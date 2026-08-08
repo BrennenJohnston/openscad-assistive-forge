@@ -555,48 +555,97 @@
             </button>
           </div>
           <div class="classic-tb-group" role="group" aria-label="Edit">
+            <!-- Named in full: the editor toolbar has its own Undo/Redo for
+                 text edits, and a bare "Undo" would be two identical buttons
+                 to a screen reader. The tooltips already said this. -->
             <button type="button" class="btn classic-tb-btn" id="classicTbUndoBtn" title="Undo parameter change">
-              <span class="classic-icon" data-icon="undo" aria-hidden="true"></span><span class="sr-only">Undo</span>
+              <span class="classic-icon" data-icon="undo" aria-hidden="true"></span><span class="sr-only">Undo parameter change</span>
             </button>
             <button type="button" class="btn classic-tb-btn" id="classicTbRedoBtn" title="Redo parameter change">
-              <span class="classic-icon" data-icon="redo" aria-hidden="true"></span><span class="sr-only">Redo</span>
+              <span class="classic-icon" data-icon="redo" aria-hidden="true"></span><span class="sr-only">Redo parameter change</span>
             </button>
           </div>
-          <div class="classic-tb-group" role="group" aria-label="Rendering">
-            <button type="button" class="btn classic-tb-btn" id="classicPreviewBtn" title="Preview (F5)">
-              <span class="classic-icon" data-icon="preview" aria-hidden="true"></span><span class="sr-only">Preview (F5)</span>
-            </button>
-            <button type="button" class="btn classic-tb-btn" id="classicRenderBtn" title="Render (F6)">
-              <span class="classic-icon" data-icon="render" aria-hidden="true"></span><span class="sr-only">Render (F6)</span>
-            </button>
+          <!-- Preview and Render moved to the 3D view toolbar (E3, U3);
+               this group is now exactly one export button. -->
+          <div class="classic-tb-group" role="group" aria-label="Export">
             <button type="button" class="btn classic-tb-btn" id="classicTbExportStlBtn" title="Export as STL">
               <span class="classic-icon" data-icon="export-stl" aria-hidden="true"></span><span class="sr-only">Export STL</span>
             </button>
           </div>
-          <div class="classic-tb-group" role="group" aria-label="Views">
+          <div class="classic-tb-group" role="group" aria-label="Panels">
+            <button type="button" class="btn classic-tb-btn" id="classicTbCustomizerBtn" aria-pressed="true" title="Show or hide the Customizer">
+              <span class="classic-icon" data-icon="parameter" aria-hidden="true"></span><span class="sr-only">Customizer</span>
+            </button>
+          </div>
+        </div>
+        <!-- 3D view toolbar (E3). Order is upstream's viewerToolBar verbatim
+             (U3): Preview Render | View All, Zoom In, Zoom Out, Reset View,
+             Measure Distance, Measure Angle | Right Left Back Front Top
+             Bottom | Perspective Orthogonal | Show Axes, Show Scale Markers,
+             Show Edges. 19 buttons.
+
+             Declared here as static markup; classic-layout-controller.js
+             adopts it into the camera-bar row of the grid on entering Classic
+             and hands it back on exit, so it sits along the bottom edge of the
+             3D view as on the desktop. Hidden outside Classic. -->
+        <div
+          id="classicCameraBar"
+          class="classic-camera-bar"
+          role="toolbar"
+          aria-label="3D view toolbar"
+        >
+          <div class="classic-tb-group" role="group" aria-label="Rendering">
+            <button type="button" class="btn classic-tb-btn" id="classicPreviewBtn" title="Preview (F5)">
+              <span class="classic-icon" data-icon="preview" aria-hidden="true"></span><span class="sr-only">Preview</span>
+            </button>
+            <button type="button" class="btn classic-tb-btn" id="classicRenderBtn" title="Render (F6)">
+              <span class="classic-icon" data-icon="render" aria-hidden="true"></span><span class="sr-only">Render</span>
+            </button>
+          </div>
+          <div class="classic-tb-group" role="group" aria-label="Zoom and measure">
             <button type="button" class="btn classic-tb-btn" id="classicViewHomeBtn" title="View all (fit model)">
               <span class="classic-icon" data-icon="zoom-all" aria-hidden="true"></span><span class="sr-only">View All</span>
             </button>
+            <button type="button" class="btn classic-tb-btn" id="classicZoomInBtn" title="Zoom in">
+              <span class="classic-icon" data-icon="zoom-in" aria-hidden="true"></span><span class="sr-only">Zoom In</span>
+            </button>
+            <button type="button" class="btn classic-tb-btn" id="classicZoomOutBtn" title="Zoom out">
+              <span class="classic-icon" data-icon="zoom-out" aria-hidden="true"></span><span class="sr-only">Zoom Out</span>
+            </button>
             <button type="button" class="btn classic-tb-btn" data-classic-view="diagonal" title="Reset view (diagonal)">
               <span class="classic-icon" data-icon="reset-view" aria-hidden="true"></span><span class="sr-only">Reset View</span>
+            </button>
+            <!-- Disabled with a reason rather than hidden, and focusable, so
+                 keyboard and screen-reader users can discover them (D-15). -->
+            <button type="button" class="btn classic-tb-btn" id="classicMeasureDistBtn" aria-disabled="true" aria-describedby="classicMeasureReason" title="Measure Distance">
+              <span class="classic-icon" data-icon="measure-distance" aria-hidden="true"></span><span class="sr-only">Measure Distance</span>
+            </button>
+            <button type="button" class="btn classic-tb-btn" id="classicMeasureAngleBtn" aria-disabled="true" aria-describedby="classicMeasureReason" title="Measure Angle">
+              <span class="classic-icon" data-icon="measure-angle" aria-hidden="true"></span><span class="sr-only">Measure Angle</span>
+            </button>
+            <span id="classicMeasureReason" class="sr-only"
+              >Measuring is not available yet. Turn on Show measurements in
+              Preview Options to see the model&rsquo;s overall size.</span
+            >
+          </div>
+          <div class="classic-tb-group" role="group" aria-label="Views">
+            <button type="button" class="btn classic-tb-btn" data-classic-view="right" title="Right view">
+              <span class="classic-icon" data-icon="view-right" aria-hidden="true"></span><span class="sr-only">Right</span>
+            </button>
+            <button type="button" class="btn classic-tb-btn" data-classic-view="left" title="Left view">
+              <span class="classic-icon" data-icon="view-left" aria-hidden="true"></span><span class="sr-only">Left</span>
+            </button>
+            <button type="button" class="btn classic-tb-btn" data-classic-view="back" title="Back view">
+              <span class="classic-icon" data-icon="view-back" aria-hidden="true"></span><span class="sr-only">Back</span>
+            </button>
+            <button type="button" class="btn classic-tb-btn" data-classic-view="front" title="Front view">
+              <span class="classic-icon" data-icon="view-front" aria-hidden="true"></span><span class="sr-only">Front</span>
             </button>
             <button type="button" class="btn classic-tb-btn" data-classic-view="top" title="Top view">
               <span class="classic-icon" data-icon="view-top" aria-hidden="true"></span><span class="sr-only">Top</span>
             </button>
             <button type="button" class="btn classic-tb-btn" data-classic-view="bottom" title="Bottom view">
               <span class="classic-icon" data-icon="view-bottom" aria-hidden="true"></span><span class="sr-only">Bottom</span>
-            </button>
-            <button type="button" class="btn classic-tb-btn" data-classic-view="left" title="Left view">
-              <span class="classic-icon" data-icon="view-left" aria-hidden="true"></span><span class="sr-only">Left</span>
-            </button>
-            <button type="button" class="btn classic-tb-btn" data-classic-view="right" title="Right view">
-              <span class="classic-icon" data-icon="view-right" aria-hidden="true"></span><span class="sr-only">Right</span>
-            </button>
-            <button type="button" class="btn classic-tb-btn" data-classic-view="front" title="Front view">
-              <span class="classic-icon" data-icon="view-front" aria-hidden="true"></span><span class="sr-only">Front</span>
-            </button>
-            <button type="button" class="btn classic-tb-btn" data-classic-view="back" title="Back view">
-              <span class="classic-icon" data-icon="view-back" aria-hidden="true"></span><span class="sr-only">Back</span>
             </button>
           </div>
           <div class="classic-tb-group" role="group" aria-label="Projection">
@@ -608,31 +657,17 @@
             </button>
           </div>
           <div class="classic-tb-group" role="group" aria-label="Overlays">
+            <!-- Split from the old combined "Axes (mm)" button per upstream
+                 (D-16): axes lines and the millimetre tick overlay are two
+                 separate toggles, as they are in the View menu. -->
+            <button type="button" class="btn classic-tb-btn" id="classicAxesToggle" aria-pressed="false" title="Show axes">
+              <span class="classic-icon" data-icon="axes" aria-hidden="true"></span><span class="sr-only">Show Axes</span>
+            </button>
+            <button type="button" class="btn classic-tb-btn" id="classicScaleMarkersToggle" aria-pressed="false" title="Show scale markers">
+              <span class="classic-icon" data-icon="scalemarkers" aria-hidden="true"></span><span class="sr-only">Show Scale Markers</span>
+            </button>
             <button type="button" class="btn classic-tb-btn" id="classicEdgesToggle" aria-pressed="false" title="Show edges">
               <span class="classic-icon" data-icon="show-edges" aria-hidden="true"></span><span class="sr-only">Show Edges</span>
-            </button>
-            <button type="button" class="btn classic-tb-btn" id="classicAxesToggle" aria-pressed="false" title="Show axes with millimetre markings">
-              <span class="classic-icon" data-icon="axes" aria-hidden="true"></span><span class="sr-only">Axes (mm)</span>
-            </button>
-            <button type="button" class="btn classic-tb-btn" id="classicCrosshairsToggle" aria-pressed="false" title="Show crosshairs">
-              <span class="classic-icon" data-icon="crosshairs" aria-hidden="true"></span><span class="sr-only">Crosshairs</span>
-            </button>
-            <button type="button"
-              class="btn btn-sm classic-tb-text-btn"
-              id="classicGridToggle"
-              aria-pressed="true"
-              aria-label="Show printer bed grid"
-              title="Show printer bed grid"
-            >Bed grid</button>
-            <label class="sr-only" for="classicGridSizeSelect">Printer bed size in millimetres</label>
-            <select
-              id="classicGridSizeSelect"
-              class="classic-grid-select"
-            ></select>
-          </div>
-          <div class="classic-tb-group" role="group" aria-label="Panels">
-            <button type="button" class="btn classic-tb-btn" id="classicTbCustomizerBtn" aria-pressed="true" title="Show or hide the Customizer">
-              <span class="classic-icon" data-icon="parameter" aria-hidden="true"></span><span class="sr-only">Customizer</span>
             </button>
           </div>
         </div>
@@ -1368,6 +1403,24 @@
                      desktop Customizer's header line. -->
               </div>
               <div id="classicPresetRow" class="classic-preset-row"></div>
+              <!-- Desktop's Customizer header is exactly the two rows above.
+                   Everything this app adds beyond it lives in this collapsed
+                   section (D-20) rather than being blended into the desktop
+                   rows; classic-layout-controller.js moves the controls in.
+                   <details> is the codebase's disclosure primitive, so the
+                   keyboard behaviour, ARIA and focus ring come for free. -->
+              <details
+                id="classicForgeExtras"
+                class="classic-forge-extras forge-disclosure"
+              >
+                <summary class="classic-forge-extras-summary">
+                  <span class="forge-disclosure-title">Forge additions</span>
+                </summary>
+                <div
+                  id="classicForgeExtrasRow"
+                  class="classic-forge-extras-row"
+                ></div>
+              </details>
             </div>
             <!-- WCAG 2.2 SC 3.2.6 Consistent Help: Help mechanisms (Features Guide button)                  appear in consistent relative order across panels (top-right area) -->
             <div class="panel-header">
@@ -2328,7 +2381,6 @@
               </details>
               <!-- Design Tools panel removed: all features now in Design toolbar menu -->
               <!-- Display Options panel removed: toggles now in View toolbar menu -->
-              <!-- Animation ($t) panel removed from UI pending full debug; backend AnimationController preserved -->
               <!-- Library Controls -->
               <div
                 class="library-controls hidden"
@@ -2822,17 +2874,22 @@
               <!-- Classic moves this row into #classicCustomizerBar so the
                    dock header matches the desktop Customizer's first line. -->
               <div class="customizer-header-row" id="customizerHeaderRow">
-                <label for="paramDetailLevel" class="sr-only"
-                  >Show Details</label
-                ><select
-                  id="paramDetailLevel"
-                  class="customizer-header-select"
-                  aria-label="Parameter detail level"
-                >
-                  <option value="show">Show Details</option>
-                  <option value="inline">Inline Details</option>
-                  <option value="hide" selected>Hide Details</option>
-                  <option value="desc-only">Description Only</option></select
+                <!-- Classic moves the detail combobox alone up to its first
+                     header row, so it travels with its label rather than
+                     leaving an orphaned <label for> behind. -->
+                <span id="paramDetailLevelWrap" class="param-detail-level-wrap"
+                  ><label for="paramDetailLevel" class="sr-only"
+                    >Show Details</label
+                  ><select
+                    id="paramDetailLevel"
+                    class="customizer-header-select"
+                    aria-label="Parameter detail level"
+                  >
+                    <option value="show">Show Details</option>
+                    <option value="inline">Inline Details</option>
+                    <option value="hide" selected>Hide Details</option>
+                    <option value="desc-only">Description Only</option>
+                  </select></span
                 ><button type="button"
                   id="resetAllBtn"
                   class="btn btn-sm btn-outline"
@@ -2842,6 +2899,7 @@
                   Reset All
                 </button>
                 <div
+                  id="customizerGroupToggles"
                   class="customizer-group-toggles"
                   role="group"
                   aria-label="Expand or collapse all parameter groups"
@@ -3036,6 +3094,77 @@
               <!-- Mobile touch-drag resize handle -->
               <div class="expert-mode-drag-handle" aria-hidden="true">
                 <span class="drag-handle-bar"></span>
+              </div>
+              <!-- Classic editor toolbar (D1). Lives inside #expertModePanel so
+                   it travels into the Classic editor slot with the panel, and
+                   is hidden outside Classic. Order is upstream's editortoolbar
+                   (U3) plus the runtime STL/DXF buttons the desktop adds, per
+                   DCR-1: New Open Save | Undo Redo Unindent Indent |
+                   Preview Render | STL DXF | 3D Print. -->
+              <div
+                id="classicEditorToolbar"
+                class="classic-editor-toolbar"
+                role="toolbar"
+                aria-label="Editor toolbar"
+              >
+                <div class="classic-tb-group" role="group" aria-label="File">
+                  <button type="button" class="btn classic-tb-btn" id="classicEdNewBtn" title="New file">
+                    <span class="classic-icon" data-icon="new" aria-hidden="true"></span><span class="sr-only">New file</span>
+                  </button>
+                  <button type="button" class="btn classic-tb-btn" id="classicEdOpenBtn" title="Open file">
+                    <span class="classic-icon" data-icon="open" aria-hidden="true"></span><span class="sr-only">Open file</span>
+                  </button>
+                  <button type="button" class="btn classic-tb-btn" id="classicEdSaveBtn" title="Save">
+                    <span class="classic-icon" data-icon="save" aria-hidden="true"></span><span class="sr-only">Save</span>
+                  </button>
+                </div>
+                <div class="classic-tb-group" role="group" aria-label="Edit">
+                  <button type="button" class="btn classic-tb-btn" id="classicEdUndoBtn" title="Undo edit">
+                    <span class="classic-icon" data-icon="undo" aria-hidden="true"></span><span class="sr-only">Undo edit</span>
+                  </button>
+                  <button type="button" class="btn classic-tb-btn" id="classicEdRedoBtn" title="Redo edit">
+                    <span class="classic-icon" data-icon="redo" aria-hidden="true"></span><span class="sr-only">Redo edit</span>
+                  </button>
+                  <!-- Upstream orders Unindent before Indent (U3) -->
+                  <button type="button" class="btn classic-tb-btn" id="classicEdUnindentBtn" title="Unindent">
+                    <span class="classic-icon" data-icon="unindent" aria-hidden="true"></span><span class="sr-only">Unindent</span>
+                  </button>
+                  <button type="button" class="btn classic-tb-btn" id="classicEdIndentBtn" title="Indent">
+                    <span class="classic-icon" data-icon="indent" aria-hidden="true"></span><span class="sr-only">Indent</span>
+                  </button>
+                </div>
+                <div class="classic-tb-group" role="group" aria-label="Rendering">
+                  <button type="button" class="btn classic-tb-btn" id="classicEdPreviewBtn" title="Preview (F5)">
+                    <span class="classic-icon" data-icon="preview" aria-hidden="true"></span><span class="sr-only">Preview</span>
+                  </button>
+                  <button type="button" class="btn classic-tb-btn" id="classicEdRenderBtn" title="Render (F6)">
+                    <span class="classic-icon" data-icon="render" aria-hidden="true"></span><span class="sr-only">Render</span>
+                  </button>
+                </div>
+                <div class="classic-tb-group" role="group" aria-label="Export">
+                  <button type="button" class="btn classic-tb-btn" id="classicEdExportStlBtn" title="Export as STL">
+                    <span class="classic-icon" data-icon="export-stl" aria-hidden="true"></span><span class="sr-only">Export STL</span>
+                  </button>
+                  <button type="button" class="btn classic-tb-btn" id="classicEdExportDxfBtn" title="Export as DXF">
+                    <span class="classic-icon" data-icon="export-dxf" aria-hidden="true"></span><span class="sr-only">Export DXF</span>
+                  </button>
+                </div>
+                <div class="classic-tb-group" role="group" aria-label="Print">
+                  <!-- aria-disabled rather than disabled: the button stays
+                       focusable so keyboard and screen-reader users can find
+                       it and hear why it is unavailable (D-15/D-26). -->
+                  <!-- No glyph: upstream assigns this action no icon either
+                       (empty iconset in MainWindow.ui, never set in
+                       MainWindow.cc), so the label is shown as text rather
+                       than inventing artwork for it. -->
+                  <button type="button" class="btn classic-tb-btn classic-tb-btn--text" id="classicEdPrintBtn" aria-disabled="true" aria-describedby="classicEdPrintReason" title="3D Print">
+                    3D Print
+                  </button>
+                  <span id="classicEdPrintReason" class="sr-only"
+                    >3D printing is not available in this browser version.
+                    Export an STL file and open it in your slicer.</span
+                  >
+                </div>
               </div>
               <div class="expert-mode-header">
                 <span class="expert-mode-title">
@@ -3234,6 +3363,25 @@
                         <h3 class="preview-settings-subheading" id="previewOptionsHeading">
                           Preview Options
                         </h3>
+                        <!-- The control that OWNS auto-preview state. The
+                             Classic Customizer checkbox and Design > Automatic
+                             Reload and Preview both drive this one; without it
+                             all three surfaces were dead. Hidden in Classic,
+                             which shows its own upstream-labelled mirror. -->
+                        <label class="toggle-switch">
+                          <input
+                            type="checkbox"
+                            id="autoPreviewToggle"
+                            checked
+                            aria-describedby="autoPreviewHelp"
+                          />
+                          <span class="toggle-label">Automatic preview</span>
+                        </label>
+                        <span id="autoPreviewHelp" class="sr-only"
+                          >Re-render the preview automatically when a parameter
+                          changes. Turn off to preview only when you press
+                          Preview.</span
+                        >
                         <label class="toggle-switch">
                           <input
                             type="checkbox"

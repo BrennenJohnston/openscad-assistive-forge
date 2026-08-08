@@ -12,6 +12,7 @@
 
 import { announceImmediate } from './announcer.js';
 import { getDrawerStateKey, safeGetItem, safeSetItem } from './storage-keys.js';
+import { CAMERA_ZOOM_STEP } from './preview.js';
 
 // Storage keys using standardized naming convention
 const STORAGE_KEY_COLLAPSED = getDrawerStateKey('camera');
@@ -109,7 +110,8 @@ export function initCameraPanelController(options = {}) {
   function setupCameraControlButtons() {
     const rotationSpeed = 0.1;
     const panSpeed = 6;
-    const zoomSpeed = 15;
+    // Same step as the 3D view toolbar and the View menu (D-19)
+    const zoomSpeed = CAMERA_ZOOM_STEP;
 
     // Helper to get the current preview manager
     const getPM = () => options.previewManager;

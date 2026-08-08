@@ -122,6 +122,18 @@ export const CORNFIELD_BACK_COLOR = 0x9dcb51;
 // for forward compatibility if specular is ever enabled.
 export const DESKTOP_SHININESS = 64;
 
+/**
+ * How far one discrete zoom activation moves the camera, in the units
+ * zoomCamera() takes — roughly 30% per press.
+ *
+ * The single source for every button, menu item and keyboard shortcut that
+ * zooms by a fixed step (D-19). The View menu previously used 1, a ~2% step
+ * that is effectively imperceptible and punishing for switch users, while the
+ * camera panel used 15; they are now the same number in one place.
+ * Continuous inputs such as the gamepad axis scale their own delta instead.
+ */
+export const CAMERA_ZOOM_STEP = 15;
+
 // The model is a non-text graphical object, so `model`/`modelBack` must
 // reach 3:1 against `background` (WCAG 2.2 SC 1.4.11). The `edges`
 // overlay lines render 1px wide, so per W3C Low Vision Task Force

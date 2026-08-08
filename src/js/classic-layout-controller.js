@@ -13,20 +13,31 @@
  *   Presets    — #presetControls, moved INTO the Customizer bar's
  *                #classicPresetRow (desktop puts the preset combobox inside
  *                the Customizer dock)
- *   Console    — #consolePanel, moved into a titled slot with a fold button
+ *   Camera bar — #classicCameraBar, a thin row along the bottom edge of the
+ *                3D view (populated by sub-plan E)
+ *   Bottom     — #classicBottomStrip spanning between the editor and the
+ *                right column, holding Console and Error-Log side by side
+ *                (plus Animate / Font List once sub-plan F builds them)
  *
  * Moves use appendChild (event listeners survive); the original parent and
  * nextSibling are recorded so exiting Classic restores the exact DOM order.
  * The grid itself lives in classic.css, keyed exclusively off
  * body[data-ui-mode='classic'] — other modes are untouched. Pane visibility
  * is data-attribute-driven (data-classic-*-hidden / -collapsed on <body>)
- * so the grid re-templates and folded panes actually give up their space.
+ * so folded panes actually give up their space, and each dock field is
+ * stamped data-classic-field-<name>="occupied|empty" so the grid derives its
+ * track sizes from occupancy instead of needing one template per combination.
  *
  * @license GPL-3.0-or-later
  */
 
 import { getUIModeController } from './ui-mode-controller.js';
 import { announceImmediate } from './announcer.js';
+import {
+  initClassicResizers,
+  destroyClassicResizers,
+  getClassicResizerController,
+} from './classic-resizer-controller.js';
 
 const PANES_STORAGE_KEY = 'openscad-forge-classic-panes';
 
@@ -45,13 +56,58 @@ export function collapseCustomizerGroups() {
     });
 }
 
+/** Container for the side-by-side bottom-strip panes (D-1). */
+const BOTTOM_STRIP_ID = 'classicBottomStrip';
+
+/**
+ * The 3D view toolbar, declared as static markup in index.html (E3) and
+ * adopted into the camera-bar row of the grid while Classic is active.
+ */
+const CAMERA_BAR_ID = 'classicCameraBar';
+
+/**
+ * Dock slots, in creation order. `panelId` is optional — a slot without one
+ * is a reserved field that sub-plan F fills (Animate, Font List,
+ * Viewport-Control); it stays hidden until its pane-visibility state turns
+ * it on. `parentId` places a slot inside another created element rather than
+ * directly on the grid.
+ *
+ * Titles are upstream dock names (Appendix U), owner-approved 2026-08-06.
+ */
 const SLOT_DEFS = [
   {
     id: 'classicConsoleSlot',
     className: 'classic-slot classic-console-slot',
     label: 'Console',
     panelId: 'consolePanel',
+    parentId: BOTTOM_STRIP_ID,
     titlebar: { text: 'Console', foldBtnId: 'classicConsoleFoldBtn' },
+  },
+  {
+    // The inner live region moves, not the tabpanel wrapper — moving
+    // #console-view-structured would strand a role="tabpanel" with no
+    // tablist. ErrorLogPanel holds a direct element reference
+    // (error-log-panel.js:48-49), which appendChild preserves.
+    id: 'classicErrorLogSlot',
+    className: 'classic-slot classic-error-log-slot',
+    label: 'Error-Log',
+    panelId: 'error-log-output',
+    parentId: BOTTOM_STRIP_ID,
+    titlebar: { text: 'Error-Log' },
+  },
+  {
+    id: 'classicAnimateSlot',
+    className: 'classic-slot classic-animate-slot',
+    label: 'Animate',
+    parentId: BOTTOM_STRIP_ID,
+    titlebar: { text: 'Animate' },
+  },
+  {
+    id: 'classicFontListSlot',
+    className: 'classic-slot classic-font-list-slot',
+    label: 'Font List',
+    parentId: BOTTOM_STRIP_ID,
+    titlebar: { text: 'Font List' },
   },
   {
     id: 'classicEditorSlot',
@@ -60,18 +116,76 @@ const SLOT_DEFS = [
     panelId: 'expertModePanel',
     titlebar: { text: 'Editor', closeBtnId: 'classicEditorCloseBtn' },
   },
+  {
+    id: 'classicViewportControlSlot',
+    className: 'classic-slot classic-viewport-control-slot',
+    label: 'Viewport-Control',
+    titlebar: { text: 'Viewport-Control' },
+  },
 ];
 
 /**
- * Panels that move into the Customizer dock rather than a created slot, so
- * its header block matches the desktop Customizer: the Show Details / Reset
- * row on the first line, the preset combobox and its +/−/save buttons on the
- * second. Order matters — each is appended to its target in turn.
+ * The dock fields the grid is built from. Each is stamped on <body> as
+ * data-classic-field-<name>="occupied|empty"; classic.css collapses an empty
+ * field's track to zero and hides its slot, so no arrangement can leave a
+ * stray auto-placed cell. `centre` (the 3D view) is always occupied and has
+ * no attribute.
+ * @type {Array<{name: string, datasetSuffix: string}>}
+ */
+const DOCK_FIELDS = [
+  { name: 'left', datasetSuffix: 'Left' },
+  { name: 'right-top', datasetSuffix: 'RightTop' },
+  { name: 'right-bottom', datasetSuffix: 'RightBottom' },
+  { name: 'bottom', datasetSuffix: 'Bottom' },
+];
+
+/**
+ * The panes that start hidden and are turned on from the Window menu. The
+ * key is the `<key>Visible` half of the persisted pane state and the
+ * `data-classic-<key>-visible` attribute; the value is the announced name.
+ * Names are the upstream dock titles, owner-approved 2026-08-06.
+ * @type {Record<string, string>}
+ */
+const OPTIONAL_PANE_LABELS = {
+  animate: 'Animate',
+  fontList: 'Font List',
+  viewportControl: 'Viewport-Control',
+};
+
+/**
+ * Controls that move into the Customizer dock rather than a created slot, so
+ * its header matches the desktop Customizer exactly (U4):
+ *
+ *   Row 1  Automatic Preview checkbox + the detail combobox
+ *   Row 2  preset combobox + [+] + [−]
+ *   ────   "Forge additions", collapsed: everything upstream does not have
+ *
+ * Moving individual controls rather than their two container rows is what
+ * lets the desktop rows hold only what desktop has (D-20). The emptied
+ * #customizerHeaderRow and the #presetControls husk stay behind and are
+ * hidden by classic.css; the husk-hide is also what drops the legacy preset
+ * search in Classic (D-22), since the searchable combobox covers it.
+ *
+ * Order matters — each is appended to its target in turn — and exit()
+ * restores in reverse, so every control returns to its recorded position.
  * @type {Array<{panelId: string, targetId: string}>}
  */
 const CUSTOMIZER_DOCK_MOVES = [
-  { panelId: 'customizerHeaderRow', targetId: 'classicCustomizerControls' },
-  { panelId: 'presetControls', targetId: 'classicPresetRow' },
+  // Row 1: the detail combobox joins the Automatic Preview checkbox
+  { panelId: 'paramDetailLevelWrap', targetId: 'classicCustomizerControls' },
+  // Row 2: preset combobox then the +/− pair, in upstream order
+  { panelId: 'presetComboboxContainer', targetId: 'classicPresetRow' },
+  { panelId: 'presetSelector', targetId: 'classicPresetRow' },
+  { panelId: 'addPresetBtn', targetId: 'classicPresetRow' },
+  { panelId: 'deletePresetBtn', targetId: 'classicPresetRow' },
+  // Forge additions, in the order they read best when expanded
+  { panelId: 'resetAllBtn', targetId: 'classicForgeExtrasRow' },
+  { panelId: 'customizerGroupToggles', targetId: 'classicForgeExtrasRow' },
+  { panelId: 'savePresetBtn', targetId: 'classicForgeExtrasRow' },
+  { panelId: 'copyPresetBtn', targetId: 'classicForgeExtrasRow' },
+  { panelId: 'copyPresetNameBtn', targetId: 'classicForgeExtrasRow' },
+  { panelId: 'managePresetsBtn', targetId: 'classicForgeExtrasRow' },
+  { panelId: 'presetSortToolbar', targetId: 'classicForgeExtrasRow' },
 ];
 
 export class ClassicLayoutController {
@@ -96,6 +210,13 @@ export class ClassicLayoutController {
      */
     this._moved = [];
 
+    /**
+     * Which Forge console tab was selected when Classic took over, so exit()
+     * can hand the panel back as found (D-9).
+     * @type {'log'|'structured'|null}
+     */
+    this._consoleTabOnEnter = null;
+
     /** Pane visibility state, persisted. Desktop defaults: editor shown. */
     this._panes = this._loadPaneState();
   }
@@ -118,6 +239,10 @@ export class ClassicLayoutController {
     // density brings the pane back.
     document.addEventListener('classic-density-change', () => {
       if (!this.active) return;
+      // Simplified empties the left and bottom fields, so the grid's
+      // occupancy attributes have to be re-stamped, not just the editor's
+      // activation state.
+      this._applyPaneAttributes();
       document.dispatchEvent(
         new CustomEvent(
           this._isEditorAvailable()
@@ -155,11 +280,33 @@ export class ClassicLayoutController {
     const mainInterface = document.getElementById('mainInterface');
     if (!mainInterface) return;
 
-    for (const def of SLOT_DEFS) {
-      const panel = document.getElementById(def.panelId);
-      if (!panel) continue;
+    // Classic replaces the console's Log/Structured tabs with side-by-side
+    // panes and hides the tablist, so a Structured selection left behind
+    // would hide the Log view with no visible control to bring it back.
+    // Reset to Log, remembering what was found so exit() can restore it (D-9).
+    this._consoleTabOnEnter = this._sanitizeConsoleTabs();
 
-      const slot = this._ensureSlot(mainInterface, def);
+    this._ensureContainer(
+      mainInterface,
+      BOTTOM_STRIP_ID,
+      'classic-bottom-strip'
+    );
+    // The camera bar is static markup in index.html (E3), so it is adopted
+    // into the grid rather than created — same appendChild contract as every
+    // other move, and exit() puts it back where it came from.
+    this._adoptIntoGrid(mainInterface, CAMERA_BAR_ID);
+
+    for (const def of SLOT_DEFS) {
+      const panel = def.panelId ? document.getElementById(def.panelId) : null;
+      if (def.panelId && !panel) continue;
+
+      const parent = def.parentId
+        ? document.getElementById(def.parentId)
+        : mainInterface;
+      if (!parent) continue;
+
+      const slot = this._ensureSlot(parent, def);
+      if (!panel) continue;
 
       this._moved.push({
         el: panel,
@@ -197,6 +344,11 @@ export class ClassicLayoutController {
       document.dispatchEvent(new CustomEvent('classic-editor-activate'));
     }
 
+    initClassicResizers();
+    if (this._panes.consoleCollapsed) {
+      getClassicResizerController()?.parkBottomSize();
+    }
+
     this.active = true;
     this.onEnter();
   }
@@ -208,10 +360,23 @@ export class ClassicLayoutController {
   exit() {
     if (!this.active) return;
 
+    // Before the moves, so the separators cannot outlive the grid areas they
+    // are placed in and leave custom properties behind for Split.js to fight.
+    destroyClassicResizers();
+
     for (const record of [...this._moved].reverse()) {
       const { el, parent, nextSibling, wasOpen } = record;
       if (parent && parent.isConnected) {
-        parent.insertBefore(el, nextSibling);
+        // Reverse order means a recorded sibling is normally back in place by
+        // now, and the markup's indentation whitespace makes most anchors
+        // text nodes that never move at all. Falling back to appendChild if
+        // the anchor is missing keeps a NotFoundError from stranding the user
+        // in a half-restored layout — insertBefore throws on a foreign anchor.
+        if (nextSibling && nextSibling.parentNode === parent) {
+          parent.insertBefore(el, nextSibling);
+        } else {
+          parent.appendChild(el);
+        }
       }
       if (el.tagName === 'DETAILS' && wasOpen !== null) {
         el.open = wasOpen;
@@ -222,10 +387,24 @@ export class ClassicLayoutController {
     for (const def of SLOT_DEFS) {
       document.getElementById(def.id)?.remove();
     }
+    // The strip is created here, so it is removed here. The camera bar is
+    // static markup that was adopted, so the move-restore loop above has
+    // already put it back — removing it would delete it from the document.
+    document.getElementById(BOTTOM_STRIP_ID)?.remove();
 
     delete document.body.dataset.classicEditorHidden;
     delete document.body.dataset.classicCustomizerHidden;
     delete document.body.dataset.classicConsoleCollapsed;
+    delete document.body.dataset.classicAnimateVisible;
+    delete document.body.dataset.classicFontListVisible;
+    delete document.body.dataset.classicViewportControlVisible;
+    for (const field of DOCK_FIELDS) {
+      delete document.body.dataset[`classicField${field.datasetSuffix}`];
+    }
+
+    // The panel is handed back exactly as found — tab selection included.
+    this._restoreConsoleTab();
+
     document.dispatchEvent(new CustomEvent('classic-editor-deactivate'));
 
     this.active = false;
@@ -255,6 +434,21 @@ export class ClassicLayoutController {
   /** @returns {boolean} */
   isConsoleCollapsed() {
     return this._panes.consoleCollapsed;
+  }
+
+  /** @returns {boolean} */
+  isAnimateVisible() {
+    return this._panes.animateVisible;
+  }
+
+  /** @returns {boolean} */
+  isFontListVisible() {
+    return this._panes.fontListVisible;
+  }
+
+  /** @returns {boolean} */
+  isViewportControlVisible() {
+    return this._panes.viewportControlVisible;
   }
 
   /** Show/hide the editor pane (Window > Editor, titlebar ✕). */
@@ -288,19 +482,92 @@ export class ClassicLayoutController {
     return this._panes.customizerVisible;
   }
 
-  /** Fold/unfold the console pane (titlebar button). */
-  setConsoleCollapsed(collapsed) {
-    this._panes.consoleCollapsed = Boolean(collapsed);
+  /**
+   * Show/hide one of the optional panes (Window menu, titlebar ✕). Same
+   * shape as toggleCustomizer, driven by a table so the three panes cannot
+   * drift apart. Announcement wording owner-approved 2026-08-06.
+   * @param {'animate'|'fontList'|'viewportControl'} pane
+   * @returns {boolean} the new visibility
+   * @private
+   */
+  _toggleOptionalPane(pane) {
+    const key = `${pane}Visible`;
+    this._panes[key] = !this._panes[key];
     this._applyPaneAttributes();
     this._savePaneState();
     announceImmediate(
-      this._panes.consoleCollapsed ? 'Console folded' : 'Console unfolded'
+      `${OPTIONAL_PANE_LABELS[pane]} ${this._panes[key] ? 'shown' : 'hidden'}`
+    );
+    return this._panes[key];
+  }
+
+  /** Show/hide the Animate pane (Window > Animate). */
+  toggleAnimate() {
+    return this._toggleOptionalPane('animate');
+  }
+
+  /** Show/hide the Font List pane (Window > Font List). */
+  toggleFontList() {
+    return this._toggleOptionalPane('fontList');
+  }
+
+  /** Show/hide the Viewport-Control pane (Window > Viewport-Control). */
+  toggleViewportControl() {
+    return this._toggleOptionalPane('viewportControl');
+  }
+
+  /**
+   * Fold/unfold the bottom strip (titlebar button). Per D-8 this folds the
+   * whole strip, not the Console pane alone — the storage key and data
+   * attribute keep their historical `console` names so existing preferences
+   * survive. Wording owner-approved 2026-08-06.
+   */
+  setConsoleCollapsed(collapsed) {
+    this._panes.consoleCollapsed = Boolean(collapsed);
+
+    // The fold and the row resizer both own --classic-row-bottom, so the
+    // resizer parks its value for the duration instead of the two writing
+    // over each other. Unfolding returns the height the user chose, not the
+    // default (B4/D-8).
+    const resizers = getClassicResizerController();
+    if (this._panes.consoleCollapsed) resizers?.parkBottomSize();
+    else resizers?.restoreBottomSize();
+
+    this._applyPaneAttributes();
+    this._savePaneState();
+    announceImmediate(
+      this._panes.consoleCollapsed
+        ? 'Bottom panels folded'
+        : 'Bottom panels unfolded'
     );
     return this._panes.consoleCollapsed;
   }
 
   /**
-   * Stamp the pane-visibility data attributes the classic.css grid keys on.
+   * Which dock fields currently hold a visible panel. The grid derives its
+   * track sizes from this, so every arrangement is described by data rather
+   * than by a hand-written template per combination.
+   * @returns {Record<string, boolean>}
+   * @private
+   */
+  _fieldOccupancy() {
+    const simplified =
+      getUIModeController().getClassicDensity() === 'simplified';
+    return {
+      left: this._panes.editorVisible && !simplified,
+      'right-top': this._panes.customizerVisible,
+      // Viewport-Control is Standard-only for v1 (D-7). Simplified treats it
+      // as hidden without clearing the preference, so returning to Standard
+      // brings it back rather than silently resetting the arrangement.
+      'right-bottom': this._panes.viewportControlVisible && !simplified,
+      // Simplified drops the code-facing docks, which empties the strip.
+      bottom: !simplified,
+    };
+  }
+
+  /**
+   * Stamp the pane-visibility and field-occupancy data attributes the
+   * classic.css grid keys on.
    * @private
    */
   _applyPaneAttributes() {
@@ -312,6 +579,23 @@ export class ClassicLayoutController {
     );
     body.dataset.classicConsoleCollapsed = String(this._panes.consoleCollapsed);
 
+    // Simplified hides Viewport-Control without clearing its preference, so
+    // the visible-attribute follows the same rule the occupancy does.
+    const simplified =
+      getUIModeController().getClassicDensity() === 'simplified';
+    body.dataset.classicAnimateVisible = String(this._panes.animateVisible);
+    body.dataset.classicFontListVisible = String(this._panes.fontListVisible);
+    body.dataset.classicViewportControlVisible = String(
+      this._panes.viewportControlVisible && !simplified
+    );
+
+    const occupancy = this._fieldOccupancy();
+    for (const field of DOCK_FIELDS) {
+      body.dataset[`classicField${field.datasetSuffix}`] = occupancy[field.name]
+        ? 'occupied'
+        : 'empty';
+    }
+
     const foldBtn = document.getElementById('classicConsoleFoldBtn');
     if (foldBtn) {
       foldBtn.setAttribute(
@@ -321,31 +605,103 @@ export class ClassicLayoutController {
     }
   }
 
-  /** @private */
+  /**
+   * Reset the Forge console to its Log tab on entering Classic, reporting
+   * which tab was selected so exit() can put it back (D-9).
+   * @returns {'log'|'structured'|null}
+   * @private
+   */
+  _sanitizeConsoleTabs() {
+    const structuredTab = document.getElementById('console-tab-structured');
+    if (!structuredTab) return null;
+    const wasStructured =
+      structuredTab.getAttribute('aria-selected') === 'true';
+    if (wasStructured) {
+      document.getElementById('console-tab-log')?.click();
+    }
+    return wasStructured ? 'structured' : 'log';
+  }
+
+  /**
+   * Re-select whichever console tab was active before Classic took over.
+   * @private
+   */
+  _restoreConsoleTab() {
+    if (this._consoleTabOnEnter === 'structured') {
+      document.getElementById('console-tab-structured')?.click();
+    }
+    this._consoleTabOnEnter = null;
+  }
+
+  /**
+   * Find or create an unlabelled layout container on the grid. Used for the
+   * bottom strip and the camera bar, which group other elements rather than
+   * being regions in their own right.
+   * @param {Element} mainInterface
+   * @param {string} id
+   * @param {string} className
+   * @returns {Element}
+   * @private
+   */
+  _ensureContainer(mainInterface, id, className) {
+    let el = document.getElementById(id);
+    if (!el) {
+      el = document.createElement('div');
+      el.id = id;
+      el.className = className;
+      mainInterface.appendChild(el);
+    }
+    return el;
+  }
+
+  /**
+   * Move an existing static element onto the grid, recording where it came
+   * from so exit() restores it. Used for markup that must live in index.html
+   * (the camera bar) but occupy a grid cell while Classic is active.
+   * @param {Element} mainInterface
+   * @param {string} id
+   * @returns {Element|null}
+   * @private
+   */
+  _adoptIntoGrid(mainInterface, id) {
+    const el = document.getElementById(id);
+    if (!el || el.parentElement === mainInterface) return el;
+
+    this._moved.push({
+      el,
+      parent: el.parentElement,
+      nextSibling: el.nextSibling,
+      wasOpen: null,
+    });
+    mainInterface.appendChild(el);
+    return el;
+  }
+
+  /**
+   * Desktop defaults: editor and Customizer shown, the optional panes off
+   * until the user asks for them (upstream starts the same way).
+   * Every key is validated independently, so a preference written before the
+   * optional panes existed hydrates without a half-restored state.
+   * @private
+   */
   _loadPaneState() {
     const defaults = {
       editorVisible: true,
       customizerVisible: true,
       consoleCollapsed: false,
+      animateVisible: false,
+      fontListVisible: false,
+      viewportControlVisible: false,
     };
     try {
       const stored = localStorage.getItem(PANES_STORAGE_KEY);
       if (!stored) return defaults;
       const parsed = JSON.parse(stored);
-      return {
-        editorVisible:
-          typeof parsed.editorVisible === 'boolean'
-            ? parsed.editorVisible
-            : defaults.editorVisible,
-        customizerVisible:
-          typeof parsed.customizerVisible === 'boolean'
-            ? parsed.customizerVisible
-            : defaults.customizerVisible,
-        consoleCollapsed:
-          typeof parsed.consoleCollapsed === 'boolean'
-            ? parsed.consoleCollapsed
-            : defaults.consoleCollapsed,
-      };
+      const hydrated = { ...defaults };
+      for (const key of Object.keys(defaults)) {
+        if (typeof parsed?.[key] === 'boolean') hydrated[key] = parsed[key];
+      }
+      return hydrated;
     } catch {
       return defaults;
     }
@@ -361,14 +717,14 @@ export class ClassicLayoutController {
   }
 
   /**
-   * Find or create a labelled slot section inside the main interface,
-   * with an optional desktop-style titlebar (text + fold/close button).
-   * @param {Element} mainInterface
+   * Find or create a labelled slot section inside `parent`, with an optional
+   * desktop-style titlebar (text + fold/close button).
+   * @param {Element} parent - the grid, or a container such as the bottom strip
    * @param {{id: string, className: string, label: string, titlebar?: Object}} def
    * @returns {Element} the element moved panels are appended into
    * @private
    */
-  _ensureSlot(mainInterface, def) {
+  _ensureSlot(parent, def) {
     let slot = document.getElementById(def.id);
     if (!slot) {
       slot = document.createElement('section');
@@ -389,7 +745,10 @@ export class ClassicLayoutController {
           fold.type = 'button';
           fold.id = def.titlebar.foldBtnId;
           fold.className = 'btn btn-sm btn-icon classic-pane-btn';
-          fold.setAttribute('aria-label', `Fold ${def.titlebar.text} pane`);
+          // Static name + aria-expanded is the APG disclosure pattern; the
+          // state is not repeated in the name. D-8: this folds the whole
+          // strip, so the name does not mention Console.
+          fold.setAttribute('aria-label', 'Fold bottom panels');
           fold.setAttribute('aria-expanded', 'true');
           fold.textContent = '▾';
           fold.addEventListener('click', () => {
@@ -420,7 +779,7 @@ export class ClassicLayoutController {
       body.appendChild(inner);
       slot.appendChild(body);
 
-      mainInterface.appendChild(slot);
+      parent.appendChild(slot);
     }
     return slot.querySelector('.classic-fold-inner') || slot;
   }

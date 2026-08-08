@@ -171,6 +171,17 @@ export class DisplayOptionsController {
     this._apply(option);
     this._syncCheckbox(option);
     if (option === 'edges') this._updateEdgeBudgetStatus();
+
+    // Several surfaces show the same flag — the View menu, the Classic 3D
+    // view toolbar, the camera panel. Without this they only learned about
+    // their own clicks, so toggling from the menu left the toolbar button's
+    // aria-pressed stale and a screen reader reporting the wrong state.
+    document.dispatchEvent(
+      new CustomEvent('display-option-change', {
+        detail: { option, enabled },
+      })
+    );
+
     const label =
       HUMAN_LABELS[option] || option.charAt(0).toUpperCase() + option.slice(1);
     announceImmediate(`${label} ${enabled ? 'shown' : 'hidden'}`);

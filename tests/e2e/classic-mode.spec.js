@@ -272,9 +272,17 @@ test.describe('Classic density: Simplified / Standard inside Classic', () => {
     // ...and keeps everything customizing needs
     await expect(page.locator('.preview-panel')).toBeVisible();
     await expect(page.locator('#paramPanel')).toBeVisible();
-    await expect(page.locator('#classicPresetRow #presetControls')).toHaveCount(
+    // C2 moves the individual desktop controls rather than the whole presets
+    // panel, so the preset row holds the chooser and the +/- pair directly
+    await expect(page.locator('#classicPresetRow #presetSelector')).toHaveCount(
       1
     );
+    await expect(page.locator('#classicPresetRow #addPresetBtn')).toBeVisible();
+    await expect(
+      page.locator('#classicPresetRow #deletePresetBtn')
+    ).toBeVisible();
+    // The Forge additions section is what Simplified drops (D-20/D-21)
+    await expect(page.locator('#classicForgeExtras')).toBeHidden();
     await expect(page.locator('#classicRenderBtn')).toBeVisible();
     await expect(page.locator('#classicTbExportStlBtn')).toBeVisible();
     for (const id of [
@@ -424,13 +432,16 @@ test.describe('Classic on mobile (375px, touch)', () => {
     await page.evaluate(() =>
       document.getElementById('paramPanel').scrollIntoView({ block: 'start' })
     );
+    // "Fully on screen" is the actual requirement. The previous proxy for it
+    // — top edge above the viewport midpoint — only held while the panel was
+    // tall enough to force extra scroll range; C2 shortened it by moving the
+    // preset controls into the dock header, so assert the requirement itself.
     await expect
       .poll(async () =>
-        page
-          .locator('#paramPanel')
-          .evaluate(
-            (el) => el.getBoundingClientRect().y < window.innerHeight / 2
-          )
+        page.locator('#paramPanel').evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          return r.top >= 0 && r.bottom <= window.innerHeight + 1;
+        })
       )
       .toBe(true);
     await expect(page.locator('#classicCustomizerBar')).toBeVisible();
@@ -473,10 +484,15 @@ test.describe('Classic on mobile (375px, touch)', () => {
       page.locator('.classic-tb-group[aria-label="Projection"]')
     ).toBeHidden();
     await expect(page.locator('#classicEdgesToggle')).toBeHidden();
-    // Primary actions and the bed grid keep their toolbar seats
+    // Primary actions keep their seats — they have no one-tap menu equivalent.
+    // They now live on the 3D view toolbar, which E3 created.
     await expect(page.locator('#classicPreviewBtn')).toBeVisible();
     await expect(page.locator('#classicRenderBtn')).toBeVisible();
-    await expect(page.locator('#classicGridToggle')).toBeVisible();
+    await expect(page.locator('#classicViewHomeBtn')).toBeVisible();
+    // D-18: the bed grid and its size select are dropped from Classic
+    // entirely; both remain in Simplified and Standard
+    await expect(page.locator('#classicGridToggle')).toHaveCount(0);
+    await expect(page.locator('#classicGridSizeSelect')).toHaveCount(0);
 
     await page.locator('#viewMenuBtn').click();
     await expect(
@@ -878,13 +894,55 @@ test.describe('Classic mode layout (C4)', () => {
     await expect(consoleSlot.locator('#consolePanel')).toHaveCount(1);
     await expect(page.locator('#consolePanel')).toHaveAttribute('open', '');
 
-    // Presets: moved INTO the Customizer dock's preset row (C7); the old
-    // standalone presets slot no longer exists
+    // Presets: the individual desktop controls move INTO the Customizer
+    // dock's preset row (C2); the old standalone presets slot never existed
+    // and the whole #presetControls panel is no longer moved as a unit
     await expect(page.locator('#classicPresetsSlot')).toHaveCount(0);
     await expect(page.locator('#classicPresetRow #presetControls')).toHaveCount(
+      0
+    );
+    await expect(page.locator('#classicPresetRow #presetSelector')).toHaveCount(
       1
     );
+    await expect(page.locator('#classicPresetRow #addPresetBtn')).toHaveCount(
+      1
+    );
+    await expect(
+      page.locator('#classicPresetRow #deletePresetBtn')
+    ).toHaveCount(1);
     await expect(page.locator('#classicCustomizerBar')).toBeVisible();
+
+    // Upstream row 1 is Automatic Preview + the detail combobox, nothing else
+    await expect(
+      page.locator('#classicCustomizerControls #paramDetailLevelWrap')
+    ).toHaveCount(1);
+    await expect(
+      page.locator('#classicCustomizerControls #resetAllBtn')
+    ).toHaveCount(0);
+
+    // Everything upstream lacks sits in the collapsed Forge additions section
+    const forgeExtras = page.locator('#classicForgeExtras');
+    await expect(forgeExtras).toBeVisible();
+    await expect(forgeExtras).not.toHaveAttribute('open', '');
+    for (const id of [
+      '#resetAllBtn',
+      '#customizerGroupToggles',
+      '#savePresetBtn',
+      '#copyPresetBtn',
+      '#copyPresetNameBtn',
+      '#managePresetsBtn',
+      '#presetSortToolbar',
+    ]) {
+      await expect(
+        page.locator(`#classicForgeExtrasRow ${id}`),
+        `${id} belongs in Forge additions`
+      ).toHaveCount(1);
+    }
+
+    // The emptied husks stay in the DOM for exit() but never paint (D-22:
+    // this is also what drops the legacy preset search in Classic)
+    await expect(page.locator('#customizerHeaderRow')).toBeHidden();
+    await expect(page.locator('#presetSearchLegacy')).toBeHidden();
 
     // Editor pane (C5): visible by default alongside the customizer
     const editorSlot = page.locator('#classicEditorSlot');
@@ -902,12 +960,15 @@ test.describe('Classic mode layout (C4)', () => {
       .count();
     expect(openGroups, 'all param groups collapsed in Classic').toBe(0);
 
-    // Icon toolbar (C6): docked under the menu bar with snap views, overlay
-    // toggles, bed-size select, and Preview/Render — chokusen icons render
+    // Icon toolbar (C6): docked under the menu bar. E3 moved the snap views,
+    // projection, overlays and Preview/Render out to the 3D view toolbar, and
+    // dropped the bed grid from Classic (D-18), so what remains here is
+    // File, Edit, Export STL and the Customizer toggle.
     const toolbar = page.locator('#classicToolbar');
     await expect(toolbar).toBeVisible();
-    await expect(toolbar.locator('[data-classic-view]')).toHaveCount(7);
-    await expect(toolbar.locator('#classicRenderBtn')).toBeVisible();
+    await expect(toolbar.locator('[data-classic-view]')).toHaveCount(0);
+    await expect(toolbar.locator('#classicTbExportStlBtn')).toBeVisible();
+    await expect(toolbar.locator('#classicTbCustomizerBtn')).toBeVisible();
     const toolbarBox = await toolbar.boundingBox();
     const menuBox = await page.locator('#toolbarMenuBar').boundingBox();
     expect(
@@ -915,19 +976,17 @@ test.describe('Classic mode layout (C4)', () => {
       'toolbar sits below the menu bar'
     ).toBeGreaterThanOrEqual(menuBox.y);
     const iconImage = await toolbar
-      .locator('.classic-icon[data-icon="render"]')
+      .locator('.classic-icon[data-icon="export-stl"]')
       .evaluate((el) => getComputedStyle(el).backgroundImage);
     expect(iconImage, 'vendored icon resolves').toContain('openscad-icons');
-    const bedOptions = await toolbar
-      .locator('#classicGridSizeSelect option')
-      .count();
-    expect(
-      bedOptions,
-      'bed-size select populated from grid presets'
-    ).toBeGreaterThan(3);
+
+    // Snap views and Render moved to the 3D view toolbar, still seven of them
+    const cameraBar = page.locator('#classicCameraBar');
+    await expect(cameraBar.locator('[data-classic-view]')).toHaveCount(7);
+    await expect(cameraBar.locator('#classicRenderBtn')).toBeVisible();
 
     // Axes toggle reflects pressed state
-    const axesToggle = toolbar.locator('#classicAxesToggle');
+    const axesToggle = cameraBar.locator('#classicAxesToggle');
     const before = await axesToggle.getAttribute('aria-pressed');
     await axesToggle.click();
     await expect(axesToggle).toHaveAttribute(
@@ -1019,8 +1078,13 @@ test.describe('Classic mode layout (C4)', () => {
       'design default values'
     );
 
-    // Copy design defaults into a new preset; it becomes the selection
+    // Copy design defaults into a new preset; it becomes the selection.
+    // Copy Preset is a Forge addition, so C2 puts it in the collapsed
+    // "Forge additions" section — open that first, as a user would.
     await presetSelect.selectOption('__design_defaults__');
+    const forgeExtras = page.locator('#classicForgeExtras');
+    await forgeExtras.locator('summary').click();
+    await expect(forgeExtras).toHaveAttribute('open', '');
     await page.locator('#copyPresetBtn').click();
     await expect(
       presetSelect.locator('option', {
@@ -1073,5 +1137,955 @@ test.describe('Classic mode layout (C4)', () => {
     await expect(
       page.getByRole('menuitemradio', { name: 'Classic (Desktop Layout)' })
     ).toHaveCount(0);
+  });
+});
+
+test.describe('Classic dock shell (B2)', () => {
+  test('classic-dock-strip: Console and Error-Log sit side by side under a full-height editor', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+
+    const strip = page.locator('#classicBottomStrip');
+    const consoleSlot = page.locator('#classicConsoleSlot');
+    const errorLogSlot = page.locator('#classicErrorLogSlot');
+    const editorSlot = page.locator('#classicEditorSlot');
+
+    await expect(strip).toBeVisible();
+    await expect(consoleSlot).toBeVisible();
+    await expect(errorLogSlot).toBeVisible();
+
+    // The Error-Log pane is a sibling of Console inside the strip, not a tab
+    await expect(strip.locator('> #classicConsoleSlot')).toHaveCount(1);
+    await expect(strip.locator('> #classicErrorLogSlot')).toHaveCount(1);
+    await expect(errorLogSlot.locator('#error-log-output')).toHaveCount(1);
+
+    const [stripBox, consoleBox, errorBox, editorBox] = await Promise.all([
+      strip.boundingBox(),
+      consoleSlot.boundingBox(),
+      errorLogSlot.boundingBox(),
+      editorSlot.boundingBox(),
+    ]);
+
+    // Error-Log is to the RIGHT of Console
+    expect(errorBox.x).toBeGreaterThan(consoleBox.x);
+
+    // R6: the editor runs full height — it starts above the strip and its
+    // bottom edge lines up with the strip's
+    expect(editorBox.y).toBeLessThan(consoleBox.y);
+    expect(
+      Math.abs(editorBox.y + editorBox.height - (stripBox.y + stripBox.height))
+    ).toBeLessThanOrEqual(4);
+
+    // R7: the strip no longer runs under the editor
+    expect(consoleBox.x).toBeGreaterThanOrEqual(
+      editorBox.x + editorBox.width - 2
+    );
+
+    // R8: the camera bar exists as its own row between view and strip
+    await expect(page.locator('#classicCameraBar')).toHaveCount(1);
+
+    // D-9: Classic replaces the console tabs with panes, so the tablist goes
+    await expect(page.locator('.console-view-tabs')).toBeHidden();
+
+    // Every dock field is stamped for the grid to size from
+    const body = page.locator('body');
+    await expect(body).toHaveAttribute('data-classic-field-left', 'occupied');
+    await expect(body).toHaveAttribute(
+      'data-classic-field-right-top',
+      'occupied'
+    );
+    await expect(body).toHaveAttribute('data-classic-field-bottom', 'occupied');
+    await expect(body).toHaveAttribute(
+      'data-classic-field-right-bottom',
+      'empty'
+    );
+
+    // Reserved fields exist but must not paint as empty dead panes
+    await expect(page.locator('#classicAnimateSlot')).toBeHidden();
+    await expect(page.locator('#classicFontListSlot')).toBeHidden();
+    await expect(page.locator('#classicViewportControlSlot')).toBeHidden();
+  });
+
+  test('classic-console-tab-restore: a Structured selection is reset on entry and handed back on exit (D-9)', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+
+    // Select the Structured tab in Forge — the console is a collapsed
+    // <details>, so it has to be opened before its tablist is reachable
+    const consolePanel = page.locator('#consolePanel');
+    if (!(await consolePanel.evaluate((el) => el.open))) {
+      await consolePanel.locator('summary').first().click();
+    }
+    const structuredTab = page.locator('#console-tab-structured');
+    await expect(structuredTab).toBeVisible({ timeout: 10_000 });
+    await structuredTab.click();
+    await expect(structuredTab).toHaveAttribute('aria-selected', 'true');
+
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+
+    // Entry sanitation: Log is selected, so exiting cannot strand the panel
+    // showing a view whose content Classic moved away
+    await expect(page.locator('#console-tab-log')).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    await expect(structuredTab).toHaveAttribute('aria-selected', 'false');
+
+    await pickInterfaceMode(page, 'Standard');
+    await expect(page.locator('body')).not.toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+
+    // Exit restore: the panel is handed back as found
+    await expect(structuredTab).toHaveAttribute('aria-selected', 'true');
+    await expect(
+      page.locator('#console-view-structured #error-log-output')
+    ).toHaveCount(1);
+    await expect(page.locator('.console-view-tabs')).toBeVisible();
+  });
+
+  test('classic-dock-occupancy: Simplified empties the left and bottom fields', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+
+    const body = page.locator('body');
+    await expect(body).toHaveAttribute('data-classic-field-left', 'occupied');
+
+    await page.locator('#classicDensityToggle').click();
+    await expect(body).toHaveAttribute('data-classic-density', 'simplified');
+
+    await expect(body).toHaveAttribute('data-classic-field-left', 'empty');
+    await expect(body).toHaveAttribute('data-classic-field-bottom', 'empty');
+    await expect(page.locator('#classicBottomStrip')).toBeHidden();
+    await expect(page.locator('#classicEditorSlot')).toBeHidden();
+
+    // The Customizer keeps its column — Simplified is not a blank screen
+    await expect(body).toHaveAttribute(
+      'data-classic-field-right-top',
+      'occupied'
+    );
+    await expect(page.locator('#paramPanel')).toBeVisible();
+  });
+});
+
+test.describe('Classic dock resizers (B4)', () => {
+  test('classic-resizer-keyboard: each separator is a tab stop that moves its pane and announces the width', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+
+    const editorResizer = page.locator('#classicResizerEditor');
+    const customizerResizer = page.locator('#classicResizerCustomizer');
+    const stripResizer = page.locator('#classicResizerStrip');
+
+    for (const resizer of [editorResizer, customizerResizer, stripResizer]) {
+      await expect(resizer).toBeVisible();
+      await expect(resizer).toHaveAttribute('role', 'separator');
+      await expect(resizer).toHaveAttribute('tabindex', '0');
+    }
+
+    await expect(editorResizer).toHaveAttribute(
+      'aria-label',
+      'Resize editor pane'
+    );
+    await expect(customizerResizer).toHaveAttribute(
+      'aria-label',
+      'Resize Customizer pane'
+    );
+    await expect(stripResizer).toHaveAttribute(
+      'aria-label',
+      'Resize bottom panels'
+    );
+    await expect(editorResizer).toHaveAttribute('aria-orientation', 'vertical');
+    await expect(stripResizer).toHaveAttribute(
+      'aria-orientation',
+      'horizontal'
+    );
+
+    // ArrowLeft shrinks the editor, and the announced value follows it
+    const editorSlot = page.locator('#classicEditorSlot');
+    const widthBefore = (await editorSlot.boundingBox()).width;
+
+    await editorResizer.focus();
+    await expect(editorResizer).toBeFocused();
+    for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowLeft');
+
+    const widthAfter = (await editorSlot.boundingBox()).width;
+    expect(widthAfter).toBeLessThan(widthBefore);
+
+    const valueNow = Number(await editorResizer.getAttribute('aria-valuenow'));
+    await expect(editorResizer).toHaveAttribute(
+      'aria-valuetext',
+      `Editor: ${valueNow}%`
+    );
+
+    // Home pins the editor at its minimum and stays there
+    await page.keyboard.press('Home');
+    const atMin = (await editorSlot.boundingBox()).width;
+    await page.keyboard.press('ArrowLeft');
+    expect((await editorSlot.boundingBox()).width).toBeCloseTo(atMin, 0);
+
+    // The 3D view keeps its floor when the strip is dragged to its limit
+    await stripResizer.focus();
+    for (let i = 0; i < 20; i++) await page.keyboard.press('ArrowUp');
+    expect(
+      (await page.locator('.preview-panel').boundingBox()).height
+    ).toBeGreaterThanOrEqual(230);
+  });
+
+  test('classic-resizer-persist: a resized column survives a reload', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+
+    const editorResizer = page.locator('#classicResizerEditor');
+    await editorResizer.focus();
+    for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowLeft');
+    const stored = Number(await editorResizer.getAttribute('aria-valuenow'));
+
+    await page.reload();
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: WASM_READY_TIMEOUT,
+    });
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+
+    await expect(page.locator('#classicResizerEditor')).toHaveAttribute(
+      'aria-valuenow',
+      String(stored)
+    );
+  });
+
+  test('classic-resizer-fold: folding parks the strip height and unfolding returns it', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+
+    // Resize the strip away from its default first, so "returns it" means
+    // the user's height rather than the default
+    const stripResizer = page.locator('#classicResizerStrip');
+    await stripResizer.focus();
+    for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowUp');
+
+    const strip = page.locator('#classicBottomStrip');
+    const resizedHeight = (await strip.boundingBox()).height;
+
+    const foldBtn = page.locator('#classicConsoleFoldBtn');
+    await expect(foldBtn).toHaveAttribute('aria-label', 'Fold bottom panels');
+    await foldBtn.click();
+
+    await expect(foldBtn).toHaveAttribute('aria-expanded', 'false');
+    // The fold animates, so the height has to be polled rather than sampled
+    await expect
+      .poll(async () => (await strip.boundingBox()).height)
+      .toBeLessThan(resizedHeight / 2);
+    // The separator steps aside while folded rather than fighting the token
+    await expect(stripResizer).toBeHidden();
+
+    await foldBtn.click();
+    await expect(foldBtn).toHaveAttribute('aria-expanded', 'true');
+    // Back to the height the user chose, not the default
+    await expect
+      .poll(async () =>
+        Math.abs((await strip.boundingBox()).height - resizedHeight)
+      )
+      .toBeLessThan(3);
+    await expect(stripResizer).toBeVisible();
+  });
+
+  test('classic-resizer-scope: no separators outside Classic or below 1024px', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+
+    // Forge keeps Split.js and must gain nothing
+    await expect(page.locator('#classicResizerEditor')).toHaveCount(0);
+
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+    await expect(page.locator('#classicResizerEditor')).toBeVisible();
+
+    // Below the desktop breakpoint the stacked fallback has no boundaries
+    await page.setViewportSize({ width: 900, height: 900 });
+    await expect(page.locator('#classicResizerEditor')).toBeHidden();
+
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await expect(page.locator('#classicResizerEditor')).toBeVisible();
+
+    // Leaving Classic removes them and the properties they wrote
+    await pickInterfaceMode(page, 'Standard');
+    await expect(page.locator('#classicResizerEditor')).toHaveCount(0);
+    const leftovers = await page.evaluate(() => {
+      const el = document.getElementById('mainInterface');
+      return [
+        el.style.getPropertyValue('--classic-col-editor'),
+        el.style.getPropertyValue('--classic-col-customizer'),
+        el.style.getPropertyValue('--classic-row-bottom'),
+      ].filter(Boolean);
+    });
+    expect(leftovers).toEqual([]);
+  });
+});
+
+test.describe('Classic canvas re-measure (B5)', () => {
+  test('classic-resizer-remeasure: the 3D canvas follows a keyboard resize', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+
+    // Where WebGL is unavailable, PreviewManager initializes headless and
+    // creates NO canvas at all ("renderer: no-renderer (headless)" in its
+    // startup log) — which is the case for Firefox on the CI runners. There is
+    // no backing store to re-measure, so the precondition is absent rather
+    // than the behaviour being wrong. Skipped on the missing capability, not
+    // on a browser name: Firefox with WebGL still runs this and still counts.
+    const rendererPresent =
+      (await page.locator('.preview-panel canvas').count()) > 0;
+    test.skip(
+      !rendererPresent,
+      'no WebGL renderer in this environment, so there is no canvas to re-measure'
+    );
+
+    const canvasSize = () =>
+      page.evaluate(() => {
+        const canvas = document.querySelector('.preview-panel canvas');
+        return canvas
+          ? {
+              w: canvas.width,
+              h: canvas.height,
+              cssW: canvas.clientWidth,
+              cssH: canvas.clientHeight,
+              dpr: window.devicePixelRatio || 1,
+            }
+          : null;
+      });
+
+    // Entering Classic re-measures the canvas through the container's
+    // ResizeObserver, which is debounced — so wait for the size to stop moving
+    // before taking a baseline. Sampling too early captures the Forge layout's
+    // width, a number the canvas never legitimately has in Classic, and every
+    // later comparison is then against a lie.
+    const settled = async () => {
+      let last = null;
+      for (let i = 0; i < 40; i++) {
+        const s = await canvasSize();
+        if (s && last !== null && s.w === last) return s;
+        last = s?.w ?? null;
+        await page.waitForTimeout(250);
+      }
+      return null;
+    };
+
+    const before = await settled();
+    expect(before, 'canvas size settled').not.toBeNull();
+    expect(before.w).toBeGreaterThan(0);
+
+    // The backing store must track the CSS box rather than being stretched to
+    // fit it. Comparing the ratio before and after is what proves that; the
+    // absolute value is NOT clientWidth * devicePixelRatio, because the
+    // renderer sizes from its container, not from the canvas element
+    // (preview.js:512), and the two differ by the container's padding.
+    const ratio = (s) => s.w / s.cssW;
+    const beforeRatio = ratio(before);
+    expect(beforeRatio).toBeGreaterThan(0);
+
+    // Shrinking the editor gives the 3D view the space
+    const editorResizer = page.locator('#classicResizerEditor');
+    await editorResizer.focus();
+    for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowLeft');
+
+    await expect
+      .poll(async () => (await canvasSize()).w, { timeout: 30_000 })
+      .toBeGreaterThan(before.w);
+
+    const after = await settled();
+    expect(after, 'canvas size settled after widening').not.toBeNull();
+    expect(
+      Math.abs(ratio(after) - beforeRatio),
+      'backing store scaled with the box, not stretched'
+    ).toBeLessThan(0.1);
+
+    // And the same for the horizontal separator
+    const stripResizer = page.locator('#classicResizerStrip');
+    await stripResizer.focus();
+    for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowUp');
+
+    await expect
+      .poll(async () => (await canvasSize()).h, { timeout: 30_000 })
+      .toBeLessThan(after.h);
+
+    const shortened = await settled();
+    expect(shortened, 'canvas size settled after shortening').not.toBeNull();
+    expect(
+      Math.abs(shortened.h / shortened.cssH - after.h / after.cssH),
+      'height backing store scaled with the box'
+    ).toBeLessThan(0.1);
+  });
+});
+
+test.describe('Automatic Preview control (C4)', () => {
+  test('classic-auto-preview-sync: all three surfaces drive one piece of state', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+
+    // The canonical control exists and owns the state
+    const forgeToggle = page.locator('#autoPreviewToggle');
+    await expect(forgeToggle).toHaveCount(1);
+    await expect(forgeToggle).toBeChecked();
+
+    const designMenuChecked = async () => {
+      await page.locator('#designMenuBtn').click();
+      const item = page.getByRole('menuitemcheckbox', {
+        name: 'Automatic Reload and Preview',
+      });
+      await expect(item).toBeVisible({ timeout: 5_000 });
+      const checked = await item.getAttribute('aria-checked');
+      await page.keyboard.press('Escape');
+      return checked === 'true';
+    };
+    const toggleFromDesignMenu = async () => {
+      await page.locator('#designMenuBtn').click();
+      await page
+        .getByRole('menuitemcheckbox', {
+          name: 'Automatic Reload and Preview',
+        })
+        .click();
+    };
+
+    // Standard: the Design menu reflects and drives the real control
+    expect(await designMenuChecked()).toBe(true);
+    await toggleFromDesignMenu();
+    await expect(forgeToggle).not.toBeChecked();
+    expect(await designMenuChecked()).toBe(false);
+    await toggleFromDesignMenu();
+    await expect(forgeToggle).toBeChecked();
+
+    // Classic: the Customizer checkbox mirrors it both ways, and the real
+    // control is present but not shown
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+    const classicCheck = page.locator('#classicAutoPreviewCheck');
+    await expect(classicCheck).toBeVisible();
+    await expect(classicCheck).toBeChecked();
+    await expect(forgeToggle).toBeHidden();
+
+    await classicCheck.uncheck();
+    await expect(forgeToggle).not.toBeChecked();
+    expect(await designMenuChecked()).toBe(false);
+
+    await toggleFromDesignMenu();
+    await expect(classicCheck).toBeChecked();
+    await expect(forgeToggle).toBeChecked();
+  });
+});
+
+test.describe('Classic editor toolbar (D1)', () => {
+  const ORDER = [
+    ['classicEdNewBtn', 'New file'],
+    ['classicEdOpenBtn', 'Open file'],
+    ['classicEdSaveBtn', 'Save'],
+    ['classicEdUndoBtn', 'Undo edit'],
+    ['classicEdRedoBtn', 'Redo edit'],
+    ['classicEdUnindentBtn', 'Unindent'],
+    ['classicEdIndentBtn', 'Indent'],
+    ['classicEdPreviewBtn', 'Preview'],
+    ['classicEdRenderBtn', 'Render'],
+    ['classicEdExportStlBtn', 'Export STL'],
+    ['classicEdExportDxfBtn', 'Export DXF'],
+    ['classicEdPrintBtn', '3D Print'],
+  ];
+
+  test('classic-editor-toolbar: twelve buttons in upstream order, named and reachable', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+
+    // Forge keeps its own editor header and must not gain this toolbar
+    await expect(page.locator('#classicEditorToolbar')).toBeHidden();
+
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+
+    const toolbar = page.locator('#classicEditorToolbar');
+    await expect(toolbar).toBeVisible();
+    await expect(toolbar).toHaveAttribute('aria-label', 'Editor toolbar');
+
+    // It travels into the editor slot with the panel it lives in
+    await expect(
+      page.locator('#classicEditorSlot #classicEditorToolbar')
+    ).toHaveCount(1);
+
+    // Exact upstream order, by DOM position
+    const ids = await toolbar.evaluate((el) =>
+      Array.from(el.querySelectorAll('button')).map((b) => b.id)
+    );
+    expect(ids).toEqual(ORDER.map(([id]) => id));
+
+    // Every button has an accessible name and a real touch target
+    for (const [id, name] of ORDER) {
+      const btn = page.locator(`#${id}`);
+      await expect(btn, `${id} name`).toHaveAccessibleName(name);
+      const box = await btn.boundingBox();
+      const target = await page.evaluate(() =>
+        parseInt(
+          getComputedStyle(document.body).getPropertyValue(
+            '--size-touch-target'
+          ),
+          10
+        )
+      );
+      expect(box.width, `${id} width`).toBeGreaterThanOrEqual(target - 1);
+      expect(box.height, `${id} height`).toBeGreaterThanOrEqual(target - 1);
+    }
+
+    // 3D Print is disabled-with-reason: focusable, and it says why (D-26)
+    const print = page.locator('#classicEdPrintBtn');
+    await expect(print).toHaveAttribute('aria-disabled', 'true');
+    await print.focus();
+    await expect(print).toBeFocused();
+    await expect(page.locator('#classicEdPrintReason')).toContainText(
+      'not available in this browser version'
+    );
+
+    // The two Undo buttons are distinguishable to a screen reader
+    await expect(page.locator('#classicTbUndoBtn')).toHaveAccessibleName(
+      'Undo parameter change'
+    );
+    await expect(page.locator('#classicTbRedoBtn')).toHaveAccessibleName(
+      'Redo parameter change'
+    );
+  });
+});
+
+test.describe('Classic editor toolbar icons (D2)', () => {
+  test('classic-editor-icons: every glyph resolves to a vendored SVG', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+
+    const toolbar = page.locator('#classicEditorToolbar');
+    await expect(toolbar).toBeVisible();
+
+    // Each icon span must resolve to a real background image, not a 404 —
+    // a missing file degrades silently to an empty box otherwise
+    const icons = await toolbar.evaluate((el) =>
+      Array.from(el.querySelectorAll('.classic-icon')).map((s) => ({
+        icon: s.dataset.icon,
+        url: getComputedStyle(s).backgroundImage,
+      }))
+    );
+    expect(icons.length).toBe(11);
+    for (const { icon, url } of icons) {
+      expect(url, `${icon} has a background image`).toContain(
+        'openscad-icons/chokusen/'
+      );
+    }
+
+    const urls = icons.map(({ url }) => url.match(/url\("?([^")]+)"?\)/)[1]);
+    for (const url of urls) {
+      const res = await page.request.get(url);
+      expect(res.status(), `${url} must be served`).toBe(200);
+    }
+
+    // 3D Print carries no glyph — upstream assigns it none — so it shows its
+    // label as text rather than an empty icon box
+    const print = page.locator('#classicEdPrintBtn');
+    await expect(print.locator('.classic-icon')).toHaveCount(0);
+    await expect(print).toHaveText('3D Print');
+    await expect(print).toHaveAccessibleName('3D Print');
+  });
+});
+
+test.describe('Classic editor toolbar behaviour (D4/D5)', () => {
+  test('classic-editor-toolbar-actions: undo gating follows the editor, export gating follows render state', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+
+    const undoBtn = page.locator('#classicEdUndoBtn');
+    const redoBtn = page.locator('#classicEdRedoBtn');
+    const stlBtn = page.locator('#classicEdExportStlBtn');
+
+    // A freshly loaded project has nothing to undo — and Undo must never be
+    // able to wipe the document that was just loaded
+    await expect(undoBtn).toHaveAttribute('aria-disabled', 'true');
+    await expect(page.locator('#classicEdUndoBtnReason')).toHaveText(
+      'Nothing to undo'
+    );
+
+    // Nothing has been rendered at full quality yet
+    await expect(stlBtn).toHaveAttribute('aria-disabled', 'true');
+    await expect(page.locator('#classicEdExportStlBtnReason')).toHaveText(
+      'Press Generate first to enable this export'
+    );
+
+    // A gated button is still focusable, so it is discoverable
+    await stlBtn.focus();
+    await expect(stlBtn).toBeFocused();
+
+    // Typing makes Undo available; CodeMirror drops keystrokes at full speed
+    const editor = page.locator('#expertModeBody .cm-content');
+    await expect(editor).toBeVisible({ timeout: 30_000 });
+    await editor.click();
+    await page.keyboard.type('// hello', { delay: 25 });
+
+    await expect(undoBtn).not.toHaveAttribute('aria-disabled', 'true');
+    await expect(redoBtn).toHaveAttribute('aria-disabled', 'true');
+
+    // Activating Undo reverts the text and re-enables Redo
+    const before = await editor.textContent();
+    expect(before).toContain('// hello');
+    await undoBtn.click();
+    await expect
+      .poll(async () => (await editor.textContent()).includes('// hello'))
+      .toBe(false);
+    await expect(redoBtn).not.toHaveAttribute('aria-disabled', 'true');
+  });
+
+  test('classic-editor-toolbar-roving: one tab stop, arrows traverse, disabled buttons stay reachable', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+
+    const toolbar = page.locator('#classicEditorToolbar');
+    await expect(toolbar).toBeVisible();
+
+    // Exactly one button is in the tab order
+    const stops = await toolbar.evaluate(
+      (el) =>
+        Array.from(el.querySelectorAll('button')).filter(
+          (b) => b.tabIndex === 0
+        ).length
+    );
+    expect(stops).toBe(1);
+
+    await page.locator('#classicEdNewBtn').focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('#classicEdOpenBtn')).toBeFocused();
+
+    await page.keyboard.press('End');
+    await expect(page.locator('#classicEdPrintBtn')).toBeFocused();
+
+    // Wraps from the last button back to the first
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('#classicEdNewBtn')).toBeFocused();
+
+    await page.keyboard.press('Home');
+    await expect(page.locator('#classicEdNewBtn')).toBeFocused();
+
+    // An aria-disabled button is still in the arrow ring — that is how a
+    // keyboard user discovers it and hears why it is unavailable
+    await page.locator('#classicEdExportStlBtn').focus();
+    await expect(page.locator('#classicEdExportStlBtn')).toBeFocused();
+  });
+});
+
+test.describe('Classic 3D view toolbar (E3-E7)', () => {
+  // Upstream viewerToolBar order (Appendix U3), verbatim
+  const ORDER = [
+    'Preview',
+    'Render',
+    'View All',
+    'Zoom In',
+    'Zoom Out',
+    'Reset View',
+    'Measure Distance',
+    'Measure Angle',
+    'Right',
+    'Left',
+    'Back',
+    'Front',
+    'Top',
+    'Bottom',
+    'Perspective',
+    'Orthogonal',
+    'Show Axes',
+    'Show Scale Markers',
+    'Show Edges',
+  ];
+
+  test('classic-camera-bar: nineteen buttons in upstream order, below the 3D view', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+
+    // Classic-only: the Forge layouts must not gain it
+    await expect(page.locator('#classicCameraBar')).toBeHidden();
+
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+
+    const bar = page.locator('#classicCameraBar');
+    await expect(bar).toBeVisible();
+    await expect(bar).toHaveAttribute('role', 'toolbar');
+    await expect(bar).toHaveAttribute('aria-label', '3D view toolbar');
+
+    const names = await bar.evaluate((el) =>
+      Array.from(el.querySelectorAll('button')).map((b) =>
+        (b.textContent || '').trim()
+      )
+    );
+    expect(names).toEqual(ORDER);
+
+    // R8: it sits along the bottom edge of the 3D view, above the strip
+    const [barBox, viewBox, stripBox] = await Promise.all([
+      bar.boundingBox(),
+      page.locator('.preview-panel').boundingBox(),
+      page.locator('#classicBottomStrip').boundingBox(),
+    ]);
+    expect(barBox.y).toBeGreaterThanOrEqual(viewBox.y + viewBox.height - 2);
+    expect(barBox.y + barBox.height).toBeLessThanOrEqual(stripBox.y + 2);
+
+    // Preview and Render appear exactly once outside the editor toolbar.
+    // The editor toolbar's own pair is the sanctioned desktop-faithful
+    // second instance (DCR-1), so it is excluded from this count.
+    for (const name of ['Preview', 'Render']) {
+      const count = await page.evaluate((n) => {
+        const scopes = [
+          document.getElementById('classicToolbar'),
+          document.getElementById('classicCameraBar'),
+        ].filter(Boolean);
+        return scopes
+          .flatMap((s) => Array.from(s.querySelectorAll('button')))
+          .filter((b) => (b.textContent || '').trim() === n).length;
+      }, name);
+      expect(count, name + ' appears once outside the editor toolbar').toBe(1);
+    }
+
+    // D-18: bed grid and its size select are gone from Classic entirely
+    await expect(page.locator('#classicGridToggle')).toHaveCount(0);
+    await expect(page.locator('#classicGridSizeSelect')).toHaveCount(0);
+    // D-17: Crosshairs lives only in the View menu now
+    await expect(page.locator('#classicCrosshairsToggle')).toHaveCount(0);
+
+    // Leaving Classic hands the bar back rather than destroying it
+    await pickInterfaceMode(page, 'Standard');
+    await expect(page.locator('#classicCameraBar')).toHaveCount(1);
+    await expect(page.locator('#classicCameraBar')).toBeHidden();
+  });
+
+  test('classic-camera-bar-actions: moved buttons still work and the axes split is honest', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+
+    // The snap-view buttons moved out of #classicToolbar; if the wiring were
+    // still scoped to it they would all be silently dead
+    const viewButtons = page.locator('#classicCameraBar [data-classic-view]');
+    await expect(viewButtons).toHaveCount(7);
+
+    // Honest axes split (D-16): each button drives exactly its own flag
+    const axes = page.locator('#classicAxesToggle');
+    const markers = page.locator('#classicScaleMarkersToggle');
+    await expect(axes).toHaveAccessibleName('Show Axes');
+    await expect(markers).toHaveAccessibleName('Show Scale Markers');
+
+    // Entering Classic re-templates the grid and the canvas re-measures, so
+    // the bar is still moving for a moment. Wait for it to settle rather than
+    // forcing the click — a bar that never settles should still fail here.
+    let lastY = null;
+    await expect
+      .poll(
+        async () => {
+          const y = (await axes.boundingBox())?.y ?? null;
+          const settled = y !== null && y === lastY;
+          lastY = y;
+          return settled;
+        },
+        { timeout: 15_000, intervals: [250, 250, 250, 250, 250] }
+      )
+      .toBe(true);
+
+    const markersBefore = await markers.getAttribute('aria-pressed');
+    await axes.click();
+    await expect(axes).toHaveAttribute('aria-pressed', 'true');
+    // Toggling Axes must NOT drag the scale markers along with it
+    await expect(markers).toHaveAttribute('aria-pressed', markersBefore);
+
+    await markers.click();
+    await expect(markers).toHaveAttribute('aria-pressed', 'true');
+
+    // Cross-surface sync: toggling the same flag from the View menu keeps the
+    // button truthful, which it did not before the display-option-change event
+    await page.locator('#viewMenuBtn').click();
+    await page.getByRole('menuitemcheckbox', { name: 'Show Axes' }).click();
+    await expect(axes).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  test('classic-camera-bar-keyboard: one tab stop, disabled measure buttons stay reachable', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+
+    const bar = page.locator('#classicCameraBar');
+    const stops = await bar.evaluate(
+      (el) =>
+        Array.from(el.querySelectorAll('button')).filter(
+          (b) => b.tabIndex === 0
+        ).length
+    );
+    expect(stops).toBe(1);
+
+    await page.locator('#classicPreviewBtn').focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('#classicRenderBtn')).toBeFocused();
+    await page.keyboard.press('End');
+    await expect(page.locator('#classicEdgesToggle')).toBeFocused();
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('#classicPreviewBtn')).toBeFocused();
+
+    // D-15: disabled-with-reason, focusable, and it says why
+    const dist = page.locator('#classicMeasureDistBtn');
+    await expect(dist).toHaveAttribute('aria-disabled', 'true');
+    await expect(dist).toHaveAttribute(
+      'aria-describedby',
+      'classicMeasureReason'
+    );
+    await dist.focus();
+    await expect(dist).toBeFocused();
+    await expect(page.locator('#classicMeasureReason')).toContainText(
+      'Measuring is not available yet'
+    );
+
+    // Simplified drops ONLY the measure pair; the rest of the bar stays
+    await page.locator('#classicDensityToggle').click();
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-classic-density',
+      'simplified'
+    );
+    await expect(dist).toBeHidden();
+    await expect(page.locator('#classicPreviewBtn')).toBeVisible();
+    await expect(page.locator('#classicRenderBtn')).toBeVisible();
+  });
+});
+
+test.describe('Classic toolbars stay one row', () => {
+  test('classic-toolbars-single-row: neither toolbar wraps, and every button is still reachable', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    // 1024px is the tightest desktop width — the camera bar took three rows
+    // here before, costing ~110px of 3D view
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+
+    // A wrapped flex row shows up as buttons on more than one y position
+    const rowCount = (sel) =>
+      page.locator(sel).evaluate((el) => {
+        const tops = new Set(
+          Array.from(el.querySelectorAll('button'))
+            .filter((b) => b.offsetParent !== null)
+            .map((b) => Math.round(b.getBoundingClientRect().top))
+        );
+        return tops.size;
+      });
+
+    expect(await rowCount('#classicCameraBar'), 'camera bar rows').toBe(1);
+    expect(await rowCount('#classicEditorToolbar'), 'editor toolbar rows').toBe(
+      1
+    );
+
+    // Scrolling sideways must not cost reachability: arrow keys traverse the
+    // whole bar and the browser brings a focused button into view
+    await page.locator('#classicPreviewBtn').focus();
+    await page.keyboard.press('End');
+    const last = page.locator('#classicEdgesToggle');
+    await expect(last).toBeFocused();
+    const inView = await last.evaluate((el) => {
+      const bar = document.getElementById('classicCameraBar');
+      const b = el.getBoundingClientRect();
+      const r = bar.getBoundingClientRect();
+      return b.left >= r.left - 1 && b.right <= r.right + 1;
+    });
+    expect(inView, 'focused button scrolled into view').toBe(true);
   });
 });
