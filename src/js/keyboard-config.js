@@ -34,10 +34,24 @@ export const DEFAULT_SHORTCUTS = {
     description: 'Cancel current render',
   },
 
+  renderAlt: {
+    key: 'Enter',
+    ctrl: true,
+    description: 'Render or download (alternative key)',
+  },
+  generateShortcut: {
+    key: 'g',
+    description: 'Generate the model',
+  },
+
   // Downloads
   download: {
     key: 'F7',
     description: 'Export STL / download rendered model',
+  },
+  downloadShortcut: {
+    key: 'd',
+    description: 'Download the rendered model',
   },
   // Code Editor
   toggleExpertMode: {
@@ -109,6 +123,27 @@ export const DEFAULT_SHORTCUTS = {
   },
 
   // Parameter controls
+  //
+  // Undo/redo and the three below used to live in a separate keydown listener
+  // in main.js that this registry knew nothing about, so they could not be
+  // seen in the shortcuts modal, could not be rebound, and Ctrl+Z fired the
+  // parameter undo even while the user was typing in the code editor (G7).
+  undo: {
+    key: 'z',
+    ctrl: true,
+    description: 'Undo the last parameter change',
+  },
+  redo: {
+    key: 'z',
+    ctrl: true,
+    shift: true,
+    description: 'Redo the last parameter change',
+  },
+  redoAlt: {
+    key: 'y',
+    ctrl: true,
+    description: 'Redo the last parameter change (alternative key)',
+  },
   resetAllParams: {
     key: 'r',
     ctrl: true,
@@ -366,11 +401,18 @@ export const LEGACY_FORGE_SHORTCUTS = {
 export const SHORTCUT_CATEGORIES = {
   rendering: {
     label: 'Rendering',
-    actions: ['render', 'preview', 'reloadAndPreview', 'cancelRender'],
+    actions: [
+      'render',
+      'renderAlt',
+      'generateShortcut',
+      'preview',
+      'reloadAndPreview',
+      'cancelRender',
+    ],
   },
   downloads: {
     label: 'Downloads & Export',
-    actions: ['download'],
+    actions: ['download', 'downloadShortcut'],
   },
   view: {
     label: 'View Controls',
@@ -392,7 +434,7 @@ export const SHORTCUT_CATEGORIES = {
   },
   parameters: {
     label: 'Customizer',
-    actions: ['resetAllParams', 'searchParams'],
+    actions: ['undo', 'redo', 'redoAlt', 'resetAllParams', 'searchParams'],
   },
   theme: {
     label: 'Theme',

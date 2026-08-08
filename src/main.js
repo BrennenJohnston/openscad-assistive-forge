@@ -649,6 +649,12 @@ function toggleClassicToolbar(bar) {
   _announce(`${def.name} ${hidden ? 'hidden' : 'shown'}`);
 }
 
+// Edit ▸ Insert Template (G7, D-43). Nothing in Appendix U or this repository
+// transcribes what upstream's template actually inserts, and this round fetches
+// nothing from upstream, so building it would mean inventing it.
+const INSERT_TEMPLATE_REASON =
+  "Insert Template is not built yet: nothing in this project records what the desktop's template inserts, and guessing would put code you did not write into your file.";
+
 // Help ▸ Offline … (G6). Both are disabled with a reason rather than hidden:
 // D-39 defers all offline-documentation bundling out of this plan, so nothing
 // third-party is fetched, pinned or vendored here.
@@ -2669,6 +2675,10 @@ async function initApp() {
 
   const setFirstVisitBlocking = (blocked) => {
     firstVisitBlocking = blocked;
+    // The legacy keydown listener checked this flag itself. Now that its
+    // shortcuts live in the registry, the guard belongs there — and it covers
+    // every registered shortcut, not only the six that were folded in (G7).
+    keyboardConfig.setEnabled(!blocked);
     if (appRoot) {
       if (blocked) {
         appRoot.setAttribute('aria-hidden', 'true');
@@ -3657,6 +3667,15 @@ async function initApp() {
       editorAction('Comment', 'comment'),
       editorAction('Uncomment', 'uncomment'),
       editorAction('Convert Tabs to Spaces', 'convertTabsToSpaces'),
+      {
+        // Upstream has no menu entry for this — it is Alt+Ins only — but a
+        // keyboard-only action that does nothing tells the user nothing.
+        // Disabled here so it can at least say why (D-43).
+        type: 'action',
+        label: 'Insert Template',
+        disabled: true,
+        tooltip: INSERT_TEMPLATE_REASON,
+      },
       editorAction('Toggle Bookmark', 'toggleBookmark'),
       editorAction('Jump to next bookmark', 'nextBookmark'),
       editorAction('Jump to previous bookmark', 'previousBookmark'),
@@ -14255,6 +14274,54 @@ if (rounded) {
     }
   });
 
+  // Folded out of the legacy keydown listener (G7). Each of these was a second
+  // document-level path this registry knew nothing about: invisible in the
+  // shortcuts modal, impossible to rebind, and — for Ctrl+Z — firing the
+  // parameter undo even while the user was typing in the code editor, because
+  // that listener had no text-entry guard. The registry skips every non-global
+  // shortcut inside an input or a contenteditable, so the editor keeps its own
+  // undo and nothing fires twice.
+  keyboardConfig.on('undo', () => {
+    const state = stateManager.getState();
+    if (state.uploadedFile && stateManager.canUndo()) {
+      performUndo();
+    }
+  });
+
+  const redoParameterChange = () => {
+    const state = stateManager.getState();
+    if (state.uploadedFile && stateManager.canRedo()) {
+      performRedo();
+    }
+  };
+  keyboardConfig.on('redo', redoParameterChange);
+  keyboardConfig.on('redoAlt', redoParameterChange);
+
+  keyboardConfig.on('renderAlt', () => {
+    const state = stateManager.getState();
+    if (state.uploadedFile && !primaryActionBtn.disabled) {
+      primaryActionBtn.click();
+    }
+  });
+
+  keyboardConfig.on('generateShortcut', () => {
+    const state = stateManager.getState();
+    if (
+      state.uploadedFile &&
+      primaryActionBtn.dataset.action === 'generate' &&
+      !primaryActionBtn.disabled
+    ) {
+      primaryActionBtn.click();
+    }
+  });
+
+  keyboardConfig.on('downloadShortcut', () => {
+    const state = stateManager.getState();
+    if (state.stl && primaryActionBtn.dataset.action === 'download') {
+      primaryActionBtn.click();
+    }
+  });
+
   keyboardConfig.on('preview', () => {
     const state = stateManager.getState();
     if (state.uploadedFile && autoPreviewController) {
@@ -14613,85 +14680,6 @@ if (rounded) {
       updateStatus('Gamepad disconnected');
     });
   }
-
-  // The bare r/d/g shortcuts below must never steal a keystroke from
-  // somewhere the user is entering text. CodeMirror's editing surface is a
-  // contenteditable div, not a textarea, so a tagName-only check let 'r'
-  // reset every parameter while the user was typing "render".
-  const isTextEntryTarget = (target) =>
-    target.tagName === 'INPUT' ||
-    target.tagName === 'TEXTAREA' ||
-    target.tagName === 'SELECT' ||
-    target.isContentEditable;
-
-  // Global keyboard shortcuts (legacy - kept for backward compatibility)
-  document.addEventListener('keydown', (e) => {
-    const state = stateManager.getState();
-    if (firstVisitBlocking) {
-      return;
-    }
-
-    // Ctrl/Cmd + Z: Undo
-    if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-      if (state.uploadedFile && stateManager.canUndo()) {
-        e.preventDefault();
-        performUndo();
-      }
-    }
-
-    // Ctrl/Cmd + Shift + Z: Redo (also Ctrl/Cmd + Y)
-    if (
-      (e.ctrlKey || e.metaKey) &&
-      ((e.key === 'z' && e.shiftKey) || e.key === 'y')
-    ) {
-      if (state.uploadedFile && stateManager.canRedo()) {
-        e.preventDefault();
-        performRedo();
-      }
-    }
-
-    // Ctrl/Cmd + Enter: Trigger primary action (generate or download)
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-      if (state.uploadedFile && !primaryActionBtn.disabled) {
-        e.preventDefault();
-        primaryActionBtn.click();
-      }
-    }
-
-    // R key: Reset parameters (when not in input field)
-    if (e.key === 'r' && !e.ctrlKey && !e.metaKey) {
-      if (!isTextEntryTarget(e.target)) {
-        if (state.uploadedFile) {
-          e.preventDefault();
-          resetBtn.click();
-        }
-      }
-    }
-
-    // D key: Download (when button is in download mode)
-    if (e.key === 'd' && !e.ctrlKey && !e.metaKey) {
-      if (!isTextEntryTarget(e.target)) {
-        if (state.stl && primaryActionBtn.dataset.action === 'download') {
-          e.preventDefault();
-          primaryActionBtn.click();
-        }
-      }
-    }
-
-    // G key: Generate (when button is in generate mode)
-    if (e.key === 'g' && !e.ctrlKey && !e.metaKey) {
-      if (!isTextEntryTarget(e.target)) {
-        if (
-          state.uploadedFile &&
-          primaryActionBtn.dataset.action === 'generate' &&
-          !primaryActionBtn.disabled
-        ) {
-          e.preventDefault();
-          primaryActionBtn.click();
-        }
-      }
-    }
-  });
 
   updateStatus('Ready - Upload a file to begin');
 }

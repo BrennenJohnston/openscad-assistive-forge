@@ -988,9 +988,10 @@ test.describe('Classic mode layout (C4)', () => {
       .evaluate((el) => getComputedStyle(el).backgroundImage);
     expect(iconImage, 'vendored icon resolves').toContain('openscad-icons');
 
-    // Snap views and Render moved to the 3D view toolbar, still seven of them
+    // Snap views and Render moved to the 3D view toolbar. Six snap views —
+    // G4 took Reset View out of them and gave it its own command.
     const cameraBar = page.locator('#classicCameraBar');
-    await expect(cameraBar.locator('[data-classic-view]')).toHaveCount(7);
+    await expect(cameraBar.locator('[data-classic-view]')).toHaveCount(6);
     await expect(cameraBar.locator('#classicRenderBtn')).toBeVisible();
 
     // Axes toggle reflects pressed state
@@ -1959,9 +1960,12 @@ test.describe('Classic 3D view toolbar (E3-E7)', () => {
     await pickInterfaceMode(page, 'Classic (Desktop Layout)');
 
     // The snap-view buttons moved out of #classicToolbar; if the wiring were
-    // still scoped to it they would all be silently dead
+    // still scoped to it they would all be silently dead. Six, not seven:
+    // G4 gave Reset View its own command instead of a snap to diagonal, so it
+    // means the same thing as the View menu item of that name.
     const viewButtons = page.locator('#classicCameraBar [data-classic-view]');
-    await expect(viewButtons).toHaveCount(7);
+    await expect(viewButtons).toHaveCount(6);
+    await expect(page.locator('#classicResetViewBtn')).toBeVisible();
 
     // Honest axes split (D-16): each button drives exactly its own flag
     const axes = page.locator('#classicAxesToggle');

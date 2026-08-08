@@ -49,6 +49,9 @@ const EDIT_MENU_ORDER = [
   'Comment',
   'Uncomment',
   'Convert Tabs to Spaces',
+  // Upstream reaches this by Alt+Ins only, with no menu entry; it ships here
+  // disabled-with-reason so it can at least say why it does nothing (D-43).
+  'Insert Template',
   'Toggle Bookmark',
   'Jump to next bookmark',
   'Jump to previous bookmark',
@@ -329,6 +332,10 @@ test.describe('Edit menu parity (G2)', () => {
     expect(items.map((i) => i.label)).toEqual(EDIT_MENU_ORDER)
 
     // D-24: no editor tabs in a one-document app.
+    const insertTemplate = items.find((i) => i.label === 'Insert Template')
+    expect(insertTemplate.disabled).toBe(true)
+    expect(insertTemplate.title).toContain('not built yet')
+
     expect(items.some((i) => /Show (Next|Previous) Tab/.test(i.label))).toBe(
       false
     )
@@ -918,6 +925,130 @@ test.describe('Help menu parity (G6)', () => {
       'aria-selected',
       'false'
     )
+  })
+})
+
+test.describe('Mnemonics and one path per shortcut (G7)', () => {
+  test('menus underline the access keys U2 marks, and only those', async ({
+    page,
+  }) => {
+    await loadFixture(page)
+
+    /** label -> the underlined character, for one menu. */
+    async function underlined(menuId) {
+      await page.locator(`#${menuId}MenuBtn`).click()
+      const out = await page.evaluate((id) => {
+        const result = {}
+        for (const btn of document.querySelectorAll(
+          `#${id}MenuItems .menu-item-label`
+        )) {
+          result[btn.textContent] =
+            btn.querySelector('.menu-mnemonic')?.textContent ?? null
+        }
+        return result
+      }, menuId)
+      await page.keyboard.press('Escape')
+      return out
+    }
+
+    const file = await underlined('file')
+    expect(file['New File']).toBe('N')
+    expect(file['Recent Files']).toBe('t') // Recen&t Files
+    expect(file['Export']).toBe('x') // E&xport
+    expect(file['Save As…']).toBe('A')
+    // Forge extras upstream does not have get no invented access key.
+    expect(file['Open Local Folder…']).toBeNull()
+    expect(file['Save a Copy']).toBeNull()
+
+    const edit = await underlined('edit')
+    expect(edit['Cut']).toBe('t') // Cu&t
+    expect(edit['Uncomment']).toBe('m') // Unco&mment
+    expect(edit['Copy viewport translation']).toBe('a') // transl&ation
+    expect(edit['Find Next']).toBe('x') // Find Ne&xt
+
+    const view = await underlined('view')
+    expect(view['Back']).toBe('k') // Bac&k
+    expect(view['Center']).toBe('n') // Ce&nter
+    // U2 marks no access key on the display toggles.
+    expect(view['Show Edges']).toBeNull()
+    expect(view['View All']).toBeNull()
+
+    // Underlining must not change what the item is called.
+    const labels = (await readMenu(page, 'view')).map((i) => i.label)
+    expect(labels).toEqual(VIEW_MENU_ORDER)
+  })
+
+  test('a disabled item states its reason once, not twice', async ({
+    page,
+  }) => {
+    await loadFixture(page)
+
+    await page.locator('#helpMenuBtn').click()
+    const item = menuItem(page, 'help', 'Offline Cheat Sheet')
+
+    // The reason used to live INSIDE the button, so it was part of the
+    // accessible NAME and the description both (D-14).
+    const name = await item.evaluate((el) => el.textContent)
+    expect(name).toBe('Offline Cheat Sheet')
+
+    const describedBy = await item.getAttribute('aria-describedby')
+    expect(describedBy).toBeTruthy()
+    const description = await page.evaluate(
+      (id) => document.getElementById(id)?.textContent ?? '',
+      describedBy.split(' ')[0]
+    )
+    expect(description).toContain('not bundled yet')
+  })
+
+  test('Ctrl+Z has exactly one path and stays out of the code editor', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+    await loadFixture(page)
+
+    // It is now a registry action, so it appears in the shortcuts modal and
+    // can be rebound. It used to be invisible there.
+    await page.keyboard.press('Control+Shift+K')
+    await expect(page.locator('#shortcutsModal')).toBeVisible()
+    await expect(page.locator('#shortcutsModalBody')).toContainText(
+      'Undo the last parameter change'
+    )
+    await page.locator('#shortcutsModalDone').click()
+
+    // One press, one undo. A second live path would take the parameter back
+    // two steps at once.
+    // The parameter groups are closed disclosures, so open the one this
+    // parameter lives in before touching it.
+    const slider = page.locator('#param-width')
+    const group = page.locator('details.param-group', { has: slider })
+    if (!(await group.evaluate((el) => el.open))) {
+      await group.locator('summary').first().click()
+    }
+
+    const original = Number(await slider.inputValue())
+    await slider.fill(String(original + 1))
+    await page.waitForTimeout(700) // two separate history entries, not one
+    await slider.fill(String(original + 2))
+    await expect(slider).toHaveValue(String(original + 2))
+
+    // A focused INPUT is where the registry deliberately stands aside, so
+    // step out of it before pressing the shortcut.
+    await slider.evaluate((el) => el.blur())
+    await page.keyboard.press('Control+z')
+    await expect(slider).toHaveValue(String(original + 1))
+
+    // In the editor, Ctrl+Z is the EDITOR's undo and must not also rewind a
+    // parameter. The legacy listener had no text-entry guard, so it did both.
+    await openEditor(page)
+    const editor = page.locator('#expertModePanel .cm-content')
+    await editor.click()
+    await page.keyboard.type('// marker', { delay: 25 })
+    await expect(editor).toContainText('// marker')
+
+    await page.keyboard.press('Control+z')
+    await expect(editor).not.toContainText('// marker')
+    // The parameter must not have moved a second time.
+    await expect(slider).toHaveValue(String(original + 1))
   })
 })
 
