@@ -35,15 +35,42 @@ describe('font manifest (F2)', () => {
   });
 
   // The drift guard this module exists for: the manifest is the UI's idea of
-  // which fonts exist, and public/fonts/ is what the worker can actually
-  // fetch. If they disagree, the Font List shows a font text() cannot use, or
-  // hides one it can.
-  it('names every .ttf that is really served, and no others', () => {
+  // which fonts exist, and what the worker can actually fetch is whatever the
+  // downloader put in public/fonts/. If they disagree, the Font List shows a
+  // font text() cannot use, or hides one it can.
+  //
+  // The downloader is the source of truth, not the folder: `public/fonts/*.ttf`
+  // is gitignored (.gitignore:12) and only appears after `npm run setup-wasm`,
+  // which the Unit Tests CI job does not run. Its list is read from source
+  // text because the module cannot be imported — it calls setup() on load.
+  it('names every font the downloader fetches, and no others', () => {
+    const script = fs.readFileSync(
+      path.join(process.cwd(), 'scripts', 'download-wasm.js'),
+      'utf8'
+    );
+    const block = script.match(/const REQUIRED_FONTS\s*=\s*\[([\s\S]*?)\]/);
+    if (!block) {
+      // Renaming the list must fail loudly, not quietly stop guarding.
+      throw new Error(
+        'REQUIRED_FONTS not found in scripts/download-wasm.js — the font ' +
+          'drift guard can no longer see what the downloader fetches'
+      );
+    }
+    const fetched = [...block[1].matchAll(/'([^']+\.ttf)'/g)]
+      .map((m) => m[1])
+      .sort();
+    expect(fetched).toEqual([...FONT_FILES].sort());
+  });
+
+  it('matches what is on disk, wherever the fonts have been downloaded', () => {
     const dir = path.join(process.cwd(), 'public', FONT_ASSET_DIR);
     const onDisk = fs
       .readdirSync(dir)
       .filter((name) => name.toLowerCase().endsWith('.ttf'))
       .sort();
+    // Empty means setup-wasm has not run in this environment, not that the
+    // manifest is wrong; the assertion above covers that case.
+    if (onDisk.length === 0) return;
     expect(onDisk).toEqual([...FONT_FILES].sort());
   });
 
