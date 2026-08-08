@@ -2457,4 +2457,53 @@ test.describe('Classic dock relocation (B6-B8)', () => {
       )
     ).toBe(stored);
   });
+  test('classic-dock-shot7: the editor docks above the Customizer, keyboard only', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await enterClassicDesktop(page);
+
+    // Desktop screenshot 7, reached without a pointer
+    await page
+      .getByRole('button', { name: 'Move Editor', exact: true })
+      .focus();
+    await page.keyboard.press('Enter');
+    // The editor's own field is omitted, so the first item IS the right column
+    await expect(
+      page.locator('.classic-panel-menu [role="menuitem"]').first()
+    ).toHaveText('Move to upper right');
+    await page.keyboard.press('Enter');
+
+    // A column takes the moved panel FIRST — above the Customizer, as upstream
+    expect(
+      await page
+        .locator('#classicFieldRightTop')
+        .evaluate((el) => [...el.children].map((c) => c.id))
+    ).toEqual(['classicEditorSlot', 'paramPanel']);
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-classic-field-left',
+      'empty'
+    );
+
+    // The bottom strip appends instead, so its panes keep reading left to right
+    await page
+      .getByRole('button', { name: 'Move Customizer', exact: true })
+      .click();
+    await page
+      .locator('.classic-panel-menu [role="menuitem"]', {
+        hasText: 'Move to bottom',
+      })
+      .click();
+    expect(
+      await page
+        .locator('#classicBottomStrip')
+        .evaluate((el) => [...el.children].map((c) => c.id))
+    ).toEqual([
+      'classicConsoleSlot',
+      'classicErrorLogSlot',
+      'classicAnimateSlot',
+      'classicFontListSlot',
+      'paramPanel',
+    ]);
+  });
 });

@@ -23,6 +23,7 @@ import { announceImmediate } from './announcer.js';
 import {
   DOCK_FIELDS,
   TAB_BAR_CLASS,
+  defaultInsertIndex,
   elementIdFor,
   fieldPositionLabel,
   panelLabel,
@@ -381,9 +382,12 @@ export class ClassicPanelMenus {
    * @private
    */
   _run(item) {
-    const result = this._deps.movePanel(item.panelId, item.field, null, {
-      mergeWith: item.mergeWith,
-    });
+    const result = this._deps.movePanel(
+      item.panelId,
+      item.field,
+      item.mergeWith ? null : defaultInsertIndex(item.field),
+      { mergeWith: item.mergeWith }
+    );
     if (!result?.ok) return;
 
     // movePanel has already re-hung the menus and placed focus; refreshing

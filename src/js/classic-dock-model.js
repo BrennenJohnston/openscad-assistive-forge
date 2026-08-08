@@ -52,6 +52,7 @@ export const DOCK_FIELDS = Object.freeze([
     elementId: 'classicFieldLeft',
     label: 'Left column',
     positionLabel: 'left column',
+    insertAt: 'start',
   },
   {
     name: 'right-top',
@@ -59,6 +60,7 @@ export const DOCK_FIELDS = Object.freeze([
     elementId: 'classicFieldRightTop',
     label: 'Upper right',
     positionLabel: 'upper right',
+    insertAt: 'start',
   },
   {
     name: 'right-bottom',
@@ -66,6 +68,7 @@ export const DOCK_FIELDS = Object.freeze([
     elementId: 'classicFieldRightBottom',
     label: 'Lower right',
     positionLabel: 'lower right',
+    insertAt: 'start',
   },
   // The bottom strip predates the field model (B2) and keeps its id, so the
   // CSS and the R2a regression tests that name it still apply.
@@ -75,6 +78,7 @@ export const DOCK_FIELDS = Object.freeze([
     elementId: 'classicBottomStrip',
     label: 'Bottom',
     positionLabel: 'bottom',
+    insertAt: 'end',
   },
 ]);
 
@@ -102,6 +106,21 @@ export function fieldLabel(field) {
  */
 export function fieldPositionLabel(field) {
   return DOCK_FIELDS.find((f) => f.name === field)?.positionLabel || field;
+}
+
+/**
+ * Where a panel lands in a field when the mover does not say (B8's menu items
+ * carry no position). A column takes it FIRST — the panel you just moved is
+ * the one you want to see, and it is what puts the Editor above the Customizer
+ * in desktop screenshot 7. The bottom strip takes it LAST, because its panes
+ * read left to right and a new one belongs at the end.
+ * @param {string} field
+ * @returns {number|null} an index for movePanel, or null to append
+ */
+export function defaultInsertIndex(field) {
+  return DOCK_FIELDS.find((f) => f.name === field)?.insertAt === 'start'
+    ? 0
+    : null;
 }
 
 /**
