@@ -3559,25 +3559,50 @@ async function initApp() {
           },
         };
       })(),
-      {
-        type: 'action',
-        label: 'Viewport-Control',
-        ...(document.body.dataset.uiMode === 'classic'
-          ? {
-              disabled: true,
-              tooltip:
-                'The camera panel is not part of the Classic layout \u2014 drag to orbit, or use the View menu and toolbar view buttons',
+      // The three panels sub-plan F builds are Classic-only this round (D-32),
+      // so each is a real dock toggle in Classic and keeps its previous Forge
+      // behaviour outside it. Viewport-Control used to be disabled in Classic
+      // with an apologetic tooltip; it is a real panel now (F4/F6).
+      (() => {
+        const classicLayout = getClassicLayoutController();
+        if (document.body.dataset.uiMode === 'classic' && classicLayout) {
+          return {
+            type: 'toggle',
+            label: 'Viewport-Control',
+            checked: classicLayout.isViewportControlVisible(),
+            handler: () => classicLayout.toggleViewportControl(),
+          };
+        }
+        return {
+          type: 'action',
+          label: 'Viewport-Control',
+          handler: () => {
+            const panel = document.getElementById('cameraPanel');
+            if (panel) {
+              panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              const focusable = panel.querySelector('button, input, select');
+              if (focusable) focusable.focus();
             }
-          : {}),
-        handler: () => {
-          const panel = document.getElementById('cameraPanel');
-          if (panel) {
-            panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            const focusable = panel.querySelector('button, input, select');
-            if (focusable) focusable.focus();
-          }
-        },
-      },
+          },
+        };
+      })(),
+      ...(document.body.dataset.uiMode === 'classic' &&
+      getClassicLayoutController()
+        ? [
+            {
+              type: 'toggle',
+              label: 'Animate',
+              checked: getClassicLayoutController().isAnimateVisible(),
+              handler: () => getClassicLayoutController().toggleAnimate(),
+            },
+            {
+              type: 'toggle',
+              label: 'Font List',
+              checked: getClassicLayoutController().isFontListVisible(),
+              handler: () => getClassicLayoutController().toggleFontList(),
+            },
+          ]
+        : []),
       { type: 'separator' },
       // -- Web-only panel toggles --
       // fileActions, editTools, designTools, displayOptions removed — now in toolbar menus
