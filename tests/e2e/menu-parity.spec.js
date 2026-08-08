@@ -36,6 +36,43 @@ const FILE_MENU_ORDER = [
   'Show Library Folder…',
 ]
 
+const EDIT_MENU_ORDER = [
+  'Undo',
+  'Redo',
+  '---',
+  'Cut',
+  'Copy',
+  'Paste',
+  '---',
+  'Indent',
+  'Unindent',
+  'Comment',
+  'Uncomment',
+  'Convert Tabs to Spaces',
+  'Toggle Bookmark',
+  'Jump to next bookmark',
+  'Jump to previous bookmark',
+  '---',
+  'Copy viewport image',
+  'Copy viewport translation',
+  'Copy viewport rotation',
+  'Copy viewport distance',
+  'Copy viewport field of view',
+  '---',
+  'Find…',
+  'Find and Replace…',
+  'Find Next',
+  'Find Previous',
+  'Use Selection for Find',
+  '---',
+  'Jump to next error',
+  'Jump to previous error',
+  '---',
+  'Increase Font Size',
+  'Decrease Font Size',
+  'Preferences (Keyboard Shortcuts)…',
+]
+
 async function waitForWasmReady(page) {
   await page.waitForSelector('body[data-wasm-ready="true"]', {
     state: 'attached',
@@ -119,6 +156,20 @@ async function readSubmenu(page, menuId, submenuLabel) {
   )
 }
 
+/** Exact-label menu item. Playwright's hasText is a case-insensitive
+ *  substring, which makes "Cut" match "Preferences (Keyboard Shortcuts)". */
+function menuItem(page, menuId, label) {
+  return page
+    .locator(`#${menuId}MenuItems button`)
+    .filter({ has: page.getByText(label, { exact: true }) })
+    .first()
+}
+
+async function clickMenuItem(page, menuId, label) {
+  await page.locator(`#${menuId}MenuBtn`).click()
+  await menuItem(page, menuId, label).click()
+}
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true')
@@ -167,9 +218,7 @@ test.describe('File menu parity (G1)', () => {
     await loadFixture(page)
 
     await page.locator('#fileMenuBtn').click()
-    await page
-      .locator('#fileMenuItems .menu-submenu-trigger', { hasText: 'Recent Files' })
-      .click()
+    await menuItem(page, 'file', 'Recent Files').click()
 
     const entries = await readSubmenu(page, 'file', 'Recent Files')
     const labels = entries.map((e) => e.label)
@@ -190,16 +239,10 @@ test.describe('File menu parity (G1)', () => {
     expect(labels[labels.length - 2]).toBe('---')
     expect(entries[entries.length - 1].disabled).toBe(false)
 
-    await page
-      .locator('#fileMenuItems ul[aria-label="Recent Files"] button', {
-        hasText: 'Clear Recent',
-      })
-      .click()
+    await menuItem(page, 'file', 'Clear Recent').click()
 
     await page.locator('#fileMenuBtn').click()
-    await page
-      .locator('#fileMenuItems .menu-submenu-trigger', { hasText: 'Recent Files' })
-      .click()
+    await menuItem(page, 'file', 'Recent Files').click()
     const afterClear = await readSubmenu(page, 'file', 'Recent Files')
     expect(afterClear.map((e) => e.label)).toEqual([
       'No recent files',
@@ -226,14 +269,8 @@ test.describe('File menu parity (G1)', () => {
     )
 
     await page.locator('#fileMenuBtn').click()
-    await page
-      .locator('#fileMenuItems .menu-submenu-trigger', { hasText: 'Recent Files' })
-      .click()
-    await page
-      .locator('#fileMenuItems ul[aria-label="Recent Files"] button', {
-        hasText: 'simple_box.scad',
-      })
-      .click()
+    await menuItem(page, 'file', 'Recent Files').click()
+    await menuItem(page, 'file', 'simple_box.scad').click()
 
     // Replacing an open file asks first — that guard is pre-existing.
     const confirm = page.locator('.confirm-modal')
@@ -257,10 +294,7 @@ test.describe('File menu parity (G1)', () => {
     await page.keyboard.type('// unsaved work\n', { delay: 25 })
     await expect(page.locator('#editorDirtyIndicator')).toBeVisible()
 
-    await page.locator('#fileMenuBtn').click()
-    await page
-      .locator('#fileMenuItems button', { hasText: 'Close Project' })
-      .click()
+    await clickMenuItem(page, 'file', 'Close Project')
 
     const confirm = page.locator('.confirm-modal')
     await expect(confirm).toBeVisible()
@@ -279,11 +313,198 @@ test.describe('File menu parity (G1)', () => {
     await expect(page.locator('#mainInterface')).toBeVisible()
     await expect(page.locator('.confirm-modal')).toHaveCount(0)
 
-    await page.locator('#fileMenuBtn').click()
-    await page
-      .locator('#fileMenuItems button', { hasText: 'Close Project' })
-      .click()
+    await clickMenuItem(page, 'file', 'Close Project')
     await page.locator('.confirm-modal button[data-action="confirm"]').click()
     await expect(page.locator('#welcomeScreen')).toBeVisible({ timeout: 15_000 })
+  })
+})
+
+test.describe('Edit menu parity (G2)', () => {
+  test('order and labels follow upstream U2', async ({ page }) => {
+    await loadFixture(page)
+    await openEditor(page)
+
+    await page.locator('#editMenuBtn').click()
+    const items = await readMenu(page, 'edit')
+    expect(items.map((i) => i.label)).toEqual(EDIT_MENU_ORDER)
+
+    // D-24: no editor tabs in a one-document app.
+    expect(items.some((i) => /Show (Next|Previous) Tab/.test(i.label))).toBe(
+      false
+    )
+
+    // Nothing is selected yet, so Use Selection for Find says why.
+    const useSelection = items.find(
+      (i) => i.label === 'Use Selection for Find'
+    )
+    expect(useSelection.disabled).toBe(true)
+    expect(useSelection.title).toBe(
+      'Select some text in the code editor first'
+    )
+  })
+
+  test('Undo follows the focus: editor text, not a parameter', async ({
+    page,
+  }) => {
+    await loadFixture(page)
+    await openEditor(page)
+
+    const editor = page.locator('#expertModePanel .cm-content')
+    await editor.click()
+    await page.keyboard.type('// bookmark me\n', { delay: 25 })
+    await expect(editor).toContainText('// bookmark me')
+
+    await page.locator('#editMenuBtn').click()
+    const items = await readMenu(page, 'edit')
+    const undo = items.find((i) => i.label === 'Undo')
+
+    // The parameter history is empty, so an enabled Undo can only be the
+    // editor's — and the tooltip has to say which one it is.
+    expect(undo.disabled).toBe(false)
+    expect(undo.title).toContain('code editor')
+
+    await menuItem(page, 'edit', 'Undo').click()
+    await expect(editor).not.toContainText('ZZMARKER')
+  })
+
+  test('Cut acts on the selection the menu bar took focus from', async ({
+    page,
+  }) => {
+    await loadFixture(page)
+    await openEditor(page)
+
+    const editor = page.locator('#expertModePanel .cm-content')
+    await editor.click()
+    await page.keyboard.press('Control+Home')
+    await page.keyboard.press('Shift+End')
+    await expect(editor).toContainText('Simple Box - Test Fixture')
+
+    await clickMenuItem(page, 'edit', 'Cut')
+
+    await expect(editor).not.toContainText('Simple Box - Test Fixture')
+  })
+
+  test('bookmarks toggle, mark the gutter, and navigate with announcements', async ({
+    page,
+  }) => {
+    await loadFixture(page)
+    await openEditor(page)
+
+    const editor = page.locator('#expertModePanel .cm-content')
+    await editor.click()
+    await page.keyboard.press('Control+Home')
+
+    await clickMenuItem(page, 'edit', 'Toggle Bookmark')
+
+    await expect(page.locator('.cm-bookmark-dot:visible')).toHaveCount(1)
+    await expect(page.locator('#srAnnouncer')).toHaveText(
+      'Bookmark added, line 1'
+    )
+
+    await editor.click()
+    await page.keyboard.press('Control+End')
+
+    await clickMenuItem(page, 'edit', 'Jump to next bookmark')
+    await expect(page.locator('#srAnnouncer')).toHaveText(
+      'Line 1, bookmark 1 of 1'
+    )
+
+    // Toggling the same line again removes it.
+    await clickMenuItem(page, 'edit', 'Toggle Bookmark')
+    await expect(page.locator('.cm-bookmark-dot:visible')).toHaveCount(0)
+    await expect(page.locator('#srAnnouncer')).toHaveText(
+      'Bookmark removed, line 1'
+    )
+  })
+
+  test('Convert Tabs to Spaces expands tabs to the next tab stop', async ({
+    page,
+  }) => {
+    await loadFixture(page)
+    await openEditor(page)
+
+    const editor = page.locator('#expertModePanel .cm-content')
+    await editor.click()
+    await page.keyboard.press('Control+Home')
+    await page.keyboard.insertText('\tx\n')
+
+    const hasTab = () =>
+      page.evaluate(
+        () =>
+          document
+            .querySelector('#expertModePanel .cm-content')
+            ?.textContent?.includes('\t') ?? false
+      )
+    expect(await hasTab()).toBe(true)
+
+    await clickMenuItem(page, 'edit', 'Convert Tabs to Spaces')
+
+    await expect.poll(hasTab).toBe(false)
+    await expect(editor).toContainText('    x')
+  })
+})
+
+test.describe('Editor folding (G2, D-40)', () => {
+  test('blocks are foldable and Fold All hides them', async ({ page }) => {
+    await loadFixture(page)
+    await openEditor(page)
+
+    const editor = page.locator('#expertModePanel .cm-content')
+    await expect(editor).toContainText('module box()')
+
+    // A StreamLanguage carries no structure, so a fold service has to supply
+    // it: without one the gutter draws nothing and Fold All is a no-op.
+    await expect(
+      page.locator('#expertModePanel .cm-foldGutter [title]')
+    ).not.toHaveCount(0)
+
+    await editor.click()
+    await page.keyboard.press('Control+Alt+BracketLeft')
+    await expect(
+      page.locator('#expertModePanel .cm-foldPlaceholder')
+    ).not.toHaveCount(0)
+    await expect(editor).not.toContainText('difference()')
+
+    await page.keyboard.press('Control+Alt+BracketRight')
+    await expect(
+      page.locator('#expertModePanel .cm-foldPlaceholder')
+    ).toHaveCount(0)
+    await expect(editor).toContainText('difference()')
+  })
+})
+
+test.describe('Grown menus stay reachable (G1/G2)', () => {
+  test('the Edit menu scrolls and its last item is reachable by keyboard', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1400, height: 900 })
+    await loadFixture(page)
+    await openEditor(page)
+
+    await page.locator('#editMenuBtn').click()
+
+    // 33 items no longer fit a 900px window, so the panel has to scroll
+    // rather than clip its tail off the bottom of the screen.
+    const scrolls = await page.evaluate(() => {
+      const body = document
+        .getElementById('editMenuItems')
+        ?.closest('.toolbar-menu-body')
+      return body ? body.scrollHeight > body.clientHeight : null
+    })
+    expect(scrolls).toBe(true)
+
+    await page.keyboard.press('End')
+    const landed = await page.evaluate(() => {
+      const el = document.activeElement
+      const rect = el?.getBoundingClientRect()
+      return {
+        label: el?.querySelector('.menu-item-label')?.textContent ?? null,
+        onScreen: Boolean(
+          rect && rect.top >= 0 && rect.bottom <= window.innerHeight
+        ),
+      }
+    })
+    expect(landed.label).toBe('Preferences (Keyboard Shortcuts)…')
+    expect(landed.onScreen).toBe(true)
   })
 })

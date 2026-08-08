@@ -3200,30 +3200,75 @@ async function initApp() {
   });
   editActionsController.init();
 
-  // ── Toolbar: Edit menu ──────────────────────────────────────────────────
+  // -- Toolbar: Edit menu --------------------------------------------------
+  // Order and labels transcribed from upstream MainWindow.ui (Appendix U2).
+  // Omitted and documented: Show Next/Previous Tab (D-24 -- one document, no
+  // editor tabs). Preferences is relabelled honestly (D-29). Jump to previous
+  // error is a Forge extra, kept beside its upstream sibling.
   getToolbarMenuController().registerMenuBuilder('edit', () => {
     const state = stateManager.getState();
     const hasFile = Boolean(state.uploadedFile);
-    const canUndo = stateManager.canUndo();
-    const canRedo = stateManager.canRedo();
 
     const modeManager = getModeManager();
     const editor = modeManager?.getEditorInstance?.();
     const expertMode = modeManager?.isExpertMode?.();
-    const canEdit = expertMode && editor;
+    // "Is there an editor the user can actually type in?" ModeManager's expert
+    // flag stays false in Classic even though the dock's Editor pane is
+    // mounted, visible and holding the project — so asking it alone disabled
+    // every editor action in the one theme this release is about.
+    const editorBox = document
+      .getElementById('expertModePanel')
+      ?.getBoundingClientRect();
+    const editorOnScreen = Boolean(
+      editorBox && editorBox.width > 0 && editorBox.height > 0
+    );
+    const canEdit = Boolean(editor) && (expertMode || editorOnScreen);
     const editorTip = 'Available when the Code Editor is open';
 
-    function editorAction(label, actionId) {
-      const available = canEdit && editor.supportsAction?.(actionId) === true;
+    // Undo and Redo follow the focus the menu bar just took: from the code
+    // editor they undo text, from anywhere else a parameter change. The
+    // parameter history keeps its own toolbar buttons, which say so by name.
+    const focusInEditor = Boolean(
+      getToolbarMenuController()
+        .getLastExternalFocus()
+        ?.closest?.('#expertModePanel')
+    );
+    const undoTargetsEditor = Boolean(canEdit && focusInEditor);
+    const canUndo = undoTargetsEditor
+      ? Boolean(editor.canUndo?.())
+      : stateManager.canUndo();
+    const canRedo = undoTargetsEditor
+      ? Boolean(editor.canRedo?.())
+      : stateManager.canRedo();
+
+    function historyTooltip(verb, available) {
+      const what = undoTargetsEditor
+        ? 'change in the code editor'
+        : 'parameter change';
+      return available
+        ? `${verb}es the last ${what}`
+        : `Nothing to ${verb.toLowerCase()}: no ${what} yet`;
+    }
+
+    /**
+     * @param {string} label
+     * @param {string} actionId
+     * @param {true|string} [gate] True when allowed, or the reason it is not.
+     */
+    function editorAction(label, actionId, gate = true) {
+      const supported = canEdit && editor.supportsAction?.(actionId) === true;
+      const available = supported && gate === true;
       return {
         type: 'action',
         label,
         disabled: !available,
         tooltip: available
           ? undefined
-          : canEdit
-            ? 'Not available in the basic text editor'
-            : editorTip,
+          : !canEdit
+            ? editorTip
+            : !supported
+              ? 'Not available in the basic text editor'
+              : gate,
         handler: available ? () => editor.performAction(actionId) : undefined,
       };
     }
@@ -3233,15 +3278,19 @@ async function initApp() {
         type: 'action',
         label: 'Undo',
         enabled: canUndo,
-        tooltip: canUndo ? undefined : 'Nothing to undo',
-        handler: () => performUndo(),
+        tooltip: historyTooltip('Undo', canUndo),
+        restoreFocus: true,
+        handler: () =>
+          undoTargetsEditor ? editor.performAction('undo') : performUndo(),
       },
       {
         type: 'action',
         label: 'Redo',
         enabled: canRedo,
-        tooltip: canRedo ? undefined : 'Nothing to redo',
-        handler: () => performRedo(),
+        tooltip: historyTooltip('Redo', canRedo),
+        restoreFocus: true,
+        handler: () =>
+          undoTargetsEditor ? editor.performAction('redo') : performRedo(),
       },
       { type: 'separator' },
       {
@@ -3249,6 +3298,9 @@ async function initApp() {
         label: 'Cut',
         disabled: !canEdit,
         tooltip: canEdit ? undefined : editorTip,
+        // Opening the menu bar takes focus, which collapses the editor's
+        // selection. restoreFocus puts it back before the command runs.
+        restoreFocus: true,
         handler: canEdit ? () => document.execCommand('cut') : undefined,
       },
       {
@@ -3256,6 +3308,7 @@ async function initApp() {
         label: 'Copy',
         disabled: !canEdit,
         tooltip: canEdit ? undefined : editorTip,
+        restoreFocus: true,
         handler: canEdit ? () => document.execCommand('copy') : undefined,
       },
       {
@@ -3263,6 +3316,7 @@ async function initApp() {
         label: 'Paste',
         disabled: !canEdit,
         tooltip: canEdit ? undefined : editorTip,
+        restoreFocus: true,
         // execCommand('paste') is blocked by every modern browser; read
         // the async Clipboard API instead, with an honest fallback.
         handler: canEdit
@@ -3286,10 +3340,14 @@ async function initApp() {
       editorAction('Unindent', 'unindent'),
       editorAction('Comment', 'comment'),
       editorAction('Uncomment', 'uncomment'),
+      editorAction('Convert Tabs to Spaces', 'convertTabsToSpaces'),
+      editorAction('Toggle Bookmark', 'toggleBookmark'),
+      editorAction('Jump to next bookmark', 'nextBookmark'),
+      editorAction('Jump to previous bookmark', 'previousBookmark'),
       { type: 'separator' },
       {
         type: 'action',
-        label: 'Copy Viewport Image',
+        label: 'Copy viewport image',
         shortcutAction: 'copyViewportImage',
         enabled: hasFile,
         tooltip: hasFile ? undefined : 'Open a file first',
@@ -3297,43 +3355,55 @@ async function initApp() {
       },
       {
         type: 'action',
-        label: 'Copy Viewport Translation',
+        label: 'Copy viewport translation',
         enabled: hasFile,
         tooltip: hasFile ? undefined : 'Open a file first',
         handler: () => editActionsController.copyTranslation(),
       },
       {
         type: 'action',
-        label: 'Copy Viewport Rotation',
+        label: 'Copy viewport rotation',
         enabled: hasFile,
         tooltip: hasFile ? undefined : 'Open a file first',
         handler: () => editActionsController.copyRotation(),
       },
       {
         type: 'action',
-        label: 'Copy Viewport Distance',
+        label: 'Copy viewport distance',
         enabled: hasFile,
         tooltip: hasFile ? undefined : 'Open a file first',
         handler: () => editActionsController.copyDistance(),
       },
       {
         type: 'action',
-        label: 'Copy Viewport FOV',
+        label: 'Copy viewport field of view',
         enabled: hasFile,
         tooltip: hasFile ? undefined : 'Open a file first',
         handler: () => editActionsController.copyFov(),
       },
       { type: 'separator' },
-      editorAction('Find\u2026', 'find'),
-      editorAction('Find and Replace\u2026', 'findReplace'),
+      editorAction('Find…', 'find'),
+      editorAction('Find and Replace…', 'findReplace'),
       editorAction('Find Next', 'findNext'),
       editorAction('Find Previous', 'findPrevious'),
+      editorAction(
+        'Use Selection for Find',
+        'useSelectionForFind',
+        canEdit && editor.hasSelection?.()
+          ? true
+          : 'Select some text in the code editor first'
+      ),
       { type: 'separator' },
       {
         type: 'action',
-        label: 'Jump to Next Error',
+        label: 'Jump to next error',
         shortcutAction: 'jumpNextError',
         handler: () => editActionsController.jumpToNextError(),
+      },
+      {
+        type: 'action',
+        label: 'Jump to previous error',
+        handler: () => editActionsController.jumpToPrevError(),
       },
       { type: 'separator' },
       {
@@ -3350,7 +3420,7 @@ async function initApp() {
       },
       {
         type: 'action',
-        label: 'Preferences\u2026',
+        label: 'Preferences (Keyboard Shortcuts)…',
         handler: () => {
           const modal = document.getElementById('shortcutsModal');
           const modalBody = document.getElementById('shortcutsModalBody');
