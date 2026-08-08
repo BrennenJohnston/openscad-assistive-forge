@@ -25,6 +25,11 @@
 
 import { resolveFileParams } from '../js/file-param-resolver.js';
 import {
+  FONT_ASSET_DIR,
+  FONT_FILES,
+  FONT_MOUNT_DIR,
+} from '../js/font-manifest.js';
+import {
   escapeRegExp,
   formatScadValue,
   buildDefineArgs,
@@ -376,41 +381,22 @@ async function mountFonts() {
 
   const FS = module.FS;
 
-  // Create font directory structure
-  const fontPath = '/usr/share/fonts/truetype/liberation';
-  try {
-    FS.mkdir('/usr');
-  } catch (_e) {
-    /* may exist */
-  }
-  try {
-    FS.mkdir('/usr/share');
-  } catch (_e) {
-    /* may exist */
-  }
-  try {
-    FS.mkdir('/usr/share/fonts');
-  } catch (_e) {
-    /* may exist */
-  }
-  try {
-    FS.mkdir('/usr/share/fonts/truetype');
-  } catch (_e) {
-    /* may exist */
-  }
-  try {
-    FS.mkdir('/usr/share/fonts/truetype/liberation');
-  } catch (_e) {
-    /* may exist */
+  // Create the font directory structure, one level at a time. Derived from the
+  // manifest's mount path so the directory the fonts land in and the path the
+  // UI reports cannot drift apart (F2).
+  const fontPath = FONT_MOUNT_DIR;
+  let built = '';
+  for (const segment of fontPath.split('/').filter(Boolean)) {
+    built += `/${segment}`;
+    try {
+      FS.mkdir(built);
+    } catch (_e) {
+      /* may exist */
+    }
   }
 
-  // List of fonts to load
-  const fonts = [
-    'LiberationSans-Regular.ttf',
-    'LiberationSans-Bold.ttf',
-    'LiberationSans-Italic.ttf',
-    'LiberationMono-Regular.ttf',
-  ];
+  // The fonts to load — one source of truth, shared with the Font List panel.
+  const fonts = FONT_FILES;
 
   // Valid TrueType fonts start with these 4 magic bytes (scalar type = 0x00010000).
   // If the server returns HTML (e.g. SPA _redirects masking a 404), the first bytes
@@ -423,7 +409,7 @@ async function mountFonts() {
 
   for (const fontFile of fonts) {
     try {
-      const fontUrl = `${assetBaseUrl}/fonts/${fontFile}`;
+      const fontUrl = `${assetBaseUrl}/${FONT_ASSET_DIR}/${fontFile}`;
       const response = await fetch(fontUrl);
 
       if (!response.ok) {
