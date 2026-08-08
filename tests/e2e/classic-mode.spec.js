@@ -2289,4 +2289,172 @@ test.describe('Classic dock relocation (B6-B8)', () => {
     await expect(page.locator('.classic-panel-menu-btn')).toHaveCount(0);
     await expect(page.locator('#paramPanel')).toBeVisible();
   });
+
+  test('classic-dock-persist: a relocated panel is still there after a reload', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await enterClassicDesktop(page);
+
+    await page
+      .getByRole('button', { name: 'Move Error-Log', exact: true })
+      .click();
+    await page
+      .locator('.classic-panel-menu [role="menuitem"]', {
+        hasText: 'Move to upper right',
+      })
+      .click();
+
+    await page.reload();
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: WASM_READY_TIMEOUT,
+    });
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+
+    expect(
+      await page
+        .locator('#classicErrorLogSlot')
+        .evaluate((el) => el.closest('.classic-dock-field')?.id)
+    ).toBe('classicFieldRightTop');
+  });
+
+  test('classic-dock-reset: View > Reset Panel Layout restores the default', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await enterClassicDesktop(page);
+
+    await page
+      .getByRole('button', { name: 'Move Editor', exact: true })
+      .click();
+    await page
+      .locator('.classic-panel-menu [role="menuitem"]', {
+        hasText: 'Move to lower right',
+      })
+      .click();
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-classic-field-left',
+      'empty'
+    );
+
+    await page.locator('#viewMenuBtn').click();
+    await page.getByRole('menuitem', { name: 'Reset Panel Layout' }).click();
+
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-classic-field-left',
+      'occupied'
+    );
+    expect(
+      await page
+        .locator('#classicEditorSlot')
+        .evaluate((el) => el.closest('.classic-dock-field')?.id)
+    ).toBe('classicFieldLeft');
+    await expect(page.locator('#srAnnouncer')).toContainText(
+      'Panel layout reset'
+    );
+
+    // ...and the reset is what survives the next reload, not the old layout
+    await page.reload();
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: WASM_READY_TIMEOUT,
+    });
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-classic-field-left',
+      'occupied'
+    );
+  });
+
+  test('classic-dock-corrupt: a bad stored layout falls back, loudly, to the default', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    const warnings = [];
+    page.on('console', (msg) => {
+      if (msg.type() === 'warning' && msg.text().includes('[ClassicDock]')) {
+        warnings.push(msg.text());
+      }
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        'openscad-forge-classic-dock',
+        '{"left":[["editor"]],"bottom":"everything"}'
+      );
+    });
+
+    await enterClassicDesktop(page);
+
+    // Default arrangement, whole — never half-restored
+    expect(
+      await page
+        .locator('#classicEditorSlot')
+        .evaluate((el) => el.closest('.classic-dock-field')?.id)
+    ).toBe('classicFieldLeft');
+    await expect(page.locator('#classicConsoleSlot')).toBeVisible();
+    expect(
+      await page
+        .locator('#classicConsoleSlot')
+        .evaluate((el) => el.parentElement?.id)
+    ).toBe('classicBottomStrip');
+
+    // Logged, not swallowed (core rule 13) — and cleared so it self-heals
+    expect(warnings.join(' ')).toContain('Ignoring the saved panel layout');
+    expect(
+      await page.evaluate(() =>
+        localStorage.getItem('openscad-forge-classic-dock')
+      )
+    ).toBeNull();
+  });
+
+  test('classic-dock-breakpoint: the arrangement waits below 1024px and comes back unchanged', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await enterClassicDesktop(page, 1200);
+
+    await page
+      .getByRole('button', { name: 'Move Error-Log', exact: true })
+      .click();
+    await page
+      .locator('.classic-panel-menu [role="menuitem"]', {
+        hasText: 'Move to upper right',
+      })
+      .click();
+    const stored = await page.evaluate(() =>
+      localStorage.getItem('openscad-forge-classic-dock')
+    );
+
+    // Below the breakpoint: the stack shows the default, and neither the
+    // splitters nor the move menus are there to be operated
+    await page.setViewportSize({ width: 900, height: 900 });
+    await expect
+      .poll(async () =>
+        page
+          .locator('#classicErrorLogSlot')
+          .evaluate((el) => el.closest('.classic-dock-field')?.id)
+      )
+      .toBe('classicBottomStrip');
+    await expect(page.locator('.classic-panel-menu-btn').first()).toBeHidden();
+    await expect(page.locator('#classicResizerEditor')).toBeHidden();
+
+    // ...and back up, unchanged
+    await page.setViewportSize({ width: 1200, height: 900 });
+    await expect
+      .poll(async () =>
+        page
+          .locator('#classicErrorLogSlot')
+          .evaluate((el) => el.closest('.classic-dock-field')?.id)
+      )
+      .toBe('classicFieldRightTop');
+    expect(
+      await page.evaluate(() =>
+        localStorage.getItem('openscad-forge-classic-dock')
+      )
+    ).toBe(stored);
+  });
 });

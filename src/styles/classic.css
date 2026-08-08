@@ -636,6 +636,19 @@ body[data-ui-mode='classic'] .classic-dock-tab:hover {
   background-color: var(--color-hover-bg);
 }
 
+/* Whether the dock is at desktop width, as a value JS can read (B9). The
+   breakpoint keeps ONE definition — here, in the media query below — rather
+   than a second copy in a matchMedia string that could drift from it. */
+body[data-ui-mode='classic'] {
+  --classic-dock-desktop: 0;
+}
+
+@media (min-width: 1024px) {
+  body[data-ui-mode='classic'] {
+    --classic-dock-desktop: 1;
+  }
+}
+
 /* ── "Move panel" title-bar menus (B8) ───────────────────────────────────────
    The popup is a child of <body> with position: fixed, because every dock
    title bar sits inside a slot with overflow-y: auto — an absolutely
@@ -1013,10 +1026,13 @@ body[data-ui-mode='classic'] .classic-error-log-slot .error-log-output {
   }
 
   /* Resizers and Viewport-Control are desktop-only (D-6, D-7); the field that
-     holds Viewport-Control goes with it, so the stack has no empty cell. */
+     holds Viewport-Control goes with it, so the stack has no empty cell.
+     Relocation goes too (B9): the stack ignores the field map, so a move
+     button here would be a control that does nothing. */
   body[data-ui-mode='classic'] .classic-resizer,
   body[data-ui-mode='classic'] .classic-viewport-control-slot,
-  body[data-ui-mode='classic'] .classic-dock-field--right-bottom {
+  body[data-ui-mode='classic'] .classic-dock-field--right-bottom,
+  body[data-ui-mode='classic'] .classic-panel-menu-btn {
     display: none;
   }
 }

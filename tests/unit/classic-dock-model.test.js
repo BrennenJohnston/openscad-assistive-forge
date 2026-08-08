@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   ClassicDockModel,
   DOCK_FIELD_NAMES,
@@ -654,5 +654,123 @@ describe('ClassicDockModel — tab-merge (B7)', () => {
       expect(tab.className).toBe('classic-dock-tab');
       expect(tab.id.startsWith('classicDockTab-')).toBe(true);
     }
+  });
+});
+
+describe('ClassicDockModel — persistence and the breakpoint (B9)', () => {
+  const KEY = 'openscad-forge-classic-dock';
+
+  beforeEach(() => {
+    localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  it('keeps its own storage key, apart from the panes and the columns', () => {
+    const model = new ClassicDockModel();
+    model.movePanel('fontList', 'left');
+    model.save();
+
+    expect(localStorage.getItem(KEY)).not.toBeNull();
+    // The arrangement lives apart from the pane visibility (B3) and the
+    // column widths (B4), so clearing one never costs the others.
+    expect(localStorage.getItem('openscad-forge-classic-panes')).toBeNull();
+    expect(localStorage.getItem('openscad-forge-classic-columns')).toBeNull();
+    expect(JSON.parse(localStorage.getItem(KEY)).left).toEqual([
+      ['editor'],
+      ['fontList'],
+    ]);
+  });
+
+  it('hydrates a saved arrangement on construction', () => {
+    const saved = new ClassicDockModel();
+    saved.movePanel('editor', 'right-top', 0);
+    saved.movePanel('errorLog', 'bottom', null, { mergeWith: 'console' });
+    saved.save();
+
+    const fresh = new ClassicDockModel();
+
+    expect(fresh.getArrangement()).toEqual(saved.getArrangement());
+    expect(fresh.getGroupOf('console')).toEqual(['console', 'errorLog']);
+  });
+
+  it('falls back to the default on a corrupt value, logs it, and clears it', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    localStorage.setItem(KEY, '{not json');
+
+    const model = new ClassicDockModel();
+
+    expect(model.getArrangement()).toEqual(defaultArrangement());
+    expect(warn).toHaveBeenCalled();
+    expect(warn.mock.calls[0][0]).toContain('Ignoring the saved panel layout');
+    // Self-heals: the next reload starts clean instead of warning forever
+    expect(localStorage.getItem(KEY)).toBeNull();
+  });
+
+  it('refuses a stored arrangement that has lost a panel', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const missing = defaultArrangement();
+    missing.left = [];
+    localStorage.setItem(KEY, JSON.stringify(missing));
+
+    const model = new ClassicDockModel();
+
+    // Never half-restored: the editor would otherwise have had no home
+    expect(model.getArrangement()).toEqual(defaultArrangement());
+    expect(warn).toHaveBeenCalled();
+  });
+
+  it('keeps an arrangement naming a panel the density hides (D-7)', () => {
+    const saved = new ClassicDockModel();
+    saved.movePanel('viewportControl', 'bottom');
+    saved.save();
+
+    // Simplified treats Viewport-Control as hidden without clearing anything
+    const model = new ClassicDockModel({
+      isPanelVisible: (id) => id !== 'viewportControl',
+    });
+
+    expect(model.getFieldOf('viewportControl')).toBe('bottom');
+    expect(model.getArrangement()['right-bottom']).toEqual([]);
+  });
+
+  it('holds but does not apply the arrangement below the breakpoint', () => {
+    const saved = new ClassicDockModel();
+    saved.movePanel('editor', 'right-top', 0);
+    saved.save();
+
+    let desktop = false;
+    const model = new ClassicDockModel({ isDesktop: () => desktop });
+
+    // Narrow: the stack shows the default, so the editor reads as left
+    expect(model.getFieldOf('editor')).toBe('left');
+    expect(model.getOccupancy().left).toBe(true);
+    // ...but the stored arrangement is untouched
+    expect(model.getArrangement()['right-top']).toEqual([
+      ['editor'],
+      ['customizer'],
+    ]);
+
+    desktop = true;
+    expect(model.getFieldOf('editor')).toBe('right-top');
+    expect(model.getOccupancy().left).toBe(false);
+  });
+
+  it('crossing the breakpoint and back never mutates the stored map', () => {
+    const saved = new ClassicDockModel();
+    saved.movePanel('errorLog', 'bottom', null, { mergeWith: 'console' });
+    saved.save();
+    const before = localStorage.getItem(KEY);
+
+    let desktop = true;
+    const model = new ClassicDockModel({ isDesktop: () => desktop });
+    desktop = false;
+    model.getOccupancy();
+    model.applyToDom();
+    desktop = true;
+    model.applyToDom();
+    model.save();
+
+    expect(localStorage.getItem(KEY)).toBe(before);
+    expect(model.getGroupOf('console')).toEqual(['console', 'errorLog']);
   });
 });

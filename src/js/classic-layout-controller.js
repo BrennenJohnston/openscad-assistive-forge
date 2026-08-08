@@ -246,7 +246,16 @@ export class ClassicLayoutController {
       // Switching tabs moves a different panel's titlebar into the shared bar,
       // and its menu button has to be re-labelled for the panels it now serves.
       onGroupChange: () => getClassicPanelMenus()?.refresh(),
+      isDesktop: () => this._isDesktopWidth(),
     });
+
+    /** @type {number|undefined} */
+    this._breakpointTimer = undefined;
+    this._wasDesktop = null;
+    this._onWindowResize = () => {
+      clearTimeout(this._breakpointTimer);
+      this._breakpointTimer = setTimeout(() => this._checkBreakpoint(), 150);
+    };
   }
 
   /**
@@ -404,6 +413,9 @@ export class ClassicLayoutController {
         this.movePanel(panelId, field, index, options),
     });
 
+    this._wasDesktop = this._isDesktopWidth();
+    window.addEventListener('resize', this._onWindowResize);
+
     this.active = true;
     this.onEnter();
   }
@@ -418,6 +430,8 @@ export class ClassicLayoutController {
     // Before the moves, so the separators cannot outlive the grid areas they
     // are placed in and leave custom properties behind for Split.js to fight.
     destroyClassicResizers();
+    window.removeEventListener('resize', this._onWindowResize);
+    clearTimeout(this._breakpointTimer);
 
     // Also before the moves: a merged panel carries role="tabpanel", a hidden
     // flag and a titlebar living in the shared bar. Undoing that first is what
@@ -686,6 +700,7 @@ export class ClassicLayoutController {
     const result = this._dock.movePanel(panelId, targetField, index, options);
     if (!result.ok) return result;
 
+    this._dock.save();
     this._dock.applyToDom();
     this._applyPaneAttributes();
     document.dispatchEvent(new CustomEvent('classic-layout-resize'));
@@ -730,6 +745,59 @@ export class ClassicLayoutController {
     return DOCK_PANEL_IDS.filter(
       (id) => id !== panelId && !group.includes(id) && this._isPanelVisible(id)
     );
+  }
+
+  /**
+   * Back to the arrangement of the desktop screenshots (View > Reset Panel
+   * Layout, B9) — the escape hatch when a dock has been rearranged into
+   * something the user cannot find their way out of.
+   * @returns {boolean} whether anything changed
+   */
+  resetPanelLayout() {
+    this._dock.reset();
+    this._dock.save();
+    this._dock.applyToDom();
+    this._applyPaneAttributes();
+    document.dispatchEvent(new CustomEvent('classic-layout-resize'));
+    getClassicPanelMenus()?.refresh();
+    // Wording owner-approved 2026-08-07.
+    announceImmediate('Panel layout reset');
+    return true;
+  }
+
+  /**
+   * Whether the dock is at desktop width. The 1024px breakpoint itself lives
+   * only in classic.css; this reads the flag that media query sets, so the two
+   * cannot drift apart.
+   * @returns {boolean}
+   * @private
+   */
+  _isDesktopWidth() {
+    if (!document.body) return true;
+    const flag = getComputedStyle(document.body)
+      .getPropertyValue('--classic-dock-desktop')
+      .trim();
+    // Outside Classic the property is unset; the dock is not on screen then,
+    // and treating it as desktop keeps the stored arrangement in play.
+    return flag === '' ? true : flag === '1';
+  }
+
+  /**
+   * Re-apply the arrangement when the window crosses the breakpoint. Below it
+   * the stack shows the default; the user's arrangement is neither applied nor
+   * touched, and comes back unchanged on the way up (B9).
+   * @private
+   */
+  _checkBreakpoint() {
+    if (!this.active) return;
+    const isDesktop = this._isDesktopWidth();
+    if (isDesktop === this._wasDesktop) return;
+    this._wasDesktop = isDesktop;
+
+    this._dock.applyToDom();
+    this._applyPaneAttributes();
+    getClassicPanelMenus()?.refresh();
+    document.dispatchEvent(new CustomEvent('classic-layout-resize'));
   }
 
   /**

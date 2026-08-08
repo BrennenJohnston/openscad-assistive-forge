@@ -28,6 +28,16 @@
  * @license GPL-3.0-or-later
  */
 
+import { getAppPrefKey } from './storage-keys.js';
+
+/**
+ * The arrangement's own key (B9), separate from the column widths
+ * (`classic-columns`, B4) and the pane visibility
+ * (`openscad-forge-classic-panes`, B3): a corrupt arrangement can then be
+ * cleared without costing the user either of the other two.
+ */
+const DOCK_STORAGE_KEY = getAppPrefKey('classic-dock');
+
 /**
  * The dock fields, in the order the grid lays them out. `datasetSuffix` is the
  * body attribute B2 stamps (data-classic-field-<name>), kept here so the field
@@ -233,6 +243,9 @@ export class ClassicDockModel {
     // Selecting a tab swaps which panel's titlebar sits in the shared bar, so
     // whatever hangs controls off those title bars has to be told (B8).
     this._onGroupChange = options.onGroupChange || (() => {});
+    // Below 1024px the dock collapses to a stack with no splitters and no
+    // relocation, so a user's arrangement is held but NOT applied (B9/D-6).
+    this._isDesktop = options.isDesktop || (() => true);
     const resolve = options.getElement;
     // The injected resolver answers for the panels and fields a test sets up;
     // the tab chrome this module creates is only ever in the document.
@@ -264,6 +277,81 @@ export class ClassicDockModel {
      * @type {Map<Element, {parent: Element, nextSibling: Node|null}>}
      */
     this._titlebarHomes = new Map();
+    this.hydrate();
+  }
+
+  /**
+   * The arrangement the DOM should currently show. At desktop widths that is
+   * the user's; below the breakpoint the stack ignores the field map, so the
+   * default is shown while the stored one is kept untouched — crossing the
+   * breakpoint and back returns exactly what the user left (B9).
+   * @returns {Record<string, string[][]>}
+   * @private
+   */
+  _effective() {
+    return this._isDesktop() ? this._map : defaultArrangement();
+  }
+
+  /**
+   * Read the saved arrangement. Anything that does not name every panel
+   * exactly once is refused WHOLE and the key dropped, so the dock opens on
+   * the default rather than a half-restored layout. The failure is logged,
+   * never swallowed.
+   * @returns {boolean} whether a stored arrangement was adopted
+   */
+  hydrate() {
+    let raw = null;
+    try {
+      raw = localStorage.getItem(DOCK_STORAGE_KEY);
+    } catch (error) {
+      console.warn('[ClassicDock] Cannot read the saved panel layout:', error);
+      return false;
+    }
+    if (!raw) return false;
+
+    let parsed = null;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (error) {
+      this._discardStored('it is not valid JSON', error);
+      return false;
+    }
+    if (!this.setArrangement(parsed)) {
+      this._discardStored(
+        'it does not name every dock panel exactly once',
+        parsed
+      );
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * @param {string} why
+   * @param {unknown} detail
+   * @private
+   */
+  _discardStored(why, detail) {
+    console.warn(
+      `[ClassicDock] Ignoring the saved panel layout because ${why}. ` +
+        'Falling back to the default arrangement and clearing the stored ' +
+        `value (${DOCK_STORAGE_KEY}).`,
+      detail
+    );
+    try {
+      localStorage.removeItem(DOCK_STORAGE_KEY);
+    } catch (error) {
+      console.warn('[ClassicDock] Could not clear it either:', error);
+    }
+  }
+
+  /** Persist the arrangement under its own key (B9). */
+  save() {
+    try {
+      localStorage.setItem(DOCK_STORAGE_KEY, JSON.stringify(this._map));
+    } catch (error) {
+      console.warn('[ClassicDock] Could not save the panel layout:', error);
+    }
   }
 
   /**
@@ -304,10 +392,9 @@ export class ClassicDockModel {
    * @returns {string|null} the field the panel sits in
    */
   getFieldOf(panelId) {
+    const map = this._effective();
     for (const field of DOCK_FIELD_NAMES) {
-      if (this._map[field].some((group) => group.includes(panelId))) {
-        return field;
-      }
+      if (map[field].some((group) => group.includes(panelId))) return field;
     }
     return null;
   }
@@ -318,8 +405,9 @@ export class ClassicDockModel {
    * @returns {string[]}
    */
   getGroupOf(panelId) {
+    const map = this._effective();
     for (const field of DOCK_FIELD_NAMES) {
-      const group = this._map[field].find((g) => g.includes(panelId));
+      const group = map[field].find((g) => g.includes(panelId));
       if (group) return [...group];
     }
     return [];
@@ -331,7 +419,7 @@ export class ClassicDockModel {
    * @returns {string[]}
    */
   getOccupants(field) {
-    return (this._map[field] || []).flat();
+    return (this._effective()[field] || []).flat();
   }
 
   /**
@@ -490,8 +578,9 @@ export class ClassicDockModel {
    */
   _normalizeActive() {
     const kept = new Set();
+    const map = this._effective();
     for (const field of DOCK_FIELD_NAMES) {
-      for (const group of this._map[field]) {
+      for (const group of map[field]) {
         if (group.length < 2) continue;
         const current = group.find((id) => this._active.has(id));
         kept.add(current || group[0]);
@@ -534,13 +623,19 @@ export class ClassicDockModel {
     // with it. Selecting a tab does NOT come through here.
     this.dissolveTabGroups();
 
+    // Below the breakpoint the effective map has no groups at all, so the tab
+    // selection is dropped and re-picked on the way back. The ARRANGEMENT
+    // survives the round trip; which tab was showing does not.
+    this._normalizeActive();
+
+    const map = this._effective();
     for (const field of DOCK_FIELDS) {
       const container = this._getElement(field.elementId);
       if (!container) continue;
 
       /** @type {Element[]} */
       const wanted = [];
-      for (const group of this._map[field.name]) {
+      for (const group of map[field.name]) {
         const els = group
           .map((panelId) => this._getElement(elementIdFor(panelId)))
           .filter(Boolean);

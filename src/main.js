@@ -3288,6 +3288,14 @@ async function initApp() {
                 }
               },
             },
+            {
+              // The way back from any arrangement the title-bar menus can
+              // produce (B9). Label owner-approved 2026-08-07.
+              label: 'Reset Panel Layout',
+              handler: () => {
+                getClassicLayoutController()?.resetPanelLayout();
+              },
+            },
           ]
         : []),
       { type: 'separator' },
