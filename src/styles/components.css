@@ -1161,6 +1161,105 @@ details.param-group.forge-disclosure[open] > summary::before {
   flex: 0 0 auto;
 }
 
+/* Sub-plan H — linked folders on the welcome screen.
+   Rows read name → state → actions. The surrounding column centres its
+   text; a list of rows with trailing buttons is far easier to scan left
+   aligned, so this block opts out. */
+.linked-folders {
+  margin-top: var(--space-sm);
+  text-align: left;
+}
+
+.linked-folders-title {
+  margin: 0 0 var(--space-xs);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.linked-folders-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.linked-folder {
+  /* Each button carries an sr-only span, which is absolutely positioned.
+     Without a positioned ancestor those resolve against <html> and push
+     the page sideways — the phantom-scroll trap R2a hit at 375px. */
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-secondary);
+}
+
+.linked-folder-name {
+  flex: 1 1 8em;
+  min-width: 0;
+  /* A long folder name wraps rather than shoving the buttons off-row. */
+  overflow-wrap: anywhere;
+  font-weight: var(--font-weight-medium);
+}
+
+/* The state is TEXT first; the border colour only decorates it, so the
+   badge still reads correctly in greyscale and high contrast. */
+.linked-folder-badge {
+  flex: 0 0 auto;
+  padding: 0 var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-sm);
+}
+
+.linked-folder[data-active-state='connected'] .linked-folder-badge {
+  border-color: var(--color-success);
+}
+
+.linked-folder[data-active-state='pending-restore'] .linked-folder-badge,
+.linked-folder[data-active-state='denied'] .linked-folder-badge {
+  border-color: var(--color-warning);
+}
+
+/* Words, not an icon or a colour — a folder with no project card yet. */
+.linked-folder-hint {
+  flex: 0 0 auto;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.linked-folder-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--space-xs);
+  margin-left: auto;
+}
+
+/* .btn-sm alone is --size-touch-target-sm; these are new targets, so they
+   take the full touch token (44px touch / 36px fine pointer). */
+.linked-folder-actions .btn {
+  min-height: var(--size-touch-target);
+}
+
+@media (max-width: 480px) {
+  /* Below this the name and two buttons stop fitting one line; let the
+     actions drop to their own row rather than squeezing the targets. */
+  .linked-folder-actions {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .linked-folder-actions .btn {
+    flex: 1 1 auto;
+  }
+}
+
 /* Folder Breadcrumbs */
 .folder-breadcrumbs {
   margin-bottom: var(--space-md);
