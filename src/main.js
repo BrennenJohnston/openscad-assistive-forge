@@ -247,6 +247,7 @@ import {
   touchProject,
   getProject,
   listSavedProjects,
+  deleteProject,
   getSavedProjectsSummary as _getSavedProjectsSummary,
   clearAllSavedProjects as _clearAllSavedProjects,
   getStorageDiagnostics,
@@ -257,6 +258,7 @@ import {
 import {
   loadFolderHandle,
   saveFolderHandle,
+  clearFolderHandle,
 } from './js/folder-handle-store.js';
 import { createLinkedFoldersUi } from './js/linked-folders-ui.js';
 import Split from 'split.js';
@@ -1924,8 +1926,98 @@ async function initApp() {
       listProjects: listSavedProjects,
       getActiveHandle: () => folderSyncCtrl.getHandle(),
       getActiveState: () => folderSyncCtrl.getState(),
+      onOpen: (entry) => _openLinkedFolder(entry),
+      onRemove: (entry) => _removeLinkedFolder(entry),
       onEmptyFocus: () => connectBtn?.focus(),
     });
+
+    /**
+     * Open a listed folder. A folder with a project card goes through the
+     * normal card-load path, which already re-grants permission, re-reads
+     * the folder from disk and adopts the handle as the active one.
+     *
+     * A folder with no card (the pre-multi-folder root slot, or one whose
+     * card was deleted) has nothing to load, so it re-grants permission on
+     * ITS OWN handle and goes through the connect-load path, which creates
+     * the card. `restoreFromStored()` cannot serve here: it only ever reads
+     * the root slot, so it would re-grant the wrong folder.
+     */
+    async function _openLinkedFolder(entry) {
+      if (!entry?.handle) return;
+
+      if (entry.projectId) {
+        await savedProjectsUI.loadSavedProject(entry.projectId);
+        return;
+      }
+
+      let granted = false;
+      try {
+        const queried =
+          typeof entry.handle.queryPermission === 'function'
+            ? await entry.handle.queryPermission({ mode: 'readwrite' })
+            : 'prompt';
+        granted =
+          queried === 'granted' ||
+          (typeof entry.handle.requestPermission === 'function' &&
+            (await entry.handle.requestPermission({ mode: 'readwrite' })) ===
+              'granted');
+      } catch (err) {
+        console.warn('[LinkedFolders] Permission request failed:', err);
+        granted = false;
+      }
+      if (!granted) {
+        updateStatus(
+          'Folder connection denied — permission required',
+          'warning'
+        );
+        return;
+      }
+
+      await folderSyncCtrl.adoptHandle(entry.handle);
+      await _loadFromConnectedFolder(entry.handle);
+    }
+
+    /**
+     * Remove a folder's link. Never touches the disk: it drops the stored
+     * handle and the pointer record, which is all this browser holds.
+     *
+     * @returns {Promise<boolean>} True when the row should disappear.
+     */
+    async function _removeLinkedFolder(entry) {
+      if (!entry) return false;
+
+      const confirmed = await showConfirmDialog(
+        `Remove the link to "${entry.name}"?\n\nYour files on disk are not touched. This removes the folder's link and its project card from this browser only.`,
+        'Remove folder link',
+        'Remove link',
+        'Cancel'
+      );
+      if (!confirmed) return false;
+
+      // Deleting the record clears its fh-* handle; a folder with no record
+      // owns nothing but the handle itself.
+      if (entry.projectId) {
+        const result = await deleteProject(entry.projectId);
+        if (!result.success) {
+          showErrorToast({ title: 'Remove Failed', message: result.error });
+          return false;
+        }
+      } else {
+        await clearFolderHandle({ key: entry.key });
+      }
+
+      // The root slot mirrors whichever folder is active, so removing the
+      // active one has to disconnect too — otherwise the next reload
+      // hydrates a folder that is no longer listed.
+      if (entry.activeState) {
+        await folderSyncCtrl.disconnect();
+      }
+
+      announceImmediate(`Removed folder link: ${entry.name}`);
+      updateStatus(`Removed folder link: ${entry.name}`);
+      await savedProjectsUI.renderSavedProjectsList();
+      return true;
+    }
 
     /** Re-read the store and repaint the list. Safe to call at any time. */
     function refreshLinkedFolders() {

@@ -262,14 +262,22 @@ export function renderLinkedFolders(listEl, entries, handlers = {}) {
 export function createLinkedFoldersUi(deps = {}) {
   const { listEl, sectionEl } = deps;
 
+  // Removing a folder triggers several refreshes at once (the project list
+  // re-renders, the sync state changes, and the removal itself). Whichever
+  // started last is the only one allowed to paint — otherwise a slower
+  // earlier read repaints over the button focus was just moved to.
+  let renderToken = 0;
+
   async function refresh() {
     if (!listEl) return;
+    const token = (renderToken += 1);
     const entries = await buildLinkedFolderModel({
       listHandles: deps.listHandles,
       listProjects: deps.listProjects,
       getActiveHandle: deps.getActiveHandle,
       getActiveState: deps.getActiveState,
     });
+    if (token !== renderToken) return;
     renderLinkedFolders(listEl, entries, {
       onOpen: (entry) => deps.onOpen?.(entry),
       onRemove: (entry) => handleRemove(entry),

@@ -361,6 +361,35 @@ describe('createLinkedFoldersUi (H2)', () => {
     });
   });
 
+  it('lets only the newest refresh paint, so a slow one cannot steal focus', async () => {
+    // Removing a folder starts several refreshes at once; the earliest can
+    // resolve last and wipe out the row focus was just moved to.
+    const handles = [
+      { key: 'fh-a', handle: fakeHandle('a', 'd1') },
+      { key: 'fh-b', handle: fakeHandle('b', 'd2') },
+    ];
+    const delays = [80, 0];
+    const ui = createLinkedFoldersUi({
+      listEl,
+      sectionEl,
+      listHandles: async () => {
+        await new Promise((r) => setTimeout(r, delays.shift() ?? 0));
+        return handles;
+      },
+      listProjects: async () =>
+        handles.map((h, i) => folderLink(`p${i}`, h.handle.name, h.key)),
+    });
+
+    const slow = ui.refresh(); // started first, resolves last
+    const fast = ui.refresh();
+    await fast;
+    const painted = listEl.querySelector('.linked-folder-remove');
+    painted.focus();
+    await slow;
+
+    expect(document.activeElement).toBe(painted);
+  });
+
   it('hands focus back to the host when the last row goes', async () => {
     let handles = [{ key: 'fh-a', handle: fakeHandle('a', 'd1') }];
     const onEmptyFocus = vi.fn();
