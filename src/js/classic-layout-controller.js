@@ -38,6 +38,17 @@ import {
   destroyClassicResizers,
   getClassicResizerController,
 } from './classic-resizer-controller.js';
+import {
+  ClassicDockModel,
+  DOCK_FIELDS,
+  DOCK_PANEL_IDS,
+  panelLabel,
+} from './classic-dock-model.js';
+import {
+  initClassicPanelMenus,
+  getClassicPanelMenus,
+  destroyClassicPanelMenus,
+} from './classic-panel-menu.js';
 
 const PANES_STORAGE_KEY = 'openscad-forge-classic-panes';
 
@@ -114,43 +125,46 @@ const SLOT_DEFS = [
     className: 'classic-slot classic-editor-slot',
     label: 'Editor',
     panelId: 'expertModePanel',
+    parentId: 'classicFieldLeft',
     titlebar: { text: 'Editor', closeBtnId: 'classicEditorCloseBtn' },
   },
   {
     id: 'classicViewportControlSlot',
     className: 'classic-slot classic-viewport-control-slot',
     label: 'Viewport-Control',
+    parentId: 'classicFieldRightBottom',
     titlebar: { text: 'Viewport-Control' },
   },
 ];
 
 /**
- * The dock fields the grid is built from. Each is stamped on <body> as
- * data-classic-field-<name>="occupied|empty"; classic.css collapses an empty
- * field's track to zero and hides its slot, so no arrangement can leave a
- * stray auto-placed cell. `centre` (the 3D view) is always occupied and has
- * no attribute.
- * @type {Array<{name: string, datasetSuffix: string}>}
+ * The dock field containers, in creation order. Each is a grid item holding
+ * whichever panels the dock model has placed there (B6); the panels move
+ * between them, the containers themselves never move.
+ *
+ * `anchorId` inserts a container where a static panel already sits rather than
+ * appending it, so adopting that panel into the dock leaves the document
+ * order — and therefore the reading order — exactly as it was.
+ *
+ * The bottom strip predates the field model and keeps its own id and class
+ * (B2), so it is created by _ensureContainer instead of appearing here.
+ * @type {Array<{id: string, className: string, anchorId?: string}>}
  */
-const DOCK_FIELDS = [
-  { name: 'left', datasetSuffix: 'Left' },
-  { name: 'right-top', datasetSuffix: 'RightTop' },
-  { name: 'right-bottom', datasetSuffix: 'RightBottom' },
-  { name: 'bottom', datasetSuffix: 'Bottom' },
+const DOCK_FIELD_CONTAINERS = [
+  {
+    id: 'classicFieldRightTop',
+    className: 'classic-dock-field classic-dock-field--right-top',
+    anchorId: 'paramPanel',
+  },
+  {
+    id: 'classicFieldLeft',
+    className: 'classic-dock-field classic-dock-field--left',
+  },
+  {
+    id: 'classicFieldRightBottom',
+    className: 'classic-dock-field classic-dock-field--right-bottom',
+  },
 ];
-
-/**
- * The panes that start hidden and are turned on from the Window menu. The
- * key is the `<key>Visible` half of the persisted pane state and the
- * `data-classic-<key>-visible` attribute; the value is the announced name.
- * Names are the upstream dock titles, owner-approved 2026-08-06.
- * @type {Record<string, string>}
- */
-const OPTIONAL_PANE_LABELS = {
-  animate: 'Animate',
-  fontList: 'Font List',
-  viewportControl: 'Viewport-Control',
-};
 
 /**
  * Controls that move into the Customizer dock rather than a created slot, so
@@ -219,6 +233,29 @@ export class ClassicLayoutController {
 
     /** Pane visibility state, persisted. Desktop defaults: editor shown. */
     this._panes = this._loadPaneState();
+
+    /**
+     * Which panel sits in which dock field (B6). The only thing that moves a
+     * panel is its movePanel(); this controller owns the DOM containers, the
+     * occupancy attributes and the resize event that follow from it.
+     * @type {ClassicDockModel}
+     */
+    this._dock = new ClassicDockModel({
+      isPanelVisible: (panelId) => this._isPanelVisible(panelId),
+      isFieldAvailable: (field) => this._isFieldAvailable(field),
+      // Switching tabs moves a different panel's titlebar into the shared bar,
+      // and its menu button has to be re-labelled for the panels it now serves.
+      onGroupChange: () => getClassicPanelMenus()?.refresh(),
+      isDesktop: () => this._isDesktopWidth(),
+    });
+
+    /** @type {number|undefined} */
+    this._breakpointTimer = undefined;
+    this._wasDesktop = null;
+    this._onWindowResize = () => {
+      clearTimeout(this._breakpointTimer);
+      this._breakpointTimer = setTimeout(() => this._checkBreakpoint(), 150);
+    };
   }
 
   /**
@@ -243,6 +280,9 @@ export class ClassicLayoutController {
       // occupancy attributes have to be re-stamped, not just the editor's
       // activation state.
       this._applyPaneAttributes();
+      // Simplified leaves only one field standing, so the legal move targets
+      // change with the density and the menus have to be rebuilt.
+      getClassicPanelMenus()?.refresh();
       document.dispatchEvent(
         new CustomEvent(
           this._isEditorAvailable()
@@ -286,15 +326,23 @@ export class ClassicLayoutController {
     // Reset to Log, remembering what was found so exit() can restore it (D-9).
     this._consoleTabOnEnter = this._sanitizeConsoleTabs();
 
+    // The right-top container is created around the Customizer, and the strip
+    // and camera bar keep the positions they had before the field model, so
+    // adopting the dock does not reshuffle the document order.
+    this._ensureField(mainInterface, DOCK_FIELD_CONTAINERS[0]);
     this._ensureContainer(
       mainInterface,
       BOTTOM_STRIP_ID,
-      'classic-bottom-strip'
+      'classic-dock-field classic-bottom-strip'
     );
     // The camera bar is static markup in index.html (E3), so it is adopted
     // into the grid rather than created — same appendChild contract as every
     // other move, and exit() puts it back where it came from.
     this._adoptIntoGrid(mainInterface, CAMERA_BAR_ID);
+
+    for (const def of DOCK_FIELD_CONTAINERS.slice(1)) {
+      this._ensureField(mainInterface, def);
+    }
 
     for (const def of SLOT_DEFS) {
       const panel = def.panelId ? document.getElementById(def.panelId) : null;
@@ -339,6 +387,10 @@ export class ClassicLayoutController {
       }
     }
 
+    // Slots are created in their default fields, so this is a no-op on a first
+    // entry and puts a user's saved arrangement back in place afterwards (B9).
+    this._dock.applyToDom();
+
     this._applyPaneAttributes();
     if (this._isEditorAvailable()) {
       document.dispatchEvent(new CustomEvent('classic-editor-activate'));
@@ -348,6 +400,21 @@ export class ClassicLayoutController {
     if (this._panes.consoleCollapsed) {
       getClassicResizerController()?.parkBottomSize();
     }
+
+    // The title-bar menus are the only way to relocate a panel this round
+    // (D-3), so they go on last, once every title bar exists.
+    initClassicPanelMenus({
+      getAllPanels: () => [...DOCK_PANEL_IDS],
+      getFieldOf: (panelId) => this._dock.getFieldOf(panelId),
+      getGroupOf: (panelId) => this._dock.getGroupOf(panelId),
+      canMove: (panelId, field) => this._dock.canMove(panelId, field),
+      getMergeCandidates: (panelId) => this._mergeCandidates(panelId),
+      movePanel: (panelId, field, index, options) =>
+        this.movePanel(panelId, field, index, options),
+    });
+
+    this._wasDesktop = this._isDesktopWidth();
+    window.addEventListener('resize', this._onWindowResize);
 
     this.active = true;
     this.onEnter();
@@ -363,6 +430,16 @@ export class ClassicLayoutController {
     // Before the moves, so the separators cannot outlive the grid areas they
     // are placed in and leave custom properties behind for Split.js to fight.
     destroyClassicResizers();
+    window.removeEventListener('resize', this._onWindowResize);
+    clearTimeout(this._breakpointTimer);
+
+    // Also before the moves: a merged panel carries role="tabpanel", a hidden
+    // flag and a titlebar living in the shared bar. Undoing that first is what
+    // lets a panel leave Classic exactly as it arrived (B7). The menu buttons
+    // go with it — the Customizer's title bar is static markup that survives
+    // the exit, so a button left on it would follow the user into Forge.
+    destroyClassicPanelMenus();
+    this._dock.dissolveTabGroups();
 
     for (const record of [...this._moved].reverse()) {
       const { el, parent, nextSibling, wasOpen } = record;
@@ -387,10 +464,14 @@ export class ClassicLayoutController {
     for (const def of SLOT_DEFS) {
       document.getElementById(def.id)?.remove();
     }
-    // The strip is created here, so it is removed here. The camera bar is
-    // static markup that was adopted, so the move-restore loop above has
-    // already put it back — removing it would delete it from the document.
+    // The strip and the field containers are created here, so they are removed
+    // here. The camera bar and the Customizer are static markup that was
+    // adopted, so the move-restore loop above has already put them back —
+    // removing those would delete them from the document.
     document.getElementById(BOTTOM_STRIP_ID)?.remove();
+    for (const def of DOCK_FIELD_CONTAINERS) {
+      document.getElementById(def.id)?.remove();
+    }
 
     delete document.body.dataset.classicEditorHidden;
     delete document.body.dataset.classicCustomizerHidden;
@@ -496,7 +577,7 @@ export class ClassicLayoutController {
     this._applyPaneAttributes();
     this._savePaneState();
     announceImmediate(
-      `${OPTIONAL_PANE_LABELS[pane]} ${this._panes[key] ? 'shown' : 'hidden'}`
+      `${panelLabel(pane)} ${this._panes[key] ? 'shown' : 'hidden'}`
     );
     return this._panes[key];
   }
@@ -544,6 +625,55 @@ export class ClassicLayoutController {
   }
 
   /**
+   * Whether a dock panel is currently on screen — its pane toggle is on AND
+   * the density has not dropped it. This is what makes a field occupied, so
+   * moving a panel moves its contribution to the grid with it.
+   * @param {string} panelId
+   * @returns {boolean}
+   * @private
+   */
+  _isPanelVisible(panelId) {
+    const simplified =
+      getUIModeController().getClassicDensity() === 'simplified';
+    switch (panelId) {
+      case 'editor':
+        return this._panes.editorVisible && !simplified;
+      case 'customizer':
+        return this._panes.customizerVisible;
+      // Viewport-Control is Standard-only for v1 (D-7). Simplified treats it
+      // as hidden without clearing the preference, so returning to Standard
+      // brings it back rather than silently resetting the arrangement.
+      case 'viewportControl':
+        return this._panes.viewportControlVisible && !simplified;
+      case 'animate':
+        return this._panes.animateVisible && !simplified;
+      case 'fontList':
+        return this._panes.fontListVisible && !simplified;
+      // Console and Error-Log have no toggle yet — Window > Error-Log arrives
+      // with F1. Simplified drops both with the rest of the code-facing docks.
+      case 'console':
+      case 'errorLog':
+        return !simplified;
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Whether a field is rendered at all right now. Moving a panel into a field
+   * the current density does not draw would strand it with no way back, so
+   * those moves are refused rather than offered and quietly ignored.
+   * @param {string} field
+   * @returns {boolean}
+   * @private
+   */
+  _isFieldAvailable(field) {
+    const simplified =
+      getUIModeController().getClassicDensity() === 'simplified';
+    return simplified ? field === 'right-top' : true;
+  }
+
+  /**
    * Which dock fields currently hold a visible panel. The grid derives its
    * track sizes from this, so every arrangement is described by data rather
    * than by a hand-written template per combination.
@@ -551,18 +681,140 @@ export class ClassicLayoutController {
    * @private
    */
   _fieldOccupancy() {
-    const simplified =
-      getUIModeController().getClassicDensity() === 'simplified';
-    return {
-      left: this._panes.editorVisible && !simplified,
-      'right-top': this._panes.customizerVisible,
-      // Viewport-Control is Standard-only for v1 (D-7). Simplified treats it
-      // as hidden without clearing the preference, so returning to Standard
-      // brings it back rather than silently resetting the arrangement.
-      'right-bottom': this._panes.viewportControlVisible && !simplified,
-      // Simplified drops the code-facing docks, which empties the strip.
-      bottom: !simplified,
-    };
+    return this._dock.getOccupancy();
+  }
+
+  /**
+   * Move a dock panel into another field (B6) — the one mutation the dock
+   * has. Re-parents the panel, re-stamps the pane and occupancy attributes,
+   * and fires the resize event so the 3D view re-measures against its new
+   * track (B5). Announcement and focus are the title-bar menu's job (B8).
+   *
+   * @param {string} panelId - a dock panel id, e.g. 'console' (NOT an element id)
+   * @param {string} targetField - 'left' | 'right-top' | 'right-bottom' | 'bottom'
+   * @param {number|null} [index] - position among the field's occupants
+   * @param {{mergeWith?: string|null}} [options] - join an occupant's tab group
+   * @returns {{ok: boolean, reason: string|null, field: string|null, merged: boolean}}
+   */
+  movePanel(panelId, targetField, index = null, options = {}) {
+    const result = this._dock.movePanel(panelId, targetField, index, options);
+    if (!result.ok) return result;
+
+    this._dock.save();
+    this._dock.applyToDom();
+    this._applyPaneAttributes();
+    document.dispatchEvent(new CustomEvent('classic-layout-resize'));
+
+    // Rebuilding the tab groups discards and recreates the shared bars, so the
+    // menus have to be re-hung before focus is sent to one of their buttons.
+    getClassicPanelMenus()?.refresh();
+
+    // Focus contract (B8): the moved panel's title bar, or its tab when the
+    // target field merged (B7).
+    this._focusAfterMove(panelId);
+    return result;
+  }
+
+  /**
+   * Put focus where the panel landed. A title bar is not focusable itself, so
+   * its menu button — the control the user just came from — takes the focus,
+   * which also leaves them able to move the panel straight on again.
+   * @param {string} panelId
+   * @private
+   */
+  _focusAfterMove(panelId) {
+    const target = this._dock.focusTargetFor(panelId);
+    if (!target) return;
+    const focusable =
+      target.getAttribute?.('role') === 'tab'
+        ? target
+        : target.querySelector?.('.classic-panel-menu-btn') || target;
+    focusable.focus?.();
+  }
+
+  /**
+   * The panels this one could merge with: everything else on screen that is
+   * not already sharing its cell. Hidden panels are left out — merging into
+   * something invisible is not a move a user can make sense of.
+   * @param {string} panelId
+   * @returns {string[]}
+   * @private
+   */
+  _mergeCandidates(panelId) {
+    const group = this._dock.getGroupOf(panelId);
+    return DOCK_PANEL_IDS.filter(
+      (id) => id !== panelId && !group.includes(id) && this._isPanelVisible(id)
+    );
+  }
+
+  /**
+   * Back to the arrangement of the desktop screenshots (View > Reset Panel
+   * Layout, B9) — the escape hatch when a dock has been rearranged into
+   * something the user cannot find their way out of.
+   * @returns {boolean} whether anything changed
+   */
+  resetPanelLayout() {
+    this._dock.reset();
+    this._dock.save();
+    this._dock.applyToDom();
+    this._applyPaneAttributes();
+    document.dispatchEvent(new CustomEvent('classic-layout-resize'));
+    getClassicPanelMenus()?.refresh();
+    // Wording owner-approved 2026-08-07.
+    announceImmediate('Panel layout reset');
+    return true;
+  }
+
+  /**
+   * Whether the dock is at desktop width. The 1024px breakpoint itself lives
+   * only in classic.css; this reads the flag that media query sets, so the two
+   * cannot drift apart.
+   * @returns {boolean}
+   * @private
+   */
+  _isDesktopWidth() {
+    if (!document.body) return true;
+    const flag = getComputedStyle(document.body)
+      .getPropertyValue('--classic-dock-desktop')
+      .trim();
+    // Outside Classic the property is unset; the dock is not on screen then,
+    // and treating it as desktop keeps the stored arrangement in play.
+    return flag === '' ? true : flag === '1';
+  }
+
+  /**
+   * Re-apply the arrangement when the window crosses the breakpoint. Below it
+   * the stack shows the default; the user's arrangement is neither applied nor
+   * touched, and comes back unchanged on the way up (B9).
+   * @private
+   */
+  _checkBreakpoint() {
+    if (!this.active) return;
+    const isDesktop = this._isDesktopWidth();
+    if (isDesktop === this._wasDesktop) return;
+    this._wasDesktop = isDesktop;
+
+    this._dock.applyToDom();
+    this._applyPaneAttributes();
+    getClassicPanelMenus()?.refresh();
+    document.dispatchEvent(new CustomEvent('classic-layout-resize'));
+  }
+
+  /**
+   * The dock's field map (B6), for the title-bar menu and the tests.
+   * @returns {Record<string, string[][]>}
+   */
+  getArrangement() {
+    return this._dock.getArrangement();
+  }
+
+  /**
+   * Which field a panel currently sits in.
+   * @param {string} panelId
+   * @returns {string|null}
+   */
+  getPanelField(panelId) {
+    return this._dock.getFieldOf(panelId);
   }
 
   /**
@@ -649,6 +901,40 @@ export class ClassicLayoutController {
       el = document.createElement('div');
       el.id = id;
       el.className = className;
+      mainInterface.appendChild(el);
+    }
+    return el;
+  }
+
+  /**
+   * Find or create a dock field container. When the definition names an
+   * anchor, the container takes that element's place in the document and the
+   * element moves inside it — that is how the Customizer joins the dock
+   * without changing where it falls in the reading order.
+   * @param {Element} mainInterface
+   * @param {{id: string, className: string, anchorId?: string}} def
+   * @returns {Element}
+   * @private
+   */
+  _ensureField(mainInterface, def) {
+    let el = document.getElementById(def.id);
+    if (el) return el;
+
+    el = document.createElement('div');
+    el.id = def.id;
+    el.className = def.className;
+
+    const anchor = def.anchorId ? document.getElementById(def.anchorId) : null;
+    if (anchor && anchor.parentElement) {
+      anchor.parentElement.insertBefore(el, anchor);
+      this._moved.push({
+        el: anchor,
+        parent: anchor.parentElement,
+        nextSibling: anchor.nextSibling,
+        wasOpen: anchor.tagName === 'DETAILS' ? anchor.open : null,
+      });
+      el.appendChild(anchor);
+    } else {
       mainInterface.appendChild(el);
     }
     return el;
