@@ -830,9 +830,11 @@ async function initApp() {
     ?.addEventListener('click', () => {
       // Downloads the render that already exists, and says so plainly when
       // there is none. Deliberately does NOT start a fresh render: rendering
-      // is the memory-hungry operation this banner is warning about.
-      // Previously clicked #renderExportButton, which does not exist.
-      exportFormatFromMenu('stl');
+      // is the memory-hungry operation this banner is warning about, which
+      // is why this is the one export path that opts out of G3's
+      // render-on-demand. Previously clicked #renderExportButton, which does
+      // not exist.
+      exportFormatFromMenu('stl', { renderIfNeeded: false });
       console.log('[Memory] STL export triggered for emergency save');
     });
 

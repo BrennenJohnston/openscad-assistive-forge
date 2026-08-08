@@ -50,8 +50,15 @@ export function setExportDependencies(deps) {
  * @param {string} format - Format key from OUTPUT_FORMATS (e.g. 'stl', 'obj')
  * @param {Object} [options]
  * @param {boolean} [options.stlBinary=true] - STL encoding (upstream ships both)
+ * @param {boolean} [options.renderIfNeeded=true] - Set false to export only
+ *        what already exists. The memory banner needs this: it appears when
+ *        memory is critical, and rendering is the operation it is warning
+ *        about, so it must never start one.
  */
-export async function exportFormatFromMenu(format, { stlBinary = true } = {}) {
+export async function exportFormatFromMenu(
+  format,
+  { stlBinary = true, renderIfNeeded = true } = {}
+) {
   const state = stateManager.getState();
   if (!state.uploadedFile?.content) {
     showErrorToast({
@@ -62,6 +69,13 @@ export async function exportFormatFromMenu(format, { stlBinary = true } = {}) {
   }
 
   if (exportDeps.hasCurrentRender?.(format, { stlBinary }) !== true) {
+    if (!renderIfNeeded) {
+      showErrorToast({
+        title: 'No Rendered Model',
+        message: 'No rendered model to export. Run Render first.',
+      });
+      return;
+    }
     if (!exportDeps.renderForExport) {
       showErrorToast({
         title: 'Engine Not Ready',
