@@ -424,7 +424,7 @@ test.describe('Edit menu parity (G2)', () => {
     )
   })
 
-  test('Use Selection for Find puts the selection in the Find field', async ({
+  test('Use Selection for Find searches for the selection', async ({
     page,
   }) => {
     await loadFixture(page)
@@ -467,9 +467,10 @@ test.describe('Edit menu parity (G2)', () => {
     // occurrence of it. This only works with the search() extension
     // installed: without it CodeMirror creates its search state lazily when
     // the panel first opens, so the query was silently dropped.
-    await expect
-      .poll(selectedLine)
-      .not.toBe(before)
+    // Strictly LATER in the document, and still inside the editor: the old
+    // code opened a search panel and left the selection in its Find field,
+    // which is not the same thing as searching.
+    await expect.poll(selectedLine).toBeGreaterThan(before)
     expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(
       'width'
     )
