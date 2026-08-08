@@ -486,13 +486,11 @@ test.describe('Grown menus stay reachable (G1/G2)', () => {
   }) => {
     await page.setViewportSize({ width: 1400, height: 900 })
     await loadFixture(page)
-    await openEditor(page)
-    // Opening the editor focuses it on a 100ms timer (main.js), so a menu
-    // opened inside that window loses focus to the editor. Let it land
-    // first — otherwise this test races a pre-existing quirk instead of
-    // measuring the menu.
-    await expect(page.locator('#expertModePanel .cm-content')).toBeFocused()
-
+    // Deliberately without the code editor open: opening it focuses it on a
+    // 100ms timer (main.js), and a menu opened inside that window loses
+    // focus back to the editor. That quirk predates this work and is
+    // reported separately; racing it here would measure it instead of the
+    // menu. The item count does not depend on the editor either way.
     await page.locator('#editMenuBtn').click()
 
     // 33 items no longer fit a 900px window, so the panel has to scroll
@@ -505,9 +503,7 @@ test.describe('Grown menus stay reachable (G1/G2)', () => {
     })
     expect(scrolls).toBe(true)
 
-    // Opening a menu moves focus into it (APG). The editor can still be
-    // settling in when the menu opens, so wait for the contract to hold
-    // rather than assuming it already does.
+    // Opening a menu moves focus into it (APG).
     await expect
       .poll(() =>
         page.evaluate(() =>
