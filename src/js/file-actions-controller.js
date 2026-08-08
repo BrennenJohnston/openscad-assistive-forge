@@ -114,6 +114,15 @@ export class FileActionsController {
     this._renderRecentList();
   }
 
+  /**
+   * Forget every recent file (File > Recent Files > Clear Recent).
+   */
+  clearRecent() {
+    this.recentFiles = [];
+    this._saveRecent();
+    this._renderRecentList();
+  }
+
   // -----------------------------------------------------------------------
   // Private
   // -----------------------------------------------------------------------

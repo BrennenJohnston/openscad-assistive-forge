@@ -2826,10 +2826,114 @@ async function initApp() {
       document.body.removeChild(link);
     },
     onExport2D: (format) => _export2DOneClick(format),
+    onOpenRecent: (entry) => _openRecentEntry(entry),
   });
   fileActionsController.init();
 
+  const RECENT_UNAVAILABLE_REASON =
+    'Not saved in this browser — open the file again to reload it';
+  const OPEN_IN_NEW_WINDOW_REASON =
+    'A new browser tab cannot be handed a file from this one. Use New Window, then open the file there.';
+
+  // A recent entry is only a file name, so re-opening works when this browser
+  // still holds the content: a saved project, or a bundled example. A one-off
+  // upload leaves nothing behind, and that entry renders disabled with a
+  // reason rather than failing on click (D-28). Menu builders are synchronous,
+  // so the lookup is cached and rebuilt whenever the project list changes.
+  const recentResolution = new Map();
+
+  async function refreshRecentResolution() {
+    const projects = await listSavedProjects();
+    const resolved = new Map();
+    for (const project of projects) {
+      if (project.originalName && !resolved.has(project.originalName)) {
+        resolved.set(project.originalName, { kind: 'project', id: project.id });
+      }
+    }
+    for (const project of projects) {
+      if (project.name && !resolved.has(project.name)) {
+        resolved.set(project.name, { kind: 'project', id: project.id });
+      }
+    }
+    for (const [key, def] of Object.entries(EXAMPLE_DEFINITIONS)) {
+      if (def.name && !resolved.has(def.name)) {
+        resolved.set(def.name, { kind: 'example', key });
+      }
+    }
+    recentResolution.clear();
+    for (const [name, target] of resolved) recentResolution.set(name, target);
+  }
+
+  function _openRecentEntry(entry) {
+    const target = recentResolution.get(entry?.name);
+    if (!target) return;
+    if (target.kind === 'project') {
+      void savedProjectsUI.loadSavedProject(target.id);
+    } else {
+      void fileHandler.loadExampleByKey(target.key);
+    }
+  }
+
+  document.addEventListener('saved-projects-rendered', () => {
+    void refreshRecentResolution();
+  });
+  void refreshRecentResolution();
+
+  /**
+   * Save a Copy: the open document stays attached to the project it came
+   * from, so a later Save still overwrites the original rather than the copy.
+   */
+  async function _saveProjectCopy() {
+    flushEditorWriteBack();
+    const state = stateManager.getState();
+    if (!state.uploadedFile?.content) return;
+    const previousProjectId = currentSavedProjectId;
+    await savedProjectsUI.showSaveProjectPrompt(state, { preSave: true });
+    currentSavedProjectId = previousProjectId;
+  }
+
+  /**
+   * File > Close Project. The Back button asks its own question, so a dirty
+   * editor is warned here and then closed directly — two dialogs in a row
+   * would be worse than one.
+   */
+  async function _closeProjectFromMenu() {
+    if (getEditorStateManager().getIsDirty()) {
+      const confirmed = await showConfirmDialog(
+        'You have unsaved edits in the code editor. Closing this project will discard them.',
+        'Unsaved code edits',
+        'Discard edits and close',
+        'Keep editing',
+        { destructive: true }
+      );
+      if (!confirmed) return;
+      await closeProjectToWelcome();
+      return;
+    }
+    document.getElementById('clearFileBtn')?.click();
+  }
+
+  /**
+   * File > Show Library Folder…: a browser has no library folder on disk, so
+   * this reveals the library bundles this build actually mounts.
+   */
+  function _showLibraryBundles() {
+    const controls = document.getElementById('libraryControls');
+    if (!controls) return;
+    controls.classList.remove('hidden');
+    const details = controls.querySelector('.library-details');
+    if (details) details.open = true;
+    controls.scrollIntoView({ block: 'nearest' });
+    controls.querySelector('.library-summary')?.focus();
+  }
+
   // ── Toolbar: File menu ──────────────────────────────────────────────────
+  // Order, labels and separators transcribed from upstream MainWindow.ui at
+  // tag openscad-2026.01.01-TEST2 (Appendix U2). Omitted and documented:
+  // Save All and the Python submenu (D-24 — one document, no Python in the
+  // WASM build). Quit has no browser meaning, so its slot is dropped and the
+  // single Close carries the clearer name "Close Project" (D-27, owner
+  // 2026-08-08). "Open Local Folder…" is a Forge extra, kept beside Open File.
   getToolbarMenuController().registerMenuBuilder('file', () => {
     const state = stateManager.getState();
     const hasFile = Boolean(state.uploadedFile);
@@ -2846,15 +2950,38 @@ async function initApp() {
     const hasFullRender =
       hasNonSTLRender || hasFullQualitySTLFor(state.parameters);
 
-    // Recent Files submenu items (filenames only; actual re-open via onOpenRecent callback)
-    const recentItems =
-      fileActionsController.recentFiles.length > 0
-        ? fileActionsController.recentFiles.map((entry) => ({
-            type: 'action',
-            label: entry.name,
-            handler: () => fileActionsController.onOpenRecent(entry),
-          }))
-        : [{ type: 'action', label: 'No recent files', disabled: true }];
+    // Recent Files submenu: entries this browser can still re-open, then
+    // Clear Recent. Unreachable entries stay listed but disabled (D-28).
+    const hasRecent = fileActionsController.recentFiles.length > 0;
+    const recentItems = [
+      ...(hasRecent
+        ? fileActionsController.recentFiles.map((entry) => {
+            const resolvable = recentResolution.has(entry.name);
+            return {
+              type: 'action',
+              label: entry.name,
+              disabled: !resolvable,
+              tooltip: resolvable ? undefined : RECENT_UNAVAILABLE_REASON,
+              handler: resolvable
+                ? () => fileActionsController.onOpenRecent(entry)
+                : undefined,
+            };
+          })
+        : [{ type: 'action', label: 'No recent files', disabled: true }]),
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'Clear Recent',
+        disabled: !hasRecent,
+        tooltip: hasRecent ? undefined : 'The recent files list is empty',
+        handler: hasRecent
+          ? () => {
+              fileActionsController.clearRecent();
+              announceImmediate('Recent files list cleared');
+            }
+          : undefined,
+      },
+    ];
 
     // Export submenu: one-click 2D exports + re-download of current render + Export as Image
     const exportItems = [
@@ -2935,7 +3062,6 @@ async function initApp() {
         handler: () => connectToLocalFolder?.(),
       },
       { type: 'submenu', label: 'Recent Files', items: recentItems },
-      { type: 'separator' },
       {
         type: 'submenu',
         label: 'Examples',
@@ -2988,8 +3114,29 @@ async function initApp() {
       { type: 'separator' },
       {
         type: 'action',
-        label: 'Close',
-        handler: () => document.getElementById('clearFileBtn')?.click(),
+        label: 'New Window',
+        tooltip: 'Opens a second copy of the app in a new browser tab',
+        handler: () =>
+          window.open(
+            window.location.origin + window.location.pathname,
+            '_blank',
+            'noopener,noreferrer'
+          ),
+      },
+      {
+        type: 'action',
+        label: 'Open in New Window',
+        disabled: true,
+        tooltip: OPEN_IN_NEW_WINDOW_REASON,
+      },
+      {
+        type: 'action',
+        label: 'Close Project',
+        enabled: hasFile,
+        tooltip: hasFile
+          ? 'Close the project and return to the start screen'
+          : 'Open a file first',
+        handler: () => void _closeProjectFromMenu(),
       },
       { type: 'separator' },
       {
@@ -3010,24 +3157,21 @@ async function initApp() {
       },
       {
         type: 'action',
-        label: 'Save All',
+        label: 'Save a Copy',
         enabled: hasFile,
         tooltip: hasFile
-          ? 'Save all changes to current project'
+          ? 'Save another copy, leaving this file attached to the project it came from'
           : 'Open a file first',
-        handler: () => fileActionsController.onSaveAll(),
+        handler: () => void _saveProjectCopy(),
       },
       { type: 'separator' },
       { type: 'submenu', label: 'Export', items: exportItems },
       { type: 'separator' },
       {
         type: 'action',
-        label: 'Close',
-        enabled: hasFile,
-        tooltip: hasFile
-          ? 'Close the project and return to the start screen'
-          : 'Open a file first',
-        handler: () => document.getElementById('clearFileBtn')?.click(),
+        label: 'Show Library Folder\u2026',
+        tooltip: 'Shows the library bundles this app can mount',
+        handler: () => _showLibraryBundles(),
       },
     ];
   });
@@ -6478,6 +6622,117 @@ async function initApp() {
     );
   }
 
+  // Close the project and return to the welcome screen. Split out of the Back
+  // button's listener so File > Close Project can ask its own dirty-aware
+  // question and still reach this one path without a second dialog.
+  async function closeProjectToWelcome() {
+    // Reset file input
+    fileInput.value = '';
+
+    // Leave STL view-only mode if it was active
+    setStlViewActive(false);
+    document
+      .getElementById('parametersContainer')
+      ?.querySelector('.stl-view-notice')
+      ?.remove();
+
+    // Clear state (including preset selection so it doesn't survive reload)
+    stateManager.setState({
+      uploadedFile: null,
+      projectFiles: null,
+      mainFilePath: null,
+      schema: null,
+      parameters: {},
+      defaults: {},
+      stl: null,
+      outputFormat: 'stl',
+      stlStats: null,
+      detectedLibraries: [],
+      currentPresetId: null,
+      currentPresetName: null,
+    });
+
+    // Sync the dropdown element and fire change so the format info panel,
+    // 2D guidance, and button labels all reset to their STL defaults.
+    if (outputFormatSelect) {
+      outputFormatSelect.value = 'stl';
+      outputFormatSelect.dispatchEvent(new Event('change'));
+    }
+
+    // Clear history
+    stateManager.clearHistory();
+
+    // Hide main interface, show welcome screen
+    mainInterface.classList.add('hidden');
+    welcomeScreen.classList.remove('hidden');
+    updateStorageDisplay();
+
+    // Refresh saved projects list when returning to welcome screen
+    await savedProjectsUI.renderSavedProjectsList();
+
+    // Reset workflow step state, then re-apply slot visibility.
+    // applyToolbarModeVisibility sees mainInterface.hidden=true and hides both
+    // the toolbar and the workflow progress (welcome-screen branch).
+    applyToolbarModeVisibility(getUIModeController().getMode());
+
+    // Exit focus mode if active
+    const focusModeBtn = document.getElementById('focusModeBtn');
+    if (
+      focusModeBtn &&
+      mainInterface &&
+      mainInterface.classList.contains('focus-mode')
+    ) {
+      mainInterface.classList.remove('focus-mode');
+      focusModeBtn.setAttribute('aria-pressed', 'false');
+    }
+
+    // Close Features Guide modal if open
+    const featuresGuideModal = document.getElementById('featuresGuideModal');
+    if (
+      featuresGuideModal &&
+      !featuresGuideModal.classList.contains('hidden')
+    ) {
+      closeFeaturesGuide();
+    }
+
+    // Clear preview and remove any loaded overlay from the previous project
+    if (previewManager) {
+      previewManager.clear();
+      previewManager.setReferenceOverlaySource({
+        kind: null,
+        name: null,
+        dataUrlOrText: null,
+      });
+      previewManager.setOverlayEnabled(false);
+    }
+
+    // Reset overlay UI controls so the previous project's state doesn't linger
+    if (overlayToggle) overlayToggle.checked = false;
+    if (overlaySourceSelect) overlaySourceSelect.value = '';
+    overlayGridCtrl.updateOverlaySourceDropdown();
+    overlayGridCtrl.updateOverlayStatus();
+
+    // Reset echo drawer so stale warnings don't persist into the
+    // next project load (prevents layout shift from expanded drawer).
+    updatePreviewDrawer([]);
+    if (typeof window.clearConsoleState === 'function') {
+      window.clearConsoleState();
+    }
+
+    // Reset status
+    updateStatus('Ready');
+    statsArea.textContent = '';
+    clearPreviewStats();
+
+    // Remove compact header
+    const appHeader = document.querySelector('.app-header');
+    if (appHeader) {
+      appHeader.classList.remove('compact');
+    }
+
+    console.log('[App] File cleared, returned to welcome screen');
+  }
+
   // Back button - returns to welcome screen
   if (clearFileBtn) {
     clearFileBtn.addEventListener('click', async () => {
@@ -6488,114 +6743,7 @@ async function initApp() {
         'Confirm',
         'Cancel'
       );
-      if (confirmed) {
-        // Reset file input
-        fileInput.value = '';
-
-        // Leave STL view-only mode if it was active
-        setStlViewActive(false);
-        document
-          .getElementById('parametersContainer')
-          ?.querySelector('.stl-view-notice')
-          ?.remove();
-
-        // Clear state (including preset selection so it doesn't survive reload)
-        stateManager.setState({
-          uploadedFile: null,
-          projectFiles: null,
-          mainFilePath: null,
-          schema: null,
-          parameters: {},
-          defaults: {},
-          stl: null,
-          outputFormat: 'stl',
-          stlStats: null,
-          detectedLibraries: [],
-          currentPresetId: null,
-          currentPresetName: null,
-        });
-
-        // Sync the dropdown element and fire change so the format info panel,
-        // 2D guidance, and button labels all reset to their STL defaults.
-        if (outputFormatSelect) {
-          outputFormatSelect.value = 'stl';
-          outputFormatSelect.dispatchEvent(new Event('change'));
-        }
-
-        // Clear history
-        stateManager.clearHistory();
-
-        // Hide main interface, show welcome screen
-        mainInterface.classList.add('hidden');
-        welcomeScreen.classList.remove('hidden');
-        updateStorageDisplay();
-
-        // Refresh saved projects list when returning to welcome screen
-        await savedProjectsUI.renderSavedProjectsList();
-
-        // Reset workflow step state, then re-apply slot visibility.
-        // applyToolbarModeVisibility sees mainInterface.hidden=true and hides both
-        // the toolbar and the workflow progress (welcome-screen branch).
-        applyToolbarModeVisibility(getUIModeController().getMode());
-
-        // Exit focus mode if active
-        const focusModeBtn = document.getElementById('focusModeBtn');
-        if (
-          focusModeBtn &&
-          mainInterface &&
-          mainInterface.classList.contains('focus-mode')
-        ) {
-          mainInterface.classList.remove('focus-mode');
-          focusModeBtn.setAttribute('aria-pressed', 'false');
-        }
-
-        // Close Features Guide modal if open
-        const featuresGuideModal =
-          document.getElementById('featuresGuideModal');
-        if (
-          featuresGuideModal &&
-          !featuresGuideModal.classList.contains('hidden')
-        ) {
-          closeFeaturesGuide();
-        }
-
-        // Clear preview and remove any loaded overlay from the previous project
-        if (previewManager) {
-          previewManager.clear();
-          previewManager.setReferenceOverlaySource({
-            kind: null,
-            name: null,
-            dataUrlOrText: null,
-          });
-          previewManager.setOverlayEnabled(false);
-        }
-
-        // Reset overlay UI controls so the previous project's state doesn't linger
-        if (overlayToggle) overlayToggle.checked = false;
-        if (overlaySourceSelect) overlaySourceSelect.value = '';
-        overlayGridCtrl.updateOverlaySourceDropdown();
-        overlayGridCtrl.updateOverlayStatus();
-
-        // Reset echo drawer so stale warnings don't persist into the
-        // next project load (prevents layout shift from expanded drawer).
-        updatePreviewDrawer([]);
-        if (typeof window.clearConsoleState === 'function') {
-          window.clearConsoleState();
-        }
-
-        // Reset status
-        updateStatus('Ready');
-        statsArea.textContent = '';
-        clearPreviewStats();
-
-        // Remove compact header
-        const appHeader = document.querySelector('.app-header');
-        if (appHeader) {
-          appHeader.classList.remove('compact');
-        }
-
-        console.log('[App] File cleared, returned to welcome screen');
-      }
+      if (confirmed) await closeProjectToWelcome();
     });
   }
 
