@@ -395,6 +395,11 @@ export class ClassicLayoutController {
     // are placed in and leave custom properties behind for Split.js to fight.
     destroyClassicResizers();
 
+    // Also before the moves: a merged panel carries role="tabpanel", a hidden
+    // flag and a titlebar living in the shared bar. Undoing that first is what
+    // lets a panel leave Classic exactly as it arrived (B7).
+    this._dock.dissolveTabGroups();
+
     for (const record of [...this._moved].reverse()) {
       const { el, parent, nextSibling, wasOpen } = record;
       if (parent && parent.isConnected) {
@@ -657,6 +662,11 @@ export class ClassicLayoutController {
     this._dock.applyToDom();
     this._applyPaneAttributes();
     document.dispatchEvent(new CustomEvent('classic-layout-resize'));
+
+    // B7: a merge selects the panel that just arrived, so that is where the
+    // user is. The solo case lands on the title bar and belongs to B8, which
+    // puts the focusable control there.
+    if (result.merged) this._dock.focusTargetFor(panelId)?.focus?.();
     return result;
   }
 

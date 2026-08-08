@@ -378,3 +378,281 @@ describe('ClassicDockModel — applyToDom (B6)', () => {
     expect(clicks).toBe(1);
   });
 });
+
+describe('ClassicDockModel — tab-merge (B7)', () => {
+  /** @type {Map<string, HTMLElement>} */
+  let elements;
+  /** @type {ClassicDockModel} */
+  let model;
+
+  /** A slot as _ensureSlot builds it: titlebar with a button, then the body. */
+  function makeSlot(id, title, withButton = false) {
+    const slot = document.createElement('section');
+    slot.id = id;
+    slot.className = 'classic-slot';
+    slot.setAttribute('aria-label', title);
+    const bar = document.createElement('div');
+    bar.className = 'classic-pane-titlebar';
+    const name = document.createElement('span');
+    name.className = 'classic-pane-title';
+    name.textContent = title;
+    bar.appendChild(name);
+    if (withButton) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.id = `${id}Btn`;
+      bar.appendChild(btn);
+    }
+    slot.appendChild(bar);
+    const body = document.createElement('div');
+    body.className = 'classic-fold';
+    slot.appendChild(body);
+    return slot;
+  }
+
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    elements = new Map();
+    for (const id of [
+      'classicFieldLeft',
+      'classicFieldRightTop',
+      'classicFieldRightBottom',
+      'classicBottomStrip',
+    ]) {
+      const el = document.createElement('div');
+      el.id = id;
+      document.body.appendChild(el);
+      elements.set(id, el);
+    }
+    for (const [id, title, withButton] of [
+      ['classicEditorSlot', 'Editor', true],
+      ['classicViewportControlSlot', 'Viewport-Control', false],
+      ['classicConsoleSlot', 'Console', true],
+      ['classicErrorLogSlot', 'Error-Log', false],
+    ]) {
+      const slot = makeSlot(id, title, withButton);
+      document.body.appendChild(slot);
+      elements.set(id, slot);
+    }
+    // The Customizer is the Forge parameter panel, which already has a role.
+    const param = document.createElement('div');
+    param.id = 'paramPanel';
+    param.className = 'param-panel';
+    param.setAttribute('role', 'region');
+    param.setAttribute('aria-labelledby', 'parameters-heading');
+    document.body.appendChild(param);
+    elements.set('paramPanel', param);
+
+    model = new ClassicDockModel({
+      getElement: (id) => elements.get(id) || null,
+    });
+    model.applyToDom();
+  });
+
+  /** @returns {HTMLElement|null} */
+  const tabgroup = () => document.querySelector('.classic-dock-tabgroup');
+  const tabs = () =>
+    [...document.querySelectorAll('[role="tab"]')].map((t) => ({
+      id: t.id,
+      label: t.textContent,
+      selected: t.getAttribute('aria-selected'),
+      tabIndex: t.tabIndex,
+      controls: t.getAttribute('aria-controls'),
+    }));
+
+  it('leaves a field of solo panels with no tablist at all', () => {
+    expect(tabgroup()).toBeNull();
+    expect(document.querySelectorAll('[role="tab"]')).toHaveLength(0);
+  });
+
+  it('draws a real tablist when a field merges, naming it after the field', () => {
+    model.movePanel('errorLog', 'bottom', null, { mergeWith: 'console' });
+    model.applyToDom();
+
+    const list = document.querySelector('[role="tablist"]');
+    expect(list.getAttribute('aria-label')).toBe('Bottom panels');
+    expect(tabs()).toEqual([
+      {
+        id: 'classicDockTab-console',
+        label: 'Console',
+        selected: 'false',
+        tabIndex: -1,
+        controls: 'classicConsoleSlot',
+      },
+      {
+        id: 'classicDockTab-errorLog',
+        label: 'Error-Log',
+        selected: 'true',
+        tabIndex: 0,
+        controls: 'classicErrorLogSlot',
+      },
+    ]);
+    // The panel that just arrived is the one showing (B7).
+    expect(model.getActivePanel('console')).toBe('errorLog');
+    expect(elements.get('classicConsoleSlot').hidden).toBe(true);
+    expect(elements.get('classicErrorLogSlot').hidden).toBe(false);
+  });
+
+  it('makes the merged panels tabpanels and hands their roles back on a split', () => {
+    model.movePanel('customizer', 'left', null, { mergeWith: 'editor' });
+    model.applyToDom();
+
+    const param = elements.get('paramPanel');
+    expect(param.getAttribute('role')).toBe('tabpanel');
+    expect(param.getAttribute('aria-labelledby')).toBe(
+      'classicDockTab-customizer'
+    );
+
+    model.movePanel('customizer', 'right-top');
+    model.applyToDom();
+
+    expect(param.getAttribute('role')).toBe('region');
+    expect(param.getAttribute('aria-labelledby')).toBe('parameters-heading');
+    expect(param.hidden).toBe(false);
+    expect(param.parentElement.id).toBe('classicFieldRightTop');
+    expect(tabgroup()).toBeNull();
+  });
+
+  it('shows ONE titlebar — the active panel’s, with its buttons still live', () => {
+    let folds = 0;
+    document
+      .getElementById('classicConsoleSlotBtn')
+      .addEventListener('click', () => {
+        folds += 1;
+      });
+
+    model.movePanel('errorLog', 'bottom', null, { mergeWith: 'console' });
+    model.applyToDom();
+
+    const bar = document.querySelector('.classic-dock-tabbar');
+    expect(bar.querySelectorAll('.classic-pane-titlebar')).toHaveLength(1);
+    // Error-Log is active and has no buttons of its own
+    expect(bar.querySelector('.classic-pane-titlebar').parentElement).toBe(bar);
+
+    // Selecting Console brings ITS titlebar — and its fold button — into the bar
+    document.getElementById('classicDockTab-console').click();
+    expect(bar.querySelectorAll('.classic-pane-titlebar')).toHaveLength(1);
+    expect(bar.querySelector('#classicConsoleSlotBtn')).not.toBeNull();
+    bar.querySelector('#classicConsoleSlotBtn').click();
+    expect(folds).toBe(1);
+
+    // Splitting the group puts the titlebar back at the top of its own slot
+    model.movePanel('errorLog', 'bottom', 1);
+    model.applyToDom();
+    const consoleSlot = elements.get('classicConsoleSlot');
+    expect(consoleSlot.firstElementChild.className).toBe(
+      'classic-pane-titlebar'
+    );
+    expect(consoleSlot.querySelector('#classicConsoleSlotBtn')).not.toBeNull();
+  });
+
+  it('moves the selection with the arrow keys and keeps one tab stop', () => {
+    model.movePanel('errorLog', 'bottom', null, { mergeWith: 'console' });
+    model.applyToDom();
+
+    const list = document.querySelector('[role="tablist"]');
+    const errorTab = document.getElementById('classicDockTab-errorLog');
+    errorTab.focus();
+
+    list.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })
+    );
+    expect(model.getActivePanel('console')).toBe('console');
+    expect(document.activeElement.id).toBe('classicDockTab-console');
+    // The single tab stop has to follow the selection, not merely stay single
+    expect(tabs()).toEqual([
+      expect.objectContaining({
+        id: 'classicDockTab-console',
+        selected: 'true',
+        tabIndex: 0,
+      }),
+      expect.objectContaining({
+        id: 'classicDockTab-errorLog',
+        selected: 'false',
+        tabIndex: -1,
+      }),
+    ]);
+    // ...and the panels follow it
+    expect(elements.get('classicConsoleSlot').hidden).toBe(false);
+    expect(elements.get('classicErrorLogSlot').hidden).toBe(true);
+
+    // Wraps
+    list.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })
+    );
+    expect(model.getActivePanel('console')).toBe('errorLog');
+
+    list.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Home', bubbles: true })
+    );
+    expect(model.getActivePanel('console')).toBe('console');
+    list.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'End', bubbles: true })
+    );
+    expect(model.getActivePanel('console')).toBe('errorLog');
+  });
+
+  it('ignores keys that are not part of the tabs pattern', () => {
+    model.movePanel('errorLog', 'bottom', null, { mergeWith: 'console' });
+    model.applyToDom();
+
+    const list = document.querySelector('[role="tablist"]');
+    document.getElementById('classicDockTab-errorLog').focus();
+    list.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })
+    );
+
+    expect(model.getActivePanel('console')).toBe('errorLog');
+  });
+
+  it('selecting a tab does not re-parent anything', () => {
+    model.movePanel('errorLog', 'bottom', null, { mergeWith: 'console' });
+    model.applyToDom();
+    const wrapper = tabgroup();
+
+    document.getElementById('classicDockTab-console').click();
+
+    expect(tabgroup()).toBe(wrapper);
+    expect(elements.get('classicConsoleSlot').parentElement).toBe(wrapper);
+  });
+
+  it('points focus at the tab when merged and at the title bar when solo', () => {
+    expect(model.focusTargetFor('console').className).toBe(
+      'classic-pane-titlebar'
+    );
+
+    model.movePanel('errorLog', 'bottom', null, { mergeWith: 'console' });
+    model.applyToDom();
+
+    expect(model.focusTargetFor('errorLog').id).toBe('classicDockTab-errorLog');
+  });
+
+  it('gives every panel back unchanged when the dock is torn down', () => {
+    model.movePanel('errorLog', 'bottom', null, { mergeWith: 'console' });
+    model.applyToDom();
+
+    model.dissolveTabGroups();
+
+    const consoleSlot = elements.get('classicConsoleSlot');
+    const errorSlot = elements.get('classicErrorLogSlot');
+    for (const slot of [consoleSlot, errorSlot]) {
+      expect(slot.getAttribute('role')).toBeNull();
+      expect(slot.getAttribute('aria-labelledby')).toBeNull();
+      expect(slot.hidden).toBe(false);
+      expect(slot.firstElementChild.className).toBe('classic-pane-titlebar');
+    }
+    expect(document.querySelector('.classic-dock-tabgroup')).toBeNull();
+    expect(document.querySelectorAll('[role="tab"]')).toHaveLength(0);
+  });
+
+  it('keeps its tab chrome clear of the Forge console tabs', () => {
+    model.movePanel('errorLog', 'bottom', null, { mergeWith: 'console' });
+    model.applyToDom();
+
+    expect(document.querySelector('.console-view-tabs')).toBeNull();
+    for (const tab of document.querySelectorAll('[role="tab"]')) {
+      expect(tab.className).toBe('classic-dock-tab');
+      expect(tab.id.startsWith('classicDockTab-')).toBe(true);
+    }
+  });
+});

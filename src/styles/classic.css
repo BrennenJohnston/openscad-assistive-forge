@@ -546,6 +546,96 @@ body[data-ui-mode='classic'] .classic-dock-field > * {
   min-width: 0;
 }
 
+/* ── Merged fields: dock tab groups (B7) ─────────────────────────────────────
+   Two panels sharing one cell become a real tab group with ONE shared bar:
+   the tablist, then the active panel's own titlebar so its fold/close buttons
+   stay live. The tab already carries the name, so the title text inside the
+   bar is hidden rather than read out twice.
+
+   Classic-owned: nothing here touches .console-view-tabs, the Forge console's
+   own tablist, which Classic hides (D-9). */
+body[data-ui-mode='classic'] .classic-dock-tabgroup {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--color-border);
+  background-color: var(--color-bg-primary);
+}
+
+body[data-ui-mode='classic'] .classic-dock-tabgroup > .classic-slot,
+body[data-ui-mode='classic'] .classic-dock-tabgroup > .param-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  border: 0;
+}
+
+/* An unselected tabpanel gives up its space. .classic-slot's display:flex
+   would otherwise beat the [hidden] default. */
+body[data-ui-mode='classic'] .classic-dock-tabgroup > [hidden] {
+  display: none;
+}
+
+body[data-ui-mode='classic'] .classic-dock-tabbar {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-xs);
+  min-width: 0;
+  background-color: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+}
+
+body[data-ui-mode='classic'] .classic-dock-tablist {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+/* The shared bar's titlebar is the active panel's own, moved here. It keeps
+   its buttons and gives up its name to the selected tab. */
+body[data-ui-mode='classic'] .classic-dock-tabbar > .classic-pane-titlebar {
+  flex: 1 1 auto;
+  min-width: 0;
+  border-bottom: 0;
+  justify-content: flex-end;
+}
+
+body[data-ui-mode='classic']
+  .classic-dock-tabbar
+  > .classic-pane-titlebar
+  > .classic-pane-title {
+  display: none;
+}
+
+body[data-ui-mode='classic'] .classic-dock-tab {
+  /* 44px on touch, auto-compact 36px on fine pointers (token media query) */
+  min-height: var(--size-touch-target);
+  padding: 0 var(--space-sm);
+  border: 0;
+  border-right: 1px solid var(--color-border);
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-family: inherit;
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+body[data-ui-mode='classic'] .classic-dock-tab[aria-selected='true'] {
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  /* Selection is carried by more than colour: the selected tab is the one
+     joined to the panel below it. */
+  box-shadow: inset 0 -2px 0 0 var(--color-accent);
+  font-weight: var(--font-weight-medium);
+}
+
+body[data-ui-mode='classic'] .classic-dock-tab:hover {
+  background-color: var(--color-hover-bg);
+}
+
 /* Empty fields hide their container at every breakpoint, so a collapsed track
    never has a zero-width element painting inside it. */
 body[data-ui-mode='classic'][data-classic-field-left='empty']
@@ -749,7 +839,8 @@ body[data-ui-mode='classic'] .classic-bottom-strip {
   background-color: var(--color-border);
 }
 
-body[data-ui-mode='classic'] .classic-bottom-strip > .classic-slot {
+body[data-ui-mode='classic'] .classic-bottom-strip > .classic-slot,
+body[data-ui-mode='classic'] .classic-bottom-strip > .classic-dock-tabgroup {
   flex: 1 1 50%;
   min-width: 0;
   min-height: 0;
@@ -828,7 +919,8 @@ body[data-ui-mode='classic'] .classic-error-log-slot .error-log-output {
     top: auto;
   }
 
-  body[data-ui-mode='classic'] .classic-slot {
+  body[data-ui-mode='classic'] .classic-slot,
+  body[data-ui-mode='classic'] .classic-dock-tabgroup {
     flex: 0 0 auto;
     max-height: 40vh;
   }
@@ -868,7 +960,8 @@ body[data-ui-mode='classic'] .classic-error-log-slot .error-log-output {
   body[data-ui-mode='classic'] .classic-bottom-strip {
     flex-direction: column;
   }
-  body[data-ui-mode='classic'] .classic-bottom-strip > .classic-slot {
+  body[data-ui-mode='classic'] .classic-bottom-strip > .classic-slot,
+  body[data-ui-mode='classic'] .classic-bottom-strip > .classic-dock-tabgroup {
     flex: 0 0 auto;
     max-height: 40vh;
   }

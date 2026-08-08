@@ -36,24 +36,47 @@
  * @type {ReadonlyArray<{name: string, datasetSuffix: string, elementId: string}>}
  */
 export const DOCK_FIELDS = Object.freeze([
-  { name: 'left', datasetSuffix: 'Left', elementId: 'classicFieldLeft' },
+  {
+    name: 'left',
+    datasetSuffix: 'Left',
+    elementId: 'classicFieldLeft',
+    label: 'Left column',
+  },
   {
     name: 'right-top',
     datasetSuffix: 'RightTop',
     elementId: 'classicFieldRightTop',
+    label: 'Upper right',
   },
   {
     name: 'right-bottom',
     datasetSuffix: 'RightBottom',
     elementId: 'classicFieldRightBottom',
+    label: 'Lower right',
   },
   // The bottom strip predates the field model (B2) and keeps its id, so the
   // CSS and the R2a regression tests that name it still apply.
-  { name: 'bottom', datasetSuffix: 'Bottom', elementId: 'classicBottomStrip' },
+  {
+    name: 'bottom',
+    datasetSuffix: 'Bottom',
+    elementId: 'classicBottomStrip',
+    label: 'Bottom',
+  },
 ]);
 
 /** @type {ReadonlyArray<string>} */
 export const DOCK_FIELD_NAMES = Object.freeze(DOCK_FIELDS.map((f) => f.name));
+
+/**
+ * The name a dock field goes by in the interface. Owner-approved 2026-08-07:
+ * a merged field's tablist is named after the field ("Bottom panels"), which
+ * is what tells two tab groups apart when both are on screen.
+ * @param {string} field
+ * @returns {string}
+ */
+export function fieldLabel(field) {
+  return DOCK_FIELDS.find((f) => f.name === field)?.label || field;
+}
 
 /**
  * The 3D view. It is not a field: it holds no dock panel, it is never a move
@@ -142,6 +165,28 @@ export function defaultArrangement() {
   return map;
 }
 
+/**
+ * Tab-group chrome (B7). These are Classic-owned and deliberately share no id
+ * or class with the Forge console's own `.console-view-tabs`, which Classic
+ * hides (D-9) — two tab systems on one page must not style or select each
+ * other.
+ */
+export const TAB_GROUP_CLASS = 'classic-dock-tabgroup';
+export const TAB_BAR_CLASS = 'classic-dock-tabbar';
+export const TABLIST_CLASS = 'classic-dock-tablist';
+export const TAB_CLASS = 'classic-dock-tab';
+
+/** The pane titlebar built by classic-layout-controller's _ensureSlot. */
+const TITLEBAR_CLASS = 'classic-pane-titlebar';
+
+/**
+ * @param {string} panelId
+ * @returns {string} the id of that panel's tab, referenced by aria-labelledby
+ */
+export function tabIdFor(panelId) {
+  return `classicDockTab-${panelId}`;
+}
+
 /** Why a move was refused. Consumed by B8 to keep illegal targets off the menu. */
 export const MOVE_REJECTED = Object.freeze({
   UNKNOWN_PANEL: 'unknown-panel',
@@ -169,11 +214,37 @@ export class ClassicDockModel {
   constructor(options = {}) {
     this._isPanelVisible = options.isPanelVisible || (() => true);
     this._isFieldAvailable = options.isFieldAvailable || (() => true);
-    this._getElement =
-      options.getElement || ((id) => document.getElementById(id));
+    const resolve = options.getElement;
+    // The injected resolver answers for the panels and fields a test sets up;
+    // the tab chrome this module creates is only ever in the document.
+    this._getElement = resolve
+      ? (id) => resolve(id) || document.getElementById(id)
+      : (id) => document.getElementById(id);
 
     /** @type {Record<string, string[][]>} */
     this._map = defaultArrangement();
+
+    /**
+     * The selected panel of each merged group (B7). Exactly one member of
+     * every group of two or more is in here; solo panels never are.
+     * @type {Set<string>}
+     */
+    this._active = new Set();
+
+    /**
+     * What a panel element looked like before it was pressed into service as a
+     * tabpanel, so splitting a group hands it back unchanged.
+     * @type {Map<Element, {role: string|null, labelledBy: string|null}>}
+     */
+    this._panelRoles = new Map();
+
+    /**
+     * Where each relocated pane titlebar came from. A merged group shows ONE
+     * titlebar — the active panel's, moved into the shared bar — so the fold
+     * and close buttons on it keep working instead of disappearing.
+     * @type {Map<Element, {parent: Element, nextSibling: Node|null}>}
+     */
+    this._titlebarHomes = new Map();
   }
 
   /**
@@ -199,12 +270,14 @@ export class ClassicDockModel {
     const validated = validateArrangement(candidate);
     if (!validated) return false;
     this._map = validated;
+    this._normalizeActive();
     return true;
   }
 
   /** Back to the default arrangement (View > Reset Panel Layout, B9). */
   reset() {
     this._map = defaultArrangement();
+    this._normalizeActive();
   }
 
   /**
@@ -353,12 +426,59 @@ export class ClassicDockModel {
       };
     }
 
+    // A panel the user just merged is the one they want to see (B7).
+    this._active.delete(panelId);
+    this._normalizeActive();
+    if (mergeWith !== null) this.setActivePanel(panelId);
+
     return {
       ok: true,
       reason: null,
       field: targetField,
       merged: mergeWith !== null,
     };
+  }
+
+  /**
+   * Which panel of a merged group is showing. Solo panels are always their own
+   * answer, so callers do not have to special-case them.
+   * @param {string} panelId - any member of the group
+   * @returns {string|null}
+   */
+  getActivePanel(panelId) {
+    const group = this.getGroupOf(panelId);
+    if (group.length === 0) return null;
+    if (group.length === 1) return group[0];
+    return group.find((id) => this._active.has(id)) || group[0];
+  }
+
+  /**
+   * Select a tab. Its group-mates give up the selection.
+   * @param {string} panelId
+   */
+  setActivePanel(panelId) {
+    const group = this.getGroupOf(panelId);
+    if (group.length < 2 || !group.includes(panelId)) return;
+    for (const id of group) this._active.delete(id);
+    this._active.add(panelId);
+  }
+
+  /**
+   * Keep the invariant: exactly one selected member per merged group, none
+   * anywhere else. Called after every mutation so no code path can leave a
+   * group with two selections or none.
+   * @private
+   */
+  _normalizeActive() {
+    const kept = new Set();
+    for (const field of DOCK_FIELD_NAMES) {
+      for (const group of this._map[field]) {
+        if (group.length < 2) continue;
+        const current = group.find((id) => this._active.has(id));
+        kept.add(current || group[0]);
+      }
+    }
+    this._active = kept;
   }
 
   /**
@@ -389,13 +509,28 @@ export class ClassicDockModel {
    * slots before sub-plan F, or any slot outside Classic) are skipped.
    */
   applyToDom() {
+    // Tab groups are torn down and rebuilt rather than reconciled in place: a
+    // move is a deliberate, infrequent action, and rebuilding is the only way
+    // to be sure a panel that has left a group takes none of the group's ARIA
+    // with it. Selecting a tab does NOT come through here.
+    this.dissolveTabGroups();
+
     for (const field of DOCK_FIELDS) {
       const container = this._getElement(field.elementId);
       if (!container) continue;
 
-      const wanted = this.getOccupants(field.name)
-        .map((panelId) => this._getElement(elementIdFor(panelId)))
-        .filter(Boolean);
+      /** @type {Element[]} */
+      const wanted = [];
+      for (const group of this._map[field.name]) {
+        const els = group
+          .map((panelId) => this._getElement(elementIdFor(panelId)))
+          .filter(Boolean);
+        if (els.length === 0) continue;
+        // A group whose other members have no element yet — the reserved
+        // Animate and Font List slots before sub-plan F — is not a tab group.
+        if (els.length === 1) wanted.push(els[0]);
+        else wanted.push(this._buildTabGroup(field.name, group, els));
+      }
 
       // Re-appending an element that is already where it belongs still detaches
       // and re-inserts it, which costs CodeMirror a re-measure on every entry.
@@ -410,6 +545,239 @@ export class ClassicDockModel {
 
       for (const el of wanted) container.appendChild(el);
     }
+  }
+
+  /**
+   * Return every panel currently inside a tab group to its field container and
+   * strip the tab wiring back off it. Public because exiting Classic has to
+   * undo the tab chrome BEFORE the layout controller moves the panels home —
+   * otherwise a panel leaves with role="tabpanel" and hidden still on it.
+   */
+  dissolveTabGroups() {
+    for (const wrapper of document.querySelectorAll(`.${TAB_GROUP_CLASS}`)) {
+      const parent = wrapper.parentElement;
+      const titlebar = wrapper.querySelector(
+        `.${TAB_BAR_CLASS} .${TITLEBAR_CLASS}`
+      );
+      if (titlebar) this._restoreTitlebar(titlebar);
+
+      for (const child of [...wrapper.children]) {
+        if (child.classList.contains(TAB_BAR_CLASS)) continue;
+        this._restorePanelRole(child);
+        parent?.appendChild(child);
+      }
+      wrapper.remove();
+    }
+  }
+
+  /**
+   * Build one merged group: a shared bar carrying the tablist and the active
+   * panel's own titlebar, then the panels themselves as tabpanels. Arrow keys
+   * move the selection and the group is a single tab stop.
+   *
+   * Native <button>s carry the tabs — activation, focusability and the
+   * accessible name all come from the element. The tab/tablist/tabpanel roles
+   * are the repair on top, because HTML has no tab primitive.
+   *
+   * @param {string} field
+   * @param {string[]} group
+   * @param {Element[]} els - the group's panel elements, in the same order
+   * @returns {Element} the tab-group wrapper
+   * @private
+   */
+  _buildTabGroup(field, group, els) {
+    const active = this.getActivePanel(group[0]);
+
+    const wrapper = document.createElement('div');
+    wrapper.className = TAB_GROUP_CLASS;
+    wrapper.dataset.classicField = field;
+
+    const bar = document.createElement('div');
+    bar.className = TAB_BAR_CLASS;
+
+    const tablist = document.createElement('div');
+    tablist.className = TABLIST_CLASS;
+    tablist.setAttribute('role', 'tablist');
+    // Named after its field, so two merged groups on screen are told apart.
+    tablist.setAttribute('aria-label', `${fieldLabel(field)} panels`);
+
+    group.forEach((panelId, i) => {
+      const tab = document.createElement('button');
+      tab.type = 'button';
+      tab.id = tabIdFor(panelId);
+      tab.className = TAB_CLASS;
+      tab.setAttribute('role', 'tab');
+      tab.dataset.classicPanel = panelId;
+      tab.setAttribute('aria-controls', els[i].id);
+      tab.setAttribute('aria-selected', String(panelId === active));
+      tab.tabIndex = panelId === active ? 0 : -1;
+      tab.textContent = panelLabel(panelId);
+      tab.addEventListener('click', () => this._selectTab(panelId));
+      tablist.appendChild(tab);
+    });
+
+    tablist.addEventListener('keydown', (event) =>
+      this._onTablistKeydown(event, group)
+    );
+    bar.appendChild(tablist);
+
+    // The active panel's own titlebar joins the shared bar so its fold and
+    // close buttons stay live; the tab already carries the name, so the title
+    // text inside the bar is hidden by CSS rather than read out twice.
+    this._adoptTitlebar(bar, els[group.indexOf(active)]);
+    wrapper.appendChild(bar);
+
+    group.forEach((panelId, i) => {
+      this._makeTabPanel(els[i], panelId, panelId === active);
+      wrapper.appendChild(els[i]);
+    });
+
+    return wrapper;
+  }
+
+  /**
+   * @param {Element} bar
+   * @param {Element|undefined} activeEl
+   * @private
+   */
+  _adoptTitlebar(bar, activeEl) {
+    const titlebar = activeEl?.querySelector(`.${TITLEBAR_CLASS}`);
+    if (!titlebar) return;
+    this._titlebarHomes.set(titlebar, {
+      parent: titlebar.parentElement,
+      nextSibling: titlebar.nextSibling,
+    });
+    bar.appendChild(titlebar);
+  }
+
+  /**
+   * @param {Element} panel
+   * @param {string} panelId
+   * @param {boolean} isActive
+   * @private
+   */
+  _makeTabPanel(panel, panelId, isActive) {
+    if (!this._panelRoles.has(panel)) {
+      this._panelRoles.set(panel, {
+        role: panel.getAttribute('role'),
+        labelledBy: panel.getAttribute('aria-labelledby'),
+      });
+    }
+    panel.setAttribute('role', 'tabpanel');
+    panel.setAttribute('aria-labelledby', tabIdFor(panelId));
+    panel.hidden = !isActive;
+  }
+
+  /**
+   * @param {Element} panel
+   * @private
+   */
+  _restorePanelRole(panel) {
+    panel.hidden = false;
+    const previous = this._panelRoles.get(panel);
+    if (!previous) return;
+    if (previous.role) panel.setAttribute('role', previous.role);
+    else panel.removeAttribute('role');
+    if (previous.labelledBy) {
+      panel.setAttribute('aria-labelledby', previous.labelledBy);
+    } else {
+      panel.removeAttribute('aria-labelledby');
+    }
+    this._panelRoles.delete(panel);
+  }
+
+  /**
+   * @param {Element} titlebar
+   * @private
+   */
+  _restoreTitlebar(titlebar) {
+    const home = this._titlebarHomes.get(titlebar);
+    this._titlebarHomes.delete(titlebar);
+    if (!home?.parent?.isConnected) return;
+    if (home.nextSibling && home.nextSibling.parentNode === home.parent) {
+      home.parent.insertBefore(titlebar, home.nextSibling);
+    } else {
+      home.parent.insertBefore(titlebar, home.parent.firstChild);
+    }
+  }
+
+  /**
+   * Show a tab's panel. Only ARIA, visibility and the shared titlebar change —
+   * no panel is re-parented, so the editor keeps its scroll position and the
+   * 3D view needs no re-measure.
+   * @param {string} panelId
+   * @private
+   */
+  _selectTab(panelId) {
+    const group = this.getGroupOf(panelId);
+    if (group.length < 2) return;
+    if (this.getActivePanel(panelId) === panelId) return;
+
+    const tab = this._getElement(tabIdFor(panelId));
+    const bar = tab
+      ?.closest(`.${TAB_GROUP_CLASS}`)
+      ?.querySelector(`.${TAB_BAR_CLASS}`);
+    if (!bar) return;
+
+    this.setActivePanel(panelId);
+
+    const previousTitlebar = bar.querySelector(`.${TITLEBAR_CLASS}`);
+    if (previousTitlebar) this._restoreTitlebar(previousTitlebar);
+
+    for (const id of group) {
+      const isActive = id === panelId;
+      const memberTab = this._getElement(tabIdFor(id));
+      if (memberTab) {
+        memberTab.setAttribute('aria-selected', String(isActive));
+        memberTab.tabIndex = isActive ? 0 : -1;
+      }
+      const panel = this._getElement(elementIdFor(id));
+      if (panel) panel.hidden = !isActive;
+    }
+
+    this._adoptTitlebar(bar, this._getElement(elementIdFor(panelId)));
+  }
+
+  /**
+   * APG tabs keyboard model: arrows move the selection, Home/End jump to the
+   * ends, and roving tabindex keeps the group to one tab stop.
+   * @param {KeyboardEvent} event
+   * @param {string[]} group
+   * @private
+   */
+  _onTablistKeydown(event, group) {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+
+    const from =
+      event.target?.dataset?.classicPanel || this.getActivePanel(group[0]);
+    const current = group.indexOf(from);
+    if (current === -1) return;
+
+    let next;
+    if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = group.length - 1;
+    else {
+      const delta = event.key === 'ArrowRight' ? 1 : -1;
+      next = (current + delta + group.length) % group.length;
+    }
+
+    event.preventDefault();
+    this._selectTab(group[next]);
+    this._getElement(tabIdFor(group[next]))?.focus();
+  }
+
+  /**
+   * Where focus belongs after a panel moves (B7/B8): its tab when the target
+   * field merged, otherwise the title bar the panel travels with.
+   * @param {string} panelId
+   * @returns {Element|null}
+   */
+  focusTargetFor(panelId) {
+    if (this.getGroupOf(panelId).length > 1) {
+      return this._getElement(tabIdFor(panelId));
+    }
+    const panel = this._getElement(elementIdFor(panelId));
+    return panel?.querySelector(`.${TITLEBAR_CLASS}`) || panel;
   }
 }
 
