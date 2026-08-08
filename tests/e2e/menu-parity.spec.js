@@ -487,6 +487,11 @@ test.describe('Grown menus stay reachable (G1/G2)', () => {
     await page.setViewportSize({ width: 1400, height: 900 })
     await loadFixture(page)
     await openEditor(page)
+    // Opening the editor focuses it on a 100ms timer (main.js), so a menu
+    // opened inside that window loses focus to the editor. Let it land
+    // first — otherwise this test races a pre-existing quirk instead of
+    // measuring the menu.
+    await expect(page.locator('#expertModePanel .cm-content')).toBeFocused()
 
     await page.locator('#editMenuBtn').click()
 
@@ -499,6 +504,17 @@ test.describe('Grown menus stay reachable (G1/G2)', () => {
       return body ? body.scrollHeight > body.clientHeight : null
     })
     expect(scrolls).toBe(true)
+
+    // Opening a menu moves focus into it (APG). The editor can still be
+    // settling in when the menu opens, so wait for the contract to hold
+    // rather than assuming it already does.
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          Boolean(document.activeElement?.closest('#editMenuItems'))
+        )
+      )
+      .toBe(true)
 
     await page.keyboard.press('End')
     const landed = await page.evaluate(() => {
@@ -513,5 +529,148 @@ test.describe('Grown menus stay reachable (G1/G2)', () => {
     })
     expect(landed.label).toBe('Preferences (Keyboard Shortcuts)…')
     expect(landed.onScreen).toBe(true)
+  })
+})
+
+const DESIGN_MENU_ORDER = [
+  'Automatic Reload and Preview',
+  'Reload and Preview',
+  'Preview',
+  'Render',
+  'Cancel Render',
+  '3D Print',
+  'Measure Distance',
+  'Measure Angle',
+  '---',
+  'Check Validity',
+  'Display AST…',
+  'Display CSG Tree…',
+  'Display CSG Products…',
+  'Display Parameters…',
+  '---',
+  'Flush Caches',
+]
+
+const EXPORT_SUBMENU_ORDER = [
+  'Export as STL (ascii)…',
+  'Export as STL (binary)…',
+  'Export as OBJ…',
+  'Export as OFF…',
+  'Export as WRL…',
+  'Export as AMF…',
+  'Export as 3MF…',
+  'Export as DXF…',
+  'Export as SVG…',
+  'Export as CSG…',
+  'Export as PDF…',
+  '---',
+  'Export as Image…',
+]
+
+test.describe('Design menu and Export submenu parity (G3)', () => {
+  test('Design order follows U2 and unavailable items say why', async ({
+    page,
+  }) => {
+    await loadFixture(page)
+
+    await page.locator('#designMenuBtn').click()
+    const items = await readMenu(page, 'design')
+    expect(items.map((i) => i.label)).toEqual(DESIGN_MENU_ORDER)
+
+    for (const label of [
+      '3D Print',
+      'Measure Distance',
+      'Measure Angle',
+      'Display AST…',
+      'Display CSG Tree…',
+      'Display CSG Products…',
+    ]) {
+      const item = items.find((i) => i.label === label)
+      expect(item.disabled, `${label} should be disabled`).toBe(true)
+      // A disabled item with no reason is just a dead control.
+      expect(item.title, `${label} should carry a reason`).toBeTruthy()
+      expect(item.title.length).toBeGreaterThan(20)
+    }
+
+    // The parameter dump keeps its honest name and stays usable.
+    expect(items.find((i) => i.label === 'Display Parameters…').disabled).toBe(
+      false
+    )
+  })
+
+  test('Export submenu follows U2 and never gates on a prior render', async ({
+    page,
+  }) => {
+    await loadFixture(page)
+
+    await page.locator('#fileMenuBtn').click()
+    await menuItem(page, 'file', 'Export').click()
+    const items = await readSubmenu(page, 'file', 'Export')
+    expect(items.map((i) => i.label)).toEqual(EXPORT_SUBMENU_ORDER)
+
+    // Nothing has been rendered in this session, yet every format this build
+    // can produce is offered: the old build disabled them all behind a
+    // "Press Generate" notice.
+    for (const item of items) {
+      if (item.label === '---' || item.label === 'Export as Image…') continue
+      if (item.label === 'Export as 3MF…') continue
+      expect(item.disabled, `${item.label} should be offered`).toBe(false)
+    }
+
+    // Measured: this WASM build traps on 3MF, so the item says so rather
+    // than failing every time it is pressed.
+    const threeMf = items.find((i) => i.label === 'Export as 3MF…')
+    expect(threeMf.disabled).toBe(true)
+    expect(threeMf.title).toContain('not available in this browser build')
+    expect(
+      items.some((i) => /Press Generate/.test(i.label))
+    ).toBe(false)
+    // POV is omitted and documented (D-24).
+    expect(items.some((i) => /POV/i.test(i.label))).toBe(false)
+  })
+
+  test('exporting with only a preview done renders first, then downloads', async ({
+    page,
+  }) => {
+    test.setTimeout(180_000)
+    await loadFixture(page)
+
+    // Only the auto-preview has run — no full render, and certainly not OBJ.
+    // The old build answered this with a "Format Mismatch" toast and a dead
+    // end; it now renders what was asked for.
+    await page.locator('#fileMenuBtn').click()
+    await menuItem(page, 'file', 'Export').click()
+    const downloadPromise = page.waitForEvent('download', { timeout: 150_000 })
+    await menuItem(page, 'file', 'Export as OBJ…').click()
+
+    const download = await downloadPromise
+    expect(download.suggestedFilename()).toMatch(/\.obj$/)
+  })
+
+  test('STL ascii and binary produce different files', async ({ page }) => {
+    test.setTimeout(240_000)
+    await loadFixture(page)
+
+    async function exportStl(label) {
+      await page.locator('#fileMenuBtn').click()
+      await menuItem(page, 'file', 'Export').click()
+      const downloadPromise = page.waitForEvent('download', {
+        timeout: 150_000,
+      })
+      await menuItem(page, 'file', label).click()
+      const download = await downloadPromise
+      const stream = await download.createReadStream()
+      const chunks = []
+      for await (const chunk of stream) chunks.push(chunk)
+      return Buffer.concat(chunks)
+    }
+
+    const ascii = await exportStl('Export as STL (ascii)…')
+    expect(ascii.subarray(0, 6).toString('utf8')).toBe('solid ')
+
+    const binary = await exportStl('Export as STL (binary)…')
+    expect(binary.subarray(0, 6).toString('utf8')).not.toBe('solid ')
+    // 80-byte header + 4-byte triangle count + 50 bytes per triangle.
+    expect(binary.length).toBe(84 + binary.readUInt32LE(80) * 50)
   })
 })

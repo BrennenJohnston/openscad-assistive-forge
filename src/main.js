@@ -218,6 +218,7 @@ import { initSavedProjectsUI } from './js/saved-projects-ui.js';
 import {
   getFileActionsController,
   exportFormatFromMenu,
+  setExportDependencies,
 } from './js/file-actions-controller.js';
 import { getEditActionsController } from './js/edit-actions-controller.js';
 import { copyPresetName } from './js/copy-preset-name.js';
@@ -2781,6 +2782,114 @@ async function initApp() {
     }
   }
 
+  /**
+   * Whether the render already in hand is this exact format, for these exact
+   * parameters — the one question that decides whether an export downloads
+   * immediately or has to render first. STL additionally consults the app's
+   * shared render-state function rather than repeating its recipe.
+   *
+   * @param {string} format
+   * @param {Object} parameters
+   * @param {Object} [options]
+   * @param {boolean} [options.stlBinary=true]
+   * @returns {boolean}
+   */
+  function hasCurrentRenderFor(format, parameters, { stlBinary = true } = {}) {
+    const output = stateManager.getState().generatedOutput;
+    const matches = Boolean(
+      output?.data &&
+      (output.format || 'stl').toLowerCase() === format &&
+      output.paramsHash === hashParams(parameters)
+    );
+    if (!matches) return false;
+    if (format !== 'stl') return true;
+    // ascii and binary are different bytes, so asking for the other encoding
+    // is a different render even when the geometry is unchanged.
+    if ((output.stlBinary ?? true) !== stlBinary) return false;
+    return hasFullQualitySTLFor(parameters);
+  }
+
+  /**
+   * Render the model in the requested format so an export can proceed.
+   * @returns {Promise<'ready'|'downloaded'|false>}
+   */
+  async function _renderForExport(format, { stlBinary = true } = {}) {
+    // SVG and DXF keep the one-click path: it asks consent for the 2D
+    // parameter changes and handles the projection fallback, neither of
+    // which a plain render in that format would do.
+    if (format === 'svg' || format === 'dxf') {
+      await _export2DOneClick(format);
+      return 'downloaded';
+    }
+
+    const state = stateManager.getState();
+    if (!renderController) {
+      showErrorToast({
+        title: 'Engine Not Ready',
+        message:
+          'The OpenSCAD engine has not initialized yet. Please wait or refresh the page.',
+      });
+      return false;
+    }
+
+    const formatName = OUTPUT_FORMATS[format]?.name || format.toUpperCase();
+    getToolbarMenuController().closeAll();
+    updateStatus(`Generating ${formatName}\u2026`);
+    announceImmediate(`Generating ${formatName}. This may take a moment.`);
+    autoPreviewController?.cancelPending();
+
+    try {
+      const startTime = Date.now();
+      const result = await renderController.renderFull(
+        state.uploadedFile.content,
+        state.parameters,
+        {
+          outputFormat: format,
+          stlBinary,
+          paramTypes: state.paramTypes || {},
+          files: state.projectFiles,
+          mainFile: state.mainFilePath,
+          libraries: getEnabledLibrariesForRender(),
+          onProgress: () => updateStatus(`Generating ${formatName}\u2026`),
+        }
+      );
+      const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+      const data = result.data || result.stl;
+      const resolvedFormat = (result.format || format).toLowerCase();
+
+      stateManager.setState({
+        generatedOutput: {
+          data,
+          format: resolvedFormat,
+          stats: result.stats,
+          paramsHash: hashParams(state.parameters),
+          stlBinary: resolvedFormat === 'stl' ? stlBinary : undefined,
+        },
+        stl: data,
+        outputFormat: resolvedFormat,
+        stlStats: result.stats,
+        lastRenderTime: duration,
+      });
+      updateStatus(`${formatName} ready (${duration}s)`);
+      return 'ready';
+    } catch (error) {
+      console.error(`[Export] ${formatName} render failed:`, error);
+      updateStatus(`${formatName} export failed: ${error.message || error}`);
+      showErrorToast({
+        title: `${formatName} Export Failed`,
+        message: error.message || String(error),
+      });
+      announceImmediate(`${formatName} export failed.`);
+      return false;
+    }
+  }
+
+  setExportDependencies({
+    hasCurrentRender: (format, options) =>
+      hasCurrentRenderFor(format, stateManager.getState().parameters, options),
+    renderForExport: _renderForExport,
+  });
+
   // Initialize file actions controller (New, Reload, Save, Save As, Export Image, Recent)
   const fileActionsController = getFileActionsController({
     onNew: () => {
@@ -2830,6 +2939,8 @@ async function initApp() {
   });
   fileActionsController.init();
 
+  const THREEMF_UNAVAILABLE_REASON =
+    '3MF export is not available in this browser build. Export as STL or OBJ instead \u2014 most slicers accept both.';
   const RECENT_UNAVAILABLE_REASON =
     'Not saved in this browser — open the file again to reload it';
   const OPEN_IN_NEW_WINDOW_REASON =
@@ -2938,17 +3049,6 @@ async function initApp() {
     const state = stateManager.getState();
     const hasFile = Boolean(state.uploadedFile);
     const hasRender = Boolean(state.stl);
-    // Full render = Generate button has been pressed and output matches current params
-    const stateOutputFormat = (state.outputFormat || '').toLowerCase();
-    const selectedFormat = (
-      document.getElementById('outputFormat')?.value || 'stl'
-    ).toLowerCase();
-    const hasNonSTLRender =
-      hasRender &&
-      stateOutputFormat === selectedFormat &&
-      stateOutputFormat !== 'stl';
-    const hasFullRender =
-      hasNonSTLRender || hasFullQualitySTLFor(state.parameters);
 
     // Recent Files submenu: entries this browser can still re-open, then
     // Clear Recent. Unreachable entries stay listed but disabled (D-28).
@@ -2983,49 +3083,40 @@ async function initApp() {
       },
     ];
 
-    // Export submenu: one-click 2D exports + re-download of current render + Export as Image
+    // Export submenu, in upstream order (U2). POV is omitted and documented
+    // (D-24 -- the WASM build has no POV writer). Every entry renders on
+    // demand when the render in hand is not already that format, so no export
+    // is a dead end any more.
+    const exportFormats = [
+      ['stl', 'Export as STL (ascii)\u2026', { stlBinary: false }],
+      ['stl', 'Export as STL (binary)\u2026', { stlBinary: true }],
+      ['obj', 'Export as OBJ\u2026', {}],
+      ['off', 'Export as OFF\u2026', {}],
+      ['wrl', 'Export as WRL\u2026', {}],
+      ['amf', 'Export as AMF\u2026', {}],
+      // Measured 2026-08-08: this build's renderer traps on 3MF with
+      // "function signature mismatch", so the item says so instead of
+      // failing every time it is pressed.
+      ['3mf', 'Export as 3MF\u2026', {}, THREEMF_UNAVAILABLE_REASON],
+      ['dxf', 'Export as DXF\u2026', {}],
+      ['svg', 'Export as SVG\u2026', {}],
+      ['csg', 'Export as CSG\u2026', {}],
+      ['pdf', 'Export as PDF\u2026', {}],
+    ];
+
     const exportItems = [
-      // One-click 2D exports (auto-adjust params, render, download)
-      {
+      ...exportFormats.map(([format, label, options, unavailableReason]) => ({
         type: 'action',
-        label: 'Export as SVG\u2026',
-        enabled: hasFile,
-        tooltip: hasFile
-          ? 'One-click: auto-adjusts parameters, generates 2D geometry, and downloads SVG'
-          : 'Open a file first',
-        handler: () => fileActionsController.onExport2D('svg'),
-      },
-      {
-        type: 'action',
-        label: 'Export as DXF\u2026',
-        enabled: hasFile,
-        tooltip: hasFile
-          ? 'One-click: auto-adjusts parameters, generates 2D geometry, and downloads DXF'
-          : 'Open a file first',
-        handler: () => fileActionsController.onExport2D('dxf'),
-      },
-      { type: 'separator' },
-      // Re-download current render in its original format
-      ...(!hasFullRender
-        ? [
-            {
-              type: 'action',
-              label: '\u24D8  Press Generate to enable file exports',
-              disabled: true,
-              tooltip:
-                'Use the Generate button to fully render the model, then file export options will become available.',
-            },
-            { type: 'separator' },
-          ]
-        : []),
-      ...Object.entries(OUTPUT_FORMATS).map(([key, fmt]) => ({
-        type: 'action',
-        label: fmt.name,
-        enabled: hasFullRender,
-        tooltip: hasFullRender
-          ? fmt.description
-          : 'Press Generate first to enable this export',
-        handler: () => exportFormatFromMenu(key),
+        label,
+        enabled: hasFile && !unavailableReason,
+        tooltip: unavailableReason
+          ? unavailableReason
+          : hasFile
+            ? OUTPUT_FORMATS[format]?.description
+            : 'Open a file first',
+        handler: unavailableReason
+          ? undefined
+          : () => void exportFormatFromMenu(format, options),
       })),
       { type: 'separator' },
       {
@@ -3450,10 +3541,30 @@ async function initApp() {
   });
   designPanelController.init();
 
-  // ── Toolbar: Design menu ─────────────────────────────────────────────────
+  const PRINT_UNAVAILABLE_REASON =
+    'Sending a model straight to a printer is not built yet. Export the model and open it in your slicer.';
+  const MEASURE_UNAVAILABLE_REASON =
+    'Measuring on the model is not built yet. Show measurements reports the overall size.';
+  const AST_UNAVAILABLE_REASON =
+    'The syntax tree is not available in this browser build. Display Parameters shows what the file declares.';
+  const CSG_UNAVAILABLE_REASON =
+    'The CSG tree is not available in this browser build. Export as CSG saves the flattened CSG source instead.';
+
+  // -- Toolbar: Design menu -------------------------------------------------
+  // Order and labels transcribed from upstream MainWindow.ui (Appendix U2).
+  // Four items ship visibly disabled with a reason rather than absent, so the
+  // menu still tells the truth about what desktop OpenSCAD offers: 3D Print
+  // (D-26), Measure Distance / Angle (D-15) and the two CSG dumps (D-38).
+  // Cancel Render is a Forge extra, kept next to the render it cancels.
   getToolbarMenuController().registerMenuBuilder('design', () => {
     const state = stateManager.getState();
     const hasFile = Boolean(state.uploadedFile);
+
+    /** An upstream action this build genuinely cannot perform yet. */
+    function unavailable(label, reason) {
+      return { type: 'action', label, disabled: true, tooltip: reason };
+    }
+
     return [
       {
         type: 'toggle',
@@ -3520,6 +3631,9 @@ async function initApp() {
           if (renderController?.isBusy?.()) renderController.cancel();
         },
       },
+      unavailable('3D Print', PRINT_UNAVAILABLE_REASON),
+      unavailable('Measure Distance', MEASURE_UNAVAILABLE_REASON),
+      unavailable('Measure Angle', MEASURE_UNAVAILABLE_REASON),
       { type: 'separator' },
       {
         type: 'action',
@@ -3529,12 +3643,17 @@ async function initApp() {
         tooltip: hasFile ? undefined : 'Open a file first',
         handler: () => designPanelController.checkValidity(),
       },
+      unavailable('Display AST…', AST_UNAVAILABLE_REASON),
+      unavailable('Display CSG Tree…', CSG_UNAVAILABLE_REASON),
+      unavailable('Display CSG Products…', CSG_UNAVAILABLE_REASON),
       {
         type: 'action',
-        label: 'Display Parameters\u2026',
+        label: 'Display Parameters…',
         shortcutAction: 'showAST',
         enabled: hasFile,
-        tooltip: hasFile ? undefined : 'Open a file first',
+        tooltip: hasFile
+          ? 'Shows the customizer parameters this file declares'
+          : 'Open a file first',
         handler: () => designPanelController.showAST(),
       },
       { type: 'separator' },
