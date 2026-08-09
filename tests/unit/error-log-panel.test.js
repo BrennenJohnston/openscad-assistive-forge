@@ -129,3 +129,52 @@ describe('ErrorLogPanel.parseLine — new patterns (Phase 4)', () => {
     expect(result.group).toBe('General');
   });
 });
+
+describe('ErrorLogPanel.parseLine — the manifold status line (P7)', () => {
+  let panel;
+
+  beforeEach(() => {
+    resetErrorLogPanel();
+    panel = new ErrorLogPanel({ container: null, badge: null });
+  });
+
+  // The Geometry branch's regex was /^Mesh (is )?not|manifold/i. `|` binds
+  // looser than anything else in a regex, so that read as
+  // (^Mesh (is )?not) OR (manifold) — an UNANCHORED "manifold". Every line
+  // with the word in it became an ERROR, this one included, and the owner's
+  // deployed screenshot shows it as a red row while the Console read "No
+  // console output yet".
+  it('a healthy render status line is not an error at all', () => {
+    expect(
+      panel.parseLine('Top level object is a 3D object (manifold):')
+    ).toBeNull();
+  });
+
+  it('a 2D status line is still not an error', () => {
+    expect(panel.parseLine('Top level object is a 2D object:')).toBeNull();
+  });
+
+  it('a real complaint is still an error, group Geometry', () => {
+    for (const line of [
+      'Mesh is not manifold',
+      'Mesh not closed',
+      'Object may not be a valid 2-manifold and may need repair',
+    ]) {
+      const result = panel.parseLine(line);
+      expect(result, line).not.toBeNull();
+      expect(result.type, line).toBe(ERROR_LOG_TYPE.ERROR);
+      expect(result.group, line).toBe('Geometry');
+    }
+  });
+
+  it('a prefixed complaint still lands in Compile, as it did before', () => {
+    // These reach the \bERROR:/\bWARNING: branches first, which is why the
+    // Geometry branch never needed to catch a prefixed line.
+    expect(panel.parseLine('ERROR: Mesh is not manifold!').group).toBe(
+      'Compile'
+    );
+    expect(
+      panel.parseLine('WARNING: Object may not be a valid 2-manifold!').group
+    ).toBe('Compile');
+  });
+});

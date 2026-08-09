@@ -131,7 +131,16 @@ export class ErrorLogPanel {
       group = 'Parse';
     } else if (
       /^CGAL error/i.test(trimmed) ||
-      /^Mesh (is )?not|manifold/i.test(trimmed)
+      // `|` binds looser than anything else in a regex, so the original
+      // /^Mesh (is )?not|manifold/i read as (^Mesh (is )?not) OR (manifold) —
+      // and that second alternative was UNANCHORED. Every line containing the
+      // word "manifold" was therefore an ERROR, including OpenSCAD's healthy
+      // status line "Top level object is a 3D object (manifold):", which the
+      // Error-Log then showed as a red row while the Console showed nothing.
+      /^Mesh (is )?not\b/i.test(trimmed) ||
+      // A real complaint says the object is NOT manifold. The status line says
+      // it IS one, so the negation is what tells them apart.
+      /\bnot\b[^\n]*\bmanifold\b/i.test(trimmed)
     ) {
       type = ERROR_LOG_TYPE.ERROR;
       group = 'Geometry';
