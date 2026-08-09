@@ -25,6 +25,15 @@ export const MODEL_NOT_2D_SUGGESTION =
   'Enable "use Laser Cutting best practices" or ensure your model uses projection() to produce 2D geometry.';
 
 /**
+ * Explanation for MODEL_NOT_2D — single source for the same three copies.
+ * PDF is named alongside SVG and DXF because it is a real 2D export that
+ * refuses a 3D-only model in exactly the same way; naming only two of the
+ * three told a user who chose PDF about formats they had not picked.
+ */
+export const MODEL_NOT_2D_EXPLANATION =
+  'Your model produces 3D geometry, but SVG, DXF and PDF export all require 2D output.';
+
+/**
  * Error message translations for common OpenSCAD errors
  * Maps error patterns to user-friendly messages
  */
@@ -86,9 +95,7 @@ export const ERROR_TRANSLATIONS = [
   },
   {
     pattern: /MODEL_NOT_2D|Current top level object is not a 2D object/i,
-    message:
-      'Your model produces 3D geometry but SVG/DXF export requires 2D output. ' +
-      MODEL_NOT_2D_SUGGESTION,
+    message: MODEL_NOT_2D_EXPLANATION + ' ' + MODEL_NOT_2D_SUGGESTION,
     code: 'MODEL_NOT_2D',
   },
   {

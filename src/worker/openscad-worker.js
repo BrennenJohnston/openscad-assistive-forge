@@ -42,6 +42,7 @@ import { resolveMountContent } from './mount-content.js';
 import {
   translateWorkerError,
   MODEL_NOT_2D_SUGGESTION,
+  MODEL_NOT_2D_EXPLANATION,
 } from './error-translations.js';
 
 // Official WASM is loaded dynamically in initWASM() from /wasm/openscad-official/
@@ -2034,9 +2035,7 @@ async function render(payload) {
 
     if (confirmedNot2D) {
       code = 'MODEL_NOT_2D';
-      message =
-        'Your model produces 3D geometry but SVG/DXF export requires 2D output. ' +
-        MODEL_NOT_2D_SUGGESTION;
+      message = MODEL_NOT_2D_EXPLANATION + ' ' + MODEL_NOT_2D_SUGGESTION;
     }
 
     // Signal that the WASM module needs a restart before the next render.
