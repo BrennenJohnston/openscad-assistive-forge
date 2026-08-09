@@ -200,6 +200,55 @@ jobs:
           path: playwright-report/
           retention-days: 30
 
+  # Production-parity E2E lane. Every other e2e job above runs against the Vite
+  # dev server, which sends no Content-Security-Policy; the built app behind the
+  # shipped public/_headers CSP had never been loaded by any test, and that is
+  # the gap a broken editor walked through to production (D4, PR #56).
+  #
+  # Deliberately its own job rather than a step on Build Check: a failure here
+  # is a test failure, and reporting it as a build failure would send whoever
+  # reads the check name looking in the wrong place.
+  e2e-tests-production:
+    name: E2E Tests (Production CSP)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download OpenSCAD WASM files
+        run: npm run setup-wasm
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Build project
+        run: npm run build
+
+      - name: Run production-parity E2E tests
+        run: npx playwright test --config=playwright.prod.config.js
+
+      # This lane writes a whole-window screenshot of the built app every run,
+      # pass or fail — that artifact is half the point of it. The prod config
+      # reports to the console in CI and writes no HTML report, so uploading
+      # playwright-report/ here would archive an empty directory.
+      - name: Upload production artifacts (screenshots, traces, video)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: production-smoke-artifacts
+          path: test-results/
+          retention-days: 30
+
   # Edge E2E tests - blocking per Milestone 0 requirements (Tier 1 browser)
   # See: docs/planning/browser-matrix.md, docs/planning/LAYER_2_BUILD_PLAN.md
   e2e-tests-edge:
