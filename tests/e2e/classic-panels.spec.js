@@ -23,6 +23,18 @@ const ANIMATE_SPIN = path.join(
   'fixtures',
   'animate-spin.scad'
 );
+/**
+ * The owner's real 1,017-line file. Used where the FILE's own content is what
+ * is being asserted — its parameter groups, its line lengths — rather than as a
+ * cheap way to get the interface on screen. sample.scad stays for the latter.
+ */
+const UNIVERSAL_CUFF = path.join(
+  process.cwd(),
+  'tests',
+  'fixtures',
+  'universal-cuff',
+  'universal_cuff_utensil_holder.scad'
+);
 
 const WASM_READY_TIMEOUT = 180_000;
 const PREVIEW_TIMEOUT = 120_000;
@@ -684,6 +696,150 @@ test.describe('Customizer header rows (P5)', () => {
     await expect(
       page.locator('#classicPresetRow #savePresetBtn')
     ).toBeVisible();
+  });
+});
+
+// ─── P6: Forge extras out of the Customizer column (Q-4) ─────────────────────
+
+/** The five panels Q-4 makes Window-menu-only in Classic, in column order. */
+const FORGE_EXTRAS = [
+  { selector: '#measureSection', label: 'Image Measurement' },
+  { selector: '#overlaySection', label: 'Reference Image' },
+  { selector: '#libraryControls > details', label: 'Libraries' },
+  { selector: '#projectFilesControls > details', label: 'Companion Files' },
+  { selector: '#advancedMenu', label: 'Advanced' },
+];
+
+test.describe('Forge extras out of the Customizer column (P6)', () => {
+  test('classic-forge-extras-hidden: parameter groups come straight after the header', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    // The real file, because the assertion is about ITS parameter groups —
+    // sample.scad's first group is "Dimensions", not "Part to Print".
+    await seedPanes(page);
+    await loadProject(page, UNIVERSAL_CUFF);
+    await enterClassicStandard(page);
+
+    for (const { selector, label } of FORGE_EXTRAS) {
+      await expect(
+        page.locator(selector),
+        `${label} should not be in the Classic column by default (Q-4)`
+      ).toBeHidden();
+    }
+
+    // The point of the phase: nothing to walk past before the parameters.
+    const gap = await page.evaluate(() => {
+      const container = document.getElementById('parametersContainer');
+      const firstGroup = container.querySelector('details.param-group');
+      const presetRow = document.getElementById('classicPresetRow');
+      // Everything focusable between the end of the header and the first group.
+      // Scoped to the whole panel, not #paramPanelBody: "Forge additions" is a
+      // sibling of it, and a stop a user walks past counts wherever it lives.
+      const between = [
+        ...document.querySelectorAll(
+          '#paramPanel summary, #paramPanel button, #paramPanel input, #paramPanel select, #paramPanel [href]'
+        ),
+      ].filter((el) => {
+        const r = el.getBoundingClientRect();
+        return (
+          el.getClientRects().length > 0 &&
+          r.top >= presetRow.getBoundingClientRect().bottom &&
+          r.bottom <= firstGroup.getBoundingClientRect().top
+        );
+      });
+      return {
+        firstGroupLabel: firstGroup
+          .querySelector('summary')
+          ?.textContent.trim(),
+        stopsBetween: between.map((el) =>
+          (el.textContent || el.getAttribute('aria-label') || el.tagName)
+            .trim()
+            .replace(/\s+/g, ' ')
+            .slice(0, 30)
+        ),
+      };
+    });
+    console.log('[p6] before the parameters:', JSON.stringify(gap));
+
+    // Five disclosures stood here before this phase. "Forge additions" is a
+    // deliberate Forge extra (D-20) and stays, so it is the only stop left.
+    expect(
+      gap.stopsBetween.length,
+      `stops before the parameters: ${gap.stopsBetween.join(' | ')}`
+    ).toBeLessThanOrEqual(1);
+    expect(gap.firstGroupLabel).toContain('Part to Print');
+  });
+
+  test('classic-forge-extras-window: each panel comes back from the Window menu, once', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await seedPanes(page);
+    await loadProject(page);
+    await enterClassicStandard(page);
+
+    const announcements = await watchAnnouncements(
+      page,
+      '__recordForgeExtraAnnouncement'
+    );
+
+    for (const { selector, label } of FORGE_EXTRAS) {
+      await openWindowMenuItem(page, label);
+      await expect(
+        page.locator(selector),
+        `${label} should appear when its Window item is ticked`
+      ).toBeVisible();
+
+      // The tick and the CSS read one state, so the menu cannot claim a hidden
+      // panel is showing — the mistake the Console tick made once.
+      await page.locator('#windowMenuBtn').click();
+      await expect(
+        page.getByRole('menuitemcheckbox', { name: label })
+      ).toHaveAttribute('aria-checked', 'true');
+      await page.keyboard.press('Escape');
+
+      await openWindowMenuItem(page, label);
+      await expect(page.locator(selector)).toBeHidden();
+    }
+
+    // Once per toggle, ten toggles. Any panel announcing twice shows up here.
+    // Polled in both directions: the announcer writes inside a
+    // requestAnimationFrame, so the final "closed" lands after the last click
+    // resolves. The counts are then asserted exactly, not just "at least one".
+    for (const { label } of FORGE_EXTRAS) {
+      for (const state of ['opened', 'closed']) {
+        await expect
+          .poll(
+            () => announcements.filter((t) => t === `${label} ${state}`).length,
+            {
+              message: `announcements seen: ${JSON.stringify(announcements)}`,
+            }
+          )
+          .toBe(1);
+      }
+    }
+  });
+
+  test('classic-forge-extras-forge-untouched: all five still sit in the Forge column', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await seedPanes(page);
+    await loadProject(page);
+    await switchToStandardMode(page);
+
+    // Q-4 is a Classic decision. Forge is where these panels live.
+    await expect(page.locator('body')).not.toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+    for (const { selector, label } of FORGE_EXTRAS) {
+      await expect(
+        page.locator(selector),
+        `${label} must still be in the Forge Customizer`
+      ).toBeVisible();
+    }
   });
 });
 

@@ -1710,6 +1710,29 @@ body[data-ui-mode='classic'] #manifestInfoBanner {
   display: none !important;
 }
 
+/* ── Forge extras out of the Customizer column (P6, owner Q-4) ───────────────
+
+   The desktop Customizer shows its parameter groups immediately under the
+   preset row. Ours put five Forge panels in front of them — Image Measurement,
+   Reference Image, Libraries, Companion Files, Advanced — so a blind user
+   walked five disclosures before reaching the region they visit most. Q-4:
+   Window-menu-only in Classic.
+
+   Keyed on the row's own [open], NOT on a separate visibility flag, so the
+   Window menu's tick and the CSS read one state and cannot disagree — the
+   mistake the Console tick already made once. Libraries and Companion Files
+   are wrappers around the same kind of <details>, so all five behave alike.
+
+   Consequence, deliberate: collapsing one of these by its own summary takes
+   the row away too, and Window is how it comes back. */
+body[data-ui-mode='classic'] #measureSection:not([open]),
+body[data-ui-mode='classic'] #overlaySection:not([open]),
+body[data-ui-mode='classic'] #advancedMenu:not([open]),
+body[data-ui-mode='classic'] #libraryControls > details:not([open]),
+body[data-ui-mode='classic'] #projectFilesControls > details:not([open]) {
+  display: none;
+}
+
 /* "Preview is current" needs no chrome in Classic — the status bar already
    says so, and the desktop viewport has no state frame. The pending, stale,
    rendering and error borders stay: those carry information the bar's text
