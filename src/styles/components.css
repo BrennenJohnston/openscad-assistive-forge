@@ -14935,3 +14935,60 @@ body.tutorial-body-locked {
     color: CanvasText;
   }
 }
+
+/* ── Preferences dialog (P11a shell) ──────────────────────────────────────
+   A six-tab dialog mirroring desktop OpenSCAD's Preferences. Tabs whose
+   engine this browser build does not have are visibly disabled and name
+   their reason, so a user is never left guessing why a section is empty. */
+.preferences-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs);
+  padding: 0 var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-primary);
+}
+
+.preferences-tab {
+  /* Never below the touch-target token, even though the desktop's tabs are
+     smaller: shrinking a hit area is not a parity decision we get to make. */
+  min-height: var(--size-touch-target);
+  padding: var(--space-xs) var(--space-md);
+  border: none;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.preferences-tab.active {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+}
+
+.preferences-tab:hover:not([aria-disabled='true']) {
+  background: var(--color-hover-bg);
+}
+
+.preferences-tab[aria-disabled='true'] {
+  color: var(--color-text-tertiary);
+  cursor: not-allowed;
+}
+
+/* No :focus-visible rule here on purpose. The shared contract at the top of
+   this file already rings every button and every [tabindex] with
+   !important, so a local rule could only duplicate it or fight it — and a
+   disabled tab, which stays focusable so its reason can be read out, gets
+   the same ring from that contract. */
+
+.preferences-modal-body {
+  min-height: 12rem;
+}
+
+.preferences-panel-reason {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  max-width: 60ch;
+}

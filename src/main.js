@@ -181,6 +181,10 @@ import {
 
 // Storage keys are centralized in ./js/storage-keys.js (audit Q4)
 import {
+  initPreferencesDialog,
+  openPreferencesDialog,
+} from './js/preferences-dialog.js';
+import {
   announceImmediate,
   announceCameraAction,
   announceError as _announceError,
@@ -648,6 +652,26 @@ function toggleClassicToolbar(bar) {
   // Same swallow as Jump To: a discrete menu action's only feedback must not
   // sit in a 350ms debounce that the next announcement cancels.
   announceImmediate(`${def.name} ${hidden ? 'hidden' : 'shown'}`);
+}
+
+/**
+ * Open the keyboard-shortcuts editor, wiring it on first use.
+ *
+ * This block was copy-pasted at FOUR call sites (Edit ▸ Preferences, Help ▸
+ * Keyboard Shortcuts, the header button, and the Ctrl+Shift+K handler), which
+ * is this project's recorded worst bug shape: a fix applied to three of four
+ * copies looks done and is not. One copy now.
+ */
+function _openShortcutsModal() {
+  const modal = document.getElementById('shortcutsModal');
+  const modalBody = document.getElementById('shortcutsModalBody');
+  if (!modal || !modalBody) return;
+  // Wire once; a second call would stack duplicate listeners.
+  if (!modal.dataset.initialized) {
+    initShortcutsModal(modalBody, () => closeModal(modal));
+    modal.dataset.initialized = 'true';
+  }
+  openModal(modal);
 }
 
 // Edit ▸ Insert Template (G7, D-43). Nothing in Appendix U or this repository
@@ -3780,17 +3804,12 @@ async function initApp() {
       },
       {
         type: 'action',
-        label: 'Preferences (Keyboard Shortcuts)…',
+        label: 'Preferences…',
         handler: () => {
-          const modal = document.getElementById('shortcutsModal');
-          const modalBody = document.getElementById('shortcutsModalBody');
-          if (modal && modalBody) {
-            if (!modal.dataset.initialized) {
-              initShortcutsModal(modalBody, () => closeModal(modal));
-              modal.dataset.initialized = 'true';
-            }
-            openModal(modal);
-          }
+          initPreferencesDialog({ onOpenShortcuts: _openShortcutsModal });
+          openPreferencesDialog({
+            returnFocusTo: document.getElementById('editMenuBtn'),
+          });
         },
       },
     ];
@@ -4499,17 +4518,7 @@ async function initApp() {
         type: 'action',
         label: 'Keyboard Shortcuts\u2026',
         shortcutAction: 'showShortcutsModal',
-        handler: () => {
-          const modal = document.getElementById('shortcutsModal');
-          const modalBody = document.getElementById('shortcutsModalBody');
-          if (modal && modalBody) {
-            if (!modal.dataset.initialized) {
-              initShortcutsModal(modalBody, () => closeModal(modal));
-              modal.dataset.initialized = 'true';
-            }
-            openModal(modal);
-          }
-        },
+        handler: _openShortcutsModal,
       },
       {
         type: 'action',
@@ -4663,18 +4672,7 @@ async function initApp() {
   // Initialize keyboard shortcuts toggle button
   const shortcutsBtn = document.getElementById('shortcutsToggle');
   if (shortcutsBtn) {
-    shortcutsBtn.addEventListener('click', () => {
-      const modal = document.getElementById('shortcutsModal');
-      const modalBody = document.getElementById('shortcutsModalBody');
-      if (modal && modalBody) {
-        // Initialize modal wiring once to avoid duplicate listeners.
-        if (!modal.dataset.initialized) {
-          initShortcutsModal(modalBody, () => closeModal(modal));
-          modal.dataset.initialized = 'true';
-        }
-        openModal(modal);
-      }
-    });
+    shortcutsBtn.addEventListener('click', _openShortcutsModal);
   }
 
   // Declare format selector elements
@@ -14629,18 +14627,7 @@ if (rounded) {
     themeManager.cycleTheme();
   });
 
-  keyboardConfig.on('showShortcutsModal', () => {
-    const modal = document.getElementById('shortcutsModal');
-    const modalBody = document.getElementById('shortcutsModalBody');
-    if (modal && modalBody) {
-      // Initialize modal wiring once to avoid duplicate listeners.
-      if (!modal.dataset.initialized) {
-        initShortcutsModal(modalBody, () => closeModal(modal));
-        modal.dataset.initialized = 'true';
-      }
-      openModal(modal);
-    }
-  });
+  keyboardConfig.on('showShortcutsModal', _openShortcutsModal);
 
   // File action shortcuts
   keyboardConfig.on('newFile', () => fileActionsController.onNew());
