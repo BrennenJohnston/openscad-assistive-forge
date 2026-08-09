@@ -171,7 +171,7 @@ test('every unavailable tab is disabled and names its reason', async ({
   // aria-disabled="true" as not-actionable and refuses to click it, though a
   // real browser dispatches the event. Arrowing is also the path that matters
   // here — it is how a keyboard user gets to the explanation at all.
-  const STEPS = { '3dprint': 2, axes: 4, buttons: 5 };
+  const STEPS = { '3dprint': 2, advanced: 3, axes: 4, buttons: 5 };
   for (const [id, steps] of Object.entries(STEPS)) {
     await page.locator('#prefs-tab-3dview').click();
     for (let i = 0; i < steps; i++) await page.keyboard.press('ArrowRight');
@@ -428,4 +428,28 @@ test('the Editor tab names what it cannot do', async ({ page }) => {
   ]) {
     await expect(page.locator(`#${id}`)).toBeVisible();
   }
+});
+
+test('the input-device tabs describe the gamepad support that exists', async ({
+  page,
+}) => {
+  // Both tabs used to say "This build has no input-device engine" while
+  // gamepad-controller.js was running and bound to real handlers. A reason
+  // that is false is worse than no reason: it tells a user to stop looking
+  // for a feature they already have.
+  test.setTimeout(240_000);
+  await openPreferences(page);
+
+  await page.locator('#prefs-tab-3dview').click();
+  for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowRight');
+  const axes = page.locator('#prefs-reason-axes');
+  await expect(axes).toBeVisible();
+  await expect(axes).not.toContainText(/no input-device engine/i);
+  await expect(axes).toContainText(/stick/i);
+
+  await page.keyboard.press('ArrowRight');
+  const buttons = page.locator('#prefs-reason-buttons');
+  await expect(buttons).toBeVisible();
+  await expect(buttons).not.toContainText(/no input-device engine/i);
+  await expect(buttons).toContainText(/D-pad/i);
 });
