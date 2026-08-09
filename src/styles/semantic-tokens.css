@@ -94,8 +94,16 @@
   /* ========================================================================
      Error Colors (Red)
      ======================================================================== */
-  --color-error: var(--red-9);
-  --color-error-hover: var(--red-10);
+  /* red-11, not the scale's solid step-9: white-on-red-9 measures 3.82:1 and
+     WCAG AA wants 4.5:1 for normal text, so the Delete button and the ERROR
+     badge both failed. red-11 measures 5.08:1 with the same --color-on-error.
+     Owner-approved 2026-08-08 with the button on screen (Q-5). The hover step
+     has to move with it: red-10 is LIGHTER than red-11, so leaving it there
+     would have made hover both paler and non-compliant.
+     Non-text contrast is unaffected — .btn carries a 1px border, so the button
+     stays distinguishable from the page whatever the fill. */
+  --color-error: var(--red-11);
+  --color-error-hover: var(--red-12);
   /* Use step-12 for WCAG AA margin (avoid borderline ratios) */
   --color-error-text: var(--red-12);
   --color-error-bg: var(--red-3);
@@ -206,8 +214,8 @@
   --color-info-bg: var(--teal-3);
 
   /* Error Colors */
-  --color-error: var(--red-9);
-  --color-error-hover: var(--red-10);
+  --color-error: var(--red-11);
+  --color-error-hover: var(--red-12);
   --color-error-text: var(--red-12);
   --color-error-bg: var(--red-3);
 
@@ -286,8 +294,8 @@
     --color-info-bg: var(--teal-3);
 
     /* Error Colors */
-    --color-error: var(--red-9);
-    --color-error-hover: var(--red-10);
+    --color-error: var(--red-11);
+    --color-error-hover: var(--red-12);
     --color-error-text: var(--red-12);
     --color-error-bg: var(--red-3);
 
@@ -365,8 +373,8 @@
   --color-info-text: var(--teal-12);
   --color-info-bg: var(--teal-3);
 
-  --color-error: var(--red-9);
-  --color-error-hover: var(--red-10);
+  --color-error: var(--red-11);
+  --color-error-hover: var(--red-12);
   --color-error-text: var(--red-12);
   --color-error-bg: var(--red-3);
 

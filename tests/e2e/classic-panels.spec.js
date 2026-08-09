@@ -2179,3 +2179,62 @@ test.describe('Classic 3D-view defaults (P9)', () => {
     ).toEqual([]);
   });
 });
+
+// ─── P13: small-defect sweep ─────────────────────────────────────────────────
+
+test.describe('Small-defect sweep (P13)', () => {
+  test('classic-delete-contrast: the destructive button meets WCAG AA', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await seedFirstVisit(page);
+    await loadProject(page);
+
+    // T2-A1. The real .btn.btn-danger in the app's own stylesheet — the class
+    // dialogs.js gives the confirm button of every destructive action. Rendered
+    // here rather than reached through the preset flow, which needs a saved
+    // preset before Delete is even enabled.
+    const measured = await page.evaluate(() => {
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-danger';
+      btn.textContent = 'Delete';
+      document.body.append(btn);
+      const cs = getComputedStyle(btn);
+      const read = (css) =>
+        (css.match(/\d+(\.\d+)?/g) || []).slice(0, 3).map(Number);
+      const luminance = (rgb) =>
+        rgb
+          .map((v) => {
+            const s = v / 255;
+            return s <= 0.03928
+              ? s / 12.92
+              : Math.pow((s + 0.055) / 1.055, 2.4);
+          })
+          .reduce((sum, c, i) => sum + [0.2126, 0.7152, 0.0722][i] * c, 0);
+      const contrast = (a, b) => {
+        const l1 = luminance(read(a));
+        const l2 = luminance(read(b));
+        return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+      };
+      const out = {
+        background: cs.backgroundColor,
+        color: cs.color,
+        ratio: Math.round(contrast(cs.color, cs.backgroundColor) * 100) / 100,
+        // A 1px border is what carries non-text contrast (WCAG 1.4.11), so
+        // darkening the fill cannot cost the button its edge.
+        borderWidth: cs.borderTopWidth,
+        borderStyle: cs.borderTopStyle,
+      };
+      btn.remove();
+      return out;
+    });
+    console.log('[p13] danger button:', JSON.stringify(measured));
+
+    // 4.5:1 is AA for normal text. It measured 3.82:1 before this phase.
+    expect(
+      measured.ratio,
+      `Delete is ${measured.color} on ${measured.background} = ${measured.ratio}:1`
+    ).toBeGreaterThanOrEqual(4.5);
+    expect(measured.borderStyle).not.toBe('none');
+  });
+});
