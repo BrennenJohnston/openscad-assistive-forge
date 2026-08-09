@@ -809,6 +809,18 @@ test.describe('Window menu parity (G5)', () => {
     expect(targets.length).toBeGreaterThan(0)
     expect(targets.map((t) => t.label)).toContain('Console')
 
+    // What matters is whether the live region EVER carried the message, not
+    // what it happens to hold a moment later: a render reporting in overwrites
+    // it. Reading the current text was the racy half of this assertion.
+    await page.evaluate(() => {
+      window.__spoken = []
+      const a = document.getElementById('srAnnouncer')
+      new MutationObserver(() => {
+        const t = (a.textContent || '').trim()
+        if (t) window.__spoken.push(t)
+      }).observe(a, { childList: true, subtree: true, characterData: true })
+    })
+
     // Scope to the submenu: the Window menu also has a top-level "Console"
     // toggle, and clicking that would hide the panel instead of visiting it.
     await page
@@ -817,7 +829,14 @@ test.describe('Window menu parity (G5)', () => {
       .first()
       .click()
 
-    await expect(page.locator('#srAnnouncer')).toHaveText('Jumped to Console')
+    // MEASURED: with the debounced announce(), a competing announcement inside
+    // 350ms cancelled this outright and the user heard nothing at all.
+    await page.evaluate(() =>
+      window.stateManager.announceChange('Preview ready')
+    )
+    await expect
+      .poll(() => page.evaluate(() => window.__spoken), { timeout: 5_000 })
+      .toContain('Jumped to Console')
     const landedInside = await page.evaluate(
       () =>
         document

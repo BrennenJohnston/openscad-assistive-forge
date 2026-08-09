@@ -181,7 +181,6 @@ import {
 
 // Storage keys are centralized in ./js/storage-keys.js (audit Q4)
 import {
-  announce as _announce,
   announceImmediate,
   announceCameraAction,
   announceError as _announceError,
@@ -646,7 +645,9 @@ function toggleClassicToolbar(bar) {
   } catch {
     // Preference persistence is best-effort.
   }
-  _announce(`${def.name} ${hidden ? 'hidden' : 'shown'}`);
+  // Same swallow as Jump To: a discrete menu action's only feedback must not
+  // sit in a 350ms debounce that the next announcement cancels.
+  announceImmediate(`${def.name} ${hidden ? 'hidden' : 'shown'}`);
 }
 
 // Edit ▸ Insert Template (G7, D-43). Nothing in Appendix U or this repository
@@ -4379,7 +4380,11 @@ async function initApp() {
             type: 'action',
             label: target.label,
             handler: () => {
-              if (target.focus()) _announce(`Jumped to ${target.label}`);
+              // Immediate, not debounced: MEASURED, a render reporting in
+              // within 350ms cancels a pending announcement outright, so the
+              // user hears nothing about the jump they just made.
+              if (target.focus())
+                announceImmediate(`Jumped to ${target.label}`);
             },
           })),
         };
