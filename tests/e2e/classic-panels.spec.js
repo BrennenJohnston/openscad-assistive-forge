@@ -1884,6 +1884,13 @@ test.describe('Panels CSS and accessibility (F7)', () => {
     // nested-interactive on Forge <summary> elements containing buttons, and
     // scrollable-region-focusable on CodeMirror's tabindex="-1" scroller.
     //
+    // Node counts moved in R-II and are worth recording: nested-interactive
+    // fell from 11 nodes to 2, because P6 took five Forge panels out of the
+    // Classic column and their summaries went with them. Two rules is still
+    // the ceiling; a third would fail here, as aria-required-parent did when
+    // P7 gave the console its status lines back and twenty role="listitem"
+    // entries appeared inside a role="log" that is not a list.
+    //
     // The second is a false positive, measured in P2: axe does not count a
     // contenteditable child as focusable content, but .cm-content is reached
     // by Tab and PageDown scrolls the region (scrollTop 0 -> 4365). Putting

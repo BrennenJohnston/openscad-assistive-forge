@@ -524,8 +524,14 @@ export class ConsolePanel {
 
     const safeMessage = escapeHtml(entry.message);
 
+    // No role at all for ordinary lines. They used to carry role="listitem",
+    // which requires a list parent and never had one — #console-output is
+    // role="log". axe never reported it because a clean render produced no
+    // lines to report; P7 gave the log its status output back and twenty
+    // aria-required-parent nodes appeared with it. role="log" already says
+    // "messages, newest last", so the entries need nothing of their own.
     const entryRole =
-      entry.type === 'warning' || entry.type === 'error' ? 'alert' : 'listitem';
+      entry.type === 'warning' || entry.type === 'error' ? 'alert' : null;
 
     const hasLocation = entry.line !== null && this.onNavigate;
     const lineLink = hasLocation
@@ -533,7 +539,7 @@ export class ConsolePanel {
       : '';
 
     return `
-      <div class="console-entry ${typeClass}" role="${entryRole}">
+      <div class="console-entry ${typeClass}"${entryRole ? ` role="${entryRole}"` : ''}>
         <time class="console-timestamp" datetime="${time.toISOString()}">${timeStr}</time>
         <span class="console-type" aria-hidden="true">${typeLabel}</span>
         <span class="console-message">${safeMessage}${lineLink}</span>

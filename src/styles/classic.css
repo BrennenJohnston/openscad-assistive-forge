@@ -950,7 +950,10 @@ body[data-ui-mode='classic'][data-classic-font-list-visible='true']
 body[data-ui-mode='classic'] .classic-error-log-slot .error-log-output {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  /* The panel scrolls its entries region, not itself (P7b): the Show row has
+     to stay put while the table under it moves. max-height would fight the
+     slot, so it goes too. */
+  max-height: none;
 }
 
 @media (max-width: 1023px) {

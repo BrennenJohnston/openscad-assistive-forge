@@ -5896,12 +5896,65 @@ body.first-visit-blocking #app {
 
 .error-log-output {
   max-height: 250px;
-  overflow-y: auto;
+  /* A column so the Show row stays put and only the entries scroll. The scroll
+     itself moved to .error-log-entries with it. */
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   font-family: var(--font-family-mono, monospace);
   font-size: var(--font-size-sm);
   background: var(--color-bg-primary);
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius-sm);
+}
+
+/* The live region (role="log"). Holds the table and nothing else, so the Show
+   select above it is never read out when a render replaces the rows. */
+.error-log-entries {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Upstream's "&Show [All ▾]" row above the table (U6b). */
+.error-log-show-row {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-2xs) var(--space-sm);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+}
+
+.error-log-show-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+}
+
+.error-log-show-select {
+  min-height: var(--size-touch-target);
+  /* Compact like the desktop's combo rather than filling the row, but still
+     shrinkable so a narrow strip pane does not overflow. */
+  flex: 0 1 auto;
+  max-width: 14em;
+  font: inherit;
+  color: var(--color-text-primary);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  padding: 0 var(--space-xs);
+}
+
+.error-log-show-select:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* The group name sits after the severity badge in the Group cell. */
+.error-log-group-name {
+  margin-left: var(--space-xs);
+  color: var(--color-text-secondary);
 }
 
 .error-log-empty {
@@ -5932,8 +5985,11 @@ body.first-visit-blocking #app {
   font-weight: 600;
 }
 
+/* Group: wider than the old Type column, because the cell now carries the
+   severity badge AND the group name. Kept as tight as that allows — every em
+   here comes off Info, which is the column worth reading. */
 .error-log-table th:nth-child(1) {
-  width: 5.5em;
+  width: 9.5em;
 }
 .error-log-table th:nth-child(2) {
   width: 8em;
@@ -6019,6 +6075,16 @@ body.first-visit-blocking #app {
 
 .error-log-cell--message {
   word-break: break-word;
+}
+
+/* table-layout is fixed, but a cell with no overflow rule still paints past its
+   column: a /tmp/input.scad path ran straight through the Line number beside it
+   (measured, P7b). Truncated with an ellipsis instead — the full path is in the
+   Info cell on the same row, so nothing is lost. */
+.error-log-cell--file {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .error-log-line-link {

@@ -77,6 +77,12 @@ async function waitForPreviewReady(page) {
   );
 }
 
+/** The structured table lives in a hidden tabpanel until its tab is chosen. */
+async function openStructuredView(page) {
+  await page.locator('#console-tab-structured').click();
+  await expect(page.locator('#console-view-structured')).toBeVisible();
+}
+
 async function openConsolePanel(page) {
   const details = page.locator('#consolePanel');
   if (!(await details.evaluate((el) => el.open))) {
@@ -212,5 +218,100 @@ test.describe('Renderer status routing (P7)', () => {
     await expect(page.locator('#console-output')).toContainText(
       /Parser error/i
     );
+  });
+});
+
+// ─── P7b: upstream column labels and the Show filter (U6b) ───────────────────
+
+test.describe('Error-Log chrome (P7b)', () => {
+  test('the columns read Group | File | Line | Info and Show narrows the table', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await loadProject(page, INVALID_SYNTAX_FIXTURE);
+    await openConsolePanel(page);
+    await expect
+      .poll(() => page.locator('#error-log-output tbody tr').count(), {
+        timeout: PREVIEW_TIMEOUT,
+      })
+      .toBeGreaterThan(0);
+
+    // Upstream's headers (OpenSCAD_1).
+    const headers = await page
+      .locator('#error-log-output thead th')
+      .allTextContents();
+    expect(headers.map((h) => h.trim())).toEqual([
+      'Group',
+      'File',
+      'Line',
+      'Info',
+    ]);
+
+    // Owner-approved 2026-08-08: the Group cell keeps the severity word as well
+    // as the group, so relabelling the column does not leave severity to the
+    // red row colour alone (WCAG 1.4.1). "Group" alone would have done that.
+    await openStructuredView(page);
+    const groupCell = page.locator('#error-log-output tbody tr td').first();
+    await expect(groupCell).toContainText('Error');
+    // "Compile", not "Parse": parseLine reaches the ERROR: branch first, so
+    // every prefixed error is grouped there whatever kind it is. Coarser than
+    // upstream, pre-existing, and only now visible — asserted as it is rather
+    // than as it ought to be, and reported to the owner instead.
+    await expect(groupCell).toContainText('Compile');
+
+    // The Show select: a real visible label, and every option can match a row.
+    const select = page.locator('#error-log-show');
+    await expect(select).toHaveValue('all');
+    expect(
+      (await select.locator('option').allTextContents()).map((t) => t.trim())
+    ).toEqual(['All', 'Error', 'Warning', 'Deprecated', 'Trace']);
+    // The <label for> is the accessible name — not an aria-label over the top.
+    expect(
+      await select.evaluate((el) => el.labels[0]?.textContent.trim())
+    ).toBe('Show');
+
+    // Narrowing to a type with no entries empties the table; back to All
+    // restores it. This is the assertion that would catch a control that looks
+    // right and does nothing.
+    await select.selectOption('warning');
+    await expect
+      .poll(() => page.locator('#error-log-output tbody tr').count())
+      .toBe(0);
+    await select.selectOption('all');
+    await expect
+      .poll(() => page.locator('#error-log-output tbody tr').count())
+      .toBeGreaterThan(0);
+  });
+
+  test('the Show control is not inside the live region', async ({ page }) => {
+    test.setTimeout(300_000);
+    await loadProject(page, UNIVERSAL_CUFF_FIXTURE);
+    await openConsolePanel(page);
+    await openStructuredView(page);
+    await expect(page.locator('#error-log-show')).toBeVisible();
+
+    // role="log" belongs to the rows, which change. A <select> rebuilt inside
+    // one would be read out on every render — the reason the live region moved
+    // off the wrapper and on to the entries.
+    const placement = await page.evaluate(() => {
+      const select = document.getElementById('error-log-show');
+      const region = document.querySelector('.error-log-entries');
+      return {
+        selectInLiveRegion: Boolean(select.closest('[aria-live]')),
+        regionRole: region?.getAttribute('role'),
+        regionHasTable: Boolean(
+          region?.querySelector('table, .error-log-empty')
+        ),
+        wrapperHasAriaLive: document
+          .getElementById('error-log-output')
+          .hasAttribute('aria-live'),
+      };
+    });
+    expect(placement).toEqual({
+      selectInLiveRegion: false,
+      regionRole: 'log',
+      regionHasTable: true,
+      wrapperHasAriaLive: false,
+    });
   });
 });
