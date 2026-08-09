@@ -20,6 +20,7 @@ import {
   Group,
   Line,
   LineBasicMaterial,
+  LineDashedMaterial,
   LineSegments,
   LinearSRGBColorSpace,
   Mesh,
@@ -88,6 +89,10 @@ export function getThreeModule() {
     Group,
     Line,
     LineBasicMaterial,
+    // The dashed negative axis halves. Added here at the same time as the
+    // overlay that needs it — the axis-tick defect was exactly this class of
+    // omission, a consumer asking for a class this object does not carry.
+    LineDashedMaterial,
     LineSegments,
     Vector3,
     // The axis-tick overlay rasterises its distance labels onto a canvas and

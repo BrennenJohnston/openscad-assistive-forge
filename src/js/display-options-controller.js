@@ -19,6 +19,7 @@ import {
 } from './storage-keys.js';
 import { announceImmediate } from './announcer.js';
 import { buildAxisTickOverlay } from './axis-tick-overlay.js';
+import { buildAxisLinesOverlay } from './axis-lines-overlay.js';
 import { getUIModeController } from './ui-mode-controller.js';
 
 const PREF_PREFIX = 'display-';
@@ -101,7 +102,7 @@ export class DisplayOptionsController {
     /** @type {boolean} Re-entrancy guard for connectPreviewManager() */
     this._connecting = false;
     /** @type {Object|null} Three.js AxesHelper instance */
-    this._axesHelper = null;
+    this._axesOverlay = null;
     /** @type {Object|null} Three.js LineSegments for edges overlay */
     this._edgesOverlay = null;
     /** @type {Object|null} Three.js Group for crosshair lines */
@@ -499,15 +500,17 @@ export class DisplayOptionsController {
   _applyAxes(pm) {
     const T = this.getThree();
     if (this.state.axes) {
-      if (!this._axesHelper && T) {
-        this._axesHelper = new T.AxesHelper(50);
-        this._axesHelper.name = '__displayAxes';
+      if (!this._axesOverlay && T) {
+        // Was AxesHelper(50): positive halves only, and 50mm short of where
+        // the tick overlay puts its outermost marks, so ticks at -200..-50
+        // and +100..+200 had no line under them at all.
+        this._axesOverlay = buildAxisLinesOverlay(T);
       }
-      if (this._axesHelper && !pm.scene.getObjectByName('__displayAxes')) {
-        pm.scene.add(this._axesHelper);
+      if (this._axesOverlay && !pm.scene.getObjectByName('__displayAxes')) {
+        pm.scene.add(this._axesOverlay.group);
       }
-    } else if (this._axesHelper) {
-      pm.scene.remove(this._axesHelper);
+    } else if (this._axesOverlay) {
+      pm.scene.remove(this._axesOverlay.group);
     }
   }
 
@@ -657,12 +660,13 @@ export class DisplayOptionsController {
     this._unsubscribeFrom(this._connectedPm || pm);
     this._connectedPm = null;
     if (pm?.scene) {
-      if (this._axesHelper) pm.scene.remove(this._axesHelper);
+      if (this._axesOverlay) pm.scene.remove(this._axesOverlay.group);
       if (this._crosshairGroup) pm.scene.remove(this._crosshairGroup);
     }
     this._removeEdgesOverlay();
     this._tearDownAxisTickOverlay();
-    this._axesHelper = null;
+    this._axesOverlay?.dispose?.();
+    this._axesOverlay = null;
     this._crosshairGroup = null;
     this._boundRefresh = null;
     this._boundThemeRefresh = null;
