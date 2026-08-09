@@ -200,25 +200,21 @@ export class ModeManager {
     }
 
     // Move focus to the appropriate target after switch (WCAG 2.4.3 Focus
-    // Order), but only if the user has not moved focus somewhere else first.
+    // Order), unless a menu or dialog has taken focus in the meantime.
     //
     // D-15: this runs a frame later, and a user who presses the editor toggle
     // and then opens a menu in the same task lands here with the menu already
     // holding focus. Taking it back leaves the menu open with focus outside
-    // it, which breaks the APG contract that focus moves INTO an open menu.
-    // Whoever holds focus now is compared against whoever held it at the
-    // switch; if it changed, someone else has claimed it and we leave it.
+    // it, breaking the APG contract that focus moves INTO an open menu.
+    //
+    // Deliberately narrow. Declining whenever focus had changed AT ALL would
+    // also skip the move in the ordinary case where the switch itself moved
+    // focus, and the 2.4.3 behaviour every other path relies on would become
+    // conditional on timing. Only a menu or a dialog owns focus in a way this
+    // must not steal back.
     if (!options.skipFocus) {
-      const focusAtSwitch = this._activeElement();
       requestAnimationFrame(() => {
-        const focusNow = this._activeElement();
-        // A neutral target means the switch itself tore down whatever had
-        // focus, which is precisely when moving it is the right thing to do.
-        const neutral =
-          !focusNow ||
-          focusNow === document.body ||
-          focusNow === document.documentElement;
-        if (focusNow === focusAtSwitch || neutral) {
+        if (!this._focusHeldByOverlay()) {
           this._manageFocusAfterSwitch(targetMode);
         }
       });
@@ -314,6 +310,20 @@ export class ModeManager {
    */
   _activeElement() {
     return typeof document === 'undefined' ? null : document.activeElement;
+  }
+
+  /**
+   * Whether a menu or dialog currently holds focus. Those own it until the
+   * user dismisses them, so a deferred focus move must not take it back.
+   * @returns {boolean}
+   * @private
+   */
+  _focusHeldByOverlay() {
+    const active = this._activeElement();
+    if (!active || typeof active.closest !== 'function') return false;
+    return Boolean(
+      active.closest('[role="menu"], [role="dialog"], [aria-modal="true"]')
+    );
   }
 
   /**
