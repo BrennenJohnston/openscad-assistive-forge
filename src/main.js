@@ -1033,13 +1033,28 @@ async function initApp() {
         exportQuality.value = 'low';
         exportQuality.dispatchEvent(new Event('change'));
       }
-      // Also reduce preview quality to fast
+      // Also reduce preview quality to fast. MEASURED: dispatching 'change'
+      // here started four renders, because that handler kicks auto-preview —
+      // and rendering is the memory-hungry operation this banner is warning
+      // about. Do exactly what the handler does, minus the kick.
       const previewQuality = document.getElementById('previewQualitySelect');
       if (previewQuality) {
         previewQuality.value = 'fast';
-        previewQuality.dispatchEvent(new Event('change'));
+        try {
+          localStorage.setItem(STORAGE_KEY_PREVIEW_QUALITY, 'fast');
+        } catch {
+          // Persistence is best-effort; the in-session mode still applies.
+        }
+        applyPreviewQualityMode();
       }
-      console.log('[Memory] Quality reduced to conserve memory');
+      // Both selects live in panels the user may not have open, so without
+      // this the button changed nothing they could see or hear. updateStatus
+      // already speaks through stateManager.announceChange — pairing it with
+      // announceImmediate says everything twice.
+      updateStatus(
+        'Quality reduced: preview set to Fast, export set to Low.',
+        'info'
+      );
     });
 
   document
@@ -1051,7 +1066,10 @@ async function initApp() {
         autoPreviewToggle.checked = false;
         autoPreviewToggle.dispatchEvent(new Event('change'));
       }
-      console.log('[Memory] Auto-preview disabled to conserve memory');
+      updateStatus(
+        'Automatic preview turned off. Use Preview or Render when you are ready.',
+        'info'
+      );
     });
 
   document

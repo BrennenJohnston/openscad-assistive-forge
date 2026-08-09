@@ -140,6 +140,106 @@ test('banner Reload tooltip no longer promises a save', async ({ page }) => {
   expect(tip).toContain('unsaved changes will be lost');
 });
 
+/**
+ * Watch for render starts and for announcements, installed BEFORE the action.
+ * Render starts are counted off the preview status text, which is what the
+ * user sees change; announcements off #srAnnouncer, the polite live region
+ * announceImmediate writes to.
+ */
+async function watch(page) {
+  await page.evaluate(() => {
+    window.__renderStarts = 0;
+    window.__spoken = [];
+    const status = document.getElementById('previewStatusText');
+    if (status) {
+      new MutationObserver(() => {
+        if (/rendering|generating/i.test(status.textContent || ''))
+          window.__renderStarts++;
+      }).observe(status, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+      });
+    }
+    const ann = document.getElementById('srAnnouncer');
+    if (ann) {
+      new MutationObserver(() => {
+        const t = (ann.textContent || '').trim();
+        if (t) window.__spoken.push(t);
+      }).observe(ann, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+      });
+    }
+  });
+}
+
+test('banner Reduce Quality lowers both settings without starting a render', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await setup(page);
+
+  // Settle first, so a render already in flight cannot be miscounted.
+  await expect(page.locator('#previewStatusText')).toContainText(
+    /ready|error/i,
+    { timeout: 180_000 }
+  );
+  await page.waitForTimeout(2_000);
+  await watch(page);
+
+  await page.locator('#memoryBannerReduceFn').click();
+  await page.waitForTimeout(4_000);
+
+  expect(
+    await page.evaluate(() => document.getElementById('exportQualitySelect').value)
+  ).toBe('low');
+  expect(
+    await page.evaluate(
+      () => document.getElementById('previewQualitySelect').value
+    )
+  ).toBe('fast');
+
+  // The recorded trap: rendering is the memory-hungry operation this banner
+  // is warning about, so the button that conserves memory must not cause one.
+  // MEASURED before the fix: four render starts.
+  expect(await page.evaluate(() => window.__renderStarts)).toBe(0);
+});
+
+test('both quality actions say what they did, exactly once', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await setup(page);
+  await expect(page.locator('#previewStatusText')).toContainText(
+    /ready|error/i,
+    { timeout: 180_000 }
+  );
+  await page.waitForTimeout(2_000);
+  await watch(page);
+
+  // Both selects live in panels the user may not have open, so the console
+  // line these buttons used to write was the only sign anything happened.
+  await page.locator('#memoryBannerReduceFn').click();
+  await expect(page.locator('#previewStatusText')).toContainText(
+    /Quality reduced/i,
+    { timeout: 5_000 }
+  );
+  const afterReduce = await page.evaluate(() => window.__spoken);
+  expect(afterReduce.filter((t) => /Quality reduced/i.test(t))).toHaveLength(1);
+
+  await page.locator('#memoryBannerDisableAuto').click();
+  await expect(page.locator('#previewStatusText')).toContainText(
+    /Automatic preview turned off/i,
+    { timeout: 5_000 }
+  );
+  const spoken = await page.evaluate(() => window.__spoken);
+  expect(
+    spoken.filter((t) => /Automatic preview turned off/i.test(t))
+  ).toHaveLength(1);
+});
+
 test('banner Disable Auto-Preview actually turns auto-preview off', async ({
   page,
 }) => {
