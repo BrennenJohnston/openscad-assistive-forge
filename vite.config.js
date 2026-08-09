@@ -34,6 +34,45 @@ function getBuildInfo() {
 }
 
 /**
+ * Replay the production security headers on the preview server.
+ *
+ * Cloudflare Pages applies `public/_headers`; `vite preview` applies nothing.
+ * Without this, an e2e run against the built app would exercise a different
+ * application than the one that ships — which is how a CSP that blocks the
+ * editor's styles reached production behind a green test suite. The `/*`
+ * block is parsed at config load so `_headers` stays the single source of
+ * truth; the CSP string is never copied.
+ */
+function readProductionHeaders() {
+  const raw = readFileSync('./public/_headers', 'utf-8');
+  const headers = {};
+  let inGlobalBlock = false;
+
+  for (const line of raw.split(/\r?\n/)) {
+    if (!line.trim() || line.trim().startsWith('#')) continue;
+    if (!/^\s/.test(line)) {
+      inGlobalBlock = line.trim() === '/*';
+      continue;
+    }
+    if (!inGlobalBlock) continue;
+    const separator = line.indexOf(':');
+    if (separator === -1) continue;
+    headers[line.slice(0, separator).trim()] = line.slice(separator + 1).trim();
+  }
+
+  if (!headers['Content-Security-Policy']) {
+    throw new Error(
+      'vite.config.js: no Content-Security-Policy found in the /* block of ' +
+        'public/_headers. The preview server must not serve the built app ' +
+        'without the shipped CSP — that would make the production test lane ' +
+        'lie about what production does.'
+    );
+  }
+
+  return headers;
+}
+
+/**
  * Plugin to inject version info into the service worker.
  *
  * sw.js is copied from public/ verbatim and never appears in the Rollup
@@ -89,6 +128,13 @@ export default defineConfig({
       'Cross-Origin-Opener-Policy': 'same-origin',
       'Cross-Origin-Embedder-Policy': 'require-corp',
     },
+  },
+  preview: {
+    port: 4173,
+    // Fail loudly rather than serve the built app on some other port, where
+    // the production test lane would silently connect to nothing.
+    strictPort: true,
+    headers: readProductionHeaders(),
   },
   worker: {
     format: 'es',

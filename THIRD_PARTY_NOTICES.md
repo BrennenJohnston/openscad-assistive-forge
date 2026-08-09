@@ -154,6 +154,19 @@ This tool was inspired by patterns from:
 
 ---
 
+## Test Fixtures
+
+### Universal Cuff Utensil Holder (CC0-1.0)
+- **File**: `tests/fixtures/universal-cuff/universal_cuff_utensil_holder.scad`
+- **Author**: Volksswitch (https://www.volksswitch.org)
+- **License**: CC0 1.0 Universal (public domain dedication, stated in the file's own header)
+- **Dedication**: https://creativecommons.org/publicdomain/zero/1.0/
+- **Note**: Included verbatim as a test fixture. Real assistive-technology
+  source of realistic size (1,017 lines), used by the production-parity and
+  editor specs — a 28-line sample cannot reproduce editor layout defects.
+
+---
+
 ## Your Model Files
 
 The `.scad` files you process with this tool retain their original license. This tool does not change the licensing of your parametric models.

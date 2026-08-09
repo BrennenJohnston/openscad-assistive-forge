@@ -33,6 +33,7 @@
     "test:e2e:headed": "node scripts/run-e2e-safe.js --headed",
     "test:e2e:debug": "node scripts/run-e2e-safe.js --debug",
     "test:e2e:direct": "playwright test",
+    "test:e2e:prod": "npm run build && playwright test --config=playwright.prod.config.js",
     "test:e2e:report": "playwright show-report",
     "test:all": "npm run test:run && npm run test:e2e",
     "test:visual": "playwright test --project=visual-regression",
