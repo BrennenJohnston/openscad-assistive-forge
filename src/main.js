@@ -15060,6 +15060,29 @@ if (typeof window !== 'undefined') {
     },
 
     /**
+     * What the axis-tick overlay actually put in the scene.
+     *
+     * `inScene` is read from the scene graph, not from the preference: the
+     * defect this exists to catch was the option reading as ON while the
+     * overlay had thrown and nothing was drawn. Asserting the toggle's own
+     * state would have reported success throughout.
+     *
+     * @returns {{enabled: boolean, inScene: boolean, ticks: number, labels: number}|null}
+     */
+    axisTickOverlay() {
+      const controller = getDisplayOptionsController();
+      const scene = previewManager?.scene;
+      if (!controller || !scene) return null;
+      const group = scene.getObjectByName('__axisTickOverlay');
+      return {
+        enabled: controller.get('axisMarks'),
+        inScene: Boolean(group),
+        ticks: controller._axisTickOverlay?.tickCount ?? 0,
+        labels: controller._axisTickOverlay?.labelCount ?? 0,
+      };
+    },
+
+    /**
      * Where the camera is and what it orbits. Read-only, and the only way a
      * parity test can prove that Center, View All and Reset View each moved
      * the view differently rather than merely that the item was clickable.

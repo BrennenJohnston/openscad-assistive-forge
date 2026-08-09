@@ -453,10 +453,23 @@ export class DisplayOptionsController {
             themeKey: pm.currentTheme,
           });
         } catch (err) {
-          console.warn(
+          // Do NOT just log and return. That is what hid this for a whole
+          // release: the option read as on, the camera-bar button read as
+          // pressed, and nothing was ever drawn. If the overlay cannot be
+          // built, the control has to stop claiming otherwise.
+          console.error(
             '[DisplayOptions] Failed to build axis tick overlay:',
             err
           );
+          this.state.axisMarks = false;
+          this._savePref('axisMarks', false);
+          this._syncCheckbox('axisMarks');
+          document.dispatchEvent(
+            new CustomEvent('display-option-change', {
+              detail: { option: 'axisMarks', enabled: false },
+            })
+          );
+          announceImmediate('Axis distance markings are unavailable');
           return;
         }
       }

@@ -90,6 +90,16 @@ export function getThreeModule() {
     LineBasicMaterial,
     LineSegments,
     Vector3,
+    // The axis-tick overlay rasterises its distance labels onto a canvas and
+    // hangs them in the scene as sprites. Without these three it threw
+    // "three.CanvasTexture is not a constructor" on every attempt and the
+    // whole overlay — tick lines included — was lost, because the throw
+    // happens before the group is returned. Its unit tests inject a mock
+    // module that DOES define them, which is why 20 of them passed against
+    // geometry the app could never build.
+    CanvasTexture,
+    Sprite,
+    SpriteMaterial,
   };
 }
 
