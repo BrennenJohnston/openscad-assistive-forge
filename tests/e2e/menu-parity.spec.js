@@ -73,7 +73,11 @@ const EDIT_MENU_ORDER = [
   '---',
   'Increase Font Size',
   'Decrease Font Size',
-  'Preferences (Keyboard Shortcuts)…',
+  // Renamed in R-III (29ec7e1) when Edit ▸ Preferences stopped being a
+  // synonym for the shortcuts editor and opened the real dialog. This
+  // expectation was not updated then, so these cases have been failing on
+  // develop ever since. Owner confirmed the label stands, 2026-08-09 (Q-12).
+  'Preferences…',
 ]
 
 async function waitForWasmReady(page) {
@@ -582,7 +586,7 @@ test.describe('Grown menus stay reachable (G1/G2)', () => {
         ),
       }
     })
-    expect(landed.label).toBe('Preferences (Keyboard Shortcuts)…')
+    expect(landed.label).toBe('Preferences…')
     expect(landed.onScreen).toBe(true)
   })
 })

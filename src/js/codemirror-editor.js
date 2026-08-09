@@ -268,11 +268,24 @@ const darkHighlightStyle = HighlightStyle.define([
  * up. Given in px because the control is a px control (Edit ▸ Font Size has
  * always announced "Font size: 14px").
  *
+ * The explicit line-height is not decoration. MEASURED: before anything set
+ * a font size on the editor root, rows were 22px against 14px text — 1.57,
+ * inherited by accident from the page. Setting the root to 14px recomputed
+ * that inherited unitless line-height against a smaller number and rows fell
+ * to 20px, i.e. 1.43, under the 1.5 that WCAG 2.2 SC 1.4.12 Text Spacing
+ * asks for. Pinning it here keeps the ratio at every font size the user can
+ * choose, instead of letting it drift out of range whenever the size changes.
+ *
  * @param {number} px
  */
+const EDITOR_LINE_HEIGHT = 1.6;
+
 function fontSizeTheme(px) {
   return EditorView.theme({
     '&': { fontSize: `${px}px` },
+    // The row height follows .cm-scroller, which carries CodeMirror's own
+    // line-height: 1.4 — that is where the 1.43 came from, not the root.
+    '.cm-scroller': { lineHeight: String(EDITOR_LINE_HEIGHT) },
     '.cm-gutters': { fontSize: `${px}px` },
   });
 }
