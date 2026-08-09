@@ -6939,8 +6939,6 @@
             aria-selected="false"
             aria-controls="prefs-panel-3dview"
             tabindex="-1"
-            aria-disabled="true"
-            aria-describedby="prefs-reason-3dview"
           >
             3D View
           </button>
@@ -7031,11 +7029,135 @@
             tabindex="0"
             hidden
           >
-            <p id="prefs-reason-3dview" class="preferences-panel-reason">
-              The viewport colour schemes are not built yet. The 3D view
-              currently follows the app theme, and Classic uses the desktop's
-              Cornfield background.
+            <fieldset class="preferences-fieldset">
+              <legend class="preferences-legend">Color scheme</legend>
+              <p id="prefs-scheme-note" class="preferences-field-note">
+                Sets the Classic 3D view's background, model and edge colors.
+                In the other modes the app theme sets them, so that high
+                contrast keeps working.
+              </p>
+              <div
+                class="preferences-scheme-list"
+                id="prefsColorSchemeList"
+                aria-describedby="prefs-scheme-note"
+              >
+                <div class="preferences-scheme-row">
+                  <input
+                    type="radio"
+                    name="prefsColorScheme"
+                    id="prefsScheme-cornfield"
+                    value="cornfield"
+                    checked
+                  />
+                  <label for="prefsScheme-cornfield">Cornfield</label>
+                </div>
+                <div class="preferences-scheme-row">
+                  <input
+                    type="radio"
+                    name="prefsColorScheme"
+                    id="prefsScheme-metallic"
+                    value="metallic"
+                  />
+                  <label for="prefsScheme-metallic">Metallic</label>
+                </div>
+                <div class="preferences-scheme-row">
+                  <input
+                    type="radio"
+                    name="prefsColorScheme"
+                    id="prefsScheme-sunset"
+                    value="sunset"
+                  />
+                  <label for="prefsScheme-sunset">Sunset</label>
+                </div>
+                <div class="preferences-scheme-row">
+                  <input
+                    type="radio"
+                    name="prefsColorScheme"
+                    id="prefsScheme-starnight"
+                    value="starnight"
+                  />
+                  <label for="prefsScheme-starnight">Starnight</label>
+                </div>
+                <div class="preferences-scheme-row">
+                  <input
+                    type="radio"
+                    name="prefsColorScheme"
+                    id="prefsScheme-beforedawn"
+                    value="beforedawn"
+                  />
+                  <label for="prefsScheme-beforedawn">BeforeDawn</label>
+                </div>
+                <div class="preferences-scheme-row">
+                  <input
+                    type="radio"
+                    name="prefsColorScheme"
+                    id="prefsScheme-nature"
+                    value="nature"
+                  />
+                  <label for="prefsScheme-nature">Nature</label>
+                </div>
+                <div class="preferences-scheme-row">
+                  <input
+                    type="radio"
+                    name="prefsColorScheme"
+                    id="prefsScheme-deepocean"
+                    value="deepocean"
+                  />
+                  <label for="prefsScheme-deepocean">DeepOcean</label>
+                </div>
+                <div class="preferences-scheme-row">
+                  <input
+                    type="radio"
+                    name="prefsColorScheme"
+                    id="prefsScheme-solarized"
+                    value="solarized"
+                  />
+                  <label for="prefsScheme-solarized">Solarized</label>
+                </div>
+                <div class="preferences-scheme-row">
+                  <input
+                    type="radio"
+                    name="prefsColorScheme"
+                    id="prefsScheme-tomorrow"
+                    value="tomorrow"
+                  />
+                  <label for="prefsScheme-tomorrow">Tomorrow</label>
+                </div>
+                <div class="preferences-scheme-row">
+                  <input
+                    type="radio"
+                    name="prefsColorScheme"
+                    id="prefsScheme-tomorrow-night"
+                    value="tomorrow-night"
+                  />
+                  <label for="prefsScheme-tomorrow-night">Tomorrow Night</label>
+                </div>
+              </div>
+            </fieldset>
+
+            <div class="preferences-check-row">
+              <input
+                type="checkbox"
+                id="prefsShowWarnings3D"
+                disabled
+                aria-describedby="prefs-reason-warnings3d"
+              />
+              <label for="prefsShowWarnings3D"
+                >Show warnings and errors in the 3D view</label
+              >
+            </div>
+            <p id="prefs-reason-warnings3d" class="preferences-panel-reason">
+              Not built here. This app reports warnings and errors in the
+              Error-Log and Console panels instead of drawing them on the
+              model.
             </p>
+
+            <div class="preferences-check-row">
+              <input type="checkbox" id="prefsMouseCentricZoom" />
+              <label for="prefsMouseCentricZoom"
+                >Zoom toward the mouse pointer</label
+              >
+            </div>
           </div>
           <div
             role="tabpanel"
