@@ -4210,6 +4210,44 @@ async function initApp() {
     const inClassic =
       document.body.dataset.uiMode === 'classic' && Boolean(classicLayout);
 
+    /**
+     * A Forge panel that Classic keeps out of the Customizer column (P6, owner
+     * Q-4). classic.css hides the row while its <details> is closed, so `open`
+     * is both the visibility and the tick — one state, so the two cannot
+     * disagree.
+     *
+     * Not panelToggle() for these, even though four of them are in
+     * PANEL_REGISTRY: for Libraries and Companion Files the registry names the
+     * WRAPPER div, so its tick would report a closed panel as showing and its
+     * handler would flip a class the Classic rule does not read. Rather than
+     * two helpers in one list for reasons a reader cannot see, all five of the
+     * Q-4 set go through this one.
+     *
+     * @param {string} selector - the row's <details>
+     * @param {string} label - the panel's name, as the Window menu lists it
+     */
+    function forgeExtraToggle(selector, label) {
+      const row = document.querySelector(selector);
+      return {
+        type: 'toggle',
+        label,
+        checked: Boolean(row?.open),
+        handler: () => {
+          const el = document.querySelector(selector);
+          if (!el) return;
+          el.open = !el.open;
+          // Same sentence as UIModeController.togglePanelVisibility uses for
+          // every other disclosure, and once per toggle.
+          announceImmediate(`${label} ${el.open ? 'opened' : 'closed'}`, {
+            clearDelayMs: 1500,
+          });
+          if (el.open) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
+        },
+      };
+    }
+
     // Upstream builds this menu from the docks themselves, so its order is the
     // dock order: Editor, Console, Customizer, Error-Log, Animate, Font List,
     // Viewport-Control (U2). Next/Previous Window are omitted — one window
@@ -4270,6 +4308,20 @@ async function initApp() {
               checked: classicLayout.isViewportControlVisible(),
               handler: () => classicLayout.toggleViewportControl(),
             },
+            // The five Forge panels Classic keeps out of the Customizer column
+            // (P6, Q-4). Listed after the dock panels and in the column order
+            // they had, so a user who knows where they used to be finds them
+            // in that order here. Outside Classic these stay where they were,
+            // in the web-only group at the foot of this menu.
+            { type: 'separator' },
+            forgeExtraToggle('#measureSection', 'Image Measurement'),
+            forgeExtraToggle('#overlaySection', 'Reference Image'),
+            forgeExtraToggle('#libraryControls > details', 'Libraries'),
+            forgeExtraToggle(
+              '#projectFilesControls > details',
+              'Companion Files'
+            ),
+            forgeExtraToggle('#advancedMenu', 'Advanced'),
           ]
         : [
             {
@@ -4314,13 +4366,21 @@ async function initApp() {
           })),
         };
       })(),
-      { type: 'separator' },
       // -- Web-only panel toggles --
       // fileActions, editTools, designTools, displayOptions removed — now in toolbar menus
-      panelToggle('libraries', 'Libraries'),
-      panelToggle('companionFileManagement', 'Companion Files'),
-      panelToggle('imageMeasurement', 'Image Measurement'),
-      panelToggle('referenceOverlay', 'Reference Image'),
+      //
+      // Classic lists these above instead, as the Q-4 set keyed on each row's
+      // own [open]. Listing them here as well would put two items with the
+      // same name in one menu, which is what happened when P6 first added them.
+      ...(inClassic
+        ? []
+        : [
+            { type: 'separator' },
+            panelToggle('libraries', 'Libraries'),
+            panelToggle('companionFileManagement', 'Companion Files'),
+            panelToggle('imageMeasurement', 'Image Measurement'),
+            panelToggle('referenceOverlay', 'Reference Image'),
+          ]),
     ];
   });
 
@@ -8356,6 +8416,8 @@ if (rounded) {
   let currentEditor = null;
   let modeManager = null;
   let editorStateManager = null;
+  /** Pending "focus the editor" timer, so a later claim on focus can win (D-15). */
+  let editorFocusTimer;
 
   // True while an editor edit is being written into stateManager. The push
   // channel below subscribes to the same store, so without this it would
@@ -8541,9 +8603,29 @@ if (rounded) {
           currentEditor.refreshLayout?.();
         }
 
-        // Focus the editor
+        // Focus the editor. Partial mitigation for D-15, NOT a fix for it:
+        // 100ms is long enough for the user to have opened a menu, tabbed
+        // onward or clicked something else, and this used to take focus
+        // regardless. It now declines when something else has claimed focus,
+        // which can only ever mean one fewer steal.
+        //
+        // It does not close D-15. Measured 2026-08-08: with this guard in
+        // place, pressing the toggle and moving focus in the same task still
+        // ends with the editor focused, so at least one other path focuses it —
+        // most likely initExpertEditor's own first-run focus. Finding that path
+        // is its own piece of work and is not attempted here.
         if (currentEditor && currentEditor.focus) {
-          setTimeout(() => currentEditor.focus(), 100);
+          clearTimeout(editorFocusTimer);
+          editorFocusTimer = setTimeout(() => {
+            editorFocusTimer = undefined;
+            const active = document.activeElement;
+            const unclaimed =
+              !active ||
+              active === document.body ||
+              active === document.documentElement ||
+              active === expertModeToggle;
+            if (unclaimed) currentEditor.focus();
+          }, 100);
         }
       } else {
         // Hide Expert Mode panel, show standard param body

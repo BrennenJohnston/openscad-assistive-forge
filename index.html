@@ -1600,7 +1600,7 @@
               </button>
             </div>
             <div class="param-panel-body" id="paramPanelBody">
-              <!-- Console Panel -- Unified OpenSCAD output (S-010 desktop parity) -->
+              <!-- Console Panel: unified OpenSCAD output (S-010 desktop parity) -->
               <details
                 class="console-panel forge-disclosure"
                 id="consolePanel"
@@ -1720,7 +1720,13 @@
                       aria-label="Console messages"
                       aria-live="polite"
                       aria-relevant="additions"
-                    >
+                      tabindex="0"
+                    ><!-- tabindex because this region scrolls and has nothing
+                         focusable inside it, so arrows and PageDown had no way
+                         in. Not the CodeMirror case (P2), where the scroller's
+                         contenteditable child IS reachable and the same axe
+                         rule is a false positive: here it was real, and P7
+                         made it visible by giving the log its content back. -->
                       <div class="console-empty">
                         No output yet. Messages from the OpenSCAD engine
                         will appear here.
@@ -1728,15 +1734,24 @@
                     </div>
                   </div>
                   <div id="console-view-structured" class="console-view-panel" role="tabpanel" aria-labelledby="console-tab-structured" hidden>
-                    <div
-                      id="error-log-output"
-                      class="error-log-output"
-                      role="log"
-                      aria-label="Structured error log"
-                      aria-live="polite"
-                    >
-                      <div class="error-log-empty">
-                        No errors. Compile or render to check for issues.
+                    <!-- The Show filter and the table both live in here so both
+                         travel into the Classic dock together (the layout
+                         controller moves #error-log-output, not its parent).
+                         role="log"/aria-live have moved OFF this element and on
+                         to the inner region the panel rebuilds: a live region
+                         should hold only the content that changes, and a
+                         <select> announcing itself on every render is exactly
+                         what it should not hold. -->
+                    <div id="error-log-output" class="error-log-output">
+                      <div
+                        class="error-log-entries"
+                        role="log"
+                        aria-label="Structured error log"
+                        aria-live="polite"
+                      >
+                        <div class="error-log-empty">
+                          No errors. Compile or render to check for issues.
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -5609,13 +5624,21 @@
       <div
         id="classicStatusBar"
         class="classic-status-bar"
-        role="status"
-        aria-live="polite"
       >
-        <span id="classicStatusText"></span>
+        <!-- Upstream's status bar is the viewport telemetry, at the left
+             (OpenSCAD_1). It is NOT in a live region: the camera's change feed
+             fires ~118 times per drag, and a polite region repeating a pose ten
+             times a second is not a rough edge, it is a product failure. It is
+             not aria-hidden either — a screen-reader user can still navigate to
+             it deliberately. It simply never speaks on its own. -->
+        <span id="classicStatusViewport" class="classic-status-viewport"></span>
+        <span class="classic-status-spacer" aria-hidden="true"></span>
+        <!-- role="status" has moved off the bar and on to this one span. The
+             render state is the only thing here that should announce itself. -->
+        <span id="classicStatusText" role="status" aria-live="polite"></span>
         <span class="classic-status-divider" aria-hidden="true">|</span>
         <span id="classicStatusStats"></span>
-        <span class="classic-status-spacer" aria-hidden="true"></span>
+        <span class="classic-status-divider" aria-hidden="true">|</span>
         <span id="classicStatusMemory"></span>
       </div>
     </div>

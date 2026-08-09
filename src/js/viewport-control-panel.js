@@ -216,8 +216,19 @@ export class ViewportControlPanel {
   /** Pull the camera's pose into the fields. */
   refresh() {
     const pose = this.readCamera();
-    this._refreshCanvasSize();
+    const size = this._refreshCanvasSize();
     if (!pose) return;
+
+    // The Classic status bar shows the same pose (P8). It listens here rather
+    // than subscribing to controls itself: this panel is connected whether or
+    // not it is on screen, and it already owns the only throttle in front of a
+    // feed that fires ~118 times per drag. Two subscribers would mean two
+    // throttles that could drift.
+    document.dispatchEvent(
+      new CustomEvent('viewport-camera-change', {
+        detail: { pose, width: size.width, height: size.height },
+      })
+    );
 
     this._set('vpTx', pose.translation.x);
     this._set('vpTy', pose.translation.y);
@@ -245,10 +256,11 @@ export class ViewportControlPanel {
    */
   _refreshCanvasSize() {
     const canvas = document.querySelector('.preview-panel canvas');
-    if (this.width) this.width.value = canvas ? String(canvas.clientWidth) : '';
-    if (this.height) {
-      this.height.value = canvas ? String(canvas.clientHeight) : '';
-    }
+    const width = canvas ? canvas.clientWidth : null;
+    const height = canvas ? canvas.clientHeight : null;
+    if (this.width) this.width.value = canvas ? String(width) : '';
+    if (this.height) this.height.value = canvas ? String(height) : '';
+    return { width, height };
   }
 
   /**

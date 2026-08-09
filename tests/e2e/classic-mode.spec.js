@@ -920,22 +920,26 @@ test.describe('Classic mode layout (C4)', () => {
     ).toHaveCount(1);
     await expect(page.locator('#classicCustomizerBar')).toBeVisible();
 
-    // Upstream row 1 is Automatic Preview + the detail combobox, nothing else
+    // Upstream row 1 is Automatic Preview + the detail combobox + Reset. P5
+    // moved Reset here from Forge additions: it IS a control the desktop
+    // Customizer has, so hiding it in a section named for what desktop lacks
+    // was the wrong shelf. Row 2 gained save preset for the same reason.
     await expect(
       page.locator('#classicCustomizerControls #paramDetailLevelWrap')
     ).toHaveCount(1);
     await expect(
       page.locator('#classicCustomizerControls #resetAllBtn')
-    ).toHaveCount(0);
+    ).toHaveCount(1);
+    await expect(page.locator('#classicPresetRow #savePresetBtn')).toHaveCount(
+      1
+    );
 
     // Everything upstream lacks sits in the collapsed Forge additions section
     const forgeExtras = page.locator('#classicForgeExtras');
     await expect(forgeExtras).toBeVisible();
     await expect(forgeExtras).not.toHaveAttribute('open', '');
     for (const id of [
-      '#resetAllBtn',
       '#customizerGroupToggles',
-      '#savePresetBtn',
       '#copyPresetBtn',
       '#copyPresetNameBtn',
       '#managePresetsBtn',
@@ -1989,20 +1993,29 @@ test.describe('Classic 3D view toolbar (E3-E7)', () => {
       )
       .toBe(true);
 
+    // Read the state rather than assume it: P9 makes Classic open with axes
+    // and scale markers ON (the desktop's defaults), so a fixed 'false' start
+    // was pinning a default this suite does not own. What matters is the flip.
     const markersBefore = await markers.getAttribute('aria-pressed');
+    const axesBefore = await axes.getAttribute('aria-pressed');
+    const flipped = (before) => (before === 'true' ? 'false' : 'true');
+
     await axes.click();
-    await expect(axes).toHaveAttribute('aria-pressed', 'true');
+    await expect(axes).toHaveAttribute('aria-pressed', flipped(axesBefore));
     // Toggling Axes must NOT drag the scale markers along with it
     await expect(markers).toHaveAttribute('aria-pressed', markersBefore);
 
     await markers.click();
-    await expect(markers).toHaveAttribute('aria-pressed', 'true');
+    await expect(markers).toHaveAttribute(
+      'aria-pressed',
+      flipped(markersBefore)
+    );
 
     // Cross-surface sync: toggling the same flag from the View menu keeps the
     // button truthful, which it did not before the display-option-change event
     await page.locator('#viewMenuBtn').click();
     await page.getByRole('menuitemcheckbox', { name: 'Show Axes' }).click();
-    await expect(axes).toHaveAttribute('aria-pressed', 'false');
+    await expect(axes).toHaveAttribute('aria-pressed', axesBefore);
   });
 
   test('classic-camera-bar-keyboard: one tab stop, disabled measure buttons stay reachable', async ({
@@ -2622,7 +2635,11 @@ test.describe('View menu per-toolbar hide toggles (G4)', () => {
       new MutationObserver(() => {
         const text = region.textContent.trim();
         if (text) window.__said.push(text);
-      }).observe(region, { childList: true, subtree: true, characterData: true });
+      }).observe(region, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+      });
     });
 
     await page.locator('#windowMenuBtn').click();

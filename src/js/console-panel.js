@@ -47,7 +47,11 @@ export class ConsolePanel {
       echo: true,
       warning: true,
       error: true,
-      info: false,
+      // On, to match the desktop console, which shows the whole compile log and
+      // offers no way to hide it. Off was unreachable rather than a choice: the
+      // filter row has ECHO / Warnings / Errors / Deprecated / Trace and no INFO
+      // checkbox, so nothing could ever switch it back on.
+      info: true,
       deprecated: true,
       trace: false,
     };
@@ -215,7 +219,15 @@ export class ConsolePanel {
       type = CONSOLE_ENTRY_TYPE.DEPRECATED;
     } else if (/\bTRACE:/i.test(trimmed)) {
       type = CONSOLE_ENTRY_TYPE.TRACE;
-    } else if (trimmed.includes('Compiling') || trimmed.includes('Rendering')) {
+    } else {
+      // Everything else OpenSCAD prints is status, and status belongs in the
+      // console. Previously only "Compiling"/"Rendering" lines were kept and
+      // the rest were dropped, so a clean render left the panel reading "No
+      // console output yet" while the desktop's console showed nine lines —
+      // cache sizes, "Normalized tree has 31 elements!", the render time. Worse,
+      // one of the dropped lines ("Top level object is a 3D object
+      // (manifold):") was being classified as an ERROR by the Error-Log, so the
+      // only trace of a healthy render was a red row.
       type = CONSOLE_ENTRY_TYPE.INFO;
     }
 
@@ -512,8 +524,14 @@ export class ConsolePanel {
 
     const safeMessage = escapeHtml(entry.message);
 
+    // No role at all for ordinary lines. They used to carry role="listitem",
+    // which requires a list parent and never had one — #console-output is
+    // role="log". axe never reported it because a clean render produced no
+    // lines to report; P7 gave the log its status output back and twenty
+    // aria-required-parent nodes appeared with it. role="log" already says
+    // "messages, newest last", so the entries need nothing of their own.
     const entryRole =
-      entry.type === 'warning' || entry.type === 'error' ? 'alert' : 'listitem';
+      entry.type === 'warning' || entry.type === 'error' ? 'alert' : null;
 
     const hasLocation = entry.line !== null && this.onNavigate;
     const lineLink = hasLocation
@@ -521,7 +539,7 @@ export class ConsolePanel {
       : '';
 
     return `
-      <div class="console-entry ${typeClass}" role="${entryRole}">
+      <div class="console-entry ${typeClass}"${entryRole ? ` role="${entryRole}"` : ''}>
         <time class="console-timestamp" datetime="${time.toISOString()}">${timeStr}</time>
         <span class="console-type" aria-hidden="true">${typeLabel}</span>
         <span class="console-message">${safeMessage}${lineLink}</span>

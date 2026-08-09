@@ -950,7 +950,10 @@ body[data-ui-mode='classic'][data-classic-font-list-visible='true']
 body[data-ui-mode='classic'] .classic-error-log-slot .error-log-output {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  /* The panel scrolls its entries region, not itself (P7b): the Show row has
+     to stay put while the table under it moves. max-height would fight the
+     slot, so it goes too. */
+  max-height: none;
 }
 
 @media (max-width: 1023px) {
@@ -1115,6 +1118,11 @@ body[data-ui-mode='classic'] .classic-pane-title {
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-normal);
   color: var(--color-text-primary);
+  /* Takes the bar's free space so the controls group at the right edge as they
+     do on the desktop. With space-between and a bare title, two controls were
+     spread across the whole bar and the ⋮ hung in the middle of it (D2). */
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 body[data-ui-mode='classic'] .classic-pane-btn {
@@ -1154,6 +1162,70 @@ body[data-classic-console-collapsed='true']
   .classic-fold {
   grid-template-rows: 0fr;
 }
+
+/* ── Per-panel collapse (D3, a Forge extra — the desktop has no such control) */
+
+/* display:none, not the strip fold's animated grid-template-rows: 0fr. Two
+   reasons, both measured.
+
+   Accessibility first: a 0fr row with overflow:hidden only CLIPS its content.
+   The editor, its toolbar and every button in it keep a place in the
+   accessibility tree and stay reachable by Tab, so a "collapsed" panel would
+   still swallow keystrokes — the trap a disclosure exists to close. Taking the
+   body out of the tree is what <details> does, and what this must do.
+
+   Then the flash: the collapsed pane also gives up its flex share below, so an
+   animated row grew the pane to its full content height first and shrank it
+   from there — 583px → 673px → 39px (measured). Instant collapse has no such
+   frame, and it matches the Customizer's, which cannot animate at all.
+
+   Direct child, so a collapsed panel does not fold a panel nested inside it. */
+body[data-ui-mode='classic'] [data-classic-collapsed='true'] > .classic-fold {
+  display: none;
+}
+
+/* Hiding the body is not enough on its own: a dock field's children are
+   flex: 1 1 0, so a collapsed pane kept its whole share of the column and left
+   a title bar sitting above 900px of nothing (measured). Giving the share up is
+   what lets the panes beside it grow into the space. */
+body[data-ui-mode='classic']
+  .classic-dock-field
+  > [data-classic-collapsed='true'] {
+  flex: 0 0 auto;
+}
+
+/* The strip lays its panes out side by side, so there the share to give up is
+   vertical: the default stretch would hold a collapsed pane at full strip
+   height with an empty body. */
+body[data-ui-mode='classic']
+  .classic-bottom-strip
+  > [data-classic-collapsed='true'] {
+  align-self: flex-start;
+}
+
+/* The Customizer is the Forge parameter panel itself, not a created slot, so it
+   has no .classic-fold at all — its body is several siblings of the title bar.
+   Wrapping them at runtime would mean moving the parameter groups on every
+   Classic entry, so they are hidden where they stand. The title bar itself
+   stays, which is the point of a collapse. Its own bar loses everything below
+   the title (controls, presets, Forge additions); when the Customizer is a
+   merged tab its title bar has moved into the shared bar, and then the whole of
+   #classicCustomizerBar folds away. */
+body[data-ui-mode='classic']
+  #paramPanel[data-classic-collapsed='true']
+  > *:not(#classicCustomizerBar),
+body[data-ui-mode='classic']
+  #paramPanel[data-classic-collapsed='true']
+  #classicCustomizerBar
+  > *:not(.classic-pane-titlebar) {
+  display: none;
+}
+
+/* The ▾/▸ glyph is real text set by the controller, not CSS content: a title
+   bar that has been adopted into a shared tab bar is no longer a descendant of
+   its own panel, and a stylesheet that fails to load must not leave a blank
+   button (R-I). aria-expanded carries the state for a screen reader; the glyph
+   is the same information for eyes (APG disclosure). */
 
 @media (prefers-reduced-motion: reduce) {
   body[data-ui-mode='classic'] .classic-fold {
@@ -1471,12 +1543,20 @@ body[data-ui-mode='classic'] .classic-auto-preview-label {
   cursor: pointer;
 }
 
-/* Upstream row 1 is exactly Automatic Preview + the detail combobox (U4),
-   so the combobox sits at the end of the line */
+/* Upstream row 1 is Automatic Preview + the detail combobox + Reset (U4,
+   OpenSCAD_1), so the combobox and the button that follows it sit at the end of
+   the line, with the checkbox alone on the left. */
 body[data-ui-mode='classic']
   .classic-customizer-controls
   .param-detail-level-wrap {
   margin-left: auto;
+}
+
+/* Reset arrived here from Forge additions at 32px tall — below the token, and
+   visibly short beside the 36px select it now stands next to. The select in
+   this row already asks for the token explicitly; so does the button. */
+body[data-ui-mode='classic'] .classic-customizer-controls .btn {
+  min-height: var(--size-touch-target);
 }
 
 body[data-ui-mode='classic']
@@ -1633,6 +1713,29 @@ body[data-ui-mode='classic'] #manifestInfoBanner {
   display: none !important;
 }
 
+/* ── Forge extras out of the Customizer column (P6, owner Q-4) ───────────────
+
+   The desktop Customizer shows its parameter groups immediately under the
+   preset row. Ours put five Forge panels in front of them — Image Measurement,
+   Reference Image, Libraries, Companion Files, Advanced — so a blind user
+   walked five disclosures before reaching the region they visit most. Q-4:
+   Window-menu-only in Classic.
+
+   Keyed on the row's own [open], NOT on a separate visibility flag, so the
+   Window menu's tick and the CSS read one state and cannot disagree — the
+   mistake the Console tick already made once. Libraries and Companion Files
+   are wrappers around the same kind of <details>, so all five behave alike.
+
+   Consequence, deliberate: collapsing one of these by its own summary takes
+   the row away too, and Window is how it comes back. */
+body[data-ui-mode='classic'] #measureSection:not([open]),
+body[data-ui-mode='classic'] #overlaySection:not([open]),
+body[data-ui-mode='classic'] #advancedMenu:not([open]),
+body[data-ui-mode='classic'] #libraryControls > details:not([open]),
+body[data-ui-mode='classic'] #projectFilesControls > details:not([open]) {
+  display: none;
+}
+
 /* "Preview is current" needs no chrome in Classic — the status bar already
    says so, and the desktop viewport has no state frame. The pending, stale,
    rendering and error borders stay: those carry information the bar's text
@@ -1669,6 +1772,19 @@ body[data-ui-mode='classic'] .classic-status-bar {
 
 body[data-ui-mode='classic'] .classic-status-spacer {
   flex: 1;
+}
+
+/* The telemetry is the longest thing in the bar and the desktop's own reading
+   is monospaced digits, which stops the line jittering sideways as the numbers
+   change under an orbit. It may shrink but never wrap the bar to two rows. */
+body[data-ui-mode='classic'] .classic-status-viewport {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-family-mono, monospace);
+  font-variant-numeric: tabular-nums;
 }
 
 /* The in-viewport overlay yields to the bottom bar in classic —

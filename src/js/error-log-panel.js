@@ -64,7 +64,15 @@ export class ErrorLogPanel {
       [ERROR_LOG_TYPE.TRACE]: false,
     };
 
-    /** @type {'timestamp'|'type'|'file'|'line'} */
+    /**
+     * The `Show [All ▾]` narrowing (U6b). null = no narrowing, so the Console's
+     * per-type checkboxes decide, exactly as they did before this control
+     * existed. A type here shows only that type, whatever the checkboxes say.
+     * @type {string|null}
+     */
+    this.showOnly = null;
+
+    /** @type {'timestamp'|'group'|'type'|'file'|'line'} */
     this.sortColumn = 'timestamp';
     /** @type {boolean} */
     this.sortAscending = true;
@@ -131,7 +139,16 @@ export class ErrorLogPanel {
       group = 'Parse';
     } else if (
       /^CGAL error/i.test(trimmed) ||
-      /^Mesh (is )?not|manifold/i.test(trimmed)
+      // `|` binds looser than anything else in a regex, so the original
+      // /^Mesh (is )?not|manifold/i read as (^Mesh (is )?not) OR (manifold) —
+      // and that second alternative was UNANCHORED. Every line containing the
+      // word "manifold" was therefore an ERROR, including OpenSCAD's healthy
+      // status line "Top level object is a 3D object (manifold):", which the
+      // Error-Log then showed as a red row while the Console showed nothing.
+      /^Mesh (is )?not\b/i.test(trimmed) ||
+      // A real complaint says the object is NOT manifold. The status line says
+      // it IS one, so the negation is what tells them apart.
+      /\bnot\b[^\n]*\bmanifold\b/i.test(trimmed)
     ) {
       type = ERROR_LOG_TYPE.ERROR;
       group = 'Geometry';
@@ -265,17 +282,18 @@ export class ErrorLogPanel {
   render() {
     if (!this.container) return;
 
-    const visible = this._sortedEntries(
-      this.entries.filter((e) => this.filters[e.type])
-    );
+    const region = this._ensureRegion();
+    const visible = this._sortedEntries(this.entries.filter(this._isVisible));
 
-    this.container.textContent = '';
+    // Only the region is rebuilt. The Show row above it keeps its element, so
+    // rendering never steals focus from the select or re-announces it.
+    region.textContent = '';
 
     if (visible.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'error-log-empty';
       empty.textContent = 'No errors. Compile or render to check for issues.';
-      this.container.appendChild(empty);
+      region.appendChild(empty);
       return;
     }
 
@@ -291,7 +309,91 @@ export class ErrorLogPanel {
       tbody.appendChild(this._buildRow(entry));
     }
     table.appendChild(tbody);
-    this.container.appendChild(table);
+    region.appendChild(table);
+  }
+
+  /**
+   * Whether an entry passes both filters: the Console's per-type checkboxes,
+   * and the Show select's narrowing on top of them.
+   * @param {ErrorLogEntry} entry
+   * @returns {boolean}
+   * @private
+   */
+  _isVisible = (entry) =>
+    this.showOnly ? entry.type === this.showOnly : this.filters[entry.type];
+
+  /**
+   * The live region the table renders into, plus the `Show [All ▾]` row above
+   * it (U6b). Built once and kept, so the select survives every render.
+   *
+   * The row sits OUTSIDE the live region on purpose: role="log" belongs to the
+   * content that changes, and a <select> rebuilt inside one would be read out
+   * on every render.
+   * @returns {HTMLElement}
+   * @private
+   */
+  _ensureRegion() {
+    let region = this.container.querySelector('.error-log-entries');
+    if (region && this.container.querySelector('.error-log-show-row')) {
+      return region;
+    }
+
+    if (!region) {
+      region = document.createElement('div');
+      region.className = 'error-log-entries';
+      region.setAttribute('role', 'log');
+      region.setAttribute('aria-label', 'Structured error log');
+      region.setAttribute('aria-live', 'polite');
+      this.container.appendChild(region);
+    }
+
+    const row = document.createElement('div');
+    row.className = 'error-log-show-row';
+
+    // A real <label>, not aria-label: the desktop shows the word, and a
+    // visible label is the accessible name a sighted and a screen-reader user
+    // can both refer to (WCAG 2.5.3).
+    const label = document.createElement('label');
+    label.className = 'error-log-show-label';
+    label.htmlFor = 'error-log-show';
+    label.textContent = 'Show';
+
+    const select = document.createElement('select');
+    select.id = 'error-log-show';
+    select.className = 'error-log-show-select';
+
+    // Owner-approved 2026-08-08: only the types this engine can actually emit.
+    // Upstream's list also has UI-WARNING, FONT-WARNING, EXPORT-WARNING and
+    // EXPORT-ERROR; those are desktop message SOURCES with no equivalent here,
+    // so they are omitted rather than shipped as options that match nothing.
+    // Trace is ours, not upstream's, and the panel already filters on it.
+    for (const [value, text] of [
+      ['all', 'All'],
+      [ERROR_LOG_TYPE.ERROR, TYPE_LABELS[ERROR_LOG_TYPE.ERROR]],
+      [ERROR_LOG_TYPE.WARNING, TYPE_LABELS[ERROR_LOG_TYPE.WARNING]],
+      [ERROR_LOG_TYPE.DEPRECATED, TYPE_LABELS[ERROR_LOG_TYPE.DEPRECATED]],
+      [ERROR_LOG_TYPE.TRACE, TYPE_LABELS[ERROR_LOG_TYPE.TRACE]],
+    ]) {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = text;
+      select.appendChild(option);
+    }
+    select.value = this.showOnly || 'all';
+    select.addEventListener('change', () => {
+      this.showOnly = select.value === 'all' ? null : select.value;
+      this.render();
+      announceImmediate(
+        this.showOnly
+          ? `Showing ${TYPE_LABELS[this.showOnly]} entries only`
+          : 'Showing all entries'
+      );
+    });
+
+    row.appendChild(label);
+    row.appendChild(select);
+    this.container.insertBefore(row, region);
+    return region;
   }
 
   // -----------------------------------------------------------------------
@@ -412,11 +514,16 @@ export class ErrorLogPanel {
     const thead = document.createElement('thead');
     const row = document.createElement('tr');
 
+    // Upstream's headers (OpenSCAD_1). "Group" is real data — parseLine has
+    // always computed Compile / Parse / Geometry / Runtime / General and never
+    // shown it. Owner-approved 2026-08-08: the Group cell carries the severity
+    // badge as well as the group name, so relabelling the column does not leave
+    // severity to the red row colour alone (WCAG 1.4.1).
     const cols = [
-      { key: 'type', label: 'Type' },
+      { key: 'group', label: 'Group' },
       { key: 'file', label: 'File' },
       { key: 'line', label: 'Line' },
-      { key: 'message', label: 'Message' },
+      { key: 'message', label: 'Info' },
     ];
 
     for (const col of cols) {
@@ -461,14 +568,19 @@ export class ErrorLogPanel {
     row.className = `error-log-row error-log-row--${entry.type}`;
     row.setAttribute('role', 'row');
 
-    const typeCell = document.createElement('td');
-    typeCell.className = 'error-log-cell--type';
+    const groupCell = document.createElement('td');
+    groupCell.className = 'error-log-cell--group';
 
     const typeBadge = document.createElement('span');
     typeBadge.className = `error-log-type-badge error-log-type-badge--${entry.type}`;
     typeBadge.textContent = TYPE_LABELS[entry.type] || entry.type;
-    typeCell.appendChild(typeBadge);
-    row.appendChild(typeCell);
+    groupCell.appendChild(typeBadge);
+
+    const groupName = document.createElement('span');
+    groupName.className = 'error-log-group-name';
+    groupName.textContent = entry.group || 'General';
+    groupCell.appendChild(groupName);
+    row.appendChild(groupCell);
 
     const fileCell = document.createElement('td');
     fileCell.className = 'error-log-cell--file';
