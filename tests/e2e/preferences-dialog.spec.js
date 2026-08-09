@@ -113,14 +113,37 @@ test('the tab bar follows the APG pattern', async ({ page }) => {
   // Exactly one panel is showing.
   expect(state.filter((t) => t.panelHidden === false)).toHaveLength(1);
 
-  // Arrows must not select a disabled tab: in the shell every tab but
-  // Keyboard is disabled, so selection has nowhere to go and must stay put.
-  await page.locator('#prefs-tab-keyboard').focus();
-  await page.keyboard.press('ArrowRight');
+  // Arrows reach EVERY tab, including the unavailable ones: their panel is
+  // where the reason lives, so a keyboard user who cannot arrow onto them
+  // cannot read it. (R-III skipped them; owner decision 2026-08-09 reversed
+  // that once the reason became visible rather than description-only.)
+  await page.locator('#prefs-tab-3dview').click();
+  const walked = [];
+  for (let i = 0; i < TAB_ORDER.length; i++) {
+    walked.push(await page.evaluate(() => document.activeElement.id));
+    await page.keyboard.press('ArrowRight');
+  }
+  expect(walked).toEqual(TAB_ORDER.map((_, i) =>
+    ['3dview', 'editor', '3dprint', 'advanced', 'axes', 'buttons', 'keyboard'][i]
+  ).map((s) => `prefs-tab-${s}`));
+
+  // Wrapped back to the start.
+  expect(await page.evaluate(() => document.activeElement.id)).toBe(
+    'prefs-tab-3dview'
+  );
+
+  await page.keyboard.press('End');
+  expect(await page.evaluate(() => document.activeElement.id)).toBe(
+    'prefs-tab-keyboard'
+  );
   await page.keyboard.press('Home');
+  expect(await page.evaluate(() => document.activeElement.id)).toBe(
+    'prefs-tab-3dview'
+  );
+
   const after = await tabState(page);
-  expect(after.find((t) => t.selected === 'true').label).toBe('Keyboard');
   expect(after.filter((t) => t.panelHidden === false)).toHaveLength(1);
+  expect(after.filter((t) => t.tabindex === '0')).toHaveLength(1);
 });
 
 test('every unavailable tab is disabled and names its reason', async ({
@@ -140,12 +163,129 @@ test('every unavailable tab is disabled and names its reason', async ({
     ).toBeGreaterThan(20);
   }
 
-  // A disabled tab still takes focus, so a screen reader can reach and read
-  // that reason. Removing it from the tab order is not the same as hiding it.
-  await page.locator('#prefs-tab-3dview').focus();
-  expect(await page.evaluate(() => document.activeElement.id)).toBe(
-    'prefs-tab-3dview'
-  );
+  // The reason must be VISIBLE, not description-only. MEASURED in R-III:
+  // selecting was refused, so the panel never showed and a sighted user got a
+  // tab that did nothing. Being in the accessibility tree is not the same as
+  // being on screen.
+  // Reached with the arrow keys rather than .click(): Playwright treats
+  // aria-disabled="true" as not-actionable and refuses to click it, though a
+  // real browser dispatches the event. Arrowing is also the path that matters
+  // here — it is how a keyboard user gets to the explanation at all.
+  const STEPS = { '3dprint': 2, axes: 4, buttons: 5 };
+  for (const [id, steps] of Object.entries(STEPS)) {
+    await page.locator('#prefs-tab-3dview').click();
+    for (let i = 0; i < steps; i++) await page.keyboard.press('ArrowRight');
+
+    await expect(page.locator(`#prefs-tab-${id}`)).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    await expect(page.locator(`#prefs-reason-${id}`)).toBeVisible();
+    // Still announced as unavailable — selectable is not the same as usable.
+    await expect(page.locator(`#prefs-tab-${id}`)).toHaveAttribute(
+      'aria-disabled',
+      'true'
+    );
+  }
+});
+
+test('the 3D View tab is live and no longer says it is not built', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await openPreferences(page);
+
+  const tab = page.locator('#prefs-tab-3dview');
+  // A tab that works must not still carry a "not built yet" description.
+  await expect(tab).not.toHaveAttribute('aria-disabled', 'true');
+  expect(await tab.getAttribute('aria-describedby')).toBeNull();
+  await expect(page.locator('#prefs-reason-3dview')).toHaveCount(0);
+
+  await tab.click();
+  await expect(page.locator('#prefsColorSchemeList')).toBeVisible();
+
+  // The desktop's ten, in the desktop's order (OpenSCAD_2.png).
+  const labels = await page
+    .locator('#prefsColorSchemeList label')
+    .allTextContents();
+  expect(labels.map((l) => l.trim())).toEqual([
+    'Cornfield',
+    'Metallic',
+    'Sunset',
+    'Starnight',
+    'BeforeDawn',
+    'Nature',
+    'DeepOcean',
+    'Solarized',
+    'Tomorrow',
+    'Tomorrow Night',
+  ]);
+
+  // Warnings-in-3D-view has no engine here, so it is disabled and says why.
+  const warn = page.locator('#prefsShowWarnings3D');
+  await expect(warn).toBeDisabled();
+  await expect(page.locator('#prefs-reason-warnings3d')).toBeVisible();
+
+  // Mouse-centric zoom IS a real capability, so it ships live.
+  await expect(page.locator('#prefsMouseCentricZoom')).toBeEnabled();
+});
+
+test('picking a scheme repaints the viewport, and it survives a reopen', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await openPreferences(page);
+
+  // Classic is where the scheme applies; elsewhere the app theme drives the
+  // viewport so that high contrast keeps working.
+  await page.locator('#preferencesModalDone').click();
+  await page.locator('#classicModeToggle').click();
+  await expect(page.locator('body')).toHaveAttribute('data-ui-mode', 'classic');
+  await page.waitForTimeout(1_000);
+
+  const scheme = () =>
+    page.evaluate(() => window.__forgeDebug.previewColorScheme());
+  expect(await scheme()).toBe('classic'); // Cornfield paints with `classic`
+
+  await page.locator('#editMenuBtn').click();
+  await page
+    .locator('#editMenuItems')
+    .getByText('Preferences…', { exact: true })
+    .click();
+  await page.locator('#prefs-tab-3dview').click();
+  await page.locator('#prefsScheme-starnight').check();
+
+  // Proven through the SCENE, not through the control: asserting that the
+  // radio moved would prove only that a radio moved.
+  await expect.poll(scheme, { timeout: 5_000 }).toBe('starnight');
+
+  // Reopening shows the choice, rather than resetting to the default.
+  await page.locator('#preferencesModalDone').click();
+  await page.locator('#editMenuBtn').click();
+  await page
+    .locator('#editMenuItems')
+    .getByText('Preferences…', { exact: true })
+    .click();
+  await expect(page.locator('#prefsScheme-starnight')).toBeChecked();
+});
+
+test('the mouse-centric zoom checkbox and the viewport one stay in step', async ({
+  page,
+}) => {
+  // One setting with two controls is this project's most repeated bug shape.
+  test.setTimeout(240_000);
+  await openPreferences(page);
+  await page.locator('#prefs-tab-3dview').click();
+
+  const inPrefs = page.locator('#prefsMouseCentricZoom');
+  const before = await inPrefs.isChecked();
+  await inPrefs.setChecked(!before);
+
+  expect(
+    await page.evaluate(
+      () => document.getElementById('zoomToCursorToggle')?.checked
+    )
+  ).toBe(!before);
 });
 
 test('Escape closes and returns focus to the menu that opened it', async ({
