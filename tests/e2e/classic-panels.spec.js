@@ -269,6 +269,300 @@ test.describe('Title-bar control order (P3)', () => {
   });
 });
 
+// ─── P4: per-panel collapse (D3) ─────────────────────────────────────────────
+
+/**
+ * Record everything the polite live region says from here on. Installed BEFORE
+ * the action, because a disclosure that announces twice is only visible as a
+ * count.
+ */
+async function watchAnnouncements(page, name = '__recordP4Announcement') {
+  const seen = [];
+  await page.exposeFunction(name, (text) => {
+    if (text) seen.push(text);
+  });
+  await page.evaluate((fn) => {
+    const region = document.getElementById('srAnnouncer');
+    region.textContent = '';
+    new MutationObserver(() => window[fn](region.textContent.trim())).observe(
+      region,
+      { childList: true, characterData: true, subtree: true }
+    );
+  }, name);
+  return seen;
+}
+
+test.describe('Per-panel collapse (P4)', () => {
+  test('classic-collapse-keyboard: Enter folds a panel to its title bar and says so once', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await seedPanes(page);
+    await loadProject(page);
+    await enterClassicStandard(page);
+
+    const btn = page.locator('#classicEditorSlot .classic-pane-collapse-btn');
+    await expect(btn).toBeVisible();
+    // Static name, state in aria-expanded — never the state in the name.
+    await expect(btn).toHaveAttribute('aria-label', 'Collapse Editor');
+    await expect(btn).toHaveAttribute('aria-expanded', 'true');
+
+    const openHeight = (await page.locator('#classicEditorSlot').boundingBox())
+      .height;
+    expect(
+      openHeight,
+      'the editor slot should be tall while open'
+    ).toBeGreaterThan(200);
+
+    const announcements = await watchAnnouncements(page);
+
+    // Keyboard only: focus the button and press Enter, no click.
+    await btn.focus();
+    await expect(btn).toBeFocused();
+    await page.keyboard.press('Enter');
+
+    await expect(btn).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.locator('#classicEditorSlot')).toHaveAttribute(
+      'data-classic-collapsed',
+      'true'
+    );
+    // Name unchanged by the state (APG); glyph flipped for eyes.
+    await expect(btn).toHaveAttribute('aria-label', 'Collapse Editor');
+    await expect(btn).toHaveText('▸');
+
+    // The point of the whole phase: the body is gone, the title bar is not.
+    await expect(
+      page.locator('#classicEditorSlot .classic-pane-titlebar')
+    ).toBeVisible();
+    const foldedHeight = (
+      await page.locator('#classicEditorSlot').boundingBox()
+    ).height;
+    expect(
+      foldedHeight,
+      `collapsed slot is ${foldedHeight}px; it should be about one title bar (was ${openHeight}px)`
+    ).toBeLessThan(60);
+
+    // A collapsed disclosure must hide its content from the KEYBOARD too, not
+    // merely clip it. Clipped-but-focusable was the first attempt, and it left
+    // the editor toolbar reachable inside a "collapsed" panel.
+    await expect(page.locator('#classicEditorSlot .classic-fold')).toBeHidden();
+    const reachable = await page.evaluate(() => {
+      const fold = document.querySelector('#classicEditorSlot .classic-fold');
+      return [
+        ...fold.querySelectorAll('button, [href], input, select, textarea'),
+      ].filter((el) => el.offsetParent !== null || el.getClientRects().length)
+        .length;
+    });
+    expect(reachable, 'a collapsed panel still offers focusable controls').toBe(
+      0
+    );
+
+    await page.keyboard.press('Enter');
+    await expect(btn).toHaveAttribute('aria-expanded', 'true');
+    await expect(btn).toHaveText('▾');
+
+    // Owner-approved wording, 2026-08-08. Polled, not read straight off: the
+    // announcer writes inside a requestAnimationFrame, so asserting on the very
+    // next statement measured the frame before the message landed.
+    await expect
+      .poll(() => announcements.filter((t) => t === 'Editor expanded').length)
+      .toBe(1);
+    // Exactly once each: announceImmediate does not debounce, so a double-fire
+    // would show up here as two.
+    expect(
+      announcements.filter((t) => t === 'Editor collapsed'),
+      `announcements seen: ${JSON.stringify(announcements)}`
+    ).toHaveLength(1);
+    expect(
+      announcements.filter((t) => t === 'Editor expanded'),
+      `announcements seen: ${JSON.stringify(announcements)}`
+    ).toHaveLength(1);
+  });
+
+  test('classic-collapse-persist: a collapsed panel is still collapsed after a reload', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    // seedFirstVisit, not seedPanes: addInitScript re-runs on the reload and
+    // would rewrite the very preference this case is measuring.
+    await seedFirstVisit(page);
+    await loadProject(page);
+    await enterClassicStandard(page);
+
+    await page
+      .locator('#classicErrorLogSlot .classic-pane-collapse-btn')
+      .click();
+    await expect(page.locator('#classicErrorLogSlot')).toHaveAttribute(
+      'data-classic-collapsed',
+      'true'
+    );
+
+    // `collapsed<Panel>`, not `<panel>Collapsed`: `consoleCollapsed` already
+    // exists and means the whole strip is folded (D-8).
+    const stored = await page.evaluate(() =>
+      JSON.parse(localStorage.getItem('openscad-forge-classic-panes'))
+    );
+    expect(stored.collapsedErrorLog).toBe(true);
+    expect(stored.collapsedEditor).toBe(false);
+    expect(
+      stored.consoleCollapsed,
+      'the strip fold must not have been switched on by a panel collapse'
+    ).toBe(false);
+
+    await page.reload();
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: WASM_READY_TIMEOUT,
+    });
+    // A reload with no saved project lands on the welcome screen, so the
+    // persisted attribute is what there is to assert, not the pixels.
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+    const after = await page.evaluate(() =>
+      JSON.parse(localStorage.getItem('openscad-forge-classic-panes'))
+    );
+    expect(after.collapsedErrorLog).toBe(true);
+  });
+
+  test('classic-collapse-legacy-prefs: a preference saved before collapse existed still loads', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    // Exactly the shape R3a wrote — no collapse keys at all.
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem(
+        'openscad-forge-classic-panes',
+        JSON.stringify({
+          editorVisible: true,
+          customizerVisible: true,
+          consoleCollapsed: false,
+          animateVisible: false,
+          fontListVisible: false,
+          viewportControlVisible: false,
+        })
+      );
+    });
+    await loadProject(page);
+    await enterClassicStandard(page);
+
+    await expect(page.locator('#classicEditorSlot')).toHaveAttribute(
+      'data-classic-collapsed',
+      'false'
+    );
+    await expect(
+      page.locator('#classicEditorSlot .classic-pane-collapse-btn')
+    ).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  test('classic-collapse-merged: a merged field collapses as one, and stays collapsed across tabs', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await seedPanes(page);
+    await loadProject(page);
+    await enterClassicStandard(page);
+
+    // Merge Error-Log into Console's cell, so one shared bar serves both (B7).
+    await page.locator('#classicErrorLogSlot .classic-panel-menu-btn').click();
+    await page
+      .getByRole('menuitem', { name: 'Merge with Console', exact: true })
+      .click();
+    const group = page.locator('.classic-dock-tabgroup');
+    await expect(group).toHaveCount(1);
+
+    const shared = group.locator('.classic-pane-collapse-btn');
+    await expect(shared).toHaveCount(1);
+    // Named for the group, not for whichever tab happens to be selected (Q-1).
+    await expect(shared).toHaveAttribute('aria-label', 'Collapse panels');
+
+    const announcements = await watchAnnouncements(
+      page,
+      '__recordMergedAnnouncement'
+    );
+    await shared.click();
+
+    // Both members carry the flag, so switching tabs cannot spring it open.
+    await expect(page.locator('#classicConsoleSlot')).toHaveAttribute(
+      'data-classic-collapsed',
+      'true'
+    );
+    await expect(page.locator('#classicErrorLogSlot')).toHaveAttribute(
+      'data-classic-collapsed',
+      'true'
+    );
+    await expect(group).toHaveAttribute('data-classic-collapsed', 'true');
+
+    await page.getByRole('tab', { name: 'Error-Log', exact: true }).click();
+    await expect(group).toHaveAttribute('data-classic-collapsed', 'true');
+    await expect(group.locator('.classic-pane-collapse-btn')).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
+
+    await expect
+      .poll(() => announcements.filter((t) => t === 'Panels collapsed').length)
+      .toBe(1);
+    expect(
+      announcements.filter((t) => t === 'Panels collapsed'),
+      `announcements seen: ${JSON.stringify(announcements)}`
+    ).toHaveLength(1);
+  });
+
+  test('classic-collapse-customizer: the Customizer folds to its title bar and back', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await seedPanes(page);
+    await loadProject(page);
+    await enterClassicStandard(page);
+
+    const btn = page.locator('#paramPanel .classic-pane-collapse-btn');
+    await expect(btn).toHaveAttribute('aria-label', 'Collapse Customizer');
+    await expect(page.locator('#classicPresetRow')).toBeVisible();
+
+    await btn.click();
+    await expect(page.locator('#paramPanel')).toHaveAttribute(
+      'data-classic-collapsed',
+      'true'
+    );
+    // The Customizer has no .classic-fold — its body is siblings of the bar,
+    // so this is the case that would silently do nothing if the CSS were wrong.
+    await expect(page.locator('#classicPresetRow')).toBeHidden();
+    await expect(page.locator('#paramPanelBody')).toBeHidden();
+    await expect(
+      page.locator('#paramPanel .classic-pane-titlebar')
+    ).toBeVisible();
+
+    await btn.click();
+    await expect(page.locator('#classicPresetRow')).toBeVisible();
+    await expect(page.locator('#paramPanelBody')).toBeVisible();
+  });
+
+  test('classic-collapse-exit: the buttons do not follow the user into Forge', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await seedPanes(page);
+    await loadProject(page);
+    await enterClassicStandard(page);
+    await expect(
+      page.locator('.classic-pane-collapse-btn').first()
+    ).toBeVisible();
+
+    // The Customizer's title bar is static markup that outlives Classic, so a
+    // button left on it would appear in Forge — the trap the ⋮ already pays.
+    await page.locator('#classicModeToggle').click();
+    await expect(page.locator('body')).not.toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+    await expect(page.locator('.classic-pane-collapse-btn')).toHaveCount(0);
+  });
+});
+
 // ─── F1: reaching the Error Log ──────────────────────────────────────────────
 
 test.describe('Error Log reach (F1)', () => {

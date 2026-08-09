@@ -53,6 +53,39 @@ import {
 
 const PANES_STORAGE_KEY = 'openscad-forge-classic-panes';
 
+const TITLEBAR_CLASS = 'classic-pane-titlebar';
+const TITLE_CLASS = 'classic-pane-title';
+const COLLAPSE_BTN_CLASS = 'classic-pane-collapse-btn';
+
+/**
+ * Panels whose title bar carries a per-panel collapse disclosure (D3 — an
+ * owner-requested Forge extra; the desktop has no such control).
+ *
+ * Console is deliberately absent: its title bar already has a ▾, and per Q-1
+ * that ▾ keeps its whole-strip meaning (D-8) rather than gaining a second,
+ * near-identical button beside it. Console still has a collapsed STATE below,
+ * because a merged field collapses as one field and Console can be in one.
+ * @type {ReadonlyArray<string>}
+ */
+const COLLAPSE_BUTTON_PANELS = Object.freeze(
+  DOCK_PANELS.map((p) => p.id).filter((id) => id !== 'console')
+);
+
+/** Every dock panel has a collapsed state, button or no button. */
+const COLLAPSIBLE_PANELS = Object.freeze(DOCK_PANELS.map((p) => p.id));
+
+/**
+ * The `_panes` key holding a panel's collapsed state. Prefixed rather than
+ * suffixed on purpose: `consoleCollapsed` is already taken, and it means the
+ * whole bottom strip is folded (D-8 kept the historical name). Colliding with
+ * it would wire Console's per-panel collapse to the strip fold.
+ * @param {string} panelId
+ * @returns {string}
+ */
+function collapsedKey(panelId) {
+  return `collapsed${panelId.charAt(0).toUpperCase()}${panelId.slice(1)}`;
+}
+
 /**
  * Classic startup contract: the customizer opens with all parameter
  * groups collapsed (desktop OpenSCAD behavior). Called on entering
@@ -249,7 +282,7 @@ export class ClassicLayoutController {
       isFieldAvailable: (field) => this._isFieldAvailable(field),
       // Switching tabs moves a different panel's titlebar into the shared bar,
       // and its menu button has to be re-labelled for the panels it now serves.
-      onGroupChange: () => getClassicPanelMenus()?.refresh(),
+      onGroupChange: () => this._refreshTitlebarControls(),
       isDesktop: () => this._isDesktopWidth(),
     });
 
@@ -286,7 +319,7 @@ export class ClassicLayoutController {
       this._applyPaneAttributes();
       // Simplified leaves only one field standing, so the legal move targets
       // change with the density and the menus have to be rebuilt.
-      getClassicPanelMenus()?.refresh();
+      this._refreshTitlebarControls();
       document.dispatchEvent(
         new CustomEvent(
           this._isEditorAvailable()
@@ -405,6 +438,11 @@ export class ClassicLayoutController {
       getClassicResizerController()?.parkBottomSize();
     }
 
+    // Before the move menus: refresh() places the ⋮ after whatever
+    // disclosures a bar already has, so the collapse buttons must exist first
+    // for the ⋮ to land to the right of them on a first entry.
+    this._ensureCollapseButtons();
+
     // The title-bar menus are the only way to relocate a panel this round
     // (D-3), so they go on last, once every title bar exists.
     initClassicPanelMenus({
@@ -443,6 +481,7 @@ export class ClassicLayoutController {
     // go with it — the Customizer's title bar is static markup that survives
     // the exit, so a button left on it would follow the user into Forge.
     destroyClassicPanelMenus();
+    this._destroyCollapseButtons();
     this._dock.dissolveTabGroups();
 
     for (const record of [...this._moved].reverse()) {
@@ -619,6 +658,138 @@ export class ClassicLayoutController {
   }
 
   /**
+   * Re-hang the title bars' own controls after anything that rebuilds them.
+   * Order matters: the collapse disclosures go on first, because the ⋮ places
+   * itself after whatever disclosures it finds.
+   * @private
+   */
+  _refreshTitlebarControls() {
+    this._ensureCollapseButtons();
+    // A button that has just been created carries no state yet, and a bar that
+    // has just been rebuilt may hold one whose panel has changed underneath it.
+    this._applyCollapseState();
+    getClassicPanelMenus()?.refresh();
+  }
+
+  /**
+   * A panel's own title bar, wherever it currently lives. Merging a field moves
+   * the ACTIVE panel's bar into the group's shared bar (_adoptTitlebar), so it
+   * is no longer inside the panel; the other members keep theirs. The panel's
+   * FIRST bar is its own — anything deeper belongs to something nested in it.
+   * @param {Element} el - the panel's element
+   * @returns {Element|null}
+   * @private
+   */
+  _titlebarOf(el) {
+    return (
+      el.querySelector(`.${TITLEBAR_CLASS}`) ||
+      el
+        .closest('.classic-dock-tabgroup')
+        ?.querySelector(`.classic-dock-tabbar > .${TITLEBAR_CLASS}`) ||
+      null
+    );
+  }
+
+  /**
+   * Put a collapse disclosure on every collapsible panel's title bar, and keep
+   * its name current. Runs on the same lifecycle as the move menus: a panel's
+   * title bar travels into a shared bar when its field merges (B7), and the
+   * button has to be named for the panels it then serves.
+   * @private
+   */
+  _ensureCollapseButtons() {
+    for (const panelId of COLLAPSE_BUTTON_PANELS) {
+      const def = DOCK_PANELS.find((p) => p.id === panelId);
+      const el = def && document.getElementById(def.elementId);
+      const bar = el && this._titlebarOf(el);
+      if (!bar) continue;
+
+      // Known corner, owner-informed 2026-08-08: when Console is the SELECTED
+      // tab of a merged field, the shared bar is Console's own and carries no
+      // collapse button, because the owner chose not to give Console a second
+      // ▾ beside its strip fold. Selecting any other tab in the group exposes
+      // one, and it collapses the whole field.
+      let btn = bar.querySelector(`.${COLLAPSE_BTN_CLASS}`);
+      if (!btn) {
+        btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `btn btn-sm btn-icon classic-pane-btn ${COLLAPSE_BTN_CLASS}`;
+        btn.dataset.classicPanel = panelId;
+        btn.addEventListener('click', () => this.togglePanelCollapsed(panelId));
+        // The state lives in aria-expanded, not in the name (APG disclosure) —
+        // the same shape as the strip's fold button. The glyph flips with it,
+        // so a sighted user is not left reading the state off nothing.
+        const glyph = document.createElement('span');
+        glyph.className = 'classic-pane-collapse-glyph';
+        glyph.setAttribute('aria-hidden', 'true');
+        btn.appendChild(glyph);
+        // Ahead of the ⋮ and the ✕ (Q-1). Inserting after the title puts it
+        // there, and ClassicPanelMenus.refresh() re-places the ⋮ after any
+        // disclosure it finds, so the two agree without sharing a selector.
+        const title = bar.querySelector(`.${TITLE_CLASS}`);
+        bar.insertBefore(btn, title ? title.nextSibling : bar.firstChild);
+      }
+      const label = this._collapseButtonLabel(panelId);
+      btn.setAttribute('aria-label', label);
+      // Owner-approved 2026-08-08: this ▾ and the strip's ▾ stay the same
+      // glyph, distinguished by their names — so those names have to be
+      // reachable by hover too, not only by screen reader. Identical to the
+      // aria-label, so the two can never disagree.
+      btn.setAttribute('title', label);
+    }
+  }
+
+  /**
+   * NEW STRING, owner review pending (D-35). A merged bar collapses its whole
+   * field as one (Q-1), so it is named for the group rather than for whichever
+   * panel's tab happens to be selected — the same rule the ⋮ follows.
+   * @param {string} panelId
+   * @returns {string}
+   * @private
+   */
+  _collapseButtonLabel(panelId) {
+    const group = this._dock.getGroupOf(panelId);
+    if (group.length > 1) return 'Collapse panels';
+    return `Collapse ${panelLabel(panelId)}`;
+  }
+
+  /** Take the collapse buttons off; the Customizer's title bar outlives Classic. */
+  _destroyCollapseButtons() {
+    for (const btn of document.querySelectorAll(`.${COLLAPSE_BTN_CLASS}`)) {
+      btn.remove();
+    }
+  }
+
+  /**
+   * Collapse/expand a panel's body, leaving its title bar in place (D3). A
+   * merged field collapses as one field per Q-1, so every panel sharing the
+   * bar moves together — otherwise switching tabs inside a collapsed field
+   * would spring it open again.
+   * @param {string} panelId
+   * @returns {boolean} the new collapsed state
+   */
+  togglePanelCollapsed(panelId) {
+    const group = this._dock.getGroupOf(panelId);
+    const members = group.length > 1 ? group : [panelId];
+    const collapsed = !this._panes[collapsedKey(panelId)];
+    for (const member of members) {
+      this._panes[collapsedKey(member)] = collapsed;
+    }
+
+    this._applyPaneAttributes();
+    this._savePaneState();
+
+    const subject = members.length > 1 ? 'Panels' : `${panelLabel(panelId)}`;
+    // NEW STRINGS, owner review pending (D-35). announceImmediate, not
+    // announce(): a debounced message can be cancelled by the next one, and a
+    // disclosure that sometimes says nothing is worse than one that repeats.
+    announceImmediate(
+      collapsed ? `${subject} collapsed` : `${subject} expanded`
+    );
+    return collapsed;
+  }
+
+  /**
    * Fold/unfold the bottom strip (titlebar button). Per D-8 this folds the
    * whole strip, not the Console pane alone — the storage key and data
    * attribute keep their historical `console` names so existing preferences
@@ -728,7 +899,7 @@ export class ClassicLayoutController {
 
     // Rebuilding the tab groups discards and recreates the shared bars, so the
     // menus have to be re-hung before focus is sent to one of their buttons.
-    getClassicPanelMenus()?.refresh();
+    this._refreshTitlebarControls();
 
     // Focus contract (B8): the moved panel's title bar, or its tab when the
     // target field merged (B7).
@@ -780,7 +951,7 @@ export class ClassicLayoutController {
     this._dock.applyToDom();
     this._applyPaneAttributes();
     document.dispatchEvent(new CustomEvent('classic-layout-resize'));
-    getClassicPanelMenus()?.refresh();
+    this._refreshTitlebarControls();
     // Wording owner-approved 2026-08-07.
     announceImmediate('Panel layout reset');
     return true;
@@ -817,7 +988,7 @@ export class ClassicLayoutController {
 
     this._dock.applyToDom();
     this._applyPaneAttributes();
-    getClassicPanelMenus()?.refresh();
+    this._refreshTitlebarControls();
     document.dispatchEvent(new CustomEvent('classic-layout-resize'));
   }
 
@@ -874,6 +1045,44 @@ export class ClassicLayoutController {
       foldBtn.setAttribute(
         'aria-expanded',
         String(!this._panes.consoleCollapsed)
+      );
+    }
+
+    this._applyCollapseState();
+  }
+
+  /**
+   * Stamp each panel's collapsed flag and bring its disclosure button into
+   * agreement. The flag goes on the panel's own element rather than on <body>,
+   * because one CSS rule then covers both a created slot and the Customizer,
+   * which is the Forge parameter panel itself.
+   * @private
+   */
+  _applyCollapseState() {
+    for (const panelId of COLLAPSIBLE_PANELS) {
+      const def = DOCK_PANELS.find((p) => p.id === panelId);
+      const el = def && document.getElementById(def.elementId);
+      if (!el) continue;
+      const collapsed = Boolean(this._panes[collapsedKey(panelId)]);
+      el.dataset.classicCollapsed = String(collapsed);
+
+      const btn = this._titlebarOf(el)?.querySelector(`.${COLLAPSE_BTN_CLASS}`);
+      if (!btn) continue;
+      btn.setAttribute('aria-expanded', String(!collapsed));
+      const glyph = btn.querySelector('.classic-pane-collapse-glyph');
+      if (glyph) glyph.textContent = collapsed ? '▸' : '▾';
+    }
+
+    // A merged field collapses as one (Q-1), and it is the group's wrapper that
+    // holds the flex share in the field — not the panels inside it — so the
+    // wrapper needs the flag as well or the group stays full height.
+    for (const wrapper of document.querySelectorAll('.classic-dock-tabgroup')) {
+      const members = [...wrapper.children].filter((el) =>
+        el.hasAttribute('data-classic-collapsed')
+      );
+      wrapper.dataset.classicCollapsed = String(
+        members.length > 0 &&
+          members.every((el) => el.dataset.classicCollapsed === 'true')
       );
     }
   }
@@ -999,6 +1208,12 @@ export class ClassicLayoutController {
       animateVisible: false,
       fontListVisible: false,
       viewportControlVisible: false,
+      // Per-panel collapse (D3), every panel open to begin with. Written into
+      // the same key as the rest; a preference saved before these existed
+      // hydrates without them, because each key is validated on its own.
+      ...Object.fromEntries(
+        COLLAPSIBLE_PANELS.map((id) => [collapsedKey(id), false])
+      ),
     };
     try {
       const stored = localStorage.getItem(PANES_STORAGE_KEY);
@@ -1041,9 +1256,9 @@ export class ClassicLayoutController {
 
       if (def.titlebar) {
         const bar = document.createElement('div');
-        bar.className = 'classic-pane-titlebar';
+        bar.className = TITLEBAR_CLASS;
         const title = document.createElement('span');
-        title.className = 'classic-pane-title';
+        title.className = TITLE_CLASS;
         title.textContent = def.titlebar.text;
         bar.appendChild(title);
 
@@ -1056,6 +1271,9 @@ export class ClassicLayoutController {
           // state is not repeated in the name. D-8: this folds the whole
           // strip, so the name does not mention Console.
           fold.setAttribute('aria-label', 'Fold bottom panels');
+          // The other half of the owner's 2026-08-08 decision to leave both
+          // strip glyphs as ▾: this one's scope is only knowable from its name.
+          fold.setAttribute('title', 'Fold bottom panels');
           fold.setAttribute('aria-expanded', 'true');
           fold.textContent = '▾';
           fold.addEventListener('click', () => {

@@ -1160,6 +1160,70 @@ body[data-classic-console-collapsed='true']
   grid-template-rows: 0fr;
 }
 
+/* ── Per-panel collapse (D3, a Forge extra — the desktop has no such control) */
+
+/* display:none, not the strip fold's animated grid-template-rows: 0fr. Two
+   reasons, both measured.
+
+   Accessibility first: a 0fr row with overflow:hidden only CLIPS its content.
+   The editor, its toolbar and every button in it keep a place in the
+   accessibility tree and stay reachable by Tab, so a "collapsed" panel would
+   still swallow keystrokes — the trap a disclosure exists to close. Taking the
+   body out of the tree is what <details> does, and what this must do.
+
+   Then the flash: the collapsed pane also gives up its flex share below, so an
+   animated row grew the pane to its full content height first and shrank it
+   from there — 583px → 673px → 39px (measured). Instant collapse has no such
+   frame, and it matches the Customizer's, which cannot animate at all.
+
+   Direct child, so a collapsed panel does not fold a panel nested inside it. */
+body[data-ui-mode='classic'] [data-classic-collapsed='true'] > .classic-fold {
+  display: none;
+}
+
+/* Hiding the body is not enough on its own: a dock field's children are
+   flex: 1 1 0, so a collapsed pane kept its whole share of the column and left
+   a title bar sitting above 900px of nothing (measured). Giving the share up is
+   what lets the panes beside it grow into the space. */
+body[data-ui-mode='classic']
+  .classic-dock-field
+  > [data-classic-collapsed='true'] {
+  flex: 0 0 auto;
+}
+
+/* The strip lays its panes out side by side, so there the share to give up is
+   vertical: the default stretch would hold a collapsed pane at full strip
+   height with an empty body. */
+body[data-ui-mode='classic']
+  .classic-bottom-strip
+  > [data-classic-collapsed='true'] {
+  align-self: flex-start;
+}
+
+/* The Customizer is the Forge parameter panel itself, not a created slot, so it
+   has no .classic-fold at all — its body is several siblings of the title bar.
+   Wrapping them at runtime would mean moving the parameter groups on every
+   Classic entry, so they are hidden where they stand. The title bar itself
+   stays, which is the point of a collapse. Its own bar loses everything below
+   the title (controls, presets, Forge additions); when the Customizer is a
+   merged tab its title bar has moved into the shared bar, and then the whole of
+   #classicCustomizerBar folds away. */
+body[data-ui-mode='classic']
+  #paramPanel[data-classic-collapsed='true']
+  > *:not(#classicCustomizerBar),
+body[data-ui-mode='classic']
+  #paramPanel[data-classic-collapsed='true']
+  #classicCustomizerBar
+  > *:not(.classic-pane-titlebar) {
+  display: none;
+}
+
+/* The ▾/▸ glyph is real text set by the controller, not CSS content: a title
+   bar that has been adopted into a shared tab bar is no longer a descendant of
+   its own panel, and a stylesheet that fails to load must not leave a blank
+   button (R-I). aria-expanded carries the state for a screen reader; the glyph
+   is the same information for eyes (APG disclosure). */
+
 @media (prefers-reduced-motion: reduce) {
   body[data-ui-mode='classic'] .classic-fold {
     transition: none;
