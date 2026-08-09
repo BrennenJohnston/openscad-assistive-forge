@@ -1993,20 +1993,29 @@ test.describe('Classic 3D view toolbar (E3-E7)', () => {
       )
       .toBe(true);
 
+    // Read the state rather than assume it: P9 makes Classic open with axes
+    // and scale markers ON (the desktop's defaults), so a fixed 'false' start
+    // was pinning a default this suite does not own. What matters is the flip.
     const markersBefore = await markers.getAttribute('aria-pressed');
+    const axesBefore = await axes.getAttribute('aria-pressed');
+    const flipped = (before) => (before === 'true' ? 'false' : 'true');
+
     await axes.click();
-    await expect(axes).toHaveAttribute('aria-pressed', 'true');
+    await expect(axes).toHaveAttribute('aria-pressed', flipped(axesBefore));
     // Toggling Axes must NOT drag the scale markers along with it
     await expect(markers).toHaveAttribute('aria-pressed', markersBefore);
 
     await markers.click();
-    await expect(markers).toHaveAttribute('aria-pressed', 'true');
+    await expect(markers).toHaveAttribute(
+      'aria-pressed',
+      flipped(markersBefore)
+    );
 
     // Cross-surface sync: toggling the same flag from the View menu keeps the
     // button truthful, which it did not before the display-option-change event
     await page.locator('#viewMenuBtn').click();
     await page.getByRole('menuitemcheckbox', { name: 'Show Axes' }).click();
-    await expect(axes).toHaveAttribute('aria-pressed', 'false');
+    await expect(axes).toHaveAttribute('aria-pressed', axesBefore);
   });
 
   test('classic-camera-bar-keyboard: one tab stop, disabled measure buttons stay reachable', async ({

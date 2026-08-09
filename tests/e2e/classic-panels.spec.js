@@ -2030,3 +2030,152 @@ test.describe('Status-bar viewport telemetry (P8)', () => {
     ).toEqual([]);
   });
 });
+
+// ─── P9: Classic 3D-view defaults ────────────────────────────────────────────
+
+const AXES_PREF = 'openscad-forge-display-axes';
+const AXIS_MARKS_PREF = 'openscad-forge-display-axisMarks';
+const GRID_PREF = 'openscad-forge-grid';
+const CLASSIC_VIEW_MARKER = 'openscad-forge-classic-view-defaults';
+
+function readViewPrefs(page) {
+  return page.evaluate(
+    ([axes, marks, grid, marker]) => ({
+      axes: localStorage.getItem(axes),
+      axisMarks: localStorage.getItem(marks),
+      grid: localStorage.getItem(grid),
+      marker: localStorage.getItem(marker),
+    }),
+    [AXES_PREF, AXIS_MARKS_PREF, GRID_PREF, CLASSIC_VIEW_MARKER]
+  );
+}
+
+test.describe('Classic 3D-view defaults (P9)', () => {
+  test('classic-view-defaults: a fresh profile gets axes and ticks on, grid off', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    // seedFirstVisit only: the DEFAULTS are the point, so nothing may be seeded.
+    await seedFirstVisit(page);
+    await loadProject(page, UNIVERSAL_CUFF);
+    await enterClassicStandard(page);
+    await page.waitForTimeout(1500);
+
+    // The desktop shows axes with tick marks and no ground grid (OpenSCAD_1).
+    const prefs = await readViewPrefs(page);
+    console.log('[p9] prefs after Classic entry:', JSON.stringify(prefs));
+    expect(prefs).toEqual({
+      axes: 'true',
+      axisMarks: 'true',
+      grid: 'false',
+      marker: 'true',
+    });
+
+    // Every surface showing these flags has to agree — the toolbar learns
+    // through display-option-change, not by watching its own clicks.
+    await expect(page.locator('#classicAxesToggle')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    await expect(page.locator('#classicScaleMarkersToggle')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+  });
+
+  test('classic-view-defaults-forge: Forge keeps its own defaults', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await seedFirstVisit(page);
+    await loadProject(page, UNIVERSAL_CUFF);
+    await switchToStandardMode(page);
+    await page.waitForTimeout(1500);
+
+    // Never entered Classic, so nothing was stamped: Forge's grid stays on and
+    // its axes stay off. "Classic-scoped" has to mean this.
+    const prefs = await readViewPrefs(page);
+    expect(prefs.marker).toBeNull();
+    expect(prefs.axes, 'Forge must not have had axes switched on').not.toBe(
+      'true'
+    );
+    expect(
+      prefs.grid,
+      'Forge must not have had its grid switched off'
+    ).not.toBe('false');
+  });
+
+  test('classic-view-defaults-once: a user choice survives re-entering Classic', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await seedFirstVisit(page);
+    await loadProject(page, UNIVERSAL_CUFF);
+    await enterClassicStandard(page);
+    await page.waitForTimeout(1200);
+    await expect(page.locator('#classicAxesToggle')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+
+    // The user turns axes back off, on purpose.
+    await page.locator('#classicAxesToggle').click();
+    await expect(page.locator('#classicAxesToggle')).toHaveAttribute(
+      'aria-pressed',
+      'false'
+    );
+
+    // Leave and come back. The stamp runs once ever; re-deciding here would
+    // quietly undo what they just did.
+    await page.locator('#classicModeToggle').click();
+    await expect(page.locator('body')).not.toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+    await page.locator('#classicModeToggle').click();
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+    await page.waitForTimeout(800);
+
+    expect((await readViewPrefs(page)).axes).toBe('false');
+    await expect(page.locator('#classicAxesToggle')).toHaveAttribute(
+      'aria-pressed',
+      'false'
+    );
+  });
+
+  test('classic-view-defaults-quiet: the stamp does not announce itself', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await seedFirstVisit(page);
+    await loadProject(page, UNIVERSAL_CUFF);
+    await switchToStandardMode(page);
+
+    const announcements = await watchAnnouncements(
+      page,
+      '__recordViewDefaultAnnouncement'
+    );
+    await page.locator('#classicModeToggle').click();
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+    await page.waitForTimeout(1500);
+
+    // Three flags change on entry. Announcing each would talk over the mode
+    // change the user actually asked for, so the stamp is silent — while every
+    // user-driven toggle still speaks (the case above proves the toggle works).
+    const optionChatter = announcements.filter((text) =>
+      /Axes (shown|hidden)|Axis distance markings (shown|hidden)|Grid/i.test(
+        text
+      )
+    );
+    expect(
+      optionChatter,
+      `entering Classic announced: ${JSON.stringify(announcements)}`
+    ).toEqual([]);
+  });
+});

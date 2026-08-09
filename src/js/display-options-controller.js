@@ -11,9 +11,15 @@
  * @license GPL-3.0-or-later
  */
 
-import { getAppPrefKey, safeGetItem, safeSetItem } from './storage-keys.js';
+import {
+  getAppPrefKey,
+  safeGetItem,
+  safeSetItem,
+  STORAGE_KEY_GRID,
+} from './storage-keys.js';
 import { announceImmediate } from './announcer.js';
 import { buildAxisTickOverlay } from './axis-tick-overlay.js';
+import { getUIModeController } from './ui-mode-controller.js';
 
 const PREF_PREFIX = 'display-';
 const DEFAULTS = {
@@ -23,6 +29,22 @@ const DEFAULTS = {
   wireframe: false,
   axisMarks: false,
 };
+
+/**
+ * What the desktop's 3D view shows out of the box (OpenSCAD_1): black axes with
+ * tick marks, and NO ground grid. Ours had the opposite of both — the Forge bed
+ * grid on, axes off — so Classic's first impression was of a different program.
+ *
+ * Applied ONCE, on first entry into Classic, and then persisted like any other
+ * toggle. A one-time stamp rather than a mode-dependent default because these
+ * three are the user's to set: re-deciding them on every mode switch would
+ * quietly undo a choice they had made on purpose.
+ *
+ * The grid belongs to the PreviewManager, not to this controller, and lives
+ * under its own key — hence the import rather than a second copy of the name.
+ */
+const CLASSIC_VIEW_DEFAULTS = Object.freeze({ axes: true, axisMarks: true });
+const CLASSIC_DEFAULTS_MARKER = getAppPrefKey('classic-view-defaults');
 
 /**
  * Edge budget is a number, not a boolean, so it lives outside `DEFAULTS`
@@ -92,6 +114,14 @@ export class DisplayOptionsController {
     this._loadPreferences();
     this._wireControls();
     this._syncControls();
+
+    // P9. Subscribed rather than called once, because Classic can be entered
+    // at any time — including by a user who started in Forge.
+    const ui = getUIModeController();
+    ui.subscribe((mode) => {
+      if (mode === 'classic') this.applyClassicViewDefaults();
+    });
+    if (ui.getMode() === 'classic') this.applyClassicViewDefaults();
     // The PreviewManager does not exist until the first model loads, so this
     // is usually a no-op here; file-handler.js connects us once it is built.
     if (!this.connectPreviewManager()) {
@@ -164,7 +194,7 @@ export class DisplayOptionsController {
    * @param {DisplayOption} option
    * @param {boolean} enabled
    */
-  set(option, enabled) {
+  set(option, enabled, { announce = true } = {}) {
     if (!(option in this.state)) return;
     this.state[option] = enabled;
     this._savePref(option, enabled);
@@ -182,9 +212,43 @@ export class DisplayOptionsController {
       })
     );
 
+    // Silent only for the Classic first-entry stamp: two or three of these in
+    // one go would talk over the mode change the user actually asked for. Every
+    // user-driven call still speaks.
+    if (!announce) return;
     const label =
       HUMAN_LABELS[option] || option.charAt(0).toUpperCase() + option.slice(1);
     announceImmediate(`${label} ${enabled ? 'shown' : 'hidden'}`);
+  }
+
+  /**
+   * Bring the 3D view to the desktop's defaults the first time Classic opens
+   * (P9): axes and their tick marks on, the ground grid off. Runs once ever —
+   * after that these are ordinary persisted toggles and the user's choices win.
+   *
+   * @returns {boolean} whether the stamp was applied
+   */
+  applyClassicViewDefaults() {
+    if (safeGetItem(CLASSIC_DEFAULTS_MARKER) === 'true') return false;
+    safeSetItem(CLASSIC_DEFAULTS_MARKER, 'true');
+
+    for (const [option, enabled] of Object.entries(CLASSIC_VIEW_DEFAULTS)) {
+      // Through set(), not straight into state: it persists the value, applies
+      // it to the scene, syncs the checkbox and fires display-option-change, so
+      // the View menu's ticks and the Classic toolbar's aria-pressed agree with
+      // what is on screen. Only the announcement is suppressed.
+      this.set(option, enabled, { announce: false });
+    }
+
+    // The grid is the PreviewManager's, and it may not exist yet — it is built
+    // lazily on the first file load. Writing the preference covers that case;
+    // toggleGrid covers the case where a scene is already on screen, and writes
+    // the same preference itself.
+    const pm = this.getPreviewManager();
+    if (typeof pm?.toggleGrid === 'function') pm.toggleGrid(false);
+    else safeSetItem(STORAGE_KEY_GRID, 'false');
+
+    return true;
   }
 
   /** @param {DisplayOption} option  @returns {boolean} */
