@@ -103,7 +103,7 @@ The CSP is in **enforcing mode**. See `public/_headers` for the full policy. Key
   Referrer-Policy: strict-origin-when-cross-origin
 ```
 
-`X-Frame-Options: SAMEORIGIN` allows same-origin iframe embedding (vs `DENY` which blocks all). CodeMirror 6 uses constructable stylesheets, so `style-src` does not need `'unsafe-inline'`.
+`X-Frame-Options: SAMEORIGIN` allows same-origin iframe embedding (vs `DENY` which blocks all). `style-src` does not need `'unsafe-inline'`: CodeMirror injects its CSS in a `<style>` element that this policy blocks, and the app re-homes those rules into a constructable stylesheet, which CSP does not govern. Expect exactly one `style-src-elem` console violation, from that blocked element.
 
 ### SPA Routing
 

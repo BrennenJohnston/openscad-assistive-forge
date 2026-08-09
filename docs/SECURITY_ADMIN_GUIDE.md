@@ -65,7 +65,7 @@ Content-Security-Policy:
 | `script-src 'unsafe-eval'` | Required | AJV compiles JSON schemas at runtime via `new Function()` |
 | `script-src 'wasm-unsafe-eval'` | Required | OpenSCAD WASM needs to compile code at runtime |
 | `worker-src blob:` | Required | Web Worker blob URLs for WASM processing |
-| `style-src 'self'` | Tightened | CodeMirror 6 uses constructable stylesheets — no `unsafe-inline` needed |
+| `style-src 'self'` | Tightened | No `unsafe-inline` needed. CodeMirror's injected `<style>` is blocked and its rules are re-homed into a constructable stylesheet; expect one `style-src-elem` violation from that element |
 | `connect-src` (external origins) | Required | Manifest sharing (`?manifest=`) fetches project files from author-hosted repos on GitHub, GitLab, and Cloudflare Pages |
 | `frame-ancestors 'none'` | Security | Prevents clickjacking via framing |
 
