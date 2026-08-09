@@ -702,6 +702,57 @@ test.describe('View menu parity (G4)', () => {
     expect(items.find((i) => i.label === 'Reset View').disabled).toBe(false)
   })
 
+  test('a preview is enough for the commands that act on the viewport (P10)', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000)
+    await loadFixture(page)
+
+    // Wait for the auto-preview to put a mesh on screen. No Generate: that is
+    // the whole point — state.stl stays null here. Match "Preview ready"
+    // exactly: a looser /ready/ also matches the idle "Ready - Upload a file
+    // to begin" and the case then runs before any preview exists.
+    await expect(page.locator('#previewStatusText')).toContainText(
+      /Preview ready/i,
+      { timeout: 180_000 }
+    )
+    test.skip(
+      (await page.locator('.preview-panel canvas').count()) === 0,
+      'this browser built no 3D canvas'
+    )
+    expect(
+      await page.evaluate(() => !!window.stateManager.getState().stl),
+      'this case is about the preview-only state'
+    ).toBe(false)
+
+    // MEASURED before the fix: all three were disabled off Boolean(state.stl),
+    // which only a full Generate sets. Center and View All fit the camera to
+    // previewManager.mesh, and Export as Image photographs the canvas -- none
+    // of them needs an STL. Export as Image compounded it by saying "Load and
+    // preview a file first" to a user who had done exactly that.
+    await page.locator('#viewMenuBtn').click()
+    const viewItems = await readMenu(page, 'view')
+    for (const label of ['Center', 'View All']) {
+      const item = viewItems.find((i) => i.label === label)
+      expect(item, `${label} must be in the View menu`).toBeTruthy()
+      expect(item.disabled, `${label} is dead after a preview`).toBe(false)
+    }
+    await page.keyboard.press('Escape')
+
+    await page.locator('#fileMenuBtn').click()
+    await menuItem(page, 'file', 'Export').click()
+    const exportItems = await readSubmenu(page, 'file', 'Export')
+    const image = exportItems.find((i) => i.label === 'Export as Image…')
+    expect(image, 'Export as Image must be in the Export submenu').toBeTruthy()
+    expect(image.disabled, 'Export as Image is dead after a preview').toBe(false)
+
+    // Not merely enabled: it has to produce the file it promises.
+    const downloadPromise = page.waitForEvent('download', { timeout: 30_000 })
+    await menuItem(page, 'file', 'Export as Image…').click()
+    const download = await downloadPromise
+    expect(download.suggestedFilename()).toMatch(/\.png$/i)
+  })
+
   test('Center, View All and Reset View each move the camera differently', async ({
     page,
   }) => {

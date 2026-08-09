@@ -3303,6 +3303,9 @@ async function initApp() {
     const state = stateManager.getState();
     const hasFile = Boolean(state.uploadedFile);
     const hasRender = Boolean(state.stl);
+    // state.stl is only set by a full Generate. Commands that act on WHAT IS
+    // ON SCREEN are available as soon as a preview has put a mesh there (P10).
+    const hasViewportModel = hasRender || Boolean(previewManager?.mesh);
 
     // Recent Files submenu: entries this browser can still re-open, then
     // Clear Recent. Unreachable entries stay listed but disabled (D-28).
@@ -3377,10 +3380,13 @@ async function initApp() {
         type: 'action',
         label: 'Export as Image\u2026',
         shortcutAction: 'exportImage',
-        enabled: hasRender,
-        tooltip: hasRender
+        // It photographs the canvas, so it needs something on screen and
+        // nothing else. It used to demand a full render while telling the
+        // user to "Load and preview a file first" -- which they had (P10).
+        enabled: hasViewportModel,
+        tooltip: hasViewportModel
           ? 'Save the current viewport as a PNG image'
-          : 'Load and preview a file first',
+          : 'Preview or render a model first',
         handler: () => fileActionsController.onExportImage(),
       },
     ];
@@ -3939,7 +3945,10 @@ async function initApp() {
   // ── Toolbar: View menu ───────────────────────────────────────────────────
   getToolbarMenuController().registerMenuBuilder('view', () => {
     const state = stateManager.getState();
-    const hasRender = Boolean(state.stl);
+    // Center and View All fit the camera to previewManager.mesh, which a
+    // preview already provides; state.stl needs a full Generate (P10).
+    const hasViewportModel =
+      Boolean(state.stl) || Boolean(previewManager?.mesh);
     const projMode = previewManager?.getProjectionMode?.() ?? 'perspective';
     const uiCtrl = getUIModeController();
     const uiModeNow = uiCtrl.getMode();
@@ -4050,8 +4059,10 @@ async function initApp() {
         type: 'action',
         label: 'Center',
         shortcutAction: 'viewCenter',
-        enabled: hasRender,
-        tooltip: hasRender ? undefined : 'Render a model first',
+        enabled: hasViewportModel,
+        tooltip: hasViewportModel
+          ? undefined
+          : 'Preview or render a model first',
         handler: () => {
           if (previewManager) {
             previewManager.centerCamera();
@@ -4063,8 +4074,10 @@ async function initApp() {
         type: 'action',
         label: 'View All',
         shortcutAction: 'viewAll',
-        enabled: hasRender,
-        tooltip: hasRender ? undefined : 'Render a model first',
+        enabled: hasViewportModel,
+        tooltip: hasViewportModel
+          ? undefined
+          : 'Preview or render a model first',
         handler: () => {
           if (previewManager) {
             previewManager.viewAllCamera();
