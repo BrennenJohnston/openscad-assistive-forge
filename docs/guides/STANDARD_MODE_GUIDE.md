@@ -223,7 +223,7 @@ To move a project to another device, export it as a ZIP from the Saved Projects 
 |--------|-----------|----------|
 | **STL** | `.stl` | 3D printing (most common) |
 | **OBJ** | `.obj` | Software with color support |
-| **3MF** | `.3mf` | Modern 3D printers |
+| **3MF** | `.3mf` | Not available in this browser build — use STL or OBJ, which slicers accept |
 | **OFF** | `.off` | Academic/research |
 | **AMF** | `.amf` | Multi-material printing |
 | **SVG** | `.svg` | Laser cutting (2D only) |

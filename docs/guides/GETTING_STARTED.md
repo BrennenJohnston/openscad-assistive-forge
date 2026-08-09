@@ -10,7 +10,7 @@ A few things that matter:
 
 - Works with keyboard, mouse, touch, and screen readers
 - Keeps all your data on your own computer
-- Exports STL, OBJ, 3MF, and more
+- Exports STL, OBJ, and more
 
 ## Opening Your First Design
 
@@ -81,7 +81,7 @@ When you're happy with your customization:
 2. Choose your format:
    - **STL**: Standard format for 3D printing
    - **OBJ**: Includes vertex colors, works with most software
-   - **3MF**: Modern format with better metadata
+   - **AMF**: XML-based, carries per-object colour
 3. Click the format button to download the file
 
 The export takes a few seconds for complex models. Your browser downloads the file automatically.

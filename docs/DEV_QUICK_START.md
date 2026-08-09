@@ -54,7 +54,7 @@ No backend. Everything runs in the browser:
 2. UI generator builds form controls from the parsed parameters
 3. User changes a parameter -> state updates -> worker runs OpenSCAD
 4. Worker returns STL bytes -> Three.js displays the preview
-5. Export downloads the STL/OBJ/AMF/3MF/OFF
+5. Export downloads the STL/OBJ/AMF/OFF
 
 The worker isolates OpenSCAD WASM so the UI stays responsive.
 

@@ -21,7 +21,7 @@ So this is my attempt at removing a few of those barriers and hopefully opening 
 - **Runs OpenSCAD in your browser** (WebAssembly in a Web Worker)
 - **Builds a parameter UI** from OpenSCAD Customizer annotations
 - **Previews the model** (Three.js) and lets you orbit/pan/zoom
-- **Exports** STL/OBJ/OFF/AMF/3MF, plus SVG/DXF for laser cutting
+- **Exports** STL/OBJ/OFF/AMF, plus SVG/DXF for laser cutting
 - **Supports multi-file projects** via `.zip` (for `include` / `use`)
 - **Keeps everything local** (no accounts, no uploads, no backend)
 
