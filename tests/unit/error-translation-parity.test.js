@@ -186,3 +186,35 @@ describe('BR-5 — code-first translation honors the worker classification', () 
     }
   });
 });
+
+describe('T2-B1 — the MODEL_NOT_2D message names every 2D export format', () => {
+  // PDF is a real 2D export (File ▸ Export ▸ Export as PDF…; OUTPUT_FORMATS
+  // marks it is2D) and it refuses a 3D-only model like SVG and DXF do. The
+  // guidance named only SVG and DXF, so a user who chose PDF was told about
+  // two formats they had not picked.
+  const FORMATS = ['SVG', 'DXF', 'PDF'];
+
+  it('names all three formats on the worker path', () => {
+    const { message } = translateWorkerError(
+      'ERROR: Current top level object is not a 2D object.'
+    );
+    for (const format of FORMATS) {
+      expect(message, format).toContain(format);
+    }
+  });
+
+  it('names all three formats on the main-thread path', () => {
+    const { explanation } = TRANSLATIONS_BY_CODE.MODEL_NOT_2D;
+    for (const format of FORMATS) {
+      expect(explanation, format).toContain(format);
+    }
+  });
+
+  it('both paths share one explanation sentence, so the copies cannot drift', () => {
+    const { message } = translateWorkerError(
+      'ERROR: Current top level object is not a 2D object.'
+    );
+    const { explanation } = TRANSLATIONS_BY_CODE.MODEL_NOT_2D;
+    expect(message.startsWith(explanation)).toBe(true);
+  });
+});

@@ -702,6 +702,57 @@ test.describe('View menu parity (G4)', () => {
     expect(items.find((i) => i.label === 'Reset View').disabled).toBe(false)
   })
 
+  test('a preview is enough for the commands that act on the viewport (P10)', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000)
+    await loadFixture(page)
+
+    // Wait for the auto-preview to put a mesh on screen. No Generate: that is
+    // the whole point — state.stl stays null here. Match "Preview ready"
+    // exactly: a looser /ready/ also matches the idle "Ready - Upload a file
+    // to begin" and the case then runs before any preview exists.
+    await expect(page.locator('#previewStatusText')).toContainText(
+      /Preview ready/i,
+      { timeout: 180_000 }
+    )
+    test.skip(
+      (await page.locator('.preview-panel canvas').count()) === 0,
+      'this browser built no 3D canvas'
+    )
+    expect(
+      await page.evaluate(() => !!window.stateManager.getState().stl),
+      'this case is about the preview-only state'
+    ).toBe(false)
+
+    // MEASURED before the fix: all three were disabled off Boolean(state.stl),
+    // which only a full Generate sets. Center and View All fit the camera to
+    // previewManager.mesh, and Export as Image photographs the canvas -- none
+    // of them needs an STL. Export as Image compounded it by saying "Load and
+    // preview a file first" to a user who had done exactly that.
+    await page.locator('#viewMenuBtn').click()
+    const viewItems = await readMenu(page, 'view')
+    for (const label of ['Center', 'View All']) {
+      const item = viewItems.find((i) => i.label === label)
+      expect(item, `${label} must be in the View menu`).toBeTruthy()
+      expect(item.disabled, `${label} is dead after a preview`).toBe(false)
+    }
+    await page.keyboard.press('Escape')
+
+    await page.locator('#fileMenuBtn').click()
+    await menuItem(page, 'file', 'Export').click()
+    const exportItems = await readSubmenu(page, 'file', 'Export')
+    const image = exportItems.find((i) => i.label === 'Export as Image…')
+    expect(image, 'Export as Image must be in the Export submenu').toBeTruthy()
+    expect(image.disabled, 'Export as Image is dead after a preview').toBe(false)
+
+    // Not merely enabled: it has to produce the file it promises.
+    const downloadPromise = page.waitForEvent('download', { timeout: 30_000 })
+    await menuItem(page, 'file', 'Export as Image…').click()
+    const download = await downloadPromise
+    expect(download.suggestedFilename()).toMatch(/\.png$/i)
+  })
+
   test('Center, View All and Reset View each move the camera differently', async ({
     page,
   }) => {
@@ -809,6 +860,18 @@ test.describe('Window menu parity (G5)', () => {
     expect(targets.length).toBeGreaterThan(0)
     expect(targets.map((t) => t.label)).toContain('Console')
 
+    // What matters is whether the live region EVER carried the message, not
+    // what it happens to hold a moment later: a render reporting in overwrites
+    // it. Reading the current text was the racy half of this assertion.
+    await page.evaluate(() => {
+      window.__spoken = []
+      const a = document.getElementById('srAnnouncer')
+      new MutationObserver(() => {
+        const t = (a.textContent || '').trim()
+        if (t) window.__spoken.push(t)
+      }).observe(a, { childList: true, subtree: true, characterData: true })
+    })
+
     // Scope to the submenu: the Window menu also has a top-level "Console"
     // toggle, and clicking that would hide the panel instead of visiting it.
     await page
@@ -817,7 +880,14 @@ test.describe('Window menu parity (G5)', () => {
       .first()
       .click()
 
-    await expect(page.locator('#srAnnouncer')).toHaveText('Jumped to Console')
+    // MEASURED: with the debounced announce(), a competing announcement inside
+    // 350ms cancelled this outright and the user heard nothing at all.
+    await page.evaluate(() =>
+      window.stateManager.announceChange('Preview ready')
+    )
+    await expect
+      .poll(() => page.evaluate(() => window.__spoken), { timeout: 5_000 })
+      .toContain('Jumped to Console')
     const landedInside = await page.evaluate(
       () =>
         document
@@ -1134,6 +1204,22 @@ test.describe('Design menu and Export submenu parity (G3)', () => {
     ).toBe(false)
     // POV is omitted and documented (D-24).
     expect(items.some((i) => /POV/i.test(i.label))).toBe(false)
+  })
+
+  test('the output-format select tells the same 3MF story as the menu (T2-B2)', async ({
+    page,
+  }) => {
+    // No fixture: the select is static markup, and the point is that the two
+    // places 3MF is offered cannot disagree about whether it works.
+    await page.goto('/')
+    await page.waitForLoadState('domcontentloaded')
+
+    const option = page.locator('#outputFormat option[value="3mf"]')
+    await expect(option).toBeAttached()
+    await expect(option).toBeDisabled()
+    // An <option> cannot carry aria-describedby, so the reason lives in the
+    // label itself — that is what a screen reader reads out.
+    await expect(option).toHaveText(/not available in this browser build/i)
   })
 
   test('exporting with only a preview done renders first, then downloads', async ({

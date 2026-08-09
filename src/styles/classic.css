@@ -1156,11 +1156,23 @@ body[data-ui-mode='classic'] .classic-fold-inner {
 }
 
 /* D-8: the fold button collapses the whole bottom strip, so every pane in it
-   folds down to its titlebar together. */
+   folds down to its titlebar together.
+
+   display:none, for the same reason the per-panel collapse below uses it, and
+   measured on this control too: with grid-template-rows: 0fr the strip was 0px
+   tall but still `visibility: visible`, holding TWELVE focusable controls, and
+   eleven Tab stops landed on invisible 13x13 checkboxes and 36x36 buttons.
+   That is WCAG 2.2 2.4.11 Focus Not Obscured (Minimum).
+
+   visibility:hidden on a delay would have kept the row's collapse animation,
+   but the global reduced-motion rule clamps transition-DURATION and not
+   transition-DELAY, so it would leave a 240ms window with the same bug. The
+   cost of display:none is that this fold no longer animates; the per-panel
+   collapse it now matches never did either. */
 body[data-classic-console-collapsed='true']
   .classic-bottom-strip
   .classic-fold {
-  grid-template-rows: 0fr;
+  display: none;
 }
 
 /* ── Per-panel collapse (D3, a Forge extra — the desktop has no such control) */

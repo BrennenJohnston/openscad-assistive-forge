@@ -930,6 +930,59 @@ test.describe('Error Log reach (F1)', () => {
     );
   });
 
+  test('classic-strip-fold: a folded strip hides its controls from the keyboard', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await loadProject(page);
+    await enterClassicStandard(page);
+
+    await page.locator('#classicConsoleFoldBtn').click();
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-classic-console-collapsed',
+      'true'
+    );
+
+    // The per-panel collapse learned this in P4; the older whole-strip fold
+    // kept grid-template-rows: 0fr, which only CLIPS. MEASURED before the fix:
+    // the strip was 0px tall but still visibility:visible, and eleven Tab stops
+    // landed on invisible 13x13 checkboxes and 36x36 buttons inside it.
+    // WCAG 2.2 2.4.11 Focus Not Obscured (Minimum).
+    const reachable = await page.evaluate(
+      () =>
+        [
+          ...document.querySelectorAll(
+            '.classic-bottom-strip .classic-fold button, .classic-bottom-strip .classic-fold input, .classic-bottom-strip .classic-fold select, .classic-bottom-strip .classic-fold textarea, .classic-bottom-strip .classic-fold [href]'
+          ),
+        ].filter((el) => el.offsetParent !== null || el.getClientRects().length)
+          .length
+    );
+    expect(
+      reachable,
+      'a folded strip still offers focusable controls'
+    ).toBe(0);
+
+    // Tab out of the fold button and confirm focus never lands inside.
+    await page.locator('#classicConsoleFoldBtn').focus();
+    const landings = [];
+    for (let i = 0; i < 20; i++) {
+      await page.keyboard.press('Tab');
+      const inside = await page.evaluate(
+        () =>
+          !!document.activeElement?.closest(
+            '.classic-bottom-strip .classic-fold'
+          )
+      );
+      if (inside) landings.push(i);
+    }
+    expect(landings, 'Tab landed inside the folded strip').toEqual([]);
+
+    // The title bars are the point of a fold — they must stay.
+    await expect(
+      page.locator('#classicConsoleSlot .classic-pane-titlebar')
+    ).toBeVisible();
+  });
+
   test('classic-errorlog-menu: Window > Error-Log toggles and reports its state', async ({
     page,
   }) => {

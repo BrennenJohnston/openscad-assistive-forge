@@ -392,10 +392,12 @@ test.describe('Classic density: Simplified / Standard inside Classic', () => {
 });
 
 test.describe('Classic on mobile (375px, touch)', () => {
+  // No isMobile: Firefox rejects it at browser-context creation, which killed
+  // this whole block there in 3-18ms. Viewport + hasTouch is what the block's
+  // name promises anyway. Same reason mobile-viewport.spec.js strips it.
   test.use({
     viewport: { width: 375, height: 812 },
     hasTouch: true,
-    isMobile: true,
   });
 
   test('classic-mobile-customizer: the Customizer joins the stacked flow instead of the off-canvas drawer', async ({

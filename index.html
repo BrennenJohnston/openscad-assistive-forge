@@ -1232,7 +1232,7 @@
                         <ul class="role-path-tips" aria-label="Key capabilities">
                           <li>Upload ZIP files with include/use dependencies</li>
                           <li>Enable MCAD, BOSL2, and other libraries</li>
-                          <li>Export in multiple formats (STL, OBJ, 3MF, SVG, DXF)</li>
+                          <li>Export in multiple formats (STL, OBJ, AMF, SVG, DXF)</li>
                           <li>Save and manage projects with companion files</li>
                         </ul>
                       </details>
@@ -3379,7 +3379,13 @@
                     <option value="obj">OBJ - Wavefront (Text)</option>
                     <option value="off">OFF - Object File Format</option>
                     <option value="amf">AMF - Additive Manufacturing</option>
-                    <option value="3mf">3MF - 3D Manufacturing</option>
+                    <!-- Measured: this WASM build traps on 3MF with "function
+                         signature mismatch". The File > Export menu item already
+                         says so; the option carries its reason in its own label
+                         because an <option> cannot take aria-describedby. -->
+                    <option value="3mf" disabled>
+                      3MF - not available in this browser build
+                    </option>
                   </optgroup>
                   <optgroup label="Laser Cutting / 2D">
                     <option value="svg">SVG - Vector Graphics</option>
@@ -6255,8 +6261,8 @@
               <li><strong>OFF</strong> – Object File Format for geometry</li>
               <li><strong>AMF</strong> – Additive Manufacturing File Format</li>
               <li>
-                <strong>3MF</strong> – Modern 3D printing format with color
-                support
+                <strong>3MF</strong> – Not available in this browser build.
+                Export as STL or OBJ instead — most slicers accept both.
               </li>
             </ul>
             <h4>Multi-File Projects</h4>
@@ -6382,7 +6388,7 @@
               </li>
               <li>
                 <strong>Generate</strong> – Create your output file
-                (STL/OBJ/OFF/AMF/3MF)
+                (STL/OBJ/OFF/AMF)
               </li>
               <li>
                 <strong>Download</strong> – Download the generated file (or
@@ -6882,6 +6888,254 @@
         </div>
       </div>
     </div>
+    <!-- Preferences dialog (P11a shell). Six tabs mirroring desktop OpenSCAD's
+         Preferences. This release ships the shell: the dialog, the APG tab
+         bar, focus handling, and every tab present and honest about its own
+         state. Tabs whose engine does not exist here are visibly disabled and
+         name their reason, never silently absent. -->
+    <div
+      class="modal hidden"
+      id="preferencesModal"
+      role="dialog"
+      aria-labelledby="preferencesModalTitle"
+      aria-modal="true"
+    >
+      <div class="modal-overlay" id="preferencesModalOverlay"></div>
+      <div class="modal-content modal-large preferences-modal-content">
+        <div class="modal-header">
+          <h2 id="preferencesModalTitle">Preferences</h2>
+          <button
+            type="button"
+            class="modal-close"
+            id="preferencesModalClose"
+            aria-label="Close preferences"
+          >
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+
+        <div
+          class="preferences-tabs"
+          role="tablist"
+          aria-label="Preferences sections"
+          id="preferencesTablist"
+        >
+          <button
+            role="tab"
+            type="button"
+            class="preferences-tab"
+            id="prefs-tab-3dview"
+            aria-selected="false"
+            aria-controls="prefs-panel-3dview"
+            tabindex="-1"
+            aria-disabled="true"
+            aria-describedby="prefs-reason-3dview"
+          >
+            3D View
+          </button>
+          <button
+            role="tab"
+            type="button"
+            class="preferences-tab"
+            id="prefs-tab-editor"
+            aria-selected="false"
+            aria-controls="prefs-panel-editor"
+            tabindex="-1"
+            aria-disabled="true"
+            aria-describedby="prefs-reason-editor"
+          >
+            Editor
+          </button>
+          <button
+            role="tab"
+            type="button"
+            class="preferences-tab"
+            id="prefs-tab-3dprint"
+            aria-selected="false"
+            aria-controls="prefs-panel-3dprint"
+            tabindex="-1"
+            aria-disabled="true"
+            aria-describedby="prefs-reason-3dprint"
+          >
+            3D Print
+          </button>
+          <button
+            role="tab"
+            type="button"
+            class="preferences-tab"
+            id="prefs-tab-advanced"
+            aria-selected="false"
+            aria-controls="prefs-panel-advanced"
+            tabindex="-1"
+            aria-disabled="true"
+            aria-describedby="prefs-reason-advanced"
+          >
+            Advanced
+          </button>
+          <button
+            role="tab"
+            type="button"
+            class="preferences-tab"
+            id="prefs-tab-axes"
+            aria-selected="false"
+            aria-controls="prefs-panel-axes"
+            tabindex="-1"
+            aria-disabled="true"
+            aria-describedby="prefs-reason-axes"
+          >
+            Axes
+          </button>
+          <button
+            role="tab"
+            type="button"
+            class="preferences-tab"
+            id="prefs-tab-buttons"
+            aria-selected="false"
+            aria-controls="prefs-panel-buttons"
+            tabindex="-1"
+            aria-disabled="true"
+            aria-describedby="prefs-reason-buttons"
+          >
+            Buttons
+          </button>
+          <button
+            role="tab"
+            type="button"
+            class="preferences-tab"
+            id="prefs-tab-keyboard"
+            aria-selected="true"
+            aria-controls="prefs-panel-keyboard"
+            tabindex="0"
+          >
+            Keyboard
+          </button>
+        </div>
+
+        <div class="modal-body preferences-modal-body">
+          <div
+            role="tabpanel"
+            id="prefs-panel-3dview"
+            aria-labelledby="prefs-tab-3dview"
+            class="preferences-panel"
+            tabindex="0"
+            hidden
+          >
+            <p id="prefs-reason-3dview" class="preferences-panel-reason">
+              The viewport colour schemes are not built yet. The 3D view
+              currently follows the app theme, and Classic uses the desktop's
+              Cornfield background.
+            </p>
+          </div>
+          <div
+            role="tabpanel"
+            id="prefs-panel-editor"
+            aria-labelledby="prefs-tab-editor"
+            class="preferences-panel"
+            tabindex="0"
+            hidden
+          >
+            <p id="prefs-reason-editor" class="preferences-panel-reason">
+              Editor font, indentation and wrap settings are not built yet. The
+              code editor wraps at word boundaries and follows the app theme.
+            </p>
+          </div>
+          <div
+            role="tabpanel"
+            id="prefs-panel-3dprint"
+            aria-labelledby="prefs-tab-3dprint"
+            class="preferences-panel"
+            tabindex="0"
+            hidden
+          >
+            <p id="prefs-reason-3dprint" class="preferences-panel-reason">
+              Sending a model straight to a printer is not built here. Export
+              the model and open it in your slicer.
+            </p>
+          </div>
+          <div
+            role="tabpanel"
+            id="prefs-panel-advanced"
+            aria-labelledby="prefs-tab-advanced"
+            class="preferences-panel"
+            tabindex="0"
+            hidden
+          >
+            <p id="prefs-reason-advanced" class="preferences-panel-reason">
+              The desktop's Advanced settings control OpenCSG, CGAL caches and
+              window docking, none of which this browser build has.
+            </p>
+          </div>
+          <div
+            role="tabpanel"
+            id="prefs-panel-axes"
+            aria-labelledby="prefs-tab-axes"
+            class="preferences-panel"
+            tabindex="0"
+            hidden
+          >
+            <p id="prefs-reason-axes" class="preferences-panel-reason">
+              The desktop's Axes tab maps a space mouse or joystick to the
+              view. This build has no input-device engine.
+            </p>
+          </div>
+          <div
+            role="tabpanel"
+            id="prefs-panel-buttons"
+            aria-labelledby="prefs-tab-buttons"
+            class="preferences-panel"
+            tabindex="0"
+            hidden
+          >
+            <p id="prefs-reason-buttons" class="preferences-panel-reason">
+              The desktop's Buttons tab assigns controller buttons to
+              commands. This build has no input-device engine.
+            </p>
+          </div>
+          <div
+            role="tabpanel"
+            id="prefs-panel-keyboard"
+            aria-labelledby="prefs-tab-keyboard"
+            class="preferences-panel"
+            tabindex="0"
+          >
+            <p>
+              Every keyboard shortcut in this app can be viewed and changed.
+              The editor opens in its own window so it has room for the full
+              list.
+            </p>
+            <button
+              type="button"
+              id="preferencesOpenShortcuts"
+              class="btn btn-primary"
+            >
+              Open Keyboard Shortcuts…
+            </button>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button
+            type="button"
+            id="preferencesModalDone"
+            class="btn btn-primary"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Keyboard Shortcuts Modal -->
     <div
       class="modal hidden"

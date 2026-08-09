@@ -181,7 +181,10 @@ import {
 
 // Storage keys are centralized in ./js/storage-keys.js (audit Q4)
 import {
-  announce as _announce,
+  initPreferencesDialog,
+  openPreferencesDialog,
+} from './js/preferences-dialog.js';
+import {
   announceImmediate,
   announceCameraAction,
   announceError as _announceError,
@@ -646,7 +649,29 @@ function toggleClassicToolbar(bar) {
   } catch {
     // Preference persistence is best-effort.
   }
-  _announce(`${def.name} ${hidden ? 'hidden' : 'shown'}`);
+  // Same swallow as Jump To: a discrete menu action's only feedback must not
+  // sit in a 350ms debounce that the next announcement cancels.
+  announceImmediate(`${def.name} ${hidden ? 'hidden' : 'shown'}`);
+}
+
+/**
+ * Open the keyboard-shortcuts editor, wiring it on first use.
+ *
+ * This block was copy-pasted at FOUR call sites (Edit ▸ Preferences, Help ▸
+ * Keyboard Shortcuts, the header button, and the Ctrl+Shift+K handler), which
+ * is this project's recorded worst bug shape: a fix applied to three of four
+ * copies looks done and is not. One copy now.
+ */
+function _openShortcutsModal() {
+  const modal = document.getElementById('shortcutsModal');
+  const modalBody = document.getElementById('shortcutsModalBody');
+  if (!modal || !modalBody) return;
+  // Wire once; a second call would stack duplicate listeners.
+  if (!modal.dataset.initialized) {
+    initShortcutsModal(modalBody, () => closeModal(modal));
+    modal.dataset.initialized = 'true';
+  }
+  openModal(modal);
 }
 
 // Edit ▸ Insert Template (G7, D-43). Nothing in Appendix U or this repository
@@ -1033,13 +1058,28 @@ async function initApp() {
         exportQuality.value = 'low';
         exportQuality.dispatchEvent(new Event('change'));
       }
-      // Also reduce preview quality to fast
+      // Also reduce preview quality to fast. MEASURED: dispatching 'change'
+      // here started four renders, because that handler kicks auto-preview —
+      // and rendering is the memory-hungry operation this banner is warning
+      // about. Do exactly what the handler does, minus the kick.
       const previewQuality = document.getElementById('previewQualitySelect');
       if (previewQuality) {
         previewQuality.value = 'fast';
-        previewQuality.dispatchEvent(new Event('change'));
+        try {
+          localStorage.setItem(STORAGE_KEY_PREVIEW_QUALITY, 'fast');
+        } catch {
+          // Persistence is best-effort; the in-session mode still applies.
+        }
+        applyPreviewQualityMode();
       }
-      console.log('[Memory] Quality reduced to conserve memory');
+      // Both selects live in panels the user may not have open, so without
+      // this the button changed nothing they could see or hear. updateStatus
+      // already speaks through stateManager.announceChange — pairing it with
+      // announceImmediate says everything twice.
+      updateStatus(
+        'Quality reduced: preview set to Fast, export set to Low.',
+        'info'
+      );
     });
 
   document
@@ -1051,7 +1091,10 @@ async function initApp() {
         autoPreviewToggle.checked = false;
         autoPreviewToggle.dispatchEvent(new Event('change'));
       }
-      console.log('[Memory] Auto-preview disabled to conserve memory');
+      updateStatus(
+        'Automatic preview turned off. Use Preview or Render when you are ready.',
+        'info'
+      );
     });
 
   document
@@ -3284,6 +3327,9 @@ async function initApp() {
     const state = stateManager.getState();
     const hasFile = Boolean(state.uploadedFile);
     const hasRender = Boolean(state.stl);
+    // state.stl is only set by a full Generate. Commands that act on WHAT IS
+    // ON SCREEN are available as soon as a preview has put a mesh there (P10).
+    const hasViewportModel = hasRender || Boolean(previewManager?.mesh);
 
     // Recent Files submenu: entries this browser can still re-open, then
     // Clear Recent. Unreachable entries stay listed but disabled (D-28).
@@ -3358,10 +3404,13 @@ async function initApp() {
         type: 'action',
         label: 'Export as Image\u2026',
         shortcutAction: 'exportImage',
-        enabled: hasRender,
-        tooltip: hasRender
+        // It photographs the canvas, so it needs something on screen and
+        // nothing else. It used to demand a full render while telling the
+        // user to "Load and preview a file first" -- which they had (P10).
+        enabled: hasViewportModel,
+        tooltip: hasViewportModel
           ? 'Save the current viewport as a PNG image'
-          : 'Load and preview a file first',
+          : 'Preview or render a model first',
         handler: () => fileActionsController.onExportImage(),
       },
     ];
@@ -3755,17 +3804,12 @@ async function initApp() {
       },
       {
         type: 'action',
-        label: 'Preferences (Keyboard Shortcuts)…',
+        label: 'Preferences…',
         handler: () => {
-          const modal = document.getElementById('shortcutsModal');
-          const modalBody = document.getElementById('shortcutsModalBody');
-          if (modal && modalBody) {
-            if (!modal.dataset.initialized) {
-              initShortcutsModal(modalBody, () => closeModal(modal));
-              modal.dataset.initialized = 'true';
-            }
-            openModal(modal);
-          }
+          initPreferencesDialog({ onOpenShortcuts: _openShortcutsModal });
+          openPreferencesDialog({
+            returnFocusTo: document.getElementById('editMenuBtn'),
+          });
         },
       },
     ];
@@ -3920,7 +3964,10 @@ async function initApp() {
   // ── Toolbar: View menu ───────────────────────────────────────────────────
   getToolbarMenuController().registerMenuBuilder('view', () => {
     const state = stateManager.getState();
-    const hasRender = Boolean(state.stl);
+    // Center and View All fit the camera to previewManager.mesh, which a
+    // preview already provides; state.stl needs a full Generate (P10).
+    const hasViewportModel =
+      Boolean(state.stl) || Boolean(previewManager?.mesh);
     const projMode = previewManager?.getProjectionMode?.() ?? 'perspective';
     const uiCtrl = getUIModeController();
     const uiModeNow = uiCtrl.getMode();
@@ -4031,8 +4078,10 @@ async function initApp() {
         type: 'action',
         label: 'Center',
         shortcutAction: 'viewCenter',
-        enabled: hasRender,
-        tooltip: hasRender ? undefined : 'Render a model first',
+        enabled: hasViewportModel,
+        tooltip: hasViewportModel
+          ? undefined
+          : 'Preview or render a model first',
         handler: () => {
           if (previewManager) {
             previewManager.centerCamera();
@@ -4044,8 +4093,10 @@ async function initApp() {
         type: 'action',
         label: 'View All',
         shortcutAction: 'viewAll',
-        enabled: hasRender,
-        tooltip: hasRender ? undefined : 'Render a model first',
+        enabled: hasViewportModel,
+        tooltip: hasViewportModel
+          ? undefined
+          : 'Preview or render a model first',
         handler: () => {
           if (previewManager) {
             previewManager.viewAllCamera();
@@ -4361,7 +4412,11 @@ async function initApp() {
             type: 'action',
             label: target.label,
             handler: () => {
-              if (target.focus()) _announce(`Jumped to ${target.label}`);
+              // Immediate, not debounced: MEASURED, a render reporting in
+              // within 350ms cancels a pending announcement outright, so the
+              // user hears nothing about the jump they just made.
+              if (target.focus())
+                announceImmediate(`Jumped to ${target.label}`);
             },
           })),
         };
@@ -4463,17 +4518,7 @@ async function initApp() {
         type: 'action',
         label: 'Keyboard Shortcuts\u2026',
         shortcutAction: 'showShortcutsModal',
-        handler: () => {
-          const modal = document.getElementById('shortcutsModal');
-          const modalBody = document.getElementById('shortcutsModalBody');
-          if (modal && modalBody) {
-            if (!modal.dataset.initialized) {
-              initShortcutsModal(modalBody, () => closeModal(modal));
-              modal.dataset.initialized = 'true';
-            }
-            openModal(modal);
-          }
-        },
+        handler: _openShortcutsModal,
       },
       {
         type: 'action',
@@ -4627,18 +4672,7 @@ async function initApp() {
   // Initialize keyboard shortcuts toggle button
   const shortcutsBtn = document.getElementById('shortcutsToggle');
   if (shortcutsBtn) {
-    shortcutsBtn.addEventListener('click', () => {
-      const modal = document.getElementById('shortcutsModal');
-      const modalBody = document.getElementById('shortcutsModalBody');
-      if (modal && modalBody) {
-        // Initialize modal wiring once to avoid duplicate listeners.
-        if (!modal.dataset.initialized) {
-          initShortcutsModal(modalBody, () => closeModal(modal));
-          modal.dataset.initialized = 'true';
-        }
-        openModal(modal);
-      }
-    });
+    shortcutsBtn.addEventListener('click', _openShortcutsModal);
   }
 
   // Declare format selector elements
@@ -14593,18 +14627,7 @@ if (rounded) {
     themeManager.cycleTheme();
   });
 
-  keyboardConfig.on('showShortcutsModal', () => {
-    const modal = document.getElementById('shortcutsModal');
-    const modalBody = document.getElementById('shortcutsModalBody');
-    if (modal && modalBody) {
-      // Initialize modal wiring once to avoid duplicate listeners.
-      if (!modal.dataset.initialized) {
-        initShortcutsModal(modalBody, () => closeModal(modal));
-        modal.dataset.initialized = 'true';
-      }
-      openModal(modal);
-    }
-  });
+  keyboardConfig.on('showShortcutsModal', _openShortcutsModal);
 
   // File action shortcuts
   keyboardConfig.on('newFile', () => fileActionsController.onNew());
