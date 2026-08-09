@@ -22,7 +22,18 @@ const DEFAULT_TICK_STEP_MM = 10; // small tick every 10 mm
 const DEFAULT_LABEL_STEP_MM = 50; // labelled tick every 50 mm
 const TICK_SHORT_MM = 1.5; // perpendicular length of small ticks
 const TICK_LONG_MM = 3.5; // perpendicular length of labelled ticks
-const SPRITE_PIXELS_PER_MM = 5; // sprite scale heuristic
+// Canvas pixels per scene millimetre for the label sprites. Sprites are
+// sized in world units, so this fixes a label's height in mm: at 12, the
+// 48px prominent labels stand 4mm tall against ticks every 10mm and labels
+// every 50mm, which reads without covering the model.
+//
+// This is the first release in which the overlay has ever drawn (it threw on
+// every attempt before — see getThreeModule), so the previous value of 5 had
+// never been seen. It put the labels 9.6mm tall, about 37px on screen at the
+// default camera, large enough to sit over the model itself. No test pins
+// this number; it was set by looking at the rendered viewport against
+// OpenSCAD_1.png.
+const SPRITE_PIXELS_PER_MM = 12;
 const FALLBACK_LIGHT_HEX = 0x222222;
 const FALLBACK_DARK_HEX = 0xdddddd;
 

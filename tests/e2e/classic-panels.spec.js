@@ -2291,3 +2291,50 @@ test.describe('Small-defect sweep (P13)', () => {
     expect(measured.borderStyle).not.toBe('none');
   });
 });
+
+/**
+ * P12 — the axis-tick overlay draws.
+ *
+ * R-II turned axis marks ON by default on first Classic entry, so this
+ * shipped as a preference that claimed to do something and did nothing.
+ * MEASURED on the parent commit: buildAxisTickOverlay threw
+ * "three.CanvasTexture is not a constructor" — getThreeModule() exports
+ * eleven classes and the overlay needs three it does not export — and
+ * _applyAxisMarks caught it, logged a console.warn and returned. The
+ * preference stayed on, the camera-bar button stayed pressed, and the scene
+ * got nothing. Its own 20 unit tests pass because they inject a mock THREE
+ * that DOES define the three missing classes.
+ */
+test('Classic draws the axis tick overlay it says is on', async ({ page }) => {
+  test.setTimeout(240_000);
+  await seedFirstVisit(page);
+  await loadProject(page, UNIVERSAL_CUFF);
+  await switchToStandardMode(page);
+  await enterClassicStandard(page);
+  await skipWithoutRenderer(page);
+
+  const overlay = () =>
+    page.evaluate(() => window.__forgeDebug.axisTickOverlay());
+
+  // Read from the scene graph, not from the toggle: the whole point is that
+  // the toggle said yes while the scene had nothing in it.
+  const on = await expect
+    .poll(overlay, { timeout: 20_000 })
+    .toMatchObject({ enabled: true, inScene: true });
+  void on;
+
+  const state = await overlay();
+  expect(state.ticks).toBeGreaterThan(0);
+  expect(state.labels).toBeGreaterThan(0);
+
+  // And it must come back out again, or "off" would be the lie instead.
+  await page.evaluate(() => {
+    document.getElementById('viewMenuBtn')?.click();
+  });
+  await page.waitForTimeout(300);
+  await page
+    .getByRole('menuitemcheckbox', { name: /scale marker|axis distance/i })
+    .first()
+    .click();
+  await expect.poll(overlay).toMatchObject({ enabled: false, inScene: false });
+});

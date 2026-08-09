@@ -77,6 +77,35 @@ function createMockThree() {
     AxesHelper: vi.fn(function () {
       this.name = '';
     }),
+    // The axis lines overlay replaced AxesHelper in P12. These mirror what
+    // getThreeModule() actually hands the controller — a mock that carries
+    // more than production does is how the axis-tick overlay kept 20 green
+    // tests while throwing on every real attempt.
+    Group: vi.fn(function () {
+      this.name = '';
+      this.children = [];
+      this.add = (child) => this.children.push(child);
+    }),
+    BufferGeometry: vi.fn(function () {
+      this.attributes = {};
+      this.setAttribute = (name, attr) => {
+        this.attributes[name] = attr;
+      };
+      this.dispose = vi.fn();
+    }),
+    Float32BufferAttribute: vi.fn(function (array, itemSize) {
+      this.array = array;
+      this.itemSize = itemSize;
+    }),
+    LineDashedMaterial: vi.fn(function (opts = {}) {
+      Object.assign(this, opts, createMockMaterial());
+    }),
+    Line: vi.fn(function (geo, mat) {
+      this.geometry = geo;
+      this.material = mat;
+      this.name = '';
+      this.computeLineDistances = vi.fn();
+    }),
   };
 }
 
@@ -725,7 +754,10 @@ describe('DisplayOptionsController — connectPreviewManager()', () => {
     ctrl.connectPreviewManager(pm);
 
     expect(mockThree.EdgesGeometry).toHaveBeenCalledWith(mockMesh.geometry, 15);
-    expect(pm.scene.add).toHaveBeenCalledWith(ctrl._axesHelper);
+    // P12 replaced AxesHelper with the axis-lines overlay, which owns a group
+    // and a dispose() rather than being a bare helper object.
+    expect(pm.scene.add).toHaveBeenCalledWith(ctrl._axesOverlay.group);
+    expect(ctrl._axesOverlay.group.children).toHaveLength(6);
   });
 
   it('a controller initialized before the PreviewManager exists still auto-refreshes (regression)', () => {

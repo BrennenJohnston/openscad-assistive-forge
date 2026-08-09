@@ -309,6 +309,21 @@ export const STORAGE_KEY_GRID_COLOR = getAppPrefKey('grid-color');
 export const STORAGE_KEY_GRID_OPACITY = getAppPrefKey('grid-opacity');
 export const STORAGE_KEY_AUTO_BED = getAppPrefKey('auto-bed');
 export const STORAGE_KEY_ZOOM_TO_CURSOR = getAppPrefKey('zoom-to-cursor');
+export const STORAGE_KEY_VIEWPORT_SCHEME = getAppPrefKey('viewport-scheme');
+
+// --- Code editor settings (editor-prefs.js, Preferences ▸ Editor) ---
+// The font-size key predates the dialog: edit-actions-controller has always
+// used it for Edit ▸ Increase/Decrease Font Size. Both import it from here
+// so the menu and the dialog cannot drift onto separate values.
+export const STORAGE_KEY_EDITOR_FONT_SIZE = getAppPrefKey('editor-font-size');
+export const STORAGE_KEY_EDITOR_INDENT_WIDTH = getAppPrefKey(
+  'editor-indent-width'
+);
+export const STORAGE_KEY_EDITOR_TAB_WIDTH = getAppPrefKey('editor-tab-width');
+export const STORAGE_KEY_EDITOR_LINE_WRAP = getAppPrefKey('editor-line-wrap');
+export const STORAGE_KEY_EDITOR_HIGHLIGHT_LINE = getAppPrefKey(
+  'editor-highlight-line'
+);
 export const STORAGE_KEY_CAMERA_COLLAPSED = getAppPrefKey(
   'camera-controls-collapsed'
 );

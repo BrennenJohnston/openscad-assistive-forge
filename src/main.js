@@ -44,7 +44,11 @@ import {
 import { setStlViewActive, isStlViewActive } from './js/stl-view-mode.js';
 import { escapeHtml, isValidServiceWorkerMessage } from './js/html-utils.js';
 import { getQualityPreset, COMPLEXITY_TIER } from './js/quality-tiers.js';
-import { getThreeModule, CAMERA_ZOOM_STEP } from './js/preview.js';
+import {
+  getThreeModule,
+  CAMERA_ZOOM_STEP,
+  VIEWPORT_SCHEMES,
+} from './js/preview.js';
 import { normalizeHexColor } from './js/color-utils.js';
 import { buildDefineArgs as formatBuildDefineArgs } from './js/scad-param-formatter.js';
 import {
@@ -192,6 +196,7 @@ import {
 } from './js/announcer.js';
 // Expert Mode (M2) - Code editor integration
 import { getModeManager } from './js/mode-manager.js';
+import { loadEditorPrefs, saveEditorPref } from './js/editor-prefs.js';
 // UI Mode Controller - Simplified/Standard/Classic interface layout switching
 import { getUIModeController } from './js/ui-mode-controller.js';
 import {
@@ -1129,8 +1134,13 @@ async function initApp() {
   window.addEventListener('storage-quota-exceeded', (e) => {
     const msg =
       e.detail?.message || 'Storage is full. Data could not be saved.';
-    updateStatus(msg, 'error');
-    _announceError(msg);
+    // MEASURED before this change: the same sentence reached a screen reader
+    // three times — politely from updateStatus, assertively from
+    // _announceError, and assertively again from the toast. The toast's is the
+    // one worth keeping: a failed save is an error, so it belongs in the
+    // assertive region, and the toast says "Storage Problem" first so the
+    // announcement names its own subject.
+    updateStatus(msg, 'error', { announce: false });
     showErrorToast({ title: 'Storage Problem', message: msg });
   });
 
@@ -3569,7 +3579,12 @@ async function initApp() {
       const modeManager = getModeManager();
       if (modeManager?.isExpertMode?.() && modeManager.getEditorInstance?.()) {
         const editor = modeManager.getEditorInstance();
-        if (editor.updateOptions) editor.updateOptions({ fontSize: size });
+        // Was `editor.updateOptions({ fontSize })`, a method neither editor
+        // has ever had. Guarded by `if`, so Edit ▸ Increase/Decrease Font
+        // Size saved the number, updated its readout and announced the new
+        // size while changing nothing on screen — the worst shape of defect
+        // for the low-vision users the control exists for.
+        editor.setFontSize?.(size);
       }
     },
   });
@@ -3806,7 +3821,61 @@ async function initApp() {
         type: 'action',
         label: 'Preferences…',
         handler: () => {
-          initPreferencesDialog({ onOpenShortcuts: _openShortcutsModal });
+          initPreferencesDialog({
+            onOpenShortcuts: _openShortcutsModal,
+            getColorScheme: () =>
+              previewManager?.getViewportScheme?.() ?? 'cornfield',
+            onColorSchemeChange: (id) => {
+              if (!previewManager?.setViewportScheme(id)) return;
+              const label =
+                VIEWPORT_SCHEMES.find((s) => s.id === id)?.label ?? id;
+              // Instant-apply is silent for a screen-reader user otherwise:
+              // the only feedback is a repaint they cannot see.
+              announceImmediate(`Color scheme ${label}`);
+            },
+            getEditorPrefs: () => loadEditorPrefs(),
+            onEditorPrefChange: (name, value) => {
+              // The preference owner clamps and persists; whatever it stored
+              // is what gets applied, so the control cannot show one number
+              // while the editor uses another.
+              const stored = saveEditorPref(name, value);
+              const editor = getModeManager()?.getEditorInstance?.();
+              const apply = {
+                fontSize: () => editor?.setFontSize?.(stored),
+                indentWidth: () => editor?.setIndentWidth?.(stored),
+                tabWidth: () => editor?.setTabWidth?.(stored),
+                lineWrapping: () => editor?.setLineWrapping?.(stored),
+                highlightActiveLine: () =>
+                  editor?.setHighlightActiveLine?.(stored),
+              };
+              apply[name]?.();
+
+              const spoken = {
+                fontSize: `Font size: ${stored}px`,
+                indentWidth: `Indentation width: ${stored} spaces`,
+                tabWidth: `Tab width: ${stored} columns`,
+                lineWrapping: `Wrap long lines, ${stored ? 'on' : 'off'}`,
+                highlightActiveLine: `Highlight the current line, ${
+                  stored ? 'on' : 'off'
+                }`,
+              };
+              if (spoken[name]) announceImmediate(spoken[name]);
+              return stored;
+            },
+            getZoomToCursor: () => previewManager?.zoomToCursorEnabled ?? true,
+            onZoomToCursorChange: (enabled) => {
+              previewManager?.toggleZoomToCursor(enabled);
+              // The viewport controls carry a second checkbox for this one
+              // setting; leaving it stale is the multi-copy trap.
+              const other = document.getElementById('zoomToCursorToggle');
+              if (other) other.checked = enabled;
+              announceImmediate(
+                enabled
+                  ? 'Zoom toward the mouse pointer, on'
+                  : 'Zoom toward the mouse pointer, off'
+              );
+            },
+          });
           openPreferencesDialog({
             returnFocusTo: document.getElementById('editMenuBtn'),
           });
@@ -5799,8 +5868,9 @@ async function initApp() {
     const advisoryMsg =
       'This model is complex — Desktop-quality previews may be slow. ' +
       'Switch Preview quality to "Performance (auto)" for faster previews.';
+    // updateStatus announces on its own; a second call here said the whole
+    // advisory twice.
     updateStatus(advisoryMsg, 'info');
-    announceImmediate(advisoryMsg);
   }
 
   // A fresh complexityAnalysis lands once per file load (file-handler sets it
@@ -6876,8 +6946,24 @@ async function initApp() {
     previewManager.showColorLegend(entries);
   }
 
-  // Update status
-  function updateStatus(message, statusType = 'default') {
+  /**
+   * Update the visible status surfaces and, by default, announce the message.
+   *
+   * `announce: false` is for the callers that already announce the same thing
+   * themselves — an error toast, say, which speaks assertively with its title
+   * attached. Without the opt-out those callers say everything to a
+   * screen-reader user twice, because this function is not a silent setter:
+   * it routes through stateManager.announceChange.
+   *
+   * @param {string} message
+   * @param {string} [statusType] 'default' | 'info' | 'success' | 'error' | 'warning'
+   * @param {{announce?: boolean}} [options]
+   */
+  function updateStatus(
+    message,
+    statusType = 'default',
+    { announce = true } = {}
+  ) {
     // Update the drawer status area (hidden but kept for screen readers)
     if (statusArea) {
       statusArea.textContent = message;
@@ -6925,8 +7011,10 @@ async function initApp() {
 
     // Announce status changes via dedicated SR live region.
     // Debounce progress-style updates (percent text) to avoid announcement spam.
-    const shouldDebounce = /\d+%/.test(message);
-    stateManager.announceChange(message, shouldDebounce);
+    if (announce) {
+      const shouldDebounce = /\d+%/.test(message);
+      stateManager.announceChange(message, shouldDebounce);
+    }
   }
 
   /**
@@ -14969,6 +15057,29 @@ if (typeof window !== 'undefined') {
      */
     previewColorScheme() {
       return previewManager?.currentTheme ?? null;
+    },
+
+    /**
+     * What the axis-tick overlay actually put in the scene.
+     *
+     * `inScene` is read from the scene graph, not from the preference: the
+     * defect this exists to catch was the option reading as ON while the
+     * overlay had thrown and nothing was drawn. Asserting the toggle's own
+     * state would have reported success throughout.
+     *
+     * @returns {{enabled: boolean, inScene: boolean, ticks: number, labels: number}|null}
+     */
+    axisTickOverlay() {
+      const controller = getDisplayOptionsController();
+      const scene = previewManager?.scene;
+      if (!controller || !scene) return null;
+      const group = scene.getObjectByName('__axisTickOverlay');
+      return {
+        enabled: controller.get('axisMarks'),
+        inScene: Boolean(group),
+        ticks: controller._axisTickOverlay?.tickCount ?? 0,
+        labels: controller._axisTickOverlay?.labelCount ?? 0,
+      };
     },
 
     /**

@@ -19,7 +19,7 @@ The application:
 - Runs the official **OpenSCAD WebAssembly build** in a Web Worker inside the user's browser.
 - Builds a parameter form from OpenSCAD Customizer annotations in the model.
 - Renders previews with **Three.js**.
-- Lets the user export STL / OBJ / OFF / AMF / 3MF for downstream slicing.
+- Lets the user export STL / OBJ / OFF / AMF for downstream slicing.
 - Stores nothing on a server. All file I/O is local.
 
 **Live site**: `https://openscad-assistive-forge.pages.dev/`

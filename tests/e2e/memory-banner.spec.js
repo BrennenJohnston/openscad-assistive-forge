@@ -264,3 +264,108 @@ test('banner Disable Auto-Preview actually turns auto-preview off', async ({
   );
   expect(stillDisabled).toBe(false);
 });
+
+/**
+ * Record every write to BOTH live regions, tagged with which one.
+ *
+ * Counts mutation RECORDS rather than re-reading textContent in the callback:
+ * the observer coalesces, so two writes landing in one frame produce one
+ * callback and reading textContent there counts them as one. `announce()`
+ * clears then sets, so each announcement adds a text node — counting added
+ * nodes is what actually measures "how many times was this said".
+ */
+async function watchBothRegions(page) {
+  await page.evaluate(() => {
+    window.__said = [];
+    for (const [id, politeness] of [
+      ['srAnnouncer', 'polite'],
+      ['srAnnouncerAssertive', 'assertive'],
+    ]) {
+      const region = document.getElementById(id);
+      if (!region) continue;
+      new MutationObserver((records) => {
+        for (const record of records) {
+          for (const node of record.addedNodes) {
+            const text = (node.textContent || '').trim();
+            if (text) window.__said.push({ politeness, text });
+          }
+        }
+      }).observe(region, { childList: true, subtree: true });
+    }
+  });
+}
+
+const saidMatching = (page, pattern) =>
+  page.evaluate(
+    (source) => window.__said.filter((s) => new RegExp(source, 'i').test(s.text)),
+    pattern.source
+  );
+
+// The two announcement sites R-III measured but left, recorded in the plan's
+// §6c. updateStatus already speaks through stateManager.announceChange, so
+// pairing it with a second announce call says everything to a screen-reader
+// user twice. These live here rather than in a new spec because the setup and
+// the subject — advisory messaging the user cannot see coming — are the same.
+
+test('a storage-quota failure is announced once, assertively', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await setup(page);
+  await page.waitForTimeout(1_000);
+  await watchBothRegions(page);
+
+  const message = 'Storage is full. Data could not be saved.';
+  await page.evaluate((detailMessage) => {
+    window.dispatchEvent(
+      new CustomEvent('storage-quota-exceeded', {
+        detail: { message: detailMessage },
+      })
+    );
+  }, message);
+  await page.waitForTimeout(1_500);
+
+  const said = await saidMatching(page, /Storage is full/);
+  // Measured on the parent commit: THREE, not the two the ledger recorded —
+  // polite via updateStatus, assertive via announceError, and assertive again
+  // from showErrorToast, which announces "<title>. <message>" itself.
+  expect(said).toHaveLength(1);
+  // A failure to save is an error, so the one that survives is the assertive
+  // one; downgrading it to polite would be the wrong half to keep.
+  expect(said[0].politeness).toBe('assertive');
+
+  // The status bar must still show it — this is about how often it is spoken,
+  // not about removing the user's visible feedback.
+  await expect(page.locator('#previewStatusText')).toContainText(
+    /Storage is full/i
+  );
+});
+
+test('the complexity advisory is announced once', async ({ page }) => {
+  test.setTimeout(240_000);
+  await setup(page);
+  await expect(page.locator('#previewStatusText')).toContainText(
+    /ready|error/i,
+    { timeout: 180_000 }
+  );
+  await page.waitForTimeout(1_000);
+  await watchBothRegions(page);
+
+  // The advisory fires from a state subscriber when a fresh complexityAnalysis
+  // carrying warnings lands, which is how file-handler delivers it.
+  await page.evaluate(() =>
+    window.stateManager.setState({
+      complexityAnalysis: { warnings: ['synthetic complexity warning'] },
+    })
+  );
+  await page.waitForTimeout(1_500);
+
+  // Measured on the parent commit: 2 — updateStatus announced it and the line
+  // below it announced the identical string again.
+  const said = await saidMatching(page, /This model is complex/);
+  expect(said).toHaveLength(1);
+
+  await expect(page.locator('#previewStatusText')).toContainText(
+    /This model is complex/i
+  );
+});

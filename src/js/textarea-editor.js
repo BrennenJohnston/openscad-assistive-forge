@@ -15,6 +15,7 @@
  */
 
 import { escapeHtml } from './html-utils.js';
+import { loadEditorPrefs } from './editor-prefs.js';
 
 const SCAD_TOKENS = {
   keywords: [
@@ -175,6 +176,10 @@ export class TextareaEditor {
 
     this._createDOM();
     this._attachEventListeners();
+    // Re-applied here because this editor is rebuilt on every mode switch;
+    // without it the saved size is forgotten the first time the user leaves
+    // and comes back.
+    this.setFontSize(loadEditorPrefs().fontSize);
     this._isInitialized = true;
 
     console.log('[TextareaEditor] Initialized');
@@ -625,6 +630,25 @@ export class TextareaEditor {
     if (this.textarea) {
       this.textarea.focus();
     }
+  }
+
+  /**
+   * Match the code, the line numbers and the syntax overlay to a font size.
+   *
+   * This editor is not a poor relation: `_detectPreferredEditor()` picks it
+   * whenever `prefers-contrast: more` is set, so the users most likely to
+   * want a larger font are the ones who land here. All three layers have to
+   * move together or the overlay stops sitting on the text it highlights.
+   *
+   * @param {number} px
+   */
+  setFontSize(px) {
+    this._fontSize = px;
+    const size = `${px}px`;
+    for (const el of [this.textarea, this.highlightOverlay, this.lineNumbers]) {
+      if (el) el.style.fontSize = size;
+    }
+    this._updateLineNumbers();
   }
 
   /**

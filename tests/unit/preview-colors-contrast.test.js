@@ -15,7 +15,12 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { PREVIEW_COLORS } from '../../src/js/preview.js';
+import {
+  PREVIEW_COLORS,
+  VIEWPORT_SCHEMES,
+  DEFAULT_VIEWPORT_SCHEME,
+  schemeColorsKey,
+} from '../../src/js/preview.js';
 
 /** WCAG relative luminance of a 0xRRGGBB color. */
 function relativeLuminance(hex) {
@@ -39,20 +44,26 @@ function contrastRatio(a, b) {
 const THEMES = Object.keys(PREVIEW_COLORS);
 
 describe('PREVIEW_COLORS non-text contrast (WCAG 2.2 SC 1.4.11)', () => {
-  it('covers all nine themes', () => {
-    expect(THEMES.sort()).toEqual(
-      [
-        'light',
-        'dark',
-        'light-hc',
-        'dark-hc',
-        'mono',
-        'mono-light',
-        'mono-hc',
-        'mono-light-hc',
-        'classic',
-      ].sort()
-    );
+  const APP_THEMES = [
+    'light',
+    'dark',
+    'light-hc',
+    'dark-hc',
+    'mono',
+    'mono-light',
+    'mono-hc',
+    'mono-light-hc',
+    'classic',
+  ];
+
+  // The nine desktop schemes that are not `classic`. Cornfield maps onto
+  // `classic`, so PREVIEW_COLORS holds nine app themes plus nine additions.
+  const SCHEME_KEYS = VIEWPORT_SCHEMES.map((s) => s.colors).filter(
+    (k) => k !== 'classic'
+  );
+
+  it('covers the nine app themes and the nine added viewport schemes', () => {
+    expect(THEMES.sort()).toEqual([...APP_THEMES, ...SCHEME_KEYS].sort());
   });
 
   it.each(THEMES)('%s: model vs background >= 3:1', (theme) => {
@@ -96,5 +107,96 @@ describe('PREVIEW_COLORS non-text contrast (WCAG 2.2 SC 1.4.11)', () => {
     ).toBeGreaterThan(
       contrastRatio(PREVIEW_COLORS.light.model, PREVIEW_COLORS.light.background)
     );
+  });
+});
+
+/**
+ * The desktop viewport schemes (Preferences ▸ 3D View), per owner decision
+ * Q-10: ten schemes, backgrounds verbatim from upstream, model and edge
+ * colours tuned the minimum distance needed to pass.
+ *
+ * The suite above already holds every one of them to 3:1 and 4.5:1 because
+ * it iterates PREVIEW_COLORS. What is asserted here is the part that
+ * iteration cannot see: that the list is the desktop's ten, that no
+ * background drifted off its upstream value, and that the schemes upstream
+ * already got right were left alone rather than "tuned" for the sake of it.
+ */
+describe('desktop viewport colour schemes', () => {
+  it('offers the desktop ten, in the desktop order', () => {
+    expect(VIEWPORT_SCHEMES.map((s) => s.label)).toEqual([
+      'Cornfield',
+      'Metallic',
+      'Sunset',
+      'Starnight',
+      'BeforeDawn',
+      'Nature',
+      'DeepOcean',
+      'Solarized',
+      'Tomorrow',
+      'Tomorrow Night',
+    ]);
+  });
+
+  it('opens on Cornfield, which paints with the classic palette', () => {
+    expect(DEFAULT_VIEWPORT_SCHEME).toBe('cornfield');
+    expect(schemeColorsKey('cornfield')).toBe('classic');
+    expect(schemeColorsKey('nonsense-id')).toBe('classic');
+  });
+
+  it('every scheme resolves to a palette that exists', () => {
+    for (const scheme of VIEWPORT_SCHEMES) {
+      expect(PREVIEW_COLORS[scheme.colors]).toBeDefined();
+    }
+  });
+
+  // Verbatim from OpenSCAD tag openscad-2021.01: Cornfield from
+  // src/colormap.cc line 39, the rest from color-schemes/render/*.json.
+  // A background is the one value Q-10 says must NOT be tuned.
+  const UPSTREAM_BACKGROUNDS = {
+    cornfield: 0xffffe5,
+    metallic: 0xaaaaff,
+    sunset: 0xaa4444,
+    starnight: 0x000000,
+    beforedawn: 0x333333,
+    nature: 0xfafafa,
+    deepocean: 0x333333,
+    solarized: 0xfdf6e3,
+    tomorrow: 0xf8f8f8,
+    'tomorrow-night': 0x1d1f21,
+  };
+
+  it.each(Object.entries(UPSTREAM_BACKGROUNDS))(
+    '%s keeps the upstream background verbatim',
+    (id, background) => {
+      expect(PREVIEW_COLORS[schemeColorsKey(id)].background).toBe(background);
+    }
+  );
+
+  it('leaves Starnight and DeepOcean exactly as upstream drew them', () => {
+    // MEASURED: these two are the only schemes that already pass all three
+    // thresholds untouched, so tuning them would have been a change with no
+    // accessibility justification.
+    expect(PREVIEW_COLORS.starnight.model).toBe(0xffffe0);
+    expect(PREVIEW_COLORS.starnight.modelBack).toBe(0x00ffff);
+    expect(PREVIEW_COLORS.starnight.edges).toBe(0x0000ff);
+    expect(PREVIEW_COLORS.deepocean.model).toBe(0xeeeeee);
+    expect(PREVIEW_COLORS.deepocean.modelBack).toBe(0x0babc8);
+    expect(PREVIEW_COLORS.deepocean.edges).toBe(0x0000ff);
+  });
+
+  it('does not ship upstream Cornfield, which fails 1.4.11 badly', () => {
+    // Upstream #f9d72c/#9dcb51 on #ffffe5 measure 1.40:1 and 1.86:1.
+    const cornfield = PREVIEW_COLORS[schemeColorsKey('cornfield')];
+    expect(cornfield.model).not.toBe(0xf9d72c);
+    expect(cornfield.modelBack).not.toBe(0x9dcb51);
+  });
+
+  it('has no -hc sibling for any scheme', () => {
+    // Classic ignores high contrast, and updateTheme must never suffix these:
+    // a lookup for a key that does not exist falls back to the light theme
+    // and the user's chosen scheme would silently disappear.
+    for (const scheme of VIEWPORT_SCHEMES) {
+      expect(PREVIEW_COLORS[`${scheme.colors}-hc`]).toBeUndefined();
+    }
   });
 });

@@ -230,3 +230,118 @@ test.describe('Expert Mode E2E Smoke Test (REC-003)', () => {
     )
   })
 })
+
+test.describe('D-15 — opening the editor must not steal focus from a menu', () => {
+  /**
+   * The editor is focused after a mode switch for WCAG 2.4.3, which is right
+   * on its own. The defect is that it happens a frame later, unconditionally,
+   * so a user who presses the editor toggle and then opens a menu ends up with
+   * the menu open and focus back in the editor — the APG menu contract says
+   * focus moves INTO an open menu and stays there.
+   *
+   * Both clicks fire in one task on purpose. That is what a fast keyboard or
+   * switch user produces, and it is the only timing that reproduces it: with
+   * ordinary click latency the menu wins the race anyway, which is why a test
+   * that merely clicked twice could not tell the fix from the defect.
+   */
+  test('the Edit menu keeps focus when the editor opens under it', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+
+    await page.goto('/')
+    await waitForWasmReady(page)
+    await page.setInputFiles(
+      '#fileInput',
+      path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
+    )
+    await page.waitForSelector('.param-control', {
+      state: 'attached',
+      timeout: 30_000,
+    })
+    await dismissSaveProjectModal(page)
+
+    const uiToggle = page.locator('#uiModeToggle')
+    if ((await uiToggle.getAttribute('aria-checked')) !== 'true') {
+      await uiToggle.click()
+    }
+    await expect(page.locator('#expertModeToggle')).toBeVisible({
+      timeout: 10_000,
+    })
+
+    await page.evaluate(() => {
+      document.getElementById('expertModeToggle').click()
+      document.getElementById('editMenuBtn').click()
+    })
+
+    // Long enough for both the rAF path and the 100ms timer to have run.
+    await page.waitForTimeout(600)
+
+    const state = await page.evaluate(() => {
+      const active = document.activeElement
+      return {
+        menuOpen: !!document.querySelector('#editMenuModal:not([hidden])'),
+        activeInMenu: !!active?.closest('#editMenuModal'),
+        activeIsEditor: !!active?.classList?.contains('cm-content'),
+      }
+    })
+
+    expect(state.menuOpen).toBe(true)
+    // MEASURED on the parent commit: activeIsEditor true with the menu open,
+    // from mode-manager's requestAnimationFrame focus, which had no guard.
+    expect(state.activeIsEditor).toBe(false)
+    expect(state.activeInMenu).toBe(true)
+  })
+})
+
+test.describe('Edit ▸ Font Size actually changes the font', () => {
+  /**
+   * Found while building Preferences ▸ Editor. The handler called
+   * `editor.updateOptions({ fontSize })` behind an `if (editor.updateOptions)`
+   * guard, and no editor in this codebase has ever had that method — so the
+   * control saved the number, updated its readout and announced the new size
+   * while changing nothing on screen. That is the worst shape of defect for
+   * the low-vision users the control exists for, and it is invisible to any
+   * test that only checks the announcement or the stored value.
+   */
+  test('increasing the font size grows the rendered text', async ({ page }) => {
+    test.setTimeout(240_000)
+
+    await page.goto('/')
+    await waitForWasmReady(page)
+    await page.setInputFiles(
+      '#fileInput',
+      path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
+    )
+    await page.waitForSelector('.param-control', {
+      state: 'attached',
+      timeout: 30_000,
+    })
+    await dismissSaveProjectModal(page)
+
+    const uiToggle = page.locator('#uiModeToggle')
+    if ((await uiToggle.getAttribute('aria-checked')) !== 'true') {
+      await uiToggle.click()
+    }
+    await page.locator('#expertModeToggle').click()
+
+    const surface = page.locator('#expertModeBody .cm-content, #expert-mode-textarea').first()
+    await expect(surface).toBeVisible({ timeout: 15_000 })
+
+    const fontSize = () =>
+      surface.evaluate((el) => parseFloat(getComputedStyle(el).fontSize))
+    const before = await fontSize()
+    expect(before).toBeGreaterThan(0)
+
+    await page.locator('#editMenuBtn').click()
+    await page
+      .locator('#editMenuModal [role="menuitem"]')
+      .filter({ hasText: 'Increase Font Size' })
+      .first()
+      .click()
+
+    // MEASURED on the parent commit: unchanged, because the method called
+    // does not exist.
+    await expect.poll(fontSize, { timeout: 5_000 }).toBeGreaterThan(before)
+  })
+})

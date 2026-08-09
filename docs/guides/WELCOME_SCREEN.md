@@ -31,7 +31,7 @@ This role-based approach reduces cognitive load by showing users paths relevant 
 **What you'll learn:**
 - Upload ZIP files with dependencies
 - Enable MCAD, BOSL2, and other libraries
-- Export in multiple formats (STL, OBJ, 3MF)
+- Export in multiple formats (STL, OBJ, AMF)
 
 ### 3. Keyboard-Only Users
 

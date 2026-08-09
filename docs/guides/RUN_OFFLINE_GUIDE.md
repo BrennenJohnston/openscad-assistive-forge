@@ -76,7 +76,7 @@ You only need to do this once after installing.
 1. Open the installed app at least once while online and let it finish loading (the page should be fully interactive and the example model should render).
 2. Disable wifi / unplug the network cable / put the device in airplane mode.
 3. Re-launch the app from the Start menu (Windows), Applications folder (macOS), or app launcher (Linux).
-4. The app should load and still let you open an example, change parameters, and render. Exporting STL/OBJ/3MF works too.
+4. The app should load and still let you open an example, change parameters, and render. Exporting STL/OBJ works too.
 
 If it does not load offline, see [Troubleshooting](#troubleshooting) below.
 

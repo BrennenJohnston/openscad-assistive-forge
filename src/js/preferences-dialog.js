@@ -10,10 +10,15 @@
  *
  * APG tabs, automatic activation: exactly one tab is in the page tab order
  * (roving tabindex), Left/Right move between tabs and select as they go,
- * Home/End jump to the ends. Disabled tabs are SKIPPED by the arrow keys
- * rather than removed, so their reason stays reachable: a disabled tab still
- * takes focus from a direct Tab or click, and a screen reader reads its
- * description there.
+ * Home/End jump to the ends.
+ *
+ * Unavailable tabs keep `aria-disabled="true"`, so they are announced as
+ * unavailable, but they are reachable and selectable like any other, and
+ * their panel holds the explanation. R-III skipped them with the arrows and
+ * left the reason to `aria-describedby` alone; MEASURED, that made the reason
+ * text invisible to every sighted user and, because a skipped tab also has
+ * `tabindex="-1"`, unreachable by keyboard at all — only a mouse click could
+ * focus it. Owner decision 2026-08-09: show the reason in the panel.
  *
  * @license GPL-3.0-or-later
  */
@@ -45,25 +50,21 @@ function tabs() {
   return TAB_IDS.map(el).filter(Boolean);
 }
 
-const isDisabled = (tab) => tab.getAttribute('aria-disabled') === 'true';
-
 /**
  * Select a tab: update aria-selected, the roving tabindex and panel
- * visibility. A disabled tab can be focused but never selected -- selecting
- * it would show an empty panel and hide the one the user was reading.
+ * visibility. Unavailable tabs select like any other -- their panel is where
+ * the reason lives, so refusing to show it is what hid the explanation.
  *
  * @param {HTMLElement} tab
  * @param {{focus?: boolean}} [options]
  */
 export function selectTab(tab, { focus = true } = {}) {
-  if (!tab || isDisabled(tab)) return;
+  if (!tab) return;
 
   for (const t of tabs()) {
     const selected = t === tab;
     t.setAttribute('aria-selected', String(selected));
-    // Roving tabindex: only the selected tab is a page tab stop. Disabled
-    // tabs keep tabindex="-1" so Tab does not stop on a dead control, but
-    // they stay clickable and their reason stays readable.
+    // Roving tabindex: only the selected tab is a page tab stop.
     t.setAttribute('tabindex', selected ? '0' : '-1');
     t.classList.toggle('active', selected);
 
@@ -75,9 +76,7 @@ export function selectTab(tab, { focus = true } = {}) {
 }
 
 /**
- * Move selection to the next enabled tab in `direction`, wrapping. Returns
- * false when no enabled tab exists in that direction, so the caller can
- * leave the key alone rather than swallowing it.
+ * Move selection one step in `direction`, wrapping.
  *
  * @param {HTMLElement} from
  * @param {number} direction -1 or 1
@@ -88,20 +87,16 @@ function moveSelection(from, direction) {
   const start = list.indexOf(from);
   if (start === -1) return false;
 
-  for (let step = 1; step <= list.length; step++) {
-    const next = list[(start + direction * step + list.length) % list.length];
-    if (next && !isDisabled(next)) {
-      selectTab(next);
-      return true;
-    }
-  }
-  return false;
+  const next = list[(start + direction + list.length) % list.length];
+  if (!next) return false;
+  selectTab(next);
+  return true;
 }
 
-/** First/last enabled tab, for Home/End. */
+/** First/last tab, for Home/End. */
 function selectEdge(fromEnd) {
-  const list = fromEnd ? tabs().reverse() : tabs();
-  const target = list.find((t) => !isDisabled(t));
+  const list = tabs();
+  const target = fromEnd ? list[list.length - 1] : list[0];
   if (target) selectTab(target);
 }
 
@@ -132,32 +127,132 @@ function onTablistKeydown(event) {
 
 let wired = false;
 
+/** @type {PreferencesHandlers} */
+let activeHandlers = {};
+
+/**
+ * @typedef {Object} PreferencesHandlers
+ * @property {() => void} [onOpenShortcuts]
+ * @property {(id: string) => void} [onColorSchemeChange]
+ * @property {() => string} [getColorScheme]
+ * @property {(enabled: boolean) => void} [onZoomToCursorChange]
+ * @property {() => boolean} [getZoomToCursor]
+ * @property {() => Object} [getEditorPrefs]
+ * @property {(name: string, value: number|boolean) => number|boolean} [onEditorPrefChange]
+ */
+
+/**
+ * Editor-tab control ids, paired with the preference each one writes.
+ * `number` controls clamp through the preference owner and echo back what was
+ * actually stored, so a control can never display a value the editor is not
+ * using.
+ */
+const EDITOR_CONTROLS = [
+  { id: 'prefsEditorFontSize', pref: 'fontSize', type: 'number' },
+  { id: 'prefsEditorIndentWidth', pref: 'indentWidth', type: 'number' },
+  { id: 'prefsEditorTabWidth', pref: 'tabWidth', type: 'number' },
+  { id: 'prefsEditorLineWrap', pref: 'lineWrapping', type: 'boolean' },
+  {
+    id: 'prefsEditorHighlightLine',
+    pref: 'highlightActiveLine',
+    type: 'boolean',
+  },
+];
+
+/**
+ * Push current app state into the dialog's controls.
+ *
+ * Called on every open rather than once at wire time: these settings have
+ * other homes in the app (zoom-to-cursor has its own checkbox in the viewport
+ * controls), so the dialog can be stale before it is ever shown. This is the
+ * multi-copy rule -- two controls for one setting must never disagree.
+ */
+function syncControls() {
+  const scheme = activeHandlers.getColorScheme?.();
+  if (scheme) {
+    const radio = document.querySelector(
+      `input[name="prefsColorScheme"][value="${scheme}"]`
+    );
+    if (radio) radio.checked = true;
+  }
+
+  const zoom = activeHandlers.getZoomToCursor?.();
+  const zoomBox = el('prefsMouseCentricZoom');
+  if (zoomBox && typeof zoom === 'boolean') zoomBox.checked = zoom;
+
+  const editorPrefs = activeHandlers.getEditorPrefs?.();
+  if (editorPrefs) {
+    for (const control of EDITOR_CONTROLS) {
+      const input = el(control.id);
+      if (!input) continue;
+      if (control.type === 'boolean') {
+        input.checked = Boolean(editorPrefs[control.pref]);
+      } else {
+        input.value = String(editorPrefs[control.pref]);
+      }
+    }
+  }
+}
+
+/** Editor tab: instant-apply on the running editor. */
+function wireEditorTab() {
+  for (const control of EDITOR_CONTROLS) {
+    const input = el(control.id);
+    if (!input) continue;
+
+    input.addEventListener('change', () => {
+      const raw =
+        control.type === 'boolean' ? input.checked : Number(input.value);
+      const stored = activeHandlers.onEditorPrefChange?.(control.pref, raw);
+
+      // Echo the stored value back into a number field. Typing 99 into an
+      // 8-32 box otherwise leaves the box reading 99 while the editor uses
+      // 32, and the control and its effect have come apart.
+      if (control.type === 'number' && typeof stored === 'number') {
+        input.value = String(stored);
+      }
+    });
+  }
+}
+
+/** 3D View tab: instant-apply, exactly like the desktop's own dialog. */
+function wireThreeDViewTab() {
+  // Delegated so the ten radios need one listener, and `change` rather than
+  // `click` so keyboard arrow-key selection applies too.
+  el('prefsColorSchemeList')?.addEventListener('change', (event) => {
+    const input = event.target;
+    if (input?.name !== 'prefsColorScheme') return;
+    activeHandlers.onColorSchemeChange?.(input.value);
+  });
+
+  el('prefsMouseCentricZoom')?.addEventListener('change', (event) => {
+    activeHandlers.onZoomToCursorChange?.(event.target.checked);
+  });
+}
+
 /**
  * Wire the dialog once. Idempotent: the menu item, a shortcut and a future
  * settings button can all call this without stacking listeners -- the same
  * duplicate-listener trap the shortcuts modal guards with dataset.initialized.
  *
- * @param {{onOpenShortcuts?: () => void}} [handlers]
+ * @param {PreferencesHandlers} [handlers]
  */
 export function initPreferencesDialog(handlers = {}) {
+  activeHandlers = handlers;
   const modal = el('preferencesModal');
   if (!modal || wired) return;
 
   const tablist = el('preferencesTablist');
   if (tablist) {
     tablist.addEventListener('keydown', onTablistKeydown);
-    // A click on a disabled tab focuses it (so its reason is announced) but
-    // must not select it.
     tablist.addEventListener('click', (event) => {
       const tab = event.target.closest('[role="tab"]');
-      if (!tab) return;
-      if (isDisabled(tab)) {
-        tab.focus();
-        return;
-      }
-      selectTab(tab);
+      if (tab) selectTab(tab);
     });
   }
+
+  wireThreeDViewTab();
+  wireEditorTab();
 
   // The shared helper wires the close button, the overlay AND Escape. Wiring
   // those by hand is how the first cut of this dialog shipped without Escape,
@@ -197,10 +292,13 @@ export function openPreferencesDialog(options = {}) {
 
   const wanted = options.tab ? el(`prefs-tab-${options.tab}`) : null;
   const target =
-    wanted && !isDisabled(wanted)
-      ? wanted
-      : tabs().find((t) => t.getAttribute('aria-selected') === 'true') ||
-        tabs().find((t) => !isDisabled(t));
+    wanted ||
+    tabs().find((t) => t.getAttribute('aria-selected') === 'true') ||
+    tabs()[0];
+
+  // Controls first: a radio that still shows the previous session's choice
+  // would be read out before the sync landed.
+  syncControls();
 
   // Set state before opening so the dialog never paints a wrong tab, and do
   // not steal focus here -- openModal moves focus into the dialog itself.

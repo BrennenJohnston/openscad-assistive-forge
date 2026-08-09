@@ -231,4 +231,127 @@ test.describe('Production build behind the shipped CSP', () => {
       'more was blocked than the single known CodeMirror <style> element'
     ).toBeLessThanOrEqual(1);
   });
+
+  test('prod-preferences: the 3D View panel is really styled behind the CSP', async ({
+    page,
+  }) => {
+    // R-I found TWO defects in this family, not one: CodeMirror's blocked
+    // stylesheet, and a dialog built by innerHTML whose inline style
+    // attributes the policy stripped — which shipped a permanently visible
+    // false warning. P11 adds a new panel with new CSS to a modal, so it is
+    // the same shape. Dev-server green proves nothing about the deployed app.
+    test.setTimeout(240_000);
+
+    await page.addInitScript(() => {
+      window.__cspViolations = [];
+      document.addEventListener('securitypolicyviolation', (event) => {
+        window.__cspViolations.push({
+          directive: event.effectiveDirective || event.violatedDirective,
+          blockedURI: event.blockedURI,
+          sample: (event.sample || '').slice(0, 120),
+        });
+      });
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+    });
+
+    await page.goto('/');
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: WASM_READY_TIMEOUT,
+    });
+    await page.locator('#fileInput').setInputFiles(FIXTURE);
+    await expect(page.locator('#mainInterface')).toBeVisible({
+      timeout: 30_000,
+    });
+    const notNow = page.locator('#saveProjectNotNow');
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 3_000 });
+      await notNow.click();
+    } catch {
+      // Save-project modal did not appear.
+    }
+    await page.locator('#uiModeToggle').click();
+
+    await page.locator('#editMenuBtn').click();
+    await page
+      .locator('#editMenuItems')
+      .getByText('Preferences…', { exact: true })
+      .click();
+    await page.locator('#prefs-tab-3dview').click();
+    await expect(page.locator('#prefsColorSchemeList')).toBeVisible();
+    await page.waitForTimeout(300);
+
+    fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
+    const shot = path.join(SCREENSHOT_DIR, 'preferences-3dview.png');
+    await page.screenshot({ path: shot });
+    console.log(`[production-smoke] whole-window screenshot: ${shot}`);
+
+    const measured = await page.evaluate(() => {
+      const list = document.getElementById('prefsColorSchemeList');
+      const row = list.querySelector('.preferences-scheme-row');
+      const listStyle = getComputedStyle(list);
+      const rowStyle = getComputedStyle(row);
+      return {
+        rows: list.querySelectorAll('.preferences-scheme-row').length,
+        // A real border proves the panel's own rules reached the document,
+        // rather than the browser's default no-border on a plain div.
+        borderWidth: listStyle.borderTopWidth,
+        rowDisplay: rowStyle.display,
+        rowHeight: Math.round(row.getBoundingClientRect().height),
+        // Compared against the token rather than a literal 44: the token
+        // resolves to 44 on touch and 36 on a fine pointer, and headless
+        // Chromium is the latter. Hardcoding 44 would assert something the
+        // design system deliberately does not promise here.
+        touchTarget: Math.round(
+          parseFloat(
+            getComputedStyle(document.documentElement).getPropertyValue(
+              '--size-touch-target'
+            )
+          )
+        ),
+        // No AUTHORED inline style in this panel: the policy refuses those,
+        // so a layout depending on one is broken only in production — the
+        // exact failure R-I shipped once.
+        //
+        // Counts NON-EMPTY values only. MEASURED: all twelve inputs here
+        // carry `style=""`, materialised by something touching el.style at
+        // runtime rather than written by hand — index.html contains no
+        // style= attribute anywhere. An empty attribute declares nothing and
+        // there is nothing for CSP to strip. Anything genuinely blocked
+        // shows up in the violation assertion below instead.
+        inlineStyled: [
+          ...document.querySelectorAll('#prefs-panel-3dview [style]'),
+        ].filter((e) => e.getAttribute('style').trim() !== '').length,
+      };
+    });
+    console.log(
+      '[production-smoke] preferences:',
+      JSON.stringify(measured, null, 2)
+    );
+
+    expect(measured.rows).toBe(10);
+    expect(
+      measured.borderWidth,
+      'the scheme list has no border: its stylesheet never applied'
+    ).not.toBe('0px');
+    expect(measured.rowDisplay).toBe('flex');
+    expect(measured.touchTarget).toBeGreaterThan(0);
+    expect(
+      measured.rowHeight,
+      'scheme rows collapsed below the touch-target token'
+    ).toBeGreaterThanOrEqual(measured.touchTarget);
+    expect(
+      measured.inlineStyled,
+      'an inline style attribute in this dialog is stripped in production'
+    ).toBe(0);
+
+    const violations = await page.evaluate(() => window.__cspViolations);
+    expect(
+      violations.filter((v) => v.directive !== 'style-src-elem'),
+      'opening Preferences violated the shipped CSP'
+    ).toEqual([]);
+    expect(violations.length).toBeLessThanOrEqual(1);
+  });
 });

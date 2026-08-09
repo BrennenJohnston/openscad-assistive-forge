@@ -43,6 +43,7 @@ import {
   foldAll,
   unfoldAll,
   foldService,
+  indentUnit,
 } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
 import {
@@ -70,6 +71,7 @@ import {
   SearchQuery,
 } from '@codemirror/search';
 import { adoptCodeMirrorStyles } from './codemirror-csp-styles.js';
+import { loadEditorPrefs } from './editor-prefs.js';
 
 // ─── OpenSCAD token lists (ported from textarea-editor.js / monaco-editor.js) ──
 
@@ -258,6 +260,35 @@ const darkHighlightStyle = HighlightStyle.define([
   { tag: tags.number, color: '#B5CEA8' },
   { tag: tags.operator, color: '#D4D4D4' },
 ]);
+
+/**
+ * CodeMirror has no font-size facility; a theme is the facility. Set on the
+ * editor root and on .cm-gutters so the line numbers scale with the code —
+ * sizing only the content leaves the gutter behind and the two stop lining
+ * up. Given in px because the control is a px control (Edit ▸ Font Size has
+ * always announced "Font size: 14px").
+ *
+ * The explicit line-height is not decoration. MEASURED: before anything set
+ * a font size on the editor root, rows were 22px against 14px text — 1.57,
+ * inherited by accident from the page. Setting the root to 14px recomputed
+ * that inherited unitless line-height against a smaller number and rows fell
+ * to 20px, i.e. 1.43, under the 1.5 that WCAG 2.2 SC 1.4.12 Text Spacing
+ * asks for. Pinning it here keeps the ratio at every font size the user can
+ * choose, instead of letting it drift out of range whenever the size changes.
+ *
+ * @param {number} px
+ */
+const EDITOR_LINE_HEIGHT = 1.6;
+
+function fontSizeTheme(px) {
+  return EditorView.theme({
+    '&': { fontSize: `${px}px` },
+    // The row height follows .cm-scroller, which carries CodeMirror's own
+    // line-height: 1.4 — that is where the 1.43 came from, not the root.
+    '.cm-scroller': { lineHeight: String(EDITOR_LINE_HEIGHT) },
+    '.cm-gutters': { fontSize: `${px}px` },
+  });
+}
 
 const lightEditorTheme = EditorView.theme({
   '&': {
@@ -659,6 +690,25 @@ export class CodeMirrorEditor {
     /** @type {Compartment} - Holds history() so setValue can reset undo state */
     this._historyCompartment = new Compartment();
 
+    // Preferences ▸ Editor reconfigures these live. Each is a real CodeMirror
+    // facility: a theme for the font size, the indentUnit and tabSize facets,
+    // the lineWrapping extension and highlightActiveLine. Anything the tab
+    // offers that has no facility behind it ships disabled with a reason
+    // rather than pretending.
+    /** @type {Compartment} */
+    this._fontSizeCompartment = new Compartment();
+    /** @type {Compartment} */
+    this._indentCompartment = new Compartment();
+    /** @type {Compartment} */
+    this._tabSizeCompartment = new Compartment();
+    /** @type {Compartment} */
+    this._wrapCompartment = new Compartment();
+    /** @type {Compartment} */
+    this._activeLineCompartment = new Compartment();
+
+    /** @type {import('./editor-prefs.js').EditorPrefs} */
+    this._editorPrefs = loadEditorPrefs();
+
     /**
      * True while setValue() replaces the document. A programmatic replace is
      * not a user edit: it must not reach onChange, or loading a project marks
@@ -688,6 +738,11 @@ export class CodeMirrorEditor {
     const onSave = this.onSave;
     const onRun = this.onRun;
 
+    // Re-read on every initialize(): the editor is destroyed and rebuilt on
+    // each mode switch, so settings applied in a previous life have to come
+    // back from storage or they silently reset.
+    this._editorPrefs = loadEditorPrefs();
+
     const startState = EditorState.create({
       doc: '',
       extensions: [
@@ -695,7 +750,16 @@ export class CodeMirrorEditor {
         // a long line runs off the pane and has to be scrolled to sideways,
         // which also fails WCAG 1.4.10. CodeMirror keeps one line number per
         // logical line, against its first visual row, as the desktop does.
-        EditorView.lineWrapping,
+        this._wrapCompartment.of(
+          this._editorPrefs.lineWrapping ? EditorView.lineWrapping : []
+        ),
+        this._fontSizeCompartment.of(fontSizeTheme(this._editorPrefs.fontSize)),
+        this._indentCompartment.of(
+          indentUnit.of(' '.repeat(this._editorPrefs.indentWidth))
+        ),
+        this._tabSizeCompartment.of(
+          EditorState.tabSize.of(this._editorPrefs.tabWidth)
+        ),
         lineNumbers(),
         bookmarkField,
         bookmarkGutter,
@@ -705,7 +769,9 @@ export class CodeMirrorEditor {
         foldGutter(),
         this._historyCompartment.of(history()),
         drawSelection(),
-        highlightActiveLine(),
+        this._activeLineCompartment.of(
+          this._editorPrefs.highlightActiveLine ? highlightActiveLine() : []
+        ),
         highlightSelectionMatches(),
         // Installed explicitly so the search state exists from the start.
         // CodeMirror otherwise adds it only when the panel first opens, and
@@ -848,6 +914,62 @@ export class CodeMirrorEditor {
     if (this._view) {
       this._view.focus();
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Preferences ▸ Editor — live reconfiguration
+  //
+  // Each setter reconfigures one compartment on the running editor, so a
+  // change is visible on the document already open rather than on the next
+  // one. Values are clamped by editor-prefs before they arrive here.
+  // ---------------------------------------------------------------------------
+
+  /** @param {number} px */
+  setFontSize(px) {
+    this._editorPrefs.fontSize = px;
+    this._view?.dispatch({
+      effects: this._fontSizeCompartment.reconfigure(fontSizeTheme(px)),
+    });
+  }
+
+  /** @param {number} width Spaces per indent step. */
+  setIndentWidth(width) {
+    this._editorPrefs.indentWidth = width;
+    this._view?.dispatch({
+      effects: this._indentCompartment.reconfigure(
+        indentUnit.of(' '.repeat(width))
+      ),
+    });
+  }
+
+  /** @param {number} width Columns a literal tab character occupies. */
+  setTabWidth(width) {
+    this._editorPrefs.tabWidth = width;
+    this._view?.dispatch({
+      effects: this._tabSizeCompartment.reconfigure(
+        EditorState.tabSize.of(width)
+      ),
+    });
+  }
+
+  /** @param {boolean} on */
+  setLineWrapping(on) {
+    this._editorPrefs.lineWrapping = on;
+    this._view?.dispatch({
+      effects: this._wrapCompartment.reconfigure(
+        on ? EditorView.lineWrapping : []
+      ),
+    });
+  }
+
+  /** @param {boolean} on */
+  setHighlightActiveLine(on) {
+    this._editorPrefs.highlightActiveLine = on;
+    this._view?.dispatch({
+      effects: this._activeLineCompartment.reconfigure(
+        on ? highlightActiveLine() : []
+      ),
+    });
   }
 
   /**
