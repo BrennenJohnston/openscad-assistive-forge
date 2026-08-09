@@ -1136,6 +1136,22 @@ test.describe('Design menu and Export submenu parity (G3)', () => {
     expect(items.some((i) => /POV/i.test(i.label))).toBe(false)
   })
 
+  test('the output-format select tells the same 3MF story as the menu (T2-B2)', async ({
+    page,
+  }) => {
+    // No fixture: the select is static markup, and the point is that the two
+    // places 3MF is offered cannot disagree about whether it works.
+    await page.goto('/')
+    await page.waitForLoadState('domcontentloaded')
+
+    const option = page.locator('#outputFormat option[value="3mf"]')
+    await expect(option).toBeAttached()
+    await expect(option).toBeDisabled()
+    // An <option> cannot carry aria-describedby, so the reason lives in the
+    // label itself — that is what a screen reader reads out.
+    await expect(option).toHaveText(/not available in this browser build/i)
+  })
+
   test('exporting with only a preview done renders first, then downloads', async ({
     page,
   }) => {

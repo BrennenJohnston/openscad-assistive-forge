@@ -1232,7 +1232,7 @@
                         <ul class="role-path-tips" aria-label="Key capabilities">
                           <li>Upload ZIP files with include/use dependencies</li>
                           <li>Enable MCAD, BOSL2, and other libraries</li>
-                          <li>Export in multiple formats (STL, OBJ, 3MF, SVG, DXF)</li>
+                          <li>Export in multiple formats (STL, OBJ, AMF, SVG, DXF)</li>
                           <li>Save and manage projects with companion files</li>
                         </ul>
                       </details>
@@ -3379,7 +3379,13 @@
                     <option value="obj">OBJ - Wavefront (Text)</option>
                     <option value="off">OFF - Object File Format</option>
                     <option value="amf">AMF - Additive Manufacturing</option>
-                    <option value="3mf">3MF - 3D Manufacturing</option>
+                    <!-- Measured: this WASM build traps on 3MF with "function
+                         signature mismatch". The File > Export menu item already
+                         says so; the option carries its reason in its own label
+                         because an <option> cannot take aria-describedby. -->
+                    <option value="3mf" disabled>
+                      3MF - not available in this browser build
+                    </option>
                   </optgroup>
                   <optgroup label="Laser Cutting / 2D">
                     <option value="svg">SVG - Vector Graphics</option>
@@ -6255,8 +6261,8 @@
               <li><strong>OFF</strong> – Object File Format for geometry</li>
               <li><strong>AMF</strong> – Additive Manufacturing File Format</li>
               <li>
-                <strong>3MF</strong> – Modern 3D printing format with color
-                support
+                <strong>3MF</strong> – Not available in this browser build.
+                Export as STL or OBJ instead — most slicers accept both.
               </li>
             </ul>
             <h4>Multi-File Projects</h4>
@@ -6382,7 +6388,7 @@
               </li>
               <li>
                 <strong>Generate</strong> – Create your output file
-                (STL/OBJ/OFF/AMF/3MF)
+                (STL/OBJ/OFF/AMF)
               </li>
               <li>
                 <strong>Download</strong> – Download the generated file (or
