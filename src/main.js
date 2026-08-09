@@ -44,7 +44,11 @@ import {
 import { setStlViewActive, isStlViewActive } from './js/stl-view-mode.js';
 import { escapeHtml, isValidServiceWorkerMessage } from './js/html-utils.js';
 import { getQualityPreset, COMPLEXITY_TIER } from './js/quality-tiers.js';
-import { getThreeModule, CAMERA_ZOOM_STEP } from './js/preview.js';
+import {
+  getThreeModule,
+  CAMERA_ZOOM_STEP,
+  VIEWPORT_SCHEMES,
+} from './js/preview.js';
 import { normalizeHexColor } from './js/color-utils.js';
 import { buildDefineArgs as formatBuildDefineArgs } from './js/scad-param-formatter.js';
 import {
@@ -3811,7 +3815,32 @@ async function initApp() {
         type: 'action',
         label: 'Preferences…',
         handler: () => {
-          initPreferencesDialog({ onOpenShortcuts: _openShortcutsModal });
+          initPreferencesDialog({
+            onOpenShortcuts: _openShortcutsModal,
+            getColorScheme: () =>
+              previewManager?.getViewportScheme?.() ?? 'cornfield',
+            onColorSchemeChange: (id) => {
+              if (!previewManager?.setViewportScheme(id)) return;
+              const label =
+                VIEWPORT_SCHEMES.find((s) => s.id === id)?.label ?? id;
+              // Instant-apply is silent for a screen-reader user otherwise:
+              // the only feedback is a repaint they cannot see.
+              announceImmediate(`Color scheme ${label}`);
+            },
+            getZoomToCursor: () => previewManager?.zoomToCursorEnabled ?? true,
+            onZoomToCursorChange: (enabled) => {
+              previewManager?.toggleZoomToCursor(enabled);
+              // The viewport controls carry a second checkbox for this one
+              // setting; leaving it stale is the multi-copy trap.
+              const other = document.getElementById('zoomToCursorToggle');
+              if (other) other.checked = enabled;
+              announceImmediate(
+                enabled
+                  ? 'Zoom toward the mouse pointer, on'
+                  : 'Zoom toward the mouse pointer, off'
+              );
+            },
+          });
           openPreferencesDialog({
             returnFocusTo: document.getElementById('editMenuBtn'),
           });
