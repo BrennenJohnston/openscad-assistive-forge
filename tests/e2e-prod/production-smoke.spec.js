@@ -166,10 +166,12 @@ test.describe('Production build behind the shipped CSP', () => {
     }
 
     // (a) CodeMirror's own styles reached the document.
+    // "pre" unwrapped, "break-spaces" once lineWrapping is on; both preserve
+    // whitespace. "normal" is the collapsed, unstyled state.
     expect(
       measured.whiteSpace,
-      'CodeMirror sets white-space on .cm-content; a proportional value means its stylesheet never applied'
-    ).toMatch(/^pre/);
+      'CodeMirror preserves whitespace on .cm-content; "normal" means its stylesheet never applied'
+    ).toMatch(/^(pre|break-spaces)/);
     expect(
       measured.fontFamily.toLowerCase(),
       'CodeMirror sets a monospace family on the scroller; a system font means its stylesheet never applied'

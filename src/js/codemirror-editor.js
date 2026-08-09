@@ -691,6 +691,11 @@ export class CodeMirrorEditor {
     const startState = EditorState.create({
       doc: '',
       extensions: [
+        // Desktop OpenSCAD wraps at word boundaries by default. Without this
+        // a long line runs off the pane and has to be scrolled to sideways,
+        // which also fails WCAG 1.4.10. CodeMirror keeps one line number per
+        // logical line, against its first visual row, as the desktop does.
+        EditorView.lineWrapping,
         lineNumbers(),
         bookmarkField,
         bookmarkGutter,
