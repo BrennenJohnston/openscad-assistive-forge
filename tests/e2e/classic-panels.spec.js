@@ -131,6 +131,144 @@ async function openWindowMenuItem(page, name) {
   await item.click();
 }
 
+/**
+ * Every dock title bar's controls, in DOM order, with geometry. Reads the live
+ * DOM rather than trusting a selector list, so a bar that gains a control is
+ * covered without editing the test.
+ */
+function readTitlebars(page) {
+  return page.evaluate(() => {
+    const box = (el) => {
+      const r = el.getBoundingClientRect();
+      return {
+        left: Math.round(r.left),
+        right: Math.round(r.right),
+        width: Math.round(r.width),
+        height: Math.round(r.height),
+      };
+    };
+    return [
+      ...document.querySelectorAll('#mainInterface .classic-pane-titlebar'),
+    ]
+      .filter((bar) => bar.getClientRects().length > 0)
+      .map((bar) => ({
+        title:
+          bar.querySelector('.classic-pane-title')?.textContent || '(none)',
+        bar: box(bar),
+        paddingRight: getComputedStyle(bar).paddingRight,
+        controls: [...bar.children]
+          .filter((el) => el.tagName === 'BUTTON')
+          .map((el) => ({
+            kind: el.classList.contains('classic-panel-menu-btn')
+              ? 'menu'
+              : el.hasAttribute('aria-expanded')
+                ? 'disclosure'
+                : 'close',
+            name: el.getAttribute('aria-label'),
+            box: box(el),
+          })),
+      }));
+  });
+}
+
+// ─── P3: title-bar control order (D1/D2) ─────────────────────────────────────
+
+test.describe('Title-bar control order (P3)', () => {
+  test('classic-titlebar-order: the close button is hard right, the move menu sits before it', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    // Every optional panel on, so "every title bar" means every one of them.
+    await seedPanes(page, {
+      animateVisible: true,
+      fontListVisible: true,
+      viewportControlVisible: true,
+    });
+    await loadProject(page);
+    await enterClassicStandard(page);
+    await expect(page.locator('.classic-panel-menu-btn').first()).toBeVisible();
+
+    const bars = await readTitlebars(page);
+    console.log('[p3] title bars:', JSON.stringify(bars, null, 2));
+
+    expect(
+      bars.length,
+      'no title bars found — the probe selector is wrong'
+    ).toBeGreaterThanOrEqual(4);
+
+    let barsWithClose = 0;
+    for (const bar of bars) {
+      const menu = bar.controls.find((c) => c.kind === 'menu');
+      const close = bar.controls.find((c) => c.kind === 'close');
+
+      // D1: on the desktop every dock title bar's ✕ is hard against the right
+      // edge. Ours may sit one padding token in, no further.
+      if (close) {
+        barsWithClose += 1;
+        const inset = bar.bar.right - close.box.right;
+        expect(
+          inset,
+          `${bar.title}: ✕ right edge is ${inset}px from the bar edge (padding-right ${bar.paddingRight})`
+        ).toBeLessThanOrEqual(6);
+        expect(
+          inset,
+          `${bar.title}: ✕ overflows the bar`
+        ).toBeGreaterThanOrEqual(0);
+      }
+
+      if (menu && close) {
+        // Visual order, and DOM order with it — a CSS-only reorder would put
+        // the focus order out of step with the reading order (WCAG 2.4.3).
+        expect(
+          menu.box.left,
+          `${bar.title}: ⋮ at x=${menu.box.left} must be left of ✕ at x=${close.box.left}`
+        ).toBeLessThan(close.box.left);
+        const order = bar.controls.map((c) => c.kind);
+        expect(
+          order.indexOf('menu'),
+          `${bar.title}: DOM order is ${order.join(' → ')}`
+        ).toBeLessThan(order.indexOf('close'));
+      }
+
+      // Q-1 order: the ⋮ follows the bar's disclosures.
+      if (menu) {
+        const order = bar.controls.map((c) => c.kind);
+        const lastDisclosure = order.lastIndexOf('disclosure');
+        if (lastDisclosure !== -1) {
+          expect(
+            order.indexOf('menu'),
+            `${bar.title}: DOM order is ${order.join(' → ')}`
+          ).toBeGreaterThan(lastDisclosure);
+        }
+
+        // D2: the ⋮ was a sliver flush against the bar edge. It carries the
+        // touch-target token like every other pane button; 36px is that token
+        // on a fine pointer, which is what Playwright's Chromium reports as.
+        expect(
+          menu.box.width,
+          `${bar.title}: ⋮ hit area is ${menu.box.width}x${menu.box.height}px`
+        ).toBeGreaterThanOrEqual(36);
+        expect(menu.box.height).toBeGreaterThanOrEqual(36);
+      }
+    }
+
+    // Guards the loop above: if no bar had a ✕, every close assertion was
+    // skipped and the test would pass having checked nothing.
+    expect(
+      barsWithClose,
+      'no title bar had a close button'
+    ).toBeGreaterThanOrEqual(2);
+
+    // The focus order has to agree with the reading order, or the visual fix
+    // has been bought with a keyboard regression (WCAG 2.4.3).
+    await page
+      .getByRole('button', { name: 'Move Editor', exact: true })
+      .focus();
+    await page.keyboard.press('Tab');
+    await expect(page.locator('#classicEditorCloseBtn')).toBeFocused();
+  });
+});
+
 // ─── F1: reaching the Error Log ──────────────────────────────────────────────
 
 test.describe('Error Log reach (F1)', () => {

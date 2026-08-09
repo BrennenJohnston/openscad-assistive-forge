@@ -1115,6 +1115,11 @@ body[data-ui-mode='classic'] .classic-pane-title {
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-normal);
   color: var(--color-text-primary);
+  /* Takes the bar's free space so the controls group at the right edge as they
+     do on the desktop. With space-between and a bare title, two controls were
+     spread across the whole bar and the ⋮ hung in the middle of it (D2). */
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 body[data-ui-mode='classic'] .classic-pane-btn {

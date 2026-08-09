@@ -37,6 +37,30 @@ const TITLEBAR_CLASS = 'classic-pane-titlebar';
 const MENU_ITEM_SELECTOR = '[role="menuitem"]';
 
 /**
+ * Where the ⋮ belongs in a title bar. The owner's order (Q-1, 2026-08-08) is
+ * `[title …spacer… collapse ▾ | ⋮ | ✕]`: the ⋮ follows the bar's disclosure
+ * controls and precedes its close button, and ✕ ends up hard against the right
+ * edge as it is on the desktop (D1). Before this the ⋮ was simply appended,
+ * which put it to the RIGHT of every ✕.
+ *
+ * A disclosure is told apart by the `aria-expanded` it must carry to be one at
+ * all, rather than by a list of button ids that would rot the next time a pane
+ * gains a control. Close buttons carry no such state.
+ *
+ * @param {Element} bar
+ * @returns {Element|null} the node to insert before; null means append
+ */
+function menuInsertionPoint(bar) {
+  for (const child of bar.children) {
+    if (child.tagName !== 'BUTTON') continue;
+    if (child.classList.contains(MENU_BTN_CLASS)) continue;
+    if (child.hasAttribute('aria-expanded')) continue;
+    return child;
+  }
+  return null;
+}
+
+/**
  * @typedef {Object} PanelMenuDeps
  * @property {() => string[]} getAllPanels - every dock panel id
  * @property {(panelId: string) => string|null} getFieldOf
@@ -89,9 +113,12 @@ export class ClassicPanelMenus {
         continue;
       }
       let btn = bar.querySelector(`.${MENU_BTN_CLASS}`);
-      if (!btn) {
-        btn = this._createButton();
-        bar.appendChild(btn);
+      if (!btn) btn = this._createButton();
+      // Re-inserting a button that is already in place would blur it, and
+      // refresh() runs right after a move has deliberately placed focus.
+      const before = menuInsertionPoint(bar);
+      if (btn.parentElement !== bar || btn.nextElementSibling !== before) {
+        bar.insertBefore(btn, before);
       }
       btn.dataset.classicPanels = panels.join(' ');
       btn.setAttribute('aria-label', this._buttonLabel(panels));
