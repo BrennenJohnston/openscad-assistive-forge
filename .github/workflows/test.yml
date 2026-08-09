@@ -183,7 +183,14 @@ jobs:
           # ceiling: the run ended in "Timed out waiting 600s" with 23 tests
           # never started, not on any assertion. Same escape hatch the WASM
           # smoke and WebKit jobs already use.
-          PW_GLOBAL_TIMEOUT: '900000'
+          #
+          # Raised again to match Edge (25min) for the same reason, one tier
+          # up: at 900000 the last develop run reported "Timed out waiting
+          # 900s" with 352 passed, 0 failed and 11 never started. Edge runs
+          # the same suite in 19min and passes on this ceiling. Red here has
+          # meant the clock rather than a defect, which is precisely how a
+          # broken editor once shipped behind a green suite.
+          PW_GLOBAL_TIMEOUT: '1500000'
       
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4

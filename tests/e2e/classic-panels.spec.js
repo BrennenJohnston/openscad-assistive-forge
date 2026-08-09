@@ -1171,6 +1171,12 @@ test.describe('Panels CSS and accessibility (F7)', () => {
     // violations, measured in R2b and neither of them Classic's doing:
     // nested-interactive on Forge <summary> elements containing buttons, and
     // scrollable-region-focusable on CodeMirror's tabindex="-1" scroller.
+    //
+    // The second is a false positive, measured in P2: axe does not count a
+    // contenteditable child as focusable content, but .cm-content is reached
+    // by Tab and PageDown scrolls the region (scrollTop 0 -> 4365). Putting
+    // tabindex="0" on the scroller would silence axe at the cost of a second,
+    // redundant tab stop on a region the keyboard already reaches. Do not.
     const allowed = ['nested-interactive', 'scrollable-region-focusable'];
     const unexpected = results.violations
       .map((v) => v.id)

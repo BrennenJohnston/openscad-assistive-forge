@@ -943,6 +943,38 @@ details.param-group.forge-disclosure[open] > summary::before {
   gap: var(--space-md);
 }
 
+.save-project-intro {
+  margin-bottom: var(--space-md);
+  color: var(--color-text-secondary);
+}
+
+/* Hidden until a name collision is found; the dialog reveals it by setting
+   display directly, which is CSSOM and so unaffected by style-src. */
+.save-project-duplicate-warning {
+  display: none;
+  margin-top: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  background: color-mix(
+    in srgb,
+    var(--color-warning, #f59e0b) 15%,
+    transparent
+  );
+  border: 1px solid var(--color-warning, #f59e0b);
+}
+
+.save-project-duplicate-title {
+  margin: 0 0 var(--space-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.save-project-duplicate-text {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
 .save-project-checkbox-wrapper {
   display: flex;
   align-items: center;
