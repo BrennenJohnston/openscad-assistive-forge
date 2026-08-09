@@ -207,8 +207,8 @@ const DOCK_FIELD_CONTAINERS = [
  * Controls that move into the Customizer dock rather than a created slot, so
  * its header matches the desktop Customizer exactly (U4):
  *
- *   Row 1  Automatic Preview checkbox + the detail combobox
- *   Row 2  preset combobox + [+] + [−]
+ *   Row 1  Automatic Preview checkbox + the detail combobox + Reset
+ *   Row 2  preset combobox + [+] + [−] + save preset
  *   ────   "Forge additions", collapsed: everything upstream does not have
  *
  * Moving individual controls rather than their two container rows is what
@@ -217,22 +217,33 @@ const DOCK_FIELD_CONTAINERS = [
  * hidden by classic.css; the husk-hide is also what drops the legacy preset
  * search in Classic (D-22), since the searchable combobox covers it.
  *
+ * P5 moved Reset and save preset OUT of Forge additions and into the rows:
+ * both are controls the desktop Customizer has, so a section named for what
+ * the desktop lacks was the wrong shelf for them. Two owner decisions came
+ * with that, both 2026-08-08 with the control on screen: the visible label
+ * stays "Reset All" rather than the desktop's "Reset", because "All" says what
+ * the button does to someone who has never used desktop OpenSCAD and it
+ * discards work; and both controls now appear in Classic-Simplified, where
+ * Forge additions had been hiding them, because Simplified already shows the
+ * preset box with its + and −, and resetting parameters is a beginner action.
+ *
  * Order matters — each is appended to its target in turn — and exit()
  * restores in reverse, so every control returns to its recorded position.
  * @type {Array<{panelId: string, targetId: string}>}
  */
 const CUSTOMIZER_DOCK_MOVES = [
-  // Row 1: the detail combobox joins the Automatic Preview checkbox
+  // Row 1: the detail combobox joins the Automatic Preview checkbox, then Reset
+  // ends the line — upstream's row 1 is exactly these three (U4, OpenSCAD_1).
   { panelId: 'paramDetailLevelWrap', targetId: 'classicCustomizerControls' },
-  // Row 2: preset combobox then the +/− pair, in upstream order
+  { panelId: 'resetAllBtn', targetId: 'classicCustomizerControls' },
+  // Row 2: preset combobox, the +/− pair, then save preset, in upstream order
   { panelId: 'presetComboboxContainer', targetId: 'classicPresetRow' },
   { panelId: 'presetSelector', targetId: 'classicPresetRow' },
   { panelId: 'addPresetBtn', targetId: 'classicPresetRow' },
   { panelId: 'deletePresetBtn', targetId: 'classicPresetRow' },
+  { panelId: 'savePresetBtn', targetId: 'classicPresetRow' },
   // Forge additions, in the order they read best when expanded
-  { panelId: 'resetAllBtn', targetId: 'classicForgeExtrasRow' },
   { panelId: 'customizerGroupToggles', targetId: 'classicForgeExtrasRow' },
-  { panelId: 'savePresetBtn', targetId: 'classicForgeExtrasRow' },
   { panelId: 'copyPresetBtn', targetId: 'classicForgeExtrasRow' },
   { panelId: 'copyPresetNameBtn', targetId: 'classicForgeExtrasRow' },
   { panelId: 'managePresetsBtn', targetId: 'classicForgeExtrasRow' },

@@ -920,22 +920,26 @@ test.describe('Classic mode layout (C4)', () => {
     ).toHaveCount(1);
     await expect(page.locator('#classicCustomizerBar')).toBeVisible();
 
-    // Upstream row 1 is Automatic Preview + the detail combobox, nothing else
+    // Upstream row 1 is Automatic Preview + the detail combobox + Reset. P5
+    // moved Reset here from Forge additions: it IS a control the desktop
+    // Customizer has, so hiding it in a section named for what desktop lacks
+    // was the wrong shelf. Row 2 gained save preset for the same reason.
     await expect(
       page.locator('#classicCustomizerControls #paramDetailLevelWrap')
     ).toHaveCount(1);
     await expect(
       page.locator('#classicCustomizerControls #resetAllBtn')
-    ).toHaveCount(0);
+    ).toHaveCount(1);
+    await expect(page.locator('#classicPresetRow #savePresetBtn')).toHaveCount(
+      1
+    );
 
     // Everything upstream lacks sits in the collapsed Forge additions section
     const forgeExtras = page.locator('#classicForgeExtras');
     await expect(forgeExtras).toBeVisible();
     await expect(forgeExtras).not.toHaveAttribute('open', '');
     for (const id of [
-      '#resetAllBtn',
       '#customizerGroupToggles',
-      '#savePresetBtn',
       '#copyPresetBtn',
       '#copyPresetNameBtn',
       '#managePresetsBtn',
@@ -2622,7 +2626,11 @@ test.describe('View menu per-toolbar hide toggles (G4)', () => {
       new MutationObserver(() => {
         const text = region.textContent.trim();
         if (text) window.__said.push(text);
-      }).observe(region, { childList: true, subtree: true, characterData: true });
+      }).observe(region, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+      });
     });
 
     await page.locator('#windowMenuBtn').click();

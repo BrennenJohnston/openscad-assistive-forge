@@ -1540,12 +1540,20 @@ body[data-ui-mode='classic'] .classic-auto-preview-label {
   cursor: pointer;
 }
 
-/* Upstream row 1 is exactly Automatic Preview + the detail combobox (U4),
-   so the combobox sits at the end of the line */
+/* Upstream row 1 is Automatic Preview + the detail combobox + Reset (U4,
+   OpenSCAD_1), so the combobox and the button that follows it sit at the end of
+   the line, with the checkbox alone on the left. */
 body[data-ui-mode='classic']
   .classic-customizer-controls
   .param-detail-level-wrap {
   margin-left: auto;
+}
+
+/* Reset arrived here from Forge additions at 32px tall — below the token, and
+   visibly short beside the 36px select it now stands next to. The select in
+   this row already asks for the token explicitly; so does the button. */
+body[data-ui-mode='classic'] .classic-customizer-controls .btn {
+  min-height: var(--size-touch-target);
 }
 
 body[data-ui-mode='classic']

@@ -563,6 +563,130 @@ test.describe('Per-panel collapse (P4)', () => {
   });
 });
 
+// ─── P5: Customizer header rows ──────────────────────────────────────────────
+
+test.describe('Customizer header rows (P5)', () => {
+  test('classic-customizer-rows: Reset ends row 1 and save preset ends row 2', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await seedPanes(page);
+    await loadProject(page);
+    await enterClassicStandard(page);
+
+    const row1 = page.locator('#classicCustomizerControls');
+    const row2 = page.locator('#classicPresetRow');
+
+    // Membership: the desktop's row 1 is Automatic Preview + the detail
+    // combobox + Reset, and its row 2 ends in save preset (OpenSCAD_1).
+    await expect(row1.locator('#resetAllBtn')).toHaveCount(1);
+    await expect(row2.locator('#savePresetBtn')).toHaveCount(1);
+    await expect(
+      page.locator('#classicForgeExtrasRow #resetAllBtn'),
+      'Reset is a control the desktop Customizer has, so it does not belong in a section named for what it lacks'
+    ).toHaveCount(0);
+    await expect(
+      page.locator('#classicForgeExtrasRow #savePresetBtn')
+    ).toHaveCount(0);
+
+    const readRows = () =>
+      page.evaluate(() => {
+        const ids = (id) =>
+          [...document.getElementById(id).children].map(
+            (el) => el.id || el.className
+          );
+        const box = (sel) => {
+          const r = document.querySelector(sel).getBoundingClientRect();
+          return {
+            left: Math.round(r.left),
+            right: Math.round(r.right),
+            top: Math.round(r.top),
+            height: Math.round(r.height),
+          };
+        };
+        return {
+          row1: ids('classicCustomizerControls'),
+          row2: ids('classicPresetRow'),
+          reset: box('#classicCustomizerControls #resetAllBtn'),
+          detail: box('#classicCustomizerControls #paramDetailLevelWrap'),
+          save: box('#classicPresetRow #savePresetBtn'),
+          del: box('#classicPresetRow #deletePresetBtn'),
+          bar: box('#classicCustomizerBar'),
+        };
+      });
+
+    // Reference width. OpenSCAD_1.png is a 1920px window, and the desktop's
+    // row 1 fits Automatic Preview, the detail combobox and Reset on one line
+    // there. The default 1280px test viewport does not — see the narrow case
+    // at the end, where wrapping is the wanted behaviour.
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.waitForTimeout(400);
+    const wide = await readRows();
+    console.log('[p5] header rows at 1920:', JSON.stringify(wide, null, 2));
+
+    // Last in each row, and in the reading order too — a CSS-only nudge would
+    // leave the focus order out of step (WCAG 2.4.3).
+    expect(wide.row1[wide.row1.length - 1]).toBe('resetAllBtn');
+    expect(wide.row2[wide.row2.length - 1]).toBe('savePresetBtn');
+    expect(wide.reset.left).toBeGreaterThan(wide.detail.right - 1);
+    expect(wide.save.left).toBeGreaterThan(wide.del.right - 1);
+    // Both end the line, one padding token in, as they do on the desktop.
+    expect(wide.bar.right - wide.reset.right).toBeLessThanOrEqual(12);
+    expect(wide.bar.right - wide.save.right).toBeLessThanOrEqual(12);
+
+    // Reset came out of Forge additions 32px tall, four short of the token and
+    // visibly short beside the select it now stands next to.
+    expect(
+      wide.reset.height,
+      `Reset is ${wide.reset.height}px tall; the detail select beside it is ${wide.detail.height}px`
+    ).toBeGreaterThanOrEqual(36);
+
+    // Still wired: Reset delegates to the Forge reset button (main.js).
+    await expect(row1.locator('#resetAllBtn')).toBeEnabled();
+
+    // Narrow: three controls do not fit one line in a 343px column, so the row
+    // wraps. That is the wanted answer — the same one R2a gave the toolbars
+    // rather than letting them overflow. What must NOT happen is clipping.
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.waitForTimeout(400);
+    const narrow = await readRows();
+    expect(
+      narrow.reset.top,
+      'at 1280px Reset is expected to wrap to a second line'
+    ).toBeGreaterThan(narrow.detail.top);
+    expect(
+      narrow.reset.right,
+      `Reset is clipped: right edge ${narrow.reset.right} vs bar ${narrow.bar.right}`
+    ).toBeLessThanOrEqual(narrow.bar.right);
+    await expect(row1.locator('#resetAllBtn')).toBeVisible();
+  });
+
+  test('classic-customizer-rows-simplified: both controls stay visible in Simplified', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await seedPanes(page);
+    await loadProject(page);
+    await enterClassicStandard(page);
+
+    // Owner-approved 2026-08-08: leaving Forge additions means these two no
+    // longer vanish with it in Simplified. Simplified already shows the preset
+    // box with its + and −, so hiding only save would be the odd pairing.
+    await page.locator('#classicDensityToggle').click();
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-classic-density',
+      'simplified'
+    );
+    await expect(page.locator('#classicForgeExtras')).toBeHidden();
+    await expect(
+      page.locator('#classicCustomizerControls #resetAllBtn')
+    ).toBeVisible();
+    await expect(
+      page.locator('#classicPresetRow #savePresetBtn')
+    ).toBeVisible();
+  });
+});
+
 // ─── F1: reaching the Error Log ──────────────────────────────────────────────
 
 test.describe('Error Log reach (F1)', () => {
