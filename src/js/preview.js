@@ -52,6 +52,7 @@ import {
   STORAGE_KEY_GRID_OPACITY,
   STORAGE_KEY_AUTO_BED,
   STORAGE_KEY_ZOOM_TO_CURSOR,
+  STORAGE_KEY_VIEWPORT_SCHEME,
   STORAGE_KEY_CAMERA_COLLAPSED,
   STORAGE_KEY_CAMERA_POSITION,
   STORAGE_KEY_LOD_WARNING_DISMISSED,
@@ -238,7 +239,157 @@ export const PREVIEW_COLORS = {
     edges: 0x020617,
     ambientLight: 0xffffff,
   },
+
+  // --- Desktop viewport colour schemes (Preferences ▸ 3D View) ---
+  //
+  // Transcribed from OpenSCAD at tag `openscad-2021.01`: Cornfield is the
+  // hardcoded default in `src/colormap.cc` (lines 39-47, no JSON exists for
+  // it) and ships above as `classic`; the rest are
+  // `color-schemes/render/<name>.json`. `monotone.json` is deliberately
+  // absent — it carries `"show-in-gui": false`, which is why the desktop's
+  // own list shows nine JSON schemes plus the built-in Cornfield.
+  //
+  // Backgrounds are VERBATIM. Model and edge colours are tuned the minimum
+  // distance along lightness — hue and saturation untouched, so a scheme
+  // still reads as itself — until `model`/`modelBack` reach 3:1 against the
+  // background (SC 1.4.11) and `edges` reaches 4.5:1 against the model.
+  // MEASURED verbatim, only Starnight and DeepOcean already passed; upstream
+  // Cornfield is 1.40:1 and 1.86:1. Every ratio below is asserted by
+  // tests/unit/preview-colors-contrast.test.js, so a hand edit that breaks
+  // one fails the suite.
+  //
+  // Where a comment says "unchanged" the value IS upstream's.
+  metallic: {
+    background: 0xaaaaff, // upstream, verbatim
+    gridPrimary: 0x7c7cd1,
+    gridSecondary: 0x9393e8,
+    model: 0x3c3cff, // 3.02:1 vs background (upstream #ddddff, lightness -31.5%)
+    modelBack: 0xa519a5, // 3.02:1 (upstream #dd22dd, lightness -12.6%)
+    edges: 0xffcdcd, // 4.53:1 vs model (upstream #ff0000, lightness +40.1%)
+    ambientLight: 0xffffff,
+  },
+  sunset: {
+    background: 0xaa4444, // upstream, verbatim
+    gridPrimary: 0xd87272,
+    gridSecondary: 0xc15b5b,
+    model: 0xffaaaa, // 3.20:1 vs background (upstream, unchanged)
+    modelBack: 0x320d13, // 3.01:1 (upstream #882233, lightness -21%)
+    edges: 0xa30000, // 4.53:1 vs model (upstream #ff0000, lightness -18%)
+    ambientLight: 0xffffff,
+  },
+  starnight: {
+    background: 0x000000, // upstream, verbatim
+    gridPrimary: 0x2e2e2e,
+    gridSecondary: 0x171717,
+    model: 0xffffe0, // 20.63:1 vs background (upstream, unchanged)
+    modelBack: 0x00ffff, // 16.75:1 (upstream, unchanged)
+    edges: 0x0000ff, // 8.44:1 vs model (upstream, unchanged)
+    ambientLight: 0xffffff,
+  },
+  beforedawn: {
+    background: 0x333333, // upstream, verbatim
+    gridPrimary: 0x616161,
+    gridSecondary: 0x4a4a4a,
+    model: 0xcccccc, // 7.87:1 vs background (upstream, unchanged)
+    modelBack: 0x6571e0, // 3.00:1 (upstream #5563dd, lightness +3.7%)
+    edges: 0xb20000, // 4.52:1 vs model (upstream #ff0000, lightness -15.1%)
+    ambientLight: 0xffffff,
+  },
+  nature: {
+    background: 0xfafafa, // upstream, verbatim
+    gridPrimary: 0xcccccc,
+    gridSecondary: 0xe3e3e3,
+    model: 0x16a085, // 3.14:1 vs background (upstream, unchanged)
+    modelBack: 0x36a631, // 3.02:1 (upstream #dbf4da, lightness -48.3%)
+    edges: 0x580000, // 4.52:1 vs model (upstream #ff0000, lightness -32.7%)
+    ambientLight: 0xffffff,
+  },
+  deepocean: {
+    background: 0x333333, // upstream, verbatim
+    gridPrimary: 0x616161,
+    gridSecondary: 0x4a4a4a,
+    model: 0xeeeeee, // 10.89:1 vs background (upstream, unchanged)
+    modelBack: 0x0babc8, // 4.62:1 (upstream, unchanged)
+    edges: 0x0000ff, // 7.41:1 vs model (upstream, unchanged)
+    ambientLight: 0xffffff,
+  },
+  solarized: {
+    background: 0xfdf6e3, // upstream, verbatim
+    gridPrimary: 0xcfc8b5,
+    gridSecondary: 0xe6dfcc,
+    model: 0xb58800, // 3.00:1 vs background (upstream, unchanged)
+    modelBack: 0x882233, // 8.38:1 (upstream, unchanged)
+    edges: 0x342700, // 4.52:1 vs model (upstream #b58800, lightness -25.2%)
+    ambientLight: 0xffffff,
+  },
+  tomorrow: {
+    background: 0xf8f8f8, // upstream, verbatim
+    gridPrimary: 0xcacaca,
+    gridSecondary: 0xe1e1e1,
+    model: 0x4271ae, // 4.70:1 vs background (upstream, unchanged)
+    modelBack: 0xe0720a, // 3.00:1 (upstream #f5871f, lightness -8.2%)
+    // Lightened, not darkened: against this mid-tone model even pure black
+    // only reaches ~4.2:1, so no dark edge can satisfy the thin-stroke
+    // threshold here.
+    edges: 0xf3f3f3, // 4.50:1 vs model (upstream #4d4d4c, lightness +65.2%)
+    ambientLight: 0xffffff,
+  },
+  'tomorrow-night': {
+    background: 0x1d1f21, // upstream, verbatim
+    gridPrimary: 0x4b4d4f,
+    gridSecondary: 0x343638,
+    model: 0x81a2be, // 6.18:1 vs background (upstream, unchanged)
+    modelBack: 0xde935f, // 6.65:1 (upstream, unchanged)
+    edges: 0x333634, // 4.57:1 vs model (upstream #c5c8c6, lightness -57.1%)
+    ambientLight: 0xffffff,
+  },
 };
+
+/**
+ * The desktop's 3D View colour-scheme list, in its own order (the JSON
+ * `index` field, which is the order OpenSCAD_2.png shows).
+ *
+ * `colors` names the PREVIEW_COLORS entry each one paints with. Cornfield
+ * maps to `classic` rather than a tenth near-duplicate: `classic` already IS
+ * the Cornfield background with an accessibility-tuned model pair, shipped
+ * and asserted since R-II, and it holds more contrast headroom (3.72:1 /
+ * 4.06:1) than a fresh minimum-distance tune would have produced.
+ */
+export const VIEWPORT_SCHEMES = Object.freeze([
+  { id: 'cornfield', label: 'Cornfield', colors: 'classic' },
+  { id: 'metallic', label: 'Metallic', colors: 'metallic' },
+  { id: 'sunset', label: 'Sunset', colors: 'sunset' },
+  { id: 'starnight', label: 'Starnight', colors: 'starnight' },
+  { id: 'beforedawn', label: 'BeforeDawn', colors: 'beforedawn' },
+  { id: 'nature', label: 'Nature', colors: 'nature' },
+  { id: 'deepocean', label: 'DeepOcean', colors: 'deepocean' },
+  { id: 'solarized', label: 'Solarized', colors: 'solarized' },
+  { id: 'tomorrow', label: 'Tomorrow', colors: 'tomorrow' },
+  { id: 'tomorrow-night', label: 'Tomorrow Night', colors: 'tomorrow-night' },
+]);
+
+/** The scheme Classic opens with — the desktop's own default. */
+export const DEFAULT_VIEWPORT_SCHEME = 'cornfield';
+
+/** @param {string} id @returns {string} PREVIEW_COLORS key for that scheme */
+export function schemeColorsKey(id) {
+  return (
+    VIEWPORT_SCHEMES.find((s) => s.id === id)?.colors ??
+    VIEWPORT_SCHEMES.find((s) => s.id === DEFAULT_VIEWPORT_SCHEME).colors
+  );
+}
+
+const VIEWPORT_SCHEME_KEYS = new Set(VIEWPORT_SCHEMES.map((s) => s.colors));
+
+/**
+ * Whether a PREVIEW_COLORS key is a Classic viewport scheme rather than an
+ * app theme. These have no `-hc` siblings, so nothing may suffix them.
+ * @param {string} key
+ * @returns {boolean}
+ */
+export function isViewportSchemeKey(key) {
+  return VIEWPORT_SCHEME_KEYS.has(key);
+}
 
 // RENDER_STATE_COLORS was removed: it applied fabricated amber/red tints
 // that do not correspond to any desktop OpenSCAD behavior. Desktop OpenSCAD
@@ -290,6 +441,11 @@ export class PreviewManager {
     // cursor; when false, zoom centers on the orbit target. Default
     // true matches stakeholder expectation (F17, "zoom toward cursor").
     this.zoomToCursorEnabled = this.loadZoomToCursorPreference();
+
+    // Chosen desktop viewport colour scheme (Preferences ▸ 3D View). Read
+    // before the first detectTheme() so Classic opens on the saved choice
+    // rather than flashing Cornfield and correcting itself.
+    this.viewportScheme = this.loadViewportScheme();
 
     // Rotation centering: temporarily center object at origin for better rotation
     this.autoBedOffset = 0; // Z offset applied by auto-bed
@@ -620,8 +776,12 @@ export class PreviewManager {
     const root = document.documentElement;
 
     // Classic renders one fixed desktop appearance, so it outranks the
-    // theme, high-contrast and Alt View settings (see classic.css).
-    if (document.body?.dataset.uiMode === 'classic') return 'classic';
+    // theme, high-contrast and Alt View settings (see classic.css). Which
+    // appearance is the user's own choice from Preferences ▸ 3D View;
+    // 'cornfield' resolves to the 'classic' palette, the historical default.
+    if (document.body?.dataset.uiMode === 'classic') {
+      return schemeColorsKey(this.viewportScheme ?? DEFAULT_VIEWPORT_SCHEME);
+    }
 
     const highContrast = root.getAttribute('data-high-contrast') === 'true';
     const dataTheme = root.getAttribute('data-theme');
@@ -663,9 +823,13 @@ export class PreviewManager {
    * @param {boolean} highContrast - High contrast mode enabled
    */
   updateTheme(theme, highContrast = false) {
-    // Determine theme key. 'classic' has no -hc sibling by design.
+    // Determine theme key. The Classic viewport schemes have no -hc siblings
+    // by design: Classic renders one fixed desktop appearance and ignores
+    // high contrast entirely. Suffixing one would look up a key that does not
+    // exist and silently fall back to the light theme, so the user's chosen
+    // scheme would vanish the moment high contrast was on.
     let themeKey = theme;
-    if (highContrast && theme !== 'classic' && !theme.endsWith('-hc')) {
+    if (highContrast && !isViewportSchemeKey(theme) && !theme.endsWith('-hc')) {
       themeKey = `${theme}-hc`;
     }
 
@@ -3440,6 +3604,63 @@ export class PreviewManager {
       );
       return true;
     }
+  }
+
+  /**
+   * The saved viewport colour scheme id, falling back to the desktop default.
+   * @returns {string}
+   */
+  loadViewportScheme() {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_VIEWPORT_SCHEME);
+      return VIEWPORT_SCHEMES.some((s) => s.id === saved)
+        ? saved
+        : DEFAULT_VIEWPORT_SCHEME;
+    } catch (error) {
+      console.warn('[Preview] Could not load viewport scheme:', error);
+      return DEFAULT_VIEWPORT_SCHEME;
+    }
+  }
+
+  /** @returns {string} */
+  getViewportScheme() {
+    return this.viewportScheme;
+  }
+
+  /**
+   * Choose a desktop viewport colour scheme and apply it now.
+   *
+   * Instant-apply, like the desktop: there is no OK/Cancel row in upstream's
+   * dialog (OpenSCAD_2/3.png), so picking a name IS the action.
+   *
+   * The scheme governs the Classic viewport. Outside Classic the app theme
+   * drives these colours and keeps doing so, because overriding it would
+   * also override the high-contrast and mono variants, which are
+   * accessibility features rather than decoration. The tab says this in its
+   * own text rather than leaving it as a silent divergence.
+   *
+   * @param {string} id
+   * @returns {boolean} True when the id was known and stored
+   */
+  setViewportScheme(id) {
+    if (!VIEWPORT_SCHEMES.some((s) => s.id === id)) return false;
+    this.viewportScheme = id;
+    try {
+      localStorage.setItem(STORAGE_KEY_VIEWPORT_SCHEME, id);
+    } catch (error) {
+      console.warn('[Preview] Could not save viewport scheme:', error);
+    }
+
+    // updateTheme() early-returns when the key is unchanged, so a repaint has
+    // to go through detectTheme()'s fresh answer.
+    const next = this.detectTheme();
+    if (next !== this.currentTheme) {
+      this.updateTheme(
+        next,
+        document.documentElement.getAttribute('data-high-contrast') === 'true'
+      );
+    }
+    return true;
   }
 
   /**

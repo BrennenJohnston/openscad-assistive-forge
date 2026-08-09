@@ -42,6 +42,7 @@ const EXPECTED_KEYS = {
   STORAGE_KEY_GRID_OPACITY: 'openscad-forge-grid-opacity',
   STORAGE_KEY_AUTO_BED: 'openscad-forge-auto-bed',
   STORAGE_KEY_ZOOM_TO_CURSOR: 'openscad-forge-zoom-to-cursor',
+  STORAGE_KEY_VIEWPORT_SCHEME: 'openscad-forge-viewport-scheme',
   STORAGE_KEY_CAMERA_COLLAPSED: 'openscad-forge-camera-controls-collapsed',
   STORAGE_KEY_CAMERA_POSITION: 'openscad-forge-camera-controls-position',
   STORAGE_KEY_LOD_WARNING_DISMISSED: 'openscad-forge-lod-warning-dismissed',
