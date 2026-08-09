@@ -199,9 +199,29 @@ export class ModeManager {
       this._announceSwitch(targetMode);
     }
 
-    // Move focus to the appropriate target after switch (WCAG 2.4.3 Focus Order)
+    // Move focus to the appropriate target after switch (WCAG 2.4.3 Focus
+    // Order), but only if the user has not moved focus somewhere else first.
+    //
+    // D-15: this runs a frame later, and a user who presses the editor toggle
+    // and then opens a menu in the same task lands here with the menu already
+    // holding focus. Taking it back leaves the menu open with focus outside
+    // it, which breaks the APG contract that focus moves INTO an open menu.
+    // Whoever holds focus now is compared against whoever held it at the
+    // switch; if it changed, someone else has claimed it and we leave it.
     if (!options.skipFocus) {
-      requestAnimationFrame(() => this._manageFocusAfterSwitch(targetMode));
+      const focusAtSwitch = this._activeElement();
+      requestAnimationFrame(() => {
+        const focusNow = this._activeElement();
+        // A neutral target means the switch itself tore down whatever had
+        // focus, which is precisely when moving it is the right thing to do.
+        const neutral =
+          !focusNow ||
+          focusNow === document.body ||
+          focusNow === document.documentElement;
+        if (focusNow === focusAtSwitch || neutral) {
+          this._manageFocusAfterSwitch(targetMode);
+        }
+      });
     }
 
     // Save mode to preferences
@@ -285,6 +305,15 @@ export class ModeManager {
         console.error('[ModeManager] Subscriber error:', error);
       }
     });
+  }
+
+  /**
+   * The element that currently has focus, or null outside a browser.
+   * @returns {Element|null}
+   * @private
+   */
+  _activeElement() {
+    return typeof document === 'undefined' ? null : document.activeElement;
   }
 
   /**
