@@ -199,10 +199,34 @@ test.describe('Production build behind the shipped CSP', () => {
     ).toBeGreaterThanOrEqual(scroller.left - 1);
 
     // (c) Permanent tripwire: the shipped CSP is a documented product
-    // feature, so anything it blocks is a defect in us, not in the header.
+    // feature, so anything it blocks is a defect in us, not in the header —
+    // with exactly one exception. CodeMirror's styling library inserts a
+    // <style> element that `style-src 'self'` correctly refuses, and its
+    // rules are re-homed through CSSOM instead (codemirror-csp-styles.js).
+    // Stopping the insertion itself would mean mounting the editor in a
+    // shadow root, which would cut the app's forced-colors high-contrast
+    // rules off from the editor, or patching style-mod's private internals.
+    // Neither is worth one blocked element. So: that element must be the
+    // only thing the policy ever blocks, and it must really be style-mod's.
+    const blockedStyleElements = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('style'))
+        .filter((element) => element.sheet === null)
+        // style-mod names every class it generates with this character.
+        .map((element) => ({ isStyleMod: element.textContent.includes('ͼ') }))
+    );
     expect(
-      violations,
+      blockedStyleElements.filter((element) => !element.isStyleMod),
+      "the CSP blocked a stylesheet that is not CodeMirror's"
+    ).toEqual([]);
+    expect(
+      violations.filter(
+        (violation) => violation.directive !== 'style-src-elem'
+      ),
       `the app violated its own Content-Security-Policy ${violations.length} time(s)`
     ).toEqual([]);
+    expect(
+      violations.length,
+      'more was blocked than the single known CodeMirror <style> element'
+    ).toBeLessThanOrEqual(1);
   });
 });

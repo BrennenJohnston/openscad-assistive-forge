@@ -1529,7 +1529,7 @@ export function initSavedProjectsUI({
             <button class="preset-modal-close" aria-label="Close dialog">&times;</button>
           </div>
           <div class="modal-body">
-            <p style="margin-bottom: var(--space-md); color: var(--color-text-secondary);">
+            <p class="save-project-intro">
               Saved projects are stored in this browser. Clearing cache/site data will remove them.
             </p>
             <div class="save-project-checkbox-wrapper">
@@ -1547,11 +1547,11 @@ export function initSavedProjectsUI({
                 <span id="saveProjectNotesCount">0</span> / 5000 characters
               </div>
             </div>
-            <div id="saveProjectDuplicateWarning" style="display:none; margin-top: var(--space-md); padding: var(--space-sm) var(--space-md); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--color-warning, #f59e0b) 15%, transparent); border: 1px solid var(--color-warning, #f59e0b);">
-              <p style="margin: 0 0 var(--space-sm); font-weight: 600; color: var(--color-text-primary);">
+            <div id="saveProjectDuplicateWarning" class="save-project-duplicate-warning">
+              <p class="save-project-duplicate-title">
                 \u26A0 A project named &ldquo;<span id="saveProjectDuplicateName"></span>&rdquo; already exists.
               </p>
-              <p style="margin: 0; color: var(--color-text-secondary); font-size: var(--text-sm);">
+              <p class="save-project-duplicate-text">
                 Do you want to overwrite it, or save this as a new copy?
               </p>
             </div>
