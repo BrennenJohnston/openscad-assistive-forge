@@ -15067,3 +15067,36 @@ body.tutorial-body-locked {
 .preferences-check-row input:disabled + label {
   color: var(--color-text-tertiary);
 }
+
+/* Editor tab: label, number field, unit. The unit is a visible word rather
+   than a suffix inside the field, so it is read as part of the row and not
+   swallowed by the input's value. */
+.preferences-number-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: var(--size-touch-target);
+}
+
+.preferences-number-row label {
+  flex: 1;
+  max-width: 22ch;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+}
+
+.preferences-number-row input {
+  width: 5rem;
+  min-height: var(--size-touch-target);
+  padding: 0 var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.preferences-unit {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}

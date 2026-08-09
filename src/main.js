@@ -196,6 +196,7 @@ import {
 } from './js/announcer.js';
 // Expert Mode (M2) - Code editor integration
 import { getModeManager } from './js/mode-manager.js';
+import { loadEditorPrefs, saveEditorPref } from './js/editor-prefs.js';
 // UI Mode Controller - Simplified/Standard/Classic interface layout switching
 import { getUIModeController } from './js/ui-mode-controller.js';
 import {
@@ -3831,6 +3832,35 @@ async function initApp() {
               // Instant-apply is silent for a screen-reader user otherwise:
               // the only feedback is a repaint they cannot see.
               announceImmediate(`Color scheme ${label}`);
+            },
+            getEditorPrefs: () => loadEditorPrefs(),
+            onEditorPrefChange: (name, value) => {
+              // The preference owner clamps and persists; whatever it stored
+              // is what gets applied, so the control cannot show one number
+              // while the editor uses another.
+              const stored = saveEditorPref(name, value);
+              const editor = getModeManager()?.getEditorInstance?.();
+              const apply = {
+                fontSize: () => editor?.setFontSize?.(stored),
+                indentWidth: () => editor?.setIndentWidth?.(stored),
+                tabWidth: () => editor?.setTabWidth?.(stored),
+                lineWrapping: () => editor?.setLineWrapping?.(stored),
+                highlightActiveLine: () =>
+                  editor?.setHighlightActiveLine?.(stored),
+              };
+              apply[name]?.();
+
+              const spoken = {
+                fontSize: `Font size: ${stored}px`,
+                indentWidth: `Indentation width: ${stored} spaces`,
+                tabWidth: `Tab width: ${stored} columns`,
+                lineWrapping: `Wrap long lines, ${stored ? 'on' : 'off'}`,
+                highlightActiveLine: `Highlight the current line, ${
+                  stored ? 'on' : 'off'
+                }`,
+              };
+              if (spoken[name]) announceImmediate(spoken[name]);
+              return stored;
             },
             getZoomToCursor: () => previewManager?.zoomToCursorEnabled ?? true,
             onZoomToCursorChange: (enabled) => {
