@@ -137,7 +137,27 @@ let activeHandlers = {};
  * @property {() => string} [getColorScheme]
  * @property {(enabled: boolean) => void} [onZoomToCursorChange]
  * @property {() => boolean} [getZoomToCursor]
+ * @property {() => Object} [getEditorPrefs]
+ * @property {(name: string, value: number|boolean) => number|boolean} [onEditorPrefChange]
  */
+
+/**
+ * Editor-tab control ids, paired with the preference each one writes.
+ * `number` controls clamp through the preference owner and echo back what was
+ * actually stored, so a control can never display a value the editor is not
+ * using.
+ */
+const EDITOR_CONTROLS = [
+  { id: 'prefsEditorFontSize', pref: 'fontSize', type: 'number' },
+  { id: 'prefsEditorIndentWidth', pref: 'indentWidth', type: 'number' },
+  { id: 'prefsEditorTabWidth', pref: 'tabWidth', type: 'number' },
+  { id: 'prefsEditorLineWrap', pref: 'lineWrapping', type: 'boolean' },
+  {
+    id: 'prefsEditorHighlightLine',
+    pref: 'highlightActiveLine',
+    type: 'boolean',
+  },
+];
 
 /**
  * Push current app state into the dialog's controls.
@@ -159,6 +179,40 @@ function syncControls() {
   const zoom = activeHandlers.getZoomToCursor?.();
   const zoomBox = el('prefsMouseCentricZoom');
   if (zoomBox && typeof zoom === 'boolean') zoomBox.checked = zoom;
+
+  const editorPrefs = activeHandlers.getEditorPrefs?.();
+  if (editorPrefs) {
+    for (const control of EDITOR_CONTROLS) {
+      const input = el(control.id);
+      if (!input) continue;
+      if (control.type === 'boolean') {
+        input.checked = Boolean(editorPrefs[control.pref]);
+      } else {
+        input.value = String(editorPrefs[control.pref]);
+      }
+    }
+  }
+}
+
+/** Editor tab: instant-apply on the running editor. */
+function wireEditorTab() {
+  for (const control of EDITOR_CONTROLS) {
+    const input = el(control.id);
+    if (!input) continue;
+
+    input.addEventListener('change', () => {
+      const raw =
+        control.type === 'boolean' ? input.checked : Number(input.value);
+      const stored = activeHandlers.onEditorPrefChange?.(control.pref, raw);
+
+      // Echo the stored value back into a number field. Typing 99 into an
+      // 8-32 box otherwise leaves the box reading 99 while the editor uses
+      // 32, and the control and its effect have come apart.
+      if (control.type === 'number' && typeof stored === 'number') {
+        input.value = String(stored);
+      }
+    });
+  }
 }
 
 /** 3D View tab: instant-apply, exactly like the desktop's own dialog. */
@@ -198,6 +252,7 @@ export function initPreferencesDialog(handlers = {}) {
   }
 
   wireThreeDViewTab();
+  wireEditorTab();
 
   // The shared helper wires the close button, the overlay AND Escape. Wiring
   // those by hand is how the first cut of this dialog shipped without Escape,

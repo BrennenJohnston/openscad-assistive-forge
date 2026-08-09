@@ -6950,8 +6950,6 @@
             aria-selected="false"
             aria-controls="prefs-panel-editor"
             tabindex="-1"
-            aria-disabled="true"
-            aria-describedby="prefs-reason-editor"
           >
             Editor
           </button>
@@ -7167,9 +7165,136 @@
             tabindex="0"
             hidden
           >
-            <p id="prefs-reason-editor" class="preferences-panel-reason">
-              Editor font, indentation and wrap settings are not built yet. The
-              code editor wraps at word boundaries and follows the app theme.
+            <p class="preferences-field-note">
+              These settings apply to the code editor. The plain-text editor
+              used in high-contrast mode takes the font size only.
+            </p>
+
+            <div class="preferences-number-row">
+              <label for="prefsEditorFontSize">Font size</label>
+              <input
+                type="number"
+                id="prefsEditorFontSize"
+                min="8"
+                max="32"
+                step="1"
+                inputmode="numeric"
+              />
+              <span class="preferences-unit">px</span>
+            </div>
+
+            <div class="preferences-number-row">
+              <label for="prefsEditorIndentWidth">Indentation width</label>
+              <input
+                type="number"
+                id="prefsEditorIndentWidth"
+                min="1"
+                max="8"
+                step="1"
+                inputmode="numeric"
+              />
+              <span class="preferences-unit">spaces</span>
+            </div>
+
+            <div class="preferences-number-row">
+              <label for="prefsEditorTabWidth">Tab width</label>
+              <input
+                type="number"
+                id="prefsEditorTabWidth"
+                min="1"
+                max="8"
+                step="1"
+                inputmode="numeric"
+              />
+              <span class="preferences-unit">columns</span>
+            </div>
+
+            <div class="preferences-check-row">
+              <input type="checkbox" id="prefsEditorLineWrap" />
+              <label for="prefsEditorLineWrap"
+                >Wrap long lines at word boundaries</label
+              >
+            </div>
+
+            <div class="preferences-check-row">
+              <input type="checkbox" id="prefsEditorHighlightLine" />
+              <label for="prefsEditorHighlightLine"
+                >Highlight the current line</label
+              >
+            </div>
+
+            <div class="preferences-check-row">
+              <input
+                type="checkbox"
+                id="prefsEditorTabIndents"
+                disabled
+                aria-describedby="prefs-reason-tabkey"
+              />
+              <label for="prefsEditorTabIndents"
+                >Tab key inserts an indent</label
+              >
+            </div>
+            <p id="prefs-reason-tabkey" class="preferences-panel-reason">
+              Not offered. Tab moves to the next control so keyboard and
+              switch users are never trapped inside the editor. Use the
+              Indent and Unindent buttons on the editor toolbar, or Edit ▸
+              Indent.
+            </p>
+
+            <div class="preferences-check-row">
+              <input
+                type="checkbox"
+                id="prefsEditorSyntaxScheme"
+                disabled
+                aria-describedby="prefs-reason-syntax"
+              />
+              <label for="prefsEditorSyntaxScheme"
+                >Choose a syntax highlighting scheme</label
+              >
+            </div>
+            <p id="prefs-reason-syntax" class="preferences-panel-reason">
+              Not built here. The editor has one light and one dark scheme and
+              picks between them from your system setting.
+            </p>
+
+            <div class="preferences-check-row">
+              <input
+                type="checkbox"
+                id="prefsEditorShowWhitespace"
+                disabled
+                aria-describedby="prefs-reason-whitespace"
+              />
+              <label for="prefsEditorShowWhitespace"
+                >Show whitespace</label
+              >
+            </div>
+            <p id="prefs-reason-whitespace" class="preferences-panel-reason">
+              Not built here. Nothing draws spaces and tabs as visible marks
+              in this editor.
+            </p>
+
+            <div class="preferences-check-row">
+              <input
+                type="checkbox"
+                id="prefsEditorWrapMarkers"
+                disabled
+                aria-describedby="prefs-reason-wrapmarkers"
+              />
+              <label for="prefsEditorWrapMarkers"
+                >Show where a wrapped line continues</label
+              >
+            </div>
+            <p id="prefs-reason-wrapmarkers" class="preferences-panel-reason">
+              Not built here. Wrapped lines continue at the left edge with no
+              marker and no hanging indent.
+            </p>
+
+            <p class="preferences-panel-reason">
+              The desktop version also offers a font family, Ctrl-wheel text
+              zoom, automatic indenting, backspace unindenting, and a choice
+              between indenting with spaces or tabs. None of those are built
+              here. This editor uses one monospace font, indents with spaces,
+              and indents new lines to match the line above.
             </p>
           </div>
           <div
