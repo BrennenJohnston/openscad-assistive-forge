@@ -347,3 +347,85 @@ test('Help ▸ Keyboard Shortcuts still opens the editor directly', async ({
   await expect(page.locator('#shortcutsModal')).not.toHaveClass(/hidden/);
   await expect(page.locator('#shortcutsModalBody')).not.toBeEmpty();
 });
+
+test('the Editor tab is live and reconfigures the running editor', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await openPreferences(page);
+
+  const tab = page.locator('#prefs-tab-editor');
+  await expect(tab).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(page.locator('#prefs-reason-editor')).toHaveCount(0);
+
+  // Open the editor so there is something live to reconfigure.
+  await page.locator('#preferencesModalDone').click();
+  await page.locator('#expertModeToggle').click();
+  const content = page.locator('#expertModeBody .cm-content').first();
+  await expect(content).toBeVisible({ timeout: 15_000 });
+
+  const measure = () =>
+    content.evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return { fontSize: cs.fontSize, whiteSpace: cs.whiteSpace };
+    });
+  const before = await measure();
+
+  await page.locator('#editMenuBtn').click();
+  await page
+    .locator('#editMenuItems')
+    .getByText('Preferences…', { exact: true })
+    .click();
+  await page.locator('#prefs-tab-editor').click();
+
+  await page.locator('#prefsEditorFontSize').fill('22');
+  await page.locator('#prefsEditorFontSize').dispatchEvent('change');
+  await page.locator('#prefsEditorLineWrap').uncheck();
+
+  // Live reconfiguration: the document already open must change, not the
+  // next one. Compartments are the facility that makes that possible.
+  await expect.poll(async () => (await measure()).fontSize).toBe('22px');
+  expect(before.whiteSpace).toMatch(/^break-spaces/);
+  await expect.poll(async () => (await measure()).whiteSpace).toBe('pre');
+});
+
+test('an out-of-range editor value is clamped, and the field says so', async ({
+  page,
+}) => {
+  // A field left reading 999 while the editor uses 32 is a control and its
+  // effect come apart — the same shape as an announcement that lies.
+  test.setTimeout(240_000);
+  await openPreferences(page);
+  await page.locator('#prefs-tab-editor').click();
+
+  const field = page.locator('#prefsEditorFontSize');
+  await field.fill('999');
+  await field.dispatchEvent('change');
+  await expect(field).toHaveValue('32');
+
+  await field.fill('1');
+  await field.dispatchEvent('change');
+  await expect(field).toHaveValue('8');
+});
+
+test('the Editor tab names what it cannot do', async ({ page }) => {
+  test.setTimeout(240_000);
+  await openPreferences(page);
+  await page.locator('#prefs-tab-editor').click();
+
+  // Tab-key indenting is refused on purpose, not missing by accident: it
+  // would trap keyboard and switch users inside the editor (WCAG 2.1.2).
+  await expect(page.locator('#prefsEditorTabIndents')).toBeDisabled();
+  await expect(page.locator('#prefs-reason-tabkey')).toBeVisible();
+  await expect(page.locator('#prefs-reason-tabkey')).toContainText(
+    /never trapped/i
+  );
+
+  for (const id of [
+    'prefs-reason-syntax',
+    'prefs-reason-whitespace',
+    'prefs-reason-wrapmarkers',
+  ]) {
+    await expect(page.locator(`#${id}`)).toBeVisible();
+  }
+});
