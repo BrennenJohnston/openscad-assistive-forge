@@ -1018,7 +1018,7 @@ const TUTORIALS = {
       {
         title: 'Generate and download your file',
         content: `
-          <p>Click <strong>Generate</strong> to create your output file (STL/OBJ/3MF, etc.).</p>
+          <p>Click <strong>Generate</strong> to create your output file (STL/OBJ/AMF, etc.).</p>
           <p class="tutorial-hint">The button text updates based on the selected output format in the Parameters panel.</p>
         `,
         highlightSelector: '@primary-action',
@@ -1147,7 +1147,7 @@ const TUTORIALS = {
           <p><strong>Try it:</strong> Select a different output format.</p>
           <ul>
             <li><strong>STL</strong> - 3D printing</li>
-            <li><strong>3MF</strong> - Modern with color</li>
+            <li><strong>AMF</strong> - Multi-material, carries colour</li>
             <li><strong>OBJ</strong> - Rendering/animation</li>
           </ul>
         `,

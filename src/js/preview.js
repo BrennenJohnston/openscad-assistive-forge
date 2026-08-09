@@ -587,7 +587,7 @@ export class PreviewManager {
     const reason = document.createElement('p');
     reason.textContent =
       'Your browser blocked WebGL, which is required to display the 3D model. ' +
-      'Rendering and exporting (STL, 3MF, etc.) still work normally.';
+      'Rendering and exporting (STL, OBJ, etc.) still work normally.';
 
     const howToFix = document.createElement('p');
     howToFix.textContent = 'To enable the 3D preview:';
