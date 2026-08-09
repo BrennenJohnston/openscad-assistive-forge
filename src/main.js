@@ -1129,8 +1129,13 @@ async function initApp() {
   window.addEventListener('storage-quota-exceeded', (e) => {
     const msg =
       e.detail?.message || 'Storage is full. Data could not be saved.';
-    updateStatus(msg, 'error');
-    _announceError(msg);
+    // MEASURED before this change: the same sentence reached a screen reader
+    // three times — politely from updateStatus, assertively from
+    // _announceError, and assertively again from the toast. The toast's is the
+    // one worth keeping: a failed save is an error, so it belongs in the
+    // assertive region, and the toast says "Storage Problem" first so the
+    // announcement names its own subject.
+    updateStatus(msg, 'error', { announce: false });
     showErrorToast({ title: 'Storage Problem', message: msg });
   });
 
@@ -5799,8 +5804,9 @@ async function initApp() {
     const advisoryMsg =
       'This model is complex — Desktop-quality previews may be slow. ' +
       'Switch Preview quality to "Performance (auto)" for faster previews.';
+    // updateStatus announces on its own; a second call here said the whole
+    // advisory twice.
     updateStatus(advisoryMsg, 'info');
-    announceImmediate(advisoryMsg);
   }
 
   // A fresh complexityAnalysis lands once per file load (file-handler sets it
@@ -6876,8 +6882,24 @@ async function initApp() {
     previewManager.showColorLegend(entries);
   }
 
-  // Update status
-  function updateStatus(message, statusType = 'default') {
+  /**
+   * Update the visible status surfaces and, by default, announce the message.
+   *
+   * `announce: false` is for the callers that already announce the same thing
+   * themselves — an error toast, say, which speaks assertively with its title
+   * attached. Without the opt-out those callers say everything to a
+   * screen-reader user twice, because this function is not a silent setter:
+   * it routes through stateManager.announceChange.
+   *
+   * @param {string} message
+   * @param {string} [statusType] 'default' | 'info' | 'success' | 'error' | 'warning'
+   * @param {{announce?: boolean}} [options]
+   */
+  function updateStatus(
+    message,
+    statusType = 'default',
+    { announce = true } = {}
+  ) {
     // Update the drawer status area (hidden but kept for screen readers)
     if (statusArea) {
       statusArea.textContent = message;
@@ -6925,8 +6947,10 @@ async function initApp() {
 
     // Announce status changes via dedicated SR live region.
     // Debounce progress-style updates (percent text) to avoid announcement spam.
-    const shouldDebounce = /\d+%/.test(message);
-    stateManager.announceChange(message, shouldDebounce);
+    if (announce) {
+      const shouldDebounce = /\d+%/.test(message);
+      stateManager.announceChange(message, shouldDebounce);
+    }
   }
 
   /**
