@@ -3578,7 +3578,12 @@ async function initApp() {
       const modeManager = getModeManager();
       if (modeManager?.isExpertMode?.() && modeManager.getEditorInstance?.()) {
         const editor = modeManager.getEditorInstance();
-        if (editor.updateOptions) editor.updateOptions({ fontSize: size });
+        // Was `editor.updateOptions({ fontSize })`, a method neither editor
+        // has ever had. Guarded by `if`, so Edit ▸ Increase/Decrease Font
+        // Size saved the number, updated its readout and announced the new
+        // size while changing nothing on screen — the worst shape of defect
+        // for the low-vision users the control exists for.
+        editor.setFontSize?.(size);
       }
     },
   });

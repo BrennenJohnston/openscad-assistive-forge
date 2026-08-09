@@ -293,3 +293,55 @@ test.describe('D-15 — opening the editor must not steal focus from a menu', ()
     expect(state.activeInMenu).toBe(true)
   })
 })
+
+test.describe('Edit ▸ Font Size actually changes the font', () => {
+  /**
+   * Found while building Preferences ▸ Editor. The handler called
+   * `editor.updateOptions({ fontSize })` behind an `if (editor.updateOptions)`
+   * guard, and no editor in this codebase has ever had that method — so the
+   * control saved the number, updated its readout and announced the new size
+   * while changing nothing on screen. That is the worst shape of defect for
+   * the low-vision users the control exists for, and it is invisible to any
+   * test that only checks the announcement or the stored value.
+   */
+  test('increasing the font size grows the rendered text', async ({ page }) => {
+    test.setTimeout(240_000)
+
+    await page.goto('/')
+    await waitForWasmReady(page)
+    await page.setInputFiles(
+      '#fileInput',
+      path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
+    )
+    await page.waitForSelector('.param-control', {
+      state: 'attached',
+      timeout: 30_000,
+    })
+    await dismissSaveProjectModal(page)
+
+    const uiToggle = page.locator('#uiModeToggle')
+    if ((await uiToggle.getAttribute('aria-checked')) !== 'true') {
+      await uiToggle.click()
+    }
+    await page.locator('#expertModeToggle').click()
+
+    const surface = page.locator('#expertModeBody .cm-content, #expert-mode-textarea').first()
+    await expect(surface).toBeVisible({ timeout: 15_000 })
+
+    const fontSize = () =>
+      surface.evaluate((el) => parseFloat(getComputedStyle(el).fontSize))
+    const before = await fontSize()
+    expect(before).toBeGreaterThan(0)
+
+    await page.locator('#editMenuBtn').click()
+    await page
+      .locator('#editMenuModal [role="menuitem"]')
+      .filter({ hasText: 'Increase Font Size' })
+      .first()
+      .click()
+
+    // MEASURED on the parent commit: unchanged, because the method called
+    // does not exist.
+    await expect.poll(fontSize, { timeout: 5_000 }).toBeGreaterThan(before)
+  })
+})
