@@ -2,7 +2,9 @@
  * CodeMirror 6 Editor — CSP-compatible advanced code editor
  *
  * Provides syntax highlighting, autocomplete, and rich editing for OpenSCAD
- * without requiring style-src 'unsafe-inline' (uses constructable stylesheets).
+ * without requiring style-src 'unsafe-inline'. CodeMirror itself injects its
+ * CSS in a <style> element, which a strict style-src discards; the rules are
+ * re-homed into a constructable stylesheet by codemirror-csp-styles.js.
  *
  * Public API matches TextareaEditor for drop-in substitution:
  *   constructor({ container, onChange, onSave, onRun, announce })
@@ -67,6 +69,7 @@ import {
   setSearchQuery,
   SearchQuery,
 } from '@codemirror/search';
+import { adoptCodeMirrorStyles } from './codemirror-csp-styles.js';
 
 // ─── OpenSCAD token lists (ported from textarea-editor.js / monaco-editor.js) ──
 
@@ -767,6 +770,9 @@ export class CodeMirrorEditor {
       state: startState,
       parent: this.container,
     });
+
+    // The view has mounted its styles by now, so there is something to adopt.
+    adoptCodeMirrorStyles();
 
     const cmContent = this._view.contentDOM;
     cmContent.setAttribute('aria-label', 'OpenSCAD code editor');
