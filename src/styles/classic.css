@@ -1774,6 +1774,19 @@ body[data-ui-mode='classic'] .classic-status-spacer {
   flex: 1;
 }
 
+/* The telemetry is the longest thing in the bar and the desktop's own reading
+   is monospaced digits, which stops the line jittering sideways as the numbers
+   change under an orbit. It may shrink but never wrap the bar to two rows. */
+body[data-ui-mode='classic'] .classic-status-viewport {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-family-mono, monospace);
+  font-variant-numeric: tabular-nums;
+}
+
 /* The in-viewport overlay yields to the bottom bar in classic —
    display:none also removes its aria-live region, so only the bar speaks */
 body[data-ui-mode='classic'] #previewStatusBar {

@@ -5624,13 +5624,21 @@
       <div
         id="classicStatusBar"
         class="classic-status-bar"
-        role="status"
-        aria-live="polite"
       >
-        <span id="classicStatusText"></span>
+        <!-- Upstream's status bar is the viewport telemetry, at the left
+             (OpenSCAD_1). It is NOT in a live region: the camera's change feed
+             fires ~118 times per drag, and a polite region repeating a pose ten
+             times a second is not a rough edge, it is a product failure. It is
+             not aria-hidden either — a screen-reader user can still navigate to
+             it deliberately. It simply never speaks on its own. -->
+        <span id="classicStatusViewport" class="classic-status-viewport"></span>
+        <span class="classic-status-spacer" aria-hidden="true"></span>
+        <!-- role="status" has moved off the bar and on to this one span. The
+             render state is the only thing here that should announce itself. -->
+        <span id="classicStatusText" role="status" aria-live="polite"></span>
         <span class="classic-status-divider" aria-hidden="true">|</span>
         <span id="classicStatusStats"></span>
-        <span class="classic-status-spacer" aria-hidden="true"></span>
+        <span class="classic-status-divider" aria-hidden="true">|</span>
         <span id="classicStatusMemory"></span>
       </div>
     </div>

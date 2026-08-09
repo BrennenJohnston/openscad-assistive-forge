@@ -1906,3 +1906,127 @@ test.describe('Panels CSS and accessibility (F7)', () => {
     ).toEqual([]);
   });
 });
+
+// ─── P8: status-bar viewport telemetry ───────────────────────────────────────
+
+test.describe('Status-bar viewport telemetry (P8)', () => {
+  test('classic-status-telemetry: the pose is on the bar and matches the camera', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await seedPanes(page);
+    await loadProject(page, UNIVERSAL_CUFF);
+    await enterClassicStandard(page);
+    await skipWithoutRenderer(page);
+
+    const viewport = page.locator('#classicStatusViewport');
+    await expect
+      .poll(() => viewport.textContent(), { timeout: 60_000 })
+      .toMatch(/^Viewport: translate = \[/);
+
+    // The desktop's line, verbatim in shape (OpenSCAD_1).
+    const text = await viewport.textContent();
+    console.log('[p8] status line:', text);
+    expect(text).toMatch(
+      /^Viewport: translate = \[ -?\d+\.\d\d -?\d+\.\d\d -?\d+\.\d\d \], rotate = \[ -?\d+\.\d\d -?\d+\.\d\d -?\d+\.\d\d \], distance = \d+\.\d\d(, fov = \d+\.\d\d)? \(\d+x\d+\)$/
+    );
+    // A rotation a hair below zero must read 0.00, not -0.00.
+    expect(text, 'negative zero reached the status bar').not.toContain('-0.00');
+
+    // Cross-checked against the camera itself, not against our own formatter.
+    const pose = await page.evaluate(() => window.__forgeDebug.cameraPose());
+    const shown = text.match(/translate = \[ ([-\d. ]+) \]/)[1].split(' ');
+    for (const [i, axis] of ['x', 'y', 'z'].entries()) {
+      expect(
+        Number(shown[i]),
+        `translate ${axis} on the bar vs the live camera target`
+      ).toBeCloseTo(pose.target[i], 1);
+    }
+    const distance = Number(text.match(/distance = ([\d.]+)/)[1]);
+    const expected = Math.hypot(
+      pose.position[0] - pose.target[0],
+      pose.position[1] - pose.target[1],
+      pose.position[2] - pose.target[2]
+    );
+    expect(distance, 'distance on the bar vs the live camera').toBeCloseTo(
+      expected,
+      1
+    );
+  });
+
+  test('classic-status-silent: orbiting says nothing to a screen reader', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await seedPanes(page);
+    await loadProject(page, UNIVERSAL_CUFF);
+    await enterClassicStandard(page);
+    await skipWithoutRenderer(page);
+    await expect
+      .poll(() => page.locator('#classicStatusViewport').textContent(), {
+        timeout: 60_000,
+      })
+      .toMatch(/^Viewport:/);
+
+    // The whole point of the phase. The camera's feed fires ~118 times per
+    // drag; if the telemetry were inside the bar's live region a screen reader
+    // would read a pose ten times a second.
+    const placement = await page.evaluate(() => {
+      const bar = document.getElementById('classicStatusBar');
+      const span = document.getElementById('classicStatusViewport');
+      return {
+        barHasAriaLive: bar.hasAttribute('aria-live'),
+        barRole: bar.getAttribute('role'),
+        telemetryInLiveRegion: Boolean(span.closest('[aria-live]')),
+        // Still navigable: not hidden from assistive tech, just quiet.
+        telemetryHidden: span.getAttribute('aria-hidden'),
+        renderStateRole: document
+          .getElementById('classicStatusText')
+          .getAttribute('role'),
+      };
+    });
+    expect(placement).toEqual({
+      barHasAriaLive: false,
+      barRole: null,
+      telemetryInLiveRegion: false,
+      telemetryHidden: null,
+      renderStateRole: 'status',
+    });
+
+    const announcements = await watchAnnouncements(
+      page,
+      '__recordTelemetryAnnouncement'
+    );
+    const before = await page.locator('#classicStatusViewport').textContent();
+
+    const box = await page.locator('.preview-panel canvas').boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    for (let i = 1; i <= 30; i += 1) {
+      await page.mouse.move(
+        box.x + box.width / 2 + i * 6,
+        box.y + box.height / 2 + i * 4
+      );
+    }
+    await page.mouse.up();
+    await page.waitForTimeout(1500);
+
+    // Guards the assertion below: if the drag moved nothing, silence is free.
+    expect(
+      await page.locator('#classicStatusViewport').textContent(),
+      'the orbit did not move the camera, so this proves nothing'
+    ).not.toBe(before);
+    // Asserting the announcer is globally EMPTY over-reaches, as F4's
+    // classic-viewport-silent already records: an auto-preview legitimately says
+    // "Rendering preview..." and "Preview ready" while the drag is in flight.
+    // What must be true is that the TELEMETRY never speaks — no pose, no
+    // "Viewport:", no coordinate triple.
+    const telemetry = announcements.filter((text) =>
+      /viewport|translate|rotate|distance =|fov =/i.test(text)
+    );
+    expect(
+      telemetry,
+      `orbiting announced telemetry: ${JSON.stringify(announcements)}`
+    ).toEqual([]);
+  });
+});
