@@ -513,7 +513,6 @@ body[data-ui-mode='classic'] .classic-slot > details {
     padding-top: var(--classic-resizer-track-h);
   }
 
-
   body[data-ui-mode='classic'] .param-panel {
     max-height: none;
     min-height: 0;
@@ -840,7 +839,6 @@ body[data-ui-mode='classic'][data-classic-field-bottom='empty']
     .classic-resizer--strip {
     display: none;
   }
-
 }
 
 /* ── 3D view toolbar (E5) ───────────────────────────────────────────────────

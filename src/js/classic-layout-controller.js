@@ -956,9 +956,7 @@ export class ClassicLayoutController {
       if (!rail) continue;
       const show = Boolean(this._panes[def.paneKey]) && occupancy[def.name];
 
-      let tab = rail.querySelector(
-        `[data-classic-stow-field="${def.name}"]`
-      );
+      let tab = rail.querySelector(`[data-classic-stow-field="${def.name}"]`);
       if (!show) {
         tab?.remove();
         continue;
