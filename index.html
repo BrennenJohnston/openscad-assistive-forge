@@ -58,6 +58,20 @@
     <div id="app">
       <header class="app-header">
         <div class="header-content">
+          <!-- U-2/Q-16: the way back to the main projects page sits at the
+               far left, nearest the browser's own Back button, in BOTH
+               themes. One DOM node, one handler — relocated from the
+               workflow row, not duplicated. Hidden while the welcome screen
+               is up (you are already there). -->
+          <button type="button"
+            id="clearFileBtn"
+            class="btn btn-sm btn-outline"
+            aria-label="Return to the main projects page. Warning: unsaved changes will be lost"
+            title="Return to the main projects page (unsaved changes will be lost)"
+            data-tutorial-target="clear-file"
+          >
+            ← Main Page
+          </button>
           <div class="header-branding">
             <img
               class="header-logo"
@@ -230,6 +244,32 @@
                 ></path>
               </svg>
             </button>
+            <!-- The Classic toggle sits LEFT of the density switch (U-7):
+                 in Classic the visible strip is GitHub · Keys · Classic ·
+                 Simplified|Standard. In Forge the density switch is hidden,
+                 so the visible order there is unchanged. -->
+            <button type="button"
+              id="classicModeToggle"
+              class="btn btn-sm btn-secondary classic-toggle hidden"
+              aria-pressed="false"
+              aria-label="Switch to Classic desktop layout"
+              title="Switch to Classic desktop layout"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="1"></rect>
+                <line x1="3" y1="8" x2="21" y2="8"></line>
+                <line x1="14" y1="8" x2="14" y2="21"></line>
+              </svg>
+              <span class="classic-label">Classic</span>
+            </button>
             <!-- Simplified/Standard inside Classic. Same switch component as
                  #uiModeToggle so the choice reads identically in both
                  layouts; Classic-only via classic.css. -->
@@ -252,28 +292,6 @@
                 >Standard</span
               >
               <span class="ui-mode-slider" aria-hidden="true"></span>
-            </button>
-            <button type="button"
-              id="classicModeToggle"
-              class="btn btn-sm btn-secondary classic-toggle hidden"
-              aria-pressed="false"
-              aria-label="Switch to Classic desktop layout"
-              title="Switch to Classic desktop layout"
-            >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                aria-hidden="true"
-              >
-                <rect x="3" y="3" width="18" height="18" rx="1"></rect>
-                <line x1="3" y1="8" x2="21" y2="8"></line>
-                <line x1="14" y1="8" x2="14" y2="21"></line>
-              </svg>
-              <span class="classic-label">Classic</span>
             </button>
           </div>
         </div>
@@ -522,15 +540,6 @@
               </svg>
               <span class="btn-text">Help</span>
             </button>
-            <button type="button"
-              id="clearFileBtn"
-              class="btn btn-sm btn-outline"
-              aria-label="Go back to welcome screen. Warning: unsaved changes will be lost"
-              title="Back to welcome screen (unsaved changes will be lost)"
-              data-tutorial-target="clear-file"
-            >
-              ← Back
-            </button>
           </div>
         </div>
         <!-- Classic icon toolbar (C6): desktop OpenSCAD's second toolbar row.
@@ -554,7 +563,10 @@
               <span class="classic-icon" data-icon="save" aria-hidden="true"></span><span class="sr-only">Save</span>
             </button>
           </div>
-          <div class="classic-tb-group" role="group" aria-label="Edit">
+          <!-- Simplified only (U-5/Q-18): in Standard the editor toolbar has
+               its own Undo/Redo for text edits, and two visible pairs read
+               as duplicates — which is what the owner reported. -->
+          <div class="classic-tb-group classic-simplified-only" role="group" aria-label="Edit">
             <!-- Named in full: the editor toolbar has its own Undo/Redo for
                  text edits, and a bare "Undo" would be two identical buttons
                  to a screen reader. The tooltips already said this. -->
@@ -565,11 +577,26 @@
               <span class="classic-icon" data-icon="redo" aria-hidden="true"></span><span class="sr-only">Redo parameter change</span>
             </button>
           </div>
-          <!-- Preview and Render moved to the 3D view toolbar (E3, U3);
-               this group is now exactly one export button. -->
-          <div class="classic-tb-group" role="group" aria-label="Export">
+          <!-- The workflow triad + DXF, both densities (U-5, Q-18 option a).
+               This consciously REVERSES the R2a-era decision to duplicate
+               the icon rows between the top and editor toolbars, and E3's
+               "exactly one export button" note that used to sit here: the
+               owner found the duplication confusing, and Preview→Render→STL
+               is the workflow every Classic user runs. The camera bar keeps
+               its own Preview/Render pair — that duplication is the
+               desktop's own (viewerToolBar, U3). -->
+          <div class="classic-tb-group" role="group" aria-label="Workflow">
+            <button type="button" class="btn classic-tb-btn" id="classicTbPreviewBtn" title="Preview (F5)">
+              <span class="classic-icon" data-icon="preview" aria-hidden="true"></span><span class="sr-only">Preview</span>
+            </button>
+            <button type="button" class="btn classic-tb-btn" id="classicTbRenderBtn" title="Render (F6)">
+              <span class="classic-icon" data-icon="render" aria-hidden="true"></span><span class="sr-only">Render</span>
+            </button>
             <button type="button" class="btn classic-tb-btn" id="classicTbExportStlBtn" title="Export as STL">
               <span class="classic-icon" data-icon="export-stl" aria-hidden="true"></span><span class="sr-only">Export STL</span>
+            </button>
+            <button type="button" class="btn classic-tb-btn" id="classicTbExportDxfBtn" title="Export as DXF">
+              <span class="classic-icon" data-icon="export-dxf" aria-hidden="true"></span><span class="sr-only">Export DXF</span>
             </button>
           </div>
           <div class="classic-tb-group" role="group" aria-label="Panels">
@@ -3485,10 +3512,11 @@
               </div>
               <!-- Classic editor toolbar (D1). Lives inside #expertModePanel so
                    it travels into the Classic editor slot with the panel, and
-                   is hidden outside Classic. Order is upstream's editortoolbar
-                   (U3) plus the runtime STL/DXF buttons the desktop adds, per
-                   DCR-1: New Open Save | Undo Redo Unindent Indent |
-                   Preview Render | STL DXF | 3D Print. -->
+                   is hidden outside Classic. U-5/Q-18a superseded DCR-1's
+                   upstream transcription: the workflow buttons (Preview,
+                   Render, STL, DXF) live on the top Classic toolbar now, so
+                   this bar is New Open Save | Undo Redo Unindent Indent |
+                   3D Print. -->
               <div
                 id="classicEditorToolbar"
                 class="classic-editor-toolbar"
@@ -3521,22 +3549,9 @@
                     <span class="classic-icon" data-icon="indent" aria-hidden="true"></span><span class="sr-only">Indent</span>
                   </button>
                 </div>
-                <div class="classic-tb-group" role="group" aria-label="Rendering">
-                  <button type="button" class="btn classic-tb-btn" id="classicEdPreviewBtn" title="Preview (F5)">
-                    <span class="classic-icon" data-icon="preview" aria-hidden="true"></span><span class="sr-only">Preview</span>
-                  </button>
-                  <button type="button" class="btn classic-tb-btn" id="classicEdRenderBtn" title="Render (F6)">
-                    <span class="classic-icon" data-icon="render" aria-hidden="true"></span><span class="sr-only">Render</span>
-                  </button>
-                </div>
-                <div class="classic-tb-group" role="group" aria-label="Export">
-                  <button type="button" class="btn classic-tb-btn" id="classicEdExportStlBtn" title="Export as STL">
-                    <span class="classic-icon" data-icon="export-stl" aria-hidden="true"></span><span class="sr-only">Export STL</span>
-                  </button>
-                  <button type="button" class="btn classic-tb-btn" id="classicEdExportDxfBtn" title="Export as DXF">
-                    <span class="classic-icon" data-icon="export-dxf" aria-hidden="true"></span><span class="sr-only">Export DXF</span>
-                  </button>
-                </div>
+                <!-- Preview/Render/STL/DXF moved to the top Classic toolbar
+                     (U-5, Q-18a): one home for the workflow triad in both
+                     densities. Text-editing ops and 3D Print stay. -->
                 <div class="classic-tb-group" role="group" aria-label="Print">
                   <!-- aria-disabled rather than disabled: the button stays
                        focusable so keyboard and screen-reader users can find

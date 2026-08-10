@@ -52,6 +52,19 @@ body {
   min-width: 0;
 }
 
+/* U-2/Q-16: the Main Page button leads the header in both themes, nearest
+   the browser's own Back button; the branding shifts right. */
+.header-content > #clearFileBtn {
+  min-height: var(--size-touch-target);
+  min-width: var(--size-touch-target);
+  flex-shrink: 0;
+}
+
+/* You are already on the main page while the welcome screen is up. */
+#app:has(#welcomeScreen:not(.hidden)) .header-content > #clearFileBtn {
+  display: none;
+}
+
 .header-branding {
   display: flex;
   align-items: center;
@@ -2873,10 +2886,10 @@ details summary:focus,
   display: none;
 }
 
-/* Hide utility buttons in workflow bar in focus mode, except the focus mode toggle itself */
+/* Hide utility buttons in focus mode, except the focus mode toggle itself */
 /* Uses :has() selector - well supported in modern browsers */
 #app:has(.main-interface.focus-mode) .workflow-actions #featuresGuideBtn,
-#app:has(.main-interface.focus-mode) .workflow-actions #clearFileBtn {
+#app:has(.main-interface.focus-mode) .header-content > #clearFileBtn {
   display: none;
 }
 

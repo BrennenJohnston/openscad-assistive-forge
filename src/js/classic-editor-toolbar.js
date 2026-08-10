@@ -1,13 +1,14 @@
 /**
  * Classic Editor Toolbar controller (D4).
  *
- * Wires the twelve buttons of #classicEditorToolbar, whose markup lives in
- * index.html so it travels into the Classic editor slot with the panel.
+ * Wires the eight buttons of #classicEditorToolbar — file ops, text-editing
+ * ops and 3D Print — whose markup lives in index.html so it travels into the
+ * Classic editor slot with the panel. The workflow buttons (Preview, Render,
+ * STL, DXF) moved to the top Classic toolbar (U-5/Q-18a).
  *
  * Every handler delegates to machinery that already exists — the file-actions
- * controller, the editor's own performAction, the A4-rewired preview trigger,
- * the Generate button — so this module owns wiring and enablement, never a
- * second implementation of an action.
+ * controller, the editor's own performAction — so this module owns wiring
+ * and enablement, never a second implementation of an action.
  *
  * Enablement is disabled-with-reason, not hiding: a gated button keeps
  * aria-disabled="true" and stays focusable so keyboard and screen-reader
@@ -27,8 +28,14 @@ import { announceImmediate } from './announcer.js';
 const REASON_NOTHING_TO_UNDO = 'Nothing to undo';
 const REASON_NOTHING_TO_REDO = 'Nothing to redo';
 const REASON_BASIC_EDITOR = 'Not available in the basic text editor';
-const REASON_NEEDS_RENDER = 'Press Generate first to enable this export';
-const REASON_NEEDS_FILE = 'Open a file first';
+/**
+ * Classic-truthful wording, owner-approved 2026-08-09 (Q-19): Classic has no
+ * Generate surface, so the old "Press Generate first…" named a control the
+ * user could not find. Exported for the top toolbar's STL button (main.js),
+ * which is the one gated export surface now that the workflow buttons left
+ * this toolbar (U-5/Q-18a).
+ */
+export const REASON_NEEDS_RENDER = 'Render the model first (F6)';
 
 export class ClassicEditorToolbar {
   /**
@@ -36,17 +43,11 @@ export class ClassicEditorToolbar {
    * @param {Object} deps.fileActionsController
    * @param {Function} deps.getEditor    - () => editor instance or null
    * @param {Function} deps.getState     - () => app state
-   * @param {Function} deps.getHasFullRender - () => boolean
-   * @param {Function} deps.triggerPreview   - the A4-rewired preview trigger
-   * @param {Function} deps.exportStl        - () => void
    */
   constructor(deps = {}) {
     this.fileActions = deps.fileActionsController || null;
     this.getEditor = deps.getEditor || (() => null);
     this.getState = deps.getState || (() => ({}));
-    this.getHasFullRender = deps.getHasFullRender || (() => false);
-    this.triggerPreview = deps.triggerPreview || (() => {});
-    this.exportStl = deps.exportStl || (() => {});
 
     /** @type {HTMLElement|null} */
     this._toolbar = null;
@@ -133,19 +134,6 @@ export class ClassicEditorToolbar {
     click('classicEdUnindentBtn', () => this._editorAction('unindent'));
     click('classicEdIndentBtn', () => this._editorAction('indent'));
 
-    // Same handler as Ctrl+Enter: flush the pending write-back, then preview
-    click('classicEdPreviewBtn', () => this.triggerPreview());
-    click('classicEdRenderBtn', () => {
-      const primary = document.getElementById('primaryActionBtn');
-      if (primary && !primary.disabled) primary.click();
-    });
-
-    click('classicEdExportStlBtn', () => this.exportStl());
-    // DXF goes through the one-click 2D path, which already handles the 2D
-    // consent prompt and the projection fallback — exportFormatFromMenu would
-    // reject it as a format mismatch against a 3D render (D-23).
-    click('classicEdExportDxfBtn', () => this.fileActions?.onExport2D?.('dxf'));
-
     // 3D Print is permanently unavailable this round (D-26); its reason span
     // is static markup, so the shared announce path covers it.
     click('classicEdPrintBtn', () => {});
@@ -198,8 +186,6 @@ export class ClassicEditorToolbar {
     if (!this._toolbar) return;
 
     const editor = this.getEditor();
-    const state = this.getState() || {};
-    const hasFile = Boolean(state.uploadedFile);
 
     // The textarea fallback (prefers-contrast: more) supports none of these,
     // and says so rather than pretending they are momentarily unavailable.
@@ -225,13 +211,6 @@ export class ClassicEditorToolbar {
       supports('unindent'),
       REASON_BASIC_EDITOR
     );
-
-    this._setAvailable(
-      'classicEdExportStlBtn',
-      this.getHasFullRender() === true,
-      REASON_NEEDS_RENDER
-    );
-    this._setAvailable('classicEdExportDxfBtn', hasFile, REASON_NEEDS_FILE);
 
     this._refreshRovingStop();
   }

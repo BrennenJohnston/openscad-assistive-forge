@@ -191,7 +191,14 @@ jobs:
           # meant the clock rather than a defect, which is precisely how a
           # broken editor once shipped behind a green suite.
           PW_GLOBAL_TIMEOUT: '1500000'
-      
+
+      # Q-23 (owner, 2026-08-09): this job once stayed green for a whole
+      # release while two menu-parity tests were red, because tests the
+      # clock cut off report as never-started rather than failed. A green
+      # summary over an incomplete run must fail.
+      - name: Never-started tests fail this job
+        run: node scripts/check-e2e-complete.mjs playwright-results.json
+
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
         if: always()
@@ -329,6 +336,11 @@ jobs:
       
       - name: Run E2E tests (Firefox)
         run: npx playwright test --project=firefox
+        env:
+          # Q-23 (owner, 2026-08-09): the same 25min ceiling Chromium and
+          # Edge run on — 86 tests had never even started here under the
+          # default 10 minutes, so the job's signal was noise.
+          PW_GLOBAL_TIMEOUT: '1500000'
       
       - name: Upload Playwright report (Firefox)
         uses: actions/upload-artifact@v4
@@ -382,7 +394,10 @@ jobs:
       - name: Run E2E tests (WebKit)
         run: npx playwright test --project=webkit
         env:
-          PW_GLOBAL_TIMEOUT: '900000'
+          # Q-23 (owner, 2026-08-09): raised from 15min to the matrix-wide
+          # 25min — this job was already failing at 16m5s with 496 tests
+          # not run, so its signal was the clock, not the browser.
+          PW_GLOBAL_TIMEOUT: '1500000'
       
       - name: Upload Playwright report (WebKit)
         uses: actions/upload-artifact@v4

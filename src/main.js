@@ -212,6 +212,7 @@ import { initClassicStatusBar } from './js/classic-status-bar.js';
 import {
   initClassicEditorToolbar,
   getClassicEditorToolbar,
+  REASON_NEEDS_RENDER as CLASSIC_STL_NEEDS_RENDER_REASON,
 } from './js/classic-editor-toolbar.js';
 import { FolderChangeWatcher } from './js/folder-change-watcher.js';
 import { FolderWriteBack } from './js/folder-write-back.js';
@@ -3972,8 +3973,10 @@ async function initApp() {
         enabled: hasFile,
         tooltip: hasFile ? undefined : 'Open a file first',
         handler: () => {
+          // Never the transformer button: with a cached full render its
+          // action is 'download', and Render must not mean download (U-8a).
           const btn = document.getElementById('primaryActionBtn');
-          if (btn && !btn.disabled) btn.click();
+          if (btn && !btn.disabled) runFullRender();
         },
       },
       {
@@ -6614,6 +6617,7 @@ async function initApp() {
         'Generate is unavailable while viewing an STL file. Open a .scad model to generate designs.'
       );
       downloadFallbackLink.classList.add('hidden');
+      _dispatchRenderStateChange(false);
       return;
     }
     if (primaryActionBtn.dataset.stlViewDisabled) {
@@ -6683,6 +6687,21 @@ async function initApp() {
         downloadFallbackLink.classList.add('hidden');
       }
     }
+
+    _dispatchRenderStateChange(isStlFormat && hasFullQualityStl);
+  }
+
+  /**
+   * Announce render-state transitions to every surface that gates on them
+   * (the Classic STL buttons, U-8b). Dispatched from inside
+   * updatePrimaryActionButton() — the one place that computes the state —
+   * so the event can never drift from what the transformer shows.
+   * @param {boolean} hasFullRender
+   */
+  function _dispatchRenderStateChange(hasFullRender) {
+    document.dispatchEvent(
+      new CustomEvent('render-state-change', { detail: { hasFullRender } })
+    );
   }
 
   // Import shared validation schemas (FILE_SIZE_LIMITS is now imported at top of initApp() to avoid TDZ)
@@ -9337,14 +9356,13 @@ if (rounded) {
     // Classic editor toolbar (D4). Dependencies are injected because they are
     // closures in here; the toolbar owns wiring and enablement only, never a
     // second implementation of any action.
+    // The workflow buttons (Preview/Render/STL/DXF) left this toolbar for
+    // the top Classic toolbar (U-5/Q-18a), taking their render-state deps
+    // with them.
     initClassicEditorToolbar({
       fileActionsController,
       getEditor: () => getModeManager()?.getEditorInstance?.() || null,
       getState: () => stateManager.getState(),
-      getHasFullRender: () =>
-        hasFullQualitySTLFor(stateManager.getState().parameters),
-      triggerPreview: () => editorPreviewTrigger?.(),
-      exportStl: () => exportFormatFromMenu('stl'),
     });
 
     // Classic Font List panel (F3). Registering the sample faces costs no new
@@ -9456,9 +9474,76 @@ if (rounded) {
         ?.addEventListener('click', () =>
           document.getElementById('redoBtn')?.click()
         );
+      // U-8b: the desktop's Export STL exports a render that exists; ours
+      // gates the same way. aria-disabled + reason rather than disabled, so
+      // keyboard and screen-reader users can find the button and hear why
+      // (the editor toolbar's pattern). Enabled, it downloads the existing
+      // full render — never starts a fresh one.
+      const classicTbStlBtn = document.getElementById('classicTbExportStlBtn');
+      if (classicTbStlBtn) {
+        const reasonId = 'classicTbExportStlReason';
+        const reasonSpan = document.createElement('span');
+        reasonSpan.id = reasonId;
+        reasonSpan.className = 'sr-only';
+        reasonSpan.textContent = CLASSIC_STL_NEEDS_RENDER_REASON;
+        classicTbStlBtn.insertAdjacentElement('afterend', reasonSpan);
+
+        const refreshClassicTbStl = () => {
+          const armed = hasFullQualitySTLFor(
+            stateManager.getState().parameters
+          );
+          if (armed) {
+            classicTbStlBtn.removeAttribute('aria-disabled');
+            classicTbStlBtn.removeAttribute('aria-describedby');
+          } else {
+            classicTbStlBtn.setAttribute('aria-disabled', 'true');
+            classicTbStlBtn.setAttribute('aria-describedby', reasonId);
+          }
+        };
+        refreshClassicTbStl();
+        document.addEventListener('render-state-change', refreshClassicTbStl);
+
+        classicTbStlBtn.addEventListener('click', (event) => {
+          if (classicTbStlBtn.getAttribute('aria-disabled') === 'true') {
+            event.preventDefault();
+            announceImmediate(
+              `Export as STL unavailable. ${CLASSIC_STL_NEEDS_RENDER_REASON}`
+            );
+            return;
+          }
+          exportFormatFromMenu('stl', { renderIfNeeded: false });
+        });
+      }
+
+      // The workflow triad's other members (U-5, Q-18a).
       document
-        .getElementById('classicTbExportStlBtn')
-        ?.addEventListener('click', () => exportFormatFromMenu('stl'));
+        .getElementById('classicTbPreviewBtn')
+        ?.addEventListener('click', () => {
+          const tbState = stateManager.getState();
+          if (!tbState.uploadedFile) return;
+          // Prefer the editor's own trigger: it flushes the pending
+          // write-back first, so Preview shows what is typed rather than
+          // the last published content — the reason the editor toolbar's
+          // Preview used it. Null until the expert block initializes
+          // (a Simplified-only session), where the plain path is right.
+          if (editorPreviewTrigger) {
+            editorPreviewTrigger();
+          } else if (autoPreviewController) {
+            autoPreviewController.onParameterChange(tbState.parameters);
+          }
+        });
+      document
+        .getElementById('classicTbRenderBtn')
+        ?.addEventListener('click', () => {
+          if (primaryActionBtn && !primaryActionBtn.disabled) {
+            runFullRender();
+          }
+        });
+      document
+        .getElementById('classicTbExportDxfBtn')
+        ?.addEventListener('click', () =>
+          fileActionsController.onExport2D?.('dxf')
+        );
 
       // Projection pair mirrors the preview manager's actual mode
       const perspBtn = document.getElementById('classicTbPerspectiveBtn');
@@ -9568,7 +9653,7 @@ if (rounded) {
         .getElementById('classicRenderBtn')
         ?.addEventListener('click', () => {
           if (primaryActionBtn && !primaryActionBtn.disabled) {
-            primaryActionBtn.click();
+            runFullRender();
           }
         });
 
@@ -10446,7 +10531,21 @@ if (rounded) {
       return;
     }
 
-    // Generate action - perform full quality render for download
+    await runFullRender();
+  });
+
+  /**
+   * The full-quality render with all of its UI side effects and NO download
+   * side effect (U-8a). Extracted from the generate branch of the
+   * primaryActionBtn handler so every Render surface — Design ▸ Render, the
+   * rebindable `render` shortcut, and both Classic Render buttons — can
+   * render without going through the Generate↔Download transformer, whose
+   * meaning depends on state the user cannot see. Pressing Render used to
+   * trigger an STL save prompt whenever a full render was already cached.
+   */
+  async function runFullRender() {
+    const state = stateManager.getState();
+
     if (!state.uploadedFile) {
       showErrorToast({
         title: 'No File Uploaded',
@@ -10840,7 +10939,7 @@ if (rounded) {
       // Always restore button to correct state based on current conditions
       updatePrimaryActionButton();
     }
-  });
+  }
 
   // Cancel render button
   cancelRenderBtn.addEventListener('click', () => {
@@ -14470,7 +14569,7 @@ if (rounded) {
   keyboardConfig.on('render', () => {
     const state = stateManager.getState();
     if (state.uploadedFile && !primaryActionBtn.disabled) {
-      primaryActionBtn.click();
+      runFullRender();
     }
   });
 

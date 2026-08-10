@@ -183,7 +183,8 @@ test.describe('Classic chrome strip (C3)', () => {
       '#contrastToggle',
       '#focusModeBtn',
       '#featuresGuideBtn',
-      '#clearFileBtn',
+      // #clearFileBtn is NOT in this list any more: U-2 overruled the
+      // File > Close adapt — the Main Page button shows in BOTH themes.
       '#actionsBar',
       '#previewInfoSection',
       '#previewDrawerToggle',
@@ -200,6 +201,11 @@ test.describe('Classic chrome strip (C3)', () => {
         `${sel} must be hidden in classic`
       ).toBeHidden();
     }
+
+    // U-2/Q-16: the way back to the main page stays visible in Classic,
+    // reading its approved label.
+    await expect(page.locator('#clearFileBtn')).toBeVisible();
+    await expect(page.locator('#clearFileBtn')).toHaveText('← Main Page');
 
     // The desktop-style menu bar and all six menus stay visible
     await expect(page.locator('#toolbarMenuBar')).toBeVisible();
@@ -260,12 +266,22 @@ test.describe('Classic density: Simplified / Standard inside Classic', () => {
     await expect(densityToggle).toHaveAttribute('role', 'switch');
     await expect(densityToggle).toHaveAttribute('aria-checked', 'false');
 
-    // Simplified drops the code-facing docks and the programmer buttons
+    // Simplified drops the code-facing docks and the authoring buttons.
+    // The parameter Undo/Redo pair is Simplified-ONLY since U-5/Q-18 —
+    // in Standard the editor toolbar shows its own Undo/Redo instead.
     await expect(page.locator('#classicEditorSlot')).toBeHidden();
     await expect(page.locator('#classicConsoleSlot')).toBeHidden();
     await expect(page.locator('#classicTbNewBtn')).toBeHidden();
     await expect(page.locator('#classicTbSaveBtn')).toBeHidden();
-    await expect(page.locator('#classicTbUndoBtn')).toBeHidden();
+    await expect(page.locator('#classicTbUndoBtn')).toBeVisible();
+    // The pair names its target in full: a bare "Undo" would be ambiguous
+    // against the editor toolbar's Undo in Standard.
+    await expect(page.locator('#classicTbUndoBtn')).toHaveAccessibleName(
+      'Undo parameter change'
+    );
+    await expect(page.locator('#classicTbRedoBtn')).toHaveAccessibleName(
+      'Redo parameter change'
+    );
     await expect(page.locator('#editMenuBtn')).toBeHidden();
     await expect(page.locator('#windowMenuBtn')).toBeHidden();
 
@@ -308,6 +324,7 @@ test.describe('Classic density: Simplified / Standard inside Classic', () => {
     await expect(page.locator('#classicEditorSlot')).toBeVisible();
     await expect(page.locator('#classicConsoleSlot')).toBeVisible();
     await expect(page.locator('#classicTbNewBtn')).toBeVisible();
+    await expect(page.locator('#classicTbUndoBtn')).toBeHidden();
     await expect(page.locator('#editMenuBtn')).toBeVisible();
     await expect(page.locator('#windowMenuBtn')).toBeVisible();
   });
@@ -974,14 +991,17 @@ test.describe('Classic mode layout (C4)', () => {
       .count();
     expect(openGroups, 'all param groups collapsed in Classic').toBe(0);
 
-    // Icon toolbar (C6): docked under the menu bar. E3 moved the snap views,
-    // projection, overlays and Preview/Render out to the 3D view toolbar, and
-    // dropped the bed grid from Classic (D-18), so what remains here is
-    // File, Edit, Export STL and the Customizer toggle.
+    // Icon toolbar (C6, reshaped by U-5/Q-18a): docked under the menu bar.
+    // The snap views, projection and overlays live on the 3D view toolbar
+    // (E3); the workflow triad + DXF live HERE in both densities, beside
+    // the file group and the Customizer toggle.
     const toolbar = page.locator('#classicToolbar');
     await expect(toolbar).toBeVisible();
     await expect(toolbar.locator('[data-classic-view]')).toHaveCount(0);
+    await expect(toolbar.locator('#classicTbPreviewBtn')).toBeVisible();
+    await expect(toolbar.locator('#classicTbRenderBtn')).toBeVisible();
     await expect(toolbar.locator('#classicTbExportStlBtn')).toBeVisible();
+    await expect(toolbar.locator('#classicTbExportDxfBtn')).toBeVisible();
     await expect(toolbar.locator('#classicTbCustomizerBtn')).toBeVisible();
     const toolbarBox = await toolbar.boundingBox();
     const menuBox = await page.locator('#toolbarMenuBar').boundingBox();
@@ -1650,6 +1670,8 @@ test.describe('Automatic Preview control (C4)', () => {
 });
 
 test.describe('Classic editor toolbar (D1)', () => {
+  // U-5/Q-18a superseded DCR-1's full upstream transcription: the workflow
+  // buttons (Preview, Render, STL, DXF) live on the top Classic toolbar now.
   const ORDER = [
     ['classicEdNewBtn', 'New file'],
     ['classicEdOpenBtn', 'Open file'],
@@ -1658,14 +1680,10 @@ test.describe('Classic editor toolbar (D1)', () => {
     ['classicEdRedoBtn', 'Redo edit'],
     ['classicEdUnindentBtn', 'Unindent'],
     ['classicEdIndentBtn', 'Indent'],
-    ['classicEdPreviewBtn', 'Preview'],
-    ['classicEdRenderBtn', 'Render'],
-    ['classicEdExportStlBtn', 'Export STL'],
-    ['classicEdExportDxfBtn', 'Export DXF'],
     ['classicEdPrintBtn', '3D Print'],
   ];
 
-  test('classic-editor-toolbar: twelve buttons in upstream order, named and reachable', async ({
+  test('classic-editor-toolbar: eight buttons in order, named and reachable', async ({
     page,
   }) => {
     test.setTimeout(240_000);
@@ -1720,13 +1738,11 @@ test.describe('Classic editor toolbar (D1)', () => {
       'not available in this browser version'
     );
 
-    // The two Undo buttons are distinguishable to a screen reader
-    await expect(page.locator('#classicTbUndoBtn')).toHaveAccessibleName(
-      'Undo parameter change'
-    );
-    await expect(page.locator('#classicTbRedoBtn')).toHaveAccessibleName(
-      'Redo parameter change'
-    );
+    // Since U-5/Q-18 the parameter Undo/Redo pair is Simplified-only, so
+    // Standard never shows two visually identical Undo pairs at once. Its
+    // full names are asserted in the density test, where it is visible.
+    await expect(page.locator('#classicTbUndoBtn')).toBeHidden();
+    await expect(page.locator('#classicTbRedoBtn')).toBeHidden();
   });
 });
 
@@ -1752,7 +1768,9 @@ test.describe('Classic editor toolbar icons (D2)', () => {
         url: getComputedStyle(s).backgroundImage,
       }))
     );
-    expect(icons.length).toBe(11);
+    // Seven icon buttons since U-5/Q-18a moved Preview/Render/STL/DXF to
+    // the top toolbar; 3D Print is the deliberate no-glyph text button.
+    expect(icons.length).toBe(7);
     for (const { icon, url } of icons) {
       expect(url, `${icon} has a background image`).toContain(
         'openscad-icons/chokusen/'
@@ -1775,7 +1793,7 @@ test.describe('Classic editor toolbar icons (D2)', () => {
 });
 
 test.describe('Classic editor toolbar behaviour (D4/D5)', () => {
-  test('classic-editor-toolbar-actions: undo gating follows the editor, export gating follows render state', async ({
+  test('classic-editor-toolbar-actions: undo gating follows the editor', async ({
     page,
   }) => {
     test.setTimeout(240_000);
@@ -1787,7 +1805,6 @@ test.describe('Classic editor toolbar behaviour (D4/D5)', () => {
 
     const undoBtn = page.locator('#classicEdUndoBtn');
     const redoBtn = page.locator('#classicEdRedoBtn');
-    const stlBtn = page.locator('#classicEdExportStlBtn');
 
     // A freshly loaded project has nothing to undo — and Undo must never be
     // able to wipe the document that was just loaded
@@ -1795,16 +1812,6 @@ test.describe('Classic editor toolbar behaviour (D4/D5)', () => {
     await expect(page.locator('#classicEdUndoBtnReason')).toHaveText(
       'Nothing to undo'
     );
-
-    // Nothing has been rendered at full quality yet
-    await expect(stlBtn).toHaveAttribute('aria-disabled', 'true');
-    await expect(page.locator('#classicEdExportStlBtnReason')).toHaveText(
-      'Press Generate first to enable this export'
-    );
-
-    // A gated button is still focusable, so it is discoverable
-    await stlBtn.focus();
-    await expect(stlBtn).toBeFocused();
 
     // Typing makes Undo available; CodeMirror drops keystrokes at full speed
     const editor = page.locator('#expertModeBody .cm-content');
@@ -1863,8 +1870,8 @@ test.describe('Classic editor toolbar behaviour (D4/D5)', () => {
 
     // An aria-disabled button is still in the arrow ring — that is how a
     // keyboard user discovers it and hears why it is unavailable
-    await page.locator('#classicEdExportStlBtn').focus();
-    await expect(page.locator('#classicEdExportStlBtn')).toBeFocused();
+    await page.locator('#classicEdPrintBtn').focus();
+    await expect(page.locator('#classicEdPrintBtn')).toBeFocused();
   });
 });
 
@@ -1927,20 +1934,21 @@ test.describe('Classic 3D view toolbar (E3-E7)', () => {
     expect(barBox.y).toBeGreaterThanOrEqual(viewBox.y + viewBox.height - 2);
     expect(barBox.y + barBox.height).toBeLessThanOrEqual(stripBox.y + 2);
 
-    // Preview and Render appear exactly once outside the editor toolbar.
-    // The editor toolbar's own pair is the sanctioned desktop-faithful
-    // second instance (DCR-1), so it is excluded from this count.
+    // Preview and Render appear exactly once PER BAR: the top toolbar owns
+    // the workflow triad (U-5/Q-18a) and the camera bar keeps upstream's own
+    // pair (viewerToolBar, U3) — the desktop's own duplication, kept. The
+    // editor toolbar has neither since U-5.
     for (const name of ['Preview', 'Render']) {
-      const count = await page.evaluate((n) => {
-        const scopes = [
-          document.getElementById('classicToolbar'),
-          document.getElementById('classicCameraBar'),
-        ].filter(Boolean);
-        return scopes
-          .flatMap((s) => Array.from(s.querySelectorAll('button')))
-          .filter((b) => (b.textContent || '').trim() === n).length;
-      }, name);
-      expect(count, name + ' appears once outside the editor toolbar').toBe(1);
+      for (const barId of ['classicToolbar', 'classicCameraBar']) {
+        const count = await page.evaluate(
+          ({ n, id }) =>
+            Array.from(
+              document.getElementById(id)?.querySelectorAll('button') ?? []
+            ).filter((b) => (b.textContent || '').trim() === n).length,
+          { n: name, id: barId }
+        );
+        expect(count, `${name} appears once in #${barId}`).toBe(1);
+      }
     }
 
     // D-18: bed grid and its size select are gone from Classic entirely
@@ -2683,5 +2691,117 @@ test.describe('View menu per-toolbar hide toggles (G4)', () => {
       'data-classic-camera-bar-hidden',
       'true'
     );
+  });
+});
+
+test.describe('Classic toggle placement and honest active label (U-7)', () => {
+  test('sits left of the density switch and names the way back when active', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await loadSampleProject(page);
+
+    const classicToggle = page.locator('#classicModeToggle');
+    const label = classicToggle.locator('.classic-label');
+
+    const toggleFirst = await page.evaluate(() => {
+      const toggle = document.getElementById('classicModeToggle');
+      const density = document.getElementById('classicDensityToggle');
+      return Boolean(
+        toggle &&
+          density &&
+          toggle.compareDocumentPosition(density) &
+            Node.DOCUMENT_POSITION_FOLLOWING
+      );
+    });
+    expect(
+      toggleFirst,
+      'the Classic toggle must precede the density switch'
+    ).toBe(true);
+
+    await expect(label).toHaveText('Classic');
+
+    await classicToggle.click();
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+    // Active state: the visible label tells the user what pressing it DOES —
+    // it is the way back to the Assistive Forge interface (owner's order).
+    await expect(label).toHaveText('A. Forge');
+    await expect(classicToggle).toHaveAttribute(
+      'aria-label',
+      'Switch back to the Assistive Forge interface'
+    );
+
+    await classicToggle.click();
+    await expect(label).toHaveText('Classic');
+    await expect(classicToggle).toHaveAttribute(
+      'aria-label',
+      'Switch to Classic desktop layout'
+    );
+  });
+});
+
+test.describe('Return to Main Page control (U-2)', () => {
+  test('leads the header in both themes, keeps the confirm flow, hides on the welcome screen', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await loadSampleProject(page);
+
+    const btn = page.locator('#clearFileBtn');
+    // Forge: visible, approved label (Q-16), leading the header before the
+    // branding — nearest the browser's own Back button.
+    await expect(btn).toBeVisible();
+    await expect(btn).toHaveText('← Main Page');
+    const leadsHeader = await page.evaluate(() => {
+      const b = document.getElementById('clearFileBtn');
+      const branding = document.querySelector('.header-branding');
+      return Boolean(
+        b &&
+          branding &&
+          b.closest('.header-content') &&
+          b.compareDocumentPosition(branding) &
+            Node.DOCUMENT_POSITION_FOLLOWING
+      );
+    });
+    expect(leadsHeader, 'the control precedes the branding').toBe(true);
+
+    // --size-touch-target is pointer-aware (44px touch / 36px fine pointer),
+    // the same token every other new control asserts against.
+    const target = await page.evaluate(() =>
+      parseInt(
+        getComputedStyle(document.body).getPropertyValue(
+          '--size-touch-target'
+        ),
+        10
+      )
+    );
+    const box = await btn.boundingBox();
+    expect(box.height, 'touch-target height').toBeGreaterThanOrEqual(
+      target - 1
+    );
+    expect(box.width, 'touch-target width').toBeGreaterThanOrEqual(target - 1);
+
+    // Classic no longer loses it — the U-2 report.
+    await page.locator('#classicModeToggle').click();
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+    await expect(btn).toBeVisible();
+
+    // The existing unsaved-changes confirm flow is intact, and Cancel stays.
+    await btn.click();
+    await page.waitForSelector('.confirm-modal', { state: 'visible' });
+    await page.locator('.confirm-modal button:has-text("Confirm")').click();
+    await expect(page.locator('#welcomeScreen')).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // You are already on the main page: the control stands down.
+    await expect(btn).toBeHidden();
   });
 });

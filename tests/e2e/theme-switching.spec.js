@@ -528,3 +528,89 @@ test.describe('Alt View unlock flow (?hfm=unlock)', () => {
     expect(rgb[0] + rgb[1] + rgb[2]).toBeLessThan(200)
   })
 })
+
+// U-4: the editor took its dark mode from the OS media query instead of the
+// app theme, so a dark-mode browser painted a dark editor island inside a
+// light app — the owner's screenshot condition. The editor must follow the
+// RESOLVED app theme, and Classic is always light (desktop parity).
+test.describe('Editor follows the app theme, not the OS (U-4)', () => {
+  test.use({ colorScheme: 'dark' })
+
+  const isCI = !!process.env.CI
+  const WASM_READY_TIMEOUT = 180_000
+
+  async function editorBrightness(page) {
+    const bg = await page
+      .locator('.cm-editor')
+      .first()
+      .evaluate((el) => getComputedStyle(el).backgroundColor)
+    const rgb = bg.match(/\d+/g)?.map(Number) ?? []
+    return (rgb[0] + rgb[1] + rgb[2]) / 3
+  }
+
+  async function loadSample(page) {
+    await page.goto('/')
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: WASM_READY_TIMEOUT,
+    })
+    await page.setInputFiles(
+      '#fileInput',
+      'tests/fixtures/sample.scad'
+    )
+    await expect(page.locator('#mainInterface')).toBeVisible({
+      timeout: 30_000,
+    })
+    const notNow = page.locator('#saveProjectNotNow')
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 3_000 })
+      await notNow.click()
+    } catch {
+      // No save-project modal to dismiss.
+    }
+    const uiToggle = page.locator('#uiModeToggle')
+    if ((await uiToggle.getAttribute('aria-checked')) !== 'true') {
+      await uiToggle.click()
+    }
+  }
+
+  test('Classic stays light under a dark OS preference', async ({ page }) => {
+    test.setTimeout(240_000)
+    await loadSample(page)
+
+    await page.locator('#classicModeToggle').click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    )
+    await expect(page.locator('.cm-editor').first()).toBeVisible({
+      timeout: 20_000,
+    })
+
+    // The owner's exact condition: dark OS, light app, Classic. The editor
+    // painted rgb(30,30,30) before the fix.
+    expect(await editorBrightness(page)).toBeGreaterThan(200)
+  })
+
+  test('the Forge editor follows the app theme in both directions', async ({
+    page,
+  }) => {
+    test.skip(isCI, 'WASM-heavy; the Classic case above is the CI regression')
+    test.setTimeout(240_000)
+    await loadSample(page)
+
+    // Expert Mode hosts the code editor outside Classic.
+    await page.keyboard.press('Control+e')
+    await expect(page.locator('#expertModePanel .cm-editor')).toBeVisible({
+      timeout: 20_000,
+    })
+
+    // App light + OS dark: light editor.
+    expect(await editorBrightness(page)).toBeGreaterThan(200)
+
+    // App dark: dark editor — the fix must not pin the editor light.
+    await page.locator('#themeToggle').click()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    expect(await editorBrightness(page)).toBeLessThan(80)
+  })
+})

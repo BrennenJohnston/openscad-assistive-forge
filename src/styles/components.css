@@ -1541,7 +1541,14 @@ details.param-group.forge-disclosure[open] > summary::before {
   max-width: 500px;
 }
 
+/* reset.css's `* { margin: 0 }` destroys the UA's `dialog { margin: auto }`,
+   so every native <dialog> opened with showModal() rendered top-left (U-1). */
+dialog:modal {
+  margin: auto;
+}
+
 /* Import mode dialog — three import strategies (merge / replace / copies) */
+.folder-scad-select-dialog,
 .preset-import-mode-dialog,
 .import-mode-dialog {
   max-width: 440px;
@@ -1553,6 +1560,7 @@ details.param-group.forge-disclosure[open] > summary::before {
   box-shadow: var(--shadow-lg);
 }
 
+.folder-scad-select-dialog::backdrop,
 .preset-import-mode-dialog::backdrop,
 .import-mode-dialog::backdrop {
   background: rgba(0, 0, 0, 0.5);
@@ -1632,6 +1640,7 @@ details.param-group.forge-disclosure[open] > summary::before {
 
 /* Forced colors (Windows High Contrast) */
 @media (forced-colors: active) {
+  .folder-scad-select-dialog,
   .preset-import-mode-dialog,
   .import-mode-dialog {
     border: 1px solid ButtonText;
@@ -11294,6 +11303,7 @@ body:has(#featuresGuideModal .modal-content.tutorial-target-highlight)
     -webkit-backdrop-filter: none !important;
   }
 
+  .folder-scad-select-dialog::backdrop,
   .preset-import-mode-dialog::backdrop,
   .import-mode-dialog::backdrop {
     background: var(--color-overlay-solid, rgba(0, 0, 0, 0.85)) !important;
