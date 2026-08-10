@@ -149,13 +149,18 @@ describe('buildAxisLinesOverlay', () => {
     expect(__test.DEFAULT_AXIS_RANGE_MM).toBe(200);
   });
 
-  it('gives both halves of an axis the same colour', () => {
-    const { group } = buildAxisLinesOverlay(makeThree());
-    for (const axis of ['x', 'y', 'z']) {
-      const pos = group.children.find((l) => l.name === `__displayAxis-${axis}pos`);
-      const neg = group.children.find((l) => l.name === `__displayAxis-${axis}neg`);
-      expect(pos.material.color).toBe(neg.material.color);
-      expect(pos.material.color).toBe(__test.AXIS_COLORS[axis]);
+  it('draws every arm in the one theme-resolved colour (Q-22)', () => {
+    // Upstream's axes are black; ours resolve --color-text-primary like the
+    // tick overlay, so lines and ticks always match. In jsdom the token is
+    // absent and the theme fallbacks apply: near-black light, light dark.
+    const light = buildAxisLinesOverlay(makeThree());
+    for (const line of light.group.children) {
+      expect(line.material.color).toBe(0x222222);
+    }
+
+    const dark = buildAxisLinesOverlay(makeThree(), { themeKey: 'dark' });
+    for (const line of dark.group.children) {
+      expect(line.material.color).toBe(0xdddddd);
     }
   });
 

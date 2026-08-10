@@ -11,13 +11,18 @@
  * Arm length matches the tick overlay's range for that reason: ticks and the
  * line they mark have to end together.
  *
- * Colours are AxesHelper's own (red X, green Y, blue Z) so the two halves of
- * an axis match. Upstream's axes are black; keeping the colours is the
- * smaller change and they carry orientation information a single colour
- * cannot.
+ * Colour follows the tick overlay's theme resolution (Q-22, owner decision
+ * 2026-08-09): upstream's axes are black, and AxesHelper's red/green/blue
+ * failed contrast — pure green measured 1.36:1 against the Cornfield
+ * background where SC 1.4.11 wants 3:1. Resolving --color-text-primary gives
+ * near-black on light themes (the desktop look) while dark themes keep
+ * visible axes, and lines and ticks always match. Orientation now reads from
+ * the dashing (negative halves) and the tick labels' axis letters.
  *
  * @license GPL-3.0-or-later
  */
+
+import { resolveAxisMarkColor } from './axis-tick-overlay.js';
 
 /** Matches DEFAULT_RANGE_MM in axis-tick-overlay.js — ticks and lines end together. */
 const DEFAULT_AXIS_RANGE_MM = 200;
@@ -25,9 +30,6 @@ const DEFAULT_AXIS_RANGE_MM = 200;
 /** Dash and gap in scene millimetres. */
 const DASH_MM = 3;
 const GAP_MM = 3;
-
-/** AxesHelper's convention, so a negative half matches its positive half. */
-const AXIS_COLORS = { x: 0xff0000, y: 0x00ff00, z: 0x0000ff };
 
 const AXIS_VECTORS = {
   x: [1, 0, 0],
@@ -42,6 +44,8 @@ const AXIS_VECTORS = {
  * @param {Object} three Three.js module (see getThreeModule).
  * @param {Object} [opts]
  * @param {number} [opts.rangeMm] Half-extent along each axis. Default 200 mm.
+ * @param {string} [opts.themeKey] Preview theme key, for the colour fallback.
+ * @param {Document} [opts.document] Override `document` (tests).
  * @returns {{group: Object, dispose: () => void}}
  */
 export function buildAxisLinesOverlay(three, opts = {}) {
@@ -54,6 +58,11 @@ export function buildAxisLinesOverlay(three, opts = {}) {
     opts.rangeMm > 0
       ? opts.rangeMm
       : DEFAULT_AXIS_RANGE_MM;
+
+  const { hex: colorHex } = resolveAxisMarkColor(
+    opts.themeKey || 'light',
+    opts.document
+  );
 
   const group = new three.Group();
   group.name = '__displayAxes';
@@ -86,9 +95,9 @@ export function buildAxisLinesOverlay(three, opts = {}) {
 
       const material =
         sign === 1
-          ? new three.LineBasicMaterial({ color: AXIS_COLORS[axis] })
+          ? new three.LineBasicMaterial({ color: colorHex })
           : new three.LineDashedMaterial({
-              color: AXIS_COLORS[axis],
+              color: colorHex,
               dashSize: DASH_MM,
               gapSize: GAP_MM,
             });
@@ -122,5 +131,4 @@ export const __test = {
   DEFAULT_AXIS_RANGE_MM,
   DASH_MM,
   GAP_MM,
-  AXIS_COLORS,
 };

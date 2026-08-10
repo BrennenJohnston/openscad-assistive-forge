@@ -38,6 +38,7 @@ import {
 
 vi.mock('../../src/js/storage-keys.js', () => ({
   getAppPrefKey: (key) => `test-${key}`,
+  STORAGE_KEY_GRID: 'test-grid',
   safeGetItem: (key) => localStorage.getItem(key),
   safeSetItem: (key, value) => {
     localStorage.setItem(key, value);
@@ -105,6 +106,24 @@ function createMockThree() {
       this.material = mat;
       this.name = '';
       this.computeLineDistances = vi.fn();
+    }),
+    // The three sprite classes getThreeModule() gained in PR #59 — the tick
+    // overlay throws without them, which is the transient failure U-3's
+    // non-persisting failure path is tested against (delete one to break).
+    CanvasTexture: vi.fn(function (canvas) {
+      this.canvas = canvas;
+      this.needsUpdate = false;
+      this.dispose = vi.fn();
+    }),
+    SpriteMaterial: vi.fn(function (opts = {}) {
+      Object.assign(this, opts, createMockMaterial());
+    }),
+    Sprite: vi.fn(function (material) {
+      this.material = material;
+      this.name = '';
+      this.userData = {};
+      this.scale = { set: vi.fn() };
+      this.position = { set: vi.fn() };
     }),
   };
 }
@@ -984,5 +1003,82 @@ describe('DisplayOptionsController — edge budget', () => {
     expect(document.getElementById('edgeBudgetStatus').textContent).toBe(
       'Edges hidden'
     );
+  });
+});
+
+describe('DisplayOptionsController — U-3: axis ticks survive failures and heal', () => {
+  let ctrl;
+  let mockThree;
+  let mockPm;
+
+  beforeEach(() => {
+    resetDisplayOptionsController();
+    localStorage.clear();
+    document.body.innerHTML = '';
+    mockThree = createMockThree();
+    mockPm = createMockPreviewManager(createMockMesh());
+    ctrl = new DisplayOptionsController({
+      getPreviewManager: () => mockPm,
+      getThree: () => mockThree,
+    });
+  });
+
+  it('a failed overlay build turns the session state off but NEVER persists it', () => {
+    localStorage.setItem('test-display-axisMarks', 'true');
+    ctrl.state.axisMarks = true;
+    // The transient failure class this guards against: a consumer asking for
+    // a class the module object does not carry.
+    delete mockThree.SpriteMaterial;
+
+    ctrl.refreshOverlays();
+
+    expect(ctrl.state.axisMarks).toBe(false);
+    // The poison that kept the owner's ticks off across sessions: the saved
+    // preference must survive the failure so the next session retries.
+    expect(localStorage.getItem('test-display-axisMarks')).toBe('true');
+  });
+
+  it('refreshOverlays() re-applies axes and axis marks after a scene rebuild', () => {
+    ctrl.state.axes = true;
+    ctrl.state.axisMarks = true;
+
+    // First call self-connects (which applies everything once)…
+    ctrl.refreshOverlays();
+    const axesAdds = () =>
+      mockPm.scene.add.mock.calls.filter(
+        ([obj]) => obj === ctrl._axesOverlay?.group
+      ).length;
+    const tickAdds = () =>
+      mockPm.scene.add.mock.calls.filter(
+        ([obj]) => obj === ctrl._axisTickOverlay?.group
+      ).length;
+    const axesBefore = axesAdds();
+    const ticksBefore = tickAdds();
+
+    // …a later post-load refresh must put both back into the scene.
+    ctrl.refreshOverlays();
+
+    expect(axesAdds()).toBeGreaterThan(axesBefore);
+    expect(tickAdds()).toBeGreaterThan(ticksBefore);
+  });
+
+  it('the v2 defaults marker heals a pre-#59 poisoned profile once', () => {
+    // The poisoned inheritance: v1 marker stamped, ticks persisted off by
+    // the old always-throwing build path, axes untouched.
+    localStorage.setItem('test-classic-view-defaults', 'true');
+    localStorage.setItem('test-display-axisMarks', 'false');
+    localStorage.setItem('test-display-axes', 'true');
+    ctrl._loadPreferences();
+    expect(ctrl.state.axisMarks).toBe(false);
+
+    expect(ctrl.applyClassicViewDefaults()).toBe(true);
+    expect(ctrl.state.axisMarks).toBe(true);
+    expect(localStorage.getItem('test-display-axisMarks')).toBe('true');
+    expect(localStorage.getItem('test-classic-view-defaults-v2')).toBe('true');
+
+    // Once ever: the second entry into Classic changes nothing.
+    ctrl.set('axisMarks', false, { announce: false });
+    expect(ctrl.applyClassicViewDefaults()).toBe(false);
+    expect(ctrl.state.axisMarks).toBe(false);
   });
 });

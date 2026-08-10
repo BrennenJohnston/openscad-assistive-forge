@@ -45,7 +45,16 @@ const DEFAULTS = {
  * under its own key — hence the import rather than a second copy of the name.
  */
 const CLASSIC_VIEW_DEFAULTS = Object.freeze({ axes: true, axisMarks: true });
-const CLASSIC_DEFAULTS_MARKER = getAppPrefKey('classic-view-defaults');
+/**
+ * v2 (U-3): before PR #59 the tick overlay threw on every build attempt and
+ * the failure path PERSISTED axisMarks=false, while the once-ever v1 marker
+ * blocked any re-stamp — so a profile that ran any pre-fix Classic session
+ * kept ticks off in every later session with nothing to heal it. Bumping the
+ * marker re-imposes the Classic view defaults ONCE on such profiles. Stated
+ * cost: a user who turned these off on purpose after #59 sees them once
+ * more, and the choice then sticks.
+ */
+const CLASSIC_DEFAULTS_MARKER = getAppPrefKey('classic-view-defaults-v2');
 
 /**
  * Edge budget is a number, not a boolean, so it lives outside `DEFAULTS`
@@ -267,6 +276,12 @@ export class DisplayOptionsController {
     if (this.connectPreviewManager()) return;
     this._apply('edges');
     this._apply('wireframe');
+    // U-3 hardening: any path that replaces or clears scene content lost
+    // axes and ticks with nothing to restore them — this list re-applied
+    // only what a mesh swap invalidates. Both are idempotent re-adds
+    // (getObjectByName guards), so the common case costs nothing.
+    this._apply('axes');
+    this._apply('axisMarks');
   }
 
   /** @returns {number} Max edge segments drawn; 0 means unlimited. */
@@ -305,6 +320,12 @@ export class DisplayOptionsController {
       // Rebuild from scratch so the new theme color is applied.
       this._tearDownAxisTickOverlay();
       this._apply('axisMarks');
+    }
+    if (this.state.axes) {
+      // The axis lines resolve the same theme color as the ticks (Q-22),
+      // so they rebuild on the same events.
+      this._tearDownAxesOverlay();
+      this._apply('axes');
     }
   }
 
@@ -463,7 +484,12 @@ export class DisplayOptionsController {
             err
           );
           this.state.axisMarks = false;
-          this._savePref('axisMarks', false);
+          // Deliberately NOT persisted (U-3): writing the preference off
+          // here is what poisoned profiles permanently — every pre-#59
+          // session did it, and the once-ever defaults marker meant nothing
+          // ever turned it back on. In-memory off keeps the controls honest
+          // for this session; the saved preference stays intact so the next
+          // session (or a manual re-toggle) retries the build.
           this._syncCheckbox('axisMarks');
           document.dispatchEvent(
             new CustomEvent('display-option-change', {
@@ -504,7 +530,9 @@ export class DisplayOptionsController {
         // Was AxesHelper(50): positive halves only, and 50mm short of where
         // the tick overlay puts its outermost marks, so ticks at -200..-50
         // and +100..+200 had no line under them at all.
-        this._axesOverlay = buildAxisLinesOverlay(T);
+        this._axesOverlay = buildAxisLinesOverlay(T, {
+          themeKey: pm.currentTheme,
+        });
       }
       if (this._axesOverlay && !pm.scene.getObjectByName('__displayAxes')) {
         pm.scene.add(this._axesOverlay.group);
@@ -512,6 +540,16 @@ export class DisplayOptionsController {
     } else if (this._axesOverlay) {
       pm.scene.remove(this._axesOverlay.group);
     }
+  }
+
+  _tearDownAxesOverlay() {
+    if (!this._axesOverlay) return;
+    const pm = this.getPreviewManager();
+    if (pm?.scene) {
+      pm.scene.remove(this._axesOverlay.group);
+    }
+    this._axesOverlay.dispose?.();
+    this._axesOverlay = null;
   }
 
   _applyEdges(pm) {
