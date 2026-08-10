@@ -900,11 +900,18 @@ export class UIModeController {
 
     const isClassic = this.currentMode === 'classic';
     btn.setAttribute('aria-pressed', String(isClassic));
+    // The button names what pressing it DOES, like the theme toggles (U-7):
+    // inside Classic it is the way back to the Assistive Forge interface,
+    // and the visible label says so rather than only changing color.
     const label = isClassic
-      ? 'Exit Classic desktop layout'
+      ? 'Switch back to the Assistive Forge interface'
       : 'Switch to Classic desktop layout';
     btn.setAttribute('aria-label', label);
     btn.setAttribute('title', label);
+    const visibleLabel = btn.querySelector('.classic-label');
+    if (visibleLabel) {
+      visibleLabel.textContent = isClassic ? 'A. Forge' : 'Classic';
+    }
   }
 
   /**

@@ -230,6 +230,32 @@
                 ></path>
               </svg>
             </button>
+            <!-- The Classic toggle sits LEFT of the density switch (U-7):
+                 in Classic the visible strip is GitHub · Keys · Classic ·
+                 Simplified|Standard. In Forge the density switch is hidden,
+                 so the visible order there is unchanged. -->
+            <button type="button"
+              id="classicModeToggle"
+              class="btn btn-sm btn-secondary classic-toggle hidden"
+              aria-pressed="false"
+              aria-label="Switch to Classic desktop layout"
+              title="Switch to Classic desktop layout"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="1"></rect>
+                <line x1="3" y1="8" x2="21" y2="8"></line>
+                <line x1="14" y1="8" x2="14" y2="21"></line>
+              </svg>
+              <span class="classic-label">Classic</span>
+            </button>
             <!-- Simplified/Standard inside Classic. Same switch component as
                  #uiModeToggle so the choice reads identically in both
                  layouts; Classic-only via classic.css. -->
@@ -252,28 +278,6 @@
                 >Standard</span
               >
               <span class="ui-mode-slider" aria-hidden="true"></span>
-            </button>
-            <button type="button"
-              id="classicModeToggle"
-              class="btn btn-sm btn-secondary classic-toggle hidden"
-              aria-pressed="false"
-              aria-label="Switch to Classic desktop layout"
-              title="Switch to Classic desktop layout"
-            >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                aria-hidden="true"
-              >
-                <rect x="3" y="3" width="18" height="18" rx="1"></rect>
-                <line x1="3" y1="8" x2="21" y2="8"></line>
-                <line x1="14" y1="8" x2="14" y2="21"></line>
-              </svg>
-              <span class="classic-label">Classic</span>
             </button>
           </div>
         </div>

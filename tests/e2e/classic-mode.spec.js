@@ -2685,3 +2685,52 @@ test.describe('View menu per-toolbar hide toggles (G4)', () => {
     );
   });
 });
+
+test.describe('Classic toggle placement and honest active label (U-7)', () => {
+  test('sits left of the density switch and names the way back when active', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await loadSampleProject(page);
+
+    const classicToggle = page.locator('#classicModeToggle');
+    const label = classicToggle.locator('.classic-label');
+
+    const toggleFirst = await page.evaluate(() => {
+      const toggle = document.getElementById('classicModeToggle');
+      const density = document.getElementById('classicDensityToggle');
+      return Boolean(
+        toggle &&
+          density &&
+          toggle.compareDocumentPosition(density) &
+            Node.DOCUMENT_POSITION_FOLLOWING
+      );
+    });
+    expect(
+      toggleFirst,
+      'the Classic toggle must precede the density switch'
+    ).toBe(true);
+
+    await expect(label).toHaveText('Classic');
+
+    await classicToggle.click();
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+    // Active state: the visible label tells the user what pressing it DOES —
+    // it is the way back to the Assistive Forge interface (owner's order).
+    await expect(label).toHaveText('A. Forge');
+    await expect(classicToggle).toHaveAttribute(
+      'aria-label',
+      'Switch back to the Assistive Forge interface'
+    );
+
+    await classicToggle.click();
+    await expect(label).toHaveText('Classic');
+    await expect(classicToggle).toHaveAttribute(
+      'aria-label',
+      'Switch to Classic desktop layout'
+    );
+  });
+});
