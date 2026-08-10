@@ -2089,7 +2089,9 @@ test.describe('Status-bar viewport telemetry (P8)', () => {
 const AXES_PREF = 'openscad-forge-display-axes';
 const AXIS_MARKS_PREF = 'openscad-forge-display-axisMarks';
 const GRID_PREF = 'openscad-forge-grid';
-const CLASSIC_VIEW_MARKER = 'openscad-forge-classic-view-defaults';
+// v2 since the U-3 heal (UF-1): the marker was bumped so profiles poisoned
+// by the pre-#59 failure path get the Classic view defaults re-stamped once.
+const CLASSIC_VIEW_MARKER = 'openscad-forge-classic-view-defaults-v2';
 
 function readViewPrefs(page) {
   return page.evaluate(

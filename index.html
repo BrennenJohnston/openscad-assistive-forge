@@ -175,100 +175,33 @@
               </svg>
               <span class="shortcuts-label">Keys</span>
             </button>
+            <!-- Owner order 2026-08-09, post-UF-1 (supersedes U-7's
+                 in-Classic order from PR #60): the mode controls hold ONE
+                 position across both themes so nothing jumps on a theme
+                 switch. The Simplified/Standard slider — the Forge one and
+                 the Classic one occupy the same slot, visibility-swapped
+                 per mode — sits just left of the Classic / A. Forge
+                 toggle, which holds the top rightmost corner. Theme and
+                 high-contrast moved to the row below (workflow actions). -->
             <button type="button"
-              id="contrastToggle"
-              class="btn btn-sm btn-secondary contrast-toggle"
-              aria-label="Toggle high contrast"
-              title="Toggle high contrast mode"
-              data-tutorial-target="contrast-toggle"
+              id="uiModeToggle"
+              class="ui-mode-toggle hidden"
+              role="switch"
+              aria-checked="false"
+              aria-label="Interface mode: Simplified. Click to switch to Standard mode"
+              title="Switch between Simplified and Standard interface modes"
             >
-              <svg
-                class="contrast-icon"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
+              <span
+                class="ui-mode-option ui-mode-option--basic"
                 aria-hidden="true"
+                >Simplified</span
               >
-                <circle cx="12" cy="12" r="10"></circle>
-                <path d="M12 2 L12 22"></path>
-                <path
-                  d="M12 2 A10 10 0 0 1 12 22"
-                  fill="currentColor"
-                  opacity="0.5"
-                ></path>
-              </svg>
-              <span class="contrast-label">HC</span>
-            </button>
-            <button type="button"
-              id="themeToggle"
-              class="btn btn-sm btn-secondary theme-toggle"
-              aria-label="Toggle theme"
-              title="Toggle light/dark theme"
-              data-tutorial-target="theme-toggle"
-            >
-              <svg
-                class="theme-icon theme-icon-sun"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
+              <span
+                class="ui-mode-option ui-mode-option--advanced"
                 aria-hidden="true"
+                >Standard</span
               >
-                <circle cx="12" cy="12" r="5"></circle>
-                <line x1="12" y1="1" x2="12" y2="3"></line>
-                <line x1="12" y1="21" x2="12" y2="23"></line>
-                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-                <line x1="1" y1="12" x2="3" y2="12"></line>
-                <line x1="21" y1="12" x2="23" y2="12"></line>
-                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-              </svg>
-              <svg
-                class="theme-icon theme-icon-moon"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                aria-hidden="true"
-              >
-                <path
-                  d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
-                ></path>
-              </svg>
-            </button>
-            <!-- The Classic toggle sits LEFT of the density switch (U-7):
-                 in Classic the visible strip is GitHub · Keys · Classic ·
-                 Simplified|Standard. In Forge the density switch is hidden,
-                 so the visible order there is unchanged. -->
-            <button type="button"
-              id="classicModeToggle"
-              class="btn btn-sm btn-secondary classic-toggle hidden"
-              aria-pressed="false"
-              aria-label="Switch to Classic desktop layout"
-              title="Switch to Classic desktop layout"
-            >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                aria-hidden="true"
-              >
-                <rect x="3" y="3" width="18" height="18" rx="1"></rect>
-                <line x1="3" y1="8" x2="21" y2="8"></line>
-                <line x1="14" y1="8" x2="14" y2="21"></line>
-              </svg>
-              <span class="classic-label">Classic</span>
+              <span class="ui-mode-slider" aria-hidden="true"></span>
             </button>
             <!-- Simplified/Standard inside Classic. Same switch component as
                  #uiModeToggle so the choice reads identically in both
@@ -292,6 +225,28 @@
                 >Standard</span
               >
               <span class="ui-mode-slider" aria-hidden="true"></span>
+            </button>
+            <button type="button"
+              id="classicModeToggle"
+              class="btn btn-sm btn-secondary classic-toggle hidden"
+              aria-pressed="false"
+              aria-label="Switch to Classic desktop layout"
+              title="Switch to Classic desktop layout"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="1"></rect>
+                <line x1="3" y1="8" x2="21" y2="8"></line>
+                <line x1="14" y1="8" x2="14" y2="21"></line>
+              </svg>
+              <span class="classic-label">Classic</span>
             </button>
           </div>
         </div>
@@ -467,26 +422,9 @@
           </button>
         </div>
           <div class="workflow-actions">
-            <button type="button"
-              id="uiModeToggle"
-              class="ui-mode-toggle hidden"
-              role="switch"
-              aria-checked="false"
-              aria-label="Interface mode: Simplified. Click to switch to Standard mode"
-              title="Switch between Simplified and Standard interface modes"
-            >
-              <span
-                class="ui-mode-option ui-mode-option--basic"
-                aria-hidden="true"
-                >Simplified</span
-              >
-              <span
-                class="ui-mode-option ui-mode-option--advanced"
-                aria-hidden="true"
-                >Standard</span
-              >
-              <span class="ui-mode-slider" aria-hidden="true"></span>
-            </button>
+            <!-- #uiModeToggle moved to the header (owner order 2026-08-09):
+                 the Simplified/Standard slider holds one position across
+                 both themes, beside the Classic / A. Forge toggle. -->
             <button type="button"
               id="focusModeBtn"
               class="btn btn-sm btn-outline"
@@ -539,6 +477,78 @@
                 ></circle>
               </svg>
               <span class="btn-text">Help</span>
+            </button>
+            <!-- Theme + high-contrast, relocated from the header (owner
+                 order 2026-08-09): they live beside Full Screen and Help so
+                 the banner's right corner belongs to the mode controls. -->
+            <button type="button"
+              id="contrastToggle"
+              class="btn btn-sm btn-secondary contrast-toggle"
+              aria-label="Toggle high contrast"
+              title="Toggle high contrast mode"
+              data-tutorial-target="contrast-toggle"
+            >
+              <svg
+                class="contrast-icon"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M12 2 L12 22"></path>
+                <path
+                  d="M12 2 A10 10 0 0 1 12 22"
+                  fill="currentColor"
+                  opacity="0.5"
+                ></path>
+              </svg>
+              <span class="contrast-label">HC</span>
+            </button>
+            <button type="button"
+              id="themeToggle"
+              class="btn btn-sm btn-secondary theme-toggle"
+              aria-label="Toggle theme"
+              title="Toggle light/dark theme"
+              data-tutorial-target="theme-toggle"
+            >
+              <svg
+                class="theme-icon theme-icon-sun"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="5"></circle>
+                <line x1="12" y1="1" x2="12" y2="3"></line>
+                <line x1="12" y1="21" x2="12" y2="23"></line>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                <line x1="1" y1="12" x2="3" y2="12"></line>
+                <line x1="21" y1="12" x2="23" y2="12"></line>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+              </svg>
+              <svg
+                class="theme-icon theme-icon-moon"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <path
+                  d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
+                ></path>
+              </svg>
             </button>
           </div>
         </div>

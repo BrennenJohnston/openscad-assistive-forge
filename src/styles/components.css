@@ -11714,6 +11714,22 @@ body.tutorial-body-locked {
   gap: var(--space-md);
 }
 
+/* Owner order 2026-08-09 moved the theme + high-contrast controls into
+   this row (beside Full Screen and Help). Their old header home was
+   always visible, so the row now shows on the welcome screen too — with
+   only the controls that do something before a file is open. Relocating
+   them must not make high contrast unreachable on the first screen a
+   low-vision user meets. */
+#app:has(#welcomeScreen:not(.hidden)) #workflowProgress.hidden {
+  display: flex !important;
+}
+
+#app:has(#welcomeScreen:not(.hidden)) #workflowProgress .workflow-steps,
+#app:has(#welcomeScreen:not(.hidden)) #workflowProgress #toolbarMenuBar,
+#app:has(#welcomeScreen:not(.hidden)) #workflowProgress #focusModeBtn {
+  display: none !important;
+}
+
 /* Workflow action buttons container — always pinned to the right */
 .workflow-actions {
   display: flex;
