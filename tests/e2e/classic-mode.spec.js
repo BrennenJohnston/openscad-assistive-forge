@@ -2695,7 +2695,12 @@ test.describe('View menu per-toolbar hide toggles (G4)', () => {
 });
 
 test.describe('Classic toggle placement and honest active label (U-7)', () => {
-  test('sits left of the density switch and names the way back when active', async ({
+  // Owner order 2026-08-09, post-UF-1 merge (supersedes U-7's in-Classic
+  // order): the Classic / A. Forge toggle holds the top RIGHTMOST corner in
+  // both themes, with the Simplified/Standard slider (Forge's and Classic's
+  // occupy the same slot, visibility-swapped) just to its left — so nothing
+  // jumps when the theme switches.
+  test('holds the top-right corner with the density slider to its left', async ({
     page,
   }) => {
     test.setTimeout(240_000);
@@ -2704,22 +2709,56 @@ test.describe('Classic toggle placement and honest active label (U-7)', () => {
     const classicToggle = page.locator('#classicModeToggle');
     const label = classicToggle.locator('.classic-label');
 
-    const toggleFirst = await page.evaluate(() => {
-      const toggle = document.getElementById('classicModeToggle');
+    const order = await page.evaluate(() => {
+      const follows = (a, b) =>
+        Boolean(
+          a &&
+            b &&
+            a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING
+        );
+      const uiMode = document.getElementById('uiModeToggle');
       const density = document.getElementById('classicDensityToggle');
-      return Boolean(
-        toggle &&
-          density &&
-          toggle.compareDocumentPosition(density) &
-            Node.DOCUMENT_POSITION_FOLLOWING
-      );
+      const classic = document.getElementById('classicModeToggle');
+      const controls = classic?.closest('.header-controls');
+      return {
+        slidersBeforeClassic:
+          follows(uiMode, classic) && follows(density, classic),
+        slidersShareTheSlot: follows(uiMode, density),
+        classicIsLast: controls?.lastElementChild === classic,
+        slidersInHeader: Boolean(uiMode?.closest('.header-controls')),
+      };
     });
-    expect(
-      toggleFirst,
-      'the Classic toggle must precede the density switch'
-    ).toBe(true);
+    expect(order.slidersBeforeClassic, 'sliders sit left of the toggle').toBe(
+      true
+    );
+    expect(order.slidersShareTheSlot, 'Forge slider then Classic slider').toBe(
+      true
+    );
+    expect(order.classicIsLast, 'the toggle holds the rightmost corner').toBe(
+      true
+    );
+    expect(order.slidersInHeader, 'the Forge slider lives in the header').toBe(
+      true
+    );
+
+    // Theme + high contrast left the banner for the workflow row, beside
+    // Full Screen and Help (the same owner order).
+    const relocated = await page.evaluate(() => ({
+      theme: Boolean(
+        document.getElementById('themeToggle')?.closest('.workflow-actions')
+      ),
+      contrast: Boolean(
+        document.getElementById('contrastToggle')?.closest('.workflow-actions')
+      ),
+    }));
+    expect(relocated.theme, 'theme toggle in the workflow row').toBe(true);
+    expect(relocated.contrast, 'HC toggle in the workflow row').toBe(true);
 
     await expect(label).toHaveText('Classic');
+
+    // THE point of the order: the toggle must not jump when the theme
+    // switches.
+    const boxBefore = await classicToggle.boundingBox();
 
     await classicToggle.click();
     await expect(page.locator('body')).toHaveAttribute(
@@ -2729,6 +2768,22 @@ test.describe('Classic toggle placement and honest active label (U-7)', () => {
     // Active state: the visible label tells the user what pressing it DOES —
     // it is the way back to the Assistive Forge interface (owner's order).
     await expect(label).toHaveText('A. Forge');
+
+    // Corner-class tolerance, not pixel-perfect: Classic's compact
+    // desktop-caption header legitimately restyles padding (~11px measured).
+    // What must never happen again is the control moving to a different
+    // REGION of the screen.
+    const boxAfter = await classicToggle.boundingBox();
+    const rightBefore = boxBefore.x + boxBefore.width;
+    const rightAfter = boxAfter.x + boxAfter.width;
+    expect(
+      Math.abs(rightAfter - rightBefore),
+      'right edge stays in the corner across the switch'
+    ).toBeLessThan(40);
+    expect(
+      Math.abs(boxAfter.y - boxBefore.y),
+      'vertical position stays in the banner across the switch'
+    ).toBeLessThan(40);
     await expect(classicToggle).toHaveAttribute(
       'aria-label',
       'Switch back to the Assistive Forge interface'
