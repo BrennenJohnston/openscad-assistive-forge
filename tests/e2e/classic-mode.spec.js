@@ -183,7 +183,8 @@ test.describe('Classic chrome strip (C3)', () => {
       '#contrastToggle',
       '#focusModeBtn',
       '#featuresGuideBtn',
-      '#clearFileBtn',
+      // #clearFileBtn is NOT in this list any more: U-2 overruled the
+      // File > Close adapt — the Main Page button shows in BOTH themes.
       '#actionsBar',
       '#previewInfoSection',
       '#previewDrawerToggle',
@@ -200,6 +201,11 @@ test.describe('Classic chrome strip (C3)', () => {
         `${sel} must be hidden in classic`
       ).toBeHidden();
     }
+
+    // U-2/Q-16: the way back to the main page stays visible in Classic,
+    // reading its approved label.
+    await expect(page.locator('#clearFileBtn')).toBeVisible();
+    await expect(page.locator('#clearFileBtn')).toHaveText('← Main Page');
 
     // The desktop-style menu bar and all six menus stay visible
     await expect(page.locator('#toolbarMenuBar')).toBeVisible();
@@ -2734,5 +2740,68 @@ test.describe('Classic toggle placement and honest active label (U-7)', () => {
       'aria-label',
       'Switch to Classic desktop layout'
     );
+  });
+});
+
+test.describe('Return to Main Page control (U-2)', () => {
+  test('leads the header in both themes, keeps the confirm flow, hides on the welcome screen', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await loadSampleProject(page);
+
+    const btn = page.locator('#clearFileBtn');
+    // Forge: visible, approved label (Q-16), leading the header before the
+    // branding — nearest the browser's own Back button.
+    await expect(btn).toBeVisible();
+    await expect(btn).toHaveText('← Main Page');
+    const leadsHeader = await page.evaluate(() => {
+      const b = document.getElementById('clearFileBtn');
+      const branding = document.querySelector('.header-branding');
+      return Boolean(
+        b &&
+          branding &&
+          b.closest('.header-content') &&
+          b.compareDocumentPosition(branding) &
+            Node.DOCUMENT_POSITION_FOLLOWING
+      );
+    });
+    expect(leadsHeader, 'the control precedes the branding').toBe(true);
+
+    // --size-touch-target is pointer-aware (44px touch / 36px fine pointer),
+    // the same token every other new control asserts against.
+    const target = await page.evaluate(() =>
+      parseInt(
+        getComputedStyle(document.body).getPropertyValue(
+          '--size-touch-target'
+        ),
+        10
+      )
+    );
+    const box = await btn.boundingBox();
+    expect(box.height, 'touch-target height').toBeGreaterThanOrEqual(
+      target - 1
+    );
+    expect(box.width, 'touch-target width').toBeGreaterThanOrEqual(target - 1);
+
+    // Classic no longer loses it — the U-2 report.
+    await page.locator('#classicModeToggle').click();
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+    await expect(btn).toBeVisible();
+
+    // The existing unsaved-changes confirm flow is intact, and Cancel stays.
+    await btn.click();
+    await page.waitForSelector('.confirm-modal', { state: 'visible' });
+    await page.locator('.confirm-modal button:has-text("Confirm")').click();
+    await expect(page.locator('#welcomeScreen')).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // You are already on the main page: the control stands down.
+    await expect(btn).toBeHidden();
   });
 });
