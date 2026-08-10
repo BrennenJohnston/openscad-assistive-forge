@@ -706,8 +706,12 @@ test.describe('Screen Reader Support', () => {
         // Modal never appeared, nothing to dismiss
         return
       }
-      // Programmatically click the continue button (bypasses overlay pointer-events)
+      // Programmatically click the continue button (bypasses overlay pointer-events).
+      // UF-3: the modal now requires an interface choice before Continue works,
+      // so pick the default recommendation first.
       await page.evaluate(() => {
+        const forge = document.getElementById('firstVisitChoiceForge')
+        if (forge) forge.click()
         const btn = document.getElementById('first-visit-continue')
         if (btn) btn.click()
       })

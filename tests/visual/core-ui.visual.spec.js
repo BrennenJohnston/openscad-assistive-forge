@@ -56,6 +56,8 @@ test.describe('Visual Regression - Core UI', () => {
     if (await welcomeModal.isVisible().catch(() => false)) {
       const closeBtn = page.locator('#first-visit-modal .modal-close, #first-visit-modal [aria-label*="close"], #first-visit-modal button.btn-primary');
       if (await closeBtn.first().isVisible().catch(() => false)) {
+        // UF-3: Continue requires an interface choice first
+        await page.locator('#firstVisitChoiceForge').check().catch(() => {});
         await closeBtn.first().click();
         await page.waitForTimeout(300);
       }
@@ -77,6 +79,8 @@ test.describe('Visual Regression - Core UI', () => {
     if (await welcomeModal.isVisible().catch(() => false)) {
       const closeBtn = page.locator('#first-visit-modal .modal-close, #first-visit-modal button.btn-primary');
       if (await closeBtn.first().isVisible().catch(() => false)) {
+        // UF-3: Continue requires an interface choice first
+        await page.locator('#firstVisitChoiceForge').check().catch(() => {});
         await closeBtn.first().click();
         await page.waitForTimeout(300);
       }
@@ -101,6 +105,8 @@ test.describe('Visual Regression - Theme Switching', () => {
     if (await welcomeModal.isVisible().catch(() => false)) {
       const closeBtn = page.locator('#first-visit-modal .modal-close, #first-visit-modal button.btn-primary');
       if (await closeBtn.first().isVisible().catch(() => false)) {
+        // UF-3: Continue requires an interface choice first
+        await page.locator('#firstVisitChoiceForge').check().catch(() => {});
         await closeBtn.first().click();
         await page.waitForTimeout(300);
       }
@@ -163,6 +169,8 @@ test.describe('Visual Regression - Parameter Controls', () => {
       } else {
         const closeBtn = page.locator('#first-visit-modal .modal-close, #first-visit-modal button.btn-primary');
         if (await closeBtn.first().isVisible().catch(() => false)) {
+          // UF-3: Continue requires an interface choice first
+          await page.locator('#firstVisitChoiceForge').check().catch(() => {});
           await closeBtn.first().click();
         }
       }
@@ -195,6 +203,8 @@ test.describe('Visual Regression - Memory Warning UI', () => {
     if (await welcomeModal.isVisible().catch(() => false)) {
       const closeBtn = page.locator('#first-visit-modal .modal-close, #first-visit-modal button.btn-primary');
       if (await closeBtn.first().isVisible().catch(() => false)) {
+        // UF-3: Continue requires an interface choice first
+        await page.locator('#firstVisitChoiceForge').check().catch(() => {});
         await closeBtn.first().click();
         await page.waitForTimeout(300);
       }
@@ -278,6 +288,8 @@ test.describe('Visual Regression - Mobile Viewport', () => {
     if (await welcomeModal.isVisible().catch(() => false)) {
       const closeBtn = page.locator('#first-visit-modal .modal-close, #first-visit-modal button.btn-primary');
       if (await closeBtn.first().isVisible().catch(() => false)) {
+        // UF-3: Continue requires an interface choice first
+        await page.locator('#firstVisitChoiceForge').check().catch(() => {});
         await closeBtn.first().click();
         await page.waitForTimeout(300);
       }

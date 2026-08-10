@@ -2773,12 +2773,53 @@ async function initApp() {
 
   const firstVisitContinue = document.getElementById('first-visit-continue');
 
+  const getFirstVisitChoice = () =>
+    document.querySelector('input[name="first-visit-ui"]:checked')?.value ||
+    null;
+
+  // Visible + announced from inside the modal: #srAnnouncer sits in the
+  // inert, aria-hidden #app subtree while this modal blocks, so the global
+  // announcer cannot speak here.
+  const showFirstVisitChoiceError = () => {
+    const error = document.getElementById('firstVisitChoiceError');
+    if (error) {
+      error.classList.remove('hidden');
+      // Re-insert the text so role="alert" re-announces on repeat presses.
+      error.textContent = '';
+      setTimeout(() => {
+        error.textContent = 'Choose an interface to continue.';
+      }, 50);
+    }
+    document.getElementById('firstVisitChoiceForge')?.focus();
+  };
+
+  document.querySelectorAll('input[name="first-visit-ui"]').forEach((radio) => {
+    radio.addEventListener('change', () => {
+      document.getElementById('firstVisitChoiceError')?.classList.add('hidden');
+    });
+  });
+
   const handleFirstVisitClose = async (_source = 'unknown') => {
+    const uiChoice = getFirstVisitChoice();
+    if (!uiChoice) {
+      showFirstVisitChoiceError();
+      return;
+    }
     hasUserAcceptedDownload = true;
     updateStoragePrefs({ allowLargeDownloads: true, seenDisclosure: true });
-    markFirstVisitComplete();
+    // Unchecked "remember" = proceed this session only; the modal returns
+    // next visit because the first-visit marker is never written.
+    if (document.getElementById('firstVisitRemember')?.checked !== false) {
+      markFirstVisitComplete();
+    }
     closeModal(firstVisitModal);
     setFirstVisitBlocking(false);
+    // After the unblock, so the mode switch's announcement is not silenced
+    // by the aria-hidden #app subtree. The controller persists the choice
+    // through its own preference storage.
+    if (uiChoice === 'classic') {
+      getUIModeController().switchMode('classic');
+    }
     if (firstVisitReadyResolvers.length > 0) {
       const resolvers = firstVisitReadyResolvers.splice(0);
       resolvers.forEach((resolve) => resolve());

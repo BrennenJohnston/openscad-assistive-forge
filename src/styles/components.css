@@ -5254,6 +5254,213 @@ body.first-visit-blocking #app {
   user-select: none;
 }
 
+/* =========================================
+   First-visit interface choice (U-9)
+   ========================================= */
+
+/* The overlay shows both interfaces as a split, lightly blurred preview:
+   Forge left, Classic right, matching the side each choice card sits on.
+   If an image fails to load, the existing dim + blurred #app show through. */
+.first-visit-overlay {
+  display: flex;
+  overflow: hidden;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.first-visit-backdrop-half {
+  flex: 1 1 50%;
+  background-size: cover;
+  /* Blur kept low on purpose: the owner wants the layouts discernable
+     behind the modal, with the modal still carrying the focus. */
+  filter: blur(4px);
+  transform: scale(1.04);
+}
+
+/* Each half shows its own side of its full-page screenshot, so together
+   they read as the screen split between the two interfaces. */
+.first-visit-backdrop-forge {
+  background-image: url('/screenshots/forge-standard.webp');
+  background-position: left center;
+}
+
+.first-visit-backdrop-classic {
+  background-image: url('/screenshots/classic-standard.webp');
+  background-position: right center;
+}
+
+.first-visit-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(12, 12, 12, 0.35);
+}
+
+.modal-first-visit {
+  max-width: 1160px;
+  width: min(94vw, 1160px);
+}
+
+.first-visit-choice {
+  border: 0;
+  padding: 0;
+  margin: var(--space-md) 0;
+}
+
+.first-visit-choice legend {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  padding: 0;
+  margin-bottom: var(--space-sm);
+}
+
+.first-visit-options {
+  display: flex;
+  gap: var(--space-md);
+}
+
+.first-visit-option {
+  flex: 1 1 0;
+  display: block;
+  border: 2px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  padding: var(--space-sm);
+  cursor: pointer;
+  background: var(--color-bg-primary);
+}
+
+.first-visit-option:hover {
+  border-color: var(--color-border-hover);
+}
+
+.first-visit-option:has(input:checked) {
+  border-color: var(--color-accent);
+  background: var(--color-accent-subtle);
+}
+
+.first-visit-option:has(input:focus-visible) {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.first-visit-option-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-sm);
+  margin-bottom: var(--space-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.first-visit-option-head input[type='radio'] {
+  flex-shrink: 0;
+  accent-color: var(--color-accent);
+}
+
+.first-visit-badge {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-accent-fg);
+  border: 1px solid currentColor;
+  border-radius: var(--border-radius-md);
+  padding: 0 var(--space-sm);
+}
+
+.first-visit-shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  margin-bottom: var(--space-sm);
+}
+
+.first-visit-guidance {
+  display: block;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+}
+
+.first-visit-compromise {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: var(--space-sm) 0;
+}
+
+.first-visit-choice-error {
+  color: var(--color-error-text);
+  font-weight: 600;
+  margin: var(--space-sm) 0;
+}
+
+.first-visit-remember {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--color-border);
+  cursor: pointer;
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.first-visit-remember input[type='checkbox'] {
+  flex-shrink: 0;
+  margin-top: 3px;
+  accent-color: var(--color-accent);
+}
+
+.first-visit-remember-hint {
+  display: block;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  font-weight: 400;
+}
+
+#first-visit-modal .modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-sm);
+}
+
+:root[data-high-contrast='true'] .first-visit-option input[type='radio'],
+:root[data-high-contrast='true'] .first-visit-remember input[type='checkbox'] {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+@media (forced-colors: active) {
+  .first-visit-option {
+    border: 1px solid ButtonText;
+  }
+
+  .first-visit-option input[type='radio']:checked {
+    forced-color-adjust: none;
+    outline: 2px solid Highlight;
+  }
+}
+
+@media (max-width: 900px) {
+  .first-visit-options {
+    flex-direction: column;
+  }
+
+  /* Stacked: Forge stays on top, Classic below, matching the card order. */
+  .first-visit-overlay {
+    flex-direction: column;
+  }
+
+  .first-visit-backdrop-forge {
+    background-position: center top;
+  }
+
+  .first-visit-backdrop-classic {
+    background-position: center bottom;
+  }
+}
+
 .preset-modal-content {
   background: var(--color-bg-primary);
   border-radius: var(--border-radius-lg);

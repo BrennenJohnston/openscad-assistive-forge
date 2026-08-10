@@ -34,7 +34,7 @@ const CACHE_STRATEGIES = {
   libraries: [/\/libraries\//],
   
   // Images/icons: cache-first
-  images: [/\.png$/, /\.jpg$/, /\.svg$/, /\.ico$/],
+  images: [/\.png$/, /\.jpg$/, /\.svg$/, /\.ico$/, /\.webp$/],
 };
 
 /**

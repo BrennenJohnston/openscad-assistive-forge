@@ -7555,74 +7555,151 @@ No console output yet. Generate a model to see output.</pre
         </div>
       </div>
     </div>
-    <!-- First-Visit Disclosure Modal -->
+    <!-- First-Visit Disclosure Modal (U-9: theme choice; copy owner-approved, Q-21).
+         The overlay carries the split preview backdrop: blurred Forge left,
+         blurred Classic right, each 1:1 with what that side's choice loads. -->
     <div
       class="modal hidden"
       id="first-visit-modal"
       role="dialog"
       aria-labelledby="first-visit-title"
-      aria-describedby="first-visit-description"
+      aria-describedby="first-visit-intro"
       aria-modal="true"
       aria-hidden="true"
     >
-      <div class="modal-overlay" id="firstVisitOverlay"></div>
-      <div class="modal-content modal-medium">
+      <div
+        class="modal-overlay first-visit-overlay"
+        id="firstVisitOverlay"
+        aria-hidden="true"
+      >
+        <div class="first-visit-backdrop-half first-visit-backdrop-forge"></div>
+        <div
+          class="first-visit-backdrop-half first-visit-backdrop-classic"
+        ></div>
+      </div>
+      <div class="modal-content modal-first-visit">
         <div class="modal-header">
           <h2 id="first-visit-title">Welcome to OpenSCAD Assistive Forge</h2>
         </div>
-        <div class="modal-body" id="first-visit-description">
-          <p>
-            <strong>This runs locally in your browser.</strong> Your model is
-            processed on this device and is not uploaded to a server.
+        <div class="modal-body">
+          <p id="first-visit-intro">
+            This app runs in your browser. Your designs are processed on this
+            device and are never uploaded to a server. Your first render
+            downloads the OpenSCAD engine, about 15 to 30 MB. It is saved for
+            your next visit. Your work is saved in this browser too. Clearing
+            the browser's site data removes saved work.
           </p>
-          <h3>Before you start</h3>
-          <ul class="features-list">
-            <li>
-              <strong>One-time download:</strong> Your first render downloads
-              the OpenSCAD engine (~15–30MB) and caches it for next time.
-            </li>
-            <li>
-              <strong>Saved here:</strong> Your designs and settings are stored
-              in this browser (storage limits vary by device/browser).
-            </li>
-            <li>
-              <strong>Clearing site data removes saves:</strong> If you clear
-              your browser storage/site data, saved work may be removed.
-            </li>
-          </ul>
-          <p class="features-note">
-            <strong>Continue</strong> to download and run the OpenSCAD engine
-            locally.
+          <fieldset class="first-visit-choice">
+            <legend>Choose your interface</legend>
+            <div class="first-visit-options">
+              <!-- aria-labelledby/describedby instead of the wrapping label
+                   naming the radio: the label would fold the screenshot's
+                   whole description into the radio's NAME; this keeps the
+                   name short and moves picture + guidance to the description. -->
+              <label class="first-visit-option">
+                <span class="first-visit-option-head">
+                  <input
+                    type="radio"
+                    name="first-visit-ui"
+                    id="firstVisitChoiceForge"
+                    value="forge"
+                    aria-labelledby="firstVisitForgeName firstVisitForgeBadge"
+                    aria-describedby="firstVisitForgeShot firstVisitForgeGuide"
+                  />
+                  <span class="first-visit-option-name" id="firstVisitForgeName"
+                    >Assistive Forge</span
+                  >
+                  <span class="first-visit-badge" id="firstVisitForgeBadge"
+                    >Recommended for new users</span
+                  >
+                </span>
+                <img
+                  class="first-visit-shot"
+                  id="firstVisitForgeShot"
+                  src="/screenshots/forge-standard.webp"
+                  width="1400"
+                  height="900"
+                  alt="The Assistive Forge interface with a model open. Menus and workflow buttons are at the top, the Customizer parameter panel is on the left, and the 3D preview of the model is on the right."
+                />
+                <span class="first-visit-guidance" id="firstVisitForgeGuide"
+                  >A guided interface built for screen readers, keyboard use,
+                  and first time users. Choose this if you are new to OpenSCAD
+                  or want the most accessible experience.</span
+                >
+              </label>
+              <label class="first-visit-option">
+                <span class="first-visit-option-head">
+                  <input
+                    type="radio"
+                    name="first-visit-ui"
+                    id="firstVisitChoiceClassic"
+                    value="classic"
+                    aria-labelledby="firstVisitClassicName"
+                    aria-describedby="firstVisitClassicShot firstVisitClassicGuide"
+                  />
+                  <span
+                    class="first-visit-option-name"
+                    id="firstVisitClassicName"
+                    >Classic</span
+                  >
+                </span>
+                <img
+                  class="first-visit-shot"
+                  id="firstVisitClassicShot"
+                  src="/screenshots/classic-standard.webp"
+                  width="1400"
+                  height="900"
+                  alt="The Classic interface with the same model open. Desktop style menus and toolbars are at the top, the code editor is on the left, the 3D preview is in the middle, the Customizer panel is on the right, and the console is at the bottom."
+                />
+                <span class="first-visit-guidance" id="firstVisitClassicGuide"
+                  >Looks and works like the OpenSCAD desktop program. Choose
+                  this if you follow a desktop guide or already know desktop
+                  OpenSCAD.</span
+                >
+              </label>
+            </div>
+          </fieldset>
+          <p class="first-visit-compromise">
+            Both interfaces open the same files and make the same models. You
+            can switch at any time with the button in the top right corner of
+            the app. Classic keeps the light desktop look. Dark and high
+            contrast themes work only in Assistive Forge.
           </p>
-          <details class="file-info-details first-visit-details">
-            <summary>Technical details</summary>
-            <ul class="features-list">
-              <li>
-                <strong>Local processing:</strong> Rendering happens on your
-                device.
-              </li>
-              <li>
-                <strong>No server:</strong> Nothing is sent to external servers.
-              </li>
-              <li><strong>Privacy:</strong> Your data stays on your device.</li>
-            </ul>
-            <p class="features-note">
-              Learn more:
-              <a
-                href="https://github.com/BrennenJohnston/openscad-assistive-forge/blob/main/README.md#how-it-works"
-                target="_blank"
-                rel="noopener noreferrer"
-                >How it works (opens in new tab)</a
+          <!-- Filled by JS on a no-choice Continue press. Lives inside the
+               modal because #srAnnouncer sits in the inert, aria-hidden #app
+               subtree while this modal blocks, so the global announcer is
+               silent here. -->
+          <p
+            class="first-visit-choice-error hidden"
+            id="firstVisitChoiceError"
+            role="alert"
+          ></p>
+          <label class="first-visit-remember">
+            <input type="checkbox" id="firstVisitRemember" checked />
+            <span>
+              Remember my choice on this device
+              <span class="first-visit-remember-hint"
+                >If unchecked, this window appears again on your next
+                visit.</span
               >
-              ·
-              <a
-                href="https://github.com/BrennenJohnston/openscad-assistive-forge/blob/main/docs/TROUBLESHOOTING.md#wasm-loading-issues"
-                target="_blank"
-                rel="noopener noreferrer"
-                >WASM download help (opens in new tab)</a
-              >
-            </p>
-          </details>
+            </span>
+          </label>
+          <p class="features-note first-visit-learn-more">
+            Learn more:
+            <a
+              href="https://github.com/BrennenJohnston/openscad-assistive-forge/blob/main/README.md#how-it-works"
+              target="_blank"
+              rel="noopener noreferrer"
+              >How it works (opens in new tab)</a
+            >
+            ·
+            <a
+              href="https://github.com/BrennenJohnston/openscad-assistive-forge/blob/main/docs/TROUBLESHOOTING.md#wasm-loading-issues"
+              target="_blank"
+              rel="noopener noreferrer"
+              >WASM download help (opens in new tab)</a
+            >
+          </p>
         </div>
         <div class="modal-footer">
           <button
