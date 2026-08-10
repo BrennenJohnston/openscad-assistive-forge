@@ -11,8 +11,16 @@ export default defineConfig({
   retries: isCI ? 2 : 0,
   // Windows: 1 worker (terminal hang avoidance). CI: 2 workers (ubuntu-latest has 2 vCPUs).
   workers: isWindows ? 1 : (isCI ? 2 : undefined),
-  // Use list reporter in CI to prevent HTML reporter hangs, HTML locally
-  reporter: isCI ? [['list'], ['html', { open: 'never' }]] : 'html',
+  // Use list reporter in CI to prevent HTML reporter hangs, HTML locally.
+  // The JSON report feeds scripts/check-e2e-complete.mjs (Q-23): a run the
+  // clock cut short must fail the job, not pass with tests never started.
+  reporter: isCI
+    ? [
+        ['list'],
+        ['html', { open: 'never' }],
+        ['json', { outputFile: 'playwright-results.json' }],
+      ]
+    : 'html',
   
   // Global timeout: 10min CI (2 workers + retries), 30min local (1 worker on Windows)
   // Firefox/WebKit projects override per-test timeout to 90s (see below).
