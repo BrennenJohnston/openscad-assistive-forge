@@ -127,7 +127,14 @@ body[data-ui-mode='classic'] {
      scroll — at which point _revealPane scrolls the newly shown one into
      view so the menu item never looks like it did nothing. */
   --classic-strip-pane-min: 190px;
-  --classic-row-bottom: minmax(var(--classic-row-bottom-min), 0.45fr);
+  /* The default lives in its own token so the stow rules below can restore
+     it after the empty-bottom rule zeroes --classic-row-bottom (UF-2b).
+     0.65fr, up from 0.45fr, is Q-20e: the owner chose a taller default strip
+     (~60px more log at a 900px window) over compressing the Console's filter
+     chrome. A user-dragged height still wins — the resizer writes
+     --classic-row-bottom directly and parks it across a stow (D-8). */
+  --classic-row-bottom-default: minmax(var(--classic-row-bottom-min), 0.65fr);
+  --classic-row-bottom: var(--classic-row-bottom-default);
   /* Floor for the 3D view, so dragging the strip up cannot reduce the
      viewport to a sliver. Owner-approved 2026-08-06. */
   --classic-row-display-min: 240px;
@@ -476,12 +483,14 @@ body[data-ui-mode='classic'] .classic-slot > details {
     --classic-row-bottom: 0;
   }
 
-  /* A folded strip keeps only its pane titlebars. Overriding the row token
-     rather than the whole row template is what lets this compose with every
-     column variant instead of needing one collapsed rule per variant. */
-  body[data-ui-mode='classic'][data-classic-console-collapsed='true']
+  /* A stowed strip reports its field 'empty', so the empty-bottom rule below
+     zeroes the row (UF-2b — the fold's keep-the-titlebars look is superseded
+     by Q-20c's stow-to-edge-tab). One case must claw the height back: the
+     lower-right field shares row 3, so while IT is occupied the row keeps
+     its default size and the freed strip cell hosts the bottom un-stow tab. */
+  body[data-ui-mode='classic'][data-classic-stow-bottom='true'][data-classic-field-right-bottom='occupied']
     .main-interface {
-    --classic-row-bottom: min-content;
+    --classic-row-bottom: var(--classic-row-bottom-default);
   }
 
   body[data-ui-mode='classic'] .preview-panel {
@@ -504,11 +513,6 @@ body[data-ui-mode='classic'] .classic-slot > details {
     padding-top: var(--classic-resizer-track-h);
   }
 
-  /* Folded: the separator steps aside, so its reserved space goes too */
-  body[data-ui-mode='classic'][data-classic-console-collapsed='true']
-    .classic-bottom-strip {
-    padding-top: 0;
-  }
 
   body[data-ui-mode='classic'] .param-panel {
     max-height: none;
@@ -837,12 +841,6 @@ body[data-ui-mode='classic'][data-classic-field-bottom='empty']
     display: none;
   }
 
-  /* A folded strip owns the row token; the separator steps aside rather than
-     fighting it for the same value (D-8). */
-  body[data-ui-mode='classic'][data-classic-console-collapsed='true']
-    .classic-resizer--strip {
-    display: none;
-  }
 }
 
 /* ── 3D view toolbar (E5) ───────────────────────────────────────────────────
@@ -1168,25 +1166,12 @@ body[data-ui-mode='classic'] .classic-fold-inner {
   flex-direction: column;
 }
 
-/* D-8: the fold button collapses the whole bottom strip, so every pane in it
-   folds down to its titlebar together.
-
-   display:none, for the same reason the per-panel collapse below uses it, and
-   measured on this control too: with grid-template-rows: 0fr the strip was 0px
-   tall but still `visibility: visible`, holding TWELVE focusable controls, and
-   eleven Tab stops landed on invisible 13x13 checkboxes and 36x36 buttons.
-   That is WCAG 2.2 2.4.11 Focus Not Obscured (Minimum).
-
-   visibility:hidden on a delay would have kept the row's collapse animation,
-   but the global reduced-motion rule clamps transition-DURATION and not
-   transition-DELAY, so it would leave a 240ms window with the same bug. The
-   cost of display:none is that this fold no longer animates; the per-panel
-   collapse it now matches never did either. */
-body[data-classic-console-collapsed='true']
-  .classic-bottom-strip
-  .classic-fold {
-  display: none;
-}
+/* The R2a–UF-1 fold rule stood here (display:none on the folded strip's
+   content — the R-III 2.4.11 fix, TWELVE ghost tab stops measured). UF-2b
+   (Q-20c) superseded the fold with the bottom field's STOW: the whole strip
+   now reports 'empty' and leaves the layout through the same empty-field
+   display:none rule every stowed field uses, which keeps that trap fix and
+   retires the fold-specific selector. */
 
 /* ── Per-panel collapse (D3, a Forge extra — the desktop has no such control) */
 
@@ -1271,7 +1256,8 @@ body[data-ui-mode='classic']
     position: relative;
   }
 
-  body[data-ui-mode='classic'] .classic-stow-rail {
+  body[data-ui-mode='classic'] .classic-stow-rail--left,
+  body[data-ui-mode='classic'] .classic-stow-rail--right {
     position: absolute;
     top: var(--space-sm);
     bottom: var(--space-sm);
@@ -1292,6 +1278,38 @@ body[data-ui-mode='classic']
 
   body[data-ui-mode='classic'] .classic-stow-rail--right {
     right: 0;
+  }
+
+  /* The bottom rail is NOT an overlay: the camera bar owns the window's
+     bottom edge, so a floating tab there would sit on live buttons. Instead
+     the rail takes the stowed strip's own grid cell as a slim min-content
+     row — the Forge Actions-drawer look. The stow-bottom row rule sits after
+     the empty-bottom rule, so at equal specificity the min-content wins
+     while the strip is stowed; the rb-occupied variant above (three
+     attributes) beats both. */
+  body[data-ui-mode='classic'] .classic-stow-rail--bottom {
+    display: none;
+    grid-area: bottom;
+    pointer-events: none;
+  }
+
+  body[data-ui-mode='classic'][data-classic-stow-bottom='true']
+    .classic-stow-rail--bottom {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: flex-start;
+  }
+
+  body[data-ui-mode='classic'][data-classic-stow-bottom='true']
+    .main-interface {
+    --classic-row-bottom: min-content;
+  }
+
+  body[data-ui-mode='classic'] .classic-stow-rail--bottom .classic-stow-tab {
+    writing-mode: horizontal-tb;
+    min-height: var(--size-touch-target);
+    padding: 0 var(--space-sm);
   }
 
   body[data-ui-mode='classic'] .classic-stow-tab {

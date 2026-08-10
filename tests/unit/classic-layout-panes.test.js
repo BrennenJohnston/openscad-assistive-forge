@@ -232,8 +232,43 @@ describe('ClassicLayoutController field stow (UF-2a, U-6/Q-20)', () => {
   it('refuses an unknown field name rather than inventing state', () => {
     const controller = new ClassicLayoutController();
 
-    expect(controller.toggleFieldStowed('bottom')).toBe(false);
-    expect(controller.isFieldStowed('bottom')).toBe(false);
+    expect(controller.toggleFieldStowed('nowhere')).toBe(false);
+    expect(controller.isFieldStowed('nowhere')).toBe(false);
     expect(localStorage.getItem(PANES_KEY)).toBeNull();
+  });
+
+  it('the bottom stow rides the historical consoleCollapsed key (UF-2b, Q-20c)', () => {
+    const controller = new ClassicLayoutController();
+
+    expect(controller.toggleFieldStowed('bottom')).toBe(true);
+    expect(controller.isConsoleCollapsed()).toBe(true);
+    expect(document.body.dataset.classicStowBottom).toBe('true');
+    expect(document.body.dataset.classicFieldBottom).toBe('empty');
+    expect(announceImmediate).toHaveBeenCalledWith('Bottom panels stowed');
+    expect(
+      JSON.parse(localStorage.getItem(PANES_KEY)).consoleCollapsed
+    ).toBe(true);
+
+    // The programmatic wrapper (the Error-Log jump) restores it...
+    expect(controller.setConsoleCollapsed(false)).toBe(false);
+    expect(document.body.dataset.classicFieldBottom).toBe('occupied');
+    expect(announceImmediate).toHaveBeenCalledWith('Bottom panels restored');
+
+    // ...and a same-state call is a no-op, not a repeat announcement.
+    announceImmediate.mockClear();
+    expect(controller.setConsoleCollapsed(false)).toBe(false);
+    expect(announceImmediate).not.toHaveBeenCalled();
+  });
+
+  it('a pre-UF-2 folded preference hydrates as the bottom stow', () => {
+    localStorage.setItem(
+      PANES_KEY,
+      JSON.stringify({ consoleCollapsed: true })
+    );
+
+    const controller = new ClassicLayoutController();
+
+    expect(controller.isFieldStowed('bottom')).toBe(true);
+    expect(controller.isConsoleCollapsed()).toBe(true);
   });
 });

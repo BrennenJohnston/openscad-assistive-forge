@@ -68,12 +68,22 @@ const STOW_RAIL_CLASS = 'classic-stow-rail';
  * fold (which becomes the bottom field's stow in UF-2b, per Q-20c).
  *
  * Glyphs are text, not SVG (Q-20a, same R-I rule as ▾/▸), and point where the
- * content will GO: « stows the left field, » brings it back.
+ * content will GO: « stows the left field, » brings it back; ⌄ stows the
+ * bottom strip, ⌃ brings it back.
+ *
+ * The bottom entry IS the old strip fold (Q-20c: one mechanism, converted in
+ * UF-2b) — its `paneKey` keeps the historical `consoleCollapsed` name so a
+ * pre-UF-2 folded preference hydrates as stowed, and D-8's height
+ * park/restore rides the same toggle.
+ *
+ * `subject` is the announcement noun; `positionLabel` feeds the control and
+ * tab names. NEW STRINGS, owner review pending (D-35).
  *
  * `paneKey` joins `openscad-forge-classic-panes`; a preference saved before
  * these keys existed hydrates without them.
- * @type {ReadonlyArray<{name: string, paneKey: string, edge: 'left'|'right',
- *   glyphStow: string, glyphRestore: string}>}
+ * @type {ReadonlyArray<{name: string, paneKey: string,
+ *   edge: 'left'|'right'|'bottom', glyphStow: string, glyphRestore: string,
+ *   subject: string, positionLabel: string}>}
  */
 const STOW_FIELDS = Object.freeze([
   {
@@ -82,6 +92,8 @@ const STOW_FIELDS = Object.freeze([
     edge: 'left',
     glyphStow: '«',
     glyphRestore: '»',
+    subject: 'Left column',
+    positionLabel: 'left column',
   },
   {
     name: 'right-top',
@@ -89,6 +101,8 @@ const STOW_FIELDS = Object.freeze([
     edge: 'right',
     glyphStow: '»',
     glyphRestore: '«',
+    subject: 'Upper right',
+    positionLabel: 'upper right',
   },
   {
     name: 'right-bottom',
@@ -96,6 +110,17 @@ const STOW_FIELDS = Object.freeze([
     edge: 'right',
     glyphStow: '»',
     glyphRestore: '«',
+    subject: 'Lower right',
+    positionLabel: 'lower right',
+  },
+  {
+    name: 'bottom',
+    paneKey: 'consoleCollapsed',
+    edge: 'bottom',
+    glyphStow: '⌄',
+    glyphRestore: '⌃',
+    subject: 'Bottom panels',
+    positionLabel: 'bottom panels',
   },
 ]);
 
@@ -103,6 +128,7 @@ const STOW_FIELDS = Object.freeze([
 const STOW_RAIL_IDS = Object.freeze({
   left: 'classicStowRailLeft',
   right: 'classicStowRailRight',
+  bottom: 'classicStowRailBottom',
 });
 
 /**
@@ -174,7 +200,9 @@ const SLOT_DEFS = [
     label: 'Console',
     panelId: 'consolePanel',
     parentId: BOTTOM_STRIP_ID,
-    titlebar: { text: 'Console', foldBtnId: 'classicConsoleFoldBtn' },
+    // The fold button this bar carried through R2a–UF-1 became the bottom
+    // field's stow control in UF-2b (Q-20c) — _ensureStowButtons owns it now.
+    titlebar: { text: 'Console' },
   },
   {
     // The inner live region moves, not the tabpanel wrapper — moving
@@ -585,7 +613,6 @@ export class ClassicLayoutController {
 
     delete document.body.dataset.classicEditorHidden;
     delete document.body.dataset.classicCustomizerHidden;
-    delete document.body.dataset.classicConsoleCollapsed;
     delete document.body.dataset.classicAnimateVisible;
     delete document.body.dataset.classicFontListVisible;
     delete document.body.dataset.classicViewportControlVisible;
@@ -870,7 +897,7 @@ export class ClassicLayoutController {
       if (btn) {
         btn.setAttribute('aria-expanded', 'true');
         // NEW STRING, owner review pending (D-35).
-        const label = `Stow the ${field.positionLabel}`;
+        const label = `Stow the ${def.positionLabel}`;
         btn.setAttribute('aria-label', label);
         btn.setAttribute('title', label);
       }
@@ -898,7 +925,7 @@ export class ClassicLayoutController {
   _ensureStowRails() {
     const mainInterface = document.getElementById('mainInterface');
     if (!mainInterface) return;
-    for (const edge of ['left', 'right']) {
+    for (const edge of Object.keys(STOW_RAIL_IDS)) {
       if (document.getElementById(STOW_RAIL_IDS[edge])) continue;
       const rail = document.createElement('div');
       rail.id = STOW_RAIL_IDS[edge];
@@ -909,7 +936,7 @@ export class ClassicLayoutController {
 
   /** @private */
   _destroyStowRails() {
-    for (const edge of ['left', 'right']) {
+    for (const edge of Object.keys(STOW_RAIL_IDS)) {
       document.getElementById(STOW_RAIL_IDS[edge])?.remove();
     }
   }
@@ -927,7 +954,6 @@ export class ClassicLayoutController {
     for (const def of STOW_FIELDS) {
       const rail = document.getElementById(STOW_RAIL_IDS[def.edge]);
       if (!rail) continue;
-      const field = DOCK_FIELDS.find((f) => f.name === def.name);
       const show = Boolean(this._panes[def.paneKey]) && occupancy[def.name];
 
       let tab = rail.querySelector(
@@ -969,7 +995,7 @@ export class ClassicLayoutController {
         .map((id) => panelLabel(id))
         .join(', ');
       tab.querySelector('.classic-stow-tab-label').textContent = contents;
-      const name = `${contents}. Restore the ${field.positionLabel}`;
+      const name = `${contents}. Restore the ${def.positionLabel}`;
       tab.setAttribute('aria-label', name);
       tab.setAttribute('title', name);
     }
@@ -1005,35 +1031,24 @@ export class ClassicLayoutController {
   }
 
   /**
-   * Fold/unfold the bottom strip (titlebar button). Per D-8 this folds the
-   * whole strip, not the Console pane alone — the storage key and data
-   * attribute keep their historical `console` names so existing preferences
-   * survive. Wording owner-approved 2026-08-06.
+   * Programmatic strip stow/restore. The strip FOLD became the bottom field's
+   * stow in UF-2b (Q-20c: one mechanism); this wrapper keeps the historical
+   * API for callers like the Error-Log jump, which restores the strip before
+   * moving focus into it and must not have its focus stolen. The storage key
+   * keeps its historical `console` name so existing preferences survive
+   * (D-8's rule) — a profile folded before UF-2 hydrates as stowed.
    */
   setConsoleCollapsed(collapsed) {
-    this._panes.consoleCollapsed = Boolean(collapsed);
-
-    // The fold and the row resizer both own --classic-row-bottom, so the
-    // resizer parks its value for the duration instead of the two writing
-    // over each other. Unfolding returns the height the user chose, not the
-    // default (B4/D-8).
-    const resizers = getClassicResizerController();
-    if (this._panes.consoleCollapsed) resizers?.parkBottomSize();
-    else resizers?.restoreBottomSize();
-
-    this._applyPaneAttributes();
-    this._savePaneState();
-    announceImmediate(
-      this._panes.consoleCollapsed
-        ? 'Bottom panels folded'
-        : 'Bottom panels unfolded'
-    );
-    return this._panes.consoleCollapsed;
+    const def = STOW_FIELDS.find((f) => f.name === 'bottom');
+    if (Boolean(collapsed) === Boolean(this._panes[def.paneKey])) {
+      return this._panes[def.paneKey];
+    }
+    return this._setFieldStowed(def, Boolean(collapsed), { focus: false });
   }
 
   /**
-   * Whether a dock field is stowed to its edge (UF-2a).
-   * @param {string} fieldName - 'left' | 'right-top' | 'right-bottom'
+   * Whether a dock field is stowed to its edge (UF-2a/b).
+   * @param {string} fieldName - 'left' | 'right-top' | 'right-bottom' | 'bottom'
    * @returns {boolean}
    */
   isFieldStowed(fieldName) {
@@ -1047,15 +1062,36 @@ export class ClassicLayoutController {
    * edge rail is the way back. Focus follows the action to the control that
    * undoes it, so the keyboard user is never left on a control that just
    * display:none'd itself.
-   * @param {string} fieldName - 'left' | 'right-top' | 'right-bottom'
+   * @param {string} fieldName - 'left' | 'right-top' | 'right-bottom' | 'bottom'
    * @returns {boolean} the new stowed state
    */
   toggleFieldStowed(fieldName) {
     const def = STOW_FIELDS.find((f) => f.name === fieldName);
     if (!def) return false;
-    const field = DOCK_FIELDS.find((f) => f.name === def.name);
-    const stowed = !this._panes[def.paneKey];
+    return this._setFieldStowed(def, !this._panes[def.paneKey], {
+      focus: true,
+    });
+  }
+
+  /**
+   * @param {(typeof STOW_FIELDS)[number]} def
+   * @param {boolean} stowed
+   * @param {{focus?: boolean}} [options] - focus:false for programmatic
+   *   callers (the Error-Log jump), which manage focus themselves
+   * @returns {boolean}
+   * @private
+   */
+  _setFieldStowed(def, stowed, { focus = true } = {}) {
     this._panes[def.paneKey] = stowed;
+
+    // D-8: the bottom stow and the row resizer both own --classic-row-bottom,
+    // so the resizer parks its value for the duration. Un-stowing returns the
+    // height the user chose, not the default.
+    if (def.name === 'bottom') {
+      const resizers = getClassicResizerController();
+      if (stowed) resizers?.parkBottomSize();
+      else resizers?.restoreBottomSize();
+    }
 
     this._applyPaneAttributes();
     this._refreshTitlebarControls();
@@ -1067,18 +1103,23 @@ export class ClassicLayoutController {
     // same reason the collapse uses it: a debounced disclosure that sometimes
     // says nothing is worse than one that repeats.
     announceImmediate(
-      stowed ? `${field.label} stowed` : `${field.label} restored`
+      stowed ? `${def.subject} stowed` : `${def.subject} restored`
     );
 
-    if (stowed) {
-      document
-        .querySelector(`.${STOW_TAB_CLASS}[data-classic-stow-field="${def.name}"]`)
-        ?.focus();
-    } else {
-      document
-        .getElementById(field.elementId)
-        ?.querySelector(`.${STOW_BTN_CLASS}`)
-        ?.focus();
+    if (focus) {
+      if (stowed) {
+        document
+          .querySelector(
+            `.${STOW_TAB_CLASS}[data-classic-stow-field="${def.name}"]`
+          )
+          ?.focus();
+      } else {
+        const field = DOCK_FIELDS.find((f) => f.name === def.name);
+        document
+          .getElementById(field.elementId)
+          ?.querySelector(`.${STOW_BTN_CLASS}`)
+          ?.focus();
+      }
     }
     return stowed;
   }
@@ -1296,7 +1337,6 @@ export class ClassicLayoutController {
     body.dataset.classicCustomizerHidden = String(
       !this._panes.customizerVisible
     );
-    body.dataset.classicConsoleCollapsed = String(this._panes.consoleCollapsed);
 
     // Simplified hides Viewport-Control without clearing its preference, so
     // the visible-attribute follows the same rule the occupancy does.
@@ -1331,14 +1371,6 @@ export class ClassicLayoutController {
       );
     }
     this._refreshStowRails();
-
-    const foldBtn = document.getElementById('classicConsoleFoldBtn');
-    if (foldBtn) {
-      foldBtn.setAttribute(
-        'aria-expanded',
-        String(!this._panes.consoleCollapsed)
-      );
-    }
 
     this._applyCollapseState();
   }
@@ -1559,25 +1591,6 @@ export class ClassicLayoutController {
         title.textContent = def.titlebar.text;
         bar.appendChild(title);
 
-        if (def.titlebar.foldBtnId) {
-          const fold = document.createElement('button');
-          fold.type = 'button';
-          fold.id = def.titlebar.foldBtnId;
-          fold.className = 'btn btn-sm btn-icon classic-pane-btn';
-          // Static name + aria-expanded is the APG disclosure pattern; the
-          // state is not repeated in the name. D-8: this folds the whole
-          // strip, so the name does not mention Console.
-          fold.setAttribute('aria-label', 'Fold bottom panels');
-          // The other half of the owner's 2026-08-08 decision to leave both
-          // strip glyphs as ▾: this one's scope is only knowable from its name.
-          fold.setAttribute('title', 'Fold bottom panels');
-          fold.setAttribute('aria-expanded', 'true');
-          fold.textContent = '▾';
-          fold.addEventListener('click', () => {
-            this.setConsoleCollapsed(!this._panes.consoleCollapsed);
-          });
-          bar.appendChild(fold);
-        }
         if (def.titlebar.closeBtnId) {
           const close = document.createElement('button');
           close.type = 'button';

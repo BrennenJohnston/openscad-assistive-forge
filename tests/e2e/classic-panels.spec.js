@@ -934,76 +934,81 @@ test.describe('Error Log reach (F1)', () => {
     );
   });
 
-  test('classic-errorlog-fold: a folded strip unfolds before focus lands', async ({
+  test('classic-errorlog-fold: a stowed strip restores before focus lands', async ({
     page,
   }) => {
     test.setTimeout(240_000);
     await loadProject(page);
     await enterClassicStandard(page);
 
-    await page.locator('#classicConsoleFoldBtn').click();
+    // UF-2b (Q-20c): the strip fold became the bottom field's stow.
+    await page
+      .locator('.classic-stow-btn[data-classic-stow-field="bottom"]')
+      .click();
     await expect(page.locator('body')).toHaveAttribute(
-      'data-classic-console-collapsed',
+      'data-classic-stow-bottom',
       'true'
     );
 
     await page.keyboard.press('Control+Alt+Digit2');
     await expect(page.locator('body')).toHaveAttribute(
-      'data-classic-console-collapsed',
+      'data-classic-stow-bottom',
       'false'
     );
   });
 
-  test('classic-strip-fold: a folded strip hides its controls from the keyboard', async ({
+  test('classic-strip-fold: a stowed strip hides its controls from the keyboard', async ({
     page,
   }) => {
     test.setTimeout(240_000);
     await loadProject(page);
     await enterClassicStandard(page);
 
-    await page.locator('#classicConsoleFoldBtn').click();
+    await page
+      .locator('.classic-stow-btn[data-classic-stow-field="bottom"]')
+      .click();
     await expect(page.locator('body')).toHaveAttribute(
-      'data-classic-console-collapsed',
+      'data-classic-stow-bottom',
       'true'
     );
 
-    // The per-panel collapse learned this in P4; the older whole-strip fold
-    // kept grid-template-rows: 0fr, which only CLIPS. MEASURED before the fix:
-    // the strip was 0px tall but still visibility:visible, and eleven Tab stops
-    // landed on invisible 13x13 checkboxes and 36x36 buttons inside it.
-    // WCAG 2.2 2.4.11 Focus Not Obscured (Minimum).
+    // The R-III lesson, carried into the stow (UF-2b): the pre-fix fold kept
+    // grid-template-rows: 0fr, which only CLIPS — the strip was 0px tall but
+    // still visibility:visible, and eleven Tab stops landed on invisible
+    // 13x13 checkboxes and 36x36 buttons inside it. WCAG 2.2 2.4.11.
+    // The stow display:nones the whole strip, title bars included.
     const reachable = await page.evaluate(
       () =>
         [
           ...document.querySelectorAll(
-            '.classic-bottom-strip .classic-fold button, .classic-bottom-strip .classic-fold input, .classic-bottom-strip .classic-fold select, .classic-bottom-strip .classic-fold textarea, .classic-bottom-strip .classic-fold [href]'
+            '.classic-bottom-strip button, .classic-bottom-strip input, .classic-bottom-strip select, .classic-bottom-strip textarea, .classic-bottom-strip [href]'
           ),
         ].filter((el) => el.offsetParent !== null || el.getClientRects().length)
           .length
     );
     expect(
       reachable,
-      'a folded strip still offers focusable controls'
+      'a stowed strip still offers focusable controls'
     ).toBe(0);
 
-    // Tab out of the fold button and confirm focus never lands inside.
-    await page.locator('#classicConsoleFoldBtn').focus();
+    // Tab from the un-stow tab and confirm focus never lands inside.
+    await page
+      .locator('.classic-stow-tab[data-classic-stow-field="bottom"]')
+      .focus();
     const landings = [];
     for (let i = 0; i < 20; i++) {
       await page.keyboard.press('Tab');
       const inside = await page.evaluate(
-        () =>
-          !!document.activeElement?.closest(
-            '.classic-bottom-strip .classic-fold'
-          )
+        () => !!document.activeElement?.closest('.classic-bottom-strip')
       );
       if (inside) landings.push(i);
     }
-    expect(landings, 'Tab landed inside the folded strip').toEqual([]);
+    expect(landings, 'Tab landed inside the stowed strip').toEqual([]);
 
-    // The title bars are the point of a fold — they must stay.
+    // The way back is the labelled edge tab (Q-20c superseded the fold's
+    // keep-the-titlebars look).
     await expect(
-      page.locator('#classicConsoleSlot .classic-pane-titlebar')
+      page.locator('.classic-stow-tab[data-classic-stow-field="bottom"]')
     ).toBeVisible();
   });
 

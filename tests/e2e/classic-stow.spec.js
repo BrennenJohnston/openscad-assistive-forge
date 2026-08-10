@@ -258,7 +258,7 @@ test.describe('Field stow (UF-2a)', () => {
       'occupied'
     );
     await expect(page.locator('.classic-dock-field--left')).toBeVisible();
-    await expect(page.locator('.classic-stow-btn')).toHaveCount(3);
+    await expect(page.locator('.classic-stow-btn')).toHaveCount(4);
     await expect(page.locator('.classic-stow-btn').first()).toBeHidden();
     await expect(page.locator('.classic-stow-rail--left')).toBeHidden();
   });
@@ -309,5 +309,132 @@ test.describe('Field stow (UF-2a)', () => {
         `new axe violation in the stowed arrangement: ${violation.id}`
       ).toBe(true);
     }
+  });
+});
+
+test.describe('Bottom stow — the converted strip fold (UF-2b, Q-20c)', () => {
+  test('classic-stow-bottom: the strip stows to a bottom bar tab, sparing the camera bar', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    // Viewport-Control OFF: with the lower-right field occupied, row 3 is
+    // deliberately kept for it and the 3D view would not grow — that
+    // arrangement has its own case below.
+    await seedPanes(page, { viewportControlVisible: false });
+    await loadProject(page);
+    await enterClassicStandard(page);
+
+    const cameraBarBefore = await page
+      .locator('.classic-camera-bar')
+      .boundingBox();
+    const previewBefore = await page.locator('.preview-panel').boundingBox();
+
+    const stowBtn = page.locator(
+      '.classic-stow-btn[data-classic-stow-field="bottom"]'
+    );
+    await expect(stowBtn).toHaveAttribute(
+      'aria-label',
+      'Stow the bottom panels'
+    );
+    await stowBtn.click();
+
+    // The whole strip leaves layout and tab order; the way back is a
+    // horizontal tab in the strip's own grid row, NOT an overlay — the camera
+    // bar owns the bottom edge and must not be covered.
+    await expect(page.locator('.classic-bottom-strip')).toBeHidden();
+    const tab = page.locator(
+      '.classic-stow-tab[data-classic-stow-field="bottom"]'
+    );
+    await expect(tab).toBeVisible();
+    await expect(tab).toHaveAttribute(
+      'aria-label',
+      'Console, Error-Log. Restore the bottom panels'
+    );
+    const tabBox = await tab.boundingBox();
+    const cameraBarAfter = await page
+      .locator('.classic-camera-bar')
+      .boundingBox();
+    expect(
+      tabBox.y,
+      'the bottom tab must sit below the camera bar, not on it'
+    ).toBeGreaterThanOrEqual(cameraBarAfter.y + cameraBarAfter.height - 1);
+    expect(cameraBarAfter.width).toBeGreaterThan(cameraBarBefore.width * 0.9);
+
+    // The 3D view grew into the freed height.
+    const previewAfter = await page.locator('.preview-panel').boundingBox();
+    expect(previewAfter.height).toBeGreaterThan(previewBefore.height + 50);
+
+    // Restore from the tab: strip back, focus on the stow control.
+    await tab.click();
+    await expect(page.locator('.classic-bottom-strip')).toBeVisible();
+    await expect(stowBtn).toBeFocused();
+  });
+
+  test('classic-stow-bottom-vpc: stowing the strip does not crush Viewport-Control', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await seedPanes(page);
+    await loadProject(page);
+    await enterClassicStandard(page);
+
+    const vpcBefore = await page
+      .locator('.classic-dock-field--right-bottom')
+      .boundingBox();
+
+    await page
+      .locator('.classic-stow-btn[data-classic-stow-field="bottom"]')
+      .click();
+    await expect(page.locator('.classic-bottom-strip')).toBeHidden();
+
+    // Before UF-2b, folding the strip flattened the lower-right field to a
+    // bare title bar because both share grid row 3 (measured in the Q-20
+    // probe). The row now keeps its size while the field is occupied.
+    const vpcAfter = await page
+      .locator('.classic-dock-field--right-bottom')
+      .boundingBox();
+    expect(
+      vpcAfter.height,
+      'Viewport-Control lost its height to the bottom stow'
+    ).toBeGreaterThan(vpcBefore.height * 0.8);
+  });
+
+  test('classic-stow-bottom-legacy: a pre-UF-2 folded profile hydrates as stowed', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    // consoleCollapsed is the fold's historical key (D-8); Q-20c upgraded its
+    // presentation, so a folded preference must come back as the stow.
+    await seedPanes(page, { consoleCollapsed: true });
+    await loadProject(page);
+    await enterClassicStandard(page);
+
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-classic-stow-bottom',
+      'true'
+    );
+    await expect(page.locator('.classic-bottom-strip')).toBeHidden();
+    await expect(
+      page.locator('.classic-stow-tab[data-classic-stow-field="bottom"]')
+    ).toBeVisible();
+  });
+
+  test('classic-strip-default-height: Q-20e raised the default (0.65fr)', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await seedPanes(page);
+    await loadProject(page);
+    await enterClassicStandard(page);
+
+    // The owner chose a taller default strip over compressing the Console
+    // chrome (Q-20e). Pin the token, not pixels — fr resolution depends on
+    // the window, and a user drag rightly overrides the default.
+    const token = await page.evaluate(() =>
+      getComputedStyle(document.body)
+        .getPropertyValue('--classic-row-bottom-default')
+        .trim()
+    );
+    expect(token).toContain('0.65fr');
   });
 });

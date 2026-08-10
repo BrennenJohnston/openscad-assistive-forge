@@ -1051,14 +1051,16 @@ test.describe('Classic mode layout (C4)', () => {
           .evaluate((el) => el.textContent)
       );
 
-    // Console fold (C10): the titlebar button folds the console pane and
-    // the display pane grows into the freed row
-    const consoleFold = page.locator('#classicConsoleFoldBtn');
+    // Bottom stow (C10, converted by UF-2b/Q-20c): the titlebar control stows
+    // the strip to its edge tab and the display pane grows into the freed row
+    const consoleFold = page.locator(
+      '.classic-stow-btn[data-classic-stow-field="bottom"]'
+    );
     await expect(consoleFold).toBeVisible();
     const displayBefore = await page.locator('.preview-panel').boundingBox();
     await consoleFold.click();
     await expect(page.locator('body')).toHaveAttribute(
-      'data-classic-console-collapsed',
+      'data-classic-stow-bottom',
       'true'
     );
     await expect
@@ -1066,9 +1068,11 @@ test.describe('Classic mode layout (C4)', () => {
         async () => (await page.locator('.preview-panel').boundingBox()).height
       )
       .toBeGreaterThan(displayBefore.height);
-    await consoleFold.click();
+    await page
+      .locator('.classic-stow-tab[data-classic-stow-field="bottom"]')
+      .click();
     await expect(page.locator('body')).toHaveAttribute(
-      'data-classic-console-collapsed',
+      'data-classic-stow-bottom',
       'false'
     );
 
@@ -1449,19 +1453,27 @@ test.describe('Classic dock resizers (B4)', () => {
     const strip = page.locator('#classicBottomStrip');
     const resizedHeight = (await strip.boundingBox()).height;
 
-    const foldBtn = page.locator('#classicConsoleFoldBtn');
-    await expect(foldBtn).toHaveAttribute('aria-label', 'Fold bottom panels');
+    // UF-2b (Q-20c): the fold became the bottom field's stow — same D-8
+    // park/restore contract, new chrome.
+    const foldBtn = page.locator(
+      '.classic-stow-btn[data-classic-stow-field="bottom"]'
+    );
+    await expect(foldBtn).toHaveAttribute(
+      'aria-label',
+      'Stow the bottom panels'
+    );
     await foldBtn.click();
 
-    await expect(foldBtn).toHaveAttribute('aria-expanded', 'false');
-    // The fold animates, so the height has to be polled rather than sampled
-    await expect
-      .poll(async () => (await strip.boundingBox()).height)
-      .toBeLessThan(resizedHeight / 2);
-    // The separator steps aside while folded rather than fighting the token
+    // The strip leaves the layout entirely; the edge tab is the state's home.
+    await expect(strip).toBeHidden();
+    const tab = page.locator(
+      '.classic-stow-tab[data-classic-stow-field="bottom"]'
+    );
+    await expect(tab).toHaveAttribute('aria-expanded', 'false');
+    // The separator steps aside while stowed rather than fighting the token
     await expect(stripResizer).toBeHidden();
 
-    await foldBtn.click();
+    await tab.click();
     await expect(foldBtn).toHaveAttribute('aria-expanded', 'true');
     // Back to the height the user chose, not the default
     await expect
@@ -2299,9 +2311,12 @@ test.describe('Classic dock relocation (B6-B8)', () => {
     await expect(page.getByRole('tablist')).toHaveCount(0);
     await expect(page.locator('#classicConsoleSlot')).toBeVisible();
     await expect(page.locator('#classicErrorLogSlot')).toBeVisible();
-    // The Console's fold button came back out of the shared bar with it
+    // The bottom stow control came back out of the shared bar with it
+    // (UF-2b: the fold became the field's stow control)
     await expect(
-      page.locator('#classicConsoleSlot #classicConsoleFoldBtn')
+      page.locator(
+        '#classicConsoleSlot .classic-stow-btn[data-classic-stow-field="bottom"]'
+      )
     ).toBeVisible();
   });
 
