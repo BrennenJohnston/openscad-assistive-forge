@@ -3972,8 +3972,10 @@ async function initApp() {
         enabled: hasFile,
         tooltip: hasFile ? undefined : 'Open a file first',
         handler: () => {
+          // Never the transformer button: with a cached full render its
+          // action is 'download', and Render must not mean download (U-8a).
           const btn = document.getElementById('primaryActionBtn');
-          if (btn && !btn.disabled) btn.click();
+          if (btn && !btn.disabled) runFullRender();
         },
       },
       {
@@ -6614,6 +6616,7 @@ async function initApp() {
         'Generate is unavailable while viewing an STL file. Open a .scad model to generate designs.'
       );
       downloadFallbackLink.classList.add('hidden');
+      _dispatchRenderStateChange(false);
       return;
     }
     if (primaryActionBtn.dataset.stlViewDisabled) {
@@ -6683,6 +6686,21 @@ async function initApp() {
         downloadFallbackLink.classList.add('hidden');
       }
     }
+
+    _dispatchRenderStateChange(isStlFormat && hasFullQualityStl);
+  }
+
+  /**
+   * Announce render-state transitions to every surface that gates on them
+   * (the Classic STL buttons, U-8b). Dispatched from inside
+   * updatePrimaryActionButton() — the one place that computes the state —
+   * so the event can never drift from what the transformer shows.
+   * @param {boolean} hasFullRender
+   */
+  function _dispatchRenderStateChange(hasFullRender) {
+    document.dispatchEvent(
+      new CustomEvent('render-state-change', { detail: { hasFullRender } })
+    );
   }
 
   // Import shared validation schemas (FILE_SIZE_LIMITS is now imported at top of initApp() to avoid TDZ)
@@ -9344,6 +9362,11 @@ if (rounded) {
       getHasFullRender: () =>
         hasFullQualitySTLFor(stateManager.getState().parameters),
       triggerPreview: () => editorPreviewTrigger?.(),
+      triggerRender: () => {
+        if (primaryActionBtn && !primaryActionBtn.disabled) {
+          runFullRender();
+        }
+      },
       exportStl: () => exportFormatFromMenu('stl'),
     });
 
@@ -9568,7 +9591,7 @@ if (rounded) {
         .getElementById('classicRenderBtn')
         ?.addEventListener('click', () => {
           if (primaryActionBtn && !primaryActionBtn.disabled) {
-            primaryActionBtn.click();
+            runFullRender();
           }
         });
 
@@ -10446,7 +10469,21 @@ if (rounded) {
       return;
     }
 
-    // Generate action - perform full quality render for download
+    await runFullRender();
+  });
+
+  /**
+   * The full-quality render with all of its UI side effects and NO download
+   * side effect (U-8a). Extracted from the generate branch of the
+   * primaryActionBtn handler so every Render surface — Design ▸ Render, the
+   * rebindable `render` shortcut, and both Classic Render buttons — can
+   * render without going through the Generate↔Download transformer, whose
+   * meaning depends on state the user cannot see. Pressing Render used to
+   * trigger an STL save prompt whenever a full render was already cached.
+   */
+  async function runFullRender() {
+    const state = stateManager.getState();
+
     if (!state.uploadedFile) {
       showErrorToast({
         title: 'No File Uploaded',
@@ -10840,7 +10877,7 @@ if (rounded) {
       // Always restore button to correct state based on current conditions
       updatePrimaryActionButton();
     }
-  });
+  }
 
   // Cancel render button
   cancelRenderBtn.addEventListener('click', () => {
@@ -14470,7 +14507,7 @@ if (rounded) {
   keyboardConfig.on('render', () => {
     const state = stateManager.getState();
     if (state.uploadedFile && !primaryActionBtn.disabled) {
-      primaryActionBtn.click();
+      runFullRender();
     }
   });
 

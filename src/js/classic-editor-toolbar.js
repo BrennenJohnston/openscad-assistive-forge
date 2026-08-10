@@ -38,6 +38,7 @@ export class ClassicEditorToolbar {
    * @param {Function} deps.getState     - () => app state
    * @param {Function} deps.getHasFullRender - () => boolean
    * @param {Function} deps.triggerPreview   - the A4-rewired preview trigger
+   * @param {Function} deps.triggerRender    - runFullRender, never the transformer (U-8a)
    * @param {Function} deps.exportStl        - () => void
    */
   constructor(deps = {}) {
@@ -46,6 +47,7 @@ export class ClassicEditorToolbar {
     this.getState = deps.getState || (() => ({}));
     this.getHasFullRender = deps.getHasFullRender || (() => false);
     this.triggerPreview = deps.triggerPreview || (() => {});
+    this.triggerRender = deps.triggerRender || (() => {});
     this.exportStl = deps.exportStl || (() => {});
 
     /** @type {HTMLElement|null} */
@@ -135,10 +137,7 @@ export class ClassicEditorToolbar {
 
     // Same handler as Ctrl+Enter: flush the pending write-back, then preview
     click('classicEdPreviewBtn', () => this.triggerPreview());
-    click('classicEdRenderBtn', () => {
-      const primary = document.getElementById('primaryActionBtn');
-      if (primary && !primary.disabled) primary.click();
-    });
+    click('classicEdRenderBtn', () => this.triggerRender());
 
     click('classicEdExportStlBtn', () => this.exportStl());
     // DXF goes through the one-click 2D path, which already handles the 2D
