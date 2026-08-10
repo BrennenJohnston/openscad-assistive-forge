@@ -27,7 +27,13 @@ import { announceImmediate } from './announcer.js';
 const REASON_NOTHING_TO_UNDO = 'Nothing to undo';
 const REASON_NOTHING_TO_REDO = 'Nothing to redo';
 const REASON_BASIC_EDITOR = 'Not available in the basic text editor';
-const REASON_NEEDS_RENDER = 'Press Generate first to enable this export';
+/**
+ * Classic-truthful wording, owner-approved 2026-08-09 (Q-19): Classic has no
+ * Generate surface, so the old "Press Generate first…" named a control the
+ * user could not find. Exported because the top toolbar's STL button
+ * (main.js) gates on the same condition and must say the same thing.
+ */
+export const REASON_NEEDS_RENDER = 'Render the model first (F6)';
 const REASON_NEEDS_FILE = 'Open a file first';
 
 export class ClassicEditorToolbar {
@@ -67,12 +73,16 @@ export class ClassicEditorToolbar {
     this._wireActions();
     this._wireRovingTabindex();
 
-    // Enablement changes on every one of these, and nothing else re-checks it
+    // Enablement changes on every one of these, and nothing else re-checks it.
+    // render-state-change is the one that un-grays the STL button when a
+    // render completes (U-8b) — without it the button stayed gray until the
+    // next mode or density switch, regardless of renders.
     for (const evt of [
       'classic-editor-activate',
       'classic-editor-deactivate',
       'ui-mode-changed',
       'classic-density-change',
+      'render-state-change',
     ]) {
       this._on(document, evt, () => this.refresh());
     }

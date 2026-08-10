@@ -212,6 +212,7 @@ import { initClassicStatusBar } from './js/classic-status-bar.js';
 import {
   initClassicEditorToolbar,
   getClassicEditorToolbar,
+  REASON_NEEDS_RENDER as CLASSIC_STL_NEEDS_RENDER_REASON,
 } from './js/classic-editor-toolbar.js';
 import { FolderChangeWatcher } from './js/folder-change-watcher.js';
 import { FolderWriteBack } from './js/folder-write-back.js';
@@ -9367,7 +9368,11 @@ if (rounded) {
           runFullRender();
         }
       },
-      exportStl: () => exportFormatFromMenu('stl'),
+      // The button only enables once a full render exists (U-8b), so export
+      // downloads what is in hand and never quietly starts a render. File ▸
+      // Export ▸ STL keeps its owner-approved render-on-demand behavior —
+      // the menu and the toolbar deliberately differ.
+      exportStl: () => exportFormatFromMenu('stl', { renderIfNeeded: false }),
     });
 
     // Classic Font List panel (F3). Registering the sample faces costs no new
@@ -9479,9 +9484,46 @@ if (rounded) {
         ?.addEventListener('click', () =>
           document.getElementById('redoBtn')?.click()
         );
-      document
-        .getElementById('classicTbExportStlBtn')
-        ?.addEventListener('click', () => exportFormatFromMenu('stl'));
+      // U-8b: the desktop's Export STL exports a render that exists; ours
+      // gates the same way. aria-disabled + reason rather than disabled, so
+      // keyboard and screen-reader users can find the button and hear why
+      // (the editor toolbar's pattern). Enabled, it downloads the existing
+      // full render — never starts a fresh one.
+      const classicTbStlBtn = document.getElementById('classicTbExportStlBtn');
+      if (classicTbStlBtn) {
+        const reasonId = 'classicTbExportStlReason';
+        const reasonSpan = document.createElement('span');
+        reasonSpan.id = reasonId;
+        reasonSpan.className = 'sr-only';
+        reasonSpan.textContent = CLASSIC_STL_NEEDS_RENDER_REASON;
+        classicTbStlBtn.insertAdjacentElement('afterend', reasonSpan);
+
+        const refreshClassicTbStl = () => {
+          const armed = hasFullQualitySTLFor(
+            stateManager.getState().parameters
+          );
+          if (armed) {
+            classicTbStlBtn.removeAttribute('aria-disabled');
+            classicTbStlBtn.removeAttribute('aria-describedby');
+          } else {
+            classicTbStlBtn.setAttribute('aria-disabled', 'true');
+            classicTbStlBtn.setAttribute('aria-describedby', reasonId);
+          }
+        };
+        refreshClassicTbStl();
+        document.addEventListener('render-state-change', refreshClassicTbStl);
+
+        classicTbStlBtn.addEventListener('click', (event) => {
+          if (classicTbStlBtn.getAttribute('aria-disabled') === 'true') {
+            event.preventDefault();
+            announceImmediate(
+              `Export as STL unavailable. ${CLASSIC_STL_NEEDS_RENDER_REASON}`
+            );
+            return;
+          }
+          exportFormatFromMenu('stl', { renderIfNeeded: false });
+        });
+      }
 
       // Projection pair mirrors the preview manager's actual mode
       const perspBtn = document.getElementById('classicTbPerspectiveBtn');
