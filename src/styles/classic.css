@@ -868,6 +868,7 @@ body[data-ui-mode='classic'] .classic-camera-bar {
    Every button stays reachable: the roving arrow keys traverse the whole
    toolbar and the browser scrolls a focused button into view, so the keyboard
    path never depends on the scrollbar. */
+body[data-ui-mode='classic'] .classic-toolbar,
 body[data-ui-mode='classic'] .classic-camera-bar,
 body[data-ui-mode='classic'] .classic-editor-toolbar {
   flex-wrap: nowrap;
@@ -876,6 +877,7 @@ body[data-ui-mode='classic'] .classic-editor-toolbar {
   scrollbar-width: thin;
 }
 
+body[data-ui-mode='classic'] .classic-toolbar .classic-tb-group,
 body[data-ui-mode='classic'] .classic-camera-bar .classic-tb-group,
 body[data-ui-mode='classic'] .classic-editor-toolbar .classic-tb-group {
   flex: 0 0 auto;
@@ -1843,13 +1845,15 @@ body[data-ui-mode='classic'][data-classic-density='simplified']
   .classic-bottom-strip,
 body[data-ui-mode='classic'][data-classic-density='simplified']
   .classic-console-slot,
-/* Programmer toolbar buttons: file authoring and editor undo/redo */
+/* Programmer toolbar buttons: file authoring. The parameter Undo/Redo group
+   is no longer here — U-5/Q-18 made it Simplified-ONLY instead (see the
+   .classic-simplified-only rule below): in Standard the editor toolbar shows
+   its own Undo/Redo pair, and two visibly identical pairs was the reported
+   confusion. */
 body[data-ui-mode='classic'][data-classic-density='simplified']
   #classicTbNewBtn,
 body[data-ui-mode='classic'][data-classic-density='simplified']
   #classicTbSaveBtn,
-body[data-ui-mode='classic'][data-classic-density='simplified']
-  .classic-tb-group[aria-label='Edit'],
 /* Editor-toolbar equivalents. Moot while Simplified hides the editor slot
    outright, kept so the two hide-lists cannot drift apart if that changes. */
 body[data-ui-mode='classic'][data-classic-density='simplified']
@@ -1871,5 +1875,13 @@ body[data-ui-mode='classic'][data-classic-density='simplified']
   #classicMeasureDistBtn,
 body[data-ui-mode='classic'][data-classic-density='simplified']
   #classicMeasureAngleBtn {
+  display: none !important;
+}
+
+/* Simplified-only controls (U-5/Q-18): the top toolbar's parameter
+   Undo/Redo. Standard shows the editor toolbar's own Undo/Redo, so a
+   second pair up top read as duplicated buttons — the owner's report. */
+body[data-ui-mode='classic'][data-classic-density='standard']
+  .classic-simplified-only {
   display: none !important;
 }

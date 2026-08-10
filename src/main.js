@@ -9356,23 +9356,13 @@ if (rounded) {
     // Classic editor toolbar (D4). Dependencies are injected because they are
     // closures in here; the toolbar owns wiring and enablement only, never a
     // second implementation of any action.
+    // The workflow buttons (Preview/Render/STL/DXF) left this toolbar for
+    // the top Classic toolbar (U-5/Q-18a), taking their render-state deps
+    // with them.
     initClassicEditorToolbar({
       fileActionsController,
       getEditor: () => getModeManager()?.getEditorInstance?.() || null,
       getState: () => stateManager.getState(),
-      getHasFullRender: () =>
-        hasFullQualitySTLFor(stateManager.getState().parameters),
-      triggerPreview: () => editorPreviewTrigger?.(),
-      triggerRender: () => {
-        if (primaryActionBtn && !primaryActionBtn.disabled) {
-          runFullRender();
-        }
-      },
-      // The button only enables once a full render exists (U-8b), so export
-      // downloads what is in hand and never quietly starts a render. File ▸
-      // Export ▸ STL keeps its owner-approved render-on-demand behavior —
-      // the menu and the toolbar deliberately differ.
-      exportStl: () => exportFormatFromMenu('stl', { renderIfNeeded: false }),
     });
 
     // Classic Font List panel (F3). Registering the sample faces costs no new
@@ -9524,6 +9514,36 @@ if (rounded) {
           exportFormatFromMenu('stl', { renderIfNeeded: false });
         });
       }
+
+      // The workflow triad's other members (U-5, Q-18a).
+      document
+        .getElementById('classicTbPreviewBtn')
+        ?.addEventListener('click', () => {
+          const tbState = stateManager.getState();
+          if (!tbState.uploadedFile) return;
+          // Prefer the editor's own trigger: it flushes the pending
+          // write-back first, so Preview shows what is typed rather than
+          // the last published content — the reason the editor toolbar's
+          // Preview used it. Null until the expert block initializes
+          // (a Simplified-only session), where the plain path is right.
+          if (editorPreviewTrigger) {
+            editorPreviewTrigger();
+          } else if (autoPreviewController) {
+            autoPreviewController.onParameterChange(tbState.parameters);
+          }
+        });
+      document
+        .getElementById('classicTbRenderBtn')
+        ?.addEventListener('click', () => {
+          if (primaryActionBtn && !primaryActionBtn.disabled) {
+            runFullRender();
+          }
+        });
+      document
+        .getElementById('classicTbExportDxfBtn')
+        ?.addEventListener('click', () =>
+          fileActionsController.onExport2D?.('dxf')
+        );
 
       // Projection pair mirrors the preview manager's actual mode
       const perspBtn = document.getElementById('classicTbPerspectiveBtn');

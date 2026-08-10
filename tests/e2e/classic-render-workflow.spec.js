@@ -74,13 +74,10 @@ test('Render never downloads: all three Classic Render surfaces (U-8a)', async (
   await page.waitForTimeout(2_000)
   expect(downloads, 'Design ▸ Render must not download').toBe(0)
 
-  // The editor toolbar's Render button lives in the Standard density.
-  await page.locator('#classicDensityToggle').click()
-  const edRender = page.locator('#classicEdRenderBtn')
-  await expect(edRender).toBeVisible({ timeout: 10_000 })
-  await edRender.click()
+  // The top toolbar's own Render button (U-5 moved the triad here).
+  await page.locator('#classicTbRenderBtn').click()
   await page.waitForTimeout(2_000)
-  expect(downloads, 'editor-toolbar Render must not download').toBe(0)
+  expect(downloads, 'top-toolbar Render must not download').toBe(0)
 
   // The render pipeline stayed healthy through all three presses: the
   // transformer still reports an up-to-date full render.
@@ -117,16 +114,12 @@ test('STL buttons gate on render state and export without rendering (U-8b)', asy
 
   await page.locator('#classicModeToggle').click()
   await expect(page.locator('body')).toHaveAttribute('data-ui-mode', 'classic')
-  // Standard density so the editor toolbar (and its STL button) is on screen.
-  await page.locator('#classicDensityToggle').click()
 
   const topStl = page.locator('#classicTbExportStlBtn')
-  const edStl = page.locator('#classicEdExportStlBtn')
-  await expect(edStl).toBeVisible({ timeout: 10_000 })
+  await expect(topStl).toBeVisible({ timeout: 10_000 })
 
-  // Before any render: both gated, with the Classic-truthful reason (Q-19).
+  // Before any render: gated, with the Classic-truthful reason (Q-19).
   await expect(topStl).toHaveAttribute('aria-disabled', 'true')
-  await expect(edStl).toHaveAttribute('aria-disabled', 'true')
   await expect(page.locator('#classicTbExportStlReason')).toHaveText(
     'Render the model first (F6)'
   )
@@ -139,7 +132,6 @@ test('STL buttons gate on render state and export without rendering (U-8b)', asy
     { timeout: 120_000 }
   )
   await expect(topStl).not.toHaveAttribute('aria-disabled', 'true')
-  await expect(edStl).not.toHaveAttribute('aria-disabled', 'true')
 
   // Export downloads what exists; it must not start a render.
   await page.evaluate(() => {
@@ -175,9 +167,6 @@ test('STL buttons gate on render state and export without rendering (U-8b)', asy
   await expect(topStl).toHaveAttribute('aria-disabled', 'true', {
     timeout: 10_000,
   })
-  await expect(edStl).toHaveAttribute('aria-disabled', 'true', {
-    timeout: 10_000,
-  })
 
   // The keyboard path speaks the reason (Playwright refuses to .click() an
   // aria-disabled element; Enter is the path that matters anyway).
@@ -187,4 +176,92 @@ test('STL buttons gate on render state and export without rendering (U-8b)', asy
     'Render the model first (F6)',
     { timeout: 5_000 }
   )
+})
+
+// U-5/Q-18a: one home for the workflow. The top Classic toolbar owns
+// Preview/Render/STL/DXF in BOTH densities; the editor toolbar keeps only
+// text-editing ops + 3D Print; parameter Undo/Redo is Simplified-only
+// (Standard shows the editor's own Undo/Redo pair instead). The camera
+// bar's Preview/Render duplication is the desktop's own and stays.
+test('one home per workflow action across the Classic toolbars (U-5)', async ({
+  page,
+}) => {
+  test.setTimeout(300_000)
+
+  await page.goto('/')
+  await page.waitForSelector('body[data-wasm-ready="true"]', {
+    state: 'attached',
+    timeout: WASM_READY_TIMEOUT,
+  })
+  await page.setInputFiles('#fileInput', FIXTURE)
+  await expect(page.locator('#mainInterface')).toBeVisible({ timeout: 30_000 })
+  const notNow = page.locator('#saveProjectNotNow')
+  try {
+    await notNow.waitFor({ state: 'visible', timeout: 3_000 })
+    await notNow.click()
+  } catch {
+    // No save-project modal to dismiss.
+  }
+  await page.locator('#classicModeToggle').click()
+  await expect(page.locator('body')).toHaveAttribute('data-ui-mode', 'classic')
+
+  // Simplified: the triad + DXF are here, and so is parameter Undo/Redo.
+  const toolbar = page.locator('#classicToolbar')
+  for (const id of [
+    'classicTbPreviewBtn',
+    'classicTbRenderBtn',
+    'classicTbExportStlBtn',
+    'classicTbExportDxfBtn',
+    'classicTbUndoBtn',
+    'classicTbRedoBtn',
+  ]) {
+    await expect(toolbar.locator(`#${id}`), id).toBeVisible()
+  }
+
+  // The editor toolbar's copies are gone from the DOM entirely.
+  for (const id of [
+    'classicEdPreviewBtn',
+    'classicEdRenderBtn',
+    'classicEdExportStlBtn',
+    'classicEdExportDxfBtn',
+  ]) {
+    await expect(page.locator(`#${id}`), id).toHaveCount(0)
+  }
+
+  // Standard: the triad stays, parameter Undo/Redo yields to the editor's.
+  await page.locator('#classicDensityToggle').click()
+  await expect(page.locator('body')).toHaveAttribute(
+    'data-classic-density',
+    'standard'
+  )
+  await expect(toolbar.locator('#classicTbPreviewBtn')).toBeVisible()
+  await expect(toolbar.locator('#classicTbRenderBtn')).toBeVisible()
+  await expect(toolbar.locator('#classicTbUndoBtn')).toBeHidden()
+  await expect(page.locator('#classicEdUndoBtn')).toBeVisible({
+    timeout: 10_000,
+  })
+
+  // The moved Render fires the real render pipeline (P4's runFullRender).
+  await page.locator('#classicTbRenderBtn').click()
+  await expect(page.locator('#primaryActionBtn')).toHaveAttribute(
+    'data-action',
+    'download',
+    { timeout: 120_000 }
+  )
+
+  // Roving arrows still walk the reshaped top toolbar.
+  await page.locator('#classicTbNewBtn').focus()
+  const visited = new Set()
+  for (let i = 0; i < 12; i++) {
+    await page.keyboard.press('ArrowRight')
+    const active = await page.evaluate(() => ({
+      id: document.activeElement?.id ?? '',
+      inToolbar: Boolean(document.activeElement?.closest('#classicToolbar')),
+    }))
+    expect(active.inToolbar, 'arrow stays inside the toolbar').toBe(true)
+    visited.add(active.id)
+  }
+  expect(visited.has('classicTbPreviewBtn')).toBe(true)
+  expect(visited.has('classicTbRenderBtn')).toBe(true)
+  expect(visited.has('classicTbExportDxfBtn')).toBe(true)
 })
