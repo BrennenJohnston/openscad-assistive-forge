@@ -37,15 +37,19 @@ const TITLEBAR_CLASS = 'classic-pane-titlebar';
 const MENU_ITEM_SELECTOR = '[role="menuitem"]';
 
 /**
- * Where the ⋮ belongs in a title bar. The owner's order (Q-1, 2026-08-08) is
- * `[title …spacer… collapse ▾ | ⋮ | ✕]`: the ⋮ follows the bar's disclosure
- * controls and precedes its close button, and ✕ ends up hard against the right
- * edge as it is on the desktop (D1). Before this the ⋮ was simply appended,
- * which put it to the RIGHT of every ✕.
+ * Where the ⋮ belongs in a title bar. The owner's order (Q-1, 2026-08-08,
+ * extended by Q-20b) is `[title …spacer… collapse ▾ | ⋮ | ✕ | stow »]`: the ⋮
+ * follows the bar's disclosure controls and precedes its close button, and
+ * the field-stow control holds the bar's outer corner past everything else.
+ * Before this the ⋮ was simply appended, which put it to the RIGHT of every ✕.
  *
  * A disclosure is told apart by the `aria-expanded` it must carry to be one at
  * all, rather than by a list of button ids that would rot the next time a pane
- * gains a control. Close buttons carry no such state.
+ * gains a control. Close buttons carry no such state. The stow control DOES
+ * carry aria-expanded, but when it holds the bar's END it marks the outer
+ * corner (Q-20b) and stops the walk the way a ✕ does — otherwise a bar with
+ * no ✕ would append the ⋮ after it. A left-edge stow control sits FIRST in
+ * its bar and is skipped like any other disclosure.
  *
  * @param {Element} bar
  * @returns {Element|null} the node to insert before; null means append
@@ -54,7 +58,12 @@ function menuInsertionPoint(bar) {
   for (const child of bar.children) {
     if (child.tagName !== 'BUTTON') continue;
     if (child.classList.contains(MENU_BTN_CLASS)) continue;
-    if (child.hasAttribute('aria-expanded')) continue;
+    if (child.hasAttribute('aria-expanded')) {
+      const stowAtEnd =
+        child.classList.contains('classic-stow-btn') &&
+        child === bar.lastElementChild;
+      if (!stowAtEnd) continue;
+    }
     return child;
   }
   return null;

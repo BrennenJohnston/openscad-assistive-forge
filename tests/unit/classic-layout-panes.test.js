@@ -153,3 +153,122 @@ describe('ClassicLayoutController pane visibility (B3)', () => {
     expect(document.body.dataset.classicFieldRightTop).toBe('occupied');
   });
 });
+
+describe('ClassicLayoutController field stow (UF-2a, U-6/Q-20)', () => {
+  beforeEach(() => {
+    density = 'standard';
+    announceImmediate.mockClear();
+    localStorage.clear();
+    for (const attr of Array.from(document.body.attributes)) {
+      if (attr.name.startsWith('data-classic')) {
+        document.body.removeAttribute(attr.name);
+      }
+    }
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  it('starts every field un-stowed', () => {
+    const controller = new ClassicLayoutController();
+
+    expect(controller.isFieldStowed('left')).toBe(false);
+    expect(controller.isFieldStowed('right-top')).toBe(false);
+    expect(controller.isFieldStowed('right-bottom')).toBe(false);
+  });
+
+  it('stowing a field reports it empty to the grid and announces once', () => {
+    const controller = new ClassicLayoutController();
+    controller.toggleAnimate(); // any toggle stamps the attributes
+    expect(document.body.dataset.classicFieldLeft).toBe('occupied');
+
+    expect(controller.toggleFieldStowed('left')).toBe(true);
+
+    // 'empty' hands the field's tracks to the 3D view and display:nones its
+    // container — the R-III keyboard-trap fix comes with it.
+    expect(document.body.dataset.classicFieldLeft).toBe('empty');
+    expect(document.body.dataset.classicStowLeft).toBe('true');
+    expect(announceImmediate).toHaveBeenCalledWith('Left column stowed');
+    expect(
+      announceImmediate.mock.calls.filter(([m]) => m === 'Left column stowed')
+    ).toHaveLength(1);
+
+    expect(controller.toggleFieldStowed('left')).toBe(false);
+    expect(document.body.dataset.classicFieldLeft).toBe('occupied');
+    expect(document.body.dataset.classicStowLeft).toBe('false');
+    expect(announceImmediate).toHaveBeenCalledWith('Left column restored');
+  });
+
+  it('persists stow state and hydrates it into a fresh controller', () => {
+    const first = new ClassicLayoutController();
+    first.toggleFieldStowed('right-top');
+
+    expect(JSON.parse(localStorage.getItem(PANES_KEY)).stowRightTop).toBe(true);
+
+    const second = new ClassicLayoutController();
+    expect(second.isFieldStowed('right-top')).toBe(true);
+    expect(second.isFieldStowed('left')).toBe(false);
+  });
+
+  it('hydrates a preference written before the stow keys existed', () => {
+    localStorage.setItem(
+      PANES_KEY,
+      JSON.stringify({
+        editorVisible: true,
+        customizerVisible: true,
+        consoleCollapsed: false,
+      })
+    );
+
+    const controller = new ClassicLayoutController();
+
+    expect(controller.isFieldStowed('left')).toBe(false);
+    expect(controller.isFieldStowed('right-top')).toBe(false);
+    expect(controller.isFieldStowed('right-bottom')).toBe(false);
+    expect(controller.isEditorVisible()).toBe(true);
+  });
+
+  it('refuses an unknown field name rather than inventing state', () => {
+    const controller = new ClassicLayoutController();
+
+    expect(controller.toggleFieldStowed('nowhere')).toBe(false);
+    expect(controller.isFieldStowed('nowhere')).toBe(false);
+    expect(localStorage.getItem(PANES_KEY)).toBeNull();
+  });
+
+  it('the bottom stow rides the historical consoleCollapsed key (UF-2b, Q-20c)', () => {
+    const controller = new ClassicLayoutController();
+
+    expect(controller.toggleFieldStowed('bottom')).toBe(true);
+    expect(controller.isConsoleCollapsed()).toBe(true);
+    expect(document.body.dataset.classicStowBottom).toBe('true');
+    expect(document.body.dataset.classicFieldBottom).toBe('empty');
+    expect(announceImmediate).toHaveBeenCalledWith('Bottom panels stowed');
+    expect(
+      JSON.parse(localStorage.getItem(PANES_KEY)).consoleCollapsed
+    ).toBe(true);
+
+    // The programmatic wrapper (the Error-Log jump) restores it...
+    expect(controller.setConsoleCollapsed(false)).toBe(false);
+    expect(document.body.dataset.classicFieldBottom).toBe('occupied');
+    expect(announceImmediate).toHaveBeenCalledWith('Bottom panels restored');
+
+    // ...and a same-state call is a no-op, not a repeat announcement.
+    announceImmediate.mockClear();
+    expect(controller.setConsoleCollapsed(false)).toBe(false);
+    expect(announceImmediate).not.toHaveBeenCalled();
+  });
+
+  it('a pre-UF-2 folded preference hydrates as the bottom stow', () => {
+    localStorage.setItem(
+      PANES_KEY,
+      JSON.stringify({ consoleCollapsed: true })
+    );
+
+    const controller = new ClassicLayoutController();
+
+    expect(controller.isFieldStowed('bottom')).toBe(true);
+    expect(controller.isConsoleCollapsed()).toBe(true);
+  });
+});

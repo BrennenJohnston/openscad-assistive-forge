@@ -56,6 +56,80 @@ const PANES_STORAGE_KEY = 'openscad-forge-classic-panes';
 const TITLEBAR_CLASS = 'classic-pane-titlebar';
 const TITLE_CLASS = 'classic-pane-title';
 const COLLAPSE_BTN_CLASS = 'classic-pane-collapse-btn';
+const STOW_BTN_CLASS = 'classic-stow-btn';
+const STOW_TAB_CLASS = 'classic-stow-tab';
+const STOW_RAIL_CLASS = 'classic-stow-rail';
+
+/**
+ * The dock fields that stow toward their own edge (U-6/Q-20, UF-2a). Stowing
+ * removes the whole FIELD from the layout — its space goes to the 3D view —
+ * leaving a labelled un-stow tab on the field's edge rail. Distinct from the
+ * per-panel ▾ collapse (one pane's body, bar stays put) and from the strip
+ * fold (which becomes the bottom field's stow in UF-2b, per Q-20c).
+ *
+ * Glyphs are text, not SVG (Q-20a, same R-I rule as ▾/▸), and point where the
+ * content will GO: « stows the left field, » brings it back; ⌄ stows the
+ * bottom strip, ⌃ brings it back.
+ *
+ * The bottom entry IS the old strip fold (Q-20c: one mechanism, converted in
+ * UF-2b) — its `paneKey` keeps the historical `consoleCollapsed` name so a
+ * pre-UF-2 folded preference hydrates as stowed, and D-8's height
+ * park/restore rides the same toggle.
+ *
+ * `subject` is the announcement noun; `positionLabel` feeds the control and
+ * tab names. NEW STRINGS, owner review pending (D-35).
+ *
+ * `paneKey` joins `openscad-forge-classic-panes`; a preference saved before
+ * these keys existed hydrates without them.
+ * @type {ReadonlyArray<{name: string, paneKey: string,
+ *   edge: 'left'|'right'|'bottom', glyphStow: string, glyphRestore: string,
+ *   subject: string, positionLabel: string}>}
+ */
+const STOW_FIELDS = Object.freeze([
+  {
+    name: 'left',
+    paneKey: 'stowLeft',
+    edge: 'left',
+    glyphStow: '«',
+    glyphRestore: '»',
+    subject: 'Left column',
+    positionLabel: 'left column',
+  },
+  {
+    name: 'right-top',
+    paneKey: 'stowRightTop',
+    edge: 'right',
+    glyphStow: '»',
+    glyphRestore: '«',
+    subject: 'Upper right',
+    positionLabel: 'upper right',
+  },
+  {
+    name: 'right-bottom',
+    paneKey: 'stowRightBottom',
+    edge: 'right',
+    glyphStow: '»',
+    glyphRestore: '«',
+    subject: 'Lower right',
+    positionLabel: 'lower right',
+  },
+  {
+    name: 'bottom',
+    paneKey: 'consoleCollapsed',
+    edge: 'bottom',
+    glyphStow: '⌄',
+    glyphRestore: '⌃',
+    subject: 'Bottom panels',
+    positionLabel: 'bottom panels',
+  },
+]);
+
+/** The edge rails holding the un-stow tabs of stowed fields. */
+const STOW_RAIL_IDS = Object.freeze({
+  left: 'classicStowRailLeft',
+  right: 'classicStowRailRight',
+  bottom: 'classicStowRailBottom',
+});
 
 /**
  * Panels whose title bar carries a per-panel collapse disclosure (D3 — an
@@ -126,7 +200,9 @@ const SLOT_DEFS = [
     label: 'Console',
     panelId: 'consolePanel',
     parentId: BOTTOM_STRIP_ID,
-    titlebar: { text: 'Console', foldBtnId: 'classicConsoleFoldBtn' },
+    // The fold button this bar carried through R2a–UF-1 became the bottom
+    // field's stow control in UF-2b (Q-20c) — _ensureStowButtons owns it now.
+    titlebar: { text: 'Console' },
   },
   {
     // The inner live region moves, not the tabpanel wrapper — moving
@@ -454,6 +530,12 @@ export class ClassicLayoutController {
     // for the ⋮ to land to the right of them on a first entry.
     this._ensureCollapseButtons();
 
+    // Stow machinery (UF-2a): the rails first, so a hydrated stow preference
+    // has somewhere to hang its un-stow tab, then the title-bar controls.
+    this._ensureStowRails();
+    this._ensureStowButtons();
+    this._refreshStowRails();
+
     // The title-bar menus are the only way to relocate a panel this round
     // (D-3), so they go on last, once every title bar exists.
     initClassicPanelMenus({
@@ -493,6 +575,8 @@ export class ClassicLayoutController {
     // the exit, so a button left on it would follow the user into Forge.
     destroyClassicPanelMenus();
     this._destroyCollapseButtons();
+    this._destroyStowButtons();
+    this._destroyStowRails();
     this._dock.dissolveTabGroups();
 
     for (const record of [...this._moved].reverse()) {
@@ -529,12 +613,12 @@ export class ClassicLayoutController {
 
     delete document.body.dataset.classicEditorHidden;
     delete document.body.dataset.classicCustomizerHidden;
-    delete document.body.dataset.classicConsoleCollapsed;
     delete document.body.dataset.classicAnimateVisible;
     delete document.body.dataset.classicFontListVisible;
     delete document.body.dataset.classicViewportControlVisible;
     for (const field of DOCK_FIELDS) {
       delete document.body.dataset[`classicField${field.datasetSuffix}`];
+      delete document.body.dataset[`classicStow${field.datasetSuffix}`];
     }
 
     // The panel is handed back exactly as found — tab selection included.
@@ -679,6 +763,7 @@ export class ClassicLayoutController {
     // A button that has just been created carries no state yet, and a bar that
     // has just been rebuilt may hold one whose panel has changed underneath it.
     this._applyCollapseState();
+    this._ensureStowButtons();
     getClassicPanelMenus()?.refresh();
   }
 
@@ -772,6 +857,151 @@ export class ClassicLayoutController {
   }
 
   /**
+   * Put a stow control on each stowable field's FIRST title bar (Q-20b: the
+   * outer-edge corner — far-left of the left field's bar, far-right of the
+   * right fields'), and keep its name current. Bars rebuild on merges, so this
+   * runs on the title-bar lifecycle and removes strays it left behind.
+   * @private
+   */
+  _ensureStowButtons() {
+    for (const def of STOW_FIELDS) {
+      const field = DOCK_FIELDS.find((f) => f.name === def.name);
+      const container = document.getElementById(field.elementId);
+      if (!container) continue;
+
+      const bar = container.querySelector(`.${TITLEBAR_CLASS}`);
+      let btn = bar ? bar.querySelector(`.${STOW_BTN_CLASS}`) : null;
+      if (bar && !btn) {
+        btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `btn btn-sm btn-icon classic-pane-btn ${STOW_BTN_CLASS}`;
+        btn.dataset.classicStowField = def.name;
+        // Text glyph, not SVG (Q-20a) — the R-I rule: a stylesheet that fails
+        // to load must not leave a blank button. aria-expanded carries the
+        // state; the bar being visible at all means the field is expanded.
+        const glyph = document.createElement('span');
+        glyph.className = 'classic-stow-glyph';
+        glyph.setAttribute('aria-hidden', 'true');
+        glyph.textContent = def.glyphStow;
+        btn.appendChild(glyph);
+        btn.addEventListener('click', () => this.toggleFieldStowed(def.name));
+        // Q-20b: the control sits nearest the edge the field stows toward.
+        // The ⋮ skips aria-expanded buttons when placing itself, so this
+        // leaves the owner's Q-1 order [title … ▾ ⋮ ✕] intact either side.
+        if (def.edge === 'left') {
+          bar.insertBefore(btn, bar.firstChild);
+        } else {
+          bar.appendChild(btn);
+        }
+      }
+      if (btn) {
+        btn.setAttribute('aria-expanded', 'true');
+        // NEW STRING, owner review pending (D-35).
+        const label = `Stow the ${def.positionLabel}`;
+        btn.setAttribute('aria-label', label);
+        btn.setAttribute('title', label);
+      }
+      // A merge rebuild can leave a button on a bar that is no longer the
+      // field's first; one control per field.
+      for (const stray of container.querySelectorAll(`.${STOW_BTN_CLASS}`)) {
+        if (stray !== btn) stray.remove();
+      }
+    }
+  }
+
+  /** @private */
+  _destroyStowButtons() {
+    for (const btn of document.querySelectorAll(`.${STOW_BTN_CLASS}`)) {
+      btn.remove();
+    }
+  }
+
+  /**
+   * Create the edge rails the un-stow tabs live on. They overlay the grid's
+   * left/right edges (classic.css) and are removed on exit — #mainInterface
+   * outlives Classic, so they cannot be left behind.
+   * @private
+   */
+  _ensureStowRails() {
+    const mainInterface = document.getElementById('mainInterface');
+    if (!mainInterface) return;
+    for (const edge of Object.keys(STOW_RAIL_IDS)) {
+      if (document.getElementById(STOW_RAIL_IDS[edge])) continue;
+      const rail = document.createElement('div');
+      rail.id = STOW_RAIL_IDS[edge];
+      rail.className = `${STOW_RAIL_CLASS} ${STOW_RAIL_CLASS}--${edge}`;
+      mainInterface.appendChild(rail);
+    }
+  }
+
+  /** @private */
+  _destroyStowRails() {
+    for (const edge of Object.keys(STOW_RAIL_IDS)) {
+      document.getElementById(STOW_RAIL_IDS[edge])?.remove();
+    }
+  }
+
+  /**
+   * Reconcile the rails' un-stow tabs with the stow state: one labelled tab
+   * per stowed, occupied field (an empty field has nothing to restore, so a
+   * stowed-but-emptied field shows no tab until a pane returns to it).
+   * Reconciles rather than rebuilds — this runs from _applyPaneAttributes,
+   * and rebuilding would destroy a tab the user has focused.
+   * @private
+   */
+  _refreshStowRails() {
+    const occupancy = this._fieldOccupancy();
+    for (const def of STOW_FIELDS) {
+      const rail = document.getElementById(STOW_RAIL_IDS[def.edge]);
+      if (!rail) continue;
+      const show = Boolean(this._panes[def.paneKey]) && occupancy[def.name];
+
+      let tab = rail.querySelector(
+        `[data-classic-stow-field="${def.name}"]`
+      );
+      if (!show) {
+        tab?.remove();
+        continue;
+      }
+      if (!tab) {
+        tab = document.createElement('button');
+        tab.type = 'button';
+        tab.className = STOW_TAB_CLASS;
+        tab.dataset.classicStowField = def.name;
+        tab.setAttribute('aria-expanded', 'false');
+        const glyph = document.createElement('span');
+        glyph.className = 'classic-stow-glyph';
+        glyph.setAttribute('aria-hidden', 'true');
+        glyph.textContent = def.glyphRestore;
+        const label = document.createElement('span');
+        label.className = 'classic-stow-tab-label';
+        tab.append(glyph, label);
+        tab.addEventListener('click', () => this.toggleFieldStowed(def.name));
+        // Rail order follows field order (right-top above right-bottom):
+        // insert before the first tab of a later field, else append.
+        const later = STOW_FIELDS.slice(STOW_FIELDS.indexOf(def) + 1)
+          .map((f) =>
+            rail.querySelector(`[data-classic-stow-field="${f.name}"]`)
+          )
+          .find(Boolean);
+        rail.insertBefore(tab, later || null);
+      }
+      // The visible label names what is inside; the accessible name starts
+      // with it (SC 2.5.3) and says what pressing does. NEW STRINGS, owner
+      // review pending (D-35).
+      const contents = (this.getArrangement()[def.name] || [])
+        .flat()
+        .filter((id) => this._isPanelVisible(id))
+        .map((id) => panelLabel(id))
+        .join(', ');
+      tab.querySelector('.classic-stow-tab-label').textContent = contents;
+      const name = `${contents}. Restore the ${def.positionLabel}`;
+      tab.setAttribute('aria-label', name);
+      tab.setAttribute('title', name);
+    }
+  }
+
+  /**
    * Collapse/expand a panel's body, leaving its title bar in place (D3). A
    * merged field collapses as one field per Q-1, so every panel sharing the
    * bar moves together — otherwise switching tabs inside a collapsed field
@@ -801,30 +1031,97 @@ export class ClassicLayoutController {
   }
 
   /**
-   * Fold/unfold the bottom strip (titlebar button). Per D-8 this folds the
-   * whole strip, not the Console pane alone — the storage key and data
-   * attribute keep their historical `console` names so existing preferences
-   * survive. Wording owner-approved 2026-08-06.
+   * Programmatic strip stow/restore. The strip FOLD became the bottom field's
+   * stow in UF-2b (Q-20c: one mechanism); this wrapper keeps the historical
+   * API for callers like the Error-Log jump, which restores the strip before
+   * moving focus into it and must not have its focus stolen. The storage key
+   * keeps its historical `console` name so existing preferences survive
+   * (D-8's rule) — a profile folded before UF-2 hydrates as stowed.
    */
   setConsoleCollapsed(collapsed) {
-    this._panes.consoleCollapsed = Boolean(collapsed);
+    const def = STOW_FIELDS.find((f) => f.name === 'bottom');
+    if (Boolean(collapsed) === Boolean(this._panes[def.paneKey])) {
+      return this._panes[def.paneKey];
+    }
+    return this._setFieldStowed(def, Boolean(collapsed), { focus: false });
+  }
 
-    // The fold and the row resizer both own --classic-row-bottom, so the
-    // resizer parks its value for the duration instead of the two writing
-    // over each other. Unfolding returns the height the user chose, not the
-    // default (B4/D-8).
-    const resizers = getClassicResizerController();
-    if (this._panes.consoleCollapsed) resizers?.parkBottomSize();
-    else resizers?.restoreBottomSize();
+  /**
+   * Whether a dock field is stowed to its edge (UF-2a/b).
+   * @param {string} fieldName - 'left' | 'right-top' | 'right-bottom' | 'bottom'
+   * @returns {boolean}
+   */
+  isFieldStowed(fieldName) {
+    const def = STOW_FIELDS.find((f) => f.name === fieldName);
+    return def ? Boolean(this._panes[def.paneKey]) : false;
+  }
+
+  /**
+   * Stow a field toward its edge, or bring it back (U-6/Q-20). The field's
+   * whole content leaves the layout AND the tab order; the un-stow tab on the
+   * edge rail is the way back. Focus follows the action to the control that
+   * undoes it, so the keyboard user is never left on a control that just
+   * display:none'd itself.
+   * @param {string} fieldName - 'left' | 'right-top' | 'right-bottom' | 'bottom'
+   * @returns {boolean} the new stowed state
+   */
+  toggleFieldStowed(fieldName) {
+    const def = STOW_FIELDS.find((f) => f.name === fieldName);
+    if (!def) return false;
+    return this._setFieldStowed(def, !this._panes[def.paneKey], {
+      focus: true,
+    });
+  }
+
+  /**
+   * @param {(typeof STOW_FIELDS)[number]} def
+   * @param {boolean} stowed
+   * @param {{focus?: boolean}} [options] - focus:false for programmatic
+   *   callers (the Error-Log jump), which manage focus themselves
+   * @returns {boolean}
+   * @private
+   */
+  _setFieldStowed(def, stowed, { focus = true } = {}) {
+    this._panes[def.paneKey] = stowed;
+
+    // D-8: the bottom stow and the row resizer both own --classic-row-bottom,
+    // so the resizer parks its value for the duration. Un-stowing returns the
+    // height the user chose, not the default.
+    if (def.name === 'bottom') {
+      const resizers = getClassicResizerController();
+      if (stowed) resizers?.parkBottomSize();
+      else resizers?.restoreBottomSize();
+    }
 
     this._applyPaneAttributes();
+    this._refreshTitlebarControls();
     this._savePaneState();
+    // The 3D view's track just changed size (B5).
+    document.dispatchEvent(new CustomEvent('classic-layout-resize'));
+
+    // NEW STRINGS, owner review pending (D-35). announceImmediate for the
+    // same reason the collapse uses it: a debounced disclosure that sometimes
+    // says nothing is worse than one that repeats.
     announceImmediate(
-      this._panes.consoleCollapsed
-        ? 'Bottom panels folded'
-        : 'Bottom panels unfolded'
+      stowed ? `${def.subject} stowed` : `${def.subject} restored`
     );
-    return this._panes.consoleCollapsed;
+
+    if (focus) {
+      if (stowed) {
+        document
+          .querySelector(
+            `.${STOW_TAB_CLASS}[data-classic-stow-field="${def.name}"]`
+          )
+          ?.focus();
+      } else {
+        const field = DOCK_FIELDS.find((f) => f.name === def.name);
+        document
+          .getElementById(field.elementId)
+          ?.querySelector(`.${STOW_BTN_CLASS}`)
+          ?.focus();
+      }
+    }
+    return stowed;
   }
 
   /**
@@ -902,6 +1199,14 @@ export class ClassicLayoutController {
   movePanel(panelId, targetField, index = null, options = {}) {
     const result = this._dock.movePanel(panelId, targetField, index, options);
     if (!result.ok) return result;
+
+    // A stowed target would swallow the panel invisibly (its field is
+    // display:none), so landing there brings the field back first (UF-2a).
+    const stowDef = STOW_FIELDS.find((f) => f.name === targetField);
+    if (stowDef && this._panes[stowDef.paneKey]) {
+      this._panes[stowDef.paneKey] = false;
+      this._savePaneState();
+    }
 
     this._dock.save();
     this._dock.applyToDom();
@@ -1032,7 +1337,6 @@ export class ClassicLayoutController {
     body.dataset.classicCustomizerHidden = String(
       !this._panes.customizerVisible
     );
-    body.dataset.classicConsoleCollapsed = String(this._panes.consoleCollapsed);
 
     // Simplified hides Viewport-Control without clearing its preference, so
     // the visible-attribute follows the same rule the occupancy does.
@@ -1044,20 +1348,32 @@ export class ClassicLayoutController {
       this._panes.viewportControlVisible && !simplified
     );
 
+    // A stowed field reports 'empty' so the existing track math hands its
+    // space to the 3D view — and the empty-field display:none rule takes its
+    // content out of the tab order (the R-III trap fix, free of charge).
+    // Desktop only: below the breakpoint occupancy stays truthful and the
+    // STOW attributes alone drive the stacked presentation (UF-2c) — a
+    // stowed section leaves the flow and its rail renders as a full-width
+    // restore bar in the field's stack position, so a stowed preference can
+    // never strand a pane unreachable. _checkBreakpoint re-stamps on every
+    // crossing.
     const occupancy = this._fieldOccupancy();
+    const desktop = this._isDesktopWidth();
     for (const field of DOCK_FIELDS) {
-      body.dataset[`classicField${field.datasetSuffix}`] = occupancy[field.name]
-        ? 'occupied'
-        : 'empty';
+      const stowed = desktop && this.isFieldStowed(field.name);
+      body.dataset[`classicField${field.datasetSuffix}`] =
+        occupancy[field.name] && !stowed ? 'occupied' : 'empty';
     }
-
-    const foldBtn = document.getElementById('classicConsoleFoldBtn');
-    if (foldBtn) {
-      foldBtn.setAttribute(
-        'aria-expanded',
-        String(!this._panes.consoleCollapsed)
+    // EFFECTIVE stow, not the raw preference: a stowed field whose panes are
+    // all hidden has no tab to restore it, so the attribute (which drives the
+    // rails AND the sibling-pinning grid rules) must not fire for it.
+    for (const def of STOW_FIELDS) {
+      const field = DOCK_FIELDS.find((f) => f.name === def.name);
+      body.dataset[`classicStow${field.datasetSuffix}`] = String(
+        Boolean(this._panes[def.paneKey]) && Boolean(occupancy[def.name])
       );
     }
+    this._refreshStowRails();
 
     this._applyCollapseState();
   }
@@ -1219,6 +1535,11 @@ export class ClassicLayoutController {
       animateVisible: false,
       fontListVisible: false,
       viewportControlVisible: false,
+      // Field stow (UF-2a). Absent from pre-UF-2 preferences; each key is
+      // validated on its own below, so old profiles hydrate to false.
+      stowLeft: false,
+      stowRightTop: false,
+      stowRightBottom: false,
       // Per-panel collapse (D3), every panel open to begin with. Written into
       // the same key as the rest; a preference saved before these existed
       // hydrates without them, because each key is validated on its own.
@@ -1273,25 +1594,6 @@ export class ClassicLayoutController {
         title.textContent = def.titlebar.text;
         bar.appendChild(title);
 
-        if (def.titlebar.foldBtnId) {
-          const fold = document.createElement('button');
-          fold.type = 'button';
-          fold.id = def.titlebar.foldBtnId;
-          fold.className = 'btn btn-sm btn-icon classic-pane-btn';
-          // Static name + aria-expanded is the APG disclosure pattern; the
-          // state is not repeated in the name. D-8: this folds the whole
-          // strip, so the name does not mention Console.
-          fold.setAttribute('aria-label', 'Fold bottom panels');
-          // The other half of the owner's 2026-08-08 decision to leave both
-          // strip glyphs as ▾: this one's scope is only knowable from its name.
-          fold.setAttribute('title', 'Fold bottom panels');
-          fold.setAttribute('aria-expanded', 'true');
-          fold.textContent = '▾';
-          fold.addEventListener('click', () => {
-            this.setConsoleCollapsed(!this._panes.consoleCollapsed);
-          });
-          bar.appendChild(fold);
-        }
         if (def.titlebar.closeBtnId) {
           const close = document.createElement('button');
           close.type = 'button';
