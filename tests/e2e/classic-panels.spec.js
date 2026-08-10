@@ -173,9 +173,11 @@ function readTitlebars(page) {
           .map((el) => ({
             kind: el.classList.contains('classic-panel-menu-btn')
               ? 'menu'
-              : el.hasAttribute('aria-expanded')
-                ? 'disclosure'
-                : 'close',
+              : el.classList.contains('classic-stow-btn')
+                ? 'stow'
+                : el.hasAttribute('aria-expanded')
+                  ? 'disclosure'
+                  : 'close',
             name: el.getAttribute('aria-label'),
             box: box(el),
           })),
@@ -214,13 +216,35 @@ test.describe('Title-bar control order (P3)', () => {
       const close = bar.controls.find((c) => c.kind === 'close');
 
       // D1: on the desktop every dock title bar's ✕ is hard against the right
-      // edge. Ours may sit one padding token in, no further.
+      // edge. Ours may sit one padding token in, no further. Q-20b (UF-2a)
+      // extends the order: a right-edge field-stow control may hold the outer
+      // corner PAST the ✕ — the ✕ is then hard against the stow control, and
+      // the stow control is hard against the edge.
+      const trailingStow =
+        bar.controls.length &&
+        bar.controls[bar.controls.length - 1].kind === 'stow'
+          ? bar.controls[bar.controls.length - 1]
+          : null;
+      if (trailingStow) {
+        const stowInset = bar.bar.right - trailingStow.box.right;
+        expect(
+          stowInset,
+          `${bar.title}: stow control right edge is ${stowInset}px from the bar edge`
+        ).toBeLessThanOrEqual(6);
+        expect(
+          stowInset,
+          `${bar.title}: stow control overflows the bar`
+        ).toBeGreaterThanOrEqual(0);
+      }
       if (close) {
         barsWithClose += 1;
-        const inset = bar.bar.right - close.box.right;
+        const rightAnchor = trailingStow ? trailingStow.box.left : bar.bar.right;
+        const inset = rightAnchor - close.box.right;
         expect(
           inset,
-          `${bar.title}: ✕ right edge is ${inset}px from the bar edge (padding-right ${bar.paddingRight})`
+          `${bar.title}: ✕ right edge is ${inset}px from ${
+            trailingStow ? 'the stow control' : 'the bar edge'
+          } (padding-right ${bar.paddingRight})`
         ).toBeLessThanOrEqual(6);
         expect(
           inset,
