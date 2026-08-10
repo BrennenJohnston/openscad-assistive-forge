@@ -1065,16 +1065,78 @@ body[data-ui-mode='classic'] .classic-error-log-slot .error-log-output {
   /* Resizers and Viewport-Control are desktop-only (D-6, D-7); the field that
      holds Viewport-Control goes with it, so the stack has no empty cell.
      Relocation goes too (B9): the stack ignores the field map, so a move
-     button here would be a control that does nothing. Field stow joins the
-     list until UF-2c builds the stacked pattern: the controller stamps real
-     occupancy below the breakpoint, so a stowed preference can never hide a
-     pane here with no way back. */
+     button here would be a control that does nothing. */
   body[data-ui-mode='classic'] .classic-resizer,
   body[data-ui-mode='classic'] .classic-viewport-control-slot,
   body[data-ui-mode='classic'] .classic-dock-field--right-bottom,
-  body[data-ui-mode='classic'] .classic-panel-menu-btn,
-  body[data-ui-mode='classic'] .classic-stow-btn,
+  body[data-ui-mode='classic'] .classic-panel-menu-btn {
+    display: none;
+  }
+
+  /* ── Field stow in the stack (UF-2c) ──────────────────────────────────
+     There is no edge to stow toward in a scrolling column, so here the
+     rails render as full-width RESTORE BARS in their field's own stack
+     position (they are already flex items of the stacked .main-interface),
+     and a stowed section simply leaves the flow — one tap on its bar
+     brings it back. The occupancy attributes stay truthful below the
+     breakpoint (the controller's desktop gate); only the stow attributes
+     drive this presentation.
+
+     Lower-right is the exception: Viewport-Control does not exist in the
+     stack (D-7), so neither does its tab. */
   body[data-ui-mode='classic'] .classic-stow-rail {
+    display: none;
+  }
+
+  body[data-ui-mode='classic'][data-classic-stow-right-top='true']
+    .classic-stow-rail--right {
+    display: flex;
+    order: 3;
+  }
+
+  body[data-ui-mode='classic'][data-classic-stow-bottom='true']
+    .classic-stow-rail--bottom {
+    display: flex;
+    order: 4;
+  }
+
+  body[data-ui-mode='classic'][data-classic-stow-left='true']
+    .classic-stow-rail--left {
+    display: flex;
+    order: 5;
+  }
+
+  body[data-ui-mode='classic'][data-classic-stow-left='true']
+    .classic-dock-field--left,
+  body[data-ui-mode='classic'][data-classic-stow-right-top='true']
+    .classic-dock-field--right-top,
+  body[data-ui-mode='classic'][data-classic-stow-bottom='true']
+    .classic-bottom-strip {
+    display: none;
+  }
+
+  body[data-ui-mode='classic'] .classic-stow-tab {
+    writing-mode: horizontal-tb;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-xs);
+    width: 100%;
+    min-height: var(--size-touch-target);
+    padding: 0 var(--space-sm);
+    background-color: var(--color-bg-secondary);
+    color: var(--color-text-primary);
+    border: 1px solid var(--color-border);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+  }
+
+  body[data-ui-mode='classic'] .classic-stow-tab:hover {
+    background-color: var(--color-hover-bg);
+  }
+
+  body[data-ui-mode='classic']
+    .classic-stow-tab[data-classic-stow-field='right-bottom'] {
     display: none;
   }
 }

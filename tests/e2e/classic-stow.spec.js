@@ -240,7 +240,7 @@ test.describe('Field stow (UF-2a)', () => {
     expect(stored.stowLeft).toBe(false);
   });
 
-  test('classic-stow-mobile-guard: below the breakpoint a stowed preference hides nothing', async ({
+  test('classic-stow-stacked: below the breakpoint a stowed section becomes a restore bar (UF-2c)', async ({
     page,
   }) => {
     test.setTimeout(300_000);
@@ -249,18 +249,42 @@ test.describe('Field stow (UF-2a)', () => {
     await loadProject(page);
     await enterClassicStandard(page);
 
-    // The stacked layout ignores stow until UF-2c: the field stays reachable
-    // and no stow chrome dangles without a working mechanism behind it. The
-    // count is what makes this case fail on the parent (toBeHidden alone is
-    // vacuously true for controls that do not exist).
+    // The stack has no edges: a stowed section leaves the flow and its rail
+    // renders as a full-width restore bar in the field's own stack position —
+    // the preference is honored AND nothing is ever stranded unreachable.
+    // Occupancy stays truthful below the breakpoint (it drives the desktop
+    // grid, not this presentation).
     await expect(page.locator('body')).toHaveAttribute(
       'data-classic-field-left',
       'occupied'
     );
+    await expect(page.locator('.classic-dock-field--left')).toBeHidden();
+    const bar = page.locator(
+      '.classic-stow-tab[data-classic-stow-field="left"]'
+    );
+    await expect(bar).toBeVisible();
+    const barBox = await bar.boundingBox();
+    const viewport = page.viewportSize();
+    expect(barBox.width, 'the restore bar spans the stack').toBeGreaterThan(
+      viewport.width * 0.8
+    );
+
+    // One tap brings the section back; the bar goes with the stow state.
+    await bar.click();
     await expect(page.locator('.classic-dock-field--left')).toBeVisible();
-    await expect(page.locator('.classic-stow-btn')).toHaveCount(4);
-    await expect(page.locator('.classic-stow-btn').first()).toBeHidden();
-    await expect(page.locator('.classic-stow-rail--left')).toBeHidden();
+    await expect(bar).toHaveCount(0);
+
+    // And the stow control works IN the stack: stow the bottom strip.
+    await page
+      .locator('.classic-stow-btn[data-classic-stow-field="bottom"]')
+      .click();
+    await expect(page.locator('.classic-bottom-strip')).toBeHidden();
+    const bottomBar = page.locator(
+      '.classic-stow-tab[data-classic-stow-field="bottom"]'
+    );
+    await expect(bottomBar).toBeVisible();
+    await bottomBar.click();
+    await expect(page.locator('.classic-bottom-strip')).toBeVisible();
   });
 
   test('classic-stow-a11y: the tab meets the touch-target token and axe reports nothing new', async ({

@@ -1351,9 +1351,12 @@ export class ClassicLayoutController {
     // A stowed field reports 'empty' so the existing track math hands its
     // space to the 3D view — and the empty-field display:none rule takes its
     // content out of the tab order (the R-III trap fix, free of charge).
-    // Desktop only: the stacked <1024px layout ignores stow until UF-2c, so a
-    // stowed preference can never strand a pane unreachable on a phone.
-    // _checkBreakpoint re-stamps on every crossing.
+    // Desktop only: below the breakpoint occupancy stays truthful and the
+    // STOW attributes alone drive the stacked presentation (UF-2c) — a
+    // stowed section leaves the flow and its rail renders as a full-width
+    // restore bar in the field's stack position, so a stowed preference can
+    // never strand a pane unreachable. _checkBreakpoint re-stamps on every
+    // crossing.
     const occupancy = this._fieldOccupancy();
     const desktop = this._isDesktopWidth();
     for (const field of DOCK_FIELDS) {
