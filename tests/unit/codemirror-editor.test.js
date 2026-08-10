@@ -4,7 +4,10 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { undo } from '@codemirror/commands';
-import { CodeMirrorEditor } from '../../src/js/codemirror-editor.js';
+import {
+  CodeMirrorEditor,
+  resolveEditorDarkMode,
+} from '../../src/js/codemirror-editor.js';
 
 describe('CodeMirrorEditor', () => {
   let container;
@@ -379,6 +382,45 @@ describe('CodeMirrorEditor', () => {
       editor.dispose();
 
       expect(editor.getValue()).toBe('');
+    });
+  });
+
+  describe('resolveEditorDarkMode (U-4)', () => {
+    it('follows the resolved app theme, not the OS: dark app is dark', () => {
+      expect(
+        resolveEditorDarkMode({ uiMode: 'standard', resolvedTheme: 'dark' })
+      ).toBe(true);
+    });
+
+    it('light app stays light — the OS preference is not even an input', () => {
+      expect(
+        resolveEditorDarkMode({ uiMode: 'standard', resolvedTheme: 'light' })
+      ).toBe(false);
+      expect(
+        resolveEditorDarkMode({ uiMode: 'simplified', resolvedTheme: 'light' })
+      ).toBe(false);
+    });
+
+    it('Classic is always light, even when the app theme is dark', () => {
+      expect(
+        resolveEditorDarkMode({ uiMode: 'classic', resolvedTheme: 'dark' })
+      ).toBe(false);
+    });
+
+    it('initialize() wires ui-mode-changed to a theme re-resolve, dispose() unwires it', () => {
+      createEditor();
+      editor.initialize();
+      const spy = vi.spyOn(editor, '_switchTheme');
+
+      document.body.dataset.uiMode = 'classic';
+      document.dispatchEvent(new CustomEvent('ui-mode-changed'));
+      expect(spy).toHaveBeenCalledWith(false);
+
+      spy.mockClear();
+      editor.dispose();
+      document.dispatchEvent(new CustomEvent('ui-mode-changed'));
+      expect(spy).not.toHaveBeenCalled();
+      delete document.body.dataset.uiMode;
     });
   });
 });

@@ -72,6 +72,22 @@ import {
 } from '@codemirror/search';
 import { adoptCodeMirrorStyles } from './codemirror-csp-styles.js';
 import { loadEditorPrefs } from './editor-prefs.js';
+import { themeManager } from './theme-manager.js';
+
+/**
+ * Where the editor's dark mode comes from (U-4): the APP, never the OS media
+ * query. Classic is always light — its chrome is the desktop token remap and
+ * the desktop editor is white. Every other mode follows the resolved app
+ * theme; 'auto' keeps data-theme synced to the OS, so auto still works
+ * through this path.
+ *
+ * @param {{ uiMode: string|null, resolvedTheme: string|null }} inputs
+ * @returns {boolean}
+ */
+export function resolveEditorDarkMode({ uiMode, resolvedTheme }) {
+  if (uiMode === 'classic') return false;
+  return resolvedTheme === 'dark';
+}
 
 // ─── OpenSCAD token lists (ported from textarea-editor.js / monaco-editor.js) ──
 
@@ -723,17 +739,17 @@ export class CodeMirrorEditor {
     /** @type {boolean} */
     this._isInitialized = false;
 
-    /** @type {MediaQueryList|null} */
-    this._darkMediaQuery = null;
+    /** @type {Function|null} Unsubscribe from themeManager's change feed */
+    this._unsubscribeTheme = null;
 
     /** @type {Function|null} */
-    this._mediaListener = null;
+    this._uiModeListener = null;
   }
 
   initialize() {
     if (this._isInitialized) return;
 
-    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const isDark = this._resolveIsDark();
 
     const onSave = this.onSave;
     const onRun = this.onRun;
@@ -848,12 +864,22 @@ export class CodeMirrorEditor {
     const cmContent = this._view.contentDOM;
     cmContent.setAttribute('aria-label', 'OpenSCAD code editor');
 
-    this._darkMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    this._mediaListener = (e) => this._switchTheme(e.matches);
-    this._darkMediaQuery.addEventListener('change', this._mediaListener);
+    this._unsubscribeTheme = themeManager.addListener(() =>
+      this._switchTheme(this._resolveIsDark())
+    );
+    this._uiModeListener = () => this._switchTheme(this._resolveIsDark());
+    document.addEventListener('ui-mode-changed', this._uiModeListener);
 
     this._isInitialized = true;
     console.log('[CodeMirrorEditor] Initialized');
+  }
+
+  /** @private @returns {boolean} */
+  _resolveIsDark() {
+    return resolveEditorDarkMode({
+      uiMode: document.body?.dataset?.uiMode ?? null,
+      resolvedTheme: themeManager.getResolvedTheme(),
+    });
   }
 
   /** @private */
@@ -1157,10 +1183,13 @@ export class CodeMirrorEditor {
   }
 
   dispose() {
-    if (this._darkMediaQuery && this._mediaListener) {
-      this._darkMediaQuery.removeEventListener('change', this._mediaListener);
-      this._darkMediaQuery = null;
-      this._mediaListener = null;
+    if (this._unsubscribeTheme) {
+      this._unsubscribeTheme();
+      this._unsubscribeTheme = null;
+    }
+    if (this._uiModeListener) {
+      document.removeEventListener('ui-mode-changed', this._uiModeListener);
+      this._uiModeListener = null;
     }
     if (this._view) {
       this._view.destroy();
