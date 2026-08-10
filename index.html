@@ -58,6 +58,20 @@
     <div id="app">
       <header class="app-header">
         <div class="header-content">
+          <!-- U-2/Q-16: the way back to the main projects page sits at the
+               far left, nearest the browser's own Back button, in BOTH
+               themes. One DOM node, one handler — relocated from the
+               workflow row, not duplicated. Hidden while the welcome screen
+               is up (you are already there). -->
+          <button type="button"
+            id="clearFileBtn"
+            class="btn btn-sm btn-outline"
+            aria-label="Return to the main projects page. Warning: unsaved changes will be lost"
+            title="Return to the main projects page (unsaved changes will be lost)"
+            data-tutorial-target="clear-file"
+          >
+            ← Main Page
+          </button>
           <div class="header-branding">
             <img
               class="header-logo"
@@ -525,15 +539,6 @@
                 ></circle>
               </svg>
               <span class="btn-text">Help</span>
-            </button>
-            <button type="button"
-              id="clearFileBtn"
-              class="btn btn-sm btn-outline"
-              aria-label="Go back to welcome screen. Warning: unsaved changes will be lost"
-              title="Back to welcome screen (unsaved changes will be lost)"
-              data-tutorial-target="clear-file"
-            >
-              ← Back
             </button>
           </div>
         </div>
