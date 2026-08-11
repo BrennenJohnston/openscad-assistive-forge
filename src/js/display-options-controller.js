@@ -18,7 +18,10 @@ import {
   STORAGE_KEY_GRID,
 } from './storage-keys.js';
 import { announceImmediate } from './announcer.js';
-import { buildAxisTickOverlay } from './axis-tick-overlay.js';
+import {
+  buildAxisTickOverlay,
+  resolveAxisMarkColor,
+} from './axis-tick-overlay.js';
 import { buildAxisLinesOverlay } from './axis-lines-overlay.js';
 import { getUIModeController } from './ui-mode-controller.js';
 
@@ -608,6 +611,7 @@ export class DisplayOptionsController {
     } else if (this._axesOverlay) {
       pm.scene.remove(this._axesOverlay.group);
     }
+    this._syncAxisTriad(pm);
   }
 
   _tearDownAxesOverlay() {
@@ -618,6 +622,21 @@ export class DisplayOptionsController {
     }
     this._axesOverlay.dispose?.();
     this._axesOverlay = null;
+  }
+
+  /**
+   * The corner triad follows the Axes toggle exactly as the desktop's
+   * smallaxes follow Show Axes (UF-7 P3), and its letters wear the same
+   * scheme-resolved color as the axis lines and ticks.
+   * @param {Object} pm
+   * @private
+   */
+  _syncAxisTriad(pm) {
+    if (typeof pm?.setAxisTriad !== 'function') return;
+    pm.setAxisTriad({
+      visible: this.state.axes,
+      letterColorHex: resolveAxisMarkColor(pm.currentTheme).hex,
+    });
   }
 
   _applyEdges(pm) {
@@ -769,6 +788,9 @@ export class DisplayOptionsController {
       if (this._axesOverlay) pm.scene.remove(this._axesOverlay.group);
       if (this._crosshairGroup) pm.scene.remove(this._crosshairGroup);
     }
+    if (typeof pm?.setAxisTriad === 'function') {
+      pm.setAxisTriad({ visible: false });
+    }
     this._removeEdgesOverlay();
     this._tearDownAxisTickOverlay();
     this._axesOverlay?.dispose?.();
@@ -776,6 +798,7 @@ export class DisplayOptionsController {
     this._crosshairGroup = null;
     this._boundRefresh = null;
     this._boundThemeRefresh = null;
+    this._boundZoomRefresh = null;
   }
 }
 

@@ -15354,6 +15354,24 @@ if (typeof window !== 'undefined') {
     },
 
     /**
+     * The corner XYZ triad's live state (UF-7 P3). `present` reads the
+     * PreviewManager's own reference — the render pass draws exactly when
+     * that reference exists, so a spec asserting on it is asserting on what
+     * the second pass will actually paint. `letterColorHex` is the
+     * scheme-resolved color the letters were built with.
+     * @returns {{enabled: boolean, present: boolean, letterColorHex: number|null}|null}
+     */
+    axisTriad() {
+      const controller = getDisplayOptionsController();
+      if (!controller || !previewManager) return null;
+      return {
+        enabled: controller.get('axes'),
+        present: Boolean(previewManager._axisTriad),
+        letterColorHex: previewManager._axisTriad?.letterColorHex ?? null,
+      };
+    },
+
+    /**
      * Where the camera is and what it orbits. Read-only, and the only way a
      * parity test can prove that Center, View All and Reset View each moved
      * the view differently rather than merely that the item was clickable.

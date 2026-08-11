@@ -187,6 +187,47 @@ function changedSamples(a, b) {
   return changed;
 }
 
+/**
+ * Read EVERY pixel of a normalized box and count strongly red, green and
+ * blue ones. The triad arms are 1px lines — grid sampling would mostly
+ * miss them, so this scans the full rectangle in one readPixels call.
+ */
+function countBoxColors(page, box) {
+  return page.evaluate((b) => {
+    return new Promise((resolve) => {
+      requestAnimationFrame(() => {
+        const canvas = document.querySelector('.preview-panel canvas');
+        const gl =
+          canvas && (canvas.getContext('webgl2') || canvas.getContext('webgl'));
+        if (!gl) {
+          resolve(null);
+          return;
+        }
+        const w = canvas.width;
+        const h = canvas.height;
+        const x0 = Math.floor(b.x0 * w);
+        const y0 = Math.floor((1 - b.y1) * h);
+        const bw = Math.max(1, Math.floor((b.x1 - b.x0) * w));
+        const bh = Math.max(1, Math.floor((b.y1 - b.y0) * h));
+        const px = new Uint8Array(bw * bh * 4);
+        gl.readPixels(x0, y0, bw, bh, gl.RGBA, gl.UNSIGNED_BYTE, px);
+        let red = 0;
+        let green = 0;
+        let blue = 0;
+        for (let i = 0; i < px.length; i += 4) {
+          const r = px[i];
+          const g = px[i + 1];
+          const bl = px[i + 2];
+          if (r > 140 && r - g > 60 && r - bl > 60) red++;
+          else if (g > 140 && g - r > 60 && g - bl > 60) green++;
+          else if (bl > 140 && bl - r > 60 && bl - g > 60) blue++;
+        }
+        resolve({ red, green, blue, total: bw * bh });
+      });
+    });
+  }, box);
+}
+
 // The cuff's front band fills the canvas center-left at the reference pose;
 // the -Z axis and its numbers pass BEHIND it. The sky box sits upper-right
 // where the +Y numbers march away from the ring.
@@ -297,5 +338,63 @@ test.describe('UF-7 axis depth truth', () => {
     await expect
       .poll(() => overlay(page), { timeout: 15_000 })
       .toMatchObject({ tickStepMm: 1 });
+  });
+
+  test('the corner triad paints its RGB arms lower-left and follows the Axes toggle', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await seedClassicPanes(page);
+    await loadProject(page, UNIVERSAL_CUFF);
+    await enterClassicStandard(page);
+    await skipWithoutRenderer(page);
+    await waitForOverlayInScene(page);
+    await setPose(page, REFERENCE_POSE);
+
+    const triad = () => page.evaluate(() => window.__forgeDebug.axisTriad());
+    await expect
+      .poll(triad, { timeout: 20_000 })
+      .toMatchObject({ enabled: true, present: true });
+    // Cornfield's axes are black — the letters carry the scheme color.
+    expect((await triad()).letterColorHex).toBe(0x000000);
+
+    // The corner box: anchor at (10% W, 10% up from the bottom), side =
+    // 3 × height/18 → generous margins either way.
+    const CORNER = { x0: 0.0, y0: 0.76, x1: 0.22, y1: 1.0 };
+    const withTriad = await countBoxColors(page, CORNER);
+    test.skip(withTriad === null, 'WebGL context not readable');
+
+    // All three arms are in the corner: red, green AND blue pixels. The
+    // model is Cornfield yellow and the marks are black, so nothing else
+    // in the scene can satisfy these thresholds.
+    expect(withTriad.red, 'no red arm pixels in the corner').toBeGreaterThan(5);
+    expect(withTriad.green, 'no green arm pixels').toBeGreaterThan(5);
+    expect(withTriad.blue, 'no blue arm pixels').toBeGreaterThan(5);
+
+    // The triad follows the Axes toggle, exactly as desktop smallaxes
+    // follow Show Axes.
+    await page.evaluate(() => document.getElementById('viewMenuBtn')?.click());
+    await page.waitForTimeout(300);
+    await page
+      .getByRole('menuitemcheckbox', { name: /show axes/i })
+      .first()
+      .click();
+    await expect
+      .poll(triad, { timeout: 10_000 })
+      .toMatchObject({ enabled: false, present: false });
+
+    const withoutTriad = await countBoxColors(page, CORNER);
+    expect(withoutTriad.red).toBeLessThanOrEqual(1);
+    expect(withoutTriad.green).toBeLessThanOrEqual(1);
+    expect(withoutTriad.blue).toBeLessThanOrEqual(1);
+
+    // Leave the world as found.
+    await page.evaluate(() => document.getElementById('viewMenuBtn')?.click());
+    await page.waitForTimeout(300);
+    await page
+      .getByRole('menuitemcheckbox', { name: /show axes/i })
+      .first()
+      .click();
+    await expect.poll(triad).toMatchObject({ enabled: true, present: true });
   });
 });
