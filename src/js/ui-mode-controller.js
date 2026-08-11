@@ -202,6 +202,15 @@ export class UIModeController {
     /** @type {string[]} Hidden panel IDs for current project (overrides defaults) */
     this._projectHiddenPanels = null;
 
+    /**
+     * @type {boolean} U-10: a saved Classic preference was deferred at
+     * boot because the viewport is mobile-shaped. While true, preference
+     * writes keep the stored 'classic' so the next desktop visit boots
+     * Classic; an explicit mode switch clears it (the user's new choice
+     * wins).
+     */
+    this._classicDeferredByViewport = false;
+
     // Load saved preferences
     this._loadPreferences();
   }
@@ -215,11 +224,26 @@ export class UIModeController {
   }
 
   /**
-   * Check if Classic mode is available (classic_mode feature flag)
+   * Check if Classic mode can be ENTERED right now: the classic_mode
+   * feature flag AND a desktop-shaped viewport (U-10, Q-24a — the gate
+   * governs entry only; a live Classic session is never ejected). The
+   * flag decides whether Classic exists at all; the viewport decides
+   * whether entry is open. Callers needing the flag alone (header button
+   * visibility) use isEnabled('classic_mode') directly.
    * @returns {boolean}
    */
   isClassicAvailable() {
-    return isEnabled('classic_mode');
+    return isEnabled('classic_mode') && isViewportDesktopShaped();
+  }
+
+  /**
+   * True when this boot found a saved Classic preference but the viewport
+   * gate deferred it (U-10): the session runs a custom mode, the saved
+   * preference is preserved, and the one-time notice should show.
+   * @returns {boolean}
+   */
+  isClassicDeferredByViewport() {
+    return this._classicDeferredByViewport;
   }
 
   /**
@@ -281,6 +305,10 @@ export class UIModeController {
     console.log(
       `[UIModeController] Switching from ${previousMode} to ${targetMode}`
     );
+
+    // A real mode switch is a new choice: stop protecting the deferred
+    // Classic preference (U-10) — the switch below persists targetMode.
+    this._classicDeferredByViewport = false;
 
     if (previousMode !== 'classic') {
       this._lastCustomMode = previousMode;
@@ -1063,10 +1091,16 @@ export class UIModeController {
         const prefs = JSON.parse(stored);
         const normalized = normalizeUiMode(prefs.mode);
         if (normalized) {
-          this.currentMode =
-            normalized === 'classic' && !this.isClassicAvailable()
-              ? 'standard'
-              : normalized;
+          if (normalized === 'classic' && !this.isClassicAvailable()) {
+            this.currentMode = 'standard';
+            // Only the viewport gate is a deferral (U-10): the choice
+            // stays saved and the boot notice shows. A disabled flag is
+            // the pre-existing silent fallback, unchanged.
+            this._classicDeferredByViewport =
+              isEnabled('classic_mode') && !isViewportDesktopShaped();
+          } else {
+            this.currentMode = normalized;
+          }
         }
         const lastCustom = normalizeUiMode(prefs.lastCustomMode);
         if (lastCustom === 'simplified' || lastCustom === 'standard') {
@@ -1092,6 +1126,13 @@ export class UIModeController {
         mode: this.currentMode,
         lastCustomMode: this._lastCustomMode,
       };
+      // U-10: while a saved Classic sits deferred behind the viewport
+      // gate, incidental writes (a density flip, hidden-panel edits) must
+      // not overwrite it — the next desktop visit still boots Classic.
+      // switchMode clears the deferral first, so explicit choices win.
+      if (this._classicDeferredByViewport && existing.mode === 'classic') {
+        prefs.mode = 'classic';
+      }
       localStorage.setItem(UI_MODE_STORAGE_KEY, JSON.stringify(prefs));
     } catch (error) {
       if (error.name === 'QuotaExceededError') {

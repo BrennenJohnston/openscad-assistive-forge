@@ -2950,6 +2950,24 @@ async function initApp() {
   // Initialize UI mode controller (Basic/Advanced interface layout)
   getUIModeController().init();
 
+  // U-10 (UF-5 P4): a saved Classic preference deferred by the viewport
+  // gate gets one visible, dismissible notice per boot, and it is spoken.
+  // The preference itself stays saved — the controller's deferral flag
+  // protects it from incidental writes until an explicit mode switch.
+  if (getUIModeController().isClassicDeferredByViewport()) {
+    const gateBanner = document.getElementById('classicGateBanner');
+    const gateBannerText = document.getElementById('classicGateBannerText');
+    if (gateBanner) {
+      gateBanner.classList.remove('hidden');
+      document
+        .getElementById('classicGateBannerDismiss')
+        ?.addEventListener('click', () => gateBanner.classList.add('hidden'));
+    }
+    if (gateBannerText) {
+      announceImmediate(gateBannerText.textContent.replace(/\s+/g, ' ').trim());
+    }
+  }
+
   // Initialize toolbar menu bar (File|Edit|Design|View|Window|Help)
   getToolbarMenuController().init();
   applyToolbarModeVisibility(getUIModeController().getMode());

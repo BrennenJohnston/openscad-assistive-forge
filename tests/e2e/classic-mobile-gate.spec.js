@@ -142,3 +142,59 @@ test.describe('Classic gate: detection boundaries (Q-25)', () => {
     await expect(toggle).not.toHaveAttribute('aria-disabled', 'true');
   });
 });
+
+test.describe('Persisted-classic phone boot (U-10, Q-24a)', () => {
+  test.use({ viewport: { width: 375, height: 812 } });
+
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        'openscad-forge-ui-mode',
+        JSON.stringify({ mode: 'classic', lastCustomMode: 'standard' })
+      );
+    });
+  });
+
+  test('gate-boot-fallback: a phone boots Forge Standard with the one-time notice; the preference survives', async ({
+    page,
+  }) => {
+    await page.goto('/');
+
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'standard'
+    );
+
+    const banner = page.locator('#classicGateBanner');
+    await expect(banner).toBeVisible();
+    await expect(banner).toContainText('desktop-only for now');
+
+    // The stored preference is untouched by the fallback.
+    const stored = await page.evaluate(() =>
+      JSON.parse(localStorage.getItem('openscad-forge-ui-mode'))
+    );
+    expect(stored.mode).toBe('classic');
+
+    await page.locator('#classicGateBannerDismiss').click();
+    await expect(banner).toBeHidden();
+  });
+
+  test('gate-boot-preserved: a desktop reload after a phone visit boots Classic again', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'standard'
+    );
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.reload();
+
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+    await expect(page.locator('#classicGateBanner')).toBeHidden();
+  });
+});

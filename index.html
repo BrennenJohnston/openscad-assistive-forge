@@ -282,6 +282,33 @@
           </div>
         </div>
       </div>
+      <!-- U-10 boot notice: a saved Classic preference was deferred because
+           this window is phone-shaped (UF-5 P4). Shown once per boot by
+           main.js; the preference itself stays saved. -->
+      <div
+        id="classicGateBanner"
+        class="update-banner hidden"
+        role="region"
+        aria-label="Classic interface notice"
+      >
+        <div class="update-banner-content">
+          <span class="update-banner-text" id="classicGateBannerText"
+            >Your saved choice is the Classic interface, which is
+            desktop-only for now. You are in the Assistive Forge interface
+            on this screen. Classic will open on your next visit from a
+            desktop-sized window.</span
+          >
+          <div class="update-banner-actions">
+            <button
+              type="button"
+              id="classicGateBannerDismiss"
+              class="btn btn-sm btn-secondary"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      </div>
       <!-- Memory Warning Banner (Milestone 0: graceful degradation) -->
       <div
         id="memoryBanner"
