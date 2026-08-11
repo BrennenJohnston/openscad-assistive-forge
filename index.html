@@ -226,6 +226,16 @@
               >
               <span class="ui-mode-slider" aria-hidden="true"></span>
             </button>
+            <!-- U-10: read as the Classic toggle's description while the
+                 viewport gate holds it aria-disabled (phones, portrait,
+                 narrow windows). Leaving Classic is never gated. Sits
+                 BEFORE the button: U-7 pins the toggle as the header's
+                 last element. -->
+            <span id="classicModeToggleReason" class="sr-only"
+              >Classic is desktop-only for now. A mobile version is planned.
+              Use the Assistive Forge interface on phones and narrow
+              windows.</span
+            >
             <button type="button"
               id="classicModeToggle"
               class="btn btn-sm btn-secondary classic-toggle hidden"

@@ -21,6 +21,10 @@
 
 import { isEnabled } from './feature-flags.js';
 import { announceImmediate } from './announcer.js';
+import {
+  isViewportDesktopShaped,
+  subscribeViewportShape,
+} from './classic-availability.js';
 
 /**
  * @typedef {'simplified' | 'standard' | 'classic'} UIMode
@@ -746,12 +750,27 @@ export class UIModeController {
     // Header Classic toggle: wired BEFORE the basic_advanced_mode early
     // return below — that flag gates the Simplified/Standard switch only
     // and must never take the Classic entry point down with it.
+    //
+    // Visibility is the FLAG's job; usability is the VIEWPORT's (U-10).
+    // With the flag on but the viewport mobile-shaped, the button shows
+    // disabled-with-reason instead of vanishing, and re-enables live when
+    // a desktop-shaped window returns.
     const classicBtn = document.getElementById('classicModeToggle');
     if (classicBtn) {
-      if (this.isClassicAvailable()) {
+      if (isEnabled('classic_mode')) {
         classicBtn.classList.remove('hidden');
-        classicBtn.addEventListener('click', () => this.toggleClassic());
+        classicBtn.addEventListener('click', (event) => {
+          // Gated means aria-disabled, not disabled: the click still
+          // arrives — say why instead of doing nothing (house pattern).
+          if (classicBtn.getAttribute('aria-disabled') === 'true') {
+            event.preventDefault();
+            this._announceClassicUnavailable();
+            return;
+          }
+          this.toggleClassic();
+        });
         this._updateClassicToggleButton();
+        subscribeViewportShape(() => this._updateClassicToggleButton());
       } else {
         classicBtn.classList.add('hidden');
       }
@@ -907,11 +926,43 @@ export class UIModeController {
       ? 'Switch back to the Assistive Forge interface'
       : 'Switch to Classic desktop layout';
     btn.setAttribute('aria-label', label);
-    btn.setAttribute('title', label);
     const visibleLabel = btn.querySelector('.classic-label');
     if (visibleLabel) {
       visibleLabel.textContent = isClassic ? 'A. Forge' : 'Classic';
     }
+
+    // U-10: the button locks only while it points INTO Classic on a
+    // mobile-shaped viewport. The way OUT of Classic is never gated.
+    const gated = !isClassic && !isViewportDesktopShaped();
+    if (gated) {
+      btn.setAttribute('aria-disabled', 'true');
+      btn.setAttribute('aria-describedby', 'classicModeToggleReason');
+      const reason = document
+        .getElementById('classicModeToggleReason')
+        ?.textContent.replace(/\s+/g, ' ')
+        .trim();
+      btn.setAttribute('title', reason ? `${label}. ${reason}` : label);
+    } else {
+      btn.removeAttribute('aria-disabled');
+      btn.removeAttribute('aria-describedby');
+      btn.setAttribute('title', label);
+    }
+  }
+
+  /**
+   * Say why the Classic toggle refuses right now (the U-10 viewport gate),
+   * composing the control's name with its reason text the same way the
+   * Classic editor toolbar announces its gated buttons.
+   * @private
+   */
+  _announceClassicUnavailable() {
+    const reason = document
+      .getElementById('classicModeToggleReason')
+      ?.textContent.replace(/\s+/g, ' ')
+      .trim();
+    announceImmediate(
+      reason ? `Classic unavailable. ${reason}` : 'Classic unavailable.'
+    );
   }
 
   /**
