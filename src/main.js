@@ -199,6 +199,11 @@ import { getModeManager } from './js/mode-manager.js';
 import { loadEditorPrefs, saveEditorPref } from './js/editor-prefs.js';
 // UI Mode Controller - Simplified/Standard/Classic interface layout switching
 import { getUIModeController } from './js/ui-mode-controller.js';
+// U-10: Classic is desktop-only for now — the viewport half of the gate
+import {
+  isViewportDesktopShaped,
+  subscribeViewportShape,
+} from './js/classic-availability.js';
 import {
   initClassicLayoutController,
   getClassicLayoutController,
@@ -2755,11 +2760,37 @@ async function initApp() {
     });
   };
 
+  // U-10 (UF-5): the modal's Classic card is genuinely disabled while the
+  // viewport is mobile-shaped, with the reason VISIBLE in the card (the
+  // C-15 shape — a real disabled attribute cannot snap back under the
+  // user's hand), and re-enables live if the window turns desktop-shaped
+  // while the modal is open. A checked Classic choice is cleared when the
+  // gate closes over it so it cannot be submitted stale.
+  const updateFirstVisitClassicGate = () => {
+    const radio = document.getElementById('firstVisitChoiceClassic');
+    const note = document.getElementById('firstVisitClassicGate');
+    if (!radio || !note) return;
+    const gated = !isViewportDesktopShaped();
+    radio.disabled = gated;
+    note.classList.toggle('hidden', !gated);
+    radio.setAttribute(
+      'aria-describedby',
+      gated
+        ? 'firstVisitClassicGate firstVisitClassicShot firstVisitClassicGuide'
+        : 'firstVisitClassicShot firstVisitClassicGuide'
+    );
+    if (gated && radio.checked) {
+      radio.checked = false;
+    }
+  };
+
   // First-visit modal check
   const firstVisitModal = document.getElementById('first-visit-modal');
   const firstVisitCheck = isFirstVisit();
   if (firstVisitCheck && firstVisitModal) {
     setFirstVisitBlocking(true);
+    updateFirstVisitClassicGate();
+    subscribeViewportShape(() => updateFirstVisitClassicGate());
     // Delay slightly to ensure DOM is ready
     setTimeout(() => {
       openModal(firstVisitModal);
@@ -2802,6 +2833,15 @@ async function initApp() {
   const handleFirstVisitClose = async (_source = 'unknown') => {
     const uiChoice = getFirstVisitChoice();
     if (!uiChoice) {
+      showFirstVisitChoiceError();
+      return;
+    }
+    // U-10 belt-and-braces: if the window turned mobile-shaped inside the
+    // gate's debounce window, a checked Classic radio can race the Continue
+    // press. Clear it and fall into the ordinary no-choice flow instead of
+    // silently submitting a gated choice.
+    if (uiChoice === 'classic' && !isViewportDesktopShaped()) {
+      updateFirstVisitClassicGate();
       showFirstVisitChoiceError();
       return;
     }
@@ -2909,6 +2949,66 @@ async function initApp() {
 
   // Initialize UI mode controller (Basic/Advanced interface layout)
   getUIModeController().init();
+
+  // U-10 (UF-5 P4+P5): one dismissible banner, two notices. The boot
+  // notice says a saved Classic preference was deferred by the viewport
+  // gate (the preference stays saved — the controller's deferral flag
+  // protects it until an explicit mode switch). The live notice says a
+  // Classic session whose window turned phone-shaped stays alive (Q-24a).
+  const classicGateBanner = document.getElementById('classicGateBanner');
+  const showClassicGateNotice = (kind) => {
+    if (!classicGateBanner) return null;
+    const bootText = document.getElementById('classicGateBannerText');
+    const liveText = document.getElementById('classicGateLiveText');
+    bootText?.classList.toggle('hidden', kind !== 'boot');
+    liveText?.classList.toggle('hidden', kind !== 'live');
+    classicGateBanner.classList.remove('hidden');
+    return kind === 'boot' ? bootText : liveText;
+  };
+  const isClassicLiveNoticeShowing = () => {
+    const liveText = document.getElementById('classicGateLiveText');
+    return Boolean(
+      classicGateBanner &&
+      !classicGateBanner.classList.contains('hidden') &&
+      liveText &&
+      !liveText.classList.contains('hidden')
+    );
+  };
+  document
+    .getElementById('classicGateBannerDismiss')
+    ?.addEventListener('click', () =>
+      classicGateBanner?.classList.add('hidden')
+    );
+
+  if (getUIModeController().isClassicDeferredByViewport()) {
+    const bootText = showClassicGateNotice('boot');
+    if (bootText) {
+      announceImmediate(bootText.textContent.replace(/\s+/g, ' ').trim());
+    }
+  }
+
+  // The live notice shows on each crossing into narrowed Classic and
+  // heals itself when the window widens again; the announcement fires
+  // once per session so repeated resizes cannot nag a screen reader.
+  let classicNarrowAnnounced = false;
+  subscribeViewportShape((desktopShaped) => {
+    if (!desktopShaped && getUIModeController().getMode() === 'classic') {
+      const liveText = showClassicGateNotice('live');
+      if (liveText && !classicNarrowAnnounced) {
+        classicNarrowAnnounced = true;
+        announceImmediate(liveText.textContent.replace(/\s+/g, ' ').trim());
+      }
+    } else if (isClassicLiveNoticeShowing()) {
+      classicGateBanner?.classList.add('hidden');
+    }
+  });
+
+  // Any real mode switch ends the state either notice describes: an
+  // explicit switch retires the boot deferral, and leaving Classic
+  // retires the live notice.
+  getUIModeController().subscribe(() => {
+    classicGateBanner?.classList.add('hidden');
+  });
 
   // Initialize toolbar menu bar (File|Edit|Design|View|Window|Help)
   getToolbarMenuController().init();

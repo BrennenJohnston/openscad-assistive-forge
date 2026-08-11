@@ -417,17 +417,28 @@ test.describe('Classic on mobile (375px, touch)', () => {
     hasTouch: true,
   });
 
+  // U-10 (UF-5): Classic ENTRY is gated at phone shapes, so stacked Classic
+  // is reached the way a user now must reach it — enter on a desktop-shaped
+  // window, then narrow. Everything asserted below is live-session behavior.
+  async function enterClassicThenNarrow(page) {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    const toggle = page.locator('#classicModeToggle');
+    await expect(toggle).not.toHaveAttribute('aria-disabled', 'true');
+    await toggle.click();
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+    await page.setViewportSize({ width: 375, height: 812 });
+  }
+
   test('classic-mobile-customizer: the Customizer joins the stacked flow instead of the off-canvas drawer', async ({
     page,
   }) => {
     test.setTimeout(240_000);
 
     await loadSampleProject(page);
-    await page.locator('#classicModeToggle').click();
-    await expect(page.locator('body')).toHaveAttribute(
-      'data-ui-mode',
-      'classic'
-    );
+    await enterClassicThenNarrow(page);
 
     // The custom modes' mobile drawer turns #paramPanel into a fixed,
     // translated off-canvas dialog whose open button lives in the
@@ -488,11 +499,7 @@ test.describe('Classic on mobile (375px, touch)', () => {
     test.setTimeout(240_000);
 
     await loadSampleProject(page);
-    await page.locator('#classicModeToggle').click();
-    await expect(page.locator('body')).toHaveAttribute(
-      'data-ui-mode',
-      'classic'
-    );
+    await enterClassicThenNarrow(page);
 
     // Snap views / projection / overlay toggles are hidden at phone width —
     // every one of them lives in the View menu
@@ -538,7 +545,7 @@ test.describe('Classic on mobile (375px, touch)', () => {
     await page.keyboard.press('Escape');
   });
 
-  test('classic-mobile-drawer-interlock: an open drawer closes when Classic takes over', async ({
+  test('classic-mobile-gate-programmatic: a DOM click on the gated toggle is refused; the drawer is untouched', async ({
     page,
   }) => {
     test.setTimeout(240_000);
@@ -551,21 +558,25 @@ test.describe('Classic on mobile (375px, touch)', () => {
     await drawerToggle.click();
     await expect(page.locator('#paramPanel')).toHaveClass(/drawer-open/);
 
-    // Entering Classic must close it: no lingering focus trap, scroll lock,
-    // or backdrop on a panel that is now in the normal flow. A pointer
-    // can't reach the header toggle through the backdrop, but programmatic
-    // mode flips (deep links, per-project UI preferences) can fire while
-    // the drawer is open — a DOM click exercises exactly that path.
+    // This was the drawer-interlock case: entering Classic over an open
+    // drawer had to close it. U-10 removed the scenario — the drawer only
+    // exists below 768px, which is always mobile-shaped, so Classic can no
+    // longer take over here. The same DOM path (a programmatic click, the
+    // deep-link shape) now pins the REFUSAL: no mode change, the drawer
+    // still open and working, and the gate's announcement spoken.
     await page.evaluate(() =>
       document.getElementById('classicModeToggle').click()
     );
-    await expect(page.locator('body')).toHaveAttribute(
+    await expect(page.locator('body')).not.toHaveAttribute(
       'data-ui-mode',
       'classic'
     );
-    await expect(page.locator('#paramPanel')).not.toHaveClass(/drawer-open/);
-    await expect(page.locator('body')).not.toHaveClass(/drawer-open/);
-    await expect(page.locator('#drawerBackdrop')).toBeHidden();
+    await expect(page.locator('#srAnnouncer')).toContainText(
+      'Classic unavailable',
+      { timeout: 3000 }
+    );
+    await expect(page.locator('#paramPanel')).toHaveClass(/drawer-open/);
+    await expect(page.locator('#drawerBackdrop')).toBeVisible();
   });
 });
 
@@ -826,15 +837,18 @@ test.describe('Classic acceptance (C13)', () => {
   }) => {
     test.setTimeout(240_000);
 
-    await page.setViewportSize({ width: 900, height: 800 });
     await loadSampleProject(page);
     // Standard density so every pane is in play for the stack assertions
     await switchToStandardMode(page);
+    // U-10: enter at the desktop-shaped default viewport, then narrow —
+    // 900px is mobile-shaped now, so the stacked layout is a live-session
+    // state, not an entry state.
     await page.locator('#classicModeToggle').click();
     await expect(page.locator('body')).toHaveAttribute(
       'data-ui-mode',
       'classic'
     );
+    await page.setViewportSize({ width: 900, height: 800 });
 
     await expect(page.locator('.preview-panel')).toBeVisible();
     await expect(page.locator('#paramPanel')).toBeVisible();

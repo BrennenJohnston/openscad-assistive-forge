@@ -21,6 +21,10 @@
 
 import { isEnabled } from './feature-flags.js';
 import { announceImmediate } from './announcer.js';
+import {
+  isViewportDesktopShaped,
+  subscribeViewportShape,
+} from './classic-availability.js';
 
 /**
  * @typedef {'simplified' | 'standard' | 'classic'} UIMode
@@ -198,6 +202,15 @@ export class UIModeController {
     /** @type {string[]} Hidden panel IDs for current project (overrides defaults) */
     this._projectHiddenPanels = null;
 
+    /**
+     * @type {boolean} U-10: a saved Classic preference was deferred at
+     * boot because the viewport is mobile-shaped. While true, preference
+     * writes keep the stored 'classic' so the next desktop visit boots
+     * Classic; an explicit mode switch clears it (the user's new choice
+     * wins).
+     */
+    this._classicDeferredByViewport = false;
+
     // Load saved preferences
     this._loadPreferences();
   }
@@ -211,11 +224,26 @@ export class UIModeController {
   }
 
   /**
-   * Check if Classic mode is available (classic_mode feature flag)
+   * Check if Classic mode can be ENTERED right now: the classic_mode
+   * feature flag AND a desktop-shaped viewport (U-10, Q-24a — the gate
+   * governs entry only; a live Classic session is never ejected). The
+   * flag decides whether Classic exists at all; the viewport decides
+   * whether entry is open. Callers needing the flag alone (header button
+   * visibility) use isEnabled('classic_mode') directly.
    * @returns {boolean}
    */
   isClassicAvailable() {
-    return isEnabled('classic_mode');
+    return isEnabled('classic_mode') && isViewportDesktopShaped();
+  }
+
+  /**
+   * True when this boot found a saved Classic preference but the viewport
+   * gate deferred it (U-10): the session runs a custom mode, the saved
+   * preference is preserved, and the one-time notice should show.
+   * @returns {boolean}
+   */
+  isClassicDeferredByViewport() {
+    return this._classicDeferredByViewport;
   }
 
   /**
@@ -277,6 +305,10 @@ export class UIModeController {
     console.log(
       `[UIModeController] Switching from ${previousMode} to ${targetMode}`
     );
+
+    // A real mode switch is a new choice: stop protecting the deferred
+    // Classic preference (U-10) — the switch below persists targetMode.
+    this._classicDeferredByViewport = false;
 
     if (previousMode !== 'classic') {
       this._lastCustomMode = previousMode;
@@ -746,12 +778,27 @@ export class UIModeController {
     // Header Classic toggle: wired BEFORE the basic_advanced_mode early
     // return below — that flag gates the Simplified/Standard switch only
     // and must never take the Classic entry point down with it.
+    //
+    // Visibility is the FLAG's job; usability is the VIEWPORT's (U-10).
+    // With the flag on but the viewport mobile-shaped, the button shows
+    // disabled-with-reason instead of vanishing, and re-enables live when
+    // a desktop-shaped window returns.
     const classicBtn = document.getElementById('classicModeToggle');
     if (classicBtn) {
-      if (this.isClassicAvailable()) {
+      if (isEnabled('classic_mode')) {
         classicBtn.classList.remove('hidden');
-        classicBtn.addEventListener('click', () => this.toggleClassic());
+        classicBtn.addEventListener('click', (event) => {
+          // Gated means aria-disabled, not disabled: the click still
+          // arrives — say why instead of doing nothing (house pattern).
+          if (classicBtn.getAttribute('aria-disabled') === 'true') {
+            event.preventDefault();
+            this._announceClassicUnavailable();
+            return;
+          }
+          this.toggleClassic();
+        });
         this._updateClassicToggleButton();
+        subscribeViewportShape(() => this._updateClassicToggleButton());
       } else {
         classicBtn.classList.add('hidden');
       }
@@ -907,11 +954,43 @@ export class UIModeController {
       ? 'Switch back to the Assistive Forge interface'
       : 'Switch to Classic desktop layout';
     btn.setAttribute('aria-label', label);
-    btn.setAttribute('title', label);
     const visibleLabel = btn.querySelector('.classic-label');
     if (visibleLabel) {
       visibleLabel.textContent = isClassic ? 'A. Forge' : 'Classic';
     }
+
+    // U-10: the button locks only while it points INTO Classic on a
+    // mobile-shaped viewport. The way OUT of Classic is never gated.
+    const gated = !isClassic && !isViewportDesktopShaped();
+    if (gated) {
+      btn.setAttribute('aria-disabled', 'true');
+      btn.setAttribute('aria-describedby', 'classicModeToggleReason');
+      const reason = document
+        .getElementById('classicModeToggleReason')
+        ?.textContent.replace(/\s+/g, ' ')
+        .trim();
+      btn.setAttribute('title', reason ? `${label}. ${reason}` : label);
+    } else {
+      btn.removeAttribute('aria-disabled');
+      btn.removeAttribute('aria-describedby');
+      btn.setAttribute('title', label);
+    }
+  }
+
+  /**
+   * Say why the Classic toggle refuses right now (the U-10 viewport gate),
+   * composing the control's name with its reason text the same way the
+   * Classic editor toolbar announces its gated buttons.
+   * @private
+   */
+  _announceClassicUnavailable() {
+    const reason = document
+      .getElementById('classicModeToggleReason')
+      ?.textContent.replace(/\s+/g, ' ')
+      .trim();
+    announceImmediate(
+      reason ? `Classic unavailable. ${reason}` : 'Classic unavailable.'
+    );
   }
 
   /**
@@ -1012,10 +1091,16 @@ export class UIModeController {
         const prefs = JSON.parse(stored);
         const normalized = normalizeUiMode(prefs.mode);
         if (normalized) {
-          this.currentMode =
-            normalized === 'classic' && !this.isClassicAvailable()
-              ? 'standard'
-              : normalized;
+          if (normalized === 'classic' && !this.isClassicAvailable()) {
+            this.currentMode = 'standard';
+            // Only the viewport gate is a deferral (U-10): the choice
+            // stays saved and the boot notice shows. A disabled flag is
+            // the pre-existing silent fallback, unchanged.
+            this._classicDeferredByViewport =
+              isEnabled('classic_mode') && !isViewportDesktopShaped();
+          } else {
+            this.currentMode = normalized;
+          }
         }
         const lastCustom = normalizeUiMode(prefs.lastCustomMode);
         if (lastCustom === 'simplified' || lastCustom === 'standard') {
@@ -1041,6 +1126,13 @@ export class UIModeController {
         mode: this.currentMode,
         lastCustomMode: this._lastCustomMode,
       };
+      // U-10: while a saved Classic sits deferred behind the viewport
+      // gate, incidental writes (a density flip, hidden-panel edits) must
+      // not overwrite it — the next desktop visit still boots Classic.
+      // switchMode clears the deferral first, so explicit choices win.
+      if (this._classicDeferredByViewport && existing.mode === 'classic') {
+        prefs.mode = 'classic';
+      }
       localStorage.setItem(UI_MODE_STORAGE_KEY, JSON.stringify(prefs));
     } catch (error) {
       if (error.name === 'QuotaExceededError') {

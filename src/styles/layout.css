@@ -113,8 +113,13 @@ body {
 
 /* Mobile portrait: icon-only header - placeholder, see end of file for full rules */
 
-/* Header Controls Container */
+/* Header Controls Container.
+   position: relative so absolutely-positioned sr-only descendants (the
+   U-10 gate reason span) resolve against THIS row, not <html> — a static
+   container lets a 1px sr-only box land past the viewport edge and add
+   phantom page scroll (the R2a 31px lesson, re-learned at 92px). */
 .header-controls {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-sm);
@@ -191,6 +196,22 @@ body {
 
 .classic-toggle[aria-pressed='true']:hover {
   background: var(--color-accent-hover);
+}
+
+/* U-10 gate: entering Classic needs a desktop-shaped viewport. The gated
+   button stays focusable (aria-disabled, not disabled) so keyboard and
+   screen-reader users can find it and hear why; it must read as
+   unavailable without relying on colour alone (dimmed AND the cursor
+   changes), matching the Classic toolbar's disabled-with-reason look. */
+.classic-toggle[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.classic-toggle[aria-disabled='true']:hover,
+.classic-toggle[aria-disabled='true']:active {
+  background: var(--color-bg-primary);
+  transform: none;
 }
 
 .contrast-toggle:focus,

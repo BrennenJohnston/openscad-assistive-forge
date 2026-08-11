@@ -244,10 +244,12 @@ test.describe('Field stow (UF-2a)', () => {
     page,
   }) => {
     test.setTimeout(300_000);
-    await page.setViewportSize({ width: 900, height: 800 });
     await seedPanes(page, { stowLeft: true });
     await loadProject(page);
+    // U-10: enter at the desktop-shaped default viewport, then narrow —
+    // below-breakpoint Classic is a live-session state, not an entry state.
     await enterClassicStandard(page);
+    await page.setViewportSize({ width: 900, height: 800 });
 
     // The stack has no edges: a stowed section leaves the flow and its rail
     // renders as a full-width restore bar in the field's own stack position —

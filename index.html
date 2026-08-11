@@ -226,6 +226,16 @@
               >
               <span class="ui-mode-slider" aria-hidden="true"></span>
             </button>
+            <!-- U-10: read as the Classic toggle's description while the
+                 viewport gate holds it aria-disabled (phones, portrait,
+                 narrow windows). Leaving Classic is never gated. Sits
+                 BEFORE the button: U-7 pins the toggle as the header's
+                 last element. -->
+            <span id="classicModeToggleReason" class="sr-only"
+              >Classic is desktop-only for now. A mobile version is planned.
+              Use the Assistive Forge interface on phones and narrow
+              windows.</span
+            >
             <button type="button"
               id="classicModeToggle"
               class="btn btn-sm btn-secondary classic-toggle hidden"
@@ -267,6 +277,40 @@
               Refresh
             </button>
             <button type="button" id="updateBannerDismiss" class="btn btn-sm btn-secondary">
+              Dismiss
+            </button>
+          </div>
+        </div>
+      </div>
+      <!-- U-10 boot notice: a saved Classic preference was deferred because
+           this window is phone-shaped (UF-5 P4). Shown once per boot by
+           main.js; the preference itself stays saved. -->
+      <div
+        id="classicGateBanner"
+        class="update-banner hidden"
+        role="region"
+        aria-label="Classic interface notice"
+      >
+        <div class="update-banner-content">
+          <span class="update-banner-text" id="classicGateBannerText"
+            >Your saved choice is the Classic interface, which is
+            desktop-only for now. You are in the Assistive Forge interface
+            on this screen. Classic will open on your next visit from a
+            desktop-sized window.</span
+          >
+          <!-- U-10 in-session notice (UF-5 P5, Q-24a): a live Classic
+               window that turns phone-shaped stays alive; this says so. -->
+          <span class="update-banner-text hidden" id="classicGateLiveText"
+            >This window is now phone-shaped, and Classic is desktop-only
+            for now. You can keep working, or switch to the Assistive
+            Forge interface with the A. Forge button.</span
+          >
+          <div class="update-banner-actions">
+            <button
+              type="button"
+              id="classicGateBannerDismiss"
+              class="btn btn-sm btn-secondary"
+            >
               Dismiss
             </button>
           </div>
@@ -7643,6 +7687,16 @@ No console output yet. Generate a model to see output.</pre
                     >Classic</span
                   >
                 </span>
+                <!-- U-10: shown while the viewport gate disables this card
+                     (C-15 shape: genuinely disabled control + a VISIBLE
+                     reason). Toggled by updateFirstVisitClassicGate(). -->
+                <span
+                  class="first-visit-gate-note hidden"
+                  id="firstVisitClassicGate"
+                  >Classic is desktop-only for now. A mobile version is
+                  planned. Use the Assistive Forge interface on phones and
+                  narrow windows.</span
+                >
                 <img
                   class="first-visit-shot"
                   id="firstVisitClassicShot"
