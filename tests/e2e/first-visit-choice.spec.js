@@ -153,3 +153,58 @@ test.describe('First-visit interface choice', () => {
     expect(results.violations).toEqual([]);
   });
 });
+
+test.describe('First-visit choice on a phone-shaped viewport (U-10, UF-5)', () => {
+  // Plain viewport only — Firefox rejects isMobile at browser-context
+  // creation (the mobile-viewport.spec.js lesson).
+  test.use({ viewport: { width: 375, height: 812 } });
+
+  test('the Classic card is genuinely disabled with a visible notice; Forge still works', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await waitForModal(page);
+
+    // C-15 shape: a real disabled attribute (the label click does nothing,
+    // no snap-back) plus a VISIBLE reason inside the card.
+    const classicRadio = page.locator('#firstVisitChoiceClassic');
+    await expect(classicRadio).toBeDisabled();
+    const note = page.locator('#firstVisitClassicGate');
+    await expect(note).toBeVisible();
+    await expect(note).toContainText('desktop-only for now');
+    await expect(classicRadio).toHaveAttribute(
+      'aria-describedby',
+      /firstVisitClassicGate/
+    );
+
+    // The Forge path is untouched by the gate.
+    await page.locator('#firstVisitChoiceForge').check();
+    await page.locator('#first-visit-continue').click();
+    await expect(page.locator(MODAL)).toBeHidden();
+    await expect(page.locator('body')).not.toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+  });
+
+  test('the Classic card re-enables live when the window turns desktop-shaped', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await waitForModal(page);
+
+    const classicRadio = page.locator('#firstVisitChoiceClassic');
+    await expect(classicRadio).toBeDisabled();
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(classicRadio).toBeEnabled();
+    await expect(page.locator('#firstVisitClassicGate')).toBeHidden();
+
+    // Narrowing again re-gates, and a checked Classic choice is cleared
+    // rather than silently submitted.
+    await classicRadio.check();
+    await page.setViewportSize({ width: 375, height: 812 });
+    await expect(classicRadio).toBeDisabled();
+    await expect(classicRadio).not.toBeChecked();
+  });
+});

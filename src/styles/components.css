@@ -5368,6 +5368,37 @@ body.first-visit-blocking #app {
   padding: 0 var(--space-sm);
 }
 
+/* U-10 gate note: the visible reason inside the Classic card while its
+   radio is genuinely disabled (C-15 shape). Warning tokens, not literals;
+   readable in both themes and high contrast. */
+.first-visit-gate-note {
+  display: block;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-warning-text);
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--border-radius-sm);
+  padding: var(--space-xs) var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+
+/* The gated card reads as unavailable without relying on colour alone:
+   the screenshot dims and the pointer affordance goes away. The note
+   itself stays at full strength — it is the explanation. */
+.first-visit-option:has(input:disabled) {
+  cursor: default;
+}
+
+.first-visit-option:has(input:disabled):hover {
+  border-color: var(--color-border);
+}
+
+.first-visit-option:has(input:disabled) .first-visit-shot,
+.first-visit-option:has(input:disabled) .first-visit-option-head {
+  opacity: 0.5;
+}
+
 .first-visit-shot {
   display: block;
   width: 100%;
