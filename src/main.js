@@ -15329,7 +15329,12 @@ if (typeof window !== 'undefined') {
      * the only way a spec can prove the U-13 theme bleed stays fixed
      * (screenshots can't read a material). Null until a build succeeded.
      *
-     * @returns {{enabled: boolean, inScene: boolean, ticks: number, labels: number, colorHex: number|null}|null}
+     * `distanceMm`/`tickStepMm` expose the UF-7 zoom-adaptive scale so a
+     * spec can prove the overlay re-derived itself after a zoom, and
+     * `nodes` names the depth-honest children (ticks, dashed negatives,
+     * line-glyph digits) actually present under the group.
+     *
+     * @returns {{enabled: boolean, inScene: boolean, ticks: number, labels: number, colorHex: number|null, distanceMm: number|null, tickStepMm: number|null, nodes: string[]}|null}
      */
     axisTickOverlay() {
       const controller = getDisplayOptionsController();
@@ -15342,6 +15347,27 @@ if (typeof window !== 'undefined') {
         ticks: controller._axisTickOverlay?.tickCount ?? 0,
         labels: controller._axisTickOverlay?.labelCount ?? 0,
         colorHex: controller._axisTickOverlay?.colorHex ?? null,
+        distanceMm: controller._axisTickOverlay?.distanceMm ?? null,
+        tickStepMm: controller._axisTickOverlay?.tickStepMm ?? null,
+        nodes: group ? group.children.map((c) => c.name).sort() : [],
+      };
+    },
+
+    /**
+     * The corner XYZ triad's live state (UF-7 P3). `present` reads the
+     * PreviewManager's own reference — the render pass draws exactly when
+     * that reference exists, so a spec asserting on it is asserting on what
+     * the second pass will actually paint. `letterColorHex` is the
+     * scheme-resolved color the letters were built with.
+     * @returns {{enabled: boolean, present: boolean, letterColorHex: number|null}|null}
+     */
+    axisTriad() {
+      const controller = getDisplayOptionsController();
+      if (!controller || !previewManager) return null;
+      return {
+        enabled: controller.get('axes'),
+        present: Boolean(previewManager._axisTriad),
+        letterColorHex: previewManager._axisTriad?.letterColorHex ?? null,
       };
     },
 

@@ -18,7 +18,10 @@ import {
   STORAGE_KEY_GRID,
 } from './storage-keys.js';
 import { announceImmediate } from './announcer.js';
-import { buildAxisTickOverlay } from './axis-tick-overlay.js';
+import {
+  buildAxisTickOverlay,
+  resolveAxisMarkColor,
+} from './axis-tick-overlay.js';
 import { buildAxisLinesOverlay } from './axis-lines-overlay.js';
 import { getUIModeController } from './ui-mode-controller.js';
 
@@ -171,6 +174,16 @@ export class DisplayOptionsController {
         }
         pm.addThemeChangeListener(this._boundThemeRefresh);
       }
+      // The axis overlays are functions of the camera distance (UF-7:
+      // desktop's showScalemarkers rebuilds per frame; ours rebuild when
+      // the zoom actually moves). Orbit and pan keep the target distance,
+      // so this only fires real rebuilds while zooming.
+      if (pm.controls?.addEventListener) {
+        if (!this._boundZoomRefresh) {
+          this._boundZoomRefresh = () => this._queueZoomRebuild();
+        }
+        pm.controls.addEventListener('change', this._boundZoomRefresh);
+      }
 
       this._applyAll();
     } finally {
@@ -187,6 +200,71 @@ export class DisplayOptionsController {
     }
     if (pm.removeThemeChangeListener && this._boundThemeRefresh) {
       pm.removeThemeChangeListener(this._boundThemeRefresh);
+    }
+    if (pm.controls?.removeEventListener && this._boundZoomRefresh) {
+      pm.controls.removeEventListener('change', this._boundZoomRefresh);
+    }
+  }
+
+  /**
+   * Camera distance to the orbit target — desktop `Camera::zoomValue()`,
+   * the number every UF-7 overlay dimension derives from.
+   * @param {Object} pm
+   * @returns {number|null}
+   * @private
+   */
+  _cameraDistanceMm(pm) {
+    const cam = pm?.camera;
+    if (!cam?.position) return null;
+    const target = pm?.controls?.target;
+    const base =
+      target && typeof cam.position.distanceTo === 'function'
+        ? cam.position.distanceTo(target)
+        : typeof cam.position.length === 'function'
+          ? cam.position.length()
+          : null;
+    if (base == null) return null;
+    // Orthographic zoom scales the frustum, not the position — desktop's
+    // one viewer_distance drives both projections, so the effective
+    // distance here is the base divided by that zoom (zoom 2 ≙ half the
+    // visible world ≙ half the distance).
+    if (pm.getProjectionMode?.() === 'orthographic' && pm.orthoCamera) {
+      return base / (pm.orthoCamera.zoom || 1);
+    }
+    return base;
+  }
+
+  /** Coalesce controls 'change' bursts to one rebuild check per frame. @private */
+  _queueZoomRebuild() {
+    if (this._zoomRebuildQueued) return;
+    this._zoomRebuildQueued = true;
+    const raf =
+      typeof requestAnimationFrame === 'function'
+        ? requestAnimationFrame
+        : (fn) => setTimeout(fn, 16);
+    raf(() => {
+      this._zoomRebuildQueued = false;
+      this._rebuildForZoom();
+    });
+  }
+
+  /** @private */
+  _rebuildForZoom() {
+    const pm = this.getPreviewManager();
+    if (!pm?.scene) return;
+    const distance = this._cameraDistanceMm(pm);
+    if (!distance) return;
+    // 0.5% is invisible at these sizes; anything larger re-derives the
+    // whole overlay from the new distance, exactly as the desktop would.
+    const stale = (built) =>
+      typeof built === 'number' && Math.abs(distance - built) / built >= 0.005;
+    if (this.state.axisMarks && stale(this._axisTickOverlay?.distanceMm)) {
+      this._tearDownAxisTickOverlay();
+      this._applyAxisMarks(pm);
+    }
+    if (this.state.axes && stale(this._axesOverlay?.distanceMm)) {
+      this._tearDownAxesOverlay();
+      this._applyAxes(pm);
     }
   }
 
@@ -473,6 +551,7 @@ export class DisplayOptionsController {
         try {
           this._axisTickOverlay = buildAxisTickOverlay(T, {
             themeKey: pm.currentTheme,
+            distanceMm: this._cameraDistanceMm(pm) ?? undefined,
           });
         } catch (err) {
           // Do NOT just log and return. That is what hid this for a whole
@@ -532,6 +611,7 @@ export class DisplayOptionsController {
         // and +100..+200 had no line under them at all.
         this._axesOverlay = buildAxisLinesOverlay(T, {
           themeKey: pm.currentTheme,
+          distanceMm: this._cameraDistanceMm(pm) ?? undefined,
         });
       }
       if (this._axesOverlay && !pm.scene.getObjectByName('__displayAxes')) {
@@ -540,6 +620,7 @@ export class DisplayOptionsController {
     } else if (this._axesOverlay) {
       pm.scene.remove(this._axesOverlay.group);
     }
+    this._syncAxisTriad(pm);
   }
 
   _tearDownAxesOverlay() {
@@ -550,6 +631,21 @@ export class DisplayOptionsController {
     }
     this._axesOverlay.dispose?.();
     this._axesOverlay = null;
+  }
+
+  /**
+   * The corner triad follows the Axes toggle exactly as the desktop's
+   * smallaxes follow Show Axes (UF-7 P3), and its letters wear the same
+   * scheme-resolved color as the axis lines and ticks.
+   * @param {Object} pm
+   * @private
+   */
+  _syncAxisTriad(pm) {
+    if (typeof pm?.setAxisTriad !== 'function') return;
+    pm.setAxisTriad({
+      visible: this.state.axes,
+      letterColorHex: resolveAxisMarkColor(pm.currentTheme).hex,
+    });
   }
 
   _applyEdges(pm) {
@@ -701,6 +797,9 @@ export class DisplayOptionsController {
       if (this._axesOverlay) pm.scene.remove(this._axesOverlay.group);
       if (this._crosshairGroup) pm.scene.remove(this._crosshairGroup);
     }
+    if (typeof pm?.setAxisTriad === 'function') {
+      pm.setAxisTriad({ visible: false });
+    }
     this._removeEdgesOverlay();
     this._tearDownAxisTickOverlay();
     this._axesOverlay?.dispose?.();
@@ -708,6 +807,7 @@ export class DisplayOptionsController {
     this._crosshairGroup = null;
     this._boundRefresh = null;
     this._boundThemeRefresh = null;
+    this._boundZoomRefresh = null;
   }
 }
 

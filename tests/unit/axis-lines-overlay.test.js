@@ -1,11 +1,10 @@
 /**
- * Axis lines overlay (P12) — both halves of each axis, negatives dashed.
+ * Axis lines overlay (P12) — both halves of each axis, negatives dashed;
+ * zoom-length arms since UF-7.
  *
- * The mock deliberately mirrors what getThreeModule() actually hands out.
- * The axis-TICK overlay's suite injects a richer fake than the app provides,
- * which is how 20 green tests sat on top of an overlay that threw on every
- * real attempt; a mock that is more generous than production is a mock that
- * proves nothing.
+ * The mock deliberately mirrors what getThreeModule() actually hands out —
+ * never more. A mock more generous than production is a mock that proves
+ * nothing (the R-IV lesson; the tick overlay's pre-UF-7 suite showed it).
  *
  * @license GPL-3.0-or-later
  */
@@ -127,26 +126,39 @@ describe('buildAxisLinesOverlay', () => {
     }
   });
 
-  it('runs each arm from the origin to its own axis end', () => {
-    const { group } = buildAxisLinesOverlay(makeThree(), { rangeMm: 200 });
+  it('runs each arm from the origin to the camera distance (zoom-length)', () => {
+    const { group, distanceMm } = buildAxisLinesOverlay(makeThree(), {
+      distanceMm: 263.43,
+    });
+    expect(distanceMm).toBe(263.43);
     const by = (name) => group.children.find((l) => l.name === name);
 
     for (const line of group.children) {
       expect(Array.from(positions(line)).slice(0, 3)).toEqual([0, 0, 0]);
     }
-    expect(Array.from(endpoint(by('__displayAxis-xpos')))).toEqual([200, 0, 0]);
-    expect(Array.from(endpoint(by('__displayAxis-xneg')))).toEqual([-200, 0, 0]);
-    expect(Array.from(endpoint(by('__displayAxis-ypos')))).toEqual([0, 200, 0]);
-    expect(Array.from(endpoint(by('__displayAxis-yneg')))).toEqual([0, -200, 0]);
-    expect(Array.from(endpoint(by('__displayAxis-zpos')))).toEqual([0, 0, 200]);
-    expect(Array.from(endpoint(by('__displayAxis-zneg')))).toEqual([0, 0, -200]);
+    const d = 263.43;
+    expect(Array.from(endpoint(by('__displayAxis-xpos')))).toEqual([d, 0, 0]);
+    expect(Array.from(endpoint(by('__displayAxis-xneg')))).toEqual([-d, 0, 0]);
+    expect(Array.from(endpoint(by('__displayAxis-ypos')))).toEqual([0, d, 0]);
+    expect(Array.from(endpoint(by('__displayAxis-yneg')))).toEqual([0, -d, 0]);
+    expect(Array.from(endpoint(by('__displayAxis-zpos')))).toEqual([0, 0, d]);
+    expect(Array.from(endpoint(by('__displayAxis-zneg')))).toEqual([0, 0, -d]);
   });
 
-  it('reaches as far as the tick overlay does', () => {
-    // Ticks are drawn to ±200mm. An axis shorter than its own tick marks
-    // leaves the outermost ones floating in space, which is what AxesHelper(50)
-    // did to every tick beyond 50mm.
-    expect(__test.DEFAULT_AXIS_RANGE_MM).toBe(200);
+  it('shares the tick overlay scale so lines and marks never disagree', () => {
+    // Desktop showAxes() and showScalemarkers() both read cam.zoomValue().
+    // Ours share one default and one dash divisor from axis-tick-overlay.
+    expect(__test.DEFAULT_DISTANCE_MM).toBe(234);
+    expect(__test.DASH_DIVISOR).toBe(90);
+  });
+
+  it('scales the dash with the zoom (desktop stipples in screen pixels)', () => {
+    const { group } = buildAxisLinesOverlay(makeThree(), { distanceMm: 900 });
+    const dashed = group.children.filter((l) => l.material.dashed);
+    for (const line of dashed) {
+      expect(line.material.dashSize).toBeCloseTo(10, 10);
+      expect(line.material.gapSize).toBeCloseTo(10, 10);
+    }
   });
 
   it('draws every arm in the one theme-resolved colour (Q-22)', () => {
@@ -164,12 +176,14 @@ describe('buildAxisLinesOverlay', () => {
     }
   });
 
-  it('falls back to the default range for a nonsense value', () => {
+  it('falls back to the default distance for a nonsense value', () => {
     for (const bad of [0, -5, NaN, Infinity, 'big', null]) {
-      const { group } = buildAxisLinesOverlay(makeThree(), { rangeMm: bad });
+      const { group } = buildAxisLinesOverlay(makeThree(), {
+        distanceMm: bad,
+      });
       const x = group.children.find((l) => l.name === '__displayAxis-xpos');
       expect(Array.from(endpoint(x))).toEqual([
-        __test.DEFAULT_AXIS_RANGE_MM,
+        __test.DEFAULT_DISTANCE_MM,
         0,
         0,
       ]);

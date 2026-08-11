@@ -1,48 +1,60 @@
 /**
- * Axis tick mark overlay (F20).
+ * Axis tick + numeral overlay — a transcription of desktop OpenSCAD
+ * 2021.01's scale markers (U-11, UF-7; owner-approved feature table +
+ * Amendment 1, 2026-08-11).
  *
- * Builds a Three.js Group containing:
- *   - Short tick marks at every 10 mm along the +X, +Y and +Z axes
- *   - Sprite labels at every 50 mm (first label at 50 mm, then 100, 150…)
- *     with the axis letter included on the prominent 50/100 mm ticks
+ * Source of truth: GLView.cc `showScalemarkers()` + `decodeMarkerValue()`
+ * (reference checkout `openscad-openscad-2021.01`). Everything scales from
+ * one number, `l` = camera distance to the look-at point (the status bar's
+ * `distance`; desktop `Camera::zoomValue()`):
+ *
+ *   - tick step   = 10^floor(log10(l)) / 10, ticks from 0 out to l on all
+ *     six half-axes (negative halves dashed, numbers always solid)
+ *   - a number on every 10th tick, plus one every 2nd tick while
+ *     l / 10^floor(log10(l)) < 3 (the "few majors visible" rule)
+ *   - minor tick length l/60, major l/30 — one-sided arms: X ticks extend
+ *     toward −Y, Y and Z ticks toward −X; numbers sit on the OPPOSITE side
+ *   - digits are line-segment glyphs (a pseudo-7-segment vector font, the
+ *     `decodeMarkerValue` vertex tables verbatim): glyph height l/60 in a
+ *     1.25·(l/60) box, width l/120, offset l/240 off the axis, char pitch
+ *     0.75·(l/60). X numbers lie in XY along X; Y numbers in XY along Y
+ *     (mirrored); Z numbers in XZ, digits rotated and stacked along the
+ *     axis. There are no textures and no billboards: the numerals live in
+ *     the world, foreshorten with the view, and depth-test behind solid
+ *     geometry exactly like the ticks (the U-11 order).
  *
  * Colors are resolved scheme-first (U-13): a Classic viewport scheme
  * paints with its own transcribed desktop `axes` color from
- * PREVIEW_COLORS, so the marks match the scheme it belongs to no matter
- * which app theme is active underneath. App themes fall back to the
- * `--color-text-primary` custom property, read from BODY at build time —
- * Classic's token remap is body-scoped while the theme attribute sits on
- * <html>, and custom properties only inherit downward, so an html-level
- * read could bake a dark theme's light foreground into Classic's light
- * scene (the U-13 defect). The body read tracks Light, Dark,
- * High-Contrast, and forced-colors modes without per-theme branches.
+ * PREVIEW_COLORS; app themes fall back to `--color-text-primary` read
+ * from BODY at build time (Classic's token remap is body-scoped while the
+ * theme attribute sits on <html> — an html-level read was the U-13
+ * defect).
  *
- * The overlay is a *child* concept — the existing AxesHelper still
- * draws the coloured axis arms; this module adds metric scale
- * decoration on top. They can be toggled independently per F20.
+ * The one deliberate deviation from desktop: XY-plane content is lifted
+ * +0.05 mm because our scene can show a ground grid at z=0 (desktop has
+ * none) and coplanar lines z-fight.
  *
  * @license GPL-3.0-or-later
  */
 
 import { PREVIEW_COLORS, isViewportSchemeKey } from './preview.js';
 
-const DEFAULT_RANGE_MM = 200; // ± along each axis
-const DEFAULT_TICK_STEP_MM = 10; // small tick every 10 mm
-const DEFAULT_LABEL_STEP_MM = 50; // labelled tick every 50 mm
-const TICK_SHORT_MM = 1.5; // perpendicular length of small ticks
-const TICK_LONG_MM = 3.5; // perpendicular length of labelled ticks
-// Canvas pixels per scene millimetre for the label sprites. Sprites are
-// sized in world units, so this fixes a label's height in mm: at 12, the
-// 48px prominent labels stand 4mm tall against ticks every 10mm and labels
-// every 50mm, which reads without covering the model.
-//
-// This is the first release in which the overlay has ever drawn (it threw on
-// every attempt before — see getThreeModule), so the previous value of 5 had
-// never been seen. It put the labels 9.6mm tall, about 37px on screen at the
-// default camera, large enough to sit over the model itself. No test pins
-// this number; it was set by looking at the rendered viewport against
-// OpenSCAD_1.png.
-const SPRITE_PIXELS_PER_MM = 12;
+// GLView.cc showScalemarkers(): size_div_sm and the labelling cadence.
+const SIZE_DIV_SM = 60;
+const MAJOR_EVERY = 10;
+const MORE_LABELS_THRESHOLD = 3;
+const MORE_LABELS_FREQ = 2;
+// Fallback when no camera distance is supplied (≈ our default camera,
+// |[150,-150,100]|). Callers pass the live distance. Shared with the
+// axis-lines overlay so ticks and lines never disagree about scale.
+export const DEFAULT_DISTANCE_MM = 234;
+// Our grid draws at z=0; desktop has no grid. Coplanar lines z-fight.
+const XY_LIFT_MM = 0.05;
+// Desktop stipples negative halves at a fixed screen size; world-unit
+// dashes must scale with the axis length instead. l/90 ≈ 2.9 mm at the
+// reference distance, matching the shipped 3 mm look there. Shared with
+// the axis-lines overlay (rule: one value, one home).
+export const DASH_DIVISOR = 90;
 const FALLBACK_LIGHT_HEX = 0x222222;
 const FALLBACK_DARK_HEX = 0xdddddd;
 
@@ -96,22 +108,47 @@ export function resolveAxisMarkColor(themeKey, docRef) {
 }
 
 /**
- * Build a fresh axis-tick overlay group. Caller is responsible for
- * adding it to a Three.js scene and for calling `dispose()` on the
- * returned controller when finished.
+ * The zoom-adaptive scale, exactly as showScalemarkers() computes it.
  *
- * @param {Object} three            Three.js module (THREE).
+ * @param {number} distanceMm Camera distance to the look-at point.
+ * @returns {{distanceMm: number, lAdjusted: number, tickStepMm: number,
+ *            extraLabels: boolean}}
+ */
+export function computeScale(distanceMm) {
+  const l = clampPositive(distanceMm, DEFAULT_DISTANCE_MM);
+  // The 1e-9 nudge absorbs the camera write path's float round-trip: the
+  // Viewport-Control panel re-derives the position through a rotation
+  // matrix, so a typed 1000 arrives as 999.9999999999992 and a bare
+  // floor(log10) would drop a whole decade (600 ticks instead of 60 —
+  // caught by the UF-7 e2e zoom probe). Desktop C++ never sees this
+  // because its viewer_distance stays a clean scalar.
+  const lAdjusted = Math.pow(10, Math.floor(Math.log10(l) + 1e-9));
+  return {
+    distanceMm: l,
+    lAdjusted,
+    tickStepMm: lAdjusted / 10,
+    extraLabels: l / lAdjusted < MORE_LABELS_THRESHOLD,
+  };
+}
+
+/**
+ * Build a fresh axis-tick overlay group. Caller is responsible for adding
+ * it to a Three.js scene, for rebuilding it when the camera distance
+ * changes (the whole overlay is a function of that distance), and for
+ * calling `dispose()` on the returned controller when finished.
+ *
+ * @param {Object} three            Three.js module (getThreeModule()).
  * @param {Object} [opts]
- * @param {string} [opts.themeKey]  Preview theme key, used for color fallback.
- * @param {number} [opts.rangeMm]   Half-extent along each axis. Default 200 mm.
- * @param {number} [opts.tickStepMm] Spacing between small ticks. Default 10 mm.
- * @param {number} [opts.labelStepMm] Spacing between labelled ticks. Default 50 mm.
+ * @param {string} [opts.themeKey]  Preview theme key, used for color resolution.
+ * @param {number} [opts.distanceMm] Camera distance to the look-at point.
  * @param {Document} [opts.document] Override `document` (tests).
  * @returns {{
  *   group: Object,
  *   labelCount: number,
  *   tickCount: number,
  *   colorHex: number,
+ *   distanceMm: number,
+ *   tickStepMm: number,
  *   dispose: () => void,
  * }}
  */
@@ -120,178 +157,316 @@ export function buildAxisTickOverlay(three, opts = {}) {
     throw new Error('buildAxisTickOverlay requires a Three.js module');
 
   const themeKey = opts.themeKey || 'light';
-  const rangeMm = clampPositive(opts.rangeMm, DEFAULT_RANGE_MM);
-  const tickStepMm = clampPositive(opts.tickStepMm, DEFAULT_TICK_STEP_MM);
-  const labelStepMm = clampPositive(opts.labelStepMm, DEFAULT_LABEL_STEP_MM);
   const docRef = opts.document ?? globalThis.document;
+  const { hex: colorHex } = resolveAxisMarkColor(themeKey, docRef);
 
-  const { hex: colorHex, css: colorCss } = resolveAxisMarkColor(
-    themeKey,
-    docRef
-  );
+  const marker = buildMarkerGeometry(opts.distanceMm);
 
   const group = new three.Group();
   group.name = '__axisTickOverlay';
-  // Make sure ticks render above the build plate but stay below the
-  // model. Tiny Z lift avoids z-fighting with the gridplane on Z=0.
-  group.renderOrder = 10;
+  // Deliberately NO renderOrder and no depth opt-outs anywhere below:
+  // marks hidden behind solid geometry are the feature (U-11).
 
-  const lineMat = new three.LineBasicMaterial({
+  const lineMat = new three.LineBasicMaterial({ color: colorHex });
+  const dashMat = new three.LineDashedMaterial({
     color: colorHex,
-    transparent: true,
-    opacity: 1,
+    dashSize: marker.distanceMm / DASH_DIVISOR,
+    gapSize: marker.distanceMm / DASH_DIVISOR,
   });
-  const tickGeometry = new three.BufferGeometry();
-  const positions = collectTickPositions({
-    rangeMm,
-    tickStepMm,
-    labelStepMm,
-  });
-  tickGeometry.setAttribute(
-    'position',
-    new three.Float32BufferAttribute(positions, 3)
+
+  const makeSegments = (positions, material, name) => {
+    const geometry = new three.BufferGeometry();
+    geometry.setAttribute(
+      'position',
+      new three.Float32BufferAttribute(positions, 3)
+    );
+    const segments = new three.LineSegments(geometry, material);
+    segments.name = name;
+    return { geometry, segments };
+  };
+
+  const solid = makeSegments(marker.solidTicks, lineMat, '__axisTickLines');
+  const dashed = makeSegments(
+    marker.dashedTicks,
+    dashMat,
+    '__axisTickLinesNeg'
   );
-  const tickLines = new three.LineSegments(tickGeometry, lineMat);
-  tickLines.name = '__axisTickLines';
-  group.add(tickLines);
+  // Dashes are computed from per-vertex distances; without this the
+  // dashed material renders solid (the R-IV lesson).
+  dashed.segments.computeLineDistances();
+  const digits = makeSegments(marker.digits, lineMat, '__axisTickDigits');
 
-  /** @type {Array<{ texture: any, material: any, sprite: any, canvas: any }>} */
-  const labels = [];
+  group.add(solid.segments);
+  group.add(dashed.segments);
+  group.add(digits.segments);
 
-  // Build labelled sprites. Include the axis letter on the prominent
-  // 50 / 100 mm ticks per the F20 acceptance criteria; bare numbers
-  // for ≥150 mm to keep the scene readable.
-  for (let mm = labelStepMm; mm <= rangeMm; mm += labelStepMm) {
-    const isProminent = mm === 50 || mm === 100;
-    for (const axis of ['x', 'y', 'z']) {
-      for (const sign of [1, -1]) {
-        const label = isProminent
-          ? `${sign === -1 ? '-' : ''}${mm} ${axis.toUpperCase()}`
-          : `${sign === -1 ? '-' : ''}${mm}`;
-        const sprite = makeLabelSprite(three, {
-          text: label,
-          colorCss,
-          docRef,
-          isProminent,
-        });
-        if (!sprite) continue;
-        const offset = TICK_LONG_MM * 1.6;
-        if (axis === 'x') {
-          sprite.sprite.position.set(sign * mm, offset, 0);
-        } else if (axis === 'y') {
-          sprite.sprite.position.set(0, sign * mm, offset);
-        } else {
-          sprite.sprite.position.set(offset, 0, sign * mm);
-        }
-        sprite.sprite.userData.axisMark = { axis, mm: sign * mm, isProminent };
-        group.add(sprite.sprite);
-        labels.push(sprite);
+  return {
+    group,
+    labelCount: marker.labelCount,
+    tickCount: marker.tickCount,
+    colorHex,
+    distanceMm: marker.distanceMm,
+    tickStepMm: marker.tickStepMm,
+    dispose: () => {
+      solid.geometry.dispose?.();
+      dashed.geometry.dispose?.();
+      digits.geometry.dispose?.();
+      lineMat.dispose?.();
+      dashMat.dispose?.();
+    },
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ * decodeMarkerValue() transcription — the vector glyph font.
+ *
+ * Each character is drawn inside a six-vertex box (A..F):
+ *   A--B      row A/B at height 1.25u ("dig_h")
+ *   |  |      row C/D at 0.875u ("dig_h/2 + dig_buf")
+ *   C--D      row E/F at 0.25u  ("dig_buf")
+ *   |  |      width u/2, char pitch 0.75u, u = l/60
+ *   E--F
+ * laid out in "canonical" coordinates (along-axis, off-axis-height) and
+ * then permuted per axis-direction by AX. The OR_* tables re-order the
+ * stroke walk per direction — that is how the desktop mirrors glyphs for
+ * the axes whose plane basis is left-handed, so numbers read correctly
+ * from the canonical viewpoint. Transcribed verbatim, not re-derived.
+ * ------------------------------------------------------------------ */
+
+// Component order (canonical → world) per direction di:
+// 0:+X, 1:+Y, 2:+Z, 3:−X, 4:−Y, 5:−Z.
+const AX = [
+  [0, 1, 2],
+  [1, 0, 2],
+  [1, 2, 0],
+  [0, 1, 2],
+  [1, 0, 2],
+  [1, 2, 0],
+];
+
+const OR_2 = [
+  [0, 1, 3, 2, 4, 5],
+  [1, 0, 2, 3, 5, 4],
+  [1, 0, 2, 3, 5, 4],
+  [1, 0, 2, 3, 5, 4],
+  [0, 1, 3, 2, 4, 5],
+  [0, 1, 3, 2, 4, 5],
+];
+
+const OR_3 = [
+  [0, 1, 3, 2, 3, 5, 4],
+  [1, 0, 2, 3, 2, 4, 5],
+  [1, 0, 2, 3, 2, 4, 5],
+  [1, 0, 2, 3, 2, 4, 5],
+  [0, 1, 3, 2, 3, 5, 4],
+  [0, 1, 3, 2, 3, 5, 4],
+];
+
+const OR_4 = [
+  [0, 2, 3, 1, 5],
+  [1, 3, 2, 0, 4],
+  [1, 3, 2, 0, 4],
+  [1, 3, 2, 0, 4],
+  [0, 2, 3, 1, 5],
+  [0, 2, 3, 1, 5],
+];
+
+const OR_5 = [
+  [1, 0, 2, 3, 5, 4],
+  [0, 1, 3, 2, 4, 5],
+  [0, 1, 3, 2, 4, 5],
+  [0, 1, 3, 2, 4, 5],
+  [1, 0, 2, 3, 5, 4],
+  [1, 0, 2, 3, 5, 4],
+];
+
+const OR_6 = [
+  [1, 0, 4, 5, 3, 2],
+  [0, 1, 5, 4, 2, 3],
+  [0, 1, 5, 4, 2, 3],
+  [0, 1, 5, 4, 2, 3],
+  [1, 0, 4, 5, 3, 2],
+  [1, 0, 4, 5, 3, 2],
+];
+
+const OR_7 = [
+  [0, 1, 4],
+  [1, 0, 5],
+  [1, 0, 5],
+  [1, 0, 5],
+  [0, 1, 4],
+  [0, 1, 4],
+];
+
+const OR_9 = [
+  [5, 1, 0, 2, 3],
+  [4, 0, 1, 3, 2],
+  [4, 0, 1, 3, 2],
+  [4, 0, 1, 3, 2],
+  [5, 1, 0, 2, 3],
+  [5, 1, 0, 2, 3],
+];
+
+const OR_E = [
+  [1, 0, 2, 3, 2, 4, 5],
+  [0, 1, 3, 2, 3, 5, 4],
+  [0, 1, 3, 2, 3, 5, 4],
+  [0, 1, 3, 2, 3, 5, 4],
+  [1, 0, 2, 3, 2, 4, 5],
+  [1, 0, 2, 3, 2, 4, 5],
+];
+
+// Symmetric glyphs use one fixed vertex walk; the rest carry per-direction
+// OR tables. mode: 'lines' = independent pairs, 'strip' = connected walk,
+// 'loop' = strip closed back to its first vertex.
+const GLYPHS = {
+  1: { mode: 'lines', fixed: [0, 4] },
+  2: { mode: 'strip', or: OR_2 },
+  3: { mode: 'strip', or: OR_3 },
+  4: { mode: 'strip', or: OR_4 },
+  5: { mode: 'strip', or: OR_5 },
+  6: { mode: 'strip', or: OR_6 },
+  7: { mode: 'strip', or: OR_7 },
+  8: { mode: 'strip', fixed: [2, 3, 1, 0, 4, 5, 3] },
+  9: { mode: 'strip', or: OR_9 },
+  0: { mode: 'loop', fixed: [0, 1, 5, 4] },
+  '-': { mode: 'lines', fixed: [2, 3] },
+  '.': { mode: 'lines', fixed: [4, 5] },
+  e: { mode: 'strip', or: OR_E },
+};
+
+/**
+ * Match C++ `STR(i)` (ostringstream, 6 significant digits): our loop
+ * multiplies k·step, but callers still must never see "30.000000000000004".
+ * @param {number} value
+ */
+function formatMarkerNumber(value) {
+  return String(Number(value.toPrecision(6)));
+}
+
+/**
+ * All tick + numeral vertex data for one camera distance.
+ *
+ * @param {number|undefined} distanceMm
+ * @returns {{distanceMm: number, tickStepMm: number, solidTicks: number[],
+ *            dashedTicks: number[], digits: number[], tickCount: number,
+ *            labelCount: number}}
+ */
+function buildMarkerGeometry(distanceMm) {
+  const { distanceMm: l, tickStepMm, extraLabels } = computeScale(distanceMm);
+  const unit = l / SIZE_DIV_SM;
+  const minor = unit;
+  const major = l / (SIZE_DIV_SM / 2);
+
+  const solidTicks = [];
+  const dashedTicks = [];
+  const digits = [];
+  let tickCount = 0;
+  let labelCount = 0;
+
+  const nz = (v) => (v === 0 ? 0 : v);
+  const pushTick = (out, sx, sy, sz, ex, ey, ez) => {
+    out.push(nz(sx), nz(sy), nz(sz), nz(ex), nz(ey), nz(ez));
+    tickCount++;
+  };
+
+  for (let k = 0; k * tickStepMm < l; k++) {
+    const i = k * tickStepMm;
+    const isMajor = k > 0 && k % MAJOR_EVERY === 0;
+    const len = isMajor ? major : minor;
+
+    // One-sided arms (GLView.cc "1 arm" form): X ticks toward −Y,
+    // Y and Z ticks toward −X. XY-plane content carries the grid lift.
+    pushTick(solidTicks, i, 0, XY_LIFT_MM, i, -len, XY_LIFT_MM);
+    pushTick(solidTicks, 0, i, XY_LIFT_MM, -len, i, XY_LIFT_MM);
+    pushTick(solidTicks, 0, 0, i, -len, 0, i);
+    pushTick(dashedTicks, -i, 0, XY_LIFT_MM, -i, -len, XY_LIFT_MM);
+    pushTick(dashedTicks, 0, -i, XY_LIFT_MM, -len, -i, XY_LIFT_MM);
+    pushTick(dashedTicks, 0, 0, -i, -len, 0, -i);
+
+    const labelled =
+      isMajor || (extraLabels && k > 0 && k % MORE_LABELS_FREQ === 0);
+    if (labelled) {
+      const text = formatMarkerNumber(i);
+      for (let di = 0; di < 6; di++) {
+        emitMarkerNumber(digits, text, i, di, unit);
+        labelCount++;
       }
     }
   }
 
   return {
-    group,
-    labelCount: labels.length,
-    tickCount: positions.length / 6,
-    colorHex,
-    dispose: () => {
-      tickGeometry.dispose?.();
-      lineMat.dispose?.();
-      labels.forEach(({ texture, material, sprite, canvas }) => {
-        texture?.dispose?.();
-        material?.dispose?.();
-        sprite?.geometry?.dispose?.();
-        if (canvas?.width != null) canvas.width = 0;
-      });
-      labels.length = 0;
-    },
+    distanceMm: l,
+    tickStepMm,
+    solidTicks,
+    dashedTicks,
+    digits,
+    tickCount,
+    labelCount,
   };
 }
 
 /**
- * @param {Object} three
- * @param {{ text: string, colorCss: string, docRef: Document, isProminent: boolean }} opts
+ * Emit one number's glyph strokes as line-segment pairs.
+ *
+ * @param {number[]} out    Flat vertex triplets, appended in place.
+ * @param {string} text     Unsigned number text (e.g. "20", "0.5").
+ * @param {number} i        Distance along the axis, always positive.
+ * @param {number} di       Direction 0..5 (+X,+Y,+Z,−X,−Y,−Z).
+ * @param {number} unit     l/60.
  */
-function makeLabelSprite(three, { text, colorCss, docRef, isProminent }) {
-  const doc = docRef;
-  if (!doc?.createElement) return null;
-  const canvas = doc.createElement('canvas');
-  // jsdom lacks 2D context; bail out so unit tests in node don't choke.
-  const ctx =
-    typeof canvas.getContext === 'function' ? canvas.getContext('2d') : null;
-  if (!ctx) {
-    // Without a 2D context we cannot rasterise text — return a
-    // placeholder Sprite with no texture so the count assertions in
-    // tests still hold and the visible scene degrades gracefully.
-    const placeholderMat = new three.SpriteMaterial({
-      transparent: true,
-      opacity: 0,
-    });
-    const placeholderSprite = new three.Sprite(placeholderMat);
-    placeholderSprite.scale.set(0, 0, 0);
-    return {
-      sprite: placeholderSprite,
-      texture: null,
-      material: placeholderMat,
-      canvas,
+function emitMarkerNumber(out, text, i, di, unit) {
+  const polarity = di > 2 ? -1 : 1;
+  let chars = di > 2 ? `-${text}` : text;
+  if (di > 0 && di < 4) chars = [...chars].reverse().join('');
+
+  const buf = unit / 4;
+  const w = unit / 2;
+  const h = unit + buf;
+  const pitch = w + buf;
+  const axMap = AX[di];
+  // The grid lift applies to the XY-plane numbers (X and Y axes); the Z
+  // axis's numbers live in XZ where there is no grid.
+  const lift = di === 2 || di === 5 ? 0 : XY_LIFT_MM;
+
+  for (let charNum = 0; charNum < chars.length; charNum++) {
+    const glyph = GLYPHS[chars[charNum]];
+    // Desktop's switch has no default: unknown characters draw nothing.
+    if (!glyph) continue;
+
+    const cx = i + charNum * pitch;
+    // Canonical box vertices as (along, height) pairs, rows A/B, C/D, E/F.
+    const box = [
+      [cx - w / 2, h],
+      [cx + w / 2, h],
+      [cx - w / 2, h / 2 + buf],
+      [cx + w / 2, h / 2 + buf],
+      [cx - w / 2, buf],
+      [cx + w / 2, buf],
+    ];
+    const vertex = (idx) => {
+      const canonical = [polarity * box[idx][0], box[idx][1], 0];
+      return [
+        canonical[axMap[0]],
+        canonical[axMap[1]],
+        canonical[axMap[2]] + lift,
+      ];
     };
-  }
 
-  const fontSize = isProminent ? 36 : 28;
-  const padding = 6;
-  ctx.font = `${isProminent ? '600' : '400'} ${fontSize}px sans-serif`;
-  const metrics = ctx.measureText(text);
-  const textWidth = Math.ceil(metrics.width);
-  canvas.width = textWidth + padding * 2;
-  canvas.height = fontSize + padding * 2;
-
-  // Re-set font after resize (canvas state resets on dimension change).
-  ctx.font = `${isProminent ? '600' : '400'} ${fontSize}px sans-serif`;
-  ctx.textBaseline = 'top';
-  ctx.fillStyle = colorCss;
-  ctx.fillText(text, padding, padding);
-
-  const texture = new three.CanvasTexture(canvas);
-  texture.needsUpdate = true;
-  const material = new three.SpriteMaterial({
-    map: texture,
-    transparent: true,
-    depthTest: false,
-    depthWrite: false,
-  });
-  const sprite = new three.Sprite(material);
-  // Convert canvas dimensions to scene units so the sprite reads the
-  // same physical size at the current camera distance regardless of
-  // model scale.
-  sprite.scale.set(
-    canvas.width / SPRITE_PIXELS_PER_MM,
-    canvas.height / SPRITE_PIXELS_PER_MM,
-    1
-  );
-  return { sprite, texture, material, canvas };
-}
-
-/**
- * @param {{rangeMm: number, tickStepMm: number, labelStepMm: number}} opts
- * @returns {number[]} Flat array of triplets: x0,y0,z0, x1,y1,z1, ...
- */
-function collectTickPositions({ rangeMm, tickStepMm, labelStepMm }) {
-  const out = [];
-  for (let mm = tickStepMm; mm <= rangeMm; mm += tickStepMm) {
-    const isLabelled = mm % labelStepMm === 0;
-    const half = (isLabelled ? TICK_LONG_MM : TICK_SHORT_MM) / 2;
-    for (const sign of [1, -1]) {
-      const v = sign * mm;
-      // X-axis ticks: line in Y direction (small perpendicular dash)
-      out.push(v, -half, 0, v, half, 0);
-      // Y-axis ticks: line in X direction
-      out.push(-half, v, 0, half, v, 0);
-      // Z-axis ticks: line in X direction (perpendicular off Z)
-      out.push(-half, 0, v, half, 0, v);
+    const seq = glyph.or ? glyph.or[di] : glyph.fixed;
+    if (glyph.mode === 'lines') {
+      for (let s = 0; s + 1 < seq.length; s += 2) {
+        out.push(...vertex(seq[s]), ...vertex(seq[s + 1]));
+      }
+    } else {
+      for (let s = 0; s + 1 < seq.length; s++) {
+        out.push(...vertex(seq[s]), ...vertex(seq[s + 1]));
+      }
+      if (glyph.mode === 'loop') {
+        out.push(...vertex(seq[seq.length - 1]), ...vertex(seq[0]));
+      }
     }
   }
-  return out;
 }
 
 /** @param {unknown} v @param {number} fallback */
@@ -359,8 +534,17 @@ function clamp255(s) {
 // Exported for tests.
 export const __test = {
   parseCssColorToHex,
-  collectTickPositions,
   hexToCss,
-  TICK_SHORT_MM,
-  TICK_LONG_MM,
+  buildMarkerGeometry,
+  emitMarkerNumber,
+  formatMarkerNumber,
+  AX,
+  GLYPHS,
+  SIZE_DIV_SM,
+  MAJOR_EVERY,
+  MORE_LABELS_THRESHOLD,
+  MORE_LABELS_FREQ,
+  XY_LIFT_MM,
+  DASH_DIVISOR,
+  DEFAULT_DISTANCE_MM,
 };

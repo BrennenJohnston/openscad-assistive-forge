@@ -33,11 +33,13 @@ import {
   Sprite,
   SpriteMaterial,
   Texture,
+  Vector2,
   Vector3,
   WebGLRenderer,
 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
+import { buildAxisTriadOverlay } from './axis-triad-overlay.js';
 import { normalizeHexColor } from './color-utils.js';
 import { get2DStylePalette } from './state-colors.js';
 import {
@@ -69,6 +71,9 @@ ColorManagement.enabled = false;
 
 /** Default grid config — 220×220mm matches popular mid-range FDM printers (Creality K1C, FlashForge Adventurer 5M Pro) */
 const DEFAULT_GRID_CONFIG = { widthMm: 220, heightMm: 220 };
+
+/** Scratch target for renderer.getSize() in the triad pass (r162 requires one). */
+const _triadSizeScratch = new Vector2();
 
 export function isThreeJsLoaded() {
   return true;
@@ -492,6 +497,10 @@ export class PreviewManager {
     // Render hooks for extensibility
     this._renderOverride = null;
     this._resizeHook = null;
+    // Corner XYZ triad (UF-7): a second render pass in the default branch
+    // of animate(). Follows the Axes display option (desktop: showSmallaxes
+    // runs iff showaxes).
+    this._axisTriad = null;
     this._postLoadHook = null; // Called after STL is loaded
     this._postLoadListeners = []; // Multi-listener post-load event
     this._themeChangeListeners = []; // Multi-listener theme-change event (F20)
@@ -1335,9 +1344,62 @@ export class PreviewManager {
     if (this.controls) this.controls.update();
     if (!this.renderer) return;
     if (this._renderOverride) {
+      // The HFM alternative view replaces the whole pass, triad included.
       this._renderOverride();
     } else {
       this.renderer.render(this.scene, this.getActiveCamera());
+      this._renderAxisTriadPass();
+    }
+  }
+
+  /**
+   * The corner triad's second pass (UF-7 P3): a scissored viewport in the
+   * lower-left (Q-26), depth cleared so the triad draws over whatever sits
+   * in its corner — the desktop renders its smallaxes with GL_ALWAYS. The
+   * triad camera copies only the main camera's rotation, so pan and zoom
+   * leave it untouched.
+   */
+  _renderAxisTriadPass() {
+    const triad = this._axisTriad;
+    if (!triad || !this.renderer) return;
+
+    const size = this.renderer.getSize(_triadSizeScratch);
+    const box = triad.layout(size.x, size.y);
+    if (!box) return;
+
+    triad.syncTo(this.getActiveCamera());
+
+    const renderer = this.renderer;
+    renderer.autoClear = false;
+    renderer.setScissorTest(true);
+    renderer.setViewport(box.x, box.y, box.size, box.size);
+    renderer.setScissor(box.x, box.y, box.size, box.size);
+    renderer.clearDepth();
+    renderer.render(triad.scene, triad.camera);
+    renderer.setScissorTest(false);
+    renderer.setViewport(0, 0, size.x, size.y);
+    renderer.autoClear = true;
+  }
+
+  /**
+   * Show, hide or recolor the corner triad. Called by the display-options
+   * controller wherever the Axes overlay is applied, with the same
+   * resolveAxisMarkColor() result the axis lines use for the letters.
+   *
+   * @param {{visible: boolean, letterColorHex?: number}} opts
+   */
+  setAxisTriad({ visible, letterColorHex }) {
+    if (!visible) {
+      this._axisTriad?.dispose();
+      this._axisTriad = null;
+      return;
+    }
+    if (this._axisTriad && this._axisTriad.letterColorHex !== letterColorHex) {
+      this._axisTriad.dispose();
+      this._axisTriad = null;
+    }
+    if (!this._axisTriad) {
+      this._axisTriad = buildAxisTriadOverlay({ letterColorHex });
     }
   }
 
@@ -2980,6 +3042,12 @@ export class PreviewManager {
       this.orthoCamera.zoom *= amount > 0 ? factor : 1 / factor;
       this.orthoCamera.zoom = Math.max(0.01, this.orthoCamera.zoom);
       this.orthoCamera.updateProjectionMatrix();
+      // controls.update() below only dispatches 'change' when the camera
+      // POSITION moved; an ortho zoom moves nothing, so the axis overlays'
+      // zoom-rebuild listener (UF-7) would never hear it. The wheel path
+      // through OrbitControls sets its own zoomChanged flag; this keyboard/
+      // button path has to say so itself.
+      this.controls.dispatchEvent?.({ type: 'change' });
     } else {
       // Perspective: translate camera along view direction
       const camera = this.getActiveCamera();
@@ -4827,6 +4895,8 @@ export class PreviewManager {
     // Clear any render/resize hooks
     this._renderOverride = null;
     this._resizeHook = null;
+    this._axisTriad?.dispose();
+    this._axisTriad = null;
 
     // Clear resize tracking state
     this._lastAspect = null;
