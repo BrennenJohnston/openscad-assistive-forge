@@ -286,6 +286,35 @@ body[data-ui-mode='classic'] .toolbar-menu-body {
   padding: var(--space-2xs) 0;
 }
 
+/* Preferences anchors over the editor column like the desktop's own dialog,
+   and its backdrop goes fully clear, so the 3D view stays visible and
+   live-previews scheme changes beside the open dialog (U-15a, Q-31a).
+   Modal semantics are untouched — focus trap, Escape, click-outside —
+   only the geometry moves. Classic is gated to >=1024 desktop-shaped
+   viewports (U-10), so phone modal layouts never meet these rules. */
+body[data-ui-mode='classic'] #preferencesModal {
+  justify-content: flex-start;
+  padding-left: calc(var(--space-lg) + env(safe-area-inset-left, 0px));
+}
+
+/* Measured against the canvas: a centered dialog covers 100% of it at any
+   usable width, so only left-anchoring works. 560px beside a 1400 window
+   leaves two thirds of the canvas clear; 480px at the 1024 gate minimum
+   leaves about half. The tab row wraps at the narrow end; the APG tab
+   pattern is unaffected by wrapping. */
+body[data-ui-mode='classic']
+  #preferencesModal
+  .modal-content.preferences-modal-content {
+  width: clamp(480px, 40vw, 560px);
+  max-width: 560px;
+}
+
+body[data-ui-mode='classic'] #preferencesModal .modal-overlay {
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 /* Icon toolbar (C6) — desktop OpenSCAD's second row, docked under the menu
    bar. Hidden outside classic and via View > Hide Toolbar. */
 .classic-toolbar {
