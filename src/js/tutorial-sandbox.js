@@ -41,6 +41,9 @@ let tutorialOverlay = null;
 let triggerElement = null;
 let previousFocus = null; // Store focus to restore on close
 let preTutorialMode = null; // Store UI mode to restore on close
+let preTutorialDensity = null; // Classic density to hand back after a forced switch
+let tutorialForcedMode = false; // True while the tutorial itself switched the interface
+let modeChangeUnsubscribe = null; // ui-mode subscription active while a tutorial runs
 let completionListeners = [];
 let stepCompleted = true;
 let resizeObserver = null;
@@ -2115,17 +2118,27 @@ export async function startTutorial(tutorialId, { triggerEl } = {}) {
   currentStepIndex = startIndex;
   isMinimized = false;
 
-  // Switch to Simplified mode for intro tutorial so the UI is simplified
+  // Switch to Simplified mode for intro tutorial so the UI is simplified.
+  // Capture the Classic density first: the forced switch must never leave
+  // its 'simplified' behind as the user's density or saved preference (U-12).
   const modeCtrl = getUIModeController();
   preTutorialMode = modeCtrl.getMode();
+  preTutorialDensity = modeCtrl.getClassicDensity();
+  tutorialForcedMode = false;
   if (tutorialId === 'intro' && preTutorialMode !== 'simplified') {
-    modeCtrl.switchMode('simplified', {
-      skipAnnouncement: true,
-      skipFocus: true,
-    });
+    tutorialForcedMode =
+      modeCtrl.switchMode('simplified', {
+        skipAnnouncement: true,
+        skipFocus: true,
+      }) === true;
   }
 
   createTutorialOverlay();
+
+  // Q-28a: a user interface switch wins over a running tutorial
+  modeChangeUnsubscribe = modeCtrl.subscribe((newMode) =>
+    handleModeChangeDuringTutorial(newMode)
+  );
   await showStep(startIndex);
   announceToScreenReader(
     `${tutorial.title} started. Step ${startIndex + 1} of ${tutorial.steps.length}. Press Escape to exit at any time.`,
@@ -3555,11 +3568,56 @@ function clearCompletionListeners() {
 }
 
 /**
+ * Q-28a (owner, 2026-08-11): a user interface switch wins over a running
+ * tutorial. Close cleanly with progress saved and one announcement, never
+ * switch the user back, and hand back any Classic density the tutorial's
+ * own forced switch planted (U-12's empty-Classic poisoning).
+ * @param {string} newMode - Mode the user switched into
+ */
+function handleModeChangeDuringTutorial(newMode) {
+  if (!activeTutorial) return;
+
+  const title = activeTutorial.title;
+  const stepsTotal = activeTutorial.steps?.length || 0;
+  const stepCurrent = currentStepIndex + 1;
+
+  const progressSaved = currentStepIndex > 0;
+  if (progressSaved) {
+    saveTutorialProgress(currentStepIndex);
+  }
+
+  const densityToRepair =
+    tutorialForcedMode && newMode === 'classic' ? preTutorialDensity : null;
+
+  closeTutorial(false, { skipModeRestore: true, skipAnnouncement: true });
+
+  if (densityToRepair) {
+    getUIModeController().setClassicDensity(densityToRepair, {
+      skipAnnouncement: true,
+    });
+  }
+
+  announceToScreenReader(
+    `${title} tutorial closed at step ${stepCurrent} of ${stepsTotal} because the interface changed.${progressSaved ? ' Progress saved.' : ''}`,
+    'assertive'
+  );
+}
+
+/**
  * Close the tutorial and clean up
  * @param {boolean} completed - Whether tutorial was completed (vs cancelled)
+ * @param {Object} [options]
+ * @param {boolean} [options.skipModeRestore] - Do not switch back to the
+ *   pre-tutorial mode (the close was caused by the user's own mode switch)
+ * @param {boolean} [options.skipAnnouncement] - Caller announces instead
  */
-export function closeTutorial(completed = false) {
+export function closeTutorial(completed = false, options = {}) {
   if (!tutorialOverlay) return;
+
+  if (modeChangeUnsubscribe) {
+    modeChangeUnsubscribe();
+    modeChangeUnsubscribe = null;
+  }
 
   clearCompletionListeners();
   clearDrawerObserver();
@@ -3691,17 +3749,39 @@ export function closeTutorial(completed = false) {
   previousFocus = null;
   triggerElement = null;
 
-  // Restore pre-tutorial UI mode if the tutorial changed it
-  if (preTutorialMode) {
+  // Restore pre-tutorial UI mode if the tutorial changed it - unless the
+  // close was caused by the user's own switch, which must stand (Q-28a).
+  if (preTutorialMode && !options.skipModeRestore) {
     const modeCtrl = getUIModeController();
     if (modeCtrl.getMode() !== preTutorialMode) {
-      modeCtrl.switchMode(preTutorialMode, {
+      const restored = modeCtrl.switchMode(preTutorialMode, {
         skipAnnouncement: true,
         skipFocus: true,
       });
+      if (
+        restored &&
+        tutorialForcedMode &&
+        preTutorialMode === 'classic' &&
+        preTutorialDensity
+      ) {
+        // The restore switch itself records the tutorial's forced mode as
+        // the Classic density; hand the user's real density back (U-12).
+        modeCtrl.setClassicDensity(preTutorialDensity, {
+          skipAnnouncement: true,
+        });
+      }
+      if (!restored && preTutorialMode === 'classic') {
+        // UF-5's viewport gate refused Classic (window too small). Never
+        // strand the user silently in a mode they did not choose.
+        announceToScreenReader(
+          'Classic needs a wider window right now, so you are staying in Assistive Forge. Your file stays open.'
+        );
+      }
     }
   }
   preTutorialMode = null;
+  preTutorialDensity = null;
+  tutorialForcedMode = false;
 
   activeTutorial = null;
   currentStepIndex = 0;
@@ -3709,9 +3789,11 @@ export function closeTutorial(completed = false) {
   currentTarget = null;
   consecutiveFailures = 0;
 
-  announceToScreenReader(
-    `Tutorial closed at step ${currentStep} of ${stepsTotal}.`
-  );
+  if (!options.skipAnnouncement) {
+    announceToScreenReader(
+      `Tutorial closed at step ${currentStep} of ${stepsTotal}.`
+    );
+  }
 }
 
 /**
