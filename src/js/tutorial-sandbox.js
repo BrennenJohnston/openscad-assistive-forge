@@ -41,6 +41,9 @@ let tutorialOverlay = null;
 let triggerElement = null;
 let previousFocus = null; // Store focus to restore on close
 let preTutorialMode = null; // Store UI mode to restore on close
+let preTutorialDensity = null; // Classic density to hand back after a forced switch
+let tutorialForcedMode = false; // True while the tutorial itself switched the interface
+let modeChangeUnsubscribe = null; // ui-mode subscription active while a tutorial runs
 let completionListeners = [];
 let stepCompleted = true;
 let resizeObserver = null;
@@ -822,12 +825,25 @@ function getStepContent(step) {
 }
 
 /**
+ * Modes a tutorial runs in when it does not declare its own homeModes.
+ * Tutorials whose targets are Forge chrome break over the Classic DOM
+ * (U-12), so cross-interface launches go through the consent dialog.
+ */
+const FORGE_HOME_MODES = ['simplified', 'standard'];
+
+/** Standard-density Classic shows the editor, console and Edit menu. */
+const isClassicStandardDensity = () =>
+  document.body?.dataset?.classicDensity === 'standard';
+
+/**
  * Tutorial step definitions
  */
 const TUTORIALS = {
   intro: {
     id: 'intro',
     title: 'Getting Started',
+    forceMode: 'simplified',
+    modeVariants: { classic: 'classic-intro' },
     steps: [
       {
         title: 'Welcome!',
@@ -1097,6 +1113,196 @@ const TUTORIALS = {
             <li>Set the grid to match your printer bed in Preview Settings</li>
             <li>Don't need a parameter group right now? Hide it with the button on the group header.</li>
           </ul>
+        `,
+        position: 'center',
+      },
+    ],
+  },
+  'classic-intro': {
+    id: 'classic-intro',
+    title: 'Classic Getting Started',
+    homeModes: ['classic'],
+    steps: [
+      {
+        title: 'Welcome to Classic!',
+        content: `
+          <p>This quick tour shows you around the Classic interface, which looks and works like the OpenSCAD desktop app.</p>
+          <ul>
+            <li>See where menus, tools, and parameters live</li>
+            <li>Change a parameter and watch the 3D view update</li>
+            <li>Render your model and export a file</li>
+          </ul>
+          <p class="tutorial-hint">Press <kbd>Esc</kbd> to exit at any time.</p>
+        `,
+        position: 'center',
+      },
+      {
+        title: 'The Classic layout',
+        content: `
+          <p>Classic puts everything in a fixed place, like the desktop app:</p>
+          <ul>
+            <li><strong>Menu bar</strong> and <strong>toolbar</strong> along the top</li>
+            <li><strong>3D view</strong> in the middle</li>
+            <li><strong>Customizer</strong> with your parameters on the right</li>
+            <li><strong>Status bar</strong> along the bottom</li>
+          </ul>
+          <p class="tutorial-hint">The Standard view also shows the code editor and console on the left.</p>
+        `,
+        position: 'center',
+      },
+      {
+        title: 'The menu bar',
+        content: `
+          <p>The menus group every command: <strong>File</strong>, <strong>Design</strong>, <strong>View</strong>, and <strong>Help</strong>. The Standard view adds <strong>Edit</strong> and <strong>Window</strong>.</p>
+          <p class="tutorial-hint">Keyboard: press <kbd>Alt</kbd> plus the underlined letter to open a menu.</p>
+        `,
+        highlightSelector: '#toolbarMenuBar',
+        position: 'bottom',
+      },
+      {
+        title: 'The toolbar',
+        content: `
+          <p>The toolbar holds the everyday buttons: <strong>Preview</strong> (F5), <strong>Render</strong> (F6), and export to <strong>STL</strong> or <strong>DXF</strong>. The gear button shows or hides the Customizer.</p>
+          <p class="tutorial-hint">The Standard view adds New, Open, and Save.</p>
+        `,
+        highlightSelector: '#classicToolbar',
+        position: 'bottom',
+      },
+      {
+        title: 'The Customizer',
+        content: `
+          <p>The <strong>Customizer</strong> holds your model's parameters, organized into groups. This is where most customizing happens.</p>
+          <p class="tutorial-hint">Automatic Preview is on by default, so changes show up in the 3D view right away.</p>
+        `,
+        highlightSelector: '#paramPanel',
+        position: 'left',
+      },
+      {
+        title: 'Expand a parameter group',
+        content: `
+          <p>Parameters are organized into <strong>collapsible groups</strong>.</p>
+          <p><strong>Try it:</strong> click the <strong>Dimensions</strong> group header to open it and see the sliders inside.</p>
+        `,
+        highlightSelector:
+          '.param-group[data-group-id="Dimensions"] summary, .param-group summary',
+        position: 'left',
+        lockScroll: true,
+        completion: {
+          type: 'detailsOpen',
+          selector:
+            '.param-group[data-group-id="Dimensions"], .param-group:first-of-type',
+        },
+      },
+      {
+        title: 'Adjust a parameter',
+        content: `
+          <p><strong>Try it:</strong> change <strong>Width</strong> and watch the 3D view update.</p>
+          <p class="tutorial-hint">You can drag the slider or type a number.</p>
+        `,
+        highlightSelector:
+          '#param-width, .param-control[data-param-name="width"] input, .param-control[data-param-name="width"]',
+        position: 'left',
+        lockScroll: true,
+        completion: {
+          type: 'domEvent',
+          selector:
+            '#param-width, #param-width input, .param-control[data-param-name="width"] input[type="range"], .param-control[data-param-name="width"] input',
+          event: 'input',
+        },
+      },
+      {
+        title: 'The 3D view',
+        content: `
+          <p>The 3D view shows your model with the same colors and axes as the desktop app. Drag to rotate, scroll to zoom.</p>
+          <p class="tutorial-hint">The view updates automatically after each parameter change.</p>
+        `,
+        highlightSelector: '@preview-container',
+        position: 'auto',
+      },
+      {
+        title: 'Designs (presets)',
+        content: `
+          <p>The <strong>Designs</strong> row saves your favorite parameter setups. Pick one from the list, or use the plus button to save the current settings as a new design.</p>
+          <p class="tutorial-hint">Designs are stored in your browser for this model.</p>
+        `,
+        highlightSelector: '#classicPresetRow',
+        position: 'left',
+      },
+      {
+        title: 'Render and export',
+        content: `
+          <p><strong>Preview</strong> (F5) is fast and approximate. <strong>Render</strong> (F6) builds the exact solid, ready to export.</p>
+          <p><strong>Try it:</strong> click <strong>Render</strong> in the toolbar.</p>
+          <p class="tutorial-hint">When it finishes, Export as STL or Export as DXF saves your file.</p>
+        `,
+        highlightSelector: '#classicTbRenderBtn',
+        position: 'bottom',
+        completion: {
+          type: 'domEvent',
+          selector: '#classicTbRenderBtn',
+          event: 'click',
+        },
+      },
+      {
+        title: 'Camera controls',
+        content: `
+          <p>The <strong>camera bar</strong> rotates, zooms, and resets the view with buttons. No dragging needed.</p>
+          <p class="tutorial-hint">A connected gamepad also steers the camera.</p>
+        `,
+        highlightSelector: '#classicCameraBar',
+        position: 'top',
+      },
+      {
+        title: 'Stow panels for space',
+        content: `
+          <p>The <strong>double-arrow</strong> buttons stow a panel onto the edge of the window. Click the tab on the rail to bring it back.</p>
+          <p class="tutorial-hint">Try stowing the Customizer when you want a bigger 3D view.</p>
+        `,
+        highlightSelector: '[data-classic-stow-field="right-top"]',
+        position: 'left',
+      },
+      {
+        title: 'The editor',
+        content: `
+          <p>The <strong>editor</strong> shows your model's OpenSCAD code. Your edits flow into the next Preview or Render.</p>
+          <p class="tutorial-hint">The editor toolbar has file and text tools, plus 3D Print.</p>
+        `,
+        highlightSelector: '#classicEditorSlot',
+        position: 'right',
+        showWhen: isClassicStandardDensity,
+        skipReason: 'not available in this view',
+      },
+      {
+        title: 'Console and Error-Log',
+        content: `
+          <p>Render messages appear in the <strong>Console</strong>. Problems show up in the <strong>Error-Log</strong> beside it, with the line number when known.</p>
+        `,
+        highlightSelector: '#classicConsoleSlot',
+        position: 'top',
+        showWhen: isClassicStandardDensity,
+        skipReason: 'not available in this view',
+      },
+      {
+        title: 'Preferences',
+        content: `
+          <p>Open <strong>Edit</strong>, then <strong>Preferences</strong> to tune Classic: color schemes for the 3D view, editor settings, and more.</p>
+          <p class="tutorial-hint">Color schemes preview live in the 3D view while the dialog is open.</p>
+        `,
+        highlightSelector: '#toolbarMenuBar',
+        position: 'bottom',
+        showWhen: isClassicStandardDensity,
+        skipReason: 'not available in this view',
+      },
+      {
+        title: "You're ready!",
+        content: `
+          <p>That's the Classic tour.</p>
+          <ul>
+            <li>The <strong>Simplified</strong> and <strong>Standard</strong> switch in the header changes how much is shown</li>
+            <li>The <strong>A. Forge</strong> button returns you to the Assistive Forge interface</li>
+            <li>Run this tour again anytime from the welcome screen</li>
+          </ul>
+          <p class="tutorial-hint">Happy modeling!</p>
         `,
         position: 'center',
       },
@@ -1641,6 +1847,91 @@ function showTutorialErrorDialog(message) {
   });
 }
 
+/**
+ * Ask before a tutorial switches the interface (U-12). Wording is
+ * owner-approved (D-35, 2026-08-11) with the interface names filled per
+ * direction. Resolves true to switch.
+ * @param {Object} tutorial - Entry from TUTORIALS
+ * @returns {Promise<boolean>}
+ */
+function showTutorialModeChoiceDialog(tutorial) {
+  return new Promise((resolve) => {
+    const classicHome = (tutorial.homeModes || FORGE_HOME_MODES).includes(
+      'classic'
+    );
+    const homeName = classicHome ? 'Classic' : 'Assistive Forge';
+    const stayName = classicHome ? 'Assistive Forge' : 'Classic';
+
+    const modal = document.createElement('div');
+    modal.className = 'preset-modal confirm-modal tutorial-mode-choice-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', 'tutorialModeChoiceTitle');
+    modal.setAttribute('aria-describedby', 'tutorialModeChoiceMessage');
+    modal.dataset.testid = 'tutorial-mode-choice-dialog';
+    modal.style.zIndex = '10005';
+
+    modal.innerHTML = `
+      <div class="preset-modal-content confirm-modal-content">
+        <div class="preset-modal-header">
+          <h3 id="tutorialModeChoiceTitle" class="preset-modal-title">This tour runs in ${homeName}</h3>
+        </div>
+        <div class="confirm-modal-body">
+          <p id="tutorialModeChoiceMessage">The ${tutorial.title} tour is designed for the ${homeName} interface. To follow it, switch to ${homeName}. Your loaded file stays open.</p>
+        </div>
+        <div class="preset-form-actions">
+          <button type="button" class="btn btn-primary" data-action="switch">Switch and start the tour</button>
+          <button type="button" class="btn btn-secondary" data-action="stay">Stay in ${stayName}</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const cleanup = (shouldSwitch) => {
+      modal.removeEventListener('keydown', onKeydown);
+      modal.remove();
+      resolve(shouldSwitch);
+    };
+
+    // aria-modal promises focus stays inside: cycle the two buttons on Tab
+    const onKeydown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        cleanup(false);
+      } else if (e.key === 'Tab') {
+        const buttons = modal.querySelectorAll('button[data-action]');
+        const first = buttons[0];
+        const last = buttons[buttons.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    modal.addEventListener('keydown', onKeydown);
+
+    modal.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-action]');
+      if (!btn) return;
+      cleanup(btn.dataset.action === 'switch');
+    });
+
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        cleanup(false);
+      }
+    });
+
+    const switchBtn = modal.querySelector('button[data-action="switch"]');
+    switchBtn?.focus();
+  });
+}
+
 // ============================================================================
 // Body Scroll Locking
 // ============================================================================
@@ -1989,10 +2280,38 @@ function setBackgroundInert(makeInert) {
  * @param {HTMLElement} [options.triggerEl] - Element that triggered the tutorial
  */
 export async function startTutorial(tutorialId, { triggerEl } = {}) {
-  const tutorial = TUTORIALS[tutorialId];
+  let tutorial = TUTORIALS[tutorialId];
   if (!tutorial) {
     console.warn(`Tutorial "${tutorialId}" not found`);
     return;
+  }
+
+  // U-12 (Q-29 entry decision): a tutorial may name a sibling built for
+  // the current interface - the welcome card's intro launches the Classic
+  // tour inside Classic, directly and in place. Resolve before any gating.
+  const modeCtrl = getUIModeController();
+  const variantId = tutorial.modeVariants?.[modeCtrl.getMode()];
+  if (variantId && TUTORIALS[variantId]) {
+    tutorialId = variantId;
+    tutorial = TUTORIALS[variantId];
+  }
+
+  // U-12: tutorials declare the interface they are built for (homeModes;
+  // Forge chrome by default). A cross-interface launch asks first
+  // (owner-approved wording, D-35); cancel stays put.
+  const homeModes = tutorial.homeModes || FORGE_HOME_MODES;
+  if (!homeModes.includes(modeCtrl.getMode())) {
+    const proceed = await showTutorialModeChoiceDialog(tutorial);
+    if (!proceed) {
+      // The welcome card that triggered us may be gone (loading the example
+      // dismissed the welcome screen), so fall back like closeTutorial does.
+      if (triggerEl && document.contains(triggerEl) && triggerEl.offsetParent) {
+        triggerEl.focus();
+      } else {
+        document.getElementById('main-content')?.focus?.();
+      }
+      return;
+    }
   }
 
   let startIndex = 0;
@@ -2022,17 +2341,46 @@ export async function startTutorial(tutorialId, { triggerEl } = {}) {
   currentStepIndex = startIndex;
   isMinimized = false;
 
-  // Switch to Simplified mode for intro tutorial so the UI is simplified
-  const modeCtrl = getUIModeController();
+  // Move to the tutorial's home interface (consented above) or its declared
+  // forceMode (the intro tour runs in Simplified). Capture the pre-tutorial
+  // state first: the forced switch must never leave its mode behind as the
+  // user's density or saved preference (U-12).
   preTutorialMode = modeCtrl.getMode();
-  if (tutorialId === 'intro' && preTutorialMode !== 'simplified') {
-    modeCtrl.switchMode('simplified', {
-      skipAnnouncement: true,
-      skipFocus: true,
-    });
+  preTutorialDensity = modeCtrl.getClassicDensity();
+  tutorialForcedMode = false;
+  const forcedTarget = !homeModes.includes(preTutorialMode)
+    ? tutorial.forceMode ||
+      (homeModes.includes(preTutorialDensity)
+        ? preTutorialDensity
+        : homeModes[0])
+    : tutorial.forceMode && tutorial.forceMode !== preTutorialMode
+      ? tutorial.forceMode
+      : null;
+  if (forcedTarget) {
+    tutorialForcedMode =
+      modeCtrl.switchMode(forcedTarget, {
+        skipAnnouncement: true,
+        skipFocus: true,
+      }) === true;
+    if (!tutorialForcedMode && !homeModes.includes(modeCtrl.getMode())) {
+      // The consented switch was refused (UF-5's viewport gate): never
+      // start a tour whose interface is absent.
+      announceToScreenReader(
+        'Classic needs a wider window right now, so the tour cannot start. Your file stays open.',
+        'assertive'
+      );
+      preTutorialMode = null;
+      preTutorialDensity = null;
+      return;
+    }
   }
 
   createTutorialOverlay();
+
+  // Q-28a: a user interface switch wins over a running tutorial
+  modeChangeUnsubscribe = modeCtrl.subscribe((newMode) =>
+    handleModeChangeDuringTutorial(newMode)
+  );
   await showStep(startIndex);
   announceToScreenReader(
     `${tutorial.title} started. Step ${startIndex + 1} of ${tutorial.steps.length}. Press Escape to exit at any time.`,
@@ -2440,9 +2788,11 @@ async function showStep(stepIndex) {
   if (step.showWhen) {
     const shouldShow = evaluateShowWhenCondition(step.showWhen);
     if (!shouldShow) {
-      const reason = isMobileViewport()
-        ? 'not applicable on mobile'
-        : 'not applicable on desktop';
+      const reason =
+        step.skipReason ||
+        (isMobileViewport()
+          ? 'not applicable on mobile'
+          : 'not applicable on desktop');
       await skipToNextValidStep(stepIndex, direction, reason);
       return;
     }
@@ -3462,11 +3812,56 @@ function clearCompletionListeners() {
 }
 
 /**
+ * Q-28a (owner, 2026-08-11): a user interface switch wins over a running
+ * tutorial. Close cleanly with progress saved and one announcement, never
+ * switch the user back, and hand back any Classic density the tutorial's
+ * own forced switch planted (U-12's empty-Classic poisoning).
+ * @param {string} newMode - Mode the user switched into
+ */
+function handleModeChangeDuringTutorial(newMode) {
+  if (!activeTutorial) return;
+
+  const title = activeTutorial.title;
+  const stepsTotal = activeTutorial.steps?.length || 0;
+  const stepCurrent = currentStepIndex + 1;
+
+  const progressSaved = currentStepIndex > 0;
+  if (progressSaved) {
+    saveTutorialProgress(currentStepIndex);
+  }
+
+  const densityToRepair =
+    tutorialForcedMode && newMode === 'classic' ? preTutorialDensity : null;
+
+  closeTutorial(false, { skipModeRestore: true, skipAnnouncement: true });
+
+  if (densityToRepair) {
+    getUIModeController().setClassicDensity(densityToRepair, {
+      skipAnnouncement: true,
+    });
+  }
+
+  announceToScreenReader(
+    `${title} tutorial closed at step ${stepCurrent} of ${stepsTotal} because the interface changed.${progressSaved ? ' Progress saved.' : ''}`,
+    'assertive'
+  );
+}
+
+/**
  * Close the tutorial and clean up
  * @param {boolean} completed - Whether tutorial was completed (vs cancelled)
+ * @param {Object} [options]
+ * @param {boolean} [options.skipModeRestore] - Do not switch back to the
+ *   pre-tutorial mode (the close was caused by the user's own mode switch)
+ * @param {boolean} [options.skipAnnouncement] - Caller announces instead
  */
-export function closeTutorial(completed = false) {
+export function closeTutorial(completed = false, options = {}) {
   if (!tutorialOverlay) return;
+
+  if (modeChangeUnsubscribe) {
+    modeChangeUnsubscribe();
+    modeChangeUnsubscribe = null;
+  }
 
   clearCompletionListeners();
   clearDrawerObserver();
@@ -3598,17 +3993,39 @@ export function closeTutorial(completed = false) {
   previousFocus = null;
   triggerElement = null;
 
-  // Restore pre-tutorial UI mode if the tutorial changed it
-  if (preTutorialMode) {
+  // Restore pre-tutorial UI mode if the tutorial changed it - unless the
+  // close was caused by the user's own switch, which must stand (Q-28a).
+  if (preTutorialMode && !options.skipModeRestore) {
     const modeCtrl = getUIModeController();
     if (modeCtrl.getMode() !== preTutorialMode) {
-      modeCtrl.switchMode(preTutorialMode, {
+      const restored = modeCtrl.switchMode(preTutorialMode, {
         skipAnnouncement: true,
         skipFocus: true,
       });
+      if (
+        restored &&
+        tutorialForcedMode &&
+        preTutorialMode === 'classic' &&
+        preTutorialDensity
+      ) {
+        // The restore switch itself records the tutorial's forced mode as
+        // the Classic density; hand the user's real density back (U-12).
+        modeCtrl.setClassicDensity(preTutorialDensity, {
+          skipAnnouncement: true,
+        });
+      }
+      if (!restored && preTutorialMode === 'classic') {
+        // UF-5's viewport gate refused Classic (window too small). Never
+        // strand the user silently in a mode they did not choose.
+        announceToScreenReader(
+          'Classic needs a wider window right now, so you are staying in Assistive Forge. Your file stays open.'
+        );
+      }
     }
   }
   preTutorialMode = null;
+  preTutorialDensity = null;
+  tutorialForcedMode = false;
 
   activeTutorial = null;
   currentStepIndex = 0;
@@ -3616,9 +4033,11 @@ export function closeTutorial(completed = false) {
   currentTarget = null;
   consecutiveFailures = 0;
 
-  announceToScreenReader(
-    `Tutorial closed at step ${currentStep} of ${stepsTotal}.`
-  );
+  if (!options.skipAnnouncement) {
+    announceToScreenReader(
+      `Tutorial closed at step ${currentStep} of ${stepsTotal}.`
+    );
+  }
 }
 
 /**
