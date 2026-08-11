@@ -182,6 +182,35 @@ describe('axis-tick-overlay (F20)', () => {
       expect(result.css).toMatch(/^#[0-9a-f]{6}$/);
       document.body.style.removeProperty('--color-text-primary');
     });
+
+    it('classic resolves the transcribed Cornfield axes color, scheme-first', () => {
+      // Even with a token present the scheme wins: the marks belong to the
+      // viewport scheme, not to the app theme underneath (U-13).
+      document.body.style.setProperty('--color-text-primary', '#ff5733');
+      const result = resolveAxisMarkColor('classic', document);
+      expect(result.hex).toBe(0x000000);
+      expect(result.css).toBe('#000000');
+      document.body.style.removeProperty('--color-text-primary');
+    });
+
+    it('a dark scheme keeps its own light axes without consulting tokens', () => {
+      const result = resolveAxisMarkColor('starnight', document);
+      expect(result.hex).toBe(0xe5e5e5);
+    });
+
+    it('prefers the body-scoped token over the html one (the U-13 shape)', () => {
+      // The dark theme writes its token on <html>; Classic's remap lives
+      // on <body>. Reading html is exactly the defect this fix removed.
+      document.documentElement.style.setProperty(
+        '--color-text-primary',
+        '#edeef0'
+      );
+      document.body.style.setProperty('--color-text-primary', '#1a1a1a');
+      const result = resolveAxisMarkColor('light', document);
+      expect(result.hex).toBe(0x1a1a1a);
+      document.documentElement.style.removeProperty('--color-text-primary');
+      document.body.style.removeProperty('--color-text-primary');
+    });
   });
 
   describe('collectTickPositions', () => {

@@ -15207,7 +15207,11 @@ if (typeof window !== 'undefined') {
      * overlay had thrown and nothing was drawn. Asserting the toggle's own
      * state would have reported success throughout.
      *
-     * @returns {{enabled: boolean, inScene: boolean, ticks: number, labels: number}|null}
+     * `colorHex` is the color the overlay actually baked at build time —
+     * the only way a spec can prove the U-13 theme bleed stays fixed
+     * (screenshots can't read a material). Null until a build succeeded.
+     *
+     * @returns {{enabled: boolean, inScene: boolean, ticks: number, labels: number, colorHex: number|null}|null}
      */
     axisTickOverlay() {
       const controller = getDisplayOptionsController();
@@ -15219,6 +15223,7 @@ if (typeof window !== 'undefined') {
         inScene: Boolean(group),
         ticks: controller._axisTickOverlay?.tickCount ?? 0,
         labels: controller._axisTickOverlay?.labelCount ?? 0,
+        colorHex: controller._axisTickOverlay?.colorHex ?? null,
       };
     },
 
