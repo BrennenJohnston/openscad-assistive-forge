@@ -3042,6 +3042,12 @@ export class PreviewManager {
       this.orthoCamera.zoom *= amount > 0 ? factor : 1 / factor;
       this.orthoCamera.zoom = Math.max(0.01, this.orthoCamera.zoom);
       this.orthoCamera.updateProjectionMatrix();
+      // controls.update() below only dispatches 'change' when the camera
+      // POSITION moved; an ortho zoom moves nothing, so the axis overlays'
+      // zoom-rebuild listener (UF-7) would never hear it. The wheel path
+      // through OrbitControls sets its own zoomChanged flag; this keyboard/
+      // button path has to say so itself.
+      this.controls.dispatchEvent?.({ type: 'change' });
     } else {
       // Perspective: translate camera along view direction
       const camera = this.getActiveCamera();

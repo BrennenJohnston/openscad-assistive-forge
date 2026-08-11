@@ -1087,3 +1087,58 @@ describe('DisplayOptionsController — U-3: axis ticks survive failures and heal
     expect(ctrl.state.axisMarks).toBe(false);
   });
 });
+
+describe('DisplayOptionsController — UF-7 zoom-adaptive distance', () => {
+  beforeEach(() => {
+    resetDisplayOptionsController();
+    localStorage.clear();
+    document.body.innerHTML = '';
+  });
+
+  function makeCameraPm(extra = {}) {
+    const pm = createMockPreviewManager(createMockMesh());
+    pm.camera = {
+      position: {
+        distanceTo: vi.fn(() => 200),
+        length: vi.fn(() => 200),
+      },
+    };
+    pm.controls = { target: {} };
+    return Object.assign(pm, extra);
+  }
+
+  it('feeds the tick overlay the camera-to-target distance', () => {
+    const ctrl = new DisplayOptionsController({
+      getPreviewManager: () => makeCameraPm(),
+      getThree: () => createMockThree(),
+    });
+    expect(ctrl._cameraDistanceMm(ctrl.getPreviewManager())).toBe(200);
+  });
+
+  it('divides by the orthographic zoom (desktop: one viewer_distance drives both projections)', () => {
+    const ctrl = new DisplayOptionsController({
+      getPreviewManager: () =>
+        makeCameraPm({
+          getProjectionMode: () => 'orthographic',
+          orthoCamera: { zoom: 2 },
+        }),
+      getThree: () => createMockThree(),
+    });
+    // Zoom 2 shows half the world — the marks must re-derive as if the
+    // camera stood at half the distance, or ortho zooming would freeze the
+    // tick decades at whatever the perspective camera last saw.
+    expect(ctrl._cameraDistanceMm(ctrl.getPreviewManager())).toBe(100);
+  });
+
+  it('an ortho zoom of 0 cannot divide the distance away', () => {
+    const ctrl = new DisplayOptionsController({
+      getPreviewManager: () =>
+        makeCameraPm({
+          getProjectionMode: () => 'orthographic',
+          orthoCamera: { zoom: 0 },
+        }),
+      getThree: () => createMockThree(),
+    });
+    expect(ctrl._cameraDistanceMm(ctrl.getPreviewManager())).toBe(200);
+  });
+});

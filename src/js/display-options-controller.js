@@ -217,12 +217,21 @@ export class DisplayOptionsController {
     const cam = pm?.camera;
     if (!cam?.position) return null;
     const target = pm?.controls?.target;
-    if (target && typeof cam.position.distanceTo === 'function') {
-      return cam.position.distanceTo(target);
+    const base =
+      target && typeof cam.position.distanceTo === 'function'
+        ? cam.position.distanceTo(target)
+        : typeof cam.position.length === 'function'
+          ? cam.position.length()
+          : null;
+    if (base == null) return null;
+    // Orthographic zoom scales the frustum, not the position — desktop's
+    // one viewer_distance drives both projections, so the effective
+    // distance here is the base divided by that zoom (zoom 2 ≙ half the
+    // visible world ≙ half the distance).
+    if (pm.getProjectionMode?.() === 'orthographic' && pm.orthoCamera) {
+      return base / (pm.orthoCamera.zoom || 1);
     }
-    return typeof cam.position.length === 'function'
-      ? cam.position.length()
-      : null;
+    return base;
   }
 
   /** Coalesce controls 'change' bursts to one rebuild check per frame. @private */
