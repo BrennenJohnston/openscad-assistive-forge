@@ -825,12 +825,20 @@ function getStepContent(step) {
 }
 
 /**
+ * Modes a tutorial runs in when it does not declare its own homeModes.
+ * Tutorials whose targets are Forge chrome break over the Classic DOM
+ * (U-12), so cross-interface launches go through the consent dialog.
+ */
+const FORGE_HOME_MODES = ['simplified', 'standard'];
+
+/**
  * Tutorial step definitions
  */
 const TUTORIALS = {
   intro: {
     id: 'intro',
     title: 'Getting Started',
+    forceMode: 'simplified',
     steps: [
       {
         title: 'Welcome!',
@@ -1645,12 +1653,20 @@ function showTutorialErrorDialog(message) {
 }
 
 /**
- * Ask before a tutorial switches the interface out of Classic (U-12).
- * Wording is owner-approved (D-35, 2026-08-11). Resolves true to switch.
+ * Ask before a tutorial switches the interface (U-12). Wording is
+ * owner-approved (D-35, 2026-08-11) with the interface names filled per
+ * direction. Resolves true to switch.
+ * @param {Object} tutorial - Entry from TUTORIALS
  * @returns {Promise<boolean>}
  */
-function showTutorialModeChoiceDialog() {
+function showTutorialModeChoiceDialog(tutorial) {
   return new Promise((resolve) => {
+    const classicHome = (tutorial.homeModes || FORGE_HOME_MODES).includes(
+      'classic'
+    );
+    const homeName = classicHome ? 'Classic' : 'Assistive Forge';
+    const stayName = classicHome ? 'Assistive Forge' : 'Classic';
+
     const modal = document.createElement('div');
     modal.className = 'preset-modal confirm-modal tutorial-mode-choice-modal';
     modal.setAttribute('role', 'dialog');
@@ -1663,14 +1679,14 @@ function showTutorialModeChoiceDialog() {
     modal.innerHTML = `
       <div class="preset-modal-content confirm-modal-content">
         <div class="preset-modal-header">
-          <h3 id="tutorialModeChoiceTitle" class="preset-modal-title">This tour runs in Assistive Forge</h3>
+          <h3 id="tutorialModeChoiceTitle" class="preset-modal-title">This tour runs in ${homeName}</h3>
         </div>
         <div class="confirm-modal-body">
-          <p id="tutorialModeChoiceMessage">The Getting Started tour is designed for the Assistive Forge interface. To follow it, switch to Assistive Forge. Your loaded file stays open.</p>
+          <p id="tutorialModeChoiceMessage">The ${tutorial.title} tour is designed for the ${homeName} interface. To follow it, switch to ${homeName}. Your loaded file stays open.</p>
         </div>
         <div class="preset-form-actions">
           <button type="button" class="btn btn-primary" data-action="switch">Switch and start the tour</button>
-          <button type="button" class="btn btn-secondary" data-action="stay">Stay in Classic</button>
+          <button type="button" class="btn btn-secondary" data-action="stay">Stay in ${stayName}</button>
         </div>
       </div>
     `;
@@ -2075,10 +2091,13 @@ export async function startTutorial(tutorialId, { triggerEl } = {}) {
     return;
   }
 
-  // U-12: the intro tour targets Forge chrome. From Classic, ask before
-  // switching interfaces (owner-approved wording, D-35); cancel stays put.
-  if (tutorialId === 'intro' && getUIModeController().getMode() === 'classic') {
-    const proceed = await showTutorialModeChoiceDialog();
+  // U-12: tutorials declare the interface they are built for (homeModes;
+  // Forge chrome by default). A cross-interface launch asks first
+  // (owner-approved wording, D-35); cancel stays put.
+  const modeCtrl = getUIModeController();
+  const homeModes = tutorial.homeModes || FORGE_HOME_MODES;
+  if (!homeModes.includes(modeCtrl.getMode())) {
+    const proceed = await showTutorialModeChoiceDialog(tutorial);
     if (!proceed) {
       // The welcome card that triggered us may be gone (loading the example
       // dismissed the welcome screen), so fall back like closeTutorial does.
@@ -2118,19 +2137,38 @@ export async function startTutorial(tutorialId, { triggerEl } = {}) {
   currentStepIndex = startIndex;
   isMinimized = false;
 
-  // Switch to Simplified mode for intro tutorial so the UI is simplified.
-  // Capture the Classic density first: the forced switch must never leave
-  // its 'simplified' behind as the user's density or saved preference (U-12).
-  const modeCtrl = getUIModeController();
+  // Move to the tutorial's home interface (consented above) or its declared
+  // forceMode (the intro tour runs in Simplified). Capture the pre-tutorial
+  // state first: the forced switch must never leave its mode behind as the
+  // user's density or saved preference (U-12).
   preTutorialMode = modeCtrl.getMode();
   preTutorialDensity = modeCtrl.getClassicDensity();
   tutorialForcedMode = false;
-  if (tutorialId === 'intro' && preTutorialMode !== 'simplified') {
+  const forcedTarget = !homeModes.includes(preTutorialMode)
+    ? tutorial.forceMode ||
+      (homeModes.includes(preTutorialDensity)
+        ? preTutorialDensity
+        : homeModes[0])
+    : tutorial.forceMode && tutorial.forceMode !== preTutorialMode
+      ? tutorial.forceMode
+      : null;
+  if (forcedTarget) {
     tutorialForcedMode =
-      modeCtrl.switchMode('simplified', {
+      modeCtrl.switchMode(forcedTarget, {
         skipAnnouncement: true,
         skipFocus: true,
       }) === true;
+    if (!tutorialForcedMode && !homeModes.includes(modeCtrl.getMode())) {
+      // The consented switch was refused (UF-5's viewport gate): never
+      // start a tour whose interface is absent.
+      announceToScreenReader(
+        'Classic needs a wider window right now, so the tour cannot start. Your file stays open.',
+        'assertive'
+      );
+      preTutorialMode = null;
+      preTutorialDensity = null;
+      return;
+    }
   }
 
   createTutorialOverlay();
