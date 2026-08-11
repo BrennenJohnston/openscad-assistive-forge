@@ -11946,10 +11946,15 @@ body.tutorial-body-locked {
   margin-left: auto;
 }
 
+/* One control height across the row (U-16): the HC and theme toggles
+   already stand at --size-touch-target, and the old literal 32px held
+   Full Screen and Help visibly shorter beside them — and under the 44px
+   touch minimum on phones. The token is pointer-aware, so the row is
+   uniform in every regime instead of only the one it was tuned in. */
 .workflow-actions .btn {
   padding: var(--space-xs) var(--space-sm);
   font-size: var(--font-size-xs);
-  min-height: 32px;
+  min-height: var(--size-touch-target);
 }
 
 .workflow-actions .btn-text {
@@ -11963,7 +11968,7 @@ body.tutorial-body-locked {
   }
 
   .workflow-actions .btn {
-    min-width: 32px;
+    min-width: var(--size-touch-target);
     padding: var(--space-xs);
   }
 }
@@ -12351,7 +12356,7 @@ body.tutorial-body-locked {
   }
 
   .workflow-actions .btn {
-    min-width: 32px;
+    min-width: var(--size-touch-target);
     padding: var(--space-xs);
   }
 }
