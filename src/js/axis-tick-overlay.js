@@ -116,7 +116,13 @@ export function resolveAxisMarkColor(themeKey, docRef) {
  */
 export function computeScale(distanceMm) {
   const l = clampPositive(distanceMm, DEFAULT_DISTANCE_MM);
-  const lAdjusted = Math.pow(10, Math.floor(Math.log10(l)));
+  // The 1e-9 nudge absorbs the camera write path's float round-trip: the
+  // Viewport-Control panel re-derives the position through a rotation
+  // matrix, so a typed 1000 arrives as 999.9999999999992 and a bare
+  // floor(log10) would drop a whole decade (600 ticks instead of 60 —
+  // caught by the UF-7 e2e zoom probe). Desktop C++ never sees this
+  // because its viewer_distance stays a clean scalar.
+  const lAdjusted = Math.pow(10, Math.floor(Math.log10(l) + 1e-9));
   return {
     distanceMm: l,
     lAdjusted,

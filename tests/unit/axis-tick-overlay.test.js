@@ -215,6 +215,15 @@ describe('axis-tick-overlay (UF-7 transcription)', () => {
       expect(computeScale(1000).tickStepMm).toBe(100);
     });
 
+    it('absorbs the camera round-trip epsilon at a decade boundary', () => {
+      // MEASURED: typing 1000 into the Viewport-Control distance field lands
+      // the camera at this value after the rotation-matrix round trip. A bare
+      // floor(log10) read it as the 100 decade → 600 ticks instead of 60.
+      expect(computeScale(999.9999999999992).tickStepMm).toBe(100);
+      // A genuinely-below value keeps the lower decade.
+      expect(computeScale(999.99).tickStepMm).toBe(10);
+    });
+
     it('keeps working below 10 mm (sub-decade zooms label fractions)', () => {
       const s = computeScale(9.5);
       expect(s.tickStepMm).toBeCloseTo(0.1, 10);
