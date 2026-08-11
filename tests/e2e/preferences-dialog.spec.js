@@ -430,6 +430,85 @@ test('the Editor tab names what it cannot do', async ({ page }) => {
   }
 });
 
+test('in Classic the dialog leaves the viewport visible while arrow keys live-apply schemes', async ({
+  page,
+}, testInfo) => {
+  // U-15a: the apply wiring predates this test; what was broken was SEEING
+  // it. The centered dialog plus a dimming, blurring backdrop covered 100%
+  // of the canvas, so the live preview repainted behind an opaque wall.
+  test.setTimeout(240_000);
+  await gotoWithFile(page);
+
+  await page.locator('#classicModeToggle').click();
+  await expect(page.locator('body')).toHaveAttribute('data-ui-mode', 'classic');
+  // A real model in the viewport, so the screenshot below shows a scheme
+  // change happening to something, not to an empty background.
+  await expect(page.locator('#previewContainer')).toHaveClass(
+    /preview-current/,
+    { timeout: 120_000 }
+  );
+
+  await page.locator('#editMenuBtn').click();
+  await page
+    .locator('#editMenuItems')
+    .getByText('Preferences…', { exact: true })
+    .click();
+  await expect(page.locator('#preferencesModal')).not.toHaveClass(/hidden/);
+  await page.locator('#prefs-tab-3dview').click();
+
+  // The visibility half (red before Q-31a): the dialog leaves most of the
+  // canvas uncovered, and the backdrop neither dims nor blurs what shows.
+  const geometry = await page.evaluate(() => {
+    const canvas = document
+      .querySelector('.preview-panel canvas')
+      .getBoundingClientRect();
+    const dialog = document
+      .querySelector('#preferencesModal .modal-content')
+      .getBoundingClientRect();
+    const overlay = getComputedStyle(
+      document.querySelector('#preferencesModal .modal-overlay')
+    );
+    const ix = Math.max(
+      0,
+      Math.min(canvas.right, dialog.right) - Math.max(canvas.left, dialog.left)
+    );
+    const iy = Math.max(
+      0,
+      Math.min(canvas.bottom, dialog.bottom) - Math.max(canvas.top, dialog.top)
+    );
+    return {
+      coveredPct: ((ix * iy) / (canvas.width * canvas.height)) * 100,
+      overlayBackground: overlay.backgroundColor,
+      overlayBlur: overlay.backdropFilter,
+    };
+  });
+  expect(geometry.coveredPct).toBeLessThan(60);
+  expect(geometry.overlayBackground).toBe('rgba(0, 0, 0, 0)');
+  expect(geometry.overlayBlur).toBe('none');
+
+  // The wiring half: arrowing the radio group applies as the focus moves —
+  // no Enter, no Space, no Done. Proven through the scene, not the control.
+  const scheme = () =>
+    page.evaluate(() => window.__forgeDebug.previewColorScheme());
+  const cornfield = page.locator('#prefsScheme-cornfield');
+  await expect(cornfield).toBeChecked();
+  await cornfield.focus();
+
+  await page.keyboard.press('ArrowDown');
+  await expect.poll(scheme, { timeout: 5_000 }).toBe('metallic');
+  await page.keyboard.press('ArrowDown');
+  await expect.poll(scheme, { timeout: 5_000 }).toBe('sunset');
+  await page.keyboard.press('ArrowDown');
+  await expect.poll(scheme, { timeout: 5_000 }).toBe('starnight');
+
+  // The deliverable U-15a asked for: the changed viewport visible BESIDE
+  // the open dialog, in one frame.
+  await testInfo.attach('classic-live-preview-beside-dialog', {
+    body: await page.screenshot(),
+    contentType: 'image/png',
+  });
+});
+
 test('the input-device tabs describe the gamepad support that exists', async ({
   page,
 }) => {
@@ -446,6 +525,16 @@ test('the input-device tabs describe the gamepad support that exists', async ({
   await expect(axes).toBeVisible();
   await expect(axes).not.toContainText(/no input-device engine/i);
   await expect(axes).toContainText(/stick/i);
+
+  // Q-32a: the read-only status line says what the engine actually sees.
+  // Headless Chromium has the Gamepad API with no devices, so the honest
+  // report is the no-controller invitation — never a fabricated pad, and
+  // never the unsupported-browser claim.
+  const status = page.locator('#prefsGamepadStatus');
+  await expect(status).toBeVisible();
+  await expect(status).toHaveText(
+    'No controller detected. Connect one and press any button.'
+  );
 
   await page.keyboard.press('ArrowRight');
   const buttons = page.locator('#prefs-reason-buttons');

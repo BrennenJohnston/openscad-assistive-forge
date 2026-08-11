@@ -139,7 +139,42 @@ let activeHandlers = {};
  * @property {() => boolean} [getZoomToCursor]
  * @property {() => Object} [getEditorPrefs]
  * @property {(name: string, value: number|boolean) => number|boolean} [onEditorPrefChange]
+ * @property {() => {supported: boolean, padName: string|null, deadZone: number|null}} [getGamepadStatus]
  */
+
+/**
+ * The Axes tab's read-only status line (Q-32a). A user could never verify
+ * that their controller was seen — the reason text names the live engine,
+ * but nothing on screen reflected the actual device. This states it.
+ *
+ * @param {{supported: boolean, padName: string|null, deadZone: number|null}} [status]
+ * @returns {string}
+ */
+export function formatGamepadStatus(status) {
+  if (!status?.supported) {
+    return 'This browser does not offer game controller input.';
+  }
+  if (!status.padName) {
+    return 'No controller detected. Connect one and press any button.';
+  }
+  const deadZone =
+    typeof status.deadZone === 'number'
+      ? ` The camera dead zone is fixed at ${status.deadZone}.`
+      : '';
+  return `Controller detected: ${status.padName}.${deadZone}`;
+}
+
+/**
+ * Render the status line. Skipped entirely when no handler was provided:
+ * a claim about controller support with no data behind it would be the
+ * exact false-reason shape R-IV removed from these tabs.
+ */
+function renderGamepadStatus() {
+  if (!activeHandlers.getGamepadStatus) return;
+  const node = el('prefsGamepadStatus');
+  if (!node) return;
+  node.textContent = formatGamepadStatus(activeHandlers.getGamepadStatus());
+}
 
 /**
  * Editor-tab control ids, paired with the preference each one writes.
@@ -192,6 +227,8 @@ function syncControls() {
       }
     }
   }
+
+  renderGamepadStatus();
 }
 
 /** Editor tab: instant-apply on the running editor. */
@@ -253,6 +290,12 @@ export function initPreferencesDialog(handlers = {}) {
 
   wireThreeDViewTab();
   wireEditorTab();
+
+  // The status line heals itself while the dialog is open — without this,
+  // "No controller detected" would sit beside a pad that was plugged in a
+  // second after opening, and only a close-and-reopen would fix it.
+  window.addEventListener('gamepadconnected', renderGamepadStatus);
+  window.addEventListener('gamepaddisconnected', renderGamepadStatus);
 
   // The shared helper wires the close button, the overlay AND Escape. Wiring
   // those by hand is how the first cut of this dialog shipped without Escape,

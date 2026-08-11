@@ -3975,6 +3975,15 @@ async function initApp() {
               // the only feedback is a repaint they cannot see.
               announceImmediate(`Color scheme ${label}`);
             },
+            getGamepadStatus: () => ({
+              supported: !!gamepadController,
+              // The same display-name trim the connection status line uses,
+              // so the two surfaces name one device the same way.
+              padName:
+                gamepadController?.getGamepadInfo?.()?.id?.split(' (')[0] ??
+                null,
+              deadZone: gamepadController?.deadzone ?? null,
+            }),
             getEditorPrefs: () => loadEditorPrefs(),
             onEditorPrefChange: (name, value) => {
               // The preference owner clamps and persists; whatever it stored
@@ -9785,7 +9794,16 @@ if (rounded) {
         .getElementById('classicPreviewBtn')
         ?.addEventListener('click', () => {
           const stripState = stateManager.getState();
-          if (stripState.uploadedFile && autoPreviewController) {
+          if (!stripState.uploadedFile) return;
+          // The same flushing trigger the top toolbar's Preview uses (E3-era
+          // defect, re-reported UF-1 §L): the plain path re-serves the cached
+          // preview of the last PUBLISHED content, so an edit typed within
+          // the write-back debounce was invisible to exactly this button.
+          // Null until the expert block initializes (a Simplified-only
+          // session), where the plain path is right.
+          if (editorPreviewTrigger) {
+            editorPreviewTrigger();
+          } else if (autoPreviewController) {
             autoPreviewController.onParameterChange(stripState.parameters);
           }
         });

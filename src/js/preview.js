@@ -614,10 +614,17 @@ export class PreviewManager {
     //
     // Three.js MeshPhongMaterial uses BRDF_Lambert which divides diffuse by π.
     // OpenSCAD's OpenGL pipeline has no such divisor (simple color * NdotL).
-    // All intensities are scaled by π to cancel the BRDF divisor and match
-    // desktop brightness: ambient 0.2*π ≈ 0.628, directional 1.0*π ≈ 3.14.
+    // All intensities are scaled by π to cancel the BRDF divisor: ambient
+    // 0.2*π ≈ 0.628. The directional pair carries a further ×1.5 measured
+    // against the desktop itself (U-14, Q-30 2026-08-11): with the π-cancel
+    // alone, A/B captures of the owner's fixture at a pinned desktop pose
+    // rendered visibly darker than OpenSCAD 2021.01 even though the preview
+    // mesh wears the WASM-baked upstream colors verbatim — the remaining
+    // gap is three's lighting evaluation, not color handling, so the level
+    // is calibrated here and nowhere else. The user brightness/contrast
+    // sliders stay neutral multipliers on top of these bases.
     const piAmbient = 0.2 * Math.PI;
-    const piDirectional = 1.0 * Math.PI;
+    const piDirectional = 1.5 * Math.PI;
 
     this.ambientLight = new AmbientLight(colors.ambientLight, piAmbient);
     this.scene.add(this.ambientLight);
