@@ -1641,6 +1641,83 @@ function showTutorialErrorDialog(message) {
   });
 }
 
+/**
+ * Ask before a tutorial switches the interface out of Classic (U-12).
+ * Wording is owner-approved (D-35, 2026-08-11). Resolves true to switch.
+ * @returns {Promise<boolean>}
+ */
+function showTutorialModeChoiceDialog() {
+  return new Promise((resolve) => {
+    const modal = document.createElement('div');
+    modal.className = 'preset-modal confirm-modal tutorial-mode-choice-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', 'tutorialModeChoiceTitle');
+    modal.setAttribute('aria-describedby', 'tutorialModeChoiceMessage');
+    modal.dataset.testid = 'tutorial-mode-choice-dialog';
+    modal.style.zIndex = '10005';
+
+    modal.innerHTML = `
+      <div class="preset-modal-content confirm-modal-content">
+        <div class="preset-modal-header">
+          <h3 id="tutorialModeChoiceTitle" class="preset-modal-title">This tour runs in Assistive Forge</h3>
+        </div>
+        <div class="confirm-modal-body">
+          <p id="tutorialModeChoiceMessage">The Getting Started tour is designed for the Assistive Forge interface. To follow it, switch to Assistive Forge. Your loaded file stays open.</p>
+        </div>
+        <div class="preset-form-actions">
+          <button type="button" class="btn btn-primary" data-action="switch">Switch and start the tour</button>
+          <button type="button" class="btn btn-secondary" data-action="stay">Stay in Classic</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const cleanup = (shouldSwitch) => {
+      modal.removeEventListener('keydown', onKeydown);
+      modal.remove();
+      resolve(shouldSwitch);
+    };
+
+    // aria-modal promises focus stays inside: cycle the two buttons on Tab
+    const onKeydown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        cleanup(false);
+      } else if (e.key === 'Tab') {
+        const buttons = modal.querySelectorAll('button[data-action]');
+        const first = buttons[0];
+        const last = buttons[buttons.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    modal.addEventListener('keydown', onKeydown);
+
+    modal.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-action]');
+      if (!btn) return;
+      cleanup(btn.dataset.action === 'switch');
+    });
+
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        cleanup(false);
+      }
+    });
+
+    const switchBtn = modal.querySelector('button[data-action="switch"]');
+    switchBtn?.focus();
+  });
+}
+
 // ============================================================================
 // Body Scroll Locking
 // ============================================================================
@@ -1993,6 +2070,22 @@ export async function startTutorial(tutorialId, { triggerEl } = {}) {
   if (!tutorial) {
     console.warn(`Tutorial "${tutorialId}" not found`);
     return;
+  }
+
+  // U-12: the intro tour targets Forge chrome. From Classic, ask before
+  // switching interfaces (owner-approved wording, D-35); cancel stays put.
+  if (tutorialId === 'intro' && getUIModeController().getMode() === 'classic') {
+    const proceed = await showTutorialModeChoiceDialog();
+    if (!proceed) {
+      // The welcome card that triggered us may be gone (loading the example
+      // dismissed the welcome screen), so fall back like closeTutorial does.
+      if (triggerEl && document.contains(triggerEl) && triggerEl.offsetParent) {
+        triggerEl.focus();
+      } else {
+        document.getElementById('main-content')?.focus?.();
+      }
+      return;
+    }
   }
 
   let startIndex = 0;
