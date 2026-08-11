@@ -3975,6 +3975,15 @@ async function initApp() {
               // the only feedback is a repaint they cannot see.
               announceImmediate(`Color scheme ${label}`);
             },
+            getGamepadStatus: () => ({
+              supported: !!gamepadController,
+              // The same display-name trim the connection status line uses,
+              // so the two surfaces name one device the same way.
+              padName:
+                gamepadController?.getGamepadInfo?.()?.id?.split(' (')[0] ??
+                null,
+              deadZone: gamepadController?.deadzone ?? null,
+            }),
             getEditorPrefs: () => loadEditorPrefs(),
             onEditorPrefChange: (name, value) => {
               // The preference owner clamps and persists; whatever it stored

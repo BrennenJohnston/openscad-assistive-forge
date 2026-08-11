@@ -526,6 +526,16 @@ test('the input-device tabs describe the gamepad support that exists', async ({
   await expect(axes).not.toContainText(/no input-device engine/i);
   await expect(axes).toContainText(/stick/i);
 
+  // Q-32a: the read-only status line says what the engine actually sees.
+  // Headless Chromium has the Gamepad API with no devices, so the honest
+  // report is the no-controller invitation — never a fabricated pad, and
+  // never the unsupported-browser claim.
+  const status = page.locator('#prefsGamepadStatus');
+  await expect(status).toBeVisible();
+  await expect(status).toHaveText(
+    'No controller detected. Connect one and press any button.'
+  );
+
   await page.keyboard.press('ArrowRight');
   const buttons = page.locator('#prefs-reason-buttons');
   await expect(buttons).toBeVisible();

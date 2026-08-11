@@ -7358,10 +7358,59 @@
               marker and no hanging indent.
             </p>
 
+            <div class="preferences-check-row">
+              <input
+                type="checkbox"
+                id="prefsEditorBraceMatching"
+                disabled
+                aria-describedby="prefs-reason-bracematch"
+              />
+              <label for="prefsEditorBraceMatching"
+                >Highlight the matching bracket</label
+              >
+            </div>
+            <p id="prefs-reason-bracematch" class="preferences-panel-reason">
+              Not built here. The editor does not highlight the bracket that
+              matches the one at the cursor.
+            </p>
+
+            <div class="preferences-check-row">
+              <input
+                type="checkbox"
+                id="prefsEditorLineNumbers"
+                checked
+                disabled
+                aria-describedby="prefs-reason-linenumbers"
+              />
+              <label for="prefsEditorLineNumbers">Display line numbers</label>
+            </div>
+            <p id="prefs-reason-linenumbers" class="preferences-panel-reason">
+              Always on here. Line numbers cannot be switched off in this
+              editor.
+            </p>
+
+            <div class="preferences-check-row">
+              <input
+                type="checkbox"
+                id="prefsEditorAutocomplete"
+                checked
+                disabled
+                aria-describedby="prefs-reason-autocomplete"
+              />
+              <label for="prefsEditorAutocomplete"
+                >Autocomplete as you type</label
+              >
+            </div>
+            <p id="prefs-reason-autocomplete" class="preferences-panel-reason">
+              Always on here, starting from the first character. The desktop's
+              on-off switch and character threshold are not offered.
+            </p>
+
             <p class="preferences-panel-reason">
               The desktop version also offers a font family, Ctrl-wheel text
-              zoom, automatic indenting, backspace unindenting, and a choice
-              between indenting with spaces or tabs. None of those are built
+              zoom, automatic indenting, backspace unindenting, a choice
+              between indenting with spaces or tabs, and changing numbers by
+              scrolling the mouse wheel over them. None of those are built
               here. This editor uses one monospace font, indents with spaces,
               and indents new lines to match the line above.
             </p>
@@ -7375,8 +7424,9 @@
             hidden
           >
             <p id="prefs-reason-3dprint" class="preferences-panel-reason">
-              Sending a model straight to a printer is not built here. Export
-              the model and open it in your slicer.
+              Sending a model straight to a printer (the desktop's OctoPrint
+              and slicer hookups) is not built here. Export the model and open
+              it in your slicer.
             </p>
           </div>
           <div
@@ -7415,6 +7465,11 @@
               the desktop offers — the dead zone is fixed. Space mice and
               other specialist 3D input devices are not supported.
             </p>
+            <!-- Read-only, deliberately NOT a live region: plugging a pad in
+                 already announces through the status line (main.js wires
+                 gamepad connect/disconnect to updateStatus), so a live region
+                 here would double-announce the same event. -->
+            <p id="prefsGamepadStatus" class="preferences-field-note"></p>
           </div>
           <div
             role="tabpanel"
