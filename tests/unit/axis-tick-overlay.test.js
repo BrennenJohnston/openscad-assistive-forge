@@ -163,27 +163,53 @@ describe('axis-tick-overlay (F20)', () => {
       expect(result.hex).toBe(0x222222);
     });
 
-    it('reads --color-text-primary when present', () => {
-      document.documentElement.style.setProperty(
-        '--color-text-primary',
-        '#ff5733'
-      );
+    it('reads --color-text-primary from body when present', () => {
+      // The token is read off <body> (not <html>): Classic's remap is
+      // body-scoped, and jsdom does not inherit custom properties, so
+      // setting it here also proves which element the resolver queries.
+      document.body.style.setProperty('--color-text-primary', '#ff5733');
       const result = resolveAxisMarkColor('light', document);
       expect(result.hex).toBe(0xff5733);
-      document.documentElement.style.removeProperty('--color-text-primary');
+      document.body.style.removeProperty('--color-text-primary');
     });
 
     it('handles a forced-colors / system color fallback gracefully', () => {
       // CanvasText / WindowText etc. can't be parsed; the helper must
       // still return a usable fallback rather than throwing.
-      document.documentElement.style.setProperty(
-        '--color-text-primary',
-        'CanvasText'
-      );
+      document.body.style.setProperty('--color-text-primary', 'CanvasText');
       const result = resolveAxisMarkColor('light-hc', document);
       expect(typeof result.hex).toBe('number');
       expect(result.css).toMatch(/^#[0-9a-f]{6}$/);
+      document.body.style.removeProperty('--color-text-primary');
+    });
+
+    it('classic resolves the transcribed Cornfield axes color, scheme-first', () => {
+      // Even with a token present the scheme wins: the marks belong to the
+      // viewport scheme, not to the app theme underneath (U-13).
+      document.body.style.setProperty('--color-text-primary', '#ff5733');
+      const result = resolveAxisMarkColor('classic', document);
+      expect(result.hex).toBe(0x000000);
+      expect(result.css).toBe('#000000');
+      document.body.style.removeProperty('--color-text-primary');
+    });
+
+    it('a dark scheme keeps its own light axes without consulting tokens', () => {
+      const result = resolveAxisMarkColor('starnight', document);
+      expect(result.hex).toBe(0xe5e5e5);
+    });
+
+    it('prefers the body-scoped token over the html one (the U-13 shape)', () => {
+      // The dark theme writes its token on <html>; Classic's remap lives
+      // on <body>. Reading html is exactly the defect this fix removed.
+      document.documentElement.style.setProperty(
+        '--color-text-primary',
+        '#edeef0'
+      );
+      document.body.style.setProperty('--color-text-primary', '#1a1a1a');
+      const result = resolveAxisMarkColor('light', document);
+      expect(result.hex).toBe(0x1a1a1a);
       document.documentElement.style.removeProperty('--color-text-primary');
+      document.body.style.removeProperty('--color-text-primary');
     });
   });
 
@@ -263,9 +289,7 @@ describe('axis-tick-overlay (F20)', () => {
         z: new Set(),
       };
       for (const s of sprites) {
-        positionsByAxis[s.userData.axisMark.axis].add(
-          s.userData.axisMark.mm
-        );
+        positionsByAxis[s.userData.axisMark.axis].add(s.userData.axisMark.mm);
       }
       for (const axis of ['x', 'y', 'z']) {
         expect([...positionsByAxis[axis]].sort((a, b) => a - b)).toEqual([
@@ -331,15 +355,12 @@ describe('axis-tick-overlay (F20)', () => {
     });
 
     it('records the resolved color hex on the result', () => {
-      document.documentElement.style.setProperty(
-        '--color-text-primary',
-        '#112233'
-      );
+      document.body.style.setProperty('--color-text-primary', '#112233');
       const result = buildAxisTickOverlay(mockThree, {
         themeKey: 'light',
       });
       expect(result.colorHex).toBe(0x112233);
-      document.documentElement.style.removeProperty('--color-text-primary');
+      document.body.style.removeProperty('--color-text-primary');
     });
   });
 });

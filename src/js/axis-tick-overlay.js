@@ -6,8 +6,15 @@
  *   - Sprite labels at every 50 mm (first label at 50 mm, then 100, 150…)
  *     with the axis letter included on the prominent 50/100 mm ticks
  *
- * Colors are pulled from the active theme's `--color-text-primary`
- * custom property at build time so the overlay tracks Light, Dark,
+ * Colors are resolved scheme-first (U-13): a Classic viewport scheme
+ * paints with its own transcribed desktop `axes` color from
+ * PREVIEW_COLORS, so the marks match the scheme it belongs to no matter
+ * which app theme is active underneath. App themes fall back to the
+ * `--color-text-primary` custom property, read from BODY at build time —
+ * Classic's token remap is body-scoped while the theme attribute sits on
+ * <html>, and custom properties only inherit downward, so an html-level
+ * read could bake a dark theme's light foreground into Classic's light
+ * scene (the U-13 defect). The body read tracks Light, Dark,
  * High-Contrast, and forced-colors modes without per-theme branches.
  *
  * The overlay is a *child* concept — the existing AxesHelper still
@@ -16,6 +23,8 @@
  *
  * @license GPL-3.0-or-later
  */
+
+import { PREVIEW_COLORS, isViewportSchemeKey } from './preview.js';
 
 const DEFAULT_RANGE_MM = 200; // ± along each axis
 const DEFAULT_TICK_STEP_MM = 10; // small tick every 10 mm
@@ -38,26 +47,43 @@ const FALLBACK_LIGHT_HEX = 0x222222;
 const FALLBACK_DARK_HEX = 0xdddddd;
 
 /**
- * Resolve the active text-foreground color for axis marks.
+ * Resolve the color for axis marks.
  *
- * @param {string} themeKey         Current preview theme (e.g. 'dark', 'light-hc').
+ * Scheme-first: when `themeKey` is a Classic viewport scheme, the scheme's
+ * own transcribed `axes` color wins — the marks belong to the scheme, not
+ * to the app theme (U-13). A scheme entry without a transcribed value
+ * falls through to the token read below (recorded gap; none today).
+ *
+ * @param {string} themeKey         Current preview theme (e.g. 'dark', 'classic').
  * @param {Document} [docRef]       Injectable for tests.
  * @returns {{ hex: number, css: string }}
  */
 export function resolveAxisMarkColor(themeKey, docRef) {
+  if (typeof themeKey === 'string' && isViewportSchemeKey(themeKey)) {
+    const axes = PREVIEW_COLORS[themeKey]?.axes;
+    if (typeof axes === 'number') {
+      return { hex: axes, css: hexToCss(axes) };
+    }
+  }
+
   const doc = docRef ?? globalThis.document;
   const fallbackHex =
     typeof themeKey === 'string' && themeKey.includes('dark')
       ? FALLBACK_DARK_HEX
       : FALLBACK_LIGHT_HEX;
 
-  if (!doc?.documentElement?.ownerDocument?.defaultView?.getComputedStyle) {
+  // Read the token off <body>, not <html>: theme tokens on <html> inherit
+  // down into <body>, so the value is the same for the app themes — but
+  // Classic's remap is body-scoped and only exists there (U-13). Body can
+  // be briefly null while <head> is still parsing; fall back to <html>.
+  const el = doc?.body ?? doc?.documentElement;
+  if (!el?.ownerDocument?.defaultView?.getComputedStyle) {
     return { hex: fallbackHex, css: hexToCss(fallbackHex) };
   }
 
   try {
-    const win = doc.documentElement.ownerDocument.defaultView;
-    const cs = win.getComputedStyle(doc.documentElement);
+    const win = el.ownerDocument.defaultView;
+    const cs = win.getComputedStyle(el);
     const raw = cs.getPropertyValue('--color-text-primary').trim();
     const parsed = parseCssColorToHex(raw);
     if (parsed != null) {

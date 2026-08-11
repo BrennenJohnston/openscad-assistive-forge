@@ -76,14 +76,11 @@ describe('PREVIEW_COLORS non-text contrast (WCAG 2.2 SC 1.4.11)', () => {
     expect(contrastRatio(modelBack, background)).toBeGreaterThanOrEqual(3);
   });
 
-  it.each(THEMES)(
-    '%s: edges vs model >= 4.5:1 (thin 1px strokes)',
-    (theme) => {
-      const { edges, model } = PREVIEW_COLORS[theme];
-      expect(edges).toBeTypeOf('number');
-      expect(contrastRatio(edges, model)).toBeGreaterThanOrEqual(4.5);
-    }
-  );
+  it.each(THEMES)('%s: edges vs model >= 4.5:1 (thin 1px strokes)', (theme) => {
+    const { edges, model } = PREVIEW_COLORS[theme];
+    expect(edges).toBeTypeOf('number');
+    expect(contrastRatio(edges, model)).toBeGreaterThanOrEqual(4.5);
+  });
 
   it('light theme no longer uses the failing Cornfield pair', () => {
     // #f9d72c (1.3:1) and #9dcb51 (1.7:1) fail SC 1.4.11 on #f5f5f5.
@@ -169,6 +166,41 @@ describe('desktop viewport colour schemes', () => {
     '%s keeps the upstream background verbatim',
     (id, background) => {
       expect(PREVIEW_COLORS[schemeColorsKey(id)].background).toBe(background);
+    }
+  );
+
+  // Verbatim from the same upstream files (U-13): Cornfield's AXES_COLOR
+  // from src/colormap.cc line 40, the rest from each scheme JSON's
+  // "axes-color". All ten already pass SC 1.4.11 against their own
+  // backgrounds (sunset is the narrowest at 3.20:1), so unlike the model
+  // and edge pairs none needed tuning — a value drifting off upstream
+  // here is a transcription error, not a tune.
+  const UPSTREAM_AXES = {
+    cornfield: 0x000000,
+    metallic: 0x222233,
+    sunset: 0x220d0d,
+    starnight: 0xe5e5e5,
+    beforedawn: 0xc1c1c1,
+    nature: 0x323232,
+    deepocean: 0xc1c1c1,
+    solarized: 0x191816,
+    tomorrow: 0x181818,
+    'tomorrow-night': 0xe8e8e8,
+  };
+
+  it.each(Object.entries(UPSTREAM_AXES))(
+    '%s keeps the upstream axes color verbatim',
+    (id, axes) => {
+      expect(PREVIEW_COLORS[schemeColorsKey(id)].axes).toBe(axes);
+    }
+  );
+
+  it.each(VIEWPORT_SCHEMES.map((s) => s.colors))(
+    '%s: axes vs background >= 3:1 (SC 1.4.11)',
+    (key) => {
+      const { axes, background } = PREVIEW_COLORS[key];
+      expect(axes).toBeTypeOf('number');
+      expect(contrastRatio(axes, background)).toBeGreaterThanOrEqual(3);
     }
   );
 
