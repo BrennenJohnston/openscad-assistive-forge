@@ -190,7 +190,14 @@ jobs:
           # the same suite in 19min and passes on this ceiling. Red here has
           # meant the clock rather than a defect, which is precisely how a
           # broken editor once shipped behind a green suite.
-          PW_GLOBAL_TIMEOUT: '1500000'
+          #
+          # Raised to 30min on the owner's order (2026-08-10, after UF-5 /
+          # PR #66): the job wall-clock reached 22m19s with ~2m41s of
+          # margin, and UF-6..UF-8 land before UF-9's health pass can trim
+          # the suite. Kept matched with Edge, as the raises above always
+          # were. The Q-23 never-started guard below stays the honesty
+          # backstop either way.
+          PW_GLOBAL_TIMEOUT: '1800000'
 
       # Q-23 (owner, 2026-08-09): this job once stayed green for a whole
       # release while two menu-parity tests were red, because tests the
@@ -294,7 +301,13 @@ jobs:
           # (their PRs targeted branches, so none of their ~53 added cases had
           # ever run here): 311 passed in 15.0m and two were then killed
           # mid-flight and reported as failures. Same signature, same fix.
-          PW_GLOBAL_TIMEOUT: '1500000'
+          #
+          # Raised to 30min on the owner's order (2026-08-10, after UF-5 /
+          # PR #66), kept matched with Chromium as always: this job's
+          # wall-clock reached 25m42s (its Playwright run sits inside the
+          # ceiling; the job total is setup + run) and the suite grows
+          # through UF-6..UF-8 before UF-9 can trim it.
+          PW_GLOBAL_TIMEOUT: '1800000'
       
       - name: Upload Playwright report (Edge)
         uses: actions/upload-artifact@v4
