@@ -83,6 +83,25 @@ describe('PreviewManager', () => {
       // glMateriali(GL_FRONT_AND_BACK, GL_SHININESS, 64) [OBSERVED]
       expect(DESKTOP_SHININESS).toBe(64)
     })
+
+    it('pins the Q-30 calibrated light intensities (U-14)', async () => {
+      // Ambient 0.2π is the desktop rig π-cancelled; the directional pair
+      // carries the ×1.5 the owner chose from the P4 contact sheet against
+      // OpenSCAD 2021.01 at a pinned pose. A drift here silently un-does a
+      // by-eye calibration no functional test can see.
+      const manager = new PreviewManager(container)
+      await manager.init()
+
+      expect(manager.baseLightIntensities.ambient).toBeCloseTo(0.2 * Math.PI)
+      expect(manager.baseLightIntensities.dir1).toBeCloseTo(1.5 * Math.PI)
+      expect(manager.baseLightIntensities.dir2).toBeCloseTo(1.5 * Math.PI)
+      expect(manager.directionalLight1.intensity).toBeCloseTo(1.5 * Math.PI)
+      expect(manager.directionalLight2.intensity).toBeCloseTo(1.5 * Math.PI)
+
+      // Sliders start neutral: the calibration must not pre-bias them.
+      expect(manager._brightnessScale).toBe(1)
+      expect(manager._contrastFactor).toBe(1)
+    })
   })
 
   describe('Measurement Preferences', () => {
@@ -2954,8 +2973,12 @@ describe('Visual Parity — desktop OpenSCAD alignment (Phase 5)', () => {
       expect(manager.ambientLight.intensity).toBeCloseTo(expected, 5)
     })
 
-    it('directional intensities are 1.0 * π (OpenGL diffuse {1,1,1,1})', () => {
-      const expected = 1.0 * Math.PI
+    it('directional intensities are 1.5 * π (π-cancel × Q-30 calibration)', () => {
+      // 1.0*π cancels the BRDF_Lambert divisor (OpenGL diffuse {1,1,1,1});
+      // the further ×1.5 is the owner's Q-30 pick from A/B captures against
+      // desktop 2021.01 at a pinned pose (U-14, 2026-08-11) — with π-cancel
+      // alone the same mesh in the same baked colors rendered visibly darker.
+      const expected = 1.5 * Math.PI
       expect(manager.directionalLight1.intensity).toBeCloseTo(expected, 5)
       expect(manager.directionalLight2.intensity).toBeCloseTo(expected, 5)
     })
@@ -2967,8 +2990,8 @@ describe('Visual Parity — desktop OpenSCAD alignment (Phase 5)', () => {
 
     it('base intensities record matches constructed values', () => {
       expect(manager.baseLightIntensities.ambient).toBeCloseTo(0.2 * Math.PI, 5)
-      expect(manager.baseLightIntensities.dir1).toBeCloseTo(1.0 * Math.PI, 5)
-      expect(manager.baseLightIntensities.dir2).toBeCloseTo(1.0 * Math.PI, 5)
+      expect(manager.baseLightIntensities.dir1).toBeCloseTo(1.5 * Math.PI, 5)
+      expect(manager.baseLightIntensities.dir2).toBeCloseTo(1.5 * Math.PI, 5)
     })
   })
 
