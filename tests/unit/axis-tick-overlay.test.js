@@ -163,27 +163,24 @@ describe('axis-tick-overlay (F20)', () => {
       expect(result.hex).toBe(0x222222);
     });
 
-    it('reads --color-text-primary when present', () => {
-      document.documentElement.style.setProperty(
-        '--color-text-primary',
-        '#ff5733'
-      );
+    it('reads --color-text-primary from body when present', () => {
+      // The token is read off <body> (not <html>): Classic's remap is
+      // body-scoped, and jsdom does not inherit custom properties, so
+      // setting it here also proves which element the resolver queries.
+      document.body.style.setProperty('--color-text-primary', '#ff5733');
       const result = resolveAxisMarkColor('light', document);
       expect(result.hex).toBe(0xff5733);
-      document.documentElement.style.removeProperty('--color-text-primary');
+      document.body.style.removeProperty('--color-text-primary');
     });
 
     it('handles a forced-colors / system color fallback gracefully', () => {
       // CanvasText / WindowText etc. can't be parsed; the helper must
       // still return a usable fallback rather than throwing.
-      document.documentElement.style.setProperty(
-        '--color-text-primary',
-        'CanvasText'
-      );
+      document.body.style.setProperty('--color-text-primary', 'CanvasText');
       const result = resolveAxisMarkColor('light-hc', document);
       expect(typeof result.hex).toBe('number');
       expect(result.css).toMatch(/^#[0-9a-f]{6}$/);
-      document.documentElement.style.removeProperty('--color-text-primary');
+      document.body.style.removeProperty('--color-text-primary');
     });
   });
 
@@ -263,9 +260,7 @@ describe('axis-tick-overlay (F20)', () => {
         z: new Set(),
       };
       for (const s of sprites) {
-        positionsByAxis[s.userData.axisMark.axis].add(
-          s.userData.axisMark.mm
-        );
+        positionsByAxis[s.userData.axisMark.axis].add(s.userData.axisMark.mm);
       }
       for (const axis of ['x', 'y', 'z']) {
         expect([...positionsByAxis[axis]].sort((a, b) => a - b)).toEqual([
@@ -331,15 +326,12 @@ describe('axis-tick-overlay (F20)', () => {
     });
 
     it('records the resolved color hex on the result', () => {
-      document.documentElement.style.setProperty(
-        '--color-text-primary',
-        '#112233'
-      );
+      document.body.style.setProperty('--color-text-primary', '#112233');
       const result = buildAxisTickOverlay(mockThree, {
         themeKey: 'light',
       });
       expect(result.colorHex).toBe(0x112233);
-      document.documentElement.style.removeProperty('--color-text-primary');
+      document.body.style.removeProperty('--color-text-primary');
     });
   });
 });

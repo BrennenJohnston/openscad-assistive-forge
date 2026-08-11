@@ -252,6 +252,10 @@ export const PREVIEW_COLORS = {
     model: 0x9a8200,
     modelBack: 0x5a8a22,
     edges: 0x020617,
+    // Upstream AXES_COLOR, verbatim: Cornfield is hardcoded in
+    // src/colormap.cc line 40 at tag openscad-2021.01 (no cornfield.json
+    // exists). 20.69:1 vs background — passes SC 1.4.11 untouched.
+    axes: 0x000000,
     ambientLight: 0xffffff,
   },
 
@@ -273,6 +277,13 @@ export const PREVIEW_COLORS = {
   // tests/unit/preview-colors-contrast.test.js, so a hand edit that breaks
   // one fails the suite.
   //
+  // `axes` is each scheme's `axes-color`, verbatim from the same upstream
+  // files (U-13): the axis lines and tick labels paint with it instead of
+  // the app's text token, so a Forge dark theme can no longer bleed a light
+  // foreground into a light scheme. All ten upstream values already pass
+  // SC 1.4.11's 3:1 against their own backgrounds (sunset is the narrowest
+  // at 3.20:1), so none needed tuning. Also asserted by the contrast suite.
+  //
   // Where a comment says "unchanged" the value IS upstream's.
   metallic: {
     background: 0xaaaaff, // upstream, verbatim
@@ -281,6 +292,7 @@ export const PREVIEW_COLORS = {
     model: 0x3c3cff, // 3.02:1 vs background (upstream #ddddff, lightness -31.5%)
     modelBack: 0xa519a5, // 3.02:1 (upstream #dd22dd, lightness -12.6%)
     edges: 0xffcdcd, // 4.53:1 vs model (upstream #ff0000, lightness +40.1%)
+    axes: 0x222233, // upstream axes-color, verbatim (7.36:1 vs background)
     ambientLight: 0xffffff,
   },
   sunset: {
@@ -290,6 +302,7 @@ export const PREVIEW_COLORS = {
     model: 0xffaaaa, // 3.20:1 vs background (upstream, unchanged)
     modelBack: 0x320d13, // 3.01:1 (upstream #882233, lightness -21%)
     edges: 0xa30000, // 4.53:1 vs model (upstream #ff0000, lightness -18%)
+    axes: 0x220d0d, // upstream axes-color, verbatim (3.20:1 vs background)
     ambientLight: 0xffffff,
   },
   starnight: {
@@ -299,6 +312,7 @@ export const PREVIEW_COLORS = {
     model: 0xffffe0, // 20.63:1 vs background (upstream, unchanged)
     modelBack: 0x00ffff, // 16.75:1 (upstream, unchanged)
     edges: 0x0000ff, // 8.44:1 vs model (upstream, unchanged)
+    axes: 0xe5e5e5, // upstream axes-color, verbatim (16.67:1 vs background)
     ambientLight: 0xffffff,
   },
   beforedawn: {
@@ -308,6 +322,7 @@ export const PREVIEW_COLORS = {
     model: 0xcccccc, // 7.87:1 vs background (upstream, unchanged)
     modelBack: 0x6571e0, // 3.00:1 (upstream #5563dd, lightness +3.7%)
     edges: 0xb20000, // 4.52:1 vs model (upstream #ff0000, lightness -15.1%)
+    axes: 0xc1c1c1, // upstream axes-color, verbatim (7.02:1 vs background)
     ambientLight: 0xffffff,
   },
   nature: {
@@ -317,6 +332,7 @@ export const PREVIEW_COLORS = {
     model: 0x16a085, // 3.14:1 vs background (upstream, unchanged)
     modelBack: 0x36a631, // 3.02:1 (upstream #dbf4da, lightness -48.3%)
     edges: 0x580000, // 4.52:1 vs model (upstream #ff0000, lightness -32.7%)
+    axes: 0x323232, // upstream axes-color, verbatim (12.28:1 vs background)
     ambientLight: 0xffffff,
   },
   deepocean: {
@@ -326,6 +342,7 @@ export const PREVIEW_COLORS = {
     model: 0xeeeeee, // 10.89:1 vs background (upstream, unchanged)
     modelBack: 0x0babc8, // 4.62:1 (upstream, unchanged)
     edges: 0x0000ff, // 7.41:1 vs model (upstream, unchanged)
+    axes: 0xc1c1c1, // upstream axes-color, verbatim (7.02:1 vs background)
     ambientLight: 0xffffff,
   },
   solarized: {
@@ -335,6 +352,7 @@ export const PREVIEW_COLORS = {
     model: 0xb58800, // 3.00:1 vs background (upstream, unchanged)
     modelBack: 0x882233, // 8.38:1 (upstream, unchanged)
     edges: 0x342700, // 4.52:1 vs model (upstream #b58800, lightness -25.2%)
+    axes: 0x191816, // upstream axes-color, verbatim (16.45:1 vs background)
     ambientLight: 0xffffff,
   },
   tomorrow: {
@@ -347,6 +365,7 @@ export const PREVIEW_COLORS = {
     // only reaches ~4.2:1, so no dark edge can satisfy the thin-stroke
     // threshold here.
     edges: 0xf3f3f3, // 4.50:1 vs model (upstream #4d4d4c, lightness +65.2%)
+    axes: 0x181818, // upstream axes-color, verbatim (16.72:1 vs background)
     ambientLight: 0xffffff,
   },
   'tomorrow-night': {
@@ -356,6 +375,7 @@ export const PREVIEW_COLORS = {
     model: 0x81a2be, // 6.18:1 vs background (upstream, unchanged)
     modelBack: 0xde935f, // 6.65:1 (upstream, unchanged)
     edges: 0x333634, // 4.57:1 vs model (upstream #c5c8c6, lightness -57.1%)
+    axes: 0xe8e8e8, // upstream axes-color, verbatim (13.49:1 vs background)
     ambientLight: 0xffffff,
   },
 };
