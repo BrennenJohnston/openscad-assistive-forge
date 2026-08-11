@@ -198,3 +198,72 @@ test.describe('Persisted-classic phone boot (U-10, Q-24a)', () => {
     await expect(page.locator('#classicGateBanner')).toBeHidden();
   });
 });
+
+test.describe('In-session narrowing keeps Classic alive (U-10, Q-24a)', () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test('gate-live-notice: narrowing shows the dismissible notice, Classic stays; widening heals it', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await pressToggle(page);
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+
+    await page.setViewportSize({ width: 375, height: 812 });
+    // Q-24a pinned: the session STAYS Classic — no eject, no hard block.
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+    const banner = page.locator('#classicGateBanner');
+    await expect(banner).toBeVisible();
+    await expect(page.locator('#classicGateLiveText')).toBeVisible();
+    await expect(banner).toContainText('phone-shaped');
+
+    // Widening heals the notice without a dismiss.
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(banner).toBeHidden();
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+
+    // A second crossing shows it again; Dismiss hides it; Classic stays.
+    await page.setViewportSize({ width: 375, height: 812 });
+    await expect(banner).toBeVisible();
+    await page.locator('#classicGateBannerDismiss').click();
+    await expect(banner).toBeHidden();
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+  });
+
+  test('gate-live-exit: leaving Classic at phone shape retires the notice and gates re-entry', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await pressToggle(page);
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+
+    await page.setViewportSize({ width: 375, height: 812 });
+    await expect(page.locator('#classicGateBanner')).toBeVisible();
+
+    await pressToggle(page);
+    await expect(page.locator('body')).not.toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+    await expect(page.locator('#classicGateBanner')).toBeHidden();
+    await expect(page.locator('#classicModeToggle')).toHaveAttribute(
+      'aria-disabled',
+      'true'
+    );
+  });
+});

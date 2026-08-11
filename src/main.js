@@ -2950,23 +2950,65 @@ async function initApp() {
   // Initialize UI mode controller (Basic/Advanced interface layout)
   getUIModeController().init();
 
-  // U-10 (UF-5 P4): a saved Classic preference deferred by the viewport
-  // gate gets one visible, dismissible notice per boot, and it is spoken.
-  // The preference itself stays saved — the controller's deferral flag
-  // protects it from incidental writes until an explicit mode switch.
+  // U-10 (UF-5 P4+P5): one dismissible banner, two notices. The boot
+  // notice says a saved Classic preference was deferred by the viewport
+  // gate (the preference stays saved — the controller's deferral flag
+  // protects it until an explicit mode switch). The live notice says a
+  // Classic session whose window turned phone-shaped stays alive (Q-24a).
+  const classicGateBanner = document.getElementById('classicGateBanner');
+  const showClassicGateNotice = (kind) => {
+    if (!classicGateBanner) return null;
+    const bootText = document.getElementById('classicGateBannerText');
+    const liveText = document.getElementById('classicGateLiveText');
+    bootText?.classList.toggle('hidden', kind !== 'boot');
+    liveText?.classList.toggle('hidden', kind !== 'live');
+    classicGateBanner.classList.remove('hidden');
+    return kind === 'boot' ? bootText : liveText;
+  };
+  const isClassicLiveNoticeShowing = () => {
+    const liveText = document.getElementById('classicGateLiveText');
+    return Boolean(
+      classicGateBanner &&
+      !classicGateBanner.classList.contains('hidden') &&
+      liveText &&
+      !liveText.classList.contains('hidden')
+    );
+  };
+  document
+    .getElementById('classicGateBannerDismiss')
+    ?.addEventListener('click', () =>
+      classicGateBanner?.classList.add('hidden')
+    );
+
   if (getUIModeController().isClassicDeferredByViewport()) {
-    const gateBanner = document.getElementById('classicGateBanner');
-    const gateBannerText = document.getElementById('classicGateBannerText');
-    if (gateBanner) {
-      gateBanner.classList.remove('hidden');
-      document
-        .getElementById('classicGateBannerDismiss')
-        ?.addEventListener('click', () => gateBanner.classList.add('hidden'));
-    }
-    if (gateBannerText) {
-      announceImmediate(gateBannerText.textContent.replace(/\s+/g, ' ').trim());
+    const bootText = showClassicGateNotice('boot');
+    if (bootText) {
+      announceImmediate(bootText.textContent.replace(/\s+/g, ' ').trim());
     }
   }
+
+  // The live notice shows on each crossing into narrowed Classic and
+  // heals itself when the window widens again; the announcement fires
+  // once per session so repeated resizes cannot nag a screen reader.
+  let classicNarrowAnnounced = false;
+  subscribeViewportShape((desktopShaped) => {
+    if (!desktopShaped && getUIModeController().getMode() === 'classic') {
+      const liveText = showClassicGateNotice('live');
+      if (liveText && !classicNarrowAnnounced) {
+        classicNarrowAnnounced = true;
+        announceImmediate(liveText.textContent.replace(/\s+/g, ' ').trim());
+      }
+    } else if (isClassicLiveNoticeShowing()) {
+      classicGateBanner?.classList.add('hidden');
+    }
+  });
+
+  // Any real mode switch ends the state either notice describes: an
+  // explicit switch retires the boot deferral, and leaving Classic
+  // retires the live notice.
+  getUIModeController().subscribe(() => {
+    classicGateBanner?.classList.add('hidden');
+  });
 
   // Initialize toolbar menu bar (File|Edit|Design|View|Window|Help)
   getToolbarMenuController().init();
