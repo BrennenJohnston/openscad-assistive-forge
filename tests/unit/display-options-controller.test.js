@@ -74,6 +74,9 @@ function createMockThree() {
       this.position = { copy: vi.fn() };
       this.rotation = { copy: vi.fn() };
       this.scale = { copy: vi.fn() };
+      // Real LineSegments has this; the UF-7 overlay dashes its negative
+      // ticks and calls it on the real class.
+      this.computeLineDistances = vi.fn();
     }),
     AxesHelper: vi.fn(function () {
       this.name = '';
@@ -342,9 +345,7 @@ describe('DisplayOptionsController — post-load listener registration', () => {
     ctrl.init();
 
     expect(mockPm.addPostLoadListener).toHaveBeenCalledTimes(1);
-    expect(typeof mockPm.addPostLoadListener.mock.calls[0][0]).toBe(
-      'function'
-    );
+    expect(typeof mockPm.addPostLoadListener.mock.calls[0][0]).toBe('function');
   });
 
   it('post-load listener rebuilds edges overlay when edges are enabled', () => {
@@ -469,6 +470,9 @@ function makeFatThreeMock() {
       this.geometry = geometry;
       this.material = material;
       this.name = '';
+      // Real LineSegments has this; the UF-7 overlay calls it on its
+      // dashed negative ticks.
+      this.computeLineDistances = vi.fn();
     }
   }
   class MockSpriteMaterial {
@@ -1027,8 +1031,9 @@ describe('DisplayOptionsController — U-3: axis ticks survive failures and heal
     localStorage.setItem('test-display-axisMarks', 'true');
     ctrl.state.axisMarks = true;
     // The transient failure class this guards against: a consumer asking for
-    // a class the module object does not carry.
-    delete mockThree.SpriteMaterial;
+    // a class the module object does not carry. (Was SpriteMaterial before
+    // UF-7 retired the sprite labels; the dashed negative ticks need this.)
+    delete mockThree.LineDashedMaterial;
 
     ctrl.refreshOverlays();
 

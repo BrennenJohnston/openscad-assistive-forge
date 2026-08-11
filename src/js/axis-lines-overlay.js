@@ -1,35 +1,34 @@
 /**
- * Axis lines overlay (P12).
+ * Axis lines overlay (P12, zoom-length since UF-7).
  *
  * Desktop OpenSCAD draws each axis through the origin in BOTH directions,
  * with the negative half dashed so you can tell which way is which at a
  * glance (OpenSCAD_1.png). three.js's AxesHelper draws the positive halves
- * only, so the negative halves were not merely undashed — they were absent,
- * and the tick marks at -50, -100, -150 and -200 sat in empty space with no
- * axis under them.
+ * only, so the negative halves were not merely undashed — they were absent.
  *
- * Arm length matches the tick overlay's range for that reason: ticks and the
- * line they mark have to end together.
+ * Arm length is the camera distance `l` (GLView.cc `showAxes()`:
+ * `auto l = cam.zoomValue()`), so at any zoom the axes span the view and
+ * end together with the tick overlay's outermost marks — the caller
+ * rebuilds this overlay when the zoom moves, same as the ticks. Dash size
+ * scales with `l` for the same reason the ticks' does: desktop stipples in
+ * screen pixels, and a fixed world-unit dash vanishes at far zoom.
  *
  * Colour follows the tick overlay's theme resolution (Q-22, owner decision
  * 2026-08-09): upstream's axes are black, and AxesHelper's red/green/blue
  * failed contrast — pure green measured 1.36:1 against the Cornfield
  * background where SC 1.4.11 wants 3:1. Resolving --color-text-primary gives
  * near-black on light themes (the desktop look) while dark themes keep
- * visible axes, and lines and ticks always match. Orientation now reads from
- * the dashing (negative halves) and the tick labels' axis letters.
+ * visible axes, and lines and ticks always match. Orientation reads from
+ * the dashing (negative halves) and the corner triad's letters.
  *
  * @license GPL-3.0-or-later
  */
 
-import { resolveAxisMarkColor } from './axis-tick-overlay.js';
-
-/** Matches DEFAULT_RANGE_MM in axis-tick-overlay.js — ticks and lines end together. */
-const DEFAULT_AXIS_RANGE_MM = 200;
-
-/** Dash and gap in scene millimetres. */
-const DASH_MM = 3;
-const GAP_MM = 3;
+import {
+  resolveAxisMarkColor,
+  DEFAULT_DISTANCE_MM,
+  DASH_DIVISOR,
+} from './axis-tick-overlay.js';
 
 const AXIS_VECTORS = {
   x: [1, 0, 0],
@@ -39,25 +38,26 @@ const AXIS_VECTORS = {
 
 /**
  * Build the axis lines: three solid positive arms and three dashed negative
- * arms, all from the origin.
+ * arms, all from the origin, each `distanceMm` long.
  *
  * @param {Object} three Three.js module (see getThreeModule).
  * @param {Object} [opts]
- * @param {number} [opts.rangeMm] Half-extent along each axis. Default 200 mm.
+ * @param {number} [opts.distanceMm] Camera distance to the look-at point —
+ *   the arm length, desktop `zoomValue()`. Defaults like the tick overlay.
  * @param {string} [opts.themeKey] Preview theme key, for the colour fallback.
  * @param {Document} [opts.document] Override `document` (tests).
- * @returns {{group: Object, dispose: () => void}}
+ * @returns {{group: Object, distanceMm: number, dispose: () => void}}
  */
 export function buildAxisLinesOverlay(three, opts = {}) {
   if (!three)
     throw new Error('buildAxisLinesOverlay requires a Three.js module');
 
-  const rangeMm =
-    typeof opts.rangeMm === 'number' &&
-    Number.isFinite(opts.rangeMm) &&
-    opts.rangeMm > 0
-      ? opts.rangeMm
-      : DEFAULT_AXIS_RANGE_MM;
+  const distanceMm =
+    typeof opts.distanceMm === 'number' &&
+    Number.isFinite(opts.distanceMm) &&
+    opts.distanceMm > 0
+      ? opts.distanceMm
+      : DEFAULT_DISTANCE_MM;
 
   const { hex: colorHex } = resolveAxisMarkColor(
     opts.themeKey || 'light',
@@ -85,9 +85,9 @@ export function buildAxisLinesOverlay(three, opts = {}) {
             0,
             0,
             0,
-            noNegativeZero(unit[0] * rangeMm * sign),
-            noNegativeZero(unit[1] * rangeMm * sign),
-            noNegativeZero(unit[2] * rangeMm * sign),
+            noNegativeZero(unit[0] * distanceMm * sign),
+            noNegativeZero(unit[1] * distanceMm * sign),
+            noNegativeZero(unit[2] * distanceMm * sign),
           ],
           3
         )
@@ -98,8 +98,8 @@ export function buildAxisLinesOverlay(three, opts = {}) {
           ? new three.LineBasicMaterial({ color: colorHex })
           : new three.LineDashedMaterial({
               color: colorHex,
-              dashSize: DASH_MM,
-              gapSize: GAP_MM,
+              dashSize: distanceMm / DASH_DIVISOR,
+              gapSize: distanceMm / DASH_DIVISOR,
             });
 
       const line = new three.Line(geometry, material);
@@ -116,6 +116,7 @@ export function buildAxisLinesOverlay(three, opts = {}) {
 
   return {
     group,
+    distanceMm,
     dispose: () => {
       for (const part of parts) {
         part.geometry.dispose?.();
@@ -128,7 +129,6 @@ export function buildAxisLinesOverlay(three, opts = {}) {
 
 // Exported for tests.
 export const __test = {
-  DEFAULT_AXIS_RANGE_MM,
-  DASH_MM,
-  GAP_MM,
+  DEFAULT_DISTANCE_MM,
+  DASH_DIVISOR,
 };
