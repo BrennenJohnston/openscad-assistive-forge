@@ -831,6 +831,10 @@ function getStepContent(step) {
  */
 const FORGE_HOME_MODES = ['simplified', 'standard'];
 
+/** Standard-density Classic shows the editor, console and Edit menu. */
+const isClassicStandardDensity = () =>
+  document.body?.dataset?.classicDensity === 'standard';
+
 /**
  * Tutorial step definitions
  */
@@ -839,6 +843,7 @@ const TUTORIALS = {
     id: 'intro',
     title: 'Getting Started',
     forceMode: 'simplified',
+    modeVariants: { classic: 'classic-intro' },
     steps: [
       {
         title: 'Welcome!',
@@ -1108,6 +1113,196 @@ const TUTORIALS = {
             <li>Set the grid to match your printer bed in Preview Settings</li>
             <li>Don't need a parameter group right now? Hide it with the button on the group header.</li>
           </ul>
+        `,
+        position: 'center',
+      },
+    ],
+  },
+  'classic-intro': {
+    id: 'classic-intro',
+    title: 'Classic Getting Started',
+    homeModes: ['classic'],
+    steps: [
+      {
+        title: 'Welcome to Classic!',
+        content: `
+          <p>This quick tour shows you around the Classic interface, which looks and works like the OpenSCAD desktop app.</p>
+          <ul>
+            <li>See where menus, tools, and parameters live</li>
+            <li>Change a parameter and watch the 3D view update</li>
+            <li>Render your model and export a file</li>
+          </ul>
+          <p class="tutorial-hint">Press <kbd>Esc</kbd> to exit at any time.</p>
+        `,
+        position: 'center',
+      },
+      {
+        title: 'The Classic layout',
+        content: `
+          <p>Classic puts everything in a fixed place, like the desktop app:</p>
+          <ul>
+            <li><strong>Menu bar</strong> and <strong>toolbar</strong> along the top</li>
+            <li><strong>3D view</strong> in the middle</li>
+            <li><strong>Customizer</strong> with your parameters on the right</li>
+            <li><strong>Status bar</strong> along the bottom</li>
+          </ul>
+          <p class="tutorial-hint">The Standard view also shows the code editor and console on the left.</p>
+        `,
+        position: 'center',
+      },
+      {
+        title: 'The menu bar',
+        content: `
+          <p>The menus group every command: <strong>File</strong>, <strong>Design</strong>, <strong>View</strong>, and <strong>Help</strong>. The Standard view adds <strong>Edit</strong> and <strong>Window</strong>.</p>
+          <p class="tutorial-hint">Keyboard: press <kbd>Alt</kbd> plus the underlined letter to open a menu.</p>
+        `,
+        highlightSelector: '#toolbarMenuBar',
+        position: 'bottom',
+      },
+      {
+        title: 'The toolbar',
+        content: `
+          <p>The toolbar holds the everyday buttons: <strong>Preview</strong> (F5), <strong>Render</strong> (F6), and export to <strong>STL</strong> or <strong>DXF</strong>. The gear button shows or hides the Customizer.</p>
+          <p class="tutorial-hint">The Standard view adds New, Open, and Save.</p>
+        `,
+        highlightSelector: '#classicToolbar',
+        position: 'bottom',
+      },
+      {
+        title: 'The Customizer',
+        content: `
+          <p>The <strong>Customizer</strong> holds your model's parameters, organized into groups. This is where most customizing happens.</p>
+          <p class="tutorial-hint">Automatic Preview is on by default, so changes show up in the 3D view right away.</p>
+        `,
+        highlightSelector: '#paramPanel',
+        position: 'left',
+      },
+      {
+        title: 'Expand a parameter group',
+        content: `
+          <p>Parameters are organized into <strong>collapsible groups</strong>.</p>
+          <p><strong>Try it:</strong> click the <strong>Dimensions</strong> group header to open it and see the sliders inside.</p>
+        `,
+        highlightSelector:
+          '.param-group[data-group-id="Dimensions"] summary, .param-group summary',
+        position: 'left',
+        lockScroll: true,
+        completion: {
+          type: 'detailsOpen',
+          selector:
+            '.param-group[data-group-id="Dimensions"], .param-group:first-of-type',
+        },
+      },
+      {
+        title: 'Adjust a parameter',
+        content: `
+          <p><strong>Try it:</strong> change <strong>Width</strong> and watch the 3D view update.</p>
+          <p class="tutorial-hint">You can drag the slider or type a number.</p>
+        `,
+        highlightSelector:
+          '#param-width, .param-control[data-param-name="width"] input, .param-control[data-param-name="width"]',
+        position: 'left',
+        lockScroll: true,
+        completion: {
+          type: 'domEvent',
+          selector:
+            '#param-width, #param-width input, .param-control[data-param-name="width"] input[type="range"], .param-control[data-param-name="width"] input',
+          event: 'input',
+        },
+      },
+      {
+        title: 'The 3D view',
+        content: `
+          <p>The 3D view shows your model with the same colors and axes as the desktop app. Drag to rotate, scroll to zoom.</p>
+          <p class="tutorial-hint">The view updates automatically after each parameter change.</p>
+        `,
+        highlightSelector: '@preview-container',
+        position: 'auto',
+      },
+      {
+        title: 'Designs (presets)',
+        content: `
+          <p>The <strong>Designs</strong> row saves your favorite parameter setups. Pick one from the list, or use the plus button to save the current settings as a new design.</p>
+          <p class="tutorial-hint">Designs are stored in your browser for this model.</p>
+        `,
+        highlightSelector: '#classicPresetRow',
+        position: 'left',
+      },
+      {
+        title: 'Render and export',
+        content: `
+          <p><strong>Preview</strong> (F5) is fast and approximate. <strong>Render</strong> (F6) builds the exact solid, ready to export.</p>
+          <p><strong>Try it:</strong> click <strong>Render</strong> in the toolbar.</p>
+          <p class="tutorial-hint">When it finishes, Export as STL or Export as DXF saves your file.</p>
+        `,
+        highlightSelector: '#classicTbRenderBtn',
+        position: 'bottom',
+        completion: {
+          type: 'domEvent',
+          selector: '#classicTbRenderBtn',
+          event: 'click',
+        },
+      },
+      {
+        title: 'Camera controls',
+        content: `
+          <p>The <strong>camera bar</strong> rotates, zooms, and resets the view with buttons. No dragging needed.</p>
+          <p class="tutorial-hint">A connected gamepad also steers the camera.</p>
+        `,
+        highlightSelector: '#classicCameraBar',
+        position: 'top',
+      },
+      {
+        title: 'Stow panels for space',
+        content: `
+          <p>The <strong>double-arrow</strong> buttons stow a panel onto the edge of the window. Click the tab on the rail to bring it back.</p>
+          <p class="tutorial-hint">Try stowing the Customizer when you want a bigger 3D view.</p>
+        `,
+        highlightSelector: '[data-classic-stow-field="right-top"]',
+        position: 'left',
+      },
+      {
+        title: 'The editor',
+        content: `
+          <p>The <strong>editor</strong> shows your model's OpenSCAD code. Your edits flow into the next Preview or Render.</p>
+          <p class="tutorial-hint">The editor toolbar has file and text tools, plus 3D Print.</p>
+        `,
+        highlightSelector: '#classicEditorSlot',
+        position: 'right',
+        showWhen: isClassicStandardDensity,
+        skipReason: 'not available in this view',
+      },
+      {
+        title: 'Console and Error-Log',
+        content: `
+          <p>Render messages appear in the <strong>Console</strong>. Problems show up in the <strong>Error-Log</strong> beside it, with the line number when known.</p>
+        `,
+        highlightSelector: '#classicConsoleSlot',
+        position: 'top',
+        showWhen: isClassicStandardDensity,
+        skipReason: 'not available in this view',
+      },
+      {
+        title: 'Preferences',
+        content: `
+          <p>Open <strong>Edit</strong>, then <strong>Preferences</strong> to tune Classic: color schemes for the 3D view, editor settings, and more.</p>
+          <p class="tutorial-hint">Color schemes preview live in the 3D view while the dialog is open.</p>
+        `,
+        highlightSelector: '#toolbarMenuBar',
+        position: 'bottom',
+        showWhen: isClassicStandardDensity,
+        skipReason: 'not available in this view',
+      },
+      {
+        title: "You're ready!",
+        content: `
+          <p>That's the Classic tour.</p>
+          <ul>
+            <li>The <strong>Simplified</strong> and <strong>Standard</strong> switch in the header changes how much is shown</li>
+            <li>The <strong>A. Forge</strong> button returns you to the Assistive Forge interface</li>
+            <li>Run this tour again anytime from the welcome screen</li>
+          </ul>
+          <p class="tutorial-hint">Happy modeling!</p>
         `,
         position: 'center',
       },
@@ -2085,16 +2280,25 @@ function setBackgroundInert(makeInert) {
  * @param {HTMLElement} [options.triggerEl] - Element that triggered the tutorial
  */
 export async function startTutorial(tutorialId, { triggerEl } = {}) {
-  const tutorial = TUTORIALS[tutorialId];
+  let tutorial = TUTORIALS[tutorialId];
   if (!tutorial) {
     console.warn(`Tutorial "${tutorialId}" not found`);
     return;
   }
 
+  // U-12 (Q-29 entry decision): a tutorial may name a sibling built for
+  // the current interface - the welcome card's intro launches the Classic
+  // tour inside Classic, directly and in place. Resolve before any gating.
+  const modeCtrl = getUIModeController();
+  const variantId = tutorial.modeVariants?.[modeCtrl.getMode()];
+  if (variantId && TUTORIALS[variantId]) {
+    tutorialId = variantId;
+    tutorial = TUTORIALS[variantId];
+  }
+
   // U-12: tutorials declare the interface they are built for (homeModes;
   // Forge chrome by default). A cross-interface launch asks first
   // (owner-approved wording, D-35); cancel stays put.
-  const modeCtrl = getUIModeController();
   const homeModes = tutorial.homeModes || FORGE_HOME_MODES;
   if (!homeModes.includes(modeCtrl.getMode())) {
     const proceed = await showTutorialModeChoiceDialog(tutorial);
@@ -2584,9 +2788,11 @@ async function showStep(stepIndex) {
   if (step.showWhen) {
     const shouldShow = evaluateShowWhenCondition(step.showWhen);
     if (!shouldShow) {
-      const reason = isMobileViewport()
-        ? 'not applicable on mobile'
-        : 'not applicable on desktop';
+      const reason =
+        step.skipReason ||
+        (isMobileViewport()
+          ? 'not applicable on mobile'
+          : 'not applicable on desktop');
       await skipToNextValidStep(stepIndex, direction, reason);
       return;
     }
