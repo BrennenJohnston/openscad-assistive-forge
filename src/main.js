@@ -4029,10 +4029,6 @@ async function initApp() {
             getZoomToCursor: () => previewManager?.zoomToCursorEnabled ?? true,
             onZoomToCursorChange: (enabled) => {
               previewManager?.toggleZoomToCursor(enabled);
-              // The viewport controls carry a second checkbox for this one
-              // setting; leaving it stale is the multi-copy trap.
-              const other = document.getElementById('zoomToCursorToggle');
-              if (other) other.checked = enabled;
               announceImmediate(
                 enabled
                   ? 'Zoom toward the mouse pointer, on'
@@ -5856,7 +5852,6 @@ async function initApp() {
   const previewQualitySelect = document.getElementById('previewQualitySelect');
   const exportQualitySelect = document.getElementById('exportQualitySelect');
   const autoBedToggle = document.getElementById('autoBedToggle');
-  const zoomToCursorToggle = document.getElementById('zoomToCursorToggle');
   const dimensionsDisplay = document.getElementById('dimensionsDisplay');
   // Note: outputFormatSelect and formatInfo already declared above
 
@@ -6182,21 +6177,6 @@ async function initApp() {
         }
       }
       console.log(`[App] Auto-bed ${enabled ? 'enabled' : 'disabled'}`);
-    });
-  }
-
-  // Wire zoom-to-cursor toggle (F17): mouse-wheel zoom focal point
-  if (zoomToCursorToggle) {
-    zoomToCursorToggle.addEventListener('change', () => {
-      const enabled = zoomToCursorToggle.checked;
-      if (previewManager) {
-        previewManager.toggleZoomToCursor(enabled);
-      }
-      announceImmediate(
-        enabled
-          ? 'Mouse-wheel zoom now follows the cursor'
-          : 'Mouse-wheel zoom now centres on the orbit target'
-      );
     });
   }
 
@@ -15394,6 +15374,16 @@ if (typeof window !== 'undefined') {
      */
     previewColorScheme() {
       return previewManager?.currentTheme ?? null;
+    },
+
+    /**
+     * Mouse-wheel zoom focal point (UF-11). The Preferences checkbox became
+     * this setting's only control, so specs prove a change against the
+     * manager's state rather than a second checkbox.
+     * @returns {boolean|null}
+     */
+    zoomToCursor() {
+      return previewManager?.zoomToCursorEnabled ?? null;
     },
 
     /**

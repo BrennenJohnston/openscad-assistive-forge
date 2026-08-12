@@ -1905,11 +1905,6 @@ export function initFileHandler({
         autoBedToggle.checked = previewManager.autoBedEnabled;
       }
 
-      const zoomToCursorToggle = document.getElementById('zoomToCursorToggle');
-      if (zoomToCursorToggle) {
-        zoomToCursorToggle.checked = previewManager.zoomToCursorEnabled;
-      }
-
       syncPreviewAppearanceOverride();
 
       const cameraPanelController = getCameraPanelController();

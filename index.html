@@ -4497,92 +4497,6 @@
                           Preview.</span
                         >
                         <div
-                          class="grid-color-row"
-                          role="group"
-                          aria-labelledby="gridColorLabel"
-                        >
-                          <label
-                            for="gridColorPicker"
-                            id="gridColorLabel"
-                            class="grid-color-label"
-                            >Grid color</label
-                          >
-                          <input
-                            type="color"
-                            id="gridColorPicker"
-                            class="grid-color-picker"
-                            value="#cccccc"
-                            aria-label="Grid line color"
-                            aria-describedby="gridColorHelp"
-                          />
-                          <button
-                            type="button"
-                            id="resetGridColorBtn"
-                            class="btn btn-sm btn-outline"
-                            aria-label="Reset grid color to theme default"
-                          >
-                            Reset
-                          </button>
-                          <span id="gridColorHelp" class="sr-only"
-                            >Choose a custom color for grid lines, or reset to
-                            the current theme default</span
-                          >
-                        </div>
-                        <!-- Grid Opacity -->
-                        <div class="preview-setting grid-opacity-setting">
-                          <label for="gridOpacityInput" id="gridOpacityLabel"
-                            >Grid opacity</label
-                          >
-                          <div class="slider-container">
-                            <input
-                              type="range"
-                              id="gridOpacityInput"
-                              min="10"
-                              max="100"
-                              step="5"
-                              value="100"
-                              aria-labelledby="gridOpacityLabel"
-                              aria-describedby="gridOpacityHelp"
-                            />
-                            <span class="slider-value" id="gridOpacityValue"
-                              >100%</span
-                            >
-                          </div>
-                        </div>
-                        <span id="gridOpacityHelp" class="sr-only"
-                          >Adjust grid line visibility from 10 to 100
-                          percent</span
-                        >
-                        <label class="toggle-switch">
-                          <input
-                            type="checkbox"
-                            id="autoBedToggle"
-                            checked
-                            aria-describedby="autoBedHelp"
-                          />
-                          <span class="toggle-label">Auto-bed (Z=0)</span>
-                        </label>
-                        <span id="autoBedHelp" class="sr-only"
-                          >Automatically place models on the build plate at Z
-                          equals zero</span
-                        >
-                        <label class="toggle-switch">
-                          <input
-                            type="checkbox"
-                            id="zoomToCursorToggle"
-                            checked
-                            aria-describedby="zoomToCursorHelp"
-                          />
-                          <span class="toggle-label"
-                            >Zoom toward mouse cursor</span
-                          >
-                        </label>
-                        <span id="zoomToCursorHelp" class="sr-only"
-                          >When enabled, scrolling the mouse wheel zooms toward
-                          the pointer location instead of the orbit centre.
-                          Keyboard zoom shortcuts are unaffected.</span
-                        >
-                        <div
                           class="preview-setting-group"
                           role="group"
                           aria-labelledby="gridSizeLabel"
@@ -7916,6 +7830,77 @@
                 >Zoom toward the mouse pointer</label
               >
             </div>
+            <!-- UF-11: these moved here from the Preview Settings drawer and
+                 keep their ids — main.js and overlay-grid-controller wire
+                 them by id, and the elements are their setting's one home. -->
+            <div class="preferences-check-row">
+              <input
+                type="checkbox"
+                id="autoBedToggle"
+                checked
+                aria-describedby="prefs-autobed-note"
+              />
+              <label for="autoBedToggle">Auto-bed (Z=0)</label>
+            </div>
+            <p id="prefs-autobed-note" class="preferences-field-note">
+              Automatically place models on the build plate at Z equals zero.
+            </p>
+            <fieldset class="preferences-fieldset">
+              <legend class="preferences-legend">Grid</legend>
+              <div
+                class="grid-color-row"
+                role="group"
+                aria-labelledby="gridColorLabel"
+              >
+                <label
+                  for="gridColorPicker"
+                  id="gridColorLabel"
+                  class="grid-color-label"
+                  >Grid color</label
+                >
+                <input
+                  type="color"
+                  id="gridColorPicker"
+                  class="grid-color-picker"
+                  value="#cccccc"
+                  aria-label="Grid line color"
+                  aria-describedby="gridColorHelp"
+                />
+                <button
+                  type="button"
+                  id="resetGridColorBtn"
+                  class="btn btn-sm btn-outline"
+                  aria-label="Reset grid color to theme default"
+                >
+                  Reset
+                </button>
+                <span id="gridColorHelp" class="sr-only"
+                  >Choose a custom color for grid lines, or reset to the current
+                  theme default</span
+                >
+              </div>
+              <div class="preview-setting grid-opacity-setting">
+                <label for="gridOpacityInput" id="gridOpacityLabel"
+                  >Grid opacity</label
+                >
+                <div class="slider-container">
+                  <input
+                    type="range"
+                    id="gridOpacityInput"
+                    min="10"
+                    max="100"
+                    step="5"
+                    value="100"
+                    aria-labelledby="gridOpacityLabel"
+                    aria-describedby="gridOpacityHelp"
+                  />
+                  <span class="slider-value" id="gridOpacityValue">100%</span>
+                </div>
+              </div>
+              <span id="gridOpacityHelp" class="sr-only"
+                >Adjust grid line visibility from 10 to 100 percent</span
+              >
+            </fieldset>
           </div>
           <div
             role="tabpanel"
