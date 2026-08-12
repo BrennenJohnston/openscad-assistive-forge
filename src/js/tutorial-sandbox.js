@@ -992,7 +992,7 @@ const TUTORIALS = {
           <ul>
             <li>Status and progress</li>
             <li>Model dimensions</li>
-            <li>Preview/export quality</li>
+            <li>Preview quality</li>
             <li><strong>Grid size</strong> — set the grid to match your printer bed. <strong>Try it:</strong> change the width to match your printer.</li>
           </ul>
           <p class="tutorial-hint">You can resize this drawer using the handle. With keyboard: focus the handle, then use arrow keys.</p>

@@ -171,7 +171,9 @@ test('every unavailable tab is disabled and names its reason', async ({
   // aria-disabled="true" as not-actionable and refuses to click it, though a
   // real browser dispatches the event. Arrowing is also the path that matters
   // here — it is how a keyboard user gets to the explanation at all.
-  const STEPS = { '3dprint': 2, advanced: 3, axes: 4, buttons: 5 };
+  // Advanced left this list in UF-11: it hosts the engine and cache
+  // controls now, so it is a live tab like 3D View.
+  const STEPS = { '3dprint': 2, axes: 4, buttons: 5 };
   for (const [id, steps] of Object.entries(STEPS)) {
     await page.locator('#prefs-tab-3dview').click();
     for (let i = 0; i < steps; i++) await page.keyboard.press('ArrowRight');
@@ -230,6 +232,31 @@ test('the 3D View tab is live and no longer says it is not built', async ({
   await expect(page.locator('#prefsMouseCentricZoom')).toBeEnabled();
 });
 
+test('the Advanced tab is live and hosts the engine and cache rows (UF-11)', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await openPreferences(page);
+
+  const tab = page.locator('#prefs-tab-advanced');
+  // The tab stopped being an honesty notice when the engine toggle and the
+  // cache button moved in from the Preview Settings drawer.
+  await expect(tab).not.toHaveAttribute('aria-disabled', 'true');
+  expect(await tab.getAttribute('aria-describedby')).toBeNull();
+
+  await tab.click();
+  await expect(page.locator('#manifoldEngineToggle')).toBeVisible();
+  await expect(page.locator('#manifoldEngineToggle')).toBeEnabled();
+  await expect(page.locator('#clearCacheBtn')).toBeVisible();
+
+  // The engine toggle still applies: its hint follows the choice.
+  const hint = page.locator('#manifoldEngineHint');
+  await page.locator('#manifoldEngineToggle').setChecked(false);
+  await expect(hint).toContainText('stable engine');
+  await page.locator('#manifoldEngineToggle').setChecked(true);
+  await expect(hint).toContainText('faster');
+});
+
 test('picking a scheme repaints the viewport, and it survives a reopen', async ({
   page,
 }) => {
@@ -269,23 +296,36 @@ test('picking a scheme repaints the viewport, and it survives a reopen', async (
   await expect(page.locator('#prefsScheme-starnight')).toBeChecked();
 });
 
-test('the mouse-centric zoom checkbox and the viewport one stay in step', async ({
+test('the mouse-centric zoom checkbox drives the viewport setting (UF-11)', async ({
   page,
 }) => {
   // One setting with two controls is this project's most repeated bug shape.
+  // UF-11 removed the viewport's copy, so this checkbox is the one home and
+  // the proof reads the preview manager's own state, not another control.
   test.setTimeout(240_000);
   await openPreferences(page);
   await page.locator('#prefs-tab-3dview').click();
+
+  // The manager is created by the first preview; wait for it so the change
+  // has something real to land on.
+  await expect
+    .poll(() => page.evaluate(() => window.__forgeDebug.zoomToCursor()), {
+      timeout: 60_000,
+    })
+    .not.toBe(null);
 
   const inPrefs = page.locator('#prefsMouseCentricZoom');
   const before = await inPrefs.isChecked();
   await inPrefs.setChecked(!before);
 
-  expect(
-    await page.evaluate(
-      () => document.getElementById('zoomToCursorToggle')?.checked
-    )
-  ).toBe(!before);
+  await expect
+    .poll(() => page.evaluate(() => window.__forgeDebug.zoomToCursor()))
+    .toBe(!before);
+
+  await inPrefs.setChecked(before);
+  await expect
+    .poll(() => page.evaluate(() => window.__forgeDebug.zoomToCursor()))
+    .toBe(before);
 });
 
 test('Escape closes and returns focus to the menu that opened it', async ({

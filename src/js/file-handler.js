@@ -1895,16 +1895,6 @@ export function initFileHandler({
       syncPreviewModelColorOverride();
       syncPreviewAppearanceOverride();
 
-      const measurementsToggle = document.getElementById('measurementsToggle');
-      if (measurementsToggle) {
-        measurementsToggle.checked = previewManager.measurementsEnabled;
-      }
-
-      const gridToggle = document.getElementById('gridToggle');
-      if (gridToggle) {
-        gridToggle.checked = previewManager.gridEnabled;
-      }
-
       getOverlayGridCtrl().connectPreviewManager(previewManager);
       getDisplayOptionsCtrl().connectPreviewManager(previewManager);
       // Classic's Viewport-Control panel reads and writes this camera (F4).
@@ -1913,11 +1903,6 @@ export function initFileHandler({
       const autoBedToggle = document.getElementById('autoBedToggle');
       if (autoBedToggle) {
         autoBedToggle.checked = previewManager.autoBedEnabled;
-      }
-
-      const zoomToCursorToggle = document.getElementById('zoomToCursorToggle');
-      if (zoomToCursorToggle) {
-        zoomToCursorToggle.checked = previewManager.zoomToCursorEnabled;
       }
 
       syncPreviewAppearanceOverride();

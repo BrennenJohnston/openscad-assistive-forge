@@ -411,6 +411,14 @@ let comparisonView = null;
 let renderQueue = null;
 
 /**
+ * Export quality mode. Module-scope like previewManager so the __forgeDebug
+ * hook can read it: File > Export Quality is its only control (UF-11) and
+ * there is no DOM element left to ask. Session-only on purpose - the retired
+ * drawer select also reset to 'model' on every boot.
+ */
+let exportQualityMode = 'model';
+
+/**
  * The expert block's ▶ Preview handler, published for the Classic editor
  * toolbar. Null until the expert block initializes.
  * @type {Function|null}
@@ -1073,12 +1081,9 @@ async function initApp() {
   document
     .getElementById('memoryBannerReduceFn')
     ?.addEventListener('click', () => {
-      // Reduce export quality to low
-      const exportQuality = document.getElementById('exportQualitySelect');
-      if (exportQuality) {
-        exportQuality.value = 'low';
-        exportQuality.dispatchEvent(new Event('change'));
-      }
+      // Reduce export quality to low. The mode lives in main.js now
+      // (File > Export Quality) - there is no select to poke (UF-11).
+      setExportQualityMode('low');
       // Also reduce preview quality to fast. MEASURED: dispatching 'change'
       // here started four renders, because that handler kicks auto-preview —
       // and rendering is the memory-hungry operation this banner is warning
@@ -3703,6 +3708,31 @@ async function initApp() {
       },
       { type: 'separator' },
       { type: 'submenu', label: 'Export', items: exportItems },
+      // UF-11: proxies the export-quality mode whose drawer select was
+      // retired; these labels are the retired select's options and this list
+      // is the setting's one home. Forge-only, like the other UF-11 menu
+      // homes - Classic's File menu keeps its audited upstream shape.
+      ...(document.body.dataset.uiMode !== 'classic'
+        ? [
+            {
+              type: 'submenu',
+              label: 'Export Quality',
+              items: [
+                { label: 'Model default', value: 'model' },
+                { label: 'Low (fast)', value: 'low' },
+                { label: 'Medium (balanced)', value: 'medium' },
+                { label: 'High (smooth)', value: 'high' },
+              ].map((opt) => ({
+                type: 'radio',
+                label: opt.label,
+                group: 'exportQuality',
+                value: opt.value,
+                checked: exportQualityMode === opt.value,
+                onChange: () => setExportQualityMode(opt.value),
+              })),
+            },
+          ]
+        : []),
       { type: 'separator' },
       {
         type: 'action',
@@ -4029,10 +4059,6 @@ async function initApp() {
             getZoomToCursor: () => previewManager?.zoomToCursorEnabled ?? true,
             onZoomToCursorChange: (enabled) => {
               previewManager?.toggleZoomToCursor(enabled);
-              // The viewport controls carry a second checkbox for this one
-              // setting; leaving it stale is the multi-copy trap.
-              const other = document.getElementById('zoomToCursorToggle');
-              if (other) other.checked = enabled;
               announceImmediate(
                 enabled
                   ? 'Zoom toward the mouse pointer, on'
@@ -4262,6 +4288,57 @@ async function initApp() {
         checked: displayOptionsController.get('crosshairs'),
         handler: () => displayOptionsController.toggle('crosshairs'),
       },
+      // UF-11: the grid, measurements and status-bar toggles moved here from
+      // the Preview Settings drawer. Forge-only: Classic's View menu keeps
+      // its audited desktop shape, and Classic never showed the drawer these
+      // came from.
+      ...(document.body.dataset.uiMode !== 'classic'
+        ? [
+            {
+              type: 'toggle',
+              label: 'Show Grid',
+              checked: Boolean(previewManager?.gridEnabled),
+              enabled: Boolean(previewManager),
+              tooltip: previewManager
+                ? undefined
+                : 'Preview or render a model first',
+              handler: () => {
+                if (!previewManager) return;
+                const next = !previewManager.gridEnabled;
+                previewManager.toggleGrid(next);
+                announceImmediate(`Grid ${next ? 'shown' : 'hidden'}`);
+              },
+            },
+            {
+              type: 'toggle',
+              label: 'Show Measurements',
+              checked: Boolean(previewManager?.measurementsEnabled),
+              enabled: Boolean(previewManager),
+              tooltip: previewManager
+                ? undefined
+                : 'Preview or render a model first',
+              handler: () => {
+                if (!previewManager) return;
+                const next = !previewManager.measurementsEnabled;
+                previewManager.toggleMeasurements(next);
+                updateDimensionsDisplay();
+                announceImmediate(`Measurements ${next ? 'shown' : 'hidden'}`);
+              },
+            },
+            {
+              type: 'toggle',
+              label: 'Show Status Bar',
+              checked: !document
+                .getElementById('previewStatusBar')
+                ?.classList.contains('user-hidden'),
+              handler: () => {
+                const bar = document.getElementById('previewStatusBar');
+                if (!bar) return;
+                setPreviewStatusBarShown(bar.classList.contains('user-hidden'));
+              },
+            },
+          ]
+        : []),
       { type: 'separator' },
       // -- Camera Views --
       {
@@ -4436,6 +4513,35 @@ async function initApp() {
           })),
         };
       })(),
+      // UF-11: the edge budget moved here from the drawer select; the values
+      // are the retired select's options and this list is now their one home.
+      // setEdgeBudget persists, rebuilds the overlay and announces the stats.
+      ...(document.body.dataset.uiMode !== 'classic'
+        ? [
+            (() => {
+              const EDGE_DETAIL_OPTIONS = [
+                { label: 'Low — 25,000 edges', value: 25000 },
+                { label: 'Balanced — 75,000 edges', value: 75000 },
+                { label: 'High — 250,000 edges', value: 250000 },
+                { label: 'Unlimited', value: 0 },
+              ];
+              const current = displayOptionsController.getEdgeBudget();
+              return {
+                type: 'submenu',
+                label: 'Edge Detail Limit',
+                items: EDGE_DETAIL_OPTIONS.map((opt) => ({
+                  type: 'radio',
+                  label: opt.label,
+                  group: 'edgeDetail',
+                  value: String(opt.value),
+                  checked: current === opt.value,
+                  onChange: () =>
+                    displayOptionsController.setEdgeBudget(opt.value),
+                })),
+              };
+            })(),
+          ]
+        : []),
       ...(document.body.dataset.uiMode === 'classic'
         ? [
             {
@@ -5362,12 +5468,8 @@ async function initApp() {
           updateStatus('Preview quality set to Fast', 'success');
         }
       } else if (action === 'export-low') {
-        const select = document.getElementById('exportQualitySelect');
-        if (select) {
-          select.value = 'low';
-          select.dispatchEvent(new Event('change', { bubbles: true }));
-          updateStatus('Export quality set to Low', 'success');
-        }
+        setExportQualityMode('low');
+        updateStatus('Export quality set to Low', 'success');
       } else if (action === 'focus-resolution') {
         const candidates = [
           '$fn',
@@ -5774,11 +5876,7 @@ async function initApp() {
   const previewContainer = document.getElementById('previewContainer');
   const autoPreviewToggle = document.getElementById('autoPreviewToggle');
   const previewQualitySelect = document.getElementById('previewQualitySelect');
-  const exportQualitySelect = document.getElementById('exportQualitySelect');
-  const measurementsToggle = document.getElementById('measurementsToggle');
-  const gridToggle = document.getElementById('gridToggle');
   const autoBedToggle = document.getElementById('autoBedToggle');
-  const zoomToCursorToggle = document.getElementById('zoomToCursorToggle');
   const dimensionsDisplay = document.getElementById('dimensionsDisplay');
   // Note: outputFormatSelect and formatInfo already declared above
 
@@ -5806,9 +5904,13 @@ async function initApp() {
     return previewQualitySelect?.value || PREVIEW_QUALITY_DEFAULT;
   };
 
-  const getSelectedExportQualityMode = () => {
-    return exportQualitySelect?.value || 'model';
-  };
+  // A function declaration so the File-menu builder, the memory banner and
+  // the error-recovery action can all reach it regardless of where they sit
+  // in this scope; the mode itself is module-scope for the debug hook.
+  function setExportQualityMode(mode) {
+    exportQualityMode = mode;
+    exportQualityPreset = getExportQualityPreset(mode);
+  }
 
   const getManualPreviewQuality = (mode) => {
     switch (mode) {
@@ -5964,13 +6066,7 @@ async function initApp() {
     }
   };
 
-  let exportQualityMode = getSelectedExportQualityMode();
   let exportQualityPreset = getExportQualityPreset(exportQualityMode);
-
-  const applyExportQualityMode = () => {
-    exportQualityMode = getSelectedExportQualityMode();
-    exportQualityPreset = getExportQualityPreset(exportQualityMode);
-  };
 
   // Wire preview settings UI
   if (autoPreviewToggle) {
@@ -6028,16 +6124,6 @@ async function initApp() {
     });
   }
 
-  if (exportQualitySelect) {
-    if (exportQualitySelect.querySelector('option[value="model"]')) {
-      exportQualitySelect.value = 'model';
-    }
-    applyExportQualityMode();
-    exportQualitySelect.addEventListener('change', () => {
-      applyExportQualityMode();
-    });
-  }
-
   // Advisory instead of a silent downgrade: with the desktop-fidelity default,
   // heavy models preview at full model quality — surface a one-shot hint that
   // Performance (auto) exists. Auto mode adapts on its own and needs none.
@@ -6071,32 +6157,6 @@ async function initApp() {
       maybeShowComplexityAdvisory(state);
     }
   });
-
-  // Wire measurements toggle
-  if (measurementsToggle) {
-    // Initialize from localStorage (after preview manager is created)
-    // The checkbox will be set when preview manager is initialized
-
-    measurementsToggle.addEventListener('change', () => {
-      const enabled = measurementsToggle.checked;
-      if (previewManager) {
-        previewManager.toggleMeasurements(enabled);
-        updateDimensionsDisplay();
-      }
-      console.log(`[App] Measurements ${enabled ? 'enabled' : 'disabled'}`);
-    });
-  }
-
-  // Wire grid toggle
-  if (gridToggle) {
-    gridToggle.addEventListener('change', () => {
-      const enabled = gridToggle.checked;
-      if (previewManager) {
-        previewManager.toggleGrid(enabled);
-      }
-      console.log(`[App] Grid ${enabled ? 'enabled' : 'disabled'}`);
-    });
-  }
 
   // Initialize overlay/grid/auto-rotate controller (extracted module)
   const overlayGridCtrl = initOverlayGridController({
@@ -6133,42 +6193,21 @@ async function initApp() {
     });
   }
 
-  // Wire zoom-to-cursor toggle (F17): mouse-wheel zoom focal point
-  if (zoomToCursorToggle) {
-    zoomToCursorToggle.addEventListener('change', () => {
-      const enabled = zoomToCursorToggle.checked;
-      if (previewManager) {
-        previewManager.toggleZoomToCursor(enabled);
-      }
-      announceImmediate(
-        enabled
-          ? 'Mouse-wheel zoom now follows the cursor'
-          : 'Mouse-wheel zoom now centres on the orbit target'
-      );
-    });
+  // Status bar visibility. The control is View > Show Status Bar (UF-11);
+  // boot only restores the persisted choice here.
+  function setPreviewStatusBarShown(shown) {
+    const bar = document.getElementById('previewStatusBar');
+    if (!bar) return;
+    bar.classList.toggle('user-hidden', !shown);
+    localStorage.setItem(STORAGE_KEY_STATUS_BAR, shown ? 'true' : 'false');
+    announceImmediate(`Status bar ${shown ? 'shown' : 'hidden'}`);
+    console.log(`[App] Status bar ${shown ? 'shown' : 'hidden'}`);
   }
-
-  // Wire status bar toggle
-  const statusBarToggle = document.getElementById('statusBarToggle');
-  if (statusBarToggle && previewStatusBar) {
-    // Initialize from localStorage
+  if (previewStatusBar) {
     const savedStatusBarPref = localStorage.getItem(STORAGE_KEY_STATUS_BAR);
-    const statusBarEnabled = savedStatusBarPref !== 'false'; // Default to true
-    statusBarToggle.checked = statusBarEnabled;
-    if (!statusBarEnabled) {
+    if (savedStatusBarPref === 'false') {
       previewStatusBar.classList.add('user-hidden');
     }
-
-    statusBarToggle.addEventListener('change', () => {
-      const enabled = statusBarToggle.checked;
-      if (enabled) {
-        previewStatusBar.classList.remove('user-hidden');
-      } else {
-        previewStatusBar.classList.add('user-hidden');
-      }
-      localStorage.setItem(STORAGE_KEY_STATUS_BAR, enabled ? 'true' : 'false');
-      console.log(`[App] Status bar ${enabled ? 'shown' : 'hidden'}`);
-    });
   }
 
   // ============================================================================
@@ -6489,7 +6528,7 @@ async function initApp() {
 
     const dimensions = previewManager.calculateDimensions();
 
-    if (dimensions && measurementsToggle?.checked) {
+    if (dimensions && previewManager.measurementsEnabled) {
       // Show dimensions panel
       dimensionsDisplay.classList.remove('hidden');
 
@@ -15348,6 +15387,26 @@ if (typeof window !== 'undefined') {
      */
     previewColorScheme() {
       return previewManager?.currentTheme ?? null;
+    },
+
+    /**
+     * Mouse-wheel zoom focal point (UF-11). The Preferences checkbox became
+     * this setting's only control, so specs prove a change against the
+     * manager's state rather than a second checkbox.
+     * @returns {boolean|null}
+     */
+    zoomToCursor() {
+      return previewManager?.zoomToCursorEnabled ?? null;
+    },
+
+    /**
+     * Export quality mode (UF-11). File > Export Quality became this
+     * setting's only control and it has no DOM element to read, so the
+     * memory-banner and recovery specs prove changes here.
+     * @returns {string}
+     */
+    exportQuality() {
+      return exportQualityMode;
     },
 
     /**

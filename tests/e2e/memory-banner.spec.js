@@ -192,9 +192,11 @@ test('banner Reduce Quality lowers both settings without starting a render', asy
   await page.locator('#memoryBannerReduceFn').click();
   await page.waitForTimeout(4_000);
 
-  expect(
-    await page.evaluate(() => document.getElementById('exportQualitySelect').value)
-  ).toBe('low');
+  // UF-11: export quality's control is File ▸ Export Quality now; the mode
+  // has no DOM element, so the debug hook is the readable truth.
+  expect(await page.evaluate(() => window.__forgeDebug.exportQuality())).toBe(
+    'low'
+  );
   expect(
     await page.evaluate(
       () => document.getElementById('previewQualitySelect').value

@@ -117,7 +117,8 @@ Undo history includes the last 50 changes.
 Auto-rotate slowly spins the model for presentation:
 
 1. Click the **Auto-rotate** button (circular arrow icon)
-2. Adjust speed in Preview Settings
+2. Adjust speed with the **Auto-rotate speed** slider next to it in the
+   Camera panel
 3. Click again to stop
 
 **Note:** Auto-rotate is disabled if you have "Reduce Motion" enabled in your system settings.

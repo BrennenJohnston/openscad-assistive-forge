@@ -581,11 +581,15 @@ test.describe('Parity — Grid Opacity Control (S-016)', () => {
     await expect(slider).toBeAttached({ timeout: 30_000 });
 
     if (!(await slider.isVisible().catch(() => false))) {
-      const drawerToggle = page.locator('#previewDrawerToggle');
-      if ((await drawerToggle.count()) > 0) {
-        await drawerToggle.click();
-        await page.waitForTimeout(500);
-      }
+      // UF-11: the slider lives in Edit ▸ Preferences ▸ 3D View now, and the
+      // menu bar is hidden in Simplified — switch to Standard first.
+      await page.locator('#uiModeToggle').click();
+      await page.locator('#editMenuBtn').click();
+      await page
+        .locator('#editMenuItems')
+        .getByText('Preferences…', { exact: true })
+        .click();
+      await page.locator('#prefs-tab-3dview').click();
     }
 
     await expect(slider).toBeVisible({ timeout: 10_000 });

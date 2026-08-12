@@ -4432,29 +4432,6 @@
                   aria-labelledby="preview-settings-heading"
                 >
                   <div
-                    class="status-area"
-                    id="statusArea"
-                    role="status"
-                    aria-live="polite"
-                    aria-label="Application status"
-                  >
-                    Ready
-                  </div>
-                  <!-- Dedicated screen reader announcer (separate from visible status) -->
-                  <div
-                    id="srAnnouncer"
-                    class="sr-only"
-                    aria-live="polite"
-                    aria-atomic="true"
-                  ></div>
-                  <!-- Assertive announcer for errors and critical warnings -->
-                  <div
-                    id="srAnnouncerAssertive"
-                    class="sr-only"
-                    aria-live="assertive"
-                    aria-atomic="true"
-                  ></div>
-                  <div
                     class="preview-settings-panel"
                     role="group"
                     aria-label="Preview settings"
@@ -4518,145 +4495,6 @@
                           >Re-render the preview automatically when a parameter
                           changes. Turn off to preview only when you press
                           Preview.</span
-                        >
-                        <label class="toggle-switch">
-                          <input
-                            type="checkbox"
-                            id="measurementsToggle"
-                            aria-describedby="measurementsHelp"
-                          />
-                          <span class="toggle-label">Show measurements</span>
-                        </label>
-                        <span id="measurementsHelp" class="sr-only"
-                          >Toggle dimension measurements and bounding box
-                          overlay on 3D preview</span
-                        >
-                        <label class="toggle-switch">
-                          <input
-                            type="checkbox"
-                            id="gridToggle"
-                            checked
-                            aria-describedby="gridHelp"
-                          />
-                          <span class="toggle-label">Show grid</span>
-                        </label>
-                        <span id="gridHelp" class="sr-only"
-                          >Toggle grid plane visibility in 3D preview</span
-                        >
-                        <div
-                          class="grid-color-row"
-                          role="group"
-                          aria-labelledby="gridColorLabel"
-                        >
-                          <label
-                            for="gridColorPicker"
-                            id="gridColorLabel"
-                            class="grid-color-label"
-                            >Grid color</label
-                          >
-                          <input
-                            type="color"
-                            id="gridColorPicker"
-                            class="grid-color-picker"
-                            value="#cccccc"
-                            aria-label="Grid line color"
-                            aria-describedby="gridColorHelp"
-                          />
-                          <button
-                            type="button"
-                            id="resetGridColorBtn"
-                            class="btn btn-sm btn-outline"
-                            aria-label="Reset grid color to theme default"
-                          >
-                            Reset
-                          </button>
-                          <span id="gridColorHelp" class="sr-only"
-                            >Choose a custom color for grid lines, or reset to
-                            the current theme default</span
-                          >
-                        </div>
-                        <!-- Grid Opacity -->
-                        <div class="preview-setting grid-opacity-setting">
-                          <label for="gridOpacityInput" id="gridOpacityLabel"
-                            >Grid opacity</label
-                          >
-                          <div class="slider-container">
-                            <input
-                              type="range"
-                              id="gridOpacityInput"
-                              min="10"
-                              max="100"
-                              step="5"
-                              value="100"
-                              aria-labelledby="gridOpacityLabel"
-                              aria-describedby="gridOpacityHelp"
-                            />
-                            <span class="slider-value" id="gridOpacityValue"
-                              >100%</span
-                            >
-                          </div>
-                        </div>
-                        <span id="gridOpacityHelp" class="sr-only"
-                          >Adjust grid line visibility from 10 to 100
-                          percent</span
-                        >
-                        <!-- Edge Detail Limit -->
-                        <div class="preview-setting edge-budget-setting">
-                          <label for="edgeBudgetSelect" id="edgeBudgetLabel"
-                            >Edge detail limit</label
-                          >
-                          <select
-                            id="edgeBudgetSelect"
-                            aria-labelledby="edgeBudgetLabel"
-                            aria-describedby="edgeBudgetHelp edgeBudgetStatus"
-                          >
-                            <option value="25000">Low — 25,000 edges</option>
-                            <option value="75000" selected>
-                              Balanced — 75,000 edges
-                            </option>
-                            <option value="250000">High — 250,000 edges</option>
-                            <option value="0">Unlimited</option>
-                          </select>
-                          <span
-                            class="edge-budget-status"
-                            id="edgeBudgetStatus"
-                          ></span>
-                        </div>
-                        <span id="edgeBudgetHelp" class="sr-only"
-                          >Caps how many outline segments the Show Edges overlay
-                          draws on dense models. The longest, most structural
-                          edges are kept; short facet lines are dropped. Lower
-                          limits render faster and keep the model
-                          readable.</span
-                        >
-                        <label class="toggle-switch">
-                          <input
-                            type="checkbox"
-                            id="autoBedToggle"
-                            checked
-                            aria-describedby="autoBedHelp"
-                          />
-                          <span class="toggle-label">Auto-bed (Z=0)</span>
-                        </label>
-                        <span id="autoBedHelp" class="sr-only"
-                          >Automatically place models on the build plate at Z
-                          equals zero</span
-                        >
-                        <label class="toggle-switch">
-                          <input
-                            type="checkbox"
-                            id="zoomToCursorToggle"
-                            checked
-                            aria-describedby="zoomToCursorHelp"
-                          />
-                          <span class="toggle-label"
-                            >Zoom toward mouse cursor</span
-                          >
-                        </label>
-                        <span id="zoomToCursorHelp" class="sr-only"
-                          >When enabled, scrolling the mouse wheel zooms toward
-                          the pointer location instead of the orbit centre.
-                          Keyboard zoom shortcuts are unaffected.</span
                         >
                         <div
                           class="preview-setting-group"
@@ -4787,71 +4625,6 @@
                             </button>
                           </div>
                         </div>
-                        <label class="toggle-switch">
-                          <input
-                            type="checkbox"
-                            id="statusBarToggle"
-                            checked
-                            aria-describedby="statusBarHelp"
-                          />
-                          <span class="toggle-label">Show status bar</span>
-                        </label>
-                        <span id="statusBarHelp" class="sr-only"
-                          >Toggle status and render info overlay on
-                          preview</span
-                        >
-                        <!-- Engine Toggle (Manifold vs CGAL) -->
-                        <div
-                          class="preview-setting-divider"
-                          aria-hidden="true"
-                        ></div>
-                        <label class="toggle-switch">
-                          <input
-                            type="checkbox"
-                            id="manifoldEngineToggle"
-                            checked
-                            aria-describedby="manifoldEngineHelp"
-                          />
-                          <span class="toggle-label"
-                            >Fast engine (Manifold)</span
-                          >
-                        </label>
-                        <span id="manifoldEngineHelp" class="sr-only"
-                          >Use Manifold geometry engine for faster rendering.
-                          Disable if you encounter issues with complex
-                          models.</span
-                        >
-                        <p class="preview-setting-hint" id="manifoldEngineHint">
-                          5-30× faster. Disable if models fail to render.
-                        </p>
-                        <div class="preview-setting rotation-speed-setting">
-                          <label
-                            class="preview-setting-label"
-                            for="rotationSpeedInput"
-                            id="rotationSpeedLabel"
-                            >Auto-rotate speed</label
-                          >
-                          <div class="slider-container">
-                            <input
-                              type="range"
-                              id="rotationSpeedInput"
-                              min="0.1"
-                              max="3"
-                              step="0.1"
-                              value="0.5"
-                              aria-labelledby="rotationSpeedLabel"
-                              aria-describedby="rotationSpeedHelp"
-                            />
-                            <span class="slider-value" id="rotationSpeedValue"
-                              >0.5°/s</span
-                            >
-                          </div>
-                        </div>
-                        <span id="rotationSpeedHelp" class="sr-only"
-                          >Set the speed of automatic model rotation when
-                          auto-rotate is enabled, from 0.1 to 3 degrees per
-                          second</span
-                        >
                         <label
                           class="preview-setting"
                           for="previewQualitySelect"
@@ -4871,25 +4644,6 @@
                             <option value="fast">
                               Fast (lower resolution)
                             </option>
-                          </select>
-                        </label>
-                        <label
-                          class="preview-setting"
-                          for="exportQualitySelect"
-                        >
-                          <span class="preview-setting-label"
-                            >Export quality</span
-                          >
-                          <select
-                            id="exportQualitySelect"
-                            aria-label="Select export quality"
-                          >
-                            <option value="model" selected>
-                              Model default
-                            </option>
-                            <option value="low">Low (fast)</option>
-                            <option value="medium">Medium (balanced)</option>
-                            <option value="high">High (smooth)</option>
                           </select>
                         </label>
                       </section>
@@ -5055,17 +4809,6 @@
                             class="complexity-tier-label"
                             >Analyzing...</span
                           >
-                        </div>
-                        <div class="preview-setting cache-tools">
-                          <span class="preview-setting-label">App cache</span>
-                          <button
-                            type="button"
-                            id="clearCacheBtn"
-                            class="btn btn-sm btn-outline"
-                            aria-label="Clear cached files and reload the app"
-                          >
-                            Clear cache &amp; reload
-                          </button>
                         </div>
                       </section>
                     </div>
@@ -6055,6 +5798,36 @@
                     </svg>
                   </button>
                 </div>
+                <!-- UF-11: moved here from the Preview Settings drawer to sit
+                     beside the Auto rotate button it belongs to; the id stays
+                     and overlay-grid-controller's wiring carries over. -->
+                <div class="preview-setting rotation-speed-setting">
+                  <label
+                    class="preview-setting-label"
+                    for="rotationSpeedInput"
+                    id="rotationSpeedLabel"
+                    >Auto-rotate speed</label
+                  >
+                  <div class="slider-container">
+                    <input
+                      type="range"
+                      id="rotationSpeedInput"
+                      min="0.1"
+                      max="3"
+                      step="0.1"
+                      value="0.5"
+                      aria-labelledby="rotationSpeedLabel"
+                      aria-describedby="rotationSpeedHelp"
+                    />
+                    <span class="slider-value" id="rotationSpeedValue"
+                      >0.5°/s</span
+                    >
+                  </div>
+                </div>
+                <span id="rotationSpeedHelp" class="sr-only"
+                  >Set the speed of automatic model rotation when auto-rotate is
+                  enabled, from 0.1 to 3 degrees per second</span
+                >
               </div>
               <!-- Pan Controls - D-pad layout -->
               <div class="camera-control-section">
@@ -6427,6 +6200,34 @@
         <span id="classicStatusMemory"></span>
       </div>
     </div>
+    <!-- Global live regions (UF-11 P1). Body-level on purpose: inside #app
+         they sat in the Preview Settings drawer, whose content is
+         display:none while collapsed (the default) and in Classic entirely,
+         and #app itself goes inert while the first-visit gate blocks — so
+         real screen readers never heard them in those states. -->
+    <div
+      class="status-area"
+      id="statusArea"
+      role="status"
+      aria-live="polite"
+      aria-label="Application status"
+    >
+      Ready
+    </div>
+    <!-- Dedicated screen reader announcer (separate from visible status) -->
+    <div
+      id="srAnnouncer"
+      class="sr-only"
+      aria-live="polite"
+      aria-atomic="true"
+    ></div>
+    <!-- Assertive announcer for errors and critical warnings -->
+    <div
+      id="srAnnouncerAssertive"
+      class="sr-only"
+      aria-live="assertive"
+      aria-atomic="true"
+    ></div>
     <!-- Render Queue Modal -->
     <div
       class="modal hidden"
@@ -7796,8 +7597,6 @@
             aria-selected="false"
             aria-controls="prefs-panel-advanced"
             tabindex="-1"
-            aria-disabled="true"
-            aria-describedby="prefs-reason-advanced"
           >
             Advanced
           </button>
@@ -7977,6 +7776,77 @@
                 >Zoom toward the mouse pointer</label
               >
             </div>
+            <!-- UF-11: these moved here from the Preview Settings drawer and
+                 keep their ids — main.js and overlay-grid-controller wire
+                 them by id, and the elements are their setting's one home. -->
+            <div class="preferences-check-row">
+              <input
+                type="checkbox"
+                id="autoBedToggle"
+                checked
+                aria-describedby="prefs-autobed-note"
+              />
+              <label for="autoBedToggle">Auto-bed (Z=0)</label>
+            </div>
+            <p id="prefs-autobed-note" class="preferences-field-note">
+              Automatically place models on the build plate at Z equals zero.
+            </p>
+            <fieldset class="preferences-fieldset">
+              <legend class="preferences-legend">Grid</legend>
+              <div
+                class="grid-color-row"
+                role="group"
+                aria-labelledby="gridColorLabel"
+              >
+                <label
+                  for="gridColorPicker"
+                  id="gridColorLabel"
+                  class="grid-color-label"
+                  >Grid color</label
+                >
+                <input
+                  type="color"
+                  id="gridColorPicker"
+                  class="grid-color-picker"
+                  value="#cccccc"
+                  aria-label="Grid line color"
+                  aria-describedby="gridColorHelp"
+                />
+                <button
+                  type="button"
+                  id="resetGridColorBtn"
+                  class="btn btn-sm btn-outline"
+                  aria-label="Reset grid color to theme default"
+                >
+                  Reset
+                </button>
+                <span id="gridColorHelp" class="sr-only"
+                  >Choose a custom color for grid lines, or reset to the current
+                  theme default</span
+                >
+              </div>
+              <div class="preview-setting grid-opacity-setting">
+                <label for="gridOpacityInput" id="gridOpacityLabel"
+                  >Grid opacity</label
+                >
+                <div class="slider-container">
+                  <input
+                    type="range"
+                    id="gridOpacityInput"
+                    min="10"
+                    max="100"
+                    step="5"
+                    value="100"
+                    aria-labelledby="gridOpacityLabel"
+                    aria-describedby="gridOpacityHelp"
+                  />
+                  <span class="slider-value" id="gridOpacityValue">100%</span>
+                </div>
+              </div>
+              <span id="gridOpacityHelp" class="sr-only"
+                >Adjust grid line visibility from 10 to 100 percent</span
+              >
+            </fieldset>
           </div>
           <div
             role="tabpanel"
@@ -8187,16 +8057,48 @@
             hidden
           >
             <p id="prefs-reason-advanced" class="preferences-panel-reason">
-              The desktop's Advanced settings tune OpenCSG, the CGAL caches,
-              window docking, sound and localization. This build has none of
-              those engines, and none of its own settings means the same thing,
-              so nothing is mapped across here rather than giving a desktop name
-              to something that behaves differently.
+              Most of the desktop's Advanced settings tune engines this build
+              does not have (OpenCSG, the CGAL caches, window docking, sound,
+              localization), so those are not imitated here. The rows below are
+              this build's own advanced settings.
             </p>
             <p class="preferences-panel-reason">
-              The settings closest in purpose are already in the app: preview
-              quality, export quality and the edge budget sit with the 3D view
-              controls, and Design ▸ Flush Caches clears cached geometry.
+              The settings closest in purpose live where they are used: preview
+              quality with the preview controls and in View ▸ Preview Quality,
+              the edge detail limit in View ▸ Edge Detail Limit, and Design ▸
+              Flush Caches clears cached geometry.
+            </p>
+            <!-- UF-11: these moved here from the Preview Settings drawer and
+                 keep their ids — main.js wires them by id at startup. -->
+            <div class="preferences-check-row">
+              <input
+                type="checkbox"
+                id="manifoldEngineToggle"
+                checked
+                aria-describedby="manifoldEngineHelp"
+              />
+              <label for="manifoldEngineToggle">Fast engine (Manifold)</label>
+            </div>
+            <span id="manifoldEngineHelp" class="sr-only"
+              >Use Manifold geometry engine for faster rendering. Disable if you
+              encounter issues with complex models.</span
+            >
+            <p class="preferences-field-note" id="manifoldEngineHint">
+              5-30× faster. Disable if models fail to render.
+            </p>
+            <div class="preferences-check-row">
+              <button
+                type="button"
+                id="clearCacheBtn"
+                class="btn btn-sm btn-outline"
+                aria-label="Clear cached files and reload the app"
+              >
+                Clear cache &amp; reload
+              </button>
+            </div>
+            <p class="preferences-field-note">
+              Clears this app's downloaded files and reloads it. Use this if the
+              app misbehaves after an update.
             </p>
           </div>
           <div
