@@ -2405,6 +2405,25 @@ test.describe('Classic dock relocation (B6-B8)', () => {
       'empty'
     );
 
+    // UF-9 P1: 'Panel layout reset' sits in #srAnnouncer for at most 1.5s
+    // (announcer auto-clear) and any later polite announcement — preview
+    // chatter especially — overwrites it, so polling toContainText raced
+    // both and lost 4x/4x in isolated runs while staying green in suite
+    // context. Record everything the live region says instead (the
+    // classic-window-announce-once idiom) and assert from the record.
+    await page.evaluate(() => {
+      window.__said = [];
+      const region = document.getElementById('srAnnouncer');
+      new MutationObserver(() => {
+        const text = region.textContent.trim();
+        if (text) window.__said.push(text);
+      }).observe(region, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+      });
+    });
+
     await page.locator('#viewMenuBtn').click();
     await page.getByRole('menuitem', { name: 'Reset Panel Layout' }).click();
 
@@ -2417,8 +2436,10 @@ test.describe('Classic dock relocation (B6-B8)', () => {
         .locator('#classicEditorSlot')
         .evaluate((el) => el.closest('.classic-dock-field')?.id)
     ).toBe('classicFieldLeft');
-    await expect(page.locator('#srAnnouncer')).toContainText(
-      'Panel layout reset'
+    await page.waitForFunction(
+      () => window.__said.some((line) => line.includes('Panel layout reset')),
+      undefined,
+      { timeout: 5_000 }
     );
 
     // ...and the reset is what survives the next reload, not the old layout

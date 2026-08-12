@@ -44,7 +44,11 @@ const OUTPUT_DIR = path.resolve(
   __dirname, '..', '..', 'docs', 'audit', 'lwfl-parity-reproduction',
 );
 
-const LWFL_PRESET_FILTER = process.env.LWFL_PRESET || 'LWFL';
+// UF-9 P1: the stakeholder bundle names its preset "... LAMP WFL 84"
+// (LAMP Words For Life), not "LWFL" — the old default filter matched
+// nothing ("Total options: 6, LWFL matches: 0" was this file's whole
+// local red). 'WFL' hits the real preset; LWFL_PRESET still overrides.
+const LWFL_PRESET_FILTER = process.env.LWFL_PRESET || 'WFL';
 
 // Bug A and Bug B parameter keys from KI-012
 const BUG_A_PARAM = 'expose_home_button';

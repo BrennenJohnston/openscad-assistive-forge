@@ -86,6 +86,38 @@ async function uploadFile(page, filePath) {
   }
 }
 
+/**
+ * UF-9 P1: the app boots Simplified, which hides the project-files panel and
+ * the reference-image overlay section (ui-mode-hidden). These tests predate
+ * that mode split; take the app to Standard the way a user does.
+ */
+async function switchToStandardMode(page) {
+  const toggle = page.locator('#uiModeToggle');
+  await expect(toggle).toBeVisible({ timeout: 10000 });
+  if ((await toggle.getAttribute('aria-checked')) !== 'true') {
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  }
+}
+
+/**
+ * UF-9 P1: parameter groups render as <details> collapsed by default
+ * (F5, owner decision 2026-05-15), so a .param-control is attached yet
+ * hidden. Prove the load, expand the groups, then assert visibility.
+ */
+async function expectParamsLoaded(page) {
+  await expect(page.locator('.param-control').first()).toBeAttached({
+    timeout: 10000,
+  });
+  const expandAll = page.locator('#expandAllGroupsBtn');
+  if (await expandAll.isVisible().catch(() => false)) {
+    await expandAll.click();
+  }
+  await expect(page.locator('.param-control').first()).toBeVisible({
+    timeout: 10000,
+  });
+}
+
 test.describe('Keyguard SVG Export', () => {
   test.describe.configure({ timeout: 150_000 }); // WASM init may need ~120s
   test('should show 2D format guidance when SVG format is selected', async ({ page }) => {
@@ -284,15 +316,16 @@ test.describe('Companion File Handling', () => {
     // Create and upload the keyguard ZIP
     const zipPath = await createKeyguardZipFixture();
     await uploadFile(page, zipPath);
-    
-    // Wait for project files to be recognized
-    await expect(page.locator('.file-tree, .project-files')).toBeVisible({ timeout: 15000 });
-    
-    // Check that both files are listed
-    const fileTree = page.locator('.file-tree, .project-files');
-    const fileNames = await fileTree.textContent();
-    
-    expect(fileNames).toContain('keyguard_minimal.scad');
+    await switchToStandardMode(page);
+
+    // UF-9 P1: the old .file-tree/.project-files markup no longer exists.
+    // Today the companion-files UI is #projectFilesControls: the badge
+    // counts EVERY project file (main + companions) and the list holds
+    // the companions only — badge '2' plus the TXT in the list is the
+    // modern proof that both ZIP files were recognized.
+    await expect(page.locator('#projectFilesControls')).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('#projectFilesBadge')).toHaveText('2');
+    const fileNames = await page.locator('#projectFilesList').textContent();
     expect(fileNames).toContain('openings_and_additions.txt');
   });
 
@@ -304,10 +337,11 @@ test.describe('Companion File Handling', () => {
     // Create and upload the keyguard ZIP
     const zipPath = await createKeyguardZipFixture();
     await uploadFile(page, zipPath);
-    
-    // Wait for project files to be recognized
-    await expect(page.locator('.file-tree, .project-files')).toBeVisible({ timeout: 15000 });
-    
+    await switchToStandardMode(page);
+
+    // UF-9 P1: modern companion-files markup (see the test above).
+    await expect(page.locator('#projectFilesControls')).toBeVisible({ timeout: 15000 });
+
     // Wait a bit for any rendering/parsing to occur
     await page.waitForTimeout(3000);
     
@@ -334,13 +368,16 @@ test.describe('Multi-Preset JSON Import/Export', () => {
     await uploadFile(page, fixturePath);
     
     // Wait for parameters to load
-    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 });
+    await expectParamsLoaded(page);
     
     // Open preset management (look for preset button or menu)
     const presetButton = page.locator('[data-action="manage-presets"], button:has-text("Preset"), button:has-text("preset")').first();
     
     if (!(await presetButton.isVisible())) {
-      test.skip();
+      test.skip(
+        true,
+        'No manage-presets trigger in this build (UF-9: skip reasons made explicit)'
+      );
       return;
     }
     
@@ -350,8 +387,10 @@ test.describe('Multi-Preset JSON Import/Export', () => {
     const importButton = page.locator('button:has-text("Import"), [data-action="import-preset"]').first();
     
     if (!(await importButton.isVisible({ timeout: 3000 }))) {
-      // Preset import UI might not be implemented
-      test.skip();
+      test.skip(
+        true,
+        'Preset import UI not reachable from this entry point (UF-9: skip reasons made explicit)'
+      );
       return;
     }
     
@@ -397,7 +436,7 @@ test.describe('Parameter Switching Stability', () => {
     await uploadFile(page, zipPath);
 
     // Wait for parameters to be available
-    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 20000 });
+    await expectParamsLoaded(page);
 
     // Change a numeric parameter a few times to trigger multiple worker restarts
     const rowsParam = page.locator('input[data-param="number_of_rows"], input[name="number_of_rows"]');
@@ -427,7 +466,7 @@ test.describe('Parameter Switching Stability', () => {
     await uploadFile(page, zipPath);
 
     // Wait for parameters and initial preview to settle
-    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 20000 });
+    await expectParamsLoaded(page);
 
     const allPresets = await getPresetOptions(page);
     const nonEmpty = allPresets.filter(o => o.trim() !== '');
@@ -452,20 +491,34 @@ test.describe('Parameter Switching Stability', () => {
     // Pixel histogram check: the preview canvas should have non-trivial content
     const canvas = page.locator('#previewContainer canvas');
     if (await canvas.isVisible({ timeout: 5000 }).catch(() => false)) {
+      // UF-9 P1: readPixels only sees the draw buffer inside the frame
+      // (no preserveDrawingBuffer) — the bare read returned all zeros while
+      // the failure screenshot showed a healthy rendered model. Read under
+      // a nested double-rAF (the axis-depth-truth pattern) so the sample
+      // always follows a full app frame.
       const pixelStats = await canvas.evaluate((el) => {
-        const ctx = el.getContext('webgl2') || el.getContext('webgl');
-        if (!ctx) return { nonBlack: 0, total: 0 };
-        const w = el.width;
-        const h = el.height;
-        const pixels = new Uint8Array(w * h * 4);
-        ctx.readPixels(0, 0, w, h, ctx.RGBA, ctx.UNSIGNED_BYTE, pixels);
-        let nonBlack = 0;
-        for (let i = 0; i < pixels.length; i += 4) {
-          if (pixels[i] > 10 || pixels[i + 1] > 10 || pixels[i + 2] > 10) {
-            nonBlack++;
-          }
-        }
-        return { nonBlack, total: w * h };
+        return new Promise((resolve) => {
+          requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            const ctx = el.getContext('webgl2') || el.getContext('webgl');
+            if (!ctx) {
+              resolve({ nonBlack: 0, total: 0 });
+              return;
+            }
+            const w = el.width;
+            const h = el.height;
+            const pixels = new Uint8Array(w * h * 4);
+            ctx.readPixels(0, 0, w, h, ctx.RGBA, ctx.UNSIGNED_BYTE, pixels);
+            let nonBlack = 0;
+            for (let i = 0; i < pixels.length; i += 4) {
+              if (pixels[i] > 10 || pixels[i + 1] > 10 || pixels[i + 2] > 10) {
+                nonBlack++;
+              }
+            }
+            resolve({ nonBlack, total: w * h });
+          });
+          });
+        });
       });
 
       // At least 1% of pixels should be non-black (model is visible, not degenerate)
@@ -580,6 +633,7 @@ test.describe('Reference Image', () => {
     
     // Wait for main interface
     await expect(page.locator('#mainInterface')).toBeVisible({ timeout: 15000 });
+    await switchToStandardMode(page);
     
     // Look for the overlay section in preview settings
     const overlaySection = page.locator('#overlaySection, .overlay-section');
@@ -605,6 +659,7 @@ test.describe('Reference Image', () => {
     await uploadFile(page, fixturePath);
     
     await expect(page.locator('#mainInterface')).toBeVisible({ timeout: 15000 });
+    await switchToStandardMode(page);
     
     // Click on the overlay summary to expand
     const overlaySummary = page.locator('.overlay-summary');
@@ -632,6 +687,7 @@ test.describe('Reference Image', () => {
     
     // Wait for files to be processed
     await expect(page.locator('#mainInterface')).toBeVisible({ timeout: 20000 });
+    await switchToStandardMode(page);
     await page.waitForTimeout(2000);
     
     // Expand overlay section
@@ -659,6 +715,7 @@ test.describe('Reference Image', () => {
     await uploadFile(page, zipPath);
     
     await expect(page.locator('#mainInterface')).toBeVisible({ timeout: 20000 });
+    await switchToStandardMode(page);
     await page.waitForTimeout(2000);
     
     // Expand overlay section
@@ -682,6 +739,7 @@ test.describe('Reference Image', () => {
     await uploadFile(page, fixturePath);
     
     await expect(page.locator('#mainInterface')).toBeVisible({ timeout: 15000 });
+    await switchToStandardMode(page);
     
     // Expand overlay section
     const overlaySummary = page.locator('.overlay-summary');
@@ -709,6 +767,7 @@ test.describe('Reference Image', () => {
     await uploadFile(page, fixturePath);
     
     await expect(page.locator('#mainInterface')).toBeVisible({ timeout: 15000 });
+    await switchToStandardMode(page);
     
     // Expand overlay section
     const overlaySummary = page.locator('.overlay-summary');
@@ -745,7 +804,7 @@ test.describe('Progress Text Shows Correct Format', () => {
     await outputFormatSelect.selectOption('svg');
     
     // Wait for parameters
-    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 });
+    await expectParamsLoaded(page);
     
     // Find Generate button
     const generateButton = page.locator('button:has-text("Generate"), button:has-text("Download")').first();
