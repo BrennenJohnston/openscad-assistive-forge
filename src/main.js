@@ -723,6 +723,8 @@ const JUMP_TO_EMPTY_REASON =
   'No panels are open, so there is nowhere to jump to. Turn one on from this menu first.';
 const JUMP_TO_UNAVAILABLE_REASON =
   'Jump To is not available in the Simplified view';
+const CODE_EDITOR_UNAVAILABLE_REASON =
+  'The Code Editor feature is turned off, so there is no editor to open.';
 
 /**
  * Can a Classic dock panel be reached right now? A merged panel that is not
@@ -840,9 +842,17 @@ function toggleEditorPanel() {
     layout.toggleEditor(); // announces for itself
     return;
   }
-  // togglePanelVisibility announces this one itself, under the panel's
-  // registry name ("Code Editor"). Announcing again here said it twice.
-  getUIModeController().togglePanelVisibility('codeEditor');
+  // Forge: open or close the Code Editor itself — the same command as its
+  // toolbar toggle, announced by the mode manager ("Code Editor opened…").
+  // This used to route through togglePanelVisibility('codeEditor'), whose
+  // primary element is the toggle BUTTON: the item hid the editor's entry
+  // point from the toolbar while the editor stayed shut (UF-10). Hiding
+  // the button remains the hidden-panels preference's job.
+  if (!_isEnabled('expert_mode')) {
+    announceImmediate(CODE_EDITOR_UNAVAILABLE_REASON);
+    return;
+  }
+  getModeManager()?.toggleMode?.();
 }
 
 /** Restore the View ▸ Hide … preferences on startup. */
@@ -3703,14 +3713,29 @@ async function initApp() {
     ];
   });
 
+  /**
+   * Is there a code editor the user can see right now? ModeManager's expert
+   * flag stays false in Classic even while the dock's Editor pane is mounted
+   * and visible (R3b-1), so the mode alone cannot answer this. The Edit-menu
+   * gates, the live font-size apply and jump-to-line all ask this one
+   * question — asking it three different ways is how the two below stayed
+   * dead in Classic while the menu items enabled (UF-10).
+   */
+  function isEditorOnScreen() {
+    const box = document
+      .getElementById('expertModePanel')
+      ?.getBoundingClientRect();
+    return Boolean(box && box.width > 0 && box.height > 0);
+  }
+
   // Initialize edit actions controller (Copy viewport, camera values, error nav, font size)
   const editActionsController = getEditActionsController({
     getPreviewManager: () => previewManager,
     getErrorLogPanel: () => errorLogPanel,
     onJumpToLine: (file, line) => {
       const modeManager = getModeManager();
-      if (modeManager?.isExpertMode?.() && modeManager.getEditorInstance?.()) {
-        const editor = modeManager.getEditorInstance();
+      const editor = modeManager?.getEditorInstance?.();
+      if (editor && (modeManager.isExpertMode?.() || isEditorOnScreen())) {
         if (editor.revealLineInCenter) editor.revealLineInCenter(line);
         if (editor.setPosition)
           editor.setPosition({ lineNumber: line, column: 1 });
@@ -3719,13 +3744,11 @@ async function initApp() {
     },
     onFontSizeChange: (size) => {
       const modeManager = getModeManager();
-      if (modeManager?.isExpertMode?.() && modeManager.getEditorInstance?.()) {
-        const editor = modeManager.getEditorInstance();
-        // Was `editor.updateOptions({ fontSize })`, a method neither editor
-        // has ever had. Guarded by `if`, so Edit ▸ Increase/Decrease Font
-        // Size saved the number, updated its readout and announced the new
-        // size while changing nothing on screen — the worst shape of defect
-        // for the low-vision users the control exists for.
+      const editor = modeManager?.getEditorInstance?.();
+      if (editor && (modeManager.isExpertMode?.() || isEditorOnScreen())) {
+        // setFontSize, not updateOptions: the latter never existed on either
+        // editor, which is how this control once saved and announced sizes
+        // without changing anything on screen (R-IV).
         editor.setFontSize?.(size);
       }
     },
@@ -3744,17 +3767,7 @@ async function initApp() {
     const modeManager = getModeManager();
     const editor = modeManager?.getEditorInstance?.();
     const expertMode = modeManager?.isExpertMode?.();
-    // "Is there an editor the user can actually type in?" ModeManager's expert
-    // flag stays false in Classic even though the dock's Editor pane is
-    // mounted, visible and holding the project — so asking it alone disabled
-    // every editor action in the one theme this release is about.
-    const editorBox = document
-      .getElementById('expertModePanel')
-      ?.getBoundingClientRect();
-    const editorOnScreen = Boolean(
-      editorBox && editorBox.width > 0 && editorBox.height > 0
-    );
-    const canEdit = Boolean(editor) && (expertMode || editorOnScreen);
+    const canEdit = Boolean(editor) && (expertMode || isEditorOnScreen());
     const editorTip = 'Available when the Code Editor is open';
 
     // Undo and Redo follow the focus the menu bar just took: from the code
@@ -4525,14 +4538,28 @@ async function initApp() {
     // dock order: Editor, Console, Customizer, Error-Log, Animate, Font List,
     // Viewport-Control (U2). Next/Previous Window are omitted — one window
     // (D-24).
+    const editorAvailable = _isEnabled('expert_mode');
+
     return [
       {
+        // Forge's tick asks the toggle button's own pressed state — the DOM
+        // truth for "is the editor open". The registry's codeEditor entry
+        // tracks whether the BUTTON is shown, which is a different question
+        // and the one this tick wrongly answered before (UF-10).
         type: 'toggle',
         label: 'Editor',
         shortcutAction: 'toggleCodeEditor',
         checked: inClassic
           ? classicLayout.isEditorVisible()
-          : uiCtrl.isPanelShowing('codeEditor'),
+          : editorAvailable &&
+            document
+              .getElementById('expertModeToggle')
+              ?.getAttribute('aria-pressed') === 'true',
+        enabled: inClassic || editorAvailable,
+        tooltip:
+          inClassic || editorAvailable
+            ? undefined
+            : CODE_EDITOR_UNAVAILABLE_REASON,
         handler: () => toggleEditorPanel(),
       },
       panelToggle('consoleOutput', 'Console', 'toggleConsole'),
@@ -4657,6 +4684,12 @@ async function initApp() {
             panelToggle('companionFileManagement', 'Companion Files'),
             panelToggle('imageMeasurement', 'Image Measurement'),
             panelToggle('referenceOverlay', 'Reference Image'),
+            // Classic's Window menu has carried this since the Q-4 set; the
+            // Forge list simply never gained it although the section and its
+            // registry entry exist here too (UF-10). Same tail slot as
+            // Classic's; the announcement uses the registry label
+            // "Advanced Menu", the C-38 shape.
+            panelToggle('advancedMenu', 'Advanced'),
           ]),
     ];
   });
