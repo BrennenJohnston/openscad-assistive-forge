@@ -63,7 +63,8 @@
                themes. One DOM node, one handler — relocated from the
                workflow row, not duplicated. Hidden while the welcome screen
                is up (you are already there). -->
-          <button type="button"
+          <button
+            type="button"
             id="clearFileBtn"
             class="btn btn-sm btn-outline"
             aria-label="Return to the main projects page. Warning: unsaved changes will be lost"
@@ -146,7 +147,8 @@
               </svg>
               <span class="github-label">GitHub</span>
             </a>
-            <button type="button"
+            <button
+              type="button"
               id="shortcutsToggle"
               class="btn btn-sm btn-secondary shortcuts-toggle"
               aria-label="Keyboard shortcuts"
@@ -183,7 +185,8 @@
                  per mode — sits just left of the Classic / A. Forge
                  toggle, which holds the top rightmost corner. Theme and
                  high-contrast moved to the row below (workflow actions). -->
-            <button type="button"
+            <button
+              type="button"
               id="uiModeToggle"
               class="ui-mode-toggle hidden"
               role="switch"
@@ -206,7 +209,8 @@
             <!-- Simplified/Standard inside Classic. Same switch component as
                  #uiModeToggle so the choice reads identically in both
                  layouts; Classic-only via classic.css. -->
-            <button type="button"
+            <button
+              type="button"
               id="classicDensityToggle"
               class="ui-mode-toggle classic-density-toggle ui-mode-toggle--basic"
               role="switch"
@@ -232,11 +236,11 @@
                  BEFORE the button: U-7 pins the toggle as the header's
                  last element. -->
             <span id="classicModeToggleReason" class="sr-only"
-              >Classic is desktop-only for now. A mobile version is planned.
-              Use the Assistive Forge interface on phones and narrow
-              windows.</span
+              >Classic is desktop-only for now. A mobile version is planned. Use
+              the Assistive Forge interface on phones and narrow windows.</span
             >
-            <button type="button"
+            <button
+              type="button"
               id="classicModeToggle"
               class="btn btn-sm btn-secondary classic-toggle hidden"
               aria-pressed="false"
@@ -273,10 +277,18 @@
             >Update available. Refresh to get the latest version.</span
           >
           <div class="update-banner-actions">
-            <button type="button" id="updateBannerRefresh" class="btn btn-sm btn-primary">
+            <button
+              type="button"
+              id="updateBannerRefresh"
+              class="btn btn-sm btn-primary"
+            >
               Refresh
             </button>
-            <button type="button" id="updateBannerDismiss" class="btn btn-sm btn-secondary">
+            <button
+              type="button"
+              id="updateBannerDismiss"
+              class="btn btn-sm btn-secondary"
+            >
               Dismiss
             </button>
           </div>
@@ -293,17 +305,17 @@
       >
         <div class="update-banner-content">
           <span class="update-banner-text" id="classicGateBannerText"
-            >Your saved choice is the Classic interface, which is
-            desktop-only for now. You are in the Assistive Forge interface
-            on this screen. Classic will open on your next visit from a
-            desktop-sized window.</span
+            >Your saved choice is the Classic interface, which is desktop-only
+            for now. You are in the Assistive Forge interface on this screen.
+            Classic will open on your next visit from a desktop-sized
+            window.</span
           >
           <!-- U-10 in-session notice (UF-5 P5, Q-24a): a live Classic
                window that turns phone-shaped stays alive; this says so. -->
           <span class="update-banner-text hidden" id="classicGateLiveText"
-            >This window is now phone-shaped, and Classic is desktop-only
-            for now. You can keep working, or switch to the Assistive
-            Forge interface with the A. Forge button.</span
+            >This window is now phone-shaped, and Classic is desktop-only for
+            now. You can keep working, or switch to the Assistive Forge
+            interface with the A. Forge button.</span
           >
           <div class="update-banner-actions">
             <button
@@ -403,68 +415,74 @@
           role="navigation"
           aria-label="Workflow progress"
         >
-        <div
-          id="toolbarMenuBar"
-          class="toolbar-menu-bar hidden"
-          role="menubar"
-          aria-label="Application menu"
-        >
-          <button type="button"
-            class="toolbar-menu-btn btn"
-            id="fileMenuBtn"
-            role="menuitem"
-            aria-haspopup="menu"
-            aria-expanded="false"
-            tabindex="0"
+          <div
+            id="toolbarMenuBar"
+            class="toolbar-menu-bar hidden"
+            role="menubar"
+            aria-label="Application menu"
           >
-            File</button
-          ><button type="button"
-            class="toolbar-menu-btn btn"
-            id="editMenuBtn"
-            role="menuitem"
-            aria-haspopup="menu"
-            aria-expanded="false"
-            tabindex="-1"
-          >
-            Edit</button
-          ><button type="button"
-            class="toolbar-menu-btn btn"
-            id="designMenuBtn"
-            role="menuitem"
-            aria-haspopup="menu"
-            aria-expanded="false"
-            tabindex="-1"
-          >
-            Design</button
-          ><button type="button"
-            class="toolbar-menu-btn btn"
-            id="viewMenuBtn"
-            role="menuitem"
-            aria-haspopup="menu"
-            aria-expanded="false"
-            tabindex="-1"
-          >
-            View</button
-          ><button type="button"
-            class="toolbar-menu-btn btn"
-            id="windowMenuBtn"
-            role="menuitem"
-            aria-haspopup="menu"
-            aria-expanded="false"
-            tabindex="-1"
-          >
-            Window</button
-          ><button type="button"
-            class="toolbar-menu-btn btn"
-            id="helpMenuBtn"
-            role="menuitem"
-            aria-haspopup="menu"
-            aria-expanded="false"
-            tabindex="-1"
-          >
-            Help
-          </button>
-        </div>
+            <button
+              type="button"
+              class="toolbar-menu-btn btn"
+              id="fileMenuBtn"
+              role="menuitem"
+              aria-haspopup="menu"
+              aria-expanded="false"
+              tabindex="0"
+            >
+              File</button
+            ><button
+              type="button"
+              class="toolbar-menu-btn btn"
+              id="editMenuBtn"
+              role="menuitem"
+              aria-haspopup="menu"
+              aria-expanded="false"
+              tabindex="-1"
+            >
+              Edit</button
+            ><button
+              type="button"
+              class="toolbar-menu-btn btn"
+              id="designMenuBtn"
+              role="menuitem"
+              aria-haspopup="menu"
+              aria-expanded="false"
+              tabindex="-1"
+            >
+              Design</button
+            ><button
+              type="button"
+              class="toolbar-menu-btn btn"
+              id="viewMenuBtn"
+              role="menuitem"
+              aria-haspopup="menu"
+              aria-expanded="false"
+              tabindex="-1"
+            >
+              View</button
+            ><button
+              type="button"
+              class="toolbar-menu-btn btn"
+              id="windowMenuBtn"
+              role="menuitem"
+              aria-haspopup="menu"
+              aria-expanded="false"
+              tabindex="-1"
+            >
+              Window</button
+            ><button
+              type="button"
+              class="toolbar-menu-btn btn"
+              id="helpMenuBtn"
+              role="menuitem"
+              aria-haspopup="menu"
+              aria-expanded="false"
+              tabindex="-1"
+            >
+              Help
+            </button>
+          </div>
           <div class="workflow-actions">
             <!-- #uiModeToggle moved to the header (owner order 2026-08-09):
                  the Simplified/Standard slider holds one position across
@@ -472,7 +490,8 @@
             <!-- Theme + high-contrast, relocated from the header (owner
                  order 2026-08-09) and leading the row since U-16: the
                  owner's order is HC, theme, Full Screen, Help. -->
-            <button type="button"
+            <button
+              type="button"
               id="contrastToggle"
               class="btn btn-sm btn-secondary contrast-toggle"
               aria-label="Toggle high contrast"
@@ -499,7 +518,8 @@
               </svg>
               <span class="contrast-label">HC</span>
             </button>
-            <button type="button"
+            <button
+              type="button"
               id="themeToggle"
               class="btn btn-sm btn-secondary theme-toggle"
               aria-label="Toggle theme"
@@ -541,7 +561,8 @@
                 ></path>
               </svg>
             </button>
-            <button type="button"
+            <button
+              type="button"
               id="focusModeBtn"
               class="btn btn-sm btn-outline"
               aria-pressed="false"
@@ -563,7 +584,8 @@
               </svg>
               <span class="btn-text">Full Screen</span>
             </button>
-            <button type="button"
+            <button
+              type="button"
               id="featuresGuideBtn"
               class="btn btn-sm btn-outline btn-with-icon"
               aria-label="Open features guide and examples"
@@ -607,28 +629,82 @@
           aria-label="Classic toolbar"
         >
           <div class="classic-tb-group" role="group" aria-label="File">
-            <button type="button" class="btn classic-tb-btn" id="classicTbNewBtn" title="New (start a new file)">
-              <span class="classic-icon" data-icon="new" aria-hidden="true"></span><span class="sr-only">New</span>
+            <button
+              type="button"
+              class="btn classic-tb-btn"
+              id="classicTbNewBtn"
+              title="New (start a new file)"
+            >
+              <span
+                class="classic-icon"
+                data-icon="new"
+                aria-hidden="true"
+              ></span
+              ><span class="sr-only">New</span>
             </button>
-            <button type="button" class="btn classic-tb-btn" id="classicTbOpenBtn" title="Open a file">
-              <span class="classic-icon" data-icon="open" aria-hidden="true"></span><span class="sr-only">Open</span>
+            <button
+              type="button"
+              class="btn classic-tb-btn"
+              id="classicTbOpenBtn"
+              title="Open a file"
+            >
+              <span
+                class="classic-icon"
+                data-icon="open"
+                aria-hidden="true"
+              ></span
+              ><span class="sr-only">Open</span>
             </button>
-            <button type="button" class="btn classic-tb-btn" id="classicTbSaveBtn" title="Save">
-              <span class="classic-icon" data-icon="save" aria-hidden="true"></span><span class="sr-only">Save</span>
+            <button
+              type="button"
+              class="btn classic-tb-btn"
+              id="classicTbSaveBtn"
+              title="Save"
+            >
+              <span
+                class="classic-icon"
+                data-icon="save"
+                aria-hidden="true"
+              ></span
+              ><span class="sr-only">Save</span>
             </button>
           </div>
           <!-- Simplified only (U-5/Q-18): in Standard the editor toolbar has
                its own Undo/Redo for text edits, and two visible pairs read
                as duplicates — which is what the owner reported. -->
-          <div class="classic-tb-group classic-simplified-only" role="group" aria-label="Edit">
+          <div
+            class="classic-tb-group classic-simplified-only"
+            role="group"
+            aria-label="Edit"
+          >
             <!-- Named in full: the editor toolbar has its own Undo/Redo for
                  text edits, and a bare "Undo" would be two identical buttons
                  to a screen reader. The tooltips already said this. -->
-            <button type="button" class="btn classic-tb-btn" id="classicTbUndoBtn" title="Undo parameter change">
-              <span class="classic-icon" data-icon="undo" aria-hidden="true"></span><span class="sr-only">Undo parameter change</span>
+            <button
+              type="button"
+              class="btn classic-tb-btn"
+              id="classicTbUndoBtn"
+              title="Undo parameter change"
+            >
+              <span
+                class="classic-icon"
+                data-icon="undo"
+                aria-hidden="true"
+              ></span
+              ><span class="sr-only">Undo parameter change</span>
             </button>
-            <button type="button" class="btn classic-tb-btn" id="classicTbRedoBtn" title="Redo parameter change">
-              <span class="classic-icon" data-icon="redo" aria-hidden="true"></span><span class="sr-only">Redo parameter change</span>
+            <button
+              type="button"
+              class="btn classic-tb-btn"
+              id="classicTbRedoBtn"
+              title="Redo parameter change"
+            >
+              <span
+                class="classic-icon"
+                data-icon="redo"
+                aria-hidden="true"
+              ></span
+              ><span class="sr-only">Redo parameter change</span>
             </button>
           </div>
           <!-- The workflow triad + DXF, both densities (U-5, Q-18 option a).
@@ -640,22 +716,73 @@
                its own Preview/Render pair — that duplication is the
                desktop's own (viewerToolBar, U3). -->
           <div class="classic-tb-group" role="group" aria-label="Workflow">
-            <button type="button" class="btn classic-tb-btn" id="classicTbPreviewBtn" title="Preview (F5)">
-              <span class="classic-icon" data-icon="preview" aria-hidden="true"></span><span class="sr-only">Preview</span>
+            <button
+              type="button"
+              class="btn classic-tb-btn"
+              id="classicTbPreviewBtn"
+              title="Preview (F5)"
+            >
+              <span
+                class="classic-icon"
+                data-icon="preview"
+                aria-hidden="true"
+              ></span
+              ><span class="sr-only">Preview</span>
             </button>
-            <button type="button" class="btn classic-tb-btn" id="classicTbRenderBtn" title="Render (F6)">
-              <span class="classic-icon" data-icon="render" aria-hidden="true"></span><span class="sr-only">Render</span>
+            <button
+              type="button"
+              class="btn classic-tb-btn"
+              id="classicTbRenderBtn"
+              title="Render (F6)"
+            >
+              <span
+                class="classic-icon"
+                data-icon="render"
+                aria-hidden="true"
+              ></span
+              ><span class="sr-only">Render</span>
             </button>
-            <button type="button" class="btn classic-tb-btn" id="classicTbExportStlBtn" title="Export as STL">
-              <span class="classic-icon" data-icon="export-stl" aria-hidden="true"></span><span class="sr-only">Export STL</span>
+            <button
+              type="button"
+              class="btn classic-tb-btn"
+              id="classicTbExportStlBtn"
+              title="Export as STL"
+            >
+              <span
+                class="classic-icon"
+                data-icon="export-stl"
+                aria-hidden="true"
+              ></span
+              ><span class="sr-only">Export STL</span>
             </button>
-            <button type="button" class="btn classic-tb-btn" id="classicTbExportDxfBtn" title="Export as DXF">
-              <span class="classic-icon" data-icon="export-dxf" aria-hidden="true"></span><span class="sr-only">Export DXF</span>
+            <button
+              type="button"
+              class="btn classic-tb-btn"
+              id="classicTbExportDxfBtn"
+              title="Export as DXF"
+            >
+              <span
+                class="classic-icon"
+                data-icon="export-dxf"
+                aria-hidden="true"
+              ></span
+              ><span class="sr-only">Export DXF</span>
             </button>
           </div>
           <div class="classic-tb-group" role="group" aria-label="Panels">
-            <button type="button" class="btn classic-tb-btn" id="classicTbCustomizerBtn" aria-pressed="true" title="Show or hide the Customizer">
-              <span class="classic-icon" data-icon="parameter" aria-hidden="true"></span><span class="sr-only">Customizer</span>
+            <button
+              type="button"
+              class="btn classic-tb-btn"
+              id="classicTbCustomizerBtn"
+              aria-pressed="true"
+              title="Show or hide the Customizer"
+            >
+              <span
+                class="classic-icon"
+                data-icon="parameter"
+                aria-hidden="true"
+              ></span
+              ><span class="sr-only">Customizer</span>
             </button>
           </div>
         </div>
@@ -676,33 +803,121 @@
           aria-label="3D view toolbar"
         >
           <div class="classic-tb-group" role="group" aria-label="Rendering">
-            <button type="button" class="btn classic-tb-btn" id="classicPreviewBtn" title="Preview (F5)">
-              <span class="classic-icon" data-icon="preview" aria-hidden="true"></span><span class="sr-only">Preview</span>
+            <button
+              type="button"
+              class="btn classic-tb-btn"
+              id="classicPreviewBtn"
+              title="Preview (F5)"
+            >
+              <span
+                class="classic-icon"
+                data-icon="preview"
+                aria-hidden="true"
+              ></span
+              ><span class="sr-only">Preview</span>
             </button>
-            <button type="button" class="btn classic-tb-btn" id="classicRenderBtn" title="Render (F6)">
-              <span class="classic-icon" data-icon="render" aria-hidden="true"></span><span class="sr-only">Render</span>
+            <button
+              type="button"
+              class="btn classic-tb-btn"
+              id="classicRenderBtn"
+              title="Render (F6)"
+            >
+              <span
+                class="classic-icon"
+                data-icon="render"
+                aria-hidden="true"
+              ></span
+              ><span class="sr-only">Render</span>
             </button>
           </div>
-          <div class="classic-tb-group" role="group" aria-label="Zoom and measure">
-            <button type="button" class="btn classic-tb-btn" id="classicViewHomeBtn" title="View all (fit model)">
-              <span class="classic-icon" data-icon="zoom-all" aria-hidden="true"></span><span class="sr-only">View All</span>
+          <div
+            class="classic-tb-group"
+            role="group"
+            aria-label="Zoom and measure"
+          >
+            <button
+              type="button"
+              class="btn classic-tb-btn"
+              id="classicViewHomeBtn"
+              title="View all (fit model)"
+            >
+              <span
+                class="classic-icon"
+                data-icon="zoom-all"
+                aria-hidden="true"
+              ></span
+              ><span class="sr-only">View All</span>
             </button>
-            <button type="button" class="btn classic-tb-btn" id="classicZoomInBtn" title="Zoom in">
-              <span class="classic-icon" data-icon="zoom-in" aria-hidden="true"></span><span class="sr-only">Zoom In</span>
+            <button
+              type="button"
+              class="btn classic-tb-btn"
+              id="classicZoomInBtn"
+              title="Zoom in"
+            >
+              <span
+                class="classic-icon"
+                data-icon="zoom-in"
+                aria-hidden="true"
+              ></span
+              ><span class="sr-only">Zoom In</span>
             </button>
-            <button type="button" class="btn classic-tb-btn" id="classicZoomOutBtn" title="Zoom out">
-              <span class="classic-icon" data-icon="zoom-out" aria-hidden="true"></span><span class="sr-only">Zoom Out</span>
+            <button
+              type="button"
+              class="btn classic-tb-btn"
+              id="classicZoomOutBtn"
+              title="Zoom out"
+            >
+              <span
+                class="classic-icon"
+                data-icon="zoom-out"
+                aria-hidden="true"
+              ></span
+              ><span class="sr-only">Zoom Out</span>
             </button>
-            <button type="button" class="btn classic-tb-btn" id="classicResetViewBtn" title="Reset view (default angle)">
-              <span class="classic-icon" data-icon="reset-view" aria-hidden="true"></span><span class="sr-only">Reset View</span>
+            <button
+              type="button"
+              class="btn classic-tb-btn"
+              id="classicResetViewBtn"
+              title="Reset view (default angle)"
+            >
+              <span
+                class="classic-icon"
+                data-icon="reset-view"
+                aria-hidden="true"
+              ></span
+              ><span class="sr-only">Reset View</span>
             </button>
             <!-- Disabled with a reason rather than hidden, and focusable, so
                  keyboard and screen-reader users can discover them (D-15). -->
-            <button type="button" class="btn classic-tb-btn" id="classicMeasureDistBtn" aria-disabled="true" aria-describedby="classicMeasureReason" title="Measure Distance">
-              <span class="classic-icon" data-icon="measure-distance" aria-hidden="true"></span><span class="sr-only">Measure Distance</span>
+            <button
+              type="button"
+              class="btn classic-tb-btn"
+              id="classicMeasureDistBtn"
+              aria-disabled="true"
+              aria-describedby="classicMeasureReason"
+              title="Measure Distance"
+            >
+              <span
+                class="classic-icon"
+                data-icon="measure-distance"
+                aria-hidden="true"
+              ></span
+              ><span class="sr-only">Measure Distance</span>
             </button>
-            <button type="button" class="btn classic-tb-btn" id="classicMeasureAngleBtn" aria-disabled="true" aria-describedby="classicMeasureReason" title="Measure Angle">
-              <span class="classic-icon" data-icon="measure-angle" aria-hidden="true"></span><span class="sr-only">Measure Angle</span>
+            <button
+              type="button"
+              class="btn classic-tb-btn"
+              id="classicMeasureAngleBtn"
+              aria-disabled="true"
+              aria-describedby="classicMeasureReason"
+              title="Measure Angle"
+            >
+              <span
+                class="classic-icon"
+                data-icon="measure-angle"
+                aria-hidden="true"
+              ></span
+              ><span class="sr-only">Measure Angle</span>
             </button>
             <span id="classicMeasureReason" class="sr-only"
               >Measuring is not available yet. Turn on Show measurements in
@@ -710,45 +925,160 @@
             >
           </div>
           <div class="classic-tb-group" role="group" aria-label="Views">
-            <button type="button" class="btn classic-tb-btn" data-classic-view="right" title="Right view">
-              <span class="classic-icon" data-icon="view-right" aria-hidden="true"></span><span class="sr-only">Right</span>
+            <button
+              type="button"
+              class="btn classic-tb-btn"
+              data-classic-view="right"
+              title="Right view"
+            >
+              <span
+                class="classic-icon"
+                data-icon="view-right"
+                aria-hidden="true"
+              ></span
+              ><span class="sr-only">Right</span>
             </button>
-            <button type="button" class="btn classic-tb-btn" data-classic-view="left" title="Left view">
-              <span class="classic-icon" data-icon="view-left" aria-hidden="true"></span><span class="sr-only">Left</span>
+            <button
+              type="button"
+              class="btn classic-tb-btn"
+              data-classic-view="left"
+              title="Left view"
+            >
+              <span
+                class="classic-icon"
+                data-icon="view-left"
+                aria-hidden="true"
+              ></span
+              ><span class="sr-only">Left</span>
             </button>
-            <button type="button" class="btn classic-tb-btn" data-classic-view="back" title="Back view">
-              <span class="classic-icon" data-icon="view-back" aria-hidden="true"></span><span class="sr-only">Back</span>
+            <button
+              type="button"
+              class="btn classic-tb-btn"
+              data-classic-view="back"
+              title="Back view"
+            >
+              <span
+                class="classic-icon"
+                data-icon="view-back"
+                aria-hidden="true"
+              ></span
+              ><span class="sr-only">Back</span>
             </button>
-            <button type="button" class="btn classic-tb-btn" data-classic-view="front" title="Front view">
-              <span class="classic-icon" data-icon="view-front" aria-hidden="true"></span><span class="sr-only">Front</span>
+            <button
+              type="button"
+              class="btn classic-tb-btn"
+              data-classic-view="front"
+              title="Front view"
+            >
+              <span
+                class="classic-icon"
+                data-icon="view-front"
+                aria-hidden="true"
+              ></span
+              ><span class="sr-only">Front</span>
             </button>
-            <button type="button" class="btn classic-tb-btn" data-classic-view="top" title="Top view">
-              <span class="classic-icon" data-icon="view-top" aria-hidden="true"></span><span class="sr-only">Top</span>
+            <button
+              type="button"
+              class="btn classic-tb-btn"
+              data-classic-view="top"
+              title="Top view"
+            >
+              <span
+                class="classic-icon"
+                data-icon="view-top"
+                aria-hidden="true"
+              ></span
+              ><span class="sr-only">Top</span>
             </button>
-            <button type="button" class="btn classic-tb-btn" data-classic-view="bottom" title="Bottom view">
-              <span class="classic-icon" data-icon="view-bottom" aria-hidden="true"></span><span class="sr-only">Bottom</span>
+            <button
+              type="button"
+              class="btn classic-tb-btn"
+              data-classic-view="bottom"
+              title="Bottom view"
+            >
+              <span
+                class="classic-icon"
+                data-icon="view-bottom"
+                aria-hidden="true"
+              ></span
+              ><span class="sr-only">Bottom</span>
             </button>
           </div>
           <div class="classic-tb-group" role="group" aria-label="Projection">
-            <button type="button" class="btn classic-tb-btn" id="classicTbPerspectiveBtn" aria-pressed="true" title="Perspective projection">
-              <span class="classic-icon" data-icon="perspective" aria-hidden="true"></span><span class="sr-only">Perspective</span>
+            <button
+              type="button"
+              class="btn classic-tb-btn"
+              id="classicTbPerspectiveBtn"
+              aria-pressed="true"
+              title="Perspective projection"
+            >
+              <span
+                class="classic-icon"
+                data-icon="perspective"
+                aria-hidden="true"
+              ></span
+              ><span class="sr-only">Perspective</span>
             </button>
-            <button type="button" class="btn classic-tb-btn" id="classicTbOrthogonalBtn" aria-pressed="false" title="Orthogonal projection">
-              <span class="classic-icon" data-icon="orthogonal" aria-hidden="true"></span><span class="sr-only">Orthogonal</span>
+            <button
+              type="button"
+              class="btn classic-tb-btn"
+              id="classicTbOrthogonalBtn"
+              aria-pressed="false"
+              title="Orthogonal projection"
+            >
+              <span
+                class="classic-icon"
+                data-icon="orthogonal"
+                aria-hidden="true"
+              ></span
+              ><span class="sr-only">Orthogonal</span>
             </button>
           </div>
           <div class="classic-tb-group" role="group" aria-label="Overlays">
             <!-- Split from the old combined "Axes (mm)" button per upstream
                  (D-16): axes lines and the millimetre tick overlay are two
                  separate toggles, as they are in the View menu. -->
-            <button type="button" class="btn classic-tb-btn" id="classicAxesToggle" aria-pressed="false" title="Show axes">
-              <span class="classic-icon" data-icon="axes" aria-hidden="true"></span><span class="sr-only">Show Axes</span>
+            <button
+              type="button"
+              class="btn classic-tb-btn"
+              id="classicAxesToggle"
+              aria-pressed="false"
+              title="Show axes"
+            >
+              <span
+                class="classic-icon"
+                data-icon="axes"
+                aria-hidden="true"
+              ></span
+              ><span class="sr-only">Show Axes</span>
             </button>
-            <button type="button" class="btn classic-tb-btn" id="classicScaleMarkersToggle" aria-pressed="false" title="Show scale markers">
-              <span class="classic-icon" data-icon="scalemarkers" aria-hidden="true"></span><span class="sr-only">Show Scale Markers</span>
+            <button
+              type="button"
+              class="btn classic-tb-btn"
+              id="classicScaleMarkersToggle"
+              aria-pressed="false"
+              title="Show scale markers"
+            >
+              <span
+                class="classic-icon"
+                data-icon="scalemarkers"
+                aria-hidden="true"
+              ></span
+              ><span class="sr-only">Show Scale Markers</span>
             </button>
-            <button type="button" class="btn classic-tb-btn" id="classicEdgesToggle" aria-pressed="false" title="Show edges">
-              <span class="classic-icon" data-icon="show-edges" aria-hidden="true"></span><span class="sr-only">Show Edges</span>
+            <button
+              type="button"
+              class="btn classic-tb-btn"
+              id="classicEdgesToggle"
+              aria-pressed="false"
+              title="Show edges"
+            >
+              <span
+                class="classic-icon"
+                data-icon="show-edges"
+                aria-hidden="true"
+              ></span
+              ><span class="sr-only">Show Edges</span>
             </button>
           </div>
         </div>
@@ -765,295 +1095,310 @@
               <!-- W3: one decluttered surface — start actions and
                    saved projects side by side under a single heading -->
               <div class="welcome-columns">
-            <section
-              class="upload-panel"
-              aria-labelledby="upload-panel-heading"
-            >
-              <h3 id="upload-panel-heading">Open or start a project</h3>
-              <p>
-                Upload an OpenSCAD (.scad) file to customize its parameters and
-                generate STL files
-              </p>
-              <!-- Primary actions: Upload existing file OR start new -->
-              <div class="welcome-actions">
-                <label
-                  class="upload-zone"
-                  id="uploadZone"
-                  for="fileInput"
-                  tabindex="0"
+                <section
+                  class="upload-panel"
+                  aria-labelledby="upload-panel-heading"
                 >
-                  <svg
-                    class="upload-icon"
-                    width="48"
-                    height="48"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    aria-hidden="true"
-                  >
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                    <polyline points="17 8 12 3 7 8"></polyline>
-                    <line x1="12" y1="3" x2="12" y2="15"></line>
-                  </svg>
-                  <span class="upload-text" id="uploadZoneText"
-                    >Drop a project here or click to browse — .scad model ·
-                    .zip project · project folder · .stl (view only) · .json
-                    presets</span
-                  >
-                  <input
-                    type="file"
-                    id="fileInput"
-                    accept=".scad,.zip,.stl,.json"
-                    class="file-input"
-                  />
-                </label>
-                <div class="welcome-divider"><span>or</span></div>
-                <button
-                  type="button"
-                  class="btn btn-large btn-outline"
-                  id="uploadZoneFolderBtn"
-                  aria-label="Open a project folder from your computer"
-                >
-                  Open Project Folder…
-                </button>
-                <button
-                  type="button"
-                  class="btn btn-lg btn-outline start-new-btn"
-                  id="startNewProjectBtn"
-                  aria-label="Start a new OpenSCAD project from scratch"
-                >
-                  <svg
-                    class="btn-icon-svg"
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
-                    ></path>
-                    <polyline points="14 2 14 8 20 8"></polyline>
-                    <line x1="12" y1="18" x2="12" y2="12"></line>
-                    <line x1="9" y1="15" x2="15" y2="15"></line>
-                  </svg>
-                  <span>Start New Project</span>
-                </button>
-              </div>
-            </section>
-            <!-- Saved Projects Section (v2 with folder tree) -->
-            <section
-              class="saved-projects-panel"
-              id="savedProjectsPanel"
-              aria-labelledby="saved-projects-heading"
-            >
-              <div class="saved-projects-header">
-                <h3 id="saved-projects-heading">Saved Projects</h3>
-                <div class="saved-projects-actions">
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-outline"
-                    id="exportAllProjectsBtn"
-                    aria-label="Export all projects as backup"
-                    title="Export Backup"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      aria-hidden="true"
+                  <h3 id="upload-panel-heading">Open or start a project</h3>
+                  <p>
+                    Upload an OpenSCAD (.scad) file to customize its parameters
+                    and generate STL files
+                  </p>
+                  <!-- Primary actions: Upload existing file OR start new -->
+                  <div class="welcome-actions">
+                    <label
+                      class="upload-zone"
+                      id="uploadZone"
+                      for="fileInput"
+                      tabindex="0"
                     >
-                      <path
-                        d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
-                      ></path>
-                      <polyline points="7 10 12 15 17 10"></polyline>
-                      <line x1="12" y1="15" x2="12" y2="3"></line>
-                    </svg>
-                    <span class="btn-text">Export</span>
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-outline"
-                    id="importProjectsBtn"
-                    aria-label="Import projects from backup"
-                    title="Import Backup"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      aria-hidden="true"
+                      <svg
+                        class="upload-icon"
+                        width="48"
+                        height="48"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+                        ></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                      </svg>
+                      <span class="upload-text" id="uploadZoneText"
+                        >Drop a project here or click to browse — .scad model ·
+                        .zip project · project folder · .stl (view only) · .json
+                        presets</span
+                      >
+                      <input
+                        type="file"
+                        id="fileInput"
+                        accept=".scad,.zip,.stl,.json"
+                        class="file-input"
+                      />
+                    </label>
+                    <div class="welcome-divider"><span>or</span></div>
+                    <button
+                      type="button"
+                      class="btn btn-large btn-outline"
+                      id="uploadZoneFolderBtn"
+                      aria-label="Open a project folder from your computer"
                     >
-                      <path
-                        d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
-                      ></path>
-                      <polyline points="17 8 12 3 7 8"></polyline>
-                      <line x1="12" y1="3" x2="12" y2="15"></line>
-                    </svg>
-                    <span class="btn-text">Import</span>
-                  </button>
-                  <!-- Import Folder button — hidden by default; shown by JS when
+                      Open Project Folder…
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-lg btn-outline start-new-btn"
+                      id="startNewProjectBtn"
+                      aria-label="Start a new OpenSCAD project from scratch"
+                    >
+                      <svg
+                        class="btn-icon-svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+                        ></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="12" y1="18" x2="12" y2="12"></line>
+                        <line x1="9" y1="15" x2="15" y2="15"></line>
+                      </svg>
+                      <span>Start New Project</span>
+                    </button>
+                  </div>
+                </section>
+                <!-- Saved Projects Section (v2 with folder tree) -->
+                <section
+                  class="saved-projects-panel"
+                  id="savedProjectsPanel"
+                  aria-labelledby="saved-projects-heading"
+                >
+                  <div class="saved-projects-header">
+                    <h3 id="saved-projects-heading">Saved Projects</h3>
+                    <div class="saved-projects-actions">
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-outline"
+                        id="exportAllProjectsBtn"
+                        aria-label="Export all projects as backup"
+                        title="Export Backup"
+                      >
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+                          ></path>
+                          <polyline points="7 10 12 15 17 10"></polyline>
+                          <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        <span class="btn-text">Export</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-outline"
+                        id="importProjectsBtn"
+                        aria-label="Import projects from backup"
+                        title="Import Backup"
+                      >
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+                          ></path>
+                          <polyline points="17 8 12 3 7 8"></polyline>
+                          <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                        <span class="btn-text">Import</span>
+                      </button>
+                      <!-- Import Folder button — hidden by default; shown by JS when
                        folder_import flag is on AND webkitdirectory is supported -->
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-outline"
-                    id="importFolderBtn"
-                    aria-label="Import project folder"
-                    title="Import Folder"
-                    hidden
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
-                      ></path>
-                    </svg>
-                    <span class="btn-text">Import Folder</span>
-                  </button>
-                  <!-- Connect Folder button (F35 Phase A) — Chromium-only.
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-outline"
+                        id="importFolderBtn"
+                        aria-label="Import project folder"
+                        title="Import Folder"
+                        hidden
+                      >
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+                          ></path>
+                        </svg>
+                        <span class="btn-text">Import Folder</span>
+                      </button>
+                      <!-- Connect Folder button (F35 Phase A) — Chromium-only.
                        Hidden by default; shown when local_folder_sync flag is on
                        AND showDirectoryPicker is available. -->
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-outline"
-                    id="connectFolderBtn"
-                    aria-label="Connect to a folder on disk for persistent two-way access"
-                    title="Connect to a folder (Chromium only)"
-                    hidden
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-                    </svg>
-                    <span class="btn-text">Connect Folder</span>
-                  </button>
-                </div>
-                <!-- Folder-sync status pill (F35 Phase A). Hidden until the
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-outline"
+                        id="connectFolderBtn"
+                        aria-label="Connect to a folder on disk for persistent two-way access"
+                        title="Connect to a folder (Chromium only)"
+                        hidden
+                      >
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"
+                          ></path>
+                          <path
+                            d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"
+                          ></path>
+                        </svg>
+                        <span class="btn-text">Connect Folder</span>
+                      </button>
+                    </div>
+                    <!-- Folder-sync status pill (F35 Phase A). Hidden until the
                      controller fires its first state change. aria-live so
                      connection / restore / disconnect events are announced. -->
-                <div
-                  class="folder-sync-status"
-                  id="folderSyncStatus"
-                  role="status"
-                  aria-live="polite"
-                  hidden
-                >
-                  <span class="folder-sync-status-text" id="folderSyncStatusText"></span>
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-outline"
-                    id="folderSyncRestoreBtn"
-                    aria-label="Reconnect to the previously-connected folder"
-                    hidden
-                  >
-                    Reconnect
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-outline"
-                    id="folderSyncDisconnectBtn"
-                    aria-label="Disconnect from the connected folder"
-                    hidden
-                  >
-                    Disconnect
-                  </button>
-                </div>
-              </div>
-              <!-- Linked folders (sub-plan H). Every folder this browser holds
+                    <div
+                      class="folder-sync-status"
+                      id="folderSyncStatus"
+                      role="status"
+                      aria-live="polite"
+                      hidden
+                    >
+                      <span
+                        class="folder-sync-status-text"
+                        id="folderSyncStatusText"
+                      ></span>
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-outline"
+                        id="folderSyncRestoreBtn"
+                        aria-label="Reconnect to the previously-connected folder"
+                        hidden
+                      >
+                        Reconnect
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-outline"
+                        id="folderSyncDisconnectBtn"
+                        aria-label="Disconnect from the connected folder"
+                        hidden
+                      >
+                        Disconnect
+                      </button>
+                    </div>
+                  </div>
+                  <!-- Linked folders (sub-plan H). Every folder this browser holds
                    a handle for; exactly one is Connected at a time (D-33).
                    Stays hidden until linked-folders-ui.js finds at least one,
                    so browsers without showDirectoryPicker never see it. -->
-              <div class="linked-folders" id="linkedFolders" hidden>
-                <h4 class="linked-folders-title" id="linkedFoldersTitle">
-                  Linked folders
-                </h4>
-                <ul
-                  class="linked-folders-list"
-                  id="linkedFoldersList"
-                  aria-labelledby="linkedFoldersTitle"
-                >
-                  <!-- Dynamically populated by linked-folders-ui.js -->
-                </ul>
-              </div>
-              <p class="saved-projects-description">
-                Your projects organized in folders (stored in this browser)
-              </p>
-              <!-- Breadcrumb navigation for folder path -->
-              <nav
-                class="folder-breadcrumbs hidden"
-                id="folderBreadcrumbs"
-                aria-label="Folder navigation"
-              >
-                <ol class="breadcrumb-list" id="breadcrumbList">
-                  <!-- Dynamically populated -->
-                </ol>
-              </nav>
-              <!-- Folder tree and projects container -->
-              <div class="saved-projects-container" id="savedProjectsContainer">
-                <div
-                  class="folder-tree"
-                  id="folderTree"
-                  role="tree"
-                  aria-label="Folder tree"
-                >
-                  <!-- Dynamically populated with folders -->
-                </div>
-                <div
-                  class="saved-projects-list"
-                  id="savedProjectsList"
-                  role="list"
-                  aria-label="Saved projects"
-                >
-                  <!-- Dynamically populated with projects -->
-                </div>
-              </div>
-              <p class="saved-projects-empty hidden" id="savedProjectsEmpty">
-                No saved projects yet. Upload a file and choose to save it.
-              </p>
-              <!-- Hidden file input for import -->
-              <input
-                type="file"
-                id="importBackupInput"
-                accept=".zip,.json"
-                class="hidden"
-                aria-hidden="true"
-              />
-              <!-- Hidden folder input (shown when folder_import flag + webkitdirectory
+                  <div class="linked-folders" id="linkedFolders" hidden>
+                    <h4 class="linked-folders-title" id="linkedFoldersTitle">
+                      Linked folders
+                    </h4>
+                    <ul
+                      class="linked-folders-list"
+                      id="linkedFoldersList"
+                      aria-labelledby="linkedFoldersTitle"
+                    >
+                      <!-- Dynamically populated by linked-folders-ui.js -->
+                    </ul>
+                  </div>
+                  <p class="saved-projects-description">
+                    Your projects organized in folders (stored in this browser)
+                  </p>
+                  <!-- Breadcrumb navigation for folder path -->
+                  <nav
+                    class="folder-breadcrumbs hidden"
+                    id="folderBreadcrumbs"
+                    aria-label="Folder navigation"
+                  >
+                    <ol class="breadcrumb-list" id="breadcrumbList">
+                      <!-- Dynamically populated -->
+                    </ol>
+                  </nav>
+                  <!-- Folder tree and projects container -->
+                  <div
+                    class="saved-projects-container"
+                    id="savedProjectsContainer"
+                  >
+                    <div
+                      class="folder-tree"
+                      id="folderTree"
+                      role="tree"
+                      aria-label="Folder tree"
+                    >
+                      <!-- Dynamically populated with folders -->
+                    </div>
+                    <div
+                      class="saved-projects-list"
+                      id="savedProjectsList"
+                      role="list"
+                      aria-label="Saved projects"
+                    >
+                      <!-- Dynamically populated with projects -->
+                    </div>
+                  </div>
+                  <p
+                    class="saved-projects-empty hidden"
+                    id="savedProjectsEmpty"
+                  >
+                    No saved projects yet. Upload a file and choose to save it.
+                  </p>
+                  <!-- Hidden file input for import -->
+                  <input
+                    type="file"
+                    id="importBackupInput"
+                    accept=".zip,.json"
+                    class="hidden"
+                    aria-hidden="true"
+                  />
+                  <!-- Hidden folder input (shown when folder_import flag + webkitdirectory
                    support; the non-standard webkitdirectory attribute is set by JS
                    during init to keep the static HTML valid) -->
-              <input
-                type="file"
-                id="importFolderInput"
-                class="hidden"
-                aria-hidden="true"
-              />
-            </section>
+                  <input
+                    type="file"
+                    id="importFolderInput"
+                    class="hidden"
+                    aria-hidden="true"
+                  />
+                </section>
               </div>
               <div class="role-paths-grid role-paths-grid--compact">
                 <!-- Beginners Start Here (only visible tutorial for now) -->
@@ -1073,7 +1418,8 @@
                     </ul>
                   </details>
                   <div class="role-path-actions">
-                    <button type="button"
+                    <button
+                      type="button"
                       class="btn btn-primary btn-role-try"
                       data-example="simple-box"
                       data-role="beginners"
@@ -1081,7 +1427,8 @@
                     >
                       Start Tutorial
                     </button>
-                    <button type="button"
+                    <button
+                      type="button"
                       class="btn btn-link btn-role-learn"
                       data-feature-tab="workflow"
                       aria-label="Open Help: Workflow"
@@ -1093,39 +1440,79 @@
                 <div class="role-path-card">
                   <h3 class="role-path-title">Charm Customizer</h3>
                   <p class="role-path-meta">
-                    Creative project &bull; customize &amp; 3D print &bull;
-                    by <a href="https://github.com/Znasif" target="_blank" rel="noopener noreferrer">Nasif Zaman<span class="sr-only"> (opens in new tab)</span></a>,
-                    <a href="https://www.thingiverse.com/thing:7153594" target="_blank" rel="noopener noreferrer">Duy Do<span class="sr-only"> (opens in new tab)</span></a> (UW WOOF3D),
-                    &amp; <a href="https://create.uw.edu/adaptive-solutions-mini-hackathon/" target="_blank" rel="noopener noreferrer">HuskyADAPT<span class="sr-only"> (opens in new tab)</span></a>
+                    Creative project &bull; customize &amp; 3D print &bull; by
+                    <a
+                      href="https://github.com/Znasif"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >Nasif Zaman<span class="sr-only">
+                        (opens in new tab)</span
+                      ></a
+                    >,
+                    <a
+                      href="https://www.thingiverse.com/thing:7153594"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >Duy Do<span class="sr-only"> (opens in new tab)</span></a
+                    >
+                    (UW WOOF3D), &amp;
+                    <a
+                      href="https://create.uw.edu/adaptive-solutions-mini-hackathon/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >HuskyADAPT<span class="sr-only">
+                        (opens in new tab)</span
+                      ></a
+                    >
                   </p>
                   <p class="role-path-description">
-                    Design wearable charms, pendants, and logo plates
-                    with engraved or raised icons. Includes Bracelet Clip Charms
-                    that clip onto silicone bracelets.
+                    Design wearable charms, pendants, and logo plates with
+                    engraved or raised icons. Includes Bracelet Clip Charms that
+                    clip onto silicone bracelets.
                   </p>
                   <p class="role-path-meta">
-                    <a href="https://www.youtube.com/watch?v=Kz3sCmPIjQM" target="_blank" rel="noopener noreferrer">Watch the tutorial video<span class="sr-only"> (opens in new tab)</span></a>
+                    <a
+                      href="https://www.youtube.com/watch?v=Kz3sCmPIjQM"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >Watch the tutorial video<span class="sr-only">
+                        (opens in new tab)</span
+                      ></a
+                    >
                     to learn how to use the Charm Customizer.
                   </p>
                   <details class="role-path-details">
                     <summary>What you can make</summary>
                     <ul class="role-path-tips" aria-label="What you can make">
-                      <li>Bracelet Clip Charms &mdash; C-clip charms that snap onto silicone bracelets</li>
-                      <li>Flat pendants in circle, square, hex, or oval shapes</li>
+                      <li>
+                        Bracelet Clip Charms &mdash; C-clip charms that snap
+                        onto silicone bracelets
+                      </li>
+                      <li>
+                        Flat pendants in circle, square, hex, or oval shapes
+                      </li>
                       <li>Logo plates from any SVG image</li>
-                      <li>Upload your own design or pick from the built-in library</li>
+                      <li>
+                        Upload your own design or pick from the built-in library
+                      </li>
                     </ul>
                   </details>
                   <div class="role-path-actions">
                     <div class="charm-variant-selector">
                       <label for="charmVariantSelect">Shape</label>
-                      <select id="charmVariantSelect" class="charm-variant-select">
+                      <select
+                        id="charmVariantSelect"
+                        class="charm-variant-select"
+                      >
                         <option value="q-charm">Bracelet Clip Charm</option>
                         <option value="nasif-charm-maker">Flat Pendant</option>
-                        <option value="logo-plate">Logo Plate (SVG Import)</option>
+                        <option value="logo-plate">
+                          Logo Plate (SVG Import)
+                        </option>
                       </select>
                     </div>
-                    <button type="button"
+                    <button
+                      type="button"
                       class="btn btn-primary btn-role-try"
                       id="openCharmMakerBtn"
                       data-example="q-charm"
@@ -1140,34 +1527,71 @@
                   <h3 class="role-path-title">Braille Card Customizer</h3>
                   <p class="role-path-meta">
                     Accessibility project &bull; customize &amp; 3D print &bull;
-                    based on the <a href="https://github.com/BrennenJohnston/braille-wedge-card-openscad" target="_blank" rel="noopener noreferrer">Braille Wedge Card<span class="sr-only"> (opens in new tab)</span></a>, <a href="https://github.com/BrennenJohnston/braille-sign-openscad" target="_blank" rel="noopener noreferrer">Sign<span class="sr-only"> (opens in new tab)</span></a>, and <a href="https://github.com/BrennenJohnston/braille-charm-openscad" target="_blank" rel="noopener noreferrer">Charm<span class="sr-only"> (opens in new tab)</span></a> generators
+                    based on the
+                    <a
+                      href="https://github.com/BrennenJohnston/braille-wedge-card-openscad"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >Braille Wedge Card<span class="sr-only">
+                        (opens in new tab)</span
+                      ></a
+                    >,
+                    <a
+                      href="https://github.com/BrennenJohnston/braille-sign-openscad"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >Sign<span class="sr-only"> (opens in new tab)</span></a
+                    >, and
+                    <a
+                      href="https://github.com/BrennenJohnston/braille-charm-openscad"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >Charm<span class="sr-only"> (opens in new tab)</span></a
+                    >
+                    generators
                   </p>
                   <p class="role-path-description">
-                    Type text and get 3D-printable braille &mdash;
-                    translation runs on your device. Make cards that print
-                    leaning back with break-away supports, small braille
-                    charms, or two-part tactile signs with raised letters
-                    and braille.
+                    Type text and get 3D-printable braille &mdash; translation
+                    runs on your device. Make cards that print leaning back with
+                    break-away supports, small braille charms, or two-part
+                    tactile signs with raised letters and braille.
                   </p>
                   <details class="role-path-details">
                     <summary>What you can make</summary>
                     <ul class="role-path-tips" aria-label="What you can make">
-                      <li>Braille business cards and contact cards &mdash; long text splits across cards or prints all at once</li>
-                      <li>Braille charms, pendants, and zipper pulls with 1&ndash;2 cells</li>
-                      <li>Two-part tactile signs: raised letters above, braille below (ADA-style defaults)</li>
-                      <li>Uncontracted or contracted (Grade 1 / Grade 2) braille</li>
+                      <li>
+                        Braille business cards and contact cards &mdash; long
+                        text splits across cards or prints all at once
+                      </li>
+                      <li>
+                        Braille charms, pendants, and zipper pulls with
+                        1&ndash;2 cells
+                      </li>
+                      <li>
+                        Two-part tactile signs: raised letters above, braille
+                        below (ADA-style defaults)
+                      </li>
+                      <li>
+                        Uncontracted or contracted (Grade 1 / Grade 2) braille
+                      </li>
                     </ul>
                   </details>
                   <div class="role-path-actions">
                     <div class="charm-variant-selector">
                       <label for="brailleVariantSelect">Tool</label>
-                      <select id="brailleVariantSelect" class="charm-variant-select">
-                        <option value="braille-sign" selected>Braille Sign</option>
+                      <select
+                        id="brailleVariantSelect"
+                        class="charm-variant-select"
+                      >
+                        <option value="braille-sign" selected>
+                          Braille Sign
+                        </option>
                         <option value="braille-wedge-card">Braille Card</option>
                         <option value="braille-charm">Braille Charm</option>
                       </select>
                     </div>
-                    <button type="button"
+                    <button
+                      type="button"
                       class="btn btn-primary btn-role-try"
                       id="openBrailleCardBtn"
                       data-example="braille-sign"
@@ -1288,12 +1712,15 @@
                         <summary>Common tasks</summary>
                         <ul class="role-path-tips" aria-label="Common tasks">
                           <li>Enable libraries and resolve dependencies</li>
-                          <li>Save and reuse presets for repeatable settings</li>
+                          <li>
+                            Save and reuse presets for repeatable settings
+                          </li>
                           <li>Export files and work with ZIP projects</li>
                         </ul>
                       </details>
                       <div class="role-path-actions">
-                        <button type="button"
+                        <button
+                          type="button"
                           class="btn btn-outline btn-role-learn"
                           data-feature-tab="libraries"
                           aria-label="Open Help: Libraries"
@@ -1310,15 +1737,23 @@
                       </p>
                       <details class="role-path-details">
                         <summary>Key capabilities</summary>
-                        <ul class="role-path-tips" aria-label="Key capabilities">
-                          <li>Upload ZIP files with include/use dependencies</li>
+                        <ul
+                          class="role-path-tips"
+                          aria-label="Key capabilities"
+                        >
+                          <li>
+                            Upload ZIP files with include/use dependencies
+                          </li>
                           <li>Enable MCAD, BOSL2, and other libraries</li>
-                          <li>Export in multiple formats (STL, OBJ, AMF, SVG, DXF)</li>
+                          <li>
+                            Export in multiple formats (STL, OBJ, AMF, SVG, DXF)
+                          </li>
                           <li>Save and manage projects with companion files</li>
                         </ul>
                       </details>
                       <div class="role-path-actions">
-                        <button type="button"
+                        <button
+                          type="button"
                           class="btn btn-outline btn-role-learn"
                           data-feature-tab="libraries"
                           aria-label="Open Help: Libraries"
@@ -1330,12 +1765,15 @@
                     <div class="role-path-card">
                       <h3 class="role-path-title">Keyboard-Only Users</h3>
                       <p class="role-path-description">
-                        Complete the full workflow without a mouse using predictable
-                        keyboard controls.
+                        Complete the full workflow without a mouse using
+                        predictable keyboard controls.
                       </p>
                       <details class="role-path-details">
                         <summary>Navigation highlights</summary>
-                        <ul class="role-path-tips" aria-label="Navigation highlights">
+                        <ul
+                          class="role-path-tips"
+                          aria-label="Navigation highlights"
+                        >
                           <li>Tab through parameters in logical order</li>
                           <li>Undo / Redo with Ctrl+Z / Ctrl+Y</li>
                           <li>Skip-to-content link at screen top</li>
@@ -1343,7 +1781,8 @@
                         </ul>
                       </details>
                       <div class="role-path-actions">
-                        <button type="button"
+                        <button
+                          type="button"
                           class="btn btn-outline btn-role-learn"
                           data-feature-tab="accessibility"
                           aria-label="Open Help: Accessibility"
@@ -1355,20 +1794,25 @@
                     <div class="role-path-card">
                       <h3 class="role-path-title">Low Vision Users</h3>
                       <p class="role-path-description">
-                        Use high-contrast themes, large touch targets, and visible
-                        focus indicators.
+                        Use high-contrast themes, large touch targets, and
+                        visible focus indicators.
                       </p>
                       <details class="role-path-details">
                         <summary>Visual aids</summary>
                         <ul class="role-path-tips" aria-label="Visual aids">
                           <li>Toggle High Contrast mode via the HC button</li>
                           <li>Switch between light and dark themes</li>
-                          <li>All interactive controls meet 44×44 px touch targets</li>
-                          <li>Visible focus rings on every focusable element</li>
+                          <li>
+                            All interactive controls meet 44×44 px touch targets
+                          </li>
+                          <li>
+                            Visible focus rings on every focusable element
+                          </li>
                         </ul>
                       </details>
                       <div class="role-path-actions">
-                        <button type="button"
+                        <button
+                          type="button"
                           class="btn btn-outline btn-role-learn"
                           data-feature-tab="accessibility"
                           aria-label="Open Help: Accessibility"
@@ -1380,19 +1824,27 @@
                     <div class="role-path-card">
                       <h3 class="role-path-title">Voice Input Users</h3>
                       <p class="role-path-description">
-                        Control the app with voice commands using stable, speakable
-                        button names.
+                        Control the app with voice commands using stable,
+                        speakable button names.
                       </p>
                       <details class="role-path-details">
                         <summary>Voice-friendly features</summary>
-                        <ul class="role-path-tips" aria-label="Voice-friendly features">
-                          <li>Say button labels: "Click Generate", "Click Help"</li>
+                        <ul
+                          class="role-path-tips"
+                          aria-label="Voice-friendly features"
+                        >
+                          <li>
+                            Say button labels: "Click Generate", "Click Help"
+                          </li>
                           <li>Every control has a unique, speakable name</li>
-                          <li>Toolbar menus open with "Click File", "Click View"</li>
+                          <li>
+                            Toolbar menus open with "Click File", "Click View"
+                          </li>
                         </ul>
                       </details>
                       <div class="role-path-actions">
-                        <button type="button"
+                        <button
+                          type="button"
                           class="btn btn-outline btn-role-learn"
                           data-feature-tab="accessibility"
                           aria-label="Open Help: Accessibility"
@@ -1409,15 +1861,28 @@
                       </p>
                       <details class="role-path-details">
                         <summary>Assistive-tech features</summary>
-                        <ul class="role-path-tips" aria-label="Assistive-tech features">
-                          <li>Live region announces parameter changes and render status</li>
-                          <li>ARIA landmarks for quick navigation between sections</li>
-                          <li>Plain-language error messages instead of raw alerts</li>
-                          <li>Accessible modal dialogs with focus management</li>
+                        <ul
+                          class="role-path-tips"
+                          aria-label="Assistive-tech features"
+                        >
+                          <li>
+                            Live region announces parameter changes and render
+                            status
+                          </li>
+                          <li>
+                            ARIA landmarks for quick navigation between sections
+                          </li>
+                          <li>
+                            Plain-language error messages instead of raw alerts
+                          </li>
+                          <li>
+                            Accessible modal dialogs with focus management
+                          </li>
                         </ul>
                       </details>
                       <div class="role-path-actions">
-                        <button type="button"
+                        <button
+                          type="button"
                           class="btn btn-outline btn-role-learn"
                           data-feature-tab="accessibility"
                           aria-label="Open Help: Accessibility"
@@ -1430,7 +1895,6 @@
                 </div>
               </details>
             </div>
-
 
             <!-- Storage Panel -->
             <section class="storage-panel" aria-labelledby="storage-heading">
@@ -1480,12 +1944,15 @@
             <div id="classicCustomizerBar" class="classic-customizer-bar">
               <div class="classic-pane-titlebar">
                 <span class="classic-pane-title">Customizer</span>
-                <button type="button"
+                <button
+                  type="button"
                   id="classicCustomizerCloseBtn"
                   class="btn btn-sm btn-icon classic-pane-btn"
                   aria-label="Hide Customizer"
                   title="Hide Customizer"
-                >✕</button>
+                >
+                  ✕
+                </button>
               </div>
               <div
                 id="classicCustomizerControls"
@@ -1525,7 +1992,8 @@
               <div class="panel-header-title-row">
                 <h2 id="parameters-heading">Customizer</h2>
                 <!-- Mobile close button for drawer -->
-                <button type="button"
+                <button
+                  type="button"
                   id="drawerCloseBtn"
                   class="btn btn-sm btn-icon mobile-only drawer-close-btn forge-control hidden"
                   aria-label="Close customizer panel"
@@ -1548,7 +2016,8 @@
               </div>
               <!-- Row 2: Action toolbar -->
               <div class="param-header-actions">
-                <button type="button"
+                <button
+                  type="button"
                   id="undoBtn"
                   class="btn btn-sm btn-icon"
                   aria-label="Undo last parameter change"
@@ -1570,7 +2039,8 @@
                     <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
                   </svg>
                 </button>
-                <button type="button"
+                <button
+                  type="button"
                   id="redoBtn"
                   class="btn btn-sm btn-icon"
                   aria-label="Redo last parameter change"
@@ -1592,7 +2062,8 @@
                     <path d="M20.49 15a9 9 0 1 1-2.13-9.36L23 10"></path>
                   </svg>
                 </button>
-                <button type="button"
+                <button
+                  type="button"
                   id="resetBtn"
                   class="btn btn-sm"
                   aria-label="Reset all parameters to default values"
@@ -1600,7 +2071,8 @@
                   Reset
                 </button>
                 <!-- Code Editor toggle (M2) - hidden until feature flag enabled -->
-                <button type="button"
+                <button
+                  type="button"
                   id="expertModeToggle"
                   class="mode-toggle-btn hidden"
                   aria-pressed="false"
@@ -1611,7 +2083,8 @@
                   <span class="mode-icon" aria-hidden="true">{ }</span>
                   <span class="btn-text">Code</span>
                 </button>
-                <button type="button"
+                <button
+                  type="button"
                   id="collapseParamPanelBtn"
                   class="btn btn-sm btn-icon btn-collapse-panel forge-control"
                   aria-expanded="true"
@@ -1711,7 +2184,9 @@
                     type="button"
                     aria-label="Console: all output from the OpenSCAD engine. Log view shows messages chronologically. Structured view shows a sortable error table with click-to-line navigation."
                     title="Console: all output from the OpenSCAD engine. Log view shows messages chronologically. Structured view shows a sortable error table with click-to-line navigation."
-                  >?</button>
+                  >
+                    ?
+                  </button>
                   <span
                     id="console-badge"
                     class="console-badge hidden"
@@ -1733,9 +2208,31 @@
                   >
                 </summary>
                 <div class="console-content">
-                  <div class="console-view-tabs" role="tablist" aria-label="Console view">
-                    <button role="tab" type="button" class="console-view-tab active" id="console-tab-log" aria-selected="true" aria-controls="console-view-log">Log</button>
-                    <button role="tab" type="button" class="console-view-tab" id="console-tab-structured" aria-selected="false" aria-controls="console-view-structured">Structured</button>
+                  <div
+                    class="console-view-tabs"
+                    role="tablist"
+                    aria-label="Console view"
+                  >
+                    <button
+                      role="tab"
+                      type="button"
+                      class="console-view-tab active"
+                      id="console-tab-log"
+                      aria-selected="true"
+                      aria-controls="console-view-log"
+                    >
+                      Log
+                    </button>
+                    <button
+                      role="tab"
+                      type="button"
+                      class="console-view-tab"
+                      id="console-tab-structured"
+                      aria-selected="false"
+                      aria-controls="console-view-structured"
+                    >
+                      Structured
+                    </button>
                   </div>
                   <div class="console-controls">
                     <label class="console-filter">
@@ -1767,7 +2264,8 @@
                       <span>Trace</span>
                     </label>
                     <div class="console-actions">
-                      <button type="button"
+                      <button
+                        type="button"
                         id="console-copy-btn"
                         class="btn btn-sm btn-icon"
                         aria-label="Copy console output to clipboard"
@@ -1775,7 +2273,8 @@
                       >
                         📋
                       </button>
-                      <button type="button"
+                      <button
+                        type="button"
                         id="console-download-btn"
                         class="btn btn-sm btn-icon"
                         aria-label="Download console log"
@@ -1783,7 +2282,8 @@
                       >
                         ⬇️
                       </button>
-                      <button type="button"
+                      <button
+                        type="button"
                         id="console-clear-btn"
                         class="btn btn-sm btn-icon"
                         aria-label="Clear console"
@@ -1793,7 +2293,12 @@
                       </button>
                     </div>
                   </div>
-                  <div id="console-view-log" class="console-view-panel" role="tabpanel" aria-labelledby="console-tab-log">
+                  <div
+                    id="console-view-log"
+                    class="console-view-panel"
+                    role="tabpanel"
+                    aria-labelledby="console-tab-log"
+                  >
                     <div
                       id="console-output"
                       class="console-output"
@@ -1802,19 +2307,26 @@
                       aria-live="polite"
                       aria-relevant="additions"
                       tabindex="0"
-                    ><!-- tabindex because this region scrolls and has nothing
+                    >
+                      <!-- tabindex because this region scrolls and has nothing
                          focusable inside it, so arrows and PageDown had no way
                          in. Not the CodeMirror case (P2), where the scroller's
                          contenteditable child IS reachable and the same axe
                          rule is a false positive: here it was real, and P7
                          made it visible by giving the log its content back. -->
                       <div class="console-empty">
-                        No output yet. Messages from the OpenSCAD engine
-                        will appear here.
+                        No output yet. Messages from the OpenSCAD engine will
+                        appear here.
                       </div>
                     </div>
                   </div>
-                  <div id="console-view-structured" class="console-view-panel" role="tabpanel" aria-labelledby="console-tab-structured" hidden>
+                  <div
+                    id="console-view-structured"
+                    class="console-view-panel"
+                    role="tabpanel"
+                    aria-labelledby="console-tab-structured"
+                    hidden
+                  >
                     <!-- The Show filter and the table both live in here so both
                          travel into the Classic dock together (the layout
                          controller moves #error-log-output, not its parent).
@@ -1843,7 +2355,10 @@
                    #classicFontListSlot on entering Classic, the same way the
                    console and editor panes travel; hidden everywhere else.
                    The slot is the labelled region, so this is a plain div. -->
-              <div id="fontListPanel" class="classic-panel-body classic-font-list">
+              <div
+                id="fontListPanel"
+                class="classic-panel-body classic-font-list"
+              >
                 <div class="classic-font-list-tablewrap">
                   <table class="classic-font-list-table">
                     <caption class="sr-only">
@@ -1868,7 +2383,11 @@
                   <legend>Filter</legend>
                   <div class="classic-font-list-field">
                     <label for="fontListFilterText">Font name</label>
-                    <input type="text" id="fontListFilterText" autocomplete="off" />
+                    <input
+                      type="text"
+                      id="fontListFilterText"
+                      autocomplete="off"
+                    />
                     <label for="fontListFilterMode" class="sr-only"
                       >Font name match type</label
                     >
@@ -1899,7 +2418,9 @@
                       <option value="all" selected>All</option>
                       <option value="any">Any</option>
                     </select>
-                    <span id="fontListCharsReason" class="classic-font-list-reason"
+                    <span
+                      id="fontListCharsReason"
+                      class="classic-font-list-reason"
                       >Filtering by characters is not available yet: it needs
                       each font file's character list, which this browser
                       version does not read.</span
@@ -1938,7 +2459,12 @@
                   </dl>
                   <!-- Upstream drags a row into the editor; a drag has no
                        keyboard equivalent, so this gives the same result. -->
-                  <button type="button" id="fontListCopyBtn" class="btn btn-sm" disabled>
+                  <button
+                    type="button"
+                    id="fontListCopyBtn"
+                    class="btn btn-sm"
+                    disabled
+                  >
                     Copy font name
                   </button>
                 </fieldset>
@@ -1976,9 +2502,9 @@
                       aria-describedby="vpLockReason"
                     />
                     <span id="vpLockReason" class="classic-vp-reason"
-                      >Locking the aspect ratio is not available: the 3D view
-                      is sized by the window, so there is no fixed width and
-                      height to lock together.</span
+                      >Locking the aspect ratio is not available: the 3D view is
+                      sized by the window, so there is no fixed width and height
+                      to lock together.</span
                     >
                   </div>
                 </fieldset>
@@ -2028,9 +2554,8 @@
                     />
                     <span class="classic-vp-unit">&deg;</span>
                     <span id="vpFovNote" class="sr-only"
-                      >Field of view applies to the perspective projection
-                      only, and is unavailable while the view is
-                      orthographic.</span
+                      >Field of view applies to the perspective projection only,
+                      and is unavailable while the view is orthographic.</span
                     >
                   </div>
                 </fieldset>
@@ -2067,8 +2592,8 @@
                   </div>
                   <p id="animateFpsNote" class="classic-animate-note">
                     FPS is a top speed, not a promise: each frame is a full
-                    render, so a complex model plays more slowly than the
-                    number asks for.
+                    render, so a complex model plays more slowly than the number
+                    asks for.
                   </p>
                   <div class="classic-animate-field">
                     <label for="animateSteps">Steps</label>
@@ -2520,7 +3045,12 @@
                 </summary>
                 <div class="overlay-controls">
                   <div class="overlay-control overlay-upload-control">
-                    <label class="overlay-control-label" for="overlaySourceSelect"> Source image </label>
+                    <label
+                      class="overlay-control-label"
+                      for="overlaySourceSelect"
+                    >
+                      Source image
+                    </label>
                     <div class="overlay-source-row">
                       <select
                         id="overlaySourceSelect"
@@ -2544,10 +3074,12 @@
                         />
                       </label>
                     </div>
-                    <span id="overlaySourceHelp" class="overlay-source-help-text"
+                    <span
+                      id="overlaySourceHelp"
+                      class="overlay-source-help-text"
                       >Upload a PNG, JPEG, or SVG image as a reference overlay
-                      behind your 3D model. This does not affect the SCAD
-                      file &mdash; it is a visual guide only.</span
+                      behind your 3D model. This does not affect the SCAD file
+                      &mdash; it is a visual guide only.</span
                     >
                   </div>
                   <label class="overlay-enable-toggle">
@@ -2630,8 +3162,7 @@
                   </div>
                   <span id="overlayColorHelp" class="sr-only"
                     >Choose the color applied to SVG overlay strokes and fills.
-                    Auto mode picks a visible color for the current
-                    theme.</span
+                    Auto mode picks a visible color for the current theme.</span
                   >
                   <!-- Tablet device selector: auto-sizes overlay to screen dimensions (ENH-B) -->
                   <div class="overlay-control overlay-tablet-control">
@@ -2639,7 +3170,8 @@
                       class="overlay-control-label"
                       for="overlayTabletSelect"
                       id="overlayTabletLabel"
-                    >Auto-size to tablet</label>
+                      >Auto-size to tablet</label
+                    >
                     <select
                       id="overlayTabletSelect"
                       class="overlay-tablet-select"
@@ -2651,8 +3183,8 @@
                   </div>
                   <span id="overlayTabletHelp" class="sr-only"
                     >Select a tablet model to automatically set the overlay
-                    width and height to match the device screen dimensions
-                    in millimetres</span
+                    width and height to match the device screen dimensions in
+                    millimetres</span
                   >
                   <!-- Overlay Dimensions Display (read-only) -->
                   <div
@@ -2672,7 +3204,9 @@
                     </summary>
                     <div class="overlay-advanced-controls">
                       <!-- Manual override master toggle -->
-                      <label class="overlay-enable-toggle overlay-override-toggle">
+                      <label
+                        class="overlay-enable-toggle overlay-override-toggle"
+                      >
                         <input
                           type="checkbox"
                           id="overlayManualOverrideToggle"
@@ -2691,7 +3225,9 @@
                         class="overlay-calibration-fieldset"
                         disabled
                       >
-                        <legend class="sr-only">Manual calibration controls</legend>
+                        <legend class="sr-only">
+                          Manual calibration controls
+                        </legend>
                         <div class="overlay-control overlay-fit-buttons">
                           <button
                             type="button"
@@ -2712,7 +3248,9 @@
                         </div>
                         <!-- Unit toggle + Scale factor -->
                         <div class="overlay-control overlay-unit-row">
-                          <label class="overlay-control-label" for="overlayUnitSelect"
+                          <label
+                            class="overlay-control-label"
+                            for="overlayUnitSelect"
                             >Unit</label
                           >
                           <select
@@ -2723,7 +3261,9 @@
                             <option value="px">px</option>
                             <option value="mm" selected>mm</option>
                           </select>
-                          <label class="overlay-scale-label" for="scaleFactorInput"
+                          <label
+                            class="overlay-scale-label"
+                            for="scaleFactorInput"
                             >Scale</label
                           >
                           <input
@@ -2738,7 +3278,9 @@
                         </div>
                         <!-- Size Controls -->
                         <div class="overlay-control overlay-size-inputs">
-                          <label class="overlay-control-label" id="overlaySizeLabel"
+                          <label
+                            class="overlay-control-label"
+                            id="overlaySizeLabel"
                             >Size (<span id="overlaySizeUnit">mm</span>)</label
                           >
                           <div class="overlay-size-row">
@@ -2782,8 +3324,11 @@
                         </div>
                         <!-- Offset Controls -->
                         <div class="overlay-control overlay-offset-inputs">
-                          <label class="overlay-control-label" id="overlayOffsetLabel"
-                            >Offset (<span id="overlayOffsetUnit">mm</span>)</label
+                          <label
+                            class="overlay-control-label"
+                            id="overlayOffsetLabel"
+                            >Offset (<span id="overlayOffsetUnit">mm</span
+                            >)</label
                           >
                           <div class="overlay-offset-row">
                             <label class="overlay-offset-field">
@@ -2881,7 +3426,8 @@
                       <!-- Library checkboxes will be dynamically generated here -->
                     </div>
                     <div class="library-footer">
-                      <button type="button"
+                      <button
+                        type="button"
                         id="libraryHelpBtn"
                         class="btn-link btn-link-with-icon"
                         aria-label="Learn more about libraries"
@@ -2953,7 +3499,8 @@
                       rel="noopener"
                       aria-label="About Companion Files: extra files that the SCAD design references"
                       title="Companion Files are extra files (like openings.txt or SVG shapes) that the SCAD design needs to produce correct geometry."
-                    >?</a>
+                      >?</a
+                    >
                     <span class="project-files-badge" id="projectFilesBadge"
                       >0</span
                     >
@@ -3073,14 +3620,16 @@
                 <div class="advanced-menu-content">
                   <!-- View SCAD Source -->
                   <div class="advanced-section">
-                    <button type="button"
+                    <button
+                      type="button"
                       id="viewSourceBtn"
                       class="btn btn-sm btn-outline advanced-btn"
                       aria-label="View OpenSCAD source code"
                     >
                       📄 View Source
                     </button>
-                    <button type="button"
+                    <button
+                      type="button"
                       id="copySourceBtn"
                       class="btn btn-sm btn-outline advanced-btn"
                       aria-label="Copy source code to clipboard"
@@ -3091,7 +3640,8 @@
                   <!-- Parameter Limits Override -->
                   <div class="advanced-section">
                     <label class="advanced-toggle">
-                      <input type="checkbox"
+                      <input
+                        type="checkbox"
                         id="unlockLimitsToggle"
                         aria-label="Unlock Parameter Limits"
                       />
@@ -3105,7 +3655,8 @@
                   <div class="advanced-section">
                     <h3 class="advanced-section-title">Reset Tools</h3>
                     <div class="reset-tools">
-                      <button type="button"
+                      <button
+                        type="button"
                         id="resetGroupBtn"
                         class="btn btn-sm btn-outline"
                         aria-label="Reset current group to defaults"
@@ -3121,7 +3672,8 @@
                       <select id="resetGroupSelect" class="reset-group-select">
                         <!-- Groups will be populated dynamically -->
                       </select>
-                      <button type="button"
+                      <button
+                        type="button"
                         id="confirmResetGroupBtn"
                         class="btn btn-sm btn-primary"
                       >
@@ -3131,7 +3683,8 @@
                   </div>
                   <!-- Raw Parameter JSON -->
                   <div class="advanced-section">
-                    <button type="button"
+                    <button
+                      type="button"
                       id="viewParamsJsonBtn"
                       class="btn btn-sm btn-outline advanced-btn"
                       aria-label="View current parameters as JSON"
@@ -3142,7 +3695,8 @@
                   <!-- Export Changed Settings (troubleshooting support) -->
                   <div class="advanced-section">
                     <h3 class="advanced-section-title">Troubleshooting</h3>
-                    <button type="button"
+                    <button
+                      type="button"
                       id="exportChangedBtn"
                       class="btn btn-sm btn-outline advanced-btn"
                       aria-label="Export only changed parameters for troubleshooting"
@@ -3193,7 +3747,8 @@
                     rel="noopener"
                     aria-label="About Presets: learn how presets, SCAD files, and companion files work together"
                     title="Presets are saved configurations. Learn how they work with SCAD files and companion files."
-                  >?</a>
+                    >?</a
+                  >
                 </summary>
                 <div class="preset-content">
                   <!-- Legacy: search input (hidden when searchable_combobox flag is on) -->
@@ -3206,7 +3761,8 @@
                       class="preset-search-input"
                       placeholder="Search presets..."
                       aria-describedby="presetSearchStatus"
-                    /><button type="button"
+                    /><button
+                      type="button"
                       id="presetSearchClear"
                       class="btn-icon btn-icon-sm preset-search-clear"
                       aria-label="Clear search"
@@ -3265,7 +3821,8 @@
                       role="group"
                       aria-label="Preset management"
                     >
-                      <button type="button"
+                      <button
+                        type="button"
                         id="savePresetBtn"
                         class="btn btn-sm btn-icon"
                         aria-label="Save Preset — overwrites current preset"
@@ -3274,7 +3831,8 @@
                       >
                         💾
                       </button>
-                      <button type="button"
+                      <button
+                        type="button"
                         id="addPresetBtn"
                         class="btn btn-sm btn-icon"
                         aria-label="Add Preset"
@@ -3282,7 +3840,8 @@
                       >
                         +
                       </button>
-                      <button type="button"
+                      <button
+                        type="button"
                         id="copyPresetBtn"
                         class="btn btn-sm btn-icon"
                         aria-label="Copy current preset to a new preset"
@@ -3291,7 +3850,8 @@
                       >
                         ⧉
                       </button>
-                      <button type="button"
+                      <button
+                        type="button"
                         id="deletePresetBtn"
                         class="btn btn-sm btn-icon btn-danger-icon"
                         aria-label="Delete current preset"
@@ -3300,7 +3860,8 @@
                       >
                         −
                       </button>
-                      <button type="button"
+                      <button
+                        type="button"
                         id="copyPresetNameBtn"
                         class="btn btn-sm btn-icon"
                         aria-label="Copy preset name to clipboard"
@@ -3318,12 +3879,22 @@
                           stroke-linejoin="round"
                           aria-hidden="true"
                         >
-                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                          <rect
+                            x="9"
+                            y="9"
+                            width="13"
+                            height="13"
+                            rx="2"
+                            ry="2"
+                          ></rect>
+                          <path
+                            d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+                          ></path>
                         </svg>
                       </button>
                     </div>
-                    <button type="button"
+                    <button
+                      type="button"
                       id="managePresetsBtn"
                       class="btn btn-sm btn-outline"
                       aria-label="Import and export presets"
@@ -3353,7 +3924,8 @@
                     <option value="hide" selected>Hide Details</option>
                     <option value="desc-only">Description Only</option>
                   </select></span
-                ><button type="button"
+                ><button
+                  type="button"
                   id="resetAllBtn"
                   class="btn btn-sm btn-outline"
                   aria-label="Reset all parameters to defaults"
@@ -3491,12 +4063,21 @@
                   <p class="guidance-title">&#x1F4D0; 2D Export Workflow</p>
                   <ol class="guidance-steps">
                     <li>
-                      Set the <code>generate</code> parameter to an SVG-compatible
-                      mode (e.g. <strong>"first layer for SVG/DXF file"</strong>)
+                      Set the <code>generate</code> parameter to an
+                      SVG-compatible mode (e.g.
+                      <strong>"first layer for SVG/DXF file"</strong>)
                     </li>
-                    <li>Click <strong>Generate</strong> to compile the 2D output</li>
-                    <li>Click <strong>Download</strong> to save the SVG or DXF file</li>
-                    <li>Open the file in your laser cutter software (e.g. LightBurn, LaserGRBL, Inkscape)</li>
+                    <li>
+                      Click <strong>Generate</strong> to compile the 2D output
+                    </li>
+                    <li>
+                      Click <strong>Download</strong> to save the SVG or DXF
+                      file
+                    </li>
+                    <li>
+                      Open the file in your laser cutter software (e.g.
+                      LightBurn, LaserGRBL, Inkscape)
+                    </li>
                   </ol>
                   <!-- 2D-export change proposal: populated by main.js when
                        propose2DExportChanges() suggests parameter changes.
@@ -3512,7 +4093,10 @@
                       &#x2139;&#xFE0F; Suggested parameter changes for 2D
                       export:
                     </p>
-                    <ul id="format2dAutoAdjustList" class="auto-adjust-list"></ul>
+                    <ul
+                      id="format2dAutoAdjustList"
+                      class="auto-adjust-list"
+                    ></ul>
                     <label class="auto-adjust-consent">
                       <input
                         type="checkbox"
@@ -3523,9 +4107,9 @@
                       Apply these changes for this export
                     </label>
                     <p class="auto-adjust-note">
-                      Applied only during Generate — your saved parameter
-                      values are not modified. Uncheck to export with your
-                      parameters exactly as configured.
+                      Applied only during Generate — your saved parameter values
+                      are not modified. Uncheck to export with your parameters
+                      exactly as configured.
                     </p>
                   </div>
                   <details class="guidance-details">
@@ -3578,29 +4162,99 @@
                 aria-label="Editor toolbar"
               >
                 <div class="classic-tb-group" role="group" aria-label="File">
-                  <button type="button" class="btn classic-tb-btn" id="classicEdNewBtn" title="New file">
-                    <span class="classic-icon" data-icon="new" aria-hidden="true"></span><span class="sr-only">New file</span>
+                  <button
+                    type="button"
+                    class="btn classic-tb-btn"
+                    id="classicEdNewBtn"
+                    title="New file"
+                  >
+                    <span
+                      class="classic-icon"
+                      data-icon="new"
+                      aria-hidden="true"
+                    ></span
+                    ><span class="sr-only">New file</span>
                   </button>
-                  <button type="button" class="btn classic-tb-btn" id="classicEdOpenBtn" title="Open file">
-                    <span class="classic-icon" data-icon="open" aria-hidden="true"></span><span class="sr-only">Open file</span>
+                  <button
+                    type="button"
+                    class="btn classic-tb-btn"
+                    id="classicEdOpenBtn"
+                    title="Open file"
+                  >
+                    <span
+                      class="classic-icon"
+                      data-icon="open"
+                      aria-hidden="true"
+                    ></span
+                    ><span class="sr-only">Open file</span>
                   </button>
-                  <button type="button" class="btn classic-tb-btn" id="classicEdSaveBtn" title="Save">
-                    <span class="classic-icon" data-icon="save" aria-hidden="true"></span><span class="sr-only">Save</span>
+                  <button
+                    type="button"
+                    class="btn classic-tb-btn"
+                    id="classicEdSaveBtn"
+                    title="Save"
+                  >
+                    <span
+                      class="classic-icon"
+                      data-icon="save"
+                      aria-hidden="true"
+                    ></span
+                    ><span class="sr-only">Save</span>
                   </button>
                 </div>
                 <div class="classic-tb-group" role="group" aria-label="Edit">
-                  <button type="button" class="btn classic-tb-btn" id="classicEdUndoBtn" title="Undo edit">
-                    <span class="classic-icon" data-icon="undo" aria-hidden="true"></span><span class="sr-only">Undo edit</span>
+                  <button
+                    type="button"
+                    class="btn classic-tb-btn"
+                    id="classicEdUndoBtn"
+                    title="Undo edit"
+                  >
+                    <span
+                      class="classic-icon"
+                      data-icon="undo"
+                      aria-hidden="true"
+                    ></span
+                    ><span class="sr-only">Undo edit</span>
                   </button>
-                  <button type="button" class="btn classic-tb-btn" id="classicEdRedoBtn" title="Redo edit">
-                    <span class="classic-icon" data-icon="redo" aria-hidden="true"></span><span class="sr-only">Redo edit</span>
+                  <button
+                    type="button"
+                    class="btn classic-tb-btn"
+                    id="classicEdRedoBtn"
+                    title="Redo edit"
+                  >
+                    <span
+                      class="classic-icon"
+                      data-icon="redo"
+                      aria-hidden="true"
+                    ></span
+                    ><span class="sr-only">Redo edit</span>
                   </button>
                   <!-- Upstream orders Unindent before Indent (U3) -->
-                  <button type="button" class="btn classic-tb-btn" id="classicEdUnindentBtn" title="Unindent">
-                    <span class="classic-icon" data-icon="unindent" aria-hidden="true"></span><span class="sr-only">Unindent</span>
+                  <button
+                    type="button"
+                    class="btn classic-tb-btn"
+                    id="classicEdUnindentBtn"
+                    title="Unindent"
+                  >
+                    <span
+                      class="classic-icon"
+                      data-icon="unindent"
+                      aria-hidden="true"
+                    ></span
+                    ><span class="sr-only">Unindent</span>
                   </button>
-                  <button type="button" class="btn classic-tb-btn" id="classicEdIndentBtn" title="Indent">
-                    <span class="classic-icon" data-icon="indent" aria-hidden="true"></span><span class="sr-only">Indent</span>
+                  <button
+                    type="button"
+                    class="btn classic-tb-btn"
+                    id="classicEdIndentBtn"
+                    title="Indent"
+                  >
+                    <span
+                      class="classic-icon"
+                      data-icon="indent"
+                      aria-hidden="true"
+                    ></span
+                    ><span class="sr-only">Indent</span>
                   </button>
                 </div>
                 <!-- Preview/Render/STL/DXF moved to the top Classic toolbar
@@ -3614,7 +4268,14 @@
                        (empty iconset in MainWindow.ui, never set in
                        MainWindow.cc), so the label is shown as text rather
                        than inventing artwork for it. -->
-                  <button type="button" class="btn classic-tb-btn classic-tb-btn--text" id="classicEdPrintBtn" aria-disabled="true" aria-describedby="classicEdPrintReason" title="3D Print">
+                  <button
+                    type="button"
+                    class="btn classic-tb-btn classic-tb-btn--text"
+                    id="classicEdPrintBtn"
+                    aria-disabled="true"
+                    aria-describedby="classicEdPrintReason"
+                    title="3D Print"
+                  >
                     3D Print
                   </button>
                   <span id="classicEdPrintReason" class="sr-only"
@@ -3635,21 +4296,32 @@
                   ></span>
                 </span>
                 <div class="expert-mode-actions">
-                  <button type="button"
+                  <button
+                    type="button"
                     id="expertModeCollapseBtn"
                     class="btn btn-sm btn-icon mobile-only"
                     aria-expanded="true"
                     aria-label="Collapse code editor"
                     title="Collapse editor"
                   >
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
-                      aria-hidden="true">
-                      <path d="M4 6l4 4 4-4" stroke="currentColor"
-                        stroke-width="2" stroke-linecap="round"
-                        stroke-linejoin="round"/>
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M4 6l4 4 4-4"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      />
                     </svg>
                   </button>
-                  <button type="button"
+                  <button
+                    type="button"
                     id="expertRunPreviewBtn"
                     class="btn btn-sm btn-primary"
                     aria-label="Run preview (F5)"
@@ -3657,7 +4329,8 @@
                   >
                     ▶ Preview
                   </button>
-                  <button type="button"
+                  <button
+                    type="button"
                     id="expertModeCloseBtn"
                     class="btn btn-sm btn-outline"
                     aria-label="Exit Code Editor"
@@ -3685,7 +4358,8 @@
                 <div class="preview-drawer-header">
                   <div class="preview-drawer-header-left">
                     <!-- Parameters button FIRST (left position) -->
-                    <button type="button"
+                    <button
+                      type="button"
                       id="mobileDrawerToggle"
                       class="btn btn-sm btn-icon mobile-only"
                       aria-expanded="false"
@@ -3710,7 +4384,8 @@
                       <span class="btn-label">Params</span>
                     </button>
                     <!-- Preview Settings button SECOND (right of Parameters) -->
-                    <button type="button"
+                    <button
+                      type="button"
                       id="previewDrawerToggle"
                       class="btn btn-sm btn-icon btn-collapse-panel preview-drawer-toggle-btn forge-control"
                       aria-expanded="false"
@@ -3815,9 +4490,14 @@
                     </div>
                     <div class="preview-settings">
                       <!-- LEFT COLUMN: Preview Options -->
-                      <section class="settings-col settings-col-options"
-                               aria-labelledby="previewOptionsHeading">
-                        <h3 class="preview-settings-subheading" id="previewOptionsHeading">
+                      <section
+                        class="settings-col settings-col-options"
+                        aria-labelledby="previewOptionsHeading"
+                      >
+                        <h3
+                          class="preview-settings-subheading"
+                          id="previewOptionsHeading"
+                        >
                           Preview Options
                         </h3>
                         <!-- The control that OWNS auto-preview state. The
@@ -3848,8 +4528,8 @@
                           <span class="toggle-label">Show measurements</span>
                         </label>
                         <span id="measurementsHelp" class="sr-only"
-                          >Toggle dimension measurements and bounding box overlay
-                          on 3D preview</span
+                          >Toggle dimension measurements and bounding box
+                          overlay on 3D preview</span
                         >
                         <label class="toggle-switch">
                           <input
@@ -3891,15 +4571,13 @@
                             Reset
                           </button>
                           <span id="gridColorHelp" class="sr-only"
-                            >Choose a custom color for grid lines, or reset
-                            to the current theme default</span
+                            >Choose a custom color for grid lines, or reset to
+                            the current theme default</span
                           >
                         </div>
                         <!-- Grid Opacity -->
                         <div class="preview-setting grid-opacity-setting">
-                          <label
-                            for="gridOpacityInput"
-                            id="gridOpacityLabel"
+                          <label for="gridOpacityInput" id="gridOpacityLabel"
                             >Grid opacity</label
                           >
                           <div class="slider-container">
@@ -3936,9 +4614,7 @@
                             <option value="75000" selected>
                               Balanced — 75,000 edges
                             </option>
-                            <option value="250000">
-                              High — 250,000 edges
-                            </option>
+                            <option value="250000">High — 250,000 edges</option>
                             <option value="0">Unlimited</option>
                           </select>
                           <span
@@ -3947,11 +4623,11 @@
                           ></span>
                         </div>
                         <span id="edgeBudgetHelp" class="sr-only"
-                          >Caps how many outline segments the Show Edges
-                          overlay draws on dense models. The longest, most
-                          structural edges are kept; short facet lines are
-                          dropped. Lower limits render faster and keep the
-                          model readable.</span
+                          >Caps how many outline segments the Show Edges overlay
+                          draws on dense models. The longest, most structural
+                          edges are kept; short facet lines are dropped. Lower
+                          limits render faster and keep the model
+                          readable.</span
                         >
                         <label class="toggle-switch">
                           <input
@@ -4040,7 +4716,9 @@
                                 aria-describedby="gridSizeHelp"
                                 aria-label="Grid width in mm"
                               />
-                              <span aria-hidden="true" class="grid-dim-separator"
+                              <span
+                                aria-hidden="true"
+                                class="grid-dim-separator"
                                 >×</span
                               >
                               <label for="gridHeightInput" class="sr-only"
@@ -4119,7 +4797,8 @@
                           <span class="toggle-label">Show status bar</span>
                         </label>
                         <span id="statusBarHelp" class="sr-only"
-                          >Toggle status and render info overlay on preview</span
+                          >Toggle status and render info overlay on
+                          preview</span
                         >
                         <!-- Engine Toggle (Manifold vs CGAL) -->
                         <div
@@ -4133,7 +4812,9 @@
                             checked
                             aria-describedby="manifoldEngineHelp"
                           />
-                          <span class="toggle-label">Fast engine (Manifold)</span>
+                          <span class="toggle-label"
+                            >Fast engine (Manifold)</span
+                          >
                         </label>
                         <span id="manifoldEngineHelp" class="sr-only"
                           >Use Manifold geometry engine for faster rendering.
@@ -4171,7 +4852,10 @@
                           auto-rotate is enabled, from 0.1 to 3 degrees per
                           second</span
                         >
-                        <label class="preview-setting" for="previewQualitySelect">
+                        <label
+                          class="preview-setting"
+                          for="previewQualitySelect"
+                        >
                           <span class="preview-setting-label"
                             >Preview quality</span
                           >
@@ -4184,10 +4868,15 @@
                             </option>
                             <option value="auto">Performance (auto)</option>
                             <option value="balanced">Balanced (~50%)</option>
-                            <option value="fast">Fast (lower resolution)</option>
+                            <option value="fast">
+                              Fast (lower resolution)
+                            </option>
                           </select>
                         </label>
-                        <label class="preview-setting" for="exportQualitySelect">
+                        <label
+                          class="preview-setting"
+                          for="exportQualitySelect"
+                        >
                           <span class="preview-setting-label"
                             >Export quality</span
                           >
@@ -4195,7 +4884,9 @@
                             id="exportQualitySelect"
                             aria-label="Select export quality"
                           >
-                            <option value="model" selected>Model default</option>
+                            <option value="model" selected>
+                              Model default
+                            </option>
                             <option value="low">Low (fast)</option>
                             <option value="medium">Medium (balanced)</option>
                             <option value="high">High (smooth)</option>
@@ -4203,9 +4894,14 @@
                         </label>
                       </section>
                       <!-- RIGHT COLUMN: Model Appearance + Color + Utilities -->
-                      <section class="settings-col settings-col-appearance"
-                               aria-labelledby="modelAppearanceHeading">
-                        <h3 class="preview-settings-subheading" id="modelAppearanceHeading">
+                      <section
+                        class="settings-col settings-col-appearance"
+                        aria-labelledby="modelAppearanceHeading"
+                      >
+                        <h3
+                          class="preview-settings-subheading"
+                          id="modelAppearanceHeading"
+                        >
                           Model Appearance
                         </h3>
                         <div class="model-appearance-controls">
@@ -4221,7 +4917,9 @@
                         <div class="model-appearance-sliders">
                           <!-- Model Opacity -->
                           <div class="preview-setting model-opacity-setting">
-                            <label for="modelOpacityInput" id="modelOpacityLabel"
+                            <label
+                              for="modelOpacityInput"
+                              id="modelOpacityLabel"
                               >Model opacity</label
                             >
                             <div class="slider-container">
@@ -4241,8 +4939,9 @@
                             </div>
                           </div>
                           <span id="modelOpacityHelp" class="sr-only"
-                            >Reduce model opacity to see the reference overlay image
-                            behind the 3D model. Useful for alignment.</span
+                            >Reduce model opacity to see the reference overlay
+                            image behind the 3D model. Useful for
+                            alignment.</span
                           >
                           <!-- Brightness -->
                           <div class="preview-setting brightness-setting">
@@ -4291,8 +4990,8 @@
                             </div>
                           </div>
                           <span id="contrastHelp" class="sr-only"
-                            >Adjust lighting contrast from flat to dramatic, 20 to
-                            200 percent</span
+                            >Adjust lighting contrast from flat to dramatic, 20
+                            to 200 percent</span
                           >
                           <!-- Reset button -->
                           <div class="preview-setting">
@@ -4305,7 +5004,8 @@
                               Reset appearance
                             </button>
                           </div>
-                        </div><!-- .model-appearance-sliders -->
+                        </div>
+                        <!-- .model-appearance-sliders -->
                         <div
                           class="preview-setting-divider"
                           aria-hidden="true"
@@ -4328,7 +5028,8 @@
                                 value="#2196F3"
                                 aria-label="Choose model display color"
                               />
-                              <button type="button"
+                              <button
+                                type="button"
                                 id="modelColorReset"
                                 class="btn-icon"
                                 title="Reset to theme default"
@@ -4357,7 +5058,8 @@
                         </div>
                         <div class="preview-setting cache-tools">
                           <span class="preview-setting-label">App cache</span>
-                          <button type="button"
+                          <button
+                            type="button"
                             id="clearCacheBtn"
                             class="btn btn-sm btn-outline"
                             aria-label="Clear cached files and reload the app"
@@ -4538,7 +5240,8 @@
                   class="actions-drawer-header"
                   data-tutorial-target="actions-drawer-toggle"
                 >
-                  <button type="button"
+                  <button
+                    type="button"
                     id="actionsDrawerToggle"
                     class="btn btn-sm btn-icon btn-collapse-panel actions-drawer-toggle-btn forge-control"
                     aria-expanded="false"
@@ -4571,7 +5274,8 @@
                 </div>
                 <!-- Drawer body (expandable content) -->
                 <div class="actions-drawer-body" id="actionsDrawerBody">
-                  <button type="button"
+                  <button
+                    type="button"
                     id="addToComparisonBtn"
                     class="btn btn-sm btn-secondary actions-drawer-btn"
                     aria-label="Add current configuration to comparison"
@@ -4595,7 +5299,8 @@
                     class="actions-drawer-divider"
                     aria-hidden="true"
                   ></span>
-                  <button type="button"
+                  <button
+                    type="button"
                     id="addToQueueBtn"
                     class="btn btn-sm btn-secondary actions-drawer-btn"
                     aria-label="Add current configuration to render queue"
@@ -4616,7 +5321,8 @@
                     </svg>
                     <span class="btn-text">Add to Queue</span>
                   </button>
-                  <button type="button"
+                  <button
+                    type="button"
                     id="viewQueueBtn"
                     class="btn btn-sm btn-secondary actions-drawer-btn"
                     aria-label="View and manage render queue"
@@ -4638,7 +5344,8 @@
                     <span class="btn-text">Queue</span>
                     <span class="queue-badge" id="queueBadge">0</span>
                   </button>
-                  <button type="button"
+                  <button
+                    type="button"
                     id="exportParamsBtn"
                     class="btn btn-sm btn-secondary actions-drawer-btn"
                     aria-label="Download parameters as JSON file"
@@ -4661,7 +5368,8 @@
                     </svg>
                     <span class="btn-text">Export Params</span>
                   </button>
-                  <button type="button"
+                  <button
+                    type="button"
                     id="publishProjectBtn"
                     class="btn btn-sm btn-secondary actions-drawer-btn"
                     aria-label="Generate a shareable manifest for hosting this project externally"
@@ -4688,7 +5396,8 @@
                     class="actions-drawer-divider"
                     aria-hidden="true"
                   ></span>
-                  <button type="button"
+                  <button
+                    type="button"
                     id="viewConsoleBtn"
                     class="btn btn-sm btn-secondary actions-drawer-btn"
                     aria-label="View OpenSCAD console output including echo statements"
@@ -4724,7 +5433,8 @@
               </div>
               <!-- Primary actions (always visible, right side) -->
               <div class="actions-primary">
-                <button type="button"
+                <button
+                  type="button"
                   id="cancelRenderBtn"
                   class="btn btn-outline hidden"
                   aria-label="Cancel current render operation"
@@ -4743,7 +5453,8 @@
                   </svg>
                   <span>Cancel</span>
                 </button>
-                <button type="button"
+                <button
+                  type="button"
                   id="primaryActionBtn"
                   class="btn btn-primary btn-large"
                   aria-label="Generate output file from current parameters"
@@ -4783,7 +5494,8 @@
                 aria-label="Camera controls"
               >
                 <!-- Drawer toggle button -->
-                <button type="button"
+                <button
+                  type="button"
                   id="cameraDrawerToggle"
                   class="btn btn-sm camera-drawer-toggle-btn forge-control"
                   aria-expanded="false"
@@ -5209,7 +5921,8 @@
               </div>
               <!-- Row 2: Collapse button -->
               <div class="camera-header-actions">
-                <button type="button"
+                <button
+                  type="button"
                   id="cameraPanelToggle"
                   class="btn btn-sm btn-icon btn-collapse-panel forge-control"
                   aria-expanded="false"
@@ -5696,10 +6409,7 @@
            status overlay, which classic hides (so only one aria-live source
            speaks). Slim by design — it is never focusable, so the 44px
            touch-target rule does not apply (documented deviation). -->
-      <div
-        id="classicStatusBar"
-        class="classic-status-bar"
-      >
+      <div id="classicStatusBar" class="classic-status-bar">
         <!-- Upstream's status bar is the viewport telemetry, at the left
              (OpenSCAD_1). It is NOT in a live region: the camera's change feed
              fires ~118 times per drag, and a polite region repeating a pose ten
@@ -5730,7 +6440,8 @@
       <div class="modal-content modal-large">
         <div class="modal-header">
           <h2 id="queueModalTitle">Render Queue</h2>
-          <button type="button"
+          <button
+            type="button"
             class="modal-close"
             id="queueModalClose"
             aria-label="Close render queue"
@@ -5751,42 +6462,48 @@
         <div class="modal-body" id="queueModalBody">
           <!-- Queue controls -->
           <div class="queue-controls">
-            <button type="button"
+            <button
+              type="button"
               id="processQueueBtn"
               class="btn btn-primary"
               aria-label="Process all queued jobs"
             >
               ▶️ Process Queue
             </button>
-            <button type="button"
+            <button
+              type="button"
               id="stopQueueBtn"
               class="btn btn-outline hidden"
               aria-label="Stop processing queue"
             >
               ⏸️ Stop
             </button>
-            <button type="button"
+            <button
+              type="button"
               id="clearCompletedBtn"
               class="btn btn-outline"
               aria-label="Clear completed jobs"
             >
               🗑️ Clear Completed
             </button>
-            <button type="button"
+            <button
+              type="button"
               id="clearQueueBtn"
               class="btn btn-outline"
               aria-label="Clear all jobs"
             >
               🗑️ Clear All
             </button>
-            <button type="button"
+            <button
+              type="button"
               id="exportQueueBtn"
               class="btn btn-outline"
               aria-label="Export queue as JSON"
             >
               💾 Export Queue
             </button>
-            <button type="button"
+            <button
+              type="button"
               id="importQueueBtn"
               class="btn btn-outline"
               aria-label="Import queue from JSON"
@@ -5845,14 +6562,16 @@
         <div class="modal-header">
           <h2 id="sourceViewerTitle">OpenSCAD Source</h2>
           <div class="source-viewer-actions">
-            <button type="button"
+            <button
+              type="button"
               class="btn btn-sm btn-outline"
               id="sourceViewerCopy"
               aria-label="Copy source code"
             >
               📋 Copy
             </button>
-            <button type="button"
+            <button
+              type="button"
               class="modal-close"
               id="sourceViewerClose"
               aria-label="Close source viewer"
@@ -5899,14 +6618,16 @@
         <div class="modal-header">
           <h2 id="paramsJsonTitle">Current Parameters (JSON)</h2>
           <div class="params-json-actions">
-            <button type="button"
+            <button
+              type="button"
               class="btn btn-sm btn-outline"
               id="paramsJsonCopy"
               aria-label="Copy parameters JSON"
             >
               📋 Copy
             </button>
-            <button type="button"
+            <button
+              type="button"
               class="modal-close"
               id="paramsJsonClose"
               aria-label="Close parameters viewer"
@@ -5952,7 +6673,8 @@
       >
         <div class="modal-header">
           <h2 id="featuresGuideTitle">Features Guide</h2>
-          <button type="button"
+          <button
+            type="button"
             class="modal-close"
             id="featuresGuideClose"
             aria-label="Close features guide"
@@ -5977,7 +6699,8 @@
             role="tablist"
             aria-label="Feature sections"
           >
-            <button type="button"
+            <button
+              type="button"
               class="features-tab"
               role="tab"
               aria-selected="true"
@@ -5987,7 +6710,8 @@
             >
               Libraries
             </button>
-            <button type="button"
+            <button
+              type="button"
               class="features-tab"
               role="tab"
               aria-selected="false"
@@ -5997,7 +6721,8 @@
             >
               Color Parameters
             </button>
-            <button type="button"
+            <button
+              type="button"
               class="features-tab"
               role="tab"
               aria-selected="false"
@@ -6007,7 +6732,8 @@
             >
               Presets
             </button>
-            <button type="button"
+            <button
+              type="button"
               class="features-tab"
               role="tab"
               aria-selected="false"
@@ -6017,7 +6743,8 @@
             >
               Advanced
             </button>
-            <button type="button"
+            <button
+              type="button"
               class="features-tab"
               role="tab"
               aria-selected="false"
@@ -6027,7 +6754,8 @@
             >
               Workflow
             </button>
-            <button type="button"
+            <button
+              type="button"
               class="features-tab"
               role="tab"
               aria-selected="false"
@@ -6037,7 +6765,8 @@
             >
               Accessibility
             </button>
-            <button type="button"
+            <button
+              type="button"
               class="features-tab"
               role="tab"
               aria-selected="false"
@@ -6092,7 +6821,8 @@
               any library from the 📚 Libraries panel.
             </p>
             <div class="features-action">
-              <button type="button"
+              <button
+                type="button"
                 class="btn btn-primary"
                 data-example="library-test"
                 data-feature-example="true"
@@ -6156,7 +6886,8 @@
               includes a working conversion helper.
             </p>
             <div class="features-action">
-              <button type="button"
+              <button
+                type="button"
                 class="btn btn-primary"
                 data-example="colored-box"
                 data-feature-example="true"
@@ -6349,7 +7080,8 @@
               </li>
             </ul>
             <div class="features-action">
-              <button type="button"
+              <button
+                type="button"
                 class="btn btn-primary"
                 data-example="multi-file-box"
                 data-feature-example="true"
@@ -6654,8 +7386,8 @@
                 first use, instant afterwards)
               </li>
               <li>
-                Glyphs render in a single phosphor color (green or amber) from
-                a pre-tinted glyph atlas — character density carries the
+                Glyphs render in a single phosphor color (green or amber) from a
+                pre-tinted glyph atlas — character density carries the
                 brightness signal, just like a real terminal
               </li>
               <li>
@@ -6749,11 +7481,11 @@
             </p>
             <h4>Sliders</h4>
             <p>
-              While Alt View is enabled, three sliders — Alt View Contrast,
-              Alt View Font Size, and Alt View Afterglow — appear in the
-              camera panel (and the mobile camera drawer). They mirror the
-              D-pad adjustments and stay in sync with them. The Afterglow
-              slider is hidden when your system requests reduced motion.
+              While Alt View is enabled, three sliders — Alt View Contrast, Alt
+              View Font Size, and Alt View Afterglow — appear in the camera
+              panel (and the mobile camera drawer). They mirror the D-pad
+              adjustments and stay in sync with them. The Afterglow slider is
+              hidden when your system requests reduced motion.
             </p>
             <h4>Status Bar</h4>
             <p>
@@ -6764,12 +7496,12 @@
             <h4>Tips</h4>
             <ul class="features-list">
               <li>
-                Double-click the Pan Adjust toggle to reset Edge, Size, and
-                Glow to their defaults
+                Double-click the Pan Adjust toggle to reset Edge, Size, and Glow
+                to their defaults
               </li>
               <li>
-                Your adjustments are saved and restored the next time you
-                enable Alt View
+                Your adjustments are saved and restored the next time you enable
+                Alt View
               </li>
               <li>
                 The sliders and the D-pad provide the same adjustments — use
@@ -6792,7 +7524,8 @@
       <div class="modal-content modal-medium">
         <div class="modal-header">
           <h2 id="textFileEditorTitle">Edit File</h2>
-          <button type="button"
+          <button
+            type="button"
             class="modal-close"
             id="textFileEditorClose"
             aria-label="Close file editor"
@@ -6829,10 +7562,18 @@
           </p>
         </div>
         <div class="modal-footer">
-          <button type="button" id="textFileEditorCancel" class="btn btn-outline">
+          <button
+            type="button"
+            id="textFileEditorCancel"
+            class="btn btn-outline"
+          >
             Cancel
           </button>
-          <button type="button" id="textFileEditorApply" class="btn btn-primary">
+          <button
+            type="button"
+            id="textFileEditorApply"
+            class="btn btn-primary"
+          >
             Apply and Preview
           </button>
         </div>
@@ -6851,7 +7592,8 @@
       <div class="modal-content modal-small confirm-modal-content">
         <div class="modal-header">
           <h2 id="resetConfirmTitle">Reset All Parameters?</h2>
-          <button type="button"
+          <button
+            type="button"
             class="modal-close"
             id="resetConfirmClose"
             aria-label="Cancel reset"
@@ -6879,10 +7621,16 @@
           </p>
         </div>
         <div class="modal-footer confirm-modal-footer">
-          <button type="button" id="resetConfirmCancel" class="btn btn-secondary">
+          <button
+            type="button"
+            id="resetConfirmCancel"
+            class="btn btn-secondary"
+          >
             Cancel
           </button>
-          <button type="button" id="resetConfirmOk" class="btn btn-primary">Reset All</button>
+          <button type="button" id="resetConfirmOk" class="btn btn-primary">
+            Reset All
+          </button>
         </div>
       </div>
     </div>
@@ -6900,7 +7648,8 @@
       <div class="modal-content about-modal-content">
         <div class="modal-header">
           <h2 id="aboutModalTitle">About OpenSCAD Assistive Forge</h2>
-          <button type="button"
+          <button
+            type="button"
             class="modal-close"
             id="aboutModalClose"
             aria-label="Close about"
@@ -6920,7 +7669,9 @@
           </button>
         </div>
         <div class="modal-body about-modal-body">
-          <p class="about-version" id="aboutVersion">OpenSCAD Assistive Forge</p>
+          <p class="about-version" id="aboutVersion">
+            OpenSCAD Assistive Forge
+          </p>
           <p>
             A browser-based OpenSCAD environment built for blind and low-vision
             makers.
@@ -6953,7 +7704,9 @@
           </p>
         </div>
         <div class="modal-footer">
-          <button type="button" id="aboutModalDone" class="btn btn-primary">Close</button>
+          <button type="button" id="aboutModalDone" class="btn btn-primary">
+            Close
+          </button>
         </div>
       </div>
     </div>
@@ -7099,9 +7852,9 @@
             <fieldset class="preferences-fieldset">
               <legend class="preferences-legend">Color scheme</legend>
               <p id="prefs-scheme-note" class="preferences-field-note">
-                Sets the Classic 3D view's background, model and edge colors.
-                In the other modes the app theme sets them, so that high
-                contrast keeps working.
+                Sets the Classic 3D view's background, model and edge colors. In
+                the other modes the app theme sets them, so that high contrast
+                keeps working.
               </p>
               <div
                 class="preferences-scheme-list"
@@ -7215,8 +7968,7 @@
             </div>
             <p id="prefs-reason-warnings3d" class="preferences-panel-reason">
               Not built here. This app reports warnings and errors in the
-              Error-Log and Console panels instead of drawing them on the
-              model.
+              Error-Log and Console panels instead of drawing them on the model.
             </p>
 
             <div class="preferences-check-row">
@@ -7304,10 +8056,9 @@
               >
             </div>
             <p id="prefs-reason-tabkey" class="preferences-panel-reason">
-              Not offered. Tab moves to the next control so keyboard and
-              switch users are never trapped inside the editor. Use the
-              Indent and Unindent buttons on the editor toolbar, or Edit ▸
-              Indent.
+              Not offered. Tab moves to the next control so keyboard and switch
+              users are never trapped inside the editor. Use the Indent and
+              Unindent buttons on the editor toolbar, or Edit ▸ Indent.
             </p>
 
             <div class="preferences-check-row">
@@ -7333,13 +8084,11 @@
                 disabled
                 aria-describedby="prefs-reason-whitespace"
               />
-              <label for="prefsEditorShowWhitespace"
-                >Show whitespace</label
-              >
+              <label for="prefsEditorShowWhitespace">Show whitespace</label>
             </div>
             <p id="prefs-reason-whitespace" class="preferences-panel-reason">
-              Not built here. Nothing draws spaces and tabs as visible marks
-              in this editor.
+              Not built here. Nothing draws spaces and tabs as visible marks in
+              this editor.
             </p>
 
             <div class="preferences-check-row">
@@ -7408,11 +8157,11 @@
 
             <p class="preferences-panel-reason">
               The desktop version also offers a font family, Ctrl-wheel text
-              zoom, automatic indenting, backspace unindenting, a choice
-              between indenting with spaces or tabs, and changing numbers by
-              scrolling the mouse wheel over them. None of those are built
-              here. This editor uses one monospace font, indents with spaces,
-              and indents new lines to match the line above.
+              zoom, automatic indenting, backspace unindenting, a choice between
+              indenting with spaces or tabs, and changing numbers by scrolling
+              the mouse wheel over them. None of those are built here. This
+              editor uses one monospace font, indents with spaces, and indents
+              new lines to match the line above.
             </p>
           </div>
           <div
@@ -7424,9 +8173,9 @@
             hidden
           >
             <p id="prefs-reason-3dprint" class="preferences-panel-reason">
-              Sending a model straight to a printer (the desktop's OctoPrint
-              and slicer hookups) is not built here. Export the model and open
-              it in your slicer.
+              Sending a model straight to a printer (the desktop's OctoPrint and
+              slicer hookups) is not built here. Export the model and open it in
+              your slicer.
             </p>
           </div>
           <div
@@ -7440,9 +8189,9 @@
             <p id="prefs-reason-advanced" class="preferences-panel-reason">
               The desktop's Advanced settings tune OpenCSG, the CGAL caches,
               window docking, sound and localization. This build has none of
-              those engines, and none of its own settings means the same
-              thing, so nothing is mapped across here rather than giving a
-              desktop name to something that behaves differently.
+              those engines, and none of its own settings means the same thing,
+              so nothing is mapped across here rather than giving a desktop name
+              to something that behaves differently.
             </p>
             <p class="preferences-panel-reason">
               The settings closest in purpose are already in the app: preview
@@ -7459,11 +8208,11 @@
             hidden
           >
             <p id="prefs-reason-axes" class="preferences-panel-reason">
-              A game controller already moves the view: the right stick
-              rotates, and the left stick zooms and pans. What is not built is
-              changing those assignments, or the dead-zone and trim controls
-              the desktop offers — the dead zone is fixed. Space mice and
-              other specialist 3D input devices are not supported.
+              A game controller already moves the view: the right stick rotates,
+              and the left stick zooms and pans. What is not built is changing
+              those assignments, or the dead-zone and trim controls the desktop
+              offers — the dead zone is fixed. Space mice and other specialist
+              3D input devices are not supported.
             </p>
             <!-- Read-only, deliberately NOT a live region: plugging a pad in
                  already announces through the status line (main.js wires
@@ -7482,8 +8231,8 @@
             <p id="prefs-reason-buttons" class="preferences-panel-reason">
               A game controller's buttons already run commands: A renders, X
               downloads, Y switches the preview on and off, B cancels, and the
-              D-pad steps through the parameters and changes their values.
-              What is not built is choosing which button does what.
+              D-pad steps through the parameters and changes their values. What
+              is not built is choosing which button does what.
             </p>
           </div>
           <div
@@ -7494,9 +8243,8 @@
             tabindex="0"
           >
             <p>
-              Every keyboard shortcut in this app can be viewed and changed.
-              The editor opens in its own window so it has room for the full
-              list.
+              Every keyboard shortcut in this app can be viewed and changed. The
+              editor opens in its own window so it has room for the full list.
             </p>
             <button
               type="button"
@@ -7532,7 +8280,8 @@
       <div class="modal-content modal-large shortcuts-modal-content">
         <div class="modal-header">
           <h2 id="shortcutsModalTitle">Keyboard Shortcuts</h2>
-          <button type="button"
+          <button
+            type="button"
             class="modal-close"
             id="shortcutsModalClose"
             aria-label="Close keyboard shortcuts"
@@ -7554,10 +8303,16 @@
           <!-- Content populated by JavaScript -->
         </div>
         <div class="modal-footer shortcuts-modal-footer">
-          <button type="button" id="shortcutsResetAll" class="btn btn-secondary">
+          <button
+            type="button"
+            id="shortcutsResetAll"
+            class="btn btn-secondary"
+          >
             Reset All to Defaults
           </button>
-          <button type="button" id="shortcutsModalDone" class="btn btn-primary">Done</button>
+          <button type="button" id="shortcutsModalDone" class="btn btn-primary">
+            Done
+          </button>
         </div>
       </div>
     </div>
@@ -7573,7 +8328,8 @@
       <div class="modal-content modal-large modal-console">
         <div class="modal-header">
           <h2 id="consoleOutputTitle">OpenSCAD Console Output</h2>
-          <button type="button"
+          <button
+            type="button"
             class="modal-close"
             id="consoleOutputClose"
             aria-label="Close console output"
@@ -7632,7 +8388,11 @@ No console output yet. Generate a model to see output.</pre
             </svg>
             Copy
           </button>
-          <button type="button" id="consoleDownloadBtn" class="btn btn-secondary">
+          <button
+            type="button"
+            id="consoleDownloadBtn"
+            class="btn btn-secondary"
+          >
             <svg
               class="btn-icon-svg"
               width="16"
@@ -7649,8 +8409,12 @@ No console output yet. Generate a model to see output.</pre
             </svg>
             Download
           </button>
-          <button type="button" id="consoleClearBtn" class="btn btn-secondary">Clear</button>
-          <button type="button" id="consoleCloseBtn" class="btn btn-primary">Close</button>
+          <button type="button" id="consoleClearBtn" class="btn btn-secondary">
+            Clear
+          </button>
+          <button type="button" id="consoleCloseBtn" class="btn btn-primary">
+            Close
+          </button>
         </div>
       </div>
     </div>
@@ -7748,9 +8512,9 @@ No console output yet. Generate a model to see output.</pre
                 <span
                   class="first-visit-gate-note hidden"
                   id="firstVisitClassicGate"
-                  >Classic is desktop-only for now. A mobile version is
-                  planned. Use the Assistive Forge interface on phones and
-                  narrow windows.</span
+                  >Classic is desktop-only for now. A mobile version is planned.
+                  Use the Assistive Forge interface on phones and narrow
+                  windows.</span
                 >
                 <img
                   class="first-visit-shot"
@@ -7888,7 +8652,8 @@ No console output yet. Generate a model to see output.</pre
       <div class="modal-content modal-large">
         <div class="modal-header">
           <h2 id="publishModalTitle">Publish Project</h2>
-          <button type="button"
+          <button
+            type="button"
             class="modal-close"
             id="publishModalClose"
             aria-label="Close publish dialog"
@@ -7921,7 +8686,8 @@ No console output yet. Generate a model to see output.</pre
               role="region"
               aria-label="Generated manifest JSON"
             ></pre>
-            <button type="button"
+            <button
+              type="button"
               id="copyManifestBtn"
               class="btn btn-sm btn-primary publish-copy-btn"
               aria-label="Copy manifest JSON to clipboard"
@@ -7979,7 +8745,8 @@ No console output yet. Generate a model to see output.</pre
                 readonly
                 aria-label="Shareable Forge link"
               />
-              <button type="button"
+              <button
+                type="button"
                 id="copyShareLinkBtn"
                 class="btn btn-sm btn-primary"
                 aria-label="Copy shareable link to clipboard"
@@ -8016,7 +8783,12 @@ No console output yet. Generate a model to see output.</pre
           </button>
         </div>
         <div class="toolbar-menu-body">
-          <ul class="menu-items-list" id="fileMenuItems" role="menu" aria-label="File"></ul>
+          <ul
+            class="menu-items-list"
+            id="fileMenuItems"
+            role="menu"
+            aria-label="File"
+          ></ul>
         </div>
       </div>
     </div>
@@ -8042,7 +8814,12 @@ No console output yet. Generate a model to see output.</pre
           </button>
         </div>
         <div class="toolbar-menu-body">
-          <ul class="menu-items-list" id="editMenuItems" role="menu" aria-label="Edit"></ul>
+          <ul
+            class="menu-items-list"
+            id="editMenuItems"
+            role="menu"
+            aria-label="Edit"
+          ></ul>
         </div>
       </div>
     </div>
@@ -8068,7 +8845,12 @@ No console output yet. Generate a model to see output.</pre
           </button>
         </div>
         <div class="toolbar-menu-body">
-          <ul class="menu-items-list" id="designMenuItems" role="menu" aria-label="Design"></ul>
+          <ul
+            class="menu-items-list"
+            id="designMenuItems"
+            role="menu"
+            aria-label="Design"
+          ></ul>
         </div>
       </div>
     </div>
@@ -8094,7 +8876,12 @@ No console output yet. Generate a model to see output.</pre
           </button>
         </div>
         <div class="toolbar-menu-body">
-          <ul class="menu-items-list" id="viewMenuItems" role="menu" aria-label="View"></ul>
+          <ul
+            class="menu-items-list"
+            id="viewMenuItems"
+            role="menu"
+            aria-label="View"
+          ></ul>
         </div>
       </div>
     </div>
@@ -8120,7 +8907,12 @@ No console output yet. Generate a model to see output.</pre
           </button>
         </div>
         <div class="toolbar-menu-body">
-          <ul class="menu-items-list" id="windowMenuItems" role="menu" aria-label="Window"></ul>
+          <ul
+            class="menu-items-list"
+            id="windowMenuItems"
+            role="menu"
+            aria-label="Window"
+          ></ul>
         </div>
       </div>
     </div>
@@ -8146,7 +8938,12 @@ No console output yet. Generate a model to see output.</pre
           </button>
         </div>
         <div class="toolbar-menu-body">
-          <ul class="menu-items-list" id="helpMenuItems" role="menu" aria-label="Help"></ul>
+          <ul
+            class="menu-items-list"
+            id="helpMenuItems"
+            role="menu"
+            aria-label="Help"
+          ></ul>
         </div>
       </div>
     </div>
