@@ -169,31 +169,37 @@ async function toggleMarks(page) {
 function sampleRegion(page, box) {
   return page.evaluate((b) => {
     return new Promise((resolve) => {
+      // UF-9 P3: nested double-rAF — on CI WebKit a single rAF once ran
+      // BEFORE the app's render pass (run 31528677140, triad case, "no red
+      // arm pixels", retry-green), so the sample must follow a full frame.
       requestAnimationFrame(() => {
-        const canvas = document.querySelector('.preview-panel canvas');
-        const gl =
-          canvas && (canvas.getContext('webgl2') || canvas.getContext('webgl'));
-        if (!gl) {
-          resolve(null);
-          return;
-        }
-        const w = canvas.width;
-        const h = canvas.height;
-        const grid = 24;
-        const out = [];
-        const px = new Uint8Array(4);
-        for (let gy = 0; gy < grid; gy++) {
-          for (let gx = 0; gx < grid; gx++) {
-            const fx = b.x0 + ((gx + 0.5) / grid) * (b.x1 - b.x0);
-            const fy = b.y0 + ((gy + 0.5) / grid) * (b.y1 - b.y0);
-            const x = Math.floor(fx * w);
-            // readPixels row 0 is the BOTTOM of the buffer.
-            const y = Math.floor((1 - fy) * h);
-            gl.readPixels(x, y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
-            out.push(px[0], px[1], px[2]);
+        requestAnimationFrame(() => {
+          const canvas = document.querySelector('.preview-panel canvas');
+          const gl =
+            canvas &&
+            (canvas.getContext('webgl2') || canvas.getContext('webgl'));
+          if (!gl) {
+            resolve(null);
+            return;
           }
-        }
-        resolve(out);
+          const w = canvas.width;
+          const h = canvas.height;
+          const grid = 24;
+          const out = [];
+          const px = new Uint8Array(4);
+          for (let gy = 0; gy < grid; gy++) {
+            for (let gx = 0; gx < grid; gx++) {
+              const fx = b.x0 + ((gx + 0.5) / grid) * (b.x1 - b.x0);
+              const fy = b.y0 + ((gy + 0.5) / grid) * (b.y1 - b.y0);
+              const x = Math.floor(fx * w);
+              // readPixels row 0 is the BOTTOM of the buffer.
+              const y = Math.floor((1 - fy) * h);
+              gl.readPixels(x, y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+              out.push(px[0], px[1], px[2]);
+            }
+          }
+          resolve(out);
+        });
       });
     });
   }, box);
@@ -219,34 +225,38 @@ function changedSamples(a, b) {
 function countBoxColors(page, box) {
   return page.evaluate((b) => {
     return new Promise((resolve) => {
+      // UF-9 P3: nested double-rAF, same reason as sampleRegion above.
       requestAnimationFrame(() => {
-        const canvas = document.querySelector('.preview-panel canvas');
-        const gl =
-          canvas && (canvas.getContext('webgl2') || canvas.getContext('webgl'));
-        if (!gl) {
-          resolve(null);
-          return;
-        }
-        const w = canvas.width;
-        const h = canvas.height;
-        const x0 = Math.floor(b.x0 * w);
-        const y0 = Math.floor((1 - b.y1) * h);
-        const bw = Math.max(1, Math.floor((b.x1 - b.x0) * w));
-        const bh = Math.max(1, Math.floor((b.y1 - b.y0) * h));
-        const px = new Uint8Array(bw * bh * 4);
-        gl.readPixels(x0, y0, bw, bh, gl.RGBA, gl.UNSIGNED_BYTE, px);
-        let red = 0;
-        let green = 0;
-        let blue = 0;
-        for (let i = 0; i < px.length; i += 4) {
-          const r = px[i];
-          const g = px[i + 1];
-          const bl = px[i + 2];
-          if (r > 140 && r - g > 60 && r - bl > 60) red++;
-          else if (g > 140 && g - r > 60 && g - bl > 60) green++;
-          else if (bl > 140 && bl - r > 60 && bl - g > 60) blue++;
-        }
-        resolve({ red, green, blue, total: bw * bh });
+        requestAnimationFrame(() => {
+          const canvas = document.querySelector('.preview-panel canvas');
+          const gl =
+            canvas &&
+            (canvas.getContext('webgl2') || canvas.getContext('webgl'));
+          if (!gl) {
+            resolve(null);
+            return;
+          }
+          const w = canvas.width;
+          const h = canvas.height;
+          const x0 = Math.floor(b.x0 * w);
+          const y0 = Math.floor((1 - b.y1) * h);
+          const bw = Math.max(1, Math.floor((b.x1 - b.x0) * w));
+          const bh = Math.max(1, Math.floor((b.y1 - b.y0) * h));
+          const px = new Uint8Array(bw * bh * 4);
+          gl.readPixels(x0, y0, bw, bh, gl.RGBA, gl.UNSIGNED_BYTE, px);
+          let red = 0;
+          let green = 0;
+          let blue = 0;
+          for (let i = 0; i < px.length; i += 4) {
+            const r = px[i];
+            const g = px[i + 1];
+            const bl = px[i + 2];
+            if (r > 140 && r - g > 60 && r - bl > 60) red++;
+            else if (g > 140 && g - r > 60 && g - bl > 60) green++;
+            else if (bl > 140 && bl - r > 60 && bl - g > 60) blue++;
+          }
+          resolve({ red, green, blue, total: bw * bh });
+        });
       });
     });
   }, box);
