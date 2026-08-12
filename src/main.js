@@ -411,6 +411,14 @@ let comparisonView = null;
 let renderQueue = null;
 
 /**
+ * Export quality mode. Module-scope like previewManager so the __forgeDebug
+ * hook can read it: File > Export Quality is its only control (UF-11) and
+ * there is no DOM element left to ask. Session-only on purpose - the retired
+ * drawer select also reset to 'model' on every boot.
+ */
+let exportQualityMode = 'model';
+
+/**
  * The expert block's ▶ Preview handler, published for the Classic editor
  * toolbar. Null until the expert block initializes.
  * @type {Function|null}
@@ -1073,12 +1081,9 @@ async function initApp() {
   document
     .getElementById('memoryBannerReduceFn')
     ?.addEventListener('click', () => {
-      // Reduce export quality to low
-      const exportQuality = document.getElementById('exportQualitySelect');
-      if (exportQuality) {
-        exportQuality.value = 'low';
-        exportQuality.dispatchEvent(new Event('change'));
-      }
+      // Reduce export quality to low. The mode lives in main.js now
+      // (File > Export Quality) - there is no select to poke (UF-11).
+      setExportQualityMode('low');
       // Also reduce preview quality to fast. MEASURED: dispatching 'change'
       // here started four renders, because that handler kicks auto-preview —
       // and rendering is the memory-hungry operation this banner is warning
@@ -3703,6 +3708,31 @@ async function initApp() {
       },
       { type: 'separator' },
       { type: 'submenu', label: 'Export', items: exportItems },
+      // UF-11: proxies the export-quality mode whose drawer select was
+      // retired; these labels are the retired select's options and this list
+      // is the setting's one home. Forge-only, like the other UF-11 menu
+      // homes - Classic's File menu keeps its audited upstream shape.
+      ...(document.body.dataset.uiMode !== 'classic'
+        ? [
+            {
+              type: 'submenu',
+              label: 'Export Quality',
+              items: [
+                { label: 'Model default', value: 'model' },
+                { label: 'Low (fast)', value: 'low' },
+                { label: 'Medium (balanced)', value: 'medium' },
+                { label: 'High (smooth)', value: 'high' },
+              ].map((opt) => ({
+                type: 'radio',
+                label: opt.label,
+                group: 'exportQuality',
+                value: opt.value,
+                checked: exportQualityMode === opt.value,
+                onChange: () => setExportQualityMode(opt.value),
+              })),
+            },
+          ]
+        : []),
       { type: 'separator' },
       {
         type: 'action',
@@ -5438,12 +5468,8 @@ async function initApp() {
           updateStatus('Preview quality set to Fast', 'success');
         }
       } else if (action === 'export-low') {
-        const select = document.getElementById('exportQualitySelect');
-        if (select) {
-          select.value = 'low';
-          select.dispatchEvent(new Event('change', { bubbles: true }));
-          updateStatus('Export quality set to Low', 'success');
-        }
+        setExportQualityMode('low');
+        updateStatus('Export quality set to Low', 'success');
       } else if (action === 'focus-resolution') {
         const candidates = [
           '$fn',
@@ -5850,7 +5876,6 @@ async function initApp() {
   const previewContainer = document.getElementById('previewContainer');
   const autoPreviewToggle = document.getElementById('autoPreviewToggle');
   const previewQualitySelect = document.getElementById('previewQualitySelect');
-  const exportQualitySelect = document.getElementById('exportQualitySelect');
   const autoBedToggle = document.getElementById('autoBedToggle');
   const dimensionsDisplay = document.getElementById('dimensionsDisplay');
   // Note: outputFormatSelect and formatInfo already declared above
@@ -5879,9 +5904,13 @@ async function initApp() {
     return previewQualitySelect?.value || PREVIEW_QUALITY_DEFAULT;
   };
 
-  const getSelectedExportQualityMode = () => {
-    return exportQualitySelect?.value || 'model';
-  };
+  // A function declaration so the File-menu builder, the memory banner and
+  // the error-recovery action can all reach it regardless of where they sit
+  // in this scope; the mode itself is module-scope for the debug hook.
+  function setExportQualityMode(mode) {
+    exportQualityMode = mode;
+    exportQualityPreset = getExportQualityPreset(mode);
+  }
 
   const getManualPreviewQuality = (mode) => {
     switch (mode) {
@@ -6037,13 +6066,7 @@ async function initApp() {
     }
   };
 
-  let exportQualityMode = getSelectedExportQualityMode();
   let exportQualityPreset = getExportQualityPreset(exportQualityMode);
-
-  const applyExportQualityMode = () => {
-    exportQualityMode = getSelectedExportQualityMode();
-    exportQualityPreset = getExportQualityPreset(exportQualityMode);
-  };
 
   // Wire preview settings UI
   if (autoPreviewToggle) {
@@ -6098,16 +6121,6 @@ async function initApp() {
           autoPreviewController.onParameterChange(state.parameters);
         }
       }
-    });
-  }
-
-  if (exportQualitySelect) {
-    if (exportQualitySelect.querySelector('option[value="model"]')) {
-      exportQualitySelect.value = 'model';
-    }
-    applyExportQualityMode();
-    exportQualitySelect.addEventListener('change', () => {
-      applyExportQualityMode();
     });
   }
 
@@ -15384,6 +15397,16 @@ if (typeof window !== 'undefined') {
      */
     zoomToCursor() {
       return previewManager?.zoomToCursorEnabled ?? null;
+    },
+
+    /**
+     * Export quality mode (UF-11). File > Export Quality became this
+     * setting's only control and it has no DOM element to read, so the
+     * memory-banner and recovery specs prove changes here.
+     * @returns {string}
+     */
+    exportQuality() {
+      return exportQualityMode;
     },
 
     /**

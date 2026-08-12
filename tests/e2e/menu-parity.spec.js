@@ -32,6 +32,9 @@ const FILE_MENU_ORDER = [
   'Save a Copy',
   '---',
   'Export',
+  // Forge-only (UF-11): the export-quality mode's one home since the drawer
+  // select retired; Classic's File menu keeps its audited upstream shape.
+  'Export Quality',
   '---',
   'Show Library Folder…',
 ]
@@ -1423,6 +1426,32 @@ test.describe('Forge direction (UF-11)', () => {
     await menuItem(page, 'view', 'Edge Detail Limit').click()
     await expect(
       page.getByRole('menuitemradio', { name: 'High — 250,000 edges' })
+    ).toHaveAttribute('aria-checked', 'true')
+  })
+})
+
+test.describe('Forge direction (UF-11, File menu)', () => {
+  test('File ▸ Export Quality sets the export mode and ticks on reopen', async ({
+    page,
+  }) => {
+    await loadFixture(page)
+
+    expect(
+      await page.evaluate(() => window.__forgeDebug.exportQuality())
+    ).toBe('model')
+
+    await page.locator('#fileMenuBtn').click()
+    await menuItem(page, 'file', 'Export Quality').click()
+    await page.getByRole('menuitemradio', { name: 'High (smooth)' }).click()
+
+    expect(
+      await page.evaluate(() => window.__forgeDebug.exportQuality())
+    ).toBe('high')
+
+    await page.locator('#fileMenuBtn').click()
+    await menuItem(page, 'file', 'Export Quality').click()
+    await expect(
+      page.getByRole('menuitemradio', { name: 'High (smooth)' })
     ).toHaveAttribute('aria-checked', 'true')
   })
 })
