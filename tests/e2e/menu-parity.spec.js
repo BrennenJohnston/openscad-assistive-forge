@@ -840,6 +840,8 @@ const WINDOW_MENU_ORDER_STANDARD = [
   'Companion Files',
   'Image Measurement',
   'Reference Image',
+  // Classic's Q-4 tail slot, mirrored in Forge since UF-10.
+  'Advanced',
 ]
 
 test.describe('Window menu parity (G5)', () => {
