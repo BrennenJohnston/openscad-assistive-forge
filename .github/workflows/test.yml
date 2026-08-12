@@ -197,7 +197,13 @@ jobs:
           # the suite. Kept matched with Edge, as the raises above always
           # were. The Q-23 never-started guard below stays the honesty
           # backstop either way.
-          PW_GLOBAL_TIMEOUT: '1800000'
+          #
+          # Raised to 35min on the owner's order (Q-36, 2026-08-12, UF-12):
+          # Edge ran 26m25s / 27m3s of its 30min ceiling on the last two
+          # runs and Round 3 adds an estimated +6 to +9 minutes of specs.
+          # Kept matched with Edge as always; sharding is the next step if
+          # either lane crosses ~30 real minutes.
+          PW_GLOBAL_TIMEOUT: '2100000'
 
       # Q-23 (owner, 2026-08-09): this job once stayed green for a whole
       # release while two menu-parity tests were red, because tests the
@@ -307,7 +313,13 @@ jobs:
           # wall-clock reached 25m42s (its Playwright run sits inside the
           # ceiling; the job total is setup + run) and the suite grows
           # through UF-6..UF-8 before UF-9 can trim it.
-          PW_GLOBAL_TIMEOUT: '1800000'
+          #
+          # Raised to 35min on the owner's order (Q-36, 2026-08-12, UF-12):
+          # this job ran 26m25s (develop@47b43da) and 27m3s (PR #73) of the
+          # 30min ceiling and Round 3 adds an estimated +6 to +9 minutes of
+          # specs. Kept matched with Chromium as always; sharding is the
+          # next step if either lane crosses ~30 real minutes.
+          PW_GLOBAL_TIMEOUT: '2100000'
       
       - name: Upload Playwright report (Edge)
         uses: actions/upload-artifact@v4
