@@ -1273,3 +1273,99 @@ test.describe('Design menu and Export submenu parity (G3)', () => {
     expect(binary.length).toBe(84 + binary.readUInt32LE(80) * 50)
   })
 })
+
+test.describe('Forge direction (UF-10)', () => {
+  test('Window ▸ Editor opens and closes the Code Editor in Forge', async ({
+    page,
+  }) => {
+    await loadFixture(page)
+
+    // The old route toggled the hidden-panels class on the editor's TOGGLE
+    // BUTTON: the entry point vanished while the editor stayed shut. Assert
+    // all three: the editor appears, the button never vanishes, and the
+    // tick answers "is the editor open".
+    await clickMenuItem(page, 'window', 'Editor')
+    await expect(page.locator('#expertModePanel .cm-content')).toBeVisible({
+      timeout: 10_000,
+    })
+    await expect(page.locator('#expertModeToggle')).toBeVisible()
+    await expect(page.locator('#expertModeToggle')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    )
+    await page.locator('#windowMenuBtn').click()
+    await expect(menuItem(page, 'window', 'Editor')).toHaveAttribute(
+      'aria-checked',
+      'true'
+    )
+    await page.keyboard.press('Escape')
+
+    await clickMenuItem(page, 'window', 'Editor')
+    await expect(
+      page.locator('#expertModePanel .cm-content')
+    ).not.toBeVisible()
+    await expect(page.locator('#expertModeToggle')).toBeVisible()
+    await expect(page.locator('#expertModeToggle')).toHaveAttribute(
+      'aria-pressed',
+      'false'
+    )
+    await page.locator('#windowMenuBtn').click()
+    await expect(menuItem(page, 'window', 'Editor')).toHaveAttribute(
+      'aria-checked',
+      'false'
+    )
+  })
+
+  test('Window ▸ Advanced toggles the Advanced section in Forge', async ({
+    page,
+  }) => {
+    await loadFixture(page)
+
+    const adv = page.locator('#advancedMenu')
+    await expect(adv).toHaveJSProperty('open', false)
+
+    await clickMenuItem(page, 'window', 'Advanced')
+    await expect(adv).toHaveJSProperty('open', true)
+
+    await page.locator('#windowMenuBtn').click()
+    await expect(menuItem(page, 'window', 'Advanced')).toHaveAttribute(
+      'aria-checked',
+      'true'
+    )
+    await page.keyboard.press('Escape')
+
+    await clickMenuItem(page, 'window', 'Advanced')
+    await expect(adv).toHaveJSProperty('open', false)
+  })
+
+  test('Increase Font Size grows the editor text live in Classic', async ({
+    page,
+  }) => {
+    await loadFixture(page)
+    // Classic entry needs a desktop-shaped viewport; the default qualifies.
+    await page.locator('#classicModeToggle').click()
+    await page.waitForSelector('#expertModePanel .cm-content', {
+      state: 'attached',
+      timeout: 20_000,
+    })
+
+    const size = () =>
+      page.evaluate(() =>
+        parseFloat(
+          getComputedStyle(
+            document.querySelector('#expertModePanel .cm-content')
+          ).fontSize
+        )
+      )
+    const before = await size()
+
+    // The announced-but-invisible shape this guards against: the size saved
+    // and spoke while the text never changed (the expert flag stays false in
+    // Classic, so the live apply needs the editor-on-screen gate).
+    await clickMenuItem(page, 'edit', 'Increase Font Size')
+    await expect.poll(size).toBeGreaterThan(before)
+
+    await clickMenuItem(page, 'edit', 'Decrease Font Size')
+    await expect.poll(size).toBe(before)
+  })
+})
