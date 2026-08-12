@@ -2802,12 +2802,36 @@ async function initApp() {
   // First-visit modal check
   const firstVisitModal = document.getElementById('first-visit-modal');
   const firstVisitCheck = isFirstVisit();
+
+  // U-21: the Forge card image and the backdrop's Forge half follow the
+  // app's active theme, resolved exactly the way detectTheme() resolves
+  // dark-vs-light outside Classic (data-theme attribute, else the system
+  // preference). High contrast resolves through the same two values
+  // (Q-38); Classic's side stays the light capture always - Classic is
+  // light by design. The backdrop swap rides a class so the image URL
+  // stays in the stylesheet (CSP: no inline styles).
+  const applyFirstVisitThemeAssets = () => {
+    const dataTheme = document.documentElement.getAttribute('data-theme');
+    const dark =
+      dataTheme === 'dark' ||
+      (dataTheme !== 'light' &&
+        window.matchMedia('(prefers-color-scheme: dark)').matches);
+    const forgeShot = document.getElementById('firstVisitForgeShot');
+    if (forgeShot) {
+      forgeShot.src = dark
+        ? '/screenshots/forge-standard-dark.webp'
+        : '/screenshots/forge-standard.webp';
+    }
+    firstVisitModal?.classList.toggle('first-visit-forge-dark', dark);
+  };
+
   if (firstVisitCheck && firstVisitModal) {
     setFirstVisitBlocking(true);
     updateFirstVisitClassicGate();
     subscribeViewportShape(() => updateFirstVisitClassicGate());
     // Delay slightly to ensure DOM is ready
     setTimeout(() => {
+      applyFirstVisitThemeAssets();
       openModal(firstVisitModal);
     }, 500);
   }

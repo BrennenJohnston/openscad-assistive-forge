@@ -5284,6 +5284,14 @@ body.first-visit-blocking #app {
   background-position: left center;
 }
 
+/* U-21: in dark theme the Forge half shows the dark capture, so the
+   backdrop's contrast matches the choice being offered. The class is set
+   at modal open from the resolved theme (see applyFirstVisitThemeAssets
+   in main.js). */
+#first-visit-modal.first-visit-forge-dark .first-visit-backdrop-forge {
+  background-image: url('/screenshots/forge-standard-dark.webp');
+}
+
 .first-visit-backdrop-classic {
   background-image: url('/screenshots/classic-standard.webp');
   background-position: right center;
@@ -5299,6 +5307,11 @@ body.first-visit-blocking #app {
 .modal-first-visit {
   max-width: 1160px;
   width: min(94vw, 1160px);
+  /* U-19: the note list and card links made the modal taller than the
+     shared 90vh cap; at 900px-tall desktops that pushed Download &
+     Continue below the modal's internal scroll fold. A slimmer margin
+     keeps the primary action on screen without scrolling. */
+  max-height: calc(100vh - 40px);
 }
 
 /* U-20: reset.css strips colour and underline from every anchor, and no
@@ -5369,7 +5382,7 @@ body.first-visit-blocking #app {
   font-weight: 600;
   color: var(--color-text-primary);
   padding: 0;
-  margin-bottom: var(--space-sm);
+  margin-bottom: var(--space-xs);
 }
 
 .first-visit-options {
@@ -5413,7 +5426,7 @@ body.first-visit-blocking #app {
 }
 
 .first-visit-option-more {
-  margin: var(--space-sm) 0 0;
+  margin: var(--space-xs) 0 0;
   font-size: var(--font-size-sm);
 }
 
@@ -5422,7 +5435,7 @@ body.first-visit-blocking #app {
   align-items: center;
   flex-wrap: wrap;
   gap: var(--space-xs) var(--space-sm);
-  margin-bottom: var(--space-sm);
+  margin-bottom: var(--space-xs);
   font-weight: 600;
   color: var(--color-text-primary);
 }
@@ -5478,7 +5491,7 @@ body.first-visit-blocking #app {
   height: auto;
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius-sm);
-  margin-bottom: var(--space-sm);
+  margin-bottom: var(--space-xs);
 }
 
 .first-visit-guidance {
@@ -5490,7 +5503,7 @@ body.first-visit-blocking #app {
 .first-visit-compromise {
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
-  margin: var(--space-sm) 0;
+  margin: var(--space-xs) 0;
 }
 
 .first-visit-choice-error {
@@ -5503,7 +5516,7 @@ body.first-visit-blocking #app {
   display: flex;
   align-items: flex-start;
   gap: var(--space-sm);
-  padding-top: var(--space-sm);
+  padding-top: var(--space-xs);
   border-top: 1px solid var(--color-border);
   cursor: pointer;
   color: var(--color-text-primary);
@@ -5519,7 +5532,11 @@ body.first-visit-blocking #app {
 #first-visit-modal .modal-footer {
   display: flex;
   justify-content: flex-end;
-  margin-top: var(--space-sm);
+  margin-top: var(--space-xs);
+}
+
+#first-visit-modal .first-visit-learn-more {
+  margin-top: var(--space-xs);
 }
 
 :root[data-high-contrast='true'] .first-visit-option input[type='radio'],
