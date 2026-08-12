@@ -239,7 +239,7 @@ To move a project to another device, export it as a ZIP from the Saved Projects 
 
 ### Export Quality
 
-Export always uses maximum quality regardless of preview settings. This ensures your 3D prints are accurate.
+Export quality is chosen from the **File** menu, under **Export Quality**: Model default, Low (fast), Medium (balanced), or High (smooth). It starts at Model default each session and is independent of the preview quality setting. Preview quality never affects exported files.
 
 ### 2D Export (SVG/DXF)
 
