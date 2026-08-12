@@ -1243,18 +1243,33 @@ test.describe('Screen Reader Support', () => {
   })
 })
 
+// UF-9 P2: on CI Firefox, axe sometimes evaluated color-contrast before the
+// app stylesheets were applied — ~187 nodes failing at ratio 1.17, a
+// different theme pair on each of three otherwise-identical runs. Block
+// until the design tokens actually resolve on <body> so every axe scan in
+// this describe sees painted styles.
+async function waitForStylesApplied(page) {
+  await page.waitForFunction(
+    () =>
+      getComputedStyle(document.body)
+        .getPropertyValue('--color-text-primary')
+        .trim().length > 0
+  );
+}
+
 test.describe('Color System and Theme Accessibility', () => {
   test('should support light theme without violations', async ({ page }) => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')
-    
+
     // Explicitly set light theme
     await page.evaluate(() => {
       document.documentElement.setAttribute('data-theme', 'light');
     });
-    
+
+    await waitForStylesApplied(page);
     await page.waitForTimeout(100);
-    
+
     // Run accessibility scan
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
@@ -1272,9 +1287,10 @@ test.describe('Color System and Theme Accessibility', () => {
     await page.evaluate(() => {
       document.documentElement.setAttribute('data-theme', 'dark');
     });
-    
+
+    await waitForStylesApplied(page);
     await page.waitForTimeout(100);
-    
+
     // Run accessibility scan
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
@@ -1293,9 +1309,10 @@ test.describe('Color System and Theme Accessibility', () => {
       document.documentElement.setAttribute('data-theme', 'light');
       document.documentElement.setAttribute('data-high-contrast', 'true');
     });
-    
+
+    await waitForStylesApplied(page);
     await page.waitForTimeout(100);
-    
+
     // Run accessibility scan
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'wcag2aaa'])
@@ -1314,9 +1331,10 @@ test.describe('Color System and Theme Accessibility', () => {
       document.documentElement.setAttribute('data-theme', 'dark');
       document.documentElement.setAttribute('data-high-contrast', 'true');
     });
-    
+
+    await waitForStylesApplied(page);
     await page.waitForTimeout(100);
-    
+
     // Run accessibility scan
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'wcag2aaa'])
