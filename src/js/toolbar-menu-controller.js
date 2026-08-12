@@ -41,6 +41,8 @@ const RADIO_GROUP_LABELS = {
   displayMode: 'Display Mode',
   projection: 'Projection',
   interfaceMode: 'Interface Mode',
+  previewQuality: 'Preview Quality',
+  edgeDetail: 'Edge Detail Limit',
 };
 
 /**
@@ -1055,9 +1057,34 @@ export class ToolbarMenuController {
 
       btn.setAttribute('aria-controls', submenuId);
 
+      // Radio runs collapse through _buildRadioGroup exactly as the
+      // top-level renderer does. _buildMenuItem has no radio branch: children
+      // of type 'radio' fell through to plain menuitems with no aria-checked
+      // and no click listener (radios carry onChange, not handler), so every
+      // radio submenu — Preview Quality included — rendered inert (UF-11,
+      // defect D-24).
       const childItems = Array.isArray(item.items) ? item.items : [];
-      for (const child of childItems) {
-        nestedUl.appendChild(this._buildMenuItem(child));
+      let ci = 0;
+      while (ci < childItems.length) {
+        const child = childItems[ci];
+        if (child.type === 'radio') {
+          const group = child.group;
+          const radioItems = [];
+          while (
+            ci < childItems.length &&
+            childItems[ci].type === 'radio' &&
+            childItems[ci].group === group
+          ) {
+            radioItems.push(childItems[ci]);
+            ci++;
+          }
+          this._buildRadioGroup(group, radioItems).forEach((el) =>
+            nestedUl.appendChild(el)
+          );
+        } else {
+          nestedUl.appendChild(this._buildMenuItem(child));
+          ci++;
+        }
       }
 
       // Submenu open/close via click on the trigger

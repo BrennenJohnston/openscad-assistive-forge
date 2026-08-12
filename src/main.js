@@ -4262,6 +4262,57 @@ async function initApp() {
         checked: displayOptionsController.get('crosshairs'),
         handler: () => displayOptionsController.toggle('crosshairs'),
       },
+      // UF-11: the grid, measurements and status-bar toggles moved here from
+      // the Preview Settings drawer. Forge-only: Classic's View menu keeps
+      // its audited desktop shape, and Classic never showed the drawer these
+      // came from.
+      ...(document.body.dataset.uiMode !== 'classic'
+        ? [
+            {
+              type: 'toggle',
+              label: 'Show Grid',
+              checked: Boolean(previewManager?.gridEnabled),
+              enabled: Boolean(previewManager),
+              tooltip: previewManager
+                ? undefined
+                : 'Preview or render a model first',
+              handler: () => {
+                if (!previewManager) return;
+                const next = !previewManager.gridEnabled;
+                previewManager.toggleGrid(next);
+                announceImmediate(`Grid ${next ? 'shown' : 'hidden'}`);
+              },
+            },
+            {
+              type: 'toggle',
+              label: 'Show Measurements',
+              checked: Boolean(previewManager?.measurementsEnabled),
+              enabled: Boolean(previewManager),
+              tooltip: previewManager
+                ? undefined
+                : 'Preview or render a model first',
+              handler: () => {
+                if (!previewManager) return;
+                const next = !previewManager.measurementsEnabled;
+                previewManager.toggleMeasurements(next);
+                updateDimensionsDisplay();
+                announceImmediate(`Measurements ${next ? 'shown' : 'hidden'}`);
+              },
+            },
+            {
+              type: 'toggle',
+              label: 'Show Status Bar',
+              checked: !document
+                .getElementById('previewStatusBar')
+                ?.classList.contains('user-hidden'),
+              handler: () => {
+                const bar = document.getElementById('previewStatusBar');
+                if (!bar) return;
+                setPreviewStatusBarShown(bar.classList.contains('user-hidden'));
+              },
+            },
+          ]
+        : []),
       { type: 'separator' },
       // -- Camera Views --
       {
@@ -4436,6 +4487,35 @@ async function initApp() {
           })),
         };
       })(),
+      // UF-11: the edge budget moved here from the drawer select; the values
+      // are the retired select's options and this list is now their one home.
+      // setEdgeBudget persists, rebuilds the overlay and announces the stats.
+      ...(document.body.dataset.uiMode !== 'classic'
+        ? [
+            (() => {
+              const EDGE_DETAIL_OPTIONS = [
+                { label: 'Low — 25,000 edges', value: 25000 },
+                { label: 'Balanced — 75,000 edges', value: 75000 },
+                { label: 'High — 250,000 edges', value: 250000 },
+                { label: 'Unlimited', value: 0 },
+              ];
+              const current = displayOptionsController.getEdgeBudget();
+              return {
+                type: 'submenu',
+                label: 'Edge Detail Limit',
+                items: EDGE_DETAIL_OPTIONS.map((opt) => ({
+                  type: 'radio',
+                  label: opt.label,
+                  group: 'edgeDetail',
+                  value: String(opt.value),
+                  checked: current === opt.value,
+                  onChange: () =>
+                    displayOptionsController.setEdgeBudget(opt.value),
+                })),
+              };
+            })(),
+          ]
+        : []),
       ...(document.body.dataset.uiMode === 'classic'
         ? [
             {
@@ -5775,8 +5855,6 @@ async function initApp() {
   const autoPreviewToggle = document.getElementById('autoPreviewToggle');
   const previewQualitySelect = document.getElementById('previewQualitySelect');
   const exportQualitySelect = document.getElementById('exportQualitySelect');
-  const measurementsToggle = document.getElementById('measurementsToggle');
-  const gridToggle = document.getElementById('gridToggle');
   const autoBedToggle = document.getElementById('autoBedToggle');
   const zoomToCursorToggle = document.getElementById('zoomToCursorToggle');
   const dimensionsDisplay = document.getElementById('dimensionsDisplay');
@@ -6072,32 +6150,6 @@ async function initApp() {
     }
   });
 
-  // Wire measurements toggle
-  if (measurementsToggle) {
-    // Initialize from localStorage (after preview manager is created)
-    // The checkbox will be set when preview manager is initialized
-
-    measurementsToggle.addEventListener('change', () => {
-      const enabled = measurementsToggle.checked;
-      if (previewManager) {
-        previewManager.toggleMeasurements(enabled);
-        updateDimensionsDisplay();
-      }
-      console.log(`[App] Measurements ${enabled ? 'enabled' : 'disabled'}`);
-    });
-  }
-
-  // Wire grid toggle
-  if (gridToggle) {
-    gridToggle.addEventListener('change', () => {
-      const enabled = gridToggle.checked;
-      if (previewManager) {
-        previewManager.toggleGrid(enabled);
-      }
-      console.log(`[App] Grid ${enabled ? 'enabled' : 'disabled'}`);
-    });
-  }
-
   // Initialize overlay/grid/auto-rotate controller (extracted module)
   const overlayGridCtrl = initOverlayGridController({
     getPreviewManager: () => previewManager,
@@ -6148,27 +6200,21 @@ async function initApp() {
     });
   }
 
-  // Wire status bar toggle
-  const statusBarToggle = document.getElementById('statusBarToggle');
-  if (statusBarToggle && previewStatusBar) {
-    // Initialize from localStorage
+  // Status bar visibility. The control is View > Show Status Bar (UF-11);
+  // boot only restores the persisted choice here.
+  function setPreviewStatusBarShown(shown) {
+    const bar = document.getElementById('previewStatusBar');
+    if (!bar) return;
+    bar.classList.toggle('user-hidden', !shown);
+    localStorage.setItem(STORAGE_KEY_STATUS_BAR, shown ? 'true' : 'false');
+    announceImmediate(`Status bar ${shown ? 'shown' : 'hidden'}`);
+    console.log(`[App] Status bar ${shown ? 'shown' : 'hidden'}`);
+  }
+  if (previewStatusBar) {
     const savedStatusBarPref = localStorage.getItem(STORAGE_KEY_STATUS_BAR);
-    const statusBarEnabled = savedStatusBarPref !== 'false'; // Default to true
-    statusBarToggle.checked = statusBarEnabled;
-    if (!statusBarEnabled) {
+    if (savedStatusBarPref === 'false') {
       previewStatusBar.classList.add('user-hidden');
     }
-
-    statusBarToggle.addEventListener('change', () => {
-      const enabled = statusBarToggle.checked;
-      if (enabled) {
-        previewStatusBar.classList.remove('user-hidden');
-      } else {
-        previewStatusBar.classList.add('user-hidden');
-      }
-      localStorage.setItem(STORAGE_KEY_STATUS_BAR, enabled ? 'true' : 'false');
-      console.log(`[App] Status bar ${enabled ? 'shown' : 'hidden'}`);
-    });
   }
 
   // ============================================================================
@@ -6489,7 +6535,7 @@ async function initApp() {
 
     const dimensions = previewManager.calculateDimensions();
 
-    if (dimensions && measurementsToggle?.checked) {
+    if (dimensions && previewManager.measurementsEnabled) {
       // Show dimensions panel
       dimensionsDisplay.classList.remove('hidden');
 

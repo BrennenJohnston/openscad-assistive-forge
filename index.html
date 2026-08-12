@@ -4496,30 +4496,6 @@
                           changes. Turn off to preview only when you press
                           Preview.</span
                         >
-                        <label class="toggle-switch">
-                          <input
-                            type="checkbox"
-                            id="measurementsToggle"
-                            aria-describedby="measurementsHelp"
-                          />
-                          <span class="toggle-label">Show measurements</span>
-                        </label>
-                        <span id="measurementsHelp" class="sr-only"
-                          >Toggle dimension measurements and bounding box
-                          overlay on 3D preview</span
-                        >
-                        <label class="toggle-switch">
-                          <input
-                            type="checkbox"
-                            id="gridToggle"
-                            checked
-                            aria-describedby="gridHelp"
-                          />
-                          <span class="toggle-label">Show grid</span>
-                        </label>
-                        <span id="gridHelp" class="sr-only"
-                          >Toggle grid plane visibility in 3D preview</span
-                        >
                         <div
                           class="grid-color-row"
                           role="group"
@@ -4576,35 +4552,6 @@
                         <span id="gridOpacityHelp" class="sr-only"
                           >Adjust grid line visibility from 10 to 100
                           percent</span
-                        >
-                        <!-- Edge Detail Limit -->
-                        <div class="preview-setting edge-budget-setting">
-                          <label for="edgeBudgetSelect" id="edgeBudgetLabel"
-                            >Edge detail limit</label
-                          >
-                          <select
-                            id="edgeBudgetSelect"
-                            aria-labelledby="edgeBudgetLabel"
-                            aria-describedby="edgeBudgetHelp edgeBudgetStatus"
-                          >
-                            <option value="25000">Low — 25,000 edges</option>
-                            <option value="75000" selected>
-                              Balanced — 75,000 edges
-                            </option>
-                            <option value="250000">High — 250,000 edges</option>
-                            <option value="0">Unlimited</option>
-                          </select>
-                          <span
-                            class="edge-budget-status"
-                            id="edgeBudgetStatus"
-                          ></span>
-                        </div>
-                        <span id="edgeBudgetHelp" class="sr-only"
-                          >Caps how many outline segments the Show Edges overlay
-                          draws on dense models. The longest, most structural
-                          edges are kept; short facet lines are dropped. Lower
-                          limits render faster and keep the model
-                          readable.</span
                         >
                         <label class="toggle-switch">
                           <input
@@ -4764,19 +4711,6 @@
                             </button>
                           </div>
                         </div>
-                        <label class="toggle-switch">
-                          <input
-                            type="checkbox"
-                            id="statusBarToggle"
-                            checked
-                            aria-describedby="statusBarHelp"
-                          />
-                          <span class="toggle-label">Show status bar</span>
-                        </label>
-                        <span id="statusBarHelp" class="sr-only"
-                          >Toggle status and render info overlay on
-                          preview</span
-                        >
                         <!-- Engine Toggle (Manifold vs CGAL) -->
                         <div
                           class="preview-setting-divider"

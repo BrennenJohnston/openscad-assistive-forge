@@ -630,11 +630,17 @@ const EXPORT_SUBMENU_ORDER = [
 // (D-24 — this renderer has no display-mode concept). The projection radios
 // render as one role="group" li, which readMenu reports as '(group)'. The
 // per-toolbar Hide items are Classic-only markup and are asserted there.
+// Show Grid / Show Measurements / Show Status Bar and the Edge Detail Limit
+// submenu are Forge-only (UF-11): they replaced drawer controls Classic
+// never showed, and Classic's View menu keeps its audited desktop shape.
 const VIEW_MENU_ORDER = [
   'Show Edges',
   'Show Axes',
   'Show Scale Markers',
   'Show Crosshairs',
+  'Show Grid',
+  'Show Measurements',
+  'Show Status Bar',
   '---',
   'Top',
   'Bottom',
@@ -653,6 +659,7 @@ const VIEW_MENU_ORDER = [
   '(group)',
   '---',
   'Preview Quality',
+  'Edge Detail Limit',
   '---',
   '(group)',
 ]
@@ -1367,5 +1374,55 @@ test.describe('Forge direction (UF-10)', () => {
 
     await clickMenuItem(page, 'edit', 'Decrease Font Size')
     await expect.poll(size).toBe(before)
+  })
+})
+
+test.describe('Forge direction (UF-11)', () => {
+  test('View ▸ Preview Quality radios drive the select (defect D-24)', async ({
+    page,
+  }) => {
+    await loadFixture(page)
+
+    await page.locator('#viewMenuBtn').click()
+    await menuItem(page, 'view', 'Preview Quality').click()
+    // Radios in submenus rendered as plain menuitems with no click wiring
+    // before UF-11 (defect D-24) — this click silently did nothing.
+    await page
+      .getByRole('menuitemradio', { name: 'Fast (lower resolution)' })
+      .click()
+
+    await expect(page.locator('#previewQualitySelect')).toHaveValue('fast')
+    // Activating a radio also closes the menu, like every other item.
+    await expect(page.locator('#viewMenuBtn')).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    )
+  })
+
+  test('View ▸ Edge Detail Limit selects a budget and remembers it', async ({
+    page,
+  }) => {
+    await loadFixture(page)
+
+    await page.locator('#viewMenuBtn').click()
+    await menuItem(page, 'view', 'Edge Detail Limit').click()
+    await page
+      .getByRole('menuitemradio', { name: 'High — 250,000 edges' })
+      .click()
+
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          localStorage.getItem('openscad-forge-display-edgeBudget')
+        )
+      )
+      .toBe('250000')
+
+    // The tick follows the stored budget on reopen.
+    await page.locator('#viewMenuBtn').click()
+    await menuItem(page, 'view', 'Edge Detail Limit').click()
+    await expect(
+      page.getByRole('menuitemradio', { name: 'High — 250,000 edges' })
+    ).toHaveAttribute('aria-checked', 'true')
   })
 })
