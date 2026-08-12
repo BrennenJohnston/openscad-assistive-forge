@@ -4625,30 +4625,6 @@
                             </button>
                           </div>
                         </div>
-                        <!-- Engine Toggle (Manifold vs CGAL) -->
-                        <div
-                          class="preview-setting-divider"
-                          aria-hidden="true"
-                        ></div>
-                        <label class="toggle-switch">
-                          <input
-                            type="checkbox"
-                            id="manifoldEngineToggle"
-                            checked
-                            aria-describedby="manifoldEngineHelp"
-                          />
-                          <span class="toggle-label"
-                            >Fast engine (Manifold)</span
-                          >
-                        </label>
-                        <span id="manifoldEngineHelp" class="sr-only"
-                          >Use Manifold geometry engine for faster rendering.
-                          Disable if you encounter issues with complex
-                          models.</span
-                        >
-                        <p class="preview-setting-hint" id="manifoldEngineHint">
-                          5-30× faster. Disable if models fail to render.
-                        </p>
                         <div class="preview-setting rotation-speed-setting">
                           <label
                             class="preview-setting-label"
@@ -4880,17 +4856,6 @@
                             class="complexity-tier-label"
                             >Analyzing...</span
                           >
-                        </div>
-                        <div class="preview-setting cache-tools">
-                          <span class="preview-setting-label">App cache</span>
-                          <button
-                            type="button"
-                            id="clearCacheBtn"
-                            class="btn btn-sm btn-outline"
-                            aria-label="Clear cached files and reload the app"
-                          >
-                            Clear cache &amp; reload
-                          </button>
                         </div>
                       </section>
                     </div>
@@ -7649,8 +7614,6 @@
             aria-selected="false"
             aria-controls="prefs-panel-advanced"
             tabindex="-1"
-            aria-disabled="true"
-            aria-describedby="prefs-reason-advanced"
           >
             Advanced
           </button>
@@ -8111,16 +8074,48 @@
             hidden
           >
             <p id="prefs-reason-advanced" class="preferences-panel-reason">
-              The desktop's Advanced settings tune OpenCSG, the CGAL caches,
-              window docking, sound and localization. This build has none of
-              those engines, and none of its own settings means the same thing,
-              so nothing is mapped across here rather than giving a desktop name
-              to something that behaves differently.
+              Most of the desktop's Advanced settings tune engines this build
+              does not have (OpenCSG, the CGAL caches, window docking, sound,
+              localization), so those are not imitated here. The rows below are
+              this build's own advanced settings.
             </p>
             <p class="preferences-panel-reason">
-              The settings closest in purpose are already in the app: preview
-              quality, export quality and the edge budget sit with the 3D view
-              controls, and Design ▸ Flush Caches clears cached geometry.
+              The settings closest in purpose live where they are used: preview
+              quality with the preview controls and in View ▸ Preview Quality,
+              the edge detail limit in View ▸ Edge Detail Limit, and Design ▸
+              Flush Caches clears cached geometry.
+            </p>
+            <!-- UF-11: these moved here from the Preview Settings drawer and
+                 keep their ids — main.js wires them by id at startup. -->
+            <div class="preferences-check-row">
+              <input
+                type="checkbox"
+                id="manifoldEngineToggle"
+                checked
+                aria-describedby="manifoldEngineHelp"
+              />
+              <label for="manifoldEngineToggle">Fast engine (Manifold)</label>
+            </div>
+            <span id="manifoldEngineHelp" class="sr-only"
+              >Use Manifold geometry engine for faster rendering. Disable if you
+              encounter issues with complex models.</span
+            >
+            <p class="preferences-field-note" id="manifoldEngineHint">
+              5-30× faster. Disable if models fail to render.
+            </p>
+            <div class="preferences-check-row">
+              <button
+                type="button"
+                id="clearCacheBtn"
+                class="btn btn-sm btn-outline"
+                aria-label="Clear cached files and reload the app"
+              >
+                Clear cache &amp; reload
+              </button>
+            </div>
+            <p class="preferences-field-note">
+              Clears this app's downloaded files and reloads it. Use this if the
+              app misbehaves after an update.
             </p>
           </div>
           <div
