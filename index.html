@@ -4432,29 +4432,6 @@
                   aria-labelledby="preview-settings-heading"
                 >
                   <div
-                    class="status-area"
-                    id="statusArea"
-                    role="status"
-                    aria-live="polite"
-                    aria-label="Application status"
-                  >
-                    Ready
-                  </div>
-                  <!-- Dedicated screen reader announcer (separate from visible status) -->
-                  <div
-                    id="srAnnouncer"
-                    class="sr-only"
-                    aria-live="polite"
-                    aria-atomic="true"
-                  ></div>
-                  <!-- Assertive announcer for errors and critical warnings -->
-                  <div
-                    id="srAnnouncerAssertive"
-                    class="sr-only"
-                    aria-live="assertive"
-                    aria-atomic="true"
-                  ></div>
-                  <div
                     class="preview-settings-panel"
                     role="group"
                     aria-label="Preview settings"
@@ -6427,6 +6404,34 @@
         <span id="classicStatusMemory"></span>
       </div>
     </div>
+    <!-- Global live regions (UF-11 P1). Body-level on purpose: inside #app
+         they sat in the Preview Settings drawer, whose content is
+         display:none while collapsed (the default) and in Classic entirely,
+         and #app itself goes inert while the first-visit gate blocks — so
+         real screen readers never heard them in those states. -->
+    <div
+      class="status-area"
+      id="statusArea"
+      role="status"
+      aria-live="polite"
+      aria-label="Application status"
+    >
+      Ready
+    </div>
+    <!-- Dedicated screen reader announcer (separate from visible status) -->
+    <div
+      id="srAnnouncer"
+      class="sr-only"
+      aria-live="polite"
+      aria-atomic="true"
+    ></div>
+    <!-- Assertive announcer for errors and critical warnings -->
+    <div
+      id="srAnnouncerAssertive"
+      class="sr-only"
+      aria-live="assertive"
+      aria-atomic="true"
+    ></div>
     <!-- Render Queue Modal -->
     <div
       class="modal hidden"
