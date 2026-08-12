@@ -5337,10 +5337,31 @@ body.first-visit-blocking #app {
   font-size: 0.85em;
 }
 
+/* U-19: the intro is a heading + four bullets. Desktop lays the list as
+   two columns of two via grid COLUMN flow - DOM order 1-4 fills the left
+   column top to bottom, then the right, so the virtual cursor still reads
+   1-2-3-4. Narrow viewports stack (see the 900px block below). */
+.first-visit-note-title {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-xs);
+}
+
+.first-visit-note-list {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: repeat(2, auto);
+  gap: var(--space-xs) var(--space-lg);
+  margin: 0;
+  padding-left: var(--space-lg);
+}
+
 .first-visit-choice {
   border: 0;
   padding: 0;
-  margin: var(--space-md) 0;
+  margin: var(--space-sm) 0;
 }
 
 .first-visit-choice legend {
@@ -5356,28 +5377,44 @@ body.first-visit-blocking #app {
   gap: var(--space-md);
 }
 
-.first-visit-option {
+/* U-19: the card box is the CELL (label + sibling learn-more link). The
+   label inside remains the radio's whole click surface; the link row is
+   part of the visual card but cannot toggle the radio. */
+.first-visit-option-cell {
   flex: 1 1 0;
-  display: block;
+  display: flex;
+  flex-direction: column;
   border: 2px solid var(--color-border);
   border-radius: var(--border-radius-md);
   padding: var(--space-sm);
-  cursor: pointer;
   background: var(--color-bg-primary);
 }
 
-.first-visit-option:hover {
+.first-visit-option {
+  display: block;
+  flex: 1 1 auto;
+  cursor: pointer;
+}
+
+/* Border highlight only while hovering the actual toggle surface, so the
+   link row does not pretend to be part of the radio's click target. */
+.first-visit-option-cell:has(.first-visit-option:hover) {
   border-color: var(--color-border-hover);
 }
 
-.first-visit-option:has(input:checked) {
+.first-visit-option-cell:has(input:checked) {
   border-color: var(--color-accent);
   background: var(--color-accent-subtle);
 }
 
-.first-visit-option:has(input:focus-visible) {
+.first-visit-option-cell:has(input:focus-visible) {
   outline: 3px solid var(--color-focus);
   outline-offset: 2px;
+}
+
+.first-visit-option-more {
+  margin: var(--space-sm) 0 0;
+  font-size: var(--font-size-sm);
 }
 
 .first-visit-option-head {
@@ -5426,7 +5463,7 @@ body.first-visit-blocking #app {
   cursor: default;
 }
 
-.first-visit-option:has(input:disabled):hover {
+.first-visit-option-cell:has(input:disabled) {
   border-color: var(--color-border);
 }
 
@@ -5479,13 +5516,6 @@ body.first-visit-blocking #app {
   accent-color: var(--color-accent);
 }
 
-.first-visit-remember-hint {
-  display: block;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  font-weight: 400;
-}
-
 #first-visit-modal .modal-footer {
   display: flex;
   justify-content: flex-end;
@@ -5507,7 +5537,7 @@ body.first-visit-blocking #app {
 }
 
 @media (forced-colors: active) {
-  .first-visit-option {
+  .first-visit-option-cell {
     border: 1px solid ButtonText;
   }
 
@@ -5530,6 +5560,13 @@ body.first-visit-blocking #app {
 @media (max-width: 900px) {
   .first-visit-options {
     flex-direction: column;
+  }
+
+  /* U-19: the four bullets stack single-column, still DOM order 1-4. */
+  .first-visit-note-list {
+    grid-auto-flow: row;
+    grid-template-columns: none;
+    grid-template-rows: none;
   }
 
   /* Stacked: Forge stays on top, Classic below, matching the card order. */
