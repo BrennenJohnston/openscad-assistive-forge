@@ -102,6 +102,30 @@ function fullManifest() {
 const MOCK_BASE = 'https://raw.githubusercontent.com/testuser/testrepo/main'
 const MANIFEST_URL = `${MOCK_BASE}/forge-manifest.json`
 
+// UF-9 P1: parameter groups render as <details> collapsed by default
+// (F5, owner decision 2026-05-15) — even a group-less SCAD lands in one
+// default group — so a .param-control is attached yet hidden. Prove the
+// load, expand the groups, then assert visibility.
+async function expectParamsLoaded(page) {
+  await expect(page.locator('.param-control').first()).toBeAttached({ timeout: 10000 })
+  // The manifest deep-link flow raises the "Shared Project" save-copy modal
+  // (Step 6 of the deep-link lifecycle, ~300ms after first-visit clears);
+  // it intercepts pointer events, so clear it before clicking Expand all.
+  const skipBtn = page.locator('#manifestSaveCopySkip')
+  try {
+    await skipBtn.waitFor({ state: 'visible', timeout: 2000 })
+    await skipBtn.click()
+    await skipBtn.waitFor({ state: 'hidden', timeout: 3000 })
+  } catch {
+    // Modal did not appear for this manifest / was already dismissed
+  }
+  const expandAll = page.locator('#expandAllGroupsBtn')
+  if (await expandAll.isVisible().catch(() => false)) {
+    await expandAll.click()
+  }
+  await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 })
+}
+
 // ---------------------------------------------------------------------------
 // Test Suite: Valid Manifest Loading
 // ---------------------------------------------------------------------------
@@ -134,7 +158,7 @@ test.describe('Manifest Loading - Valid Manifests', () => {
     await expect(mainInterface).toBeVisible({ timeout: 30000 })
 
     // Parameters should render
-    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 })
+    await expectParamsLoaded(page)
 
     // Status bar should show project name
     const statusText = await page.locator('#statusArea, .status-bar').textContent()
@@ -155,7 +179,7 @@ test.describe('Manifest Loading - Valid Manifests', () => {
     await expect(mainInterface).toBeVisible({ timeout: 30000 })
 
     // Should have parameters from the SCAD file
-    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 })
+    await expectParamsLoaded(page)
   })
 
   test('loads manifest with defaults.skipWelcome=true and skips welcome screen', async ({ page }) => {
@@ -197,7 +221,7 @@ test.describe('Manifest Loading - Valid Manifests', () => {
     await expect(mainInterface).toBeVisible({ timeout: 30000 })
 
     // Wait for parameters to load
-    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 })
+    await expectParamsLoaded(page)
 
     // With autoPreview, the render should have started or completed
     // Look for any sign of rendering activity (progress bar, canvas, status update)
@@ -414,7 +438,7 @@ test.describe('Manifest Loading - Sequential Loads', () => {
     await page.goto(`/?manifest=${encodeURIComponent(MANIFEST_URL)}`)
     const mainInterface = page.locator('#mainInterface')
     await expect(mainInterface).toBeVisible({ timeout: 30000 })
-    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 })
+    await expectParamsLoaded(page)
 
     // Second manifest (different project with different params)
     const MOCK_BASE_2 = 'https://raw.githubusercontent.com/testuser/secondrepo/main'
@@ -445,7 +469,7 @@ test.describe('Manifest Loading - Sequential Loads', () => {
 
     await page.goto(`/?manifest=${encodeURIComponent(MANIFEST_URL_2)}`)
     await expect(mainInterface).toBeVisible({ timeout: 30000 })
-    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 })
+    await expectParamsLoaded(page)
   })
 })
 

@@ -16,6 +16,32 @@ test.beforeEach(async ({ page }) => {
   })
 })
 
+// F5 (owner decision 2026-05-15): parameter groups render as <details>
+// collapsed by default, so a .param-control can be attached yet hidden
+// inside its group. Prove the parameters loaded first, then expand the
+// groups so the visibility assertion still means what it meant when these
+// deep-link tests were written (UF-9 P1; this was D-11's real mechanism —
+// not a dev-vs-deployed lane difference).
+async function expectParamsLoaded(page) {
+  await expect(page.locator('.param-control').first()).toBeAttached({ timeout: 10000 })
+  // Some example sources raise the save-project prompt (q-charm loads as
+  // 'program-example'); its dialog intercepts pointer events, so clear it
+  // before clicking anything.
+  const notNow = page.locator('#saveProjectNotNow')
+  try {
+    await notNow.waitFor({ state: 'visible', timeout: 2000 })
+    await notNow.click()
+    await notNow.waitFor({ state: 'hidden', timeout: 3000 })
+  } catch {
+    // Save prompt did not appear for this example source
+  }
+  const expandAll = page.locator('#expandAllGroupsBtn')
+  if (await expandAll.isVisible().catch(() => false)) {
+    await expandAll.click()
+  }
+  await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 })
+}
+
 test.describe('Example Deep-Links', () => {
   test('loads simple-box via deep-link parameter', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
@@ -27,7 +53,7 @@ test.describe('Example Deep-Links', () => {
     await expect(mainInterface).toBeVisible({ timeout: 20000 })
     
     // Should have parameters loaded (use .first() to avoid strict mode on multi-match)
-    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 })
+    await expectParamsLoaded(page)
   })
 
   test('loads colored-box via deep-link parameter', async ({ page }) => {
@@ -38,7 +64,7 @@ test.describe('Example Deep-Links', () => {
     const mainInterface = page.locator('#mainInterface')
     await expect(mainInterface).toBeVisible({ timeout: 20000 })
     
-    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 })
+    await expectParamsLoaded(page)
   })
 
   test('handles invalid example name gracefully', async ({ page }) => {
@@ -120,7 +146,7 @@ test.describe('Bracelet Clip Charm Smoke Tests', () => {
     const mainInterface = page.locator('#mainInterface')
     await expect(mainInterface).toBeVisible({ timeout: 20000 })
 
-    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 })
+    await expectParamsLoaded(page)
   })
 
   test('welcome screen has Charm Customizer card with variant selector including Bracelet Clip Charm', async ({ page }) => {
@@ -152,7 +178,7 @@ test.describe('Deep-Link Aliases', () => {
     const mainInterface = page.locator('#mainInterface')
     await expect(mainInterface).toBeVisible({ timeout: 20000 })
 
-    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 })
+    await expectParamsLoaded(page)
   })
 
   test('?example=cable-organizer loads via example param', async ({ page }) => {
@@ -163,6 +189,6 @@ test.describe('Deep-Link Aliases', () => {
     const mainInterface = page.locator('#mainInterface')
     await expect(mainInterface).toBeVisible({ timeout: 20000 })
 
-    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 })
+    await expectParamsLoaded(page)
   })
 })

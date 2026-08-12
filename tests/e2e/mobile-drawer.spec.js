@@ -28,7 +28,12 @@ async function loadSampleFile(page) {
 
   const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
   await page.setInputFiles('#fileInput', fixturePath);
-  await page.waitForSelector('.param-control', { timeout: 30_000 });
+  // F5 (owner decision 2026-05-15): parameter groups render collapsed by
+  // default, and at the mobile viewport the params also sit inside the
+  // closed drawer — .param-control is attached but never "visible" here.
+  // Attached is the load-complete signal; each test opens the drawer
+  // itself (UF-9 P1: this wait was the whole file's 13/13 local red).
+  await page.waitForSelector('.param-control', { state: 'attached', timeout: 30_000 });
 
   // Dismiss the "Save this file for quick access?" modal if it appears.
   // The modal may render slightly after .param-control, so we must
@@ -93,10 +98,16 @@ test.describe('Mobile Drawer', () => {
     await page.locator('#mobileDrawerToggle').click();
     // Focus is moved into the drawer after the open transition
     await page.waitForTimeout(400);
-    
-    // Tab through all elements, should cycle within drawer
-    const firstFocusable = page.locator('#paramPanel button, #paramPanel input').first();
-    await expect(firstFocusable).toBeFocused();
+
+    // The drawer focuses its first FOCUSABLE element; the first matching
+    // button in DOM order is the disabled Undo toolbar button, so assert
+    // the a11y contract directly — focus landed inside the drawer
+    // (UF-9 P1: the literal-first assertion went stale when the
+    // Undo/Redo toolbar row was added).
+    const focusInsideDrawer = await page.evaluate(
+      () => document.activeElement.closest('#paramPanel') !== null
+    );
+    expect(focusInsideDrawer).toBe(true);
     
     // Many tabs should keep focus in drawer
     for (let i = 0; i < 20; i++) {
