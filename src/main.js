@@ -3703,14 +3703,29 @@ async function initApp() {
     ];
   });
 
+  /**
+   * Is there a code editor the user can see right now? ModeManager's expert
+   * flag stays false in Classic even while the dock's Editor pane is mounted
+   * and visible (R3b-1), so the mode alone cannot answer this. The Edit-menu
+   * gates, the live font-size apply and jump-to-line all ask this one
+   * question — asking it three different ways is how the two below stayed
+   * dead in Classic while the menu items enabled (UF-10).
+   */
+  function isEditorOnScreen() {
+    const box = document
+      .getElementById('expertModePanel')
+      ?.getBoundingClientRect();
+    return Boolean(box && box.width > 0 && box.height > 0);
+  }
+
   // Initialize edit actions controller (Copy viewport, camera values, error nav, font size)
   const editActionsController = getEditActionsController({
     getPreviewManager: () => previewManager,
     getErrorLogPanel: () => errorLogPanel,
     onJumpToLine: (file, line) => {
       const modeManager = getModeManager();
-      if (modeManager?.isExpertMode?.() && modeManager.getEditorInstance?.()) {
-        const editor = modeManager.getEditorInstance();
+      const editor = modeManager?.getEditorInstance?.();
+      if (editor && (modeManager.isExpertMode?.() || isEditorOnScreen())) {
         if (editor.revealLineInCenter) editor.revealLineInCenter(line);
         if (editor.setPosition)
           editor.setPosition({ lineNumber: line, column: 1 });
@@ -3719,13 +3734,11 @@ async function initApp() {
     },
     onFontSizeChange: (size) => {
       const modeManager = getModeManager();
-      if (modeManager?.isExpertMode?.() && modeManager.getEditorInstance?.()) {
-        const editor = modeManager.getEditorInstance();
-        // Was `editor.updateOptions({ fontSize })`, a method neither editor
-        // has ever had. Guarded by `if`, so Edit ▸ Increase/Decrease Font
-        // Size saved the number, updated its readout and announced the new
-        // size while changing nothing on screen — the worst shape of defect
-        // for the low-vision users the control exists for.
+      const editor = modeManager?.getEditorInstance?.();
+      if (editor && (modeManager.isExpertMode?.() || isEditorOnScreen())) {
+        // setFontSize, not updateOptions: the latter never existed on either
+        // editor, which is how this control once saved and announced sizes
+        // without changing anything on screen (R-IV).
         editor.setFontSize?.(size);
       }
     },
@@ -3744,17 +3757,7 @@ async function initApp() {
     const modeManager = getModeManager();
     const editor = modeManager?.getEditorInstance?.();
     const expertMode = modeManager?.isExpertMode?.();
-    // "Is there an editor the user can actually type in?" ModeManager's expert
-    // flag stays false in Classic even though the dock's Editor pane is
-    // mounted, visible and holding the project — so asking it alone disabled
-    // every editor action in the one theme this release is about.
-    const editorBox = document
-      .getElementById('expertModePanel')
-      ?.getBoundingClientRect();
-    const editorOnScreen = Boolean(
-      editorBox && editorBox.width > 0 && editorBox.height > 0
-    );
-    const canEdit = Boolean(editor) && (expertMode || editorOnScreen);
+    const canEdit = Boolean(editor) && (expertMode || isEditorOnScreen());
     const editorTip = 'Available when the Code Editor is open';
 
     // Undo and Redo follow the focus the menu bar just took: from the code
