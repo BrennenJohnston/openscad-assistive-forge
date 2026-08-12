@@ -5301,6 +5301,42 @@ body.first-visit-blocking #app {
   width: min(94vw, 1160px);
 }
 
+/* U-20: reset.css strips colour and underline from every anchor, and no
+   scoped rule ever put them back here, so the modal's links read as body
+   text in every theme. Same shape as .role-path-meta a — the house link
+   convention. */
+.modal-first-visit a {
+  color: var(--color-accent-fg);
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 2px;
+  transition:
+    color var(--motion-base),
+    text-decoration-color var(--motion-base);
+}
+
+.modal-first-visit a:hover {
+  color: var(--color-accent-hover);
+  text-decoration-thickness: 2.5px;
+}
+
+.modal-first-visit a:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+@supports not selector(:focus-visible) {
+  .modal-first-visit a:focus {
+    outline: 3px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+}
+
+.modal-first-visit a[target='_blank']::after {
+  content: '\2009\2197';
+  font-size: 0.85em;
+}
+
 .first-visit-choice {
   border: 0;
   padding: 0;
@@ -5462,6 +5498,14 @@ body.first-visit-blocking #app {
   outline-offset: 2px;
 }
 
+:root[data-high-contrast='true'] .modal-first-visit a {
+  text-decoration-thickness: 2px;
+}
+
+:root[data-high-contrast='true'] .modal-first-visit a:hover {
+  text-decoration-thickness: 3px;
+}
+
 @media (forced-colors: active) {
   .first-visit-option {
     border: 1px solid ButtonText;
@@ -5470,6 +5514,16 @@ body.first-visit-blocking #app {
   .first-visit-option input[type='radio']:checked {
     forced-color-adjust: none;
     outline: 2px solid Highlight;
+  }
+
+  .modal-first-visit a {
+    color: LinkText;
+    text-decoration: underline;
+    forced-color-adjust: none;
+  }
+
+  .modal-first-visit a:hover {
+    color: ActiveText;
   }
 }
 
