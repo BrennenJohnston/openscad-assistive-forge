@@ -15561,6 +15561,21 @@ if (typeof window !== 'undefined') {
     },
 
     /**
+     * Grid scene truth (UF-14). `visible` reads the helper actually in the
+     * scene, not the preference — the preference matrix asserts what is
+     * painted, exactly as axisTickOverlay() does for ticks.
+     * @returns {{enabled: boolean, visible: boolean|null, size: {widthMm: number, heightMm: number}|null}|null}
+     */
+    grid() {
+      if (!previewManager) return null;
+      return {
+        enabled: Boolean(previewManager.gridEnabled),
+        visible: previewManager.gridHelper?.visible ?? null,
+        size: previewManager.getGridSize?.() ?? null,
+      };
+    },
+
+    /**
      * Export quality mode (UF-11). File > Export Quality became this
      * setting's only control and it has no DOM element to read, so the
      * memory-banner and recovery specs prove changes here.
