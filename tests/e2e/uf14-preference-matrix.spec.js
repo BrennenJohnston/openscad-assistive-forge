@@ -418,4 +418,147 @@ test.describe('UF-14 per-interface preference matrix', () => {
     p = await probe(page);
     expectForgeSide(p);
   });
+
+  // UF-15 P3 (U-26d): the cross-wire candidates OUTSIDE the per-UI set.
+  // The signed Q-40 table marks auto-preview, preview quality and the
+  // editor prefs APP-LEVEL (one value, both interfaces), and projection is
+  // live camera state SHARED BY ORDER (never persisted at all). MEASURED
+  // while writing this: auto-preview enablement is itself live session
+  // state — its storage key is written only by memory recovery and read by
+  // nothing — so its sharing proof is the live control state, not storage.
+  // This case proves the sharing is sanctioned and whole: values set in
+  // Classic arrive in Forge, no row grows a --forge/--classic sibling, and
+  // nothing invents a projection key. It also pins UF-15 P2's promise: a
+  // scheme choice persists at once, announces, and the reopened control
+  // shows it. One WASM load.
+  test('uf15-matrix-app-level: shared rows stay shared and a scheme choice is never lost', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+    });
+    await loadProject(page);
+    await switchToStandardMode(page);
+    await enterClassicStandard(page);
+
+    const canvases = await page.locator('.preview-panel canvas').count();
+    test.skip(canvases === 0, 'no WebGL renderer: no scene to assert on');
+
+    // ── The scheme choice is saved and announced the moment it is made
+    // (UF-15 P2), and the reopened dialog shows it (the multi-copy rule).
+    await page.locator('#editMenuBtn').click();
+    await page.getByRole('menuitem', { name: /preferences/i }).click();
+    await page.locator('#prefs-tab-3dview').click();
+    await page.locator('#prefsScheme-nature').check();
+    // The announcer clears itself after 1.5s; probe inside the window.
+    await page.waitForTimeout(400);
+    expect(
+      await page.evaluate(
+        () => document.getElementById('srAnnouncer')?.textContent ?? null
+      )
+    ).toBe('Color scheme Nature');
+    await page.locator('#preferencesModalDone').click();
+
+    const schemeKeys = await readScoped(page, [K.scheme]);
+    expect(schemeKeys[`${K.scheme}--classic`]).toBe('nature');
+    expect(schemeKeys[`${K.scheme}--forge`]).toBeNull();
+
+    await page.locator('#editMenuBtn').click();
+    await page.getByRole('menuitem', { name: /preferences/i }).click();
+    await expect(page.locator('#prefsScheme-nature')).toBeChecked();
+    await page.locator('#preferencesModalDone').click();
+
+    // ── The APP-LEVEL rows, set through Classic's own controls. Auto-
+    // preview off first, so the quality change below cannot queue a
+    // re-render this case would then have to wait out.
+    await page.locator('#classicAutoPreviewCheck').uncheck();
+
+    await page.locator('#editMenuBtn').click();
+    await page.getByRole('menuitem', { name: /preferences/i }).click();
+    await page.locator('#prefs-tab-editor').click();
+    const font = page.locator('#prefsEditorFontSize');
+    await font.fill('18');
+    await font.dispatchEvent('change');
+    await page.locator('#preferencesModalDone').click();
+
+    await page.locator('#viewMenuBtn').click();
+    await page.getByRole('menuitem', { name: 'Preview Quality' }).click();
+    await page
+      .getByRole('menuitemradio', { name: 'Fast (lower resolution)' })
+      .click();
+
+    await page.locator('#classicTbOrthogonalBtn').click();
+    await expect
+      .poll(() => page.evaluate(() => window.__forgeDebug.projection()), {
+        timeout: 5_000,
+      })
+      .toBe('orthographic');
+
+    // Storage truth: one unsuffixed value per row, no namespaced siblings,
+    // and no projection key exists at all.
+    const APP_LEVEL_BASES = [
+      'openscad-forge-auto-preview-enabled',
+      'openscad-forge-preview-quality-mode',
+      'openscad-forge-editor-font-size',
+      'openscad-forge-editor-indent-width',
+      'openscad-forge-editor-tab-width',
+      'openscad-forge-editor-line-wrap',
+      'openscad-forge-editor-highlight-line',
+    ];
+    const shared = await page.evaluate((bases) => {
+      const keys = Object.keys(localStorage);
+      return {
+        quality: localStorage.getItem('openscad-forge-preview-quality-mode'),
+        editorFont: localStorage.getItem('openscad-forge-editor-font-size'),
+        projectionKeys: keys.filter((k) => /projection/i.test(k)),
+        scopedSiblings: keys.filter((k) =>
+          bases.some((b) => k === `${b}--forge` || k === `${b}--classic`)
+        ),
+      };
+    }, APP_LEVEL_BASES);
+    expect(shared.quality).toBe('fast');
+    expect(shared.editorFont).toBe('18');
+    expect(shared.projectionKeys).toEqual([]);
+    expect(shared.scopedSiblings).toEqual([]);
+
+    // ── Forge: every shared row ARRIVES; the per-UI scheme does not.
+    await backToForge(page);
+    expect(
+      await page.evaluate(() => window.__forgeDebug.projection())
+    ).toBe('orthographic');
+    // The Classic uncheck reached Forge's toggle live (the shared
+    // controller state — auto-preview's sharing is not a storage story).
+    expect(
+      await page.evaluate(
+        () => document.getElementById('autoPreviewToggle')?.checked
+      )
+    ).toBe(false);
+    expect(
+      await page.evaluate(() => window.__forgeDebug.previewColorScheme())
+    ).toBe('light');
+
+    await page.locator('#editMenuBtn').click();
+    await page.getByRole('menuitem', { name: /preferences/i }).click();
+    await page.locator('#prefs-tab-editor').click();
+    await expect(page.locator('#prefsEditorFontSize')).toHaveValue('18');
+    // And the scheme group is Classic-only here (Q-41).
+    await page.locator('#prefs-tab-3dview').click();
+    await expect(page.locator('#prefsColorSchemeList')).toBeHidden();
+    await page.locator('#preferencesModalDone').click();
+
+    // ── Classic again: its own scheme returns; the live camera stays put.
+    await page.locator('#classicModeToggle').click();
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+    await page.waitForTimeout(1200);
+    expect(
+      await page.evaluate(() => window.__forgeDebug.previewColorScheme())
+    ).toBe('nature');
+    expect(
+      await page.evaluate(() => window.__forgeDebug.projection())
+    ).toBe('orthographic');
+  });
 });

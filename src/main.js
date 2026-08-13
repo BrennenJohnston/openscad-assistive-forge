@@ -153,6 +153,7 @@ import {
   STORAGE_KEY_STATUS_BAR,
   STORAGE_KEY_GRID,
   STORAGE_KEY_GRID_SIZE,
+  STORAGE_KEY_VIEWPORT_SCHEME,
   STORAGE_KEY_MODEL_COLOR,
   STORAGE_KEY_MODEL_COLOR_ENABLED,
   STORAGE_KEY_MODEL_OPACITY,
@@ -4047,10 +4048,26 @@ async function initApp() {
         handler: () => {
           initPreferencesDialog({
             onOpenShortcuts: _openShortcutsModal,
-            getColorScheme: () =>
-              previewManager?.getViewportScheme?.() ?? 'cornfield',
+            getColorScheme: () => {
+              if (previewManager) return previewManager.getViewportScheme();
+              // Before the first preview the manager does not exist, but a
+              // saved choice does — the dialog must show it, not the default
+              // (the multi-copy rule: control and effect must not disagree).
+              const saved = readScopedPref(STORAGE_KEY_VIEWPORT_SCHEME);
+              return VIEWPORT_SCHEMES.some((s) => s.id === saved)
+                ? saved
+                : 'cornfield';
+            },
             onColorSchemeChange: (id) => {
-              if (!previewManager?.setViewportScheme(id)) return;
+              if (previewManager) {
+                if (!previewManager.setViewportScheme(id)) return;
+              } else {
+                // No preview yet (the manager is created by the first
+                // geometry): persist the choice so the first paint honors
+                // it instead of silently dropping it (UF-15 P2).
+                if (!VIEWPORT_SCHEMES.some((s) => s.id === id)) return;
+                writeScopedPref(STORAGE_KEY_VIEWPORT_SCHEME, id);
+              }
               const label =
                 VIEWPORT_SCHEMES.find((s) => s.id === id)?.label ?? id;
               // Instant-apply is silent for a screen-reader user otherwise:
@@ -15583,6 +15600,17 @@ if (typeof window !== 'undefined') {
      */
     exportQuality() {
       return exportQualityMode;
+    },
+
+    /**
+     * Camera projection scene truth (UF-15). Projection is live camera
+     * state shared across the interfaces by order — never persisted — so
+     * the preference matrix proves flip continuity here rather than
+     * through either interface's own toggle button.
+     * @returns {string|null}
+     */
+    projection() {
+      return previewManager?.projectionMode ?? null;
     },
 
     /**

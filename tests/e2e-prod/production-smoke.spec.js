@@ -274,6 +274,24 @@ test.describe('Production build behind the shipped CSP', () => {
     }
     await page.locator('#uiModeToggle').click();
 
+    // Q-41 (UF-15): the scheme group exists only in Classic now, so the
+    // styling proof runs where the panel actually paints for a user.
+    // Classic Standard keeps the menu bar (Simplified hides it).
+    await page.locator('#classicModeToggle').click();
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+    const densityToggle = page.locator('#classicDensityToggle');
+    await expect(densityToggle).toBeVisible();
+    if ((await densityToggle.getAttribute('aria-checked')) !== 'true') {
+      await densityToggle.click();
+    }
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-classic-density',
+      'standard'
+    );
+
     await page.locator('#editMenuBtn').click();
     await page
       .locator('#editMenuItems')

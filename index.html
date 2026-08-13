@@ -7648,7 +7648,12 @@
             tabindex="0"
             hidden
           >
-            <fieldset class="preferences-fieldset">
+            <!-- Q-41 (UF-15): outside Classic the app theme drives the
+                 viewport so high contrast keeps working, and these radios
+                 repainted nothing while looking live. Owner decision: the
+                 group exists only where it works (hidden by components.css
+                 when body[data-ui-mode] is not classic). -->
+            <fieldset class="preferences-fieldset" id="prefsColorSchemeGroup">
               <legend class="preferences-legend">Color scheme</legend>
               <p id="prefs-scheme-note" class="preferences-field-note">
                 Sets the Classic 3D view's background, model and edge colors. In

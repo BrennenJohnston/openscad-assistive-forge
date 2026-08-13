@@ -191,7 +191,7 @@ test('every unavailable tab is disabled and names its reason', async ({
   }
 });
 
-test('the 3D View tab is live and no longer says it is not built', async ({
+test('the 3D View tab is live and the scheme group exists only in Classic (Q-41)', async ({
   page,
 }) => {
   test.setTimeout(240_000);
@@ -204,9 +204,38 @@ test('the 3D View tab is live and no longer says it is not built', async ({
   await expect(page.locator('#prefs-reason-3dview')).toHaveCount(0);
 
   await tab.click();
+
+  // Q-41 (UF-15, owner decision): outside Classic the radios repainted
+  // nothing while looking live — the app theme drives the viewport there
+  // so high contrast keeps working. The group now exists only where it
+  // works: display:none in Forge, out of the accessibility tree.
+  await expect(page.locator('#prefsColorSchemeGroup')).toBeAttached();
+  await expect(page.locator('#prefsColorSchemeList')).toBeHidden();
+
+  // The rest of the tab stays live in Forge. Warnings-in-3D-view has no
+  // engine here, so it is disabled and says why.
+  const warn = page.locator('#prefsShowWarnings3D');
+  await expect(warn).toBeDisabled();
+  await expect(page.locator('#prefs-reason-warnings3d')).toBeVisible();
+
+  // Mouse-centric zoom IS a real capability, so it ships live.
+  await expect(page.locator('#prefsMouseCentricZoom')).toBeEnabled();
+
+  // In Classic the group is present with the desktop's ten, in the
+  // desktop's order (OpenSCAD_2.png).
+  await page.locator('#preferencesModalDone').click();
+  await page.locator('#classicModeToggle').click();
+  await expect(page.locator('body')).toHaveAttribute('data-ui-mode', 'classic');
+  await page.waitForTimeout(1_000);
+
+  await page.locator('#editMenuBtn').click();
+  await page
+    .locator('#editMenuItems')
+    .getByText('Preferences…', { exact: true })
+    .click();
+  await page.locator('#prefs-tab-3dview').click();
   await expect(page.locator('#prefsColorSchemeList')).toBeVisible();
 
-  // The desktop's ten, in the desktop's order (OpenSCAD_2.png).
   const labels = await page
     .locator('#prefsColorSchemeList label')
     .allTextContents();
@@ -222,14 +251,6 @@ test('the 3D View tab is live and no longer says it is not built', async ({
     'Tomorrow',
     'Tomorrow Night',
   ]);
-
-  // Warnings-in-3D-view has no engine here, so it is disabled and says why.
-  const warn = page.locator('#prefsShowWarnings3D');
-  await expect(warn).toBeDisabled();
-  await expect(page.locator('#prefs-reason-warnings3d')).toBeVisible();
-
-  // Mouse-centric zoom IS a real capability, so it ships live.
-  await expect(page.locator('#prefsMouseCentricZoom')).toBeEnabled();
 });
 
 test('the Advanced tab is live and hosts the engine and cache rows (UF-11)', async ({

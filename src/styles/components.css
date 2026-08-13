@@ -15398,6 +15398,15 @@ body.tutorial-body-locked {
   max-width: 60ch;
 }
 
+/* Q-41 (UF-15): the scheme governs only the Classic viewport; outside
+   Classic the app theme paints it so high contrast keeps working. The
+   radios used to sit in Forge looking live while repainting nothing —
+   owner decision: the group exists only where it works. display:none is
+   the honest hide (out of the accessibility tree, not merely invisible). */
+body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
+  display: none;
+}
+
 /* No max-height here on purpose. .modal-content already scrolls at
    min(90vh, 900px), so capping the list too would nest a second scroll
    region inside it and hide three of the ten schemes on a screen with room
