@@ -1,13 +1,16 @@
 /**
- * Welcome spotlight (U-23, UF-16)
+ * Welcome spotlight (U-23 UF-16, U-24 UF-17)
  *
- * The Beginners Start Here card carries a passive spotlight (halo + tag +
- * dismiss) while the intro tutorial family was never opened, completed, or
- * dismissed — recorded in the persistent registry under
- * openscad-forge-tutorial-state. The spotlight may only exist after the
+ * ONE welcome card at a time carries a passive spotlight (halo + tag +
+ * dismiss) — recorded in the persistent registry under
+ * openscad-forge-tutorial-state. Precedence (Q-44a): the Welcome Page
+ * Tour card wears it while its family was never opened, completed, or
+ * dismissed; afterwards the Beginners Start Here card wears it while the
+ * intro family is untouched. The spotlight may only exist after the
  * first-visit gate resolves (inside the inert #app it would be
- * unreachable), announces exactly one polite tip, and clears live on any
- * intro-family registry write. Dismissal is permanent (Q-43a).
+ * unreachable), announces exactly one polite tip, and clears live on its
+ * own family's registry write. Dismissal is permanent (Q-43a) and hands
+ * over on the NEXT visit, not instantly.
  *
  * @license GPL-3.0-or-later
  */
@@ -17,7 +20,6 @@ const REGISTRY_KEY = 'openscad-forge-tutorial-state';
 const SPOTLIGHT_CARD = '.role-path-card.welcome-spotlight';
 const TAG = '.welcome-spotlight-tag';
 const DISMISS = '.welcome-spotlight-dismiss';
-const WASM_READY_TIMEOUT = 180_000;
 
 async function stampFirstVisitSeen(page) {
   await page.addInitScript(() => {
@@ -75,11 +77,12 @@ test.describe('Welcome spotlight (U-23, UF-16)', () => {
     await page.locator('#first-visit-continue').click();
     await expect(page.locator('#first-visit-modal')).toBeHidden();
 
-    // Now the card carries the halo, the tag, and a real dismiss button.
+    // Now exactly ONE card carries the halo — the Welcome Page Tour card
+    // (Q-44a precedence), with the tag and a real dismiss button.
     await expect(page.locator(SPOTLIGHT_CARD)).toHaveCount(1);
     const card = page.locator(SPOTLIGHT_CARD);
     await expect(card.locator('.role-path-title')).toHaveText(
-      'Beginners Start Here'
+      'Welcome Page Tour'
     );
     await expect(card.locator('.welcome-spotlight-tag-text')).toHaveText(
       'New here? Start with this tour'
@@ -96,7 +99,7 @@ test.describe('Welcome spotlight (U-23, UF-16)', () => {
       .poll(
         () =>
           page.evaluate(() =>
-            window.__said.some((t) => t.includes('Beginners Start Here'))
+            window.__said.some((t) => t.includes('Welcome Page Tour'))
           ),
         { timeout: 5_000 }
       )
@@ -106,21 +109,16 @@ test.describe('Welcome spotlight (U-23, UF-16)', () => {
     expect(await readRegistry(page)).toBeNull();
   });
 
-  test('starting the tutorial from the card clears the spotlight and records opened', async ({
+  test('starting the welcome tour from the card clears the spotlight and records opened', async ({
     page,
   }) => {
-    test.setTimeout(240_000);
     await stampFirstVisitSeen(page);
     await page.goto('/');
     await expect(page.locator(SPOTLIGHT_CARD)).toHaveCount(1);
 
-    // The real U-23 path: the card's own Start button (loads the example,
-    // then launches the intro tour — WASM must be up for the load).
-    await page.waitForSelector('body[data-wasm-ready="true"]', {
-      state: 'attached',
-      timeout: WASM_READY_TIMEOUT,
-    });
-    await page.locator('button[data-tutorial="intro"]').click();
+    // The real U-24 path: the card's own Start button. No example loads,
+    // so no WASM wait is needed — the tour lives on the welcome surface.
+    await page.locator('button[data-tutorial="welcome"]').click();
 
     // The registry write at startTutorial's commitment point removes the
     // decoration live and durably.
@@ -129,20 +127,25 @@ test.describe('Welcome spotlight (U-23, UF-16)', () => {
     });
     await expect(page.locator(TAG)).toHaveCount(0);
     await expect
-      .poll(async () => (await readRegistry(page))?.intro?.opened, {
+      .poll(async () => (await readRegistry(page))?.welcome?.opened, {
         timeout: 10_000,
       })
       .toEqual(expect.any(Number));
 
+    // Q-44a soft handoff: the NEXT visit hands the tip to the Beginners
+    // card, because the welcome family now carries a record and intro
+    // does not.
     await page.reload();
     await expect(page.locator('#welcomeScreen')).toBeVisible({
       timeout: 30_000,
     });
-    await expect(page.locator(SPOTLIGHT_CARD)).toHaveCount(0);
-    await expect(page.locator(TAG)).toHaveCount(0);
+    await expect(page.locator(SPOTLIGHT_CARD)).toHaveCount(1);
+    await expect(
+      page.locator(SPOTLIGHT_CARD).locator('.role-path-title')
+    ).toHaveText('Beginners Start Here');
   });
 
-  test('Dismiss tip is permanent (Q-43a): records dismissed, hands focus back, survives reload', async ({
+  test('Dismiss tip is permanent (Q-43a) and hands over on the next visit, not instantly (Q-44a)', async ({
     page,
   }) => {
     await stampFirstVisitSeen(page);
@@ -152,13 +155,29 @@ test.describe('Welcome spotlight (U-23, UF-16)', () => {
 
     await dismiss.click();
 
+    // No instant whack-a-mole: the Beginners tip must NOT pop up in the
+    // same visit the welcome tip was dismissed.
     await expect(page.locator(SPOTLIGHT_CARD)).toHaveCount(0);
     await expect(page.locator(TAG)).toHaveCount(0);
     // Focus lands on the card's Start button, never on <body>.
-    await expect(page.locator('button[data-tutorial="intro"]')).toBeFocused();
+    await expect(page.locator('button[data-tutorial="welcome"]')).toBeFocused();
     const registry = await readRegistry(page);
-    expect(registry.intro.dismissed).toEqual(expect.any(Number));
-    expect(registry.intro.opened).toBeUndefined();
+    expect(registry.welcome.dismissed).toEqual(expect.any(Number));
+    expect(registry.welcome.opened).toBeUndefined();
+    expect(registry.intro).toBeUndefined();
+
+    // Next visit: the Beginners card wears the tip. Dismissing that one
+    // too ends the affordance for good.
+    await page.reload();
+    await expect(page.locator('#welcomeScreen')).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page.locator(SPOTLIGHT_CARD)).toHaveCount(1);
+    await expect(
+      page.locator(SPOTLIGHT_CARD).locator('.role-path-title')
+    ).toHaveText('Beginners Start Here');
+    await page.locator(DISMISS).click();
+    await expect(page.locator(SPOTLIGHT_CARD)).toHaveCount(0);
 
     await page.reload();
     await expect(page.locator('#welcomeScreen')).toBeVisible({
@@ -168,7 +187,7 @@ test.describe('Welcome spotlight (U-23, UF-16)', () => {
     await expect(page.locator(TAG)).toHaveCount(0);
   });
 
-  test('completing a tutorial records completed; other families leave the intro spotlight alone', async ({
+  test('completing a tutorial records completed; other families leave the welcome spotlight alone', async ({
     page,
   }) => {
     await stampFirstVisitSeen(page);
@@ -210,9 +229,13 @@ test.describe('Welcome spotlight (U-23, UF-16)', () => {
     const registry = await readRegistry(page);
     expect(registry['voice-input'].opened).toEqual(expect.any(Number));
     expect(registry['voice-input'].completed).toEqual(expect.any(Number));
-    // Family isolation: the intro spotlight is still up and unrecorded.
+    // Family isolation: the welcome spotlight is still up and unrecorded.
+    expect(registry.welcome).toBeUndefined();
     expect(registry.intro).toBeUndefined();
     await expect(page.locator(SPOTLIGHT_CARD)).toHaveCount(1);
+    await expect(
+      page.locator(SPOTLIGHT_CARD).locator('.role-path-title')
+    ).toHaveText('Welcome Page Tour');
   });
 
   test('reduced motion collapses the pulse to a static halo', async ({

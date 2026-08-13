@@ -345,3 +345,156 @@ test('tutorial: no infinite retry loop when target is missing', async ({ page })
     'Tutorial should exit or show recovery dialog after max failures — not loop indefinitely'
   ).toBe(true)
 })
+
+// ── Welcome page tour (U-24, UF-17) ──────────────────────────────────────────
+
+test.describe('Welcome page tour (U-24, UF-17)', () => {
+  const REGISTRY_KEY = 'openscad-forge-tutorial-state'
+
+  const readRegistry = (page) =>
+    page.evaluate((key) => {
+      const raw = localStorage.getItem(key)
+      return raw ? JSON.parse(raw) : null
+    }, REGISTRY_KEY)
+
+  /** Click Next/Finish until the tour closes (welcome steps are all passive). */
+  async function walkToFinish(page, maxClicks = 20) {
+    for (let i = 0; i < maxClicks; i++) {
+      const overlayGone = await page
+        .locator('.tutorial-panel')
+        .isHidden()
+        .catch(() => true)
+      if (overlayGone) return
+      await page.locator('#tutorialNextBtn').click()
+      await page.waitForTimeout(300)
+    }
+  }
+
+  test('Forge: end to end from the card, recording the family and chaining to Beginners once', async ({
+    page,
+  }) => {
+    await setBaseline(page)
+    await page.goto('/')
+    await expect(page.locator('#welcomeScreen')).toBeVisible({ timeout: 30_000 })
+
+    await page.locator('#startWelcomeTourBtn').click()
+    await expect(page.locator('.tutorial-panel')).toBeVisible({ timeout: 10_000 })
+    await expect(page.locator('#tutorial-step-title')).toHaveText('Welcome to the Forge!')
+
+    // opened is written at the commitment point, before any step outcome
+    await expect
+      .poll(async () => (await readRegistry(page))?.welcome?.opened, { timeout: 10_000 })
+      .toEqual(expect.any(Number))
+
+    await walkToFinish(page)
+    await expect(page.locator('.tutorial-panel')).toHaveCount(0, { timeout: 10_000 })
+
+    const registry = await readRegistry(page)
+    expect(registry.welcome.completed).toEqual(expect.any(Number))
+    // The family rule: nothing records under the variant id
+    expect(registry['welcome-classic']).toBeUndefined()
+
+    // The U-24 chain: exactly one spotlight, now on the Beginners card
+    await expect(page.locator('.welcome-spotlight-tag')).toHaveCount(1)
+    await expect(
+      page.locator('.role-path-card.welcome-spotlight .role-path-title')
+    ).toHaveText('Beginners Start Here')
+  })
+
+  test('Classic: the welcome-classic variant walks the chrome-free welcome end to end', async ({
+    page,
+  }) => {
+    await setBaseline(page)
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        'openscad-forge-ui-mode',
+        JSON.stringify({ mode: 'classic', lastCustomMode: 'standard' })
+      )
+    })
+    await page.goto('/')
+    await expect(page.locator('body')).toHaveAttribute('data-ui-mode', 'classic')
+    await expect(page.locator('body')).toHaveAttribute('data-app-surface', 'welcome')
+
+    await page.locator('#startWelcomeTourBtn').click()
+    await expect(page.locator('.tutorial-panel')).toBeVisible({ timeout: 10_000 })
+    // The modeVariants hop: the Classic variant runs, not the Forge tour
+    await expect(page.locator('#tutorial-step-title')).toHaveText('Welcome to Classic!')
+
+    await walkToFinish(page)
+    await expect(page.locator('.tutorial-panel')).toHaveCount(0, { timeout: 10_000 })
+
+    // The family rule: the variant records as the welcome family
+    const registry = await readRegistry(page)
+    expect(registry.welcome.opened).toEqual(expect.any(Number))
+    expect(registry.welcome.completed).toEqual(expect.any(Number))
+    expect(registry['welcome-classic']).toBeUndefined()
+  })
+
+  test('chaining declines when the intro family already has a record', async ({ page }) => {
+    await setBaseline(page)
+    await page.addInitScript((key) => {
+      localStorage.setItem(key, JSON.stringify({ intro: { opened: 1 } }))
+    }, REGISTRY_KEY)
+    await page.goto('/')
+    await expect(page.locator('#welcomeScreen')).toBeVisible({ timeout: 30_000 })
+
+    // Precedence: the welcome card still wears the tip (its family is clear)
+    await expect(
+      page.locator('.role-path-card.welcome-spotlight .role-path-title')
+    ).toHaveText('Welcome Page Tour')
+
+    await page.locator('#startWelcomeTourBtn').click()
+    await expect(page.locator('.tutorial-panel')).toBeVisible({ timeout: 10_000 })
+    await walkToFinish(page)
+    await expect(page.locator('.tutorial-panel')).toHaveCount(0, { timeout: 10_000 })
+
+    // No chain: intro already has a record, so no card is decorated
+    await expect(page.locator('.welcome-spotlight-tag')).toHaveCount(0)
+    await expect(page.locator('.role-path-card.welcome-spotlight')).toHaveCount(0)
+  })
+
+  test('opening a project through the spotlight cutout closes the tour without completing it', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+    await setBaseline(page)
+    await page.goto('/')
+    await expect(page.locator('#welcomeScreen')).toBeVisible({ timeout: 30_000 })
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: 180_000,
+    })
+
+    await page.locator('#startWelcomeTourBtn').click()
+    await expect(page.locator('.tutorial-panel')).toBeVisible({ timeout: 10_000 })
+
+    // Walk to the Open-or-start step, whose cutout exposes Start New Project
+    for (let i = 0; i < 6; i++) {
+      await page.locator('#tutorialNextBtn').click()
+      await page.waitForTimeout(300)
+    }
+    await expect(page.locator('#tutorial-step-title')).toHaveText('Open or start a project')
+
+    await page.locator('#startNewProjectBtn').click()
+    await expect(page.locator('body')).toHaveAttribute('data-app-surface', 'project', {
+      timeout: 60_000,
+    })
+
+    // The user's action wins: the tour is gone, opened recorded, completed not
+    await expect(page.locator('.tutorial-panel')).toHaveCount(0, { timeout: 10_000 })
+    const registry = await readRegistry(page)
+    expect(registry.welcome.opened).toEqual(expect.any(Number))
+    expect(registry.welcome.completed).toBeUndefined()
+  })
+
+  test('no tour can exist while the first-visit modal blocks', async ({ page }) => {
+    // Deliberately no baseline stamp: the modal must be up
+    await page.goto('/')
+    await page
+      .locator('#first-visit-modal:not(.hidden)')
+      .waitFor({ state: 'visible', timeout: 10_000 })
+
+    await expect(page.locator('#app')).toHaveAttribute('inert', '')
+    await expect(page.locator('.tutorial-overlay')).toHaveCount(0)
+  })
+})
