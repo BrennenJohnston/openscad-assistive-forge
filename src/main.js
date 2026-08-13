@@ -164,6 +164,7 @@ import {
   STORAGE_KEY_WASM_INIT_COMPLETED,
   PRESET_SORT_KEY,
 } from './js/storage-keys.js';
+import { ensureScopedPrefsSeeded } from './js/ui-scoped-prefs.js';
 import {
   initImageMeasurement,
   openFullscreen as measureOpenFullscreen,
@@ -906,6 +907,12 @@ async function initApp() {
   // Storage key migration: One-time migration of localStorage keys to standardized naming
   // Must run before any localStorage reads to ensure consistent key access
   migrateStorageKeys();
+
+  // UF-14: split the PER-UI viewing preferences into per-interface
+  // namespaces (Q-40b seeding). After the migration so it copies migrated
+  // values; before any controller init so every scoped read finds its
+  // namespace ready. Marker-gated — a no-op on every boot after the first.
+  ensureScopedPrefsSeeded();
 
   // Recovery Mode: Detect if we're recovering from a memory-related crash
   const urlParams = new URLSearchParams(window.location.search);

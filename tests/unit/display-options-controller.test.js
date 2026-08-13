@@ -39,6 +39,7 @@ import {
 vi.mock('../../src/js/storage-keys.js', () => ({
   getAppPrefKey: (key) => `test-${key}`,
   STORAGE_KEY_GRID: 'test-grid',
+  STORAGE_KEY_UI_MODE: 'test-ui-mode',
   safeGetItem: (key) => localStorage.getItem(key),
   safeSetItem: (key, value) => {
     localStorage.setItem(key, value);
