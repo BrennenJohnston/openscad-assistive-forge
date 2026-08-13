@@ -10528,6 +10528,79 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
 }
 
+/* U-23 (UF-16): the Beginners-card spotlight — a passive attention
+   affordance borrowing the tutorial highlight's visual language. The halo
+   and the tag strip are the whole treatment: no veil, no focus trap. */
+.role-path-card.welcome-spotlight {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 4px;
+  animation: welcomeSpotlightPulse 2s ease-in-out infinite;
+}
+
+@keyframes welcomeSpotlightPulse {
+  0%,
+  100% {
+    outline-offset: 4px;
+  }
+  50% {
+    outline-offset: 6px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .role-path-card.welcome-spotlight {
+    animation: none;
+  }
+}
+
+[data-high-contrast='true'] .role-path-card.welcome-spotlight {
+  outline-width: 4px;
+}
+
+.welcome-spotlight-tag {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-focus);
+  border-radius: var(--border-radius-md);
+}
+
+.welcome-spotlight-tag-text {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.welcome-spotlight-dismiss {
+  min-height: 44px;
+  min-width: 44px;
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-size-sm);
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.welcome-spotlight-dismiss:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+@media (forced-colors: active) {
+  .role-path-card.welcome-spotlight {
+    outline-color: Highlight;
+  }
+
+  .welcome-spotlight-dismiss {
+    border: 2px solid ButtonText;
+  }
+}
+
 .role-path-title {
   font-size: var(--font-size-lg);
   font-weight: 600;
