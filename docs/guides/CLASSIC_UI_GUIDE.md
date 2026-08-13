@@ -46,7 +46,7 @@ Dark and high contrast themes work only in the Assistive Forge interface. If you
 
 Open Preferences from the Edit menu. The dialog follows the desktop program's shape, with tabs for 3D View, Editor, 3D Print, Advanced, Axes, Buttons, and Keyboard. Tabs that are not available yet say so.
 
-- The 3D View tab holds the desktop color schemes for the 3D preview, such as Cornfield.
+- The 3D View tab holds the desktop color schemes for the 3D preview, such as Cornfield. The color scheme options appear only while you are in the Classic interface, because the schemes color only the Classic 3D view.
 - The Advanced tab holds the render engine choice and the app cache controls.
 
 ## Switching between interfaces
