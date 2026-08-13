@@ -2302,6 +2302,15 @@ function lockBodyScroll() {
     didLockBodyScroll = false;
     return;
   }
+  // U-24: a welcome-surface tour spans the header AND the welcome column.
+  // Reaching its start card means the document may be scrolled, and the
+  // body lock freezes that offset into body.top — pinning the header
+  // permanently off-view, where every header step fails (D-23 cascade).
+  // Zero the document first; the welcome column keeps its own scroll for
+  // the per-step reveals lower down.
+  if (activeTutorial?.surface === 'welcome' && window.scrollY > 0) {
+    window.scrollTo(0, 0);
+  }
   scrollYBeforeLock = window.scrollY;
   document.body.classList.add('tutorial-body-locked');
   document.body.style.top = `-${scrollYBeforeLock}px`;
@@ -3222,6 +3231,18 @@ async function showStep(stepIndex) {
   // Resolve target with retry (late DOM availability + visibility)
   let resolvedTarget = null;
   if (step.highlightSelector || step.targetKey) {
+    // U-24: welcome-surface targets live down one long scrolling column,
+    // the resolver demands viewport intersection, and the engine's own
+    // scroll runs only after resolution — so an off-screen target could
+    // never resolve. Bring the candidate on screen first (instant, so the
+    // rect is correct immediately); the project tours keep their existing
+    // drawer-driven path untouched.
+    if (activeTutorial.surface === 'welcome') {
+      const candidate = resolveStepTarget(step, { requireVisible: false });
+      if (candidate && !isElementVisible(candidate)) {
+        candidate.scrollIntoView({ behavior: 'auto', block: 'center' });
+      }
+    }
     resolvedTarget = await resolveTargetWithRetry(step);
     if (!resolvedTarget) {
       isSettingUpStep = false; // Clear flag before early return
