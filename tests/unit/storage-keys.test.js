@@ -64,6 +64,9 @@ const EXPECTED_KEYS = {
   // UI-scoped preference split marker (ui-scoped-prefs.js, UF-14)
   STORAGE_KEY_SCOPED_PREFS_SEEDED: 'openscad-forge-scoped-prefs-seeded-v1',
 
+  // Persistent tutorial registry (tutorial-sandbox.js, UF-16)
+  STORAGE_KEY_TUTORIAL_STATE: 'openscad-forge-tutorial-state',
+
   // Preset dropdown sort order
   PRESET_SORT_KEY: 'openscad-forge-preset-sort',
 

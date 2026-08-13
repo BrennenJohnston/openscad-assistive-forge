@@ -15,6 +15,11 @@
 import { createFocusTrap } from './focus-trap.js';
 import { getUIModeController } from './ui-mode-controller.js';
 import { announceImmediate, announceError } from './announcer.js';
+import {
+  STORAGE_KEY_TUTORIAL_STATE,
+  safeGetItem,
+  safeSetItem,
+} from './storage-keys.js';
 
 /**
  * Tutorial step definition
@@ -1736,6 +1741,98 @@ function clearTutorialProgress() {
   }
 }
 
+// ============================================================================
+// Persistent tutorial registry (UF-16)
+// ============================================================================
+// localStorage, unlike the sessionStorage step progress above: completing a
+// tutorial ERASES its progress record, so "was this ever opened/completed?"
+// needs its own persistent answer. The welcome spotlight (U-23) and the
+// welcome tour's chaining (UF-17) both read it.
+//
+// Shape under STORAGE_KEY_TUTORIAL_STATE:
+//   { [familyId]: { opened?: ms, completed?: ms, dismissed?: ms } }
+
+/** Fired on document whenever a registry field is written. */
+export const TUTORIAL_STATE_EVENT = 'forge:tutorial-state-change';
+
+// A mode variant is the same tutorial wearing the current interface — one
+// welcome card, one family record ('classic-intro' counts as 'intro').
+const TUTORIAL_FAMILY_OF = (() => {
+  const map = {};
+  for (const [familyId, tutorial] of Object.entries(TUTORIALS)) {
+    for (const variantId of Object.values(tutorial.modeVariants || {})) {
+      map[variantId] = familyId;
+    }
+  }
+  return map;
+})();
+
+/**
+ * Resolve a tutorial id to its family id.
+ * @param {string} tutorialId - Requested or resolved tutorial id
+ * @returns {string} The family id ('classic-intro' -> 'intro')
+ */
+export function getTutorialFamilyId(tutorialId) {
+  return TUTORIAL_FAMILY_OF[tutorialId] || tutorialId;
+}
+
+function readTutorialRegistry() {
+  const raw = safeGetItem(STORAGE_KEY_TUTORIAL_STATE);
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed;
+    }
+  } catch (e) {
+    console.warn('[Tutorial] Ignoring corrupt tutorial-state value:', e);
+  }
+  return {};
+}
+
+function writeTutorialRegistryField(tutorialId, field) {
+  const familyId = getTutorialFamilyId(tutorialId);
+  const registry = readTutorialRegistry();
+  const existing = registry[familyId];
+  const entry =
+    existing && typeof existing === 'object' && !Array.isArray(existing)
+      ? { ...existing }
+      : {};
+  entry[field] = Date.now();
+  registry[familyId] = entry;
+  safeSetItem(STORAGE_KEY_TUTORIAL_STATE, JSON.stringify(registry));
+  document.dispatchEvent(
+    new CustomEvent(TUTORIAL_STATE_EVENT, { detail: { familyId, field } })
+  );
+}
+
+/**
+ * Read a family's persistent record.
+ * @param {string} tutorialId - Any id in the family
+ * @returns {{opened?: number, completed?: number, dismissed?: number}}
+ */
+export function getTutorialFamilyState(tutorialId) {
+  const entry = readTutorialRegistry()[getTutorialFamilyId(tutorialId)];
+  return entry && typeof entry === 'object' && !Array.isArray(entry)
+    ? entry
+    : {};
+}
+
+/** @param {string} tutorialId - The RESOLVED id of the tutorial that opened */
+export function recordTutorialOpened(tutorialId) {
+  writeTutorialRegistryField(tutorialId, 'opened');
+}
+
+/** @param {string} tutorialId - The RESOLVED id of the completed tutorial */
+export function recordTutorialCompleted(tutorialId) {
+  writeTutorialRegistryField(tutorialId, 'completed');
+}
+
+/** @param {string} tutorialId - The family whose spotlight was dismissed (Q-43a: permanent) */
+export function recordTutorialSpotlightDismissed(tutorialId) {
+  writeTutorialRegistryField(tutorialId, 'dismissed');
+}
+
 /**
  * Show a resume dialog when progress exists
  * @param {number} stepIndex - Saved step index
@@ -2374,6 +2471,10 @@ export async function startTutorial(tutorialId, { triggerEl } = {}) {
       return;
     }
   }
+
+  // The tutorial is now committed to open: every abort path (missing id,
+  // declined consent, refused viewport switch) has already returned.
+  recordTutorialOpened(tutorialId);
 
   createTutorialOverlay();
 
@@ -3927,8 +4028,13 @@ export function closeTutorial(completed = false, options = {}) {
   const stepsTotal = activeTutorial?.steps?.length || 0;
   const currentStep = currentStepIndex + 1;
 
-  // Clear or keep progress based on completion
+  // Clear or keep progress based on completion. The persistent registry
+  // record is written FIRST — clearTutorialProgress erases the only other
+  // evidence this run happened.
   if (completed) {
+    if (activeTutorial?.id) {
+      recordTutorialCompleted(activeTutorial.id);
+    }
     clearTutorialProgress();
   }
 
