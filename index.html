@@ -8347,13 +8347,32 @@ No console output yet. Generate a model to see output.</pre
           <h2 id="first-visit-title">Welcome to OpenSCAD Assistive Forge</h2>
         </div>
         <div class="modal-body">
-          <p id="first-visit-intro">
-            This app runs in your browser. Your designs are processed on this
-            device and are never uploaded to a server. Your first render
-            downloads the OpenSCAD engine, about 15 to 30 MB. It is saved for
-            your next visit. Your work is saved in this browser too. Clearing
-            the browser's site data removes saved work.
-          </p>
+          <!-- U-19: heading + four short bullets, two columns of two on
+               desktop (grid column flow keeps DOM order 1-4 for the
+               virtual cursor), stacked at the modal's narrow breakpoint.
+               The id stays: the dialog's aria-describedby points here. -->
+          <div id="first-visit-intro" class="first-visit-note">
+            <h3 class="first-visit-note-title">Note for first time users:</h3>
+            <ul class="first-visit-note-list">
+              <li>
+                This app runs entirely in your browser. All of your work stays
+                on your device. No information is sent to or collected by anyone
+                else.
+              </li>
+              <li>
+                Your first render downloads the OpenSCAD engine, about 15 to 30
+                MB. It downloads once and is saved for your next visit.
+              </li>
+              <li>
+                Your work can be saved in your browser's storage. You can also
+                link a folder on your own drive if you prefer.
+              </li>
+              <li>
+                Clearing the browser's site data removes all saved work and the
+                app itself.
+              </li>
+            </ul>
+          </div>
           <fieldset class="first-visit-choice">
             <legend>Choose your interface</legend>
             <div class="first-visit-options">
@@ -8361,84 +8380,109 @@ No console output yet. Generate a model to see output.</pre
                    naming the radio: the label would fold the screenshot's
                    whole description into the radio's NAME; this keeps the
                    name short and moves picture + guidance to the description. -->
-              <label class="first-visit-option">
-                <span class="first-visit-option-head">
-                  <input
-                    type="radio"
-                    name="first-visit-ui"
-                    id="firstVisitChoiceForge"
-                    value="forge"
-                    aria-labelledby="firstVisitForgeName firstVisitForgeBadge"
-                    aria-describedby="firstVisitForgeShot firstVisitForgeGuide"
+              <!-- U-19: the learn-more link is a SIBLING of the label, not
+                   a child - inside it, clicking the link would toggle the
+                   radio and the link text would join the radio's
+                   description. -->
+              <div class="first-visit-option-cell">
+                <label class="first-visit-option">
+                  <span class="first-visit-option-head">
+                    <input
+                      type="radio"
+                      name="first-visit-ui"
+                      id="firstVisitChoiceForge"
+                      value="forge"
+                      aria-labelledby="firstVisitForgeName firstVisitForgeBadge"
+                      aria-describedby="firstVisitForgeShot firstVisitForgeGuide"
+                    />
+                    <span
+                      class="first-visit-option-name"
+                      id="firstVisitForgeName"
+                      >Assistive Forge</span
+                    >
+                    <span class="first-visit-badge" id="firstVisitForgeBadge"
+                      >Recommended for new users</span
+                    >
+                  </span>
+                  <img
+                    class="first-visit-shot"
+                    id="firstVisitForgeShot"
+                    src="/screenshots/forge-standard.webp"
+                    width="1400"
+                    height="900"
+                    alt="The Assistive Forge interface with a model open. Menus and workflow buttons are at the top, the Customizer parameter panel is on the left, and the 3D preview of the model is on the right."
                   />
-                  <span class="first-visit-option-name" id="firstVisitForgeName"
-                    >Assistive Forge</span
+                  <span class="first-visit-guidance" id="firstVisitForgeGuide"
+                    >Choose Assistive Forge for the most accessible
+                    experience.</span
                   >
-                  <span class="first-visit-badge" id="firstVisitForgeBadge"
-                    >Recommended for new users</span
+                </label>
+                <p class="first-visit-option-more">
+                  <a
+                    href="https://github.com/BrennenJohnston/openscad-assistive-forge/blob/main/docs/guides/ACCESSIBILITY_HIGHLIGHTS.md"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Accessibility highlights (opens in new tab)</a
                   >
-                </span>
-                <img
-                  class="first-visit-shot"
-                  id="firstVisitForgeShot"
-                  src="/screenshots/forge-standard.webp"
-                  width="1400"
-                  height="900"
-                  alt="The Assistive Forge interface with a model open. Menus and workflow buttons are at the top, the Customizer parameter panel is on the left, and the 3D preview of the model is on the right."
-                />
-                <span class="first-visit-guidance" id="firstVisitForgeGuide"
-                  >A guided interface built for screen readers, keyboard use,
-                  and first time users. Choose this if you are new to OpenSCAD
-                  or want the most accessible experience.</span
-                >
-              </label>
-              <label class="first-visit-option">
-                <span class="first-visit-option-head">
-                  <input
-                    type="radio"
-                    name="first-visit-ui"
-                    id="firstVisitChoiceClassic"
-                    value="classic"
-                    aria-labelledby="firstVisitClassicName"
-                    aria-describedby="firstVisitClassicShot firstVisitClassicGuide"
-                  />
+                </p>
+              </div>
+              <div class="first-visit-option-cell">
+                <label class="first-visit-option">
+                  <span class="first-visit-option-head">
+                    <input
+                      type="radio"
+                      name="first-visit-ui"
+                      id="firstVisitChoiceClassic"
+                      value="classic"
+                      aria-labelledby="firstVisitClassicName"
+                      aria-describedby="firstVisitClassicShot firstVisitClassicGuide"
+                    />
+                    <span
+                      class="first-visit-option-name"
+                      id="firstVisitClassicName"
+                      >Classic</span
+                    >
+                  </span>
+                  <!-- U-10: shown while the viewport gate disables this card
+                       (C-15 shape: genuinely disabled control + a VISIBLE
+                       reason). Toggled by updateFirstVisitClassicGate(). -->
                   <span
-                    class="first-visit-option-name"
-                    id="firstVisitClassicName"
-                    >Classic</span
+                    class="first-visit-gate-note hidden"
+                    id="firstVisitClassicGate"
+                    >Classic is desktop-only for now. A mobile version is
+                    planned. Use the Assistive Forge interface on phones and
+                    narrow windows.</span
                   >
-                </span>
-                <!-- U-10: shown while the viewport gate disables this card
-                     (C-15 shape: genuinely disabled control + a VISIBLE
-                     reason). Toggled by updateFirstVisitClassicGate(). -->
-                <span
-                  class="first-visit-gate-note hidden"
-                  id="firstVisitClassicGate"
-                  >Classic is desktop-only for now. A mobile version is planned.
-                  Use the Assistive Forge interface on phones and narrow
-                  windows.</span
-                >
-                <img
-                  class="first-visit-shot"
-                  id="firstVisitClassicShot"
-                  src="/screenshots/classic-standard.webp"
-                  width="1400"
-                  height="900"
-                  alt="The Classic interface with the same model open. Desktop style menus and toolbars are at the top, the code editor is on the left, the 3D preview is in the middle, the Customizer panel is on the right, and the console is at the bottom."
-                />
-                <span class="first-visit-guidance" id="firstVisitClassicGuide"
-                  >Looks and works like the OpenSCAD desktop program. Choose
-                  this if you follow a desktop guide or already know desktop
-                  OpenSCAD.</span
-                >
-              </label>
+                  <img
+                    class="first-visit-shot"
+                    id="firstVisitClassicShot"
+                    src="/screenshots/classic-standard.webp"
+                    width="1400"
+                    height="900"
+                    alt="The Classic interface with the same model open. Desktop style menus and toolbars are at the top, the code editor is on the left, the 3D preview is in the middle, the Customizer panel is on the right, and the console is at the bottom."
+                  />
+                  <span class="first-visit-guidance" id="firstVisitClassicGuide"
+                    >Choose this if you already use the OpenSCAD desktop
+                    application or are following an OpenSCAD tutorial.</span
+                  >
+                </label>
+                <p class="first-visit-option-more">
+                  <a
+                    href="https://github.com/BrennenJohnston/openscad-assistive-forge/blob/main/docs/guides/CLASSIC_UI_GUIDE.md"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >About the Classic interface (opens in new tab)</a
+                  >
+                </p>
+              </div>
             </div>
           </fieldset>
+          <!-- U-19: the light-desktop-look / themes-only-in-Forge fact this
+               line used to carry now lives in CLASSIC_UI_GUIDE.md (the
+               Classic card's link). -->
           <p class="first-visit-compromise">
-            Both interfaces open the same files and make the same models. You
-            can switch at any time with the button in the top right corner of
-            the app. Classic keeps the light desktop look. Dark and high
-            contrast themes work only in Assistive Forge.
+            On a desktop, you can switch between interfaces at any time with the
+            button in the top right corner of the app.
           </p>
           <!-- Filled by JS on a no-choice Continue press. Lives inside the
                modal because #srAnnouncer sits in the inert, aria-hidden #app
@@ -8451,13 +8495,7 @@ No console output yet. Generate a model to see output.</pre
           ></p>
           <label class="first-visit-remember">
             <input type="checkbox" id="firstVisitRemember" checked />
-            <span>
-              Remember my choice on this device
-              <span class="first-visit-remember-hint"
-                >If unchecked, this window appears again on your next
-                visit.</span
-              >
-            </span>
+            <span>Remember my choice on this device</span>
           </label>
           <p class="features-note first-visit-learn-more">
             Learn more:

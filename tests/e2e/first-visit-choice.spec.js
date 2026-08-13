@@ -138,6 +138,155 @@ test.describe('First-visit interface choice', () => {
     await expect(page.locator('body')).toHaveClass(/first-visit-blocking/);
   });
 
+  test('the modal speaks the approved copy and the remember-hint is gone (UF-12, U-19)', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await waitForModal(page);
+
+    // The intro is a heading + four bullets, in DOM order 1-4.
+    await expect(
+      page.locator('#first-visit-intro .first-visit-note-title')
+    ).toHaveText('Note for first time users:');
+    const bullets = page.locator('#first-visit-intro .first-visit-note-list li');
+    await expect(bullets).toHaveCount(4);
+    await expect(bullets.nth(0)).toContainText(
+      'This app runs entirely in your browser.'
+    );
+    await expect(bullets.nth(3)).toContainText(
+      "Clearing the browser's site data"
+    );
+
+    // One-line interface descriptions (the owner's approved strings).
+    await expect(page.locator('#firstVisitForgeGuide')).toHaveText(
+      'Choose Assistive Forge for the most accessible experience.'
+    );
+    await expect(page.locator('#firstVisitClassicGuide')).toHaveText(
+      'Choose this if you already use the OpenSCAD desktop application or are following an OpenSCAD tutorial.'
+    );
+
+    // The follow-up statement is the approved one-liner.
+    await expect(page.locator('.first-visit-compromise')).toHaveText(
+      'On a desktop, you can switch between interfaces at any time with the button in the top right corner of the app.'
+    );
+
+    // The redundant remember-hint is deleted outright.
+    await expect(page.locator('.first-visit-remember-hint')).toHaveCount(0);
+  });
+
+  test('card links are siblings of the labels and cannot toggle the radios (UF-12, U-19)', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await waitForModal(page);
+
+    // No anchor may live inside a card label: there it would toggle the
+    // radio on click and join the radio's accessible description.
+    await expect(
+      page.locator('#first-visit-modal label.first-visit-option a')
+    ).toHaveCount(0);
+
+    const forgeLink = page
+      .locator('.first-visit-option-cell')
+      .nth(0)
+      .locator('.first-visit-option-more a');
+    const classicLink = page
+      .locator('.first-visit-option-cell')
+      .nth(1)
+      .locator('.first-visit-option-more a');
+    await expect(forgeLink).toHaveAttribute(
+      'href',
+      /ACCESSIBILITY_HIGHLIGHTS\.md/
+    );
+    await expect(classicLink).toHaveAttribute('href', /CLASSIC_UI_GUIDE\.md/);
+
+    // Click each link (navigation suppressed - no network in this suite)
+    // and prove neither radio picked up the click.
+    await page.evaluate(() => {
+      document
+        .querySelectorAll('.first-visit-option-more a')
+        .forEach((a) =>
+          a.addEventListener('click', (e) => e.preventDefault())
+        );
+    });
+    await forgeLink.click();
+    await classicLink.click();
+    await expect(page.locator('#firstVisitChoiceForge')).not.toBeChecked();
+    await expect(page.locator('#firstVisitChoiceClassic')).not.toBeChecked();
+  });
+
+  test('modal links look like links in light and dark (UF-12, U-20)', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await waitForModal(page);
+
+    const probe = async () => {
+      const links = page.locator('.modal-first-visit a');
+      const count = await links.count();
+      expect(count).toBeGreaterThanOrEqual(4);
+      const bodyColor = await page
+        .locator('.first-visit-compromise')
+        .evaluate((el) => getComputedStyle(el).color);
+      for (let i = 0; i < count; i++) {
+        const style = await links
+          .nth(i)
+          .evaluate((el) => ({
+            underline: getComputedStyle(el).textDecorationLine,
+            color: getComputedStyle(el).color,
+          }));
+        expect(style.underline).toContain('underline');
+        expect(style.color).not.toBe(bodyColor);
+      }
+    };
+
+    await probe();
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await probe();
+  });
+
+  test('dark theme shows the dark Forge capture; Classic stays light (UF-12, U-21)', async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.goto('/');
+    await waitForModal(page);
+
+    await expect(page.locator('#firstVisitForgeShot')).toHaveAttribute(
+      'src',
+      /forge-standard-dark\.webp$/
+    );
+    await expect(page.locator('#first-visit-modal')).toHaveClass(
+      /first-visit-forge-dark/
+    );
+    // Classic is light by design - its capture never swaps.
+    await expect(page.locator('#firstVisitClassicShot')).toHaveAttribute(
+      'src',
+      /classic-standard\.webp$/
+    );
+    // The dark asset really loads, not just points somewhere.
+    const width = await page
+      .locator('#firstVisitForgeShot')
+      .evaluate((img) => img.naturalWidth);
+    expect(width).toBeGreaterThan(0);
+  });
+
+  test('light theme keeps the light Forge capture (UF-12, U-21)', async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.goto('/');
+    await waitForModal(page);
+
+    await expect(page.locator('#firstVisitForgeShot')).toHaveAttribute(
+      'src',
+      /forge-standard\.webp$/
+    );
+    await expect(page.locator('#first-visit-modal')).not.toHaveClass(
+      /first-visit-forge-dark/
+    );
+  });
+
   test('the open modal has no axe violations', async ({ page }) => {
     await page.goto('/');
     await waitForModal(page);
