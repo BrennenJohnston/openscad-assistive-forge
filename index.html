@@ -1098,6 +1098,7 @@
                 <section
                   class="upload-panel"
                   aria-labelledby="upload-panel-heading"
+                  data-tutorial-target="welcome-open-panel"
                 >
                   <h3 id="upload-panel-heading">Open or start a project</h3>
                   <p>
@@ -1401,8 +1402,42 @@
                 </section>
               </div>
               <div class="role-paths-grid role-paths-grid--compact">
-                <!-- Beginners Start Here (only visible tutorial for now) -->
+                <!-- U-24 (UF-17): the welcome-page tour card leads the grid
+                     (Q-44). Its Start button loads no example, so the
+                     unified [data-example] handler never sees it; main.js
+                     wires it directly to startTutorial('welcome'). -->
                 <div class="role-path-card">
+                  <h3 class="role-path-title">Welcome Page Tour</h3>
+                  <p class="role-path-meta">Guided tour • about 2 minutes</p>
+                  <p class="role-path-description">
+                    See what everything on this page does, including what works
+                    differently from desktop OpenSCAD.
+                  </p>
+                  <details class="role-path-details">
+                    <summary>What you’ll learn</summary>
+                    <ul class="role-path-tips" aria-label="What you'll learn">
+                      <li>Where projects open and how saving works</li>
+                      <li>The ready-made Charm and Braille customizers</li>
+                      <li>What Clear Cache does before you press it</li>
+                      <li>The controls in the header</li>
+                    </ul>
+                  </details>
+                  <div class="role-path-actions">
+                    <button
+                      type="button"
+                      class="btn btn-primary btn-role-try"
+                      id="startWelcomeTourBtn"
+                      data-tutorial="welcome"
+                    >
+                      Start Welcome Tour
+                    </button>
+                  </div>
+                </div>
+                <!-- Beginners Start Here (only visible tutorial for now) -->
+                <div
+                  class="role-path-card"
+                  data-tutorial-target="beginners-card"
+                >
                   <h3 class="role-path-title">Beginners Start Here</h3>
                   <p class="role-path-meta">Guided tour • about 3 minutes</p>
                   <p class="role-path-description">
@@ -1437,7 +1472,7 @@
                     </button>
                   </div>
                 </div>
-                <div class="role-path-card">
+                <div class="role-path-card" data-tutorial-target="charm-card">
                   <h3 class="role-path-title">Charm Customizer</h3>
                   <p class="role-path-meta">
                     Creative project &bull; customize &amp; 3D print &bull; by
@@ -1523,7 +1558,7 @@
                     </button>
                   </div>
                 </div>
-                <div class="role-path-card">
+                <div class="role-path-card" data-tutorial-target="braille-card">
                   <h3 class="role-path-title">Braille Card Customizer</h3>
                   <p class="role-path-meta">
                     Accessibility project &bull; customize &amp; 3D print &bull;

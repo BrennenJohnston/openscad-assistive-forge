@@ -7935,6 +7935,16 @@ if (rounded) {
     });
   });
 
+  // U-24 (UF-17): the welcome-tour card starts a tour of the surface it
+  // sits on. No example loads, so the unified [data-example] handler
+  // above never sees this button.
+  const welcomeTourBtn = document.getElementById('startWelcomeTourBtn');
+  if (welcomeTourBtn) {
+    welcomeTourBtn.addEventListener('click', () => {
+      startTutorial('welcome', { triggerEl: welcomeTourBtn });
+    });
+  }
+
   // U-23 (UF-16): the Beginners-card spotlight waits for the first-visit
   // gate — inside the inert #app it would be unreachable and unannounced.
   void initWelcomeSpotlight({ waitForFirstVisitAcceptance });
