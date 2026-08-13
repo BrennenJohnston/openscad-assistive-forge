@@ -36,10 +36,12 @@ import {
   resetDisplayOptionsController,
 } from '../../src/js/display-options-controller.js';
 
-vi.mock('../../src/js/storage-keys.js', () => ({
+vi.mock('../../src/js/storage-keys.js', async (importOriginal) => ({
+  ...(await importOriginal()),
   getAppPrefKey: (key) => `test-${key}`,
   STORAGE_KEY_GRID: 'test-grid',
   STORAGE_KEY_UI_MODE: 'test-ui-mode',
+  STORAGE_KEY_SCOPED_PREFS_SEEDED: 'test-scoped-prefs-seeded-v1',
   safeGetItem: (key) => localStorage.getItem(key),
   safeSetItem: (key, value) => {
     localStorage.setItem(key, value);
@@ -584,11 +586,13 @@ describe('DisplayOptionsController — axis distance markings (F20)', () => {
     expect(mockPm.scene.remove).toHaveBeenCalledWith(group);
   });
 
-  it('toggling persists state to localStorage just like the other display options', () => {
+  it('toggling persists state to the active namespace just like the other display options', () => {
     ctrl.set('axisMarks', true);
-    expect(localStorage.getItem('test-display-axisMarks')).toBe('true');
+    expect(localStorage.getItem('test-display-axisMarks--forge')).toBe('true');
     ctrl.set('axisMarks', false);
-    expect(localStorage.getItem('test-display-axisMarks')).toBe('false');
+    expect(localStorage.getItem('test-display-axisMarks--forge')).toBe('false');
+    // The base (pre-split) key is a frozen archive — never written again.
+    expect(localStorage.getItem('test-display-axisMarks')).toBeNull();
   });
 
   it('refreshThemeSensitiveOverlays rebuilds the overlay so labels pick up new theme color', () => {
@@ -957,7 +961,9 @@ describe('DisplayOptionsController — edge budget', () => {
   it('persists the budget and restores it on the next init', () => {
     const three = makeEdgeBudgetThree(segmentsOfLength(5));
     makeCtrl(three).setEdgeBudget(250000);
-    expect(localStorage.getItem('test-display-edgeBudget')).toBe('250000');
+    expect(localStorage.getItem('test-display-edgeBudget--forge')).toBe(
+      '250000'
+    );
 
     const restored = makeCtrl(makeEdgeBudgetThree(segmentsOfLength(5)));
     restored.init();
@@ -1042,6 +1048,9 @@ describe('DisplayOptionsController — U-3: axis ticks survive failures and heal
     // The poison that kept the owner's ticks off across sessions: the saved
     // preference must survive the failure so the next session retries.
     expect(localStorage.getItem('test-display-axisMarks')).toBe('true');
+    expect(localStorage.getItem('test-display-axisMarks--forge')).not.toBe(
+      'false'
+    );
   });
 
   it('refreshOverlays() re-applies axes and axis marks after a scene rebuild', () => {
@@ -1068,24 +1077,36 @@ describe('DisplayOptionsController — U-3: axis ticks survive failures and heal
     expect(tickAdds()).toBeGreaterThan(ticksBefore);
   });
 
-  it('the v2 defaults marker heals a pre-#59 poisoned profile once', () => {
-    // The poisoned inheritance: v1 marker stamped, ticks persisted off by
-    // the old always-throwing build path, axes untouched.
-    localStorage.setItem('test-classic-view-defaults', 'true');
+  it('a pre-split poisoned profile heals in Classic through the namespace default (U-3 heir)', () => {
+    // The pre-UF-14 poison: ticks persisted off under the shared key by the
+    // old always-throwing build path. Seeding copies that into the FORGE
+    // namespace (the user's Forge reality) but never into Classic, whose
+    // desktop default turns axes and ticks back on — the healing the v2
+    // stamp used to do, now with nothing left to poison.
     localStorage.setItem('test-display-axisMarks', 'false');
-    localStorage.setItem('test-display-axes', 'true');
+
+    document.body.dataset.uiMode = 'classic';
+    ctrl._loadPreferences();
+    expect(ctrl.state.axisMarks).toBe(true);
+    expect(ctrl.state.axes).toBe(true);
+
+    // The same profile back in Forge keeps its own saved reality.
+    document.body.dataset.uiMode = 'standard';
     ctrl._loadPreferences();
     expect(ctrl.state.axisMarks).toBe(false);
+    expect(ctrl.state.axes).toBe(false);
 
-    expect(ctrl.applyClassicViewDefaults()).toBe(true);
-    expect(ctrl.state.axisMarks).toBe(true);
-    expect(localStorage.getItem('test-display-axisMarks')).toBe('true');
-    expect(localStorage.getItem('test-classic-view-defaults-v2')).toBe('true');
-
-    // Once ever: the second entry into Classic changes nothing.
+    // A Classic choice sticks in Classic without touching Forge.
+    document.body.dataset.uiMode = 'classic';
+    ctrl._loadPreferences();
     ctrl.set('axisMarks', false, { announce: false });
-    expect(ctrl.applyClassicViewDefaults()).toBe(false);
+    expect(localStorage.getItem('test-display-axisMarks--classic')).toBe(
+      'false'
+    );
+    expect(localStorage.getItem('test-display-axisMarks--forge')).toBe('false');
+    ctrl._loadPreferences();
     expect(ctrl.state.axisMarks).toBe(false);
+    delete document.body.dataset.uiMode;
   });
 });
 

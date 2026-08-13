@@ -33,6 +33,7 @@ import {
   getAppPrefKey,
   safeGetItem,
   safeSetItem,
+  safeRemoveItem,
   STORAGE_KEY_UI_MODE,
   STORAGE_KEY_SCOPED_PREFS_SEEDED,
   STORAGE_KEY_GRID,
@@ -226,4 +227,21 @@ export function writeScopedPref(
 ) {
   ensureScopedPrefsSeeded();
   return safeSetItem(getScopedKey(baseKey, ns), String(value));
+}
+
+/**
+ * Remove a PER-UI preference for the active (or given) interface — the
+ * scoped equivalent of a reset-to-default: the next read falls through to
+ * the namespace (or caller) default. The base key stays untouched.
+ *
+ * @param {string} baseKey - A key from SCOPED_PREF_BASE_KEYS
+ * @param {{ns?: UiNamespace}} [options]
+ * @returns {boolean} True when the removal succeeded
+ */
+export function removeScopedPref(
+  baseKey,
+  { ns = getActiveUiNamespace() } = {}
+) {
+  ensureScopedPrefsSeeded();
+  return safeRemoveItem(getScopedKey(baseKey, ns));
 }

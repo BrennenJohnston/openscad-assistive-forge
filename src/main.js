@@ -164,7 +164,12 @@ import {
   STORAGE_KEY_WASM_INIT_COMPLETED,
   PRESET_SORT_KEY,
 } from './js/storage-keys.js';
-import { ensureScopedPrefsSeeded } from './js/ui-scoped-prefs.js';
+import {
+  ensureScopedPrefsSeeded,
+  readScopedPref,
+  writeScopedPref,
+  removeScopedPref,
+} from './js/ui-scoped-prefs.js';
 import {
   initImageMeasurement,
   openFullscreen as measureOpenFullscreen,
@@ -6231,12 +6236,12 @@ async function initApp() {
     const bar = document.getElementById('previewStatusBar');
     if (!bar) return;
     bar.classList.toggle('user-hidden', !shown);
-    localStorage.setItem(STORAGE_KEY_STATUS_BAR, shown ? 'true' : 'false');
+    writeScopedPref(STORAGE_KEY_STATUS_BAR, shown ? 'true' : 'false');
     announceImmediate(`Status bar ${shown ? 'shown' : 'hidden'}`);
     console.log(`[App] Status bar ${shown ? 'shown' : 'hidden'}`);
   }
   if (previewStatusBar) {
-    const savedStatusBarPref = localStorage.getItem(STORAGE_KEY_STATUS_BAR);
+    const savedStatusBarPref = readScopedPref(STORAGE_KEY_STATUS_BAR);
     if (savedStatusBarPref === 'false') {
       previewStatusBar.classList.add('user-hidden');
     }
@@ -6308,9 +6313,9 @@ async function initApp() {
   );
 
   // Load saved state
-  const savedModelColor = localStorage.getItem(STORAGE_KEY_MODEL_COLOR);
+  const savedModelColor = readScopedPref(STORAGE_KEY_MODEL_COLOR);
   const savedColorEnabled =
-    localStorage.getItem(STORAGE_KEY_MODEL_COLOR_ENABLED) === 'true';
+    readScopedPref(STORAGE_KEY_MODEL_COLOR_ENABLED) === 'true';
 
   if (savedModelColor && modelColorPicker) {
     modelColorPicker.value = savedModelColor;
@@ -6324,7 +6329,7 @@ async function initApp() {
 
   const getSelectedModelColor = () =>
     modelColorPicker?.value ||
-    localStorage.getItem(STORAGE_KEY_MODEL_COLOR) ||
+    readScopedPref(STORAGE_KEY_MODEL_COLOR) ||
     getThemeDefaultColor();
 
   const syncPreviewModelColorOverride = () => {
@@ -6351,7 +6356,7 @@ async function initApp() {
 
     modelColorEnabled.addEventListener('change', () => {
       const enabled = modelColorEnabled.checked;
-      localStorage.setItem(STORAGE_KEY_MODEL_COLOR_ENABLED, String(enabled));
+      writeScopedPref(STORAGE_KEY_MODEL_COLOR_ENABLED, String(enabled));
       updatePickerDisabledState(enabled);
       if (previewManager) {
         syncPreviewModelColorOverride();
@@ -6373,7 +6378,7 @@ async function initApp() {
         if (previewManager && modelColorEnabled?.checked) {
           previewManager.setColorOverride(color);
         }
-        localStorage.setItem(STORAGE_KEY_MODEL_COLOR, color);
+        writeScopedPref(STORAGE_KEY_MODEL_COLOR, color);
         console.log(`[App] Model color changed to ${color}`);
       }, 150);
     });
@@ -6388,7 +6393,7 @@ async function initApp() {
         const themeDefault = getThemeDefaultColor();
         modelColorPicker.value = themeDefault;
       }
-      localStorage.removeItem(STORAGE_KEY_MODEL_COLOR);
+      removeScopedPref(STORAGE_KEY_MODEL_COLOR);
       console.log('[App] Model color reset to theme default');
     });
   }
@@ -6409,11 +6414,11 @@ async function initApp() {
   );
 
   // Restore persisted values
-  const savedOpacity = localStorage.getItem(STORAGE_KEY_MODEL_OPACITY);
-  const savedBrightness = localStorage.getItem(STORAGE_KEY_BRIGHTNESS);
-  const savedContrast = localStorage.getItem(STORAGE_KEY_CONTRAST);
+  const savedOpacity = readScopedPref(STORAGE_KEY_MODEL_OPACITY);
+  const savedBrightness = readScopedPref(STORAGE_KEY_BRIGHTNESS);
+  const savedContrast = readScopedPref(STORAGE_KEY_CONTRAST);
   const savedAppearanceEnabled =
-    localStorage.getItem(STORAGE_KEY_MODEL_APPEARANCE_ENABLED) === 'true';
+    readScopedPref(STORAGE_KEY_MODEL_APPEARANCE_ENABLED) === 'true';
   if (savedOpacity && modelOpacityInput) {
     modelOpacityInput.value = savedOpacity;
     if (modelOpacityValue) modelOpacityValue.textContent = `${savedOpacity}%`;
@@ -6461,10 +6466,7 @@ async function initApp() {
 
     modelAppearanceEnabled.addEventListener('change', () => {
       const enabled = modelAppearanceEnabled.checked;
-      localStorage.setItem(
-        STORAGE_KEY_MODEL_APPEARANCE_ENABLED,
-        String(enabled)
-      );
+      writeScopedPref(STORAGE_KEY_MODEL_APPEARANCE_ENABLED, String(enabled));
       updateAppearanceSlidersDisabledState(enabled);
       syncPreviewAppearanceOverride();
     });
@@ -6474,7 +6476,7 @@ async function initApp() {
     modelOpacityInput.addEventListener('input', () => {
       const v = modelOpacityInput.value;
       if (modelOpacityValue) modelOpacityValue.textContent = `${v}%`;
-      localStorage.setItem(STORAGE_KEY_MODEL_OPACITY, v);
+      writeScopedPref(STORAGE_KEY_MODEL_OPACITY, v);
       if (previewManager && modelAppearanceEnabled?.checked) {
         previewManager.setModelOpacity(parseInt(v, 10));
       }
@@ -6484,7 +6486,7 @@ async function initApp() {
     brightnessInput.addEventListener('input', () => {
       const v = brightnessInput.value;
       if (brightnessValue) brightnessValue.textContent = `${v}%`;
-      localStorage.setItem(STORAGE_KEY_BRIGHTNESS, v);
+      writeScopedPref(STORAGE_KEY_BRIGHTNESS, v);
       if (previewManager && modelAppearanceEnabled?.checked) {
         previewManager.setBrightness(parseInt(v, 10));
       }
@@ -6494,7 +6496,7 @@ async function initApp() {
     contrastInput.addEventListener('input', () => {
       const v = contrastInput.value;
       if (contrastValue) contrastValue.textContent = `${v}%`;
-      localStorage.setItem(STORAGE_KEY_CONTRAST, v);
+      writeScopedPref(STORAGE_KEY_CONTRAST, v);
       if (previewManager && modelAppearanceEnabled?.checked) {
         previewManager.setContrast(parseInt(v, 10));
       }
@@ -6514,9 +6516,9 @@ async function initApp() {
         contrastInput.value = '100';
         if (contrastValue) contrastValue.textContent = '100%';
       }
-      localStorage.removeItem(STORAGE_KEY_MODEL_OPACITY);
-      localStorage.removeItem(STORAGE_KEY_BRIGHTNESS);
-      localStorage.removeItem(STORAGE_KEY_CONTRAST);
+      removeScopedPref(STORAGE_KEY_MODEL_OPACITY);
+      removeScopedPref(STORAGE_KEY_BRIGHTNESS);
+      removeScopedPref(STORAGE_KEY_CONTRAST);
       if (previewManager && modelAppearanceEnabled?.checked) {
         previewManager.resetAppearance();
       }

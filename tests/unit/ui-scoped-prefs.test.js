@@ -18,6 +18,7 @@ import {
   ensureScopedPrefsSeeded,
   readScopedPref,
   writeScopedPref,
+  removeScopedPref,
 } from '../../src/js/ui-scoped-prefs.js';
 import {
   STORAGE_KEY_UI_MODE,
@@ -125,7 +126,10 @@ describe('ensureScopedPrefsSeeded (the Q-40b matrix)', () => {
     localStorage.setItem(STORAGE_KEY_GRID, 'true');
     localStorage.setItem(AXES_KEY, 'false');
     localStorage.setItem(AXIS_MARKS_KEY, 'false');
-    localStorage.setItem(STORAGE_KEY_GRID_SIZE, '{"widthMm":250,"heightMm":210}');
+    localStorage.setItem(
+      STORAGE_KEY_GRID_SIZE,
+      '{"widthMm":250,"heightMm":210}'
+    );
     localStorage.setItem(STORAGE_KEY_VIEWPORT_SCHEME, 'nature');
     localStorage.setItem(STORAGE_KEY_MODEL_COLOR, '#aabbcc');
 
@@ -239,6 +243,24 @@ describe('readScopedPref / writeScopedPref', () => {
     expect(writeScopedPref(STORAGE_KEY_GRID, 'false')).toBe(true);
     expect(localStorage.getItem(`${STORAGE_KEY_GRID}--forge`)).toBe('false');
     expect(localStorage.getItem(`${STORAGE_KEY_GRID}--classic`)).toBe('true');
+  });
+
+  it('removeScopedPref resets only the active namespace (reset-to-default)', () => {
+    localStorage.setItem(STORAGE_KEY_SCOPED_PREFS_SEEDED, 'true');
+    localStorage.setItem(`${STORAGE_KEY_MODEL_COLOR}--forge`, '#111111');
+    localStorage.setItem(`${STORAGE_KEY_MODEL_COLOR}--classic`, '#222222');
+    localStorage.setItem(STORAGE_KEY_MODEL_COLOR, '#333333');
+
+    document.body.dataset.uiMode = 'classic';
+    expect(removeScopedPref(STORAGE_KEY_MODEL_COLOR)).toBe(true);
+
+    expect(
+      localStorage.getItem(`${STORAGE_KEY_MODEL_COLOR}--classic`)
+    ).toBeNull();
+    expect(localStorage.getItem(`${STORAGE_KEY_MODEL_COLOR}--forge`)).toBe(
+      '#111111'
+    );
+    expect(localStorage.getItem(STORAGE_KEY_MODEL_COLOR)).toBe('#333333');
   });
 
   it('a read before the boot seed call still seeds first (defensive ordering)', () => {

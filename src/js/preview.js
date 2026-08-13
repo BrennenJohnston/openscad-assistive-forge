@@ -63,6 +63,15 @@ import {
   safeSetItem,
   safeRemoveItem,
 } from './storage-keys.js';
+// UF-14 (U-25): the viewing preferences the signed Q-40 table marks PER-UI
+// read and write through the scoped facade — one saved copy per interface.
+// Camera pose stays live shared state, and custom grid PRESETS stay
+// app-level (a saved library, not a viewing state).
+import {
+  readScopedPref,
+  writeScopedPref,
+  removeScopedPref,
+} from './ui-scoped-prefs.js';
 
 // Disable Three.js color management to match desktop OpenSCAD's
 // non-linear-aware OpenGL pipeline. OpenSCAD passes sRGB colors
@@ -3233,7 +3242,7 @@ export class PreviewManager {
    * @returns {boolean} Preference value
    */
   loadMeasurementPreference() {
-    return safeGetItem(STORAGE_KEY_MEASUREMENTS) === 'true';
+    return readScopedPref(STORAGE_KEY_MEASUREMENTS) === 'true';
   }
 
   /**
@@ -3241,7 +3250,7 @@ export class PreviewManager {
    * @param {boolean} enabled - Measurement enabled state
    */
   saveMeasurementPreference(enabled) {
-    safeSetItem(STORAGE_KEY_MEASUREMENTS, enabled ? 'true' : 'false');
+    writeScopedPref(STORAGE_KEY_MEASUREMENTS, enabled ? 'true' : 'false');
   }
 
   /**
@@ -3264,8 +3273,10 @@ export class PreviewManager {
    * @returns {boolean} Preference value (defaults to true)
    */
   loadGridPreference() {
-    const pref = safeGetItem(STORAGE_KEY_GRID);
-    // Default to true (grid visible) if not set
+    // The Classic namespace's default is false (ui-scoped-prefs
+    // NAMESPACE_DEFAULTS — the desktop shows no bed grid); a null read
+    // only happens in Forge, where the grid defaults on.
+    const pref = readScopedPref(STORAGE_KEY_GRID);
     return pref === null ? true : pref === 'true';
   }
 
@@ -3274,7 +3285,7 @@ export class PreviewManager {
    * @param {boolean} enabled - Grid enabled state
    */
   saveGridPreference(enabled) {
-    safeSetItem(STORAGE_KEY_GRID, enabled ? 'true' : 'false');
+    writeScopedPref(STORAGE_KEY_GRID, enabled ? 'true' : 'false');
   }
 
   /**
@@ -3353,7 +3364,7 @@ export class PreviewManager {
    * @returns {string|null}
    */
   loadGridColorPreference() {
-    const raw = safeGetItem(STORAGE_KEY_GRID_COLOR);
+    const raw = readScopedPref(STORAGE_KEY_GRID_COLOR);
     if (raw && /^#[0-9a-f]{6}$/i.test(raw)) return raw;
     return null;
   }
@@ -3364,9 +3375,9 @@ export class PreviewManager {
    */
   saveGridColorPreference(hex) {
     if (hex) {
-      safeSetItem(STORAGE_KEY_GRID_COLOR, hex);
+      writeScopedPref(STORAGE_KEY_GRID_COLOR, hex);
     } else {
-      safeRemoveItem(STORAGE_KEY_GRID_COLOR);
+      removeScopedPref(STORAGE_KEY_GRID_COLOR);
     }
   }
 
@@ -3403,7 +3414,7 @@ export class PreviewManager {
    * @returns {number} 10–100 (default 100)
    */
   loadGridOpacityPreference() {
-    const raw = safeGetItem(STORAGE_KEY_GRID_OPACITY);
+    const raw = readScopedPref(STORAGE_KEY_GRID_OPACITY);
     if (raw !== null) {
       const val = parseInt(raw, 10);
       if (!Number.isNaN(val) && val >= 10 && val <= 100) return val;
@@ -3417,9 +3428,9 @@ export class PreviewManager {
    */
   saveGridOpacityPreference(value) {
     if (value !== null && value !== undefined && value !== 100) {
-      safeSetItem(STORAGE_KEY_GRID_OPACITY, String(value));
+      writeScopedPref(STORAGE_KEY_GRID_OPACITY, String(value));
     } else {
-      safeRemoveItem(STORAGE_KEY_GRID_OPACITY);
+      removeScopedPref(STORAGE_KEY_GRID_OPACITY);
     }
   }
 
@@ -3497,7 +3508,7 @@ export class PreviewManager {
   loadGridSizePreference() {
     try {
       // try/catch retained for JSON.parse of possibly-corrupt values
-      const raw = safeGetItem(STORAGE_KEY_GRID_SIZE);
+      const raw = readScopedPref(STORAGE_KEY_GRID_SIZE);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (
@@ -3519,7 +3530,7 @@ export class PreviewManager {
    * @param {{ widthMm: number, heightMm: number }} config
    */
   saveGridSizePreference(config) {
-    safeSetItem(STORAGE_KEY_GRID_SIZE, JSON.stringify(config));
+    writeScopedPref(STORAGE_KEY_GRID_SIZE, JSON.stringify(config));
   }
 
   /**
@@ -3668,7 +3679,7 @@ export class PreviewManager {
    * @returns {boolean} Preference value (defaults to true - most users want this)
    */
   loadAutoBedPreference() {
-    const pref = safeGetItem(STORAGE_KEY_AUTO_BED);
+    const pref = readScopedPref(STORAGE_KEY_AUTO_BED);
     // Default to true (auto-bed enabled) if not set
     return pref === null ? true : pref === 'true';
   }
@@ -3678,7 +3689,7 @@ export class PreviewManager {
    * @param {boolean} enabled - Auto-bed enabled state
    */
   saveAutoBedPreference(enabled) {
-    safeSetItem(STORAGE_KEY_AUTO_BED, enabled ? 'true' : 'false');
+    writeScopedPref(STORAGE_KEY_AUTO_BED, enabled ? 'true' : 'false');
   }
 
   /**
@@ -3704,16 +3715,8 @@ export class PreviewManager {
    * @returns {boolean}
    */
   loadZoomToCursorPreference() {
-    try {
-      const pref = localStorage.getItem(STORAGE_KEY_ZOOM_TO_CURSOR);
-      return pref === null ? true : pref === 'true';
-    } catch (error) {
-      console.warn(
-        '[Preview] Could not load zoom-to-cursor preference:',
-        error
-      );
-      return true;
-    }
+    const pref = readScopedPref(STORAGE_KEY_ZOOM_TO_CURSOR);
+    return pref === null ? true : pref === 'true';
   }
 
   /**
@@ -3721,15 +3724,10 @@ export class PreviewManager {
    * @returns {string}
    */
   loadViewportScheme() {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_VIEWPORT_SCHEME);
-      return VIEWPORT_SCHEMES.some((s) => s.id === saved)
-        ? saved
-        : DEFAULT_VIEWPORT_SCHEME;
-    } catch (error) {
-      console.warn('[Preview] Could not load viewport scheme:', error);
-      return DEFAULT_VIEWPORT_SCHEME;
-    }
+    const saved = readScopedPref(STORAGE_KEY_VIEWPORT_SCHEME);
+    return VIEWPORT_SCHEMES.some((s) => s.id === saved)
+      ? saved
+      : DEFAULT_VIEWPORT_SCHEME;
   }
 
   /** @returns {string} */
@@ -3755,11 +3753,7 @@ export class PreviewManager {
   setViewportScheme(id) {
     if (!VIEWPORT_SCHEMES.some((s) => s.id === id)) return false;
     this.viewportScheme = id;
-    try {
-      localStorage.setItem(STORAGE_KEY_VIEWPORT_SCHEME, id);
-    } catch (error) {
-      console.warn('[Preview] Could not save viewport scheme:', error);
-    }
+    writeScopedPref(STORAGE_KEY_VIEWPORT_SCHEME, id);
 
     // updateTheme() early-returns when the key is unchanged, so a repaint has
     // to go through detectTheme()'s fresh answer.
@@ -3777,17 +3771,7 @@ export class PreviewManager {
    * @param {boolean} enabled
    */
   saveZoomToCursorPreference(enabled) {
-    try {
-      localStorage.setItem(
-        STORAGE_KEY_ZOOM_TO_CURSOR,
-        enabled ? 'true' : 'false'
-      );
-    } catch (error) {
-      console.warn(
-        '[Preview] Could not save zoom-to-cursor preference:',
-        error
-      );
-    }
+    writeScopedPref(STORAGE_KEY_ZOOM_TO_CURSOR, enabled ? 'true' : 'false');
   }
 
   /**

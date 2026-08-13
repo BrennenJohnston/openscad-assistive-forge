@@ -11,21 +11,25 @@
  * @license GPL-3.0-or-later
  */
 
-import {
-  getAppPrefKey,
-  safeGetItem,
-  safeSetItem,
-  STORAGE_KEY_GRID,
-} from './storage-keys.js';
+import { getAppPrefKey } from './storage-keys.js';
+import { readScopedPref, writeScopedPref } from './ui-scoped-prefs.js';
 import { announceImmediate } from './announcer.js';
 import {
   buildAxisTickOverlay,
   resolveAxisMarkColor,
 } from './axis-tick-overlay.js';
 import { buildAxisLinesOverlay } from './axis-lines-overlay.js';
-import { getUIModeController } from './ui-mode-controller.js';
 
 const PREF_PREFIX = 'display-';
+/**
+ * Forge defaults. Classic's differ for axes and axisMarks (the desktop's
+ * out-of-the-box look: black axes with tick marks on) — those live in
+ * ui-scoped-prefs.js NAMESPACE_DEFAULTS, which readScopedPref serves when
+ * the Classic namespace has no saved value. UF-14 replaced the old
+ * first-entry stamp (classic-view-defaults-v2) with that per-namespace
+ * fallback, so each interface keeps its own saved copy of every toggle
+ * and neither can overwrite the other's again (U-25).
+ */
 const DEFAULTS = {
   axes: false,
   edges: true,
@@ -33,31 +37,6 @@ const DEFAULTS = {
   wireframe: false,
   axisMarks: false,
 };
-
-/**
- * What the desktop's 3D view shows out of the box (OpenSCAD_1): black axes with
- * tick marks, and NO ground grid. Ours had the opposite of both — the Forge bed
- * grid on, axes off — so Classic's first impression was of a different program.
- *
- * Applied ONCE, on first entry into Classic, and then persisted like any other
- * toggle. A one-time stamp rather than a mode-dependent default because these
- * three are the user's to set: re-deciding them on every mode switch would
- * quietly undo a choice they had made on purpose.
- *
- * The grid belongs to the PreviewManager, not to this controller, and lives
- * under its own key — hence the import rather than a second copy of the name.
- */
-const CLASSIC_VIEW_DEFAULTS = Object.freeze({ axes: true, axisMarks: true });
-/**
- * v2 (U-3): before PR #59 the tick overlay threw on every build attempt and
- * the failure path PERSISTED axisMarks=false, while the once-ever v1 marker
- * blocked any re-stamp — so a profile that ran any pre-fix Classic session
- * kept ticks off in every later session with nothing to heal it. Bumping the
- * marker re-imposes the Classic view defaults ONCE on such profiles. Stated
- * cost: a user who turned these off on purpose after #59 sees them once
- * more, and the choice then sticks.
- */
-const CLASSIC_DEFAULTS_MARKER = getAppPrefKey('classic-view-defaults-v2');
 
 /**
  * Edge budget is a number, not a boolean, so it lives outside `DEFAULTS`
@@ -128,13 +107,6 @@ export class DisplayOptionsController {
     this._wireControls();
     this._syncControls();
 
-    // P9. Subscribed rather than called once, because Classic can be entered
-    // at any time — including by a user who started in Forge.
-    const ui = getUIModeController();
-    ui.subscribe((mode) => {
-      if (mode === 'classic') this.applyClassicViewDefaults();
-    });
-    if (ui.getMode() === 'classic') this.applyClassicViewDefaults();
     // The PreviewManager does not exist until the first model loads, so this
     // is usually a no-op here; file-handler.js connects us once it is built.
     if (!this.connectPreviewManager()) {
@@ -309,36 +281,6 @@ export class DisplayOptionsController {
     announceImmediate(`${label} ${enabled ? 'shown' : 'hidden'}`);
   }
 
-  /**
-   * Bring the 3D view to the desktop's defaults the first time Classic opens
-   * (P9): axes and their tick marks on, the ground grid off. Runs once ever —
-   * after that these are ordinary persisted toggles and the user's choices win.
-   *
-   * @returns {boolean} whether the stamp was applied
-   */
-  applyClassicViewDefaults() {
-    if (safeGetItem(CLASSIC_DEFAULTS_MARKER) === 'true') return false;
-    safeSetItem(CLASSIC_DEFAULTS_MARKER, 'true');
-
-    for (const [option, enabled] of Object.entries(CLASSIC_VIEW_DEFAULTS)) {
-      // Through set(), not straight into state: it persists the value, applies
-      // it to the scene, syncs the checkbox and fires display-option-change, so
-      // the View menu's ticks and the Classic toolbar's aria-pressed agree with
-      // what is on screen. Only the announcement is suppressed.
-      this.set(option, enabled, { announce: false });
-    }
-
-    // The grid is the PreviewManager's, and it may not exist yet — it is built
-    // lazily on the first file load. Writing the preference covers that case;
-    // toggleGrid covers the case where a scene is already on screen, and writes
-    // the same preference itself.
-    const pm = this.getPreviewManager();
-    if (typeof pm?.toggleGrid === 'function') pm.toggleGrid(false);
-    else safeSetItem(STORAGE_KEY_GRID, 'false');
-
-    return true;
-  }
-
   /** @param {DisplayOption} option  @returns {boolean} */
   get(option) {
     return !!this.state[option];
@@ -374,7 +316,7 @@ export class DisplayOptionsController {
    */
   setEdgeBudget(value) {
     this._edgeBudget = _coerceEdgeBudget(value);
-    safeSetItem(
+    writeScopedPref(
       getAppPrefKey(PREF_PREFIX + EDGE_BUDGET_PREF),
       String(this._edgeBudget)
     );
@@ -413,20 +355,22 @@ export class DisplayOptionsController {
 
   _loadPreferences() {
     for (const key of Object.keys(DEFAULTS)) {
-      const saved = safeGetItem(getAppPrefKey(PREF_PREFIX + key));
+      const saved = readScopedPref(getAppPrefKey(PREF_PREFIX + key));
       if (saved !== null) this.state[key] = saved === 'true';
+      else this.state[key] = DEFAULTS[key];
     }
-    const savedBudget = safeGetItem(
+    const savedBudget = readScopedPref(
       getAppPrefKey(PREF_PREFIX + EDGE_BUDGET_PREF)
     );
-    if (savedBudget !== null) {
-      this._edgeBudget = _coerceEdgeBudget(savedBudget);
-    }
+    this._edgeBudget =
+      savedBudget !== null
+        ? _coerceEdgeBudget(savedBudget)
+        : DEFAULT_EDGE_BUDGET;
   }
 
   /** @param {string} key @param {boolean} val */
   _savePref(key, val) {
-    safeSetItem(getAppPrefKey(PREF_PREFIX + key), String(val));
+    writeScopedPref(getAppPrefKey(PREF_PREFIX + key), String(val));
   }
 
   // ---------------------------------------------------------------------------
