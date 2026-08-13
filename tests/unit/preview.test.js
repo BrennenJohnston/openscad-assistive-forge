@@ -112,7 +112,7 @@ describe('PreviewManager', () => {
       expect(manager.loadMeasurementPreference()).toBe(true)
 
       manager.saveMeasurementPreference(false)
-      expect(localStorage.getItem('openscad-forge-measurements')).toBe('false')
+      expect(localStorage.getItem('openscad-forge-measurements--forge')).toBe('false')
     })
 
     it('returns false when localStorage is empty', () => {
@@ -159,11 +159,11 @@ describe('PreviewManager', () => {
     it('persists toggle changes to localStorage', () => {
       const manager = new PreviewManager(container)
       manager.toggleZoomToCursor(false)
-      expect(localStorage.getItem('openscad-forge-zoom-to-cursor')).toBe('false')
+      expect(localStorage.getItem('openscad-forge-zoom-to-cursor--forge')).toBe('false')
       expect(manager.zoomToCursorEnabled).toBe(false)
 
       manager.toggleZoomToCursor(true)
-      expect(localStorage.getItem('openscad-forge-zoom-to-cursor')).toBe('true')
+      expect(localStorage.getItem('openscad-forge-zoom-to-cursor--forge')).toBe('true')
       expect(manager.zoomToCursorEnabled).toBe(true)
     })
 
@@ -312,11 +312,11 @@ describe('PreviewManager', () => {
 
       manager.toggleMeasurements(true)
       expect(manager.showMeasurements).toHaveBeenCalled()
-      expect(localStorage.getItem('openscad-forge-measurements')).toBe('true')
+      expect(localStorage.getItem('openscad-forge-measurements--forge')).toBe('true')
 
       manager.toggleMeasurements(false)
       expect(manager.hideMeasurements).toHaveBeenCalled()
-      expect(localStorage.getItem('openscad-forge-measurements')).toBe('false')
+      expect(localStorage.getItem('openscad-forge-measurements--forge')).toBe('false')
     })
 
     it('does not show measurements when no mesh exists', () => {
@@ -1828,7 +1828,7 @@ describe('PreviewManager', () => {
 
       it('persists the color in localStorage', () => {
         manager.setGridColor('#00ff00')
-        expect(localStorage.getItem('openscad-forge-grid-color')).toBe('#00ff00')
+        expect(localStorage.getItem('openscad-forge-grid-color--forge')).toBe('#00ff00')
       })
 
       it('normalizes hex without hash', () => {
@@ -1862,9 +1862,9 @@ describe('PreviewManager', () => {
       })
 
       it('removes the color from localStorage', () => {
-        localStorage.setItem('openscad-forge-grid-color', '#ff0000')
+        localStorage.setItem('openscad-forge-grid-color--forge', '#ff0000')
         manager.resetGridColor()
-        expect(localStorage.getItem('openscad-forge-grid-color')).toBeNull()
+        expect(localStorage.getItem('openscad-forge-grid-color--forge')).toBeNull()
       })
     })
 
@@ -1905,13 +1905,13 @@ describe('PreviewManager', () => {
     describe('saveGridColorPreference', () => {
       it('saves a valid color', () => {
         manager.saveGridColorPreference('#112233')
-        expect(localStorage.getItem('openscad-forge-grid-color')).toBe('#112233')
+        expect(localStorage.getItem('openscad-forge-grid-color--forge')).toBe('#112233')
       })
 
       it('removes the key when null is passed', () => {
-        localStorage.setItem('openscad-forge-grid-color', '#112233')
+        localStorage.setItem('openscad-forge-grid-color--forge', '#112233')
         manager.saveGridColorPreference(null)
-        expect(localStorage.getItem('openscad-forge-grid-color')).toBeNull()
+        expect(localStorage.getItem('openscad-forge-grid-color--forge')).toBeNull()
       })
 
       it('handles localStorage errors gracefully', () => {
@@ -2001,7 +2001,7 @@ describe('PreviewManager', () => {
 
       it('persists in localStorage', () => {
         manager.setGridOpacity(75)
-        expect(localStorage.getItem('openscad-forge-grid-opacity')).toBe('75')
+        expect(localStorage.getItem('openscad-forge-grid-opacity--forge')).toBe('75')
       })
 
       it('clamps below minimum to 10', () => {
@@ -2050,9 +2050,9 @@ describe('PreviewManager', () => {
       })
 
       it('removes from localStorage', () => {
-        localStorage.setItem('openscad-forge-grid-opacity', '50')
+        localStorage.setItem('openscad-forge-grid-opacity--forge', '50')
         manager.resetGridOpacity()
-        expect(localStorage.getItem('openscad-forge-grid-opacity')).toBeNull()
+        expect(localStorage.getItem('openscad-forge-grid-opacity--forge')).toBeNull()
       })
     })
 
@@ -2087,18 +2087,18 @@ describe('PreviewManager', () => {
     describe('saveGridOpacityPreference', () => {
       it('saves a non-default value', () => {
         manager.saveGridOpacityPreference(70)
-        expect(localStorage.getItem('openscad-forge-grid-opacity')).toBe('70')
+        expect(localStorage.getItem('openscad-forge-grid-opacity--forge')).toBe('70')
       })
 
       it('removes key when null', () => {
-        localStorage.setItem('openscad-forge-grid-opacity', '50')
+        localStorage.setItem('openscad-forge-grid-opacity--forge', '50')
         manager.saveGridOpacityPreference(null)
-        expect(localStorage.getItem('openscad-forge-grid-opacity')).toBeNull()
+        expect(localStorage.getItem('openscad-forge-grid-opacity--forge')).toBeNull()
       })
 
       it('removes key when value is 100 (default)', () => {
         manager.saveGridOpacityPreference(100)
-        expect(localStorage.getItem('openscad-forge-grid-opacity')).toBeNull()
+        expect(localStorage.getItem('openscad-forge-grid-opacity--forge')).toBeNull()
       })
 
       it('handles localStorage errors gracefully', () => {

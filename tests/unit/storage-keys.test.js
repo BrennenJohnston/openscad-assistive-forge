@@ -58,6 +58,12 @@ const EXPECTED_KEYS = {
   STORAGE_KEY_LAZY_UNION: 'openscad-forge-lazy-union',
   STORAGE_KEY_MANIFOLD_ENGINE: 'openscad-forge-manifold-engine',
 
+  // UI mode (ui-mode-controller.js; centralized in UF-14)
+  STORAGE_KEY_UI_MODE: 'openscad-forge-ui-mode',
+
+  // UI-scoped preference split marker (ui-scoped-prefs.js, UF-14)
+  STORAGE_KEY_SCOPED_PREFS_SEEDED: 'openscad-forge-scoped-prefs-seeded-v1',
+
   // Preset dropdown sort order
   PRESET_SORT_KEY: 'openscad-forge-preset-sort',
 

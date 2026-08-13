@@ -215,6 +215,13 @@ function syncControls() {
   const zoomBox = el('prefsMouseCentricZoom');
   if (zoomBox && typeof zoom === 'boolean') zoomBox.checked = zoom;
 
+  const showGrid = activeHandlers.getShowGrid?.();
+  const showGridBox = el('prefsShowGrid');
+  if (showGridBox && typeof showGrid === 'boolean') {
+    showGridBox.checked = showGrid;
+  }
+  syncGridSizeSelect();
+
   const editorPrefs = activeHandlers.getEditorPrefs?.();
   if (editorPrefs) {
     for (const control of EDITOR_CONTROLS) {
@@ -252,6 +259,41 @@ function wireEditorTab() {
   }
 }
 
+/**
+ * Rebuild the Grid size select from the app's current preset list (UF-14,
+ * Q-40c). Options come from the handler on every open — the drawer is the
+ * canonical preset editor, so the dialog can be stale before it is shown
+ * (the same multi-copy rule syncControls() states). When the current size
+ * matches no preset, a synthetic "Current" option keeps the control honest
+ * instead of silently displaying a preset that is not in effect.
+ */
+function syncGridSizeSelect() {
+  const select = el('prefsGridSizeSelect');
+  if (!select) return;
+  const state = activeHandlers.getGridSizeOptions?.();
+  if (!state) return;
+
+  select.textContent = '';
+  let currentMatched = false;
+  for (const option of state.options) {
+    const node = document.createElement('option');
+    node.value = option.value;
+    node.textContent = option.label;
+    if (option.value === state.current) {
+      node.selected = true;
+      currentMatched = true;
+    }
+    select.appendChild(node);
+  }
+  if (!currentMatched && state.currentLabel) {
+    const node = document.createElement('option');
+    node.value = '__current';
+    node.textContent = state.currentLabel;
+    node.selected = true;
+    select.insertBefore(node, select.firstChild);
+  }
+}
+
 /** 3D View tab: instant-apply, exactly like the desktop's own dialog. */
 function wireThreeDViewTab() {
   // Delegated so the ten radios need one listener, and `change` rather than
@@ -264,6 +306,19 @@ function wireThreeDViewTab() {
 
   el('prefsMouseCentricZoom')?.addEventListener('change', (event) => {
     activeHandlers.onZoomToCursorChange?.(event.target.checked);
+  });
+
+  el('prefsShowGrid')?.addEventListener('change', (event) => {
+    activeHandlers.onShowGridChange?.(event.target.checked);
+  });
+
+  el('prefsGridSizeSelect')?.addEventListener('change', (event) => {
+    const value = event.target.value;
+    if (value === '__current') return;
+    activeHandlers.onGridSizeChange?.(value);
+    // Re-sync so the control echoes what was actually applied (a clamped
+    // or rejected size must never keep displaying the requested one).
+    syncGridSizeSelect();
   });
 }
 

@@ -25,6 +25,7 @@ import {
   isViewportDesktopShaped,
   subscribeViewportShape,
 } from './classic-availability.js';
+import { STORAGE_KEY_UI_MODE } from './storage-keys.js';
 
 /**
  * @typedef {'simplified' | 'standard' | 'classic'} UIMode
@@ -57,8 +58,10 @@ export function normalizeUiMode(value) {
  * @property {boolean} defaultHiddenInBasic - Whether hidden by default in Simplified mode
  */
 
-// Storage key for UI mode preference (follows openscad-forge-{feature} convention)
-const UI_MODE_STORAGE_KEY = 'openscad-forge-ui-mode';
+// Storage key for UI mode preference (follows openscad-forge-{feature}
+// convention; the string lives in storage-keys.js since UF-14 so
+// ui-scoped-prefs.js can share it)
+const UI_MODE_STORAGE_KEY = STORAGE_KEY_UI_MODE;
 
 // CSS class applied to panel elements when hidden in Simplified mode
 const HIDDEN_CLASS = 'ui-mode-hidden';

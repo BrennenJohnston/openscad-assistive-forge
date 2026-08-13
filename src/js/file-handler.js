@@ -76,6 +76,7 @@ import { isEnabled } from './feature-flags.js';
 import { prepareSvg, needsPreparation } from './svg-preparer.js';
 import { svgToDataUrl, dataUrlToText } from './svg-text-encoding.js';
 import { STORAGE_KEY_MODEL_COLOR } from './storage-keys.js';
+import { readScopedPref } from './ui-scoped-prefs.js';
 import { initBraillePanel, destroyBraillePanel } from './braille-panel.js';
 
 let currentExampleKey = null;
@@ -1938,7 +1939,7 @@ export function initFileHandler({
           pm.updateTheme(pm.detectTheme(), highContrast);
 
           const modelColorPicker = document.getElementById('modelColorPicker');
-          const hasSavedColor = localStorage.getItem(STORAGE_KEY_MODEL_COLOR);
+          const hasSavedColor = readScopedPref(STORAGE_KEY_MODEL_COLOR);
           if (modelColorPicker && !hasSavedColor) {
             const themeKey = highContrast ? `${activeTheme}-hc` : activeTheme;
             // Match PREVIEW_COLORS from preview.js (Cornfield gold [OBSERVED])

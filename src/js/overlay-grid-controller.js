@@ -10,6 +10,9 @@ import { announceImmediate } from './announcer.js';
 import { escapeHtml } from './html-utils.js';
 import * as SharedImageStore from './shared-image-store.js';
 import { getAppPrefKey, safeGetItem, safeSetItem } from './storage-keys.js';
+// UF-14 (U-25): auto-rotate and its speed are PER-UI viewing preferences
+// (signed Q-40 table); the reference-overlay cluster stays app-level.
+import { readScopedPref, writeScopedPref } from './ui-scoped-prefs.js';
 
 const STORAGE_KEY_OVERLAY_ENABLED = getAppPrefKey('overlay-enabled');
 const STORAGE_KEY_OVERLAY_OPACITY = getAppPrefKey('overlay-opacity');
@@ -1058,12 +1061,12 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       previewManager.setAutoRotate(enabled);
     }
     syncAutoRotateToggles(enabled);
-    localStorage.setItem(STORAGE_KEY_AUTO_ROTATE, enabled ? 'true' : 'false');
+    writeScopedPref(STORAGE_KEY_AUTO_ROTATE, enabled ? 'true' : 'false');
     announceImmediate(`Auto-rotation ${enabled ? 'enabled' : 'disabled'}`);
     console.log(`[App] Auto-rotate ${enabled ? 'enabled' : 'disabled'}`);
   }
 
-  const savedRotateSpeed = localStorage.getItem(STORAGE_KEY_ROTATE_SPEED);
+  const savedRotateSpeed = readScopedPref(STORAGE_KEY_ROTATE_SPEED);
 
   function updateRotationSpeedDisplay(speed) {
     if (rotationSpeedValue) {
@@ -1118,7 +1121,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
 
     rotationSpeedInput.addEventListener('change', () => {
       const speed = parseFloat(rotationSpeedInput.value);
-      localStorage.setItem(STORAGE_KEY_ROTATE_SPEED, speed.toString());
+      writeScopedPref(STORAGE_KEY_ROTATE_SPEED, speed.toString());
       console.log(`[App] Auto-rotate speed set to ${speed.toFixed(1)} deg/s`);
     });
   }
@@ -1209,8 +1212,8 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
     }
 
     // Restore auto-rotate settings
-    const savedAutoRotatePref = localStorage.getItem(STORAGE_KEY_AUTO_ROTATE);
-    const savedRotateSpeedPref = localStorage.getItem(STORAGE_KEY_ROTATE_SPEED);
+    const savedAutoRotatePref = readScopedPref(STORAGE_KEY_AUTO_ROTATE);
+    const savedRotateSpeedPref = readScopedPref(STORAGE_KEY_ROTATE_SPEED);
 
     if (savedRotateSpeedPref) {
       const speed = parseFloat(savedRotateSpeedPref);
@@ -1223,6 +1226,32 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       pm.setAutoRotate(true);
       syncAutoRotateToggles(true);
     }
+  }
+
+  /**
+   * The live swap (UF-14 P3): re-read auto-rotate and its speed from the
+   * newly active namespace and re-apply them — rotation state, both
+   * toggle buttons' aria-pressed, and the speed slider readout. Reduced
+   * motion still wins over any saved "on".
+   */
+  function reapplyScopedAutoRotate() {
+    const pm = getPreviewManager();
+
+    let speed = 0.5;
+    const savedSpeed = readScopedPref(STORAGE_KEY_ROTATE_SPEED);
+    if (savedSpeed) {
+      const parsed = parseFloat(savedSpeed);
+      if (!isNaN(parsed) && parsed >= 0.1 && parsed <= 3) speed = parsed;
+    }
+    if (rotationSpeedInput) rotationSpeedInput.value = speed;
+    updateRotationSpeedDisplay(speed);
+    if (pm) pm.setAutoRotateSpeed(speed);
+
+    const enabled =
+      readScopedPref(STORAGE_KEY_AUTO_ROTATE) === 'true' &&
+      !prefersReducedMotion.matches;
+    if (pm) pm.setAutoRotate(enabled);
+    syncAutoRotateToggles(enabled);
   }
 
   // ---- Public API ----
@@ -1238,6 +1267,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
     getThemeAwareSvgColor,
     syncAutoRotateToggles,
     setAutoRotation,
+    reapplyScopedAutoRotate,
     connectPreviewManager,
   };
 }

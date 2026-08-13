@@ -105,12 +105,28 @@ test('dark Forge theme cannot bleed into Classic axis marks, and the scheme choi
   await page.locator('#preferencesModalDone').click();
 
   // --- Leave Classic: the dark app theme resolves its own light marks ------
+  // Since UF-14 the marks are a PER-UI preference (U-25): Classic's
+  // defaults no longer leak into Forge, so the overlay leaves the scene on
+  // the flip and Forge shows marks only when Forge turns them on — which
+  // is exactly what this leg does, through Forge's own View menu, before
+  // judging the color the Forge rebuild bakes.
   await page.locator('#classicModeToggle').click();
   await expect(page.locator('body')).not.toHaveAttribute(
     'data-ui-mode',
     'classic'
   );
   await expect.poll(scheme, { timeout: 10_000 }).toBe('dark');
+  await expect
+    .poll(async () => (await overlay())?.inScene, { timeout: 10_000 })
+    .toBe(false);
+
+  await page.locator('#viewMenuBtn').click();
+  await page
+    .getByRole('menuitemcheckbox', { name: 'Show Scale Markers' })
+    .click();
+  await expect
+    .poll(async () => (await overlay())?.inScene, { timeout: 10_000 })
+    .toBe(true);
 
   // Absorb the rebuild before judging the color: Starnight's axes are also
   // light, so the brightness check alone could pass on the stale overlay.

@@ -1413,10 +1413,11 @@ test.describe('Forge direction (UF-11)', () => {
       .getByRole('menuitemradio', { name: 'High — 250,000 edges' })
       .click()
 
+    // Since UF-14 the budget persists in the Forge namespace's own copy (U-25).
     await expect
       .poll(() =>
         page.evaluate(() =>
-          localStorage.getItem('openscad-forge-display-edgeBudget')
+          localStorage.getItem('openscad-forge-display-edgeBudget--forge')
         )
       )
       .toBe('250000')

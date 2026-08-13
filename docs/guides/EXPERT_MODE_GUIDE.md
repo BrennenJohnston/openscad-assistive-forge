@@ -50,6 +50,16 @@ When you switch modes:
 3. Parameters sync in both directions
 4. Unsaved changes indicator shows if you have edits
 
+### Viewing Preferences and the Classic Interface
+
+Switching between the Forge interface and Classic keeps your code,
+parameter values, and camera position, but each interface remembers its
+own viewing preferences: grid, axes and tick markings, edges,
+measurements, status bar, model color and appearance, auto-rotate, and
+Classic's color scheme. A view setting you change in one interface stays
+in that interface. Editor settings such as font size are shared, because
+both interfaces use the same editor.
+
 ---
 
 ## The Code Editor

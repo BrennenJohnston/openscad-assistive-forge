@@ -151,6 +151,8 @@ import {
   STORAGE_KEY_RECOVERY_SOURCE,
   STORAGE_KEY_RECOVERY_TIMESTAMP,
   STORAGE_KEY_STATUS_BAR,
+  STORAGE_KEY_GRID,
+  STORAGE_KEY_GRID_SIZE,
   STORAGE_KEY_MODEL_COLOR,
   STORAGE_KEY_MODEL_COLOR_ENABLED,
   STORAGE_KEY_MODEL_OPACITY,
@@ -164,6 +166,12 @@ import {
   STORAGE_KEY_WASM_INIT_COMPLETED,
   PRESET_SORT_KEY,
 } from './js/storage-keys.js';
+import {
+  ensureScopedPrefsSeeded,
+  readScopedPref,
+  writeScopedPref,
+  removeScopedPref,
+} from './js/ui-scoped-prefs.js';
 import {
   initImageMeasurement,
   openFullscreen as measureOpenFullscreen,
@@ -906,6 +914,12 @@ async function initApp() {
   // Storage key migration: One-time migration of localStorage keys to standardized naming
   // Must run before any localStorage reads to ensure consistent key access
   migrateStorageKeys();
+
+  // UF-14: split the PER-UI viewing preferences into per-interface
+  // namespaces (Q-40b seeding). After the migration so it copies migrated
+  // values; before any controller init so every scoped read finds its
+  // namespace ready. Marker-gated — a no-op on every boot after the first.
+  ensureScopedPrefsSeeded();
 
   // Recovery Mode: Detect if we're recovering from a memory-related crash
   const urlParams = new URLSearchParams(window.location.search);
@@ -4090,6 +4104,60 @@ async function initApp() {
                   : 'Zoom toward the mouse pointer, off'
               );
             },
+            // UF-14 (Q-40c): the grid is per-interface now, and Preferences
+            // is Classic's home for its own copy. Reads fall back to the
+            // scoped preference before any model exists (the facade's
+            // Classic default is grid-off).
+            getShowGrid: () =>
+              previewManager
+                ? previewManager.gridEnabled
+                : readScopedPref(STORAGE_KEY_GRID) !== 'false',
+            onShowGridChange: (enabled) => {
+              if (previewManager) previewManager.toggleGrid(enabled);
+              else {
+                writeScopedPref(STORAGE_KEY_GRID, enabled ? 'true' : 'false');
+              }
+              announceImmediate(enabled ? 'Grid shown' : 'Grid hidden');
+            },
+            getGridSizeOptions: () => {
+              // The drawer select is the canonical preset list (built-ins
+              // plus the user's saved presets); mirror it minus the
+              // custom-size editor, which stays the drawer's job.
+              const drawer = document.getElementById('gridPresetSelect');
+              const options = drawer
+                ? Array.from(drawer.querySelectorAll('option'))
+                    .filter((o) => o.value !== 'custom')
+                    .map((o) => ({
+                      value: o.value,
+                      label: o.textContent.trim(),
+                    }))
+                : [];
+              let size = previewManager?.getGridSize?.() ?? null;
+              if (!size) {
+                try {
+                  size = JSON.parse(readScopedPref(STORAGE_KEY_GRID_SIZE));
+                } catch {
+                  size = null;
+                }
+              }
+              const current = size ? `${size.widthMm}x${size.heightMm}` : null;
+              return {
+                options,
+                current,
+                currentLabel: size
+                  ? `Current (${size.widthMm} × ${size.heightMm} mm)`
+                  : null,
+              };
+            },
+            onGridSizeChange: (value) => {
+              // Drive the canonical control so the drawer's handler applies,
+              // persists and reports the change exactly once — two controls,
+              // one code path (the D-24 lesson).
+              const drawer = document.getElementById('gridPresetSelect');
+              if (!drawer) return;
+              drawer.value = value;
+              drawer.dispatchEvent(new Event('change', { bubbles: true }));
+            },
           });
           openPreferencesDialog({
             returnFocusTo: document.getElementById('editMenuBtn'),
@@ -6224,12 +6292,12 @@ async function initApp() {
     const bar = document.getElementById('previewStatusBar');
     if (!bar) return;
     bar.classList.toggle('user-hidden', !shown);
-    localStorage.setItem(STORAGE_KEY_STATUS_BAR, shown ? 'true' : 'false');
+    writeScopedPref(STORAGE_KEY_STATUS_BAR, shown ? 'true' : 'false');
     announceImmediate(`Status bar ${shown ? 'shown' : 'hidden'}`);
     console.log(`[App] Status bar ${shown ? 'shown' : 'hidden'}`);
   }
   if (previewStatusBar) {
-    const savedStatusBarPref = localStorage.getItem(STORAGE_KEY_STATUS_BAR);
+    const savedStatusBarPref = readScopedPref(STORAGE_KEY_STATUS_BAR);
     if (savedStatusBarPref === 'false') {
       previewStatusBar.classList.add('user-hidden');
     }
@@ -6301,9 +6369,9 @@ async function initApp() {
   );
 
   // Load saved state
-  const savedModelColor = localStorage.getItem(STORAGE_KEY_MODEL_COLOR);
+  const savedModelColor = readScopedPref(STORAGE_KEY_MODEL_COLOR);
   const savedColorEnabled =
-    localStorage.getItem(STORAGE_KEY_MODEL_COLOR_ENABLED) === 'true';
+    readScopedPref(STORAGE_KEY_MODEL_COLOR_ENABLED) === 'true';
 
   if (savedModelColor && modelColorPicker) {
     modelColorPicker.value = savedModelColor;
@@ -6317,7 +6385,7 @@ async function initApp() {
 
   const getSelectedModelColor = () =>
     modelColorPicker?.value ||
-    localStorage.getItem(STORAGE_KEY_MODEL_COLOR) ||
+    readScopedPref(STORAGE_KEY_MODEL_COLOR) ||
     getThemeDefaultColor();
 
   const syncPreviewModelColorOverride = () => {
@@ -6344,7 +6412,7 @@ async function initApp() {
 
     modelColorEnabled.addEventListener('change', () => {
       const enabled = modelColorEnabled.checked;
-      localStorage.setItem(STORAGE_KEY_MODEL_COLOR_ENABLED, String(enabled));
+      writeScopedPref(STORAGE_KEY_MODEL_COLOR_ENABLED, String(enabled));
       updatePickerDisabledState(enabled);
       if (previewManager) {
         syncPreviewModelColorOverride();
@@ -6366,7 +6434,7 @@ async function initApp() {
         if (previewManager && modelColorEnabled?.checked) {
           previewManager.setColorOverride(color);
         }
-        localStorage.setItem(STORAGE_KEY_MODEL_COLOR, color);
+        writeScopedPref(STORAGE_KEY_MODEL_COLOR, color);
         console.log(`[App] Model color changed to ${color}`);
       }, 150);
     });
@@ -6381,7 +6449,7 @@ async function initApp() {
         const themeDefault = getThemeDefaultColor();
         modelColorPicker.value = themeDefault;
       }
-      localStorage.removeItem(STORAGE_KEY_MODEL_COLOR);
+      removeScopedPref(STORAGE_KEY_MODEL_COLOR);
       console.log('[App] Model color reset to theme default');
     });
   }
@@ -6402,11 +6470,11 @@ async function initApp() {
   );
 
   // Restore persisted values
-  const savedOpacity = localStorage.getItem(STORAGE_KEY_MODEL_OPACITY);
-  const savedBrightness = localStorage.getItem(STORAGE_KEY_BRIGHTNESS);
-  const savedContrast = localStorage.getItem(STORAGE_KEY_CONTRAST);
+  const savedOpacity = readScopedPref(STORAGE_KEY_MODEL_OPACITY);
+  const savedBrightness = readScopedPref(STORAGE_KEY_BRIGHTNESS);
+  const savedContrast = readScopedPref(STORAGE_KEY_CONTRAST);
   const savedAppearanceEnabled =
-    localStorage.getItem(STORAGE_KEY_MODEL_APPEARANCE_ENABLED) === 'true';
+    readScopedPref(STORAGE_KEY_MODEL_APPEARANCE_ENABLED) === 'true';
   if (savedOpacity && modelOpacityInput) {
     modelOpacityInput.value = savedOpacity;
     if (modelOpacityValue) modelOpacityValue.textContent = `${savedOpacity}%`;
@@ -6454,10 +6522,7 @@ async function initApp() {
 
     modelAppearanceEnabled.addEventListener('change', () => {
       const enabled = modelAppearanceEnabled.checked;
-      localStorage.setItem(
-        STORAGE_KEY_MODEL_APPEARANCE_ENABLED,
-        String(enabled)
-      );
+      writeScopedPref(STORAGE_KEY_MODEL_APPEARANCE_ENABLED, String(enabled));
       updateAppearanceSlidersDisabledState(enabled);
       syncPreviewAppearanceOverride();
     });
@@ -6467,7 +6532,7 @@ async function initApp() {
     modelOpacityInput.addEventListener('input', () => {
       const v = modelOpacityInput.value;
       if (modelOpacityValue) modelOpacityValue.textContent = `${v}%`;
-      localStorage.setItem(STORAGE_KEY_MODEL_OPACITY, v);
+      writeScopedPref(STORAGE_KEY_MODEL_OPACITY, v);
       if (previewManager && modelAppearanceEnabled?.checked) {
         previewManager.setModelOpacity(parseInt(v, 10));
       }
@@ -6477,7 +6542,7 @@ async function initApp() {
     brightnessInput.addEventListener('input', () => {
       const v = brightnessInput.value;
       if (brightnessValue) brightnessValue.textContent = `${v}%`;
-      localStorage.setItem(STORAGE_KEY_BRIGHTNESS, v);
+      writeScopedPref(STORAGE_KEY_BRIGHTNESS, v);
       if (previewManager && modelAppearanceEnabled?.checked) {
         previewManager.setBrightness(parseInt(v, 10));
       }
@@ -6487,7 +6552,7 @@ async function initApp() {
     contrastInput.addEventListener('input', () => {
       const v = contrastInput.value;
       if (contrastValue) contrastValue.textContent = `${v}%`;
-      localStorage.setItem(STORAGE_KEY_CONTRAST, v);
+      writeScopedPref(STORAGE_KEY_CONTRAST, v);
       if (previewManager && modelAppearanceEnabled?.checked) {
         previewManager.setContrast(parseInt(v, 10));
       }
@@ -6507,13 +6572,67 @@ async function initApp() {
         contrastInput.value = '100';
         if (contrastValue) contrastValue.textContent = '100%';
       }
-      localStorage.removeItem(STORAGE_KEY_MODEL_OPACITY);
-      localStorage.removeItem(STORAGE_KEY_BRIGHTNESS);
-      localStorage.removeItem(STORAGE_KEY_CONTRAST);
+      removeScopedPref(STORAGE_KEY_MODEL_OPACITY);
+      removeScopedPref(STORAGE_KEY_BRIGHTNESS);
+      removeScopedPref(STORAGE_KEY_CONTRAST);
       if (previewManager && modelAppearanceEnabled?.checked) {
         previewManager.resetAppearance();
       }
     });
+  }
+
+  /**
+   * The live swap (UF-14 P3): re-read the main.js-owned PER-UI surfaces
+   * from the newly active namespace and re-apply them — status-bar
+   * visibility, model color override, the appearance sliders, and
+   * auto-rotate (via the overlay/grid controller). Runs on every
+   * Forge<->Classic flip through syncPreviewSceneToMode; no announcements,
+   * the mode switch already speaks.
+   */
+  function reloadScopedUiSurfaces() {
+    const statusBarNode = document.getElementById('previewStatusBar');
+    if (statusBarNode) {
+      statusBarNode.classList.toggle(
+        'user-hidden',
+        readScopedPref(STORAGE_KEY_STATUS_BAR) === 'false'
+      );
+    }
+
+    const scopedColor = readScopedPref(STORAGE_KEY_MODEL_COLOR);
+    if (modelColorPicker) {
+      modelColorPicker.value = scopedColor || getThemeDefaultColor();
+    }
+    const scopedColorEnabled =
+      readScopedPref(STORAGE_KEY_MODEL_COLOR_ENABLED) === 'true';
+    if (modelColorEnabled) modelColorEnabled.checked = scopedColorEnabled;
+    updatePickerDisabledState(scopedColorEnabled);
+    syncPreviewModelColorOverride();
+
+    const scopedOpacity = readScopedPref(STORAGE_KEY_MODEL_OPACITY) || '100';
+    const scopedBrightness = readScopedPref(STORAGE_KEY_BRIGHTNESS) || '100';
+    const scopedContrast = readScopedPref(STORAGE_KEY_CONTRAST) || '100';
+    if (modelOpacityInput) {
+      modelOpacityInput.value = scopedOpacity;
+      if (modelOpacityValue)
+        modelOpacityValue.textContent = `${scopedOpacity}%`;
+    }
+    if (brightnessInput) {
+      brightnessInput.value = scopedBrightness;
+      if (brightnessValue) brightnessValue.textContent = `${scopedBrightness}%`;
+    }
+    if (contrastInput) {
+      contrastInput.value = scopedContrast;
+      if (contrastValue) contrastValue.textContent = `${scopedContrast}%`;
+    }
+    const scopedAppearanceEnabled =
+      readScopedPref(STORAGE_KEY_MODEL_APPEARANCE_ENABLED) === 'true';
+    if (modelAppearanceEnabled) {
+      modelAppearanceEnabled.checked = scopedAppearanceEnabled;
+    }
+    updateAppearanceSlidersDisabledState(scopedAppearanceEnabled);
+    syncPreviewAppearanceOverride();
+
+    overlayGridCtrl.reapplyScopedAutoRotate();
   }
 
   /**
@@ -6522,7 +6641,11 @@ async function initApp() {
   function getThemeDefaultColor() {
     const root = document.documentElement;
     const uiVariant = root.getAttribute('data-ui-variant');
-    const highContrast = themeManager.isHighContrastEnabled();
+    // themeManager exposes highContrast as a property; the method call this
+    // used to make (isHighContrastEnabled) never existed and threw the
+    // moment UF-14's live swap became the first caller to actually reach
+    // this line (every older path short-circuited on the picker's value).
+    const highContrast = themeManager.highContrast === true;
 
     // Check for mono variant first
     if (uiVariant === 'mono') {
@@ -9560,7 +9683,15 @@ if (rounded) {
     // viewport re-detects on every entry and exit (detectTheme() returns
     // 'classic' while the mode is active).
     const syncPreviewSceneToMode = () => {
+      // UF-14 P3: the flip crosses a preference-namespace boundary, so the
+      // target interface's own saved viewing state is re-applied in one
+      // pass. The DOM surfaces swap even before any model exists...
+      reloadScopedUiSurfaces();
       if (!previewManager) return;
+      // ...and the scene picks up its grid/measurements/scheme state, then
+      // re-detects colors (grid rebuilds resolve them from currentTheme,
+      // which updateTheme refreshes right here).
+      previewManager.reloadScopedViewPreferences();
       previewManager.updateTheme(
         previewManager.detectTheme(),
         document.documentElement.getAttribute('data-high-contrast') === 'true'
@@ -15427,6 +15558,21 @@ if (typeof window !== 'undefined') {
      */
     zoomToCursor() {
       return previewManager?.zoomToCursorEnabled ?? null;
+    },
+
+    /**
+     * Grid scene truth (UF-14). `visible` reads the helper actually in the
+     * scene, not the preference — the preference matrix asserts what is
+     * painted, exactly as axisTickOverlay() does for ticks.
+     * @returns {{enabled: boolean, visible: boolean|null, size: {widthMm: number, heightMm: number}|null}|null}
+     */
+    grid() {
+      if (!previewManager) return null;
+      return {
+        enabled: Boolean(previewManager.gridEnabled),
+        visible: previewManager.gridHelper?.visible ?? null,
+        size: previewManager.getGridSize?.() ?? null,
+      };
     },
 
     /**

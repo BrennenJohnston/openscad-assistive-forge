@@ -340,6 +340,18 @@ export const STORAGE_KEY_METRICS_LOG = getAppPrefKey('metrics-log');
 export const STORAGE_KEY_LAZY_UNION = getAppPrefKey('lazy-union');
 export const STORAGE_KEY_MANIFOLD_ENGINE = getAppPrefKey('manifold-engine');
 
+// --- UI mode (ui-mode-controller.js) ---
+// The controller has always persisted under this name; centralized here so
+// ui-scoped-prefs.js can resolve the active interface without importing the
+// controller. The string itself is unchanged.
+export const STORAGE_KEY_UI_MODE = 'openscad-forge-ui-mode';
+
+// --- UI-scoped preference split marker (ui-scoped-prefs.js, UF-14) ---
+// Gates the one-time Q-40b seeding of the per-interface namespaces.
+export const STORAGE_KEY_SCOPED_PREFS_SEEDED = getAppPrefKey(
+  'scoped-prefs-seeded-v1'
+);
+
 // --- Preset dropdown sort order ---
 export const PRESET_SORT_KEY = 'openscad-forge-preset-sort';
 

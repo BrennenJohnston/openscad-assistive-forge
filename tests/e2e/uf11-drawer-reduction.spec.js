@@ -169,9 +169,12 @@ test('a relocated toggle stays keyboard-operable in its menu home', async ({
   await page.keyboard.press('Enter');
 
   // The grid preference flipped from its default (on) and the change was
-  // announced — state truth plus what a screen reader hears.
+  // announced — state truth plus what a screen reader hears. Since UF-14
+  // the toggle writes the Forge namespace's own copy (U-25).
   await expect
-    .poll(() => page.evaluate(() => localStorage.getItem('openscad-forge-grid')))
+    .poll(() =>
+      page.evaluate(() => localStorage.getItem('openscad-forge-grid--forge'))
+    )
     .toBe('false');
   await expect
     .poll(() =>
