@@ -7793,6 +7793,26 @@
             </p>
             <fieldset class="preferences-fieldset">
               <legend class="preferences-legend">Grid</legend>
+              <!-- UF-14 (Q-40c): the grid is a per-interface preference now,
+                   and Preferences is Classic's home for its own copy. Both
+                   controls drive the same code paths as the Forge drawer's
+                   grid controls; custom sizes are still edited there. -->
+              <div class="preferences-check-row">
+                <input type="checkbox" id="prefsShowGrid" />
+                <label for="prefsShowGrid">Show grid</label>
+              </div>
+              <div class="preferences-grid-size-row">
+                <label for="prefsGridSizeSelect">Grid size</label>
+                <select
+                  id="prefsGridSizeSelect"
+                  class="grid-preset-select"
+                  aria-describedby="prefsGridSizeHelp"
+                ></select>
+                <span id="prefsGridSizeHelp" class="sr-only"
+                  >Choose a printer bed preset for the grid. Custom sizes can be
+                  created in the Preview Settings drawer.</span
+                >
+              </div>
               <div
                 class="grid-color-row"
                 role="group"

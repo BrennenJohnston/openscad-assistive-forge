@@ -1228,6 +1228,32 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
     }
   }
 
+  /**
+   * The live swap (UF-14 P3): re-read auto-rotate and its speed from the
+   * newly active namespace and re-apply them — rotation state, both
+   * toggle buttons' aria-pressed, and the speed slider readout. Reduced
+   * motion still wins over any saved "on".
+   */
+  function reapplyScopedAutoRotate() {
+    const pm = getPreviewManager();
+
+    let speed = 0.5;
+    const savedSpeed = readScopedPref(STORAGE_KEY_ROTATE_SPEED);
+    if (savedSpeed) {
+      const parsed = parseFloat(savedSpeed);
+      if (!isNaN(parsed) && parsed >= 0.1 && parsed <= 3) speed = parsed;
+    }
+    if (rotationSpeedInput) rotationSpeedInput.value = speed;
+    updateRotationSpeedDisplay(speed);
+    if (pm) pm.setAutoRotateSpeed(speed);
+
+    const enabled =
+      readScopedPref(STORAGE_KEY_AUTO_ROTATE) === 'true' &&
+      !prefersReducedMotion.matches;
+    if (pm) pm.setAutoRotate(enabled);
+    syncAutoRotateToggles(enabled);
+  }
+
   // ---- Public API ----
   return {
     syncGridColorPicker,
@@ -1241,6 +1267,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
     getThemeAwareSvgColor,
     syncAutoRotateToggles,
     setAutoRotation,
+    reapplyScopedAutoRotate,
     connectPreviewManager,
   };
 }

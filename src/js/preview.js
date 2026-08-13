@@ -3775,6 +3775,40 @@ export class PreviewManager {
   }
 
   /**
+   * The live swap (UF-14 P3): re-read every PER-UI preview preference from
+   * the newly active namespace and re-apply it to the running scene in one
+   * pass — grid visibility, size, color and opacity, measurements,
+   * zoom-to-cursor and the viewport scheme. Camera pose, mesh and
+   * parameters are untouched (SHARED BY ORDER). Auto-bed's new value
+   * governs the next geometry load; the placed mesh is not re-transformed
+   * mid-flip. Colors follow separately via updateTheme(detectTheme()) —
+   * the caller (syncPreviewSceneToMode) runs that right after.
+   */
+  reloadScopedViewPreferences() {
+    this.measurementsEnabled = this.loadMeasurementPreference();
+    this.gridEnabled = this.loadGridPreference();
+    this.gridConfig = this.loadGridSizePreference();
+    this.gridColorOverride = this.loadGridColorPreference();
+    this.gridOpacity = this.loadGridOpacityPreference();
+    this.autoBedEnabled = this.loadAutoBedPreference();
+    this.zoomToCursorEnabled = this.loadZoomToCursorPreference();
+    if (this.controls) {
+      this.controls.zoomToCursor = this.zoomToCursorEnabled;
+    }
+    this.viewportScheme = this.loadViewportScheme();
+
+    // One rebuild covers size, color, opacity AND visibility; a no-op
+    // before the first model (no scene yet — the constructor reads fresh).
+    this._rebuildGrid();
+
+    if (this.measurementsEnabled && this.mesh) {
+      this.showMeasurements();
+    } else {
+      this.hideMeasurements();
+    }
+  }
+
+  /**
    * Apply auto-bed transformation to geometry
    * Moves the geometry so its lowest Z point sits on Z=0 (the build plate)
    * @param {THREE.BufferGeometry} geometry - The geometry to transform

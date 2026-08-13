@@ -12,7 +12,12 @@
  */
 
 import { getAppPrefKey } from './storage-keys.js';
-import { readScopedPref, writeScopedPref } from './ui-scoped-prefs.js';
+import {
+  readScopedPref,
+  writeScopedPref,
+  getActiveUiNamespace,
+} from './ui-scoped-prefs.js';
+import { getUIModeController } from './ui-mode-controller.js';
 import { announceImmediate } from './announcer.js';
 import {
   buildAxisTickOverlay,
@@ -107,10 +112,54 @@ export class DisplayOptionsController {
     this._wireControls();
     this._syncControls();
 
+    // The live swap (UF-14 P3): entering or leaving Classic crosses a
+    // preference-namespace boundary, so the controller drops the old
+    // interface's state and picks up the target's own saved copy.
+    // Simplified<->Standard flips share the forge namespace and change
+    // nothing here.
+    this._lastNamespace = getActiveUiNamespace();
+    getUIModeController().subscribe(() => {
+      const ns = getActiveUiNamespace();
+      if (ns === this._lastNamespace) return;
+      this._lastNamespace = ns;
+      this.reloadForNamespace();
+    });
+
     // The PreviewManager does not exist until the first model loads, so this
     // is usually a no-op here; file-handler.js connects us once it is built.
     if (!this.connectPreviewManager()) {
       this._applyAll();
+    }
+  }
+
+  /**
+   * Re-read every display option from the (new) active namespace and apply
+   * only what actually changed — scene overlays, checkboxes, and one
+   * display-option-change event per changed option so the View menu, the
+   * Classic camera bar and the drawer all agree (the D-24 lesson: surfaces
+   * that only learn about their own clicks lie). Deliberately silent, like
+   * the old Classic first-entry stamp: the mode switch already announces
+   * itself, and two or three toggle announcements would talk over it.
+   */
+  reloadForNamespace() {
+    const before = { ...this.state };
+    const budgetBefore = this._edgeBudget;
+    this._loadPreferences();
+    this._syncControls();
+
+    for (const key of Object.keys(this.state)) {
+      if (this.state[key] === before[key]) continue;
+      this._apply(key);
+      if (key === 'edges') this._updateEdgeBudgetStatus();
+      document.dispatchEvent(
+        new CustomEvent('display-option-change', {
+          detail: { option: key, enabled: this.state[key] },
+        })
+      );
+    }
+    if (this._edgeBudget !== budgetBefore && this.state.edges) {
+      this._apply('edges');
+      this._updateEdgeBudgetStatus();
     }
   }
 

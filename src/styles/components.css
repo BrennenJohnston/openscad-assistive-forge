@@ -15429,6 +15429,19 @@ body.tutorial-body-locked {
   color: var(--color-text-primary);
 }
 
+.preferences-grid-size-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) 0;
+  min-height: var(--size-touch-target);
+}
+
+.preferences-grid-size-row .grid-preset-select {
+  flex: 1;
+  min-width: 0;
+}
+
 .preferences-check-row {
   display: flex;
   align-items: center;

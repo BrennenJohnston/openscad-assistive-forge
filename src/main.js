@@ -151,6 +151,8 @@ import {
   STORAGE_KEY_RECOVERY_SOURCE,
   STORAGE_KEY_RECOVERY_TIMESTAMP,
   STORAGE_KEY_STATUS_BAR,
+  STORAGE_KEY_GRID,
+  STORAGE_KEY_GRID_SIZE,
   STORAGE_KEY_MODEL_COLOR,
   STORAGE_KEY_MODEL_COLOR_ENABLED,
   STORAGE_KEY_MODEL_OPACITY,
@@ -4102,6 +4104,60 @@ async function initApp() {
                   : 'Zoom toward the mouse pointer, off'
               );
             },
+            // UF-14 (Q-40c): the grid is per-interface now, and Preferences
+            // is Classic's home for its own copy. Reads fall back to the
+            // scoped preference before any model exists (the facade's
+            // Classic default is grid-off).
+            getShowGrid: () =>
+              previewManager
+                ? previewManager.gridEnabled
+                : readScopedPref(STORAGE_KEY_GRID) !== 'false',
+            onShowGridChange: (enabled) => {
+              if (previewManager) previewManager.toggleGrid(enabled);
+              else {
+                writeScopedPref(STORAGE_KEY_GRID, enabled ? 'true' : 'false');
+              }
+              announceImmediate(enabled ? 'Grid shown' : 'Grid hidden');
+            },
+            getGridSizeOptions: () => {
+              // The drawer select is the canonical preset list (built-ins
+              // plus the user's saved presets); mirror it minus the
+              // custom-size editor, which stays the drawer's job.
+              const drawer = document.getElementById('gridPresetSelect');
+              const options = drawer
+                ? Array.from(drawer.querySelectorAll('option'))
+                    .filter((o) => o.value !== 'custom')
+                    .map((o) => ({
+                      value: o.value,
+                      label: o.textContent.trim(),
+                    }))
+                : [];
+              let size = previewManager?.getGridSize?.() ?? null;
+              if (!size) {
+                try {
+                  size = JSON.parse(readScopedPref(STORAGE_KEY_GRID_SIZE));
+                } catch {
+                  size = null;
+                }
+              }
+              const current = size ? `${size.widthMm}x${size.heightMm}` : null;
+              return {
+                options,
+                current,
+                currentLabel: size
+                  ? `Current (${size.widthMm} × ${size.heightMm} mm)`
+                  : null,
+              };
+            },
+            onGridSizeChange: (value) => {
+              // Drive the canonical control so the drawer's handler applies,
+              // persists and reports the change exactly once — two controls,
+              // one code path (the D-24 lesson).
+              const drawer = document.getElementById('gridPresetSelect');
+              if (!drawer) return;
+              drawer.value = value;
+              drawer.dispatchEvent(new Event('change', { bubbles: true }));
+            },
           });
           openPreferencesDialog({
             returnFocusTo: document.getElementById('editMenuBtn'),
@@ -6526,12 +6582,70 @@ async function initApp() {
   }
 
   /**
+   * The live swap (UF-14 P3): re-read the main.js-owned PER-UI surfaces
+   * from the newly active namespace and re-apply them — status-bar
+   * visibility, model color override, the appearance sliders, and
+   * auto-rotate (via the overlay/grid controller). Runs on every
+   * Forge<->Classic flip through syncPreviewSceneToMode; no announcements,
+   * the mode switch already speaks.
+   */
+  function reloadScopedUiSurfaces() {
+    const statusBarNode = document.getElementById('previewStatusBar');
+    if (statusBarNode) {
+      statusBarNode.classList.toggle(
+        'user-hidden',
+        readScopedPref(STORAGE_KEY_STATUS_BAR) === 'false'
+      );
+    }
+
+    const scopedColor = readScopedPref(STORAGE_KEY_MODEL_COLOR);
+    if (modelColorPicker) {
+      modelColorPicker.value = scopedColor || getThemeDefaultColor();
+    }
+    const scopedColorEnabled =
+      readScopedPref(STORAGE_KEY_MODEL_COLOR_ENABLED) === 'true';
+    if (modelColorEnabled) modelColorEnabled.checked = scopedColorEnabled;
+    updatePickerDisabledState(scopedColorEnabled);
+    syncPreviewModelColorOverride();
+
+    const scopedOpacity = readScopedPref(STORAGE_KEY_MODEL_OPACITY) || '100';
+    const scopedBrightness = readScopedPref(STORAGE_KEY_BRIGHTNESS) || '100';
+    const scopedContrast = readScopedPref(STORAGE_KEY_CONTRAST) || '100';
+    if (modelOpacityInput) {
+      modelOpacityInput.value = scopedOpacity;
+      if (modelOpacityValue)
+        modelOpacityValue.textContent = `${scopedOpacity}%`;
+    }
+    if (brightnessInput) {
+      brightnessInput.value = scopedBrightness;
+      if (brightnessValue) brightnessValue.textContent = `${scopedBrightness}%`;
+    }
+    if (contrastInput) {
+      contrastInput.value = scopedContrast;
+      if (contrastValue) contrastValue.textContent = `${scopedContrast}%`;
+    }
+    const scopedAppearanceEnabled =
+      readScopedPref(STORAGE_KEY_MODEL_APPEARANCE_ENABLED) === 'true';
+    if (modelAppearanceEnabled) {
+      modelAppearanceEnabled.checked = scopedAppearanceEnabled;
+    }
+    updateAppearanceSlidersDisabledState(scopedAppearanceEnabled);
+    syncPreviewAppearanceOverride();
+
+    overlayGridCtrl.reapplyScopedAutoRotate();
+  }
+
+  /**
    * Get the theme default model color
    */
   function getThemeDefaultColor() {
     const root = document.documentElement;
     const uiVariant = root.getAttribute('data-ui-variant');
-    const highContrast = themeManager.isHighContrastEnabled();
+    // themeManager exposes highContrast as a property; the method call this
+    // used to make (isHighContrastEnabled) never existed and threw the
+    // moment UF-14's live swap became the first caller to actually reach
+    // this line (every older path short-circuited on the picker's value).
+    const highContrast = themeManager.highContrast === true;
 
     // Check for mono variant first
     if (uiVariant === 'mono') {
@@ -9569,7 +9683,15 @@ if (rounded) {
     // viewport re-detects on every entry and exit (detectTheme() returns
     // 'classic' while the mode is active).
     const syncPreviewSceneToMode = () => {
+      // UF-14 P3: the flip crosses a preference-namespace boundary, so the
+      // target interface's own saved viewing state is re-applied in one
+      // pass. The DOM surfaces swap even before any model exists...
+      reloadScopedUiSurfaces();
       if (!previewManager) return;
+      // ...and the scene picks up its grid/measurements/scheme state, then
+      // re-detects colors (grid rebuilds resolve them from currentTheme,
+      // which updateTheme refreshes right here).
+      previewManager.reloadScopedViewPreferences();
       previewManager.updateTheme(
         previewManager.detectTheme(),
         document.documentElement.getAttribute('data-high-contrast') === 'true'
