@@ -144,6 +144,18 @@ Preview colors can be customized:
 3. Choose a color
 4. Note: This is preview only; exported models use their defined colors
 
+### Your View Settings Are Per Interface
+
+The Assistive Forge and Classic interfaces each remember their own viewing
+preferences: grid on and off and its size and color, axes and tick
+markings, edges, measurements, the status bar, model color and appearance,
+auto-rotate, and Classic's color scheme. Changing one of these in Classic
+never changes it in the Forge interface, and switching interfaces brings
+back each side's own saved look. Your code, parameter values, and camera
+position stay the same across both interfaces, so you always see the same
+object in the same pose. In Classic, the grid is controlled from
+**Preferences ▸ 3D View**.
+
 ---
 
 ## Presets
