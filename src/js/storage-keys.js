@@ -352,6 +352,12 @@ export const STORAGE_KEY_SCOPED_PREFS_SEEDED = getAppPrefKey(
   'scoped-prefs-seeded-v1'
 );
 
+// --- Persistent tutorial registry (tutorial-sandbox.js, UF-16) ---
+// APP-LEVEL per the signed Q-40 table: which tutorial families were ever
+// opened/completed/dismissed. Distinct from the sessionStorage step
+// progress ('tutorialProgress'), which stays session-scoped by design.
+export const STORAGE_KEY_TUTORIAL_STATE = getAppPrefKey('tutorial-state');
+
 // --- Preset dropdown sort order ---
 export const PRESET_SORT_KEY = 'openscad-forge-preset-sort';
 

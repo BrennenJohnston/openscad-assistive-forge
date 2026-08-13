@@ -117,6 +117,7 @@ import {
 } from './js/storage-manager.js';
 // showWorkflowProgress / hideWorkflowProgress moved to hfm-controller.js (applyToolbarModeVisibility)
 import { startTutorial } from './js/tutorial-sandbox.js';
+import { initWelcomeSpotlight } from './js/welcome-spotlight.js';
 import { initDrawerController } from './js/drawer-controller.js';
 import { initPreviewSettingsDrawer } from './js/preview-settings-drawer.js';
 import { initCameraPanelController } from './js/camera-panel-controller.js';
@@ -7933,6 +7934,10 @@ if (rounded) {
       }
     });
   });
+
+  // U-23 (UF-16): the Beginners-card spotlight waits for the first-visit
+  // gate — inside the inert #app it would be unreachable and unannounced.
+  void initWelcomeSpotlight({ waitForFirstVisitAcceptance });
 
   // Wire charm variant selector to update the single Open button
   const charmVariantSelect = document.getElementById('charmVariantSelect');
