@@ -336,6 +336,15 @@ body[data-ui-mode='classic'][data-classic-toolbar-hidden='true']
   display: none;
 }
 
+/* A chrome-free welcome (U-22, UF-13): on the welcome surface the icon
+   toolbar has nothing to act on, so it hides the way the menu bar already
+   does (applyToolbarModeVisibility). display:none, not visually-hidden —
+   a hidden bar must not stay Tab-reachable. The View > Hide Classic
+   Toolbar preference above is a separate condition and stays untouched. */
+body[data-ui-mode='classic'][data-app-surface='welcome'] .classic-toolbar {
+  display: none;
+}
+
 /* Editor toolbar (D1). Lives inside #expertModePanel so it travels into the
    Classic editor slot with the panel; the Forge layouts keep their own
    .expert-mode-header and never show this. Group hairlines come from the
@@ -1981,6 +1990,13 @@ body[data-ui-mode='classic'] .classic-status-bar {
   background-color: var(--color-bg-secondary);
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
+}
+
+/* A chrome-free welcome (U-22, UF-13, Q-39a): the welcome screen carries its
+   own copy of the "upload a file" hint, so the status bar hides with the
+   icon toolbar until a project opens. */
+body[data-ui-mode='classic'][data-app-surface='welcome'] .classic-status-bar {
+  display: none;
 }
 
 body[data-ui-mode='classic'] .classic-status-spacer {
