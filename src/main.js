@@ -226,6 +226,7 @@ import {
   getToolbarMenuController,
   applyToolbarModeVisibility,
 } from './js/toolbar-menu-controller.js';
+import { setAppSurface } from './js/app-surface.js';
 import { initParamDetailController } from './js/param-detail-controller.js';
 import { initOverlayGridController } from './js/overlay-grid-controller.js';
 import { initSavedProjectsUI } from './js/saved-projects-ui.js';
@@ -7578,6 +7579,7 @@ async function initApp() {
     // Hide main interface, show welcome screen
     mainInterface.classList.add('hidden');
     welcomeScreen.classList.remove('hidden');
+    setAppSurface('welcome');
     updateStorageDisplay();
 
     // Refresh saved projects list when returning to welcome screen
@@ -8182,6 +8184,7 @@ if (rounded) {
       // Hide welcome screen early so the user sees a loading state, not the landing page
       welcomeScreen.classList.add('hidden');
       mainInterface.classList.remove('hidden');
+      setAppSurface('project');
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -8451,6 +8454,7 @@ if (rounded) {
         // Show welcome screen again on failure so the user isn't stuck
         welcomeScreen.classList.remove('hidden');
         mainInterface.classList.add('hidden');
+        setAppSurface('welcome');
       }
     }, 500);
   }
@@ -12022,10 +12026,12 @@ if (rounded) {
       // File is loaded - show main interface, hide welcome screen
       mainInterface.classList.remove('hidden');
       welcomeScreen.classList.add('hidden');
+      setAppSurface('project');
     } else {
       // No file loaded - show welcome screen, hide main interface
       mainInterface.classList.add('hidden');
       welcomeScreen.classList.remove('hidden');
+      setAppSurface('welcome');
     }
 
     // Optionally clear variants or keep them

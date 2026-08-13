@@ -71,6 +71,7 @@ import { showErrorModal, showErrorToast } from './error-translator.js';
 import { closeTutorial } from './tutorial-sandbox.js';
 import { sanitizeUrlParams } from './file-param-resolver.js';
 import { applyToolbarModeVisibility } from './toolbar-menu-controller.js';
+import { setAppSurface } from './app-surface.js';
 import { isEnabled } from './feature-flags.js';
 import { prepareSvg, needsPreparation } from './svg-preparer.js';
 import { svgToDataUrl, dataUrlToText } from './svg-text-encoding.js';
@@ -1011,6 +1012,7 @@ export function initFileHandler({
       const mainInterface = document.getElementById('mainInterface');
       welcomeScreen.classList.add('hidden');
       mainInterface.classList.remove('hidden');
+      setAppSurface('project');
 
       updatePreviewDrawer([]);
       if (typeof window.clearConsoleState === 'function') {
@@ -1823,6 +1825,7 @@ export function initFileHandler({
       const mainInterface = document.getElementById('mainInterface');
       welcomeScreen?.classList.add('hidden');
       mainInterface?.classList.remove('hidden');
+      setAppSurface('project');
       // The workflow toolbar carries the Back button — required to leave
       // view mode again.
       showWorkflowProgress();

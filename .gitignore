@@ -21,6 +21,10 @@ coverage/
 test-results/
 playwright-report/
 
+# Review screenshots and OpenSCAD check output (D-7, Q-39b): these travel in
+# PR descriptions now. Files committed before this rule stay tracked.
+build/
+
 # Parity harness output (generated; goldens live in scripts/parity/golden/)
 artifacts/
 
