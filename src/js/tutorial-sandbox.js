@@ -59,6 +59,7 @@ let consecutiveFailures = 0; // Track consecutive step failures
 let isNavigating = false; // Debounce navigation clicks
 let isPaused = false; // Pause state for visibility changes
 let targetRemovalObserver = null; // Watch for target removal
+let surfaceObserver = null; // Watch for welcome -> project while a welcome-surface tour runs
 let currentTarget = null; // Currently highlighted target
 let scrollYBeforeLock = 0; // Store scroll position for body lock
 let didLockBodyScroll = false; // Avoid fighting other scroll locks (e.g. mobile drawer)
@@ -1313,6 +1314,264 @@ const TUTORIALS = {
       },
     ],
   },
+  // U-24 (UF-17): the welcome-page tour. No project loads, no mode is
+  // forced; the Classic variant resolves through modeVariants exactly the
+  // way intro/classic-intro pair up, so the registry records both as the
+  // 'welcome' family. surface: 'welcome' arms the surface-flip close guard.
+  // All strings are the Q-44-approved D-35 pack, verbatim.
+  welcome: {
+    id: 'welcome',
+    title: 'Welcome Page Tour',
+    surface: 'welcome',
+    modeVariants: { classic: 'welcome-classic' },
+    steps: [
+      {
+        title: 'Welcome to the Forge!',
+        content: `
+          <p>This short tour shows you what each part of this welcome page does. Everything runs in your browser. There is nothing to install, and your designs stay on your device.</p>
+          <p class="tutorial-hint">About 2 minutes. Press <kbd>Esc</kbd> to exit at any time.</p>
+        `,
+        position: 'center',
+      },
+      {
+        title: 'Keyboard shortcuts',
+        content: `
+          <p>The <strong>Keys</strong> button lists every keyboard shortcut. The whole app works without a mouse, and this list is the fastest way to learn the keys.</p>
+        `,
+        highlightSelector: '#shortcutsToggle',
+        position: 'bottom',
+      },
+      {
+        title: 'Simplified or Standard',
+        content: `
+          <p>This switch controls how much of the interface is shown once a project is open. <strong>Simplified</strong> keeps the essentials. <strong>Standard</strong> shows more tools. You can change it at any time, and nothing is lost when you switch.</p>
+        `,
+        highlightSelector: '#uiModeToggle',
+        position: 'bottom',
+        showWhen: {
+          condition: () => {
+            const el = document.getElementById('uiModeToggle');
+            return !!el && !el.classList.contains('hidden');
+          },
+        },
+        skipReason: 'not available right now',
+      },
+      {
+        title: 'High contrast',
+        content: `
+          <p>The <strong>HC</strong> button turns on a high-contrast look that keeps text, borders, and focus rings easy to see. It applies everywhere in the app, including this page.</p>
+        `,
+        highlightSelector: '@contrast-toggle',
+        position: 'bottom',
+      },
+      {
+        title: 'Light or dark',
+        content: `
+          <p>This button switches between the light and dark themes. Your choice is remembered for next time.</p>
+        `,
+        highlightSelector: '@theme-toggle',
+        position: 'bottom',
+      },
+      {
+        title: 'Help and examples',
+        content: `
+          <p><strong>Help</strong> opens the Features Guide with built-in documentation and examples. If you are ever stuck, start there.</p>
+        `,
+        highlightSelector: '@features-guide',
+        position: 'bottom',
+      },
+      {
+        title: 'Open or start a project',
+        content: `
+          <p>Projects begin here. Drop a <code>.scad</code> model, a <code>.zip</code> project, or a project folder onto the drop zone, or click it to browse. Below it, <strong>Open Project Folder</strong> opens a folder from your computer, and <strong>Start New Project</strong> begins a blank project.</p>
+          <p class="tutorial-hint">Different from desktop OpenSCAD: the app loads a copy into the browser, and your original files stay untouched.</p>
+        `,
+        highlightSelector: '@welcome-open-panel',
+        position: 'right',
+      },
+      {
+        title: 'Saved Projects',
+        content: `
+          <p>Projects you save appear here, organized into folders. Different from desktop OpenSCAD: saved projects live in this browser's storage, not as files on your disk. Clearing browser data can remove them, so use <strong>Export</strong> to download a backup file of every project. <strong>Import</strong> restores from a backup.</p>
+        `,
+        highlightSelector: '#savedProjectsPanel',
+        position: 'left',
+      },
+      {
+        title: 'Import Folder',
+        content: `
+          <p><strong>Import Folder</strong> copies a whole project folder from your computer into Saved Projects, including the extra files a model includes or uses.</p>
+        `,
+        highlightSelector: '#importFolderBtn',
+        position: 'left',
+        showWhen: {
+          condition: () => {
+            const el = document.getElementById('importFolderBtn');
+            return !!el && !el.hidden;
+          },
+        },
+        skipReason: 'not available in this browser',
+      },
+      {
+        title: 'Connect Folder',
+        content: `
+          <p><strong>Connect Folder</strong> links a folder on your disk to the app, so changes flow both ways while it is connected. This is the closest match to how desktop OpenSCAD works with files. It is available in Chromium browsers such as Chrome and Edge.</p>
+        `,
+        highlightSelector: '#connectFolderBtn',
+        position: 'left',
+        showWhen: {
+          condition: () => {
+            const el = document.getElementById('connectFolderBtn');
+            return !!el && !el.hidden;
+          },
+        },
+        skipReason: 'not available in this browser',
+      },
+      {
+        title: 'Charm Customizer',
+        content: `
+          <p>This card holds a ready-made creative project: wearable charms, pendants, and logo plates with raised or engraved icons. Pick a shape from the <strong>Shape</strong> menu, and the button opens it as a full project. This tour stays on the welcome page, so we will not open it now.</p>
+        `,
+        highlightSelector: '@charm-card',
+        position: 'top',
+      },
+      {
+        title: 'Braille Card Customizer',
+        content: `
+          <p>This card makes 3D-printable braille. Type text and get cards, charms, or two-part tactile signs. Braille translation runs on your device, so nothing you type leaves it. When you are ready, the <strong>Open Braille Card Customizer</strong> button starts it.</p>
+        `,
+        highlightSelector: '@braille-card',
+        position: 'top',
+      },
+      {
+        title: 'Clear Cache',
+        content: `
+          <p>This button frees the browser storage the app uses. Take care with it: by default it also deletes your saved projects. The dialog it opens has a checkbox to keep them, and exporting a backup first is always the safe move. Nothing to do here now. It is good to know where it lives.</p>
+        `,
+        highlightSelector: '#clearStorageBtn',
+        position: 'top',
+      },
+      {
+        title: 'Your next step',
+        content: `
+          <p>That is the whole welcome page. When you are ready to build something, the <strong>Beginners Start Here</strong> card loads a simple example and walks you through changing parameters and generating your first file. Press <strong>Finish</strong> to end this tour.</p>
+        `,
+        highlightSelector: '@beginners-card',
+        position: 'top',
+      },
+    ],
+  },
+  'welcome-classic': {
+    id: 'welcome-classic',
+    title: 'Classic Welcome Page Tour',
+    surface: 'welcome',
+    homeModes: ['classic'],
+    steps: [
+      {
+        title: 'Welcome to Classic!',
+        content: `
+          <p>This short tour shows you what each part of the welcome page does. You are in the Classic layout, which looks and works like the OpenSCAD desktop app once a project is open. Everything runs in your browser, and there is nothing to install.</p>
+          <p class="tutorial-hint">About 2 minutes. Press <kbd>Esc</kbd> to exit at any time.</p>
+        `,
+        position: 'center',
+      },
+      {
+        title: 'Keyboard shortcuts',
+        content: `
+          <p>The <strong>Keys</strong> button lists every keyboard shortcut. The whole app works without a mouse, and this list is the fastest way to learn the keys.</p>
+        `,
+        highlightSelector: '#shortcutsToggle',
+        position: 'bottom',
+      },
+      {
+        title: 'Simplified or Standard',
+        content: `
+          <p>This switch controls the Classic view. <strong>Simplified</strong> shows the Customizer and the 3D view. <strong>Standard</strong> adds the code editor and console, like the desktop app. You can change it at any time.</p>
+        `,
+        highlightSelector: '#classicDensityToggle',
+        position: 'bottom',
+      },
+      {
+        title: 'Open or start a project',
+        content: `
+          <p>Projects begin here. Drop a <code>.scad</code> model, a <code>.zip</code> project, or a project folder onto the drop zone, or click it to browse. Below it, <strong>Open Project Folder</strong> opens a folder from your computer, and <strong>Start New Project</strong> begins a blank project.</p>
+          <p class="tutorial-hint">Different from desktop OpenSCAD: the app loads a copy into the browser, and your original files stay untouched.</p>
+        `,
+        highlightSelector: '@welcome-open-panel',
+        position: 'right',
+      },
+      {
+        title: 'Saved Projects',
+        content: `
+          <p>Projects you save appear here, organized into folders. Different from desktop OpenSCAD: saved projects live in this browser's storage, not as files on your disk. Clearing browser data can remove them, so use <strong>Export</strong> to download a backup file of every project. <strong>Import</strong> restores from a backup.</p>
+        `,
+        highlightSelector: '#savedProjectsPanel',
+        position: 'left',
+      },
+      {
+        title: 'Import Folder',
+        content: `
+          <p><strong>Import Folder</strong> copies a whole project folder from your computer into Saved Projects, including the extra files a model includes or uses.</p>
+        `,
+        highlightSelector: '#importFolderBtn',
+        position: 'left',
+        showWhen: {
+          condition: () => {
+            const el = document.getElementById('importFolderBtn');
+            return !!el && !el.hidden;
+          },
+        },
+        skipReason: 'not available in this browser',
+      },
+      {
+        title: 'Connect Folder',
+        content: `
+          <p><strong>Connect Folder</strong> links a folder on your disk to the app, so changes flow both ways while it is connected. This is the closest match to how desktop OpenSCAD works with files. It is available in Chromium browsers such as Chrome and Edge.</p>
+        `,
+        highlightSelector: '#connectFolderBtn',
+        position: 'left',
+        showWhen: {
+          condition: () => {
+            const el = document.getElementById('connectFolderBtn');
+            return !!el && !el.hidden;
+          },
+        },
+        skipReason: 'not available in this browser',
+      },
+      {
+        title: 'Charm Customizer',
+        content: `
+          <p>This card holds a ready-made creative project: wearable charms, pendants, and logo plates with raised or engraved icons. Pick a shape from the <strong>Shape</strong> menu, and the button opens it as a full project. This tour stays on the welcome page, so we will not open it now.</p>
+        `,
+        highlightSelector: '@charm-card',
+        position: 'top',
+      },
+      {
+        title: 'Braille Card Customizer',
+        content: `
+          <p>This card makes 3D-printable braille. Type text and get cards, charms, or two-part tactile signs. Braille translation runs on your device, so nothing you type leaves it. When you are ready, the <strong>Open Braille Card Customizer</strong> button starts it.</p>
+        `,
+        highlightSelector: '@braille-card',
+        position: 'top',
+      },
+      {
+        title: 'Clear Cache',
+        content: `
+          <p>This button frees the browser storage the app uses. Take care with it: by default it also deletes your saved projects. The dialog it opens has a checkbox to keep them, and exporting a backup first is always the safe move. Nothing to do here now. It is good to know where it lives.</p>
+        `,
+        highlightSelector: '#clearStorageBtn',
+        position: 'top',
+      },
+      {
+        title: 'Your next step',
+        content: `
+          <p>That is the whole welcome page. When you are ready to build something, the <strong>Beginners Start Here</strong> card loads a simple example and starts the Classic tour of the project screen. Press <strong>Finish</strong> to end this tour.</p>
+        `,
+        highlightSelector: '@beginners-card',
+        position: 'top',
+      },
+    ],
+  },
   makers: {
     id: 'makers',
     title: 'Advanced Features',
@@ -2482,6 +2741,12 @@ export async function startTutorial(tutorialId, { triggerEl } = {}) {
   modeChangeUnsubscribe = modeCtrl.subscribe((newMode) =>
     handleModeChangeDuringTutorial(newMode)
   );
+  // U-24: spotlight cutouts stay clickable, so a user can open a project
+  // in the middle of a welcome-surface tour. That action wins the same way
+  // a mode switch does; the tour closes with its surface.
+  if (tutorial.surface === 'welcome') {
+    watchSurfaceChangeDuringTutorial();
+  }
   await showStep(startIndex);
   announceToScreenReader(
     `${tutorial.title} started. Step ${startIndex + 1} of ${tutorial.steps.length}. Press Escape to exit at any time.`,
@@ -3919,6 +4184,37 @@ function clearCompletionListeners() {
  * own forced switch planted (U-12's empty-Classic poisoning).
  * @param {string} newMode - Mode the user switched into
  */
+/**
+ * U-24: close a welcome-surface tour when the app surface flips to
+ * 'project' (the user opened something through a spotlight cutout).
+ * Mirrors handleModeChangeDuringTutorial: the user's action wins, progress
+ * is saved past step one, and the close announces its own reason.
+ */
+function watchSurfaceChangeDuringTutorial() {
+  surfaceObserver = new MutationObserver(() => {
+    if (!activeTutorial) return;
+    if (document.body.dataset.appSurface !== 'project') return;
+
+    const title = activeTutorial.title;
+    const progressSaved = currentStepIndex > 0;
+    if (progressSaved) {
+      saveTutorialProgress(currentStepIndex);
+    }
+
+    closeTutorial(false, { skipModeRestore: true, skipAnnouncement: true });
+
+    // D-35: flagged for owner review (post-Q-44 addition).
+    announceToScreenReader(
+      `${title} closed because a project opened.${progressSaved ? ' Progress saved.' : ''}`,
+      'assertive'
+    );
+  });
+  surfaceObserver.observe(document.body, {
+    attributes: true,
+    attributeFilter: ['data-app-surface'],
+  });
+}
+
 function handleModeChangeDuringTutorial(newMode) {
   if (!activeTutorial) return;
 
@@ -3977,6 +4273,12 @@ export function closeTutorial(completed = false, options = {}) {
   if (targetRemovalObserver) {
     targetRemovalObserver.disconnect();
     targetRemovalObserver = null;
+  }
+
+  // Clean up the welcome-surface flip observer
+  if (surfaceObserver) {
+    surfaceObserver.disconnect();
+    surfaceObserver = null;
   }
 
   // Remove highlight from any targeted elements
