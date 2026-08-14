@@ -228,6 +228,35 @@ test.describe('U-28: a tour survives the control it highlights', () => {
   });
 });
 
+test.describe('the spotlight itself', () => {
+  test('triage Table 1 #5: a tall target is scrolled clear of the chrome above its scroll container', async ({
+    page,
+  }) => {
+    await boot(page)
+    await startWelcomeTour(page)
+    await walkTo(page, 'Open or start a project')
+    await page.waitForTimeout(800) // the engine scrolls smoothly
+
+    const geometry = await page.evaluate(() => {
+      const target = document.querySelector('.tutorial-target-highlight')
+      const style = getComputedStyle(target)
+      // the halo is drawn OUTSIDE the border box
+      const halo =
+        parseFloat(style.outlineOffset) + parseFloat(style.outlineWidth)
+      const rect = target.getBoundingClientRect()
+      const header = document.querySelector('.app-header')
+      return {
+        haloTop: Math.round(rect.top - halo),
+        headerBottom: Math.round(header.getBoundingClientRect().bottom),
+      }
+    })
+
+    // MEASURED at the base: haloTop 8 against a header bottom of 74, so the
+    // top edge of the halo and the panel's own heading were both hidden.
+    expect(geometry.haloTop).toBeGreaterThan(geometry.headerBottom)
+  })
+})
+
 test.describe('UF-21 defects: a tour must not claim it finished', () => {
   test('D-28: a failure-driven skip past the last step does not record completion', async ({
     page,

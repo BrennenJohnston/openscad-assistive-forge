@@ -114,6 +114,49 @@ function findScrollableParent(element) {
 }
 
 /**
+ * Bring a target into view inside its own scroll container, leaving room for
+ * the halo.
+ *
+ * Triage Table 1 #5 (reported at UF-17): on the welcome tour's Open-or-start
+ * step the halo's top edge, and the panel's own heading with it, disappeared
+ * under the header. MEASURED at the base: #welcomeScreen is the scroll
+ * container and its visible box starts 124px down, but scrollIntoView with
+ * block:'center' centres against the WINDOW, so it parked the 476px panel at
+ * y=13 and the container clipped its first 111px. The halo's top edge sat 66px
+ * above the header's bottom edge.
+ *
+ * Centring inside the container's own client box instead keeps the whole
+ * target, halo included, where it can be seen. A target too tall for the box
+ * shows its top rather than its middle, since that is where a tour's subject
+ * usually begins.
+ *
+ * @param {HTMLElement} el - The step's target
+ */
+function scrollTargetIntoContainerView(el) {
+  const margin = SPOTLIGHT_PADDING + 8;
+  const container = findScrollableParent(el);
+  if (!container) {
+    el.scrollIntoView({ behavior: 'auto', block: 'center' });
+    return;
+  }
+
+  const containerRect = container.getBoundingClientRect();
+  const elRect = el.getBoundingClientRect();
+  const view = container.clientHeight;
+  const elTopInContent = elRect.top - containerRect.top + container.scrollTop;
+
+  const next =
+    elRect.height + margin * 2 >= view
+      ? elTopInContent - margin
+      : elTopInContent - (view - elRect.height) / 2;
+
+  container.scrollTop = Math.max(
+    0,
+    Math.min(next, container.scrollHeight - view)
+  );
+}
+
+/**
  * Check if we're on mobile viewport
  * @returns {boolean}
  */
@@ -3486,7 +3529,7 @@ async function showStep(stepIndex) {
     if (activeTutorial.surface === 'welcome') {
       const candidate = resolveStepTarget(step, { requireVisible: false });
       if (candidate && !isElementVisible(candidate)) {
-        candidate.scrollIntoView({ behavior: 'auto', block: 'center' });
+        scrollTargetIntoContainerView(candidate);
       }
     }
     resolvedTarget = await resolveTargetWithRetry(step);
@@ -3694,8 +3737,20 @@ function updateSpotlightAndPosition() {
           behavior: 'smooth',
         });
       } else if (targetRect.top < topPadding) {
+        // Triage Table 1 #5: this used to align the target's top to the
+        // WINDOW's top, which puts it under whatever chrome sits above the
+        // scroll container. MEASURED on the welcome tour's Open-or-start step:
+        // #welcomeScreen's visible box starts 124px down, so the 476px panel
+        // landed at y=16 and the container clipped its first 111px, taking the
+        // halo's top edge and the panel's own heading with it. Align to the
+        // container's own top edge, with room for the halo.
+        const containerTop = Math.max(
+          0,
+          scrollableParent.getBoundingClientRect().top
+        );
+        const wanted = containerTop + topPadding + SPOTLIGHT_PADDING;
         scrollableParent.scrollBy({
-          top: targetRect.top - topPadding,
+          top: targetRect.top - wanted,
           behavior: 'smooth',
         });
       } else {
