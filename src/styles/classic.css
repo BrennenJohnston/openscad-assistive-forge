@@ -998,6 +998,58 @@ body[data-ui-mode='classic'] .classic-error-log-slot .error-log-output {
   max-height: none;
 }
 
+/* The Console pane, the same answer its neighbour has had since P7b (D-27).
+   The Log view's box carried a fixed max-height that knew nothing about the
+   pane it had been docked into, so the pane handed it 146px at 1400 wide and
+   60px at 1024 and clipped the rest — with `.classic-fold-inner`'s
+   overflow:hidden above it and no scrollable ancestor anywhere, the clipped
+   part was simply unreachable, and render()'s scroll-to-newest was driving
+   every fresh message straight into it. The console read as empty.
+
+   Every link in the chain has to give up its content height for the flex to
+   reach the log. Two of them needed help. The <details> is not a direct child
+   of .classic-slot (the fold wrapper sits between), so the
+   .classic-slot > details rule never applied to it. And a <details> does not
+   make its own content a flex item — MEASURED: with display:flex on the panel
+   and flex:1/min-height:0 on .console-content, the content still laid out at
+   its full 648px inside a 225px panel. Positioning the content against the
+   panel is what makes the panel's height reach it, and unlike
+   ::details-content it needs no pseudo-element support. The filter row keeps
+   its natural height; only the message list flexes. */
+body[data-ui-mode='classic'] .classic-console-slot #consolePanel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+body[data-ui-mode='classic'] .classic-console-slot .console-content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* :not([hidden]) so this never outranks .console-view-panel[hidden]'s
+   display:none — Classic forces the Log tab on entry, but a tabpanel that
+   ignores its own hidden attribute is a trap, not a shortcut. */
+body[data-ui-mode='classic']
+  .classic-console-slot
+  #console-view-log:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+body[data-ui-mode='classic'] .classic-console-slot #console-output {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+}
+
 @media (max-width: 1023px) {
   /* The stacked panes are taller than the window, so the column scrolls.
      Without this the overflow is silently clipped. */

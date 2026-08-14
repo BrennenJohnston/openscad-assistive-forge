@@ -106,7 +106,26 @@ export class ClassicPanelMenus {
 
     // A fixed-position popup would drift away from its button; closing is
     // honest and matches how the application menus behave.
-    this._onReposition = () => this.closeMenu();
+    //
+    // Only for scrolls that actually MOVE the button, though. This is a
+    // capturing window listener, so it hears every element in the app scroll
+    // its own content — and a pane scrolling inside itself leaves the title
+    // bar, and therefore the menu, exactly where it was. Since UF-19 the
+    // console log scrolls itself to its newest line whenever output arrives,
+    // which was silently closing an open dock menu and throwing focus back to
+    // the button mid-keystroke. A page scroll reports the document as its
+    // target, not an Element, so those still close.
+    this._onReposition = (event) => {
+      if (
+        event?.type === 'scroll' &&
+        event.target instanceof Element &&
+        this._openButton &&
+        !event.target.contains(this._openButton)
+      ) {
+        return;
+      }
+      this.closeMenu();
+    };
   }
 
   /**

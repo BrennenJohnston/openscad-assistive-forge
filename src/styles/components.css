@@ -6089,8 +6089,12 @@ body.first-visit-blocking #app {
   margin-left: auto;
 }
 
+/* The Log view's message list. 400px, not the 200px this block declared for
+   years: the modal's block was overriding it to 400 the whole time, so 400 is
+   the height the Forge console actually has today and the collision fix is not
+   the place to change it. */
 .console-output {
-  max-height: 200px;
+  max-height: 400px;
   overflow-y: auto;
   font-family: var(--font-family-mono, monospace);
   font-size: var(--font-size-sm);
@@ -9377,7 +9381,12 @@ body.first-visit-blocking #app {
   border-radius: var(--border-radius-sm);
 }
 
-.console-output {
+/* The console modal's <pre>. Named for the modal because it used to be called
+   .console-output, the same class the Log view's #console-output div carries,
+   and being the later block it won on both — handing a div full of generated
+   <div> rows a pre-wrap that rendered the generator's own indentation as blank
+   lines. Keep this selector element-specific to the modal. */
+.console-modal-output {
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
   font-size: var(--font-size-sm);
   line-height: 1.5;
@@ -9393,7 +9402,7 @@ body.first-visit-blocking #app {
 }
 
 /* Highlight ECHO: lines for visibility */
-.console-output .echo-line {
+.console-modal-output .echo-line {
   color: var(--color-info-text, #17a2b8);
   font-weight: 600;
   background: var(--color-info-bg, rgba(23, 162, 184, 0.15));

@@ -706,7 +706,7 @@
 }
 
 /* Console echo line styling for mono variant */
-:root[data-ui-variant='mono'] .console-output .echo-line {
+:root[data-ui-variant='mono'] .console-modal-output .echo-line {
   background: transparent;
   border-left: 2px solid var(--color-accent);
   color: var(--color-accent);

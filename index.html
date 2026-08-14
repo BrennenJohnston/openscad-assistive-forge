@@ -8316,8 +8316,18 @@
             calculated values, or help troubleshoot configurations.
           </p>
           <div class="console-output-container">
+            <!-- console-MODAL-output, not console-output: this <pre> and the Log
+                 view's #console-output div shared one class name, and the block
+                 written for this element sat later in components.css, so it won
+                 on both. The Log view inherited white-space:pre-wrap, which
+                 turned ConsolePanel.renderEntry()'s template indentation into
+                 three rendered blank lines between every message (measured:
+                 63px gaps, scrollHeight 1795px against 451px of actual text),
+                 and a fixed max-height:400px that took no account of the pane
+                 it sits in. In Classic that box was clipped to 60px at 1024px
+                 wide and the console read as empty (D-27). -->
             <pre
-              class="console-output"
+              class="console-modal-output"
               id="consoleOutput"
               tabindex="0"
               role="region"
