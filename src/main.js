@@ -6,6 +6,10 @@
 import './styles/main.css';
 import { extractParameters } from './js/parser.js';
 import {
+  reconcileParameters,
+  collectWithheldDefineKeys,
+} from './js/parameter-reconciler.js';
+import {
   renderParameterUI,
   setLimitsUnlocked,
   getAllDefaults,
@@ -3085,7 +3089,7 @@ async function initApp() {
   async function _saveCurrentProject(successMessage) {
     // Save what the user can see. Without this, saving inside the editor's
     // write-back window persists the pre-edit source and then reports success.
-    flushEditorWriteBack();
+    publishEditorEdits();
     const state = stateManager.getState();
     if (!state.uploadedFile?.content) return;
     if (currentSavedProjectId) {
@@ -3130,6 +3134,10 @@ async function initApp() {
    * @param {string} format - 'svg' or 'dxf'
    */
   async function _export2DOneClick(format) {
+    // D-29, same as the 3D export path: this is reached both through
+    // _renderForExport and directly from the Classic toolbar's DXF button,
+    // so it publishes on its own account rather than trusting its caller.
+    publishEditorEdits();
     const state = stateManager.getState();
     if (!state.uploadedFile) {
       showErrorToast({
@@ -3300,6 +3308,10 @@ async function initApp() {
    * @returns {Promise<'ready'|'downloaded'|false>}
    */
   async function _renderForExport(format, { stlBinary = true } = {}) {
+    // D-29: File > Export renders straight from state, so it needs the
+    // editor published first for the same reason Render does.
+    publishEditorEdits();
+
     // SVG and DXF keep the one-click path: it asks consent for the 2D
     // parameter changes and handles the projection fallback, neither of
     // which a plain render in that format would do.
@@ -3481,7 +3493,7 @@ async function initApp() {
    * from, so a later Save still overwrites the original rather than the copy.
    */
   async function _saveProjectCopy() {
-    flushEditorWriteBack();
+    publishEditorEdits();
     const state = stateManager.getState();
     if (!state.uploadedFile?.content) return;
     const previousProjectId = currentSavedProjectId;
@@ -5296,6 +5308,18 @@ async function initApp() {
     // Initialize if not yet done
     if (!renderController) {
       renderController = new RenderController();
+
+      // Q-45a: only parameters the user actually changed travel as -D.
+      // Everything else follows the SCAD source's own declarations, which is
+      // what lets an edited default take effect at all (U-30).
+      renderController.setWithheldDefineKeyResolver(() => {
+        const defineState = stateManager.getState();
+        return collectWithheldDefineKeys({
+          parameters: defineState.parameters || {},
+          defaults: defineState.defaults || {},
+          schemaNames: Object.keys(defineState.schema?.parameters || {}),
+        });
+      });
 
       // Set up memory warning callback
       renderController.setMemoryWarningCallback((memoryInfo) => {
@@ -8990,14 +9014,23 @@ if (rounded) {
   // Export/Generate right after a pause still sees the edit.
   const EDITOR_WRITE_BACK_DELAY_MS = 500;
 
+  // Owner-approved wording (UF-18, Q-45). Names the control and its shortcut
+  // so the next step is not left to be guessed.
+  const EDITED_PENDING_PREVIEW_MESSAGE =
+    'Edited. Press Preview (F5) to update the model.';
+
   /**
    * Publish an editor edit into the app's single source of truth, so render,
    * export and save all see it. Mirrors the folder-watch writer
    * (`main.js` folder-change handler) minus its re-render: typing must not
    * start a render (D-12) — Preview/F5 does that.
    * @param {string} code
+   * @param {Object} [options]
+   * @param {boolean} [options.announcePending=true] - False when something is
+   *   about to render or save anyway, so the pending-edit line is neither
+   *   shown for a frame nor spoken over the action the user just took.
    */
-  function applyEditorEdit(code) {
+  function applyEditorEdit(code, { announcePending = true } = {}) {
     const state = stateManager.getState();
     if (!state?.uploadedFile) return;
     if (state.uploadedFile.content === code) return;
@@ -9025,6 +9058,13 @@ if (rounded) {
       autoPreviewController.initialPreviewDone = cameraSettled;
     }
 
+    // Typing deliberately does not render (D-12, desktop parity), and until
+    // now nothing said so: P0 measured zero renders after an edit with no
+    // affordance anywhere on screen, which is half of why U-30 read as
+    // "completely useless". Fires once per edit burst, not per keystroke,
+    // and the next render's own status replaces it.
+    if (announcePending) updateStatus(EDITED_PENDING_PREVIEW_MESSAGE);
+
     updatePrimaryActionButton();
   }
 
@@ -9046,7 +9086,124 @@ if (rounded) {
     if (!editorWriteBackTimer) return;
     cancelEditorWriteBack();
     const code = currentEditor?.getValue?.();
-    if (typeof code === 'string') applyEditorEdit(code);
+    // Every caller is on its way to render, export, save or leave the editor,
+    // so telling the user to press Preview here would speak over the action
+    // they just took.
+    if (typeof code === 'string')
+      applyEditorEdit(code, { announcePending: false });
+  }
+
+  // Reconciliation bookkeeping (UF-18, Q-45a). `retiredParameterValues` holds
+  // values the user had set on parameters the code has since removed, so
+  // editing a declaration away and back does not reset their choice.
+  let lastReconciledSource = null;
+  let lastReconciledFileName = null;
+  let retiredParameterValues = {};
+
+  /**
+   * Re-read the parameter schema from the edited source and fold it into the
+   * live values (Q-45a).
+   *
+   * The schema used to be parsed once, when the file loaded, and every render
+   * then passed `-D` for every parameter in it — so an edited default reached
+   * the worker but the stale `-D` overrode it and the model never moved
+   * (U-30). This runs on Preview, Render and Save: the owner chose those
+   * moments over a typing-pause timer so the Customizer is never rebuilt
+   * under a user's hand or mid-sentence for a screen reader.
+   *
+   * @returns {{added: string[], removed: string[]}|null} null when nothing moved
+   */
+  function reconcileEditedParameters() {
+    const state = stateManager.getState();
+    const source = state?.uploadedFile?.content;
+    if (typeof source !== 'string' || !state.schema) return null;
+
+    if (state.uploadedFile.name !== lastReconciledFileName) {
+      lastReconciledFileName = state.uploadedFile.name;
+      lastReconciledSource = null;
+      retiredParameterValues = {};
+    }
+    if (source === lastReconciledSource) return null;
+    lastReconciledSource = source;
+
+    let nextSchema;
+    try {
+      nextSchema = extractParameters(source);
+    } catch (error) {
+      console.warn(
+        '[Reconcile] Could not re-read parameters from the edited code:',
+        error
+      );
+      return null;
+    }
+
+    const result = reconcileParameters({
+      nextSchema,
+      previousSchema: state.schema,
+      parameters: state.parameters || {},
+      defaults: state.defaults || {},
+      retiredValues: retiredParameterValues,
+    });
+
+    if (!result.ok) {
+      console.warn(
+        `[Reconcile] Skipped: ${result.reason}. Keeping the parameters already on screen.`
+      );
+      return null;
+    }
+    retiredParameterValues = result.retiredValues;
+
+    const paramTypes = {};
+    for (const [name, def] of Object.entries(nextSchema.parameters || {})) {
+      paramTypes[name] = def.type || 'string';
+    }
+
+    // Ranges, groups and descriptions can move without any value moving, and
+    // the panel has to follow those too.
+    const schemaMoved =
+      JSON.stringify(state.schema?.parameters || {}) !==
+      JSON.stringify(nextSchema.parameters || {});
+
+    stateManager.setState({
+      schema: nextSchema,
+      paramTypes,
+      parameters: result.parameters,
+      defaults: result.defaults,
+    });
+
+    if (!result.changed && !schemaMoved) return null;
+
+    const parametersContainer = document.getElementById('parametersContainer');
+    if (parametersContainer) {
+      renderParameterUI(
+        nextSchema,
+        parametersContainer,
+        (values) => {
+          stateManager.recordParameterState();
+          stateManager.setState({ parameters: values });
+          clearPresetSelection(values);
+          if (autoPreviewController) {
+            autoPreviewController.onParameterChange(values);
+          }
+          updatePrimaryActionButton();
+          companionFilesCtrl?.syncOverlayWithScreenshotParam?.(values);
+        },
+        result.parameters
+      );
+    }
+
+    return { added: result.added, removed: result.removed };
+  }
+
+  /**
+   * Publish what the editor holds before something reads the model: flush the
+   * pending write-back, then reconcile the schema. Every path that renders,
+   * exports or saves goes through here, so none of them can act on a source
+   * the user has already changed.
+   */
+  function publishEditorEdits() {
+    flushEditorWriteBack();
+    return reconcileEditedParameters();
   }
 
   if (
@@ -9288,8 +9445,9 @@ if (rounded) {
       }
 
       // Publish the edit before rendering — forcePreview renders whatever
-      // content the controller was last given, not the editor buffer.
-      flushEditorWriteBack();
+      // content the controller was last given, not the editor buffer — and
+      // reconcile, so an edited default is not overridden by a stale -D.
+      publishEditorEdits();
 
       if (!autoPreviewController) {
         announceToScreenReader('Preview is not ready yet');
@@ -10966,6 +11124,11 @@ if (rounded) {
    * trigger an STL save prompt whenever a full render was already cached.
    */
   async function runFullRender() {
+    // D-29: this read used to happen with a write-back still queued, so
+    // pressing Render within 500 ms of typing was a race — measured at P0,
+    // the Classic toolbar's Render carried the edit only 1 time in 5. Every
+    // Preview button already published first; Render never did.
+    publishEditorEdits();
     const state = stateManager.getState();
 
     if (!state.uploadedFile) {

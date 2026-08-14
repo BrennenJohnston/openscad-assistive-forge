@@ -213,6 +213,16 @@ export class RenderController {
     this._moduleUsed = false;
     this._restartInProgress = null;
 
+    /**
+     * Names this render must NOT pass as `-D` (UF-18, Q-45a). Supplied by the
+     * app, which is the only layer that knows which parameters a person
+     * actually changed. Everything withheld here falls through to the value
+     * the SCAD source declares, which is the point: a `-D` for every
+     * parameter is what made an edited default invisible (U-30).
+     * @type {(() => Set<string>)|null}
+     */
+    this._getWithheldDefineKeys = null;
+
     // Worker health monitoring
     this._heartbeatId = 0;
     this._lastPongTimestamp = 0;
@@ -694,6 +704,43 @@ export class RenderController {
   }
 
   /**
+   * Supply the names this controller must withhold from `-D` (UF-18, Q-45a).
+   * @param {(() => Set<string>)|null} resolver
+   */
+  setWithheldDefineKeyResolver(resolver) {
+    this._getWithheldDefineKeys = resolver;
+  }
+
+  /**
+   * Drop the parameters the app says the user never touched, so the SCAD
+   * source's own declarations decide their values.
+   *
+   * Applied AFTER the quality preset, never before: `applyQualitySettings`
+   * reads `$fn` to decide whether to cap it, and a preset that forces `$fn`
+   * writes a value that has to survive to the command line.
+   *
+   * @param {Object} parameters
+   * @returns {Object}
+   */
+  _withholdUntouchedParameters(parameters) {
+    if (!this._getWithheldDefineKeys) return parameters;
+    let withheld;
+    try {
+      withheld = this._getWithheldDefineKeys();
+    } catch (error) {
+      console.warn('[Render] Could not resolve withheld -D keys:', error);
+      return parameters;
+    }
+    if (!withheld || withheld.size === 0) return parameters;
+
+    const kept = {};
+    for (const [key, value] of Object.entries(parameters || {})) {
+      if (!withheld.has(key)) kept[key] = value;
+    }
+    return kept;
+  }
+
+  /**
    * Set callback for when OpenSCAD capabilities are detected
    * @param {Function} callback - Called with capability info after init
    */
@@ -840,7 +887,9 @@ export class RenderController {
   async render(scadContent, parameters = {}, options = {}) {
     const run = async () => {
       const quality = options.quality || RENDER_QUALITY.FULL;
-      const adjustedParams = this.applyQualitySettings(parameters, quality);
+      const adjustedParams = this._withholdUntouchedParameters(
+        this.applyQualitySettings(parameters, quality)
+      );
       // Use explicit timeout if provided, then quality preset, then controller default
       let timeoutMs =
         options.timeoutMs ||
