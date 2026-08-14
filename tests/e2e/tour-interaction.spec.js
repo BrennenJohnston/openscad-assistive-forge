@@ -235,7 +235,18 @@ test.describe('the spotlight itself', () => {
     await boot(page)
     await startWelcomeTour(page)
     await walkTo(page, 'Open or start a project')
-    await page.waitForTimeout(800) // the engine scrolls smoothly
+
+    // Push the target's top above the fold, still overlapping the viewport so
+    // the engine can resolve it, and let the engine correct the scroll. This
+    // drives the exact branch the defect lived in, instead of depending on
+    // wherever the previous step happened to leave things. (Scrolling it out
+    // of view entirely would make the target unresolvable and clear the
+    // spotlight, which is a different path.)
+    await page.evaluate(() => {
+      document.getElementById('welcomeScreen').scrollTop = 600
+      window.dispatchEvent(new Event('scroll'))
+    })
+    await page.waitForTimeout(900) // the engine scrolls smoothly
 
     const geometry = await page.evaluate(() => {
       const target = document.querySelector('.tutorial-target-highlight')
