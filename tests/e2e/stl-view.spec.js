@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import path from 'path'
+import { skipWithoutWebGL } from './helpers/webgl.js'
 
 // STL view-only mode: an .stl loads straight into the three.js preview —
 // no WASM render, no parameters, Generate/Export stay unavailable.
@@ -36,6 +37,13 @@ test.describe('STL view-only mode', () => {
     test.setTimeout(240_000)
 
     await openApp(page)
+    // This case is about an STL arriving in the three.js viewer. Where the
+    // browser cannot make a WebGL context there is no viewer and no canvas,
+    // so the precondition is absent rather than the behaviour being wrong.
+    await skipWithoutWebGL(
+      page,
+      'no WebGL context: the STL viewer never creates a canvas here'
+    )
     await page.locator('#fileInput').setInputFiles(STL_FIXTURE)
 
     await expect(page.locator('#welcomeScreen')).toBeHidden({
