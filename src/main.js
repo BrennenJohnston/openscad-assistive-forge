@@ -3134,6 +3134,10 @@ async function initApp() {
    * @param {string} format - 'svg' or 'dxf'
    */
   async function _export2DOneClick(format) {
+    // D-29, same as the 3D export path: this is reached both through
+    // _renderForExport and directly from the Classic toolbar's DXF button,
+    // so it publishes on its own account rather than trusting its caller.
+    publishEditorEdits();
     const state = stateManager.getState();
     if (!state.uploadedFile) {
       showErrorToast({
@@ -3304,6 +3308,10 @@ async function initApp() {
    * @returns {Promise<'ready'|'downloaded'|false>}
    */
   async function _renderForExport(format, { stlBinary = true } = {}) {
+    // D-29: File > Export renders straight from state, so it needs the
+    // editor published first for the same reason Render does.
+    publishEditorEdits();
+
     // SVG and DXF keep the one-click path: it asks consent for the 2D
     // parameter changes and handles the projection fallback, neither of
     // which a plain render in that format would do.
@@ -3312,9 +3320,6 @@ async function initApp() {
       return 'downloaded';
     }
 
-    // D-29: File > Export renders straight from state, so it needs the
-    // editor published first for the same reason Render does.
-    publishEditorEdits();
     const state = stateManager.getState();
     if (!renderController) {
       showErrorToast({
