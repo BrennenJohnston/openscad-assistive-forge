@@ -438,7 +438,17 @@ jobs:
           # Q-23 (owner, 2026-08-09): raised from 15min to the matrix-wide
           # 25min — this job was already failing at 16m5s with 496 tests
           # not run, so its signal was the clock, not the browser.
-          PW_GLOBAL_TIMEOUT: '1500000'
+          #
+          # UF-20: 25min was STILL the clock even after the lane was scoped to
+          # 176 tests. MEASURED: 92 passed / 4 failed / 3 flaky / 42 skipped
+          # and 35 STILL never started, at 25.0m. Two things are fixed
+          # together — the four failures were all defect D-31 (no WASM after a
+          # reload) and each burned three attempts waiting out a 180s timeout,
+          # which is most of the missing time, so they are now skipped at
+          # source; and this ceiling matches the 35min Chromium and Edge run
+          # on. macOS runners bill at 10x, so the ceiling is insurance against
+          # an unfinished lane rather than time this job is expected to use.
+          PW_GLOBAL_TIMEOUT: '2100000'
       
       - name: Upload Playwright report (WebKit)
         uses: actions/upload-artifact@v4
