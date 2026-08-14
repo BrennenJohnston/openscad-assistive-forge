@@ -9025,8 +9025,12 @@ if (rounded) {
    * (`main.js` folder-change handler) minus its re-render: typing must not
    * start a render (D-12) — Preview/F5 does that.
    * @param {string} code
+   * @param {Object} [options]
+   * @param {boolean} [options.announcePending=true] - False when something is
+   *   about to render or save anyway, so the pending-edit line is neither
+   *   shown for a frame nor spoken over the action the user just took.
    */
-  function applyEditorEdit(code) {
+  function applyEditorEdit(code, { announcePending = true } = {}) {
     const state = stateManager.getState();
     if (!state?.uploadedFile) return;
     if (state.uploadedFile.content === code) return;
@@ -9059,7 +9063,7 @@ if (rounded) {
     // affordance anywhere on screen, which is half of why U-30 read as
     // "completely useless". Fires once per edit burst, not per keystroke,
     // and the next render's own status replaces it.
-    updateStatus(EDITED_PENDING_PREVIEW_MESSAGE);
+    if (announcePending) updateStatus(EDITED_PENDING_PREVIEW_MESSAGE);
 
     updatePrimaryActionButton();
   }
@@ -9082,7 +9086,11 @@ if (rounded) {
     if (!editorWriteBackTimer) return;
     cancelEditorWriteBack();
     const code = currentEditor?.getValue?.();
-    if (typeof code === 'string') applyEditorEdit(code);
+    // Every caller is on its way to render, export, save or leave the editor,
+    // so telling the user to press Preview here would speak over the action
+    // they just took.
+    if (typeof code === 'string')
+      applyEditorEdit(code, { announcePending: false });
   }
 
   // Reconciliation bookkeeping (UF-18, Q-45a). `retiredParameterValues` holds
