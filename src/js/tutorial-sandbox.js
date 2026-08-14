@@ -49,6 +49,7 @@ let preTutorialMode = null; // Store UI mode to restore on close
 let preTutorialDensity = null; // Classic density to hand back after a forced switch
 let tutorialForcedMode = false; // True while the tutorial itself switched the interface
 let modeChangeUnsubscribe = null; // ui-mode subscription active while a tutorial runs
+let densityChangeListener = null; // Classic density listener active while a tutorial runs
 let completionListeners = [];
 let stepCompleted = true;
 let resizeObserver = null;
@@ -60,6 +61,8 @@ let isNavigating = false; // Debounce navigation clicks
 let isPaused = false; // Pause state for visibility changes
 let targetRemovalObserver = null; // Watch for target removal
 let surfaceObserver = null; // Watch for welcome -> project while a welcome-surface tour runs
+let dialogObserver = null; // Watch for a user-opened dialog while a tutorial runs
+let dialogOpenAtKeydown = false; // Was a dialog up when this Escape was pressed?
 let currentTarget = null; // Currently highlighted target
 let scrollYBeforeLock = 0; // Store scroll position for body lock
 let didLockBodyScroll = false; // Avoid fighting other scroll locks (e.g. mobile drawer)
@@ -2093,6 +2096,46 @@ export function recordTutorialSpotlightDismissed(tutorialId) {
 }
 
 /**
+ * Keep the promise `aria-modal` makes. Each of these dialogs is two buttons,
+ * so the trap is a Tab cycle over them plus an Escape answer.
+ *
+ * UF-8 reported that the resume and error dialogs claimed aria-modal without
+ * any trap while only the mode-choice dialog implemented one; this is that
+ * single implementation, used by all three.
+ *
+ * @param {HTMLElement} modal - The dialog element
+ * @param {() => void} onEscape - What Escape answers
+ * @returns {(e: KeyboardEvent) => void} The handler, so callers can remove it
+ */
+function trapTwoButtonDialog(modal, onEscape) {
+  const onKeydown = (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      // The tutorial's own document-level Escape handler must not also fire
+      e.stopPropagation();
+      onEscape();
+      return;
+    }
+    if (e.key !== 'Tab') return;
+
+    const buttons = modal.querySelectorAll('button[data-action]');
+    if (buttons.length === 0) return;
+    const first = buttons[0];
+    const last = buttons[buttons.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
+
+  modal.addEventListener('keydown', onKeydown);
+  return onKeydown;
+}
+
+/**
  * Show a resume dialog when progress exists
  * @param {number} stepIndex - Saved step index
  * @param {number} totalSteps - Total steps in tutorial
@@ -2127,9 +2170,13 @@ function showTutorialResumeDialog(stepIndex, totalSteps) {
     document.body.appendChild(modal);
 
     const cleanup = (shouldResume) => {
+      modal.removeEventListener('keydown', onKeydown);
       modal.remove();
       resolve(shouldResume);
     };
+
+    // Escape answers the same way clicking outside already does: start over
+    const onKeydown = trapTwoButtonDialog(modal, () => cleanup(false));
 
     modal.addEventListener('click', (e) => {
       const btn = e.target.closest('button[data-action]');
@@ -2182,9 +2229,13 @@ function showTutorialErrorDialog(message) {
     document.body.appendChild(modal);
 
     const cleanup = (shouldRestart) => {
+      modal.removeEventListener('keydown', onKeydown);
       modal.remove();
       resolve(shouldRestart);
     };
+
+    // Escape answers the same way clicking outside already does: exit
+    const onKeydown = trapTwoButtonDialog(modal, () => cleanup(false));
 
     modal.addEventListener('click', (e) => {
       const btn = e.target.closest('button[data-action]');
@@ -2251,25 +2302,7 @@ function showTutorialModeChoiceDialog(tutorial) {
     };
 
     // aria-modal promises focus stays inside: cycle the two buttons on Tab
-    const onKeydown = (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        cleanup(false);
-      } else if (e.key === 'Tab') {
-        const buttons = modal.querySelectorAll('button[data-action]');
-        const first = buttons[0];
-        const last = buttons[buttons.length - 1];
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault();
-          last.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault();
-          first.focus();
-        }
-      }
-    };
-
-    modal.addEventListener('keydown', onKeydown);
+    const onKeydown = trapTwoButtonDialog(modal, () => cleanup(false));
 
     modal.addEventListener('click', (e) => {
       const btn = e.target.closest('button[data-action]');
@@ -2388,11 +2421,20 @@ function findNextValidStepIndex(startIndex, direction) {
  * @param {number} direction - Direction to move
  * @param {string} reason - Skip reason
  */
-async function skipToNextValidStep(stepIndex, direction, reason) {
+async function skipToNextValidStep(
+  stepIndex,
+  direction,
+  reason,
+  { completedIfPastEnd = true } = {}
+) {
   announceToScreenReader(`Step skipped: ${reason}`);
   const nextIndex = findNextValidStepIndex(stepIndex + direction, direction);
   if (nextIndex === null) {
-    closeTutorial(true);
+    // Defect D-28: skipping past the end because the remaining steps do not
+    // apply to this layout is a finish; skipping past it because a step
+    // FAILED taught nothing, so it must not be recorded as one. The caller
+    // says which it is.
+    closeTutorial(completedIfPastEnd);
     return;
   }
   await showStep(nextIndex);
@@ -2426,7 +2468,9 @@ async function handleStepFailure(reason, stepIndex, direction) {
     return;
   }
 
-  await skipToNextValidStep(stepIndex, direction, reason);
+  await skipToNextValidStep(stepIndex, direction, reason, {
+    completedIfPastEnd: false,
+  });
 }
 
 // ============================================================================
@@ -2466,6 +2510,81 @@ function watchTargetRemoval(targetElement, onRemoved) {
   });
 
   return targetRemovalObserver;
+}
+
+/**
+ * Watch the step's target and survive a re-render.
+ *
+ * U-28 anchor resilience: a mode or density change rebuilds panels, which
+ * removes the highlighted node and puts an equivalent one back a moment
+ * later. Look for that replacement once before treating the removal as a
+ * failure, so an interface change costs the user nothing.
+ *
+ * @param {HTMLElement} target - Element to watch
+ * @param {number} stepIndex - The step this watch belongs to
+ */
+function armTargetRemovalWatch(target, stepIndex) {
+  watchTargetRemoval(target, () => {
+    if (!activeTutorial || currentStepIndex !== stepIndex) return;
+    void (async () => {
+      const step = activeTutorial?.steps?.[stepIndex];
+      const replacement = step ? await resolveTargetWithRetry(step, 600) : null;
+      if (!activeTutorial || currentStepIndex !== stepIndex) return;
+
+      if (replacement) {
+        currentTarget = replacement;
+        armTargetRemovalWatch(replacement, stepIndex);
+        updateSpotlightAndPosition();
+        return;
+      }
+
+      announceToScreenReader(
+        'Tutorial step interrupted: element no longer available.'
+      );
+      currentTarget = null;
+      void handleStepFailure('target removed', stepIndex, 1);
+    })();
+  });
+}
+
+/**
+ * Re-settle the current step after the interface changed under it.
+ *
+ * U-28 / Q-50a (owner, 2026-08-14): a layout change the tour can live with
+ * must not end it. If the step's subject left the screen it skips forward
+ * with the reason it already carries; otherwise the spotlight simply follows
+ * the element to wherever it now is. The completion gate is deliberately NOT
+ * rebuilt, so a step whose action the user has already done does not ask for
+ * it a second time.
+ *
+ * @param {string} reason - Skip reason to speak if the step no longer applies
+ */
+async function reResolveStepAfterLayoutChange(reason) {
+  if (!activeTutorial || !tutorialOverlay) return;
+  const stepIndex = currentStepIndex;
+  const step = activeTutorial.steps[stepIndex];
+  if (!step) return;
+
+  if (step.showWhen && !evaluateShowWhenCondition(step.showWhen)) {
+    await skipToNextValidStep(stepIndex, 1, step.skipReason || reason);
+    return;
+  }
+
+  if (!step.highlightSelector && !step.targetKey) {
+    updateSpotlightAndPosition();
+    return;
+  }
+
+  const target = await resolveTargetWithRetry(step);
+  if (!activeTutorial || currentStepIndex !== stepIndex) return;
+  if (!target) {
+    await handleStepFailure('target unavailable', stepIndex, 1);
+    return;
+  }
+
+  currentTarget = target;
+  armTargetRemovalWatch(target, stepIndex);
+  updateSpotlightAndPosition();
 }
 
 // ============================================================================
@@ -2699,6 +2818,16 @@ export async function startTutorial(tutorialId, { triggerEl } = {}) {
     }
   }
 
+  // Defect D-33: a tour already on screen has to be closed BEFORE this run
+  // captures any state. closeTutorial resets the module's globals, so doing
+  // it later (as createTutorialOverlay did) wiped the incoming tutorial and
+  // threw on activeTutorial.title, leaving no tour at all. Every abort path
+  // above has already returned, so nothing is destroyed for a tour that then
+  // fails to open.
+  if (tutorialOverlay) {
+    closeTutorial(false, { skipAnnouncement: true });
+  }
+
   // Store current focus to restore on close
   previousFocus = document.activeElement;
   triggerElement = triggerEl || previousFocus;
@@ -2746,16 +2875,24 @@ export async function startTutorial(tutorialId, { triggerEl } = {}) {
 
   createTutorialOverlay();
 
-  // Q-28a: a user interface switch wins over a running tutorial
+  // Q-28a, as revised by Q-50a: a user interface switch is handled here
   modeChangeUnsubscribe = modeCtrl.subscribe((newMode) =>
     handleModeChangeDuringTutorial(newMode)
   );
+  // U-28: the Classic density switch never reaches those subscribers
+  // (setClassicDensity dispatches this event instead), so the tour listens
+  // for it directly and re-settles the same way.
+  densityChangeListener = () => {
+    void reResolveStepAfterLayoutChange('the Classic view changed');
+  };
+  document.addEventListener('classic-density-change', densityChangeListener);
   // U-24: spotlight cutouts stay clickable, so a user can open a project
   // in the middle of a welcome-surface tour. That action wins the same way
   // a mode switch does; the tour closes with its surface.
   if (tutorial.surface === 'welcome') {
     watchSurfaceChangeDuringTutorial();
   }
+  watchDialogsDuringTutorial();
   await showStep(startIndex);
   announceToScreenReader(
     `${tutorial.title} started. Step ${startIndex + 1} of ${tutorial.steps.length}. Press Escape to exit at any time.`,
@@ -2767,8 +2904,13 @@ export async function startTutorial(tutorialId, { triggerEl } = {}) {
  * Create the tutorial overlay DOM structure
  */
 function createTutorialOverlay() {
+  // startTutorial closes a running tour before it captures state (D-33), so
+  // this is only a stale-node guard and must NOT reset the module's state:
+  // closeTutorial would null the activeTutorial this overlay is being built
+  // for.
   if (tutorialOverlay) {
-    closeTutorial();
+    tutorialOverlay.remove();
+    tutorialOverlay = null;
   }
 
   const overlay = document.createElement('div');
@@ -2894,7 +3036,10 @@ function setupTutorialListeners() {
   const backBtn = tutorialOverlay.querySelector('#tutorialBackBtn');
   const nextBtn = tutorialOverlay.querySelector('#tutorialNextBtn');
 
-  closeBtn?.addEventListener('click', closeTutorial);
+  // Defect D-32: passing closeTutorial straight to addEventListener handed
+  // the click event to its `completed` parameter, so the X recorded the tour
+  // as finished and threw the saved progress away.
+  closeBtn?.addEventListener('click', () => closeTutorial(false));
   minimizeBtn?.addEventListener('click', toggleMinimize);
   restoreBtn?.addEventListener('click', toggleMinimize);
 
@@ -2906,7 +3051,19 @@ function setupTutorialListeners() {
   // Click outside panel to focus target (if there is one)
   tutorialOverlay.addEventListener('click', handleOverlayClick);
 
+  document.addEventListener('keydown', noteDialogBeforeKeydown, true);
   document.addEventListener('keydown', handleKeydown);
+}
+
+/**
+ * Record, before anyone has had a chance to close it, whether a dialog was on
+ * screen when Escape was pressed (Q-50c). Capture phase, so this runs ahead of
+ * the dialog's own handler.
+ */
+function noteDialogBeforeKeydown(e) {
+  if (e.key === 'Escape') {
+    dialogOpenAtKeydown = isAppDialogOpen();
+  }
 }
 
 /**
@@ -2924,6 +3081,14 @@ function handleKeydown(e) {
       activeElement.isContentEditable);
 
   if (e.key === 'Escape') {
+    // Q-50c: while a dialog the user opened from a spotlight is on screen,
+    // Escape belongs to that dialog. Stand aside and let the app's own
+    // handler close it; the next Escape exits the tour.
+    //
+    // The dialog's own handler usually runs FIRST and removes the dialog, so
+    // by the time this one is reached there is nothing left to see. That is
+    // what noteDialogBeforeKeydown records, on the capture phase.
+    if (dialogOpenAtKeydown || isAppDialogOpen()) return;
     e.preventDefault();
     closeTutorial();
   } else if (
@@ -3139,6 +3304,72 @@ function restoreIfAutoMinimized() {
 }
 
 /**
+ * Every surface the app opens as a dialog. The tour's own panel carries
+ * role="dialog" and its own choice dialogs are .preset-modal, so both are
+ * excluded by isAppDialogOpen.
+ */
+const APP_DIALOG_SELECTOR =
+  '.modal-overlay, .preset-modal, [role="dialog"], [role="alertdialog"], dialog[open]';
+const TUTORIAL_OWN_DIALOGS =
+  '.tutorial-resume-modal, .tutorial-error-modal, .tutorial-mode-choice-modal';
+
+const isRendered = (el) =>
+  typeof el.checkVisibility === 'function'
+    ? el.checkVisibility()
+    : getComputedStyle(el).display !== 'none';
+
+/**
+ * Is a dialog the USER opened currently on screen?
+ * @returns {boolean}
+ */
+function isAppDialogOpen() {
+  for (const el of document.querySelectorAll(APP_DIALOG_SELECTOR)) {
+    if (tutorialOverlay?.contains(el)) continue;
+    if (el.closest(TUTORIAL_OWN_DIALOGS)) continue;
+    if (isRendered(el)) return true;
+  }
+  return false;
+}
+
+/**
+ * Q-50c (owner, 2026-08-14): pressing a spotlighted control that opens a
+ * dialog must not leave the dialog stranded under the veil. MEASURED at the
+ * base: the Clear Cache dialog computes z-index 1000 against the veil's
+ * 10003, so it opened dimmed with the tour panel lying across it and focus on
+ * a button the user could barely see. While any dialog is up the tour shrinks
+ * to its bar and the veil fades; when the dialog goes, the tour comes back.
+ */
+function watchDialogsDuringTutorial() {
+  let scheduled = false;
+
+  const sync = () => {
+    if (!activeTutorial || !tutorialOverlay) return;
+    const dialogUp = isAppDialogOpen();
+    if (dialogUp && !isMinimized) {
+      setMinimized(true, { auto: true });
+    } else if (!dialogUp && isMinimized && wasAutoMinimized) {
+      setMinimized(false, { auto: true });
+    }
+  };
+
+  dialogObserver = new MutationObserver(() => {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(() => {
+      scheduled = false;
+      sync();
+    });
+  });
+
+  dialogObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['class', 'open', 'hidden', 'style'],
+  });
+}
+
+/**
  * Show a specific tutorial step
  * @param {number} stepIndex - Step index
  */
@@ -3252,15 +3483,7 @@ async function showStep(stepIndex) {
   }
   currentTarget = resolvedTarget;
   if (currentTarget) {
-    const observedStepIndex = stepIndex;
-    watchTargetRemoval(currentTarget, () => {
-      if (!activeTutorial || currentStepIndex !== observedStepIndex) return;
-      announceToScreenReader(
-        'Tutorial step interrupted: element no longer available.'
-      );
-      currentTarget = null;
-      void handleStepFailure('target removed', observedStepIndex, 1);
-    });
+    armTargetRemovalWatch(currentTarget, stepIndex);
   }
 
   // Update content (use compact content if viewport is small/zoomed)
@@ -4239,6 +4462,22 @@ function watchSurfaceChangeDuringTutorial() {
 function handleModeChangeDuringTutorial(newMode) {
   if (!activeTutorial) return;
 
+  // U-28 / Q-50a (owner, 2026-08-14) REVISES Q-28a: a switch inside the
+  // interface family this tour was built for is the user exploring, not the
+  // user leaving, so the tour stays and the step re-settles. Crossing between
+  // Forge and Classic still ends it, because the steps point at chrome the
+  // other layout does not have.
+  const homeModes = activeTutorial.homeModes || FORGE_HOME_MODES;
+  if (homeModes.includes(newMode)) {
+    // The user's own choice outlives the tour: closeTutorial must not switch
+    // them back to where the tour found them.
+    tutorialForcedMode = false;
+    preTutorialMode = null;
+    preTutorialDensity = null;
+    void reResolveStepAfterLayoutChange('the interface changed');
+    return;
+  }
+
   const title = activeTutorial.title;
   const stepsTotal = activeTutorial.steps?.length || 0;
   const stepCurrent = currentStepIndex + 1;
@@ -4281,6 +4520,14 @@ export function closeTutorial(completed = false, options = {}) {
     modeChangeUnsubscribe = null;
   }
 
+  if (densityChangeListener) {
+    document.removeEventListener(
+      'classic-density-change',
+      densityChangeListener
+    );
+    densityChangeListener = null;
+  }
+
   clearCompletionListeners();
   clearDrawerObserver();
 
@@ -4300,6 +4547,12 @@ export function closeTutorial(completed = false, options = {}) {
   if (surfaceObserver) {
     surfaceObserver.disconnect();
     surfaceObserver = null;
+  }
+
+  // Clean up the dialog watcher (Q-50c)
+  if (dialogObserver) {
+    dialogObserver.disconnect();
+    dialogObserver = null;
   }
 
   // Remove highlight from any targeted elements
@@ -4342,7 +4595,9 @@ export function closeTutorial(completed = false, options = {}) {
     screen.orientation.removeEventListener('change', handleOrientationChange);
   }
 
+  document.removeEventListener('keydown', noteDialogBeforeKeydown, true);
   document.removeEventListener('keydown', handleKeydown);
+  dialogOpenAtKeydown = false;
 
   tutorialOverlay.remove();
   tutorialOverlay = null;
