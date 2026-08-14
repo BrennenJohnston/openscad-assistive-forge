@@ -18,7 +18,23 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-async function setup(page, { save = false } = {}) {
+/**
+ * Force the banner visible; its handlers bind at init regardless of state.
+ *
+ * Separated from setup() because the banner overlays the app header: with it
+ * up, its "Reload (Safe)" button covers the interface-mode switch and
+ * intercepts clicks on it. A test that needs header controls arranges them
+ * first and calls this afterwards.
+ */
+async function showEmergencyBanner(page) {
+  await page.evaluate(() => {
+    const b = document.getElementById('memoryBanner');
+    b.dataset.state = 'emergency';
+    b.dataset.visible = 'true';
+  });
+}
+
+async function setup(page, { save = false, banner = true } = {}) {
   await page.goto('/');
   await page.waitForSelector('body[data-wasm-ready="true"]', {
     state: 'attached',
@@ -44,12 +60,7 @@ async function setup(page, { save = false } = {}) {
     timeout: 10_000,
   });
 
-  // Force the banner visible; its handlers bind at init regardless of state
-  await page.evaluate(() => {
-    const b = document.getElementById('memoryBanner');
-    b.dataset.state = 'emergency';
-    b.dataset.visible = 'true';
-  });
+  if (banner) await showEmergencyBanner(page);
 }
 
 const persisted = (page) =>
@@ -74,12 +85,18 @@ test('banner Save Project reaches a real save (and flushes the editor)', async (
   page,
 }) => {
   test.setTimeout(240_000);
-  await setup(page, { save: true });
+  // This is the only case that needs a HEADER control, so it opens the editor
+  // before raising the banner. Raising it first put the banner's "Reload
+  // (Safe)" button over #uiModeToggle, and the click was intercepted: measured
+  // failing on develop as often as 7 attempts in 10 on Edge, which turned that
+  // required lane red at 84eae3d.
+  await setup(page, { save: true, banner: false });
 
   await page.locator('#uiModeToggle').click();
   await page.locator('#expertModeToggle').click();
   const cm = page.locator('#expertModeBody .cm-content');
   await expect(cm).toBeVisible({ timeout: 15_000 });
+  await showEmergencyBanner(page);
   await cm.click();
   await page.keyboard.press('Control+End');
   await page.keyboard.type('\n// BANNER_SAVE', { delay: 25 });
