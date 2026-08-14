@@ -161,6 +161,15 @@ test.describe('Console shows its newest output (UF-19, U-31)', () => {
   }) => {
     test.setTimeout(240_000);
 
+    // A defined window, not whatever the lane defaults to. The Classic console
+    // pane is a fixed slice of the window, and its filter row takes a fixed
+    // amount off the top of that slice, so how many lines the log gets depends
+    // on the window's HEIGHT. At 1280x720 with the wider fonts of a Linux CI
+    // runner the filter row wraps to three rows and leaves the log less than
+    // one line — a real residual of the pane's chrome density, reported to the
+    // owner rather than tuned away here, and not what this case is about.
+    await page.setViewportSize({ width: 1400, height: 900 });
+
     await loadProject(page);
     await waitForNewestLine(page);
 
