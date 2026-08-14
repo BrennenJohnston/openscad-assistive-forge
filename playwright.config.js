@@ -86,6 +86,24 @@ export default defineConfig({
       testMatch: '**/*.visual.spec.js',
     },
     // WebKit/Safari - Tier 2 browser (requires macOS runners, extended timeouts)
+    //
+    // Q-48 (owner, 2026-08-14): this lane is SCOPED, and the reason is
+    // arithmetic. Running all 782 tests, it reached 177 of them in its
+    // 25-minute budget - 103 passed, 2 failed, 70 skipped, 597 never started -
+    // so it reported the clock rather than the browser. MEASURED cost on the
+    // macOS runner: ~13.5s per executed test in classic-mode, ~7.6s in
+    // accessibility, against ~19 tests/min on the Firefox lane. Finishing the
+    // whole suite needs roughly 100+ minutes, and macOS runners bill at 10x,
+    // so a complete lane was rejected on cost.
+    //
+    // The owner chose coverage weighted toward accessibility, because Safari
+    // is the browser VoiceOver users are on, so that suite buys more here than
+    // anywhere else. The scope is these five files (~176 tests), which fit the
+    // existing budget and still include classic-mode, where this lane's one
+    // reproducible failure lives.
+    //
+    // Anything outside this list is NOT covered on Safari. Widening it means
+    // re-checking the arithmetic above, not just adding a line.
     {
       name: 'webkit',
       use: {
@@ -94,7 +112,13 @@ export default defineConfig({
         navigationTimeout: 45000,
       },
       timeout: 90000,
-      testIgnore: '**/wasm-smoke.spec.js',
+      testMatch: [
+        '**/accessibility.spec.js',
+        '**/classic-mode.spec.js',
+        '**/theme-switching.spec.js',
+        '**/first-visit-choice.spec.js',
+        '**/basic-workflow.spec.js',
+      ],
     },
     // Mobile & tablet projects — scoped to responsive audit spec to avoid
     // interference with desktop-only E2E tests.
