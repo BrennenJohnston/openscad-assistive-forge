@@ -79,7 +79,7 @@
     "happy-dom": "^20.3.0",
     "jsdom": "^27.4.0",
     "liblouis": "^0.4.0",
-    "lighthouse": "^12.8.2",
+    "lighthouse": "^13.4.1",
     "png-to-ico": "^3.0.1",
     "prettier": "^3.1.1",
     "vite": "^7.3.1",
