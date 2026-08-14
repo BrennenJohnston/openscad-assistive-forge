@@ -114,6 +114,35 @@ function findScrollableParent(element) {
 }
 
 /**
+ * The highest point on screen where this element can actually be seen.
+ *
+ * The nearest SCROLLABLE ancestor is not the right answer: an ancestor whose
+ * content happens to fit still clips with `overflow: auto`, and the scrollable
+ * one may be further out and start at the top of the window. MEASURED on the
+ * CI Firefox runner, where wider fonts make `#welcomeScreen`'s content fit so
+ * it is not scrollable: aligning to the scrollable ancestor put the target at
+ * y=48 under an 86px header, while `#welcomeScreen` itself was still clipping
+ * at ~145. So take the lowest top edge of every CLIPPING ancestor.
+ *
+ * @param {HTMLElement} el
+ * @returns {number} Viewport y below which the element is not clipped
+ */
+function visibleTopBoundFor(el) {
+  let bound = 0;
+  let parent = el.parentElement;
+
+  while (parent && parent !== document.documentElement) {
+    const style = getComputedStyle(parent);
+    if (style.overflowY !== 'visible' || style.overflowX !== 'visible') {
+      bound = Math.max(bound, parent.getBoundingClientRect().top);
+    }
+    parent = parent.parentElement;
+  }
+
+  return bound;
+}
+
+/**
  * Bring a target into view inside its own scroll container, leaving room for
  * the halo.
  *
@@ -3744,11 +3773,8 @@ function updateSpotlightAndPosition() {
         // landed at y=16 and the container clipped its first 111px, taking the
         // halo's top edge and the panel's own heading with it. Align to the
         // container's own top edge, with room for the halo.
-        const containerTop = Math.max(
-          0,
-          scrollableParent.getBoundingClientRect().top
-        );
-        const wanted = containerTop + topPadding + SPOTLIGHT_PADDING;
+        const wanted =
+          visibleTopBoundFor(target) + topPadding + SPOTLIGHT_PADDING;
         scrollableParent.scrollBy({
           top: targetRect.top - wanted,
           behavior: 'smooth',
