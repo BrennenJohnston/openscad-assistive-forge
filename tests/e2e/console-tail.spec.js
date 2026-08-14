@@ -197,6 +197,55 @@ test.describe('Console shows its newest output (UF-19, U-31)', () => {
     ).toContainText(NEWEST);
   });
 
+  test('Classic: arriving output does not close an open dock menu', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    // The log follows its newest line by scrolling itself, and the dock's move
+    // menus dismissed on any scroll anywhere in the app — a capturing window
+    // listener that could not tell a pane scrolling its own content from the
+    // page moving under the menu. Output arriving while a menu was open closed
+    // it and threw focus back to the button mid-keystroke.
+    await loadProject(page);
+    await waitForNewestLine(page);
+
+    await page.locator('#classicModeToggle').click();
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic',
+      { timeout: 20_000 }
+    );
+    await expect(page.locator('#classicConsoleSlot')).toBeVisible({
+      timeout: 20_000,
+    });
+
+    const menuBtn = page.getByRole('button', {
+      name: 'Move Error-Log',
+      exact: true,
+    });
+    await menuBtn.click();
+    await expect(menuBtn).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator('.classic-panel-menu')).toBeVisible();
+
+    await page.evaluate(() =>
+      window.updateConsoleOutput('ECHO: "tail-arrived-with-menu-open"')
+    );
+    await page.waitForTimeout(600);
+
+    await expect(
+      page.locator('.classic-panel-menu'),
+      'the menu is still open'
+    ).toBeVisible();
+    await expect(menuBtn).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      await page.evaluate(
+        () => document.activeElement?.getAttribute('role') === 'menuitem'
+      ),
+      'focus is still inside the menu'
+    ).toBe(true);
+  });
+
   test('a reader who has scrolled up is not dragged back by arriving output', async ({
     page,
   }) => {

@@ -130,6 +130,7 @@ export class ConsolePanel {
     // Docking into Classic resizes the log from 400px to the height of its
     // pane, which leaves a scrollTop that used to be the bottom parked in the
     // middle of the log. Re-pin on resize, but only while following.
+    //
     if (typeof ResizeObserver === 'function') {
       this._resizeObserver = new ResizeObserver(() => {
         if (this._followTail) this.scrollToTail();
