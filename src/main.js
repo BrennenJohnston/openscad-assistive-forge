@@ -14542,6 +14542,13 @@ if (rounded) {
       })
       .join('\n');
 
+    // The drawer is 120px tall and holds one render's messages, so without
+    // this a design that echoes more than about six lines showed only its
+    // first few, every time (U-31). Same reasoning as the console modal: the
+    // content is replaced wholesale each render, so there is no reader
+    // position worth preserving and no scrolled-up pause.
+    echoMessagesEl.scrollTop = echoMessagesEl.scrollHeight;
+
     // Show the drawer: always mark it visible so the badge/label appears.
     // Auto-expand only when problems are present AND either the user has
     // not folded it, or NEW problems arrived since their fold.
@@ -14600,6 +14607,12 @@ if (rounded) {
     });
 
     consoleOutput.innerHTML = highlightedLines.join('\n');
+
+    // Land on the newest output, like the desktop console (U-31). No
+    // scrolled-up pause here, unlike the Log view: this pane shows only the
+    // LATEST render's output rather than a running log, so when it is
+    // re-rendered the text a reader was holding their place in is gone.
+    consoleOutput.scrollTop = consoleOutput.scrollHeight;
   }
 
   // Open console modal
@@ -14617,6 +14630,13 @@ if (rounded) {
     // Show modal
     consoleOutputModal.classList.remove('hidden');
 
+    // renderConsoleOutput's scroll-to-newest ran against a hidden modal, where
+    // scrollHeight is 0, so it did nothing. Now that the modal has layout, put
+    // it on the newest output the way the desktop console does (U-31).
+    if (consoleOutput) {
+      consoleOutput.scrollTop = consoleOutput.scrollHeight;
+    }
+
     // Announce to screen readers
     announceImmediate('Console output panel opened');
   };
@@ -14632,6 +14652,14 @@ if (rounded) {
     const collapsed = echoDrawerEl.classList.toggle('collapsed');
     echoDrawerUserCollapsed = collapsed;
     echoDrawerToggleBtn.setAttribute('aria-expanded', String(!collapsed));
+
+    // A collapsed drawer has no layout, so the scroll-to-newest that ran when
+    // its messages arrived was a no-op against a scrollHeight of 0. Opening it
+    // is the first moment the write can land (U-31).
+    if (!collapsed) {
+      const messages = document.getElementById('echoMessages');
+      if (messages) messages.scrollTop = messages.scrollHeight;
+    }
   });
 
   // Echo drawer "View Full Console" button
