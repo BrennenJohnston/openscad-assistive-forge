@@ -248,8 +248,20 @@ test.describe('First-visit interface choice', () => {
   test('dark theme shows the dark Forge capture; Classic stays light (UF-12, U-21)', async ({
     page,
   }) => {
-    await page.emulateMedia({ colorScheme: 'dark' });
+    // Order matters on Firefox, and this is the sequence that works there.
+    // Emulating BEFORE a fresh page's first navigation does not take: Firefox
+    // still answers matchMedia light, the app resolves light, and the light
+    // capture loads - which is why this case failed on the Firefox lane, not
+    // anything the app got wrong. MEASURED on this app, three ways: emulate
+    // then goto gives dark=false on Firefox (true on Chromium); the
+    // colorScheme context option gives false too; goto, then emulate, then
+    // reload gives true on both, and Firefox then sets data-theme=dark and
+    // swaps to the dark capture by itself. The modal still opens on the
+    // reload: the first-visit flag is written when a choice is made, not when
+    // the modal is shown.
     await page.goto('/');
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.reload();
     await waitForModal(page);
 
     await expect(page.locator('#firstVisitForgeShot')).toHaveAttribute(

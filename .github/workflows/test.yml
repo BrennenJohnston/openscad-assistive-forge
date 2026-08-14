@@ -365,7 +365,18 @@ jobs:
           # Q-23 (owner, 2026-08-09): the same 25min ceiling Chromium and
           # Edge run on — 86 tests had never even started here under the
           # default 10 minutes, so the job's signal was noise.
-          PW_GLOBAL_TIMEOUT: '1500000'
+          #
+          # UF-20: raised to the 35min those two lanes actually run on today.
+          # They were lifted from 25 to 35 at UF-12 and this one was not, so
+          # the parity the note above describes had quietly lapsed. It matters:
+          # with the five failures fixed this lane finishes in 24.2m against a
+          # 25m budget, and the run before it spent its whole budget and
+          # reported two errors that belonged to no test at all
+          # ("Timed out waiting 1500s for the test suite to run"). Under a
+          # minute of headroom on a shared runner is not a margin, and the
+          # never-started guard already fails the job honestly if a raised
+          # ceiling ever hides an unfinished run.
+          PW_GLOBAL_TIMEOUT: '2100000'
       
       - name: Upload Playwright report (Firefox)
         uses: actions/upload-artifact@v4
@@ -380,12 +391,17 @@ jobs:
   # continue-on-error is intentional (see issue #36): WebKit on macOS runners
   # has historically flaky skip-link, modal focus, and theme keyboard tests,
   # so this job is non-blocking to keep the Test Suite green while still
-  # surfacing WebKit regressions in the job logs/artifacts.
+  # surfacing WebKit regressions in the job logs/artifacts. MEASURED at UF-20:
+  # it does what it says - a run with this job red and everything else green
+  # still concludes the workflow as success.
   #
-  # PW_GLOBAL_TIMEOUT is raised to 15min for this job only: WebKit is the
-  # slowest browser in the matrix (~9-11min wall time on green runs), and the
-  # default 10min globalTimeout left ~0-60s of headroom, intermittently
-  # cutting off the trailing mobile tutorial tests (issue #36).
+  # UF-20 / Q-48: the SCOPE of this lane now lives in playwright.config.js,
+  # not here. Running all 782 tests it reached 177 in its 25-minute budget and
+  # left 597 never started, so its red reported the clock rather than the
+  # browser; finishing the whole suite needs roughly 100+ minutes on a runner
+  # billed at 10x. The owner chose a scoped lane weighted toward accessibility
+  # (Safari is where VoiceOver users are). Read the project comment in
+  # playwright.config.js before changing the list or this timeout.
   e2e-tests-webkit:
     name: E2E Tests (Safari/WebKit)
     runs-on: macos-latest
@@ -422,7 +438,17 @@ jobs:
           # Q-23 (owner, 2026-08-09): raised from 15min to the matrix-wide
           # 25min — this job was already failing at 16m5s with 496 tests
           # not run, so its signal was the clock, not the browser.
-          PW_GLOBAL_TIMEOUT: '1500000'
+          #
+          # UF-20: 25min was STILL the clock even after the lane was scoped to
+          # 176 tests. MEASURED: 92 passed / 4 failed / 3 flaky / 42 skipped
+          # and 35 STILL never started, at 25.0m. Two things are fixed
+          # together — the four failures were all defect D-31 (no WASM after a
+          # reload) and each burned three attempts waiting out a 180s timeout,
+          # which is most of the missing time, so they are now skipped at
+          # source; and this ceiling matches the 35min Chromium and Edge run
+          # on. macOS runners bill at 10x, so the ceiling is insurance against
+          # an unfinished lane rather than time this job is expected to use.
+          PW_GLOBAL_TIMEOUT: '2100000'
       
       - name: Upload Playwright report (WebKit)
         uses: actions/upload-artifact@v4

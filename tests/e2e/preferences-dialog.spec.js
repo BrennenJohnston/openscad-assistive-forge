@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
+import { skipWithoutWebGL } from './helpers/webgl.js';
 
 const SAMPLE = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
 
@@ -507,6 +508,16 @@ test('in Classic the dialog leaves the viewport visible while arrow keys live-ap
   await expect(page.locator('#previewContainer')).toHaveClass(
     /preview-current/,
     { timeout: 120_000 }
+  );
+
+  // Both halves of this case measure the canvas: the visibility half needs its
+  // rectangle, and the live-apply half needs pixels to repaint. Where the
+  // browser cannot make a WebGL context no canvas exists at all - the state
+  // above still reaches preview-current, so the geometry read below is what
+  // dereferences null.
+  await skipWithoutWebGL(
+    page,
+    'no WebGL context: no preview canvas to leave visible or repaint'
   );
 
   await page.locator('#editMenuBtn').click();

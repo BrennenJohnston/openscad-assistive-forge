@@ -2509,8 +2509,15 @@ details summary:focus,
   color: var(--color-text-primary);
 }
 
-.preview-webgl-error h3 {
+/* Heading level moved h3 -> h2 with defect D-30. The level is a document
+   -structure fix, not a request for a bigger heading, so the size is pinned to
+   the token nearest the h3 default this replaced (18px vs the browser's
+   18.72px) - otherwise the UA default for h2 would jump it to 24px. Using the
+   token also means it now follows the large-text preference, which the
+   browser default did not. */
+.preview-webgl-error h2 {
   margin: 0 0 var(--space-sm);
+  font-size: var(--font-size-lg);
 }
 
 .preview-webgl-error p {

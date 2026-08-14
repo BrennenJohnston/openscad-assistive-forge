@@ -1957,6 +1957,14 @@ test.describe('Panels CSS and accessibility (F7)', () => {
     await loadProject(page);
     await enterClassicStandard(page);
 
+    // This case runs on every browser, including ones with no WebGL. It used
+    // to fail there on a third violation, heading-order: the
+    // "3D preview unavailable" notice carried a hardcoded <h3>, which Forge
+    // hid under its "Preview Settings & Info" <h2> but Classic did not, so the
+    // page ran <h1> straight to <h3>. That was defect D-30, a real one, and it
+    // is fixed in src/js/preview.js rather than allowed for here. MEASURED
+    // after the fix, against a Firefox launched with webgl.disabled=true:
+    // Classic reports exactly the two violations below and nothing else.
     const results = await new AxeBuilder({ page })
       .include('#mainInterface')
       .analyze();

@@ -797,7 +797,14 @@ export class PreviewManager {
     notice.className = 'preview-webgl-error';
     notice.setAttribute('role', 'alert');
 
-    const heading = document.createElement('h3');
+    // Defect D-30: this was an h3. In Forge it sits under the "Preview
+    // Settings & Info" h2 and the order was fine, but Classic does not carry
+    // those Forge panel headings, so the page ran h1 straight to h3 and a
+    // reader navigating by heading level hit a skipped one - on the very
+    // notice written for people whose browser blocks WebGL. h2 is correct in
+    // both: it follows the h1 in Classic and sits beside the panel headings in
+    // Forge. The wording is unchanged.
+    const heading = document.createElement('h2');
     heading.textContent = '3D preview unavailable';
 
     const reason = document.createElement('p');

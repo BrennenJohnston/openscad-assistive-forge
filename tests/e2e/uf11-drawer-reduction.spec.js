@@ -10,6 +10,7 @@
  * and prove a relocated control stays keyboard-operable in its new home.
  */
 import { test, expect } from '@playwright/test';
+import { skipWithoutWebGL } from './helpers/webgl.js';
 import path from 'path';
 
 const FIXTURE = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
@@ -143,6 +144,12 @@ test('a relocated toggle stays keyboard-operable in its menu home', async ({
   await loadFixture(page);
   await page.locator('#uiModeToggle').click();
   await expect(page.locator('#viewMenuBtn')).toBeVisible();
+  // The grid toggle this case drives only enables once a model is on screen,
+  // and no canvas is ever created where the browser cannot draw.
+  await skipWithoutWebGL(
+    page,
+    'no WebGL context: no model canvas, so the grid toggle never enables'
+  );
   // A model must exist before the grid toggle enables.
   await expect(page.locator('#previewContainer canvas')).toBeVisible({
     timeout: 90_000,
