@@ -1,7 +1,6 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
 import AxeBuilder from '@axe-core/playwright';
-import { skipWithoutWebGL } from './helpers/webgl.js';
 
 // Classic panels (sub-plan F, release R3a) — the Error-Log's keyboard route
 // and the three panels the desktop has that Classic did not: Font List,
@@ -1958,23 +1957,14 @@ test.describe('Panels CSS and accessibility (F7)', () => {
     await loadProject(page);
     await enterClassicStandard(page);
 
-    // DEFECT D-30 (reported to the owner, UF-20, fix belongs to a product
-    // release): where the browser cannot draw, PreviewManager replaces the
-    // preview with its "3D preview unavailable" notice, whose heading is a
-    // hardcoded <h3> (src/js/preview.js). In Forge that h3 sits under the
-    // "Preview Settings & Info" <h2> and the order is fine; in Classic those
-    // Forge panel headings are not in the tree, so the page runs <h1> straight
-    // to <h3> and axe reports heading-order. It is a real defect for a Classic
-    // user with WebGL disabled - exactly the reader that notice is written
-    // for - but it is NOT this case's subject, and adding heading-order to the
-    // allowed list below would hide it permanently. Skipped on the missing
-    // capability instead; the panels' axe contract is proved in full on every
-    // lane that can draw.
-    await skipWithoutWebGL(
-      page,
-      'no WebGL context: the preview-unavailable notice adds an h3 that skips a level (defect D-30)'
-    );
-
+    // This case runs on every browser, including ones with no WebGL. It used
+    // to fail there on a third violation, heading-order: the
+    // "3D preview unavailable" notice carried a hardcoded <h3>, which Forge
+    // hid under its "Preview Settings & Info" <h2> but Classic did not, so the
+    // page ran <h1> straight to <h3>. That was defect D-30, a real one, and it
+    // is fixed in src/js/preview.js rather than allowed for here. MEASURED
+    // after the fix, against a Firefox launched with webgl.disabled=true:
+    // Classic reports exactly the two violations below and nothing else.
     const results = await new AxeBuilder({ page })
       .include('#mainInterface')
       .analyze();
