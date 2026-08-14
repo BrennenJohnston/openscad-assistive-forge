@@ -121,7 +121,27 @@ export class ConsolePanel {
    * @private
    */
   _initTailFollowing() {
+    this._noteGeometry();
+
     this.container.addEventListener('scroll', () => {
+      // Only a reader moving inside a box that is the shape we last left it
+      // means "stop following". Resizing the window fires a scroll event of
+      // its own, with the log at a completely different offset because the box
+      // is a different height and the lines have re-wrapped — MEASURED in
+      // Classic, 1400 to 1024: scrollTop 1002 to 1945, clientHeight 132 to 46,
+      // scrollHeight 1134 to 2309. Reading that as a reader scrolling up
+      // turned following off for good, and no later output brought it back.
+      //
+      // The comparison is against the shape at OUR last write, not at the last
+      // scroll event, so growing the log with new output while a reader is
+      // paused cannot make their next real scroll look like a resize.
+      const { scrollHeight, clientHeight } = this.container;
+      const resized =
+        scrollHeight !== this._lastGeometry.scrollHeight ||
+        clientHeight !== this._lastGeometry.clientHeight;
+      this._noteGeometry();
+      if (resized) return;
+
       // Our own scroll writes land at the bottom, so they re-assert following
       // rather than cancelling it; no programmatic-scroll flag is needed.
       this._followTail = this.isScrolledToTail();
@@ -130,7 +150,6 @@ export class ConsolePanel {
     // Docking into Classic resizes the log from 400px to the height of its
     // pane, which leaves a scrollTop that used to be the bottom parked in the
     // middle of the log. Re-pin on resize, but only while following.
-    //
     if (typeof ResizeObserver === 'function') {
       this._resizeObserver = new ResizeObserver(() => {
         if (this._followTail) this.scrollToTail();
@@ -155,6 +174,20 @@ export class ConsolePanel {
   scrollToTail() {
     if (!this.container) return;
     this.container.scrollTop = this.container.scrollHeight;
+    this._noteGeometry();
+  }
+
+  /**
+   * Remember the log's shape as we are leaving it, so the scroll handler can
+   * tell a resize apart from a reader.
+   * @private
+   */
+  _noteGeometry() {
+    if (!this.container) return;
+    this._lastGeometry = {
+      scrollHeight: this.container.scrollHeight,
+      clientHeight: this.container.clientHeight,
+    };
   }
 
   /**
@@ -539,6 +572,7 @@ export class ConsolePanel {
           No console output yet. ECHO, WARNING, and ERROR messages will appear here.
         </div>
       `;
+      this._noteGeometry();
       return;
     }
 
@@ -558,6 +592,7 @@ export class ConsolePanel {
       this.scrollToTail();
     } else {
       this.container.scrollTop = previousScrollTop;
+      this._noteGeometry();
     }
   }
 

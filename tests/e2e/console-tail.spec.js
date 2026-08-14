@@ -195,6 +195,17 @@ test.describe('Console shows its newest output (UF-19, U-31)', () => {
       page.locator('#console-output'),
       "the design's own echoes reached the Classic pane"
     ).toContainText(NEWEST);
+
+    // Narrowing the window re-wraps the lines and shrinks the box, which fires
+    // a scroll event of its own. Reading that as the reader scrolling up turned
+    // following off for good, so the pane sat on old output from then on.
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await expect
+      .poll(async () => (await readLogGeometry(page)).distanceFromTail, {
+        timeout: 20_000,
+        intervals: [250],
+      })
+      .toBeLessThanOrEqual(TAIL_SLACK);
   });
 
   test('Classic: arriving output does not close an open dock menu', async ({
