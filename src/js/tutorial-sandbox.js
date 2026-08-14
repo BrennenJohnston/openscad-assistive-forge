@@ -1110,6 +1110,26 @@ const TUTORIALS = {
         position: 'bottom',
         completion: { type: 'modalClose', selector: '#featuresGuideModal' },
       },
+      // U-29 / Q-51b (owner, 2026-08-14): the Simplified/Standard teaching
+      // moved here from the welcome tour, near the end so nothing the tour
+      // shows depends on the choice made in it. Q-51c: the step INVITES the
+      // press and never requires it, so no completion gate. The tour survives
+      // the press (U-28), which is what makes teaching it by pressing safe.
+      {
+        title: 'Simplified or Standard',
+        content: `
+          <p>This switch controls how much of the interface is shown. <strong>Simplified</strong> keeps the essentials. <strong>Standard</strong> shows more tools. Press it now to see the difference. The tour stays open, and nothing is lost when you switch.</p>
+        `,
+        highlightSelector: '#uiModeToggle',
+        position: 'bottom',
+        showWhen: {
+          condition: () => {
+            const el = document.getElementById('uiModeToggle');
+            return !!el && !el.classList.contains('hidden');
+          },
+        },
+        skipReason: 'not available right now',
+      },
       {
         title: "You're ready!",
         content: `
@@ -1302,12 +1322,23 @@ const TUTORIALS = {
         showWhen: isClassicStandardDensity,
         skipReason: 'not available in this view',
       },
+      // U-29 / Q-51b: the Classic half of the moved teaching. It sits after
+      // the editor, console and Preferences steps deliberately: those three
+      // only appear in the Standard view, so a user who chooses Simplified
+      // here has already been shown what the extra panes hold.
+      {
+        title: 'Simplified or Standard',
+        content: `
+          <p>This switch controls the Classic view. <strong>Simplified</strong> shows the Customizer and the 3D view. <strong>Standard</strong> adds the code editor and console, like the desktop app. Press it now to see the difference. The tour stays open, and you can switch back at any time.</p>
+        `,
+        highlightSelector: '#classicDensityToggle',
+        position: 'bottom',
+      },
       {
         title: "You're ready!",
         content: `
           <p>That's the Classic tour.</p>
           <ul>
-            <li>The <strong>Simplified</strong> and <strong>Standard</strong> switch in the header changes how much is shown</li>
             <li>The <strong>A. Forge</strong> button returns you to the Assistive Forge interface</li>
             <li>Run this tour again anytime from the welcome screen</li>
           </ul>
@@ -1344,21 +1375,10 @@ const TUTORIALS = {
         highlightSelector: '#shortcutsToggle',
         position: 'bottom',
       },
-      {
-        title: 'Simplified or Standard',
-        content: `
-          <p>This switch controls how much of the interface is shown once a project is open. <strong>Simplified</strong> keeps the essentials. <strong>Standard</strong> shows more tools. You can change it at any time, and nothing is lost when you switch.</p>
-        `,
-        highlightSelector: '#uiModeToggle',
-        position: 'bottom',
-        showWhen: {
-          condition: () => {
-            const el = document.getElementById('uiModeToggle');
-            return !!el && !el.classList.contains('hidden');
-          },
-        },
-        skipReason: 'not available right now',
-      },
+      // U-29 / Q-51a (owner, 2026-08-14): the Simplified/Standard step used to
+      // sit here. It moved to the box tour, where pressing the switch does
+      // something; on the welcome surface it changes nothing a user can see.
+      // This SUPERSEDES that part of the Q-44 welcome pack. 14 steps -> 13.
       {
         title: 'High contrast',
         content: `
@@ -1486,14 +1506,9 @@ const TUTORIALS = {
         highlightSelector: '#shortcutsToggle',
         position: 'bottom',
       },
-      {
-        title: 'Simplified or Standard',
-        content: `
-          <p>This switch controls the Classic view. <strong>Simplified</strong> shows the Customizer and the 3D view. <strong>Standard</strong> adds the code editor and console, like the desktop app. You can change it at any time.</p>
-        `,
-        highlightSelector: '#classicDensityToggle',
-        position: 'bottom',
-      },
+      // U-29 / Q-51a: moved to the Classic box tour, same reasoning as the
+      // Forge welcome tour above. SUPERSEDES that part of the Q-44 pack.
+      // 11 steps -> 10.
       {
         title: 'Open or start a project',
         content: `
@@ -4447,7 +4462,8 @@ function watchSurfaceChangeDuringTutorial() {
 
     closeTutorial(false, { skipModeRestore: true, skipAnnouncement: true });
 
-    // D-35: flagged for owner review (post-Q-44 addition).
+    // Q-50d (owner, 2026-08-14): approved as drafted, in its final context.
+    // The D-35 review flag this line carried since UF-17 is retired.
     announceToScreenReader(
       `${title} closed because a project opened.${progressSaved ? ' Progress saved.' : ''}`,
       'assertive'
