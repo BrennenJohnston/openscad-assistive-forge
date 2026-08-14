@@ -199,8 +199,12 @@ export function reconcileParameters({
   const changed =
     added.length > 0 ||
     removed.length > 0 ||
-    nextNames.some((name) => !parameterValuesEqual(outParameters[name], parameters[name])) ||
-    nextNames.some((name) => !parameterValuesEqual(outDefaults[name], defaults[name]));
+    nextNames.some(
+      (name) => !parameterValuesEqual(outParameters[name], parameters[name])
+    ) ||
+    nextNames.some(
+      (name) => !parameterValuesEqual(outDefaults[name], defaults[name])
+    );
 
   return {
     ok: true,
