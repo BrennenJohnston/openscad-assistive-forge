@@ -256,15 +256,45 @@ test.describe('the spotlight itself', () => {
         parseFloat(style.outlineOffset) + parseFloat(style.outlineWidth)
       const rect = target.getBoundingClientRect()
       const header = document.querySelector('.app-header')
+
+      // Everything between the target and the root that clips or scrolls, so a
+      // failure on a runner I cannot reproduce locally explains itself instead
+      // of needing another round trip.
+      const ancestors = []
+      let parent = target.parentElement
+      while (parent && parent !== document.documentElement) {
+        const parentStyle = getComputedStyle(parent)
+        if (
+          parentStyle.overflowY !== 'visible' ||
+          parentStyle.overflowX !== 'visible'
+        ) {
+          const r = parent.getBoundingClientRect()
+          ancestors.push(
+            `${parent.id || parent.tagName.toLowerCase()}` +
+              ` top=${Math.round(r.top)} h=${Math.round(r.height)}` +
+              ` oy=${parentStyle.overflowY}` +
+              ` scroll=${parent.scrollTop}/${parent.scrollHeight}-${parent.clientHeight}`
+          )
+        }
+        parent = parent.parentElement
+      }
+
       return {
         haloTop: Math.round(rect.top - halo),
         headerBottom: Math.round(header.getBoundingClientRect().bottom),
+        targetTop: Math.round(rect.top),
+        targetHeight: Math.round(rect.height),
+        viewport: `${window.innerWidth}x${window.innerHeight}`,
+        clippingAncestors: ancestors,
       }
     })
 
     // MEASURED at the base: haloTop 8 against a header bottom of 74, so the
     // top edge of the halo and the panel's own heading were both hidden.
-    expect(geometry.haloTop).toBeGreaterThan(geometry.headerBottom)
+    expect(
+      geometry.haloTop,
+      `halo must clear the header: ${JSON.stringify(geometry)}`
+    ).toBeGreaterThan(geometry.headerBottom)
   })
 })
 
