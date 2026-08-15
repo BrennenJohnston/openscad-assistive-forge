@@ -3757,24 +3757,32 @@ function updateSpotlightAndPosition() {
     const deltaDown = targetRect.bottom - effectiveBottom;
     const topPadding = 16;
 
+    // Triage Table 1 #5. Two rules, and the order between them is the whole
+    // fix:
+    //
+    // `wanted` is where the target's top belongs. Aligning it to the WINDOW's
+    // top buries it under whatever chrome sits above its clipping box - on the
+    // welcome tour's Open-or-start step #welcomeScreen's box starts 124px down
+    // here and 148px down on the CI Firefox runner, and the panel's first
+    // hundred-odd pixels, halo and heading included, were simply clipped away.
+    //
+    // `fits` decides whether showing the BOTTOM is even sensible. MEASURED on
+    // that runner, where wider fonts wrap the same panel to 648px inside a
+    // 572px box: the two rules fought, the bottom-first rule won, and it
+    // dragged the top back up to y=48 under an 86px header. A target too tall
+    // to fit has to show its top, because that is where its heading is.
+    const wanted = visibleTopBoundFor(target) + topPadding + SPOTLIGHT_PADDING;
+    const fits = targetRect.height <= effectiveBottom - wanted;
+
     // Prefer adjusting the nearest scrollable parent so we can account for
     // fixed UI overlays (like the mobile actions bar).
     if (scrollableParent && typeof scrollableParent.scrollBy === 'function') {
-      if (deltaDown > 0) {
+      if (deltaDown > 0 && fits) {
         scrollableParent.scrollBy({
           top: deltaDown + topPadding,
           behavior: 'smooth',
         });
-      } else if (targetRect.top < topPadding) {
-        // Triage Table 1 #5: this used to align the target's top to the
-        // WINDOW's top, which puts it under whatever chrome sits above the
-        // scroll container. MEASURED on the welcome tour's Open-or-start step:
-        // #welcomeScreen's visible box starts 124px down, so the 476px panel
-        // landed at y=16 and the container clipped its first 111px, taking the
-        // halo's top edge and the panel's own heading with it. Align to the
-        // container's own top edge, with room for the halo.
-        const wanted =
-          visibleTopBoundFor(target) + topPadding + SPOTLIGHT_PADDING;
+      } else if (targetRect.top < wanted) {
         scrollableParent.scrollBy({
           top: targetRect.top - wanted,
           behavior: 'smooth',
@@ -3787,11 +3795,11 @@ function updateSpotlightAndPosition() {
         });
       }
     } else if (typeof window.scrollBy === 'function') {
-      if (deltaDown > 0) {
+      if (deltaDown > 0 && fits) {
         window.scrollBy({ top: deltaDown + topPadding, behavior: 'smooth' });
-      } else if (targetRect.top < topPadding) {
+      } else if (targetRect.top < wanted) {
         window.scrollBy({
-          top: targetRect.top - topPadding,
+          top: targetRect.top - wanted,
           behavior: 'smooth',
         });
       } else {
