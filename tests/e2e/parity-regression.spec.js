@@ -50,6 +50,7 @@ test.beforeEach(async ({ page }) => {
     if (!sessionStorage.getItem('__test_initialized')) {
       localStorage.clear();
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
       sessionStorage.setItem('__test_initialized', 'true');
     }
   });

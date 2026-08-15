@@ -125,6 +125,7 @@ test.describe('Full Render Color Passthrough (Phase 2)', () => {
     await page.addInitScript(() => {
       localStorage.clear();
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
     });
   });
 

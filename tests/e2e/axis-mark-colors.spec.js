@@ -30,6 +30,7 @@ const STARNIGHT_AXES = 0xe5e5e5;
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
     // The dark leg of the owner's recipe, seeded instead of clicked so the
     // resolved theme is dark regardless of the machine running the test.
     localStorage.setItem('openscad-forge-theme', 'dark');

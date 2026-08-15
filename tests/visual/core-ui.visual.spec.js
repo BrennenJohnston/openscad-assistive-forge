@@ -17,6 +17,13 @@ test.setTimeout(60000);
 
 test.describe('Visual Regression - Core UI', () => {
   test.beforeEach(async ({ page }) => {
+    // UF-22: these captures deliberately keep the first-visit modal, but two
+    // of them dismiss it and then shoot the page underneath. Suppress the
+    // tour nudge so it is not what they photograph.
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+    });
+
     // Navigate to the app
     await page.goto('/');
 
@@ -306,6 +313,7 @@ test.describe('Visual Regression - Disclosure Sections', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
     });
     await page.goto('/');
     await page.waitForSelector('#app', { state: 'visible' });
@@ -351,6 +359,7 @@ test.describe('Visual Regression - UI Uniformity', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
     });
     await page.goto('/');
     await page.waitForSelector('#app', { state: 'visible' });

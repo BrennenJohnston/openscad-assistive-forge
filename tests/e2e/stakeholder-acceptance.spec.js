@@ -30,6 +30,7 @@ test.describe('Stakeholder Acceptance Tests', () => {
     await page.addInitScript(() => {
       localStorage.clear()
       localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
     })
     await page.goto('http://localhost:5173/')
   })

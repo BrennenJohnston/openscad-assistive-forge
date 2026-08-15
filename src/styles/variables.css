@@ -102,6 +102,9 @@
   --z-index-dropdown: 100;
   --z-index-drawer: 900;
   --z-index-modal-backdrop: 950;
+  /* UF-22: the tutorial menu stays lit while the nudge dims the rest of the
+     page, so it sits between that backdrop and the dialog itself. */
+  --z-index-nudge-spotlight: 960;
   --z-index-modal: 1000;
   --z-index-skip-link: 9999;
   --z-index-tutorial-backdrop: 9998;

@@ -358,6 +358,17 @@ export const STORAGE_KEY_SCOPED_PREFS_SEEDED = getAppPrefKey(
 // progress ('tutorialProgress'), which stays session-scoped by design.
 export const STORAGE_KEY_TUTORIAL_STATE = getAppPrefKey('tutorial-state');
 
+// --- Welcome tour nudge, permanent suppression (tour-nudge.js, UF-22) ---
+// APP-LEVEL for the same reason as the registry above: whether someone wants
+// to be offered the welcome tour is a fact about the person, not about which
+// interface they happen to be in, and the tour itself is one family across
+// Forge and Classic. Written only by the modal's "Do not show this again"
+// checkbox (Q-52d); the card tip's own dismissal is recorded in the registry
+// instead, so the two controls keep separate scopes.
+export const STORAGE_KEY_TOUR_NUDGE_SUPPRESSED = getAppPrefKey(
+  'tour-nudge-suppressed'
+);
+
 // --- Preset dropdown sort order ---
 export const PRESET_SORT_KEY = 'openscad-forge-preset-sort';
 

@@ -47,6 +47,7 @@ test.describe('Preset Workflow', () => {
     await page.addInitScript(() => {
       localStorage.clear()
       localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
     })
     await page.goto('/')
   })
@@ -743,6 +744,7 @@ test.describe('Project-Native Presets (project_presets flag)', () => {
     await page.addInitScript(() => {
       localStorage.clear()
       localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
     })
     await page.goto(`/?${PROJECT_PRESETS_FLAG}`)
     await page.waitForSelector('body[data-wasm-ready="true"]', {
@@ -939,6 +941,7 @@ test.describe('Preset Workflow — Searchable Combobox variant', () => {
     await page.addInitScript(() => {
       localStorage.clear()
       localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
     })
     await page.goto(`/?${COMBOBOX_FLAG_PARAM}`)
   })
