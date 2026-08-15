@@ -296,6 +296,54 @@ test.describe('the spotlight itself', () => {
       `halo must clear the header: ${JSON.stringify(geometry)}`
     ).toBeGreaterThan(geometry.headerBottom)
   })
+
+  test('and still clears it when the target is TALLER than the box it lives in', async ({
+    page,
+  }) => {
+    // The CI Firefox runner's wider fonts wrap this panel to 648px inside a
+    // 572px container, and that is a different branch: showing the target's
+    // bottom drags its top back under the header. Reproduced here by making
+    // the window short and narrow enough for the same thing to be true.
+    // Width stays clear of the 768px mobile threshold, which would change the
+    // tour's drawer handling and make this a different test.
+    await page.setViewportSize({ width: 800, height: 500 })
+    await boot(page)
+    await startWelcomeTour(page)
+    await walkTo(page, 'Open or start a project')
+
+    await page.evaluate(() => {
+      document.getElementById('welcomeScreen').scrollTop = 600
+      window.dispatchEvent(new Event('scroll'))
+    })
+    await page.waitForTimeout(900)
+
+    const geometry = await page.evaluate(() => {
+      const target = document.querySelector('.tutorial-target-highlight')
+      const style = getComputedStyle(target)
+      const halo =
+        parseFloat(style.outlineOffset) + parseFloat(style.outlineWidth)
+      const rect = target.getBoundingClientRect()
+      const container = document.getElementById('welcomeScreen')
+      return {
+        haloTop: Math.round(rect.top - halo),
+        headerBottom: Math.round(
+          document.querySelector('.app-header').getBoundingClientRect().bottom
+        ),
+        targetHeight: Math.round(rect.height),
+        containerHeight: container.clientHeight,
+        tallerThanBox: rect.height > container.clientHeight,
+      }
+    })
+
+    expect(
+      geometry.tallerThanBox,
+      `this case is only meaningful when the target does not fit: ${JSON.stringify(geometry)}`
+    ).toBe(true)
+    expect(
+      geometry.haloTop,
+      `halo must clear the header: ${JSON.stringify(geometry)}`
+    ).toBeGreaterThan(geometry.headerBottom)
+  })
 })
 
 test.describe('UF-21 defects: a tour must not claim it finished', () => {
