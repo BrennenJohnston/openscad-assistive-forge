@@ -7676,7 +7676,14 @@ async function initApp() {
         e.preventDefault();
         companionFilesCtrl.applyTextFileEditorChanges();
       }
-      // Escape to cancel
+    });
+  }
+
+  // Escape belongs to the dialog, not to the textarea. Bound to the textarea it
+  // died the moment a keyboard user tabbed to Cancel or the X, which is exactly
+  // the path they take (UF-23, U-32).
+  if (textFileEditorModal) {
+    textFileEditorModal.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         e.preventDefault();
         closeModal(textFileEditorModal);
