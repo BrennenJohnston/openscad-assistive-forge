@@ -230,6 +230,41 @@ test.describe('Welcome tour nudge (U-27, UF-22)', () => {
     );
   });
 
+  test('it waits behind a full-screen overlay instead of opening underneath one', async ({
+    page,
+  }) => {
+    // The first build of this release opened the dialog under the WASM
+    // loading overlay (z-index 10000 against the dialog's 1000), with
+    // "Loading OpenSCAD Engine" printed across its buttons. No ordinary spec
+    // can catch that, because CI and local runs both boot with the engine
+    // already cached and the overlay gone in milliseconds. So one is stood up
+    // by hand. #processingOverlay is the app's own id for a covering overlay
+    // and nothing creates it at boot.
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      const plant = () => {
+        const el = document.createElement('div');
+        el.id = 'processingOverlay';
+        el.className = 'processing-overlay';
+        document.body.appendChild(el);
+      };
+      if (document.body) plant();
+      else document.addEventListener('DOMContentLoaded', plant);
+    });
+    await page.goto('/');
+    await page.waitForFunction(
+      () => typeof window.startTutorial === 'function'
+    );
+
+    await page.waitForTimeout(2_000);
+    await expect(page.locator(MODAL)).toHaveCount(0);
+
+    await page.evaluate(() =>
+      document.getElementById('processingOverlay').remove()
+    );
+    await expect(page.locator(MODAL)).toBeVisible({ timeout: 15_000 });
+  });
+
   test('the pulse on the outlined button is off under reduced motion', async ({
     page,
   }) => {

@@ -64,7 +64,7 @@ const COPY = {
  * Has the user ticked "Do not show this again"?
  * @returns {boolean}
  */
-export function isTourNudgeSuppressed() {
+function isTourNudgeSuppressed() {
   return safeGetItem(STORAGE_KEY_TOUR_NUDGE_SUPPRESSED) === 'true';
 }
 
@@ -105,7 +105,11 @@ function screenIsCovered() {
 }
 
 /**
- * Resolve once nothing is covering the page.
+ * Resolve once nothing is covering the page. All three coverers are appended
+ * to and `remove()`d from document.body directly, never toggled by class, so
+ * body's own childList is the whole signal — and this can be armed through a
+ * 15-30MB engine download without watching every mutation the boot makes.
+ *
  * @returns {Promise<void>}
  */
 function waitForClearScreen() {
@@ -116,12 +120,7 @@ function waitForClearScreen() {
       observer.disconnect();
       resolve();
     });
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ['class', 'hidden', 'style'],
-    });
+    observer.observe(document.body, { childList: true });
   });
 }
 
