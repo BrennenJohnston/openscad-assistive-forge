@@ -56,15 +56,9 @@ export function ensureLibraryDir(FS, dirPath) {
 export function writeLibraryFile(FS, libRoot, relativePath, content) {
   const filePath = `${libRoot}/${relativePath}`;
 
-  const parts = relativePath.split('/');
-  let currentPath = libRoot;
-  for (let i = 0; i < parts.length - 1; i++) {
-    currentPath += '/' + parts[i];
-    try {
-      FS.mkdir(currentPath);
-    } catch (error) {
-      if (error.code !== 'EEXIST') throw error;
-    }
+  const lastSlash = relativePath.lastIndexOf('/');
+  if (lastSlash > -1) {
+    ensureLibraryDir(FS, `${libRoot}/${relativePath.slice(0, lastSlash)}`);
   }
 
   FS.writeFile(filePath, content);
