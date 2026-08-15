@@ -6,7 +6,7 @@
  */
 
 import { stateManager } from './state.js';
-import { announce } from './announcer.js';
+import { announceImmediate } from './announcer.js';
 import { escapeHtml } from './html-utils.js';
 import { formatFileSize } from './download.js';
 import { openModal, closeModal } from './modal-manager.js';
@@ -812,7 +812,10 @@ export function initCompanionFilesController({
 
     closeModal(modal);
     restoreFocusToFileRow(path);
-    announce(`Saved ${path}`);
+    // Immediate, not debounced: the preview this is about to await announces
+    // "Rendering preview..." within the debounce window and swallows it
+    // otherwise. Measured swallowed before this was changed.
+    announceImmediate(`Saved ${path}`);
 
     const autoPreviewController = getAutoPreviewController();
     if (autoPreviewController) {
@@ -822,7 +825,10 @@ export function initCompanionFilesController({
       );
     }
 
-    updateStatus(`Updated file: ${path}`, 'success');
+    // announce:false because the save was already spoken above, the moment it
+    // happened, rather than after the render this awaited. updateStatus speaks
+    // by default, and pairing the two says the same event twice.
+    updateStatus(`Updated file: ${path}`, 'success', { announce: false });
     console.log(`[ProjectFiles] Updated file: ${path}`);
 
     await autoSaveCompanionFiles();
