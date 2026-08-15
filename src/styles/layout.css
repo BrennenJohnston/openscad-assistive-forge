@@ -322,6 +322,18 @@ body {
   font-weight: 600;
 }
 
+/* U-29 (UF-21): the Simplified/Standard switch controls how much of the
+   project interface is shown, and on the welcome surface there is no project
+   interface to show. MEASURED at the base: pressing it there changes nothing
+   a user can see (196 rendered elements before and after; #mainInterface is
+   not rendered either way), while announcing "All panels are now visible"
+   about panels that are not on screen. It is taught in the box tour instead,
+   where pressing it does something. display:none, not visually-hidden - an
+   inert control must not stay Tab-reachable. */
+body[data-app-surface='welcome'] #uiModeToggle {
+  display: none;
+}
+
 .ui-mode-option {
   position: relative;
   z-index: 1;

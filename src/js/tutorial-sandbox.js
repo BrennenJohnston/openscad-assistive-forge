@@ -49,6 +49,7 @@ let preTutorialMode = null; // Store UI mode to restore on close
 let preTutorialDensity = null; // Classic density to hand back after a forced switch
 let tutorialForcedMode = false; // True while the tutorial itself switched the interface
 let modeChangeUnsubscribe = null; // ui-mode subscription active while a tutorial runs
+let densityChangeListener = null; // Classic density listener active while a tutorial runs
 let completionListeners = [];
 let stepCompleted = true;
 let resizeObserver = null;
@@ -60,6 +61,8 @@ let isNavigating = false; // Debounce navigation clicks
 let isPaused = false; // Pause state for visibility changes
 let targetRemovalObserver = null; // Watch for target removal
 let surfaceObserver = null; // Watch for welcome -> project while a welcome-surface tour runs
+let dialogObserver = null; // Watch for a user-opened dialog while a tutorial runs
+let dialogOpenAtKeydown = false; // Was a dialog up when this Escape was pressed?
 let currentTarget = null; // Currently highlighted target
 let scrollYBeforeLock = 0; // Store scroll position for body lock
 let didLockBodyScroll = false; // Avoid fighting other scroll locks (e.g. mobile drawer)
@@ -108,6 +111,78 @@ function findScrollableParent(element) {
   }
 
   return null;
+}
+
+/**
+ * The highest point on screen where this element can actually be seen.
+ *
+ * The nearest SCROLLABLE ancestor is not the right answer: an ancestor whose
+ * content happens to fit still clips with `overflow: auto`, and the scrollable
+ * one may be further out and start at the top of the window. MEASURED on the
+ * CI Firefox runner, where wider fonts make `#welcomeScreen`'s content fit so
+ * it is not scrollable: aligning to the scrollable ancestor put the target at
+ * y=48 under an 86px header, while `#welcomeScreen` itself was still clipping
+ * at ~145. So take the lowest top edge of every CLIPPING ancestor.
+ *
+ * @param {HTMLElement} el
+ * @returns {number} Viewport y below which the element is not clipped
+ */
+function visibleTopBoundFor(el) {
+  let bound = 0;
+  let parent = el.parentElement;
+
+  while (parent && parent !== document.documentElement) {
+    const style = getComputedStyle(parent);
+    if (style.overflowY !== 'visible' || style.overflowX !== 'visible') {
+      bound = Math.max(bound, parent.getBoundingClientRect().top);
+    }
+    parent = parent.parentElement;
+  }
+
+  return bound;
+}
+
+/**
+ * Bring a target into view inside its own scroll container, leaving room for
+ * the halo.
+ *
+ * Triage Table 1 #5 (reported at UF-17): on the welcome tour's Open-or-start
+ * step the halo's top edge, and the panel's own heading with it, disappeared
+ * under the header. MEASURED at the base: #welcomeScreen is the scroll
+ * container and its visible box starts 124px down, but scrollIntoView with
+ * block:'center' centres against the WINDOW, so it parked the 476px panel at
+ * y=13 and the container clipped its first 111px. The halo's top edge sat 66px
+ * above the header's bottom edge.
+ *
+ * Centring inside the container's own client box instead keeps the whole
+ * target, halo included, where it can be seen. A target too tall for the box
+ * shows its top rather than its middle, since that is where a tour's subject
+ * usually begins.
+ *
+ * @param {HTMLElement} el - The step's target
+ */
+function scrollTargetIntoContainerView(el) {
+  const margin = SPOTLIGHT_PADDING + 8;
+  const container = findScrollableParent(el);
+  if (!container) {
+    el.scrollIntoView({ behavior: 'auto', block: 'center' });
+    return;
+  }
+
+  const containerRect = container.getBoundingClientRect();
+  const elRect = el.getBoundingClientRect();
+  const view = container.clientHeight;
+  const elTopInContent = elRect.top - containerRect.top + container.scrollTop;
+
+  const next =
+    elRect.height + margin * 2 >= view
+      ? elTopInContent - margin
+      : elTopInContent - (view - elRect.height) / 2;
+
+  container.scrollTop = Math.max(
+    0,
+    Math.min(next, container.scrollHeight - view)
+  );
 }
 
 /**
@@ -1107,6 +1182,26 @@ const TUTORIALS = {
         position: 'bottom',
         completion: { type: 'modalClose', selector: '#featuresGuideModal' },
       },
+      // U-29 / Q-51b (owner, 2026-08-14): the Simplified/Standard teaching
+      // moved here from the welcome tour, near the end so nothing the tour
+      // shows depends on the choice made in it. Q-51c: the step INVITES the
+      // press and never requires it, so no completion gate. The tour survives
+      // the press (U-28), which is what makes teaching it by pressing safe.
+      {
+        title: 'Simplified or Standard',
+        content: `
+          <p>This switch controls how much of the interface is shown. <strong>Simplified</strong> keeps the essentials. <strong>Standard</strong> shows more tools. Press it now to see the difference. The tour stays open, and nothing is lost when you switch.</p>
+        `,
+        highlightSelector: '#uiModeToggle',
+        position: 'bottom',
+        showWhen: {
+          condition: () => {
+            const el = document.getElementById('uiModeToggle');
+            return !!el && !el.classList.contains('hidden');
+          },
+        },
+        skipReason: 'not available right now',
+      },
       {
         title: "You're ready!",
         content: `
@@ -1299,12 +1394,23 @@ const TUTORIALS = {
         showWhen: isClassicStandardDensity,
         skipReason: 'not available in this view',
       },
+      // U-29 / Q-51b: the Classic half of the moved teaching. It sits after
+      // the editor, console and Preferences steps deliberately: those three
+      // only appear in the Standard view, so a user who chooses Simplified
+      // here has already been shown what the extra panes hold.
+      {
+        title: 'Simplified or Standard',
+        content: `
+          <p>This switch controls the Classic view. <strong>Simplified</strong> shows the Customizer and the 3D view. <strong>Standard</strong> adds the code editor and console, like the desktop app. Press it now to see the difference. The tour stays open, and you can switch back at any time.</p>
+        `,
+        highlightSelector: '#classicDensityToggle',
+        position: 'bottom',
+      },
       {
         title: "You're ready!",
         content: `
           <p>That's the Classic tour.</p>
           <ul>
-            <li>The <strong>Simplified</strong> and <strong>Standard</strong> switch in the header changes how much is shown</li>
             <li>The <strong>A. Forge</strong> button returns you to the Assistive Forge interface</li>
             <li>Run this tour again anytime from the welcome screen</li>
           </ul>
@@ -1341,21 +1447,10 @@ const TUTORIALS = {
         highlightSelector: '#shortcutsToggle',
         position: 'bottom',
       },
-      {
-        title: 'Simplified or Standard',
-        content: `
-          <p>This switch controls how much of the interface is shown once a project is open. <strong>Simplified</strong> keeps the essentials. <strong>Standard</strong> shows more tools. You can change it at any time, and nothing is lost when you switch.</p>
-        `,
-        highlightSelector: '#uiModeToggle',
-        position: 'bottom',
-        showWhen: {
-          condition: () => {
-            const el = document.getElementById('uiModeToggle');
-            return !!el && !el.classList.contains('hidden');
-          },
-        },
-        skipReason: 'not available right now',
-      },
+      // U-29 / Q-51a (owner, 2026-08-14): the Simplified/Standard step used to
+      // sit here. It moved to the box tour, where pressing the switch does
+      // something; on the welcome surface it changes nothing a user can see.
+      // This SUPERSEDES that part of the Q-44 welcome pack. 14 steps -> 13.
       {
         title: 'High contrast',
         content: `
@@ -1483,14 +1578,9 @@ const TUTORIALS = {
         highlightSelector: '#shortcutsToggle',
         position: 'bottom',
       },
-      {
-        title: 'Simplified or Standard',
-        content: `
-          <p>This switch controls the Classic view. <strong>Simplified</strong> shows the Customizer and the 3D view. <strong>Standard</strong> adds the code editor and console, like the desktop app. You can change it at any time.</p>
-        `,
-        highlightSelector: '#classicDensityToggle',
-        position: 'bottom',
-      },
+      // U-29 / Q-51a: moved to the Classic box tour, same reasoning as the
+      // Forge welcome tour above. SUPERSEDES that part of the Q-44 pack.
+      // 11 steps -> 10.
       {
         title: 'Open or start a project',
         content: `
@@ -2093,6 +2183,46 @@ export function recordTutorialSpotlightDismissed(tutorialId) {
 }
 
 /**
+ * Keep the promise `aria-modal` makes. Each of these dialogs is two buttons,
+ * so the trap is a Tab cycle over them plus an Escape answer.
+ *
+ * UF-8 reported that the resume and error dialogs claimed aria-modal without
+ * any trap while only the mode-choice dialog implemented one; this is that
+ * single implementation, used by all three.
+ *
+ * @param {HTMLElement} modal - The dialog element
+ * @param {() => void} onEscape - What Escape answers
+ * @returns {(e: KeyboardEvent) => void} The handler, so callers can remove it
+ */
+function trapTwoButtonDialog(modal, onEscape) {
+  const onKeydown = (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      // The tutorial's own document-level Escape handler must not also fire
+      e.stopPropagation();
+      onEscape();
+      return;
+    }
+    if (e.key !== 'Tab') return;
+
+    const buttons = modal.querySelectorAll('button[data-action]');
+    if (buttons.length === 0) return;
+    const first = buttons[0];
+    const last = buttons[buttons.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
+
+  modal.addEventListener('keydown', onKeydown);
+  return onKeydown;
+}
+
+/**
  * Show a resume dialog when progress exists
  * @param {number} stepIndex - Saved step index
  * @param {number} totalSteps - Total steps in tutorial
@@ -2127,9 +2257,13 @@ function showTutorialResumeDialog(stepIndex, totalSteps) {
     document.body.appendChild(modal);
 
     const cleanup = (shouldResume) => {
+      modal.removeEventListener('keydown', onKeydown);
       modal.remove();
       resolve(shouldResume);
     };
+
+    // Escape answers the same way clicking outside already does: start over
+    const onKeydown = trapTwoButtonDialog(modal, () => cleanup(false));
 
     modal.addEventListener('click', (e) => {
       const btn = e.target.closest('button[data-action]');
@@ -2182,9 +2316,13 @@ function showTutorialErrorDialog(message) {
     document.body.appendChild(modal);
 
     const cleanup = (shouldRestart) => {
+      modal.removeEventListener('keydown', onKeydown);
       modal.remove();
       resolve(shouldRestart);
     };
+
+    // Escape answers the same way clicking outside already does: exit
+    const onKeydown = trapTwoButtonDialog(modal, () => cleanup(false));
 
     modal.addEventListener('click', (e) => {
       const btn = e.target.closest('button[data-action]');
@@ -2251,25 +2389,7 @@ function showTutorialModeChoiceDialog(tutorial) {
     };
 
     // aria-modal promises focus stays inside: cycle the two buttons on Tab
-    const onKeydown = (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        cleanup(false);
-      } else if (e.key === 'Tab') {
-        const buttons = modal.querySelectorAll('button[data-action]');
-        const first = buttons[0];
-        const last = buttons[buttons.length - 1];
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault();
-          last.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault();
-          first.focus();
-        }
-      }
-    };
-
-    modal.addEventListener('keydown', onKeydown);
+    const onKeydown = trapTwoButtonDialog(modal, () => cleanup(false));
 
     modal.addEventListener('click', (e) => {
       const btn = e.target.closest('button[data-action]');
@@ -2388,11 +2508,20 @@ function findNextValidStepIndex(startIndex, direction) {
  * @param {number} direction - Direction to move
  * @param {string} reason - Skip reason
  */
-async function skipToNextValidStep(stepIndex, direction, reason) {
+async function skipToNextValidStep(
+  stepIndex,
+  direction,
+  reason,
+  { completedIfPastEnd = true } = {}
+) {
   announceToScreenReader(`Step skipped: ${reason}`);
   const nextIndex = findNextValidStepIndex(stepIndex + direction, direction);
   if (nextIndex === null) {
-    closeTutorial(true);
+    // Defect D-28: skipping past the end because the remaining steps do not
+    // apply to this layout is a finish; skipping past it because a step
+    // FAILED taught nothing, so it must not be recorded as one. The caller
+    // says which it is.
+    closeTutorial(completedIfPastEnd);
     return;
   }
   await showStep(nextIndex);
@@ -2426,7 +2555,9 @@ async function handleStepFailure(reason, stepIndex, direction) {
     return;
   }
 
-  await skipToNextValidStep(stepIndex, direction, reason);
+  await skipToNextValidStep(stepIndex, direction, reason, {
+    completedIfPastEnd: false,
+  });
 }
 
 // ============================================================================
@@ -2466,6 +2597,81 @@ function watchTargetRemoval(targetElement, onRemoved) {
   });
 
   return targetRemovalObserver;
+}
+
+/**
+ * Watch the step's target and survive a re-render.
+ *
+ * U-28 anchor resilience: a mode or density change rebuilds panels, which
+ * removes the highlighted node and puts an equivalent one back a moment
+ * later. Look for that replacement once before treating the removal as a
+ * failure, so an interface change costs the user nothing.
+ *
+ * @param {HTMLElement} target - Element to watch
+ * @param {number} stepIndex - The step this watch belongs to
+ */
+function armTargetRemovalWatch(target, stepIndex) {
+  watchTargetRemoval(target, () => {
+    if (!activeTutorial || currentStepIndex !== stepIndex) return;
+    void (async () => {
+      const step = activeTutorial?.steps?.[stepIndex];
+      const replacement = step ? await resolveTargetWithRetry(step, 600) : null;
+      if (!activeTutorial || currentStepIndex !== stepIndex) return;
+
+      if (replacement) {
+        currentTarget = replacement;
+        armTargetRemovalWatch(replacement, stepIndex);
+        updateSpotlightAndPosition();
+        return;
+      }
+
+      announceToScreenReader(
+        'Tutorial step interrupted: element no longer available.'
+      );
+      currentTarget = null;
+      void handleStepFailure('target removed', stepIndex, 1);
+    })();
+  });
+}
+
+/**
+ * Re-settle the current step after the interface changed under it.
+ *
+ * U-28 / Q-50a (owner, 2026-08-14): a layout change the tour can live with
+ * must not end it. If the step's subject left the screen it skips forward
+ * with the reason it already carries; otherwise the spotlight simply follows
+ * the element to wherever it now is. The completion gate is deliberately NOT
+ * rebuilt, so a step whose action the user has already done does not ask for
+ * it a second time.
+ *
+ * @param {string} reason - Skip reason to speak if the step no longer applies
+ */
+async function reResolveStepAfterLayoutChange(reason) {
+  if (!activeTutorial || !tutorialOverlay) return;
+  const stepIndex = currentStepIndex;
+  const step = activeTutorial.steps[stepIndex];
+  if (!step) return;
+
+  if (step.showWhen && !evaluateShowWhenCondition(step.showWhen)) {
+    await skipToNextValidStep(stepIndex, 1, step.skipReason || reason);
+    return;
+  }
+
+  if (!step.highlightSelector && !step.targetKey) {
+    updateSpotlightAndPosition();
+    return;
+  }
+
+  const target = await resolveTargetWithRetry(step);
+  if (!activeTutorial || currentStepIndex !== stepIndex) return;
+  if (!target) {
+    await handleStepFailure('target unavailable', stepIndex, 1);
+    return;
+  }
+
+  currentTarget = target;
+  armTargetRemovalWatch(target, stepIndex);
+  updateSpotlightAndPosition();
 }
 
 // ============================================================================
@@ -2699,6 +2905,16 @@ export async function startTutorial(tutorialId, { triggerEl } = {}) {
     }
   }
 
+  // Defect D-33: a tour already on screen has to be closed BEFORE this run
+  // captures any state. closeTutorial resets the module's globals, so doing
+  // it later (as createTutorialOverlay did) wiped the incoming tutorial and
+  // threw on activeTutorial.title, leaving no tour at all. Every abort path
+  // above has already returned, so nothing is destroyed for a tour that then
+  // fails to open.
+  if (tutorialOverlay) {
+    closeTutorial(false, { skipAnnouncement: true });
+  }
+
   // Store current focus to restore on close
   previousFocus = document.activeElement;
   triggerElement = triggerEl || previousFocus;
@@ -2746,16 +2962,24 @@ export async function startTutorial(tutorialId, { triggerEl } = {}) {
 
   createTutorialOverlay();
 
-  // Q-28a: a user interface switch wins over a running tutorial
+  // Q-28a, as revised by Q-50a: a user interface switch is handled here
   modeChangeUnsubscribe = modeCtrl.subscribe((newMode) =>
     handleModeChangeDuringTutorial(newMode)
   );
+  // U-28: the Classic density switch never reaches those subscribers
+  // (setClassicDensity dispatches this event instead), so the tour listens
+  // for it directly and re-settles the same way.
+  densityChangeListener = () => {
+    void reResolveStepAfterLayoutChange('the Classic view changed');
+  };
+  document.addEventListener('classic-density-change', densityChangeListener);
   // U-24: spotlight cutouts stay clickable, so a user can open a project
   // in the middle of a welcome-surface tour. That action wins the same way
   // a mode switch does; the tour closes with its surface.
   if (tutorial.surface === 'welcome') {
     watchSurfaceChangeDuringTutorial();
   }
+  watchDialogsDuringTutorial();
   await showStep(startIndex);
   announceToScreenReader(
     `${tutorial.title} started. Step ${startIndex + 1} of ${tutorial.steps.length}. Press Escape to exit at any time.`,
@@ -2767,8 +2991,13 @@ export async function startTutorial(tutorialId, { triggerEl } = {}) {
  * Create the tutorial overlay DOM structure
  */
 function createTutorialOverlay() {
+  // startTutorial closes a running tour before it captures state (D-33), so
+  // this is only a stale-node guard and must NOT reset the module's state:
+  // closeTutorial would null the activeTutorial this overlay is being built
+  // for.
   if (tutorialOverlay) {
-    closeTutorial();
+    tutorialOverlay.remove();
+    tutorialOverlay = null;
   }
 
   const overlay = document.createElement('div');
@@ -2894,7 +3123,10 @@ function setupTutorialListeners() {
   const backBtn = tutorialOverlay.querySelector('#tutorialBackBtn');
   const nextBtn = tutorialOverlay.querySelector('#tutorialNextBtn');
 
-  closeBtn?.addEventListener('click', closeTutorial);
+  // Defect D-32: passing closeTutorial straight to addEventListener handed
+  // the click event to its `completed` parameter, so the X recorded the tour
+  // as finished and threw the saved progress away.
+  closeBtn?.addEventListener('click', () => closeTutorial(false));
   minimizeBtn?.addEventListener('click', toggleMinimize);
   restoreBtn?.addEventListener('click', toggleMinimize);
 
@@ -2906,7 +3138,19 @@ function setupTutorialListeners() {
   // Click outside panel to focus target (if there is one)
   tutorialOverlay.addEventListener('click', handleOverlayClick);
 
+  document.addEventListener('keydown', noteDialogBeforeKeydown, true);
   document.addEventListener('keydown', handleKeydown);
+}
+
+/**
+ * Record, before anyone has had a chance to close it, whether a dialog was on
+ * screen when Escape was pressed (Q-50c). Capture phase, so this runs ahead of
+ * the dialog's own handler.
+ */
+function noteDialogBeforeKeydown(e) {
+  if (e.key === 'Escape') {
+    dialogOpenAtKeydown = isAppDialogOpen();
+  }
 }
 
 /**
@@ -2924,6 +3168,14 @@ function handleKeydown(e) {
       activeElement.isContentEditable);
 
   if (e.key === 'Escape') {
+    // Q-50c: while a dialog the user opened from a spotlight is on screen,
+    // Escape belongs to that dialog. Stand aside and let the app's own
+    // handler close it; the next Escape exits the tour.
+    //
+    // The dialog's own handler usually runs FIRST and removes the dialog, so
+    // by the time this one is reached there is nothing left to see. That is
+    // what noteDialogBeforeKeydown records, on the capture phase.
+    if (dialogOpenAtKeydown || isAppDialogOpen()) return;
     e.preventDefault();
     closeTutorial();
   } else if (
@@ -3139,6 +3391,72 @@ function restoreIfAutoMinimized() {
 }
 
 /**
+ * Every surface the app opens as a dialog. The tour's own panel carries
+ * role="dialog" and its own choice dialogs are .preset-modal, so both are
+ * excluded by isAppDialogOpen.
+ */
+const APP_DIALOG_SELECTOR =
+  '.modal-overlay, .preset-modal, [role="dialog"], [role="alertdialog"], dialog[open]';
+const TUTORIAL_OWN_DIALOGS =
+  '.tutorial-resume-modal, .tutorial-error-modal, .tutorial-mode-choice-modal';
+
+const isRendered = (el) =>
+  typeof el.checkVisibility === 'function'
+    ? el.checkVisibility()
+    : getComputedStyle(el).display !== 'none';
+
+/**
+ * Is a dialog the USER opened currently on screen?
+ * @returns {boolean}
+ */
+function isAppDialogOpen() {
+  for (const el of document.querySelectorAll(APP_DIALOG_SELECTOR)) {
+    if (tutorialOverlay?.contains(el)) continue;
+    if (el.closest(TUTORIAL_OWN_DIALOGS)) continue;
+    if (isRendered(el)) return true;
+  }
+  return false;
+}
+
+/**
+ * Q-50c (owner, 2026-08-14): pressing a spotlighted control that opens a
+ * dialog must not leave the dialog stranded under the veil. MEASURED at the
+ * base: the Clear Cache dialog computes z-index 1000 against the veil's
+ * 10003, so it opened dimmed with the tour panel lying across it and focus on
+ * a button the user could barely see. While any dialog is up the tour shrinks
+ * to its bar and the veil fades; when the dialog goes, the tour comes back.
+ */
+function watchDialogsDuringTutorial() {
+  let scheduled = false;
+
+  const sync = () => {
+    if (!activeTutorial || !tutorialOverlay) return;
+    const dialogUp = isAppDialogOpen();
+    if (dialogUp && !isMinimized) {
+      setMinimized(true, { auto: true });
+    } else if (!dialogUp && isMinimized && wasAutoMinimized) {
+      setMinimized(false, { auto: true });
+    }
+  };
+
+  dialogObserver = new MutationObserver(() => {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(() => {
+      scheduled = false;
+      sync();
+    });
+  });
+
+  dialogObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['class', 'open', 'hidden', 'style'],
+  });
+}
+
+/**
  * Show a specific tutorial step
  * @param {number} stepIndex - Step index
  */
@@ -3240,7 +3558,7 @@ async function showStep(stepIndex) {
     if (activeTutorial.surface === 'welcome') {
       const candidate = resolveStepTarget(step, { requireVisible: false });
       if (candidate && !isElementVisible(candidate)) {
-        candidate.scrollIntoView({ behavior: 'auto', block: 'center' });
+        scrollTargetIntoContainerView(candidate);
       }
     }
     resolvedTarget = await resolveTargetWithRetry(step);
@@ -3252,15 +3570,7 @@ async function showStep(stepIndex) {
   }
   currentTarget = resolvedTarget;
   if (currentTarget) {
-    const observedStepIndex = stepIndex;
-    watchTargetRemoval(currentTarget, () => {
-      if (!activeTutorial || currentStepIndex !== observedStepIndex) return;
-      announceToScreenReader(
-        'Tutorial step interrupted: element no longer available.'
-      );
-      currentTarget = null;
-      void handleStepFailure('target removed', observedStepIndex, 1);
-    });
+    armTargetRemovalWatch(currentTarget, stepIndex);
   }
 
   // Update content (use compact content if viewport is small/zoomed)
@@ -3456,8 +3766,17 @@ function updateSpotlightAndPosition() {
           behavior: 'smooth',
         });
       } else if (targetRect.top < topPadding) {
+        // Triage Table 1 #5: this used to align the target's top to the
+        // WINDOW's top, which puts it under whatever chrome sits above the
+        // scroll container. MEASURED on the welcome tour's Open-or-start step:
+        // #welcomeScreen's visible box starts 124px down, so the 476px panel
+        // landed at y=16 and the container clipped its first 111px, taking the
+        // halo's top edge and the panel's own heading with it. Align to the
+        // container's own top edge, with room for the halo.
+        const wanted =
+          visibleTopBoundFor(target) + topPadding + SPOTLIGHT_PADDING;
         scrollableParent.scrollBy({
-          top: targetRect.top - topPadding,
+          top: targetRect.top - wanted,
           behavior: 'smooth',
         });
       } else {
@@ -4224,7 +4543,8 @@ function watchSurfaceChangeDuringTutorial() {
 
     closeTutorial(false, { skipModeRestore: true, skipAnnouncement: true });
 
-    // D-35: flagged for owner review (post-Q-44 addition).
+    // Q-50d (owner, 2026-08-14): approved as drafted, in its final context.
+    // The D-35 review flag this line carried since UF-17 is retired.
     announceToScreenReader(
       `${title} closed because a project opened.${progressSaved ? ' Progress saved.' : ''}`,
       'assertive'
@@ -4238,6 +4558,22 @@ function watchSurfaceChangeDuringTutorial() {
 
 function handleModeChangeDuringTutorial(newMode) {
   if (!activeTutorial) return;
+
+  // U-28 / Q-50a (owner, 2026-08-14) REVISES Q-28a: a switch inside the
+  // interface family this tour was built for is the user exploring, not the
+  // user leaving, so the tour stays and the step re-settles. Crossing between
+  // Forge and Classic still ends it, because the steps point at chrome the
+  // other layout does not have.
+  const homeModes = activeTutorial.homeModes || FORGE_HOME_MODES;
+  if (homeModes.includes(newMode)) {
+    // The user's own choice outlives the tour: closeTutorial must not switch
+    // them back to where the tour found them.
+    tutorialForcedMode = false;
+    preTutorialMode = null;
+    preTutorialDensity = null;
+    void reResolveStepAfterLayoutChange('the interface changed');
+    return;
+  }
 
   const title = activeTutorial.title;
   const stepsTotal = activeTutorial.steps?.length || 0;
@@ -4281,6 +4617,14 @@ export function closeTutorial(completed = false, options = {}) {
     modeChangeUnsubscribe = null;
   }
 
+  if (densityChangeListener) {
+    document.removeEventListener(
+      'classic-density-change',
+      densityChangeListener
+    );
+    densityChangeListener = null;
+  }
+
   clearCompletionListeners();
   clearDrawerObserver();
 
@@ -4300,6 +4644,12 @@ export function closeTutorial(completed = false, options = {}) {
   if (surfaceObserver) {
     surfaceObserver.disconnect();
     surfaceObserver = null;
+  }
+
+  // Clean up the dialog watcher (Q-50c)
+  if (dialogObserver) {
+    dialogObserver.disconnect();
+    dialogObserver = null;
   }
 
   // Remove highlight from any targeted elements
@@ -4342,7 +4692,9 @@ export function closeTutorial(completed = false, options = {}) {
     screen.orientation.removeEventListener('change', handleOrientationChange);
   }
 
+  document.removeEventListener('keydown', noteDialogBeforeKeydown, true);
   document.removeEventListener('keydown', handleKeydown);
+  dialogOpenAtKeydown = false;
 
   tutorialOverlay.remove();
   tutorialOverlay = null;

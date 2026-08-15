@@ -2102,6 +2102,15 @@ body[data-ui-mode='classic'] .classic-density-toggle {
   display: inline-flex;
 }
 
+/* U-29 (UF-21), the Classic half of the same rule. MEASURED at the base: on
+   the welcome surface a press changes nothing on screen (172 rendered
+   elements before and after) while announcing that the editor and console
+   panes are hidden, when no pane is on screen at all. The Classic box tour
+   teaches it where it works. display:none so it is not Tab-reachable. */
+body[data-ui-mode='classic'][data-app-surface='welcome'] #classicDensityToggle {
+  display: none;
+}
+
 /* Both code-facing docks leave the shell in Simplified. The strip covers the
    Console, Error-Log, Animate and Font List panes it contains; the explicit
    .classic-console-slot entry is kept because it is what the existing

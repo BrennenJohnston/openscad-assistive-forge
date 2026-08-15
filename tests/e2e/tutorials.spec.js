@@ -465,11 +465,30 @@ test.describe('Welcome page tour (U-24, UF-17)', () => {
       timeout: 180_000,
     })
 
+    // Watch the live regions: the close announcement is this case's subject
+    // now that Q-50d approved its wording.
+    await page.evaluate(() => {
+      window.__said = []
+      for (const id of ['srAnnouncer', 'srAnnouncerAssertive']) {
+        const el = document.getElementById(id)
+        if (!el || el.__watched) continue
+        el.__watched = true
+        new MutationObserver(() => {
+          const text = el.textContent.trim()
+          if (text) window.__said.push(text)
+        }).observe(el, { childList: true, characterData: true, subtree: true })
+      }
+    })
+
     await page.locator('#startWelcomeTourBtn').click()
     await expect(page.locator('.tutorial-panel')).toBeVisible({ timeout: 10_000 })
 
-    // Walk to the Open-or-start step, whose cutout exposes Start New Project
-    for (let i = 0; i < 6; i++) {
+    // Walk to the Open-or-start step, whose cutout exposes Start New Project.
+    // By title, not by a click count: UF-21 shortened this tour by one step
+    // (U-29) and a fixed count silently overshot.
+    for (let i = 0; i < 12; i++) {
+      const title = await page.locator('#tutorial-step-title').textContent()
+      if (title === 'Open or start a project') break
       await page.locator('#tutorialNextBtn').click()
       await page.waitForTimeout(300)
     }
@@ -485,6 +504,13 @@ test.describe('Welcome page tour (U-24, UF-17)', () => {
     const registry = await readRegistry(page)
     expect(registry.welcome.opened).toEqual(expect.any(Number))
     expect(registry.welcome.completed).toBeUndefined()
+
+    // Q-50d (owner, 2026-08-14): this sentence is approved as drafted, so it
+    // is pinned rather than left as a D-35 flag in the code.
+    const announcements = await page.evaluate(() => window.__said)
+    expect(announcements.join(' | ')).toContain(
+      'Welcome Page Tour closed because a project opened. Progress saved.'
+    )
   })
 
   test('no tour can exist while the first-visit modal blocks', async ({ page }) => {
