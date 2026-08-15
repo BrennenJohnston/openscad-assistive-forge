@@ -39,6 +39,7 @@ import { postProcessDXF } from './dxf-postprocess.js';
 import { parseOffTriangleCount } from './mesh-stats.js';
 import { generateMissingFileWarnings } from './missing-file-warnings.js';
 import { resolveMountContent } from './mount-content.js';
+import { ensureLibraryDir, writeLibraryFile } from './library-fs.js';
 import {
   translateWorkerError,
   MODEL_NOT_2D_SUGGESTION,
@@ -793,34 +794,7 @@ async function mountLibraries(libraries) {
   let totalMounted = 0;
   const baseRoot = '/libraries';
 
-  const ensureDir = (dirPath) => {
-    const parts = dirPath.split('/').filter(Boolean);
-    let current = '';
-    for (const part of parts) {
-      current += `/${part}`;
-
-      // Check if path exists and what type it is
-      const analyzed = FS.analyzePath(current);
-
-      // If exists and is a directory, skip
-      if (analyzed.exists && analyzed.object?.isFolder) {
-        continue;
-      }
-
-      // If exists but NOT a directory, we have a problem
-      if (analyzed.exists && !analyzed.object?.isFolder) {
-        throw new Error(`Path exists as file, not directory: ${current}`);
-      }
-
-      try {
-        FS.mkdir(current);
-      } catch (error) {
-        if (error.code !== 'EEXIST') {
-          throw error;
-        }
-      }
-    }
-  };
+  const ensureDir = (dirPath) => ensureLibraryDir(FS, dirPath);
 
   ensureDir(baseRoot);
 
@@ -873,21 +847,7 @@ async function mountLibraries(libraries) {
             );
             if (fileResponse.ok) {
               const content = await fileResponse.text();
-              const filePath = `${libRoot}/${file}`;
-
-              // Create subdirectories if needed
-              const parts = file.split('/');
-              let currentPath = libRoot;
-              for (let i = 0; i < parts.length - 1; i++) {
-                currentPath += '/' + parts[i];
-                try {
-                  FS.mkdir(currentPath);
-                } catch (error) {
-                  if (error.code !== 'EEXIST') throw error;
-                }
-              }
-
-              FS.writeFile(filePath, content);
+              writeLibraryFile(FS, libRoot, file, content);
               totalMounted++;
             }
           } catch (error) {
