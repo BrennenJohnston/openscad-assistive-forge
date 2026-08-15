@@ -67,6 +67,9 @@ const EXPECTED_KEYS = {
   // Persistent tutorial registry (tutorial-sandbox.js, UF-16)
   STORAGE_KEY_TUTORIAL_STATE: 'openscad-forge-tutorial-state',
 
+  // Welcome tour nudge, permanent suppression (tour-nudge.js, UF-22)
+  STORAGE_KEY_TOUR_NUDGE_SUPPRESSED: 'openscad-forge-tour-nudge-suppressed',
+
   // Preset dropdown sort order
   PRESET_SORT_KEY: 'openscad-forge-preset-sort',
 
