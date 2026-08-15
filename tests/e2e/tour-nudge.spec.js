@@ -189,11 +189,20 @@ test.describe('Welcome tour nudge (U-27, UF-22)', () => {
   });
 
   test('the card tip dismissal counts as a no (Q-52c)', async ({ page }) => {
-    await bootWelcome(page, {
-      storage: {
-        [REGISTRY_KEY]: JSON.stringify({ welcome: { dismissed: 1 } }),
-      },
-    });
+    // Asked as a contrast, so the case cannot pass merely because no such
+    // dialog exists: the same boot with an untouched registry must be asked.
+    await bootWelcome(page);
+    await expect(page.locator(MODAL)).toBeVisible({ timeout: 30_000 });
+
+    await page.evaluate(
+      ([key]) =>
+        localStorage.setItem(key, JSON.stringify({ welcome: { dismissed: 1 } })),
+      [REGISTRY_KEY]
+    );
+    await page.reload();
+    await page.waitForFunction(
+      () => typeof window.startTutorial === 'function'
+    );
     await page.waitForTimeout(2_000);
     await expect(page.locator(MODAL)).toHaveCount(0);
   });
