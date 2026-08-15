@@ -453,6 +453,21 @@ describe('Error Translator', () => {
       expect(result.explanation).not.toContain('switched off');
     });
 
+    test('finds the cause in details when the worker has classified it away', () => {
+      // The real shape on the main thread: the worker matched "Ignoring
+      // unknown module" first, so error.message is prose that no longer
+      // contains the failing path, and error.code is UNKNOWN_MODULE. Only
+      // error.details still carries the OpenSCAD output.
+      const result = translateError(
+        'Your model uses a module that could not be found. Check include/use statements and ensure library files are loaded.',
+        { code: 'UNKNOWN_MODULE', details: REAL_MESSAGE }
+      );
+
+      expect(result.title).toBe('Missing Library');
+      expect(result.explanation).toContain('MCAD');
+      expect(result.suggestion).toContain('Libraries panel');
+    });
+
     test('leaves a plain missing companion file alone', () => {
       // No folder in the path, so this is a companion file, not a library —
       // telling the user to look in the Libraries panel would be wrong.

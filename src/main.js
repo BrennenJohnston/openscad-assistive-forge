@@ -96,6 +96,7 @@ import {
 } from './js/modal-manager.js';
 import {
   translateError,
+  findMissingLibrary,
   showErrorModal,
   showErrorToast,
 } from './js/error-translator.js';
@@ -5779,6 +5780,20 @@ async function initApp() {
       const memWarning = document.getElementById('memoryWarning');
       if (memWarning) memWarning.remove();
 
+      return true;
+    }
+
+    // A library the model needs did not resolve. Say that, because the empty
+    // geometry handled below is its CONSEQUENCE: the old guidance sent the
+    // user hunting through parameters for a cause that was a checkbox (D-42).
+    if (findMissingLibrary(`${msg}\n${detailsStr}`)) {
+      if (previewManager) {
+        previewManager.clear();
+      }
+      const friendly = translateError(detailsStr || msg);
+      const sentence = `${friendly.explanation} ${friendly.suggestion}`;
+      updateStatus(sentence, 'error');
+      _announceError(sentence);
       return true;
     }
 
@@ -11531,6 +11546,7 @@ if (rounded) {
       // Use COGA-compliant friendly error translation (code-first, BR-5)
       const friendlyError = translateError(error.message, {
         code: error.code,
+        details: error.details,
       });
       updateStatus(`Error: ${friendlyError.title}`);
       _announceError(

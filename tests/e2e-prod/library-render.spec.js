@@ -123,6 +123,67 @@ test.describe('Rendering through a library bundle', () => {
     ).toEqual([]);
   });
 
+  test('prod-library-off: switching a needed library off says so (D-42)', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+      localStorage.removeItem('openscad-forge-libraries');
+      localStorage.setItem(
+        'openscad-forge-ui-mode',
+        JSON.stringify({ mode: 'standard', lastCustomMode: 'standard' })
+      );
+    });
+
+    await page.goto('/?example=library-test');
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: WASM_READY_TIMEOUT,
+    });
+
+    // The parameter panel is built after the file loads; wait for the control
+    // itself rather than for a fixed time, then open the group it sits in.
+    await page
+      .locator('#param-style')
+      .waitFor({ state: 'attached', timeout: 60_000 });
+    await page.evaluate(() => {
+      let node = document.querySelector('#param-style')?.parentElement;
+      while (node) {
+        if (node.tagName === 'DETAILS') node.open = true;
+        node = node.parentElement;
+      }
+    });
+    await page.locator('#param-style').selectOption('Rounded');
+    await expect(page.locator('#library-MCAD')).toBeChecked();
+
+    // Switch off the library the model needs.
+    await page.locator('#library-MCAD').uncheck();
+
+    // The cause must be named. Before this release the user was told
+    // "Something Went Wrong ... try resetting parameters to defaults", and
+    // then "This selection produces no geometry with the current settings" —
+    // both pointing at parameters, which is not where the answer is.
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () => document.getElementById('statusArea')?.textContent || ''
+          ),
+        { timeout: 90_000 }
+      )
+      .toContain('MCAD library, which is switched off');
+
+    const status = await page.evaluate(
+      () => document.getElementById('statusArea').textContent
+    );
+    expect(status).toContain('Libraries panel');
+    expect(status).not.toContain('resetting parameters');
+    expect(status).not.toContain('current settings');
+  });
+
   test('prod-library-nested: a module three folders deep inside a bundle resolves', async ({
     page,
   }) => {
