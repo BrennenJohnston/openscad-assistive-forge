@@ -78,6 +78,12 @@
      ======================================================================== */
   --color-success: var(--green-9);
   --color-success-hover: var(--green-10);
+  /* Defect D-46 (UF-25): step-9 is a solid UI colour, not a text background.
+     White on it measures 3.07:1, under the 4.5:1 that 14px text needs. Use
+     this token wherever --color-on-success text sits ON a success fill;
+     step-11 measures 4.67:1 against --slate-1. In dark themes --slate-1 is
+     near-black, so step-9 already passes there and stays. */
+  --color-success-solid: var(--green-11);
   /* Use step-12 for WCAG AA on subtle (step-3) backgrounds */
   --color-success-text: var(--green-12);
   --color-success-bg: var(--green-3);
@@ -204,6 +210,8 @@
   /* Success Colors */
   --color-success: var(--green-9);
   --color-success-hover: var(--green-10);
+  /* D-46: --slate-1 is near-black in dark themes, so step-9 passes here. */
+  --color-success-solid: var(--green-9);
   --color-success-text: var(--green-12);
   --color-success-bg: var(--green-3);
 
@@ -284,6 +292,8 @@
     /* Success Colors */
     --color-success: var(--green-9);
     --color-success-hover: var(--green-10);
+    /* D-46: --slate-1 is near-black here, so step-9 passes. */
+    --color-success-solid: var(--green-9);
     --color-success-text: var(--green-12);
     --color-success-bg: var(--green-3);
 
@@ -365,6 +375,9 @@
 
   --color-success: var(--green-9);
   --color-success-hover: var(--green-10);
+  /* D-46: --slate-1 is near-black in dark themes, so step-9 passes here. */
+  /* D-46: explicit light theme, so the step-11 fill (see :root). */
+  --color-success-solid: var(--green-11);
   --color-success-text: var(--green-12);
   --color-success-bg: var(--green-3);
 

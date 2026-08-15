@@ -78,6 +78,8 @@
   --color-warning-text: var(--color-text-primary);
   --color-on-warning: var(--color-accent-text);
   --color-success: #00ff00;
+  /* D-46 (UF-25): mono keeps its phosphor green for solid success fills. */
+  --color-success-solid: #00ff00;
   --color-success-bg: #001a00;
   --color-success-hover: var(--color-accent-hover);
   --color-success-text: var(--color-text-primary);
@@ -155,6 +157,7 @@
   --color-warning: #ffb000;
   --color-warning-bg: #1a1000;
   --color-success: #ffb000;
+  --color-success-solid: #ffb000;
   --color-success-bg: #0a0800;
 }
 
