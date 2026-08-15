@@ -122,6 +122,7 @@ import {
 // showWorkflowProgress / hideWorkflowProgress moved to hfm-controller.js (applyToolbarModeVisibility)
 import { startTutorial } from './js/tutorial-sandbox.js';
 import { initWelcomeSpotlight } from './js/welcome-spotlight.js';
+import { initTourNudge } from './js/tour-nudge.js';
 import { initDrawerController } from './js/drawer-controller.js';
 import { initPreviewSettingsDrawer } from './js/preview-settings-drawer.js';
 import { initCameraPanelController } from './js/camera-panel-controller.js';
@@ -7969,9 +7970,20 @@ if (rounded) {
     });
   }
 
+  // U-27 (UF-22): ask about the welcome tour once per load, after the gate.
+  const tourNudgeSettled = initTourNudge({
+    waitForFirstVisitAcceptance,
+    startTutorial,
+  });
+
   // U-23 (UF-16): the Beginners-card spotlight waits for the first-visit
   // gate — inside the inert #app it would be unreachable and unannounced.
-  void initWelcomeSpotlight({ waitForFirstVisitAcceptance });
+  // Q-52c: it now also waits for the nudge, so the card's tip takes over
+  // when the dialog is answered instead of competing with it.
+  void initWelcomeSpotlight({
+    waitForFirstVisitAcceptance,
+    waitForTourNudge: () => tourNudgeSettled,
+  });
 
   // Wire charm variant selector to update the single Open button
   const charmVariantSelect = document.getElementById('charmVariantSelect');

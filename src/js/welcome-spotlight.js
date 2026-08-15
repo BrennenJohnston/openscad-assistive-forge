@@ -10,6 +10,12 @@
  * welcome family carries any record, the Beginners card wears the tip
  * while the intro family is untouched.
  *
+ * REVISED by Q-52c (UF-22): while the tour nudge is on screen the welcome
+ * card wears no tip, because the dialog is already asking the same question
+ * over the top of it. The tip appears when the dialog is answered. Q-44a's
+ * "the welcome card wears the tip first" is superseded to that extent and
+ * holds unchanged everywhere else, including the completion chain.
+ *
  * Deliberately NOT a tour: no veil, no focus trap, no scroll change, no
  * step machinery. The whole treatment is a halo on the existing card plus
  * a tag strip holding a dismiss button, and one polite announcement. The
@@ -115,16 +121,29 @@ function decorateCard(familyId, tutorialId, announcement) {
  * @param {Object} options
  * @param {() => Promise<void>} options.waitForFirstVisitAcceptance - The
  *   main.js gate; resolves immediately on ordinary boots.
+ * @param {() => Promise<{startedTour: boolean}|void>} [options.waitForTourNudge]
+ *   Q-52c: resolves once the UF-22 nudge has been answered, or immediately
+ *   when it never showed. Optional so the module still stands alone.
  */
-export async function initWelcomeSpotlight({ waitForFirstVisitAcceptance }) {
+export async function initWelcomeSpotlight({
+  waitForFirstVisitAcceptance,
+  waitForTourNudge,
+}) {
   if (isFamilyCleared(WELCOME_FAMILY) && isFamilyCleared(INTRO_FAMILY)) return;
 
   await waitForFirstVisitAcceptance();
+  const nudge = waitForTourNudge ? await waitForTourNudge() : null;
 
-  if (!isFamilyCleared(WELCOME_FAMILY)) {
-    decorateCard(WELCOME_FAMILY, 'welcome', ANNOUNCEMENT_WELCOME);
-  } else if (!isFamilyCleared(INTRO_FAMILY)) {
-    decorateCard(INTRO_FAMILY, 'intro', ANNOUNCEMENT_INTRO);
+  // Q-44a still says a tour merely OPENED hands the tip over on the next
+  // visit, not on this one. Starting the tour from the nudge opens it during
+  // this very load, so neither card is decorated underneath the running tour.
+  // The chain below is armed either way, so finishing still hands over.
+  if (!nudge?.startedTour) {
+    if (!isFamilyCleared(WELCOME_FAMILY)) {
+      decorateCard(WELCOME_FAMILY, 'welcome', ANNOUNCEMENT_WELCOME);
+    } else if (!isFamilyCleared(INTRO_FAMILY)) {
+      decorateCard(INTRO_FAMILY, 'intro', ANNOUNCEMENT_INTRO);
+    }
   }
 
   // The U-24 chain, armed independently of the decoration: the 'opened'

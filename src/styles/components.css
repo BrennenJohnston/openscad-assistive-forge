@@ -10610,6 +10610,128 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   }
 }
 
+/* U-27 (UF-22): the welcome tour nudge. The dim matches every other modal in
+   the app (.modal-overlay); what is new is that the tutorial menu stays lit
+   above it, so the dialog's words have something to point at. The lit region
+   is decoration only — pointer-events:none, and the dialog is aria-modal. */
+.tour-nudge-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(12, 12, 12, 0.55);
+  z-index: var(--z-index-modal-backdrop);
+}
+
+.role-paths-grid.tour-nudge-lit {
+  position: relative;
+  z-index: var(--z-index-nudge-spotlight);
+  pointer-events: none;
+  background: var(--color-bg-primary);
+  border-radius: var(--border-radius-md);
+  outline: 3px solid var(--color-focus);
+  outline-offset: 8px;
+}
+
+.tour-nudge-target {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 4px;
+  animation: tourNudgePulse 2s ease-in-out infinite;
+}
+
+@keyframes tourNudgePulse {
+  0%,
+  100% {
+    outline-offset: 4px;
+  }
+  50% {
+    outline-offset: 7px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-nudge-target {
+    animation: none;
+  }
+}
+
+.tour-nudge-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: var(--z-index-modal);
+  width: min(28rem, calc(100vw - 2 * var(--space-md)));
+  max-height: calc(100vh - 2 * var(--space-md));
+  overflow-y: auto;
+  padding: var(--space-lg);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  border: 2px solid var(--color-border);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+
+.tour-nudge-title {
+  margin: 0 0 var(--space-sm);
+  font-size: var(--font-size-xl);
+  color: var(--color-text-primary);
+}
+
+.tour-nudge-body {
+  margin: 0 0 var(--space-md);
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+}
+
+.tour-nudge-never {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: 44px;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.tour-nudge-never input {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+}
+
+.tour-nudge-never:focus-within {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+  border-radius: var(--border-radius-md);
+}
+
+.tour-nudge-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+}
+
+.tour-nudge-actions .btn {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+[data-high-contrast='true'] .role-paths-grid.tour-nudge-lit,
+[data-high-contrast='true'] .tour-nudge-target {
+  outline-width: 4px;
+}
+
+@media (forced-colors: active) {
+  .role-paths-grid.tour-nudge-lit,
+  .tour-nudge-target {
+    outline-color: Highlight;
+  }
+
+  .tour-nudge-modal {
+    border: 2px solid CanvasText;
+  }
+}
+
 .role-path-title {
   font-size: var(--font-size-lg);
   font-weight: 600;
