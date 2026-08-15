@@ -6,6 +6,7 @@
  */
 
 import { stateManager } from './state.js';
+import { announce } from './announcer.js';
 import { escapeHtml } from './html-utils.js';
 import { formatFileSize } from './download.js';
 import { openModal, closeModal } from './modal-manager.js';
@@ -757,6 +758,29 @@ export function initCompanionFilesController({
   }
 
   /**
+   * Put focus back on the row of the file that was just saved.
+   *
+   * closeModal cannot do this on its own: saving rebuilds the whole list with
+   * innerHTML, so the button it captured as the opening trigger is detached by
+   * the time it tries to restore, and focus() on a detached node is a no-op
+   * that leaves focus on <body>. Re-find the equivalent button instead. Match
+   * on dataset rather than a selector so paths containing quotes cannot break
+   * the lookup.
+   *
+   * @param {string} path - Path of the file that was saved
+   */
+  function restoreFocusToFileRow(path) {
+    const container = document.getElementById('projectFilesList');
+    const editButtons = container
+      ? [...container.querySelectorAll('button[data-action="edit"]')]
+      : [];
+    const target =
+      editButtons.find((btn) => btn.dataset.path === path) ||
+      document.querySelector('#projectFilesControls .project-files-summary');
+    if (target) target.focus();
+  }
+
+  /**
    * Apply text file editor changes and trigger preview.
    */
   async function applyTextFileEditorChanges() {
@@ -787,6 +811,8 @@ export function initCompanionFilesController({
     renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
 
     closeModal(modal);
+    restoreFocusToFileRow(path);
+    announce(`Saved ${path}`);
 
     const autoPreviewController = getAutoPreviewController();
     if (autoPreviewController) {
