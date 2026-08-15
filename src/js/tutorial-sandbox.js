@@ -3128,7 +3128,7 @@ function setupTutorialListeners() {
   // as finished and threw the saved progress away.
   closeBtn?.addEventListener('click', () => closeTutorial(false));
   minimizeBtn?.addEventListener('click', toggleMinimize);
-  restoreBtn?.addEventListener('click', toggleMinimize);
+  restoreBtn?.addEventListener('click', restoreFromBar);
 
   backBtn?.addEventListener('click', () =>
     navigateToStep(currentStepIndex - 1)
@@ -3349,6 +3349,30 @@ function setupResizeObserver() {
 function toggleMinimize() {
   // User-initiated toggle
   setMinimized(!isMinimized, { auto: false });
+}
+
+/**
+ * Defect D-44 (UF-25, owner 2026-08-15). On a phone the parameter panel is a
+ * full-screen drawer carrying role="dialog", so Q-50c's dialog watcher
+ * minimizes the tour as soon as a drawer step opens it - and then re-minimizes
+ * it in the same frame every time Restore was pressed. MEASURED: the button
+ * was visible, labelled "Restore tutorial", and did nothing at all.
+ *
+ * Restore now closes that drawer first, which is what a person had to do by
+ * hand to get the tour back. It deliberately does NOT dismiss real dialogs:
+ * a confirm or a save prompt is a decision the user is in the middle of, and
+ * a tour button must not answer it for them.
+ */
+function restoreFromBar() {
+  const drawer = document.getElementById('paramPanel');
+  if (
+    isMinimized &&
+    drawer?.classList.contains('drawer-open') &&
+    isRendered(drawer)
+  ) {
+    document.getElementById('mobileDrawerToggle')?.click();
+  }
+  toggleMinimize();
 }
 
 /**
@@ -4721,33 +4745,46 @@ export function closeTutorial(completed = false, options = {}) {
     clearTutorialProgress();
   }
 
+  // Defect D-43 (UF-25). Two faults lived here and both silently dropped
+  // focus onto <body>, which drops a keyboard or screen-reader user at the
+  // top of the document every time they leave a tour.
+  //
+  // 1. previousFocus and triggerElement are module-level and were cleared
+  //    immediately after this callback was SCHEDULED, so by the time the
+  //    frame ran both read null and neither restore target was ever tried.
+  //    They are captured into locals here instead.
+  // 2. The old guard asked the element about its own display/visibility.
+  //    Neither reports 'none'/'hidden' for an element whose ANCESTOR is
+  //    hidden, so on the welcome screen the loop chose #primaryActionBtn
+  //    inside #mainInterface.hidden and .focus() was a no-op. isRendered()
+  //    uses checkVisibility(), which accounts for hidden ancestors.
+  const restoreTo = previousFocus;
+  const restoreFallback = triggerElement;
+
+  const canTakeFocus = (el) =>
+    el &&
+    typeof el.focus === 'function' &&
+    document.contains(el) &&
+    isRendered(el);
+
   // Restore focus to the element that had focus before tutorial started
   // Use requestAnimationFrame to ensure DOM has settled after overlay removal
   requestAnimationFrame(() => {
     let focusRestored = false;
 
-    // First try: previousFocus (the element that had focus when tutorial started)
-    if (previousFocus && document.contains(previousFocus)) {
-      const style = window.getComputedStyle(previousFocus);
-      if (style.display !== 'none' && style.visibility !== 'hidden') {
-        previousFocus.focus();
-        focusRestored = true;
-      }
+    // First try: the element that had focus when the tutorial started
+    if (canTakeFocus(restoreTo)) {
+      restoreTo.focus();
+      focusRestored = document.activeElement === restoreTo;
     }
 
-    // Second try: triggerElement (the element that triggered the tutorial)
-    if (!focusRestored && triggerElement && document.contains(triggerElement)) {
-      const triggerStyle = window.getComputedStyle(triggerElement);
-      if (
-        triggerStyle.display !== 'none' &&
-        triggerStyle.visibility !== 'hidden'
-      ) {
-        triggerElement.focus();
-        focusRestored = true;
-      }
+    // Second try: the element that triggered the tutorial
+    if (!focusRestored && canTakeFocus(restoreFallback)) {
+      restoreFallback.focus();
+      focusRestored = document.activeElement === restoreFallback;
     }
 
-    // Fallback: focus a visible, focusable element
+    // Fallback: focus a rendered, focusable element
     if (!focusRestored) {
       const fallbackTargets = [
         '#primaryActionBtn:not([disabled])',
@@ -4762,10 +4799,9 @@ export function closeTutorial(completed = false, options = {}) {
 
       for (const selector of fallbackTargets) {
         const el = document.querySelector(selector);
-        if (el && typeof el.focus === 'function') {
-          const style = window.getComputedStyle(el);
-          if (style.display !== 'none' && style.visibility !== 'hidden') {
-            el.focus();
+        if (canTakeFocus(el)) {
+          el.focus();
+          if (document.activeElement === el) {
             focusRestored = true;
             break;
           }
