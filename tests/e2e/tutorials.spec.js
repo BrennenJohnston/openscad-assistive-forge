@@ -27,6 +27,7 @@ const SPOTLIGHT_TIMEOUT_MS = 1500
 async function setBaseline(page) {
   await page.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
   })
 }
 
@@ -311,6 +312,7 @@ for (const vp of VIEWPORTS) {
 test('tutorial: no infinite retry loop when target is missing', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
   })
   await page.goto('/')
   await startTutorial(page, 'intro')

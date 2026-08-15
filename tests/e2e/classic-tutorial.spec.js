@@ -18,6 +18,7 @@ const CLASSIC_STAMP = JSON.stringify({
 async function bootClassicWelcome(page) {
   await page.addInitScript((stamp) => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
     localStorage.setItem('openscad-forge-ui-mode', stamp);
   }, CLASSIC_STAMP);
   await page.goto('/');
@@ -166,6 +167,7 @@ test.describe('Classic tutorial (UF-8, U-12)', () => {
     // hand back the user's own density, dock layout and saved preference.
     await page.addInitScript(() => {
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
       localStorage.setItem(
         'openscad-forge-ui-mode',
         JSON.stringify({ mode: 'standard', lastCustomMode: 'standard' })

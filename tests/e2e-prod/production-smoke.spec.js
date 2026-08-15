@@ -57,6 +57,7 @@ test.describe('Production build behind the shipped CSP', () => {
     });
     await page.addInitScript(() => {
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
     });
 
     const response = await page.goto('/');
@@ -254,6 +255,7 @@ test.describe('Production build behind the shipped CSP', () => {
     });
     await page.addInitScript(() => {
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
     });
 
     await page.goto('/');

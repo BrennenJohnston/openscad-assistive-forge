@@ -129,6 +129,7 @@ test.describe('CSG Face Coloring Pipeline (unmodified source)', () => {
     await page.addInitScript(() => {
       localStorage.clear();
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
     });
   });
 

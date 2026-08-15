@@ -48,6 +48,7 @@ const REFERENCE_POSE = {
 function seedClassicPanes(page) {
   return page.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
     localStorage.setItem(
       'openscad-forge-classic-panes',
       JSON.stringify({

@@ -157,6 +157,7 @@ test.describe('UF-14 per-interface preference matrix', () => {
     test.setTimeout(300_000);
     await page.addInitScript(() => {
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
     });
     await loadProject(page);
     await switchToStandardMode(page);
@@ -287,6 +288,7 @@ test.describe('UF-14 per-interface preference matrix', () => {
     await page.addInitScript(
       ([keys, marker]) => {
         localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+        localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
         localStorage.setItem(marker, 'true');
         const seed = {
           [`${keys.grid}--forge`]: 'true',
@@ -437,6 +439,7 @@ test.describe('UF-14 per-interface preference matrix', () => {
     test.setTimeout(300_000);
     await page.addInitScript(() => {
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
     });
     await loadProject(page);
     await switchToStandardMode(page);

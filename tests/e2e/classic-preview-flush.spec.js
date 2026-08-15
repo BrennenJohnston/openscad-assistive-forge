@@ -26,6 +26,7 @@ const MARKER = 'UF6_P6_FLUSH_MARKER';
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
   });
 });
 

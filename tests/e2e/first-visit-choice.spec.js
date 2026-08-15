@@ -23,6 +23,16 @@ async function waitForModal(page) {
 }
 
 test.describe('First-visit interface choice', () => {
+  // UF-22: the gate is this file's subject, and the tour nudge arrives right
+  // behind it once the choice is made. Suppressed here so it cannot land in
+  // the middle of a case about the modal. The nudge's own behaviour at this
+  // gate is covered in tour-nudge.spec.js.
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+    });
+  });
+
   test('modal appears with both options unchosen and the app blocked', async ({
     page,
   }) => {
@@ -319,6 +329,12 @@ test.describe('First-visit choice on a phone-shaped viewport (U-10, UF-5)', () =
   // Plain viewport only — Firefox rejects isMobile at browser-context
   // creation (the mobile-viewport.spec.js lesson).
   test.use({ viewport: { width: 375, height: 812 } });
+
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+    });
+  });
 
   test('the Classic card is genuinely disabled with a visible notice; Forge still works', async ({
     page,

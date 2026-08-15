@@ -21,6 +21,7 @@ async function waitForWasmReady(page) {
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
   })
 })
 
@@ -693,6 +694,7 @@ test.describe('Screen Reader Support', () => {
     test.beforeEach(async ({ page }) => {
       await page.addInitScript(() => {
         localStorage.removeItem('openscad-forge-first-visit-seen')
+        localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
       })
     })
     

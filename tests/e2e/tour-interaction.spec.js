@@ -31,6 +31,7 @@ async function boot(page, { classic = false } = {}) {
   await page.addInitScript(
     ({ stamp, useClassic }) => {
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
       if (useClassic) localStorage.setItem('openscad-forge-ui-mode', stamp);
       window.__said = [];
       document.addEventListener('DOMContentLoaded', () => {

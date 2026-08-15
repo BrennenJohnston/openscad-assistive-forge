@@ -21,6 +21,7 @@ function seedPanes(page, panes = {}) {
   return page.addInitScript(
     ([key, value]) => {
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
       localStorage.setItem(key, JSON.stringify(value));
     },
     [

@@ -23,6 +23,7 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.clear()
     localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
   })
 })
 
@@ -528,6 +529,7 @@ test.describe('Bug 5: Preset compatibility warning', () => {
       }
       localStorage.setItem('openscad-forge-presets-v2', JSON.stringify(presetData))
       localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
     })
 
     await page.goto('/?example=simple-box')

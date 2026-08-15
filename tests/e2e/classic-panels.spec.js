@@ -50,6 +50,7 @@ function seedPanes(page, panes = {}) {
   return page.addInitScript(
     ([key, value]) => {
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
       localStorage.setItem(key, JSON.stringify(value));
     },
     [
@@ -75,6 +76,7 @@ function seedPanes(page, panes = {}) {
 function seedFirstVisit(page) {
   return page.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
   });
 }
 
@@ -469,6 +471,7 @@ test.describe('Per-panel collapse (P4)', () => {
     // Exactly the shape R3a wrote — no collapse keys at all.
     await page.addInitScript(() => {
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
       localStorage.setItem(
         'openscad-forge-classic-panes',
         JSON.stringify({
