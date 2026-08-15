@@ -1467,6 +1467,10 @@ export class AutoPreviewController {
         );
         exportError.code = 'EXPORT_STL_FAILED';
         exportError.cause = stlError;
+        // Carry the raw OpenSCAD output across the wrap. Without it the UI
+        // can only see this sentence, and every specific diagnosis the
+        // worker made is lost behind a generic failure (D-42).
+        exportError.details = stlError.details;
         throw exportError;
       }
     }
