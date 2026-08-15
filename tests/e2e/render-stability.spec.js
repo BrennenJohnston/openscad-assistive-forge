@@ -506,71 +506,17 @@ test.describe('Render Stability — DXF Export (BUG-D post-fix)', () => {
     expect(nonPrintable).toBe(0);
   });
 
-  test('DXF postProcessDXF converts LWPOLYLINE entities to LINE', async ({ page }) => {
-    test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
-
-    // This test validates the post-processing behavior directly via the worker
-    await page.goto('/');
-    await page.waitForLoadState('networkidle', { timeout: 30_000 });
-
-    // Inject a minimal LWPOLYLINE DXF and call postProcessDXF via the exposed API
-    const testDxf = `0
-SECTION
-2
-HEADER
-0
-ENDSEC
-0
-SECTION
-2
-ENTITIES
-0
-LWPOLYLINE
-8
-0
-90
-4
-10
-0.0
-20
-0.0
-10
-1.0
-20
-0.0
-10
-1.0
-20
-1.0
-10
-0.0
-20
-1.0
-0
-ENDSEC
-0
-EOF
-`;
-
-    const result = await page.evaluate(async (dxf) => {
-      // postProcessDXF is exported on the worker, not directly accessible.
-      // Check if there's a test hook or just verify the worker import.
-      if (typeof window.__postProcessDXF === 'function') {
-        return window.__postProcessDXF(dxf);
-      }
-      return null;
-    }, testDxf);
-
-    if (result === null) {
-      console.log('[BUG-D] postProcessDXF not directly accessible from page context — skipping white-box test');
-      // This is expected; the function lives in the worker
-      return;
-    }
-
-    // If accessible, verify LWPOLYLINE was converted
-    expect(result).not.toContain('LWPOLYLINE');
-    expect(result).toContain('LINE');
-  });
+  /*
+   * Q-55(ii) (owner, 2026-08-15): the 'DXF postProcessDXF converts LWPOLYLINE
+   * entities to LINE' case was REMOVED here. It built a 40-line DXF fixture,
+   * called window.__postProcessDXF, found it undefined - its own comment said
+   * "this is expected; the function lives in the worker" - and then returned
+   * and passed. It could never assert anything.
+   *
+   * The behaviour it named is genuinely covered: tests/unit/dxf-postprocess.test.js
+   * imports postProcessDXF from src/worker/dxf-postprocess.js and tests the
+   * LWPOLYLINE-to-LINE conversion for real, in the unit suite, on every run.
+   */
 });
 
 // ─── Test Suite: 2D/3D Preview Transitions ──────────────────────────────────

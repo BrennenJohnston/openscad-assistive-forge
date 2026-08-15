@@ -674,6 +674,25 @@ test.describe('Project-Native Presets (project_presets flag)', () => {
     expect(label).toContain('Selection Test')
   })
 
+  /*
+   * KNOWN RED, and deliberately left red: defect D-47, reported to the owner
+   * on 2026-08-15 and not fixed here.
+   *
+   * User-saved presets are filed under state.uploadedFile.name, and for a ZIP
+   * that is the ARCHIVE's filename - file-handler.js passes `file.name` as
+   * originalFileName on the ZIP path. This test opens the same project from
+   * two differently named archives, so the second upload looks up a different
+   * key and cannot see the preset saved under the first. The presets are not
+   * lost; they are filed elsewhere.
+   *
+   * The sibling case above proves project-NATIVE presets (from the sidecar
+   * JSON) DO follow the project across a rename, so the two kinds of preset
+   * behave differently. Whether a user's own presets should follow a project
+   * across a rename is a product decision about how people organise their
+   * work, and it needs a storage migration, so it is the owner's call and its
+   * own release. This test states the behaviour it expects; when D-47 is
+   * settled it either goes green or is rewritten to the decision.
+   */
   test('user-saved presets in localStorage survive project reload', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 

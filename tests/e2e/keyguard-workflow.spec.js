@@ -371,57 +371,50 @@ test.describe('Multi-Preset JSON Import/Export', () => {
     // Wait for parameters to load
     await expectParamsLoaded(page);
     
-    // Open preset management (look for preset button or menu)
-    const presetButton = page.locator('[data-action="manage-presets"], button:has-text("Preset"), button:has-text("preset")').first();
-    
-    if (!(await presetButton.isVisible())) {
-      test.skip(
-        true,
-        'No manage-presets trigger in this build (UF-9: skip reasons made explicit)'
-      );
-      return;
-    }
-    
+    // UF-25: this test skipped itself with the reason "No manage-presets
+    // trigger in this build". That reason was false - #managePresetsBtn is
+    // right there. The old union locator's first() resolved to something
+    // hidden, so the guard fired and the case stopped running, and the skip
+    // message made it look deliberate. Import lives inside the Manage Presets
+    // dialog as data-action="import".
+    const presetButton = page.locator('#managePresetsBtn');
+    await expect(presetButton).toBeVisible();
     await presetButton.click();
-    
-    // Look for import option
-    const importButton = page.locator('button:has-text("Import"), [data-action="import-preset"]').first();
-    
-    if (!(await importButton.isVisible({ timeout: 3000 }))) {
-      test.skip(
-        true,
-        'Preset import UI not reachable from this entry point (UF-9: skip reasons made explicit)'
-      );
-      return;
+
+    const importButton = page.locator('button[data-action="import"]');
+    await expect(importButton).toBeVisible({ timeout: 5000 });
+
+    // Import opens a file chooser rather than exposing a file input.
+    const chooserPromise = page.waitForEvent('filechooser');
+    await importButton.click();
+
+    // With no user presets saved yet there is no replace/merge question, but
+    // handle the dialog if this build asks one.
+    const modeDialog = page.locator('dialog.preset-import-mode-dialog');
+    if (await modeDialog.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await modeDialog.locator('button[value="ok"]').click();
     }
-    
-    // Set up file input for import
-    const importInput = page.locator('input[type="file"][accept*=".json"]');
-    const multiPresetPath = path.join(process.cwd(), 'tests', 'fixtures', 'test-multipreset.json');
-    
-    await importInput.setInputFiles(multiPresetPath);
-    
+
+    const chooser = await chooserPromise;
+    await chooser.setFiles(
+      path.join(process.cwd(), 'tests', 'fixtures', 'test-multipreset.json')
+    );
+
     // Wait for import to complete
     await page.waitForTimeout(2000);
-    
+
     // Check that no error is shown
     const errorAlert = page.locator('[role="alert"]:has-text("error"), [role="alert"]:has-text("invalid")');
     const hasError = await errorAlert.isVisible({ timeout: 1000 }).catch(() => false);
-    
     expect(hasError).toBe(false);
-    
-    // Verify presets appear in list or dropdown
-    const presetList = page.locator('.preset-list, .preset-dropdown, select[data-preset]');
-    if (await presetList.isVisible()) {
-      const presetText = await presetList.textContent();
-      // Should contain at least one of the imported preset names
-      const hasImportedPreset = 
-        presetText.includes('Client A') ||
-        presetText.includes('Client B') ||
-        presetText.includes('Test Preset');
-      
-      expect(hasImportedPreset).toBe(true);
-    }
+
+    // The imported names must actually reach the preset dropdown. The old
+    // check sat inside `if (presetList.isVisible())` against selectors that
+    // match nothing, so it asserted nothing either.
+    const optionLabels = await page
+      .locator('#presetSelect')
+      .evaluate((el) => Array.from(el.options).map((o) => o.textContent.trim()));
+    expect(optionLabels.join('\n')).toContain('Client A');
   });
 });
 
