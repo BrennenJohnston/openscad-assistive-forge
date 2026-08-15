@@ -10,6 +10,7 @@ import {
   showErrorModal,
   showErrorToast,
 } from '../../src/js/error-translator.js';
+import { libraryManager } from '../../src/js/library-manager.js';
 
 describe('Error Translator', () => {
   describe('translateError', () => {
@@ -382,6 +383,84 @@ describe('Error Translator', () => {
 
       const toasts = document.querySelectorAll('.error-toast');
       expect(toasts.length).toBe(2);
+    });
+  });
+
+  /**
+   * UF-24 / D-42. A model whose library cannot be resolved used to fall all
+   * the way through to the generic "Something Went Wrong ... try resetting
+   * parameters to defaults", which points at the one thing that is not the
+   * cause. Two library patterns already existed above, but they were written
+   * against a guessed wording (`use <Lib/x.scad>`) and never match what
+   * OpenSCAD actually prints.
+   *
+   * The message below is the real one, captured live by unticking MCAD on the
+   * bundled library-test example.
+   */
+  describe('missing library (D-42)', () => {
+    const REAL_MESSAGE = [
+      'OpenSCAD compilation failed with exit code 1. Output:',
+      "WARNING: Can't open include file 'MCAD/boxes.scad', import file 'MCAD/boxes.scad'.",
+      "WARNING: Can't open library 'MCAD/boxes.scad'. in file /tmp/input.scad, line 8",
+      "WARNING: Ignoring unknown module 'roundedBox' in file /tmp/input.scad, line 43",
+      'Current top level object is empty.',
+    ].join('\n');
+
+    beforeEach(() => {
+      libraryManager.disable('MCAD');
+    });
+
+    afterEach(() => {
+      libraryManager.disable('MCAD');
+    });
+
+    test('names the library instead of blaming the parameters', () => {
+      const result = translateError(REAL_MESSAGE);
+
+      expect(result.title).not.toBe('Something Went Wrong');
+      expect(result.explanation).toContain('MCAD');
+      expect(result.explanation).not.toContain('unexpected error');
+    });
+
+    test('says the library is switched off, and where to switch it on', () => {
+      const result = translateError(REAL_MESSAGE);
+
+      expect(result.explanation).toContain('switched off');
+      expect(result.suggestion).toContain('Libraries panel');
+      expect(result.suggestion).not.toContain('resetting parameters');
+    });
+
+    test('keeps the raw output for the technical details section', () => {
+      const result = translateError(REAL_MESSAGE);
+
+      expect(result.technical).toBe(REAL_MESSAGE);
+    });
+
+    test('does not claim a switched-ON library is switched off', () => {
+      libraryManager.enable('MCAD');
+      const result = translateError(REAL_MESSAGE);
+
+      expect(result.explanation).toContain('MCAD');
+      expect(result.explanation).not.toContain('switched off');
+    });
+
+    test('does not claim an unknown library is switched off', () => {
+      const result = translateError(
+        "WARNING: Can't open include file 'SomeOtherLib/thing.scad', import file 'SomeOtherLib/thing.scad'."
+      );
+
+      expect(result.explanation).toContain('SomeOtherLib');
+      expect(result.explanation).not.toContain('switched off');
+    });
+
+    test('leaves a plain missing companion file alone', () => {
+      // No folder in the path, so this is a companion file, not a library —
+      // telling the user to look in the Libraries panel would be wrong.
+      const result = translateError(
+        "WARNING: Can't open include file 'helpers.scad', import file 'helpers.scad'."
+      );
+
+      expect(result.suggestion || '').not.toContain('Libraries panel');
     });
   });
 });
