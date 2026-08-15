@@ -78,6 +78,16 @@ test.describe('Welcome spotlight (U-23, UF-16)', () => {
     await page.locator('#first-visit-continue').click();
     await expect(page.locator('#first-visit-modal')).toBeHidden();
 
+    // Q-52c (UF-22): on a genuinely fresh profile the tour nudge asks first
+    // and the card's tip stands down underneath it. Answering the dialog is
+    // what hands the tip over. The nudge's own behaviour lives in
+    // tour-nudge.spec.js; here it is one step of the real first-run walk.
+    await expect(page.locator('.tour-nudge-modal')).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page.locator(SPOTLIGHT_CARD)).toHaveCount(0);
+    await page.locator('.tour-nudge-dismiss').click();
+
     // Now exactly ONE card carries the halo — the Welcome Page Tour card
     // (Q-44a precedence), with the tag and a real dismiss button.
     await expect(page.locator(SPOTLIGHT_CARD)).toHaveCount(1);
