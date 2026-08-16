@@ -52,11 +52,56 @@ async function openClassicEditor(page) {
   await expect(page.locator('#classicEditorSlot .cm-content')).toBeVisible({
     timeout: 20_000,
   });
-  // Down into the modules, where the fixture actually nests blocks.
-  await page.evaluate(() => {
-    document.querySelector('#classicEditorSlot .cm-scroller').scrollTop = 3760;
+  await scrollToFoldableBlocks(page);
+}
+
+/**
+ * Scroll down until an EXPANDED fold marker is on screen.
+ *
+ * Deliberately not a pixel offset. The fixture's first blocks are ~170 lines
+ * down, but converting that to a scrollTop needs a row height, and the row
+ * height depends on the platform's fonts — a hardcoded offset passed on
+ * Windows and landed somewhere else entirely on the Linux CI runner. Stepping
+ * until the thing we need is actually visible is environment-independent, and
+ * it reports what it saw when it gives up.
+ */
+async function scrollToFoldableBlocks(page) {
+  const openBoxes = () =>
+    page.evaluate(
+      () =>
+        document.querySelectorAll(
+          '#classicEditorSlot .cm-foldBox.cm-foldBox-open'
+        ).length
+    );
+
+  for (let step = 0; step < 30; step++) {
+    if ((await openBoxes()) > 0) return;
+    const moved = await page.evaluate(() => {
+      const s = document.querySelector('#classicEditorSlot .cm-scroller');
+      const before = s.scrollTop;
+      s.scrollTop = before + s.clientHeight;
+      return s.scrollTop !== before;
+    });
+    await page.waitForTimeout(250);
+    if (!moved) break;
+  }
+
+  const diagnosis = await page.evaluate(() => {
+    const s = document.querySelector('#classicEditorSlot .cm-scroller');
+    const all = document.querySelectorAll('#classicEditorSlot .cm-foldBox');
+    return {
+      scrollTop: Math.round(s.scrollTop),
+      scrollHeight: Math.round(s.scrollHeight),
+      clientHeight: Math.round(s.clientHeight),
+      boxes: all.length,
+      open: document.querySelectorAll('.cm-foldBox-open').length,
+      closed: document.querySelectorAll('.cm-foldBox-closed').length,
+    };
   });
-  await page.waitForTimeout(600);
+  throw new Error(
+    'never found an expanded fold marker while scrolling: ' +
+      JSON.stringify(diagnosis)
+  );
 }
 
 const boxes = (page) => page.locator('#classicEditorSlot .cm-foldBox');
@@ -92,6 +137,14 @@ test('fold-markers: the gutter draws boxes, and the glyph says what it will do',
         (b) => b.querySelector('svg')?.getAttribute('aria-hidden') === 'true'
       ),
       textInside: all.filter((b) => b.textContent.trim().length > 0).length,
+      // Every marker must keep a title. CodeMirror's default marker sets one;
+      // supplying markerDOM replaces that element and silently drops it, which
+      // is how this restyle first shipped with no accessible name on the
+      // control at all.
+      titled: all.filter((b) => (b.getAttribute('title') || '').trim()).length,
+      openTitle: all
+        .find((b) => b.classList.contains('cm-foldBox-open'))
+        ?.getAttribute('title'),
     };
   });
 
@@ -104,6 +157,13 @@ test('fold-markers: the gutter draws boxes, and the glyph says what it will do',
     true
   );
   expect(before.textInside, 'a marker carries text').toBe(0);
+  expect(
+    before.titled,
+    'a fold marker has no title, so the control has no accessible name'
+  ).toBe(before.total);
+  expect(before.openTitle, 'an expanded marker should offer to fold').toBe(
+    'Fold line'
+  );
 });
 
 test('fold-markers: pressing a marker collapses, and the box becomes a plus', async ({

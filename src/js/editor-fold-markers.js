@@ -43,11 +43,18 @@ export function foldMarkerDOM(open) {
   const wrapper = document.createElement('span');
   wrapper.className = `cm-foldBox ${open ? 'cm-foldBox-open' : 'cm-foldBox-closed'}`;
 
+  // CodeMirror's DEFAULT marker sets this title; supplying `markerDOM` replaces
+  // that element wholesale and it never gets set (`FoldMarker.toDOM` returns
+  // the custom node before it reaches the `span.title = ...` line). MEASURED,
+  // and caught by `menu-parity.spec.js`, which asserts the fold gutter holds
+  // something with a title — so restyling the marker had quietly taken away
+  // its only accessible name. Same strings CodeMirror uses.
+  wrapper.title = open ? 'Fold line' : 'Unfold line';
+
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('viewBox', '0 0 12 12');
   svg.setAttribute('focusable', 'false');
-  // The gutter element around this carries the button semantics and the
-  // title text CodeMirror sets; the drawing itself is decoration.
+  // The drawing is decoration; the wrapper's title is what names the control.
   svg.setAttribute('aria-hidden', 'true');
 
   const box = document.createElementNS(SVG_NS, 'rect');
