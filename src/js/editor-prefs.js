@@ -28,6 +28,7 @@ import {
   STORAGE_KEY_EDITOR_HIGHLIGHT_LINE,
   STORAGE_KEY_EDITOR_WRAP_INDENT,
   STORAGE_KEY_EDITOR_WRAP_ARROW,
+  STORAGE_KEY_EDITOR_BRACE_MATCHING,
   safeGetItem,
   safeSetItem,
 } from './storage-keys.js';
@@ -62,6 +63,8 @@ const BOOLEAN_PREF_SPEC = Object.freeze({
   // since without wrapping no line has a continuation row.
   wrapIndent: { key: STORAGE_KEY_EDITOR_WRAP_INDENT, default: true },
   wrapArrow: { key: STORAGE_KEY_EDITOR_WRAP_ARROW, default: true },
+  // settings.cc: enableBraceMatching, default true.
+  braceMatching: { key: STORAGE_KEY_EDITOR_BRACE_MATCHING, default: true },
 });
 
 /** @param {number} value @param {{min: number, max: number}} spec */
@@ -78,6 +81,7 @@ function clamp(value, spec) {
  * @property {boolean} highlightActiveLine
  * @property {boolean} wrapIndent
  * @property {boolean} wrapArrow
+ * @property {boolean} braceMatching
  */
 
 /** @returns {EditorPrefs} */

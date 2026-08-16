@@ -4123,6 +4123,7 @@ async function initApp() {
                   editor?.setHighlightActiveLine?.(stored),
                 wrapIndent: () => editor?.setWrapIndent?.(stored),
                 wrapArrow: () => editor?.setWrapArrow?.(stored),
+                braceMatching: () => editor?.setBraceMatching?.(stored),
               };
               apply[name]?.();
 
@@ -4138,6 +4139,9 @@ async function initApp() {
                   stored ? 'on' : 'off'
                 }`,
                 wrapArrow: `Mark where a wrapped line continues, ${
+                  stored ? 'on' : 'off'
+                }`,
+                braceMatching: `Highlight the matching bracket, ${
                   stored ? 'on' : 'off'
                 }`,
               };

@@ -52,6 +52,7 @@ const EXPECTED_KEYS = {
   // wrap-return marker as separate settings and Q-58 chose to mirror that.
   STORAGE_KEY_EDITOR_WRAP_INDENT: 'openscad-forge-editor-wrap-indent',
   STORAGE_KEY_EDITOR_WRAP_ARROW: 'openscad-forge-editor-wrap-arrow',
+  STORAGE_KEY_EDITOR_BRACE_MATCHING: 'openscad-forge-editor-brace-matching',
   STORAGE_KEY_CAMERA_COLLAPSED: 'openscad-forge-camera-controls-collapsed',
   STORAGE_KEY_CAMERA_POSITION: 'openscad-forge-camera-controls-position',
   STORAGE_KEY_LOD_WARNING_DISMISSED: 'openscad-forge-lod-warning-dismissed',

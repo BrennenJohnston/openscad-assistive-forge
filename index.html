@@ -7989,6 +7989,13 @@
             </div>
 
             <div class="preferences-check-row">
+              <input type="checkbox" id="prefsEditorBraceMatching" />
+              <label for="prefsEditorBraceMatching"
+                >Highlight the matching bracket</label
+              >
+            </div>
+
+            <div class="preferences-check-row">
               <input
                 type="checkbox"
                 id="prefsEditorTabIndents"
@@ -8033,22 +8040,6 @@
             <p id="prefs-reason-whitespace" class="preferences-panel-reason">
               Not built here. Nothing draws spaces and tabs as visible marks in
               this editor.
-            </p>
-
-            <div class="preferences-check-row">
-              <input
-                type="checkbox"
-                id="prefsEditorBraceMatching"
-                disabled
-                aria-describedby="prefs-reason-bracematch"
-              />
-              <label for="prefsEditorBraceMatching"
-                >Highlight the matching bracket</label
-              >
-            </div>
-            <p id="prefs-reason-bracematch" class="preferences-panel-reason">
-              Not built here. The editor does not highlight the bracket that
-              matches the one at the cursor.
             </p>
 
             <div class="preferences-check-row">
