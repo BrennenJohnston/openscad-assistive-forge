@@ -192,6 +192,8 @@ const EDITOR_CONTROLS = [
     pref: 'highlightActiveLine',
     type: 'boolean',
   },
+  { id: 'prefsEditorWrapIndent', pref: 'wrapIndent', type: 'boolean' },
+  { id: 'prefsEditorWrapArrow', pref: 'wrapArrow', type: 'boolean' },
 ];
 
 /**

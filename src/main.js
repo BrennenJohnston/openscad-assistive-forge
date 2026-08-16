@@ -4121,6 +4121,8 @@ async function initApp() {
                 lineWrapping: () => editor?.setLineWrapping?.(stored),
                 highlightActiveLine: () =>
                   editor?.setHighlightActiveLine?.(stored),
+                wrapIndent: () => editor?.setWrapIndent?.(stored),
+                wrapArrow: () => editor?.setWrapArrow?.(stored),
               };
               apply[name]?.();
 
@@ -4130,6 +4132,12 @@ async function initApp() {
                 tabWidth: `Tab width: ${stored} columns`,
                 lineWrapping: `Wrap long lines, ${stored ? 'on' : 'off'}`,
                 highlightActiveLine: `Highlight the current line, ${
+                  stored ? 'on' : 'off'
+                }`,
+                wrapIndent: `Indent wrapped continuation lines, ${
+                  stored ? 'on' : 'off'
+                }`,
+                wrapArrow: `Mark where a wrapped line continues, ${
                   stored ? 'on' : 'off'
                 }`,
               };

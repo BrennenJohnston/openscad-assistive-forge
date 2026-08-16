@@ -324,6 +324,12 @@ export const STORAGE_KEY_EDITOR_LINE_WRAP = getAppPrefKey('editor-line-wrap');
 export const STORAGE_KEY_EDITOR_HIGHLIGHT_LINE = getAppPrefKey(
   'editor-highlight-line'
 );
+// The two wrap marks are separate keys because the desktop keeps them as two
+// settings and Q-58 chose to mirror that (lineWrapIndentationStyle and
+// lineWrapVisualizationEnd, settings.cc).
+export const STORAGE_KEY_EDITOR_WRAP_INDENT =
+  getAppPrefKey('editor-wrap-indent');
+export const STORAGE_KEY_EDITOR_WRAP_ARROW = getAppPrefKey('editor-wrap-arrow');
 export const STORAGE_KEY_CAMERA_COLLAPSED = getAppPrefKey(
   'camera-controls-collapsed'
 );

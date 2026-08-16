@@ -7975,6 +7975,20 @@
             </div>
 
             <div class="preferences-check-row">
+              <input type="checkbox" id="prefsEditorWrapIndent" />
+              <label for="prefsEditorWrapIndent"
+                >Indent wrapped continuation lines</label
+              >
+            </div>
+
+            <div class="preferences-check-row">
+              <input type="checkbox" id="prefsEditorWrapArrow" />
+              <label for="prefsEditorWrapArrow"
+                >Mark where a wrapped line continues</label
+              >
+            </div>
+
+            <div class="preferences-check-row">
               <input
                 type="checkbox"
                 id="prefsEditorTabIndents"
@@ -8019,22 +8033,6 @@
             <p id="prefs-reason-whitespace" class="preferences-panel-reason">
               Not built here. Nothing draws spaces and tabs as visible marks in
               this editor.
-            </p>
-
-            <div class="preferences-check-row">
-              <input
-                type="checkbox"
-                id="prefsEditorWrapMarkers"
-                disabled
-                aria-describedby="prefs-reason-wrapmarkers"
-              />
-              <label for="prefsEditorWrapMarkers"
-                >Show where a wrapped line continues</label
-              >
-            </div>
-            <p id="prefs-reason-wrapmarkers" class="preferences-panel-reason">
-              Not built here. Wrapped lines continue at the left edge with no
-              marker and no hanging indent.
             </p>
 
             <div class="preferences-check-row">

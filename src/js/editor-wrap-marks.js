@@ -20,6 +20,14 @@
  * `.cm-content`. Copying a wrapped line therefore yields the original bytes,
  * and a screen reader reading the document never meets either mark.
  *
+ * They ship as two independent extensions because the owner's answer to Q-58
+ * was (c): two Preferences toggles, mirroring the desktop, where
+ * `lineWrapIndentationStyle` and `lineWrapVisualizationEnd` really are
+ * separate settings. So the arrow's reserved column travels with the ARROW
+ * rather than with the indent — switch the indent off on its own and the text
+ * must still leave the arrow somewhere to sit; switch the arrow off and the
+ * full pane width comes back.
+ *
  * Why the indent is a theme rule rather than a per-line decoration: CM6's
  * selection geometry (`rectanglesForRange`, @codemirror/view) reads
  * `.cm-line`'s own computed `paddingLeft`, `paddingRight` and negative
@@ -92,8 +100,22 @@ const ARROW_GLYPH_EM = 0.85;
 const wrapIndentTheme = EditorView.theme({
   '.cm-content.cm-lineWrapping .cm-line': {
     paddingLeft: `calc(${CM_LINE_PADDING_LEFT_PX}px + ${WRAP_INDENT_COLUMNS}ch)`,
-    paddingRight: `calc(${CM_LINE_PADDING_RIGHT_PX}px + ${ARROW_COLUMN_CH}ch)`,
     textIndent: `-${WRAP_INDENT_COLUMNS}ch`,
+  },
+});
+
+/**
+ * The column the arrow lives in, reserved by narrowing the line rather than by
+ * drawing over it. The desktop's Scintilla wraps early to leave its marker
+ * room; CM6 wraps at the content box, so the content box is what has to give.
+ *
+ * This belongs to the arrow and not to the indent (Q-58c): with the arrow
+ * switched off there is nothing to reserve room for, and the line should get
+ * the width back.
+ */
+const arrowColumnTheme = EditorView.theme({
+  '.cm-content.cm-lineWrapping .cm-line': {
+    paddingRight: `calc(${CM_LINE_PADDING_RIGHT_PX}px + ${ARROW_COLUMN_CH}ch)`,
   },
 });
 
@@ -335,10 +357,21 @@ const wrapArrowTheme = EditorView.theme({
 });
 
 /**
- * The whole feature as one extension, for one compartment.
+ * Hanging indent for continuation rows, on its own (desktop
+ * `lineWrapIndentationStyle = Fixed`, `lineWrapIndentation = 4`).
  *
  * @returns {import('@codemirror/state').Extension}
  */
-export function wrapMarks() {
-  return [wrapIndentTheme, wrapArrowTheme, buildWrapArrowLayer()];
+export function wrapIndent() {
+  return wrapIndentTheme;
+}
+
+/**
+ * Return arrows at the right border, on their own, with the column they need
+ * (desktop `lineWrapVisualizationEnd = Border`).
+ *
+ * @returns {import('@codemirror/state').Extension}
+ */
+export function wrapReturnArrows() {
+  return [arrowColumnTheme, wrapArrowTheme, buildWrapArrowLayer()];
 }

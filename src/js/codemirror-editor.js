@@ -71,7 +71,7 @@ import {
   SearchQuery,
 } from '@codemirror/search';
 import { adoptCodeMirrorStyles } from './codemirror-csp-styles.js';
-import { wrapMarks } from './editor-wrap-marks.js';
+import { wrapIndent, wrapReturnArrows } from './editor-wrap-marks.js';
 import { loadEditorPrefs } from './editor-prefs.js';
 import { themeManager } from './theme-manager.js';
 
@@ -721,7 +721,9 @@ export class CodeMirrorEditor {
     /** @type {Compartment} */
     this._wrapCompartment = new Compartment();
     /** @type {Compartment} */
-    this._wrapMarksCompartment = new Compartment();
+    this._wrapIndentCompartment = new Compartment();
+    /** @type {Compartment} */
+    this._wrapArrowCompartment = new Compartment();
     /** @type {Compartment} */
     this._activeLineCompartment = new Compartment();
 
@@ -778,8 +780,15 @@ export class CodeMirrorEditor {
         // How a wrapped line tells you it is one: continuation rows hang four
         // columns in and every row that continues carries a return arrow at
         // the right border, both from the desktop's own defaults. Neither
-        // mark is made of characters, so the document is untouched.
-        this._wrapMarksCompartment.of(wrapMarks()),
+        // mark is made of characters, so the document is untouched. Two
+        // compartments because the desktop keeps them as two settings and
+        // Q-58 chose to mirror that.
+        this._wrapIndentCompartment.of(
+          this._editorPrefs.wrapIndent ? wrapIndent() : []
+        ),
+        this._wrapArrowCompartment.of(
+          this._editorPrefs.wrapArrow ? wrapReturnArrows() : []
+        ),
         this._fontSizeCompartment.of(fontSizeTheme(this._editorPrefs.fontSize)),
         this._indentCompartment.of(
           indentUnit.of(' '.repeat(this._editorPrefs.indentWidth))
@@ -1039,6 +1048,24 @@ export class CodeMirrorEditor {
     this._view?.dispatch({
       effects: this._wrapCompartment.reconfigure(
         on ? EditorView.lineWrapping : []
+      ),
+    });
+  }
+
+  /** @param {boolean} on Hang continuation rows four columns in. */
+  setWrapIndent(on) {
+    this._editorPrefs.wrapIndent = on;
+    this._view?.dispatch({
+      effects: this._wrapIndentCompartment.reconfigure(on ? wrapIndent() : []),
+    });
+  }
+
+  /** @param {boolean} on Mark every row that continues, at the right border. */
+  setWrapArrow(on) {
+    this._editorPrefs.wrapArrow = on;
+    this._view?.dispatch({
+      effects: this._wrapArrowCompartment.reconfigure(
+        on ? wrapReturnArrows() : []
       ),
     });
   }
