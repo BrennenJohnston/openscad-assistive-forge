@@ -105,14 +105,8 @@ test.describe('Terminology Consistency - Saved Projects', () => {
     
     await page.goto('/')
     
-    try {
-      await loadSimpleBoxExample(page)
-    } catch (error) {
-      console.log('Could not load example:', error.message)
-      test.skip()
-      return
-    }
-    
+    await loadSimpleBoxExample(page)
+
     // Look for save project button
     const saveBtn = page.locator('button:has-text("Save"), button[aria-label*="Save"]').first()
     
@@ -137,19 +131,11 @@ test.describe('Terminology Consistency - Saved Projects', () => {
     // First, save a design
     await page.goto('/')
     
-    try {
-      await loadSimpleBoxExample(page)
-    } catch (error) {
-      test.skip()
-      return
-    }
-    
+    await loadSimpleBoxExample(page)
+
     // Try to save the current project
     const saveBtn = page.locator('button:has-text("Save")').first()
-    if (!(await saveBtn.isVisible().catch(() => false))) {
-      test.skip()
-      return
-    }
+    await expect(saveBtn).toBeVisible()
     
     // The specific dialog text testing would require actually triggering dialogs
     // For now, verify the button structure is present
@@ -333,12 +319,7 @@ test.describe('Status Messages Terminology', () => {
     
     await page.goto('/')
     
-    try {
-      await loadSimpleBoxExample(page)
-    } catch (error) {
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page)
     
     // Check status area for any messages
     const statusArea = page.locator('#statusArea, .status-message, [role="status"]')

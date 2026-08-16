@@ -20,6 +20,9 @@ public/liblouis/
 coverage/
 test-results/
 playwright-report/
+# Written at the repo root by any CI-mode Playwright run; it is the input to
+# scripts/check-e2e-complete.mjs, never something to commit.
+playwright-results.json
 
 # Review screenshots and OpenSCAD check output (D-7, Q-39b): these travel in
 # PR descriptions now. Files committed before this rule stay tracked.

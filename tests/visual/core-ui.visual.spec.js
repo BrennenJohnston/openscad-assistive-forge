@@ -15,63 +15,147 @@ import { test, expect } from '@playwright/test';
 // Increase timeout for visual tests (loading takes time)
 test.setTimeout(60000);
 
+/**
+ * UF-27 / D-51: dismiss the first-visit modal, and wait until it is really
+ * gone before anything is photographed.
+ *
+ * Every describe below used to do this inline as a best-effort click guarded
+ * by `if (await modal.isVisible())`, checked the instant the page loaded. The
+ * modal opens on a delay, so that check found nothing, the dismissal was
+ * skipped in silence, and the shot caught the page through the modal backdrop.
+ * MEASURED consequence at HEAD: theme-light.png was BYTE-IDENTICAL to
+ * welcome-screen.png (same SHA-256), and theme-dark, high-contrast and both
+ * memory-banner baselines were pictures of the welcome modal rather than of
+ * the thing each is named for.
+ *
+ * This is UF-25's proven pattern from the mobile-layout case, lifted out so
+ * there is one copy: drive the app's own flow (choose an interface, then
+ * Continue) and wait for the blocking state to clear rather than for a fixed
+ * number of milliseconds.
+ */
+async function dismissFirstVisit(page) {
+  const modal = page.locator('#first-visit-modal:not(.hidden)');
+  await modal.waitFor({ state: 'visible', timeout: 15000 });
+  await page.evaluate(() => {
+    document.getElementById('firstVisitChoiceForge')?.click();
+    document.getElementById('first-visit-continue')?.click();
+  });
+  await page.waitForFunction(
+    () => !document.body.classList.contains('first-visit-blocking'),
+    null,
+    { timeout: 15000 }
+  );
+  await expect(modal).toBeHidden();
+
+  // Accepting the gate is what starts the engine loading, and its splash
+  // covers the whole page while it does. Everything that dismisses the gate
+  // then photographs the app, so the wait belongs here.
+  await waitForEngine(page);
+}
+
+async function openApp(page) {
+  await page.goto('/');
+  await page.waitForSelector('#app', { state: 'visible' });
+}
+
+/**
+ * UF-27 / P4: wait for the OpenSCAD engine to finish loading before anything
+ * is photographed.
+ *
+ * This suite never waited, and on the Linux CI runner it showed. Three
+ * successive generations of the baseline set were captured and looked at, and
+ * they disagreed with each other: in one, main-layout.png and theme-dark.png
+ * were 85KB pictures of the application; in the next they were 25KB pictures
+ * of the "Loading OpenSCAD Engine" splash, spinner and progress bar and all.
+ * The same splash explains the blank header strip - clipping to the header's
+ * box while that near-white overlay covers it captures 528 bytes of nothing.
+ * Locally the engine is cached and the race is invisible, which is why the
+ * win32 baselines never showed it.
+ *
+ * WHERE this is called matters, and getting it wrong deadlocks the suite.
+ * MEASURED: the engine does not begin loading until the first-visit gate is
+ * accepted. Waiting for it before dismissal hangs for the full timeout - a
+ * first attempt that waited inside openApp() took the suite from 53s to 10.8
+ * minutes, and the only three cases that survived were the three that preset
+ * openscad-forge-first-visit-seen and so had no gate in the way. So it is
+ * waited for after the gate is gone, never before.
+ */
+async function waitForEngine(page) {
+  await page.waitForSelector('body[data-wasm-ready="true"]', {
+    state: 'attached',
+    timeout: 120_000,
+  });
+}
+
+/** UF-22: keep the tour nudge out of shots that are not about the tour. */
+async function suppressTourNudge(page) {
+  await page.addInitScript(() => {
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+  });
+}
+
+/**
+ * UF-27 / D-52: four cases in this file were reporting PASS while asserting
+ * nothing whatsoever.
+ *
+ * Each wrapped its `toHaveScreenshot` in `if (await el.isVisible())` against
+ * an element that only exists once a project is open. The suite never opens
+ * one, so the condition was always false, the assertion never ran, and the
+ * case still reported ok. MEASURED: the file has 16 cases naming 16 baselines,
+ * and only 12 baseline files exist - the four with no file are exactly these
+ * four. A missing baseline is normally how Playwright tells you a case never
+ * asserted; here nothing was listening.
+ *
+ * They now skip, formally and with this reason, so the board says "did not
+ * check" instead of "checked and fine".
+ *
+ * The fix, when someone takes it: open a project first, the way
+ * render-stability.spec.js does with `/?example=colored-box`, and wait for
+ * `.param-control`. MEASURED on that page: `.panel-header` becomes visible at
+ * 499x85 and `.param-panel-body` at 499x654, so three of the four would then
+ * capture something real. `.forge-disclosure` stays hidden even with a project
+ * open (11 in the DOM, none visible), so the 1440px disclosure case needs its
+ * own answer about what it is meant to photograph. It was not taken here
+ * because it puts a project load into a lane that is being made able to fail
+ * for the first time, and that trade deserves its own measurement.
+ */
+const NEEDS_A_LOADED_PROJECT =
+  'the element only exists with a project open, and this suite opens none (see the note above)';
+
 test.describe('Visual Regression - Core UI', () => {
   test.beforeEach(async ({ page }) => {
     // UF-22: these captures deliberately keep the first-visit modal, but two
     // of them dismiss it and then shoot the page underneath. Suppress the
     // tour nudge so it is not what they photograph.
-    await page.addInitScript(() => {
-      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
-    });
+    await suppressTourNudge(page);
 
-    // Navigate to the app
-    await page.goto('/');
-
-    // Wait for app to fully load
-    await page.waitForSelector('#app', { state: 'visible' });
+    // Navigate to the app and wait for it to be fully loaded
+    await openApp(page);
 
     // Wait for any initial animations to settle
     await page.waitForTimeout(500);
   });
 
   test('welcome screen layout', async ({ page }) => {
-    // Ensure first-visit modal is visible (shown on first visit)
-    const welcomeModal = page.locator('#first-visit-modal');
-    
-    // Modal may not appear if user has visited before (localStorage flag)
-    // Try to show it or skip gracefully
-    const isVisible = await welcomeModal.isVisible().catch(() => false);
-    
-    if (isVisible) {
-      // Take screenshot of welcome modal
-      await expect(page).toHaveScreenshot('welcome-screen.png', {
-        maxDiffPixels: 100,
-        threshold: 0.2,
-      });
-    } else {
-      // Take screenshot of current state (modal may have been dismissed)
-      await expect(page).toHaveScreenshot('welcome-screen.png', {
-        maxDiffPixels: 200,
-        threshold: 0.2,
-      });
-    }
+    // UF-27: this is the one capture that WANTS the modal, so wait for it
+    // rather than photographing whatever is on screen. It used to branch on
+    // an immediate isVisible() and shoot either way under two different
+    // tolerances, which meant a run that lost the modal still passed - and
+    // recorded the wrong picture under this name.
+    const welcomeModal = page.locator('#first-visit-modal:not(.hidden)');
+    await welcomeModal.waitFor({ state: 'visible', timeout: 15000 });
+
+    await expect(page).toHaveScreenshot('welcome-screen.png', {
+      maxDiffPixels: 100,
+      threshold: 0.2,
+    });
   });
 
   // Q-55(ii) (owner, 2026-08-15): renamed. The capture is correct and the
   // baseline file keeps its name, but 'main layout' described the project UI
   // while the image is the welcome page with the first-visit modal dismissed.
   test('welcome page with the first-visit modal dismissed', async ({ page }) => {
-    // Close first-visit modal if visible
-    const welcomeModal = page.locator('#first-visit-modal');
-    if (await welcomeModal.isVisible().catch(() => false)) {
-      const closeBtn = page.locator('#first-visit-modal .modal-close, #first-visit-modal [aria-label*="close"], #first-visit-modal button.btn-primary');
-      if (await closeBtn.first().isVisible().catch(() => false)) {
-        // UF-3: Continue requires an interface choice first
-        await page.locator('#firstVisitChoiceForge').check().catch(() => {});
-        await closeBtn.first().click();
-        await page.waitForTimeout(300);
-      }
-    }
+    await dismissFirstVisit(page);
 
     // Wait for main UI to be visible
     await page.waitForSelector('.app-header', { state: 'visible' });
@@ -84,21 +168,46 @@ test.describe('Visual Regression - Core UI', () => {
   });
 
   test('header controls', async ({ page }) => {
-    // Close first-visit modal if visible
-    const welcomeModal = page.locator('#first-visit-modal');
-    if (await welcomeModal.isVisible().catch(() => false)) {
-      const closeBtn = page.locator('#first-visit-modal .modal-close, #first-visit-modal button.btn-primary');
-      if (await closeBtn.first().isVisible().catch(() => false)) {
-        // UF-3: Continue requires an interface choice first
-        await page.locator('#firstVisitChoiceForge').check().catch(() => {});
-        await closeBtn.first().click();
-        await page.waitForTimeout(300);
-      }
-    }
+    await dismissFirstVisit(page);
 
-    // Screenshot just the header
+    /*
+     * UF-27 / P4: this was the only ELEMENT screenshot in the file, and the
+     * only baseline that came back blank when the set was first generated on
+     * the Linux CI runner - 1280x74, the right geometry, 528 bytes of plain
+     * white, against 12,473 bytes of painted header for the same element on
+     * win32. Looked at, not inferred. Seeding that would have sealed a picture
+     * of nothing in as the thing every future Linux run is compared against,
+     * which is the exact vacuity this job is being fixed to end.
+     *
+     * The cause turned out to be the one openApp() now fixes for the whole
+     * file: the "Loading OpenSCAD Engine" splash was still up, and 528 bytes
+     * of near-white is exactly what you get by clipping to the header's box
+     * while a full-screen overlay covers it. The next generation caught the
+     * same splash in main-layout.png and theme-dark.png outright, which is how
+     * it was identified.
+     *
+     * The capture stays a clipped PAGE screenshot rather than an element
+     * screenshot, and the waits below stay. Neither was the cause, both are
+     * cheap, and together they take the remaining timing explanations off the
+     * list for the one capture in this file that is not a whole viewport.
+     */
     const header = page.locator('.app-header');
-    await expect(header).toHaveScreenshot('header-controls.png', {
+    await expect(header).toBeVisible();
+    await page.evaluate(() => window.scrollTo(0, 0));
+    // .then(() => undefined) because document.fonts.ready resolves to a
+    // FontFaceSet, which is not serialisable back across the bridge.
+    await page.evaluate(() => document.fonts.ready.then(() => undefined));
+    await page.waitForFunction(() => {
+      const logo = document.querySelector('.app-header .header-logo');
+      return !logo || (logo.complete && logo.naturalWidth > 0);
+    });
+    await page.waitForTimeout(300);
+
+    const box = await header.boundingBox();
+    expect(box).not.toBeNull();
+
+    await expect(page).toHaveScreenshot('header-controls.png', {
+      clip: box,
       maxDiffPixels: 50,
       threshold: 0.2,
     });
@@ -106,21 +215,15 @@ test.describe('Visual Regression - Core UI', () => {
 });
 
 test.describe('Visual Regression - Theme Switching', () => {
+  // UF-27 / D-51: all three baselines under this describe were pictures of
+  // the first-visit modal, not of the themed application - theme-light.png
+  // was byte-identical to welcome-screen.png. The dismissal ran on an
+  // immediate isVisible() check that the delayed modal always lost, and this
+  // describe never got UF-22's nudge suppression either.
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await page.waitForSelector('#app', { state: 'visible' });
-
-    // Close first-visit modal
-    const welcomeModal = page.locator('#first-visit-modal');
-    if (await welcomeModal.isVisible().catch(() => false)) {
-      const closeBtn = page.locator('#first-visit-modal .modal-close, #first-visit-modal button.btn-primary');
-      if (await closeBtn.first().isVisible().catch(() => false)) {
-        // UF-3: Continue requires an interface choice first
-        await page.locator('#firstVisitChoiceForge').check().catch(() => {});
-        await closeBtn.first().click();
-        await page.waitForTimeout(300);
-      }
-    }
+    await suppressTourNudge(page);
+    await openApp(page);
+    await dismissFirstVisit(page);
   });
 
   test('light theme', async ({ page }) => {
@@ -165,8 +268,7 @@ test.describe('Visual Regression - Theme Switching', () => {
 
 test.describe('Visual Regression - Parameter Controls', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await page.waitForSelector('#app', { state: 'visible' });
+    await openApp(page);
 
     // Close first-visit modal and load example
     const welcomeModal = page.locator('#first-visit-modal');
@@ -188,18 +290,23 @@ test.describe('Visual Regression - Parameter Controls', () => {
   });
 
   test('parameter panel with controls', async ({ page }) => {
-    // Wait for parameters to load
-    const parameterPanel = page.locator('#parameterPanel, .parameter-panel');
-    await parameterPanel.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {
-      // Panel might not be visible if no file loaded
-    });
+    // UF-27 / D-52: the selector this used, `#parameterPanel, .parameter-panel`,
+    // matches NOTHING in the app - MEASURED count 0 both with and without a
+    // project loaded. It is the `#fileInfo` mistake of UF-25 again: an id that
+    // no longer exists, waited for, then hidden behind an `if (visible)` that
+    // could never be true. The real element is `#paramPanelBody`.
+    const parameterPanel = page.locator('#paramPanelBody');
+    await parameterPanel
+      .waitFor({ state: 'visible', timeout: 15000 })
+      .catch(() => {});
 
-    if (await parameterPanel.isVisible()) {
-      await expect(parameterPanel).toHaveScreenshot('parameter-panel.png', {
-        maxDiffPixels: 100,
-        threshold: 0.2,
-      });
-    }
+    const visible = await parameterPanel.isVisible().catch(() => false);
+    test.skip(!visible, NEEDS_A_LOADED_PROJECT);
+
+    await expect(parameterPanel).toHaveScreenshot('parameter-panel.png', {
+      maxDiffPixels: 100,
+      threshold: 0.2,
+    });
   });
 });
 
@@ -212,10 +319,21 @@ test.describe('Visual Regression - Memory Warning UI', () => {
    * 300ms settle, so the shot never caught the warning state it is named for.
    * A baseline that depicts nothing cannot catch a regression in anything.
    * The two memory BANNER cases below do capture real state and stay.
+   *
+   * UF-27 / D-51 correction: they did not. Both baselines were a 1280x46
+   * strip of the dimmed page behind the first-visit modal - no banner, no
+   * text, no colour - because this describe dismissed nothing before forcing
+   * the banner state, and the modal backdrop paints over a position:fixed
+   * banner. MEASURED side by side: with the modal dismissed the same capture
+   * shows the real amber banner, its warning icon, the sentence, and all four
+   * buttons. The state also survives the settle (data-visible/data-state read
+   * back true/critical after 600ms), so the live-monitor race that killed the
+   * badge case does not apply here.
    */
   test('memory banner critical state', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForSelector('#app', { state: 'visible' });
+    await suppressTourNudge(page);
+    await openApp(page);
+    await dismissFirstVisit(page);
 
     // Show memory banner in critical state
     await page.evaluate(() => {
@@ -235,8 +353,9 @@ test.describe('Visual Regression - Memory Warning UI', () => {
   });
 
   test('memory banner emergency state', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForSelector('#app', { state: 'visible' });
+    await suppressTourNudge(page);
+    await openApp(page);
+    await dismissFirstVisit(page);
 
     // Show memory banner in emergency state
     await page.evaluate(() => {
@@ -269,14 +388,11 @@ test.describe('Visual Regression - Mobile Viewport', () => {
   // that the gate is properly dismissed, the nudge is the first thing on
   // screen, so this photographs a dialog instead of a layout without it.
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
-    });
+    await suppressTourNudge(page);
   });
 
   test('mobile layout', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForSelector('#app', { state: 'visible' });
+    await openApp(page);
 
     // Q-55(ii) (owner, 2026-08-15): the old baseline was BLURRED - every word
     // on the page out of focus - because the dismissal was a best-effort click
@@ -289,18 +405,9 @@ test.describe('Visual Regression - Mobile Viewport', () => {
     // The modal opens on a delay, so the old code's immediate isVisible()
     // check found nothing, skipped the dismissal entirely, and shot the page
     // through the backdrop. Wait for it to arrive before dismissing it.
-    const welcomeModal = page.locator('#first-visit-modal:not(.hidden)');
-    await welcomeModal.waitFor({ state: 'visible', timeout: 15000 });
-    await page.evaluate(() => {
-      document.getElementById('firstVisitChoiceForge')?.click();
-      document.getElementById('first-visit-continue')?.click();
-    });
-    await page.waitForFunction(
-      () => !document.body.classList.contains('first-visit-blocking'),
-      null,
-      { timeout: 15000 }
-    );
-    await expect(welcomeModal).toBeHidden();
+    // UF-27: this is where dismissFirstVisit() came from - four other places
+    // in this file were still doing it the broken way.
+    await dismissFirstVisit(page);
     await page.waitForTimeout(500);
 
     await expect(page).toHaveScreenshot('mobile-layout.png', {
@@ -316,8 +423,10 @@ test.describe('Visual Regression - Disclosure Sections', () => {
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');
       localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
     });
-    await page.goto('/');
-    await page.waitForSelector('#app', { state: 'visible' });
+    await openApp(page);
+    // No first-visit gate here, so the engine starts straight away and its
+    // splash is what these would otherwise photograph.
+    await waitForEngine(page);
     await page.waitForTimeout(500);
   });
 
@@ -325,14 +434,15 @@ test.describe('Visual Regression - Disclosure Sections', () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.waitForTimeout(300);
 
-    // Capture disclosures area if visible
+    // UF-27 / D-52: see the note on NEEDS_A_LOADED_PROJECT.
     const disclosures = page.locator('.forge-disclosure').first();
-    if (await disclosures.isVisible().catch(() => false)) {
-      await expect(page).toHaveScreenshot('disclosures-closed-1440.png', {
-        maxDiffPixels: 200,
-        threshold: 0.2,
-      });
-    }
+    const visible = await disclosures.isVisible().catch(() => false);
+    test.skip(!visible, NEEDS_A_LOADED_PROJECT);
+
+    await expect(page).toHaveScreenshot('disclosures-closed-1440.png', {
+      maxDiffPixels: 200,
+      threshold: 0.2,
+    });
   });
 
   test('disclosure sections at 768px tablet width', async ({ page }) => {
@@ -362,8 +472,10 @@ test.describe('Visual Regression - UI Uniformity', () => {
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');
       localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
     });
-    await page.goto('/');
-    await page.waitForSelector('#app', { state: 'visible' });
+    await openApp(page);
+    // No first-visit gate here, so the engine starts straight away and its
+    // splash is what these would otherwise photograph.
+    await waitForEngine(page);
     await page.waitForTimeout(500);
   });
 
@@ -371,13 +483,15 @@ test.describe('Visual Regression - UI Uniformity', () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.waitForTimeout(300);
 
-    const header = page.locator('.panel-header');
-    if (await header.isVisible().catch(() => false)) {
-      await expect(header).toHaveScreenshot('param-header-desktop-1280.png', {
-        maxDiffPixels: 150,
-        threshold: 0.2,
-      });
-    }
+    // UF-27 / D-52: see the note on NEEDS_A_LOADED_PROJECT.
+    const header = page.locator('.panel-header').first();
+    const visible = await header.isVisible().catch(() => false);
+    test.skip(!visible, NEEDS_A_LOADED_PROJECT);
+
+    await expect(header).toHaveScreenshot('param-header-desktop-1280.png', {
+      maxDiffPixels: 150,
+      threshold: 0.2,
+    });
   });
 
   test('drawer headers at 480px mobile portrait', async ({ page }) => {
@@ -394,12 +508,14 @@ test.describe('Visual Regression - UI Uniformity', () => {
     await page.setViewportSize({ width: 1024, height: 768 });
     await page.waitForTimeout(300);
 
-    const paramBody = page.locator('.param-panel-body');
-    if (await paramBody.isVisible().catch(() => false)) {
-      await expect(paramBody).toHaveScreenshot('disclosure-stack-1024.png', {
-        maxDiffPixels: 200,
-        threshold: 0.2,
-      });
-    }
+    // UF-27 / D-52: see the note on NEEDS_A_LOADED_PROJECT.
+    const paramBody = page.locator('.param-panel-body').first();
+    const visible = await paramBody.isVisible().catch(() => false);
+    test.skip(!visible, NEEDS_A_LOADED_PROJECT);
+
+    await expect(paramBody).toHaveScreenshot('disclosure-stack-1024.png', {
+      maxDiffPixels: 200,
+      threshold: 0.2,
+    });
   });
 });
