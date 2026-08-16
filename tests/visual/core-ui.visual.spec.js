@@ -135,17 +135,23 @@ test.describe('Visual Regression - Core UI', () => {
     await dismissFirstVisit(page);
 
     /*
-     * UF-27 / P4: this is the only ELEMENT screenshot in the file, and it is
-     * the only baseline that came back blank when the set was first generated
-     * on the Linux CI runner - 1280x74, the right geometry, 528 bytes of plain
-     * white, against 12,473 bytes of painted header on win32. A blank baseline
-     * would have been sealed in as the thing every future run is compared
-     * against, which is the exact vacuity the Linux job is being fixed to end.
+     * UF-27 / P4: this was the only ELEMENT screenshot in the file, and the
+     * only baseline that came back blank when the set was first generated on
+     * the Linux CI runner - 1280x74, the right geometry, 528 bytes of plain
+     * white, against 12,473 bytes of painted header for the same element on
+     * win32. Looked at, not inferred. Seeding that would have sealed a picture
+     * of nothing in as the thing every future Linux run is compared against,
+     * which is the exact vacuity this job is being fixed to end.
      *
-     * So the capture is pinned before it is taken: the page is scrolled to the
-     * top (an element shot scrolls to its target, and a shifting layout can
-     * hand it the blank strip below the header instead), the webfonts are
-     * settled, and the logo image is required to have actually decoded.
+     * MEASURED twice at exactly 528 bytes, so it is systematic rather than a
+     * race, and pinning scroll, webfonts and the logo decode did not shift it.
+     * What DOES paint on that runner is the page-screenshot path:
+     * main-layout.png, shot from the same page moments earlier, has the header
+     * in it correctly. So the header is captured as a clipped PAGE screenshot
+     * of its own box instead of as an element screenshot - same picture, same
+     * baseline name, a capture path that survives the runner's software
+     * rendering. The waits below stay: they cost nothing and they remove the
+     * timing explanations from the list.
      */
     const header = page.locator('.app-header');
     await expect(header).toBeVisible();
@@ -159,7 +165,11 @@ test.describe('Visual Regression - Core UI', () => {
     });
     await page.waitForTimeout(300);
 
-    await expect(header).toHaveScreenshot('header-controls.png', {
+    const box = await header.boundingBox();
+    expect(box).not.toBeNull();
+
+    await expect(page).toHaveScreenshot('header-controls.png', {
+      clip: box,
       maxDiffPixels: 50,
       threshold: 0.2,
     });
