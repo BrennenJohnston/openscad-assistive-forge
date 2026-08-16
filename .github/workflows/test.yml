@@ -415,7 +415,14 @@ jobs:
           # never-started guard already fails the job honestly if a raised
           # ceiling ever hides an unfinished run.
           PW_GLOBAL_TIMEOUT: '2100000'
-      
+
+      # Q-23, extended here on the owner's decision (UF-27): this lane can
+      # genuinely fail, so the never-started guard has teeth on it. WebKit is
+      # deliberately left without one - it carries continue-on-error by design
+      # (issue #36), so a guard there could never turn the board red anyway.
+      - name: Never-started tests fail this job
+        run: node scripts/check-e2e-complete.mjs playwright-results.json
+
       - name: Upload Playwright report (Firefox)
         uses: actions/upload-artifact@v4
         if: always()
