@@ -2713,18 +2713,9 @@ test.describe('UI Uniformity Regression', () => {
   });
 });
 
+// UF-25: this describe used to carry its own dismissSaveProjectModal helper.
+// waitForModelLoaded does that step now, so the duplicate is gone.
 test.describe('Axe-Core Scans for Missing Views (REC-002)', () => {
-  async function dismissSaveProjectModal(page) {
-    const notNowBtn = page.locator('#saveProjectNotNow')
-    try {
-      await notNowBtn.waitFor({ state: 'visible', timeout: 3000 })
-      await notNowBtn.click()
-      await page.waitForTimeout(300)
-    } catch {
-      // Modal did not appear — nothing to dismiss
-    }
-  }
-
   test('should run axe scan with Expert Mode active', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
