@@ -75,6 +75,9 @@ body[data-ui-mode='classic'] {
   /* Status colors pinned to their light values so a leftover dark or
      high-contrast preference cannot repaint console output */
   --color-success: #1a7f37;
+  /* D-46 (UF-25): Classic's own green already measures 5.08:1 against white,
+     so the solid-fill pair keeps it rather than inheriting Forge's. */
+  --color-success-solid: #1a7f37;
   --color-success-hover: #14682c;
   --color-success-text: #1a7f37;
   --color-success-bg: #dff2e1;

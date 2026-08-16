@@ -249,6 +249,10 @@
 
   /* Success - Darker green for 7:1 */
   --color-success: #08651a;
+  /* D-46 (UF-25): every block that overrides --color-success must also
+     override the solid-fill pair, or a component reading it falls back to
+     the default theme's green and high contrast is quietly lost. */
+  --color-success-solid: #08651a;
   --color-success-hover: #054d14;
   --color-success-text: #08651a;
   --color-success-bg: #c8e6c9;
@@ -322,6 +326,8 @@
 
   /* Success - Bright green for 7:1 */
   --color-success: #66ff66;
+  /* D-46: keep the high-contrast green for solid fills too. */
+  --color-success-solid: #66ff66;
   --color-success-hover: #7fff7f;
   --color-success-text: #66ff66;
   --color-success-bg: #0d3d0d;
@@ -384,6 +390,8 @@
     --color-accent-subtle: #003d66;
 
     --color-success: #66ff66;
+    /* D-46: keep the high-contrast green for solid fills too. */
+    --color-success-solid: #66ff66;
     --color-success-hover: #7fff7f;
     --color-success-text: #66ff66;
     --color-success-bg: #0d3d0d;
@@ -480,6 +488,8 @@
     --color-on-error: Canvas;
 
     --color-success: LinkText;
+    /* D-46: forced colours keep the system colour for solid fills. */
+    --color-success-solid: LinkText;
     --color-success-hover: LinkText;
     --color-success-text: CanvasText;
     --color-success-bg: Canvas;
