@@ -152,9 +152,35 @@ jobs:
           path: artifacts/parity/report.*
           retention-days: 30
 
-  e2e-tests-chromium:
-    name: E2E Tests (Chromium)
+  # SHARDS. Chromium became the pinch point once Edge was split: it reached
+  # 29m18s of its 35-minute ceiling on UF-29's board, against the "~30 real
+  # minutes" trigger the note inside this job has named since Q-36. Two shards
+  # now run side by side, each with the whole 35 minutes, and the ceiling stays
+  # where it is.
+  #
+  # DELIBERATELY UNLIKE EDGE in one respect. Splitting Edge renamed its check
+  # contexts, which meant editing ruleset 12059827 by hand and left PR #90
+  # blocked until that happened. Here the shards get their own contexts and the
+  # small aggregate job below keeps the name "E2E Tests (Chromium)" that the
+  # ruleset already requires, so nothing outside version control has to change
+  # and no PR is ever blocked mid-transition. The cost is one extra ~15s job.
+  #
+  # MEASURED before this was written, not after: `--shard=n/2 --list` divides
+  # the suite into 415 tests in 41 files and 414 in 31, totalling the 829 an
+  # unsharded run lists. A `--shard` run reports only its own shard in
+  # playwright-results.json with a result on each (proved for Edge in UF-27),
+  # so the never-started guard still works per shard rather than seeing the
+  # other half as missing.
+  e2e-tests-chromium-shard:
+    name: E2E Tests (Chromium ${{ matrix.shard }}/2)
     runs-on: ubuntu-latest
+
+    strategy:
+      # A red shard must not cancel its sibling: knowing whether the failure is
+      # in one half or both is most of the diagnosis.
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     
     steps:
       - name: Checkout code
@@ -175,8 +201,8 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
       
-      - name: Run E2E tests (Chromium only)
-        run: npx playwright test --project=chromium
+      - name: Run E2E tests (Chromium shard ${{ matrix.shard }} of 2)
+        run: npx playwright test --project=chromium --shard=${{ matrix.shard }}/2
         env:
           # R2a added 17 Classic e2e cases, each booting WASM and loading a
           # project, which pushed this job past the default 10-minute global
@@ -203,22 +229,55 @@ jobs:
           # runs and Round 3 adds an estimated +6 to +9 minutes of specs.
           # Kept matched with Edge as always; sharding is the next step if
           # either lane crosses ~30 real minutes.
+          #
+          # 2026-08-16: it crossed it - 29m18s on UF-29's board - so the
+          # sharding this note promised is what happened, and the ceiling
+          # stayed where it is. Each shard now runs roughly half the suite
+          # against the whole 35 minutes. Raising this number is not the answer
+          # if a shard ever gets close again; a third shard is.
           PW_GLOBAL_TIMEOUT: '2100000'
 
       # Q-23 (owner, 2026-08-09): this job once stayed green for a whole
       # release while two menu-parity tests were red, because tests the
       # clock cut off report as never-started rather than failed. A green
       # summary over an incomplete run must fail.
-      - name: Never-started tests fail this job
+      - name: Never-started tests fail this shard
         run: node scripts/check-e2e-complete.mjs playwright-results.json
 
-      - name: Upload Playwright report
+      - name: Upload Playwright report (Chromium shard ${{ matrix.shard }})
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: playwright-report-chromium
+          # upload-artifact v4 rejects two uploads under one name, so the
+          # shard number has to be in it.
+          name: playwright-report-chromium-${{ matrix.shard }}
           path: playwright-report/
           retention-days: 30
+
+  # THE REQUIRED CHECK. Ruleset 12059827 requires the context "E2E Tests
+  # (Chromium)", so that name has to keep existing and keep meaning "the whole
+  # Chromium suite passed".
+  #
+  # `needs` on a matrix job resolves to a single result that is `success` only
+  # when EVERY leg succeeded, so this is a real gate rather than a rubber stamp.
+  # `if: always()` matters as much: without it a failed shard would SKIP this
+  # job, and a skipped required check is not the same thing as a failed one -
+  # it would leave the merge waiting rather than refused.
+  e2e-tests-chromium:
+    name: E2E Tests (Chromium)
+    runs-on: ubuntu-latest
+    needs: [e2e-tests-chromium-shard]
+    if: always()
+
+    steps:
+      - name: Both Chromium shards must have passed
+        run: |
+          result='${{ needs.e2e-tests-chromium-shard.result }}'
+          echo "Chromium shards reported: $result"
+          if [ "$result" != "success" ]; then
+            echo "::error::Chromium did not pass ($result). The half that failed is in E2E Tests (Chromium 1/2) or (2/2)."
+            exit 1
+          fi
 
   # Production-parity E2E lane. Every other e2e job above runs against the Vite
   # dev server, which sends no Content-Security-Policy; the built app behind the
