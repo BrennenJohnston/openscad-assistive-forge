@@ -71,6 +71,7 @@ import {
   SearchQuery,
 } from '@codemirror/search';
 import { adoptCodeMirrorStyles } from './codemirror-csp-styles.js';
+import { wrapIndent, wrapReturnArrows } from './editor-wrap-marks.js';
 import { loadEditorPrefs } from './editor-prefs.js';
 import { themeManager } from './theme-manager.js';
 
@@ -720,6 +721,10 @@ export class CodeMirrorEditor {
     /** @type {Compartment} */
     this._wrapCompartment = new Compartment();
     /** @type {Compartment} */
+    this._wrapIndentCompartment = new Compartment();
+    /** @type {Compartment} */
+    this._wrapArrowCompartment = new Compartment();
+    /** @type {Compartment} */
     this._activeLineCompartment = new Compartment();
 
     /** @type {import('./editor-prefs.js').EditorPrefs} */
@@ -744,6 +749,9 @@ export class CodeMirrorEditor {
 
     /** @type {Function|null} */
     this._uiModeListener = null;
+
+    /** @type {ResizeObserver|null} */
+    this._resizeObserver = null;
   }
 
   initialize() {
@@ -768,6 +776,18 @@ export class CodeMirrorEditor {
         // logical line, against its first visual row, as the desktop does.
         this._wrapCompartment.of(
           this._editorPrefs.lineWrapping ? EditorView.lineWrapping : []
+        ),
+        // How a wrapped line tells you it is one: continuation rows hang four
+        // columns in and every row that continues carries a return arrow at
+        // the right border, both from the desktop's own defaults. Neither
+        // mark is made of characters, so the document is untouched. Two
+        // compartments because the desktop keeps them as two settings and
+        // Q-58 chose to mirror that.
+        this._wrapIndentCompartment.of(
+          this._editorPrefs.wrapIndent ? wrapIndent() : []
+        ),
+        this._wrapArrowCompartment.of(
+          this._editorPrefs.wrapArrow ? wrapReturnArrows() : []
         ),
         this._fontSizeCompartment.of(fontSizeTheme(this._editorPrefs.fontSize)),
         this._indentCompartment.of(
@@ -870,8 +890,52 @@ export class CodeMirrorEditor {
     this._uiModeListener = () => this._switchTheme(this._resolveIsDark());
     document.addEventListener('ui-mode-changed', this._uiModeListener);
 
+    this._observeContainerResize();
+
     this._isInitialized = true;
     console.log('[CodeMirrorEditor] Initialized');
+  }
+
+  /**
+   * Re-measure when the pane changes width (D-53).
+   *
+   * CodeMirror already watches its own scroller, but the handler is guarded:
+   * `if (view.docView.lastUpdate < Date.now() - 75) this.onResize()`
+   * (@codemirror/view, the DOMObserver constructor). A resize that lands
+   * within 75ms of a doc-view update is dropped and never retried, and
+   * Classic's responsive reflow does exactly that — it re-lays the dock and
+   * updates the editor in the same moment. MEASURED: dragging the viewport to
+   * 768 took the editor from 213px to 701px of content while CodeMirror went
+   * on believing the old width for as long as it was left alone, curing only
+   * on the next click or window resize.
+   *
+   * This observer has no such guard, so the cached geometry cannot survive a
+   * resize. `requestMeasure` coalesces into CodeMirror's own measure cycle, so
+   * a drag costs one measure per frame rather than one per pixel.
+   *
+   * A measure on its own is not enough, which cost a while to find: view-level
+   * extensions only recompute inside a ViewUpdate, and re-wrapping is done by
+   * the browser in CSS without the doc view being redrawn, so no update is
+   * produced. The empty transaction makes one. It carries no changes, and the
+   * update listener above reacts only to `docChanged`, so nothing is marked
+   * dirty and the undo history is untouched.
+   *
+   * @private
+   */
+  _observeContainerResize() {
+    if (typeof ResizeObserver !== 'function' || !this.container) return;
+
+    let lastWidth = -1;
+    this._resizeObserver = new ResizeObserver(() => {
+      const view = this._view;
+      if (!view) return;
+      const width = view.contentDOM.clientWidth;
+      if (width === lastWidth) return;
+      lastWidth = width;
+      view.requestMeasure();
+      view.dispatch({});
+    });
+    this._resizeObserver.observe(this.container);
   }
 
   /** @private @returns {boolean} */
@@ -984,6 +1048,24 @@ export class CodeMirrorEditor {
     this._view?.dispatch({
       effects: this._wrapCompartment.reconfigure(
         on ? EditorView.lineWrapping : []
+      ),
+    });
+  }
+
+  /** @param {boolean} on Hang continuation rows four columns in. */
+  setWrapIndent(on) {
+    this._editorPrefs.wrapIndent = on;
+    this._view?.dispatch({
+      effects: this._wrapIndentCompartment.reconfigure(on ? wrapIndent() : []),
+    });
+  }
+
+  /** @param {boolean} on Mark every row that continues, at the right border. */
+  setWrapArrow(on) {
+    this._editorPrefs.wrapArrow = on;
+    this._view?.dispatch({
+      effects: this._wrapArrowCompartment.reconfigure(
+        on ? wrapReturnArrows() : []
       ),
     });
   }
@@ -1190,6 +1272,10 @@ export class CodeMirrorEditor {
     if (this._uiModeListener) {
       document.removeEventListener('ui-mode-changed', this._uiModeListener);
       this._uiModeListener = null;
+    }
+    if (this._resizeObserver) {
+      this._resizeObserver.disconnect();
+      this._resizeObserver = null;
     }
     if (this._view) {
       this._view.destroy();

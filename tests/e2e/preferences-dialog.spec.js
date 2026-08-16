@@ -484,12 +484,17 @@ test('the Editor tab names what it cannot do', async ({ page }) => {
     /never trapped/i
   );
 
-  for (const id of [
-    'prefs-reason-syntax',
-    'prefs-reason-whitespace',
-    'prefs-reason-wrapmarkers',
-  ]) {
+  for (const id of ['prefs-reason-syntax', 'prefs-reason-whitespace']) {
     await expect(page.locator(`#${id}`)).toBeVisible();
+  }
+
+  // UF-28 built the wrap marks, so they are no longer something this tab
+  // cannot do. Its old reason ("Not built here. Wrapped lines continue at the
+  // left edge with no marker and no hanging indent.") would now be a lie, and
+  // a built feature behind a lying row is a defect in its own right.
+  await expect(page.locator('#prefs-reason-wrapmarkers')).toHaveCount(0);
+  for (const id of ['prefsEditorWrapIndent', 'prefsEditorWrapArrow']) {
+    await expect(page.locator(`#${id}`)).toBeEnabled();
   }
 });
 

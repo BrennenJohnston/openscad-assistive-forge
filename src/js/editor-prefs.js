@@ -26,6 +26,8 @@ import {
   STORAGE_KEY_EDITOR_TAB_WIDTH,
   STORAGE_KEY_EDITOR_LINE_WRAP,
   STORAGE_KEY_EDITOR_HIGHLIGHT_LINE,
+  STORAGE_KEY_EDITOR_WRAP_INDENT,
+  STORAGE_KEY_EDITOR_WRAP_ARROW,
   safeGetItem,
   safeSetItem,
 } from './storage-keys.js';
@@ -54,6 +56,12 @@ const BOOLEAN_PREF_SPEC = Object.freeze({
     key: STORAGE_KEY_EDITOR_HIGHLIGHT_LINE,
     default: true,
   },
+  // Desktop defaults: lineWrapIndentationStyle Fixed with lineWrapIndentation
+  // 4, and lineWrapVisualizationEnd Border (settings.cc). Both are on there,
+  // so both are on here. They only show themselves while lineWrapping is on,
+  // since without wrapping no line has a continuation row.
+  wrapIndent: { key: STORAGE_KEY_EDITOR_WRAP_INDENT, default: true },
+  wrapArrow: { key: STORAGE_KEY_EDITOR_WRAP_ARROW, default: true },
 });
 
 /** @param {number} value @param {{min: number, max: number}} spec */
@@ -68,6 +76,8 @@ function clamp(value, spec) {
  * @property {number} tabWidth
  * @property {boolean} lineWrapping
  * @property {boolean} highlightActiveLine
+ * @property {boolean} wrapIndent
+ * @property {boolean} wrapArrow
  */
 
 /** @returns {EditorPrefs} */
