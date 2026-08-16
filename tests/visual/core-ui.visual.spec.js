@@ -168,6 +168,33 @@ test.describe('Visual Regression - Core UI', () => {
     const box = await header.boundingBox();
     expect(box).not.toBeNull();
 
+    // TEMPORARY UF-27 P4 diagnostic: why is this region blank on the Linux
+    // runner and painted on win32? Removed once the answer is in.
+    console.log(
+      '[header-diag] ' +
+        JSON.stringify(
+          await page.evaluate(() => {
+            const el = document.querySelector('.app-header');
+            const cs = getComputedStyle(el);
+            const r = el.getBoundingClientRect();
+            return {
+              rect: { x: r.x, y: r.y, w: r.width, h: r.height },
+              scrollY: window.scrollY,
+              dpr: window.devicePixelRatio,
+              background: cs.backgroundColor,
+              backgroundImage: cs.backgroundImage.slice(0, 60),
+              position: cs.position,
+              opacity: cs.opacity,
+              visibility: cs.visibility,
+              transform: cs.transform,
+              zIndex: cs.zIndex,
+              bodyClass: document.body.className.slice(0, 120),
+            };
+          })
+        )
+    );
+    console.log('[header-diag] playwright box: ' + JSON.stringify(box));
+
     await expect(page).toHaveScreenshot('header-controls.png', {
       clip: box,
       maxDiffPixels: 50,
