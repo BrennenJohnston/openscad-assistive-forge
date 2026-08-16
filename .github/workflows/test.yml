@@ -201,16 +201,6 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
       
-      # TEMPORARY (reverted in the next commit): break shard 2 on purpose, to
-      # watch "E2E Tests (Chromium)" actually go red. A required check nobody
-      # has seen fail is not known to work - twice now this repo has found one
-      # that could not.
-      - name: TEMPORARY shard-failure probe
-        if: matrix.shard == 2
-        run: |
-          echo "Deliberate failure to prove the aggregate gate bites."
-          exit 1
-
       - name: Run E2E tests (Chromium shard ${{ matrix.shard }} of 2)
         run: npx playwright test --project=chromium --shard=${{ matrix.shard }}/2
         env:
