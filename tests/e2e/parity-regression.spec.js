@@ -286,19 +286,17 @@ test.describe('Parity — Blank Display (S-007)', () => {
     const generateParam = page
       .locator('.param-control')
       .filter({ hasText: /^generate/i });
-    if ((await generateParam.count()) === 0) {
-      test.skip();
-      return;
-    }
+    // UF-27: both of these used to skip in silence. The keyguard fixture DOES
+    // carry a `generate` parameter with a Customizer option - that is the whole
+    // premise of S-007 - so a fixture that lost either one would have reported
+    // a pass rather than the regression it is.
+    expect(await generateParam.count()).toBeGreaterThan(0);
 
     const generateSelect = generateParam.locator('select').first();
     const customizerOption = generateSelect
       .locator('option')
       .filter({ hasText: /customizer/i });
-    if ((await customizerOption.count()) === 0) {
-      test.skip();
-      return;
-    }
+    expect(await customizerOption.count()).toBeGreaterThan(0);
 
     // The control lives inside a collapsed <details> group — open it first
     const generateGroup = page
@@ -524,10 +522,21 @@ test.describe('Parity — Preset Cycling Stability (S-014)', () => {
     const options = await getPresetOptions(page);
     const presets = options.slice(0, Math.min(4, options.length));
 
-    if (presets.length < 3) {
-      test.skip();
-      return;
-    }
+    /*
+     * UF-27: this used to skip in silence here, so the case reported a clean
+     * skip rather than the coverage gap it is. MEASURED: the keyguard fixture
+     * offers 2 presets and this case needs 3 to be what its name says, so it
+     * has never once exercised "3+ sequential preset switches".
+     *
+     * The fix, when someone takes it: add a third preset to the keyguard
+     * fixture. It was not taken here because that fixture is shared with the
+     * golden geometry manifest, so changing it is a geometry-parity decision
+     * rather than a test-hygiene one.
+     */
+    test.skip(
+      presets.length < 3,
+      `needs 3 presets to cycle and the keyguard fixture offers ${presets.length} (see the note above)`
+    );
 
     const results = [];
     for (const presetName of presets) {

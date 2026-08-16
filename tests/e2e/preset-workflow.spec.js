@@ -277,10 +277,7 @@ test.describe('Preset Workflow', () => {
     page.on('dialog', (dialog) => dialog.accept())
 
     const manageBtn = page.locator('#managePresetsBtn')
-    if (!(await manageBtn.isVisible({ timeout: 3000 }).catch(() => false))) {
-      test.skip()
-      return
-    }
+    await expect(manageBtn).toBeVisible({ timeout: 3000 })
     await manageBtn.click()
 
     const importAction = page.locator('button[data-action="import"]')
@@ -663,10 +660,7 @@ test.describe('Project-Native Presets (project_presets flag)', () => {
     await page.waitForTimeout(500)
 
     const selected = await selectPreset(page, 'Selection Test')
-    if (!selected) {
-      test.skip()
-      return
-    }
+    expect(selected).toBe(true)
 
     await page.waitForTimeout(1000)
 
@@ -712,10 +706,7 @@ test.describe('Project-Native Presets (project_presets flag)', () => {
     await page.waitForTimeout(500)
 
     const addBtn = page.locator('#addPresetBtn, button[aria-label*="Add preset"]')
-    if (!(await addBtn.isVisible({ timeout: 5000 }).catch(() => false))) {
-      test.skip()
-      return
-    }
+    await expect(addBtn).toBeVisible({ timeout: 5000 })
 
     await addBtn.click()
     const modal = page.locator('.preset-modal')
@@ -764,12 +755,7 @@ test.describe('Preset Workflow — Searchable Combobox variant', () => {
   test('combobox is shown and native select is hidden when flag is enabled', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
-    try {
-      await loadSimpleBoxExample(page)
-    } catch {
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page)
 
     const comboboxInput = page.locator('#presetComboboxContainer .preset-combobox-input')
     const nativeSelect = page.locator('select#presetSelect')
@@ -782,18 +768,10 @@ test.describe('Preset Workflow — Searchable Combobox variant', () => {
   test('combobox shows "design default values" as the first option', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
-    try {
-      await loadSimpleBoxExample(page)
-    } catch {
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page)
 
     const comboboxInput = page.locator('#presetComboboxContainer .preset-combobox-input')
-    if (!(await comboboxInput.isVisible({ timeout: 5000 }).catch(() => false))) {
-      test.skip()
-      return
-    }
+    await expect(comboboxInput).toBeVisible({ timeout: 5000 })
 
     // Open the combobox
     await comboboxInput.click()
@@ -810,19 +788,11 @@ test.describe('Preset Workflow — Searchable Combobox variant', () => {
   test('combobox filters options by text input', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
-    try {
-      await loadSimpleBoxExample(page)
-    } catch {
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page)
 
     // Save two presets so there's something to filter
     const addBtn = page.locator('#addPresetBtn, button[aria-label*="Add preset"]')
-    if (!(await addBtn.isVisible({ timeout: 5000 }).catch(() => false))) {
-      test.skip()
-      return
-    }
+    await expect(addBtn).toBeVisible({ timeout: 5000 })
 
     for (const name of ['Alpha Preset', 'Beta Preset']) {
       await addBtn.click()
@@ -837,10 +807,7 @@ test.describe('Preset Workflow — Searchable Combobox variant', () => {
     }
 
     const comboboxInput = page.locator('#presetComboboxContainer .preset-combobox-input')
-    if (!(await comboboxInput.isVisible().catch(() => false))) {
-      test.skip()
-      return
-    }
+    await expect(comboboxInput).toBeVisible()
 
     // Type to filter — only "Alpha Preset" should remain
     await comboboxInput.fill('Alpha')
@@ -862,18 +829,10 @@ test.describe('Preset Workflow — Searchable Combobox variant', () => {
   test('combobox shows "No presets match" when filter has no results', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
-    try {
-      await loadSimpleBoxExample(page)
-    } catch {
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page)
 
     const comboboxInput = page.locator('#presetComboboxContainer .preset-combobox-input')
-    if (!(await comboboxInput.isVisible({ timeout: 5000 }).catch(() => false))) {
-      test.skip()
-      return
-    }
+    await expect(comboboxInput).toBeVisible({ timeout: 5000 })
 
     await comboboxInput.fill('xyzzy_no_match_at_all')
     await page.waitForTimeout(200)
@@ -885,18 +844,10 @@ test.describe('Preset Workflow — Searchable Combobox variant', () => {
   test('combobox closes on Escape and sets aria-expanded="false"', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
-    try {
-      await loadSimpleBoxExample(page)
-    } catch {
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page)
 
     const comboboxInput = page.locator('#presetComboboxContainer .preset-combobox-input')
-    if (!(await comboboxInput.isVisible({ timeout: 5000 }).catch(() => false))) {
-      test.skip()
-      return
-    }
+    await expect(comboboxInput).toBeVisible({ timeout: 5000 })
 
     // Open
     await comboboxInput.click()
@@ -913,19 +864,11 @@ test.describe('Preset Workflow — Searchable Combobox variant', () => {
   test('combobox selects a preset on click and fires change', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
-    try {
-      await loadSimpleBoxExample(page)
-    } catch {
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page)
 
     // Save a preset to have something to select
     const addBtn = page.locator('#addPresetBtn, button[aria-label*="Add preset"]')
-    if (!(await addBtn.isVisible({ timeout: 5000 }).catch(() => false))) {
-      test.skip()
-      return
-    }
+    await expect(addBtn).toBeVisible({ timeout: 5000 })
 
     await addBtn.click()
     const clickModal = page.locator('.preset-modal')
@@ -938,10 +881,7 @@ test.describe('Preset Workflow — Searchable Combobox variant', () => {
     await page.waitForTimeout(300)
 
     const comboboxInput = page.locator('#presetComboboxContainer .preset-combobox-input')
-    if (!(await comboboxInput.isVisible().catch(() => false))) {
-      test.skip()
-      return
-    }
+    await expect(comboboxInput).toBeVisible()
 
     // Open and click the saved preset
     await comboboxInput.click()
@@ -952,10 +892,7 @@ test.describe('Preset Workflow — Searchable Combobox variant', () => {
       '.preset-combobox-option:not(.preset-combobox-empty)',
       { hasText: 'Click Select Test' }
     )
-    if (!(await targetOption.isVisible().catch(() => false))) {
-      test.skip()
-      return
-    }
+    await expect(targetOption).toBeVisible()
 
     await targetOption.click()
 
@@ -967,19 +904,11 @@ test.describe('Preset Workflow — Searchable Combobox variant', () => {
   test('combobox selection syncs to the hidden native select', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
-    try {
-      await loadSimpleBoxExample(page)
-    } catch {
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page)
 
     // Save a preset so there's something to select
     const addBtn = page.locator('#addPresetBtn, button[aria-label*="Add preset"]')
-    if (!(await addBtn.isVisible({ timeout: 5000 }).catch(() => false))) {
-      test.skip()
-      return
-    }
+    await expect(addBtn).toBeVisible({ timeout: 5000 })
 
     await addBtn.click()
     const syncModal = page.locator('.preset-modal')
@@ -993,10 +922,7 @@ test.describe('Preset Workflow — Searchable Combobox variant', () => {
 
     // Select via the combobox
     const comboboxInput = page.locator('#presetComboboxContainer .preset-combobox-input')
-    if (!(await comboboxInput.isVisible().catch(() => false))) {
-      test.skip()
-      return
-    }
+    await expect(comboboxInput).toBeVisible()
 
     await comboboxInput.click()
     const listbox = page.locator('#presetComboboxContainer .preset-combobox-list')
@@ -1018,20 +944,12 @@ test.describe('Preset Workflow — Searchable Combobox variant', () => {
   test('shared selectPreset() helper works with combobox widget', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
-    try {
-      await loadSimpleBoxExample(page)
-    } catch {
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page)
 
     // The shared helper should auto-detect the combobox and select "design default values"
     const options = await getPresetOptions(page)
     const designDefault = options.find(o => o.toLowerCase().includes('design default'))
-    if (!designDefault) {
-      test.skip()
-      return
-    }
+    expect(designDefault).toBeTruthy()
 
     const result = await selectPreset(page, designDefault)
     expect(result).toBe(true)
@@ -1043,18 +961,10 @@ test.describe('Preset Workflow — Searchable Combobox variant', () => {
   test('combobox selects a preset via keyboard Enter', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
-    try {
-      await loadSimpleBoxExample(page)
-    } catch {
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page)
 
     const comboboxInput = page.locator('#presetComboboxContainer .preset-combobox-input')
-    if (!(await comboboxInput.isVisible({ timeout: 5000 }).catch(() => false))) {
-      test.skip()
-      return
-    }
+    await expect(comboboxInput).toBeVisible({ timeout: 5000 })
 
     // Open the combobox and navigate with Arrow Down + Enter
     await comboboxInput.click()

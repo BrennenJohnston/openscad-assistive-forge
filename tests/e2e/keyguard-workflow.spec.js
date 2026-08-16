@@ -465,10 +465,10 @@ test.describe('Parameter Switching Stability', () => {
     const allPresets = await getPresetOptions(page);
     const nonEmpty = allPresets.filter(o => o.trim() !== '');
 
-    if (nonEmpty.length < 2) {
-      test.skip();
-      return;
-    }
+    // UF-27: this used to skip in silence when the fixture offered fewer than
+    // two presets. It offers them, so the guard was dead code that would have
+    // turned a broken fixture into a pass.
+    expect(nonEmpty.length).toBeGreaterThanOrEqual(2);
 
     // Switch presets at least 5 times (cycle through available presets)
     const switchCount = Math.max(5, nonEmpty.length);
