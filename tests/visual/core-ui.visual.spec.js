@@ -46,6 +46,45 @@ async function dismissFirstVisit(page) {
     { timeout: 15000 }
   );
   await expect(modal).toBeHidden();
+
+  // Accepting the gate is what starts the engine loading, and its splash
+  // covers the whole page while it does. Everything that dismisses the gate
+  // then photographs the app, so the wait belongs here.
+  await waitForEngine(page);
+}
+
+async function openApp(page) {
+  await page.goto('/');
+  await page.waitForSelector('#app', { state: 'visible' });
+}
+
+/**
+ * UF-27 / P4: wait for the OpenSCAD engine to finish loading before anything
+ * is photographed.
+ *
+ * This suite never waited, and on the Linux CI runner it showed. Three
+ * successive generations of the baseline set were captured and looked at, and
+ * they disagreed with each other: in one, main-layout.png and theme-dark.png
+ * were 85KB pictures of the application; in the next they were 25KB pictures
+ * of the "Loading OpenSCAD Engine" splash, spinner and progress bar and all.
+ * The same splash explains the blank header strip - clipping to the header's
+ * box while that near-white overlay covers it captures 528 bytes of nothing.
+ * Locally the engine is cached and the race is invisible, which is why the
+ * win32 baselines never showed it.
+ *
+ * WHERE this is called matters, and getting it wrong deadlocks the suite.
+ * MEASURED: the engine does not begin loading until the first-visit gate is
+ * accepted. Waiting for it before dismissal hangs for the full timeout - a
+ * first attempt that waited inside openApp() took the suite from 53s to 10.8
+ * minutes, and the only three cases that survived were the three that preset
+ * openscad-forge-first-visit-seen and so had no gate in the way. So it is
+ * waited for after the gate is gone, never before.
+ */
+async function waitForEngine(page) {
+  await page.waitForSelector('body[data-wasm-ready="true"]', {
+    state: 'attached',
+    timeout: 120_000,
+  });
 }
 
 /** UF-22: keep the tour nudge out of shots that are not about the tour. */
@@ -90,11 +129,8 @@ test.describe('Visual Regression - Core UI', () => {
     // tour nudge so it is not what they photograph.
     await suppressTourNudge(page);
 
-    // Navigate to the app
-    await page.goto('/');
-
-    // Wait for app to fully load
-    await page.waitForSelector('#app', { state: 'visible' });
+    // Navigate to the app and wait for it to be fully loaded
+    await openApp(page);
 
     // Wait for any initial animations to settle
     await page.waitForTimeout(500);
@@ -143,15 +179,17 @@ test.describe('Visual Regression - Core UI', () => {
      * of nothing in as the thing every future Linux run is compared against,
      * which is the exact vacuity this job is being fixed to end.
      *
-     * MEASURED twice at exactly 528 bytes, so it is systematic rather than a
-     * race, and pinning scroll, webfonts and the logo decode did not shift it.
-     * What DOES paint on that runner is the page-screenshot path:
-     * main-layout.png, shot from the same page moments earlier, has the header
-     * in it correctly. So the header is captured as a clipped PAGE screenshot
-     * of its own box instead of as an element screenshot - same picture, same
-     * baseline name, a capture path that survives the runner's software
-     * rendering. The waits below stay: they cost nothing and they remove the
-     * timing explanations from the list.
+     * The cause turned out to be the one openApp() now fixes for the whole
+     * file: the "Loading OpenSCAD Engine" splash was still up, and 528 bytes
+     * of near-white is exactly what you get by clipping to the header's box
+     * while a full-screen overlay covers it. The next generation caught the
+     * same splash in main-layout.png and theme-dark.png outright, which is how
+     * it was identified.
+     *
+     * The capture stays a clipped PAGE screenshot rather than an element
+     * screenshot, and the waits below stay. Neither was the cause, both are
+     * cheap, and together they take the remaining timing explanations off the
+     * list for the one capture in this file that is not a whole viewport.
      */
     const header = page.locator('.app-header');
     await expect(header).toBeVisible();
@@ -167,33 +205,6 @@ test.describe('Visual Regression - Core UI', () => {
 
     const box = await header.boundingBox();
     expect(box).not.toBeNull();
-
-    // TEMPORARY UF-27 P4 diagnostic: why is this region blank on the Linux
-    // runner and painted on win32? Removed once the answer is in.
-    console.log(
-      '[header-diag] ' +
-        JSON.stringify(
-          await page.evaluate(() => {
-            const el = document.querySelector('.app-header');
-            const cs = getComputedStyle(el);
-            const r = el.getBoundingClientRect();
-            return {
-              rect: { x: r.x, y: r.y, w: r.width, h: r.height },
-              scrollY: window.scrollY,
-              dpr: window.devicePixelRatio,
-              background: cs.backgroundColor,
-              backgroundImage: cs.backgroundImage.slice(0, 60),
-              position: cs.position,
-              opacity: cs.opacity,
-              visibility: cs.visibility,
-              transform: cs.transform,
-              zIndex: cs.zIndex,
-              bodyClass: document.body.className.slice(0, 120),
-            };
-          })
-        )
-    );
-    console.log('[header-diag] playwright box: ' + JSON.stringify(box));
 
     await expect(page).toHaveScreenshot('header-controls.png', {
       clip: box,
@@ -211,8 +222,7 @@ test.describe('Visual Regression - Theme Switching', () => {
   // describe never got UF-22's nudge suppression either.
   test.beforeEach(async ({ page }) => {
     await suppressTourNudge(page);
-    await page.goto('/');
-    await page.waitForSelector('#app', { state: 'visible' });
+    await openApp(page);
     await dismissFirstVisit(page);
   });
 
@@ -258,8 +268,7 @@ test.describe('Visual Regression - Theme Switching', () => {
 
 test.describe('Visual Regression - Parameter Controls', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await page.waitForSelector('#app', { state: 'visible' });
+    await openApp(page);
 
     // Close first-visit modal and load example
     const welcomeModal = page.locator('#first-visit-modal');
@@ -323,8 +332,7 @@ test.describe('Visual Regression - Memory Warning UI', () => {
    */
   test('memory banner critical state', async ({ page }) => {
     await suppressTourNudge(page);
-    await page.goto('/');
-    await page.waitForSelector('#app', { state: 'visible' });
+    await openApp(page);
     await dismissFirstVisit(page);
 
     // Show memory banner in critical state
@@ -346,8 +354,7 @@ test.describe('Visual Regression - Memory Warning UI', () => {
 
   test('memory banner emergency state', async ({ page }) => {
     await suppressTourNudge(page);
-    await page.goto('/');
-    await page.waitForSelector('#app', { state: 'visible' });
+    await openApp(page);
     await dismissFirstVisit(page);
 
     // Show memory banner in emergency state
@@ -385,8 +392,7 @@ test.describe('Visual Regression - Mobile Viewport', () => {
   });
 
   test('mobile layout', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForSelector('#app', { state: 'visible' });
+    await openApp(page);
 
     // Q-55(ii) (owner, 2026-08-15): the old baseline was BLURRED - every word
     // on the page out of focus - because the dismissal was a best-effort click
@@ -417,8 +423,10 @@ test.describe('Visual Regression - Disclosure Sections', () => {
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');
       localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
     });
-    await page.goto('/');
-    await page.waitForSelector('#app', { state: 'visible' });
+    await openApp(page);
+    // No first-visit gate here, so the engine starts straight away and its
+    // splash is what these would otherwise photograph.
+    await waitForEngine(page);
     await page.waitForTimeout(500);
   });
 
@@ -464,8 +472,10 @@ test.describe('Visual Regression - UI Uniformity', () => {
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');
       localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
     });
-    await page.goto('/');
-    await page.waitForSelector('#app', { state: 'visible' });
+    await openApp(page);
+    // No first-visit gate here, so the engine starts straight away and its
+    // splash is what these would otherwise photograph.
+    await waitForEngine(page);
     await page.waitForTimeout(500);
   });
 

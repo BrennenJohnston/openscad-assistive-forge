@@ -582,11 +582,26 @@ jobs:
           path: sbom-generated.json
           retention-days: 90
 
+  # Q-57 (owner, 2026-08-16): this job used to be vacuous twice over.
+  # tests/visual/baselines/linux/ held nothing but .gitkeep, so the
+  # generate-on-first-run branch below fired on EVERY run: it made fresh
+  # baselines, compared them against nothing, and passed. And it carried
+  # continue-on-error, so even a real failure could not have shown.
+  #
+  # UF-27 seeds a real Linux baseline set, captured on this runner and looked
+  # at image by image, so the comparison branch is the one that runs. The
+  # continue-on-error is gone: this job can now fail, honestly. It stays
+  # NON-required, so a red here reports a visual change without blocking a
+  # merge - which satisfies the Q-55(i) clause that no required lane may carry
+  # continue-on-error, from the other direction.
+  #
+  # The generate branch is kept, because bootstrapping a new platform needs it,
+  # but it now FAILS the job afterwards. A run that generated baselines
+  # compared nothing, and must never again be able to report that as green.
   visual-regression:
     name: Visual Regression (Linux)
     runs-on: ubuntu-latest
-    continue-on-error: true
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -632,6 +647,19 @@ jobs:
           name: visual-baselines-linux
           path: tests/visual/baselines/linux/
           retention-days: 30
+
+      # Q-57: a run that GENERATED baselines compared nothing. That is how this
+      # job passed every run for its whole life. The artifact above is the
+      # useful part - download it, look at every image, commit the ones that
+      # are right - but the run itself must not report green.
+      - name: A generating run has not checked anything
+        if: steps.check-baselines.outputs.baseline_count == '0'
+        run: |
+          echo "This run found no Linux baselines and generated them instead of"
+          echo "comparing against them, so it verified nothing."
+          echo "Download the visual-baselines-linux artifact, LOOK at every"
+          echo "image, and commit the ones that show what their name says."
+          exit 1
       
       - name: Upload visual diff artifacts
         uses: actions/upload-artifact@v4
