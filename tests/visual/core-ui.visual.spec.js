@@ -134,8 +134,31 @@ test.describe('Visual Regression - Core UI', () => {
   test('header controls', async ({ page }) => {
     await dismissFirstVisit(page);
 
-    // Screenshot just the header
+    /*
+     * UF-27 / P4: this is the only ELEMENT screenshot in the file, and it is
+     * the only baseline that came back blank when the set was first generated
+     * on the Linux CI runner - 1280x74, the right geometry, 528 bytes of plain
+     * white, against 12,473 bytes of painted header on win32. A blank baseline
+     * would have been sealed in as the thing every future run is compared
+     * against, which is the exact vacuity the Linux job is being fixed to end.
+     *
+     * So the capture is pinned before it is taken: the page is scrolled to the
+     * top (an element shot scrolls to its target, and a shifting layout can
+     * hand it the blank strip below the header instead), the webfonts are
+     * settled, and the logo image is required to have actually decoded.
+     */
     const header = page.locator('.app-header');
+    await expect(header).toBeVisible();
+    await page.evaluate(() => window.scrollTo(0, 0));
+    // .then(() => undefined) because document.fonts.ready resolves to a
+    // FontFaceSet, which is not serialisable back across the bridge.
+    await page.evaluate(() => document.fonts.ready.then(() => undefined));
+    await page.waitForFunction(() => {
+      const logo = document.querySelector('.app-header .header-logo');
+      return !logo || (logo.complete && logo.naturalWidth > 0);
+    });
+    await page.waitForTimeout(300);
+
     await expect(header).toHaveScreenshot('header-controls.png', {
       maxDiffPixels: 50,
       threshold: 0.2,
