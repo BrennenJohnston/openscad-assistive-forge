@@ -831,6 +831,108 @@ describe('PreviewManager', () => {
     })
   })
 
+  // D-48 (U-36). Every face view used to leave its own `camera.up` behind.
+  // OrbitControls reads camera.up ONCE, when it is constructed, so a later up
+  // never reaches the orbit maths — but the lookAt(target) that ends every
+  // frame's update does read it. Top and Bottom therefore left the picture
+  // rolled, and the roll grew with every drag (measured live: 25deg, 40deg,
+  // 45deg over three 25px drags) until the view was un-navigable.
+  //
+  // The invariant that fixes it, asserted here at the source: three's lookAt
+  // builds screen-right as normalize(up x forward), so screen-right is always
+  // perpendicular to camera.up. With Z-up that means screenRight.z === 0 at
+  // every pose — which IS "no roll" in a Z-up world.
+  describe('setCameraView keeps the world Z-up (D-48)', () => {
+    const VIEW_NAMES = Object.keys(PreviewManager.CAMERA_VIEWS)
+
+    function makeViewManager() {
+      const manager = new PreviewManager(container)
+      manager.camera = new PerspectiveCamera(45, 4 / 3, 0.1, 10000)
+      manager.camera.up.set(0, 0, 1)
+      manager.projectionMode = 'perspective'
+      manager.controls = { target: new Vector3(0, 0, 0), update: vi.fn() }
+      manager.mesh = new Mesh(new BoxGeometry(10, 10, 10), new MeshPhongMaterial())
+      manager.mesh.updateMatrixWorld(true)
+      return manager
+    }
+
+    /** The camera's world basis: columns 1 and 2 of its world matrix. */
+    function screenBasis(camera) {
+      camera.updateMatrixWorld(true)
+      const m = camera.matrixWorld.elements
+      return {
+        right: new Vector3(m[0], m[1], m[2]),
+        up: new Vector3(m[4], m[5], m[6]),
+        toEye: new Vector3(m[8], m[9], m[10]),
+      }
+    }
+
+    it('leaves camera.up at world Z for every one of the seven views', () => {
+      expect(VIEW_NAMES).toHaveLength(7)
+      for (const name of VIEW_NAMES) {
+        const manager = makeViewManager()
+        manager.setCameraView(name)
+        expect(manager.camera.up.toArray(), `${name} view`).toEqual([0, 0, 1])
+      }
+    })
+
+    it('no view table entry carries its own up any more', () => {
+      for (const [name, view] of Object.entries(PreviewManager.CAMERA_VIEWS)) {
+        expect(view.up, `${name} view must not define an up`).toBeUndefined()
+      }
+    })
+
+    it('puts no roll in the picture at any of the seven views', () => {
+      for (const name of VIEW_NAMES) {
+        const manager = makeViewManager()
+        manager.setCameraView(name)
+        const { right } = screenBasis(manager.camera)
+        // Rolled by a hair is still rolled; 1e-9 is float noise, not a pose.
+        expect(Math.abs(right.z), `${name} view screen-right tilted`).toBeLessThan(1e-9)
+      }
+    })
+
+    it('keeps the desktop screen orientation at Top and Bottom', () => {
+      const top = makeViewManager()
+      top.setCameraView('top')
+      const topBasis = screenBasis(top.camera)
+      // Desktop Top: looking down -Z with +X across the screen and +Y up it.
+      expect(topBasis.right.x).toBeCloseTo(1, 6)
+      expect(topBasis.up.y).toBeCloseTo(1, 6)
+      expect(topBasis.toEye.z).toBeCloseTo(1, 5)
+
+      const bottom = makeViewManager()
+      bottom.setCameraView('bottom')
+      const bottomBasis = screenBasis(bottom.camera)
+      // Desktop Bottom: looking up +Z, +X still across, +Y DOWN the screen.
+      expect(bottomBasis.right.x).toBeCloseTo(1, 6)
+      expect(bottomBasis.up.y).toBeCloseTo(-1, 6)
+      expect(bottomBasis.toEye.z).toBeCloseTo(-1, 5)
+    })
+
+    it('places Top and Bottom off the pole, but invisibly so', () => {
+      const zAxis = new Vector3(0, 0, 1)
+      for (const [name, sign] of [
+        ['top', 1],
+        ['bottom', -1],
+      ]) {
+        const manager = makeViewManager()
+        manager.setCameraView(name)
+        const toEye = manager.camera.position
+          .clone()
+          .sub(manager.controls.target)
+          .normalize()
+        const polar = toEye.angleTo(zAxis.clone().multiplyScalar(sign))
+        // Above OrbitControls' own polar epsilon (1e-6 rad) by three orders,
+        // so the controls never clamp there; the actual angle is 0.057deg,
+        // which moves the picture by well under one pixel on any canvas this
+        // app draws, so nobody can see it.
+        expect(polar, `${name} sits on the pole`).toBeGreaterThan(1e-4)
+        expect(polar, `${name} is visibly off-axis`).toBeLessThan(0.1 * (Math.PI / 180))
+      }
+    })
+  })
+
   describe('Animation Loop', () => {
     it('calls requestAnimationFrame and updates controls', () => {
       const manager = new PreviewManager(container)
