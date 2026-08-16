@@ -48,6 +48,10 @@ const EXPECTED_KEYS = {
   STORAGE_KEY_EDITOR_TAB_WIDTH: 'openscad-forge-editor-tab-width',
   STORAGE_KEY_EDITOR_LINE_WRAP: 'openscad-forge-editor-line-wrap',
   STORAGE_KEY_EDITOR_HIGHLIGHT_LINE: 'openscad-forge-editor-highlight-line',
+  // Two keys, not one: the desktop keeps the hanging indent and the
+  // wrap-return marker as separate settings and Q-58 chose to mirror that.
+  STORAGE_KEY_EDITOR_WRAP_INDENT: 'openscad-forge-editor-wrap-indent',
+  STORAGE_KEY_EDITOR_WRAP_ARROW: 'openscad-forge-editor-wrap-arrow',
   STORAGE_KEY_CAMERA_COLLAPSED: 'openscad-forge-camera-controls-collapsed',
   STORAGE_KEY_CAMERA_POSITION: 'openscad-forge-camera-controls-position',
   STORAGE_KEY_LOD_WARNING_DISMISSED: 'openscad-forge-lod-warning-dismissed',
