@@ -175,10 +175,10 @@ test.describe('Render Stability — Preset Cycling (BUG-A post-fix)', () => {
     // Get the list of available presets
     const allPresets = await getPresetOptions(page);
     const nonEmpty = allPresets.filter(o => o.trim() !== '');
-    if (nonEmpty.length < 2) {
-      test.skip();
-      return;
-    }
+    test.skip(
+      nonEmpty.length < 2,
+      'this fixture offers fewer than two presets, so there is no cycle to test'
+    );
 
     const numPresetsToTest = Math.min(nonEmpty.length, 5);
     const results = [];
@@ -254,18 +254,11 @@ test.describe('Render Stability — Customizer Settings Mode (BUG-B post-fix)', 
 
     // Find the select element within the generate control
     const generateSelect = generateParam.locator('select').first();
-    if (!(await generateSelect.isVisible())) {
-      test.skip();
-      return;
-    }
+    test.skip(!(await generateSelect.isVisible()), NO_GENERATE_PARAM);
 
     // Try to find a "Customizer Settings" option
     const customizerOption = generateSelect.locator('option').filter({ hasText: /customizer/i });
-    if ((await customizerOption.count()) === 0) {
-      console.log('[BUG-B] No customizer option in generate dropdown — skipping');
-      test.skip();
-      return;
-    }
+    test.skip((await customizerOption.count()) === 0, NO_GENERATE_PARAM);
 
     // Select the customizer option
     await generateSelect.selectOption({ label: /customizer/i });
@@ -301,10 +294,7 @@ test.describe('Render Stability — Customizer Settings Mode (BUG-B post-fix)', 
 
     const generateSelect = generateParam.locator('select').first();
     const customizerOption = generateSelect.locator('option').filter({ hasText: /customizer/i });
-    if ((await customizerOption.count()) === 0) {
-      test.skip();
-      return;
-    }
+    test.skip((await customizerOption.count()) === 0, NO_GENERATE_PARAM);
 
     // Switch to Customizer Settings
     await generateSelect.selectOption({ label: /customizer/i });
@@ -315,10 +305,7 @@ test.describe('Render Stability — Customizer Settings Mode (BUG-B post-fix)', 
       .locator('option')
       .filter({ hasText: /3D|preview/i })
       .first();
-    if ((await threeDoption.count()) === 0) {
-      test.skip();
-      return;
-    }
+    test.skip((await threeDoption.count()) === 0, NO_GENERATE_PARAM);
     const threeDValue = await threeDoption.getAttribute('value');
     await generateSelect.selectOption({ value: threeDValue });
     console.log('[BUG-B] Switched back to 3D mode:', threeDValue);
@@ -400,10 +387,7 @@ test.describe('Render Stability — Console Panel Interactions (BUG-C post-fix)'
 
     const generateSelect = generateParam.locator('select').first();
     const customizerOption = generateSelect.locator('option').filter({ hasText: /customizer/i });
-    if ((await customizerOption.count()) === 0) {
-      test.skip();
-      return;
-    }
+    test.skip((await customizerOption.count()) === 0, NO_GENERATE_PARAM);
 
     const renderCountBefore = consoleMessages.filter((message) =>
       message.includes('[Preview Performance]')
@@ -551,10 +535,7 @@ test.describe('Render Stability — 2D/3D Preview Transitions', () => {
     const threeDOption = options.find(
       (o) => /3d|stl|printed/i.test(o)
     );
-    if (!threeDOption) {
-      test.skip();
-      return;
-    }
+    test.skip(!threeDOption, NO_GENERATE_PARAM);
 
     await generateSelect.selectOption({ label: threeDOption });
     await waitForPreviewIdle(page, { timeout: 90_000 });

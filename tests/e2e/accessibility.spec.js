@@ -34,12 +34,22 @@ async function waitForWasmReady(page) {
 const ALLOWED_AXE_VIOLATIONS = ['nested-interactive']
 
 function expectOnlyAllowedViolations(results) {
-  const unexpected = results.violations
-    .map((v) => v.id)
-    .filter((id) => !ALLOWED_AXE_VIOLATIONS.includes(id))
+  const unexpected = results.violations.filter(
+    (v) => !ALLOWED_AXE_VIOLATIONS.includes(v.id)
+  )
+  // Name the element and say why. A bare rule id sends the next person
+  // hunting; axe already knows the selector and the measured contrast.
+  const detail = unexpected
+    .flatMap((v) =>
+      v.nodes.map(
+        (n) =>
+          `${v.id} @ ${n.target.join(' ')} :: ${n.failureSummary.replace(/\s+/g, ' ')}`
+      )
+    )
+    .join('\n')
   expect(
-    unexpected,
-    `unexpected axe violations: ${unexpected.join(', ')}`
+    unexpected.map((v) => v.id),
+    `unexpected axe violations:\n${detail}`
   ).toEqual([])
 }
 
@@ -125,6 +135,17 @@ test.describe('Accessibility Compliance (WCAG 2.2 AA)', () => {
     
     await fileInput.setInputFiles(fixturePath)
     await waitForModelLoaded(page)
+
+    // UF-25: the preview state pill carries `transition: all 240ms`, so a scan
+    // that arrives while it is still moving from the rendering colour to the
+    // ready colour measures a BLEND of the two and reports a contrast figure
+    // belonging to neither. MEASURED: #f8f8f9 on #258557 at 4.32:1, where the
+    // resting pair is --slate-1 on --color-success-solid at 4.67:1. Let it
+    // land before scanning.
+    await expect(page.locator('.preview-state-indicator.state-current')).toBeVisible({
+      timeout: 90_000,
+    })
+    await page.waitForTimeout(500)
 
     // Run accessibility scan on parameter UI
     const results = await new AxeBuilder({ page })
@@ -2713,8 +2734,11 @@ test.describe('Axe-Core Scans for Missing Views (REC-002)', () => {
     const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
 
     await page.setInputFiles('#fileInput', fixturePath)
-    await page.waitForSelector('.param-control', { timeout: 30_000 })
-    await dismissSaveProjectModal(page)
+    // UF-25: this waited for `.param-control` to be VISIBLE, and F5 loads the
+    // parameter groups collapsed, so it timed out at 30s on a control that
+    // was present and correct. The catch that used to wrap this test turned
+    // that into a skip.
+    await waitForModelLoaded(page)
 
     const uiModeToggle = page.locator('#uiModeToggle')
     await uiModeToggle.click()
