@@ -330,6 +330,11 @@ export const STORAGE_KEY_EDITOR_HIGHLIGHT_LINE = getAppPrefKey(
 export const STORAGE_KEY_EDITOR_WRAP_INDENT =
   getAppPrefKey('editor-wrap-indent');
 export const STORAGE_KEY_EDITOR_WRAP_ARROW = getAppPrefKey('editor-wrap-arrow');
+// settings.cc: Settings::enableBraceMatching, default true, sitting beside
+// highlightCurrentLine — which this app already exposes as a live toggle.
+export const STORAGE_KEY_EDITOR_BRACE_MATCHING = getAppPrefKey(
+  'editor-brace-matching'
+);
 export const STORAGE_KEY_CAMERA_COLLAPSED = getAppPrefKey(
   'camera-controls-collapsed'
 );

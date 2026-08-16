@@ -38,12 +38,12 @@ import {
   syntaxHighlighting,
   HighlightStyle,
   codeFolding,
-  foldGutter,
   foldKeymap,
   foldAll,
   unfoldAll,
   foldService,
   indentUnit,
+  bracketMatching,
 } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
 import {
@@ -72,6 +72,8 @@ import {
 } from '@codemirror/search';
 import { adoptCodeMirrorStyles } from './codemirror-csp-styles.js';
 import { wrapIndent, wrapReturnArrows } from './editor-wrap-marks.js';
+import { boxedFoldGutter } from './editor-fold-markers.js';
+import { LIGHT_SCHEME, DARK_SCHEME } from './editor-color-scheme.js';
 import { loadEditorPrefs } from './editor-prefs.js';
 import { themeManager } from './theme-manager.js';
 
@@ -230,8 +232,31 @@ const openscadStreamLanguage = StreamLanguage.define({
       return 'variable';
     }
 
+    // Operators and punctuation. Added in UF-29: this tokenizer never emitted
+    // them, so they fell through to `null` and painted as plain text — which
+    // is why the palette's `operator` entry had nothing to colour. The desktop
+    // draws them in its operator colour, brackets and semicolons included.
+    if (stream.match(/[+\-*/%=<>!&|?:;,.()[\]{}]/)) {
+      return 'operator';
+    }
+
     stream.next();
     return null;
+  },
+
+  // Without this, four of the tokens above reach no tag at all. MEASURED in
+  // the running editor before it was added: only five token classes were ever
+  // painted (keywords, line comments, block comments, strings, numbers), and
+  // builtins, functions, constants and $-variables all rendered as plain black
+  // text while the highlight style carried entries for tags this tokenizer
+  // never produces. `builtin` is the only one CodeMirror's legacy table knows;
+  // `function`, `constant` and `special` are modifier names rather than tags,
+  // so they resolved to nothing.
+  tokenTable: {
+    builtin: tags.standard(tags.variableName),
+    function: tags.function(tags.variableName),
+    constant: tags.atom,
+    special: tags.special(tags.variableName),
   },
 
   languageData: {
@@ -240,43 +265,51 @@ const openscadStreamLanguage = StreamLanguage.define({
 });
 
 // ─── Highlight styles (light + dark) ────────────────────────────────────────
-// Colors ported from SCAD_THEME / SCAD_DARK_THEME in monaco-editor.js
+//
+// Built from the desktop's own editor schemes (UF-29, Q-60a). The mapping from
+// the scheme file's keys to this tokenizer's tokens, MEASURED against the
+// owner's screenshots rather than assumed:
+//
+//   keyword1  Green      language keywords     `module` renders green
+//   keyword2  Green      constants             true / false / undef / PI
+//   keyword3  DarkBlue   builtins, functions,  `difference` and `union`
+//                        and $-variables       render dark blue
+//   comment   DarkCyan   line + block comments
+//   number    DarkRed
+//   string    DarkMagenta
+//   operator  Blue       brackets and punctuation included
+//
+// $-variables are keyword3 by INFERENCE — no screenshot showed one — and are
+// grouped with the builtins they belong to. Everything else was read off the
+// pixels.
+//
+// Neither bold nor italic is applied: the desktop renders keywords and
+// comments at the same weight and slope as everything else, and the previous
+// VS Code port's bold keywords / italic comments were its own invention.
 
-const lightHighlightStyle = HighlightStyle.define([
-  { tag: tags.keyword, color: '#0000FF', fontWeight: 'bold' },
-  { tag: tags.typeName, color: '#267F99' },
-  { tag: tags.function(tags.variableName), color: '#795E26' },
-  { tag: tags.bool, color: '#0070C1' },
-  { tag: tags.null, color: '#0070C1' },
-  {
-    tag: tags.special(tags.variableName),
-    color: '#001080',
-    fontStyle: 'italic',
-  },
-  { tag: tags.comment, color: '#008000', fontStyle: 'italic' },
-  { tag: tags.blockComment, color: '#008000', fontStyle: 'italic' },
-  { tag: tags.string, color: '#A31515' },
-  { tag: tags.number, color: '#098658' },
-  { tag: tags.operator, color: '#000000' },
-]);
+/**
+ * @param {import('./editor-color-scheme.js').EditorScheme} scheme
+ * @returns {import('@codemirror/language').HighlightStyle}
+ */
+function highlightStyleFor(scheme) {
+  const t = scheme.tokens;
+  return HighlightStyle.define([
+    { tag: tags.keyword, color: t.keyword1 },
+    { tag: tags.atom, color: t.keyword2 },
+    { tag: tags.standard(tags.variableName), color: t.keyword3 },
+    { tag: tags.function(tags.variableName), color: t.keyword3 },
+    { tag: tags.special(tags.variableName), color: t.keyword3 },
+    { tag: tags.lineComment, color: t.comment },
+    { tag: tags.blockComment, color: t.comment },
+    { tag: tags.comment, color: t.comment },
+    { tag: tags.string, color: t.string },
+    { tag: tags.number, color: t.number },
+    { tag: tags.operator, color: t.operator },
+  ]);
+}
 
-const darkHighlightStyle = HighlightStyle.define([
-  { tag: tags.keyword, color: '#569CD6', fontWeight: 'bold' },
-  { tag: tags.typeName, color: '#4EC9B0' },
-  { tag: tags.function(tags.variableName), color: '#DCDCAA' },
-  { tag: tags.bool, color: '#4FC1FF' },
-  { tag: tags.null, color: '#4FC1FF' },
-  {
-    tag: tags.special(tags.variableName),
-    color: '#9CDCFE',
-    fontStyle: 'italic',
-  },
-  { tag: tags.comment, color: '#6A9955', fontStyle: 'italic' },
-  { tag: tags.blockComment, color: '#6A9955', fontStyle: 'italic' },
-  { tag: tags.string, color: '#CE9178' },
-  { tag: tags.number, color: '#B5CEA8' },
-  { tag: tags.operator, color: '#D4D4D4' },
-]);
+const lightHighlightStyle = highlightStyleFor(LIGHT_SCHEME);
+const darkHighlightStyle = highlightStyleFor(DARK_SCHEME);
 
 /**
  * CodeMirror has no font-size facility; a theme is the facility. Set on the
@@ -307,50 +340,60 @@ function fontSizeTheme(px) {
   });
 }
 
-const lightEditorTheme = EditorView.theme({
-  '&': {
-    backgroundColor: '#FFFFFF',
-    color: '#000000',
-  },
-  '.cm-gutters': {
-    backgroundColor: '#F8F8F8',
-    color: '#237893',
-    borderRight: '1px solid #ddd',
-  },
-  '.cm-activeLineGutter': {
-    color: '#0B216F',
-  },
-  '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': {
-    backgroundColor: '#ADD6FF',
-  },
-  '.cm-activeLine': {
-    backgroundColor: '#F8F8F800',
-  },
-});
+/**
+ * The editor chrome, from the same scheme file as the syntax colours.
+ *
+ * `.cm-activeLine` takes the scheme's caret-line background verbatim. That is
+ * a visible change from the old themes, whose light active line was fully
+ * transparent (`#F8F8F800`) and whose dark one was barely there — and it is
+ * why every foreground in editor-color-scheme.js is contrast-checked against
+ * the caret line as well as the paper.
+ *
+ * @param {import('./editor-color-scheme.js').EditorScheme} scheme
+ * @param {{dark?: boolean}} [options]
+ */
+function editorThemeFor(scheme, options = {}) {
+  return EditorView.theme(
+    {
+      '&': {
+        backgroundColor: scheme.paper,
+        color: scheme.text,
+      },
+      '.cm-gutters': {
+        backgroundColor: scheme.marginBackground,
+        color: scheme.marginForeground,
+        borderRight: `1px solid ${options.dark ? '#333' : '#ddd'}`,
+      },
+      '.cm-activeLineGutter': {
+        color: scheme.text,
+        backgroundColor: scheme.caretLine,
+      },
+      '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': {
+        backgroundColor: scheme.selectionBackground,
+      },
+      '.cm-selectionMatch': {
+        backgroundColor: scheme.matchedBraceBackground,
+      },
+      '.cm-activeLine': {
+        backgroundColor: scheme.caretLine,
+      },
+      // Brace matching (Q-61). The scheme carries both pairs, so the rider
+      // needed no colour of its own.
+      '.cm-matchingBracket, &.cm-focused .cm-matchingBracket': {
+        backgroundColor: scheme.matchedBraceBackground,
+        color: scheme.matchedBraceForeground,
+      },
+      '.cm-nonmatchingBracket, &.cm-focused .cm-nonmatchingBracket': {
+        backgroundColor: scheme.unmatchedBraceBackground,
+        color: scheme.unmatchedBraceForeground,
+      },
+    },
+    options
+  );
+}
 
-const darkEditorTheme = EditorView.theme(
-  {
-    '&': {
-      backgroundColor: '#1E1E1E',
-      color: '#D4D4D4',
-    },
-    '.cm-gutters': {
-      backgroundColor: '#1E1E1E',
-      color: '#858585',
-      borderRight: '1px solid #333',
-    },
-    '.cm-activeLineGutter': {
-      color: '#C6C6C6',
-    },
-    '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': {
-      backgroundColor: '#264F78',
-    },
-    '.cm-activeLine': {
-      backgroundColor: '#ffffff0a',
-    },
-  },
-  { dark: true }
-);
+const lightEditorTheme = editorThemeFor(LIGHT_SCHEME);
+const darkEditorTheme = editorThemeFor(DARK_SCHEME, { dark: true });
 
 // ─── Autocomplete for OpenSCAD ──────────────────────────────────────────────
 
@@ -725,6 +768,8 @@ export class CodeMirrorEditor {
     /** @type {Compartment} */
     this._wrapArrowCompartment = new Compartment();
     /** @type {Compartment} */
+    this._braceMatchCompartment = new Compartment();
+    /** @type {Compartment} */
     this._activeLineCompartment = new Compartment();
 
     /** @type {import('./editor-prefs.js').EditorPrefs} */
@@ -802,7 +847,14 @@ export class CodeMirrorEditor {
         bookmarkTheme,
         codeFolding(),
         scadFoldService,
-        foldGutter(),
+        boxedFoldGutter(),
+        // Q-61: the desktop highlights the brace matching the one at the
+        // cursor, and its scheme file already carried both colour pairs. It is
+        // a real setting there (settings.cc enableBraceMatching, default true)
+        // sitting beside highlightCurrentLine, so it is a real setting here.
+        this._braceMatchCompartment.of(
+          this._editorPrefs.braceMatching ? bracketMatching() : []
+        ),
         this._historyCompartment.of(history()),
         drawSelection(),
         this._activeLineCompartment.of(
@@ -1066,6 +1118,16 @@ export class CodeMirrorEditor {
     this._view?.dispatch({
       effects: this._wrapArrowCompartment.reconfigure(
         on ? wrapReturnArrows() : []
+      ),
+    });
+  }
+
+  /** @param {boolean} on Highlight the brace matching the one at the cursor. */
+  setBraceMatching(on) {
+    this._editorPrefs.braceMatching = on;
+    this._view?.dispatch({
+      effects: this._braceMatchCompartment.reconfigure(
+        on ? bracketMatching() : []
       ),
     });
   }
