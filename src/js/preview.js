@@ -589,8 +589,10 @@ export class PreviewManager {
     this._lastContainerWidth = width;
     this._lastContainerHeight = height;
 
-    // Set Z as the up axis (OpenSCAD uses Z-up, Three.js defaults to Y-up)
-    this.camera.up.set(0, 0, 1);
+    // Set Z as the up axis (OpenSCAD uses Z-up, Three.js defaults to Y-up).
+    // This must run BEFORE OrbitControls is constructed below: the controls
+    // capture their orbit frame from camera.up once and never re-read it.
+    this.camera.up.set(...PreviewManager.WORLD_UP);
 
     // Position camera for OpenSCAD-style diagonal view (looking at origin from front-right-above)
     // This mimics OpenSCAD's default "Diagonal" view orientation
@@ -2437,8 +2439,7 @@ export class PreviewManager {
    *   elevation = 35° above the XY plane
    *
    * Works correctly in both perspective and orthographic projection modes.
-   * Also resets the camera up vector to Z-up (important after standard views
-   * like Top/Bottom which change the up vector).
+   * Also re-asserts Z-up, so a camera that somehow lost it comes back sane.
    */
   fitCameraToModel() {
     if (!this.mesh) return;
@@ -2463,8 +2464,7 @@ export class PreviewManager {
 
     const camera = this.getActiveCamera();
 
-    // Reset up vector to Z-up (standard views like Top change this)
-    camera.up.set(0, 0, 1);
+    camera.up.set(...PreviewManager.WORLD_UP);
 
     camera.position.set(
       center.x + horizontalDist * Math.sin(azimuth), // X: slightly right
@@ -2539,7 +2539,7 @@ export class PreviewManager {
     const camera = this.getActiveCamera();
     const [x, y, z] = PreviewManager.DEFAULT_CAMERA_POSITION;
 
-    camera.up.set(0, 0, 1);
+    camera.up.set(...PreviewManager.WORLD_UP);
     camera.position.set(x, y, z);
     camera.lookAt(0, 0, 0);
 
@@ -2633,10 +2633,45 @@ export class PreviewManager {
   static DEFAULT_CAMERA_POSITION = [150, -150, 100];
 
   /**
+   * The world's up axis. OpenSCAD is Z-up, and this app has exactly one up:
+   * OrbitControls captures its orbit frame from `camera.up` ONCE, inside the
+   * IIFE that builds `update()`, so a later write never reaches the orbit
+   * maths — but the `lookAt(target)` at the end of every frame's update DOES
+   * read it. Leaving a different up behind therefore cannot re-aim the
+   * turntable; it only rolls the picture, and the roll grows with every drag
+   * until the view is un-navigable (D-48). Nothing may set a different one.
+   */
+  static WORLD_UP = [0, 0, 1];
+
+  /**
+   * How far off the pole the Top and Bottom views sit.
+   *
+   * `lookAt` cannot build a camera frame when the view direction is parallel
+   * to `up` — three falls back to nudging the direction by 0.0001, which lands
+   * Top with +Y across the screen instead of up it — and OrbitControls clamps
+   * the polar angle of a camera sitting exactly on a pole. Both views are
+   * therefore aimed a hair toward -Y, which is also what puts +Y up the screen
+   * for Top and down it for Bottom, matching the desktop.
+   *
+   * The size is MEASURED, not guessed. Looking straight down, the Z axis and
+   * its scale marks lie in a plane that contains the view direction, so they
+   * collapse to a line — and the ones nearest the camera blow up under
+   * perspective the instant that plane opens even slightly. Comparing renders
+   * of the Top and Bottom views against the exactly-on-pole ones, the strongly
+   * changed pixels run 2890 at 1e-3, 948 at 1e-4, 489 at 3e-5 and 7 at 1e-5,
+   * where what is left is one antialiased axis line landing on a different
+   * row. 1e-5 is 0.00057°, and still ten times OrbitControls' polar epsilon.
+   */
+  static POLE_EPSILON = 0.00001;
+
+  /**
    * Standard camera views for OpenSCAD-style viewing (Z-up coordinate system)
    *
    * direction: unit-ish vector FROM the model center TOWARD the camera.
-   * up:        which direction is "up" on screen.
+   *
+   * There is deliberately no per-view up: screen orientation follows from the
+   * direction and WORLD_UP alone, which is what keeps the orbit a turntable
+   * around global Z after every one of these (D-48).
    *
    * The diagonal view matches OpenSCAD's default $vpr = [55, 0, 25]:
    *   azimuth 25° from front (-Y) toward right (+X), elevation 35° above XY plane.
@@ -2644,17 +2679,16 @@ export class PreviewManager {
    *            ≈ [0.346, -0.742, 0.574]
    */
   static CAMERA_VIEWS = {
-    top: { name: 'Top', direction: [0, 0, 1], up: [0, 1, 0] },
-    bottom: { name: 'Bottom', direction: [0, 0, -1], up: [0, -1, 0] },
-    front: { name: 'Front', direction: [0, -1, 0], up: [0, 0, 1] },
-    back: { name: 'Back', direction: [0, 1, 0], up: [0, 0, 1] },
-    left: { name: 'Left', direction: [-1, 0, 0], up: [0, 0, 1] },
-    right: { name: 'Right', direction: [1, 0, 0], up: [0, 0, 1] },
-    diagonal: {
-      name: 'Diagonal',
-      direction: [0.346, -0.742, 0.574],
-      up: [0, 0, 1],
+    top: { name: 'Top', direction: [0, -PreviewManager.POLE_EPSILON, 1] },
+    bottom: {
+      name: 'Bottom',
+      direction: [0, -PreviewManager.POLE_EPSILON, -1],
     },
+    front: { name: 'Front', direction: [0, -1, 0] },
+    back: { name: 'Back', direction: [0, 1, 0] },
+    left: { name: 'Left', direction: [-1, 0, 0] },
+    right: { name: 'Right', direction: [1, 0, 0] },
+    diagonal: { name: 'Diagonal', direction: [0.346, -0.742, 0.574] },
   };
 
   /**
@@ -2693,8 +2727,9 @@ export class PreviewManager {
     // Position camera along the direction vector from center
     camera.position.copy(center).addScaledVector(direction, cameraDistance);
 
-    // Set up vector for the active camera
-    camera.up.set(...view.up);
+    // Z-up, always — see WORLD_UP. The pose itself carries the screen
+    // orientation, so nothing here needs its own up.
+    camera.up.set(...PreviewManager.WORLD_UP);
 
     // Look at center
     camera.lookAt(center);
@@ -2756,7 +2791,7 @@ export class PreviewManager {
           0.1,
           10000
         );
-        this.orthoCamera.up.set(0, 0, 1);
+        this.orthoCamera.up.set(...PreviewManager.WORLD_UP);
       } else {
         this.orthoCamera.left = (frustumHeight * aspect) / -2;
         this.orthoCamera.right = (frustumHeight * aspect) / 2;
