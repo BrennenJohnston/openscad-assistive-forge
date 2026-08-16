@@ -2651,11 +2651,18 @@ export class PreviewManager {
    * Top with +Y across the screen instead of up it — and OrbitControls clamps
    * the polar angle of a camera sitting exactly on a pole. Both views are
    * therefore aimed a hair toward -Y, which is also what puts +Y up the screen
-   * for Top and down it for Bottom, matching the desktop. 0.001 is 0.057° of
-   * tilt: under a pixel at any sane canvas size, and a thousand times
-   * OrbitControls' own polar epsilon.
+   * for Top and down it for Bottom, matching the desktop.
+   *
+   * The size is MEASURED, not guessed. Looking straight down, the Z axis and
+   * its scale marks lie in a plane that contains the view direction, so they
+   * collapse to a line — and the ones nearest the camera blow up under
+   * perspective the instant that plane opens even slightly. Comparing renders
+   * of the Top and Bottom views against the exactly-on-pole ones, the strongly
+   * changed pixels run 2890 at 1e-3, 948 at 1e-4, 489 at 3e-5 and 7 at 1e-5,
+   * where what is left is one antialiased axis line landing on a different
+   * row. 1e-5 is 0.00057°, and still ten times OrbitControls' polar epsilon.
    */
-  static POLE_EPSILON = 0.001;
+  static POLE_EPSILON = 0.00001;
 
   /**
    * Standard camera views for OpenSCAD-style viewing (Z-up coordinate system)

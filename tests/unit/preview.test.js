@@ -923,12 +923,12 @@ describe('PreviewManager', () => {
           .sub(manager.controls.target)
           .normalize()
         const polar = toEye.angleTo(zAxis.clone().multiplyScalar(sign))
-        // Above OrbitControls' own polar epsilon (1e-6 rad) by three orders,
-        // so the controls never clamp there; the actual angle is 0.057deg,
-        // which moves the picture by well under one pixel on any canvas this
-        // app draws, so nobody can see it.
-        expect(polar, `${name} sits on the pole`).toBeGreaterThan(1e-4)
-        expect(polar, `${name} is visibly off-axis`).toBeLessThan(0.1 * (Math.PI / 180))
+        // Clear of OrbitControls' own polar epsilon (1e-6 rad), so the
+        // controls never clamp at the pose itself; and far under a twentieth
+        // of a degree, which is where the Z axis marks start to fan out from
+        // the origin (measured: 7 changed pixels at this angle, 489 at 3e-5).
+        expect(polar, `${name} sits on the pole`).toBeGreaterThan(5e-6)
+        expect(polar, `${name} is visibly off-axis`).toBeLessThan(0.05 * (Math.PI / 180))
       }
     })
   })
