@@ -12,11 +12,23 @@ import JSZip from 'jszip'
 // Skip WASM-dependent tests in CI - WASM initialization is slow/unreliable
 const isCI = !!process.env.CI
 
-// Dismiss first-visit modal so it doesn't block UI interactions
+// Dismiss first-visit modal so it doesn't block UI interactions.
+//
+// UF-25: also ask for Standard. #projectFilesControls is
+// defaultHiddenInBasic in ui-mode-controller.js and Simplified is the
+// default mode, so four tests here waited for a panel the mode controller
+// had deliberately hidden and failed on every local run. Diagnosed at UF-23
+// and repaired here. The repair belongs to the test: which panels Simplified
+// hides is a signed product decision (Q-40), not something a spec may change
+// by asserting against it.
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true')
     localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
+    localStorage.setItem(
+      'openscad-forge-ui-mode',
+      JSON.stringify({ mode: 'standard', lastCustomMode: 'standard' })
+    )
   })
 })
 
@@ -108,6 +120,21 @@ const uploadZipProject = async (page) => {
   }
 }
 
+/**
+ * UF-25: the file list lives inside a collapsed <details>, so
+ * #projectFilesList is present but not visible until the disclosure is
+ * opened. Three tests asserted on it straight after upload and failed on
+ * every local run.
+ */
+const openProjectFilesDisclosure = async (page) => {
+  const details = page.locator('details.project-files-details')
+  await expect(details).toBeVisible()
+  if (!(await details.evaluate((el) => el.open))) {
+    await details.locator('summary').click()
+  }
+  await expect(details).toHaveJSProperty('open', true)
+}
+
 test.describe('Project Files Manager', () => {
   test.describe.configure({ timeout: 150_000 }) // WASM init may need ~120s
 
@@ -115,6 +142,7 @@ test.describe('Project Files Manager', () => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
     await uploadZipProject(page)
+    await openProjectFilesDisclosure(page)
     
     // Verify project files controls become visible
     const projectFilesControls = page.locator('#projectFilesControls')
@@ -132,16 +160,9 @@ test.describe('Project Files Manager', () => {
   test('shows empty-state companion files for single-file projects', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
-    await page.goto('/')
-    
-    try {
-      await loadSimpleBoxExample(page)
-    } catch (error) {
-      console.log('Could not load example:', error.message)
-      test.skip()
-      return
-    }
-    
+    await loadSimpleBoxExample(page)
+    await openProjectFilesDisclosure(page)
+
     // Panel should be visible with empty-state content (not hidden)
     const projectFilesControls = page.locator('#projectFilesControls')
     await expect(projectFilesControls).toBeVisible({ timeout: 10000 })
@@ -156,7 +177,8 @@ test.describe('Project Files Manager', () => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
     await uploadZipProject(page)
-    
+    await openProjectFilesDisclosure(page)
+
     // Check for project files list
     const filesList = page.locator('#projectFilesList')
     await expect(filesList).toBeVisible({ timeout: 5000 })
@@ -175,7 +197,8 @@ test.describe('Project Files Manager', () => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
     await uploadZipProject(page)
-    
+    await openProjectFilesDisclosure(page)
+
     // Find the main file item
     const mainFileItem = page.locator('.project-file-item.main-file').first()
     await expect(mainFileItem).toBeVisible()
@@ -190,17 +213,14 @@ test.describe('Project Files Manager', () => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
     await uploadZipProject(page)
-    
-    // Find a non-main file item
+    await openProjectFilesDisclosure(page)
+
+    // The fixture ships helpers.scad and settings.txt beside main.scad, so
+    // there are always non-main files here. This used to skip itself when it
+    // found none, which hid the fact that it found none (UF-25).
     const nonMainItems = page.locator('.project-file-item:not(.main-file)')
-    const count = await nonMainItems.count()
-    
-    if (count === 0) {
-      console.log('No non-main files found in project')
-      test.skip()
-      return
-    }
-    
+    await expect(nonMainItems.first()).toBeVisible()
+
     // Check first non-main item for buttons
     const firstNonMain = nonMainItems.first()
     
@@ -213,23 +233,18 @@ test.describe('Project Files Manager', () => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
     await uploadZipProject(page)
+    await openProjectFilesDisclosure(page)
     
     // Find a .txt file's edit button
     const txtFileItem = page.locator('.project-file-item:has(.project-file-name:has-text(".txt"))').first()
     
-    if (!(await txtFileItem.isVisible().catch(() => false))) {
-      console.log('No .txt file found in project')
-      test.skip()
-      return
-    }
-    
+    // The fixture always ships settings.txt, so these guards were hiding a
+    // missing panel rather than a missing file (UF-25).
+    await expect(txtFileItem).toBeVisible()
+
     const editBtn = txtFileItem.locator('button[data-action="edit"]')
-    
-    if (!(await editBtn.isVisible().catch(() => false))) {
-      console.log('No edit button found for .txt file')
-      test.skip()
-      return
-    }
+    await expect(editBtn).toBeVisible()
+
     
     await editBtn.click()
     
@@ -246,20 +261,16 @@ test.describe('Project Files Manager', () => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
     await uploadZipProject(page)
+    await openProjectFilesDisclosure(page)
     
     // Find and open edit modal for a text file
     const txtFileItem = page.locator('.project-file-item:has(.project-file-name:has-text(".txt"))').first()
     
-    if (!(await txtFileItem.isVisible().catch(() => false))) {
-      test.skip()
-      return
-    }
-    
+    await expect(txtFileItem).toBeVisible()
+
     const editBtn = txtFileItem.locator('button[data-action="edit"]')
-    if (!(await editBtn.isVisible().catch(() => false))) {
-      test.skip()
-      return
-    }
+    await expect(editBtn).toBeVisible()
+
     
     await editBtn.click()
     
@@ -310,6 +321,7 @@ cube(10);
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
     await uploadZipProject(page)
+    await openProjectFilesDisclosure(page)
     
     // Check that file icons are present
     const icons = page.locator('.project-file-icon')
@@ -326,6 +338,7 @@ cube(10);
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
     await uploadZipProject(page)
+    await openProjectFilesDisclosure(page)
     
     // Check that file sizes are displayed
     const sizes = page.locator('.project-file-size')
@@ -342,13 +355,11 @@ cube(10);
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
     await uploadZipProject(page)
+    await openProjectFilesDisclosure(page)
     
     const filesList = page.locator('#projectFilesList')
-    
-    if (!(await filesList.isVisible().catch(() => false))) {
-      test.skip()
-      return
-    }
+    await expect(filesList).toBeVisible()
+
     
     // Check for role="list" or similar
     const role = await filesList.getAttribute('role')
@@ -363,25 +374,21 @@ cube(10);
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
     await uploadZipProject(page)
+    await openProjectFilesDisclosure(page)
     
     // Get initial file count
     const fileItems = page.locator('.project-file-item')
     const initialCount = await fileItems.count()
     
-    if (initialCount < 2) {
-      console.log('Need at least 2 files to test removal')
-      test.skip()
-      return
-    }
-    
+    // main.scad + helpers.scad + settings.txt: three, always. The old guards
+    // skipped instead of failing, so a panel that never opened looked like a
+    // project that had nothing to remove (UF-25).
+    expect(initialCount).toBeGreaterThanOrEqual(2)
+
     // Find a non-main file to remove
     const nonMainItem = page.locator('.project-file-item:not(.main-file)').first()
     const removeBtn = nonMainItem.locator('button[data-action="remove"]')
-    
-    if (!(await removeBtn.isVisible().catch(() => false))) {
-      test.skip()
-      return
-    }
+    await expect(removeBtn).toBeVisible()
     
     // Set up dialog handler before clicking
     page.on('dialog', async dialog => {
@@ -402,24 +409,19 @@ cube(10);
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
     await uploadZipProject(page)
+    await openProjectFilesDisclosure(page)
     
     // Get initial file count
     const fileItems = page.locator('.project-file-item')
     const initialCount = await fileItems.count()
     
-    if (initialCount < 2) {
-      test.skip()
-      return
-    }
-    
+    expect(initialCount).toBeGreaterThanOrEqual(2)
+
     // Find a non-main file to try removing
     const nonMainItem = page.locator('.project-file-item:not(.main-file)').first()
     const removeBtn = nonMainItem.locator('button[data-action="remove"]')
-    
-    if (!(await removeBtn.isVisible().catch(() => false))) {
-      test.skip()
-      return
-    }
+    await expect(removeBtn).toBeVisible()
+
     
     // Set up dialog handler to dismiss
     page.on('dialog', async dialog => {
@@ -439,15 +441,8 @@ cube(10);
   test('companion save button is visible for loaded projects', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
-    await page.goto('/')
-
-    try {
-      await loadSimpleBoxExample(page)
-    } catch (error) {
-      console.log('Could not load example:', error.message)
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page)
+    await openProjectFilesDisclosure(page)
 
     // The Save as Project button should be visible in the companion files section
     const saveBtn = page.locator('#companionSaveBtn')

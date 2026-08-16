@@ -596,16 +596,26 @@ jobs:
           path: test-results/
           retention-days: 14
 
+  # Q-55 (owner, 2026-08-15): a REQUIRED check must be capable of failing.
+  # This job carried continue-on-error on its only real step, so "Lint
+  # Markdown" reported success no matter what markdownlint found - a green
+  # gate that could not go red. MEASURED before removing it: markdownlint-cli2
+  # reports 3 issues locally and all three live in .cursor/, which is
+  # gitignored and never checked out, so CI sees a clean tree.
+  #
+  # Verified before the change that passing `globs` here does NOT discard the
+  # ignore list in .markdownlint-cli2.jsonc: cli2 appends the config's ignores
+  # to the command-line globs, so node_modules and the vendored folders stay
+  # out either way. The input is kept as it was; only the gate changed.
   lint-markdown:
     name: Lint Markdown
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Lint markdown files
         uses: DavidAnson/markdownlint-cli2-action@v16
         with:
           globs: '**/*.md'
-        continue-on-error: true

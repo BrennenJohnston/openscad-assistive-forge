@@ -11,7 +11,6 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
-import JSZip from 'jszip';
 import { fileURLToPath } from 'url';
 import {
   selectPreset as selectPresetHelper,
@@ -27,6 +26,29 @@ const isCI = !!process.env.CI;
 
 test.describe.configure({ timeout: 180_000 });
 
+/**
+ * UF-25, and this is a documented gap rather than a repair.
+ *
+ * Four tests in this file (BUG-B's two Customizer Settings cases, BUG-C's
+ * debounce case and the 2D-to-3D transition) drive a `generate` parameter:
+ * they pick "Customizer settings" or "first layer for SVG/DXF file" from a
+ * dropdown and check what the preview does. MEASURED: no example this suite
+ * loads has such a parameter. `colored-box` has none, and the only fixtures
+ * in the repository that do are tests/fixtures/keyguard-minimal and
+ * keyguard-v75.
+ *
+ * So those four skip, and until now they skipped SILENTLY with a bare
+ * test.skip() - which reads in a report as a deliberate exclusion rather than
+ * as coverage that quietly stopped existing. They now carry this reason.
+ *
+ * The fix, when someone takes it: load the keyguard-minimal fixture as a ZIP
+ * the way keyguard-workflow.spec.js does, and point these four at it. It was
+ * not taken here because it puts a heavy keyguard render into a suite that is
+ * otherwise about a small box, and that trade deserves its own measurement.
+ */
+const NO_GENERATE_PARAM =
+  'no fixture in this suite has a `generate` parameter (see the note above)';
+
 // ─── Shared helpers ────────────────────────────────────────────────────────────
 
 /** Suppress first-visit modal before each test */
@@ -34,6 +56,14 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true');
     localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+    // UF-25: #consolePanel is defaultHiddenInBasic and Simplified is the
+    // default mode, so the console test clicked at a summary the mode
+    // controller had hidden and timed out. This suite drives panels, so it
+    // asks for Standard.
+    localStorage.setItem(
+      'openscad-forge-ui-mode',
+      JSON.stringify({ mode: 'standard', lastCustomMode: 'standard' })
+    );
   });
 });
 
@@ -75,17 +105,33 @@ async function getPreviewStats(page) {
  * Detect whether the preview canvas currently contains rendered geometry.
  */
 async function hasMesh(page) {
-  return page.evaluate(() => {
-    const canvas = document.querySelector('#viewer canvas, .preview-container canvas');
-    if (!canvas) return false;
-    const ctx = canvas.getContext('webgl2') || canvas.getContext('webgl');
-    if (!ctx) return false;
-    const pixels = new Uint8Array(4);
-    const x = Math.floor(canvas.width / 2);
-    const y = Math.floor(canvas.height / 2);
-    ctx.readPixels(x, y, 1, 1, ctx.RGBA, ctx.UNSIGNED_BYTE, pixels);
-    return pixels[3] > 0 && (pixels[0] + pixels[1] + pixels[2]) > 0;
-  });
+  // UF-9 established this and UF-25 needed it here: a readPixels taken
+  // outside an animation frame reads a CLEARED drawing buffer, so a perfectly
+  // rendered model reports no mesh. MEASURED before the fix: the preset-cycle
+  // test logged `mesh=false, triangles=116` - the geometry was plainly there.
+  // The nested double-rAF puts the read inside the frame that has just been
+  // painted.
+  return page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            const canvas = document.querySelector(
+              '#viewer canvas, .preview-container canvas'
+            );
+            if (!canvas) return resolve(false);
+            const ctx =
+              canvas.getContext('webgl2') || canvas.getContext('webgl');
+            if (!ctx) return resolve(false);
+            const pixels = new Uint8Array(4);
+            const x = Math.floor(canvas.width / 2);
+            const y = Math.floor(canvas.height / 2);
+            ctx.readPixels(x, y, 1, 1, ctx.RGBA, ctx.UNSIGNED_BYTE, pixels);
+            resolve(pixels[3] > 0 && pixels[0] + pixels[1] + pixels[2] > 0);
+          })
+        );
+      })
+  );
 }
 
 /**
@@ -129,10 +175,10 @@ test.describe('Render Stability — Preset Cycling (BUG-A post-fix)', () => {
     // Get the list of available presets
     const allPresets = await getPresetOptions(page);
     const nonEmpty = allPresets.filter(o => o.trim() !== '');
-    if (nonEmpty.length < 2) {
-      test.skip();
-      return;
-    }
+    test.skip(
+      nonEmpty.length < 2,
+      'this fixture offers fewer than two presets, so there is no cycle to test'
+    );
 
     const numPresetsToTest = Math.min(nonEmpty.length, 5);
     const results = [];
@@ -148,7 +194,9 @@ test.describe('Render Stability — Preset Cycling (BUG-A post-fix)', () => {
       try {
         await waitForPreviewIdle(page, { timeout: 90_000 });
       } catch (e) {
-        console.warn(`[PresetCycle] Preset ${presetValue}: render did not complete in time`);
+        // presetValue was never defined here, so this handler threw a
+        // ReferenceError of its own whenever a render timed out (UF-25).
+        console.warn(`[PresetCycle] Preset ${presetName}: render did not complete in time`);
       }
 
       // Record whether a mesh is present
@@ -202,26 +250,15 @@ test.describe('Render Stability — Customizer Settings Mode (BUG-B post-fix)', 
       .locator('.param-control')
       .filter({ hasText: /^generate/i });
 
-    if ((await generateParam.count()) === 0) {
-      console.log('[BUG-B] No "generate" parameter found — loading simple-box instead');
-      test.skip();
-      return;
-    }
+    test.skip((await generateParam.count()) === 0, NO_GENERATE_PARAM);
 
     // Find the select element within the generate control
     const generateSelect = generateParam.locator('select').first();
-    if (!(await generateSelect.isVisible())) {
-      test.skip();
-      return;
-    }
+    test.skip(!(await generateSelect.isVisible()), NO_GENERATE_PARAM);
 
     // Try to find a "Customizer Settings" option
     const customizerOption = generateSelect.locator('option').filter({ hasText: /customizer/i });
-    if ((await customizerOption.count()) === 0) {
-      console.log('[BUG-B] No customizer option in generate dropdown — skipping');
-      test.skip();
-      return;
-    }
+    test.skip((await customizerOption.count()) === 0, NO_GENERATE_PARAM);
 
     // Select the customizer option
     await generateSelect.selectOption({ label: /customizer/i });
@@ -253,17 +290,11 @@ test.describe('Render Stability — Customizer Settings Mode (BUG-B post-fix)', 
     await waitForPreviewIdle(page, { timeout: 90_000 });
 
     const generateParam = page.locator('.param-control').filter({ hasText: /^generate/i });
-    if ((await generateParam.count()) === 0) {
-      test.skip();
-      return;
-    }
+    test.skip((await generateParam.count()) === 0, NO_GENERATE_PARAM);
 
     const generateSelect = generateParam.locator('select').first();
     const customizerOption = generateSelect.locator('option').filter({ hasText: /customizer/i });
-    if ((await customizerOption.count()) === 0) {
-      test.skip();
-      return;
-    }
+    test.skip((await customizerOption.count()) === 0, NO_GENERATE_PARAM);
 
     // Switch to Customizer Settings
     await generateSelect.selectOption({ label: /customizer/i });
@@ -274,10 +305,7 @@ test.describe('Render Stability — Customizer Settings Mode (BUG-B post-fix)', 
       .locator('option')
       .filter({ hasText: /3D|preview/i })
       .first();
-    if ((await threeDoption.count()) === 0) {
-      test.skip();
-      return;
-    }
+    test.skip((await threeDoption.count()) === 0, NO_GENERATE_PARAM);
     const threeDValue = await threeDoption.getAttribute('value');
     await generateSelect.selectOption({ value: threeDValue });
     console.log('[BUG-B] Switched back to 3D mode:', threeDValue);
@@ -355,17 +383,11 @@ test.describe('Render Stability — Console Panel Interactions (BUG-C post-fix)'
     await waitForPreviewIdle(page, { timeout: 90_000 });
 
     const generateParam = page.locator('.param-control').filter({ hasText: /^generate/i });
-    if ((await generateParam.count()) === 0) {
-      test.skip();
-      return;
-    }
+    test.skip((await generateParam.count()) === 0, NO_GENERATE_PARAM);
 
     const generateSelect = generateParam.locator('select').first();
     const customizerOption = generateSelect.locator('option').filter({ hasText: /customizer/i });
-    if ((await customizerOption.count()) === 0) {
-      test.skip();
-      return;
-    }
+    test.skip((await customizerOption.count()) === 0, NO_GENERATE_PARAM);
 
     const renderCountBefore = consoleMessages.filter((message) =>
       message.includes('[Preview Performance]')
@@ -402,57 +424,45 @@ test.describe('Render Stability — DXF Export (BUG-D post-fix)', () => {
     await loadParametricExample(page);
     await waitForPreviewIdle(page, { timeout: 90_000 });
 
-    // Switch generate to a 2D export mode (first layer / laser cut)
+    // A DXF is a 2D drawing, so this needs a model that can be asked for one.
+    // UF-25: without that, the export produced nothing, the test waited out a
+    // 120s download timeout and then RETURNED EARLY AND PASSED - two minutes
+    // of wall clock to assert nothing at all.
     const generateParam = page.locator('.param-control').filter({ hasText: /^generate/i });
-    if ((await generateParam.count()) > 0) {
-      const generateSelect = generateParam.locator('select').first();
-      const firstLayerOption = generateSelect
-        .locator('option')
-        .filter({ hasText: /first layer|laser|2D/i })
-        .first();
-      if ((await firstLayerOption.count()) > 0) {
-        const val = await firstLayerOption.getAttribute('value');
-        await generateSelect.selectOption({ value: val });
-        await page.waitForTimeout(500);
-      }
-    }
+    test.skip((await generateParam.count()) === 0, NO_GENERATE_PARAM);
+
+    const generateSelect = generateParam.locator('select').first();
+    const firstLayerOption = generateSelect
+      .locator('option')
+      .filter({ hasText: /first layer|laser|2D/i })
+      .first();
+    test.skip((await firstLayerOption.count()) === 0, NO_GENERATE_PARAM);
+    await generateSelect.selectOption({
+      value: await firstLayerOption.getAttribute('value'),
+    });
+    await page.waitForTimeout(500);
 
     // Select DXF output format
     const outputFormatSelect = page.locator('#outputFormat');
-    if (!(await outputFormatSelect.isVisible())) {
-      test.skip();
-      return;
-    }
+    await expect(outputFormatSelect).toBeVisible();
     await outputFormatSelect.selectOption('dxf');
     await page.waitForTimeout(500);
 
     // Click the Generate button
-    const generateBtn = page.locator('#primaryActionBtn, button:has-text("Generate"), button:has-text("Render")').first();
-    if (!(await generateBtn.isEnabled())) {
-      test.skip();
-      return;
-    }
+    // UF-25: this union used to resolve first() to #classicTbRenderBtn, the
+    // Classic toolbar's Render button, which is not rendered in Forge.
+    const generateBtn = page.locator('#primaryActionBtn');
+    await expect(generateBtn).toBeEnabled();
 
-    // Listen for download
+    // Listen for download. If it never arrives, that IS the failure: the
+    // guard this test exists for is the CONTENT of the file.
     const downloadPromise = page.waitForEvent('download', { timeout: 120_000 });
     await generateBtn.click();
 
-    let dxfContent = null;
-    try {
-      const download = await downloadPromise;
-      const downloadPath = await download.path();
-      if (downloadPath) {
-        dxfContent = fs.readFileSync(downloadPath, 'utf-8');
-      }
-    } catch (e) {
-      console.warn('[BUG-D] Download did not complete within timeout:', e.message);
-    }
-
-    if (dxfContent === null) {
-      console.warn('[BUG-D] No DXF file was downloaded — skipping content validation');
-      // Still pass — this is a baseline test; the render may just be slow
-      return;
-    }
+    const download = await downloadPromise;
+    const downloadPath = await download.path();
+    expect(downloadPath, 'DXF export produced no file').toBeTruthy();
+    const dxfContent = fs.readFileSync(downloadPath, 'utf-8');
 
     console.log('[BUG-D] DXF file size:', dxfContent.length, 'bytes');
 
@@ -480,71 +490,17 @@ test.describe('Render Stability — DXF Export (BUG-D post-fix)', () => {
     expect(nonPrintable).toBe(0);
   });
 
-  test('DXF postProcessDXF converts LWPOLYLINE entities to LINE', async ({ page }) => {
-    test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
-
-    // This test validates the post-processing behavior directly via the worker
-    await page.goto('/');
-    await page.waitForLoadState('networkidle', { timeout: 30_000 });
-
-    // Inject a minimal LWPOLYLINE DXF and call postProcessDXF via the exposed API
-    const testDxf = `0
-SECTION
-2
-HEADER
-0
-ENDSEC
-0
-SECTION
-2
-ENTITIES
-0
-LWPOLYLINE
-8
-0
-90
-4
-10
-0.0
-20
-0.0
-10
-1.0
-20
-0.0
-10
-1.0
-20
-1.0
-10
-0.0
-20
-1.0
-0
-ENDSEC
-0
-EOF
-`;
-
-    const result = await page.evaluate(async (dxf) => {
-      // postProcessDXF is exported on the worker, not directly accessible.
-      // Check if there's a test hook or just verify the worker import.
-      if (typeof window.__postProcessDXF === 'function') {
-        return window.__postProcessDXF(dxf);
-      }
-      return null;
-    }, testDxf);
-
-    if (result === null) {
-      console.log('[BUG-D] postProcessDXF not directly accessible from page context — skipping white-box test');
-      // This is expected; the function lives in the worker
-      return;
-    }
-
-    // If accessible, verify LWPOLYLINE was converted
-    expect(result).not.toContain('LWPOLYLINE');
-    expect(result).toContain('LINE');
-  });
+  /*
+   * Q-55(ii) (owner, 2026-08-15): the 'DXF postProcessDXF converts LWPOLYLINE
+   * entities to LINE' case was REMOVED here. It built a 40-line DXF fixture,
+   * called window.__postProcessDXF, found it undefined - its own comment said
+   * "this is expected; the function lives in the worker" - and then returned
+   * and passed. It could never assert anything.
+   *
+   * The behaviour it named is genuinely covered: tests/unit/dxf-postprocess.test.js
+   * imports postProcessDXF from src/worker/dxf-postprocess.js and tests the
+   * LWPOLYLINE-to-LINE conversion for real, in the unit suite, on every run.
+   */
 });
 
 // ─── Test Suite: 2D/3D Preview Transitions ──────────────────────────────────
@@ -556,18 +512,20 @@ test.describe('Render Stability — 2D/3D Preview Transitions', () => {
     await loadParametricExample(page);
     await waitForPreviewIdle(page, { timeout: 90_000 });
 
-    // Find the generate parameter dropdown
-    const generateSelect = page.locator('select').filter({ has: page.locator('option') }).first();
+    // Find the generate parameter dropdown. UF-25: a bare `select` resolved
+    // first() to #charmVariantSelect on the welcome screen, which is not
+    // visible once a project is open. Use the same idiom as the tests above.
+    const generateParam = page
+      .locator('.param-control')
+      .filter({ hasText: /^generate/i });
+    const generateSelect = generateParam.locator('select').first();
     const options = await generateSelect.locator('option').allTextContents();
 
     // Look for a 2D option (SVG/DXF/first layer)
     const svgOption = options.find(
       (o) => /svg|dxf|first layer/i.test(o)
     );
-    if (!svgOption) {
-      test.skip();
-      return;
-    }
+    test.skip(!svgOption, NO_GENERATE_PARAM);
 
     // Switch to 2D mode
     await generateSelect.selectOption({ label: svgOption });
@@ -577,10 +535,7 @@ test.describe('Render Stability — 2D/3D Preview Transitions', () => {
     const threeDOption = options.find(
       (o) => /3d|stl|printed/i.test(o)
     );
-    if (!threeDOption) {
-      test.skip();
-      return;
-    }
+    test.skip(!threeDOption, NO_GENERATE_PARAM);
 
     await generateSelect.selectOption({ label: threeDOption });
     await waitForPreviewIdle(page, { timeout: 90_000 });

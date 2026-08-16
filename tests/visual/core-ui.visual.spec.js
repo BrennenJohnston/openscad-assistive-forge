@@ -57,7 +57,10 @@ test.describe('Visual Regression - Core UI', () => {
     }
   });
 
-  test('main layout after dismissing welcome', async ({ page }) => {
+  // Q-55(ii) (owner, 2026-08-15): renamed. The capture is correct and the
+  // baseline file keeps its name, but 'main layout' described the project UI
+  // while the image is the welcome page with the first-visit modal dismissed.
+  test('welcome page with the first-visit modal dismissed', async ({ page }) => {
     // Close first-visit modal if visible
     const welcomeModal = page.locator('#first-visit-modal');
     if (await welcomeModal.isVisible().catch(() => false)) {
@@ -201,41 +204,15 @@ test.describe('Visual Regression - Parameter Controls', () => {
 });
 
 test.describe('Visual Regression - Memory Warning UI', () => {
-  test('memory badge states', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForSelector('#app', { state: 'visible' });
-
-    // Close first-visit modal
-    const welcomeModal = page.locator('#first-visit-modal');
-    if (await welcomeModal.isVisible().catch(() => false)) {
-      const closeBtn = page.locator('#first-visit-modal .modal-close, #first-visit-modal button.btn-primary');
-      if (await closeBtn.first().isVisible().catch(() => false)) {
-        // UF-3: Continue requires an interface choice first
-        await page.locator('#firstVisitChoiceForge').check().catch(() => {});
-        await closeBtn.first().click();
-        await page.waitForTimeout(300);
-      }
-    }
-
-    // Show memory badge in warning state
-    await page.evaluate(() => {
-      const badge = document.getElementById('memoryStatusBadge');
-      const badgeText = document.getElementById('memoryStatusText');
-      if (badge) {
-        badge.classList.remove('hidden');
-        badge.dataset.state = 'warning';
-        if (badgeText) badgeText.textContent = '450 MB';
-      }
-    });
-    await page.waitForTimeout(300);
-
-    const badge = page.locator('#memoryStatusBadge');
-    await expect(badge).toHaveScreenshot('memory-badge-warning.png', {
-      maxDiffPixels: 20,
-      threshold: 0.1,
-    });
-  });
-
+  /*
+   * Q-55(ii) (owner, 2026-08-15): the 'memory badge states' case was REMOVED
+   * here, with its baseline. The image it compared against was a blank grey
+   * rectangle with no badge, no text and no colour in it - UF-9 recorded why:
+   * the app's live memory monitor overwrites the forced data-state inside the
+   * 300ms settle, so the shot never caught the warning state it is named for.
+   * A baseline that depicts nothing cannot catch a regression in anything.
+   * The two memory BANNER cases below do capture real state and stay.
+   */
   test('memory banner critical state', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('#app', { state: 'visible' });
@@ -286,21 +263,45 @@ test.describe('Visual Regression - Memory Warning UI', () => {
 test.describe('Visual Regression - Mobile Viewport', () => {
   test.use({ viewport: { width: 375, height: 667 } }); // iPhone SE
 
+  // UF-25: this describe never got UF-22's nudge suppression. It did not
+  // matter while the capture happened through an undismissed first-visit
+  // modal, because the nudge only appears after the gate is accepted. Now
+  // that the gate is properly dismissed, the nudge is the first thing on
+  // screen, so this photographs a dialog instead of a layout without it.
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+    });
+  });
+
   test('mobile layout', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('#app', { state: 'visible' });
 
-    // Close first-visit modal
-    const welcomeModal = page.locator('#first-visit-modal');
-    if (await welcomeModal.isVisible().catch(() => false)) {
-      const closeBtn = page.locator('#first-visit-modal .modal-close, #first-visit-modal button.btn-primary');
-      if (await closeBtn.first().isVisible().catch(() => false)) {
-        // UF-3: Continue requires an interface choice first
-        await page.locator('#firstVisitChoiceForge').check().catch(() => {});
-        await closeBtn.first().click();
-        await page.waitForTimeout(300);
-      }
-    }
+    // Q-55(ii) (owner, 2026-08-15): the old baseline was BLURRED - every word
+    // on the page out of focus - because the dismissal was a best-effort click
+    // followed by a flat 300ms wait, so the shot caught the page under the
+    // modal backdrop. A blurred baseline hides exactly the layout changes it
+    // exists to catch, and how blurred it is depends on timing, so it was a
+    // flake waiting to happen. Dismiss the way the app's own flow works
+    // (choose an interface, then Continue) and wait for the blocking state to
+    // actually clear.
+    // The modal opens on a delay, so the old code's immediate isVisible()
+    // check found nothing, skipped the dismissal entirely, and shot the page
+    // through the backdrop. Wait for it to arrive before dismissing it.
+    const welcomeModal = page.locator('#first-visit-modal:not(.hidden)');
+    await welcomeModal.waitFor({ state: 'visible', timeout: 15000 });
+    await page.evaluate(() => {
+      document.getElementById('firstVisitChoiceForge')?.click();
+      document.getElementById('first-visit-continue')?.click();
+    });
+    await page.waitForFunction(
+      () => !document.body.classList.contains('first-visit-blocking'),
+      null,
+      { timeout: 15000 }
+    );
+    await expect(welcomeModal).toBeHidden();
+    await page.waitForTimeout(500);
 
     await expect(page).toHaveScreenshot('mobile-layout.png', {
       maxDiffPixels: 200,
