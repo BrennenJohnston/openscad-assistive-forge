@@ -21,17 +21,21 @@ npm run test:e2e:ui
 
 ## Where the tests live
 
-Unit tests:
+| Path | What it is | How to run it |
+|---|---|---|
+| `tests/unit/*.test.js` | Vitest. 108 files, 3,957 tests as of 2026-08-16 | `npm run test:run` |
+| `tests/e2e/*.spec.js` | Playwright against the dev server | `npm run test:e2e` |
+| `tests/e2e-prod/*.spec.js` | Playwright against the **built** app under the deployed Content Security Policy | `npm run test:e2e:prod` |
+| `tests/visual/*.visual.spec.js` | Screenshot comparison, baselines per platform | `npm run test:visual` |
+| `scripts/parity/` | Geometry comparison against desktop OpenSCAD | `npm run parity` |
+| `tests/fixtures/` | Models and data the tests use | -- |
 
-`tests/unit/*.test.js`
+The production lane exists because styling that works in the dev server can be
+refused by the real policy. Anything touching CSS, the editor, or the Content
+Security Policy should run `npm run test:e2e:prod` as well.
 
-E2E tests:
-
-`tests/e2e/*.spec.js`
-
-Fixtures used by tests:
-
-`tests/fixtures/`
+Harness files that live under `build/` must be named `*.pwalk.js`, not
+`*.spec.js` -- Vitest picks up `build/*.spec.js` and tries to run it.
 
 ## Troubleshooting
 
@@ -111,13 +115,18 @@ This replicates the end-to-end workflow for a multi-file SCAD project with prese
 
 After any changes, verify:
 
-- [ ] `npm run test:run` -- all unit tests pass (1982+).
+- [ ] `npm run test:run` -- all unit tests pass (108 files, 3,957 tests).
 - [ ] `npm run test:e2e` -- E2E tests pass on Chromium.
 - [ ] Vector parameter widgets still render correctly.
 - [ ] Expert Mode toggle (Ctrl+E) is functional.
 - [ ] Share link generation and loading works.
 - [ ] `npx playwright test tests/e2e/accessibility.spec.js` -- axe-core passes.
-- [ ] Bundle size is within the 153KB gzipped budget (`npm run build` and check dist).
+- [ ] `npm run build && npm run check-bundle` -- budgets met.
+
+Measured 2026-08-16: core app **475 KB** gzipped against a 500 KB budget, main
+CSS 58 KB against 150 KB, all assets 844 KB against 1 MB. The core app is at
+95% of its budget, so a new dependency is a real decision rather than a
+formality.
 
 ---
 
@@ -127,9 +136,9 @@ These are known differences between Forge's WASM-based rendering and the desktop
 
 | Feature | Desktop | Forge (WASM) | Notes |
 |---------|---------|-------------|-------|
-| **Animations (`$t`)** | Supported | Not supported | Animation variable is not available in the WASM build |
-| **Text rendering** | Uses system fonts | Requires bundled fonts | Font loading may differ; some fonts unavailable |
-| **OpenSCAD version** | Latest release | May lag behind | WASM build is updated periodically; newer features may not be available |
+| **Animations (`$t`)** | Supported | Supported, but slower | The Animate panel sets `$t` per frame and re-renders for real. A WASM render takes 0.3 to 10 seconds, so the frame rate you ask for is a ceiling, not a promise -- playback renders a frame, then waits out whatever is left of the budget |
+| **Text rendering** | Uses system fonts | Requires bundled fonts | Only the Liberation family is bundled; other fonts are unavailable |
+| **OpenSCAD version** | Latest release | 2026.04.03 official WASM build, with Manifold | Vendored in `public/wasm/openscad-official/`; see its `README.txt` for how to update |
 | **Performance** | Native speed | Slower for complex models | Models with >100K faces may be significantly slower in WASM |
 | **File access** | Full filesystem | Upload/URL only | No direct filesystem access; all files must be uploaded or fetched via URL |
 | **Customizer GUI** | Native Qt widgets | HTML form controls | Behavior should match, but rendering differs |

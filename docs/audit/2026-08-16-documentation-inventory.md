@@ -361,6 +361,37 @@ untrustworthy.
   Your ledger still carries D-13 open: the saved-project Delete button measures
   3.81:1.
 
+### F10. The deployment guide told IT departments the app would not work on their servers
+
+Found while rewriting, not in the first pass. `docs/DEPLOYMENT.md:92` said:
+
+> **Why needed:** OpenSCAD WASM uses SharedArrayBuffer for performance. Without
+> these headers, `window.crossOriginIsolated` is `false` and WASM fails.
+
+The project ran an experiment on 2026-08-04 to answer exactly that question, and
+got the opposite answer. From `docs/audit/offline-pwa-spike-results.md`, against
+a static server sending no COOP or COEP headers at all:
+
+| Check | Cold, headerless | Offline reload |
+|---|---|---|
+| `crossOriginIsolated` | `false` | `false` |
+| `SharedArrayBuffer` available | no | no |
+| WASM engine initialises | **yes** | **yes** |
+| Preview renders geometry | **yes** | **yes** |
+| Console errors | none | none |
+
+That spike was run for a named request — hosting on an IT-locked machine — and
+its decision was "GO, with nothing to build". Meanwhile the deployment guide was
+telling anyone who read it that headerless hosting fails. Corrected, with the
+measurement cited.
+
+One thing I did **not** resolve, because it needs a test rather than an opinion:
+the spike says the build "falls back to single-threaded execution when
+`SharedArrayBuffer` is unavailable", which implies it might thread when the
+headers are present, while `BROWSER_SUPPORT.md` and `PERFORMANCE.md` both say
+the build is single-threaded regardless. Someone should settle that against the
+current binary; the wording I have written claims only what was measured.
+
 ---
 
 ## 5. What I checked and found genuinely accurate
@@ -542,7 +573,7 @@ description. The other twelve scripts are all reachable from `package.json`,
 | `docs/TROUBLESHOOTING.md` | **STALE-REWRITE** | F5. "Node 18+" is unsourced — `package.json` has no `engines` field. |
 | `docs/DEV_QUICK_START.md` | **STALE-REWRITE** | F5. Its project-structure block omits `tests/e2e-prod/` and `tests/visual/`. |
 | `docs/PERFORMANCE.md` | **STALE-REWRITE** | F7, F8. Bundle figures and the WASM package are both from a superseded build. |
-| `docs/DEPLOYMENT.md` | **STALE-REWRITE** | F5 (WASM size). Its cross-origin-isolation rationale says threading; the app is single-threaded, which `BROWSER_SUPPORT.md` states correctly. |
+| `docs/DEPLOYMENT.md` | **STALE-REWRITE** | F10 — it told IT teams headerless hosting fails, which the project's own spike disproved. Plus F5 (WASM size). |
 | `docs/ROLLBACK_RUNBOOK.md` | **STALE-REWRITE** | F7 (version/date header). Procedure itself looks sound. |
 | `docs/RENDER_TRIGGER_MAP.md` | **STALE-REWRITE** | F8. Calls itself single-source-of-truth while being five months unaudited, for two resolved bugs. |
 | `docs/RELEASING.md` | **STALE-REWRITE** | Never mentions merging `develop` into `main`, though `DEVELOPMENT_WORKFLOW.md` says `main` is what deploys. The release procedure has a hole in it. |
