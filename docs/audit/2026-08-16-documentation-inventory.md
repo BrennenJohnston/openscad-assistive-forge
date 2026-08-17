@@ -392,7 +392,15 @@ headers are present, while `BROWSER_SUPPORT.md` and `PERFORMANCE.md` both say
 the build is single-threaded regardless. Someone should settle that against the
 current binary; the wording I have written claims only what was measured.
 
-### F11. `main` requires a status check that no longer exists
+### F11. `main` required a status check that no longer existed — FIXED
+
+> **Resolved 2026-08-16**, after this was reported. The owner asked for the same
+> repair `develop` had, and ruleset 12059665 now requires
+> `E2E Tests (Edge 1/2)` and `E2E Tests (Edge 2/2)` in place of the retired
+> name — eight required checks, all eight verified against jobs that really
+> report. Everything else in the ruleset was read back afterwards and is
+> byte-identical, including the four rules `main` carries that `develop` does
+> not. The account below is kept because the failure mode is worth recognising.
 
 Not a documentation problem — a repository-configuration one, found because
 `.github/BRANCH_PROTECTION.md` had to be checked against reality before it could
@@ -406,15 +414,15 @@ MEASURED from the GitHub API on 2026-08-16. There are two rulesets, not one:
 - **12059665, `main`** — also active, stricter (it adds signed commits and
   linear history). Its required checks still name **`E2E Tests (Edge)`**.
 
-No job produces that name any more. A required check that never reports does not
-fail — it sits pending — so **a pull request from `develop` into `main` will
-wait forever rather than being refused.** The next promotion to production is
-blocked until ruleset 12059665 is edited the way 12059827 already was.
+No job produced that name any more. A required check that never reports does not
+fail — it sits pending — so a pull request from `develop` into `main` would have
+waited forever rather than being refused. That is a worse failure than a red
+check, because there is nothing to click on.
 
-Ruleset edits are yours, so this is reported rather than done. The other six
-names on `main` all check out, including `Lighthouse Performance Audit`, which
-comes from `lighthouse.yml` rather than `test.yml` and does still run on pull
-requests to `main`.
+The other six names on `main` all checked out, including
+`Lighthouse Performance Audit`, which comes from `lighthouse.yml` rather than
+`test.yml` and does still run on pull requests to `main`. So the repair was
+exactly one swap.
 
 The old `.github/BRANCH_PROTECTION.md` would not have helped anyone find this:
 it described classic branch protection that was never configured, with five
