@@ -633,8 +633,8 @@ header, which is what makes it a record rather than a stale instruction.
 
 | File | Disposition | Note |
 |---|---|---|
-| `docs/plans/geometry_fix_executor_prompt.md` | **OBSOLETE-ARCHIVE** | Q-62b, signed. Zero inbound references. |
-| `docs/plans/qa_parity_executor_prompt.md` | **OBSOLETE-ARCHIVE** | Q-62b, signed. Zero inbound references. |
+| `docs/plans/geometry_fix_executor_prompt.md` | **OBSOLETE-ARCHIVE — done** | Q-62b, signed. Zero inbound references. Now at `docs/archive/geometry_fix_executor_prompt.md` with a dated note. |
+| `docs/plans/qa_parity_executor_prompt.md` | **OBSOLETE-ARCHIVE — done** | Q-62b, signed. Zero inbound references. Now at `docs/archive/qa_parity_executor_prompt.md` with a dated note. |
 | `docs/plans/lighting-visual-parity.plan.md` | **OBSOLETE-ARCHIVE — awaiting your signature** | All phases completed; zero inbound references. |
 | `docs/plans/qa_parity_fix_plan_validation_report.md` | **OBSOLETE-ARCHIVE — awaiting your signature** | Validates a plan outside this repository; zero inbound references. |
 | `docs/plans/lwfl-csg-bypass-test-protocol.md` | **ACCURATE-KEEP** (with a status line to add) | Live workstream tooling. Evidence in section 6. |
