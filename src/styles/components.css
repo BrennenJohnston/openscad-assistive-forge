@@ -7350,12 +7350,16 @@ body.first-visit-blocking #app {
 }
 
 /* File list */
+/* The box grows with the tree and stops at six rows, counted in the same
+   token the rows are sized from: 236px on a mouse, 284px on a phone. A flat
+   200px ceiling showed five rows before UF-31 made the rows one target tall
+   and four after. */
 .project-files-list {
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
   margin-bottom: var(--space-sm);
-  max-height: 200px;
+  max-height: calc(var(--size-touch-target) * 6 + var(--space-xs) * 5);
   overflow-y: auto;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
@@ -7375,6 +7379,24 @@ body.first-visit-blocking #app {
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius-md);
   font-size: var(--font-size-sm);
+}
+
+/* A file row is focusable only so a navigation can land on it (D-54), and the
+   global ring fires on [tabindex]:focus rather than :focus-visible, so a mouse
+   click into a folder would leave a ring sitting on the first row. Keyboard
+   focus still matches :focus-visible and keeps its ring; only the pointer case
+   is silenced. */
+.project-file-item[tabindex]:focus:not(:focus-visible) {
+  outline: none !important;
+}
+
+/* MEASURED: a row sits flush with the list's left, top and bottom edges, and
+   the list is a scroll container in both axes, so the default 2px-offset ring
+   is clipped on three sides — for the folder buttons too, which is why this is
+   not scoped to the new file rows. Drawing it inside the row keeps the whole
+   3px visible without moving anything. */
+.project-file-item:focus-visible {
+  outline-offset: -3px !important;
 }
 
 .project-file-item.main-file {
