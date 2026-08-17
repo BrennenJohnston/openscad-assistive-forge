@@ -95,32 +95,62 @@ async function suppressTourNudge(page) {
 }
 
 /**
- * UF-27 / D-52: four cases in this file were reporting PASS while asserting
- * nothing whatsoever.
+ * UF-32: open the app with a real project on screen, for the four cases whose
+ * subject only exists then.
  *
- * Each wrapped its `toHaveScreenshot` in `if (await el.isVisible())` against
- * an element that only exists once a project is open. The suite never opens
- * one, so the condition was always false, the assertion never ran, and the
- * case still reported ok. MEASURED: the file has 16 cases naming 16 baselines,
- * and only 12 baseline files exist - the four with no file are exactly these
- * four. A missing baseline is normally how Playwright tells you a case never
- * asserted; here nothing was listening.
+ * The deep link is the same door render-stability.spec.js uses. MEASURED at
+ * develop@20d32d1: it raises no save prompt and leaves no modal open, so
+ * nothing can paint over a capture the way the first-visit modal did in D-51.
  *
- * They now skip, formally and with this reason, so the board says "did not
- * check" instead of "checked and fine".
- *
- * The fix, when someone takes it: open a project first, the way
- * render-stability.spec.js does with `/?example=colored-box`, and wait for
- * `.param-control`. MEASURED on that page: `.panel-header` becomes visible at
- * 499x85 and `.param-panel-body` at 499x654, so three of the four would then
- * capture something real. `.forge-disclosure` stays hidden even with a project
- * open (11 in the DOM, none visible), so the 1440px disclosure case needs its
- * own answer about what it is meant to photograph. It was not taken here
- * because it puts a project load into a lane that is being made able to fail
- * for the first time, and that trade deserves its own measurement.
+ * The waits, in the order the engine forces: the caller presets
+ * first-visit-seen, so there is no gate and the engine starts immediately;
+ * then the parameters the app generates from the model prove it is really
+ * open; then a completed render, which is what puts the model in the picture
+ * and the file size and triangle count in the status bar. Waiting for the
+ * render rather than for a fixed delay is what keeps the full-page capture
+ * from photographing an empty canvas on a slow runner.
  */
-const NEEDS_A_LOADED_PROJECT =
-  'the element only exists with a project open, and this suite opens none (see the note above)';
+async function openProject(page) {
+  await page.goto('/?example=colored-box');
+  await page.waitForSelector('#app', { state: 'visible' });
+  await waitForEngine(page);
+  await page.waitForSelector('.param-control', {
+    state: 'attached',
+    timeout: 30_000,
+  });
+  await page.waitForFunction(
+    () => /[\d,]+\s+triangles/.test(document.body.innerText),
+    null,
+    { timeout: 60_000 }
+  );
+  await page.waitForTimeout(500);
+}
+
+/**
+ * D-52, found at UF-27 and CLOSED at UF-32.
+ *
+ * Four cases in this file reported PASS for their whole lives while asserting
+ * nothing. Each wrapped its `toHaveScreenshot` in `if (await el.isVisible())`
+ * against an element that only exists once a project is open, and the suite
+ * opened none — so the condition was always false, the assertion never ran,
+ * and the case still reported ok. The tell was in the file listing: 16 cases
+ * named 16 baselines and only 12 baseline files existed. UF-27 turned them
+ * into formal skips so the board said "did not check" instead of "checked and
+ * fine"; UF-32 opens a project and lets them check.
+ *
+ * They live together in one describe now because they share that requirement
+ * and because their old describes hold cases that must keep photographing the
+ * app WITHOUT a project. Moving them renamed no baseline: the snapshot path
+ * comes from the name passed to toHaveScreenshot, not from the describe.
+ *
+ * ONE CORRECTION TO WHAT UF-27 RECORDED, measured at develop@20d32d1: the note
+ * here used to say `.forge-disclosure` "stays hidden even with a project open
+ * (11 in the DOM, none visible)", and that the 1440px case therefore needed
+ * its own answer. With a project open there are 11 in the DOM and FOUR
+ * visible — Presets, Dimensions, Appearance, Details — in Simplified, and ten
+ * in Standard. Without a project: 8 in the DOM, 0 visible, which is the state
+ * that measurement must have caught. None of the four cases was blocked.
+ */
 
 test.describe('Visual Regression - Core UI', () => {
   test.beforeEach(async ({ page }) => {
@@ -266,46 +296,131 @@ test.describe('Visual Regression - Theme Switching', () => {
   });
 });
 
-test.describe('Visual Regression - Parameter Controls', () => {
+/**
+ * The four cases D-52 was about. One beforeEach, one requirement: a project
+ * on screen. See the note above the first describe in this file.
+ */
+test.describe('Visual Regression - With a project open (D-52)', () => {
   test.beforeEach(async ({ page }) => {
-    await openApp(page);
-
-    // Close first-visit modal and load example
-    const welcomeModal = page.locator('#first-visit-modal');
-    if (await welcomeModal.isVisible().catch(() => false)) {
-      // Click simple box example if available
-      const simpleBoxLink = page.locator('a[href*="simple-box"], button:has-text("Simple Box")');
-      if (await simpleBoxLink.first().isVisible().catch(() => false)) {
-        await simpleBoxLink.first().click();
-        await page.waitForTimeout(1000);
-      } else {
-        const closeBtn = page.locator('#first-visit-modal .modal-close, #first-visit-modal button.btn-primary');
-        if (await closeBtn.first().isVisible().catch(() => false)) {
-          // UF-3: Continue requires an interface choice first
-          await page.locator('#firstVisitChoiceForge').check().catch(() => {});
-          await closeBtn.first().click();
-        }
-      }
-    }
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+      // Stamp the mode rather than inheriting whatever the default happens to
+      // be. Simplified is what a new user meets and what the other twelve
+      // baselines photograph. MEASURED: Standard puts the Companion Files
+      // panel inside two of these four captures, which would tie pictures
+      // named for the parameter panel to a surface that is not their subject.
+      localStorage.setItem(
+        'openscad-forge-ui-mode',
+        JSON.stringify({ mode: 'simplified', lastCustomMode: 'simplified' })
+      );
+    });
+    await openProject(page);
   });
 
-  test('parameter panel with controls', async ({ page }) => {
-    // UF-27 / D-52: the selector this used, `#parameterPanel, .parameter-panel`,
-    // matches NOTHING in the app - MEASURED count 0 both with and without a
-    // project loaded. It is the `#fileInfo` mistake of UF-25 again: an id that
-    // no longer exists, waited for, then hidden behind an `if (visible)` that
-    // could never be true. The real element is `#paramPanelBody`.
-    const parameterPanel = page.locator('#paramPanelBody');
-    await parameterPanel
-      .waitFor({ state: 'visible', timeout: 15000 })
-      .catch(() => {});
+  /**
+   * Each case declares its viewport with test.use, so the page is CREATED at
+   * that size and never resized. Two measured reasons, and the second one
+   * produced a baseline that had to be thrown away:
+   *
+   * 1. #paramPanelBody sits at y=184 and is 654px tall at 1280 and 722px at
+   *    1024, so at the original 720/768 heights its bottom fell outside the
+   *    viewport, Playwright's scrollIntoView shifted its container up by ~70px
+   *    to take the shot, and the sticky .panel-header then covered the panel's
+   *    first row. The pictures showed a half-clipped Sort row no user sees.
+   * 2. Resizing to 1440 AFTER load re-opens the Preview Settings drawer, which
+   *    then covers most of the 3D view. The first 1440 baseline captured that
+   *    and was discarded. A page created at 1440 keeps the drawer collapsed,
+   *    which is what a user opening the app at that size gets.
+   *
+   * The width is what each case is named for; the height is chosen to let the
+   * subject fit.
+   */
+  test.describe('parameter panel', () => {
+    test.use({ viewport: { width: 1280, height: 900 } });
 
-    const visible = await parameterPanel.isVisible().catch(() => false);
-    test.skip(!visible, NEEDS_A_LOADED_PROJECT);
+    test('parameter panel with controls', async ({ page }) => {
+      // UF-27: the old selector `#parameterPanel, .parameter-panel` matched
+      // NOTHING in the app - the `#fileInfo` mistake of UF-25 again. The real
+      // element is #paramPanelBody, and `.param-panel-body` is the same node.
+      const parameterPanel = page.locator('#paramPanelBody');
+      await expect(parameterPanel).toBeVisible();
 
-    await expect(parameterPanel).toHaveScreenshot('parameter-panel.png', {
-      maxDiffPixels: 100,
-      threshold: 0.2,
+      await expect(parameterPanel).toHaveScreenshot('parameter-panel.png', {
+        maxDiffPixels: 100,
+        threshold: 0.2,
+      });
+    });
+  });
+
+  test.describe('whole page at 1440px', () => {
+    test.use({ viewport: { width: 1440, height: 900 } });
+
+    test('disclosure sections closed state at 1440px', async ({ page }) => {
+      // MEASURED: the first .forge-disclosure in DOM order is the Console, and
+      // six more hidden panels follow it — Simplified hides all seven. The four
+      // that ARE visible are Presets and the three parameter groups, which load
+      // collapsed (F5, owner 2026-05-15) and are the closed state this case is
+      // named for. Asserting on `.first()` is what kept this case skipping even
+      // with a project open, and is almost certainly what produced UF-27's
+      // "11 in the DOM, none visible" note.
+      await expect(page.locator('.forge-disclosure:visible')).toHaveCount(4);
+
+      await expect(page).toHaveScreenshot('disclosures-closed-1440.png', {
+        maxDiffPixels: 200,
+        threshold: 0.2,
+      });
+    });
+  });
+
+  test.describe('parameters header', () => {
+    test.use({ viewport: { width: 1280, height: 800 } });
+
+    test('parameters header layout at 1280px desktop', async ({ page }) => {
+      const header = page.locator('.panel-header').first();
+      await expect(header).toBeVisible();
+
+      await expect(header).toHaveScreenshot('param-header-desktop-1280.png', {
+        maxDiffPixels: 150,
+        threshold: 0.2,
+      });
+    });
+
+    /**
+     * The canary (owner's call, 2026-08-17). Every other case in this file
+     * allows a per-pixel colour threshold, and that is deliberate: it keeps
+     * anti-aliasing from reddening the lane on two platforms with different
+     * font rendering. The cost is measured — rounding the disclosure corners
+     * to zero moves 660 pixels of the 1440 capture (0.05%) and still passes.
+     *
+     * So one capture is held to zero. It photographs the smallest, most
+     * static region in the set, the same header the case above allows 150
+     * pixels of drift in, and it permits none: any pixel that moves reddens
+     * it. If this one starts flaking while the tolerant four stay green, the
+     * flake is in the rendering, not in the app.
+     */
+    test('parameters header, pixel-exact canary', async ({ page }) => {
+      const header = page.locator('.panel-header').first();
+      await expect(header).toBeVisible();
+
+      await expect(header).toHaveScreenshot('param-header-strict-1280.png', {
+        maxDiffPixels: 0,
+        threshold: 0,
+      });
+    });
+  });
+
+  test.describe('disclosure stack', () => {
+    test.use({ viewport: { width: 1024, height: 960 } });
+
+    test('disclosure sections stack uniformity at 1024px', async ({ page }) => {
+      const paramBody = page.locator('.param-panel-body').first();
+      await expect(paramBody).toBeVisible();
+
+      await expect(paramBody).toHaveScreenshot('disclosure-stack-1024.png', {
+        maxDiffPixels: 200,
+        threshold: 0.2,
+      });
     });
   });
 });
@@ -430,21 +545,6 @@ test.describe('Visual Regression - Disclosure Sections', () => {
     await page.waitForTimeout(500);
   });
 
-  test('disclosure sections closed state at 1440px', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await page.waitForTimeout(300);
-
-    // UF-27 / D-52: see the note on NEEDS_A_LOADED_PROJECT.
-    const disclosures = page.locator('.forge-disclosure').first();
-    const visible = await disclosures.isVisible().catch(() => false);
-    test.skip(!visible, NEEDS_A_LOADED_PROJECT);
-
-    await expect(page).toHaveScreenshot('disclosures-closed-1440.png', {
-      maxDiffPixels: 200,
-      threshold: 0.2,
-    });
-  });
-
   test('disclosure sections at 768px tablet width', async ({ page }) => {
     await page.setViewportSize({ width: 768, height: 1024 });
     await page.waitForTimeout(300);
@@ -479,21 +579,6 @@ test.describe('Visual Regression - UI Uniformity', () => {
     await page.waitForTimeout(500);
   });
 
-  test('parameters header layout at 1280px desktop', async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 800 });
-    await page.waitForTimeout(300);
-
-    // UF-27 / D-52: see the note on NEEDS_A_LOADED_PROJECT.
-    const header = page.locator('.panel-header').first();
-    const visible = await header.isVisible().catch(() => false);
-    test.skip(!visible, NEEDS_A_LOADED_PROJECT);
-
-    await expect(header).toHaveScreenshot('param-header-desktop-1280.png', {
-      maxDiffPixels: 150,
-      threshold: 0.2,
-    });
-  });
-
   test('drawer headers at 480px mobile portrait', async ({ page }) => {
     await page.setViewportSize({ width: 480, height: 854 });
     await page.waitForTimeout(300);
@@ -504,18 +589,4 @@ test.describe('Visual Regression - UI Uniformity', () => {
     });
   });
 
-  test('disclosure sections stack uniformity at 1024px', async ({ page }) => {
-    await page.setViewportSize({ width: 1024, height: 768 });
-    await page.waitForTimeout(300);
-
-    // UF-27 / D-52: see the note on NEEDS_A_LOADED_PROJECT.
-    const paramBody = page.locator('.param-panel-body').first();
-    const visible = await paramBody.isVisible().catch(() => false);
-    test.skip(!visible, NEEDS_A_LOADED_PROJECT);
-
-    await expect(paramBody).toHaveScreenshot('disclosure-stack-1024.png', {
-      maxDiffPixels: 200,
-      threshold: 0.2,
-    });
-  });
 });

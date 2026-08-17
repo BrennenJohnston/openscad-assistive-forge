@@ -418,8 +418,11 @@ export function initCompanionFilesController({
         ? 'project-file-item main-file'
         : 'project-file-item';
 
+      // tabindex="-1" so a navigation can hand focus to the row itself. It
+      // stays out of the Tab order; only the buttons inside it are reachable
+      // by Tab, exactly as before.
       return `
-        <div class="${itemClass}" role="listitem">
+        <div class="${itemClass}" role="listitem" tabindex="-1">
           <span class="project-file-icon" aria-hidden="true">${icon}</span>
           <span class="project-file-name" title="${escapeHtml(path)}">${escapeHtml(name)}</span>
           ${mainBadge}
@@ -437,15 +440,45 @@ export function initCompanionFilesController({
     if (breadcrumbHost) breadcrumbHost.innerHTML = breadcrumbHtml;
     container.innerHTML = folderItems.join('') + fileItems.join('');
 
-    // Breadcrumb navigation
     const breadcrumbScope = breadcrumbHost || container;
+
+    /**
+     * Put focus somewhere sensible after the tree redraws for a navigation the
+     * user asked for (D-54).
+     *
+     * The list is rebuilt with innerHTML, so the row they just pressed is
+     * detached by the time this runs and focus has already fallen to <body> —
+     * UF-23's mechanism on the navigation path. Only the three navigation
+     * handlers call this; a background re-render must never move focus.
+     *
+     * @param {string|null} folderLeft - Folder the user stepped OUT of, whose
+     *   row is now on screen again. Null when stepping in.
+     */
+    function focusAfterTreeNavigation(folderLeft = null) {
+      // Match on dataset rather than a selector, so a folder name containing
+      // quotes cannot break the lookup (the UF-23 rule).
+      const rows = [...container.querySelectorAll('.project-file-item')];
+      const target = folderLeft
+        ? rows.find((row) => row.dataset.folderEnter === folderLeft) || rows[0]
+        : rows[0];
+      const fallback =
+        breadcrumbScope.querySelector('.file-nav-breadcrumb-home') ||
+        document.querySelector('#projectFilesControls .project-files-summary');
+      (target || fallback)?.focus();
+    }
+
+    // Breadcrumb navigation
     breadcrumbScope
       .querySelectorAll('.file-nav-breadcrumb-btn')
       .forEach((btn) => {
         const depth = parseInt(btn.dataset.depth, 10);
         const activate = () => {
+          // The segment being dropped is the folder the user is stepping out
+          // of, and its row is on screen again once the redraw lands.
+          const folderLeft = companionCurrentPath[depth] || null;
           companionCurrentPath = companionCurrentPath.slice(0, depth);
           renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
+          focusAfterTreeNavigation(folderLeft);
         };
         btn.addEventListener('click', activate);
         btn.addEventListener('keydown', (e) => {
@@ -462,6 +495,7 @@ export function initCompanionFilesController({
       const enter = () => {
         companionCurrentPath = [...companionCurrentPath, folderName];
         renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
+        focusAfterTreeNavigation();
       };
       row.addEventListener('click', enter);
       // Enter and Space are the button's own now. Escape still has to be
@@ -469,8 +503,11 @@ export function initCompanionFilesController({
       row.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && companionCurrentPath.length > 0) {
           e.preventDefault();
+          const folderLeft =
+            companionCurrentPath[companionCurrentPath.length - 1];
           companionCurrentPath = companionCurrentPath.slice(0, -1);
           renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
+          focusAfterTreeNavigation(folderLeft);
         }
       });
     });
