@@ -493,6 +493,28 @@ cube(10);
   })
 
   /**
+   * UF-34. The case above passes only because a single-file example takes the
+   * renderer's companionCount === 0 branch, which is the ONLY branch that
+   * refreshes this button. With companions present the button kept its hidden
+   * class, so Save as Project was missing in exactly the situation it exists
+   * for: a multi-file project that is not saved yet.
+   */
+  test('companion save button is visible when the project HAS companion files', async ({
+    page,
+  }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await uploadZipProject(page)
+    await openProjectFilesDisclosure(page)
+
+    await expect(page.locator('.project-file-item').first()).toBeVisible()
+
+    const saveBtn = page.locator('#companionSaveBtn')
+    await expect(saveBtn).toBeVisible({ timeout: 10000 })
+    await expect(saveBtn).toContainText('Save as Project')
+  })
+
+  /**
    * UF-33. UF-31 made every row one touch target tall, which cost the list a
    * visible row inside its 200px ceiling — four on a phone where it had been
    * five. The owner chose to let the box grow with the content up to a larger

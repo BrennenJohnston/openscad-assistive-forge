@@ -267,6 +267,13 @@ export function initCompanionFilesController({
     }
     controls.classList.remove('hidden');
 
+    // Once per render, before the count decides anything: this used to sit
+    // inside the no-companions branch only, so Save as Project stayed hidden
+    // in exactly the case it exists for — a multi-file project not yet saved.
+    if (saveBtn) {
+      updateCompanionSaveButton();
+    }
+
     const companionFiles = projectFiles
       ? new Map(
           Array.from(projectFiles.entries()).filter(
@@ -287,9 +294,6 @@ export function initCompanionFilesController({
       if (badge) badge.textContent = '0';
       container.innerHTML = '';
       if (breadcrumbHost) breadcrumbHost.innerHTML = '';
-      if (saveBtn) {
-        updateCompanionSaveButton();
-      }
       if (warning && warningText) {
         const missingFiles = [];
         if (requiredFiles && requiredFiles.files) {
