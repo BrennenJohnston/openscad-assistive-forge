@@ -12,12 +12,35 @@ A few things that matter:
 - Keeps all your data on your own computer
 - Exports STL, OBJ, and more
 
+## The first thing you will see
+
+The very first time you open the app, before anything else, it asks you to pick
+an interface. You get a short note for first-time users and two choices:
+
+- **Assistive Forge** -- the guided one. Parameters first, built for keyboard
+  use, screen readers and high contrast. Works on phones and tablets as well as
+  desktops. Pick this one if you are new to OpenSCAD, and pick it if you are not
+  sure.
+- **Classic** -- the layout of the OpenSCAD desktop application: menus, toolbar,
+  code editor, Customizer and console. Pick this if you already know the desktop
+  program or you are following a tutorial written for it. Desktop screen widths
+  only.
+
+Neither choice is permanent. There is a button in the top right that switches
+between them at any time, and your code, parameter values and camera position
+all come with you. See the [Classic Interface Guide](./CLASSIC_UI_GUIDE.md).
+
+The app only asks once. After that it opens straight into whichever you chose.
+
+The rest of this guide describes the **Assistive Forge** interface.
+
 ## Opening Your First Design
 
 ### Option 1: Load an Example
 
 1. Open the app at your hosted URL
-2. Look for the **Welcome Panel** in the center of the screen
+2. Once past the interface choice, look for the **Welcome Panel** in the centre
+   of the screen
 3. Click **"Load Example"** to see available sample models
 4. Select any example to load it
 

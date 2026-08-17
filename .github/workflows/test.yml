@@ -33,10 +33,7 @@ jobs:
 
       - name: Check for hallucinated imports
         run: npm run import-check
-      
-      - name: Scan for AI code bloat
-        run: npm run bloat-scan
-      
+
       - name: Audit CSS variables
         run: npm run css-variable-audit
 

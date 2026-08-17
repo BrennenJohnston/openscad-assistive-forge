@@ -10,10 +10,16 @@ cd openscad-assistive-forge
 npm install
 
 # First time only:
-npm run setup-wasm        # downloads OpenSCAD WASM (~15-30MB)
-npm run setup-libraries   # downloads OpenSCAD libraries
+npm run setup-wasm        # downloads Liberation fonts for OpenSCAD text() (~2MB)
+npm run setup-libraries   # downloads the MCAD / BOSL2 / NopSCADlib / dotSCAD bundles
+npm run setup-liblouis    # copies the braille translation engine and tables
 npx playwright install    # for E2E tests
 ```
+
+The OpenSCAD WASM binary is **not** downloaded -- it is vendored in git at
+`public/wasm/openscad-official/`. `setup-wasm` is named after the thing it used
+to do; today it fetches fonts. All three setup scripts run automatically as part
+of `npm run build`.
 
 ## Common commands
 
@@ -31,6 +37,7 @@ npm run check-a11y       # accessibility audit (Lighthouse)
 ## Project structure
 
 ```
+index.html             The whole UI markup, in one file
 src/
   main.js              Entry point
   js/                  Core modules (parser, ui-generator, preview, etc.)
@@ -39,10 +46,16 @@ src/
 public/
   sw.js                Service worker
   examples/            Example .scad files
-  wasm/                OpenSCAD WASM (downloaded)
+  wasm/                OpenSCAD WASM (vendored in git)
+  libraries/           Library bundles (downloaded)
+  liblouis/            Braille translation engine and tables (copied)
 tests/
   unit/                Vitest tests
-  e2e/                 Playwright tests
+  e2e/                 Playwright tests, against the dev server
+  e2e-prod/            Playwright tests, against the built app under the real CSP
+  visual/              Screenshot comparison, with per-platform baselines
+  fixtures/            Models and data the tests use
+scripts/               Setup, checks and CI helpers
 docs/                  Documentation
 ```
 

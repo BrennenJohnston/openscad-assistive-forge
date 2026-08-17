@@ -1,91 +1,51 @@
 # Welcome Screen
 
-The Welcome screen provides role-based entry points with guided tutorial sandboxes to help users learn the app. Currently, the main entry point is a single "Getting Started" tutorial that covers both workflow basics and UI orientation.
+The welcome screen is what you land on with no project open. It offers a few
+things to start with, and a collapsed section explaining who the app is built
+for.
 
-## Design Philosophy
+*Verified against `index.html` on 2026-08-16.*
 
-This role-based approach reduces cognitive load by showing users paths relevant to their needs first, improves discoverability of accessibility features, and provides concrete examples with working demos.
+## What is on it
 
-## Role Paths
+### Cards you see straight away
 
-### 1. Beginners Start Here (Getting Started)
+Four, in this order:
 
-**Target audience:** Anyone new to the app
+| Card | Its button does |
+|---|---|
+| **Welcome Page Tour** | Starts a guided tour of the welcome page itself. Loads no model. |
+| **Beginners Start Here** | Loads the `simple-box` example and starts the introductory tour. Also has an "Open Help" link to the Workflow page. |
+| **Charm Customizer** | Opens the `q-charm` example -- design a charm, pendant or zipper pull. |
+| **Braille Card Customizer** | Opens the `braille-sign` example -- type text, get printable braille. |
 
-**Example:** Simple Box
+Only the first two start a tutorial. The other two open a ready-made tool.
 
-**What you'll learn:**
-- Where Parameters, Preview, Actions, and Camera controls are (desktop + mobile)
-- Adjusting parameters with live preview
-- Saving presets
-- Generating and downloading files
+### "Explore Features & Accessibility"
 
-**Tutorial:** Guided walkthrough showing panel layout, parameter adjustments, presets, Actions menu, Camera controls, file generation, and Help access.
+Below those sits a disclosure with that heading, **collapsed by default**.
+Opening it reveals six more cards:
 
-### 2. Advanced Makers
+- Explore Features
+- Advanced Makers
+- Keyboard-Only Users
+- Low Vision Users
+- Voice Input Users
+- Screen Reader Users
 
-**Target audience:** Users working with multi-file projects and libraries
+These are **not** tutorials and they load no model. Each describes who it is for,
+lists what the app offers that group, and has a single button that opens the
+relevant page of the in-app Help guide. They exist so that someone who needs
+high contrast, or uses only a keyboard, can find out what is there without
+reading a manual.
 
-**Example:** Library Test
+## Why it is shaped this way
 
-**What you'll learn:**
-- Upload ZIP files with dependencies
-- Enable MCAD, BOSL2, and other libraries
-- Export in multiple formats (STL, OBJ, AMF)
-
-### 3. Keyboard-Only Users
-
-**Target audience:** Users who cannot use a mouse, switch users
-
-**Example:** Cylinder
-
-**What you'll learn:**
-- Tab through parameters logically
-- Undo/Redo with Ctrl+Z / Ctrl+Shift+Z
-- Skip to main content
-- Modal focus trapping (Escape to close)
-
-### 4. Low Vision Users
-
-**Target audience:** Users who need high contrast or larger targets
-
-**Example:** Simple Box
-
-**What you'll learn:**
-- Toggle high contrast mode (HC button)
-- Switch light/dark theme
-- Large touch targets (44×44px minimum)
-
-### 5. Voice Input Users
-
-**Target audience:** Users with Dragon, Voice Control, Voice Access
-
-**Example:** Simple Box
-
-**What you'll learn:**
-- Say button labels: "Click Generate STL"
-- Navigate: "Click Help", "Click Reset"
-- All controls have unique, speakable names
-
-### 6. Screen Reader Users
-
-**Target audience:** Blind users, NVDA, JAWS, VoiceOver, TalkBack users
-
-**Example:** Simple Box
-
-**What you'll learn:**
-- Status area announces all changes
-- ARIA landmarks for quick navigation
-- Plain-language error messages
-
-## Accessibility Spotlights
-
-Below the role cards, key accessibility features are highlighted:
-
-1. Keyboard-first design with logical tab order
-2. High contrast and forced colors support
-3. Plain-language error messages
-4. Full workflow without drag gestures
+Showing four things and hiding six keeps the first screen short, which matters
+most for the people the app is built for: a long screen is a long way to travel
+with a screen reader or a switch. The six that are hidden are reference
+material rather than something to do, so they are one keystroke away rather than
+in the way.
 
 ## Implementation
 
@@ -95,9 +55,13 @@ Module: `src/js/tutorial-sandbox.js`
 
 All role paths launch a spotlight coachmark tutorial after loading the example.
 
+This applies to the two cards that start a tour -- Welcome Page Tour and
+Beginners Start Here. The Welcome Page Tour skips the loading step, because it
+tours the page you are already on.
+
 ```mermaid
 flowchart TB
-    User[User picks role path] --> Load[Load example SCAD]
+    User[User presses a tour button] --> Load[Load example SCAD]
     Load --> Tutorial[tutorial-sandbox.js]
     Tutorial --> Spotlight[Create SVG spotlight overlay]
     Tutorial --> Panel[Show tutorial panel]
@@ -143,7 +107,11 @@ Guidelines:
 - Use `<kbd>` for keyboard shortcuts
 - Completion actions should be simple (one click, one change)
 
-All tutorials use `simple-box` example except Advanced Makers (uses `library-test`).
+The introductory tour uses the `simple-box` example. The welcome-page tour uses
+no example at all.
+
+The app remembers which tours you have finished or dismissed, so a tour you have
+already seen does not offer itself again.
 
 ## Related Documentation
 

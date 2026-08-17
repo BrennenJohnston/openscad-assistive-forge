@@ -400,35 +400,6 @@ flowchart LR
     UI -->|toggle / swap / sync| State
 ```
 
-## CLI tool
-
-The CLI (`openscad-forge`) is for developers who want to extract parameters or scaffold standalone customizers:
-
-```mermaid
-flowchart TB
-    CLI[openscad-forge CLI]
-    
-    CLI --> extract[extract command]
-    CLI --> scaffold[scaffold command]
-    CLI --> validate[validate command]
-    CLI --> sync[sync command]
-    CLI --> theme[theme command]
-    CLI --> ci[ci command]
-    CLI --> test[test command]
-    
-    extract --> |reads| SCAD[.scad files]
-    extract --> |outputs| Schema[JSON Schema]
-    
-    scaffold --> |uses| Templates[Framework Templates]
-    scaffold --> |generates| WebApp[Standalone Web App]
-    
-    Templates --> React[React]
-    Templates --> Vue[Vue]
-    Templates --> Svelte[Svelte]
-    Templates --> Angular[Angular]
-    Templates --> Preact[Preact]
-```
-
 ## Key modules
 
 **Entry point:**

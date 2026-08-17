@@ -39,6 +39,22 @@ The welcome screen ships with ready-to-use customizers -- no `.scad` file needed
   with engraved or raised icons, including C-clip charms that snap onto
   silicone bracelets. Import your own SVG or pick from the built-in library.
 
+## Two interfaces
+
+The first time you open the app it asks which interface you want, and you can
+switch at any time from the button in the top right:
+
+- **Assistive Forge** -- a guided, parameter-first interface built for screen
+  readers, keyboard use, and people new to OpenSCAD. Light, dark, and high
+  contrast themes.
+- **Classic** -- the layout of the OpenSCAD desktop application: the same menus,
+  toolbar, editor, Customizer, and console. For people who already know the
+  desktop program or are following a tutorial written for it. Desktop widths
+  only, and it keeps the desktop's light appearance.
+
+Both open the same files and produce the same geometry. See
+`docs/guides/CLASSIC_UI_GUIDE.md`.
+
 ## Accessibility notes (the short version)
 
 I treat accessibility bugs as "real bugs". A few highlights:
@@ -84,15 +100,6 @@ Then open `http://localhost:5173`.
 **Optional:** If you have [Pixi](https://pixi.sh/) installed, `pixi run dev`
 (and all other tasks) work as drop-in replacements for `npm run`. See
 `pixi.toml` for the full task list.
-
-## CLI (developer toolchain)
-
-This repo also has a CLI (`openscad-forge`) for extracting parameters and scaffolding standalone customizers.
-
-```bash
-npm install -g .
-openscad-forge --help
-```
 
 ## Docs (where to start)
 

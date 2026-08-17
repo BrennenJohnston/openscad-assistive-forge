@@ -6,9 +6,9 @@ This guide covers deploying OpenSCAD Assistive Forge to various hosting platform
 
 OpenSCAD Assistive Forge is a static Vite site with special requirements:
 
-- **Cross-Origin Isolation**: Required for SharedArrayBuffer (WASM threading)
+- **Cross-Origin Isolation**: recommended, not required -- see below
 - **Security Headers**: CSP, HSTS, and other protective headers
-- **Large Assets**: ~15-30 MB WASM files need proper caching
+- **Large Assets**: the OpenSCAD WASM binary is about 10 MB and needs proper caching
 
 ---
 
@@ -89,7 +89,23 @@ These headers are configured in `public/_headers` and copied to `dist/` during b
   Cross-Origin-Resource-Policy: cross-origin
 ```
 
-**Why needed:** OpenSCAD WASM uses SharedArrayBuffer for performance. Without these headers, `window.crossOriginIsolated` is `false` and WASM fails.
+**Why we send them:** they enable `SharedArrayBuffer`, which a future threaded
+OpenSCAD build could use. They cost nothing to send and keep that door open.
+
+**They are not required.** MEASURED on 2026-08-04 against a static server
+sending no COOP or COEP headers at all: `crossOriginIsolated` was `false` and
+`SharedArrayBuffer` was unavailable, and the WASM engine still initialised, the
+preview still rendered real geometry, and there were no console errors -- both
+on a cold visit and on an offline reload afterwards. The full record is in
+[`audit/offline-pwa-spike-results.md`](./audit/offline-pwa-spike-results.md).
+
+This matters for anyone hosting on an intranet share or a locked-down file
+server that cannot set headers: **that works.** Serve the contents of `dist/`
+over plain HTTP with correct MIME types, have the user open it once while
+connected, and the service worker takes care of the rest.
+
+(`file://` is a different matter and is out of scope -- browsers refuse ES
+modules from it.)
 
 ### Security Headers (Recommended)
 
