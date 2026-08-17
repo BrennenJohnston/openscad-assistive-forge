@@ -7362,11 +7362,15 @@ body.first-visit-blocking #app {
   scrollbar-color: var(--color-border) transparent;
 }
 
+/* Every row is one touch target tall (D-37). The vertical padding is gone
+   because min-height now sets the height: with both, a row carrying buttons
+   would stand taller than a row without and the tree would read ragged. */
 .project-file-item {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  padding: var(--space-xs) var(--space-sm);
+  padding: 0 var(--space-sm);
+  min-height: var(--size-touch-target);
   background: var(--color-bg-primary);
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius-md);
@@ -7413,9 +7417,17 @@ body.first-visit-blocking #app {
   flex-shrink: 0;
 }
 
+/* Edit and remove measured 26.5x24 and 19.8x24 before UF-31 — the two
+   smallest controls in the panel. Sized by the token, never a literal 44:
+   --size-touch-target resolves to 36px on a fine pointer and 44px otherwise. */
 .project-file-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--size-touch-target);
+  min-height: var(--size-touch-target);
   padding: var(--space-2xs) var(--space-xs);
-  font-size: var(--font-size-2xs);
+  font-size: var(--font-size-sm);
   background: transparent;
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius-sm);
@@ -7449,11 +7461,13 @@ body.first-visit-blocking #app {
 /* and the file-manager modal                                          */
 /* ------------------------------------------------------------------ */
 
-/* Breadcrumb bar — compact to fit in the constrained companion panel */
+/* Breadcrumb bar — compact to fit in the constrained companion panel. Its own
+   vertical padding is 0 so the bar is exactly one touch target tall: the
+   crumbs inside it carry the height (D-37). */
 .file-nav-breadcrumbs {
   display: flex;
   align-items: center;
-  padding: var(--space-2xs) var(--space-xs);
+  padding: 0 var(--space-xs);
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius-sm);
@@ -7498,10 +7512,15 @@ body.first-visit-blocking #app {
   flex-shrink: 0;
 }
 
+/* The home crumb measured 24.5x22 and a folder crumb 30.8x22 before UF-31,
+   and these are the controls that ARE the way back through the tree. */
 .file-nav-breadcrumb-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-2xs);
+  min-width: var(--size-touch-target);
+  min-height: var(--size-touch-target);
   padding: var(--space-2xs) var(--space-xs);
   background: transparent;
   border: none;
@@ -7544,6 +7563,16 @@ body.first-visit-blocking #app {
 .file-nav-folder-row {
   cursor: pointer;
   background: var(--color-bg-secondary);
+}
+
+/* In the companion panel the row is a real <button> (D-38), which needs the
+   inherited type and alignment back. The file-manager modal still renders it
+   as a div, so this is scoped to the element rather than the class. */
+button.file-nav-folder-row {
+  width: 100%;
+  font-family: inherit;
+  color: inherit;
+  text-align: left;
 }
 
 .file-nav-folder-row:hover {
