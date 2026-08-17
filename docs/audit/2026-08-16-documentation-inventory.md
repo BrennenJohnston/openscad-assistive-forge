@@ -391,10 +391,21 @@ for the rewrites:
   `CODE_OF_CONDUCT.md` — accurate; every command named exists in
   `package.json`.
 
-One correction to your ledger while I was checking: it records that "the
-output-format select still offers 3MF and will still fail there" (D-16).
-MEASURED at this HEAD: the select's 3MF option now carries `disabled`. That
-part of D-16 is closed.
+Two corrections to your ledger while I was checking.
+
+**D-16, partly closed.** The ledger records that "the output-format select still
+offers 3MF and will still fail there". MEASURED at this HEAD: the select's 3MF
+option now carries `disabled`.
+
+**D-1 is closed.** The ledger still lists it open — "its Disable Auto-Preview
+and Reduce Quality buttons only `console.log`". MEASURED at this HEAD, both have
+real handlers: `#memoryBannerReduceFn` calls `setExportQualityMode('low')` and
+drops preview quality (with a comment recording that dispatching a `change`
+event there started four renders, which is the opposite of what the banner
+wants), and `#memoryBannerDisableAuto` unchecks `#autoPreviewToggle` and fires
+its change event. I had written this file's row for
+`TROUBLESHOOTING_USER_GUIDE.md` on the strength of the ledger rather than my own
+reading, and it was wrong; the guide's advice to press those buttons is sound.
 
 ---
 
@@ -558,7 +569,7 @@ Plus three files that sit loose in `docs/` rather than in a subfolder:
 | File | Disposition | Note |
 |---|---|---|
 | `docs/guides/EXPERT_MODE_GUIDE.md` | **STALE-REWRITE — highest user impact** | F2, F3, F9. Three wrong keyboard rows, a dead editor, a dead settings path. |
-| `docs/guides/TROUBLESHOOTING_USER_GUIDE.md` | **STALE-REWRITE** | F3, F4. Also sends users to the memory banner's "Reduce Quality" and "Disable Auto-Preview" buttons, which your ledger records (D-1) as console-logging only. |
+| `docs/guides/TROUBLESHOOTING_USER_GUIDE.md` | **STALE-REWRITE** | F3, F4. Its memory-banner advice is correct — see the ledger correction below. |
 | `docs/guides/GETTING_STARTED.md` | **STALE-REWRITE** | F9: describes the wrong first screen. Export list is incomplete but not wrong. |
 | `docs/guides/ACCESSIBILITY_GUIDE.md` | **STALE-REWRITE — D-35** | F1. Otherwise a strong document. Says nothing about Classic, which withholds dark and high-contrast themes — an accessibility-relevant fact. |
 | `docs/guides/WELCOME_SCREEN.md` | **STALE-REWRITE** | F9: six cards described, ten exist; opening sentence contradicts its own body. |

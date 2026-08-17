@@ -283,9 +283,16 @@ If your model uses `include` or `use` statements:
 
 ### File Size Limits
 
-- Single files: 5 MB maximum
-- ZIP archives: 20 MB maximum
-- These limits prevent browser memory issues
+| What you open | Limit |
+|---|---|
+| A single `.scad` file | 5 MB |
+| A `.zip` project | 250 MB |
+| An STL you are only viewing | 250 MB |
+| A folder | 2,000 files and 500 MB |
+
+Opening a folder warns you above 200 files or 150 MB. That is a warning, not a
+refusal -- large projects simply render more slowly, because every file the
+model depends on has to be handed to the OpenSCAD engine before it can start.
 
 ### SVG Preparation
 

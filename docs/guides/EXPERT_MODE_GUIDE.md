@@ -64,68 +64,75 @@ both interfaces use the same editor.
 
 ## The Code Editor
 
-### Editor Types
+### Which editor you get
 
-OpenSCAD Assistive Forge offers two editor options:
+There are two, and the app picks for you. There is no setting to choose
+between them.
 
-| Editor | Best For | Features |
-|--------|----------|----------|
-| **Monaco** | Most users | VS Code-like experience, autocomplete hints |
-| **Textarea** | Screen reader users | Full accessibility, native browser behavior |
+| Editor | When you get it | What it gives you |
+|--------|-----------------|-------------------|
+| **CodeMirror 6** | Normally | Syntax colouring, line numbers, code folding, bracket matching, find and replace, bookmarks, wrapped-line markers |
+| **Plain text editor** | When your operating system asks for increased contrast | A real `<textarea>`: your browser's own text handling, its own find, its own undo, plus line numbers and a lightweight colour overlay |
 
-The app automatically selects the best editor based on your preferences and accessibility settings.
+The switch happens at startup and follows your system's "increase contrast"
+setting (`prefers-contrast: more` in browser terms). If you turn that on in
+Windows, macOS or your Linux desktop, you get the plain text editor, because a
+plain `<textarea>` is the most predictable thing to hand to a screen reader or a
+magnifier. If you leave it off, you get CodeMirror.
 
-### Switching Editors
+Everything else in this guide -- writing parameters, annotations, debugging --
+works the same in both.
 
-If you prefer a specific editor:
+### CodeMirror features
 
-1. Open **Settings** (gear icon)
-2. Find **Editor Preference**
-3. Choose "Monaco", "Textarea", or "Auto"
-
-### Monaco Editor Features
-
-- Syntax highlighting for OpenSCAD
+- Syntax colouring using the OpenSCAD desktop application's own colour scheme
 - Line numbers
-- Error underlining
-- Code folding (collapse sections)
-- Find and replace (`Ctrl+F`, `Ctrl+H`)
-- Multiple cursors (`Alt+Click`)
+- Code folding, with plus and minus boxes in the gutter like the desktop
+- Bracket matching (Preferences ▸ Editor)
+- Find and replace
+- Bookmarks (Edit menu)
+- Markers showing where a long line wraps and continues (Preferences ▸ Editor)
 
-### Textarea Editor Features
+### Plain text editor features
 
-- Full screen reader support
-- Native browser find (`Ctrl+F`)
-- Native undo/redo
-- Syntax highlighting via overlays
-- High contrast mode support
+- A real `<textarea>`, so your screen reader treats it as ordinary editable text
+- Your browser's own find and its own undo and redo
+- Line numbers and a status bar
+- A colour overlay behind the text, marked `aria-hidden` so it never reaches
+  assistive technology
 
 ---
 
 ## Keyboard Shortcuts
 
+These are the CodeMirror editor's keys, checked against the version the app
+ships. On a Mac, read `Ctrl` as `Cmd`.
+
 ### Navigation
 
 | Action | Shortcut |
 |--------|----------|
-| Go to line | `Ctrl+G` |
 | Find | `Ctrl+F` |
-| Replace | `Ctrl+H` |
+| Find next | `Ctrl+G` or `F3` |
+| Find previous | `Ctrl+Shift+G` or `Shift+F3` |
+| Go to line | `Ctrl+Alt+G` |
 | Go to start | `Ctrl+Home` |
 | Go to end | `Ctrl+End` |
+
+Replace lives inside the find panel: press `Ctrl+F`, then use the replace field
+that opens with it. There is no separate shortcut for it.
 
 ### Editing
 
 | Action | Shortcut |
 |--------|----------|
 | Undo | `Ctrl+Z` |
-| Redo | `Ctrl+Y` or `Ctrl+Shift+Z` |
-| Cut line | `Ctrl+X` (no selection) |
-| Copy line | `Ctrl+C` (no selection) |
+| Redo | `Ctrl+Y` (`Cmd+Shift+Z` on Mac, `Ctrl+Shift+Z` on Linux) |
 | Delete line | `Ctrl+Shift+K` |
-| Duplicate line | `Ctrl+Shift+D` |
+| Copy line downwards | `Shift+Alt+Down` |
 | Move line up | `Alt+Up` |
 | Move line down | `Alt+Down` |
+| Comment or uncomment | `Ctrl+/` |
 
 ### Preview
 
@@ -419,20 +426,28 @@ Note: Library availability depends on the WASM build.
 
 ### Screen Reader Support
 
-The textarea editor provides full screen reader support:
+The plain text editor is an ordinary `<textarea>`, so your screen reader reads
+it the way it reads any editable text box: line by line, character by character,
+with your usual review keys. Its colour overlay is marked `aria-hidden`, so it
+never adds noise.
 
-- Line-by-line reading
-- Character navigation
-- Announces error locations
-- Works with all major screen readers
+Turning on your system's "increase contrast" setting is what gives you that
+editor. There is no in-app control that swaps them.
+
+> Not yet confirmed by ear. The behaviour above is what the code does; nobody
+> has yet sat down with NVDA, JAWS or VoiceOver and worked through Expert Mode.
+> If you do, please tell us what you find.
 
 ### High Contrast
 
-Both editors support high contrast mode:
-
-- Toggle via HC button
-- Syntax colors adjust automatically
-- Error highlighting remains visible
+- The **HC** button in the header switches the app to its high-contrast theme.
+  That is an in-app theme change and it does **not** swap the editor.
+- Your **system's** increase-contrast setting is what swaps the editor to the
+  plain text one, at startup.
+- Windows High Contrast (forced colors) is respected in both editors.
+- In the Classic interface the editor keeps the desktop application's light
+  appearance; dark and high-contrast themes apply in the Assistive Forge
+  interface only.
 
 ### Keyboard Navigation
 
@@ -454,26 +469,42 @@ Expert Mode is fully keyboard accessible:
 
 ### Parameters Not Showing
 
-Ensure your annotations are correct:
+Check the annotation is on the same line as the variable, and that the range or
+option list is in **square** brackets:
 
 ```openscad
-// Correct
+// Works
 width = 50; // [10:100]
 
-// Wrong (space before bracket)
+// Also works -- the space after the slashes is optional
 width = 50; //[10:100]
 
-// Wrong (wrong brackets)
+// Does not work -- round brackets are not an annotation
 width = 50; // (10:100)
+
+// Does not work -- the annotation must be on the assignment line
+// [10:100]
+width = 50;
 ```
+
+Two other reasons parameters go missing:
+
+- Anything under a `/* [Hidden] */` group heading is deliberately not shown.
+- A variable whose value is an expression rather than a plain literal, such as
+  `width = base * 2;`, is not offered as a control. OpenSCAD's own Customizer
+  behaves the same way.
 
 ### Editor Not Loading
 
-If Monaco fails to load:
+The editor is part of the app and is not fetched from anywhere, so a network
+problem cannot stop it appearing. If the editor area is blank:
 
-1. Check your internet connection (Monaco loads from CDN)
-2. Try the textarea editor (Settings → Editor → Textarea)
-3. Disable browser extensions that block scripts
+1. Reload the page
+2. Check the browser console (`F12`) for an error and include it if you report
+   the problem
+3. If you have your system's "increase contrast" setting on, you are meant to
+   see the plain text editor rather than the coloured one -- that is the design,
+   not a fault
 
 ---
 
