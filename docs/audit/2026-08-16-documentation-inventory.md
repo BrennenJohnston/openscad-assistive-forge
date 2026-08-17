@@ -798,12 +798,19 @@ header, which is what makes it a record rather than a stale instruction.
 
 | | Files |
 |---|---|
-| Rewritten and committed | **27** |
-| Held for your signature (accessibility-critical) | **6** |
+| Rewritten and committed | **29** |
+| Held for your signature (accessibility-critical) | **4 entirely, plus a table in a fifth and a word in a sixth** |
 | Archived | 2 signed, 2 awaiting signature |
 | Scanner deleted and unwired | 1 script, 3 wiring points |
 
-The 27 were done in four chunks, ordered by who would hit the error first: the
+That adds up: 33 marked STALE-REWRITE, minus the 4 held entirely, is 29.
+`RELEASE_NOTES.md`, `ACCESSIBILITY_CONFORMANCE.md`, `ACCESSIBILITY_GUIDE.md` and
+the VPAT are the four untouched. `BROWSER_SUPPORT.md` had everything except its
+assistive-technology table corrected, and `conformance-decisions.md` keeps one
+stale word ("Monaco") pending your sign-off because it lives in a conformance
+document.
+
+The 29 were done in four chunks, ordered by who would hit the error first: the
 front door and the deleted CLI, then the five guides users follow, then the
 developer documentation, then the operational and reference documents. The six
 held are all in
