@@ -237,6 +237,78 @@ test.describe('Companion files: controls you can hit (D-37)', () => {
   });
 });
 
+/** Where focus actually is, described well enough to assert on. */
+const focusedRow = (page) =>
+  page.evaluate(() => {
+    const el = document.activeElement;
+    if (!el || el === document.body) return { where: 'BODY' };
+    const list = document.getElementById('projectFilesList');
+    return {
+      where: el.dataset?.folderEnter
+        ? `folder=${el.dataset.folderEnter}`
+        : el.getAttribute('aria-label') ||
+          el.textContent.trim().replace(/\s+/g, ' ').slice(0, 40),
+      inList: !!el.closest('#projectFilesList'),
+      isFirstRow: el === list?.querySelector('.project-file-item'),
+    };
+  });
+
+/**
+ * D-54. Entering or leaving a folder rebuilt the list with innerHTML, which
+ * destroyed the row the user had just pressed and dropped focus on <body> —
+ * UF-23's dead-end on the navigation path rather than the save path. Measured
+ * pre-existing before UF-31 and unchanged by it.
+ *
+ * Signed behaviour: entering lands on the first row inside the folder, leaving
+ * lands on the folder row you came out of.
+ */
+test.describe('Companion files: the tree keeps your place (D-54)', () => {
+  test.describe.configure({ timeout: 180_000 });
+
+  for (const ui of [
+    { classic: false, name: 'Forge' },
+    { classic: true, name: 'Classic' },
+  ]) {
+    test(`entering a folder moves focus into it, not to the document (${ui.name})`, async ({
+      page,
+    }) => {
+      test.skip(isCI, 'Needs a real multi-file project, so needs WASM');
+
+      await openCompanionTree(page, {
+        classic: ui.classic,
+        enterFolder: null,
+      });
+
+      await page.locator('#projectFilesList [data-folder-enter="utils"]').focus();
+      await page.keyboard.press('Enter');
+      await expect(
+        page.locator('#projectFilesBreadcrumbs .file-nav-breadcrumb-home')
+      ).toBeVisible();
+
+      const landed = await focusedRow(page);
+      expect(landed.where).not.toBe('BODY');
+      expect(landed.inList).toBe(true);
+      expect(landed.isFirstRow).toBe(true);
+    });
+  }
+
+  test('the home crumb returns focus to the folder row you came out of', async ({
+    page,
+  }) => {
+    test.skip(isCI, 'Needs a real multi-file project, so needs WASM');
+
+    await openCompanionTree(page); // enters utils/
+    await page
+      .locator('#projectFilesBreadcrumbs .file-nav-breadcrumb-home')
+      .click();
+    await expect(
+      page.locator('#projectFilesList [data-folder-enter="utils"]')
+    ).toBeVisible();
+
+    expect((await focusedRow(page)).where).toBe('folder=utils');
+  });
+});
+
 test.describe('Companion files: a way back', () => {
   test.describe.configure({ timeout: 180_000 });
 

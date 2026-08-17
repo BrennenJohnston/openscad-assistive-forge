@@ -84,6 +84,28 @@ setting2=value2
 }
 
 /**
+ * A ZIP with enough companions to overflow a six-row list: seven rows in one
+ * flat folder, so the list's own ceiling is what stops it rather than a
+ * folder boundary.
+ */
+const createWideZipFixture = async () => {
+  const zip = new JSZip()
+  zip.file(
+    'main.scad',
+    `/* [Settings] */\nwidth = 100; // [50:200]\n\ncube([width, 10, 10]);\n`
+  )
+  for (let i = 1; i <= 6; i++) {
+    zip.file(`companion-${i}.txt`, `companion file ${i}\n`)
+  }
+  const buffer = await zip.generateAsync({ type: 'nodebuffer' })
+  const outputDir = path.join(process.cwd(), 'test-results')
+  await fs.promises.mkdir(outputDir, { recursive: true })
+  const zipPath = path.join(outputDir, `project-files-wide-${Date.now()}.zip`)
+  await fs.promises.writeFile(zipPath, buffer)
+  return zipPath
+}
+
+/**
  * Load the simple-box example via deep-link (avoids strict mode
  * violations from multiple buttons matching data-example="simple-box")
  */
@@ -110,6 +132,26 @@ const uploadZipProject = async (page) => {
   await page.locator('#mainInterface').waitFor({ state: 'visible', timeout: 30000 })
 
   // Dismiss save-project modal if it appears
+  try {
+    const notNowBtn = page.locator('#saveProjectNotNow')
+    await notNowBtn.waitFor({ state: 'visible', timeout: 3000 })
+    await notNowBtn.click()
+    await page.waitForTimeout(300)
+  } catch {
+    // Modal didn't appear
+  }
+}
+
+/** Same upload path as uploadZipProject, with the seven-row fixture. */
+const uploadWideZipProject = async (page) => {
+  await page.goto('/')
+  await page.waitForSelector('body[data-wasm-ready="true"]', {
+    state: 'attached',
+    timeout: 120_000,
+  })
+  await page.locator('#fileInput').setInputFiles(await createWideZipFixture())
+  await page.locator('#mainInterface').waitFor({ state: 'visible', timeout: 30000 })
+
   try {
     const notNowBtn = page.locator('#saveProjectNotNow')
     await notNowBtn.waitFor({ state: 'visible', timeout: 3000 })
@@ -448,5 +490,38 @@ cube(10);
     const saveBtn = page.locator('#companionSaveBtn')
     await expect(saveBtn).toBeVisible({ timeout: 10000 })
     await expect(saveBtn).toContainText('Save as Project')
+  })
+
+  /**
+   * UF-33. UF-31 made every row one touch target tall, which cost the list a
+   * visible row inside its 200px ceiling — four on a phone where it had been
+   * five. The owner chose to let the box grow with the content up to a larger
+   * cap, so six rows now have to fit before anything scrolls, at either
+   * density. Measured from the rows themselves rather than from a literal, so
+   * a phone (44px rows) and a mouse (36px rows) are both covered.
+   */
+  test('six rows fit before the file list starts scrolling', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await uploadWideZipProject(page)
+    await openProjectFilesDisclosure(page)
+
+    const box = await page.locator('#projectFilesList').evaluate((el) => {
+      const rows = [...el.querySelectorAll('.project-file-item')]
+      const style = getComputedStyle(el)
+      return {
+        rowCount: rows.length,
+        rowHeight: rows[0]?.getBoundingClientRect().height ?? 0,
+        gap: parseFloat(style.rowGap) || 0,
+        clientHeight: el.clientHeight,
+      }
+    })
+
+    expect(box.rowCount).toBeGreaterThanOrEqual(7)
+    const sixRows = box.rowHeight * 6 + box.gap * 5
+    expect(
+      box.clientHeight + 1,
+      `list is ${box.clientHeight}px; six ${box.rowHeight}px rows need ${sixRows}px`
+    ).toBeGreaterThanOrEqual(sixRows)
   })
 })
