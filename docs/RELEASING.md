@@ -37,8 +37,12 @@ Then open a pull request from `develop` into `main` and let it go green. Both
 branches are guarded by rulesets and both need an approving review; `main` also
 requires signed commits and linear history. See
 [`.github/BRANCH_PROTECTION.md`](../.github/BRANCH_PROTECTION.md) for the exact
-required checks — **and read its warning before you try**, because `main`
-currently requires a check name that no longer exists.
+required checks on each.
+
+If a pull request into `main` ever sits waiting on a check that never arrives
+rather than going red, the cause is almost certainly a required check name that
+no longer matches a job name. That exact fault was found and fixed on
+2026-08-16; the branch-protection document explains how to spot and repair it.
 
 Once it is merged:
 

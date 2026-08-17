@@ -40,38 +40,41 @@ Active, targeting the default branch. Stricter than `develop`: it also requires
 **signed commits**, **linear history**, and blocks branch **creation** and
 direct **updates**.
 
-Seven required status checks:
+Eight required status checks:
 
 - `E2E Tests (Chromium)`
-- `E2E Tests (Edge)` — **see the warning below**
+- `E2E Tests (Edge 1/2)`
+- `E2E Tests (Edge 2/2)`
 - `Unit Tests`
 - `Lint Markdown`
 - `Build Check`
 - `Lighthouse Performance Audit`
 - `Cloudflare Pages`
 
-> ## ⚠ `main` requires a check that no longer exists
+All eight were verified against the jobs that actually report, on 2026-08-16.
+
+> ### Repaired 2026-08-16 — worth knowing why
 >
-> **Measured 2026-08-16.** The `main` ruleset requires a context named
-> `E2E Tests (Edge)`. No job produces that name any more. The Edge lane was
-> split into two shards, and the workflow now reports
-> `E2E Tests (Edge 1/2)` and `E2E Tests (Edge 2/2)`.
+> Until that date this ruleset required a context named `E2E Tests (Edge)`.
+> Nothing had produced that name since the Edge lane was split into two shards;
+> the `develop` ruleset was updated at the time and this one was missed.
 >
-> A required check that never reports does not fail — it stays pending, so a
-> pull request into `main` waits forever rather than being refused. **The next
-> promotion of `develop` to `main` will not be mergeable** without an
-> administrator bypass.
+> **A required check that never reports does not fail — it stays pending.** So
+> the symptom was not a red board. It was a pull request into `main` that sat
+> "waiting for status to be reported" indefinitely, with nothing saying why.
+> That is a worse failure than a red check, because there is nothing to click.
 >
-> The fix is to replace `E2E Tests (Edge)` with the two shard names in ruleset
-> 12059665, exactly as was done for `develop` in ruleset 12059827. Editing a
-> ruleset is the repository owner's decision, so this is reported here rather
-> than changed.
+> Two API details, kept because they cost an afternoon the first time:
 >
-> One API detail worth keeping if you do it: the ruleset update endpoint is
-> **`PUT`, not `PATCH`**. A `PATCH` to that path matches no route and returns a
-> bare `404`, which reads exactly like a permissions problem and is not one.
-> `PUT` also **replaces** the ruleset, so the name, target, enforcement,
-> conditions and bypass actors all have to be sent back or they are lost.
+> - The ruleset update endpoint is **`PUT`, not `PATCH`**. A `PATCH` to that
+>   path matches no route and returns a bare `404`, which reads exactly like a
+>   permissions problem and is not one.
+> - **`PUT` replaces the ruleset.** Name, target, enforcement, conditions,
+>   bypass actors and *every* rule must be sent back or they are silently lost.
+>   `main` carries four rules `develop` does not — `required_signatures`,
+>   `required_linear_history`, `update` and `creation` — plus
+>   `strict_required_status_checks_policy: true`. Read the ruleset, modify the
+>   one field, send the whole thing back, then read it again and compare.
 
 ## Where the check names come from
 
