@@ -943,11 +943,23 @@ test.describe('Classic mode layout (C4)', () => {
     }
     await expect(firstGroup).toHaveJSProperty('open', true);
 
-    // Record the original DOM location of the panes to be moved
-    const originalParents = await page.evaluate(() => ({
-      console: document.getElementById('consolePanel')?.parentElement?.id,
-      presets: document.getElementById('presetControls')?.parentElement?.id,
-    }));
+    // Record the original DOM location of the panes to be moved.
+    //
+    // UF-35 wrapped both in an id-less .forge-disclosure-row so their header
+    // controls could leave the <summary>, so the immediate parent no longer
+    // HAS an id and this read returned "". Walk to the nearest ancestor that
+    // does: which region a panel goes home to is what this checks, and that
+    // survives a wrapper.
+    const readHomes = () =>
+      page.evaluate(() => {
+        const home = (id) =>
+          document.getElementById(id)?.parentElement?.closest('[id]')?.id;
+        return {
+          console: home('consolePanel'),
+          presets: home('presetControls'),
+        };
+      });
+    const originalParents = await readHomes();
     expect(originalParents.console).toBeTruthy();
     expect(originalParents.presets).toBeTruthy();
 
@@ -1126,10 +1138,7 @@ test.describe('Classic mode layout (C4)', () => {
       'standard'
     );
 
-    const restoredParents = await page.evaluate(() => ({
-      console: document.getElementById('consolePanel')?.parentElement?.id,
-      presets: document.getElementById('presetControls')?.parentElement?.id,
-    }));
+    const restoredParents = await readHomes();
     expect(restoredParents.console).toBe(originalParents.console);
     expect(restoredParents.presets).toBe(originalParents.presets);
     await expect(page.locator('#classicConsoleSlot')).toHaveCount(0);

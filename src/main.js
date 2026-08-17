@@ -4869,8 +4869,11 @@ async function initApp() {
             forgeExtraToggle('#measureSection', 'Image Measurement'),
             forgeExtraToggle('#overlaySection', 'Reference Image'),
             forgeExtraToggle('#libraryControls > details', 'Libraries'),
+            // UF-35 put a .forge-disclosure-row between the two, so this can
+            // no longer be a direct-child selector; the class is unique
+            // inside the wrapper either way.
             forgeExtraToggle(
-              '#projectFilesControls > details',
+              '#projectFilesControls .project-files-details',
               'Companion Files'
             ),
             forgeExtraToggle('#advancedMenu', 'Advanced'),

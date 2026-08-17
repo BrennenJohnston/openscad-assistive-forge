@@ -733,7 +733,13 @@ const FORGE_EXTRAS = [
   { selector: '#measureSection', label: 'Image Measurement' },
   { selector: '#overlaySection', label: 'Reference Image' },
   { selector: '#libraryControls > details', label: 'Libraries' },
-  { selector: '#projectFilesControls > details', label: 'Companion Files' },
+  // UF-35 wrapped Companion Files in a .forge-disclosure-row so its help
+  // control could leave the <summary>, so this is no longer a direct child.
+  // Libraries carries no header control and is unwrapped.
+  {
+    selector: '#projectFilesControls .project-files-details',
+    label: 'Companion Files',
+  },
   { selector: '#advancedMenu', label: 'Advanced' },
 ];
 
@@ -1972,24 +1978,22 @@ test.describe('Panels CSS and accessibility (F7)', () => {
       .include('#mainInterface')
       .analyze();
 
-    // Classic's default arrangement reports exactly two pre-existing
-    // violations, measured in R2b and neither of them Classic's doing:
-    // nested-interactive on Forge <summary> elements containing buttons, and
-    // scrollable-region-focusable on CodeMirror's tabindex="-1" scroller.
+    // Classic once reported two pre-existing violations, neither of them
+    // Classic's doing. ONE IS LEFT.
     //
-    // Node counts moved in R-II and are worth recording: nested-interactive
-    // fell from 11 nodes to 2, because P6 took five Forge panels out of the
-    // Classic column and their summaries went with them. Two rules is still
-    // the ceiling; a third would fail here, as aria-required-parent did when
-    // P7 gave the console its status lines back and twenty role="listitem"
-    // entries appeared inside a role="log" that is not a list.
+    // nested-interactive is GONE. Its node count tells the story: 11 in R2b,
+    // 2 after R-II's P6 took five Forge panels out of the Classic column, and
+    // 3 by UF-35 - one per parameter group, because that family scales with
+    // the model. UF-35 moved every header control out of its <summary> and
+    // MEASURED 0 here. It is off this list, so it can fail.
     //
-    // The second is a false positive, measured in P2: axe does not count a
-    // contenteditable child as focusable content, but .cm-content is reached
-    // by Tab and PageDown scrolls the region (scrollTop 0 -> 4365). Putting
-    // tabindex="0" on the scroller would silence axe at the cost of a second,
-    // redundant tab stop on a region the keyboard already reaches. Do not.
-    const allowed = ['nested-interactive', 'scrollable-region-focusable'];
+    // The one that stays is a false positive, measured in P2: axe does not
+    // count a contenteditable child as focusable content, but .cm-content is
+    // reached by Tab and PageDown scrolls the region (scrollTop 0 -> 4365).
+    // Putting tabindex="0" on the scroller would silence axe at the cost of a
+    // second, redundant tab stop on a region the keyboard already reaches.
+    // Do not.
+    const allowed = ['scrollable-region-focusable'];
     const unexpected = results.violations
       .map((v) => v.id)
       .filter((id) => !allowed.includes(id));
