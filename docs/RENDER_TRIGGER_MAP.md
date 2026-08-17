@@ -1,6 +1,15 @@
 # Render Trigger Map
 
-**Purpose:** Single-source-of-truth document mapping every code path that can trigger an OpenSCAD render (preview or full). Used as the ground-truth reference for investigating BUG-B (unexpected display content in Customizer Settings mode) and BUG-C (spontaneous renders).
+**Purpose:** Maps every code path that could trigger an OpenSCAD render (preview
+or full). Written as the ground-truth reference for investigating BUG-B
+(unexpected display content in Customizer Settings mode) and BUG-C (spontaneous
+renders), both of which were subsequently fixed — see `KNOWN_ISSUES.md`, S-007
+and S-008.
+
+> **Read the audit date below before trusting this.** It has not been re-audited
+> since 2026-03-03, and several releases have touched rendering since. It is
+> still the best starting map of the render paths; it is no longer a guarantee
+> that the list is complete.
 
 **Architecture layer:** Layer 3 (frontend) → Layer 2 (worker bridge) → Layer 1 (WASM binary, frozen).
 

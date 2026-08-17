@@ -4,10 +4,24 @@
 
 The camera controls provide keyboard-accessible alternatives to mouse-based dragging operations for manipulating the 3D preview camera. Controls are available in two primary locations:
 
-- **Desktop:** Right-side Camera panel
-- **Mobile:** Camera drawer in the actions bar
+- **Desktop (768px and above):** the Camera panel, `#cameraPanel`
+- **Below 768px:** the Camera drawer in the actions bar, `#cameraDrawer`
 
 This document details how the implementation meets WCAG 2.2 accessibility guidelines.
+
+> **Scope note, 2026-08-16.** This document also used to describe a third,
+> floating set of controls with a corner-position preference, keyed on
+> `#cameraControlsBody` and `.camera-control-btn`. **That widget is not in the
+> shipped app.** MEASURED: those selectors appear in JavaScript and CSS but in
+> zero places in `index.html`, because `setupCameraControls()` in `preview.js`
+> returns early whenever `#cameraPanel` exists at 768px and above, and again
+> whenever `#cameraDrawer` exists below that — and both ids are in the markup.
+> Everything after those two guards is unreachable, including a second
+> `.camera-view-btn` binding and a `#cameraResetView` binding.
+>
+> The passages about it have been removed rather than left to read as if they
+> described something a user could reach. Removing the dead code itself is a
+> separate change, reported to the owner rather than made here.
 
 ## WCAG 2.2 Compliance
 
@@ -44,7 +58,7 @@ This document details how the implementation meets WCAG 2.2 accessibility guidel
 
 **Implementation:**
 - Control panel uses `role="group"` to establish relationship between controls
-- Toggle button uses `aria-controls="cameraControlsBody"` to link to controlled region
+- The toggle links to its region with `aria-controls`: `#cameraPanelToggle` to `cameraPanelBody`, `#cameraDrawerToggle` to `cameraDrawerBody`
 - Collapsed state communicated via `aria-expanded` attribute
 - Visual grouping (rotation, pan, zoom) matches semantic structure
 
@@ -54,7 +68,7 @@ This document details how the implementation meets WCAG 2.2 accessibility guidel
 
 **Implementation:**
 - All buttons are keyboard focusable (native `<button>` elements)
-- Toggle and Move buttons can be activated with Enter/Space
+- The toggle button can be activated with Enter or Space
 - Camera control buttons respond to Enter/Space
 - No keyboard traps or inaccessible functionality
 
@@ -112,7 +126,6 @@ This document details how the implementation meets WCAG 2.2 accessibility guidel
 - Camera controls are persistent (always visible when expanded)
 - Collapsible via toggle button (user-controlled dismissal)
 - No auto-hiding or timeout behavior
-- Position can be moved to different corners to avoid obscuring content
 
 ## Additional Accessibility Features
 
@@ -132,14 +145,16 @@ All camera operations have keyboard alternatives:
 
 ### Persistent Preferences
 
-User preferences are saved to localStorage:
-- Collapsed/expanded state
-- Panel position (bottom-right, bottom-left, top-right, top-left)
-- Preferences persist across sessions
+The panel's collapsed or expanded state is saved and restored across sessions.
+
+There is no corner-position preference. That belonged to the floating widget
+described in the scope note at the top of this document, which the app does not
+build.
 
 ### Responsive Design
 
-- Adjusts button sizes on mobile (40×40px minimum)
+- The Camera panel is used at 768px and above; below that the same controls
+  appear in the Camera drawer
 - Safe area insets respected for notched devices
 - Works in portrait and landscape orientations
 
@@ -151,19 +166,28 @@ User preferences are saved to localStorage:
 
 ### Reduced Motion
 
+Handled globally rather than per component, in `src/styles/variables.css`:
+
 ```css
 @media (prefers-reduced-motion: reduce) {
-  .camera-control-btn {
-    transition: none;
-  }
-  .camera-control-btn:hover {
-    transform: none;
-  }
-  .camera-control-btn:active {
-    transform: none;
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 ```
+
+That covers the camera buttons along with everything else. The buttons' only
+transitions are colour changes, and the `scale(0.95)` on press has no transition
+of its own, so it is instant either way.
+
+(There is also a per-component `@media (prefers-reduced-motion: reduce)` block
+in `components.css` naming `.camera-control-btn`. That class belongs to the
+floating widget described in the scope note above and styles nothing the app
+renders.)
 
 ## Bug Fix: Hidden Attribute Support
 

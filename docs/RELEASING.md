@@ -17,19 +17,35 @@ Update `CHANGELOG.md` with what changed.
 
 ## Doing the release
 
+`main` is what deploys to production, and `develop` is where the work lands, so
+a release is a promotion of one to the other.
+
 ```bash
+# On develop, with everything merged and green
+git checkout develop
+git pull
+
 # Bump version in package.json
 npm version X.Y.Z --no-git-tag-version
 
-# Commit everything
 git add -A
 git commit -m "chore: release vX.Y.Z"
-
-# Tag it
-git tag -a vX.Y.Z -m "Release vX.Y.Z"
-
-# Push
 git push origin develop
+```
+
+Then open a pull request from `develop` into `main` and let it go green. Both
+branches are guarded by rulesets and both need an approving review; `main` also
+requires signed commits and linear history. See
+[`.github/BRANCH_PROTECTION.md`](../.github/BRANCH_PROTECTION.md) for the exact
+required checks — **and read its warning before you try**, because `main`
+currently requires a check name that no longer exists.
+
+Once it is merged:
+
+```bash
+git checkout main
+git pull
+git tag -a vX.Y.Z -m "Release vX.Y.Z"
 git push origin vX.Y.Z
 ```
 

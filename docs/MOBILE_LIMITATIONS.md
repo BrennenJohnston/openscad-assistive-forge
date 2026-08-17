@@ -20,9 +20,19 @@ Mobile CPUs are slower. Expect 2-3x longer render times:
 
 The app auto-adjusts quality settings on mobile. Test complex models on desktop first.
 
+## Which interface you get on a phone
+
+The **Assistive Forge** interface works on phones and tablets. The **Classic**
+interface does not: it reproduces a desktop application window, and there is no
+mobile version of it yet. On a narrow screen the app keeps you in the Assistive
+Forge interface, and it says so rather than silently ignoring the choice. Your
+saved preference is not overwritten, so Classic comes back when you next open
+the app on a desktop.
+
 ## Viewport and keyboard
 
-Solved in v1.4. The layout adjusts when the virtual keyboard appears. Uses CSS `dvh` units with fallback for older browsers.
+The layout adjusts when the virtual keyboard appears. Uses CSS `dvh` units with
+a fallback for older browsers.
 
 ## Touch targets
 

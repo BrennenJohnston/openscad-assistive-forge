@@ -392,6 +392,35 @@ headers are present, while `BROWSER_SUPPORT.md` and `PERFORMANCE.md` both say
 the build is single-threaded regardless. Someone should settle that against the
 current binary; the wording I have written claims only what was measured.
 
+### F11. `main` requires a status check that no longer exists
+
+Not a documentation problem — a repository-configuration one, found because
+`.github/BRANCH_PROTECTION.md` had to be checked against reality before it could
+be rewritten.
+
+MEASURED from the GitHub API on 2026-08-16. There are two rulesets, not one:
+
+- **12059827, `develop`** — the one the project's notes talk about. Seven
+  required checks, correctly naming `E2E Tests (Edge 1/2)` and
+  `E2E Tests (Edge 2/2)` after UF-27's split.
+- **12059665, `main`** — also active, stricter (it adds signed commits and
+  linear history). Its required checks still name **`E2E Tests (Edge)`**.
+
+No job produces that name any more. A required check that never reports does not
+fail — it sits pending — so **a pull request from `develop` into `main` will
+wait forever rather than being refused.** The next promotion to production is
+blocked until ruleset 12059665 is edited the way 12059827 already was.
+
+Ruleset edits are yours, so this is reported rather than done. The other six
+names on `main` all check out, including `Lighthouse Performance Audit`, which
+comes from `lighthouse.yml` rather than `test.yml` and does still run on pull
+requests to `main`.
+
+The old `.github/BRANCH_PROTECTION.md` would not have helped anyone find this:
+it described classic branch protection that was never configured, with five
+invented check names (`test`, `test-e2e`, `lint`, `build`, `lighthouse-ci`),
+none of which the repository has ever used.
+
 ---
 
 ## 5. What I checked and found genuinely accurate
