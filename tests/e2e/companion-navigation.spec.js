@@ -37,7 +37,7 @@ test.beforeEach(async ({ page }) => {
  * utils/, so an editable companion (helpers.scad) is on screen.
  * Companion Files is defaultHiddenInBasic, so Standard density is required.
  */
-const openCompanionTree = async (page, { classic = false } = {}) => {
+const openCompanionTree = async (page, { classic = false, enterFolder = 'utils' } = {}) => {
   if (classic) {
     await page.addInitScript((stamp) => {
       localStorage.setItem('openscad-forge-ui-mode', stamp);
@@ -70,7 +70,11 @@ const openCompanionTree = async (page, { classic = false } = {}) => {
     if (d && !d.open) d.open = true;
   });
 
-  await page.locator('#projectFilesList [data-folder-enter="utils"]').click();
+  if (!enterFolder) return;
+
+  await page
+    .locator(`#projectFilesList [data-folder-enter="${enterFolder}"]`)
+    .click();
   await expect(
     page.locator('#projectFilesList [data-action="edit"]').first()
   ).toBeVisible();
@@ -103,6 +107,97 @@ const focusedDescriptor = (page) =>
       .filter(Boolean)
       .join(' ');
   });
+
+/**
+ * Every control the companion tree offers, with the selector scoped to the
+ * whole panel rather than to #projectFilesList: UF-31 moves the breadcrumb bar
+ * out of the list (D-38), and this measurement must hold either side of that.
+ */
+const TREE_CONTROLS = [
+  { name: 'breadcrumb', selector: '#projectFilesControls .file-nav-breadcrumb-btn' },
+  { name: 'edit button', selector: '#projectFilesControls [data-action="edit"]' },
+  { name: 'remove button', selector: '#projectFilesControls [data-action="remove"]' },
+  { name: 'folder row', selector: '#projectFilesControls [data-folder-enter]' },
+];
+
+/**
+ * Measure every tree control against the RESOLVED touch-target token, never a
+ * literal 44: --size-touch-target is 44px by default and 36px under
+ * (pointer: fine) and (min-width: 768px), so a desktop Chromium run is
+ * measured against 36 and a phone against 44. Reading the token at runtime is
+ * the standing rule for this project's target assertions.
+ */
+const measureTreeControls = (page) =>
+  page.evaluate((controls) => {
+    const token = parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue(
+        '--size-touch-target'
+      )
+    );
+    const measured = [];
+    for (const { name, selector } of controls) {
+      for (const el of document.querySelectorAll(selector)) {
+        const r = el.getBoundingClientRect();
+        measured.push({
+          name,
+          label: el.getAttribute('aria-label') || el.textContent.trim(),
+          w: Math.round(r.width * 10) / 10,
+          h: Math.round(r.height * 10) / 10,
+        });
+      }
+    }
+    return { token, measured };
+  }, TREE_CONTROLS);
+
+/** Controls smaller than the token in either dimension, described for a report. */
+const underToken = ({ token, measured }) =>
+  measured
+    .filter((m) => m.w + 0.5 < token || m.h + 0.5 < token)
+    .map((m) => `${m.name} "${m.label}" ${m.w}x${m.h} < ${token}`);
+
+test.describe('Companion files: controls you can hit (D-37)', () => {
+  test.describe.configure({ timeout: 180_000 });
+
+  /**
+   * D-37, MEASURED on this release's base (develop@2f89c48) at 1400x900,
+   * identical in both interfaces, against a resolved token of 36px:
+   *   home breadcrumb 24.5x22, folder crumb 30.8x22,
+   *   edit button 26.5x24, remove button 19.8x24, folder rows 523x33.1.
+   * These are the controls that ARE the way back through the tree.
+   */
+  for (const ui of [{ classic: false, name: 'Forge' }, { classic: true, name: 'Classic' }]) {
+    test(`every tree control meets the touch-target token (${ui.name})`, async ({
+      page,
+    }) => {
+      test.skip(isCI, 'Needs a real multi-file project, so needs WASM');
+
+      // At the root: the two folder rows and the main file's row.
+      await openCompanionTree(page, {
+        classic: ui.classic,
+        enterFolder: null,
+      });
+      const atRoot = await measureTreeControls(page);
+      expect(
+        atRoot.measured.filter((m) => m.name === 'folder row').length
+      ).toBe(2);
+      expect(underToken(atRoot).join('\n')).toBe('');
+
+      // Inside utils/: the breadcrumb bar and an editable companion's buttons.
+      await page.locator('#projectFilesList [data-folder-enter="utils"]').click();
+      await expect(
+        page.locator('#projectFilesList [data-action="edit"]').first()
+      ).toBeVisible();
+      const inFolder = await measureTreeControls(page);
+      expect(
+        inFolder.measured.filter((m) => m.name === 'breadcrumb').length
+      ).toBeGreaterThanOrEqual(2);
+      expect(
+        inFolder.measured.some((m) => m.name === 'edit button')
+      ).toBe(true);
+      expect(underToken(inFolder).join('\n')).toBe('');
+    });
+  }
+});
 
 test.describe('Companion files: a way back', () => {
   test.describe.configure({ timeout: 180_000 });

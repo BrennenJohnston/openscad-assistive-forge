@@ -2794,6 +2794,71 @@ test.describe('Axe-Core Scans for Missing Views (REC-002)', () => {
     await expect(modal).toBeHidden()
   })
 
+  /**
+   * D-38 (UF-31). Diagnosed in UF-23 and measured again on this release's
+   * base: axe reports aria-required-children (CRITICAL) on #projectFilesList
+   * in BOTH interfaces —
+   *
+   *   "Element has children which are not allowed: nav[aria-label], [role=list]"
+   *
+   * index.html declares the container a list; the renderer then writes a <nav>
+   * breadcrumb bar and a second role="list" into it. A list may own only
+   * listitems.
+   *
+   * nested-interactive on .project-files-summary is the "?" help link inside a
+   * clickable <summary> — a separate ledger item covering three panels, and
+   * already the one entry in ALLOWED_AXE_VIOLATIONS.
+   */
+  test('companion files panel has no aria-required-children violation', async ({ page }) => {
+    test.skip(isCI, 'Needs a real multi-file project, so needs WASM')
+
+    // Companion Files is defaultHiddenInBasic and Simplified is the default
+    // mode, so the panel is not in the page at all until Standard is asked
+    // for. Confirmed by eye on the first run's failure screenshot.
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        'openscad-forge-ui-mode',
+        JSON.stringify({ mode: 'standard', lastCustomMode: 'standard' })
+      )
+    })
+
+    await page.goto('/?example=multi-file-box')
+    await waitForWasmReady(page)
+    await page.waitForFunction(
+      () => document.querySelectorAll('#projectFilesList *').length > 0,
+      { timeout: 30_000 }
+    )
+
+    // The panel ships with its disclosure closed; opening it directly is
+    // setup, not the behaviour under test.
+    await page.evaluate(() => {
+      const d = document.querySelector('#projectFilesControls details')
+      if (d && !d.open) d.open = true
+    })
+    // UF-25: an axe scan taken during the disclosure's transition measures a
+    // blend of two states. Let it settle before scanning.
+    await expect(page.locator('#projectFilesList')).toBeVisible()
+    await page.waitForTimeout(700)
+
+    const atRoot = await new AxeBuilder({ page })
+      .include('#projectFilesControls')
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .analyze()
+    expectOnlyAllowedViolations(atRoot)
+
+    // Inside a folder the breadcrumb bar exists, which is the other half of
+    // the violation. Both states must be clean.
+    await page.locator('#projectFilesList [data-folder-enter="utils"]').click()
+    await expect(page.locator('#projectFilesList [data-action="edit"]').first()).toBeVisible()
+    await page.waitForTimeout(300)
+
+    const inFolder = await new AxeBuilder({ page })
+      .include('#projectFilesControls')
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .analyze()
+    expectOnlyAllowedViolations(inFolder)
+  })
+
   test('should run axe scan in error state after invalid .scad', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
