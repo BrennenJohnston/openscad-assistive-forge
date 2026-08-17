@@ -511,22 +511,29 @@ function" candidates outside `docs/plans/`, so it is your call.
 
 ### D-35 flags — accessibility-critical text I will not touch without you
 
+**The full package, with exact before-and-after text for every line, is in
+[`2026-08-16-accessibility-claims-review.md`](./2026-08-16-accessibility-claims-review.md).**
+It covers six files and is the one thing in this release that needs you to sit
+down and read rather than just approve. In summary:
+
 1. **The screen-reader testing claims (F1).** Five documents, four of them
    accessibility-critical, assert testing your own records say never happened.
-   The options as I see them: (a) strike the claims and replace them with what
-   is actually true — automated axe-core and code audit, with manual AT
-   verification outstanding; (b) leave them and schedule the testing that would
-   make them true; (c) something else. I recommend (a), because
-   `conformance-decisions.md` already says (a) and the documents that contradict
-   it are the ones handed to IT departments.
-2. **The fictional editor setting (F3)**, where it appears in
-   `ACCESSIBILITY_CONFORMANCE.md` and the VPAT as a conformance *mitigation*.
-   Removing a mitigation may change a conformance level. That is your call.
-3. **`#prefsEditorSyntaxScheme`'s reason text** — carried over from UF-29's
+   The recommendation is to say what is true: the automated coverage is
+   genuinely substantial — 16 axe-core scans across four theme states with the
+   `wcag22aa` ruleset on every pull request, plus a keyboard suite and a
+   per-criterion code audit — and it is not screen-reader testing.
+2. **The fictional editor setting (F3)**, which both
+   `ACCESSIBILITY_CONFORMANCE.md` and the VPAT offer as the *mitigation* for the
+   code editor's assistive-technology limitations. A mitigation nobody can reach
+   is not one, and removing it may change a conformance level.
+3. **The VPAT contradicts the decisions log on four criteria**, including
+   claiming "Supports" for 1.4.12 Text Spacing where the log says "Not
+   Evaluated".
+4. **`#prefsEditorSyntaxScheme`'s reason text** — carried over from UF-29's
    report, unchanged: it says the editor "picks between them from your system
    setting", but `resolveEditorDarkMode` reads the app's resolved theme, and
    Classic is always light. First sentence true, second false.
-4. **CodeMirror's folded-range wording** — carried over from UF-29: a screen
+5. **CodeMirror's folded-range wording** — carried over from UF-29: a screen
    reader meets `aria-label="folded code"` at a collapsed fold. Unchanged by
    this release; still wants your ear.
 
@@ -606,7 +613,7 @@ description. The other twelve scripts are all reachable from `package.json`,
 | `docs/ROLLBACK_RUNBOOK.md` | **STALE-REWRITE** | F7 (version/date header). Procedure itself looks sound. |
 | `docs/RENDER_TRIGGER_MAP.md` | **STALE-REWRITE** | F8. Calls itself single-source-of-truth while being five months unaudited, for two resolved bugs. |
 | `docs/RELEASING.md` | **STALE-REWRITE** | Never mentions merging `develop` into `main`, though `DEVELOPMENT_WORKFLOW.md` says `main` is what deploys. The release procedure has a hole in it. |
-| `docs/QUICK_REFERENCE.md` | **STALE-REWRITE** | 331 bytes that duplicate three sections of `DEVELOPMENT_WORKFLOW.md`. Candidate to merge away — your call. |
+| `docs/QUICK_REFERENCE.md` | ACCURATE-KEEP, but redundant | 331 bytes, all of it accurate, all of it duplicating three sections of `DEVELOPMENT_WORKFLOW.md`. Left alone — deleting a file is your call, and duplication is not an error. |
 | `docs/DEVELOPMENT_WORKFLOW.md` | ACCURATE-KEEP | |
 | `docs/RESPONSIVE_UI.md` | ACCURATE-KEEP | Breakpoints verified. |
 | `docs/MOBILE_LIMITATIONS.md` | **STALE-REWRITE** | "Solved in v1.4" uses a version scheme that no longer exists. Does not mention the mobile entry gate or that Classic is desktop-only. |
@@ -759,15 +766,33 @@ header, which is what makes it a record rather than a stale instruction.
 
 | Disposition | Files |
 |---|---|
-| ACCURATE-KEEP | 36 |
+| ACCURATE-KEEP | 37 |
 | DATED RECORD | 59 |
-| STALE-REWRITE | 34 |
+| STALE-REWRITE | 33 |
 | OBSOLETE-ARCHIVE | 4 (2 signed, 2 awaiting signature) |
 | **Total tracked** | **133** |
 
-Of the 34 that need rewriting, 9 are guides users are pointed at directly and
-17 are operational documents under `docs/`. That is the order the rewrite
-chunks follow.
+## 10. What this release actually did
+
+| | Files |
+|---|---|
+| Rewritten and committed | **27** |
+| Held for your signature (accessibility-critical) | **6** |
+| Archived | 2 signed, 2 awaiting signature |
+| Scanner deleted and unwired | 1 script, 3 wiring points |
+
+The 27 were done in four chunks, ordered by who would hit the error first: the
+front door and the deleted CLI, then the five guides users follow, then the
+developer documentation, then the operational and reference documents. The six
+held are all in
+[`2026-08-16-accessibility-claims-review.md`](./2026-08-16-accessibility-claims-review.md).
+
+Three things were found by rewriting that the first inventory pass missed, and
+all three are recorded above rather than quietly fixed: the CLI text in
+`ARCHITECTURE.md` and `MANIFEST_SHARING_GUIDE.md` (F2), the deployment guide's
+claim that headerless hosting fails (F10), and `main`'s ruleset requiring a
+check that no longer exists (F11). Reading a document for quality and searching
+it for a specific dead fact are different jobs, and this release needed both.
 
 The pattern behind those numbers is worth stating plainly: **almost every
 stale document dates from February to April 2026, and almost every accurate one
