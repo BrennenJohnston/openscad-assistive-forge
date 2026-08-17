@@ -385,6 +385,29 @@ test.describe('Visual Regression - With a project open (D-52)', () => {
         threshold: 0.2,
       });
     });
+
+    /**
+     * The canary (owner's call, 2026-08-17). Every other case in this file
+     * allows a per-pixel colour threshold, and that is deliberate: it keeps
+     * anti-aliasing from reddening the lane on two platforms with different
+     * font rendering. The cost is measured — rounding the disclosure corners
+     * to zero moves 660 pixels of the 1440 capture (0.05%) and still passes.
+     *
+     * So one capture is held to zero. It photographs the smallest, most
+     * static region in the set, the same header the case above allows 150
+     * pixels of drift in, and it permits none: any pixel that moves reddens
+     * it. If this one starts flaking while the tolerant four stay green, the
+     * flake is in the rendering, not in the app.
+     */
+    test('parameters header, pixel-exact canary', async ({ page }) => {
+      const header = page.locator('.panel-header').first();
+      await expect(header).toBeVisible();
+
+      await expect(header).toHaveScreenshot('param-header-strict-1280.png', {
+        maxDiffPixels: 0,
+        threshold: 0,
+      });
+    });
   });
 
   test.describe('disclosure stack', () => {
