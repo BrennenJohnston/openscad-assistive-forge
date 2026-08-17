@@ -248,6 +248,7 @@ export function initCompanionFilesController({
     requiredFiles = null
   ) {
     const container = document.getElementById('projectFilesList');
+    const breadcrumbHost = document.getElementById('projectFilesBreadcrumbs');
     const badge = document.getElementById('projectFilesBadge');
     const controls = document.getElementById('projectFilesControls');
     const warning = document.getElementById('projectFilesWarning');
@@ -285,6 +286,7 @@ export function initCompanionFilesController({
     if (companionCount === 0) {
       if (badge) badge.textContent = '0';
       container.innerHTML = '';
+      if (breadcrumbHost) breadcrumbHost.innerHTML = '';
       if (saveBtn) {
         updateCompanionSaveButton();
       }
@@ -364,16 +366,22 @@ export function initCompanionFilesController({
     const sortedFolders = [...currentNode.folders.entries()].sort((a, b) =>
       a[0].localeCompare(b[0])
     );
+    // A folder row is a real <button> inside a listitem wrapper. It cannot be
+    // both the list's item and its own control: axe refuses role="button" as a
+    // child of role="list" (D-38), and a native button also carries Enter,
+    // Space and focusability without a tabindex/keydown pair of its own.
     const folderItems = sortedFolders.map(([folderName, childNode]) => {
       const count = countFilesRecursive(childNode);
       return `
-        <div class="project-file-item file-nav-folder-row" role="button" tabindex="0"
-             data-folder-enter="${escapeHtml(folderName)}"
-             aria-label="Open folder ${escapeHtml(folderName)}, ${count} file${count !== 1 ? 's' : ''}">
-          <span class="project-file-icon" aria-hidden="true">\u{1F4C2}</span>
-          <span class="project-file-name">${escapeHtml(folderName)}</span>
-          <span class="project-file-size file-nav-folder-count">${count} file${count !== 1 ? 's' : ''}</span>
-          <span class="file-nav-folder-chevron" aria-hidden="true">\u203A</span>
+        <div class="project-file-listitem" role="listitem">
+          <button type="button" class="project-file-item file-nav-folder-row"
+               data-folder-enter="${escapeHtml(folderName)}"
+               aria-label="Open folder ${escapeHtml(folderName)}, ${count} file${count !== 1 ? 's' : ''}">
+            <span class="project-file-icon" aria-hidden="true">\u{1F4C2}</span>
+            <span class="project-file-name">${escapeHtml(folderName)}</span>
+            <span class="project-file-size file-nav-folder-count">${count} file${count !== 1 ? 's' : ''}</span>
+            <span class="file-nav-folder-chevron" aria-hidden="true">\u203A</span>
+          </button>
         </div>`;
     });
 
@@ -419,28 +427,30 @@ export function initCompanionFilesController({
         </div>`;
     });
 
-    container.innerHTML =
-      breadcrumbHtml +
-      '<div role="list">' +
-      folderItems.join('') +
-      fileItems.join('') +
-      '</div>';
+    // The list owns listitems and nothing else. The breadcrumb bar is a <nav>
+    // and lives in its own host above the list (D-38); it also stops scrolling
+    // away with the rows now that it is outside the scroll box.
+    if (breadcrumbHost) breadcrumbHost.innerHTML = breadcrumbHtml;
+    container.innerHTML = folderItems.join('') + fileItems.join('');
 
     // Breadcrumb navigation
-    container.querySelectorAll('.file-nav-breadcrumb-btn').forEach((btn) => {
-      const depth = parseInt(btn.dataset.depth, 10);
-      const activate = () => {
-        companionCurrentPath = companionCurrentPath.slice(0, depth);
-        renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
-      };
-      btn.addEventListener('click', activate);
-      btn.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          activate();
-        }
+    const breadcrumbScope = breadcrumbHost || container;
+    breadcrumbScope
+      .querySelectorAll('.file-nav-breadcrumb-btn')
+      .forEach((btn) => {
+        const depth = parseInt(btn.dataset.depth, 10);
+        const activate = () => {
+          companionCurrentPath = companionCurrentPath.slice(0, depth);
+          renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
+        };
+        btn.addEventListener('click', activate);
+        btn.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            activate();
+          }
+        });
       });
-    });
 
     // Folder row navigation
     container.querySelectorAll('[data-folder-enter]').forEach((row) => {
@@ -450,11 +460,10 @@ export function initCompanionFilesController({
         renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
       };
       row.addEventListener('click', enter);
+      // Enter and Space are the button's own now. Escape still has to be
+      // bound: it is this tree's way back up one level.
       row.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          enter();
-        } else if (e.key === 'Escape' && companionCurrentPath.length > 0) {
+        if (e.key === 'Escape' && companionCurrentPath.length > 0) {
           e.preventDefault();
           companionCurrentPath = companionCurrentPath.slice(0, -1);
           renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
