@@ -7377,16 +7377,6 @@ body.first-visit-blocking #app {
   font-size: var(--font-size-sm);
 }
 
-/* Wrapper that carries role="listitem" for a folder row, whose own element is
-   a button and so cannot be the list's item as well (D-38). */
-.project-file-listitem {
-  display: block;
-}
-
-.project-file-listitem > .project-file-item {
-  width: 100%;
-}
-
 .project-file-item.main-file {
   border-color: var(--color-accent-fg);
   background: var(--color-accent-subtle);
