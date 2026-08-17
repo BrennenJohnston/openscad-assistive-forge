@@ -165,6 +165,22 @@ Still advertising it:
 - `docs/specs/PARAMETER_SCHEMA_SPEC.md:9` — "Usage in v2 (CLI Toolchain): The
   `forge extract` command generates `params.schema.json` files following this
   specification."
+- `docs/ARCHITECTURE.md:403-430` — a "CLI tool" section with a diagram of seven
+  commands and five framework templates, none of which exist.
+- `docs/guides/MANIFEST_SHARING_GUIDE.md:232-247` — "CLI Quickstart", telling a
+  user to run `npx openscad-forge manifest ...`. This is a user-facing
+  instruction that cannot work.
+- `docs/OPEN_SOURCE_PROJECTS.md:71-81` — lists Chalk and Commander as runtime
+  dependencies. MEASURED: neither is in `package.json` at all; both went with
+  the CLI. Neither was in `THIRD_PARTY_NOTICES.md`, so the licence record is
+  unaffected.
+
+**A correction to my own first pass.** The last three of those were found by a
+grep sweep *after* I had written the table below, and two of them —
+`ARCHITECTURE.md` and `MANIFEST_SHARING_GUIDE.md` — I had first marked
+ACCURATE-KEEP on the strength of reading them for structure and tone. Reading a
+long document for quality is not the same as searching it for a specific dead
+name. Their rows are corrected.
 
 ### F3. Several documents send users to a Settings control that does not exist, for an editor that was deleted
 
@@ -523,9 +539,9 @@ description. The other twelve scripts are all reachable from `package.json`,
 | `docs/DEVELOPMENT_WORKFLOW.md` | ACCURATE-KEEP | |
 | `docs/RESPONSIVE_UI.md` | ACCURATE-KEEP | Breakpoints verified. |
 | `docs/MOBILE_LIMITATIONS.md` | **STALE-REWRITE** | "Solved in v1.4" uses a version scheme that no longer exists. Does not mention the mobile entry gate or that Classic is desktop-only. |
-| `docs/ARCHITECTURE.md` | ACCURATE-KEEP (UNVERIFIED in detail) | Read; the high-level description matches. Its module map deserves a line-by-line check in a rewrite chunk. |
+| `docs/ARCHITECTURE.md` | **STALE-REWRITE** | F2: carried a whole "CLI tool" section. The rest of the high-level description matches; its module map still deserves a line-by-line check. |
 | `docs/SECURITY_ADMIN_GUIDE.md` | ACCURATE-KEEP (UNVERIFIED in detail) | Names the permanent CodeMirror CSP violation, which is correct and deliberate. |
-| `docs/OPEN_SOURCE_PROJECTS.md` | ACCURATE-KEEP | |
+| `docs/OPEN_SOURCE_PROJECTS.md` | **STALE-REWRITE** | F2: listed Chalk and Commander as runtime dependencies; both left with the CLI. |
 | `docs/OPEN_SOURCE_GUIDES.md` | DATED RECORD | 151 KB of collected external reference material. |
 | `docs/OPENSCAD_LANGUAGE_REFERENCE.md` | DATED RECORD | 585 KB of upstream OpenSCAD language reference; explicitly excluded from Markdown linting. Not ours to rewrite. |
 
@@ -557,7 +573,7 @@ Plus three files that sit loose in `docs/` rather than in a subfolder:
 | `docs/guides/IT_APPROVAL_GUIDE.md` | ACCURATE-KEEP, but see F1 | Well written and honest about the CSP. Its accessibility paragraph rests on the VPAT, so whatever you decide in F1 lands here too. This is the document you hand to IT. |
 | `docs/guides/BRAILLE_CARD_GUIDE.md` | ACCURATE-KEEP | Matches the three shipped variants. |
 | `docs/guides/KEYGUARD_WORKFLOW_GUIDE.md` | ACCURATE-KEEP | |
-| `docs/guides/MANIFEST_SHARING_GUIDE.md` | ACCURATE-KEEP | |
+| `docs/guides/MANIFEST_SHARING_GUIDE.md` | **STALE-REWRITE** | F2: its "CLI Quickstart" told users to run a removed command. The hand-written route it also documents is correct, so nobody is stranded. |
 | `docs/guides/COLOR_SYSTEM_GUIDE.md` | ACCURATE-KEEP | |
 | `docs/guides/GOLDEN_SVG_PROCEDURE.md` | ACCURATE-KEEP | A procedure for producing desktop reference output; still valid. |
 
@@ -672,15 +688,15 @@ header, which is what makes it a record rather than a stale instruction.
 
 | Disposition | Files |
 |---|---|
-| ACCURATE-KEEP | 39 |
+| ACCURATE-KEEP | 36 |
 | DATED RECORD | 59 |
-| STALE-REWRITE | 31 |
+| STALE-REWRITE | 34 |
 | OBSOLETE-ARCHIVE | 4 (2 signed, 2 awaiting signature) |
 | **Total tracked** | **133** |
 
-Of the 31 that need rewriting, 8 are guides users are pointed at directly and
-15 are operational documents under `docs/`. That is the order the rewrite
-chunks will follow.
+Of the 34 that need rewriting, 9 are guides users are pointed at directly and
+17 are operational documents under `docs/`. That is the order the rewrite
+chunks follow.
 
 The pattern behind those numbers is worth stating plainly: **almost every
 stale document dates from February to April 2026, and almost every accurate one

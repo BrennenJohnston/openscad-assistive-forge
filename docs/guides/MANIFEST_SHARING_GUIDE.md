@@ -229,22 +229,15 @@ Bundle your `.scad`, companion files, and preset `.json` into a single ZIP. Forg
 | Best for | Small projects (1-5 files) | Large projects / many files | Quick one-off share |
 ---
 
-## CLI Quickstart: Auto-generate a manifest
+## Writing the manifest
 
-If you have the Forge developer CLI installed, you can generate `forge-manifest.json` automatically instead of writing it by hand:
+There is no tool that writes the manifest for you. A command-line generator
+existed until 2026-08-04 and was removed with the rest of the developer CLI.
 
-```bash
-# From a folder — generates an uncompressed manifest
-npx openscad-forge manifest ./my_project_folder -o forge-manifest.json --name "My Project" --author "Your Name"
-
-# From a .zip file — generates a bundle manifest (files.bundle)
-npx openscad-forge manifest ./my_project.zip -o forge-manifest.json --name "My Project" --author "Your Name"
-
-# Folder with --zip flag — generates a bundle manifest pointing to a .zip
-npx openscad-forge manifest ./my_project_folder --zip -o forge-manifest.json
-```
-
-The command scans for `.scad` files, auto-detects the main file, finds companion and preset files, and writes the manifest. Review and adjust the output before committing.
+Write the file by hand -- it is short. Copy whichever example below is closest
+to your project, change the file names, and you are done. If you get a name
+wrong, Forge tells you which file it could not find rather than failing
+silently.
 
 ---
 

@@ -2,7 +2,7 @@
 
 **Project**: OpenSCAD Assistive Forge  
 **Current version**: 4.5.0  
-**Last updated**: 2026-07-13  
+**Last updated**: 2026-08-16  
 
 This is a single-maintainer project. This file is here so I don’t have to answer “is it abandoned?” and “what’s next?” in every issue thread.
 
@@ -11,7 +11,7 @@ This is a single-maintainer project. This file is here so I don’t have to answ
 - The web app works: upload a Customizer-enabled `.scad`, tweak params, preview, export.
 - It’s intentionally **client-side only** (no accounts, no uploads, no backend).
 - The welcome screen ships two ready-to-use tools: the **Charm Customizer** and the **Braille Card Customizer** (card / charm / sign, with on-device liblouis braille translation).
-- The CLI is included for developers who want to scaffold standalone customizers.
+- There are **two interfaces**: the guided **Assistive Forge** one, and **Classic**, which reproduces the OpenSCAD desktop window. The app asks which you want on your first visit and you can switch at any time.
 
 ## What’s solid (things I’m pretty happy with)
 
@@ -20,7 +20,7 @@ This is a single-maintainer project. This file is here so I don’t have to answ
 - **ZIP multi-file support** for `include` / `use` with hardened companion file resolution
 - **SVG preparation workspace** with transform baking, path offset, role assignment, and fullscreen editing
 - **Presets / undo / sharing** workflows with project-native preset support and numeric sorting
-- **Test coverage** exists (3,426 unit tests + e2e suite)
+- **Test coverage** exists (3,957 unit tests across 108 files, plus end-to-end suites on four browsers, a production-CSP lane, and visual regression)
 
 ## Known rough edges
 
@@ -34,7 +34,7 @@ In no particular order:
 
 - Keep polishing the “first run” experience and error messages (OpenSCAD failures can be weird).
 - More real-world examples in `public/examples/`.
-- Tighten documentation so it reads more like a hobby project and less like an enterprise checklist.
+- Finish tightening the documentation. A full review in August 2026 found that most guides written before May described a version of the app that no longer exists; the inventory and the fixes are in `docs/audit/2026-08-16-documentation-inventory.md`.
 
 ## If you’re reading this as a contributor
 
