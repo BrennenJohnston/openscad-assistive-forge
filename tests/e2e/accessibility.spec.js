@@ -17,21 +17,27 @@ async function waitForWasmReady(page) {
 }
 
 /**
- * UF-25: the loaded-model surface reports exactly one long-standing axe
- * violation, and it is the same one classic-panels.spec.js already allows for
- * with its reasoning written out: `nested-interactive` on Forge <summary>
- * elements that carry a button (the parameter-group Hide buttons and the
- * Presets help link). Everything else must be zero.
+ * THE LIST IS EMPTY, AND THAT IS THE POINT.
  *
- * When these tests were first made to run at UF-25 they reported three
- * violations, and the other two were REAL and were fixed rather than added
- * here: defect D-45 (the panel help button measured 16.3px against WCAG 2.2
- * AA's 24px floor, and failed target-offset) and defect D-46 (the green
- * "Preview ready" pill measured 3.07:1 where 14px text needs 4.5:1). Adding a
- * rule to this list buys green and hides a defect, so a new entry needs a
- * measurement and a reason, not a shrug.
+ * UF-25 put `nested-interactive` here with its reasoning written out, beside
+ * a warning that an entry buys green and hides a defect. UF-35 paid that back
+ * by fixing what it covered rather than explaining it again: the help control
+ * in three panel headers and the Hide button on every parameter group each
+ * sat inside a <summary>, which IS the disclosure's own button, so each was a
+ * control inside a control. The group family scaled with the model - three
+ * groups measured three violations, eleven measured eleven - and the cost was
+ * concrete: the Console header's accessible name was the word "Console"
+ * followed by the help button's entire 180-character sentence.
+ *
+ * Two other violations surfaced at UF-25 and were fixed the same way rather
+ * than allowed: D-45 (the panel help button measured 16.3px against WCAG 2.2
+ * AA's 24px floor, and failed target-offset) and D-46 (the green "Preview
+ * ready" pill measured 3.07:1 where 14px text needs 4.5:1).
+ *
+ * Anything added here needs a measurement and a reason, not a shrug - and an
+ * empty list is what lets this board fail on a real regression.
  */
-const ALLOWED_AXE_VIOLATIONS = ['nested-interactive']
+const ALLOWED_AXE_VIOLATIONS = []
 
 function expectOnlyAllowedViolations(results) {
   const unexpected = results.violations.filter(
@@ -2805,9 +2811,9 @@ test.describe('Axe-Core Scans for Missing Views (REC-002)', () => {
    * breadcrumb bar and a second role="list" into it. A list may own only
    * listitems.
    *
-   * nested-interactive on .project-files-summary is the "?" help link inside a
-   * clickable <summary> — a separate ledger item covering three panels, and
-   * already the one entry in ALLOWED_AXE_VIOLATIONS.
+   * The "?" help link that used to sit inside this clickable <summary> and
+   * reported nested-interactive moved out at UF-35; ALLOWED_AXE_VIOLATIONS is
+   * empty now.
    */
   test('companion files panel has no aria-required-children violation', async ({ page }) => {
     test.skip(isCI, 'Needs a real multi-file project, so needs WASM')

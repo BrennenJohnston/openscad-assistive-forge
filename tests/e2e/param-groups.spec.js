@@ -18,6 +18,23 @@ test.beforeEach(async ({ page }) => {
   })
 })
 
+/**
+ * UF-35: the ✕ moved out of the <summary>. A <summary> IS the disclosure's
+ * own button, so a control inside it was a control inside a control - axe's
+ * nested-interactive, once per group, so the count grew with the model. It
+ * now sits in an actions layer beside the <details>, and the two share one
+ * .forge-disclosure-row, so the button is reached through the row rather than
+ * through the group. Its box and its place in the header are unchanged; the
+ * geometry assertions below are what proves that.
+ */
+function groupRow(page, index = 0) {
+  return page
+    .locator('.forge-disclosure-row', {
+      has: page.locator('details.param-group'),
+    })
+    .nth(index)
+}
+
 async function loadSample(page) {
   await page.goto('/')
   await page.waitForSelector('body[data-wasm-ready="true"]', {
@@ -48,9 +65,13 @@ test.describe('param group hide geometry (C12)', () => {
 
     await loadSample(page)
 
-    const group = page.locator('details.param-group').first()
+    const row = groupRow(page)
+    const group = row.locator('details.param-group')
     const summary = group.locator('summary')
-    const hideBtn = summary.locator('.param-group-hide-btn')
+    const hideBtn = row.locator('.param-group-hide-btn')
+
+    // The repair's own guard: the control must NOT be inside the summary.
+    await expect(summary.locator('.param-group-hide-btn')).toHaveCount(0)
 
     // Full token-sized hit target regardless of the hover-reveal opacity.
     // --size-touch-target is 44px on touch and (by existing app-wide design)
@@ -98,7 +119,7 @@ test.describe('param group hide geometry (C12)', () => {
       await firstGroup.locator('summary span').first().textContent()
     ).trim()
 
-    await firstGroup.locator('.param-group-hide-btn').click()
+    await groupRow(page).locator('.param-group-hide-btn').click()
     await expect(firstGroup).toBeHidden()
 
     // Focus lands on the restore bar (the pressed ✕ left the tree)
@@ -125,7 +146,7 @@ test.describe('param group hide geometry (C12)', () => {
     await loadSample(page)
 
     const firstGroup = page.locator('details.param-group').first()
-    await firstGroup.locator('.param-group-hide-btn').click()
+    await groupRow(page).locator('.param-group-hide-btn').click()
     await expect(firstGroup).toBeHidden()
 
     await page.reload()

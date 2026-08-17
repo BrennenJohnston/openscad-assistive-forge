@@ -2190,30 +2190,11 @@
             </div>
             <div class="param-panel-body" id="paramPanelBody">
               <!-- Console Panel: unified OpenSCAD output (S-010 desktop parity) -->
-              <details
-                class="console-panel forge-disclosure"
-                id="consolePanel"
-                aria-label="Console"
-              >
-                <summary class="console-summary">
-                  <svg
-                    class="btn-icon-svg forge-disclosure-icon"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="square"
-                    stroke-linejoin="miter"
-                    aria-hidden="true"
-                  >
-                    <polyline points="4 17 10 11 4 5"></polyline>
-                    <line x1="12" y1="19" x2="20" y2="19"></line>
-                  </svg>
-                  <span class="console-title forge-disclosure-title"
-                    >Console</span
-                  >
+              <!-- UF-35: the help control sits in .forge-disclosure-actions,
+                   outside the <summary>, because a control inside the
+                   disclosure's own button is axe's nested-interactive. -->
+              <div class="forge-disclosure-row">
+                <div class="forge-disclosure-actions">
                   <button
                     class="panel-help-btn"
                     type="button"
@@ -2222,147 +2203,185 @@
                   >
                     ?
                   </button>
-                  <span
-                    id="console-badge"
-                    class="console-badge hidden"
-                    aria-hidden="true"
-                    >0</span
-                  >
-                  <!-- Error/warning count for the Structured view (F1).
+                </div>
+                <details
+                  class="console-panel forge-disclosure"
+                  id="consolePanel"
+                  aria-label="Console"
+                >
+                  <summary class="console-summary">
+                    <svg
+                      class="btn-icon-svg forge-disclosure-icon"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="square"
+                      stroke-linejoin="miter"
+                      aria-hidden="true"
+                    >
+                      <polyline points="4 17 10 11 4 5"></polyline>
+                      <line x1="12" y1="19" x2="20" y2="19"></line>
+                    </svg>
+                    <span class="console-title forge-disclosure-title"
+                      >Console</span
+                    >
+                    <span
+                      id="console-badge"
+                      class="console-badge hidden"
+                      aria-hidden="true"
+                      >0</span
+                    >
+                    <!-- Error/warning count for the Structured view (F1).
                        Decorative, like #console-badge above it: ErrorLogPanel
                        already announces errors and warnings through the
                        announcer, so repeating the count to assistive tech
                        would say the same thing twice. Classic hides this
                        summary entirely and shows the Error-Log as its own
                        bottom-strip pane instead. -->
-                  <span
-                    id="error-log-badge"
-                    class="error-log-badge hidden"
-                    aria-hidden="true"
-                    >0</span
-                  >
-                </summary>
-                <div class="console-content">
-                  <div
-                    class="console-view-tabs"
-                    role="tablist"
-                    aria-label="Console view"
-                  >
-                    <button
-                      role="tab"
-                      type="button"
-                      class="console-view-tab active"
-                      id="console-tab-log"
-                      aria-selected="true"
-                      aria-controls="console-view-log"
+                    <span
+                      id="error-log-badge"
+                      class="error-log-badge hidden"
+                      aria-hidden="true"
+                      >0</span
                     >
-                      Log
-                    </button>
-                    <button
-                      role="tab"
-                      type="button"
-                      class="console-view-tab"
-                      id="console-tab-structured"
-                      aria-selected="false"
-                      aria-controls="console-view-structured"
+                    <!-- Holds the help control's place in the real header row;
+                       the control itself is painted over it from the actions
+                       layer above. Last, so the badges' changing widths cannot
+                       move it. -->
+                    <span class="panel-help-slot" aria-hidden="true"></span>
+                  </summary>
+                  <div class="console-content">
+                    <div
+                      class="console-view-tabs"
+                      role="tablist"
+                      aria-label="Console view"
                     >
-                      Structured
-                    </button>
-                  </div>
-                  <div class="console-controls">
-                    <label class="console-filter">
-                      <input type="checkbox" id="console-filter-echo" checked />
-                      <span>ECHO</span>
-                    </label>
-                    <label class="console-filter">
-                      <input type="checkbox" id="console-filter-warn" checked />
-                      <span>Warnings</span>
-                    </label>
-                    <label class="console-filter">
-                      <input
-                        type="checkbox"
-                        id="console-filter-error"
-                        checked
-                      />
-                      <span>Errors</span>
-                    </label>
-                    <label class="console-filter">
-                      <input
-                        type="checkbox"
-                        id="console-filter-deprecated"
-                        checked
-                      />
-                      <span>Deprecated</span>
-                    </label>
-                    <label class="console-filter">
-                      <input type="checkbox" id="console-filter-trace" />
-                      <span>Trace</span>
-                    </label>
-                    <div class="console-actions">
                       <button
+                        role="tab"
                         type="button"
-                        id="console-copy-btn"
-                        class="btn btn-sm btn-icon"
-                        aria-label="Copy console output to clipboard"
-                        title="Copy to clipboard"
+                        class="console-view-tab active"
+                        id="console-tab-log"
+                        aria-selected="true"
+                        aria-controls="console-view-log"
                       >
-                        📋
+                        Log
                       </button>
                       <button
+                        role="tab"
                         type="button"
-                        id="console-download-btn"
-                        class="btn btn-sm btn-icon"
-                        aria-label="Download console log"
-                        title="Download log"
+                        class="console-view-tab"
+                        id="console-tab-structured"
+                        aria-selected="false"
+                        aria-controls="console-view-structured"
                       >
-                        ⬇️
-                      </button>
-                      <button
-                        type="button"
-                        id="console-clear-btn"
-                        class="btn btn-sm btn-icon"
-                        aria-label="Clear console"
-                        title="Clear"
-                      >
-                        🗑️
+                        Structured
                       </button>
                     </div>
-                  </div>
-                  <div
-                    id="console-view-log"
-                    class="console-view-panel"
-                    role="tabpanel"
-                    aria-labelledby="console-tab-log"
-                  >
+                    <div class="console-controls">
+                      <label class="console-filter">
+                        <input
+                          type="checkbox"
+                          id="console-filter-echo"
+                          checked
+                        />
+                        <span>ECHO</span>
+                      </label>
+                      <label class="console-filter">
+                        <input
+                          type="checkbox"
+                          id="console-filter-warn"
+                          checked
+                        />
+                        <span>Warnings</span>
+                      </label>
+                      <label class="console-filter">
+                        <input
+                          type="checkbox"
+                          id="console-filter-error"
+                          checked
+                        />
+                        <span>Errors</span>
+                      </label>
+                      <label class="console-filter">
+                        <input
+                          type="checkbox"
+                          id="console-filter-deprecated"
+                          checked
+                        />
+                        <span>Deprecated</span>
+                      </label>
+                      <label class="console-filter">
+                        <input type="checkbox" id="console-filter-trace" />
+                        <span>Trace</span>
+                      </label>
+                      <div class="console-actions">
+                        <button
+                          type="button"
+                          id="console-copy-btn"
+                          class="btn btn-sm btn-icon"
+                          aria-label="Copy console output to clipboard"
+                          title="Copy to clipboard"
+                        >
+                          📋
+                        </button>
+                        <button
+                          type="button"
+                          id="console-download-btn"
+                          class="btn btn-sm btn-icon"
+                          aria-label="Download console log"
+                          title="Download log"
+                        >
+                          ⬇️
+                        </button>
+                        <button
+                          type="button"
+                          id="console-clear-btn"
+                          class="btn btn-sm btn-icon"
+                          aria-label="Clear console"
+                          title="Clear"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
                     <div
-                      id="console-output"
-                      class="console-output"
-                      role="log"
-                      aria-label="Console messages"
-                      aria-live="polite"
-                      aria-relevant="additions"
-                      tabindex="0"
+                      id="console-view-log"
+                      class="console-view-panel"
+                      role="tabpanel"
+                      aria-labelledby="console-tab-log"
                     >
-                      <!-- tabindex because this region scrolls and has nothing
+                      <div
+                        id="console-output"
+                        class="console-output"
+                        role="log"
+                        aria-label="Console messages"
+                        aria-live="polite"
+                        aria-relevant="additions"
+                        tabindex="0"
+                      >
+                        <!-- tabindex because this region scrolls and has nothing
                          focusable inside it, so arrows and PageDown had no way
                          in. Not the CodeMirror case (P2), where the scroller's
                          contenteditable child IS reachable and the same axe
                          rule is a false positive: here it was real, and P7
                          made it visible by giving the log its content back. -->
-                      <div class="console-empty">
-                        No output yet. Messages from the OpenSCAD engine will
-                        appear here.
+                        <div class="console-empty">
+                          No output yet. Messages from the OpenSCAD engine will
+                          appear here.
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div
-                    id="console-view-structured"
-                    class="console-view-panel"
-                    role="tabpanel"
-                    aria-labelledby="console-tab-structured"
-                    hidden
-                  >
-                    <!-- The Show filter and the table both live in here so both
+                    <div
+                      id="console-view-structured"
+                      class="console-view-panel"
+                      role="tabpanel"
+                      aria-labelledby="console-tab-structured"
+                      hidden
+                    >
+                      <!-- The Show filter and the table both live in here so both
                          travel into the Classic dock together (the layout
                          controller moves #error-log-output, not its parent).
                          role="log"/aria-live have moved OFF this element and on
@@ -2370,21 +2389,22 @@
                          should hold only the content that changes, and a
                          <select> announcing itself on every render is exactly
                          what it should not hold. -->
-                    <div id="error-log-output" class="error-log-output">
-                      <div
-                        class="error-log-entries"
-                        role="log"
-                        aria-label="Structured error log"
-                        aria-live="polite"
-                      >
-                        <div class="error-log-empty">
-                          No errors. Compile or render to check for issues.
+                      <div id="error-log-output" class="error-log-output">
+                        <div
+                          class="error-log-entries"
+                          role="log"
+                          aria-label="Structured error log"
+                          aria-live="polite"
+                        >
+                          <div class="error-log-empty">
+                            No errors. Compile or render to check for issues.
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </details>
+                </details>
+              </div>
               <!-- Classic Font List panel (F3), transcribed from upstream
                    FontList.ui. Declared here as static markup and moved into
                    #classicFontListSlot on entering Classic, the same way the
@@ -3502,31 +3522,9 @@
                 role="region"
                 aria-label="Companion files for this design"
               >
-                <details class="project-files-details forge-disclosure">
-                  <summary
-                    class="project-files-summary"
-                    data-tutorial-target="companion-files"
-                  >
-                    <svg
-                      class="btn-icon-svg forge-disclosure-icon"
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="square"
-                      stroke-linejoin="miter"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"
-                      ></path>
-                      <polyline points="14 2 14 8 20 8"></polyline>
-                      <line x1="12" y1="18" x2="12" y2="12"></line>
-                      <line x1="9" y1="15" x2="15" y2="15"></line>
-                    </svg>
-                    <span class="forge-disclosure-title">Companion Files</span>
+                <!-- UF-35: help control outside the <summary>. -->
+                <div class="forge-disclosure-row">
+                  <div class="forge-disclosure-actions">
                     <a
                       href="docs/guides/CONCEPTUAL_MODEL.md#companion-files--extra-files-the-design-needs"
                       class="panel-help-btn"
@@ -3536,104 +3534,144 @@
                       title="Companion Files are extra files (like openings.txt or SVG shapes) that the SCAD design needs to produce correct geometry."
                       >?</a
                     >
-                    <span class="project-files-badge" id="projectFilesBadge"
-                      >0</span
+                  </div>
+                  <details class="project-files-details forge-disclosure">
+                    <summary
+                      class="project-files-summary"
+                      data-tutorial-target="companion-files"
                     >
-                  </summary>
-                  <div class="project-files-content">
-                    <p class="project-files-help" id="projectFilesHelp">
-                      Manage companion files used by this design:
-                    </p>
-                    <!-- Empty state shown when no companion files are present -->
-                    <div class="companion-empty-state" id="companionEmptyState">
-                      <p>
-                        No companion files yet. Use <strong>Add File</strong> to
-                        include <code>.txt</code>, <code>.svg</code>, or other
-                        files your design needs.
-                      </p>
-                    </div>
-                    <!-- Missing files warning with action button (dependency preflight check) -->
-                    <div
-                      class="project-files-warning hidden"
-                      id="projectFilesWarning"
-                      role="alert"
-                    >
-                      <div class="warning-content">
-                        <span class="warning-icon" aria-hidden="true">⚠️</span>
-                        <span class="warning-text" id="projectFilesWarningText"
-                          >Some required files are missing</span
-                        >
-                      </div>
-                      <button
-                        type="button"
-                        class="btn btn-sm btn-outline btn-warning-action"
-                        id="addMissingFilesBtn"
-                        aria-label="Add the missing files to this project"
+                      <svg
+                        class="btn-icon-svg forge-disclosure-icon"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="square"
+                        stroke-linejoin="miter"
+                        aria-hidden="true"
                       >
-                        Add Missing Files...
-                      </button>
-                    </div>
-                    <!-- Folder breadcrumbs. Outside the list below, and not
+                        <path
+                          d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"
+                        ></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="12" y1="18" x2="12" y2="12"></line>
+                        <line x1="9" y1="15" x2="15" y2="15"></line>
+                      </svg>
+                      <span class="forge-disclosure-title"
+                        >Companion Files</span
+                      >
+                      <span class="project-files-badge" id="projectFilesBadge"
+                        >0</span
+                      >
+                      <!-- Holds the help control's place; last, so the badge's
+                         changing width cannot move it. -->
+                      <span class="panel-help-slot" aria-hidden="true"></span>
+                    </summary>
+                    <div class="project-files-content">
+                      <p class="project-files-help" id="projectFilesHelp">
+                        Manage companion files used by this design:
+                      </p>
+                      <!-- Empty state shown when no companion files are present -->
+                      <div
+                        class="companion-empty-state"
+                        id="companionEmptyState"
+                      >
+                        <p>
+                          No companion files yet. Use
+                          <strong>Add File</strong> to include
+                          <code>.txt</code>, <code>.svg</code>, or other files
+                          your design needs.
+                        </p>
+                      </div>
+                      <!-- Missing files warning with action button (dependency preflight check) -->
+                      <div
+                        class="project-files-warning hidden"
+                        id="projectFilesWarning"
+                        role="alert"
+                      >
+                        <div class="warning-content">
+                          <span class="warning-icon" aria-hidden="true"
+                            >⚠️</span
+                          >
+                          <span
+                            class="warning-text"
+                            id="projectFilesWarningText"
+                            >Some required files are missing</span
+                          >
+                        </div>
+                        <button
+                          type="button"
+                          class="btn btn-sm btn-outline btn-warning-action"
+                          id="addMissingFilesBtn"
+                          aria-label="Add the missing files to this project"
+                        >
+                          Add Missing Files...
+                        </button>
+                      </div>
+                      <!-- Folder breadcrumbs. Outside the list below, and not
                          inside it, because a role="list" may own only
                          listitems (D-38). -->
-                    <div
-                      class="project-files-breadcrumbs"
-                      id="projectFilesBreadcrumbs"
-                    ></div>
-                    <!-- File list -->
-                    <div
-                      class="project-files-list"
-                      id="projectFilesList"
-                      role="list"
-                      aria-label="Project files"
-                    >
-                      <!-- Dynamically populated -->
-                    </div>
-                    <!-- Add file controls -->
-                    <div class="project-files-actions">
-                      <label
-                        class="btn btn-sm btn-outline project-files-add-btn"
-                        for="addCompanionFileInput"
+                      <div
+                        class="project-files-breadcrumbs"
+                        id="projectFilesBreadcrumbs"
+                      ></div>
+                      <!-- File list -->
+                      <div
+                        class="project-files-list"
+                        id="projectFilesList"
+                        role="list"
+                        aria-label="Project files"
                       >
-                        <svg
-                          class="btn-icon-svg"
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          aria-hidden="true"
+                        <!-- Dynamically populated -->
+                      </div>
+                      <!-- Add file controls -->
+                      <div class="project-files-actions">
+                        <label
+                          class="btn btn-sm btn-outline project-files-add-btn"
+                          for="addCompanionFileInput"
                         >
-                          <line x1="12" y1="5" x2="12" y2="19"></line>
-                          <line x1="5" y1="12" x2="19" y2="12"></line>
-                        </svg>
-                        Add File
-                        <input
-                          type="file"
-                          id="addCompanionFileInput"
-                          class="sr-only"
-                          accept=".txt,.scad,.svg,.json,.csv"
-                          multiple
-                        />
-                      </label>
+                          <svg
+                            class="btn-icon-svg"
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            aria-hidden="true"
+                          >
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                          </svg>
+                          Add File
+                          <input
+                            type="file"
+                            id="addCompanionFileInput"
+                            class="sr-only"
+                            accept=".txt,.scad,.svg,.json,.csv"
+                            multiple
+                          />
+                        </label>
+                      </div>
+                      <div class="project-files-footer">
+                        <p class="project-files-hint">
+                          Add .txt, .scad, .svg, or other files referenced by
+                          your model
+                        </p>
+                        <button
+                          type="button"
+                          class="btn btn-sm btn-outline companion-save-btn hidden"
+                          id="companionSaveBtn"
+                          aria-label="Save companion files to this project"
+                        >
+                          Save as Project
+                        </button>
+                      </div>
                     </div>
-                    <div class="project-files-footer">
-                      <p class="project-files-hint">
-                        Add .txt, .scad, .svg, or other files referenced by your
-                        model
-                      </p>
-                      <button
-                        type="button"
-                        class="btn btn-sm btn-outline companion-save-btn hidden"
-                        id="companionSaveBtn"
-                        aria-label="Save companion files to this project"
-                      >
-                        Save as Project
-                      </button>
-                    </div>
-                  </div>
-                </details>
+                  </details>
+                </div>
               </div>
               <!-- Advanced Menu -->
               <details class="advanced-menu forge-disclosure" id="advancedMenu">
@@ -3757,31 +3795,9 @@
                 </div>
               </details>
               <!-- Preset Controls -->
-              <details
-                class="preset-controls forge-disclosure"
-                id="presetControls"
-                aria-label="Parameter presets"
-                data-tutorial-target="preset-controls"
-              >
-                <summary class="preset-summary">
-                  <svg
-                    class="btn-icon-svg forge-disclosure-icon"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="square"
-                    stroke-linejoin="miter"
-                    aria-hidden="true"
-                  >
-                    <rect x="4" y="4" width="16" height="16" rx="0"></rect>
-                    <rect x="7" y="4" width="10" height="6" rx="0"></rect>
-                    <rect x="8" y="14" width="8" height="6" rx="0"></rect>
-                    <line x1="16" y1="7" x2="16" y2="9"></line>
-                  </svg>
-                  <span class="forge-disclosure-title">Presets</span>
+              <!-- UF-35: help control outside the <summary>. -->
+              <div class="forge-disclosure-row">
+                <div class="forge-disclosure-actions">
                   <a
                     href="docs/guides/CONCEPTUAL_MODEL.md#parameters--presets--the-configuration"
                     class="panel-help-btn"
@@ -3791,162 +3807,191 @@
                     title="Presets are saved configurations. Learn how they work with SCAD files and companion files."
                     >?</a
                   >
-                </summary>
-                <div class="preset-content">
-                  <!-- Legacy: search input (hidden when searchable_combobox flag is on) -->
-                  <div class="preset-search" id="presetSearchLegacy">
-                    <label for="presetSearchInput" class="sr-only"
-                      >Search presets</label
-                    ><input
-                      type="text"
-                      id="presetSearchInput"
-                      class="preset-search-input"
-                      placeholder="Search presets..."
-                      aria-describedby="presetSearchStatus"
-                    /><button
-                      type="button"
-                      id="presetSearchClear"
-                      class="btn-icon btn-icon-sm preset-search-clear"
-                      aria-label="Clear search"
+                </div>
+                <details
+                  class="preset-controls forge-disclosure"
+                  id="presetControls"
+                  aria-label="Parameter presets"
+                  data-tutorial-target="preset-controls"
+                >
+                  <summary class="preset-summary">
+                    <svg
+                      class="btn-icon-svg forge-disclosure-icon"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="square"
+                      stroke-linejoin="miter"
+                      aria-hidden="true"
+                    >
+                      <rect x="4" y="4" width="16" height="16" rx="0"></rect>
+                      <rect x="7" y="4" width="10" height="6" rx="0"></rect>
+                      <rect x="8" y="14" width="8" height="6" rx="0"></rect>
+                      <line x1="16" y1="7" x2="16" y2="9"></line>
+                    </svg>
+                    <span class="forge-disclosure-title">Presets</span>
+                    <!-- Holds the help control's place in the real header row. -->
+                    <span class="panel-help-slot" aria-hidden="true"></span>
+                  </summary>
+                  <div class="preset-content">
+                    <!-- Legacy: search input (hidden when searchable_combobox flag is on) -->
+                    <div class="preset-search" id="presetSearchLegacy">
+                      <label for="presetSearchInput" class="sr-only"
+                        >Search presets</label
+                      ><input
+                        type="text"
+                        id="presetSearchInput"
+                        class="preset-search-input"
+                        placeholder="Search presets..."
+                        aria-describedby="presetSearchStatus"
+                      /><button
+                        type="button"
+                        id="presetSearchClear"
+                        class="btn-icon btn-icon-sm preset-search-clear"
+                        aria-label="Clear search"
+                        hidden
+                      >
+                        &times;
+                      </button>
+                      <div
+                        id="presetSearchStatus"
+                        class="sr-only"
+                        role="status"
+                        aria-live="polite"
+                      ></div>
+                    </div>
+                    <div class="preset-sort-toolbar" id="presetSortToolbar">
+                      <label for="presetDropdownSort" class="preset-sort-label"
+                        >Sort</label
+                      >
+                      <select
+                        id="presetDropdownSort"
+                        class="preset-sort-select"
+                        aria-label="Sort presets by"
+                      >
+                        <option value="name-asc">Name (A–Z)</option>
+                        <option value="name-desc">Name (Z–A)</option>
+                        <option value="date-created">Date created</option>
+                        <option value="date-modified">Date modified</option>
+                      </select>
+                    </div>
+                    <!-- Searchable combobox (shown when searchable_combobox flag is on) -->
+                    <div
+                      id="presetComboboxContainer"
+                      class="preset-combobox-container"
                       hidden
                     >
-                      &times;
-                    </button>
-                    <div
-                      id="presetSearchStatus"
-                      class="sr-only"
-                      role="status"
-                      aria-live="polite"
-                    ></div>
-                  </div>
-                  <div class="preset-sort-toolbar" id="presetSortToolbar">
-                    <label for="presetDropdownSort" class="preset-sort-label"
-                      >Sort</label
-                    >
-                    <select
-                      id="presetDropdownSort"
-                      class="preset-sort-select"
-                      aria-label="Sort presets by"
-                    >
-                      <option value="name-asc">Name (A–Z)</option>
-                      <option value="name-desc">Name (Z–A)</option>
-                      <option value="date-created">Date created</option>
-                      <option value="date-modified">Date modified</option>
-                    </select>
-                  </div>
-                  <!-- Searchable combobox (shown when searchable_combobox flag is on) -->
-                  <div
-                    id="presetComboboxContainer"
-                    class="preset-combobox-container"
-                    hidden
-                  >
-                    <!-- initSearchableCombobox() populates this container;
+                      <!-- initSearchableCombobox() populates this container;
                          the input's accessible name comes from its ariaLabel option -->
-                  </div>
-                  <!-- Legacy: native select (hidden when searchable_combobox flag is on) -->
-                  <div class="preset-selector" id="presetSelector">
-                    <label for="presetSelect" class="preset-label sr-only"
-                      >Select preset</label
-                    >
-                    <select
-                      id="presetSelect"
-                      class="preset-select"
-                      aria-label="Select a saved preset to load"
-                    >
-                      <option value="">-- Select Preset --</option>
-                    </select>
-                    <!-- OpenSCAD Customizer-style preset controls: Save, Add, Delete -->
-                  </div>
-                  <div class="preset-actions-row">
-                    <div
-                      class="preset-actions-group"
-                      role="group"
-                      aria-label="Preset management"
-                    >
-                      <button
-                        type="button"
-                        id="savePresetBtn"
-                        class="btn btn-sm btn-icon"
-                        aria-label="Save Preset — overwrites current preset"
-                        title="Save Preset — overwrites current preset"
-                        disabled
+                    </div>
+                    <!-- Legacy: native select (hidden when searchable_combobox flag is on) -->
+                    <div class="preset-selector" id="presetSelector">
+                      <label for="presetSelect" class="preset-label sr-only"
+                        >Select preset</label
                       >
-                        💾
-                      </button>
-                      <button
-                        type="button"
-                        id="addPresetBtn"
-                        class="btn btn-sm btn-icon"
-                        aria-label="Add Preset"
-                        title="Add Preset"
+                      <select
+                        id="presetSelect"
+                        class="preset-select"
+                        aria-label="Select a saved preset to load"
                       >
-                        +
-                      </button>
-                      <button
-                        type="button"
-                        id="copyPresetBtn"
-                        class="btn btn-sm btn-icon"
-                        aria-label="Copy current preset to a new preset"
-                        title="Copy Preset — duplicate the current preset"
-                        disabled
+                        <option value="">-- Select Preset --</option>
+                      </select>
+                      <!-- OpenSCAD Customizer-style preset controls: Save, Add, Delete -->
+                    </div>
+                    <div class="preset-actions-row">
+                      <div
+                        class="preset-actions-group"
+                        role="group"
+                        aria-label="Preset management"
                       >
-                        ⧉
-                      </button>
-                      <button
-                        type="button"
-                        id="deletePresetBtn"
-                        class="btn btn-sm btn-icon btn-danger-icon"
-                        aria-label="Delete current preset"
-                        title="Delete current preset"
-                        disabled
-                      >
-                        −
-                      </button>
-                      <button
-                        type="button"
-                        id="copyPresetNameBtn"
-                        class="btn btn-sm btn-icon"
-                        aria-label="Copy preset name to clipboard"
-                        title="Copy preset name"
-                        disabled
-                      >
-                        <svg
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          aria-hidden="true"
+                        <button
+                          type="button"
+                          id="savePresetBtn"
+                          class="btn btn-sm btn-icon"
+                          aria-label="Save Preset — overwrites current preset"
+                          title="Save Preset — overwrites current preset"
+                          disabled
                         >
-                          <rect
-                            x="9"
-                            y="9"
-                            width="13"
-                            height="13"
-                            rx="2"
-                            ry="2"
-                          ></rect>
-                          <path
-                            d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
-                          ></path>
-                        </svg>
+                          💾
+                        </button>
+                        <button
+                          type="button"
+                          id="addPresetBtn"
+                          class="btn btn-sm btn-icon"
+                          aria-label="Add Preset"
+                          title="Add Preset"
+                        >
+                          +
+                        </button>
+                        <button
+                          type="button"
+                          id="copyPresetBtn"
+                          class="btn btn-sm btn-icon"
+                          aria-label="Copy current preset to a new preset"
+                          title="Copy Preset — duplicate the current preset"
+                          disabled
+                        >
+                          ⧉
+                        </button>
+                        <button
+                          type="button"
+                          id="deletePresetBtn"
+                          class="btn btn-sm btn-icon btn-danger-icon"
+                          aria-label="Delete current preset"
+                          title="Delete current preset"
+                          disabled
+                        >
+                          −
+                        </button>
+                        <button
+                          type="button"
+                          id="copyPresetNameBtn"
+                          class="btn btn-sm btn-icon"
+                          aria-label="Copy preset name to clipboard"
+                          title="Copy preset name"
+                          disabled
+                        >
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            aria-hidden="true"
+                          >
+                            <rect
+                              x="9"
+                              y="9"
+                              width="13"
+                              height="13"
+                              rx="2"
+                              ry="2"
+                            ></rect>
+                            <path
+                              d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+                            ></path>
+                          </svg>
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        id="managePresetsBtn"
+                        class="btn btn-sm btn-outline"
+                        aria-label="Import and export presets"
+                        title="Import and export presets"
+                      >
+                        📋 Import / Export
                       </button>
                     </div>
-                    <button
-                      type="button"
-                      id="managePresetsBtn"
-                      class="btn btn-sm btn-outline"
-                      aria-label="Import and export presets"
-                      title="Import and export presets"
-                    >
-                      📋 Import / Export
-                    </button>
                   </div>
-                </div>
-              </details>
+                </details>
+              </div>
               <!-- Classic moves this row into #classicCustomizerBar so the
                    dock header matches the desktop Customizer's first line. -->
               <div class="customizer-header-row" id="customizerHeaderRow">

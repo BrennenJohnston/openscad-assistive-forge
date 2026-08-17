@@ -104,7 +104,12 @@ summary:focus-visible,
 /* Hide button on each group header (C12): full touch target anchored at the
    far right, well clear of the disclosure chevron (which param groups move
    to the LEFT of the label) — the old 24px ✕ sat 4px from the chevron and
-   was constantly mis-pressed. */
+   was constantly mis-pressed.
+
+   UF-35: it no longer sits inside the <summary>. It is painted into the
+   header by .forge-disclosure-actions and .param-group-hide-slot holds its
+   place in the real header row — see the disclosure-header actions block
+   below. Its own box is unchanged. */
 .param-group-hide-btn {
   display: inline-flex;
   align-items: center;
@@ -128,8 +133,16 @@ summary:focus-visible,
     background-color var(--motion-base) ease;
 }
 
-.forge-disclosure summary:hover .param-group-hide-btn,
-.forge-disclosure summary:focus-within .param-group-hide-btn {
+/* The button is outside the summary now, and the actions layer sits over the
+   header, so hovering the button itself is NOT hovering the summary — it
+   needs its own :hover here or the control vanishes as the pointer lands on
+   it. */
+.forge-disclosure-row:has(> .forge-disclosure > summary:hover)
+  .param-group-hide-btn,
+.forge-disclosure-row:has(> .forge-disclosure > summary:focus-within)
+  .param-group-hide-btn,
+.forge-disclosure-actions .param-group-hide-btn:hover,
+.forge-disclosure-actions .param-group-hide-btn:focus-visible {
   opacity: 1;
 }
 
@@ -230,6 +243,104 @@ details.param-group.forge-disclosure[open] > summary::before {
   .forge-disclosure summary::after {
     transition: none;
   }
+}
+
+/* ============================================================================
+   Disclosure header actions (UF-35)
+   ============================================================================
+   A <summary> IS the disclosure's button, so a control placed inside it is a
+   control inside a control: axe's nested-interactive, and a node screen
+   readers are not required to expose. Nor is there a half-step — a <details>
+   whose first child is not a <summary> gets a UA-generated "Details" marker
+   in its place, measured.
+
+   So the control moves out to a sibling layer stacked over the header, and a
+   slot of the same size holds its place in the real header row. Q-64 (owner,
+   2026-08-17): the layer goes BEFORE the <details> in source order, so the
+   control is reached one Tab stop early rather than behind the whole panel —
+   which measured 2 stops on Companion Files, 5 on Presets, 11 on the Console
+   and 12 on the Dimensions group.
+
+   The layer repeats the summary's padding, min-height, gap, border and font
+   size rather than carrying an offset of its own, so it tracks all three
+   space-token breakpoints and the high-contrast font bump without arithmetic.
+   ============================================================================ */
+/* position:relative, NOT grid or flex. The row must let the disclosure's own
+   margins collapse straight through it, or it contains them and every panel
+   below shifts — MEASURED at 4 to 8px with a grid row, and the param groups'
+   own margin-bottom: var(--space-lg) collapsed to var(--space-xs) when a rule
+   here tried to normalise it. A relative block establishes no formatting
+   context, so the disclosure keeps whatever margins it already had. */
+.forge-disclosure-row {
+  position: relative;
+}
+
+/* A row whose disclosure is gone or hidden must go with it, or the actions
+   layer is left painting a control over nothing — MEASURED: without this, a
+   help button that has never been visible in Classic or Simplified appears in
+   both. The disclosure can leave in five ways, and this is every one the app
+   uses: Classic relocates whole panels between docks with appendChild, which
+   moves the <details> and leaves the row behind; Simplified adds
+   .ui-mode-hidden; C12 hides a group with [hidden]; the parameter search adds
+   .search-empty; and .hidden is the shared utility. A sixth idiom would need
+   a line here, so add one with any new way of hiding a disclosure. */
+.forge-disclosure-row:not(:has(> .forge-disclosure)),
+.forge-disclosure-row:has(> .forge-disclosure[hidden]),
+.forge-disclosure-row:has(> .forge-disclosure.hidden),
+.forge-disclosure-row:has(> .forge-disclosure.ui-mode-hidden),
+.forge-disclosure-row:has(> .forge-disclosure.search-empty) {
+  display: none;
+}
+
+.forge-disclosure-actions {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  min-height: var(--size-touch-target);
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+  border: 1px solid transparent;
+  /* The header underneath must stay clickable everywhere the control is not. */
+  pointer-events: none;
+}
+
+.forge-disclosure-actions > * {
+  pointer-events: auto;
+}
+
+/* Reproduces the shared chevron's width from the same declaration that draws
+   it, so the control lands exactly where it sat as a flex child. */
+.forge-disclosure-actions::after {
+  content: '';
+  width: 0.5em;
+  height: 0.5em;
+  border-right: 2px solid transparent;
+  border-bottom: 2px solid transparent;
+  flex-shrink: 0;
+}
+
+/* Param groups carry their chevron on ::before, so nothing trails the slot. */
+.forge-disclosure-actions--no-chevron::after {
+  display: none;
+}
+
+.panel-help-slot {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.param-group-hide-slot {
+  width: var(--size-touch-target);
+  height: var(--size-touch-target);
+  margin-left: var(--space-lg);
+  flex-shrink: 0;
 }
 
 /* Buttons */

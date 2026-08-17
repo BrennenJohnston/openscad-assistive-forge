@@ -451,6 +451,20 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       safeSetItem(HIDDEN_KEY, JSON.stringify([...set]));
     }
 
+    /**
+     * UF-35: the ✕ left the group's <summary> — a control inside the
+     * disclosure's own control is axe's nested-interactive — and now sits in
+     * the actions layer beside the <details>. It is no longer a descendant of
+     * the group, so it is reached through the row that stacks the two.
+     */
+    function hideButtonFor(groupEl) {
+      return (
+        groupEl
+          .closest('.forge-disclosure-row')
+          ?.querySelector('.param-group-hide-btn') || null
+      );
+    }
+
     function refreshShowAll() {
       const existingBar = container.querySelector('.param-groups-hidden-bar');
       const hiddenGroups = container.querySelectorAll('.param-group[hidden]');
@@ -474,7 +488,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       showAll.addEventListener('click', () => {
         container.querySelectorAll('.param-group[hidden]').forEach((el) => {
           el.removeAttribute('hidden');
-          const btn = el.querySelector('.param-group-hide-btn');
+          const btn = hideButtonFor(el);
           if (btn) btn.setAttribute('aria-pressed', 'false');
         });
         saveHidden(new Set());
@@ -494,7 +508,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
         chip.textContent = `Show ${label}`;
         chip.addEventListener('click', () => {
           groupEl.removeAttribute('hidden');
-          const btn = groupEl.querySelector('.param-group-hide-btn');
+          const btn = hideButtonFor(groupEl);
           if (btn) btn.setAttribute('aria-pressed', 'false');
           const hiddenSet = loadHidden();
           hiddenSet.delete(groupEl.dataset.groupId);
@@ -512,7 +526,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       .forEach((details) => {
         if (hidden.has(details.dataset.groupId)) {
           details.setAttribute('hidden', '');
-          const btn = details.querySelector('.param-group-hide-btn');
+          const btn = hideButtonFor(details);
           if (btn) btn.setAttribute('aria-pressed', 'true');
         }
       });
@@ -525,7 +539,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       );
       if (!groupEl) return;
       groupEl.setAttribute('hidden', '');
-      const btn = groupEl.querySelector('.param-group-hide-btn');
+      const btn = hideButtonFor(groupEl);
       if (btn) btn.setAttribute('aria-pressed', 'true');
       const hiddenSet = loadHidden();
       hiddenSet.add(groupId);

@@ -2777,6 +2777,18 @@ export function renderParameterUI(
     summaryLabel.textContent = group.label;
     summary.appendChild(summaryLabel);
 
+    // UF-35: the Hide button used to live inside this <summary>, which made
+    // it a control inside the disclosure's own control — axe's
+    // nested-interactive, once per group, so the count grew with the model.
+    // It moves to an actions layer stacked over the header, and a slot of the
+    // same size keeps this row's layout identical. Q-64 (owner, 2026-08-17):
+    // the layer comes first in source order, so Tab reaches Hide one stop
+    // before its header rather than behind every parameter in the group.
+    const hideSlot = document.createElement('span');
+    hideSlot.className = 'param-group-hide-slot';
+    hideSlot.setAttribute('aria-hidden', 'true');
+    summary.appendChild(hideSlot);
+
     // Hide group button — keyboard accessible with aria-pressed
     const hideBtn = document.createElement('button');
     hideBtn.className = 'param-group-hide-btn';
@@ -2786,7 +2798,9 @@ export function renderParameterUI(
     hideBtn.title = 'Hide this group';
     hideBtn.innerHTML = '&#x2715;'; // × character
     hideBtn.addEventListener('click', (e) => {
-      // Prevent the summary toggle from firing
+      // The button sits outside the <summary> now, so it can no longer toggle
+      // the disclosure by bubbling; these keep the click from reaching any
+      // other listener on the way up.
       e.stopPropagation();
       e.preventDefault();
       // Dispatch custom event so main.js can persist the hidden state
@@ -2797,7 +2811,6 @@ export function renderParameterUI(
         })
       );
     });
-    summary.appendChild(hideBtn);
 
     details.appendChild(summary);
 
@@ -2862,7 +2875,19 @@ export function renderParameterUI(
       details.appendChild(control);
     });
 
-    container.appendChild(details);
+    // Actions layer first, so Tab reaches Hide immediately before the header
+    // it belongs to (Q-64). The row only stacks the two — .param-group keeps
+    // every class, id and attribute the rest of the app matches on.
+    const row = document.createElement('div');
+    row.className = 'forge-disclosure-row';
+    const actions = document.createElement('div');
+    actions.className =
+      'forge-disclosure-actions forge-disclosure-actions--no-chevron';
+    actions.appendChild(hideBtn);
+    row.appendChild(actions);
+    row.appendChild(details);
+
+    container.appendChild(row);
   });
 
   // Initialize parameter search after rendering

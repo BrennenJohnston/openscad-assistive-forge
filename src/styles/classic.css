@@ -1845,9 +1845,16 @@ body[data-ui-mode='classic']
 
 /* The husks the moves leave behind. #customizerHeaderRow is emptied by C2,
    and hiding #presetControls is also what drops the legacy preset search in
-   Classic (D-22) — the searchable combobox is the only preset search here. */
+   Classic (D-22) — the searchable combobox is the only preset search here.
+
+   UF-35 wrapped #presetControls in a .forge-disclosure-row so its help
+   control could leave the <summary>, which put a level between the husk and
+   .param-panel-body — matching the row is also what keeps that control from
+   surfacing in Classic, where it has never been visible. */
 body[data-ui-mode='classic'] #customizerHeaderRow,
-body[data-ui-mode='classic'] .param-panel-body > #presetControls {
+body[data-ui-mode='classic']
+  .param-panel-body
+  > .forge-disclosure-row:has(> #presetControls) {
   display: none;
 }
 
@@ -2009,7 +2016,13 @@ body[data-ui-mode='classic'] #measureSection:not([open]),
 body[data-ui-mode='classic'] #overlaySection:not([open]),
 body[data-ui-mode='classic'] #advancedMenu:not([open]),
 body[data-ui-mode='classic'] #libraryControls > details:not([open]),
-body[data-ui-mode='classic'] #projectFilesControls > details:not([open]) {
+/* UF-35 wrapped Companion Files in a .forge-disclosure-row, so the row is
+   what has to go — hiding the <details> alone would leave its help control
+   behind, which is how a button that has never appeared in Classic showed up
+   there. Libraries carries no header control and is unwrapped. */
+body[data-ui-mode='classic']
+  #projectFilesControls
+  > .forge-disclosure-row:has(> details:not([open])) {
   display: none;
 }
 
