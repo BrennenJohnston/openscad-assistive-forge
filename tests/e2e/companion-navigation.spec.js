@@ -37,7 +37,10 @@ test.beforeEach(async ({ page }) => {
  * utils/, so an editable companion (helpers.scad) is on screen.
  * Companion Files is defaultHiddenInBasic, so Standard density is required.
  */
-const openCompanionTree = async (page, { classic = false, enterFolder = 'utils' } = {}) => {
+const openCompanionTree = async (
+  page,
+  { classic = false, enterFolder = 'utils', mobileDrawer = false } = {}
+) => {
   if (classic) {
     await page.addInitScript((stamp) => {
       localStorage.setItem('openscad-forge-ui-mode', stamp);
@@ -60,6 +63,13 @@ const openCompanionTree = async (page, { classic = false, enterFolder = 'utils' 
     () => document.querySelectorAll('#projectFilesList *').length > 0,
     { timeout: 30_000 }
   );
+
+  // A narrow viewport parks the whole parameter column in the mobile drawer,
+  // so the panel is off screen until the drawer is opened.
+  if (mobileDrawer) {
+    await page.locator('#mobileDrawerToggle').click();
+    await expect(page.locator('#projectFilesControls')).toBeVisible();
+  }
 
   // The panel ships with its disclosure closed. In Classic a closed disclosure
   // is display:none entirely (classic.css) and Window > Companion Files is the
@@ -197,6 +207,34 @@ test.describe('Companion files: controls you can hit (D-37)', () => {
       expect(underToken(inFolder).join('\n')).toBe('');
     });
   }
+
+  /**
+   * The token flips at the media query boundary — 36px only under
+   * (pointer: fine) and (min-width: 768px) — so a desktop run never exercises
+   * the 44px value a phone gets. This case does, and it is also the width
+   * where two 44px buttons and a file name have to share one row.
+   */
+  test.describe('on a phone', () => {
+    test.use({ viewport: { width: 375, height: 800 } });
+
+    test('every tree control meets the touch-target token (Forge, 375px)', async ({
+      page,
+    }) => {
+      test.skip(isCI, 'Needs a real multi-file project, so needs WASM');
+
+      await openCompanionTree(page, { enterFolder: null, mobileDrawer: true });
+
+      const measured = await measureTreeControls(page);
+      expect(measured.token).toBe(44);
+      expect(underToken(measured).join('\n')).toBe('');
+
+      await page.locator('#projectFilesList [data-folder-enter="utils"]').click();
+      await expect(
+        page.locator('#projectFilesList [data-action="edit"]').first()
+      ).toBeVisible();
+      expect(underToken(await measureTreeControls(page)).join('\n')).toBe('');
+    });
+  });
 });
 
 test.describe('Companion files: a way back', () => {
