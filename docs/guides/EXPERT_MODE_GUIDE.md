@@ -88,10 +88,19 @@ works the same in both.
 - Syntax colouring using the OpenSCAD desktop application's own colour scheme
 - Line numbers
 - Code folding, with plus and minus boxes in the gutter like the desktop
-- Bracket matching (Preferences ▸ Editor)
+- Bracket matching
 - Find and replace
 - Bookmarks (Edit menu)
-- Markers showing where a long line wraps and continues (Preferences ▸ Editor)
+- Markers showing where a long line wraps and continues: the continuation is
+  indented, and the row that continues carries a return arrow at the right edge,
+  the way the desktop draws them
+
+**Edit ▸ Preferences ▸ Editor** — available from either interface — holds the
+switches for these, along with font size, indent and tab width, line wrapping,
+line numbers, autocomplete and active-line highlighting. The three that control
+the marks above are "Highlight the matching bracket", "Indent wrapped
+continuation lines" and "Mark where a wrapped line continues". All three start
+on, because that is how the desktop application behaves.
 
 ### Plain text editor features
 
