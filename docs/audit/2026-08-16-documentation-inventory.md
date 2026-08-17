@@ -537,6 +537,28 @@ down and read rather than just approve. In summary:
    reader meets `aria-label="folded code"` at a collapsed fold. Unchanged by
    this release; still wants your ear.
 
+### A link checker would take twenty minutes and would have caught three of these
+
+The release record for every docs change here has had to say "links
+hand-verified, no link checker exists". So I wrote one — twenty lines of Node
+walking `git ls-files "*.md"`, pulling every `](path)` that is not a URL, and
+testing whether the file is there.
+
+**Result across the whole repository: 301 relative links, 22 broken.** None of
+them is in a file this release touched. They break down as:
+
+- **8** image paths in `docs/OPENSCAD_LANGUAGE_REFERENCE.md` — vendored upstream
+  reference text whose images were never copied. Expected.
+- **12** in dated audit records pointing into `.audit-scratch/` and `.cursor/`,
+  both git-ignored working directories. Expected for a record of a day's work.
+- **2** literal `(link)` placeholders inside template text. Expected.
+
+So nothing here needs fixing. But the same twenty lines would have caught the
+three 404 GitHub links this release found by reading, and it would catch the
+next moved file automatically. Worth adding beside the other checks in the Unit
+Tests job, with the four expected categories allowed for. Your call — it is a
+new gate, and this release's job was not to add one.
+
 ### One question that is not mine to answer
 
 `docs/README.md:84` lists `planning/` as part of the folder layout, but
