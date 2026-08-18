@@ -860,6 +860,16 @@ describe('Color Contrast - Mono Green Phosphor (Dark Theme)', () => {
     expect(meetsNonTextContrast(ratio)).toBe(true);
   });
 
+  // D-55 pattern, primary buttons: the generic mono hover repaints the
+  // surface with --color-hover-bg; variant.css completes the pair by
+  // flipping the label to the accent. This guards BOTH halves together.
+  it('primary button label (accent) on hover-bg meets WCAG AA while hovered', () => {
+    const hoverBg = monoGreen['--color-hover-bg'];
+    const ratio = getContrastRatio(accent, hoverBg);
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
+    expect(meetsWCAG_AA(ratio)).toBe(true);
+  });
+
   it('border on black meets non-text contrast', () => {
     const ratio = getContrastRatio(border, bg);
     expect(ratio).toBeGreaterThanOrEqual(3.0);
@@ -940,6 +950,14 @@ describe('Color Contrast - Mono Amber Phosphor (Light Theme)', () => {
     const ratio = getContrastRatio(accentHover, bg);
     expect(ratio).toBeGreaterThanOrEqual(3.0);
     expect(meetsNonTextContrast(ratio)).toBe(true);
+  });
+
+  // D-55 pattern, primary buttons: same pair guard as the green section.
+  it('primary button label (accent) on hover-bg meets WCAG AA while hovered', () => {
+    const hoverBg = monoAmber['--color-hover-bg'];
+    const ratio = getContrastRatio(accent, hoverBg);
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
+    expect(meetsWCAG_AA(ratio)).toBe(true);
   });
 
   it('border on black meets non-text contrast', () => {

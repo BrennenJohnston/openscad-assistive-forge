@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **ASCII City Walk — a playable game inside the hidden Alt View mode** (CW-1…CW-5) — unlocking
+  Alt View now also reveals a game card on the welcome screen. Pick one of four bundled cities
+  (Seattle, Denver, Albuquerque, Burnaby — built from real OpenStreetMap building footprints,
+  heights, and streets; Map data © OpenStreetMap contributors, ODbL) and walk it in first person,
+  rendered entirely through the existing ASCII pipeline in the active phosphor (green dark /
+  amber light). Keyboard-only controls (arrows/WASD walk, Q/E turn, Shift faster, M toggles a
+  top-down map view with a player beacon, H help, Escape exits), fullscreen modal layer with a
+  capture-phase focus trap, in-layer screen-reader announcements, and persistent map-data
+  attribution. The Alt View renderer was refactored from a module singleton to per-instance
+  state (public API unchanged) so the game and the model preview can each hold their own ASCII
+  view; city extracts are baked by `scripts/bake-city-extract.mjs` (Overpass API, tags trimmed,
+  ODbL attribution stamped) into `public/examples/ascii-city/`, load lazily, and are excluded
+  from the bundle budget under the same lazy-payload rationale as liblouis. New unit suites
+  (parser/heights/ring-stitching, collision/movement/compass, scene build, alt-view instance
+  isolation) and an e2e spec (gating, keyboard flow, map toggle, focus restore, axe scans of the
+  open layer)
+
+### Fixed
+
+- **Mono variant: primary buttons keep a legible label while hovered** (D-55 pattern) — the mono
+  theme's generic button hover repaints the surface with `--color-hover-bg` and nothing else,
+  which under a primary button's black label measured **1.11:1** (label erased on mouse-over) on
+  every primary button in the hidden theme. Found by the City Walk axe scan, which deliberately
+  hovers a real button — a hover state is invisible to a scan unless something happens to be
+  hovering. variant.css now completes the pair by flipping the hovered label (and its
+  `currentColor` icons) to the accent: measured 7.2:1 (green) / 10.2:1 (amber), guarded by new
+  token-pair tests beside the existing mono contrast guards
+
 - **Braille editor (Unicode) extended to the Braille Sign** (Braille Sign 1.2.0) — the
   card tool's hand-editing panel now appears in the sign tool too, wired to the sign's
   `Line_1`–`Line_6` braille parameters. On a sign it drives the **braille plate only**:
