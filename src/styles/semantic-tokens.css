@@ -144,6 +144,18 @@
      Interactive States
      ======================================================================== */
   --color-hover-bg: var(--slate-3);
+  /* D-57: the strong hover fill for .btn-secondary. It used --color-border
+       directly, which is a BORDER colour pressed into service as a SURFACE, and
+       it missed AA against its own text by a hair: 4.33:1 in light and 3.65:1 in
+       dark, where 4.5:1 is needed. One step along the same slate scale fixes it
+       and keeps the strong fill the design wanted - 4.96:1 light, 5.40:1 dark,
+       still 3.14:1 and 2.81:1 against the button at rest.
+       The two themes move in OPPOSITE directions (lighter under dark text,
+       darker under light text), which is why this is a token and not a value.
+       Every other scope below keeps var(--color-border), so Classic, high
+       contrast, the mono variants and forced-colors are unchanged - Classic
+       already measured 4.72:1 and high contrast aims higher than AA. */
+  --color-hover-bg-strong: var(--slate-9);
 
   /* ========================================================================
      Focus Indicators
@@ -245,6 +257,7 @@
 
   /* Interactive States */
   --color-hover-bg: var(--slate-3);
+  --color-hover-bg-strong: var(--slate-8);
 
   /* Focus Indicators - Lighter blue for dark backgrounds */
   --color-focus: #66b3ff;
@@ -327,6 +340,7 @@
 
     /* Interactive States */
     --color-hover-bg: var(--slate-3);
+    --color-hover-bg-strong: var(--slate-8);
 
     /* Focus Indicators */
     --color-focus: #66b3ff;
@@ -405,6 +419,7 @@
   --color-input-border-focus: var(--color-focus);
 
   --color-hover-bg: var(--slate-3);
+  --color-hover-bg-strong: var(--slate-9);
 
   --color-focus: #0052cc;
   --focus-ring: 0 0 0 3px rgba(0, 82, 204, 0.35);

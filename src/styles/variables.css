@@ -287,6 +287,7 @@
 
   /* Interactive States */
   --color-hover-bg: #e8e8e8;
+  --color-hover-bg-strong: var(--color-hover-bg);
 
   /* Focus - Brand-neutral blue with 3:1 contrast */
   --color-focus: var(--color-accent);
@@ -362,6 +363,7 @@
 
   /* Interactive States */
   --color-hover-bg: #333333;
+  --color-hover-bg-strong: var(--color-hover-bg);
 
   /* Focus - Brand-neutral light blue with 3:1 contrast */
   --color-focus: #66b3ff;
@@ -420,6 +422,7 @@
     --color-input-border-focus: #66b3ff;
 
     --color-hover-bg: #333333;
+    --color-hover-bg-strong: var(--color-hover-bg);
 
     --color-focus: #66b3ff;
     --focus-ring: 0 0 0 4px #66b3ff;
@@ -518,6 +521,7 @@
     --color-input-border-focus: Highlight;
 
     --color-hover-bg: Canvas;
+    --color-hover-bg-strong: var(--color-hover-bg);
 
     --color-focus: Highlight;
 
@@ -592,6 +596,7 @@
     --color-text-primary: #000000;
     --color-text-secondary: #1a1a1a;
     --color-border: #000000;
+    --color-hover-bg-strong: var(--color-hover-bg);
     --color-border-light: #333333;
 
     /* Stronger focus indicators */
@@ -603,6 +608,7 @@
     --color-text-primary: #ffffff;
     --color-text-secondary: #f0f0f0;
     --color-border: #ffffff;
+    --color-hover-bg-strong: var(--color-hover-bg);
     --color-border-light: #cccccc;
     --focus-ring: 0 0 0 4px rgba(102, 179, 255, 0.6);
   }
@@ -613,6 +619,7 @@
       --color-text-primary: #ffffff;
       --color-text-secondary: #f0f0f0;
       --color-border: #ffffff;
+      --color-hover-bg-strong: var(--color-hover-bg);
       --color-border-light: #cccccc;
       --focus-ring: 0 0 0 4px rgba(102, 179, 255, 0.6);
     }

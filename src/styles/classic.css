@@ -70,6 +70,7 @@ body[data-ui-mode='classic'] {
   --color-input-border: #858585;
   --color-input-border-focus: #0067c0;
   --color-hover-bg: #dceaf7;
+  --color-hover-bg-strong: var(--color-border);
   --color-focus: #0052cc;
 
   /* Status colors pinned to their light values so a leftover dark or

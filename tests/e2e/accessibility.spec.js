@@ -2907,3 +2907,91 @@ test.describe('Axe-Core Scans for Missing Views (REC-002)', () => {
     expect(results.passes.length).toBeGreaterThan(0)
   })
 })
+
+/**
+ * D-57: a hover rule that repaints the background and nothing else.
+ *
+ * `.btn-secondary:hover` set `background-color: var(--color-border)` — a BORDER
+ * colour used as a SURFACE — and left whatever text colour was already there.
+ * MEASURED before the fix, on a real hover of a real button:
+ *
+ *   Forge light          #1c2024 on #80838d    4.33:1   fail
+ *   Forge dark           #edeef0 on #777b84    3.65:1   fail
+ *   High contrast light  #000000 on #000000    1.00:1   THE LABEL VANISHED
+ *   High contrast dark   #ffffff on #ffffff    1.00:1   THE LABEL VANISHED
+ *
+ * High contrast was the worst of it, and it is the mode people turn on
+ * *because* they need contrast: `--color-border` there is pure black or pure
+ * white, which is exactly the button's text colour, so hovering erased the
+ * label completely. That had never been measured because nothing in the suite
+ * hovered anything.
+ *
+ * This runs on the welcome screen and needs no WASM, so unlike most of this
+ * file it executes on every CI lane rather than being skipped.
+ */
+test.describe('Hover contrast (D-57)', () => {
+  const THEMES = [
+    ['Forge light', { theme: 'light' }],
+    ['Forge dark', { theme: 'dark' }],
+    ['High contrast light', { theme: 'light', hc: true }],
+    ['High contrast dark', { theme: 'dark', hc: true }],
+    ['Mono dark', { theme: 'dark', variant: 'mono' }],
+    ['Mono light', { theme: 'light', variant: 'mono' }],
+  ]
+
+  test('secondary buttons keep a legible label while hovered, in every theme', async ({
+    page,
+  }) => {
+    await page.goto('/')
+    await page.waitForLoadState('networkidle')
+
+    const button = page.locator('.btn-secondary:visible').first()
+    await expect(button).toBeVisible({ timeout: 15000 })
+
+    for (const [label, cfg] of THEMES) {
+      await page.evaluate((c) => {
+        const r = document.documentElement
+        r.dataset.theme = c.theme
+        if (c.hc) r.dataset.highContrast = 'true'
+        else delete r.dataset.highContrast
+        if (c.variant) r.dataset.uiVariant = c.variant
+        else delete r.dataset.uiVariant
+      }, cfg)
+      await page.waitForTimeout(300)
+
+      await button.hover()
+      await page.waitForTimeout(300)
+
+      const measured = await button.evaluate((el) => {
+        const cs = getComputedStyle(el)
+        const read = (css) =>
+          (css.match(/\d+(\.\d+)?/g) || []).slice(0, 3).map(Number)
+        const luminance = (rgb) =>
+          rgb
+            .map((v) => {
+              const s = v / 255
+              return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4)
+            })
+            .reduce((sum, c, i) => sum + [0.2126, 0.7152, 0.0722][i] * c, 0)
+        const l1 = luminance(read(cs.color))
+        const l2 = luminance(read(cs.backgroundColor))
+        return {
+          color: cs.color,
+          background: cs.backgroundColor,
+          ratio:
+            Math.round(
+              ((Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)) * 100
+            ) / 100,
+        }
+      })
+
+      console.log(
+        `[d57] ${label}: ${measured.color} on ${measured.background} = ${measured.ratio}:1`
+      )
+      expect(
+        measured.ratio,
+        `${label} hover is ${measured.color} on ${measured.background} = ${measured.ratio}:1`
+      ).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+})
