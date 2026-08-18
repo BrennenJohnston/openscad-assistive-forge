@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **ASCII City Walk Round 2 — a city that looks alive** (CW-8, CW-6, CW-9, CW-10) — the game's
+  comprehensive visual pass and feature round. Buildings are now distinct: window-grid wall
+  textures (world-meter UVs, no custom mapping), deterministic per-building lightness tiers and
+  palette-family hues carried as vertex colors, lit storefront strips on the ground floor, and
+  streets drawn at eye level as curb lines that fade under the fog (surfaces stay black — any
+  visible surface tone carpets the horizon). The signed high-contrast color model ships: the ANSI
+  bright terminal set in green+HC, the cyberpunk neon set in amber+HC, single phosphor everywhere
+  else, via a new per-instance palette mode in the Alt View converter (per-color glyph atlases,
+  chroma-normalized per-cell picks that survive fog, guarded ≥4.5:1 on black). Character size is
+  adjustable in-game (-/=, 50–250%, seeded from the saved Alt View preference). The map view is
+  navigable: arrows pan at constant screen speed, -/= and the mouse wheel zoom 0.4×–8×, Home
+  recenters on the player (follow mode), solid emissive-free block masses over dark street
+  corridors. Walking speed is a persistent 0.5×–3× multiplier on [ and ]. And every city carries
+  up to twelve landmarks (rebaked extracts keep tourism/historic/amenity tags): map beacons,
+  L/Shift+L cycling with announcements, a real-text legend with compass directions, and
+  "near NAME" street-view proximity announcements with hysteresis
+
+### Fixed
+
+- **City Walk: help panel rendered under the ASCII glyphs** — the overlay canvas carries
+  z-index 5 and the help panel (and the new landmark legend) defaulted below it, so both panels
+  were occluded by the rendered city; visibility assertions cannot detect occlusion, which is why
+  no test caught it. Both panels now sit at `--z-index-dropdown`, verified by screenshot
+
 - **ASCII City Walk — a playable game inside the hidden Alt View mode** (CW-1…CW-5) — unlocking
   Alt View now also reveals a game card on the welcome screen. Pick one of four bundled cities
   (Seattle, Denver, Albuquerque, Burnaby — built from real OpenStreetMap building footprints,
