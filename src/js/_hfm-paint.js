@@ -171,6 +171,10 @@ export function resizeOverlay(canvas, cssW, cssH, dpr, persistCanvas) {
  * combined result is copied back for the next frame. Degrades gracefully to
  * hard-clear when the persistence canvas is unavailable.
  *
+ * Palette mode (CW-6): pass `colorLayers` and each cell blits from the atlas
+ * of its palette color instead of the single-atlas argument. Callers without
+ * it get the exact single-color behavior they always had.
+ *
  * @param {CanvasRenderingContext2D} ctx - overlay 2D context (DPR-sized)
  * @param {Int16Array|number[]} glyphIndices - flat [row * cols + col] atlas indices
  * @param {number} cols
@@ -181,6 +185,9 @@ export function resizeOverlay(canvas, cssW, cssH, dpr, persistCanvas) {
  * @param {HTMLCanvasElement|null} [persistCanvas]
  * @param {CanvasRenderingContext2D|null} [persistCtx]
  * @param {number} [persistFade=0] - 0 (no trail) to 1 (never fades)
+ * @param {{ indices: Int8Array|number[], atlases: Array<{canvas: HTMLCanvasElement}> }} [colorLayers]
+ *   per-cell palette indices + one atlas per palette color (all atlases share
+ *   the base atlas's cell metrics)
  */
 export function paintFrame(
   ctx,
@@ -192,7 +199,8 @@ export function paintFrame(
   charH,
   persistCanvas,
   persistCtx,
-  persistFade
+  persistFade,
+  colorLayers
 ) {
   const fade =
     persistCanvas && persistCtx && typeof persistFade === 'number'
@@ -202,6 +210,8 @@ export function paintFrame(
   const { canvas: atlasCanvas, cellW, cellH, dpr } = atlas;
   const stepX = charW * dpr;
   const stepY = charH * dpr;
+  const colorIndices = colorLayers?.indices ?? null;
+  const colorAtlases = colorLayers?.atlases ?? null;
 
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
@@ -209,10 +219,15 @@ export function paintFrame(
     const base = row * cols;
     const dy = (row * stepY) | 0;
     for (let col = 0; col < cols; col++) {
-      const idx = glyphIndices[base + col];
+      const cell = base + col;
+      const idx = glyphIndices[cell];
       if (idx === SPACE_INDEX) continue;
+      const source =
+        colorAtlases && colorIndices
+          ? (colorAtlases[colorIndices[cell]]?.canvas ?? atlasCanvas)
+          : atlasCanvas;
       ctx.drawImage(
-        atlasCanvas,
+        source,
         idx * cellW,
         0,
         cellW,
@@ -234,4 +249,77 @@ export function paintFrame(
     persistCtx.clearRect(0, 0, persistCanvas.width, persistCanvas.height);
     persistCtx.drawImage(ctx.canvas, 0, 0);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Palette mode helpers (CW-6) — pure math, unit-tested directly
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a #rrggbb hex color into RGB in [0, 1].
+ * @param {string} css
+ * @returns {[number, number, number]}
+ */
+export function parsePaletteColor(css) {
+  const m = /^#([0-9a-f]{6})$/i.exec(String(css).trim());
+  if (!m) return [1, 1, 1];
+  const v = parseInt(m[1], 16);
+  return [((v >> 16) & 255) / 255, ((v >> 8) & 255) / 255, (v & 255) / 255];
+}
+
+/**
+ * Normalize a color by its max component, so hue survives darkening —
+ * a fog-dimmed red cell still points at the red palette entry.
+ * @param {[number, number, number]} rgb
+ * @returns {[number, number, number]}
+ */
+export function normalizeChroma([r, g, b]) {
+  const max = Math.max(r, g, b);
+  if (max < 1e-6) return [0, 0, 0];
+  return [r / max, g / max, b / max];
+}
+
+/**
+ * Nearest palette entry for a cell's average color, compared in
+ * chroma-normalized space.
+ *
+ * `chromaBoost` (> 1) raises the normalized non-max channels to a power,
+ * exaggerating mild tints before matching: a softly warm wall then lands on
+ * the red entry instead of white, while genuinely achromatic cells
+ * ([1,1,1]) are unchanged. Needed because scene tints keep their chroma
+ * low so the MONOCHROME modes stay luminance-true.
+ *
+ * @param {number} r - cell average red in [0, 1]
+ * @param {number} g
+ * @param {number} b
+ * @param {Array<[number, number, number]>} normalizedPalette - entries
+ *   pre-normalized with normalizeChroma()
+ * @param {number} [chromaBoost=1]
+ * @returns {number} palette index
+ */
+export function pickPaletteIndex(r, g, b, normalizedPalette, chromaBoost = 1) {
+  const max = Math.max(r, g, b);
+  let nr = max < 1e-6 ? 0 : r / max;
+  let ng = max < 1e-6 ? 0 : g / max;
+  let nb = max < 1e-6 ? 0 : b / max;
+  if (chromaBoost !== 1) {
+    nr = Math.pow(nr, chromaBoost);
+    ng = Math.pow(ng, chromaBoost);
+    nb = Math.pow(nb, chromaBoost);
+  }
+
+  let best = 0;
+  let bestDist = Infinity;
+  for (let i = 0; i < normalizedPalette.length; i++) {
+    const [pr, pg, pb] = normalizedPalette[i];
+    const dr = nr - pr;
+    const dg = ng - pg;
+    const db = nb - pb;
+    const dist = dr * dr + dg * dg + db * db;
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = i;
+    }
+  }
+  return best;
 }

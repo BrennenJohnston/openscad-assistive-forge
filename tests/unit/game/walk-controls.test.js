@@ -9,6 +9,12 @@ import {
   buildCollisionGrid,
   findSpawn,
   fitOrthoToBounds,
+  createMapCamera,
+  stepMapCamera,
+  recenterMapCamera,
+  mapCameraFrustum,
+  MAP_ZOOM_MIN,
+  MAP_ZOOM_MAX,
   WALK_SPEED_MPS,
   FAST_SPEED_MPS,
   TURN_SPEED_RADPS,
@@ -225,6 +231,101 @@ describe('findSpawn', () => {
     const grid = buildCollisionGrid(model)
     const spawn = findSpawn(model, grid)
     expect(grid.isBlocked(spawn.x, spawn.y)).toBe(false)
+  })
+})
+
+describe('stepWalk — speed multiplier (CW-Q8)', () => {
+  it('scales the walking speed and clamps to 0.5–3.0', () => {
+    const state = createWalkState({ x: 0, y: 0, headingRad: 0 })
+    stepWalk(state, { forward: 1, speedScale: 2 }, 0.1)
+    expect(state.y).toBeCloseTo(WALK_SPEED_MPS * 2 * 0.1, 5)
+
+    const slow = createWalkState({ x: 0, y: 0, headingRad: 0 })
+    stepWalk(slow, { forward: 1, speedScale: 0.1 }, 0.1)
+    expect(slow.y).toBeCloseTo(WALK_SPEED_MPS * 0.5 * 0.1, 5)
+  })
+
+  it('Shift sprint keeps its floor and scales past it', () => {
+    // At 1x, sprint = the 4 m/s floor.
+    const a = createWalkState({ x: 0, y: 0, headingRad: 0 })
+    stepWalk(a, { forward: 1, fast: true, speedScale: 1 }, 0.1)
+    expect(a.y).toBeCloseTo(FAST_SPEED_MPS * 0.1, 5)
+
+    // At 3x, walking (4.8) exceeds the floor — sprint never goes SLOWER
+    // than walking.
+    const b = createWalkState({ x: 0, y: 0, headingRad: 0 })
+    stepWalk(b, { forward: 1, fast: true, speedScale: 3 }, 0.1)
+    expect(b.y).toBeCloseTo(WALK_SPEED_MPS * 3 * 0.1, 5)
+  })
+})
+
+describe('map camera (CW-9)', () => {
+  const bounds = { minX: -500, maxX: 500, minY: -400, maxY: 400 }
+
+  it('starts framing the whole city, following the player', () => {
+    const cam = createMapCamera(bounds)
+    expect(cam.zoom).toBe(1)
+    expect(cam.centerX).toBe(0)
+    expect(cam.centerY).toBe(0)
+    expect(cam.follow).toBe(true)
+  })
+
+  it('zoom is exponential, clamped, and does not break follow', () => {
+    const cam = createMapCamera(bounds)
+    for (let i = 0; i < 30; i++) {
+      stepMapCamera(cam, { zoom: 1 }, 0.1, bounds, 1.6)
+    }
+    expect(cam.zoom).toBeLessThanOrEqual(MAP_ZOOM_MAX)
+    expect(cam.zoom).toBeGreaterThan(1)
+    expect(cam.follow).toBe(true)
+
+    for (let i = 0; i < 80; i++) {
+      stepMapCamera(cam, { zoom: -1 }, 0.1, bounds, 1.6)
+    }
+    expect(cam.zoom).toBeGreaterThanOrEqual(MAP_ZOOM_MIN)
+  })
+
+  it('panning moves at constant screen speed, breaks follow, and clamps to bounds', () => {
+    const cam = createMapCamera(bounds)
+    stepMapCamera(cam, { panX: 1 }, 0.1, bounds, 1.6)
+    const stepAt1x = cam.centerX
+    expect(stepAt1x).toBeGreaterThan(0)
+    expect(cam.follow).toBe(false)
+
+    // Zoomed in 4x, the same key press moves 1/4 the world distance.
+    const zoomed = createMapCamera(bounds)
+    zoomed.zoom = 4
+    stepMapCamera(zoomed, { panX: 1 }, 0.1, bounds, 1.6)
+    expect(zoomed.centerX).toBeCloseTo(stepAt1x / 4, 5)
+
+    // Clamped at the city edge.
+    const runaway = createMapCamera(bounds)
+    for (let i = 0; i < 500; i++) {
+      stepMapCamera(runaway, { panX: 1 }, 0.1, bounds, 1.6)
+    }
+    expect(runaway.centerX).toBe(bounds.maxX)
+  })
+
+  it('recenter snaps to the player and resumes follow', () => {
+    const cam = createMapCamera(bounds)
+    stepMapCamera(cam, { panX: 1, panY: -1 }, 0.1, bounds, 1.6)
+    expect(cam.follow).toBe(false)
+    recenterMapCamera(cam, 42, -17)
+    expect(cam.centerX).toBe(42)
+    expect(cam.centerY).toBe(-17)
+    expect(cam.follow).toBe(true)
+  })
+
+  it('frustum scales the whole-city fit by 1/zoom around the camera center', () => {
+    const cam = createMapCamera(bounds)
+    const fit1 = mapCameraFrustum(cam, bounds, 2)
+    cam.zoom = 2
+    cam.centerX = 100
+    const fit2 = mapCameraFrustum(cam, bounds, 2)
+
+    expect(fit2.right - fit2.left).toBeCloseTo((fit1.right - fit1.left) / 2, 5)
+    expect((fit2.right - fit2.left) / (fit2.top - fit2.bottom)).toBeCloseTo(2, 5)
+    expect(fit2.centerX).toBe(100)
   })
 })
 

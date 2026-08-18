@@ -191,6 +191,180 @@ test.describe('ASCII City Walk — playing', () => {
   })
 })
 
+test.describe('ASCII City Walk — map navigation and walking speed (CW-9)', () => {
+  test('map view: keyboard zoom, pan breaks follow, Home recenters', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'zoom 1.0x'
+    )
+
+    // Held Equal zooms in exponentially.
+    await page.keyboard.down('Equal')
+    await page.waitForTimeout(700)
+    await page.keyboard.up('Equal')
+    const hud = await page.textContent('#cityWalkHudStatus')
+    const zoom = parseFloat(/zoom (\d+\.\d)x/.exec(hud)?.[1] ?? '0')
+    expect(zoom).toBeGreaterThan(1.2)
+
+    // Panning breaks player-follow (asserted via the DEV handle).
+    await page.keyboard.down('ArrowRight')
+    await page.waitForTimeout(400)
+    await page.keyboard.up('ArrowRight')
+    const afterPan = await page.evaluate(() => ({
+      follow: window.__cityWalkGame.mapCam.follow,
+      centerX: window.__cityWalkGame.mapCam.centerX,
+    }))
+    expect(afterPan.follow).toBe(false)
+
+    // Home snaps back to the player and resumes follow.
+    await page.keyboard.press('Home')
+    await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
+      /Map centered on you/
+    )
+    const afterHome = await page.evaluate(
+      () => window.__cityWalkGame.mapCam.follow
+    )
+    expect(afterHome).toBe(true)
+
+    // Back on the street, walking keys still walk.
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'street view'
+    )
+  })
+
+  test('walking speed adjusts, announces, and persists across sessions', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'speed 100%'
+    )
+
+    await page.keyboard.press('BracketRight')
+    await page.keyboard.press('BracketRight')
+    await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
+      /Walking speed 150 percent/
+    )
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'speed 150%'
+    )
+
+    // Persisted: a fresh session opens at the saved multiplier.
+    await page.keyboard.press('Escape')
+    await expect(page.locator('#cityWalkLayer')).toBeHidden()
+    await page.locator('#cityWalkLaunchBtn').click()
+    await expect(page.locator('#cityWalkLayer')).toBeVisible()
+    await enterCity(page, 'Denver, Colorado')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'speed 150%'
+    )
+  })
+})
+
+test.describe('ASCII City Walk — landmarks (CW-10)', () => {
+  test('legend lists landmarks in map view; L cycles, announces, and highlights', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // Legend is a map-view feature.
+    await expect(page.locator('#cityWalkLegend')).toBeHidden()
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkLegend')).toBeVisible()
+    const items = page.locator('#cityWalkLegend li')
+    expect(await items.count()).toBeGreaterThanOrEqual(1)
+    // Rows carry a compass direction from the player.
+    await expect(items.first()).toContainText('—')
+
+    // L selects and announces the first landmark…
+    await page.keyboard.press('KeyL')
+    await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
+      /Landmark 1 of \d+: /
+    )
+    await expect(
+      page.locator('#cityWalkLegend li[aria-current="true"]')
+    ).toHaveCount(1)
+
+    // …and Shift+L cycles backwards (wraps to the last).
+    await page.keyboard.press('Shift+KeyL')
+    await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
+      /Landmark \d+ of \d+: /
+    )
+
+    // Returning to the street resets the selection.
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkLegend')).toBeHidden()
+    await page.keyboard.press('KeyM')
+    await expect(
+      page.locator('#cityWalkLegend li[aria-current="true"]')
+    ).toHaveCount(0)
+  })
+
+  test('L from street view opens the map and selects a landmark', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    await page.keyboard.press('KeyL')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
+    await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
+      /Landmark 1 of \d+: /
+    )
+  })
+})
+
+test.describe('ASCII City Walk — high contrast (CW-6)', () => {
+  test('launches and plays under high contrast with the palette active', async ({
+    page,
+  }) => {
+    await page.goto('/?hfm=unlock')
+    await expect(page.locator('#cityWalkCard')).toBeVisible({ timeout: 30000 })
+    await page.locator('#contrastToggle').click()
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-high-contrast',
+      'true'
+    )
+
+    await page.locator('#cityWalkLaunchBtn').click()
+    await expect(page.locator('#cityWalkLayer')).toBeVisible({
+      timeout: 20000,
+    })
+    await enterCity(page)
+
+    // The dev handle proves the CW-Q2 gate: palette active under HC…
+    const paletteOn = await page.evaluate(
+      () => window.__cityWalkGame?.altView?.getPalette()?.length ?? 0
+    )
+    expect(paletteOn).toBeGreaterThanOrEqual(4)
+
+    // …character size keys still work…
+    await page.keyboard.press('Equal')
+    await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
+      /Character size 110 percent/
+    )
+
+    // …and walking still walks.
+    await page.keyboard.down('ArrowRight')
+    await page.waitForTimeout(1300)
+    await page.keyboard.up('ArrowRight')
+    await expect(page.locator('#cityWalkHudStatus')).not.toContainText(
+      'facing north'
+    )
+
+    await page.keyboard.press('Escape')
+    await expect(page.locator('#cityWalkLayer')).toBeHidden()
+  })
+})
+
 test.describe('ASCII City Walk — accessibility', () => {
   test('axe: city picker and in-game layer have no violations', async ({
     page,

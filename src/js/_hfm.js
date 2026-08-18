@@ -31,6 +31,9 @@ import {
   buildGlyphAtlas,
   getPhosphorColor,
   paintFrame,
+  parsePaletteColor,
+  normalizeChroma,
+  pickPaletteIndex,
   GLYPH_COUNT,
 } from './_hfm-paint.js';
 
@@ -76,6 +79,14 @@ function _createInstanceState() {
     glyphVectors: null,
     lookup: null,
     atlasKey: '',
+
+    // Palette mode (CW-6): null = classic single phosphor. When set, one
+    // atlas per palette color plus a per-cell color index buffer.
+    palette: null, // string[] of #rrggbb, or null
+    paletteChroma: null, // chroma-normalized [r,g,b] per entry
+    paletteChromaBoost: 1,
+    paletteAtlases: null,
+    colorIndices: null, // Int8Array, rows*cols
 
     // Render-on-demand scheduling
     dirty: true,
@@ -322,17 +333,35 @@ function _buildGlyphVectors(atlas) {
 
 function _ensureGlyphModel(st, { fontFamily, fontSizePx, charW, charH, dpr }) {
   const color = getPhosphorColor();
-  const key = `${fontFamily}|${fontSizePx}|${charW}|${charH}|${dpr}|${color}`;
+  const paletteKey = st.palette ? st.palette.join(',') : '';
+  const key = `${fontFamily}|${fontSizePx}|${charW}|${charH}|${dpr}|${color}|${paletteKey}`;
   if (st.atlas && st.atlasKey === key) return;
 
-  st.atlas = buildGlyphAtlas({
-    fontFamily,
-    fontSizePx,
-    charW,
-    charH,
-    dpr,
-    color,
-  });
+  if (st.palette) {
+    // One atlas per palette color; glyph coverage (alpha) is identical
+    // across tints, so shape vectors come from the first atlas.
+    st.paletteAtlases = st.palette.map((paletteColor) =>
+      buildGlyphAtlas({
+        fontFamily,
+        fontSizePx,
+        charW,
+        charH,
+        dpr,
+        color: paletteColor,
+      })
+    );
+    st.atlas = st.paletteAtlases[0];
+  } else {
+    st.paletteAtlases = null;
+    st.atlas = buildGlyphAtlas({
+      fontFamily,
+      fontSizePx,
+      charW,
+      charH,
+      dpr,
+      color,
+    });
+  }
   st.glyphVectors = _buildGlyphVectors(st.atlas);
   st.lookup = createLookup(st.glyphVectors);
   st.atlasKey = key;
@@ -422,6 +451,10 @@ function _renderFrame(
   const v = new Float32Array(6);
   const extSamples = new Float32Array(10);
   const glyphIndices = new Int16Array(rows * cols);
+  const usePalette = Boolean(st.palette && st.paletteChroma);
+  if (usePalette && st.colorIndices?.length !== rows * cols) {
+    st.colorIndices = new Int8Array(rows * cols);
+  }
   let idx = 0;
 
   for (let y = 0; y < rows; y++) {
@@ -430,7 +463,11 @@ function _renderFrame(
     for (let x = 0; x < cols; x++) {
       const baseX = x * cellW;
 
-      // Internal points (main shape vector) — single tap each
+      // Internal points (main shape vector) — single tap each. In palette
+      // mode the same six taps also accumulate the cell's average color.
+      let sumR = 0;
+      let sumG = 0;
+      let sumB = 0;
       for (let i = 0; i < 6; i++) {
         const sx = Math.min(
           sampleW - 1,
@@ -447,6 +484,20 @@ function _renderFrame(
           imgData[pidx + 2]
         );
         v[i] = _clamp01(invert ? 1 - lum : lum);
+        if (usePalette) {
+          sumR += imgData[pidx];
+          sumG += imgData[pidx + 1];
+          sumB += imgData[pidx + 2];
+        }
+      }
+      if (usePalette) {
+        st.colorIndices[idx] = pickPaletteIndex(
+          sumR / (6 * 255),
+          sumG / (6 * 255),
+          sumB / (6 * 255),
+          st.paletteChroma,
+          st.paletteChromaBoost
+        );
       }
 
       // External boundary points for edge detection; out-of-bounds clamp to 0
@@ -493,7 +544,10 @@ function _renderFrame(
     charH,
     st.persistCanvas,
     st.persistCtx,
-    st.persistFade
+    st.persistFade,
+    usePalette
+      ? { indices: st.colorIndices, atlases: st.paletteAtlases }
+      : undefined
   );
 }
 
@@ -666,6 +720,36 @@ export async function initAltView(previewManager) {
       st.atlasKey = '';
       st.dirty = true;
     },
+    /**
+     * Palette mode (CW-6). Pass an array of #rrggbb colors to render each
+     * cell in the nearest palette color (one glyph atlas per entry);
+     * pass null to restore the classic single-phosphor rendering.
+     * @param {string[]|null} colors
+     * @param {{chromaBoost?: number}} [options] - see pickPaletteIndex
+     * @returns {string[]|null} the active palette
+     */
+    setPalette(colors, options = {}) {
+      if (Array.isArray(colors) && colors.length > 0) {
+        st.palette = colors.map(String);
+        st.paletteChroma = st.palette.map((c) =>
+          normalizeChroma(parsePaletteColor(c))
+        );
+        st.paletteChromaBoost = Number.isFinite(options.chromaBoost)
+          ? Math.max(1, options.chromaBoost)
+          : 1;
+      } else {
+        st.palette = null;
+        st.paletteChroma = null;
+        st.paletteAtlases = null;
+        st.colorIndices = null;
+      }
+      st.atlasKey = '';
+      st.dirty = true;
+      return st.palette;
+    },
+    getPalette() {
+      return st.palette ? st.palette.slice() : null;
+    },
     setContrastScale(scale) {
       return _setContrastScale(st, scale);
     },
@@ -700,6 +784,8 @@ export async function initAltView(previewManager) {
       st.glyphVectors = null;
       st.lookup = null;
       st.atlasKey = '';
+      st.paletteAtlases = null;
+      st.colorIndices = null;
       st.dirty = true;
     },
     isEnabled: () => st.enabled,

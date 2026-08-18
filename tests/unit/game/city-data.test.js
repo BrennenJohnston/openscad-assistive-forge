@@ -373,3 +373,93 @@ describe('trimOverpassElement', () => {
     expect(trimmed.members[0]).toMatchObject({ ref: 11, role: 'outer' })
   })
 })
+
+describe('extractLandmarks (CW-10)', () => {
+  const buildingEl = (id, cx, tags, half = 10) => ({
+    type: 'way',
+    id,
+    tags: { building: 'yes', ...tags },
+    geometry: squareRing(cx, 0, half),
+  })
+
+  it('scores tagged sites and tall/large named buildings, skipping the unnamed', async () => {
+    const { extractLandmarks } = await import(
+      '../../../src/js/game/city-data.js'
+    )
+    const model = parseCityExtract(
+      extractOf(
+        buildingEl(1, 0, { name: 'Old Cathedral', historic: 'church' }),
+        buildingEl(2, 50, { name: 'Big Tower', height: '120' }),
+        buildingEl(3, 100, { name: 'Corner Shop', height: '6' }, 4),
+        buildingEl(4, 150, { height: '200' }) // unnamed: never a landmark
+      ),
+      { center: CENTER }
+    )
+    const landmarks = extractLandmarks(model)
+
+    const names = landmarks.map((l) => l.name)
+    expect(names).toContain('Old Cathedral')
+    expect(names).toContain('Big Tower')
+    expect(names).not.toContain('Corner Shop')
+    expect(landmarks).toHaveLength(2)
+
+    // Centroid lands inside the footprint.
+    const tower = landmarks.find((l) => l.name === 'Big Tower')
+    expect(tower.x).toBeCloseTo(50, 0)
+    expect(tower.y).toBeCloseTo(0, 0)
+  })
+
+  it('caps the list, orders by score then height, and dedupes names', async () => {
+    const { extractLandmarks } = await import(
+      '../../../src/js/game/city-data.js'
+    )
+    const many = []
+    for (let i = 0; i < 20; i++) {
+      many.push(
+        buildingEl(100 + i, i * 40, { name: `Tower ${i}`, height: '80' })
+      )
+    }
+    // A duplicate-name part must appear once.
+    many.push(buildingEl(999, 900, { name: 'Tower 0', height: '80' }))
+    // A tourism site outranks plain towers.
+    many.push(
+      buildingEl(1000, 950, { name: 'City Museum', tourism: 'museum' })
+    )
+
+    const model = parseCityExtract(extractOf(...many), { center: CENTER })
+    const landmarks = extractLandmarks(model, { max: 12 })
+
+    expect(landmarks).toHaveLength(12)
+    expect(landmarks[0].name).toBe('City Museum')
+    expect(
+      landmarks.filter((l) => l.name === 'Tower 0')
+    ).toHaveLength(1)
+  })
+})
+
+describe('nearestLandmarkName (CW-10)', () => {
+  const landmarks = [
+    { name: 'Library', x: 0, y: 0, heightM: 20, score: 3 },
+    { name: 'Tower', x: 200, y: 0, heightM: 100, score: 4 },
+  ]
+
+  it('enters at 60 m and holds until 80 m (hysteresis)', async () => {
+    const { nearestLandmarkName } = await import(
+      '../../../src/js/game/city-data.js'
+    )
+    expect(nearestLandmarkName(landmarks, 70, 0, null)).toBeNull()
+    expect(nearestLandmarkName(landmarks, 50, 0, null)).toBe('Library')
+    // At 70 m out, still held...
+    expect(nearestLandmarkName(landmarks, 70, 0, 'Library')).toBe('Library')
+    // ...released past 80 m.
+    expect(nearestLandmarkName(landmarks, 90, 0, 'Library')).toBeNull()
+  })
+
+  it('switches to a nearer landmark once the held one is out of range', async () => {
+    const { nearestLandmarkName } = await import(
+      '../../../src/js/game/city-data.js'
+    )
+    expect(nearestLandmarkName(landmarks, 170, 0, 'Library')).toBe('Tower')
+    expect(nearestLandmarkName([], 0, 0, null)).toBeNull()
+  })
+})

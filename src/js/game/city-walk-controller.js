@@ -29,8 +29,16 @@ import {
   Mesh,
   MeshBasicMaterial,
 } from 'three';
-import { parseCityExtract } from './city-data.js';
-import { buildCityGroup, attachCityLighting } from './city-scene.js';
+import {
+  parseCityExtract,
+  extractLandmarks,
+  nearestLandmarkName,
+} from './city-data.js';
+import {
+  buildCityGroup,
+  attachCityLighting,
+  buildLandmarkBeacons,
+} from './city-scene.js';
 import {
   createWalkState,
   stepWalk,
@@ -38,11 +46,21 @@ import {
   headingLabel,
   buildCollisionGrid,
   findSpawn,
-  fitOrthoToBounds,
+  createMapCamera,
+  stepMapCamera,
+  recenterMapCamera,
+  mapCameraFrustum,
 } from './walk-controls.js';
 import { initAltView } from '../_hfm.js';
 import { createDocumentFocusTrap } from '../focus-trap.js';
 import { announce } from '../announcer.js';
+import { HC_PALETTE_GREEN, HC_PALETTE_AMBER } from './hc-palettes.js';
+import {
+  safeGetItem,
+  safeSetItem,
+  STORAGE_KEY_HFM_FONT_SCALE,
+  STORAGE_KEY_CITY_WALK_SPEED,
+} from '../storage-keys.js';
 
 // Bundled extracts (Q-68). Slugs match public/examples/ascii-city/*.json.
 const CITIES = [
@@ -308,7 +326,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       'A and D: sidestep left and right',
       'Arrow Left / Q and Arrow Right / E: turn',
       'Shift (hold): move faster',
+      'Left and Right Bracket: walking speed down or up',
       'M: switch between street view and map view',
+      'On the map: arrow keys pan, Minus and Equals zoom, Home returns to you',
+      'L and Shift+L: cycle landmarks on the map',
+      'Minus and Equals in street view: smaller or larger characters',
       'H: open or close this help',
       'Escape: close this help, or leave the game',
     ];
@@ -334,6 +356,14 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
 
     layer.appendChild(help);
 
+    // Landmark legend (CW-10): real text beside the map view.
+    const legend = document.createElement('aside');
+    legend.className = 'city-walk-legend';
+    legend.id = 'cityWalkLegend';
+    legend.setAttribute('aria-label', 'Landmarks');
+    legend.hidden = true;
+    layer.appendChild(legend);
+
     // In-layer polite live region (see announceInLayer).
     const announcer = document.createElement('p');
     announcer.className = 'sr-only';
@@ -352,8 +382,66 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       hud,
       hudStatus,
       help,
+      legend,
       announcer,
     };
+  }
+
+  /** Fill the map-view legend with this city's landmarks. */
+  function buildLegend(landmarks) {
+    const { legend } = state.refs;
+    legend.replaceChildren();
+
+    const heading = document.createElement('h3');
+    heading.className = 'city-walk-legend-heading';
+    heading.textContent = 'Landmarks';
+    legend.appendChild(heading);
+
+    if (landmarks.length === 0) {
+      const none = document.createElement('p');
+      none.className = 'city-walk-legend-empty';
+      none.textContent = 'No landmarks found in this area.';
+      legend.appendChild(none);
+      return;
+    }
+
+    const list = document.createElement('ol');
+    list.className = 'city-walk-legend-list';
+    for (const lm of landmarks) {
+      const li = document.createElement('li');
+      li.textContent = lm.name;
+      list.appendChild(li);
+    }
+    legend.appendChild(list);
+
+    const hint = document.createElement('p');
+    hint.className = 'city-walk-legend-hint';
+    hint.textContent = 'L cycles landmarks on the map.';
+    legend.appendChild(hint);
+  }
+
+  /**
+   * Refresh legend rows with the compass direction from the player and mark
+   * the selected landmark. Directions update when the map opens, not per
+   * frame — the player cannot move while the map is up.
+   */
+  function refreshLegend(game) {
+    const items = state.refs.legend.querySelectorAll('li');
+    items.forEach((li, i) => {
+      const lm = game.landmarks[i];
+      const bearing = Math.atan2(
+        lm.x - game.walkState.x,
+        lm.y - game.walkState.y
+      );
+      li.textContent = `${lm.name} — ${headingLabel(bearing)}`;
+      if (i === game.landmarkIndex) {
+        li.setAttribute('aria-current', 'true');
+        li.classList.add('selected');
+      } else {
+        li.removeAttribute('aria-current');
+        li.classList.remove('selected');
+      }
+    });
   }
 
   function makeOsmLink() {
@@ -452,14 +540,17 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
 
     const city3d = buildCityGroup(model);
     scene.add(city3d.group);
-    // Roads belong to the map view. At street level a real downtown's road
-    // network compresses into a solid glyph carpet near the horizon (every
-    // way between here and 700 m stacks into a few cell rows), while the
-    // building canyons already trace the streets. Overhead, the ribbons ARE
-    // the map.
-    const roadsMesh = city3d.group.children.find((c) => c.name === 'roads');
-    if (roadsMesh) roadsMesh.visible = false;
-    const detachLighting = attachCityLighting(scene, fpCamera);
+    // Streets are visible in both views since CW-8: dim under the fog at
+    // street level, brightened into the map's street network overhead
+    // (city3d.setMapView swaps the tone on toggle).
+    const lighting = attachCityLighting(scene, fpCamera);
+
+    // Landmarks (CW-10): beacons on the map, a legend, proximity text.
+    const landmarks = extractLandmarks(model);
+    const beacons = buildLandmarkBeacons(landmarks);
+    beacons.group.visible = false;
+    scene.add(beacons.group);
+    buildLegend(landmarks);
 
     // Bright beacon marking the player in the top-down map view, sized
     // relative to the city so it stays visible at map scale.
@@ -478,6 +569,15 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     const collision = buildCollisionGrid(model);
     const spawn = findSpawn(model, collision);
     const walkState = createWalkState({ ...spawn, headingRad: 0 });
+    const mapCam = createMapCamera(model.boundsM);
+
+    // CW-Q8: persisted walking-speed multiplier (comfort preference).
+    const savedSpeed = parseFloat(
+      safeGetItem(STORAGE_KEY_CITY_WALK_SPEED) ?? ''
+    );
+    const speedScale = Number.isFinite(savedSpeed)
+      ? Math.max(0.5, Math.min(3, savedSpeed))
+      : 1;
 
     const game = {
       city,
@@ -487,13 +587,18 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       fpCamera,
       orthoCamera,
       city3d,
-      roadsMesh,
-      detachLighting,
+      lighting,
       marker,
       markerGeom,
       markerMat,
       collision,
       walkState,
+      mapCam,
+      speedScale,
+      landmarks,
+      beacons,
+      landmarkIndex: -1,
+      nearLandmark: null,
       mapView: false,
       altView: null,
       resizeObserver: null,
@@ -512,6 +617,28 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       isAutoRotateEnabled: () => false,
     };
     game.altView = await initAltView(managerLike);
+
+    // Character size seeds from the saved Alt View preference so the game
+    // matches the preview's ASCII look; in-game adjustment (-/=) stays
+    // session-local and never writes the shared pref back.
+    const savedFont = parseFloat(safeGetItem(STORAGE_KEY_HFM_FONT_SCALE) ?? '');
+    if (Number.isFinite(savedFont)) game.altView.setFontScale(savedFont);
+
+    // CW-Q2/CW-Q5/CW-Q6: multicolor exists ONLY under high contrast —
+    // neon in amber (light), the ANSI bright set in green (dark). The
+    // observer follows live theme/contrast flips (e.g. a system
+    // prefers-color-scheme change mid-game).
+    applyHcPalette(game);
+    game.themeObserver = new MutationObserver(() => {
+      applyHcPalette(game);
+      game.altView.rebuildGlyphs?.();
+      game.altView.invalidate();
+    });
+    game.themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-high-contrast', 'data-theme'],
+    });
+
     game.altView.enable();
 
     if (import.meta.env.DEV) {
@@ -520,11 +647,28 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     }
 
     applyFirstPersonCamera();
-    fitMapCamera();
+    applyMapCamera();
     updateHud();
 
     game.resizeObserver = new ResizeObserver(() => handleViewportResize());
     game.resizeObserver.observe(viewport);
+
+    // Mouse wheel zooms the map view (keyboard stays primary: -/= do the
+    // same). preventDefault keeps the page from scrolling behind the layer.
+    viewport.addEventListener(
+      'wheel',
+      (event) => {
+        const g = state.game;
+        if (!g || !g.mapView) return;
+        event.preventDefault();
+        const factor = Math.pow(1.0015, -event.deltaY);
+        g.mapCam.zoom = Math.min(8, Math.max(0.4, g.mapCam.zoom * factor));
+        applyMapCamera();
+        g.altView.invalidate();
+        updateHud();
+      },
+      { passive: false }
+    );
 
     game.lastFrameMs = performance.now();
     state.rafId = requestAnimationFrame(frame);
@@ -543,6 +687,26 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     state.refs.startError.hidden = false;
   }
 
+  /**
+   * CW-Q2 gate: palette only when high contrast is on; scheme picks the set
+   * (light = amber -> neon, dark = green -> ANSI bright). Otherwise the
+   * classic single phosphor.
+   */
+  function applyHcPalette(game) {
+    const root = document.documentElement;
+    const hc = root.getAttribute('data-high-contrast') === 'true';
+    if (!hc) {
+      game.altView.setPalette(null);
+      return;
+    }
+    const light = root.getAttribute('data-theme') === 'light';
+    // chromaBoost exaggerates the scene's deliberately mild tints (kept low
+    // so monochrome stays luminance-true) into decisive palette picks.
+    game.altView.setPalette(light ? HC_PALETTE_AMBER : HC_PALETTE_GREEN, {
+      chromaBoost: 3.5,
+    });
+  }
+
   function unloadCity() {
     if (state.rafId !== null) {
       cancelAnimationFrame(state.rafId);
@@ -551,9 +715,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     const game = state.game;
     if (!game) return;
 
+    game.themeObserver?.disconnect();
     game.resizeObserver?.disconnect();
     game.altView?.dispose();
-    game.detachLighting?.();
+    game.lighting?.detach();
+    game.beacons?.dispose();
     game.city3d?.dispose();
     game.markerGeom?.dispose();
     game.markerMat?.dispose();
@@ -606,6 +772,58 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       return;
     }
 
+    if (event.code === 'KeyL') {
+      event.preventDefault();
+      event.stopPropagation();
+      cycleLandmark(event.shiftKey ? -1 : 1);
+      return;
+    }
+
+    if (
+      event.code === 'Minus' ||
+      event.code === 'NumpadSubtract' ||
+      event.code === 'Equal' ||
+      event.code === 'NumpadAdd'
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      const minus = event.code === 'Minus' || event.code === 'NumpadSubtract';
+      if (state.game.mapView) {
+        // Map mode: -/= are HELD zoom keys (see frame()).
+        state.keys.add(minus ? 'zoomOut' : 'zoomIn');
+      } else {
+        adjustCharacterSize(minus ? -0.1 : 0.1);
+      }
+      return;
+    }
+
+    if (event.code === 'BracketLeft' || event.code === 'BracketRight') {
+      event.preventDefault();
+      event.stopPropagation();
+      adjustWalkSpeed(event.code === 'BracketLeft' ? -0.25 : 0.25);
+      return;
+    }
+
+    if (
+      state.game.mapView &&
+      (event.code === 'Home' ||
+        event.code === 'Digit0' ||
+        event.code === 'Numpad0')
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      recenterMapCamera(
+        state.game.mapCam,
+        state.game.walkState.x,
+        state.game.walkState.y
+      );
+      applyMapCamera();
+      state.game.altView.invalidate();
+      updateHud();
+      announceInLayer('Map centered on you.');
+      return;
+    }
+
     const action = KEY_ACTIONS.get(event.code);
     if (action) {
       event.preventDefault();
@@ -619,6 +837,12 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       state.shiftHeld = false;
       return;
     }
+    if (event.code === 'Minus' || event.code === 'NumpadSubtract') {
+      state.keys.delete('zoomOut');
+    }
+    if (event.code === 'Equal' || event.code === 'NumpadAdd') {
+      state.keys.delete('zoomIn');
+    }
     const action = KEY_ACTIONS.get(event.code);
     if (action) state.keys.delete(action);
   }
@@ -626,6 +850,14 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   function clearHeldKeys() {
     state.keys.clear();
     state.shiftHeld = false;
+  }
+
+  function adjustCharacterSize(delta) {
+    const game = state.game;
+    if (!game) return;
+    const next = game.altView.setFontScale(game.altView.getFontScale() + delta);
+    game.altView.invalidate();
+    announceInLayer(`Character size ${Math.round(next * 100)} percent.`);
   }
 
   // -------------------------------------------------------------------
@@ -639,12 +871,12 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     game.fpCamera.lookAt(...pose.target);
   }
 
-  function fitMapCamera() {
+  function applyMapCamera() {
     const game = state.game;
     const { viewport } = state.refs;
     const aspect =
       Math.max(1, viewport.clientWidth) / Math.max(1, viewport.clientHeight);
-    const fit = fitOrthoToBounds(game.model.boundsM, aspect);
+    const fit = mapCameraFrustum(game.mapCam, game.model.boundsM, aspect);
     const cam = game.orthoCamera;
     cam.left = fit.left;
     cam.right = fit.right;
@@ -659,30 +891,91 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     const game = state.game;
     game.mapView = !game.mapView;
     game.marker.visible = game.mapView;
-    if (game.roadsMesh) game.roadsMesh.visible = game.mapView;
+    game.city3d.setMapView(game.mapView);
+    game.lighting.setMapBoost(game.mapView);
+    game.beacons.group.visible = game.mapView;
+    state.refs.legend.hidden = !game.mapView;
     if (game.mapView) {
       // The whole map sits ~1 km from the overhead camera — distance fog
       // would black it out entirely. Street view gets the fog back.
       game.streetFog = game.scene.fog;
       game.scene.fog = null;
       game.marker.position.set(game.walkState.x, game.walkState.y, 0);
-      fitMapCamera();
+      // Open following the player; walking pauses while the map is up
+      // (the arrows pan the map instead — CW-9).
+      recenterMapCamera(game.mapCam, game.walkState.x, game.walkState.y);
+      applyMapCamera();
+      refreshLegend(game);
     } else {
       game.scene.fog = game.streetFog ?? null;
+      // A zoom key held through the M press must not stick, and landmark
+      // selection resets with the map.
+      state.keys.delete('zoomIn');
+      state.keys.delete('zoomOut');
+      game.landmarkIndex = -1;
+      game.beacons.setSelected(null);
     }
     game.altView.invalidate();
     updateHud();
     announceInLayer(
-      game.mapView ? 'Map view, seen from above.' : 'Street view.'
+      game.mapView
+        ? 'Map view, seen from above. Arrow keys pan, minus and equals zoom, Home returns to you.'
+        : 'Street view.'
+    );
+  }
+
+  function cycleLandmark(direction) {
+    const game = state.game;
+    if (!game) return;
+    if (game.landmarks.length === 0) {
+      announceInLayer('No landmarks in this city.');
+      return;
+    }
+    // Landmarks live on the map — cycling from street view opens it.
+    if (!game.mapView) toggleMapView();
+
+    const count = game.landmarks.length;
+    game.landmarkIndex = (game.landmarkIndex + direction + count) % count;
+    const lm = game.landmarks[game.landmarkIndex];
+
+    game.beacons.setSelected(game.landmarkIndex);
+    // Center the map on the landmark; manual selection is not follow mode.
+    game.mapCam.centerX = lm.x;
+    game.mapCam.centerY = lm.y;
+    game.mapCam.follow = false;
+    applyMapCamera();
+    refreshLegend(game);
+    game.altView.invalidate();
+    announceInLayer(
+      `Landmark ${game.landmarkIndex + 1} of ${count}: ${lm.name}.`
+    );
+  }
+
+  function adjustWalkSpeed(delta) {
+    const game = state.game;
+    if (!game) return;
+    game.speedScale = Math.max(
+      0.5,
+      Math.min(3, Math.round((game.speedScale + delta) * 100) / 100)
+    );
+    safeSetItem(STORAGE_KEY_CITY_WALK_SPEED, String(game.speedScale));
+    updateHud();
+    announceInLayer(
+      `Walking speed ${Math.round(game.speedScale * 100)} percent.`
     );
   }
 
   function updateHud() {
     const game = state.game;
     if (!game) return;
+    const view = game.mapView
+      ? `map view · zoom ${game.mapCam.zoom.toFixed(1)}x`
+      : `street view · speed ${Math.round(game.speedScale * 100)}%`;
+    const near =
+      !game.mapView && game.nearLandmark ? ` · near ${game.nearLandmark}` : '';
     const text =
       `${game.city.label} · facing ${headingLabel(game.walkState.headingRad)}` +
-      ` · ${game.mapView ? 'map view' : 'street view'}`;
+      ` · ${view}${near}`;
     if (text !== game.lastHudText) {
       game.lastHudText = text;
       state.refs.hudStatus.textContent = text;
@@ -698,7 +991,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     game.renderer.setSize(width, height);
     game.fpCamera.aspect = width / height;
     game.fpCamera.updateProjectionMatrix();
-    fitMapCamera();
+    applyMapCamera();
     game.altView.resize(width, height);
     game.altView.invalidate();
   }
@@ -711,6 +1004,46 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     const dtS = Math.max(0, (nowMs - game.lastFrameMs) / 1000);
     game.lastFrameMs = nowMs;
 
+    if (game.mapView) {
+      // Map mode (CW-9): the movement keys drive the camera, not the
+      // player — walking is suspended while the overhead view is open.
+      const { viewport } = state.refs;
+      const aspect =
+        Math.max(1, viewport.clientWidth) / Math.max(1, viewport.clientHeight);
+      const { changed } = stepMapCamera(
+        game.mapCam,
+        {
+          panX:
+            (state.keys.has('strafeRight') || state.keys.has('turnRight')
+              ? 1
+              : 0) -
+            (state.keys.has('strafeLeft') || state.keys.has('turnLeft')
+              ? 1
+              : 0),
+          panY:
+            (state.keys.has('forward') ? 1 : 0) -
+            (state.keys.has('back') ? 1 : 0),
+          zoom:
+            (state.keys.has('zoomIn') ? 1 : 0) -
+            (state.keys.has('zoomOut') ? 1 : 0),
+        },
+        dtS,
+        game.model.boundsM,
+        aspect
+      );
+      if (game.mapCam.follow) {
+        game.mapCam.centerX = game.walkState.x;
+        game.mapCam.centerY = game.walkState.y;
+      }
+      if (changed) {
+        applyMapCamera();
+        game.altView.invalidate();
+        updateHud();
+      }
+      game.altView.render();
+      return;
+    }
+
     const input = {
       forward:
         (state.keys.has('forward') ? 1 : 0) - (state.keys.has('back') ? 1 : 0),
@@ -721,6 +1054,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
         (state.keys.has('turnRight') ? 1 : 0) -
         (state.keys.has('turnLeft') ? 1 : 0),
       fast: state.shiftHeld,
+      speedScale: game.speedScale,
     };
 
     const { moved, turned } = stepWalk(
@@ -732,8 +1066,17 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
 
     if (moved || turned) {
       applyFirstPersonCamera();
-      if (game.mapView && moved) {
-        game.marker.position.set(game.walkState.x, game.walkState.y, 0);
+      if (moved) {
+        const near = nearestLandmarkName(
+          game.landmarks,
+          game.walkState.x,
+          game.walkState.y,
+          game.nearLandmark
+        );
+        if (near !== game.nearLandmark) {
+          game.nearLandmark = near;
+          if (near) announceInLayer(`Near ${near}.`);
+        }
       }
       game.altView.invalidate();
       updateHud();

@@ -514,3 +514,10 @@ export const STORAGE_KEY_HFM_FONT_SCALE = 'openscad-forge-hfm-font-scale';
  * Value is a decimal string in [0, 1] matching _HFM_PERSIST_FADE_RANGE in main.js.
  */
 export const STORAGE_KEY_HFM_PERSIST_FADE = 'openscad-forge-hfm-persist-fade';
+
+/**
+ * localStorage key for the City Walk game's walking-speed multiplier
+ * (CW-Q8). Decimal string in [0.5, 3]; a comfort/accessibility preference,
+ * so it persists across sessions.
+ */
+export const STORAGE_KEY_CITY_WALK_SPEED = getAppPrefKey('city-walk-speed');
