@@ -300,6 +300,7 @@ export function parseCityExtract(extract, options = {}) {
         heightM,
         minHeightM,
         name: tags.name,
+        tags,
       });
       continue;
     }
@@ -339,6 +340,7 @@ export function parseCityExtract(extract, options = {}) {
           heightM,
           minHeightM,
           name: tags.name,
+          tags,
         });
         emitted = true;
       }
@@ -415,6 +417,10 @@ export function trimOverpassElement(el) {
     'building:min_level',
     'name',
     'highway',
+    // Landmark families (CW-10)
+    'tourism',
+    'historic',
+    'amenity',
   ];
 
   const trimTags = (tags) => {
@@ -452,5 +458,112 @@ export function trimOverpassElement(el) {
     return { type: 'relation', id: el.id, tags, members };
   }
 
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Landmarks (CW-10)
+// ---------------------------------------------------------------------------
+
+// Amenity values notable enough to landmark when the building is named.
+const LANDMARK_AMENITIES = new Set([
+  'place_of_worship',
+  'theatre',
+  'townhall',
+  'library',
+  'university',
+  'courthouse',
+  'arts_centre',
+  'hospital',
+  'community_centre',
+  'conference_centre',
+]);
+
+/**
+ * Pick the named buildings worth marking on the map: tagged tourism or
+ * historic sites, notable amenities, and the tallest or largest named
+ * structures. Deterministic; capped.
+ *
+ * @param {ReturnType<typeof parseCityExtract>} model
+ * @param {{max?: number}} [options]
+ * @returns {Array<{name: string, x: number, y: number, heightM: number, score: number}>}
+ */
+export function extractLandmarks(model, options = {}) {
+  const max = options.max ?? 12;
+  const seen = new Set();
+  const scored = [];
+
+  for (const building of model.buildings) {
+    const name = building.name;
+    if (typeof name !== 'string' || name.trim() === '') continue;
+    if (seen.has(name)) continue; // multi-part buildings appear once
+
+    const tags = building.tags ?? {};
+    let score = 0;
+    if (typeof tags.tourism === 'string') score += 3;
+    if (typeof tags.historic === 'string') score += 3;
+    if (LANDMARK_AMENITIES.has(tags.amenity)) score += 2;
+    if (building.heightM >= 60) score += 2;
+    else if (building.heightM >= 25) score += 1;
+    if (Math.abs(signedArea(building.outer)) >= 3000) score += 1;
+
+    if (score < 2) continue;
+    seen.add(name);
+
+    let cx = 0;
+    let cy = 0;
+    for (const [x, y] of building.outer) {
+      cx += x;
+      cy += y;
+    }
+    scored.push({
+      name,
+      x: cx / building.outer.length,
+      y: cy / building.outer.length,
+      heightM: building.heightM,
+      score,
+    });
+  }
+
+  scored.sort((a, b) => b.score - a.score || b.heightM - a.heightM);
+  return scored.slice(0, max);
+}
+
+/**
+ * Street-view landmark proximity with hysteresis: you are "near" a landmark
+ * once inside enterM of its centroid, and stay near it until you leave
+ * exitM — so the HUD does not flicker at the boundary.
+ *
+ * @param {ReturnType<typeof extractLandmarks>} landmarks
+ * @param {number} x - player position
+ * @param {number} y
+ * @param {string|null} currentName - the landmark currently held as near
+ * @param {{enterM?: number, exitM?: number}} [options]
+ * @returns {string|null} the landmark now considered near, or null
+ */
+export function nearestLandmarkName(
+  landmarks,
+  x,
+  y,
+  currentName,
+  options = {}
+) {
+  const enterM = options.enterM ?? 60;
+  const exitM = options.exitM ?? 80;
+
+  let nearest = null;
+  let nearestDist = Infinity;
+  let currentDist = Infinity;
+  for (const lm of landmarks) {
+    const dist = Math.hypot(lm.x - x, lm.y - y);
+    if (dist < nearestDist) {
+      nearest = lm;
+      nearestDist = dist;
+    }
+    if (lm.name === currentName) currentDist = dist;
+  }
+
+  if (currentName !== null && currentDist <= exitM) return currentName;
+  if (nearest && nearestDist <= enterM) return nearest.name;
   return null;
 }

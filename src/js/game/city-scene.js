@@ -30,6 +30,7 @@
 
 import {
   AmbientLight,
+  BoxGeometry,
   BufferAttribute,
   BufferGeometry,
   CanvasTexture,
@@ -39,6 +40,7 @@ import {
   Fog,
   Group,
   Mesh,
+  MeshBasicMaterial,
   MeshLambertMaterial,
   Path,
   PlaneGeometry,
@@ -577,6 +579,45 @@ export function buildCityGroup(model) {
       group.clear();
     },
     stats: { buildingTriangles, storefrontTriangles, roadTriangles },
+  };
+}
+
+/**
+ * Landmark beacons for the map view (CW-10): one slim pillar per landmark,
+ * dim by default, the selected one bright white. MeshBasicMaterial ignores
+ * lighting, so beacons read the same at every ambient level.
+ *
+ * @param {Array<{name: string, x: number, y: number}>} landmarks
+ * @returns {{group: import('three').Group, setSelected: (index: number|null) => void, dispose: () => void}}
+ */
+export function buildLandmarkBeacons(landmarks) {
+  const group = new Group();
+  group.name = 'landmark-beacons';
+
+  const geom = new BoxGeometry(7, 7, 90);
+  const dimMat = new MeshBasicMaterial({ color: 0x777777 });
+  const brightMat = new MeshBasicMaterial({ color: 0xffffff });
+
+  const meshes = landmarks.map((lm) => {
+    const mesh = new Mesh(geom, dimMat);
+    mesh.position.set(lm.x, lm.y, 0);
+    group.add(mesh);
+    return mesh;
+  });
+
+  return {
+    group,
+    setSelected(index) {
+      meshes.forEach((mesh, i) => {
+        mesh.material = i === index ? brightMat : dimMat;
+      });
+    },
+    dispose() {
+      geom.dispose();
+      dimMat.dispose();
+      brightMat.dispose();
+      group.clear();
+    },
   };
 }
 

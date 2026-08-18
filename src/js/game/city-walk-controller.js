@@ -29,8 +29,16 @@ import {
   Mesh,
   MeshBasicMaterial,
 } from 'three';
-import { parseCityExtract } from './city-data.js';
-import { buildCityGroup, attachCityLighting } from './city-scene.js';
+import {
+  parseCityExtract,
+  extractLandmarks,
+  nearestLandmarkName,
+} from './city-data.js';
+import {
+  buildCityGroup,
+  attachCityLighting,
+  buildLandmarkBeacons,
+} from './city-scene.js';
 import {
   createWalkState,
   stepWalk,
@@ -321,6 +329,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       'Left and Right Bracket: walking speed down or up',
       'M: switch between street view and map view',
       'On the map: arrow keys pan, Minus and Equals zoom, Home returns to you',
+      'L and Shift+L: cycle landmarks on the map',
       'Minus and Equals in street view: smaller or larger characters',
       'H: open or close this help',
       'Escape: close this help, or leave the game',
@@ -347,6 +356,14 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
 
     layer.appendChild(help);
 
+    // Landmark legend (CW-10): real text beside the map view.
+    const legend = document.createElement('aside');
+    legend.className = 'city-walk-legend';
+    legend.id = 'cityWalkLegend';
+    legend.setAttribute('aria-label', 'Landmarks');
+    legend.hidden = true;
+    layer.appendChild(legend);
+
     // In-layer polite live region (see announceInLayer).
     const announcer = document.createElement('p');
     announcer.className = 'sr-only';
@@ -365,8 +382,66 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       hud,
       hudStatus,
       help,
+      legend,
       announcer,
     };
+  }
+
+  /** Fill the map-view legend with this city's landmarks. */
+  function buildLegend(landmarks) {
+    const { legend } = state.refs;
+    legend.replaceChildren();
+
+    const heading = document.createElement('h3');
+    heading.className = 'city-walk-legend-heading';
+    heading.textContent = 'Landmarks';
+    legend.appendChild(heading);
+
+    if (landmarks.length === 0) {
+      const none = document.createElement('p');
+      none.className = 'city-walk-legend-empty';
+      none.textContent = 'No landmarks found in this area.';
+      legend.appendChild(none);
+      return;
+    }
+
+    const list = document.createElement('ol');
+    list.className = 'city-walk-legend-list';
+    for (const lm of landmarks) {
+      const li = document.createElement('li');
+      li.textContent = lm.name;
+      list.appendChild(li);
+    }
+    legend.appendChild(list);
+
+    const hint = document.createElement('p');
+    hint.className = 'city-walk-legend-hint';
+    hint.textContent = 'L cycles landmarks on the map.';
+    legend.appendChild(hint);
+  }
+
+  /**
+   * Refresh legend rows with the compass direction from the player and mark
+   * the selected landmark. Directions update when the map opens, not per
+   * frame — the player cannot move while the map is up.
+   */
+  function refreshLegend(game) {
+    const items = state.refs.legend.querySelectorAll('li');
+    items.forEach((li, i) => {
+      const lm = game.landmarks[i];
+      const bearing = Math.atan2(
+        lm.x - game.walkState.x,
+        lm.y - game.walkState.y
+      );
+      li.textContent = `${lm.name} — ${headingLabel(bearing)}`;
+      if (i === game.landmarkIndex) {
+        li.setAttribute('aria-current', 'true');
+        li.classList.add('selected');
+      } else {
+        li.removeAttribute('aria-current');
+        li.classList.remove('selected');
+      }
+    });
   }
 
   function makeOsmLink() {
@@ -470,6 +545,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // (city3d.setMapView swaps the tone on toggle).
     const lighting = attachCityLighting(scene, fpCamera);
 
+    // Landmarks (CW-10): beacons on the map, a legend, proximity text.
+    const landmarks = extractLandmarks(model);
+    const beacons = buildLandmarkBeacons(landmarks);
+    beacons.group.visible = false;
+    scene.add(beacons.group);
+    buildLegend(landmarks);
+
     // Bright beacon marking the player in the top-down map view, sized
     // relative to the city so it stays visible at map scale.
     const spanM = Math.max(
@@ -513,6 +595,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       walkState,
       mapCam,
       speedScale,
+      landmarks,
+      beacons,
+      landmarkIndex: -1,
+      nearLandmark: null,
       mapView: false,
       altView: null,
       resizeObserver: null,
@@ -633,6 +719,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     game.resizeObserver?.disconnect();
     game.altView?.dispose();
     game.lighting?.detach();
+    game.beacons?.dispose();
     game.city3d?.dispose();
     game.markerGeom?.dispose();
     game.markerMat?.dispose();
@@ -682,6 +769,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       event.preventDefault();
       event.stopPropagation();
       toggleMapView();
+      return;
+    }
+
+    if (event.code === 'KeyL') {
+      event.preventDefault();
+      event.stopPropagation();
+      cycleLandmark(event.shiftKey ? -1 : 1);
       return;
     }
 
@@ -799,6 +893,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     game.marker.visible = game.mapView;
     game.city3d.setMapView(game.mapView);
     game.lighting.setMapBoost(game.mapView);
+    game.beacons.group.visible = game.mapView;
+    state.refs.legend.hidden = !game.mapView;
     if (game.mapView) {
       // The whole map sits ~1 km from the overhead camera — distance fog
       // would black it out entirely. Street view gets the fog back.
@@ -809,11 +905,15 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       // (the arrows pan the map instead — CW-9).
       recenterMapCamera(game.mapCam, game.walkState.x, game.walkState.y);
       applyMapCamera();
+      refreshLegend(game);
     } else {
       game.scene.fog = game.streetFog ?? null;
-      // A zoom key held through the M press must not stick.
+      // A zoom key held through the M press must not stick, and landmark
+      // selection resets with the map.
       state.keys.delete('zoomIn');
       state.keys.delete('zoomOut');
+      game.landmarkIndex = -1;
+      game.beacons.setSelected(null);
     }
     game.altView.invalidate();
     updateHud();
@@ -821,6 +921,33 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       game.mapView
         ? 'Map view, seen from above. Arrow keys pan, minus and equals zoom, Home returns to you.'
         : 'Street view.'
+    );
+  }
+
+  function cycleLandmark(direction) {
+    const game = state.game;
+    if (!game) return;
+    if (game.landmarks.length === 0) {
+      announceInLayer('No landmarks in this city.');
+      return;
+    }
+    // Landmarks live on the map — cycling from street view opens it.
+    if (!game.mapView) toggleMapView();
+
+    const count = game.landmarks.length;
+    game.landmarkIndex = (game.landmarkIndex + direction + count) % count;
+    const lm = game.landmarks[game.landmarkIndex];
+
+    game.beacons.setSelected(game.landmarkIndex);
+    // Center the map on the landmark; manual selection is not follow mode.
+    game.mapCam.centerX = lm.x;
+    game.mapCam.centerY = lm.y;
+    game.mapCam.follow = false;
+    applyMapCamera();
+    refreshLegend(game);
+    game.altView.invalidate();
+    announceInLayer(
+      `Landmark ${game.landmarkIndex + 1} of ${count}: ${lm.name}.`
     );
   }
 
@@ -844,9 +971,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     const view = game.mapView
       ? `map view · zoom ${game.mapCam.zoom.toFixed(1)}x`
       : `street view · speed ${Math.round(game.speedScale * 100)}%`;
+    const near =
+      !game.mapView && game.nearLandmark ? ` · near ${game.nearLandmark}` : '';
     const text =
       `${game.city.label} · facing ${headingLabel(game.walkState.headingRad)}` +
-      ` · ${view}`;
+      ` · ${view}${near}`;
     if (text !== game.lastHudText) {
       game.lastHudText = text;
       state.refs.hudStatus.textContent = text;
@@ -937,6 +1066,18 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
 
     if (moved || turned) {
       applyFirstPersonCamera();
+      if (moved) {
+        const near = nearestLandmarkName(
+          game.landmarks,
+          game.walkState.x,
+          game.walkState.y,
+          game.nearLandmark
+        );
+        if (near !== game.nearLandmark) {
+          game.nearLandmark = near;
+          if (near) announceInLayer(`Near ${near}.`);
+        }
+      }
       game.altView.invalidate();
       updateHud();
     }

@@ -268,6 +268,60 @@ test.describe('ASCII City Walk — map navigation and walking speed (CW-9)', () 
   })
 })
 
+test.describe('ASCII City Walk — landmarks (CW-10)', () => {
+  test('legend lists landmarks in map view; L cycles, announces, and highlights', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // Legend is a map-view feature.
+    await expect(page.locator('#cityWalkLegend')).toBeHidden()
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkLegend')).toBeVisible()
+    const items = page.locator('#cityWalkLegend li')
+    expect(await items.count()).toBeGreaterThanOrEqual(1)
+    // Rows carry a compass direction from the player.
+    await expect(items.first()).toContainText('—')
+
+    // L selects and announces the first landmark…
+    await page.keyboard.press('KeyL')
+    await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
+      /Landmark 1 of \d+: /
+    )
+    await expect(
+      page.locator('#cityWalkLegend li[aria-current="true"]')
+    ).toHaveCount(1)
+
+    // …and Shift+L cycles backwards (wraps to the last).
+    await page.keyboard.press('Shift+KeyL')
+    await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
+      /Landmark \d+ of \d+: /
+    )
+
+    // Returning to the street resets the selection.
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkLegend')).toBeHidden()
+    await page.keyboard.press('KeyM')
+    await expect(
+      page.locator('#cityWalkLegend li[aria-current="true"]')
+    ).toHaveCount(0)
+  })
+
+  test('L from street view opens the map and selects a landmark', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    await page.keyboard.press('KeyL')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
+    await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
+      /Landmark 1 of \d+: /
+    )
+  })
+})
+
 test.describe('ASCII City Walk — high contrast (CW-6)', () => {
   test('launches and plays under high contrast with the palette active', async ({
     page,

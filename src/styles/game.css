@@ -120,6 +120,9 @@
 
 .city-walk-help {
   position: absolute;
+  /* Above the ASCII overlay canvas (z-index 5 in _hfm-paint.js) — without
+   * this the panel renders UNDER the glyphs. */
+  z-index: var(--z-index-dropdown);
   top: calc(var(--space-lg) + 44px + var(--space-md));
   right: var(--space-md);
   max-width: min(480px, calc(100vw - 2 * var(--space-md)));
@@ -147,6 +150,49 @@
 
 .city-walk-help-note {
   max-width: 48ch;
+}
+
+/* Landmark legend (map view): real text over the map's left edge. */
+.city-walk-legend {
+  position: absolute;
+  /* Above the ASCII overlay canvas, like .city-walk-help. */
+  z-index: var(--z-index-dropdown);
+  top: calc(var(--space-lg) + 44px + var(--space-md));
+  left: var(--space-md);
+  max-width: min(340px, calc(100vw - 2 * var(--space-md)));
+  max-height: calc(100% - 160px);
+  overflow-y: auto;
+  padding: var(--space-md);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.city-walk-legend-heading {
+  margin: 0 0 var(--space-sm);
+  font-size: var(--font-size-base);
+}
+
+.city-walk-legend-list {
+  margin: 0;
+  padding-left: var(--space-lg);
+  font-size: var(--font-size-sm);
+}
+
+.city-walk-legend-list li {
+  margin-bottom: var(--space-2xs);
+}
+
+.city-walk-legend-list li.selected {
+  color: var(--color-accent);
+  font-weight: bold;
+}
+
+.city-walk-legend-hint,
+.city-walk-legend-empty {
+  margin: var(--space-sm) 0 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
 }
 
 /* Welcome card: attribution rides at the card's foot in a small size. */
