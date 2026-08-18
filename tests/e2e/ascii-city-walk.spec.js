@@ -191,6 +191,49 @@ test.describe('ASCII City Walk — playing', () => {
   })
 })
 
+test.describe('ASCII City Walk — high contrast (CW-6)', () => {
+  test('launches and plays under high contrast with the palette active', async ({
+    page,
+  }) => {
+    await page.goto('/?hfm=unlock')
+    await expect(page.locator('#cityWalkCard')).toBeVisible({ timeout: 30000 })
+    await page.locator('#contrastToggle').click()
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-high-contrast',
+      'true'
+    )
+
+    await page.locator('#cityWalkLaunchBtn').click()
+    await expect(page.locator('#cityWalkLayer')).toBeVisible({
+      timeout: 20000,
+    })
+    await enterCity(page)
+
+    // The dev handle proves the CW-Q2 gate: palette active under HC…
+    const paletteOn = await page.evaluate(
+      () => window.__cityWalkGame?.altView?.getPalette()?.length ?? 0
+    )
+    expect(paletteOn).toBeGreaterThanOrEqual(4)
+
+    // …character size keys still work…
+    await page.keyboard.press('Equal')
+    await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
+      /Character size 110 percent/
+    )
+
+    // …and walking still walks.
+    await page.keyboard.down('ArrowRight')
+    await page.waitForTimeout(1300)
+    await page.keyboard.up('ArrowRight')
+    await expect(page.locator('#cityWalkHudStatus')).not.toContainText(
+      'facing north'
+    )
+
+    await page.keyboard.press('Escape')
+    await expect(page.locator('#cityWalkLayer')).toBeHidden()
+  })
+})
+
 test.describe('ASCII City Walk — accessibility', () => {
   test('axe: city picker and in-game layer have no violations', async ({
     page,

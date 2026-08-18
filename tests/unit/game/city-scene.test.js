@@ -194,14 +194,29 @@ describe('attachCityLighting', () => {
   it('adds ambient to the scene and parents the headlight to the camera', () => {
     const scene = new Scene()
     const camera = new PerspectiveCamera()
-    const detach = attachCityLighting(scene, camera)
+    const lighting = attachCityLighting(scene, camera)
 
     expect(scene.children.some((c) => c.isAmbientLight)).toBe(true)
     expect(scene.children).toContain(camera)
     expect(camera.children.some((c) => c.isDirectionalLight)).toBe(true)
 
-    detach()
+    lighting.detach()
     expect(scene.children.some((c) => c.isAmbientLight)).toBe(false)
     expect(camera.children.some((c) => c.isDirectionalLight)).toBe(false)
+  })
+
+  it('setMapBoost raises ambient for the overhead view and restores it', () => {
+    const scene = new Scene()
+    const camera = new PerspectiveCamera()
+    const lighting = attachCityLighting(scene, camera)
+    const ambient = scene.children.find((c) => c.isAmbientLight)
+
+    const street = ambient.intensity
+    lighting.setMapBoost(true)
+    expect(ambient.intensity).toBeGreaterThan(street)
+    lighting.setMapBoost(false)
+    expect(ambient.intensity).toBe(street)
+
+    lighting.detach()
   })
 })

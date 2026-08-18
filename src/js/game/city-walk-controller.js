@@ -43,6 +43,8 @@ import {
 import { initAltView } from '../_hfm.js';
 import { createDocumentFocusTrap } from '../focus-trap.js';
 import { announce } from '../announcer.js';
+import { HC_PALETTE_GREEN, HC_PALETTE_AMBER } from './hc-palettes.js';
+import { safeGetItem, STORAGE_KEY_HFM_FONT_SCALE } from '../storage-keys.js';
 
 // Bundled extracts (Q-68). Slugs match public/examples/ascii-city/*.json.
 const CITIES = [
@@ -309,6 +311,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       'Arrow Left / Q and Arrow Right / E: turn',
       'Shift (hold): move faster',
       'M: switch between street view and map view',
+      'Minus and Equals: smaller or larger characters',
       'H: open or close this help',
       'Escape: close this help, or leave the game',
     ];
@@ -455,7 +458,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // Streets are visible in both views since CW-8: dim under the fog at
     // street level, brightened into the map's street network overhead
     // (city3d.setMapView swaps the tone on toggle).
-    const detachLighting = attachCityLighting(scene, fpCamera);
+    const lighting = attachCityLighting(scene, fpCamera);
 
     // Bright beacon marking the player in the top-down map view, sized
     // relative to the city so it stays visible at map scale.
@@ -483,7 +486,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       fpCamera,
       orthoCamera,
       city3d,
-      detachLighting,
+      lighting,
       marker,
       markerGeom,
       markerMat,
@@ -507,6 +510,28 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       isAutoRotateEnabled: () => false,
     };
     game.altView = await initAltView(managerLike);
+
+    // Character size seeds from the saved Alt View preference so the game
+    // matches the preview's ASCII look; in-game adjustment (-/=) stays
+    // session-local and never writes the shared pref back.
+    const savedFont = parseFloat(safeGetItem(STORAGE_KEY_HFM_FONT_SCALE) ?? '');
+    if (Number.isFinite(savedFont)) game.altView.setFontScale(savedFont);
+
+    // CW-Q2/CW-Q5/CW-Q6: multicolor exists ONLY under high contrast —
+    // neon in amber (light), the ANSI bright set in green (dark). The
+    // observer follows live theme/contrast flips (e.g. a system
+    // prefers-color-scheme change mid-game).
+    applyHcPalette(game);
+    game.themeObserver = new MutationObserver(() => {
+      applyHcPalette(game);
+      game.altView.rebuildGlyphs?.();
+      game.altView.invalidate();
+    });
+    game.themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-high-contrast', 'data-theme'],
+    });
+
     game.altView.enable();
 
     if (import.meta.env.DEV) {
@@ -538,6 +563,26 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     state.refs.startError.hidden = false;
   }
 
+  /**
+   * CW-Q2 gate: palette only when high contrast is on; scheme picks the set
+   * (light = amber -> neon, dark = green -> ANSI bright). Otherwise the
+   * classic single phosphor.
+   */
+  function applyHcPalette(game) {
+    const root = document.documentElement;
+    const hc = root.getAttribute('data-high-contrast') === 'true';
+    if (!hc) {
+      game.altView.setPalette(null);
+      return;
+    }
+    const light = root.getAttribute('data-theme') === 'light';
+    // chromaBoost exaggerates the scene's deliberately mild tints (kept low
+    // so monochrome stays luminance-true) into decisive palette picks.
+    game.altView.setPalette(light ? HC_PALETTE_AMBER : HC_PALETTE_GREEN, {
+      chromaBoost: 3.5,
+    });
+  }
+
   function unloadCity() {
     if (state.rafId !== null) {
       cancelAnimationFrame(state.rafId);
@@ -546,9 +591,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     const game = state.game;
     if (!game) return;
 
+    game.themeObserver?.disconnect();
     game.resizeObserver?.disconnect();
     game.altView?.dispose();
-    game.detachLighting?.();
+    game.lighting?.detach();
     game.city3d?.dispose();
     game.markerGeom?.dispose();
     game.markerMat?.dispose();
@@ -601,6 +647,19 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       return;
     }
 
+    if (
+      event.code === 'Minus' ||
+      event.code === 'NumpadSubtract' ||
+      event.code === 'Equal' ||
+      event.code === 'NumpadAdd'
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      const shrink = event.code === 'Minus' || event.code === 'NumpadSubtract';
+      adjustCharacterSize(shrink ? -0.1 : 0.1);
+      return;
+    }
+
     const action = KEY_ACTIONS.get(event.code);
     if (action) {
       event.preventDefault();
@@ -621,6 +680,14 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   function clearHeldKeys() {
     state.keys.clear();
     state.shiftHeld = false;
+  }
+
+  function adjustCharacterSize(delta) {
+    const game = state.game;
+    if (!game) return;
+    const next = game.altView.setFontScale(game.altView.getFontScale() + delta);
+    game.altView.invalidate();
+    announceInLayer(`Character size ${Math.round(next * 100)} percent.`);
   }
 
   // -------------------------------------------------------------------
@@ -655,6 +722,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     game.mapView = !game.mapView;
     game.marker.visible = game.mapView;
     game.city3d.setMapView(game.mapView);
+    game.lighting.setMapBoost(game.mapView);
     if (game.mapView) {
       // The whole map sits ~1 km from the overhead camera — distance fog
       // would black it out entirely. Street view gets the fog back.

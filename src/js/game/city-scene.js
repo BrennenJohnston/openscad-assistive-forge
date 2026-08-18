@@ -565,9 +565,6 @@ export function buildCityGroup(model) {
       if (curbMesh) curbMesh.visible = !isMap;
       if (buildingsMat) {
         buildingsMat.map = isMap ? null : (windowTexture ?? null);
-        // Overhead, roofs get an emissive floor so blocks render as dense
-        // glyph masses and the streets stay dark corridors between them.
-        buildingsMat.emissive.setHex(isMap ? 0x3a3a3a : 0x000000);
         buildingsMat.needsUpdate = true;
       }
       groundMat.map = isMap ? null : (groundTexture ?? null);
@@ -590,10 +587,16 @@ export function buildCityGroup(model) {
  *
  * @param {import('three').Scene} scene
  * @param {import('three').Camera} camera
- * @returns {() => void} dispose
+ * @returns {{detach: () => void, setMapBoost: (isMap: boolean) => void}}
  */
 export function attachCityLighting(scene, camera) {
-  const ambient = new AmbientLight(0xffffff, 0.55);
+  // Street 0.55; map 1.3 — the overhead view has no headlight on the roofs,
+  // so the boost makes blocks render as dense glyph masses. Multiplicative
+  // (not emissive) so per-building tints keep their hue for the HC palette
+  // quantizer.
+  const AMBIENT_STREET = 0.55;
+  const AMBIENT_MAP = 1.3;
+  const ambient = new AmbientLight(0xffffff, AMBIENT_STREET);
   scene.add(ambient);
 
   // Distance fade to black: building faces dim with depth (near walls
@@ -612,13 +615,18 @@ export function attachCityLighting(scene, camera) {
   camera.add(headlight);
   camera.add(headlight.target);
 
-  return () => {
-    camera.remove(headlight);
-    camera.remove(headlight.target);
-    scene.remove(ambient);
-    scene.remove(camera);
-    scene.fog = prevFog ?? null;
-    ambient.dispose();
-    headlight.dispose();
+  return {
+    setMapBoost(isMap) {
+      ambient.intensity = isMap ? AMBIENT_MAP : AMBIENT_STREET;
+    },
+    detach() {
+      camera.remove(headlight);
+      camera.remove(headlight.target);
+      scene.remove(ambient);
+      scene.remove(camera);
+      scene.fog = prevFog ?? null;
+      ambient.dispose();
+      headlight.dispose();
+    },
   };
 }

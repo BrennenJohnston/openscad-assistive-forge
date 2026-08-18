@@ -1004,3 +1004,32 @@ describe('APCA Contrast (Future WCAG 3.0) - Informational', () => {
     console.log(`APCA Contrast (informational): ${apcaContrast.toFixed(1)}Lc`);
   });
 });
+
+describe('City Walk high-contrast glyph palettes (CW-Q5 / CW-Q6)', () => {
+  // Owner-signed 2026-08-18. Multicolor glyphs exist ONLY under high
+  // contrast (CW-Q2); every entry must stay legible on the game's black
+  // background. Change a hex in hc-palettes.js and this guard measures it.
+  const black = '#000000';
+
+  it('green-HC ANSI bright set: every entry >= 4.5:1 on black', async () => {
+    const { HC_PALETTE_GREEN } = await import(
+      '../../src/js/game/hc-palettes.js'
+    );
+    expect(HC_PALETTE_GREEN.length).toBeGreaterThanOrEqual(4);
+    for (const hex of HC_PALETTE_GREEN) {
+      const ratio = getContrastRatio(hex, black);
+      expect(ratio, `${hex} on black`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('amber-HC cyberpunk neon set: every entry >= 4.5:1 on black', async () => {
+    const { HC_PALETTE_AMBER } = await import(
+      '../../src/js/game/hc-palettes.js'
+    );
+    expect(HC_PALETTE_AMBER.length).toBeGreaterThanOrEqual(4);
+    for (const hex of HC_PALETTE_AMBER) {
+      const ratio = getContrastRatio(hex, black);
+      expect(ratio, `${hex} on black`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});
