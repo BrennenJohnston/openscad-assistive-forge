@@ -18,6 +18,7 @@ import {
   BufferGeometry,
   DirectionalLight,
   ExtrudeGeometry,
+  Fog,
   Group,
   Mesh,
   MeshLambertMaterial,
@@ -29,9 +30,26 @@ import {
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 // Luminance palette (greys; the phosphor tint comes from the ASCII painter).
-const BUILDING_COLOR = 0x9a9a9a;
-const GROUND_COLOR = 0x1c1c1c;
-const ROAD_COLOR = 0x3d3d3d;
+// Calibrated by eye against the CW-4 screenshots. The ground is EXACT black
+// on purpose: the ASCII converter maps any uniformly lit surface to visible
+// glyphs (only true black reads as empty cells), so open ground stays empty
+// and the street canyons come from the building walls. The road ribbons are
+// the map view's street network — the controller shows them only there.
+const BUILDING_COLOR = 0x858585;
+const GROUND_COLOR = 0x000000;
+const ROAD_COLOR = 0x4a4a4a;
+
+// Minor path classes are parsed (city-data keeps them for future rounds)
+// but not drawn: dense downtowns carry footpaths everywhere, and under
+// first-person perspective compression they merge into a solid glyph
+// carpet that drowns the actual street grid.
+const UNDRAWN_ROAD_KINDS = new Set([
+  'footway',
+  'path',
+  'cycleway',
+  'steps',
+  'track',
+]);
 
 // Roads float just above the ground plane so they win the depth test.
 const ROAD_LIFT_M = 0.08;
@@ -76,12 +94,21 @@ function extrudeBuilding(building) {
  *
  * @param {{points: Array<[number,number]>, widthM: number}} road
  * @param {number[]} positions - flat xyz output array (appended to)
+ * @param {{minX:number,minY:number,maxX:number,maxY:number}} [cullBounds]
+ *   segments with both endpoints outside are skipped
  */
-function appendRoadRibbon(road, positions) {
+function appendRoadRibbon(road, positions, cullBounds) {
   const half = road.widthM / 2;
+  const inBounds = (x, y) =>
+    !cullBounds ||
+    (x >= cullBounds.minX &&
+      x <= cullBounds.maxX &&
+      y >= cullBounds.minY &&
+      y <= cullBounds.maxY);
   for (let i = 0; i < road.points.length - 1; i++) {
     const [x1, y1] = road.points[i];
     const [x2, y2] = road.points[i + 1];
+    if (!inBounds(x1, y1) && !inBounds(x2, y2)) continue;
     const dx = x2 - x1;
     const dy = y2 - y1;
     const len = Math.hypot(dx, dy);
@@ -139,9 +166,20 @@ export function buildCityGroup(model) {
   group.add(ground);
   disposables.push(groundGeom, groundMat);
 
-  // Roads — one merged ribbon mesh.
+  // Roads — one merged ribbon mesh. Segments entirely beyond the ground
+  // plane are dropped: Overpass returns whole ways, and their far tails
+  // would otherwise float over the void past the ground's edge.
+  const cullBounds = {
+    minX: b.minX - GROUND_MARGIN_M,
+    minY: b.minY - GROUND_MARGIN_M,
+    maxX: b.maxX + GROUND_MARGIN_M,
+    maxY: b.maxY + GROUND_MARGIN_M,
+  };
   const roadPositions = [];
-  for (const road of model.roads) appendRoadRibbon(road, roadPositions);
+  for (const road of model.roads) {
+    if (UNDRAWN_ROAD_KINDS.has(road.kind)) continue;
+    appendRoadRibbon(road, roadPositions, cullBounds);
+  }
   let roadTriangles = 0;
   if (roadPositions.length > 0) {
     const roadGeom = new BufferGeometry();
@@ -185,12 +223,20 @@ export function buildCityGroup(model) {
  * @returns {() => void} dispose
  */
 export function attachCityLighting(scene, camera) {
-  const ambient = new AmbientLight(0xffffff, 0.9);
+  const ambient = new AmbientLight(0xffffff, 0.55);
   scene.add(ambient);
+
+  // Distance fade to black: building faces dim with depth (near walls
+  // dense glyphs, far skyline sparse) and the far field falls to empty —
+  // the reference aesthetic's "distant objects fade into the dark".
+  // Disabled for the orthographic map view by the controller.
+  const fog = new Fog(0x000000, 40, 260);
+  const prevFog = scene.fog;
+  scene.fog = fog;
 
   // Camera must be in the scene graph for its child light to render.
   scene.add(camera);
-  const headlight = new DirectionalLight(0xffffff, 2.4);
+  const headlight = new DirectionalLight(0xffffff, 2.2);
   headlight.position.set(0, 0, 0);
   headlight.target.position.set(0, 0, -1); // straight down the view axis
   camera.add(headlight);
@@ -201,6 +247,7 @@ export function attachCityLighting(scene, camera) {
     camera.remove(headlight.target);
     scene.remove(ambient);
     scene.remove(camera);
+    scene.fog = prevFog ?? null;
     ambient.dispose();
     headlight.dispose();
   };

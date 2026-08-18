@@ -25,8 +25,10 @@ import { gzipSync } from 'zlib';
 // Lazy-loaded static payloads fetched on demand at runtime, never part of
 // the initial page load (same rationale as the WASM binary exclusion).
 // liblouis/ holds the braille translation engine + tables loaded only by
-// the Braille Card Customizer's worker.
-const EXCLUDED_DIRS = ['liblouis'];
+// the Braille Card Customizer's worker; examples/ascii-city/ holds the
+// City Walk game's map extracts, fetched only when a player picks a city.
+// Entries are dist-relative path prefixes (POSIX separators).
+const EXCLUDED_DIRS = ['liblouis', 'examples/ascii-city'];
 
 // Budget definitions (in bytes)
 const BUDGETS = {
@@ -137,8 +139,10 @@ function checkBudgets(distPath) {
   const assetExtensions = ['.js', '.css', '.html', '.json'];
   const assets = allFiles.filter((f) => {
     if (!assetExtensions.includes(extname(f))) return false;
-    const topDir = relative(distPath, f).split(sep)[0];
-    return !EXCLUDED_DIRS.includes(topDir);
+    const relPath = relative(distPath, f).split(sep).join('/');
+    return !EXCLUDED_DIRS.some(
+      (dir) => relPath === dir || relPath.startsWith(`${dir}/`)
+    );
   });
 
   // Calculate sizes

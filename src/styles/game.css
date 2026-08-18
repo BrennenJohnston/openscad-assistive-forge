@@ -1,0 +1,155 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* ASCII City Walk game layer (CW-4).
+ *
+ * The layer always runs under the mono variant (the controller forces it
+ * on for the session), but every value here is a theme token, so it renders
+ * correctly whichever phosphor (green/amber) or contrast mode is active.
+ * The welcome card, by contrast, can be visible in the standard theme too —
+ * it only adds sizing on top of the existing role-path-card styles.
+ */
+
+.city-walk-layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-index-modal);
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+
+.city-walk-layer[hidden] {
+  display: none;
+}
+
+.city-walk-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+  flex: 0 0 auto;
+}
+
+.city-walk-title {
+  margin: 0;
+  font-size: var(--font-size-lg);
+}
+
+.city-walk-header-actions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+/* Hit-target floor for every control in the layer (a11y hard rule). */
+.city-walk-btn {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.city-walk-start {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  text-align: center;
+}
+
+.city-walk-start-heading {
+  margin: 0;
+  font-size: var(--font-size-xl);
+}
+
+.city-walk-start-intro {
+  margin: 0;
+  max-width: 60ch;
+}
+
+.city-walk-city-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  width: min(100%, 360px);
+}
+
+.city-walk-city-btn {
+  width: 100%;
+}
+
+.city-walk-start-error {
+  margin: 0;
+  max-width: 60ch;
+  color: var(--color-error);
+}
+
+.city-walk-viewport {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.city-walk-viewport canvas {
+  display: block;
+}
+
+.city-walk-hud {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-xs) var(--space-md);
+  border-top: 1px solid var(--color-border);
+  flex: 0 0 auto;
+  font-size: var(--font-size-sm);
+}
+
+.city-walk-hud-status {
+  margin: 0;
+}
+
+.city-walk-attribution {
+  margin: 0;
+  font-size: var(--font-size-xs);
+}
+
+.city-walk-help {
+  position: absolute;
+  top: calc(var(--space-lg) + 44px + var(--space-md));
+  right: var(--space-md);
+  max-width: min(480px, calc(100vw - 2 * var(--space-md)));
+  max-height: calc(100% - 120px);
+  overflow-y: auto;
+  padding: var(--space-md);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg, none);
+}
+
+.city-walk-help h3 {
+  margin-top: 0;
+}
+
+.city-walk-help-list {
+  margin: var(--space-sm) 0;
+  padding-left: var(--space-lg);
+}
+
+.city-walk-help-list li {
+  margin-bottom: var(--space-xs);
+}
+
+.city-walk-help-note {
+  max-width: 48ch;
+}
+
+/* Welcome card: attribution rides at the card's foot in a small size. */
+.city-walk-card .city-walk-attribution {
+  margin-top: var(--space-sm);
+}

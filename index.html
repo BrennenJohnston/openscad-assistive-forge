@@ -1637,6 +1637,55 @@
                     </button>
                   </div>
                 </div>
+                <!-- ASCII City Walk (CW-4): hidden until the Alt View unlock
+                     reveals every [data-hfm-gated] element. Its button loads
+                     no example — main.js wires it to the game controller
+                     directly, like the tour card above. -->
+                <div
+                  class="role-path-card city-walk-card"
+                  id="cityWalkCard"
+                  hidden
+                  data-hfm-gated
+                >
+                  <h3 class="role-path-title">ASCII City Walk</h3>
+                  <p class="role-path-meta">
+                    Hidden game &bull; real city maps &bull; keyboard controls
+                  </p>
+                  <p class="role-path-description">
+                    Walk through a real city drawn entirely in ASCII characters.
+                    Pick a city, stroll its streets in first person, and flip to
+                    a top-down map view.
+                  </p>
+                  <details class="role-path-details">
+                    <summary>How to play</summary>
+                    <ul class="role-path-tips" aria-label="How to play">
+                      <li>Arrow keys or W A S D walk; Q and E turn</li>
+                      <li>Hold Shift to move faster</li>
+                      <li>M switches between street and map view</li>
+                      <li>Escape leaves the game</li>
+                    </ul>
+                  </details>
+                  <div class="role-path-actions">
+                    <button
+                      type="button"
+                      class="btn btn-primary btn-role-try"
+                      id="cityWalkLaunchBtn"
+                    >
+                      Enter the City
+                    </button>
+                  </div>
+                  <p class="role-path-meta city-walk-attribution">
+                    Map data &copy;
+                    <a
+                      href="https://www.openstreetmap.org/copyright"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >OpenStreetMap contributors<span class="sr-only">
+                        (opens in new tab)</span
+                      ></a
+                    >
+                  </p>
+                </div>
               </div>
               <!-- Accessibility Spotlights -->
               <details
@@ -8998,6 +9047,11 @@ No console output yet. Generate a model to see output.</pre
         </div>
       </div>
     </div>
+    <!-- ASCII City Walk game layer (CW-4). Empty shell: the controller
+         (src/js/game/city-walk-controller.js) builds and tears down its
+         contents around each session. -->
+    <div id="cityWalkLayer" class="city-walk-layer" hidden></div>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

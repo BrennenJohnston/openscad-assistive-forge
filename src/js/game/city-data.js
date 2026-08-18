@@ -103,7 +103,8 @@ function parseLengthMeters(raw) {
  */
 export function resolveBuildingHeight(tags = {}) {
   let heightM =
-    parseLengthMeters(tags.height) ?? parseLengthMeters(tags['building:height']);
+    parseLengthMeters(tags.height) ??
+    parseLengthMeters(tags['building:height']);
 
   if (heightM === null || heightM <= 0) {
     const levels = parseFloat(tags['building:levels']);
@@ -117,9 +118,7 @@ export function resolveBuildingHeight(tags = {}) {
   if (minHeightM === null) {
     const minLevel = parseFloat(tags['building:min_level']);
     minHeightM =
-      Number.isFinite(minLevel) && minLevel > 0
-        ? minLevel * LEVEL_HEIGHT_M
-        : 0;
+      Number.isFinite(minLevel) && minLevel > 0 ? minLevel * LEVEL_HEIGHT_M : 0;
   }
   minHeightM = Math.max(0, minHeightM);
 
@@ -184,7 +183,10 @@ function assembleRings(memberGeoms) {
       }
     }
 
-    if (chain.length >= 4 && pointKey(chain[0]) === pointKey(chain[chain.length - 1])) {
+    if (
+      chain.length >= 4 &&
+      pointKey(chain[0]) === pointKey(chain[chain.length - 1])
+    ) {
       rings.push(chain);
     } else {
       dropped++;
@@ -254,11 +256,7 @@ export function signedArea(pts) {
  */
 export function parseCityExtract(extract, options = {}) {
   const center = options.center ?? extract?.center;
-  if (
-    !center ||
-    !Number.isFinite(center.lat) ||
-    !Number.isFinite(center.lon)
-  ) {
+  if (!center || !Number.isFinite(center.lat) || !Number.isFinite(center.lon)) {
     throw new Error('parseCityExtract: no projection center available');
   }
   const elements = Array.isArray(extract?.elements) ? extract.elements : [];
@@ -296,7 +294,13 @@ export function parseCityExtract(extract, options = {}) {
         continue;
       }
       const { heightM, minHeightM } = resolveBuildingHeight(tags);
-      buildings.push({ outer, holes: [], heightM, minHeightM, name: tags.name });
+      buildings.push({
+        outer,
+        holes: [],
+        heightM,
+        minHeightM,
+        name: tags.name,
+      });
       continue;
     }
 
@@ -359,6 +363,11 @@ export function parseCityExtract(extract, options = {}) {
     }
   }
 
+  // Bounds define the playable core (map view, ground plane, collision).
+  // Overpass `around` returns WHOLE ways, so a highway passing through the
+  // radius can trail kilometers beyond it — bounds therefore come from the
+  // buildings alone whenever any exist, and road tails are treated as
+  // scenery outside the core.
   const boundsM = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
   const growBounds = ([x, y]) => {
     if (x < boundsM.minX) boundsM.minX = x;
@@ -367,7 +376,9 @@ export function parseCityExtract(extract, options = {}) {
     if (y > boundsM.maxY) boundsM.maxY = y;
   };
   for (const b of buildings) b.outer.forEach(growBounds);
-  for (const r of roads) r.points.forEach(growBounds);
+  if (buildings.length === 0) {
+    for (const r of roads) r.points.forEach(growBounds);
+  }
 
   return {
     center: { lat: center.lat, lon: center.lon },

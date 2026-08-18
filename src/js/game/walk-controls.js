@@ -156,7 +156,9 @@ export function headingLabel(headingRad) {
  */
 export function buildCollisionGrid(model, options = {}) {
   const cellM = options.cellM ?? 1;
-  const marginM = options.marginM ?? 2;
+  // Bounds come from the building core (city-data.js); a generous margin
+  // keeps the streets past the outermost buildings walkable.
+  const marginM = options.marginM ?? 30;
   const b = model.boundsM;
   const originX = b.minX - marginM;
   const originY = b.minY - marginM;
@@ -183,7 +185,15 @@ export function buildCollisionGrid(model, options = {}) {
   };
 }
 
-function rasterizePolygon(building, originX, originY, cols, rows, cellM, cells) {
+function rasterizePolygon(
+  building,
+  originX,
+  originY,
+  cols,
+  rows,
+  cellM,
+  cells
+) {
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
@@ -223,10 +233,7 @@ function pointInRing(x, y, ring) {
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
     const [xi, yi] = ring[i];
     const [xj, yj] = ring[j];
-    if (
-      yi > y !== yj > y &&
-      x < ((xj - xi) * (y - yi)) / (yj - yi) + xi
-    ) {
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
       inside = !inside;
     }
   }
