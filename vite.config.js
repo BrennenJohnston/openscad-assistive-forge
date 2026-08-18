@@ -73,6 +73,61 @@ function readProductionHeaders() {
 }
 
 /**
+ * D-31: WebKit will not load the dev worker script after a page reload.
+ *
+ * MEASURED. First load is fine - the request returns 200 with
+ * Cross-Origin-Embedder-Policy: require-corp on it, and the worker starts in
+ * about a second. After `location.reload()` WebKit refuses it outright:
+ *
+ *   Refused to load '/src/worker/openscad-worker.js?worker_file&type=module'
+ *   worker because of Cross-Origin-Embedder-Policy
+ *
+ * and NO response arrives at all - the block happens against the cached entry,
+ * before the network. The app then sits at data-wasm-ready unset for ever.
+ * Chromium reloads the same page in a fifth of a second.
+ *
+ * The built app behind public/_headers does NOT have this problem: measured on
+ * WebKit, first load 1.2s and reload 1.1s, worker attached both times. So this
+ * is the dev server only, and never reached a user.
+ *
+ * `no-store` is what fixes it: nothing is cached, so there is no cached entry
+ * to fail the check. It has to cover the worker's IMPORTS as well as its entry
+ * - measured, pinning only the entry moved the failure one step along, to
+ * svg-validation.js, mount-content.js, mesh-stats.js and dxf-postprocess.js.
+ * Hence /src/worker/ rather than the `worker_file` query alone. Still scoped
+ * rather than global so the rest of dev keeps its caching, and `apply: 'serve'`
+ * leaves the build untouched.
+ *
+ * This is NOT a relaxation of COOP/COEP. Those headers are unchanged and
+ * cross-origin isolation stays on - `crossOriginIsolated` is true and
+ * SharedArrayBuffer is available before and after, measured.
+ */
+function devWorkerNoStore() {
+  return {
+    name: 'd31-dev-worker-no-store',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (!req.url || !/worker_file|\/src\/worker\//.test(req.url)) {
+          next();
+          return;
+        }
+        // Vite's own transform middleware sets Cache-Control: no-cache on
+        // module responses AFTER this runs, so simply setting the header here
+        // is overwritten - measured, the reload still failed. Pin it instead.
+        const setHeader = res.setHeader.bind(res);
+        res.setHeader = (name, value) =>
+          String(name).toLowerCase() === 'cache-control'
+            ? res
+            : setHeader(name, value);
+        setHeader('Cache-Control', 'no-store');
+        next();
+      });
+    },
+  };
+}
+
+/**
  * Plugin to inject version info into the service worker.
  *
  * sw.js is copied from public/ verbatim and never appears in the Rollup
@@ -98,7 +153,7 @@ const buildInfo = getBuildInfo();
 
 export default defineConfig({
   base: '/',
-  plugins: [injectSwCacheVersion()],
+  plugins: [injectSwCacheVersion(), devWorkerNoStore()],
   define: {
     // Inject version info as global constants
     __APP_VERSION__: JSON.stringify(buildInfo.version),
