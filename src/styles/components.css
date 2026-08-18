@@ -426,8 +426,13 @@ details.param-group.forge-disclosure[open] > summary::before {
   border: 1px solid var(--color-border);
 }
 
+/* D-57: --color-hover-bg-strong, not --color-border. This rule sets a
+   background and nothing else, so whatever text colour another rule chose has
+   to stay legible on it - and against --color-border it did not: 4.33:1 in
+   Forge light and 3.65:1 in dark. The token is one step along the same scale
+   and is defined per theme in semantic-tokens.css. */
 .btn-secondary:hover:not(:disabled) {
-  background-color: var(--color-border);
+  background-color: var(--color-hover-bg-strong);
 }
 
 .btn-sm {

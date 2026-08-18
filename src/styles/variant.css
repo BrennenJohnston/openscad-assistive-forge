@@ -64,6 +64,7 @@
   --color-border-light: #009900;
   --color-border-hover: #00ff00;
   --color-hover-bg: #1a4d1a;
+  --color-hover-bg-strong: var(--color-hover-bg);
   --color-focus: #00ff00;
 
   /* Error/Warning/Success in monochrome green (all use green tints) */
@@ -149,6 +150,7 @@
   --color-border-light: #997200;
   --color-border-hover: #ffb000;
   --color-hover-bg: #1a1000;
+  --color-hover-bg-strong: var(--color-hover-bg);
   --color-focus: #ffb000;
 
   /* Error/Warning/Success in monochrome amber */
