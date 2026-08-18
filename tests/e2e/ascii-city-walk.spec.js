@@ -1,0 +1,221 @@
+import { test, expect } from '@playwright/test'
+import AxeBuilder from '@axe-core/playwright'
+
+/**
+ * ASCII City Walk (CW-5): the hidden game behind the Alt View unlock.
+ *
+ * The game never touches the WASM engine — the welcome card, layer, and
+ * three.js scene are all independent of it — so nothing here waits for
+ * data-wasm-ready.
+ *
+ * Same rule as accessibility.spec.js: the allowed-violations list is empty
+ * and stays empty.
+ */
+const ALLOWED_AXE_VIOLATIONS = []
+
+function expectOnlyAllowedViolations(results) {
+  const unexpected = results.violations.filter(
+    (v) => !ALLOWED_AXE_VIOLATIONS.includes(v.id)
+  )
+  const detail = unexpected
+    .flatMap((v) =>
+      v.nodes.map(
+        (n) =>
+          `${v.id} @ ${n.target.join(' ')} :: ${n.failureSummary.replace(/\s+/g, ' ')}`
+      )
+    )
+    .join('\n')
+  expect(
+    unexpected.map((v) => v.id),
+    `unexpected axe violations:\n${detail}`
+  ).toEqual([])
+}
+
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
+  })
+})
+
+async function launchGame(page) {
+  await page.goto('/?hfm=unlock')
+  await expect(page.locator('#cityWalkCard')).toBeVisible({ timeout: 30000 })
+  await page.locator('#cityWalkLaunchBtn').click()
+  await expect(page.locator('#cityWalkLayer')).toBeVisible({ timeout: 20000 })
+}
+
+async function enterCity(page, cityName = 'Seattle, Washington') {
+  await page.getByRole('button', { name: cityName }).click()
+  await expect(page.locator('#cityWalkViewport')).toBeVisible({
+    timeout: 30000,
+  })
+  await expect(page.locator('#cityWalkHudStatus')).toContainText(
+    'street view',
+    { timeout: 15000 }
+  )
+}
+
+test.describe('ASCII City Walk — gating', () => {
+  test('the card does not exist for anyone without the unlock', async ({
+    page,
+  }) => {
+    await page.goto('/')
+    await expect(page.locator('#welcomeScreen')).toBeVisible({
+      timeout: 30000,
+    })
+    // hidden attribute -> display:none -> absent from the accessibility tree
+    await expect(page.locator('#cityWalkCard')).toBeHidden()
+    await expect(page.locator('#cityWalkLaunchBtn')).toBeHidden()
+  })
+
+  test('the unlock reveals the card alongside the other gated UI', async ({
+    page,
+  }) => {
+    await page.goto('/?hfm=unlock')
+    await expect(page.locator('#cityWalkCard')).toBeVisible({
+      timeout: 30000,
+    })
+    await expect(
+      page.locator('#cityWalkCard .role-path-title')
+    ).toHaveText('ASCII City Walk')
+  })
+})
+
+test.describe('ASCII City Walk — playing', () => {
+  test('launch, walk, turn, map view, and exit restore', async ({ page }) => {
+    await launchGame(page)
+
+    // Modal semantics + initial focus inside the layer
+    await expect(page.locator('#cityWalkLayer')).toHaveAttribute(
+      'role',
+      'dialog'
+    )
+    await expect(page.locator('#cityWalkLayer')).toHaveAttribute(
+      'aria-modal',
+      'true'
+    )
+    await expect(
+      page.getByRole('button', { name: 'Seattle, Washington' })
+    ).toBeFocused()
+
+    await enterCity(page)
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'facing north'
+    )
+
+    // Turning right for >1s moves the compass off north
+    await page.keyboard.down('ArrowRight')
+    await page.waitForTimeout(1300)
+    await page.keyboard.up('ArrowRight')
+    await expect(page.locator('#cityWalkHudStatus')).not.toContainText(
+      'facing north'
+    )
+
+    // Map view toggle and back
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'street view'
+    )
+
+    // Exit: layer hides, mono variant is restored off, focus returns to the
+    // launch card (UF-23 lesson: the trigger is captured explicitly).
+    await page.keyboard.press('Escape')
+    await expect(page.locator('#cityWalkLayer')).toBeHidden()
+    await expect(page.locator('html')).not.toHaveAttribute(
+      'data-ui-variant',
+      'mono'
+    )
+    await expect(page.locator('#cityWalkLaunchBtn')).toBeFocused()
+  })
+
+  test('Escape closes the help panel before it closes the game', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    await page.keyboard.press('KeyH')
+    await expect(page.locator('#cityWalkHelpPanel')).toBeVisible()
+    await expect(page.locator('#cityWalkHelpBtn')).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    )
+
+    await page.keyboard.press('Escape')
+    await expect(page.locator('#cityWalkHelpPanel')).toBeHidden()
+    await expect(page.locator('#cityWalkLayer')).toBeVisible()
+
+    await page.keyboard.press('Escape')
+    await expect(page.locator('#cityWalkLayer')).toBeHidden()
+  })
+
+  test('every city loads to a walkable street view', async ({ page }) => {
+    await launchGame(page)
+    await enterCity(page, 'Denver, Colorado')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'Denver, Colorado'
+    )
+    await page.keyboard.press('Escape')
+    await expect(page.locator('#cityWalkLayer')).toBeHidden()
+
+    // Relaunch into another city — the session teardown must be complete.
+    await page.locator('#cityWalkLaunchBtn').click()
+    await expect(page.locator('#cityWalkLayer')).toBeVisible()
+    await enterCity(page, 'Burnaby, British Columbia')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'Burnaby, British Columbia'
+    )
+  })
+
+  test('the OpenStreetMap attribution is visible while playing', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    // Start panel attribution
+    await expect(
+      page
+        .locator('#cityWalkStartPanel')
+        .getByRole('link', { name: /OpenStreetMap contributors/ })
+    ).toBeVisible()
+
+    await enterCity(page)
+    // HUD attribution stays on screen during play
+    await expect(
+      page
+        .locator('.city-walk-hud')
+        .getByRole('link', { name: /OpenStreetMap contributors/ })
+    ).toBeVisible()
+  })
+})
+
+test.describe('ASCII City Walk — accessibility', () => {
+  test('axe: city picker and in-game layer have no violations', async ({
+    page,
+  }) => {
+    await launchGame(page)
+
+    // Deliberately scan WITH a hovered primary button: a hover state is
+    // invisible to a scan unless something happens to be hovering (D-55),
+    // and this scan is what caught the mono variant's primary-hover pair
+    // measuring 1.11:1 before variant.css completed the pair.
+    await page.getByRole('button', { name: 'Denver, Colorado' }).hover()
+
+    const pickerResults = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .include('#cityWalkLayer')
+      .analyze()
+    expectOnlyAllowedViolations(pickerResults)
+
+    await enterCity(page)
+    await page.keyboard.press('KeyH') // help open exercises the panel too
+
+    const inGameResults = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .include('#cityWalkLayer')
+      .analyze()
+    expectOnlyAllowedViolations(inGameResults)
+  })
+})

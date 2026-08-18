@@ -31,6 +31,14 @@ The shape-vector approach to character-based rendering used in this project was 
 
 The article's exploration of 6-dimensional shape vectors, per-cell contrast enhancement, and treating characters as shapes rather than pixels informed the rendering approach.
 
+### ASCII City Walk (hidden game)
+
+The walkable ASCII city inside the Alt View mode draws on several inspirations. No code was taken from any of them; the game is built on this project's own ASCII pipeline, three.js, and OpenStreetMap data.
+
+- **OpenStreetMap contributors** — the map data the cities are built from (ODbL 1.0; see THIRD_PARTY_NOTICES.md)
+- **Touch Mapper** by Samuli Kärkkäinen — the idea of turning an address into a tactile-style top-down map informed the game's aerial view (https://touch-mapper.org, AGPL-3.0; concept reference only)
+- **Grow Now! Games** — "A Walkable ASCII Cyberpunk City in One HTML File" video, the street-level ASCII-city aesthetic that sparked the feature (https://www.grownowgames.com/; closed source, aesthetic inspiration only)
+
 ---
 
 ## Fonts

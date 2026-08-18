@@ -18,6 +18,11 @@
 // readback, 6 internal + 10 external luminance taps per cell, directional +
 // global contrast, lazy 6D-key lookup to a glyph index, then atlas blits in
 // a single phosphor color at device-pixel resolution.
+//
+// Renderer state lives in a per-instance object created by initAltView(), so
+// independent consumers (the model preview's Alt View, other alt-rendered
+// surfaces) each hold their own overlay, atlas, and scheduling state without
+// interfering. Pure helpers (sampling layouts, vector math) stay module-level.
 
 import { createLookup } from './_hfm-lookup.js';
 import {
@@ -28,28 +33,6 @@ import {
   paintFrame,
   GLYPH_COUNT,
 } from './_hfm-paint.js';
-
-let isEnabled = false;
-let canvasOpacity = null;
-
-// Renderer state (module-level singleton)
-let _overlayCanvas = null; // HTMLCanvasElement
-let _overlayCtx = null; // CanvasRenderingContext2D
-let _persistCanvas = null; // off-screen afterglow persistence canvas
-let _persistCtx = null;
-let _sampleCanvas = null;
-let _sampleCtx = null;
-
-// Glyph atlas + shape-vector model (rebuilt when font metrics / theme change)
-let _atlas = null;
-let _glyphVectors = null;
-let _lookup = null;
-let _atlasKey = '';
-
-// Render-on-demand scheduling
-let _dirty = true;
-let _lastFrameMs = 0;
-let _lastConvertMs = 0;
 
 // Tuning knobs
 // _MIN_INTERVAL_MS      — conversion throttle ceiling (~30 fps while dirty)
@@ -68,16 +51,47 @@ const _TARGET_SAMPLE_PX = 4;
 const _DEFAULT_CONTRAST_EXP = 3.2;
 const _DEFAULT_DIR_CONTRAST_EXP = 5.0;
 
-let _dynamicInterval = _MIN_INTERVAL_MS;
-let _contrastScale = 1;
-let _contrastExp = _DEFAULT_CONTRAST_EXP;
-let _dirContrastExp = _DEFAULT_DIR_CONTRAST_EXP;
-let _fontScale = 1;
-
 // Phosphor afterglow / persistence (off by default; enable via setPersistFade())
 const _DEFAULT_PERSIST_FADE = 0;
-let _persistFade = 0;
-let _reducedMotion = false; // mirrors prefers-reduced-motion
+
+/**
+ * Per-instance renderer state. One of these is created for every
+ * initAltView() call; all stateful helpers below take it as their first
+ * argument.
+ */
+function _createInstanceState() {
+  return {
+    enabled: false,
+    canvasOpacity: null,
+
+    overlayCanvas: null, // HTMLCanvasElement
+    overlayCtx: null, // CanvasRenderingContext2D
+    persistCanvas: null, // off-screen afterglow persistence canvas
+    persistCtx: null,
+    sampleCanvas: null,
+    sampleCtx: null,
+
+    // Glyph atlas + shape-vector model (rebuilt when font metrics / theme change)
+    atlas: null,
+    glyphVectors: null,
+    lookup: null,
+    atlasKey: '',
+
+    // Render-on-demand scheduling
+    dirty: true,
+    lastFrameMs: 0,
+    lastConvertMs: 0,
+    dynamicInterval: _MIN_INTERVAL_MS,
+
+    contrastScale: 1,
+    contrastExp: _DEFAULT_CONTRAST_EXP,
+    dirContrastExp: _DEFAULT_DIR_CONTRAST_EXP,
+    fontScale: 1,
+
+    persistFade: 0,
+    reducedMotion: false, // mirrors prefers-reduced-motion
+  };
+}
 
 function _checkReducedMotion() {
   return (
@@ -104,25 +118,25 @@ function _clamp01(x) {
   return x < 0 ? 0 : x > 1 ? 1 : x;
 }
 
-function _setContrastScale(scale) {
+function _setContrastScale(st, scale) {
   const next = Number.isFinite(scale) ? scale : 1;
   // Clamp to useful range based on the researched exponent windows:
   // - Min 0.5 → exponent ~0.9 (near identity, no visible enhancement)
   // - Max 4.0 → exponent ~7.2 (very sharp edges, before artifact threshold)
-  _contrastScale = Math.max(0.5, Math.min(4.0, next));
-  _contrastExp = _DEFAULT_CONTRAST_EXP * _contrastScale;
-  _dirContrastExp = _DEFAULT_DIR_CONTRAST_EXP * _contrastScale;
-  _dirty = true;
-  return _contrastScale;
+  st.contrastScale = Math.max(0.5, Math.min(4.0, next));
+  st.contrastExp = _DEFAULT_CONTRAST_EXP * st.contrastScale;
+  st.dirContrastExp = _DEFAULT_DIR_CONTRAST_EXP * st.contrastScale;
+  st.dirty = true;
+  return st.contrastScale;
 }
 
-function _setFontScale(scale) {
+function _setFontScale(st, scale) {
   const next = Number.isFinite(scale) ? scale : 1;
   // - Min 0.5 → smaller chars, higher resolution (may be hard to read)
   // - Max 2.5 → larger chars, lower resolution (more legible)
-  _fontScale = Math.max(0.5, Math.min(2.5, next));
-  _dirty = true;
-  return _fontScale;
+  st.fontScale = Math.max(0.5, Math.min(2.5, next));
+  st.dirty = true;
+  return st.fontScale;
 }
 
 function _getFontMetrics(fontFamily, fontSizePx) {
@@ -208,7 +222,7 @@ const _EXT_AFFECTING = [
   [5, 7, 8, 9], // internal 5 (bottom-right)
 ];
 
-function _applyDirectionalContrast(v, extSamples) {
+function _applyDirectionalContrast(st, v, extSamples) {
   // Component-wise directional contrast: normalize each internal component
   // to the max of its affecting external samples, then sharpen.
   for (let i = 0; i < 6; i++) {
@@ -221,7 +235,7 @@ function _applyDirectionalContrast(v, extSamples) {
 
     if (maxExt > v[i] && maxExt > 0.01) {
       const normalized = v[i] / maxExt;
-      const enhanced = Math.pow(normalized, _dirContrastExp);
+      const enhanced = Math.pow(normalized, st.dirContrastExp);
       v[i] = _clamp01(enhanced * maxExt);
     }
   }
@@ -229,13 +243,13 @@ function _applyDirectionalContrast(v, extSamples) {
   return v;
 }
 
-function _applyCellContrast(v) {
+function _applyCellContrast(st, v) {
   // Global contrast: max-normalize the cell then apply the exponent.
   const max = Math.max(v[0], v[1], v[2], v[3], v[4], v[5]);
   if (!(max > 0)) return v;
   for (let i = 0; i < 6; i++) {
     const n = v[i] / max;
-    v[i] = _clamp01(Math.pow(_clamp01(n), _contrastExp) * max);
+    v[i] = _clamp01(Math.pow(_clamp01(n), st.contrastExp) * max);
   }
   return v;
 }
@@ -306,12 +320,12 @@ function _buildGlyphVectors(atlas) {
   return vectors;
 }
 
-function _ensureGlyphModel({ fontFamily, fontSizePx, charW, charH, dpr }) {
+function _ensureGlyphModel(st, { fontFamily, fontSizePx, charW, charH, dpr }) {
   const color = getPhosphorColor();
   const key = `${fontFamily}|${fontSizePx}|${charW}|${charH}|${dpr}|${color}`;
-  if (_atlas && _atlasKey === key) return;
+  if (st.atlas && st.atlasKey === key) return;
 
-  _atlas = buildGlyphAtlas({
+  st.atlas = buildGlyphAtlas({
     fontFamily,
     fontSizePx,
     charW,
@@ -319,24 +333,26 @@ function _ensureGlyphModel({ fontFamily, fontSizePx, charW, charH, dpr }) {
     dpr,
     color,
   });
-  _glyphVectors = _buildGlyphVectors(_atlas);
-  _lookup = createLookup(_glyphVectors);
-  _atlasKey = key;
+  st.glyphVectors = _buildGlyphVectors(st.atlas);
+  st.lookup = createLookup(st.glyphVectors);
+  st.atlasKey = key;
 }
 
-function _ensureOverlay(container) {
-  if (_overlayCanvas) return;
+function _ensureOverlay(st, container) {
+  if (st.overlayCanvas) return;
   const { canvas, ctx, persistCanvas, persistCtx } = createOverlay(container);
-  _overlayCanvas = canvas;
-  _overlayCtx = ctx;
-  _persistCanvas = persistCanvas;
-  _persistCtx = persistCtx;
+  st.overlayCanvas = canvas;
+  st.overlayCtx = ctx;
+  st.persistCanvas = persistCanvas;
+  st.persistCtx = persistCtx;
 }
 
-function _ensureSampler() {
-  if (_sampleCanvas) return;
-  _sampleCanvas = document.createElement('canvas');
-  _sampleCtx = _sampleCanvas.getContext('2d', { willReadFrequently: true });
+function _ensureSampler(st) {
+  if (st.sampleCanvas) return;
+  st.sampleCanvas = document.createElement('canvas');
+  st.sampleCtx = st.sampleCanvas.getContext('2d', {
+    willReadFrequently: true,
+  });
 }
 
 function _computeInvertFromScene(scene) {
@@ -367,37 +383,31 @@ function _computeSampleScale(charW) {
   return Math.max(0.05, Math.min(0.5, _TARGET_SAMPLE_PX / Math.max(1, charW)));
 }
 
-function _renderFrame({
-  renderer,
-  scene,
-  width,
-  height,
-  fontFamily,
-  fontSizePx,
-  charW,
-  charH,
-}) {
-  _ensureSampler();
+function _renderFrame(
+  st,
+  { renderer, scene, width, height, fontFamily, fontSizePx, charW, charH }
+) {
+  _ensureSampler(st);
 
   const dpr = _getDpr();
-  _ensureGlyphModel({ fontFamily, fontSizePx, charW, charH, dpr });
+  _ensureGlyphModel(st, { fontFamily, fontSizePx, charW, charH, dpr });
 
   const sampleScale = _computeSampleScale(charW);
   const sampleW = Math.max(1, Math.floor(width * sampleScale));
   const sampleH = Math.max(1, Math.floor(height * sampleScale));
   // Resizing a canvas clears it and resets context state — only do it when
   // the dimensions actually change.
-  if (_sampleCanvas.width !== sampleW || _sampleCanvas.height !== sampleH) {
-    _sampleCanvas.width = sampleW;
-    _sampleCanvas.height = sampleH;
+  if (st.sampleCanvas.width !== sampleW || st.sampleCanvas.height !== sampleH) {
+    st.sampleCanvas.width = sampleW;
+    st.sampleCanvas.height = sampleH;
   }
   // Bilinear downscale = GPU box filter, standing in for area-average
   // supersampling; one tap per sample point then suffices.
-  _sampleCtx.imageSmoothingEnabled = true;
-  _sampleCtx.clearRect(0, 0, sampleW, sampleH);
-  _sampleCtx.drawImage(renderer.domElement, 0, 0, sampleW, sampleH);
+  st.sampleCtx.imageSmoothingEnabled = true;
+  st.sampleCtx.clearRect(0, 0, sampleW, sampleH);
+  st.sampleCtx.drawImage(renderer.domElement, 0, 0, sampleW, sampleH);
 
-  const imgData = _sampleCtx.getImageData(0, 0, sampleW, sampleH).data;
+  const imgData = st.sampleCtx.getImageData(0, 0, sampleW, sampleH).data;
   const invert = _computeInvertFromScene(scene);
 
   const cellW = Math.max(1, charW * sampleScale);
@@ -456,31 +466,34 @@ function _renderFrame({
         }
       }
 
-      _applyDirectionalContrast(v, extSamples);
-      _applyCellContrast(v);
+      _applyDirectionalContrast(st, v, extSamples);
+      _applyCellContrast(st, v);
 
-      glyphIndices[idx++] = _lookup.nearestIndex(v);
+      glyphIndices[idx++] = st.lookup.nearestIndex(v);
     }
   }
 
   // Sync overlay canvas backing store to container size at device resolution
   const backingW = Math.max(1, Math.round(width * dpr));
   const backingH = Math.max(1, Math.round(height * dpr));
-  if (_overlayCanvas.width !== backingW || _overlayCanvas.height !== backingH) {
-    resizeOverlay(_overlayCanvas, width, height, dpr, _persistCanvas);
+  if (
+    st.overlayCanvas.width !== backingW ||
+    st.overlayCanvas.height !== backingH
+  ) {
+    resizeOverlay(st.overlayCanvas, width, height, dpr, st.persistCanvas);
   }
 
   paintFrame(
-    _overlayCtx,
+    st.overlayCtx,
     glyphIndices,
     cols,
     rows,
-    _atlas,
+    st.atlas,
     charW,
     charH,
-    _persistCanvas,
-    _persistCtx,
-    _persistFade
+    st.persistCanvas,
+    st.persistCtx,
+    st.persistFade
   );
 }
 
@@ -492,7 +505,9 @@ function _renderFrame({
 export async function initAltView(previewManager) {
   const { renderer, scene, container } = previewManager;
 
-  _ensureOverlay(container);
+  const st = _createInstanceState();
+
+  _ensureOverlay(st, container);
 
   // Pick a conservative font size for performance/readability.
   const fontFamily =
@@ -517,97 +532,97 @@ export async function initAltView(previewManager) {
 
     // Approximate fontSize from targetCharW (monospace: fontSize * 0.6 ≈ charW)
     const approxSize = Math.round(targetCharW / 0.6);
-    const scaled = Math.round(approxSize * _fontScale);
+    const scaled = Math.round(approxSize * st.fontScale);
     fontSizePx = Math.max(6, Math.min(24, scaled));
     metrics = _getFontMetrics(fontFamily, fontSizePx);
   }
 
   _recomputeFontForSize(container.clientWidth, container.clientHeight);
 
-  _reducedMotion = _checkReducedMotion();
+  st.reducedMotion = _checkReducedMotion();
 
   const _onControlsChange = () => {
-    _dirty = true;
+    st.dirty = true;
   };
 
   return {
     enable() {
       // Re-check reduced-motion on every enable so media-query changes are respected
-      _reducedMotion = _checkReducedMotion();
-      _persistFade = _reducedMotion ? 0 : _DEFAULT_PERSIST_FADE;
+      st.reducedMotion = _checkReducedMotion();
+      st.persistFade = st.reducedMotion ? 0 : _DEFAULT_PERSIST_FADE;
 
-      _dynamicInterval = _MIN_INTERVAL_MS;
-      _dirty = true;
+      st.dynamicInterval = _MIN_INTERVAL_MS;
+      st.dirty = true;
 
       // Camera changes (drag, damping decay, programmatic moves) mark the
       // frame dirty so conversion runs only while something moves.
       previewManager.controls?.addEventListener?.('change', _onControlsChange);
 
-      isEnabled = true;
-      _overlayCanvas.style.display = 'block';
+      st.enabled = true;
+      st.overlayCanvas.style.display = 'block';
 
       // One-shot CRT power-on flourish (pure CSS; skipped for reduced motion)
-      if (!_reducedMotion) {
-        _overlayCanvas.classList.remove('crt-power-on');
-        void _overlayCanvas.offsetWidth; // restart animation if re-enabling
-        _overlayCanvas.classList.add('crt-power-on');
-        _overlayCanvas.addEventListener(
+      if (!st.reducedMotion) {
+        st.overlayCanvas.classList.remove('crt-power-on');
+        void st.overlayCanvas.offsetWidth; // restart animation if re-enabling
+        st.overlayCanvas.classList.add('crt-power-on');
+        st.overlayCanvas.addEventListener(
           'animationend',
           (e) => e.target.classList.remove('crt-power-on'),
           { once: true }
         );
       }
 
-      if (canvasOpacity === null) {
-        canvasOpacity = renderer.domElement.style.opacity || '';
+      if (st.canvasOpacity === null) {
+        st.canvasOpacity = renderer.domElement.style.opacity || '';
       }
       renderer.domElement.style.opacity = '0';
     },
     disable() {
-      isEnabled = false;
+      st.enabled = false;
       previewManager.controls?.removeEventListener?.(
         'change',
         _onControlsChange
       );
-      _overlayCanvas.style.display = 'none';
-      renderer.domElement.style.opacity = canvasOpacity ?? '';
+      st.overlayCanvas.style.display = 'none';
+      renderer.domElement.style.opacity = st.canvasOpacity ?? '';
       // Clear persistence canvas so stale afterglow does not show on next enable
-      if (_persistCanvas && _persistCtx) {
-        _persistCtx.clearRect(
+      if (st.persistCanvas && st.persistCtx) {
+        st.persistCtx.clearRect(
           0,
           0,
-          _persistCanvas.width,
-          _persistCanvas.height
+          st.persistCanvas.width,
+          st.persistCanvas.height
         );
       }
     },
     toggle() {
-      isEnabled ? this.disable() : this.enable();
-      return isEnabled;
+      st.enabled ? this.disable() : this.enable();
+      return st.enabled;
     },
     render() {
       // Always render the underlying scene so controls + animation stay correct.
       renderer.render(scene, previewManager.getActiveCamera());
 
-      if (!isEnabled) return;
+      if (!st.enabled) return;
 
       // Auto-rotate moves the camera every frame without firing 'change'
       if (previewManager.isAutoRotateEnabled?.()) {
-        _dirty = true;
+        st.dirty = true;
       }
 
       const now = performance.now();
-      if (now - _lastFrameMs < _dynamicInterval) return;
+      if (now - st.lastFrameMs < st.dynamicInterval) return;
       // Skip conversion while clean; the fallback tick self-heals any missed
       // invalidation at ~1 Hz.
-      if (!_dirty && now - _lastConvertMs <= _FALLBACK_TICK_MS) return;
-      _lastFrameMs = now;
+      if (!st.dirty && now - st.lastConvertMs <= _FALLBACK_TICK_MS) return;
+      st.lastFrameMs = now;
 
       const w = container.clientWidth;
       const h = container.clientHeight;
       if (w <= 0 || h <= 0) return;
 
-      _renderFrame({
+      _renderFrame(st, {
         renderer,
         scene,
         width: w,
@@ -617,77 +632,77 @@ export async function initAltView(previewManager) {
         charW: metrics.charW,
         charH: metrics.charH,
       });
-      _dirty = false;
+      st.dirty = false;
       const after = performance.now();
-      _lastConvertMs = after;
+      st.lastConvertMs = after;
 
       // Frame governor: back off proportionally on slow conversions, decay
       // back toward 30 fps one step per fast conversion (no ping-ponging).
       const duration = after - now;
       if (duration > _MIN_INTERVAL_MS) {
-        _dynamicInterval = Math.min(
+        st.dynamicInterval = Math.min(
           _MAX_INTERVAL_MS,
           Math.ceil(duration / _MIN_INTERVAL_MS) * _MIN_INTERVAL_MS
         );
       } else {
-        _dynamicInterval = Math.max(
+        st.dynamicInterval = Math.max(
           _MIN_INTERVAL_MS,
-          _dynamicInterval - _MIN_INTERVAL_MS
+          st.dynamicInterval - _MIN_INTERVAL_MS
         );
       }
     },
     invalidate() {
-      _dirty = true;
+      st.dirty = true;
     },
     resize(width, height) {
       _recomputeFontForSize(width, height);
-      _dirty = true;
+      st.dirty = true;
     },
     /**
      * Rebuild the glyph atlas (re-reading --color-accent) — call after a
      * theme change so the phosphor tint follows the active variant.
      */
     rebuildGlyphs() {
-      _atlasKey = '';
-      _dirty = true;
+      st.atlasKey = '';
+      st.dirty = true;
     },
     setContrastScale(scale) {
-      return _setContrastScale(scale);
+      return _setContrastScale(st, scale);
     },
     getContrastScale() {
-      return _contrastScale;
+      return st.contrastScale;
     },
     setFontScale(scale) {
-      _setFontScale(scale);
+      _setFontScale(st, scale);
       _recomputeFontForSize(container.clientWidth, container.clientHeight);
-      return _fontScale;
+      return st.fontScale;
     },
     getFontScale() {
-      return _fontScale;
+      return st.fontScale;
     },
     dispose() {
-      isEnabled = false;
+      st.enabled = false;
       previewManager.controls?.removeEventListener?.(
         'change',
         _onControlsChange
       );
-      if (canvasOpacity !== null) {
-        renderer.domElement.style.opacity = canvasOpacity;
+      if (st.canvasOpacity !== null) {
+        renderer.domElement.style.opacity = st.canvasOpacity;
       }
-      _overlayCanvas?.remove();
-      _overlayCanvas = null;
-      _overlayCtx = null;
-      _persistCanvas = null;
-      _persistCtx = null;
-      _sampleCanvas = null;
-      _sampleCtx = null;
-      _atlas = null;
-      _glyphVectors = null;
-      _lookup = null;
-      _atlasKey = '';
-      _dirty = true;
+      st.overlayCanvas?.remove();
+      st.overlayCanvas = null;
+      st.overlayCtx = null;
+      st.persistCanvas = null;
+      st.persistCtx = null;
+      st.sampleCanvas = null;
+      st.sampleCtx = null;
+      st.atlas = null;
+      st.glyphVectors = null;
+      st.lookup = null;
+      st.atlasKey = '';
+      st.dirty = true;
     },
-    isEnabled: () => isEnabled,
+    isEnabled: () => st.enabled,
 
     // Phosphor afterglow controls
     setPersistFade(value) {
@@ -696,12 +711,12 @@ export async function initAltView(previewManager) {
         Math.min(1, Number.isFinite(value) ? value : 0)
       );
       // Never enable fade when reduced-motion is active
-      _persistFade = _reducedMotion ? 0 : clamped;
-      _dirty = true;
-      return _persistFade;
+      st.persistFade = st.reducedMotion ? 0 : clamped;
+      st.dirty = true;
+      return st.persistFade;
     },
     getPersistFade() {
-      return _persistFade;
+      return st.persistFade;
     },
     /**
      * Allow the caller to push the current prefers-reduced-motion state without
@@ -709,30 +724,30 @@ export async function initAltView(previewManager) {
      * @param {boolean} reduced
      */
     setReducedMotion(reduced) {
-      _reducedMotion = Boolean(reduced);
-      if (_reducedMotion) {
-        _persistFade = 0;
+      st.reducedMotion = Boolean(reduced);
+      if (st.reducedMotion) {
+        st.persistFade = 0;
         // Clear any stale persistence content
-        if (_persistCanvas && _persistCtx) {
-          _persistCtx.clearRect(
+        if (st.persistCanvas && st.persistCtx) {
+          st.persistCtx.clearRect(
             0,
             0,
-            _persistCanvas.width,
-            _persistCanvas.height
+            st.persistCanvas.width,
+            st.persistCanvas.height
           );
         }
-        _dirty = true;
+        st.dirty = true;
       }
     },
     clearPersistence() {
-      if (_persistCanvas && _persistCtx) {
-        _persistCtx.clearRect(
+      if (st.persistCanvas && st.persistCtx) {
+        st.persistCtx.clearRect(
           0,
           0,
-          _persistCanvas.width,
-          _persistCanvas.height
+          st.persistCanvas.width,
+          st.persistCanvas.height
         );
-        _dirty = true;
+        st.dirty = true;
       }
     },
   };

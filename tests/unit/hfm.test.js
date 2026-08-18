@@ -358,3 +358,109 @@ describe('initAltView — API surface', () => {
     api.dispose()
   })
 })
+
+describe('initAltView — instance isolation (CW-1)', () => {
+  // Two instances from ONE module load (no resetModules between them): each
+  // must own its overlay, sampler, settings, and lifecycle. This is what
+  // allows a second alt-rendered surface to coexist with the preview's.
+  it('creates an independent overlay per container', async () => {
+    vi.resetModules()
+    const { initAltView } = await import('../../src/js/_hfm.js')
+    const pmA = createMockPreviewManager()
+    const pmB = createMockPreviewManager()
+    const a = await initAltView(pmA)
+    const b = await initAltView(pmB)
+
+    expect(
+      pmA.container.querySelectorAll('canvas.hfm-overlay-canvas')
+    ).toHaveLength(1)
+    expect(
+      pmB.container.querySelectorAll('canvas.hfm-overlay-canvas')
+    ).toHaveLength(1)
+
+    a.dispose()
+    b.dispose()
+  })
+
+  it('settings do not cross-talk between instances', async () => {
+    vi.resetModules()
+    const { initAltView } = await import('../../src/js/_hfm.js')
+    const a = await initAltView(createMockPreviewManager())
+    const b = await initAltView(createMockPreviewManager())
+
+    a.setContrastScale(4.0)
+    a.setFontScale(2.5)
+    a.setPersistFade(0.5)
+
+    expect(b.getContrastScale()).toBe(1)
+    expect(b.getFontScale()).toBe(1)
+    expect(b.getPersistFade()).toBe(0)
+
+    a.dispose()
+    b.dispose()
+  })
+
+  it('enabling one instance leaves the other untouched, and each samples its own renderer', async () => {
+    vi.resetModules()
+    const { initAltView } = await import('../../src/js/_hfm.js')
+    const pmA = createMockPreviewManager()
+    const pmB = createMockPreviewManager()
+    const a = await initAltView(pmA)
+    const b = await initAltView(pmB)
+
+    const nowSpy = vi.spyOn(performance, 'now')
+    nowSpy.mockReturnValue(10000)
+
+    a.enable()
+    expect(a.isEnabled()).toBe(true)
+    expect(b.isEnabled()).toBe(false)
+    expect(pmA.renderer.domElement.style.opacity).toBe('0')
+    expect(pmB.renderer.domElement.style.opacity).not.toBe('0')
+
+    a.render()
+    b.render()
+    expect(samplingDrawCount(pmA)).toBe(1)
+    expect(samplingDrawCount(pmB)).toBe(0)
+
+    b.enable()
+    b.render()
+    expect(samplingDrawCount(pmB)).toBe(1)
+
+    a.dispose()
+    b.dispose()
+  })
+
+  it('disposing one instance leaves the other fully functional', async () => {
+    vi.resetModules()
+    const { initAltView } = await import('../../src/js/_hfm.js')
+    const pmA = createMockPreviewManager()
+    const pmB = createMockPreviewManager()
+    const a = await initAltView(pmA)
+    const b = await initAltView(pmB)
+
+    const nowSpy = vi.spyOn(performance, 'now')
+    nowSpy.mockReturnValue(10000)
+
+    a.enable()
+    b.enable()
+    a.render()
+    b.render()
+    expect(samplingDrawCount(pmA)).toBe(1)
+    expect(samplingDrawCount(pmB)).toBe(1)
+
+    a.dispose()
+    expect(
+      pmA.container.querySelectorAll('canvas.hfm-overlay-canvas')
+    ).toHaveLength(0)
+    expect(
+      pmB.container.querySelectorAll('canvas.hfm-overlay-canvas')
+    ).toHaveLength(1)
+
+    b.invalidate()
+    nowSpy.mockReturnValue(10100)
+    b.render()
+    expect(samplingDrawCount(pmB)).toBe(2)
+
+    b.dispose()
+  })
+})

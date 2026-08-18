@@ -10750,6 +10750,28 @@ if (rounded) {
       return 'Alt View unlocked. Refresh to persist.';
     };
 
+    // ASCII City Walk (CW-4): the gated welcome card's launch button. The
+    // game module is lazy-loaded on first press so it costs nothing until
+    // someone who found the unlock actually plays.
+    const cityWalkLaunchBtn = document.getElementById('cityWalkLaunchBtn');
+    if (cityWalkLaunchBtn) {
+      cityWalkLaunchBtn.addEventListener('click', async () => {
+        // No disabled toggle here: disabling the button would blur it, and
+        // the controller restores focus to this trigger on exit. Re-entry is
+        // already guarded by the controller's session singleton.
+        try {
+          const mod = await import('./js/game/city-walk-controller.js');
+          await mod.launchCityWalk({
+            hfmCtrl,
+            triggerEl: cityWalkLaunchBtn,
+          });
+        } catch (error) {
+          console.error('[CityWalk] Failed to launch:', error);
+          _announceError('The game could not be started. Please try again.');
+        }
+      });
+    }
+
     // Expose startTutorial globally for E2E test automation
     window.startTutorial = (tutorialId) => startTutorial(tutorialId);
 

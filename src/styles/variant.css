@@ -199,6 +199,18 @@
   border-color: var(--color-accent);
 }
 
+/* D-55 pattern: the generic mono hover above repaints every button's
+ * surface with --color-hover-bg and nothing else. Under a primary's
+ * accent-text (black) label that pair measures 1.11:1 — the label
+ * vanishes the moment a mouse touches it (found by the City Walk axe
+ * scan, which hovers a real button). Completing the pair flips the
+ * label to the accent, the same hover-bg/accent pairing the header
+ * toggles measure at 14.41:1 (green) and 7.79:1 (amber); icons follow
+ * via currentColor. */
+:root[data-ui-variant='mono'] .btn-primary:hover:not(:disabled) {
+  color: var(--color-accent);
+}
+
 :root[data-ui-variant='mono'] .btn-icon-svg {
   shape-rendering: geometricPrecision;
 }

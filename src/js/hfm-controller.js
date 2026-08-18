@@ -841,6 +841,17 @@ export function initHfmController({
     },
 
     /**
+     * Switch the variant-specific assets (logo, favicon) on or off without
+     * touching the alt-view render state. Used by the City Walk game, which
+     * forces the mono variant for its own lifetime and must restore the
+     * standard assets on exit.
+     * @param {boolean} enabled
+     */
+    setVariantAssets(enabled) {
+      _setAssetsForVariant(Boolean(enabled));
+    },
+
+    /**
      * Notify the controller that the app theme changed while Alt View may be
      * active. Rebuilds the glyph atlas so the phosphor tint (green/amber)
      * follows the new theme.
