@@ -188,13 +188,26 @@ body {
   border-color: var(--color-accent);
 }
 
-.contrast-toggle:hover,
-.classic-toggle:hover {
+/* D-55: these two rules were being beaten, and the pairs below are the ones
+   these controls always intended — nothing here is a new colour.
+   `.btn-secondary:hover:not(:disabled)` in components.css sets a BACKGROUND and
+   nothing else, at (0,3,0) in a later-loading file, so it won and left whatever
+   text colour another rule had already chosen. MEASURED on the resulting pairs:
+   Forge hover #1c2024 on #80838d = 4.33:1, and the pressed Classic toggle kept
+   its white accent text over #858585 = 3.69:1, where AA needs 4.5:1 for 14px.
+   The token it used, --color-border, is a BORDER colour being used as a
+   surface. Restoring these needs weight, not new values: naming the class the
+   override targets and matching its :not(:disabled) takes them past it.
+   The guard is the contrast test, not the selector — if .btn-secondary ever
+   leaves this button, that test fails rather than the colour silently
+   regressing. */
+.contrast-toggle.btn-secondary:hover:not(:disabled),
+.classic-toggle.btn-secondary:hover:not(:disabled) {
   background: var(--color-hover-bg);
   transform: scale(1.05);
 }
 
-.classic-toggle[aria-pressed='true']:hover {
+.classic-toggle.btn-secondary[aria-pressed='true']:hover:not(:disabled) {
   background: var(--color-accent-hover);
 }
 

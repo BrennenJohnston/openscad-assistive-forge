@@ -2345,6 +2345,87 @@ test.describe('Small-defect sweep (P13)', () => {
     ).toBeGreaterThanOrEqual(4.5);
     expect(measured.borderStyle).not.toBe('none');
   });
+
+  /**
+   * D-55: the header toggles lost their own hover colour.
+   *
+   * `.btn-secondary:hover:not(:disabled)` in components.css sets a BACKGROUND
+   * and nothing else. At (0,3,0) in a file that loads AFTER layout.css it beat
+   * both `.classic-toggle:hover` (0,2,0) and
+   * `.classic-toggle[aria-pressed='true']:hover` (0,3,0, losing the tie on
+   * source order), so these controls hovered to `--color-border` — a BORDER
+   * token used as a surface — while keeping whatever text colour another rule
+   * had set. MEASURED before the fix: Forge #1c2024 on #80838d = 4.33:1, and
+   * the pressed Classic toggle #ffffff on #858585 = 3.69:1, against AA's 4.5:1
+   * for 14px text.
+   *
+   * This measures the PAIR the user actually sees rather than asserting a
+   * selector, so it still fails if the markup, the tokens or the cascade move.
+   * The rest states always passed (15.58:1 and 5.67:1) and are checked too, so
+   * a fix to hover cannot quietly cost the resting state.
+   */
+  test('d55-toggle-hover-contrast: the header toggles stay legible while hovered', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await seedFirstVisit(page);
+    await loadProject(page);
+
+    const readPair = (selector) =>
+      page.evaluate((sel) => {
+        const el = document.querySelector(sel);
+        const cs = getComputedStyle(el);
+        const read = (css) =>
+          (css.match(/\d+(\.\d+)?/g) || []).slice(0, 3).map(Number);
+        const luminance = (rgb) =>
+          rgb
+            .map((v) => {
+              const s = v / 255;
+              return s <= 0.03928
+                ? s / 12.92
+                : Math.pow((s + 0.055) / 1.055, 2.4);
+            })
+            .reduce((sum, c, i) => sum + [0.2126, 0.7152, 0.0722][i] * c, 0);
+        const l1 = luminance(read(cs.color));
+        const l2 = luminance(read(cs.backgroundColor));
+        return {
+          color: cs.color,
+          background: cs.backgroundColor,
+          ratio:
+            Math.round(
+              ((Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)) * 100
+            ) / 100,
+        };
+      }, selector);
+
+    /** Park the pointer well clear so :hover cannot be left on from a click. */
+    const rest = () => page.mouse.move(5, 400);
+
+    const check = async (label, selector, hovered) => {
+      if (hovered) {
+        await page.locator(selector).hover();
+      } else {
+        await rest();
+      }
+      await page.waitForTimeout(300);
+      const m = await readPair(selector);
+      console.log(`[d55] ${label}: ${m.color} on ${m.background} = ${m.ratio}:1`);
+      expect(
+        m.ratio,
+        `${label} is ${m.color} on ${m.background} = ${m.ratio}:1`
+      ).toBeGreaterThanOrEqual(4.5);
+    };
+
+    await check('Forge, contrast toggle hovered', '#contrastToggle', true);
+    await check('Forge, classic toggle at rest', '#classicModeToggle', false);
+    await check('Forge, classic toggle hovered', '#classicModeToggle', true);
+
+    await switchToStandardMode(page);
+    await enterClassicStandard(page);
+
+    await check('Classic, classic toggle at rest', '#classicModeToggle', false);
+    await check('Classic, classic toggle hovered', '#classicModeToggle', true);
+  });
 });
 
 /**

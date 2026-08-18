@@ -495,14 +495,48 @@ test.describe('Classic on mobile (375px, touch)', () => {
     // — top edge above the viewport midpoint — only held while the panel was
     // tall enough to force extra scroll range; C2 shortened it by moving the
     // preset controls into the dock header, so assert the requirement itself.
-    await expect
-      .poll(async () =>
-        page.locator('#paramPanel').evaluate((el) => {
-          const r = el.getBoundingClientRect();
-          return r.top >= 0 && r.bottom <= window.innerHeight + 1;
+    // D-56: this poll has failed roughly once in ten runs and has never
+    // reproduced on demand — 4/4 alone and 4/4 in a full nine-suite x4 gate.
+    // It was suspected of being UF-35's disclosure wrapper, and MEASURED not
+    // to be: #paramPanel is 292px tall and ends 64px clear of the 812px
+    // viewport, identical to the pixel with and without that release. So the
+    // boundary is not tight and the cause is timing.
+    //
+    // The assertion is unchanged. It just records what the poll actually saw,
+    // so the next occurrence arrives with evidence rather than a bare
+    // predicate timeout. Do not soften this into a retry — a test that stops
+    // failing is worth less than one that explains itself.
+    const d56Samples = [];
+    try {
+      await expect
+        .poll(async () => {
+          const s = await page.locator('#paramPanel').evaluate((el) => {
+            const r = el.getBoundingClientRect();
+            return {
+              fits: r.top >= 0 && r.bottom <= window.innerHeight + 1,
+              top: Math.round(r.top),
+              bottom: Math.round(r.bottom),
+              height: Math.round(r.height),
+              innerHeight: window.innerHeight,
+              scrollTop: Math.round(document.scrollingElement.scrollTop),
+            };
+          });
+          d56Samples.push(s);
+          return s.fits;
         })
-      )
-      .toBe(true);
+        .toBe(true);
+    } catch (err) {
+      console.log(
+        `[d56] the panel never fit the viewport. ${d56Samples.length} samples, last 8:`
+      );
+      for (const s of d56Samples.slice(-8)) {
+        console.log('[d56]   ' + JSON.stringify(s));
+      }
+      await page
+        .screenshot({ path: 'test-results/d56-panel-did-not-fit.png' })
+        .catch(() => {});
+      throw err;
+    }
     await expect(page.locator('#classicCustomizerBar')).toBeVisible();
 
     // The window itself gained no phantom scroll from the re-flow
