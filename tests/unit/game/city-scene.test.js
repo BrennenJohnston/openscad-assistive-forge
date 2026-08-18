@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { Scene, PerspectiveCamera, Box3 } from 'three'
-import { buildCityGroup, attachCityLighting } from '../../../src/js/game/city-scene.js'
+import {
+  buildCityGroup,
+  attachCityLighting,
+  buildingTint,
+  ROAD_TONES,
+} from '../../../src/js/game/city-scene.js'
 import { parseCityExtract } from '../../../src/js/game/city-data.js'
 
 const CENTER = { lat: 40, lon: -100 }
@@ -95,6 +100,93 @@ describe('buildCityGroup', () => {
     expect(group.children.map((c) => c.name)).toContain('ground')
     expect(stats.buildingTriangles).toBe(0)
     dispose()
+  })
+})
+
+describe('buildCityGroup — CW-8 distinctness', () => {
+  it('buildings carry a per-vertex color attribute and vertex-color material', () => {
+    const { group, dispose } = buildCityGroup(model())
+    const buildings = group.children.find((c) => c.name === 'buildings')
+
+    expect(buildings.geometry.getAttribute('color')).toBeDefined()
+    expect(buildings.geometry.getAttribute('color').itemSize).toBe(3)
+    expect(buildings.material.vertexColors).toBe(true)
+
+    dispose()
+  })
+
+  it('grounded buildings get a storefront strip; elevated parts do not', () => {
+    // model(): one grounded 25 m building, one min_height=4 skybridge part.
+    const { group, stats, dispose } = buildCityGroup(model())
+    const storefronts = group.children.find((c) => c.name === 'storefronts')
+
+    expect(storefronts).toBeDefined()
+    expect(stats.storefrontTriangles).toBeGreaterThan(0)
+
+    // The strip stops at 3.5 m and starts at the ground.
+    storefronts.geometry.computeBoundingBox()
+    expect(storefronts.geometry.boundingBox.min.z).toBe(0)
+    expect(storefronts.geometry.boundingBox.max.z).toBeCloseTo(3.5, 5)
+
+    // Exactly one of the two buildings qualifies (the skybridge is skipped),
+    // so the strip has the same triangle count as one extruded square.
+    const perBuilding = stats.buildingTriangles / 2
+    expect(stats.storefrontTriangles).toBe(perBuilding)
+
+    dispose()
+  })
+
+  it('setMapView swaps road tone and curb visibility between views', () => {
+    const { group, setMapView, dispose } = buildCityGroup(model())
+    const roads = group.children.find((c) => c.name === 'roads')
+    const curbs = group.children.find((c) => c.name === 'curbs')
+
+    // Street view: black surfaces, visible curb lines.
+    expect(roads.material.color.getHex()).toBe(ROAD_TONES.street)
+    expect(curbs).toBeDefined()
+    expect(curbs.visible).toBe(true)
+    // Two curb ribbons per surface ribbon → 2× the triangle count.
+    expect(curbs.geometry.getAttribute('position').count).toBe(
+      roads.geometry.getAttribute('position').count * 2
+    )
+
+    setMapView(true)
+    expect(roads.material.color.getHex()).toBe(ROAD_TONES.map)
+    expect(curbs.visible).toBe(false)
+
+    setMapView(false)
+    expect(roads.material.color.getHex()).toBe(ROAD_TONES.street)
+    expect(curbs.visible).toBe(true)
+
+    dispose()
+  })
+})
+
+describe('buildingTint', () => {
+  it('is deterministic for the same building identity', () => {
+    expect(buildingTint(7, 'Test Tower')).toEqual(buildingTint(7, 'Test Tower'))
+    expect(buildingTint(3)).toEqual(buildingTint(3))
+  })
+
+  it('varies across buildings', () => {
+    const distinct = new Set()
+    for (let i = 0; i < 24; i++) {
+      distinct.add(JSON.stringify(buildingTint(i, `b${i}`)))
+    }
+    expect(distinct.size).toBeGreaterThan(4)
+  })
+
+  it('keeps luminance inside the tier band so mono density stays readable', () => {
+    for (let i = 0; i < 24; i++) {
+      const [r, g, b] = buildingTint(i, `b${i}`)
+      const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+      expect(lum).toBeGreaterThanOrEqual(0.42)
+      expect(lum).toBeLessThanOrEqual(1.0)
+      for (const ch of [r, g, b]) {
+        expect(ch).toBeGreaterThanOrEqual(0)
+        expect(ch).toBeLessThanOrEqual(1)
+      }
+    }
   })
 })
 

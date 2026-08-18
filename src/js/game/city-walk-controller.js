@@ -452,13 +452,9 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
 
     const city3d = buildCityGroup(model);
     scene.add(city3d.group);
-    // Roads belong to the map view. At street level a real downtown's road
-    // network compresses into a solid glyph carpet near the horizon (every
-    // way between here and 700 m stacks into a few cell rows), while the
-    // building canyons already trace the streets. Overhead, the ribbons ARE
-    // the map.
-    const roadsMesh = city3d.group.children.find((c) => c.name === 'roads');
-    if (roadsMesh) roadsMesh.visible = false;
+    // Streets are visible in both views since CW-8: dim under the fog at
+    // street level, brightened into the map's street network overhead
+    // (city3d.setMapView swaps the tone on toggle).
     const detachLighting = attachCityLighting(scene, fpCamera);
 
     // Bright beacon marking the player in the top-down map view, sized
@@ -487,7 +483,6 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       fpCamera,
       orthoCamera,
       city3d,
-      roadsMesh,
       detachLighting,
       marker,
       markerGeom,
@@ -659,7 +654,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     const game = state.game;
     game.mapView = !game.mapView;
     game.marker.visible = game.mapView;
-    if (game.roadsMesh) game.roadsMesh.visible = game.mapView;
+    game.city3d.setMapView(game.mapView);
     if (game.mapView) {
       // The whole map sits ~1 km from the overhead camera — distance fog
       // would black it out entirely. Street view gets the fog back.
