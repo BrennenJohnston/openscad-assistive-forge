@@ -38,13 +38,21 @@ import {
   headingLabel,
   buildCollisionGrid,
   findSpawn,
-  fitOrthoToBounds,
+  createMapCamera,
+  stepMapCamera,
+  recenterMapCamera,
+  mapCameraFrustum,
 } from './walk-controls.js';
 import { initAltView } from '../_hfm.js';
 import { createDocumentFocusTrap } from '../focus-trap.js';
 import { announce } from '../announcer.js';
 import { HC_PALETTE_GREEN, HC_PALETTE_AMBER } from './hc-palettes.js';
-import { safeGetItem, STORAGE_KEY_HFM_FONT_SCALE } from '../storage-keys.js';
+import {
+  safeGetItem,
+  safeSetItem,
+  STORAGE_KEY_HFM_FONT_SCALE,
+  STORAGE_KEY_CITY_WALK_SPEED,
+} from '../storage-keys.js';
 
 // Bundled extracts (Q-68). Slugs match public/examples/ascii-city/*.json.
 const CITIES = [
@@ -310,8 +318,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       'A and D: sidestep left and right',
       'Arrow Left / Q and Arrow Right / E: turn',
       'Shift (hold): move faster',
+      'Left and Right Bracket: walking speed down or up',
       'M: switch between street view and map view',
-      'Minus and Equals: smaller or larger characters',
+      'On the map: arrow keys pan, Minus and Equals zoom, Home returns to you',
+      'Minus and Equals in street view: smaller or larger characters',
       'H: open or close this help',
       'Escape: close this help, or leave the game',
     ];
@@ -477,6 +487,15 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     const collision = buildCollisionGrid(model);
     const spawn = findSpawn(model, collision);
     const walkState = createWalkState({ ...spawn, headingRad: 0 });
+    const mapCam = createMapCamera(model.boundsM);
+
+    // CW-Q8: persisted walking-speed multiplier (comfort preference).
+    const savedSpeed = parseFloat(
+      safeGetItem(STORAGE_KEY_CITY_WALK_SPEED) ?? ''
+    );
+    const speedScale = Number.isFinite(savedSpeed)
+      ? Math.max(0.5, Math.min(3, savedSpeed))
+      : 1;
 
     const game = {
       city,
@@ -492,6 +511,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       markerMat,
       collision,
       walkState,
+      mapCam,
+      speedScale,
       mapView: false,
       altView: null,
       resizeObserver: null,
@@ -540,11 +561,28 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     }
 
     applyFirstPersonCamera();
-    fitMapCamera();
+    applyMapCamera();
     updateHud();
 
     game.resizeObserver = new ResizeObserver(() => handleViewportResize());
     game.resizeObserver.observe(viewport);
+
+    // Mouse wheel zooms the map view (keyboard stays primary: -/= do the
+    // same). preventDefault keeps the page from scrolling behind the layer.
+    viewport.addEventListener(
+      'wheel',
+      (event) => {
+        const g = state.game;
+        if (!g || !g.mapView) return;
+        event.preventDefault();
+        const factor = Math.pow(1.0015, -event.deltaY);
+        g.mapCam.zoom = Math.min(8, Math.max(0.4, g.mapCam.zoom * factor));
+        applyMapCamera();
+        g.altView.invalidate();
+        updateHud();
+      },
+      { passive: false }
+    );
 
     game.lastFrameMs = performance.now();
     state.rafId = requestAnimationFrame(frame);
@@ -655,8 +693,40 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     ) {
       event.preventDefault();
       event.stopPropagation();
-      const shrink = event.code === 'Minus' || event.code === 'NumpadSubtract';
-      adjustCharacterSize(shrink ? -0.1 : 0.1);
+      const minus = event.code === 'Minus' || event.code === 'NumpadSubtract';
+      if (state.game.mapView) {
+        // Map mode: -/= are HELD zoom keys (see frame()).
+        state.keys.add(minus ? 'zoomOut' : 'zoomIn');
+      } else {
+        adjustCharacterSize(minus ? -0.1 : 0.1);
+      }
+      return;
+    }
+
+    if (event.code === 'BracketLeft' || event.code === 'BracketRight') {
+      event.preventDefault();
+      event.stopPropagation();
+      adjustWalkSpeed(event.code === 'BracketLeft' ? -0.25 : 0.25);
+      return;
+    }
+
+    if (
+      state.game.mapView &&
+      (event.code === 'Home' ||
+        event.code === 'Digit0' ||
+        event.code === 'Numpad0')
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      recenterMapCamera(
+        state.game.mapCam,
+        state.game.walkState.x,
+        state.game.walkState.y
+      );
+      applyMapCamera();
+      state.game.altView.invalidate();
+      updateHud();
+      announceInLayer('Map centered on you.');
       return;
     }
 
@@ -672,6 +742,12 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     if (event.key === 'Shift') {
       state.shiftHeld = false;
       return;
+    }
+    if (event.code === 'Minus' || event.code === 'NumpadSubtract') {
+      state.keys.delete('zoomOut');
+    }
+    if (event.code === 'Equal' || event.code === 'NumpadAdd') {
+      state.keys.delete('zoomIn');
     }
     const action = KEY_ACTIONS.get(event.code);
     if (action) state.keys.delete(action);
@@ -701,12 +777,12 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     game.fpCamera.lookAt(...pose.target);
   }
 
-  function fitMapCamera() {
+  function applyMapCamera() {
     const game = state.game;
     const { viewport } = state.refs;
     const aspect =
       Math.max(1, viewport.clientWidth) / Math.max(1, viewport.clientHeight);
-    const fit = fitOrthoToBounds(game.model.boundsM, aspect);
+    const fit = mapCameraFrustum(game.mapCam, game.model.boundsM, aspect);
     const cam = game.orthoCamera;
     cam.left = fit.left;
     cam.right = fit.right;
@@ -729,23 +805,48 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       game.streetFog = game.scene.fog;
       game.scene.fog = null;
       game.marker.position.set(game.walkState.x, game.walkState.y, 0);
-      fitMapCamera();
+      // Open following the player; walking pauses while the map is up
+      // (the arrows pan the map instead — CW-9).
+      recenterMapCamera(game.mapCam, game.walkState.x, game.walkState.y);
+      applyMapCamera();
     } else {
       game.scene.fog = game.streetFog ?? null;
+      // A zoom key held through the M press must not stick.
+      state.keys.delete('zoomIn');
+      state.keys.delete('zoomOut');
     }
     game.altView.invalidate();
     updateHud();
     announceInLayer(
-      game.mapView ? 'Map view, seen from above.' : 'Street view.'
+      game.mapView
+        ? 'Map view, seen from above. Arrow keys pan, minus and equals zoom, Home returns to you.'
+        : 'Street view.'
+    );
+  }
+
+  function adjustWalkSpeed(delta) {
+    const game = state.game;
+    if (!game) return;
+    game.speedScale = Math.max(
+      0.5,
+      Math.min(3, Math.round((game.speedScale + delta) * 100) / 100)
+    );
+    safeSetItem(STORAGE_KEY_CITY_WALK_SPEED, String(game.speedScale));
+    updateHud();
+    announceInLayer(
+      `Walking speed ${Math.round(game.speedScale * 100)} percent.`
     );
   }
 
   function updateHud() {
     const game = state.game;
     if (!game) return;
+    const view = game.mapView
+      ? `map view · zoom ${game.mapCam.zoom.toFixed(1)}x`
+      : `street view · speed ${Math.round(game.speedScale * 100)}%`;
     const text =
       `${game.city.label} · facing ${headingLabel(game.walkState.headingRad)}` +
-      ` · ${game.mapView ? 'map view' : 'street view'}`;
+      ` · ${view}`;
     if (text !== game.lastHudText) {
       game.lastHudText = text;
       state.refs.hudStatus.textContent = text;
@@ -761,7 +862,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     game.renderer.setSize(width, height);
     game.fpCamera.aspect = width / height;
     game.fpCamera.updateProjectionMatrix();
-    fitMapCamera();
+    applyMapCamera();
     game.altView.resize(width, height);
     game.altView.invalidate();
   }
@@ -774,6 +875,46 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     const dtS = Math.max(0, (nowMs - game.lastFrameMs) / 1000);
     game.lastFrameMs = nowMs;
 
+    if (game.mapView) {
+      // Map mode (CW-9): the movement keys drive the camera, not the
+      // player — walking is suspended while the overhead view is open.
+      const { viewport } = state.refs;
+      const aspect =
+        Math.max(1, viewport.clientWidth) / Math.max(1, viewport.clientHeight);
+      const { changed } = stepMapCamera(
+        game.mapCam,
+        {
+          panX:
+            (state.keys.has('strafeRight') || state.keys.has('turnRight')
+              ? 1
+              : 0) -
+            (state.keys.has('strafeLeft') || state.keys.has('turnLeft')
+              ? 1
+              : 0),
+          panY:
+            (state.keys.has('forward') ? 1 : 0) -
+            (state.keys.has('back') ? 1 : 0),
+          zoom:
+            (state.keys.has('zoomIn') ? 1 : 0) -
+            (state.keys.has('zoomOut') ? 1 : 0),
+        },
+        dtS,
+        game.model.boundsM,
+        aspect
+      );
+      if (game.mapCam.follow) {
+        game.mapCam.centerX = game.walkState.x;
+        game.mapCam.centerY = game.walkState.y;
+      }
+      if (changed) {
+        applyMapCamera();
+        game.altView.invalidate();
+        updateHud();
+      }
+      game.altView.render();
+      return;
+    }
+
     const input = {
       forward:
         (state.keys.has('forward') ? 1 : 0) - (state.keys.has('back') ? 1 : 0),
@@ -784,6 +925,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
         (state.keys.has('turnRight') ? 1 : 0) -
         (state.keys.has('turnLeft') ? 1 : 0),
       fast: state.shiftHeld,
+      speedScale: game.speedScale,
     };
 
     const { moved, turned } = stepWalk(
@@ -795,9 +937,6 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
 
     if (moved || turned) {
       applyFirstPersonCamera();
-      if (game.mapView && moved) {
-        game.marker.position.set(game.walkState.x, game.walkState.y, 0);
-      }
       game.altView.invalidate();
       updateHud();
     }

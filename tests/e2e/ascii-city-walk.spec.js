@@ -191,6 +191,83 @@ test.describe('ASCII City Walk — playing', () => {
   })
 })
 
+test.describe('ASCII City Walk — map navigation and walking speed (CW-9)', () => {
+  test('map view: keyboard zoom, pan breaks follow, Home recenters', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'zoom 1.0x'
+    )
+
+    // Held Equal zooms in exponentially.
+    await page.keyboard.down('Equal')
+    await page.waitForTimeout(700)
+    await page.keyboard.up('Equal')
+    const hud = await page.textContent('#cityWalkHudStatus')
+    const zoom = parseFloat(/zoom (\d+\.\d)x/.exec(hud)?.[1] ?? '0')
+    expect(zoom).toBeGreaterThan(1.2)
+
+    // Panning breaks player-follow (asserted via the DEV handle).
+    await page.keyboard.down('ArrowRight')
+    await page.waitForTimeout(400)
+    await page.keyboard.up('ArrowRight')
+    const afterPan = await page.evaluate(() => ({
+      follow: window.__cityWalkGame.mapCam.follow,
+      centerX: window.__cityWalkGame.mapCam.centerX,
+    }))
+    expect(afterPan.follow).toBe(false)
+
+    // Home snaps back to the player and resumes follow.
+    await page.keyboard.press('Home')
+    await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
+      /Map centered on you/
+    )
+    const afterHome = await page.evaluate(
+      () => window.__cityWalkGame.mapCam.follow
+    )
+    expect(afterHome).toBe(true)
+
+    // Back on the street, walking keys still walk.
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'street view'
+    )
+  })
+
+  test('walking speed adjusts, announces, and persists across sessions', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'speed 100%'
+    )
+
+    await page.keyboard.press('BracketRight')
+    await page.keyboard.press('BracketRight')
+    await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
+      /Walking speed 150 percent/
+    )
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'speed 150%'
+    )
+
+    // Persisted: a fresh session opens at the saved multiplier.
+    await page.keyboard.press('Escape')
+    await expect(page.locator('#cityWalkLayer')).toBeHidden()
+    await page.locator('#cityWalkLaunchBtn').click()
+    await expect(page.locator('#cityWalkLayer')).toBeVisible()
+    await enterCity(page, 'Denver, Colorado')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'speed 150%'
+    )
+  })
+})
+
 test.describe('ASCII City Walk — high contrast (CW-6)', () => {
   test('launches and plays under high contrast with the palette active', async ({
     page,

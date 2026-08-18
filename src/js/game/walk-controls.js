@@ -41,9 +41,11 @@ function normalizeHeading(h) {
  * Advance the walk state by one frame.
  *
  * @param {{x:number,y:number,headingRad:number}} state - mutated in place
- * @param {{forward?: number, strafe?: number, turn?: number, fast?: boolean}} input
+ * @param {{forward?: number, strafe?: number, turn?: number, fast?: boolean, speedScale?: number}} input
  *   forward: +1 forward / -1 back; strafe: +1 right / -1 left;
- *   turn: +1 clockwise (right) / -1 counter-clockwise
+ *   turn: +1 clockwise (right) / -1 counter-clockwise; speedScale: the
+ *   CW-Q8 walking-speed multiplier (0.5–3.0, default 1) — Shift sprint
+ *   never drops below its 4 m/s floor but scales up past it
  * @param {number} dtS - seconds since last frame
  * @param {{isBlocked: (x: number, y: number) => boolean}} [collision]
  * @returns {{moved: boolean, turned: boolean}}
@@ -64,7 +66,11 @@ export function stepWalk(state, input, dtS, collision) {
 
   if (forward === 0 && strafe === 0) return { moved: false, turned };
 
-  const speed = input.fast ? FAST_SPEED_MPS : WALK_SPEED_MPS;
+  const userScale = Number.isFinite(input.speedScale)
+    ? Math.max(0.5, Math.min(3, input.speedScale))
+    : 1;
+  const walkSpeed = WALK_SPEED_MPS * userScale;
+  const speed = input.fast ? Math.max(FAST_SPEED_MPS, walkSpeed) : walkSpeed;
   const sin = Math.sin(state.headingRad);
   const cos = Math.cos(state.headingRad);
   // Forward along the bearing; strafe 90° clockwise from it.
@@ -302,5 +308,113 @@ export function fitOrthoToBounds(boundsM, aspect, marginM = 20) {
     bottom: -halfH,
     centerX,
     centerY,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Map camera (CW-9): pan / zoom / follow state for the overhead view
+// ---------------------------------------------------------------------------
+
+export const MAP_ZOOM_MIN = 0.4;
+export const MAP_ZOOM_MAX = 8;
+// Exponential zoom: holding the key for one second multiplies by this.
+const MAP_ZOOM_RATE_PER_S = 2.2;
+// Pan speed as a fraction of the visible half-height per second, so the map
+// moves at a constant SCREEN speed at every zoom level.
+const MAP_PAN_SCREENS_PER_S = 0.9;
+
+/**
+ * Create the overhead camera state: whole-city framing, following the
+ * player.
+ *
+ * @param {{minX:number,minY:number,maxX:number,maxY:number}} boundsM
+ * @returns {{zoom:number, centerX:number, centerY:number, follow:boolean}}
+ */
+export function createMapCamera(boundsM) {
+  return {
+    zoom: 1,
+    centerX: (boundsM.minX + boundsM.maxX) / 2,
+    centerY: (boundsM.minY + boundsM.maxY) / 2,
+    follow: true,
+  };
+}
+
+/**
+ * Advance the map camera one frame. Any manual pan breaks player-follow;
+ * zoom alone keeps it.
+ *
+ * @param {ReturnType<typeof createMapCamera>} cam - mutated in place
+ * @param {{panX?: number, panY?: number, zoom?: number}} input - each axis
+ *   -1 | 0 | +1
+ * @param {number} dtS
+ * @param {{minX:number,minY:number,maxX:number,maxY:number}} boundsM
+ * @param {number} aspect - viewport aspect (for the pan screen-speed)
+ * @returns {{changed: boolean}}
+ */
+export function stepMapCamera(cam, input, dtS, boundsM, aspect) {
+  const dt = Math.min(Math.max(dtS, 0), 0.1);
+  const panX = Math.sign(input.panX ?? 0);
+  const panY = Math.sign(input.panY ?? 0);
+  const zoomDir = Math.sign(input.zoom ?? 0);
+  let changed = false;
+
+  if (zoomDir !== 0) {
+    const factor = Math.pow(MAP_ZOOM_RATE_PER_S, zoomDir * dt);
+    const next = Math.max(
+      MAP_ZOOM_MIN,
+      Math.min(MAP_ZOOM_MAX, cam.zoom * factor)
+    );
+    if (next !== cam.zoom) {
+      cam.zoom = next;
+      changed = true;
+    }
+  }
+
+  if (panX !== 0 || panY !== 0) {
+    const fit = fitOrthoToBounds(boundsM, Math.max(0.1, aspect));
+    const halfH = (fit.top - fit.bottom) / 2 / cam.zoom;
+    const step = halfH * MAP_PAN_SCREENS_PER_S * dt;
+    cam.centerX = Math.min(
+      boundsM.maxX,
+      Math.max(boundsM.minX, cam.centerX + panX * step)
+    );
+    cam.centerY = Math.min(
+      boundsM.maxY,
+      Math.max(boundsM.minY, cam.centerY + panY * step)
+    );
+    cam.follow = false;
+    changed = true;
+  }
+
+  return { changed };
+}
+
+/** Snap the map camera to a position and resume player-follow. */
+export function recenterMapCamera(cam, x, y) {
+  cam.centerX = x;
+  cam.centerY = y;
+  cam.follow = true;
+}
+
+/**
+ * The orthographic frustum for the current map-camera state: the whole-city
+ * fit scaled by 1/zoom around the camera center.
+ *
+ * @param {ReturnType<typeof createMapCamera>} cam
+ * @param {{minX:number,minY:number,maxX:number,maxY:number}} boundsM
+ * @param {number} aspect
+ * @returns {{left:number,right:number,top:number,bottom:number,centerX:number,centerY:number}}
+ */
+export function mapCameraFrustum(cam, boundsM, aspect) {
+  const fit = fitOrthoToBounds(boundsM, Math.max(0.1, aspect));
+  const halfW = (fit.right - fit.left) / 2 / cam.zoom;
+  const halfH = (fit.top - fit.bottom) / 2 / cam.zoom;
+  return {
+    left: -halfW,
+    right: halfW,
+    top: halfH,
+    bottom: -halfH,
+    centerX: cam.centerX,
+    centerY: cam.centerY,
   };
 }
