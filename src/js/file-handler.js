@@ -1344,8 +1344,9 @@ export function initFileHandler({
             );
             updatePresetDropdown();
 
-            const importedPresets =
-              presetManager.getPresetsForModel(originalFileName);
+            const importedPresets = presetManager.getPresetsForModel(
+              mainFilePath || fileName
+            );
             if (importedPresets.length > 0) {
               const parameterSetsForMap = Object.fromEntries(
                 importedPresets.map((p) => [p.name, p.parameters])
