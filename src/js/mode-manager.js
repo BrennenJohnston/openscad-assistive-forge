@@ -378,9 +378,8 @@ export class ModeManager {
   _announceSwitch(mode) {
     const messages = {
       standard:
-        'Code Editor closed. Parameter controls are now active. Tab through parameters to customize.',
-      expert:
-        'Code Editor opened. Press Escape then Tab to access other controls.',
+        'Editor closed. Parameter controls are now active. Tab through parameters to customize.',
+      expert: 'Editor opened. Press Escape then Tab to access other controls.',
     };
 
     this.announceToScreenReader(messages[mode] || `Switched to ${mode} mode`);

@@ -53,11 +53,11 @@ export const DEFAULT_SHORTCUTS = {
     key: 'd',
     description: 'Download the rendered model',
   },
-  // Code Editor
+  // Editor (C-38)
   toggleExpertMode: {
     key: 'e',
     ctrl: true,
-    description: 'Toggle Code Editor',
+    description: 'Toggle Editor',
   },
 
   // View controls
@@ -335,7 +335,7 @@ export const DEFAULT_SHORTCUTS = {
     key: '3',
     ctrl: true,
     alt: true,
-    description: 'Toggle Code Editor panel',
+    description: 'Toggle Editor panel',
   },
   toggleCustomizer: {
     key: '4',
