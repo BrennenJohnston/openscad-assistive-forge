@@ -90,13 +90,23 @@ jobs:
       # once on one run). Cache the browsers so the install step only ever
       # downloads when the Playwright version moves.
       - name: Cache Playwright browsers
+        id: pwcache
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: pw-${{ runner.os }}-chromium-${{ hashFiles('package-lock.json') }}
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        # On a cache hit the browsers are already here, and --with-deps'
+        # apt-get against the Azure mirror is the thing that actually hangs
+        # (measured: the hang survived a cache hit). The runner image already
+        # ships every system library these browsers need.
+        run: |
+          if [ "${{ steps.pwcache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install chromium
+          else
+            npx playwright install --with-deps chromium
+          fi
 
       - name: Run WASM smoke suite
         run: npx playwright test tests/e2e/wasm-smoke.spec.js --project=chromium
@@ -142,13 +152,23 @@ jobs:
       # once on one run). Cache the browsers so the install step only ever
       # downloads when the Playwright version moves.
       - name: Cache Playwright browsers
+        id: pwcache
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: pw-${{ runner.os }}-chromium-${{ hashFiles('package-lock.json') }}
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        # On a cache hit the browsers are already here, and --with-deps'
+        # apt-get against the Azure mirror is the thing that actually hangs
+        # (measured: the hang survived a cache hit). The runner image already
+        # ships every system library these browsers need.
+        run: |
+          if [ "${{ steps.pwcache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install chromium
+          else
+            npx playwright install --with-deps chromium
+          fi
 
       - name: Start dev server
         run: |
@@ -221,13 +241,23 @@ jobs:
       # once on one run). Cache the browsers so the install step only ever
       # downloads when the Playwright version moves.
       - name: Cache Playwright browsers
+        id: pwcache
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: pw-${{ runner.os }}-chromium-${{ hashFiles('package-lock.json') }}
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        # On a cache hit the browsers are already here, and --with-deps'
+        # apt-get against the Azure mirror is the thing that actually hangs
+        # (measured: the hang survived a cache hit). The runner image already
+        # ships every system library these browsers need.
+        run: |
+          if [ "${{ steps.pwcache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install chromium
+          else
+            npx playwright install --with-deps chromium
+          fi
       
       - name: Run E2E tests (Chromium shard ${{ matrix.shard }} of 2)
         run: npx playwright test --project=chromium --shard=${{ matrix.shard }}/2
@@ -341,13 +371,23 @@ jobs:
       # once on one run). Cache the browsers so the install step only ever
       # downloads when the Playwright version moves.
       - name: Cache Playwright browsers
+        id: pwcache
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: pw-${{ runner.os }}-chromium-${{ hashFiles('package-lock.json') }}
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        # On a cache hit the browsers are already here, and --with-deps'
+        # apt-get against the Azure mirror is the thing that actually hangs
+        # (measured: the hang survived a cache hit). The runner image already
+        # ships every system library these browsers need.
+        run: |
+          if [ "${{ steps.pwcache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install chromium
+          else
+            npx playwright install --with-deps chromium
+          fi
 
       - name: Build project
         run: npm run build
@@ -419,6 +459,7 @@ jobs:
       # once on one run). Cache the browsers so the install step only ever
       # downloads when the Playwright version moves.
       - name: Cache Playwright browsers
+        id: pwcache
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
@@ -517,13 +558,23 @@ jobs:
       # once on one run). Cache the browsers so the install step only ever
       # downloads when the Playwright version moves.
       - name: Cache Playwright browsers
+        id: pwcache
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: pw-${{ runner.os }}-firefox-${{ hashFiles('package-lock.json') }}
 
       - name: Install Playwright browsers (Firefox)
-        run: npx playwright install --with-deps firefox
+        # On a cache hit the browsers are already here, and --with-deps'
+        # apt-get against the Azure mirror is the thing that actually hangs
+        # (measured: the hang survived a cache hit). The runner image already
+        # ships every system library these browsers need.
+        run: |
+          if [ "${{ steps.pwcache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install firefox
+          else
+            npx playwright install --with-deps firefox
+          fi
       
       - name: Run E2E tests (Firefox)
         run: npx playwright test --project=firefox
@@ -607,13 +658,23 @@ jobs:
       # once on one run). Cache the browsers so the install step only ever
       # downloads when the Playwright version moves.
       - name: Cache Playwright browsers
+        id: pwcache
         uses: actions/cache@v4
         with:
           path: ~/Library/Caches/ms-playwright
           key: pw-${{ runner.os }}-webkit-${{ hashFiles('package-lock.json') }}
 
       - name: Install Playwright browsers (WebKit)
-        run: npx playwright install --with-deps webkit
+        # On a cache hit the browsers are already here, and --with-deps'
+        # apt-get against the Azure mirror is the thing that actually hangs
+        # (measured: the hang survived a cache hit). The runner image already
+        # ships every system library these browsers need.
+        run: |
+          if [ "${{ steps.pwcache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install webkit
+          else
+            npx playwright install --with-deps webkit
+          fi
       
       - name: Run E2E tests (WebKit)
         run: npx playwright test --project=webkit
@@ -763,13 +824,23 @@ jobs:
       # once on one run). Cache the browsers so the install step only ever
       # downloads when the Playwright version moves.
       - name: Cache Playwright browsers
+        id: pwcache
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: pw-${{ runner.os }}-chromium-${{ hashFiles('package-lock.json') }}
 
       - name: Install Playwright browsers (Chromium)
-        run: npx playwright install --with-deps chromium
+        # On a cache hit the browsers are already here, and --with-deps'
+        # apt-get against the Azure mirror is the thing that actually hangs
+        # (measured: the hang survived a cache hit). The runner image already
+        # ships every system library these browsers need.
+        run: |
+          if [ "${{ steps.pwcache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install chromium
+          else
+            npx playwright install --with-deps chromium
+          fi
       
       - name: Check for existing baselines
         id: check-baselines
