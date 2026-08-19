@@ -86,6 +86,15 @@ jobs:
       - name: Download OpenSCAD WASM files
         run: npm run setup-wasm
 
+      # AF-CI2: the browser download hung twelve CI jobs in two days (four at
+      # once on one run). Cache the browsers so the install step only ever
+      # downloads when the Playwright version moves.
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-chromium-${{ hashFiles('package-lock.json') }}
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
@@ -128,6 +137,15 @@ jobs:
 
       - name: Download OpenSCAD WASM files
         run: npm run setup-wasm
+
+      # AF-CI2: the browser download hung twelve CI jobs in two days (four at
+      # once on one run). Cache the browsers so the install step only ever
+      # downloads when the Playwright version moves.
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-chromium-${{ hashFiles('package-lock.json') }}
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
@@ -199,6 +217,15 @@ jobs:
       - name: Download OpenSCAD WASM files
         run: npm run setup-wasm
       
+      # AF-CI2: the browser download hung twelve CI jobs in two days (four at
+      # once on one run). Cache the browsers so the install step only ever
+      # downloads when the Playwright version moves.
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-chromium-${{ hashFiles('package-lock.json') }}
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
       
@@ -310,6 +337,15 @@ jobs:
       - name: Download OpenSCAD WASM files
         run: npm run setup-wasm
 
+      # AF-CI2: the browser download hung twelve CI jobs in two days (four at
+      # once on one run). Cache the browsers so the install step only ever
+      # downloads when the Playwright version moves.
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-chromium-${{ hashFiles('package-lock.json') }}
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
@@ -379,8 +415,27 @@ jobs:
       - name: Download OpenSCAD WASM files
         run: npm run setup-wasm
       
+      # AF-CI2: the browser download hung twelve CI jobs in two days (four at
+      # once on one run). Cache the browsers so the install step only ever
+      # downloads when the Playwright version moves.
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-msedge-ffmpeg-${{ hashFiles('package-lock.json') }}
+
       - name: Install Playwright browsers (Edge/msedge)
-        run: npx playwright install --with-deps msedge
+        # AF-CI2: the msedge channel is an apt download, which the cache above
+        # cannot hold - but the runner image ships Microsoft Edge already, so
+        # only download when it is genuinely missing. ffmpeg (video recording)
+        # comes from the cached ms-playwright directory.
+        run: |
+          if command -v microsoft-edge >/dev/null 2>&1; then
+            echo "Microsoft Edge is preinstalled on this runner; skipping the download"
+          else
+            npx playwright install --with-deps msedge
+          fi
+          npx playwright install ffmpeg
       
       - name: Run E2E tests (Edge shard ${{ matrix.shard }} of 2)
         run: npx playwright test --project=msedge --shard=${{ matrix.shard }}/2
@@ -458,6 +513,15 @@ jobs:
       - name: Download OpenSCAD WASM files
         run: npm run setup-wasm
       
+      # AF-CI2: the browser download hung twelve CI jobs in two days (four at
+      # once on one run). Cache the browsers so the install step only ever
+      # downloads when the Playwright version moves.
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-firefox-${{ hashFiles('package-lock.json') }}
+
       - name: Install Playwright browsers (Firefox)
         run: npx playwright install --with-deps firefox
       
@@ -539,6 +603,15 @@ jobs:
       - name: Download OpenSCAD WASM files
         run: npm run setup-wasm
       
+      # AF-CI2: the browser download hung twelve CI jobs in two days (four at
+      # once on one run). Cache the browsers so the install step only ever
+      # downloads when the Playwright version moves.
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/ms-playwright
+          key: pw-${{ runner.os }}-webkit-${{ hashFiles('package-lock.json') }}
+
       - name: Install Playwright browsers (WebKit)
         run: npx playwright install --with-deps webkit
       
@@ -686,6 +759,15 @@ jobs:
       - name: Download OpenSCAD WASM files
         run: npm run setup-wasm
       
+      # AF-CI2: the browser download hung twelve CI jobs in two days (four at
+      # once on one run). Cache the browsers so the install step only ever
+      # downloads when the Playwright version moves.
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-chromium-${{ hashFiles('package-lock.json') }}
+
       - name: Install Playwright browsers (Chromium)
         run: npx playwright install --with-deps chromium
       
