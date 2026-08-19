@@ -15774,6 +15774,7 @@ function renderLibraryUI(detectedLibraries) {
 
     // Add event listener
     checkbox.addEventListener('change', () => {
+      if (checkbox.disabled) return;
       if (checkbox.checked) {
         libraryManager.enable(lib.id);
       } else {
@@ -15785,6 +15786,33 @@ function renderLibraryUI(detectedLibraries) {
       if (statusArea) {
         statusArea.textContent = `${lib.name} ${checkbox.checked ? 'enabled' : 'disabled'}`;
       }
+    });
+  });
+
+  // AF-4: the list always showed the same four names whether or not this
+  // copy of the app can actually serve their files. Probe reality (each
+  // library's own manifest, the file the worker mounts from) and say so on
+  // the row. An ENABLED library stays operable even when unreachable, so it
+  // can still be switched off.
+  libraryManager.checkAvailability().then((availability) => {
+    allLibraries.forEach((lib) => {
+      if (availability[lib.id] !== false) return;
+      const checkbox = libraryList.querySelector(
+        `input[data-library-id="${lib.id}"]`
+      );
+      if (!checkbox) return; // list re-rendered since the probe started
+      const row = checkbox.closest('.library-item');
+      if (!row || row.querySelector('.library-unavailable-note')) return;
+      if (!checkbox.checked) {
+        checkbox.disabled = true;
+      }
+      row.classList.add('library-unavailable');
+      const note = document.createElement('span');
+      note.className = 'library-unavailable-note';
+      // D-35: new string, flagged in the ledger for owner review.
+      note.textContent =
+        'Not available right now: the library’s files could not be reached.';
+      row.querySelector('.library-info')?.appendChild(note);
     });
   });
 }
