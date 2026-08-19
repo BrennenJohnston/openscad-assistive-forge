@@ -11,6 +11,7 @@ jobs:
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
       - name: Checkout code
@@ -67,6 +68,7 @@ jobs:
   wasm-smoke:
     name: WASM Smoke (blocking, no skips)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     steps:
       - name: Checkout code
@@ -109,6 +111,7 @@ jobs:
   parity-check:
     name: Geometry Parity (golden, blocking)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     steps:
       - name: Checkout code
@@ -171,6 +174,7 @@ jobs:
   e2e-tests-chromium-shard:
     name: E2E Tests (Chromium ${{ matrix.shard }}/2)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     strategy:
       # A red shard must not cancel its sibling: knowing whether the failure is
@@ -263,6 +267,7 @@ jobs:
   e2e-tests-chromium:
     name: E2E Tests (Chromium)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: [e2e-tests-chromium-shard]
     if: always()
 
@@ -287,6 +292,7 @@ jobs:
   e2e-tests-production:
     name: E2E Tests (Production CSP)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     steps:
       - name: Checkout code
@@ -348,6 +354,7 @@ jobs:
   e2e-tests-edge:
     name: E2E Tests (Edge ${{ matrix.shard }}/2)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     strategy:
       # A red shard must not cancel its sibling: knowing whether the failure
@@ -427,6 +434,7 @@ jobs:
   e2e-tests-firefox:
     name: E2E Tests (Firefox)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     
     steps:
       - name: Checkout code
@@ -506,6 +514,7 @@ jobs:
   e2e-tests-webkit:
     name: E2E Tests (Safari/WebKit)
     runs-on: macos-latest
+    timeout-minutes: 45
     continue-on-error: true
     
     steps:
@@ -562,6 +571,7 @@ jobs:
   build:
     name: Build Check
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
       - name: Checkout code
@@ -602,6 +612,7 @@ jobs:
   security-checks:
     name: Security Checks
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
       - name: Checkout code
@@ -657,6 +668,7 @@ jobs:
   visual-regression:
     name: Visual Regression (Linux)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     steps:
       - name: Checkout code
@@ -739,6 +751,7 @@ jobs:
   lint-markdown:
     name: Lint Markdown
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout code
