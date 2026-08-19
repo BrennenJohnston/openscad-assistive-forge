@@ -2668,10 +2668,10 @@ async function initApp() {
         if (!['save', 'delete', 'rename'].includes(event)) return;
         if (!folderWriteBack.isAvailable()) return;
         const wbState = stateManager.getState();
-        if (!wbState.uploadedFile || wbState.uploadedFile.name !== modelName) {
+        if (!wbState.uploadedFile || presetModelKey(wbState) !== modelName) {
           return;
         }
-        const mainPath = wbState.mainFilePath || wbState.uploadedFile.name;
+        const mainPath = presetModelKey(wbState);
         const sidecarPath = mainPath.replace(/\.scad$/i, '.json');
         if (sidecarPath === mainPath) return;
         const hiddenParams = wbState.schema?.hiddenParameters || {};
@@ -8542,7 +8542,7 @@ if (rounded) {
           // After handleFile, presets have been auto-imported from JSON files.
           // Find the matching preset by name and programmatically select it.
           const state = stateManager.getState();
-          const modelName = state.uploadedFile?.name;
+          const modelName = state.uploadedFile ? presetModelKey(state) : null;
           if (modelName) {
             const presets = presetManager.getPresetsForModel(modelName);
             const match = presets.find(
@@ -12873,6 +12873,14 @@ if (rounded) {
     updatePresetControlStates();
   }
 
+  // D-47: user presets are keyed by the PROJECT's main file, not the archive
+  // that delivered it. A ZIP's filename changes when someone renames or
+  // re-downloads it; the main .scad path inside it does not. The desktop keys
+  // presets the same way (the sidecar .json sits beside the .scad).
+  function presetModelKey(state) {
+    return state.mainFilePath || state.uploadedFile?.name;
+  }
+
   // Update preset dropdown based on current model
   // Preserves current selection if the preset still exists
   // Applies the user's saved sort preference (shared with Import/Export modal)
@@ -12894,7 +12902,10 @@ if (rounded) {
       return;
     }
 
-    const modelName = state.uploadedFile.name;
+    const modelName = presetModelKey(state);
+    // Presets saved before D-47 sit under the archive's name; move them to
+    // the stable key once. No-op on every later call.
+    presetManager.adoptLegacyModelKey(state.uploadedFile.name, modelName);
     const currentSortOrder =
       localStorage.getItem(PRESET_SORT_KEY) || 'name-asc';
     const presets = presetManager.getSortedPresets(modelName, currentSortOrder);
@@ -13107,7 +13118,7 @@ if (rounded) {
 
       // Auto-rename duplicates: "test1" → "test1 (1)" → "test1 (2)" etc.
       const existingPresets = presetManager.getPresetsForModel(
-        state.uploadedFile.name
+        presetModelKey(state)
       );
       let finalName = name;
       const existingNames = new Set(existingPresets.map((p) => p.name));
@@ -13136,7 +13147,7 @@ if (rounded) {
 
         // Save preset and capture returned object (contains id and name)
         const savedPreset = presetManager.savePreset(
-          state.uploadedFile.name,
+          presetModelKey(state),
           finalName,
           state.parameters,
           {
@@ -13250,7 +13261,7 @@ if (rounded) {
       return;
     }
 
-    const modelName = state.uploadedFile.name;
+    const modelName = presetModelKey(state);
     let currentSortOrder = localStorage.getItem(PRESET_SORT_KEY) || 'name-asc';
     const presets = presetManager.getSortedPresets(modelName, currentSortOrder);
 
@@ -13663,7 +13674,7 @@ if (rounded) {
 
     // Get the preset to update
     const preset = presetManager.loadPreset(
-      state.uploadedFile.name,
+      presetModelKey(state),
       selectedPresetId
     );
     if (!preset) {
@@ -13688,7 +13699,7 @@ if (rounded) {
 
       // Save/overwrite the current preset with current parameters
       const savedPreset = presetManager.savePreset(
-        state.uploadedFile.name,
+        presetModelKey(state),
         preset.name, // Use existing name - this will overwrite
         state.parameters,
         {
@@ -13741,7 +13752,7 @@ if (rounded) {
       params = { ...state.defaults };
     } else {
       const preset = presetManager.loadPreset(
-        state.uploadedFile.name,
+        presetModelKey(state),
         selectedPresetId
       );
       if (!preset) {
@@ -13754,7 +13765,7 @@ if (rounded) {
     }
 
     const existingNames = new Set(
-      (presetManager.getPresetsForModel(state.uploadedFile.name) || []).map(
+      (presetManager.getPresetsForModel(presetModelKey(state)) || []).map(
         (p) => p.name
       )
     );
@@ -13765,7 +13776,7 @@ if (rounded) {
 
     try {
       const savedPreset = presetManager.savePreset(
-        state.uploadedFile.name,
+        presetModelKey(state),
         copyName,
         params,
         { description }
@@ -13795,7 +13806,7 @@ if (rounded) {
 
     // Get preset info for confirmation
     const preset = presetManager.loadPreset(
-      state.uploadedFile.name,
+      presetModelKey(state),
       selectedPresetId
     );
     if (!preset) {
@@ -13818,7 +13829,7 @@ if (rounded) {
 
     try {
       const deleted = presetManager.deletePreset(
-        state.uploadedFile.name,
+        presetModelKey(state),
         selectedPresetId
       );
       if (deleted) {
@@ -14154,7 +14165,7 @@ if (rounded) {
       return;
     }
 
-    const preset = presetManager.loadPreset(state.uploadedFile.name, presetId);
+    const preset = presetManager.loadPreset(presetModelKey(state), presetId);
 
     if (preset) {
       // Log compatibility info (desktop OpenSCAD parity: silently skip extras)

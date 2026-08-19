@@ -457,6 +457,41 @@ export class PresetManager {
   }
 
   /**
+   * D-47: move a bucket saved under a legacy key (the delivering archive's
+   * filename) to the project's stable key (its main file path). Runs on
+   * every dropdown refresh and is a no-op once the legacy bucket is gone.
+   * A preset whose name already exists under the stable key is left in
+   * place under the legacy key rather than overwriting anything.
+   * @param {string} legacyName - the old bucket key (archive filename)
+   * @param {string} stableName - the project's stable key
+   * @returns {number} how many presets moved
+   */
+  adoptLegacyModelKey(legacyName, stableName) {
+    if (!legacyName || !stableName || legacyName === stableName) return 0;
+    const legacy = this.presets[legacyName];
+    if (!Array.isArray(legacy) || legacy.length === 0) return 0;
+
+    const target = this.presets[stableName] || [];
+    const taken = new Set(target.map((p) => p.name));
+    const moved = [];
+    const kept = [];
+    for (const preset of legacy) {
+      (taken.has(preset.name) ? kept : moved).push(preset);
+    }
+    if (moved.length === 0) return 0;
+
+    this.presets[stableName] = [...target, ...moved];
+    if (kept.length > 0) {
+      this.presets[legacyName] = kept;
+    } else {
+      delete this.presets[legacyName];
+    }
+    this.persist();
+    this.notifyListeners('save', null, stableName);
+    return moved.length;
+  }
+
+  /**
    * Get all presets for the current model
    * @param {string} modelName - Name of the model
    * @returns {Array} Array of presets for this model
