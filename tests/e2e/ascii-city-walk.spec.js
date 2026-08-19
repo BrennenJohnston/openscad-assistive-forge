@@ -68,6 +68,20 @@ async function webglAvailable(page) {
   })
 }
 
+/**
+ * The compass word from the HUD line, exactly. Never assert headings with
+ * substring matching: "northeast" and "northwest" CONTAIN "north" (and the
+ * south pair contains "south"), so not.toContainText('facing north') fails
+ * on a turn that lands one sector over - which is precisely what Edge's
+ * frame cadence produced, and what reddened this suite three develop runs
+ * in a row (AF-E).
+ */
+const hudHeading = (page) =>
+  page
+    .locator('#cityWalkHudStatus')
+    .innerText()
+    .then((t) => t.match(/facing (\w+)/)?.[1] ?? null)
+
 async function enterCity(page, cityName = 'Seattle, Washington') {
   test.skip(
     !(await webglAvailable(page)),
@@ -127,17 +141,14 @@ test.describe('ASCII City Walk — playing', () => {
     ).toBeFocused()
 
     await enterCity(page)
-    await expect(page.locator('#cityWalkHudStatus')).toContainText(
-      'facing north'
-    )
+    await expect.poll(() => hudHeading(page)).toBe('north')
 
-    // Turning right for >1s moves the compass off north
+    // Turning right for >1s moves the compass off north - to ANY other
+    // sector. Exact label, not substring (see hudHeading).
     await page.keyboard.down('ArrowRight')
     await page.waitForTimeout(1300)
     await page.keyboard.up('ArrowRight')
-    await expect(page.locator('#cityWalkHudStatus')).not.toContainText(
-      'facing north'
-    )
+    await expect.poll(() => hudHeading(page)).not.toBe('north')
 
     // Map view toggle and back
     await page.keyboard.press('KeyM')
@@ -379,13 +390,11 @@ test.describe('ASCII City Walk — high contrast (CW-6)', () => {
       /Character size 110 percent/
     )
 
-    // …and walking still walks.
+    // …and walking still walks. Exact label, not substring (see hudHeading).
     await page.keyboard.down('ArrowRight')
     await page.waitForTimeout(1300)
     await page.keyboard.up('ArrowRight')
-    await expect(page.locator('#cityWalkHudStatus')).not.toContainText(
-      'facing north'
-    )
+    await expect.poll(() => hudHeading(page)).not.toBe('north')
 
     await page.keyboard.press('Escape')
     await expect(page.locator('#cityWalkLayer')).toBeHidden()
