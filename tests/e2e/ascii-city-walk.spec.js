@@ -45,7 +45,34 @@ async function launchGame(page) {
   await expect(page.locator('#cityWalkLayer')).toBeVisible({ timeout: 20000 })
 }
 
+/**
+ * The game is WebGL-only: startGame() cannot build a scene without a GL
+ * context, so the app shows its accessible fallback and leaves the viewport
+ * hidden. Firefox on Linux CI has no WebGL AT ALL - the main 3D preview falls
+ * back there too - so the in-city cases have nothing to exercise there.
+ *
+ * Gate on the CAPABILITY, never on a browser name. These cases run wherever
+ * WebGL exists (local Firefox included, where they pass), and they start
+ * running again by themselves if CI ever gains it - no stale skip to clean up.
+ * Everything BEFORE entering a city still runs on every browser: the layer,
+ * the picker, the modal semantics, and the axe scan.
+ */
+async function webglAvailable(page) {
+  return page.evaluate(() => {
+    try {
+      const canvas = document.createElement('canvas')
+      return Boolean(canvas.getContext('webgl2') || canvas.getContext('webgl'))
+    } catch {
+      return false
+    }
+  })
+}
+
 async function enterCity(page, cityName = 'Seattle, Washington') {
+  test.skip(
+    !(await webglAvailable(page)),
+    'This browser has no WebGL, so the 3D city cannot start.'
+  )
   await page.getByRole('button', { name: cityName }).click()
   await expect(page.locator('#cityWalkViewport')).toBeVisible({
     timeout: 30000,
@@ -365,10 +392,39 @@ test.describe('ASCII City Walk — high contrast (CW-6)', () => {
   })
 })
 
-test.describe('ASCII City Walk — accessibility', () => {
-  test('axe: city picker and in-game layer have no violations', async ({
+test.describe('ASCII City Walk — without WebGL', () => {
+  test('says so accessibly, and Escape still leaves as promised', async ({
     page,
   }) => {
+    await launchGame(page)
+    test.skip(
+      await webglAvailable(page),
+      'This browser has WebGL, so the fallback never appears.'
+    )
+
+    await page.getByRole('button', { name: 'Seattle, Washington' }).click()
+
+    // The promise the fallback makes must be kept: it is the only thing a
+    // player without WebGL ever sees, and it tells them how to get out.
+    const startError = page.locator('#cityWalkStartError')
+    await expect(startError).toBeVisible()
+    await expect(startError).toHaveAttribute('role', 'alert')
+    await expect(startError).toContainText('3D rendering is not available')
+    await expect(page.locator('#cityWalkViewport')).toBeHidden()
+
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .include('#cityWalkLayer')
+      .analyze()
+    expectOnlyAllowedViolations(results)
+
+    await page.keyboard.press('Escape')
+    await expect(page.locator('#cityWalkLayer')).toBeHidden()
+  })
+})
+
+test.describe('ASCII City Walk — accessibility', () => {
+  test('axe: the city picker has no violations', async ({ page }) => {
     await launchGame(page)
 
     // Deliberately scan WITH a hovered primary button: a hover state is
@@ -382,7 +438,10 @@ test.describe('ASCII City Walk — accessibility', () => {
       .include('#cityWalkLayer')
       .analyze()
     expectOnlyAllowedViolations(pickerResults)
+  })
 
+  test('axe: the in-game layer has no violations', async ({ page }) => {
+    await launchGame(page)
     await enterCity(page)
     await page.keyboard.press('KeyH') // help open exercises the panel too
 
