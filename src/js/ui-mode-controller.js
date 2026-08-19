@@ -84,7 +84,10 @@ const PANEL_REGISTRY = [
   // fileActions panel removed — now in File toolbar menu
   {
     id: 'codeEditor',
-    label: 'Code Editor',
+    // C-38, owner-signed 2026-08-19: the menu item says "Editor", so what
+    // you hear says "Editor" - one word everywhere this label reaches
+    // (density list, hide/toggle names, opened/closed, Jump To).
+    label: 'Editor',
     selector: '#expertModeToggle, #expertModePanel',
     defaultHiddenInBasic: true,
   },

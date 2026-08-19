@@ -896,7 +896,7 @@ export class ClassicLayoutController {
       }
       if (btn) {
         btn.setAttribute('aria-expanded', 'true');
-        // NEW STRING, owner review pending (D-35).
+        // Owner-approved 2026-08-19 (the consolidated D-35 pack, section 9).
         const label = `Stow the ${def.positionLabel}`;
         btn.setAttribute('aria-label', label);
         btn.setAttribute('title', label);

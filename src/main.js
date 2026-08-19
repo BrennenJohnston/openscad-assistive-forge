@@ -867,8 +867,8 @@ function toggleEditorPanel() {
     layout.toggleEditor(); // announces for itself
     return;
   }
-  // Forge: open or close the Code Editor itself — the same command as its
-  // toolbar toggle, announced by the mode manager ("Code Editor opened…").
+  // Forge: open or close the Editor itself — the same command as its
+  // toolbar toggle, announced by the mode manager ("Editor opened…", C-38).
   // This used to route through togglePanelVisibility('codeEditor'), whose
   // primary element is the toggle BUTTON: the item hid the editor's entry
   // point from the toolbar while the editor stayed shut (UF-10). Hiding
@@ -3862,7 +3862,7 @@ async function initApp() {
     const editor = modeManager?.getEditorInstance?.();
     const expertMode = modeManager?.isExpertMode?.();
     const canEdit = Boolean(editor) && (expertMode || isEditorOnScreen());
-    const editorTip = 'Available when the Code Editor is open';
+    const editorTip = 'Available when the Editor is open';
 
     // Undo and Redo follow the focus the menu bar just took: from the code
     // editor they undo text, from anywhere else a parameter change. The

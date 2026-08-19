@@ -113,8 +113,10 @@ describe('ModeManager', () => {
     it('should announce mode switch to screen reader', () => {
       modeManager.switchMode('expert');
 
+      // C-38 (owner-signed 2026-08-19): the announcement says "Editor",
+      // matching the menu item. Pinned exactly so a drift either way is red.
       expect(mockAnnounce).toHaveBeenCalledWith(
-        expect.stringContaining('Code Editor')
+        'Editor opened. Press Escape then Tab to access other controls.'
       );
     });
 

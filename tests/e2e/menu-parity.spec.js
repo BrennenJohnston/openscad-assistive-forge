@@ -1286,7 +1286,7 @@ test.describe('Design menu and Export submenu parity (G3)', () => {
 })
 
 test.describe('Forge direction (UF-10)', () => {
-  test('Window ▸ Editor opens and closes the Code Editor in Forge', async ({
+  test('Window ▸ Editor opens and closes the Editor in Forge', async ({
     page,
   }) => {
     await loadFixture(page)
