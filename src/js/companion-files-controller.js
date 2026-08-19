@@ -654,8 +654,11 @@ export function initCompanionFilesController({
     }
 
     try {
-      const fileName = file.name;
-      const ext = fileName.split('.').pop()?.toLowerCase();
+      // AF-4: a file lands where you are STANDING in the tree, not always at
+      // the root. companionCurrentPath is the folder the tree is showing.
+      const targetPath = [...companionCurrentPath, file.name].join('/');
+      const fileName = targetPath;
+      const ext = file.name.split('.').pop()?.toLowerCase();
       const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext);
 
       let content;

@@ -128,6 +128,9 @@ const TREE_CONTROLS = [
   { name: 'edit button', selector: '#projectFilesControls [data-action="edit"]' },
   { name: 'remove button', selector: '#projectFilesControls [data-action="remove"]' },
   { name: 'folder row', selector: '#projectFilesControls [data-folder-enter]' },
+  // AF-4 (C-20): the two action buttons under the tree join the contract.
+  { name: 'add-file button', selector: '#projectFilesControls .project-files-add-btn' },
+  { name: 'save-as-project button', selector: '#companionSaveBtn' },
 ];
 
 /**
@@ -306,6 +309,52 @@ test.describe('Companion files: the tree keeps your place (D-54)', () => {
     ).toBeVisible();
 
     expect((await focusedRow(page)).where).toBe('folder=utils');
+  });
+});
+
+test.describe('Companion files: Add File lands where you are standing (AF-4)', () => {
+  test.skip(isCI, 'needs the WASM file handler, like the rest of this file');
+
+  test('a file added while inside utils/ is filed under utils/, not the root', async ({
+    page,
+  }) => {
+    await openCompanionTree(page, { enterFolder: 'utils' });
+
+    await page.locator('#addCompanionFileInput').setInputFiles({
+      name: 'added-note.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from('a note added from inside utils/'),
+    });
+
+    // Filed under the folder the tree was showing...
+    await expect(
+      page.locator('[data-path="utils/added-note.txt"]').first()
+    ).toBeVisible({ timeout: 10_000 });
+
+    // ...and NOT as a second copy at the root.
+    await page
+      .locator('#projectFilesControls .file-nav-breadcrumb-home')
+      .click();
+    await expect(
+      page.locator('[data-path="added-note.txt"]')
+    ).toHaveCount(0);
+    await expect(
+      page.locator('#projectFilesList [data-folder-enter="utils"]')
+    ).toBeVisible();
+  });
+
+  test('a file added at the root still lands at the root', async ({ page }) => {
+    await openCompanionTree(page, { enterFolder: null });
+
+    await page.locator('#addCompanionFileInput').setInputFiles({
+      name: 'root-note.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from('a note added at the root'),
+    });
+
+    await expect(
+      page.locator('[data-path="root-note.txt"]').first()
+    ).toBeVisible({ timeout: 10_000 });
   });
 });
 

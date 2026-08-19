@@ -7297,6 +7297,14 @@ body.first-visit-blocking #app {
   line-height: 1.3;
 }
 
+/* AF-4: a library whose files this copy cannot reach says so on its row. */
+.library-unavailable-note {
+  display: block;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin-top: var(--space-xs);
+}
+
 .library-footer {
   padding-top: var(--space-sm);
   border-top: 1px solid var(--color-border);
@@ -7841,6 +7849,15 @@ button.file-nav-folder-row {
 .companion-save-btn {
   margin-top: var(--space-xs);
   width: 100%;
+}
+
+/* AF-4 (C-20): .btn-sm alone resolves to 32px on desktop; Add File and
+   Save as Project are real targets, so they take the full touch token
+   (44px touch / 36px fine pointer) - the UF-31 rule, same as the
+   linked-folder actions. */
+.project-files-actions .btn,
+.companion-save-btn {
+  min-height: var(--size-touch-target);
 }
 
 /* High Contrast Mode */

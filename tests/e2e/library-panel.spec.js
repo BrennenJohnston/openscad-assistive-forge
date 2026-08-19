@@ -102,3 +102,44 @@ test.describe('File > Show Library Folder…', () => {
       .toBe('summary.library-summary');
   });
 });
+
+test.describe('Libraries panel: names reflect reality (AF-4)', () => {
+  // Availability is probed per library against its own manifest.json - the
+  // file the worker mounts from. Stub two outcomes so the case is
+  // deterministic on every machine, downloaded bundles or not.
+  test('an unreachable library says so and cannot be switched on', async ({
+    page,
+  }) => {
+    await page.route('**/libraries/MCAD/manifest.json', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
+    );
+    for (const missing of ['BOSL2', 'NopSCADlib', 'dotSCAD']) {
+      await page.route(`**/libraries/${missing}/manifest.json`, (route) =>
+        route.fulfill({ status: 404, body: '' })
+      );
+    }
+
+    await openProject(page, stamp('standard', 'standard'));
+
+    const row = (id) =>
+      page.locator(`.library-item:has(input[data-library-id="${id}"])`);
+
+    // The unreachable one: visible reason, box disabled.
+    await expect(
+      row('dotSCAD').locator('.library-unavailable-note')
+    ).toHaveText(
+      'Not available right now: the library’s files could not be reached.',
+      { timeout: 15_000 }
+    );
+    await expect(
+      row('dotSCAD').locator('input[data-library-id]')
+    ).toBeDisabled();
+
+    // The reachable one: no note, box operable.
+    await expect(row('MCAD').locator('.library-unavailable-note')).toHaveCount(
+      0
+    );
+    await expect(row('MCAD').locator('input[data-library-id]')).toBeEnabled();
+  });
+});
+
