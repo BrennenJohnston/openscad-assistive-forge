@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Look up at the towers in the City Walk** (CW-13) - the game's camera is no longer fixed to the
+  horizon. R and F tilt the gaze up and down at 45 degrees a second, stopping at 60 degrees either
+  way, and V returns it to level and says so. Dragging the viewport with a mouse looks around too,
+  at a quarter of a degree per pixel, with no pointer lock and no cursor capture - a press that
+  travels less than four pixels is still an ordinary click. The bearing survives every tilt, so
+  looking up at a tower and then walking still walks the way you were facing, and the HUD adds
+  "looking up" or "looking down" while the gaze is tilted. Every look action has a key; the mouse
+  drag is an addition, never the only way to reach anything. The map view keeps both hands off:
+  walking is suspended there and so is looking around
+
 - **City Walk characters small enough to disappear into** (CW-12) - the game's character size now
   runs from 10% to 100% in ten-point steps, replacing the old 50-250%, and persists across
   sessions on its own preference key. The floor was MEASURED rather than guessed: at a fullscreen
@@ -75,6 +85,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   open layer)
 
 ### Fixed
+
+- **A click on the City Walk killed the keyboard** (D-59) - the game's viewport is not a focusable
+  element, so a plain click anywhere on the city moved focus to the page body, outside the layer
+  the game's key handler is bound to. Every key stopped working for the rest of the session, in
+  both the street and map views, with only Escape and Tab as a way back and nothing on screen to
+  say so. Present since the game first shipped; found while checking that the new mouse drag left
+  the focus trap alone, and measured on the release base before and after the fix
 
 - **Mono variant: primary buttons keep a legible label while hovered** (D-55 pattern) — the mono
   theme's generic button hover repaints the surface with `--color-hover-bg` and nothing else,
