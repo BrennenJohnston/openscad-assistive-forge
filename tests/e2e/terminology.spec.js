@@ -110,19 +110,14 @@ test.describe('Terminology Consistency - Saved Projects', () => {
     // Look for save project button
     const saveBtn = page.locator('button:has-text("Save"), button[aria-label*="Save"]').first()
     
-    if (await saveBtn.isVisible().catch(() => false)) {
-      const text = await saveBtn.textContent()
-      const ariaLabel = await saveBtn.getAttribute('aria-label')
-      const title = await saveBtn.getAttribute('title')
-      
-      // If it mentions "design", it should be updated to "project"
-      const combinedText = `${text || ''} ${ariaLabel || ''} ${title || ''}`.toLowerCase()
-      
-      if (combinedText.includes('saved design')) {
-        // This is a terminology issue that should be flagged
-        console.warn('Found "saved design" terminology in save button, should be "saved project"')
-      }
-    }
+    // AF-7: this used to console.warn and pass regardless. The ban is the
+    // test - a save control may never say "saved design".
+    await expect(saveBtn).toBeVisible()
+    const text = await saveBtn.textContent()
+    const ariaLabel = await saveBtn.getAttribute('aria-label')
+    const title = await saveBtn.getAttribute('title')
+    const combinedText = `${text || ''} ${ariaLabel || ''} ${title || ''}`.toLowerCase()
+    expect(combinedText).not.toContain('saved design')
   })
 
   test('load confirmation dialog uses "Saved Project" terminology', async ({ page }) => {
@@ -133,21 +128,31 @@ test.describe('Terminology Consistency - Saved Projects', () => {
     
     await loadSimpleBoxExample(page)
 
-    // Try to save the current project
+    // AF-7: this used to assert only that <body> was visible. The save
+    // modal fires on load for an unsaved example - its copy is the check.
+    const modal = page.locator('.save-project-modal')
+    if (await modal.isVisible().catch(() => false)) {
+      const copy = ((await modal.textContent()) || '').toLowerCase()
+      expect(copy).not.toContain('saved design')
+      expect(copy).toContain('project')
+      await page.locator('#saveProjectNotNow').click()
+    }
     const saveBtn = page.locator('button:has-text("Save")').first()
     await expect(saveBtn).toBeVisible()
-    
-    // The specific dialog text testing would require actually triggering dialogs
-    // For now, verify the button structure is present
-    expect(await page.locator('body').isVisible()).toBe(true)
+    const saveWords = `${(await saveBtn.textContent()) || ''} ${(await saveBtn.getAttribute('aria-label')) || ''}`.toLowerCase()
+    expect(saveWords).not.toContain('design')
   })
 
   test('delete confirmation uses "Saved Project" terminology', async ({ page }) => {
-    // This would require having a saved project and clicking delete
-    // Testing the actual dialog would be more complex
-    // For now, verify the page loads without terminology errors
+    // AF-7: this used to assert only that <body> was visible - while the
+    // shipped dialog title said "Delete Saved Design". The title string is
+    // owned by saved-projects-ui; drive the module boundary directly.
     await page.goto('/')
-    await expect(page.locator('body')).toBeVisible()
+    const title = await page.evaluate(async () => {
+      const mod = await import('/src/js/saved-projects-ui.js')
+      return mod.DELETE_CONFIRM_TITLE
+    })
+    expect(title).toBe('Delete Saved Project')
   })
 })
 
@@ -279,17 +284,13 @@ test.describe('Accessibility Labels Terminology', () => {
       
       const lowerLabel = ariaLabel.toLowerCase()
       
-      // If it mentions saved items, should use "project" not "design"
-      if (lowerLabel.includes('saved')) {
-        if (lowerLabel.includes('design') && !lowerLabel.includes('project')) {
-          console.warn(`Found aria-label with "design" terminology: "${ariaLabel}"`)
-        }
-      }
-      
-      // If it mentions companion/project files, should use "companion"
-      if (lowerLabel.includes('files') && lowerLabel.includes('project')) {
-        console.warn(`Consider using "companion files" instead of "project files" in: "${ariaLabel}"`)
-      }
+      // AF-7: both checks used to console.warn and pass regardless - while
+      // index.html shipped aria-label="Project files" on the companion list.
+      expect(lowerLabel, `aria-label bans "saved design": "${ariaLabel}"`).not.toContain('saved design')
+      expect(
+        lowerLabel.includes('project files'),
+        `companion surfaces are "Companion files", not "Project files": "${ariaLabel}"`
+      ).toBe(false)
     }
   })
 
@@ -305,10 +306,8 @@ test.describe('Accessibility Labels Terminology', () => {
       
       const lowerTitle = title.toLowerCase()
       
-      // Check for old terminology
-      if (lowerTitle.includes('saved design')) {
-        console.warn(`Found title with "saved design": "${title}"`)
-      }
+      // AF-7: used to warn and pass. Banned outright.
+      expect(lowerTitle, `title bans "saved design": "${title}"`).not.toContain('saved design')
     }
   })
 })
@@ -324,14 +323,11 @@ test.describe('Status Messages Terminology', () => {
     // Check status area for any messages
     const statusArea = page.locator('#statusArea, .status-message, [role="status"]')
     
-    if (await statusArea.isVisible().catch(() => false)) {
-      const statusText = await statusArea.textContent()
-      const lowerStatus = statusText.toLowerCase()
-      
-      // If status mentions saved items, should use "project"
-      if (lowerStatus.includes('saved design')) {
-        console.warn('Status message uses "saved design", consider "saved project"')
-      }
+    // AF-7: used to warn and pass - while loading a saved project ANNOUNCED
+    // "Loaded saved design". Banned outright, on every status surface found.
+    for (const area of await statusArea.all()) {
+      const statusText = (await area.textContent().catch(() => '')) || ''
+      expect(statusText.toLowerCase()).not.toContain('saved design')
     }
   })
 })

@@ -191,11 +191,10 @@ test.describe('Keyguard SVG Export', () => {
     await expect(format2dGuidance).toBeHidden({ timeout: 2000 });
   });
 
-  // Re-enable attempt 2026-07-05 (review remediation): fails locally with
-  // "TimeoutError: page.waitForEvent: Timeout 60000ms exceeded while waiting
-  // for event 'download'" — the Generate click never produces a download in
-  // this flow. Needs product/test-flow investigation before re-enabling.
-  test.skip('should export valid SVG from simple 2D model', async ({ page }) => {
+  // Re-enabled 2026-08-19 (AF-7). The 2026-07-05 "no download" was the
+  // one-click premise: the primary action is Generate THEN Download since
+  // the transformer. Flow updated; passes in ~40s.
+  test('should export valid SVG from simple 2D model', async ({ page }) => {
     test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
     
     await page.goto('/');
@@ -208,16 +207,26 @@ test.describe('Keyguard SVG Export', () => {
     const outputFormatSelect = page.locator('#outputFormat');
     await outputFormatSelect.selectOption('svg');
     
-    // Wait for parameters to load
+    // UF-2 put parameters in drawers that ship closed; open them before
+    // asking for a control to be VISIBLE (the auto-preview spec's idiom).
+    await page.evaluate(() => {
+      for (const g of document.querySelectorAll('details.param-group')) g.open = true;
+    });
     await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 });
     
     // Find and click Generate button
     const generateButton = page.locator('button:has-text("Generate"), button:has-text("Download")').first();
     await expect(generateButton).toBeVisible({ timeout: 5000 });
     
-    // Set up download promise before clicking
-    const downloadPromise = page.waitForEvent('download', { timeout: 60000 });
+    // The primary action is TWO steps now: Generate renders the SVG and the
+    // button becomes Download (measured: "SVG ready | 379 B" with the button
+    // relabelled). The one-click premise predates the transformer.
     await generateButton.click();
+    await expect(page.locator('#previewStatusText')).toContainText(/SVG ready/i, {
+      timeout: 90000,
+    });
+    const downloadPromise = page.waitForEvent('download', { timeout: 30000 });
+    await page.locator('button:has-text("Download")').first().click();
     
     const download = await downloadPromise;
     
@@ -243,12 +252,20 @@ test.describe('Keyguard SVG Export', () => {
     expect(hasGeometry).toBe(true);
   });
 
-  // Re-enable attempt 2026-07-05 (review remediation): fails locally in the
-  // upload phase — '.file-tree, .project-files' never becomes visible after
-  // the ZIP upload (same pre-existing failure as zip-workflow.spec.js on
-  // develop). Needs product/test-flow investigation before re-enabling.
-  test.skip('should export valid SVG from keyguard with Laser-Cut settings', async ({ page }) => {
+  // Re-enable attempt 2026-08-19 (AF-7): the 2026-07-05 upload-phase failure
+  // is GONE (stale selectors from before the UF-2 drawers / UF-31 tree; both
+  // repaired below, and the flow now reaches the render). What remains is a
+  // PRODUCT measurement: the real keyguard's first-layer SVG sat at
+  // "Generating SVG..." for FIVE minutes without finishing - projection() of
+  // the whole model in single-threaded WASM. Reported to the owner; the skip
+  // below carries the reason into the report instead of a comment.
+  test('should export valid SVG from keyguard with Laser-Cut settings', async ({ page }) => {
+    test.skip(
+      true,
+      'Keyguard first-layer SVG exceeds 5min in WASM (measured 2026-08-19); needs a product-level look at projection cost'
+    );
     test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
+    test.setTimeout(420_000);
     
     await page.goto('/');
     
@@ -256,23 +273,30 @@ test.describe('Keyguard SVG Export', () => {
     const zipPath = await createKeyguardZipFixture();
     await uploadFile(page, zipPath);
     
-    // Wait for project files to be recognized
-    await expect(page.locator('.file-tree, .project-files')).toBeVisible({ timeout: 15000 });
+    // "Project recognized" used to be asserted on the companion panel, but
+    // that panel is defaultHiddenInBasic - hidden by design in Simplified -
+    // and was never this test's subject. The keyguard's own parameter
+    // arriving IS the recognition signal.
+    await expect(
+      page.locator('.param-control[data-param-name="type_of_keyguard"] select')
+    ).toBeAttached({ timeout: 30000 });
     
-    // Wait for parameters to load
+    // UF-2 put parameters in drawers that ship closed; open them before
+    // asking for a control to be VISIBLE (the auto-preview spec's idiom).
+    await page.evaluate(() => {
+      for (const g of document.querySelectorAll('details.param-group')) g.open = true;
+    });
     await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 });
     
-    // Find and set type_of_keyguard to Laser-Cut
-    const keyguardTypeParam = page.locator('select[data-param="type_of_keyguard"]');
-    if (await keyguardTypeParam.isVisible()) {
-      await keyguardTypeParam.selectOption('Laser-Cut');
-    }
-    
-    // Find and set generate to "first layer for SVG/DXF file"
-    const generateParam = page.locator('select[data-param="generate"]');
-    if (await generateParam.isVisible()) {
-      await generateParam.selectOption('first layer for SVG/DXF file');
-    }
+    // These two settings ARE the test - the old if-visible guards skipped
+    // them silently against a selector that no longer existed, so the case
+    // was exporting a 3D keyguard's "SVG" whenever it last "passed".
+    await page
+      .locator('.param-control[data-param-name="type_of_keyguard"] select')
+      .selectOption('Laser-Cut');
+    await page
+      .locator('.param-control[data-param-name="generate"] select')
+      .selectOption('first layer for SVG/DXF file');
     
     // Select SVG output format
     const outputFormatSelect = page.locator('#outputFormat');
@@ -285,9 +309,14 @@ test.describe('Keyguard SVG Export', () => {
     const generateButton = page.locator('button:has-text("Generate"), button:has-text("Download")').first();
     await expect(generateButton).toBeVisible({ timeout: 5000 });
     
-    // Set up download promise before clicking
-    const downloadPromise = page.waitForEvent('download', { timeout: 90000 });
+    // Two steps, same as the simple-2D case: Generate renders, then the
+    // relabelled Download button saves.
     await generateButton.click();
+    await expect(page.locator('#previewStatusText')).toContainText(/SVG ready/i, {
+      timeout: 300000,
+    });
+    const downloadPromise = page.waitForEvent('download', { timeout: 30000 });
+    await page.locator('button:has-text("Download")').first().click();
     
     const download = await downloadPromise;
     
@@ -529,11 +558,9 @@ test.describe('Parameter Switching Stability', () => {
 });
 
 test.describe('OpenSCAD Output Exposure', () => {
-  // Re-enable attempt 2026-07-05 (review remediation): fails locally at the
-  // console-panel assertion — the panel text never contains
-  // "E2E TEST MESSAGE 123" after upload + render. Needs product/test-flow
-  // investigation before re-enabling.
-  test.skip('should display echo output from OpenSCAD', async ({ page }) => {
+  // Re-enabled 2026-08-19 (AF-7): the console-panel failure it blamed was
+  // fixed by UF-19's console work - the case simply works now.
+  test('should display echo output from OpenSCAD', async ({ page }) => {
     test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
     
     await page.goto('/');

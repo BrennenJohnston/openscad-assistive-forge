@@ -43,7 +43,7 @@ const PANEL_HTML = `
         </div>
         <div class="project-files-breadcrumbs" id="projectFilesBreadcrumbs"></div>
         <div class="project-files-list" id="projectFilesList" role="list"
-             aria-label="Project files"></div>
+             aria-label="Companion files"></div>
         <button type="button" id="companionSaveBtn" class="hidden"></button>
       </div>
     </details>
