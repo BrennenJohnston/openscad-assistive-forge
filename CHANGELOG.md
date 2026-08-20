@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **City Walk is desktop-only, like Classic** (CW-11) - the hidden game card's "Enter the City"
+  button now gates on the same viewport shape as the Classic interface (at least 1024 px wide and
+  not portrait, U-10/Q-24a). On a phone-shaped window it reads as unavailable, shows a
+  plain-language reason on the card that is also its accessible description, and a press announces
+  the refusal instead of starting a game whose controls were never designed for that shape. The
+  gate is ENTRY only: a session already running survives any resize, Escape always leaves, and the
+  button re-enables live when a desktop-shaped window returns, with no reload
+
 - **ASCII City Walk Round 2 — a city that looks alive** (CW-8, CW-6, CW-9, CW-10) — the game's
   comprehensive visual pass and feature round. Buildings are now distinct: window-grid wall
   textures (world-meter UVs, no custom mapping), deterministic per-building lightness tiers and

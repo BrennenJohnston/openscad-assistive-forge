@@ -199,3 +199,29 @@
 .city-walk-card .city-walk-attribution {
   margin-top: var(--space-sm);
 }
+
+/* CW-11 gate: the launch button stays focusable (aria-disabled, not
+   disabled) so keyboard and screen-reader users can find it and hear why,
+   and it must read as unavailable without relying on colour alone. Same
+   treatment as the Classic header toggle's gate (layout.css).
+
+   0.7, not the header toggle's 0.5: MEASURED composited, 0.5 puts the
+   label at 2.86:1 in light and 2.81:1 under high contrast - legal for an
+   inactive control, but high contrast is the mode people choose BECAUSE
+   they need contrast. 0.7 still reads as dimmed and keeps every mode
+   above 4.5:1.
+
+   Colours are deliberately NOT pinned for the gated hover, only the
+   lift. Pinning the background to --color-accent measured 1:1 in the
+   mono variant, whose D-58 rule flips the primary label TO the accent at
+   a higher specificity: amber label on amber surface. The variant's own
+   hover pair is already complete, so the cascade is left alone. */
+.city-walk-card .btn-role-try[aria-disabled='true'] {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.city-walk-card .btn-role-try[aria-disabled='true']:hover,
+.city-walk-card .btn-role-try[aria-disabled='true']:active {
+  transform: none;
+}

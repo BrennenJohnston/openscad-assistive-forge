@@ -123,6 +123,226 @@ test.describe('ASCII City Walk — gating', () => {
   })
 })
 
+/**
+ * CW-11: the game is desktop-only, on the same viewport predicate as Classic
+ * (U-10/Q-24a). ENTRY is what gates: a session already running survives any
+ * resize, and Escape always leaves.
+ *
+ * Nothing here enters a city, so every case runs on every browser - no WebGL
+ * capability gate needed.
+ */
+test.describe('ASCII City Walk — desktop-only gate (CW-11)', () => {
+  const REASON_TEXT =
+    'Desktop only for now. The city walk needs a wide landscape window. ' +
+    'Try it on a computer, or widen this window.'
+
+  test.describe('phone-shaped viewport', () => {
+    // Plain viewport, set through test.use: isMobile is rejected by Firefox at
+    // context creation, and a setViewportSize after load re-opens drawers
+    // (UF-32).
+    test.use({ viewport: { width: 390, height: 844 } })
+
+    test('the launch button is gated, says why, and refuses to start the game', async ({
+      page,
+    }) => {
+      await page.goto('/?hfm=unlock')
+      await expect(page.locator('#cityWalkCard')).toBeVisible({
+        timeout: 30000,
+      })
+
+      const btn = page.locator('#cityWalkLaunchBtn')
+      await expect(btn).toHaveAttribute('aria-disabled', 'true')
+      await expect(btn).toHaveAttribute(
+        'aria-describedby',
+        'cityWalkGateReason'
+      )
+
+      // On the card, not sr-only: a phone has no hover tooltip, so the reason
+      // has to be readable by a sighted player too.
+      const reason = page.locator('#cityWalkGateReason')
+      await expect(reason).toBeVisible()
+      expect((await reason.textContent()).replace(/\s+/g, ' ').trim()).toBe(
+        REASON_TEXT
+      )
+
+      // Keyboard first: Playwright refuses .click() on aria-disabled elements,
+      // and the keyboard is the path that matters anyway.
+      await btn.focus()
+      await page.keyboard.press('Enter')
+      await expect(page.locator('#srAnnouncer')).toContainText(
+        'ASCII City Walk unavailable',
+        { timeout: 3000 }
+      )
+      await expect(page.locator('#cityWalkLayer')).toBeHidden()
+
+      // A real mouse press is refused too. force: skips the actionability
+      // check that would stop the click before the listener ever sees it.
+      await btn.click({ force: true })
+      await expect(page.locator('#cityWalkLayer')).toBeHidden()
+    })
+
+    test('axe: the gated card has no violations', async ({ page }) => {
+      await page.goto('/?hfm=unlock')
+      await expect(page.locator('#cityWalkCard')).toBeVisible({
+        timeout: 30000,
+      })
+      await expect(page.locator('#cityWalkLaunchBtn')).toHaveAttribute(
+        'aria-disabled',
+        'true'
+      )
+
+      // Scanned WITH the gated button hovered (D-55): a hover state is
+      // invisible to a scan unless something happens to be hovering.
+      await page.locator('#cityWalkLaunchBtn').hover()
+
+      const results = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+        .include('#cityWalkCard')
+        .analyze()
+      expectOnlyAllowedViolations(results)
+    })
+
+    /**
+     * The gated button dims, so its label/surface pair is a COMPOSITE over the
+     * card: the token guards in tests/unit/color-contrast.test.js cannot see
+     * it, and axe skips contrast checks on aria-disabled controls. Nothing
+     * would have caught this while writing CW-11: pinning the gated hover
+     * background to --color-accent measured 1:1 in the mono variant, whose
+     * D-58 rule flips a primary label TO the accent at a higher specificity -
+     * amber on amber, the same erasure D-55/D-57/D-58 each found once. Same
+     * shape as the D-57 guard in accessibility.spec.js, plus the opacity.
+     */
+    test('the gated label stays legible at rest and hovered, in every theme', async ({
+      page,
+    }) => {
+      const THEMES = [
+        ['Forge light', { theme: 'light' }],
+        ['Forge dark', { theme: 'dark' }],
+        ['High contrast light', { theme: 'light', hc: true }],
+        ['High contrast dark', { theme: 'dark', hc: true }],
+        ['Mono light', { theme: 'light', variant: 'mono' }],
+        ['Mono dark', { theme: 'dark', variant: 'mono' }],
+      ]
+
+      await page.goto('/?hfm=unlock')
+      await expect(page.locator('#cityWalkCard')).toBeVisible({
+        timeout: 30000,
+      })
+      const btn = page.locator('#cityWalkLaunchBtn')
+      await expect(btn).toHaveAttribute('aria-disabled', 'true')
+
+      for (const [label, cfg] of THEMES) {
+        await page.evaluate((c) => {
+          const r = document.documentElement
+          r.dataset.theme = c.theme
+          if (c.hc) r.dataset.highContrast = 'true'
+          else delete r.dataset.highContrast
+          if (c.variant) r.dataset.uiVariant = c.variant
+          else delete r.dataset.uiVariant
+        }, cfg)
+        await page.waitForTimeout(300)
+
+        for (const state of ['rest', 'hovered']) {
+          if (state === 'hovered') await btn.hover()
+          else await page.mouse.move(0, 0)
+          await page.waitForTimeout(250)
+
+          const measured = await btn.evaluate((el) => {
+            const cs = getComputedStyle(el)
+            const read = (css) =>
+              (css.match(/\d+(\.\d+)?/g) || []).slice(0, 3).map(Number)
+            const luminance = (rgb) =>
+              rgb
+                .map((v) => {
+                  const s = v / 255
+                  return s <= 0.03928
+                    ? s / 12.92
+                    : Math.pow((s + 0.055) / 1.055, 2.4)
+                })
+                .reduce((sum, c, i) => sum + [0.2126, 0.7152, 0.0722][i] * c, 0)
+            // The dim composites the whole button over the first opaque
+            // ancestor, so BOTH halves have to be mixed before measuring.
+            let backdrop = [255, 255, 255]
+            for (let n = el.parentElement; n; n = n.parentElement) {
+              const bg = getComputedStyle(n).backgroundColor
+              const parts = bg.match(/[\d.]+/g)
+              if (parts && (parts.length < 4 || Number(parts[3]) > 0)) {
+                backdrop = parts.slice(0, 3).map(Number)
+                break
+              }
+            }
+            const alpha = Number(cs.opacity)
+            const mix = (rgb) =>
+              rgb.map((v, i) => alpha * v + (1 - alpha) * backdrop[i])
+            const l1 = luminance(mix(read(cs.color)))
+            const l2 = luminance(mix(read(cs.backgroundColor)))
+            return {
+              color: cs.color,
+              background: cs.backgroundColor,
+              opacity: alpha,
+              ratio:
+                Math.round(
+                  ((Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)) * 100
+                ) / 100,
+            }
+          })
+
+          console.log(
+            `[cw11] ${label} ${state}: ${measured.color} on ${measured.background} @ ${measured.opacity} = ${measured.ratio}:1`
+          )
+          expect(
+            measured.ratio,
+            `${label} ${state} is ${measured.color} on ${measured.background} at opacity ${measured.opacity} = ${measured.ratio}:1`
+          ).toBeGreaterThanOrEqual(4.5)
+        }
+      }
+    })
+  })
+
+  test.describe('desktop-shaped viewport', () => {
+    test.use({ viewport: { width: 1280, height: 800 } })
+
+    test('the gate is inert: no gate state on the button, and it opens the game', async ({
+      page,
+    }) => {
+      await page.goto('/?hfm=unlock')
+      await expect(page.locator('#cityWalkCard')).toBeVisible({
+        timeout: 30000,
+      })
+
+      const btn = page.locator('#cityWalkLaunchBtn')
+      await expect(btn).not.toHaveAttribute('aria-disabled', 'true')
+      await expect(btn).not.toHaveAttribute('aria-describedby', /.+/)
+      await expect(page.locator('#cityWalkGateReason')).toBeHidden()
+
+      await btn.click()
+      await expect(page.locator('#cityWalkLayer')).toBeVisible({
+        timeout: 20000,
+      })
+    })
+
+    test('narrowing a running game leaves it open; only re-entry is gated', async ({
+      page,
+    }) => {
+      await launchGame(page)
+
+      await page.setViewportSize({ width: 390, height: 844 })
+      // Q-24a's shape: the session STAYS. Nothing ejects a player mid-game.
+      await expect(page.locator('#cityWalkLayer')).toBeVisible()
+      // The trigger behind the layer is gated for the NEXT entry. The
+      // subscription is debounced (150ms); the retrying assertion absorbs it.
+      await expect(page.locator('#cityWalkLaunchBtn')).toHaveAttribute(
+        'aria-disabled',
+        'true'
+      )
+
+      // And the way out is never gated.
+      await page.keyboard.press('Escape')
+      await expect(page.locator('#cityWalkLayer')).toBeHidden()
+    })
+  })
+})
+
 test.describe('ASCII City Walk — playing', () => {
   test('launch, walk, turn, map view, and exit restore', async ({ page }) => {
     await launchGame(page)

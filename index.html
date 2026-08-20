@@ -1674,6 +1674,15 @@
                       Enter the City
                     </button>
                   </div>
+                  <!-- CW-11: read as the launch button's description while the
+                       viewport gate holds it aria-disabled (phones, portrait,
+                       narrow windows). main.js unhides it with the gate, so a
+                       sighted phone player sees the reason too. An OPEN game
+                       is never gated: only entry is (U-10/Q-24a). -->
+                  <p class="role-path-meta" id="cityWalkGateReason" hidden>
+                    Desktop only for now. The city walk needs a wide landscape
+                    window. Try it on a computer, or widen this window.
+                  </p>
                   <p class="role-path-meta city-walk-attribution">
                     Map data &copy;
                     <a
