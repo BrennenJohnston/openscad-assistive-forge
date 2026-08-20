@@ -19,6 +19,11 @@ import {
   FAST_SPEED_MPS,
   TURN_SPEED_RADPS,
   EYE_HEIGHT_M,
+  applyLookDelta,
+  levelView,
+  pitchLabel,
+  PITCH_SPEED_RADPS,
+  PITCH_LIMIT_RAD,
   clampCharScale,
   seedCharScale,
   CHAR_SCALE_MIN,
@@ -449,6 +454,191 @@ describe('character size (CW-12)', () => {
 
     it('survives a junk game value by falling through, not by throwing', () => {
       expect(seedCharScale('NaN', '0.4')).toBe(0.4)
+    })
+  })
+})
+
+describe('looking around (CW-13)', () => {
+  const DEG = Math.PI / 180
+
+  describe('pitch on held keys', () => {
+    it('starts level and rises at PITCH_SPEED_RADPS', () => {
+      const state = createWalkState({ x: 0, y: 0 })
+      expect(state.pitchRad).toBe(0)
+      stepWalk(state, { pitch: 1 }, 0.1)
+      expect(state.pitchRad).toBeCloseTo(PITCH_SPEED_RADPS * 0.1, 6)
+    })
+
+    it('looks down on a negative axis', () => {
+      const state = createWalkState({ x: 0, y: 0 })
+      stepWalk(state, { pitch: -1 }, 0.1)
+      expect(state.pitchRad).toBeCloseTo(-PITCH_SPEED_RADPS * 0.1, 6)
+    })
+
+    it('clamps at 60 degrees up and down', () => {
+      const up = createWalkState({ x: 0, y: 0 })
+      // 45 deg/s for three seconds would reach 135 deg unclamped.
+      for (let i = 0; i < 30; i++) stepWalk(up, { pitch: 1 }, 0.1)
+      expect(up.pitchRad).toBeCloseTo(PITCH_LIMIT_RAD, 10)
+      expect(PITCH_LIMIT_RAD / DEG).toBeCloseTo(60, 10)
+
+      const down = createWalkState({ x: 0, y: 0 })
+      for (let i = 0; i < 30; i++) stepWalk(down, { pitch: -1 }, 0.1)
+      expect(down.pitchRad).toBeCloseTo(-PITCH_LIMIT_RAD, 10)
+    })
+
+    it('reports no change once parked against the limit', () => {
+      const state = createWalkState({ x: 0, y: 0 })
+      for (let i = 0; i < 30; i++) stepWalk(state, { pitch: 1 }, 0.1)
+      // A key still held at the limit must not keep marking the frame dirty:
+      // every pitched frame re-converts the whole screen (CW-12 bench).
+      const held = stepWalk(state, { pitch: 1 }, 0.1)
+      expect(held.pitched).toBe(false)
+      expect(stepWalk(state, { pitch: -1 }, 0.1).pitched).toBe(true)
+    })
+
+    it('clamps runaway dt like every other axis', () => {
+      const state = createWalkState({ x: 0, y: 0 })
+      stepWalk(state, { pitch: 1 }, 5)
+      expect(state.pitchRad).toBeCloseTo(PITCH_SPEED_RADPS * 0.1, 6)
+    })
+
+    it('pitches and walks in the same frame without disturbing the bearing', () => {
+      const state = createWalkState({ x: 0, y: 0, headingRad: 0 })
+      const result = stepWalk(state, { forward: 1, pitch: 1 }, 0.1)
+      expect(result).toEqual({ moved: true, turned: false, pitched: true })
+      expect(state.headingRad).toBe(0)
+      expect(state.y).toBeCloseTo(WALK_SPEED_MPS * 0.1, 5)
+      expect(state.pitchRad).toBeCloseTo(PITCH_SPEED_RADPS * 0.1, 6)
+    })
+
+    it('seeds and clamps a spawn pitch', () => {
+      expect(createWalkState({ x: 0, y: 0, pitchRad: 10 }).pitchRad).toBe(
+        PITCH_LIMIT_RAD
+      )
+      expect(createWalkState({ x: 0, y: 0, pitchRad: NaN }).pitchRad).toBe(0)
+    })
+  })
+
+  describe('firstPersonPose with pitch', () => {
+    it('lifts the target and keeps it one meter from the eye', () => {
+      const state = createWalkState({ x: 5, y: -2, headingRad: 0, pitchRad: 30 * DEG })
+      const pose = firstPersonPose(state)
+      expect(pose.eye).toEqual([5, -2, EYE_HEIGHT_M])
+      const dx = pose.target[0] - pose.eye[0]
+      const dy = pose.target[1] - pose.eye[1]
+      const dz = pose.target[2] - pose.eye[2]
+      expect(Math.hypot(dx, dy, dz)).toBeCloseTo(1, 10)
+      expect(dz).toBeCloseTo(Math.sin(30 * DEG), 10)
+    })
+
+    it('holds the compass bearing at every pitch', () => {
+      for (const headingDeg of [0, 37, 90, 180, 275]) {
+        for (const pitchDeg of [-60, -30, 0, 30, 60]) {
+          const pose = firstPersonPose({
+            x: 0,
+            y: 0,
+            headingRad: headingDeg * DEG,
+            pitchRad: pitchDeg * DEG,
+          })
+          // atan2(east, north) recovers the bearing from the gaze's ground
+          // shadow; only pitch beyond the clamp could collapse it to 0/0.
+          const bearing = Math.atan2(pose.target[0], pose.target[1]) / DEG
+          expect(((bearing % 360) + 360) % 360).toBeCloseTo(headingDeg, 8)
+        }
+      }
+    })
+
+    it('looks up over the eye but never straight up', () => {
+      const pose = firstPersonPose({
+        x: 0,
+        y: 0,
+        headingRad: 0,
+        pitchRad: PITCH_LIMIT_RAD,
+      })
+      expect(pose.target[2]).toBeGreaterThan(EYE_HEIGHT_M)
+      // Ground reach stays a real half-meter: lookAt() with a fixed world up
+      // needs a gaze that is never parallel to it.
+      expect(Math.hypot(pose.target[0], pose.target[1])).toBeCloseTo(0.5, 10)
+    })
+
+    it('treats a state with no pitchRad as level (pre-CW-13 shape)', () => {
+      const pose = firstPersonPose({ x: 1, y: 2, headingRad: 0 })
+      expect(pose.target).toEqual([1, 3, EYE_HEIGHT_M])
+    })
+  })
+
+  describe('levelView', () => {
+    it('returns the gaze to the horizon and reports the change', () => {
+      const state = createWalkState({ x: 0, y: 0, pitchRad: 45 * DEG })
+      expect(levelView(state)).toBe(true)
+      expect(state.pitchRad).toBe(0)
+      expect(firstPersonPose(state).target[2]).toBe(EYE_HEIGHT_M)
+    })
+
+    it('reports no change when the gaze is already level', () => {
+      const state = createWalkState({ x: 0, y: 0 })
+      expect(levelView(state)).toBe(false)
+      expect(state.pitchRad).toBe(0)
+    })
+
+    it('leaves the bearing and the position alone', () => {
+      const state = createWalkState({ x: 3, y: 4, headingRad: 1.2, pitchRad: 0.5 })
+      levelView(state)
+      expect(state.headingRad).toBeCloseTo(1.2, 10)
+      expect([state.x, state.y]).toEqual([3, 4])
+    })
+  })
+
+  describe('applyLookDelta (drag-look)', () => {
+    it('turns and pitches by absolute angles', () => {
+      const state = createWalkState({ x: 0, y: 0 })
+      const result = applyLookDelta(state, 10 * DEG, -5 * DEG)
+      expect(result).toEqual({ turned: true, pitched: true })
+      expect(state.headingRad).toBeCloseTo(10 * DEG, 10)
+      expect(state.pitchRad).toBeCloseTo(-5 * DEG, 10)
+    })
+
+    it('normalizes the bearing past a full turn', () => {
+      const state = createWalkState({ x: 0, y: 0, headingRad: 350 * DEG })
+      applyLookDelta(state, 20 * DEG, 0)
+      expect(state.headingRad).toBeCloseTo(10 * DEG, 8)
+    })
+
+    it('clamps pitch to the same limit the keys obey', () => {
+      const state = createWalkState({ x: 0, y: 0 })
+      applyLookDelta(state, 0, 400 * DEG)
+      expect(state.pitchRad).toBe(PITCH_LIMIT_RAD)
+      expect(applyLookDelta(state, 0, 10 * DEG).pitched).toBe(false)
+    })
+
+    it('reports nothing for a zero or junk delta', () => {
+      const state = createWalkState({ x: 0, y: 0, headingRad: 1 })
+      expect(applyLookDelta(state, 0, 0)).toEqual({
+        turned: false,
+        pitched: false,
+      })
+      expect(applyLookDelta(state, NaN, undefined)).toEqual({
+        turned: false,
+        pitched: false,
+      })
+      expect(state.headingRad).toBe(1)
+      expect(state.pitchRad).toBe(0)
+    })
+  })
+
+  describe('pitchLabel', () => {
+    it('words the direction for the HUD', () => {
+      expect(pitchLabel(20 * DEG)).toBe('up')
+      expect(pitchLabel(-20 * DEG)).toBe('down')
+      expect(pitchLabel(0)).toBe(null)
+    })
+
+    it('reads level within half a degree, so drag residue never lingers', () => {
+      expect(pitchLabel(0.2 * DEG)).toBe(null)
+      expect(pitchLabel(-0.2 * DEG)).toBe(null)
+      expect(pitchLabel(1 * DEG)).toBe('up')
+      expect(pitchLabel(undefined)).toBe(null)
     })
   })
 })
