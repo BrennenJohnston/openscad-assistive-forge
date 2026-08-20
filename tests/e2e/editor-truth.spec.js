@@ -237,4 +237,70 @@ test.describe('The editor decides the model (UF-18)', () => {
       })
       .toContain('UF18_RENDER_MARKER');
   });
+
+  /** The actions drawer holds Compare and Queue; open it if collapsed. */
+  async function openActionsDrawer(page) {
+    const btn = page.locator('#addToQueueBtn');
+    if (!(await btn.isVisible())) {
+      await page.locator('#actionsDrawerToggle').click();
+    }
+    await expect(btn).toBeVisible({ timeout: 10_000 });
+  }
+
+  test('AF-5: Add to Queue captures an edit typed a moment earlier', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await loadFixture(page);
+    await waitForFirstPreview(page);
+    const editor = await openForgeEditor(page);
+
+    // Same race shape as D-29's Render: the queue SNAPSHOTS content at the
+    // click, so an unpublished edit would be missing from every render the
+    // job ever does - the snapshot never heals when the debounce fires.
+    await editor.click();
+    await page.keyboard.press('Control+End');
+    // Queue and comparison renders do not sink echo into the console panel,
+    // so the compiler's own TRIANGLE COUNT is the witness instead: the
+    // fixture is 24 triangles, and this unpublished edit adds a cube (+12).
+    await page.keyboard.press('Enter');
+    await page.keyboard.insertText('cube(3);');
+    await openActionsDrawer(page);
+    await page.locator('#addToQueueBtn').click();
+
+    await page.locator('#viewQueueBtn').click();
+    await expect(page.locator('#renderQueueModal')).toBeVisible();
+    await page.locator('#processQueueBtn').click();
+
+    await expect
+      .poll(
+        () => page.locator('.queue-item-stats').first().textContent(),
+        { timeout: RENDER_TIMEOUT }
+      )
+      .toContain('36');
+  });
+
+  test('AF-5: Add to Comparison captures an edit typed a moment earlier', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await loadFixture(page);
+    await waitForFirstPreview(page);
+    const editor = await openForgeEditor(page);
+
+    await editor.click();
+    await page.keyboard.press('Control+End');
+    await page.keyboard.press('Enter');
+    await page.keyboard.insertText('cube(3);');
+    await openActionsDrawer(page);
+    await page.locator('#addToComparisonBtn').click();
+
+    // The variant auto-renders on add; the compiler's own triangle count is
+    // the witness the snapshot carried the edit (fixture 24, cube adds 12).
+    await expect
+      .poll(() => page.locator('.status-stats').first().textContent(), {
+        timeout: RENDER_TIMEOUT,
+      })
+      .toContain('36 triangles');
+  });
 });

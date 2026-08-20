@@ -12025,6 +12025,10 @@ if (rounded) {
 
   // Add to Queue button
   addToQueueBtn?.addEventListener('click', () => {
+    // D-29's sibling (AF-5): a queued job snapshots the project's content at
+    // this moment, so an edit still inside the write-back window would be
+    // left behind for every render the job ever does.
+    publishEditorEdits();
     const state = stateManager.getState();
 
     if (!state.uploadedFile) {
@@ -12289,6 +12293,9 @@ if (rounded) {
   // Add to Comparison button
   const addToComparisonBtn = document.getElementById('addToComparisonBtn');
   addToComparisonBtn?.addEventListener('click', () => {
+    // D-29's sibling (AF-5): comparison variants render from the content
+    // captured here, same exposure as the queue.
+    publishEditorEdits();
     const state = stateManager.getState();
 
     if (!state.uploadedFile) {
