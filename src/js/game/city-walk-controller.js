@@ -46,6 +46,7 @@ import {
   createWalkState,
   stepWalk,
   firstPersonPose,
+  applyLookDelta,
   levelView,
   headingLabel,
   pitchLabel,
@@ -81,6 +82,16 @@ const CITIES = [
 ];
 
 const ORTHO_CAMERA_HEIGHT_M = 1000;
+
+// Drag-look (CW-13). Degrees of rotation per pixel of pointer travel, both
+// axes. Drag needs more per pixel than pointer-lock mouselook does, because
+// the travel is bounded by the window instead of being unlimited: the MIT
+// reference (justMoritz/3d-game-engine) uses 0.002 rad/px under pointer lock
+// and 0.005 rad/px - 0.29 deg - on its drag path, which is where this sits.
+const DRAG_RAD_PER_PX = (0.25 * Math.PI) / 180;
+// A press that travels less than this is a click, not a drag, so a stray tap
+// on the viewport never nudges the view.
+const DRAG_THRESHOLD_PX = 4;
 
 let activeSession = null;
 
@@ -127,6 +138,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     helpOpen: false,
     keys: new Set(),
     shiftHeld: false,
+    drag: null,
     refs: {},
   };
 
@@ -676,6 +688,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     game.resizeObserver = new ResizeObserver(() => handleViewportResize());
     game.resizeObserver.observe(viewport);
 
+    viewport.addEventListener('pointerdown', handleViewportPointerDown);
+    viewport.addEventListener('pointermove', handleViewportPointerMove);
+    viewport.addEventListener('pointerup', handleViewportPointerUp);
+    viewport.addEventListener('pointercancel', handleViewportPointerUp);
+
     // Mouse wheel zooms the map view (keyboard stays primary: -/= do the
     // same). preventDefault keeps the page from scrolling behind the layer.
     viewport.addEventListener(
@@ -882,6 +899,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   function clearHeldKeys() {
     state.keys.clear();
     state.shiftHeld = false;
+    endDrag();
   }
 
   /**
@@ -900,6 +918,95 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       updateHud();
     }
     announceInLayer('View level.');
+  }
+
+  // -------------------------------------------------------------------
+  // Drag-look (CW-13): pointer travel rotates the gaze. No pointer lock -
+  // it hides the cursor and hijacks Escape, and every look action already
+  // has a key. Street view only; the map has its own wheel zoom.
+  // -------------------------------------------------------------------
+
+  function handleViewportPointerDown(event) {
+    const game = state.game;
+    if (!game) return;
+    if (event.button !== 0) return;
+
+    // D-59, pre-existing since CW-4 and measured on this release's base: the
+    // viewport is not focusable, so the browser's default press moves focus
+    // to <body> - outside the layer the game's key listener is bound to. One
+    // click on the city, in either view, and every key stopped working for
+    // the rest of the session. Refusing the default keeps focus where the
+    // trap put it, which is why this runs before the map-view return below.
+    event.preventDefault();
+
+    if (game.mapView || state.drag) return;
+
+    state.drag = {
+      pointerId: event.pointerId,
+      lastX: event.clientX,
+      lastY: event.clientY,
+      travelPx: 0,
+      looking: false,
+    };
+    try {
+      state.refs.viewport.setPointerCapture(event.pointerId);
+    } catch {
+      // Capture is an optimization: without it the drag simply ends when the
+      // pointer leaves the viewport. Never worth failing the press over.
+    }
+  }
+
+  function handleViewportPointerMove(event) {
+    const drag = state.drag;
+    const game = state.game;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (!game || game.mapView) {
+      endDrag();
+      return;
+    }
+
+    const dx = event.clientX - drag.lastX;
+    const dy = event.clientY - drag.lastY;
+    drag.lastX = event.clientX;
+    drag.lastY = event.clientY;
+
+    if (!drag.looking) {
+      drag.travelPx += Math.abs(dx) + Math.abs(dy);
+      if (drag.travelPx < DRAG_THRESHOLD_PX) return;
+      drag.looking = true;
+    }
+
+    // Dragging right turns right and dragging down looks down, matching the
+    // mouselook every first-person game uses.
+    const { turned, pitched } = applyLookDelta(
+      game.walkState,
+      dx * DRAG_RAD_PER_PX,
+      -dy * DRAG_RAD_PER_PX
+    );
+    if (!turned && !pitched) return;
+
+    applyFirstPersonCamera();
+    game.altView.invalidate();
+    updateHud();
+  }
+
+  function handleViewportPointerUp(event) {
+    if (state.drag && state.drag.pointerId !== event.pointerId) return;
+    endDrag();
+  }
+
+  function endDrag() {
+    const drag = state.drag;
+    state.drag = null;
+    if (!drag) return;
+    const viewport = state.refs.viewport;
+    try {
+      if (viewport?.hasPointerCapture?.(drag.pointerId)) {
+        viewport.releasePointerCapture(drag.pointerId);
+      }
+    } catch {
+      // The pointer is already gone; there is nothing left to release.
+    }
   }
 
   function adjustCharacterSize(delta) {
@@ -944,6 +1051,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
 
   function toggleMapView() {
     const game = state.game;
+    endDrag();
     game.mapView = !game.mapView;
     game.marker.visible = game.mapView;
     game.city3d.setMapView(game.mapView);
