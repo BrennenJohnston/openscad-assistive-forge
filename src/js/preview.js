@@ -691,6 +691,7 @@ export class PreviewManager {
       this.controls.zoomToCursor = this.zoomToCursorEnabled;
 
       this.setupKeyboardControls();
+      this._setupPoleCrossing();
     }
 
     // Handle window resize with view preservation
@@ -2337,6 +2338,119 @@ export class PreviewManager {
    *
    * @returns {boolean} true when the view moved
    */
+  /**
+   * AF-11 (UF-26's recorded stop): OrbitControls clamps the polar angle at
+   * the poles, so from Top only an upward drag tilted away - the downward
+   * one pressed a dead clamp - where the desktop rolls straight over. This
+   * carries the camera OVER the pole when a gesture keeps pushing against
+   * the clamp: azimuth flips half a turn and the camera lands a real tilt
+   * past the pole, exactly the far side of the roll-over. One crossing per
+   * gesture, so a single pull cannot ping-pong across.
+   *
+   * D-48's invariant holds by construction: pure vector geometry on
+   * camera.position - camera.up is never read or written.
+   */
+  _setupPoleCrossing() {
+    const el = this.renderer?.domElement;
+    if (!el) return;
+    this._poleGesture = { active: false, lastY: 0, acc: 0, crossed: false };
+
+    el.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      this._poleGesture.active = true;
+      this._poleGesture.lastY = e.clientY;
+      this._poleGesture.acc = 0;
+      this._poleGesture.crossed = false;
+      this._poleGesture.pointerId = e.pointerId;
+    });
+    window.addEventListener('pointerup', () => {
+      this._poleGesture.active = false;
+      this._poleGesture.acc = 0;
+    });
+    el.addEventListener('pointermove', (e) => {
+      const g = this._poleGesture;
+      if (!g.active || g.crossed || !this.controls?.enabled) return;
+      const dy = e.clientY - g.lastY;
+      g.lastY = e.clientY;
+
+      const polar = this.controls.getPolarAngle();
+      const NEAR = 0.02; // ~1.1 degrees - inside this, the clamp is what stops you
+      const atTop = polar < NEAR;
+      const atBottom = polar > Math.PI - NEAR;
+      // At Top the DOWNWARD drag (dy > 0) presses the clamp; at Bottom the
+      // upward one. Any other motion resets the intent.
+      if (atTop && dy > 0) g.acc += dy;
+      else if (atBottom && dy < 0) g.acc += dy;
+      else g.acc = 0;
+
+      const THRESHOLD_PX = 14;
+      let side = null;
+      if (g.acc > THRESHOLD_PX) side = 'top';
+      else if (g.acc < -THRESHOLD_PX) side = 'bottom';
+      if (side) {
+        g.acc = 0;
+        g.crossed = this._crossPole(side);
+        if (g.crossed) {
+          // The rest of THIS gesture still belongs to OrbitControls, and it
+          // would rotate straight back into the pole from the far side
+          // (measured: the crossing fired, then eight remaining moves undid
+          // it). End the library's drag at the moment of crossing; the next
+          // grab starts on the far side.
+          g.active = false;
+          el.dispatchEvent(
+            new PointerEvent('pointercancel', {
+              pointerId: g.pointerId,
+              bubbles: true,
+            })
+          );
+        }
+      }
+    });
+  }
+
+  /**
+   * Carry the camera over the given pole: same distance, azimuth + half a
+   * turn, landing CROSS_LANDING off the pole on the far side.
+   * @param {'top'|'bottom'} side
+   * @returns {boolean} true when the camera moved
+   */
+  _crossPole(side) {
+    if (!this.controls) return false;
+    const camera = this.getActiveCamera();
+    const target = this.controls.target;
+
+    // Damping keeps a residue of the gesture's rotation and would decay it
+    // AGAINST the landing (measured: ~7 degrees clawed back toward the
+    // pole). One undamped update consumes the pending delta into the clamp,
+    // where it can do nothing, so the landing below is exact.
+    const wasDamping = this.controls.enableDamping;
+    this.controls.enableDamping = false;
+    this.controls.update();
+    this.controls.enableDamping = wasDamping;
+    const offset = camera.position.clone().sub(target);
+    const dist = offset.length();
+    if (dist < 1e-6) return false;
+
+    // The horizontal heading we arrived on; at the pole it is tiny but real
+    // (the face views sit POLE_EPSILON off the pole, aimed a hair toward -Y).
+    const h = new Vector3(offset.x, offset.y, 0);
+    if (h.lengthSq() < 1e-12) h.set(0, -1, 0);
+    h.normalize().negate(); // azimuth + PI: out the other side
+
+    const CROSS_LANDING = (12 * Math.PI) / 180; // a real, visible tilt past
+    const sin = Math.sin(CROSS_LANDING);
+    const cos =
+      side === 'top' ? Math.cos(CROSS_LANDING) : -Math.cos(CROSS_LANDING);
+
+    camera.position
+      .copy(target)
+      .addScaledVector(h, dist * sin)
+      .add(new Vector3(0, 0, dist * cos));
+    camera.lookAt(target);
+    this.controls.update();
+    return true;
+  }
+
   viewAllCamera() {
     if (!this.camera || !this.mesh) return false;
 
