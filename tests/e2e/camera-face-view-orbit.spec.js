@@ -352,3 +352,58 @@ test.describe('UF-26 — a camera you can steer after a face view (D-48)', () =>
     );
   });
 });
+
+test.describe('AF-11 - the pole is a door, not a wall', () => {
+  test('Forge: from Top, the previously dead downward drag crosses over', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await openWithStl(page);
+
+    await pressForgeView(page, 'top');
+    const atTop = await readCamera(page);
+    expect(atTop, 'no camera pose published at Top').not.toBeNull();
+    expect(atTop.elevationDeg).toBeGreaterThan(89.5);
+
+    // UF-26 recorded this exact gesture as pressing a dead clamp: from Top,
+    // dragging DOWN did nothing while the desktop rolls straight over.
+    await dragCanvas(page, 0, 40);
+    const crossed = await readCamera(page);
+    expect(
+      crossed.elevationDeg,
+      'the downward drag still presses a dead clamp instead of crossing'
+    ).toBeLessThan(85);
+    expect(crossed.elevationDeg).toBeGreaterThan(45);
+    // Out the OTHER side: azimuth flipped half a turn (mod 360).
+    let dAz = Math.abs(crossed.azimuthDeg - atTop.azimuthDeg) % 360;
+    if (dAz > 180) dAz = 360 - dAz;
+    expect(dAz, 'the crossing did not come out the far side').toBeGreaterThan(150);
+    // And the frame is still a turntable: no roll (D-48 untouched).
+    expect(crossed.roll).toBeLessThan(ROLL_TOLERANCE);
+  });
+
+  test('Forge: from Bottom, the previously dead upward drag crosses over', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await openWithStl(page);
+
+    await pressForgeView(page, 'bottom');
+    const atBottom = await readCamera(page);
+    expect(atBottom, 'no camera pose published at Bottom').not.toBeNull();
+    expect(atBottom.elevationDeg).toBeLessThan(-89.5);
+
+    await dragCanvas(page, 0, -40);
+    const crossed = await readCamera(page);
+    expect(
+      crossed.elevationDeg,
+      'the upward drag still presses a dead clamp instead of crossing'
+    ).toBeGreaterThan(-85);
+    expect(crossed.elevationDeg).toBeLessThan(-45);
+    let dAz = Math.abs(crossed.azimuthDeg - atBottom.azimuthDeg) % 360;
+    if (dAz > 180) dAz = 360 - dAz;
+    expect(dAz, 'the crossing did not come out the far side').toBeGreaterThan(150);
+    expect(crossed.roll).toBeLessThan(ROLL_TOLERANCE);
+  });
+});
+
