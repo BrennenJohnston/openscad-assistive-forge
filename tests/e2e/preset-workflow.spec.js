@@ -752,6 +752,32 @@ test.describe('Preset Workflow — Searchable Combobox variant', () => {
     await page.goto(`/?${COMBOBOX_FLAG_PARAM}`)
   })
 
+  test('AF-10: the resting selection is design default values, like the desktop', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await loadSimpleBoxExample(page)
+
+    // R-II P5b: before any choice, the desktop's combobox shows the active
+    // "design default values" - not a search placeholder. Display parity
+    // only: nothing is applied, and Save stays disabled (defaults are
+    // immutable, desktop-correct).
+    await expect(page.locator('#presetComboboxInput')).toHaveValue(
+      'design default values'
+    )
+    await expect(page.locator('#savePresetBtn')).toBeDisabled()
+  })
+
+  test('AF-10: the save control is a text button, like the desktop', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await loadSimpleBoxExample(page)
+
+    // R-II P10: the desktop has a text "save preset" button where we shipped
+    // a floppy icon. The accessible name never changed; the VISIBLE label is
+    // the parity subject.
+    await expect(page.locator('#savePresetBtn')).toHaveText('Save Preset')
+  })
+
   test('combobox is shown and native select is hidden when flag is enabled', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 

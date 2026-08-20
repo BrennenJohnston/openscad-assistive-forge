@@ -13011,6 +13011,9 @@ if (rounded) {
         ];
       }
       _presetCombobox.update(comboOptions, currentPresetId || null);
+      // AF-10 (R-II P5b): at rest the desktop shows the active
+      // "design default values", not a search hint. Display only.
+      _presetCombobox.setRestingLabel('design default values');
       _presetCombobox.setDisabled(false);
     }
 
