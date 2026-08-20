@@ -246,18 +246,24 @@ test('both quality actions say what they did, exactly once', async ({
     /Quality reduced/i,
     { timeout: 5_000 }
   );
-  const afterReduce = await page.evaluate(() => window.__spoken);
-  expect(afterReduce.filter((t) => /Quality reduced/i.test(t))).toHaveLength(1);
+  await expectSaidExactlyOnce(page, () =>
+    page.evaluate(
+      () => window.__spoken.filter((t) => /Quality reduced/i.test(t)).length
+    )
+  );
 
   await page.locator('#memoryBannerDisableAuto').click();
   await expect(page.locator('#previewStatusText')).toContainText(
     /Automatic preview turned off/i,
     { timeout: 5_000 }
   );
-  const spoken = await page.evaluate(() => window.__spoken);
-  expect(
-    spoken.filter((t) => /Automatic preview turned off/i.test(t))
-  ).toHaveLength(1);
+  await expectSaidExactlyOnce(page, () =>
+    page.evaluate(
+      () =>
+        window.__spoken.filter((t) => /Automatic preview turned off/i.test(t))
+          .length
+    )
+  );
 });
 
 test('banner Disable Auto-Preview actually turns auto-preview off', async ({
@@ -312,14 +318,56 @@ async function watchBothRegions(page) {
         }
       }).observe(region, { childList: true, subtree: true });
     }
+
+    // AF-MB: the status LINE is one slot - a later "Preview ready" from the
+    // fixture's own render legitimately overwrites an advisory before an
+    // assertion can sample it. Keep a history, so "the user was shown it"
+    // can be asserted without racing the overwrite.
+    window.__statusSeen = [];
+    const statusEl = document.getElementById('previewStatusText');
+    if (statusEl) {
+      const record = () => {
+        const t = (statusEl.textContent || '').trim();
+        if (t && window.__statusSeen[window.__statusSeen.length - 1] !== t) {
+          window.__statusSeen.push(t);
+        }
+      };
+      record();
+      new MutationObserver(record).observe(statusEl, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+      });
+    }
   });
 }
+
+const statusEverShowed = (page, pattern) =>
+  page.evaluate(
+    (source) =>
+      window.__statusSeen.some((t) => new RegExp(source, 'i').test(t)),
+    pattern.source
+  );
 
 const saidMatching = (page, pattern) =>
   page.evaluate(
     (source) => window.__said.filter((s) => new RegExp(source, 'i').test(s.text)),
     pattern.source
   );
+
+/**
+ * Announce-once, honestly, under CI load (AF-MB): on a pressured lane the
+ * announcement can arrive LATE - after any fixed sleep - which is not the
+ * defect these cases exist to catch. A DUPLICATE is the defect, at any
+ * speed. So: poll until the count reaches one (lateness forgiven), let the
+ * region settle, then require it is STILL one (a second arrival fails).
+ * A count that jumps straight past one fails the poll outright.
+ */
+const expectSaidExactlyOnce = async (page, readCount, settleMs = 1500) => {
+  await expect.poll(readCount, { timeout: 30_000 }).toBe(1);
+  await page.waitForTimeout(settleMs);
+  expect(await readCount()).toBe(1);
+};
 
 // The two announcement sites R-III measured but left, recorded in the plan's
 // §6c. updateStatus already speaks through stateManager.announceChange, so
@@ -343,22 +391,24 @@ test('a storage-quota failure is announced once, assertively', async ({
       })
     );
   }, message);
-  await page.waitForTimeout(1_500);
 
-  const said = await saidMatching(page, /Storage is full/);
   // Measured on the parent commit: THREE, not the two the ledger recorded —
   // polite via updateStatus, assertive via announceError, and assertive again
   // from showErrorToast, which announces "<title>. <message>" itself.
-  expect(said).toHaveLength(1);
+  await expectSaidExactlyOnce(page, async () =>
+    (await saidMatching(page, /Storage is full/)).length
+  );
+  const said = await saidMatching(page, /Storage is full/);
   // A failure to save is an error, so the one that survives is the assertive
   // one; downgrading it to polite would be the wrong half to keep.
   expect(said[0].politeness).toBe('assertive');
 
-  // The status bar must still show it — this is about how often it is spoken,
-  // not about removing the user's visible feedback.
-  await expect(page.locator('#previewStatusText')).toContainText(
-    /Storage is full/i
-  );
+  // The status bar must still SHOW it — this is about how often it is
+  // spoken, not about removing the user's visible feedback. History, not a
+  // snapshot: a later "Preview ready" may have overwritten the slot already.
+  await expect
+    .poll(() => statusEverShowed(page, /Storage is full/))
+    .toBe(true);
 });
 
 test('the complexity advisory is announced once', async ({ page }) => {
@@ -371,6 +421,11 @@ test('the complexity advisory is announced once', async ({ page }) => {
   await page.waitForTimeout(1_000);
   await watchBothRegions(page);
 
+  // A REAL advisory from the fixture's own analysis may already have spoken
+  // before this point; the synthetic dispatch below must add exactly ONE
+  // more, so the count is a delta from here, not an absolute.
+  const before = (await saidMatching(page, /This model is complex/)).length;
+
   // The advisory fires from a state subscriber when a fresh complexityAnalysis
   // carrying warnings lands, which is how file-handler delivers it.
   await page.evaluate(() =>
@@ -378,14 +433,14 @@ test('the complexity advisory is announced once', async ({ page }) => {
       complexityAnalysis: { warnings: ['synthetic complexity warning'] },
     })
   );
-  await page.waitForTimeout(1_500);
 
   // Measured on the parent commit: 2 — updateStatus announced it and the line
   // below it announced the identical string again.
-  const said = await saidMatching(page, /This model is complex/);
-  expect(said).toHaveLength(1);
-
-  await expect(page.locator('#previewStatusText')).toContainText(
-    /This model is complex/i
+  await expectSaidExactlyOnce(page, async () =>
+    (await saidMatching(page, /This model is complex/)).length - before
   );
+
+  await expect
+    .poll(() => statusEverShowed(page, /This model is complex/))
+    .toBe(true);
 });
