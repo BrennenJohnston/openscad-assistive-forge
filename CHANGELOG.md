@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Accessibility toggles inside the City Walk** (CW-14) - the game layer is a modal that traps focus,
+  so the app header's high contrast and theme buttons were out of reach for as long as you were
+  walking. The game's own header now carries both, in the same order the app header uses: High
+  contrast, Theme, then Help and Exit game. They call the app's existing theme manager, so a flip made
+  inside the game is the same flip as one made outside it, and it is still in force when you leave.
+  High contrast is a toggle button that carries its pressed state, and switching it on mid-walk raises
+  the multicolour high-contrast palette over the city without a reload; switching it off returns the
+  single phosphor. The theme button cycles the app's three settings and names the one it is on - Auto,
+  Light or Dark - and because the phosphor colour is the theme's accent, dark walks the city in green
+  and light walks it in amber, swapping live as you press. Both buttons announce what happened through
+  the game's own in-layer announcer rather than the app's status line, which a modal hides, and both
+  keep their labels honest when the flip arrives from somewhere else. The pressed pair was measured on
+  the real button at rest and hovered in all four states the game can be in; the worst of the eight
+  readings is 9.46:1
+
 - **Look up at the towers in the City Walk** (CW-13) - the game's camera is no longer fixed to the
   horizon. R and F tilt the gaze up and down at 45 degrees a second, stopping at 60 degrees either
   way, and V returns it to level and says so. Dragging the viewport with a mouse looks around too,
