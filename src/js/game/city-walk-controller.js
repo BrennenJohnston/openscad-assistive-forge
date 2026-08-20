@@ -5,8 +5,11 @@
  * DOM, forces the mono (Alt View) variant on while open, loads a bundled
  * city extract, and renders its own three.js scene through a dedicated
  * instance of the Alt View ASCII converter (initAltView — per-instance
- * since CW-1). Keyboard-only by design (Q-67): arrows/WASD walk, Q/E turn,
- * Shift is faster, M toggles the top-down map view, H help, Escape leaves.
+ * since CW-1). Every action has a key (Q-67): arrows/WASD walk, Q/E turn,
+ * R/F look up and down, V levels the gaze, Shift is faster, M toggles the
+ * top-down map view, H help, Escape leaves. Dragging the viewport with a
+ * pointer looks around too (CW-13) — an addition for mouse players, never
+ * the only way to reach anything.
  *
  * The layer is modal: document-level capture focus trap, Escape on the
  * capture phase, focus restored to the launching control on exit. The
@@ -43,7 +46,9 @@ import {
   createWalkState,
   stepWalk,
   firstPersonPose,
+  levelView,
   headingLabel,
+  pitchLabel,
   buildCollisionGrid,
   findSpawn,
   createMapCamera,
@@ -330,6 +335,9 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       'Arrow Down or S: walk backward',
       'A and D: sidestep left and right',
       'Arrow Left / Q and Arrow Right / E: turn',
+      'R and F: look up and down',
+      'V: level the view',
+      'Drag with the mouse in street view: look around',
       'Shift (hold): move faster',
       'Left and Right Bracket: walking speed down or up',
       'M: switch between street view and map view',
@@ -758,6 +766,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     ['KeyQ', 'turnLeft'],
     ['ArrowRight', 'turnRight'],
     ['KeyE', 'turnRight'],
+    ['KeyR', 'lookUp'],
+    ['KeyF', 'lookDown'],
   ]);
 
   function handleGameKeyDown(event) {
@@ -784,6 +794,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       event.preventDefault();
       event.stopPropagation();
       toggleMapView();
+      return;
+    }
+
+    if (event.code === 'KeyV') {
+      event.preventDefault();
+      event.stopPropagation();
+      levelTheView();
       return;
     }
 
@@ -865,6 +882,24 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   function clearHeldKeys() {
     state.keys.clear();
     state.shiftHeld = false;
+  }
+
+  /**
+   * V works in both views on purpose. The map suspends the street camera
+   * rather than replacing it, so a gaze left tilted while the map is open
+   * would still be tilted on the way back; one key that always means "undo
+   * my looking" cannot strand it. The announcement is unconditional - a key
+   * that answers with silence reads as broken.
+   */
+  function levelTheView() {
+    const game = state.game;
+    if (!game) return;
+    if (levelView(game.walkState)) {
+      applyFirstPersonCamera();
+      game.altView.invalidate();
+      updateHud();
+    }
+    announceInLayer('View level.');
   }
 
   function adjustCharacterSize(delta) {
@@ -993,9 +1028,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       : `street view · speed ${Math.round(game.speedScale * 100)}%`;
     const near =
       !game.mapView && game.nearLandmark ? ` · near ${game.nearLandmark}` : '';
+    const looking = game.mapView ? null : pitchLabel(game.walkState.pitchRad);
+    const gaze = looking ? ` · looking ${looking}` : '';
     const text =
       `${game.city.label} · facing ${headingLabel(game.walkState.headingRad)}` +
-      ` · ${view}${near}`;
+      `${gaze} · ${view}${near}`;
     if (text !== game.lastHudText) {
       game.lastHudText = text;
       state.refs.hudStatus.textContent = text;
@@ -1073,18 +1110,21 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       turn:
         (state.keys.has('turnRight') ? 1 : 0) -
         (state.keys.has('turnLeft') ? 1 : 0),
+      pitch:
+        (state.keys.has('lookUp') ? 1 : 0) -
+        (state.keys.has('lookDown') ? 1 : 0),
       fast: state.shiftHeld,
       speedScale: game.speedScale,
     };
 
-    const { moved, turned } = stepWalk(
+    const { moved, turned, pitched } = stepWalk(
       game.walkState,
       input,
       dtS,
       game.collision
     );
 
-    if (moved || turned) {
+    if (moved || turned || pitched) {
       applyFirstPersonCamera();
       if (moved) {
         const near = nearestLandmarkName(
