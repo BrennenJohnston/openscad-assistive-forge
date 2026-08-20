@@ -40,6 +40,7 @@ import { parseOffTriangleCount } from './mesh-stats.js';
 import { generateMissingFileWarnings } from './missing-file-warnings.js';
 import { resolveMountContent } from './mount-content.js';
 import { ensureLibraryDir, writeLibraryFile } from './library-fs.js';
+import { unpackLibraryArchive } from './lib-archive.js';
 import {
   translateWorkerError,
   MODEL_NOT_2D_SUGGESTION,
@@ -839,8 +840,40 @@ async function mountLibraries(libraries) {
 
         ensureDir(libRoot);
 
+        // AF-12: one archive instead of one request per file (695 for
+        // dotSCAD). Anything wrong on this path - missing archive, corrupt
+        // bytes - is SAID and then the per-file loop below takes over, so
+        // an old deployment without archives keeps working.
+        let mountedFromArchive = false;
+        if (manifest.archive) {
+          try {
+            const zipResponse = await fetch(
+              `${assetBaseUrl}${lib.path}/${manifest.archive}`
+            );
+            if (!zipResponse.ok) {
+              throw new Error(`HTTP ${zipResponse.status}`);
+            }
+            const entries = await unpackLibraryArchive(
+              await zipResponse.arrayBuffer()
+            );
+            for (const entry of entries) {
+              writeLibraryFile(FS, libRoot, entry.path, entry.text);
+              totalMounted++;
+            }
+            mountedFromArchive = true;
+            if (import.meta.env.DEV)
+              console.log(
+                `[Worker FS] Mounted ${lib.id} from ${manifest.archive} (${entries.length} files)`
+              );
+          } catch (error) {
+            console.warn(
+              `[Worker FS] Archive mount failed for ${lib.id} (${error.message}); falling back to per-file fetches`
+            );
+          }
+        }
+
         // Fetch and mount each file
-        for (const file of files) {
+        for (const file of mountedFromArchive ? [] : files) {
           try {
             const fileResponse = await fetch(
               `${assetBaseUrl}${lib.path}/${file}`
