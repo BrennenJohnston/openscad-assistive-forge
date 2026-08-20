@@ -160,6 +160,118 @@ export function resizeOverlay(canvas, cssW, cssH, dpr, persistCanvas) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Tiny-cell composite path (CW-12)
+// ---------------------------------------------------------------------------
+// At a few device pixels per character cell the per-cell ctx.drawImage() call
+// dominates the entire ASCII conversion — MEASURED at 271 ms of a 433 ms frame
+// (63%) with 238k cells, because the cost is per CALL, not per pixel. Composing
+// every glyph into one reusable buffer and handing the canvas a single
+// putImageData replaces ~238k canvas calls with ~1.9M typed-array writes.
+//
+// Scope guard: this path is entered only when a character cell is at most
+// _TINY_CELL_MAX_CSS_PX wide in CSS pixels AND afterglow is off. The preview's
+// Alt View bottoms out at scale 0.5, which is a 5 px cell at every dpr, so it
+// never reaches here and keeps the drawImage path byte for byte.
+//
+// The threshold is deliberately in CSS pixels, not device pixels: what makes
+// the old path expensive is the NUMBER of drawImage calls, and that follows
+// the cell count, which follows charW in CSS px. Gating on device px would
+// have switched the fast path off at 30% on a 2x display — exactly the
+// machines that need it — while every bench number was taken at dpr 1.
+
+const _TINY_CELL_MAX_CSS_PX = 4;
+
+/** One reusable frame buffer per overlay context, resized with the canvas. */
+const _frameBuffers = new WeakMap();
+
+function _frameBuffer(ctx, w, h) {
+  const held = _frameBuffers.get(ctx);
+  if (held && held.width === w && held.height === h) return held;
+  const made = ctx.createImageData(w, h);
+  _frameBuffers.set(ctx, made);
+  return made;
+}
+
+/**
+ * An atlas's pixels as one Uint32Array, computed once and cached on the atlas
+ * object itself — atlases are rebuilt (and the cache thrown away with them)
+ * whenever font metrics or theme colors change. The atlas canvas is already
+ * created with willReadFrequently, so this read is the cheap direction.
+ */
+function _atlasPixels32(atlas) {
+  if (atlas._pixels32) return atlas._pixels32;
+  const ctx = atlas.canvas.getContext('2d', { willReadFrequently: true });
+  const img = ctx.getImageData(0, 0, atlas.canvas.width, atlas.canvas.height);
+  atlas._pixels32 = new Uint32Array(img.data.buffer);
+  return atlas._pixels32;
+}
+
+function _paintTinyCells(
+  ctx,
+  glyphIndices,
+  cols,
+  rows,
+  atlas,
+  stepX,
+  stepY,
+  colorIndices,
+  colorAtlases
+) {
+  const w = ctx.canvas.width;
+  const h = ctx.canvas.height;
+  const img = _frameBuffer(ctx, w, h);
+  const dst = new Uint32Array(img.data.buffer);
+  dst.fill(0);
+
+  const { cellW, cellH } = atlas;
+  const basePixels = _atlasPixels32(atlas);
+  const baseStride = atlas.canvas.width;
+
+  for (let row = 0; row < rows; row++) {
+    const rowBase = row * cols;
+    const dy0 = (row * stepY) | 0;
+    if (dy0 >= h) break;
+    const runH = Math.min(cellH, h - dy0);
+
+    for (let col = 0; col < cols; col++) {
+      const cell = rowBase + col;
+      const idx = glyphIndices[cell];
+      if (idx === SPACE_INDEX) continue;
+
+      const dx0 = (col * stepX) | 0;
+      if (dx0 >= w) continue;
+      const runW = Math.min(cellW, w - dx0);
+
+      let src = basePixels;
+      let stride = baseStride;
+      if (colorAtlases && colorIndices) {
+        const layer = colorAtlases[colorIndices[cell]];
+        if (layer) {
+          src = _atlasPixels32(layer);
+          stride = layer.canvas.width;
+        }
+      }
+
+      const sx0 = idx * cellW;
+      for (let y = 0; y < runH; y++) {
+        let s = y * stride + sx0;
+        let d = (dy0 + y) * w + dx0;
+        for (let x = 0; x < runW; x++, s++, d++) {
+          // Fully transparent atlas pixels leave the buffer alone, which is
+          // what source-over does. Cells never overlap here (charW is an
+          // integer and stepX === cellW at every dpr we ship), so a copy and
+          // a source-over composite produce the same pixels.
+          const px = src[s];
+          if (px !== 0) dst[d] = px;
+        }
+      }
+    }
+  }
+
+  ctx.putImageData(img, 0, 0);
+}
+
 /**
  * Paint one frame of ASCII art by blitting glyphs from the atlas.
  *
@@ -212,6 +324,21 @@ export function paintFrame(
   const stepY = charH * dpr;
   const colorIndices = colorLayers?.indices ?? null;
   const colorAtlases = colorLayers?.atlases ?? null;
+
+  if (fade === 0 && charW <= _TINY_CELL_MAX_CSS_PX) {
+    _paintTinyCells(
+      ctx,
+      glyphIndices,
+      cols,
+      rows,
+      atlas,
+      stepX,
+      stepY,
+      colorIndices,
+      colorAtlases
+    );
+    return;
+  }
 
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
