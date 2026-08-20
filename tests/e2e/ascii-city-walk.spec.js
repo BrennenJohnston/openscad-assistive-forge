@@ -613,6 +613,197 @@ test.describe('ASCII City Walk — character size (CW-12)', () => {
   })
 })
 
+test.describe('ASCII City Walk — looking around (CW-13)', () => {
+  const DEG = Math.PI / 180
+
+  /** The live gaze, straight off the DEV handle the game exposes. */
+  const gaze = (page) =>
+    page.evaluate(() => {
+      const w = window.__cityWalkGame?.walkState
+      return { pitch: w?.pitchRad ?? null, heading: w?.headingRad ?? null }
+    })
+
+  /** Where focus sits, and whether it is still inside the modal layer. */
+  const focusState = (page) =>
+    page.evaluate(() => ({
+      id: document.activeElement?.id || document.activeElement?.tagName,
+      inLayer: Boolean(
+        document
+          .getElementById('cityWalkLayer')
+          ?.contains(document.activeElement)
+      ),
+    }))
+
+  async function dragViewport(page, dx, dy, steps = 20) {
+    const box = await page.locator('#cityWalkViewport').boundingBox()
+    const x = box.x + box.width / 2
+    const y = box.y + box.height / 2
+    await page.mouse.move(x, y)
+    await page.mouse.down()
+    for (let i = 1; i <= steps; i++) {
+      await page.mouse.move(x + (dx * i) / steps, y + (dy * i) / steps)
+    }
+    await page.mouse.up()
+  }
+
+  test('R and F tilt the gaze, the HUD says so, and V levels it', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    expect((await gaze(page)).pitch).toBe(0)
+    await expect(page.locator('#cityWalkHudStatus')).not.toContainText(
+      'looking'
+    )
+
+    // Held R climbs; 45 deg/s means half a second cannot reach the clamp, so
+    // this asserts real integration rather than a jump to the limit.
+    await page.keyboard.down('KeyR')
+    await page.waitForTimeout(600)
+    await page.keyboard.up('KeyR')
+    await expect
+      .poll(async () => (await gaze(page)).pitch > 5 * DEG)
+      .toBe(true)
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('looking up')
+
+    // The bearing is untouched by looking up - pitch and yaw are separate.
+    expect((await gaze(page)).heading).toBe(0)
+
+    // Held to the stop: the clamp is exactly 60 degrees, never beyond.
+    await page.keyboard.down('KeyR')
+    await page.waitForTimeout(2200)
+    await page.keyboard.up('KeyR')
+    await expect
+      .poll(async () => Math.round((await gaze(page)).pitch / DEG))
+      .toBe(60)
+
+    await page.keyboard.press('KeyV')
+    await expect(page.locator('#cityWalkAnnouncer')).toHaveText(/View level/)
+    expect((await gaze(page)).pitch).toBe(0)
+    await expect(page.locator('#cityWalkHudStatus')).not.toContainText(
+      'looking'
+    )
+
+    // F goes the other way, and the HUD words it differently.
+    await page.keyboard.down('KeyF')
+    await page.waitForTimeout(600)
+    await page.keyboard.up('KeyF')
+    await expect
+      .poll(async () => (await gaze(page)).pitch < -5 * DEG)
+      .toBe(true)
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'looking down'
+    )
+  })
+
+  test('a mouse drag turns and tilts; a plain click does neither', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const before = await gaze(page)
+
+    // Under the 4 px threshold this is a click, not a drag.
+    const box = await page.locator('#cityWalkViewport').boundingBox()
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width / 2 + 2, box.y + box.height / 2 + 1)
+    await page.mouse.up()
+    expect(await gaze(page)).toEqual(before)
+
+    // 200 px right and 100 px up at 0.25 deg/px: +50 deg of yaw, +25 of pitch.
+    await dragViewport(page, 200, -100)
+    await expect
+      .poll(async () => Math.round((await gaze(page)).heading / DEG))
+      .toBe(50)
+    expect(Math.round((await gaze(page)).pitch / DEG)).toBe(25)
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('looking up')
+  })
+
+  test('the map view ignores the look keys and the drag', async ({ page }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // Positive control first: without proof the same press WORKS in street
+    // view, "the map ignores it" would pass on a build that has no pitch at
+    // all - which is exactly what the release base is.
+    await page.keyboard.down('KeyR')
+    await page.waitForTimeout(700)
+    await page.keyboard.up('KeyR')
+    await expect
+      .poll(async () => (await gaze(page)).pitch > 5 * DEG)
+      .toBe(true)
+    await page.keyboard.press('KeyV')
+    expect((await gaze(page)).pitch).toBe(0)
+
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
+    const before = await gaze(page)
+
+    await page.keyboard.down('KeyR')
+    await page.waitForTimeout(700)
+    await page.keyboard.up('KeyR')
+    await dragViewport(page, 150, 80, 10)
+
+    // Walking is suspended in the map view, and so is looking around.
+    expect(await gaze(page)).toEqual(before)
+    await expect(page.locator('#cityWalkHudStatus')).not.toContainText(
+      'looking'
+    )
+  })
+
+  test('D-59: a click in the viewport leaves the keyboard working', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // Pre-existing since CW-4: the viewport is not focusable, so a plain
+    // click sent focus to <body> - outside the layer the key listener is
+    // bound to - and every key died for the rest of the session.
+    for (const view of ['street', 'map']) {
+      if (view === 'map') {
+        await page.keyboard.press('KeyM')
+        await expect(page.locator('#cityWalkHudStatus')).toContainText(
+          'map view'
+        )
+      }
+
+      const box = await page.locator('#cityWalkViewport').boundingBox()
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+
+      const focus = await focusState(page)
+      expect(focus.inLayer, `focus left the layer in ${view} view`).toBe(true)
+
+      // Proof the keyboard still reaches the game: H opens the help panel.
+      await page.keyboard.press('KeyH')
+      await expect(page.locator('#cityWalkHelpPanel')).toBeVisible()
+      await page.keyboard.press('KeyH')
+      await expect(page.locator('#cityWalkHelpPanel')).toBeHidden()
+
+      if (view === 'map') await page.keyboard.press('KeyM')
+    }
+  })
+
+  test('the help panel names the look controls', async ({ page }) => {
+    await launchGame(page)
+    await enterCity(page)
+    await page.keyboard.press('KeyH')
+    await expect(page.locator('#cityWalkHelpPanel')).toBeVisible()
+    await expect(page.locator('#cityWalkHelpPanel')).toContainText(
+      'R and F: look up and down'
+    )
+    await expect(page.locator('#cityWalkHelpPanel')).toContainText(
+      'V: level the view'
+    )
+    await expect(page.locator('#cityWalkHelpPanel')).toContainText(
+      'Drag with the mouse in street view: look around'
+    )
+  })
+})
+
 test.describe('ASCII City Walk — landmarks (CW-10)', () => {
   test('legend lists landmarks in map view; L cycles, announces, and highlights', async ({
     page,
