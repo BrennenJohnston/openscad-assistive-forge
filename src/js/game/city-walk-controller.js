@@ -623,7 +623,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       getActiveCamera: () => (game.mapView ? orthoCamera : fpCamera),
       isAutoRotateEnabled: () => false,
     };
-    game.altView = await initAltView(managerLike);
+    // allowTinyCells: the game's range reaches a 2 px character cell, where a
+    // glyph is almost all antialiasing. Without this the city dims as the
+    // characters shrink (CW-12). The preview's Alt View does not opt in.
+    game.altView = await initAltView(managerLike, { allowTinyCells: true });
 
     // Character size (CW-Q10): the game's own saved value wins, then the
     // shared Alt View preference clamped into the game's range, then 50%.

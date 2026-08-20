@@ -117,6 +117,7 @@ describe('buildGlyphAtlas', () => {
       charH: 4,
       dpr: 1,
       color: '#00ff00',
+      normalizeTinyAlpha: true,
     })
     HTMLCanvasElement.prototype.getContext = orig
 
@@ -144,6 +145,7 @@ describe('buildGlyphAtlas', () => {
       charH: 5,
       dpr: 1,
       color: '#00ff00',
+      normalizeTinyAlpha: true,
     })
     HTMLCanvasElement.prototype.getContext = orig
 
@@ -167,6 +169,34 @@ describe('buildGlyphAtlas', () => {
       charH: 13,
       dpr: 1,
       color: '#00ff00',
+      normalizeTinyAlpha: true,
+    })
+    HTMLCanvasElement.prototype.getContext = orig
+
+    expect(atlasCtx.getImageData).not.toHaveBeenCalled()
+    expect(atlasCtx.putImageData).not.toHaveBeenCalled()
+  })
+
+  it('leaves a tiny atlas alone when the caller did not opt in', () => {
+    // THE guard for the main app. Iosevka Term advances at about half its
+    // size, so the preview slider's own 0.5 minimum lands on a 7 px font and
+    // a 4 px cell - inside the width threshold. Only the missing opt-in keeps
+    // the preview's Alt View rendering exactly as it always has.
+    const orig = HTMLCanvasElement.prototype.getContext
+    HTMLCanvasElement.prototype.getContext = function () {
+      atlasCtx = createMockCtx()
+      atlasCtx.canvas = this
+      stubAtlasPixels(164)
+      return atlasCtx
+    }
+    buildGlyphAtlas({
+      fontFamily: 'monospace',
+      fontSizePx: 7,
+      charW: 4,
+      charH: 9,
+      dpr: 1,
+      color: '#00ff00',
+      // no normalizeTinyAlpha - this is the preview's call shape
     })
     HTMLCanvasElement.prototype.getContext = orig
 

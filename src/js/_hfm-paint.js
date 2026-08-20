@@ -60,6 +60,7 @@ export function buildGlyphAtlas({
   charH,
   dpr,
   color,
+  normalizeTinyAlpha = false,
 }) {
   const cellW = Math.max(1, Math.round(charW * dpr));
   const cellH = Math.max(1, Math.round(charH * dpr));
@@ -80,7 +81,7 @@ export function buildGlyphAtlas({
     ctx.fillText(ch, i * cellW + cellW / 2, cellH / 2);
   }
 
-  _restoreTinyGlyphBrightness(ctx, canvas, charW);
+  if (normalizeTinyAlpha) _restoreTinyGlyphBrightness(ctx, canvas, charW);
 
   return { canvas, cellW, cellH, dpr, color };
 }
@@ -98,10 +99,13 @@ export function buildGlyphAtlas({
  * its strongest pixel is fully opaque restores the intended mapping (amber's
  * floor measures 8.99:1 after, high-contrast dark 19.43:1).
  *
- * Scope: only cells at most _TINY_CELL_MAX_CSS_PX wide, the same threshold the
- * composite paint path uses. Atlases at font 12 px and up are already at full
- * alpha, so this would be a no-op for the preview's Alt View anyway; the guard
- * makes that a fact rather than a coincidence of the font.
+ * Scope: the CALLER must opt in (the City Walk does; the preview's Alt View
+ * does not), AND the cell must be at most _TINY_CELL_MAX_CSS_PX wide. The
+ * opt-in is what makes this game-only, and it is not decoration: Iosevka Term
+ * advances at about half its size, so the preview slider's own 0.5 minimum
+ * lands on a 7 px font and a 4 px cell — inside the width threshold. A width
+ * test alone would have brightened the main app's Alt View by about 11% at its
+ * smallest setting, which this release promised not to touch.
  *
  * @param {CanvasRenderingContext2D} ctx - the atlas context, already drawn
  * @param {HTMLCanvasElement} canvas
@@ -213,10 +217,14 @@ export function resizeOverlay(canvas, cssW, cssH, dpr, persistCanvas) {
 // every glyph into one reusable buffer and handing the canvas a single
 // putImageData replaces ~238k canvas calls with ~1.9M typed-array writes.
 //
-// Scope guard: this path is entered only when a character cell is at most
-// _TINY_CELL_MAX_CSS_PX wide in CSS pixels AND afterglow is off. The preview's
-// Alt View bottoms out at scale 0.5, which is a 5 px cell at every dpr, so it
-// never reaches here and keeps the drawImage path byte for byte.
+// Entered only when a character cell is at most _TINY_CELL_MAX_CSS_PX wide in
+// CSS pixels AND afterglow is off. The preview's Alt View CAN reach this at
+// its own 0.5 minimum (Iosevka Term advances at about half its size, so a 7 px
+// font is a 4 px cell) and that is fine on purpose: the two paths are
+// pixel-identical — 0 of 1,906,560 differed in an A/B at 30% and 20% — so the
+// preview gets the speed and none of the change. The brightness treatment,
+// which IS visible, is gated on a caller opt-in instead; see
+// _restoreTinyGlyphBrightness.
 //
 // The threshold is deliberately in CSS pixels, not device pixels: what makes
 // the old path expensive is the NUMBER of drawImage calls, and that follows

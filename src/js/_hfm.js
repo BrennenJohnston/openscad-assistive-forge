@@ -98,6 +98,11 @@ function _createInstanceState() {
     // Written on every frame; read only through the DEV-only getters.
     convertStats: { last: 0, sum: 0, max: 0, samples: 0 },
 
+    // CW-12: caller opt-in for the small-character treatment. The City Walk
+    // sets it; the preview's Alt View leaves it false so its own smallest
+    // setting renders exactly as it always has.
+    tinyCellsAllowed: false,
+
     contrastScale: 1,
     contrastExp: _DEFAULT_CONTRAST_EXP,
     dirContrastExp: _DEFAULT_DIR_CONTRAST_EXP,
@@ -356,6 +361,7 @@ function _ensureGlyphModel(st, { fontFamily, fontSizePx, charW, charH, dpr }) {
         charH,
         dpr,
         color: paletteColor,
+        normalizeTinyAlpha: st.tinyCellsAllowed,
       })
     );
     st.atlas = st.paletteAtlases[0];
@@ -368,6 +374,7 @@ function _ensureGlyphModel(st, { fontFamily, fontSizePx, charW, charH, dpr }) {
       charH,
       dpr,
       color,
+      normalizeTinyAlpha: st.tinyCellsAllowed,
     });
   }
   st.glyphVectors = _buildGlyphVectors(st.atlas);
@@ -562,12 +569,19 @@ function _renderFrame(
 /**
  * Initialize alternate view
  * @param {Object} previewManager - PreviewManager instance
+ * @param {{allowTinyCells?: boolean}} [options] - allowTinyCells opts this
+ *   instance into the small-character treatment (CW-12): glyph atlases below
+ *   a 4 px cell are normalized back to full opacity, so the picture does not
+ *   dim as the characters shrink. The City Walk sets it; the preview's Alt
+ *   View does not, and so renders exactly as it always has at every setting
+ *   its own 0.5-2.5 slider can reach.
  * @returns {Object} API for controlling the alternate view
  */
-export async function initAltView(previewManager) {
+export async function initAltView(previewManager, options = {}) {
   const { renderer, scene, container } = previewManager;
 
   const st = _createInstanceState();
+  st.tinyCellsAllowed = Boolean(options.allowTinyCells);
 
   _ensureOverlay(st, container);
 
