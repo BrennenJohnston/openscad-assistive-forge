@@ -900,6 +900,257 @@ test.describe('ASCII City Walk — high contrast (CW-6)', () => {
   })
 })
 
+test.describe('ASCII City Walk — accessibility toggles (CW-14)', () => {
+  const contrastBtn = (page) => page.locator('#cityWalkContrastBtn')
+  const themeBtn = (page) => page.locator('#cityWalkThemeBtn')
+  const announcer = (page) => page.locator('#cityWalkAnnouncer')
+
+  /** How many colours the converter is quantizing to, or null for phosphor. */
+  const paletteSize = (page) =>
+    page.evaluate(
+      () => window.__cityWalkGame?.altView?.getPalette()?.length ?? null
+    )
+
+  /** The phosphor colour the ASCII painter reads (_hfm-paint getPhosphorColor). */
+  const accent = (page) =>
+    page.evaluate(() =>
+      getComputedStyle(document.documentElement)
+        .getPropertyValue('--color-accent')
+        .trim()
+    )
+
+  test('the high contrast button turns the palette on and off mid-walk', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    await expect(contrastBtn(page)).toHaveAttribute('aria-pressed', 'false')
+    await expect(contrastBtn(page)).toHaveAttribute(
+      'aria-label',
+      'Turn high contrast on'
+    )
+    await expect(page.locator('html')).not.toHaveAttribute(
+      'data-high-contrast',
+      'true'
+    )
+    expect(await paletteSize(page)).toBeNull()
+
+    await contrastBtn(page).click()
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-high-contrast',
+      'true'
+    )
+    await expect(contrastBtn(page)).toHaveAttribute('aria-pressed', 'true')
+    await expect(contrastBtn(page)).toHaveAttribute(
+      'aria-label',
+      'Turn high contrast off'
+    )
+    await expect(announcer(page)).toHaveText('High contrast on.')
+    // CW-Q2: multicolour exists only under high contrast, and the game's
+    // own MutationObserver is what applies it without a reload.
+    await expect.poll(() => paletteSize(page)).toBeGreaterThanOrEqual(4)
+
+    await contrastBtn(page).click()
+    await expect(page.locator('html')).not.toHaveAttribute(
+      'data-high-contrast',
+      'true'
+    )
+    await expect(contrastBtn(page)).toHaveAttribute('aria-pressed', 'false')
+    await expect(announcer(page)).toHaveText('High contrast off.')
+    await expect.poll(() => paletteSize(page)).toBeNull()
+  })
+
+  test('the theme button cycles the app setting and swaps the phosphor', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // A fresh profile starts on the app's default 'auto' setting.
+    await expect(themeBtn(page)).toHaveText('Theme: Auto')
+    await expect(themeBtn(page)).toHaveAttribute(
+      'aria-label',
+      'Theme: Auto. Press to cycle themes.'
+    )
+
+    // The hexes are the game's phosphor identity, documented in
+    // _hfm-paint.js: green in the dark scheme, amber in the light one. If
+    // either ever changes, this case should be the thing that notices.
+    await themeBtn(page).click()
+    await expect(themeBtn(page)).toHaveText('Theme: Light')
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-theme-setting',
+      'light'
+    )
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+    await expect(announcer(page)).toHaveText('Theme: Light')
+    expect(await accent(page)).toBe('#ffb000')
+
+    await themeBtn(page).click()
+    await expect(themeBtn(page)).toHaveText('Theme: Dark')
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    await expect(announcer(page)).toHaveText('Theme: Dark')
+    expect(await accent(page)).toBe('#00ff00')
+
+    await themeBtn(page).click()
+    await expect(themeBtn(page)).toHaveText('Theme: Auto')
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-theme-setting',
+      'auto'
+    )
+    await expect(announcer(page)).toHaveText('Theme: Auto (follows system)')
+
+    // The game keeps playing through every flip.
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'street view'
+    )
+  })
+
+  test('high contrast switched on before launch opens the game already pressed', async ({
+    page,
+  }) => {
+    await page.goto('/?hfm=unlock')
+    await expect(page.locator('#cityWalkCard')).toBeVisible({ timeout: 30000 })
+    await page.locator('#contrastToggle').click()
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-high-contrast',
+      'true'
+    )
+
+    await page.locator('#cityWalkLaunchBtn').click()
+    await expect(page.locator('#cityWalkLayer')).toBeVisible({ timeout: 20000 })
+
+    // Built pressed, before anything in the layer has been clicked.
+    await expect(contrastBtn(page)).toHaveAttribute('aria-pressed', 'true')
+    await expect(contrastBtn(page)).toHaveAttribute(
+      'aria-label',
+      'Turn high contrast off'
+    )
+  })
+
+  test('a click on a header toggle leaves the keyboard working (D-59 pattern)', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    await themeBtn(page).click()
+    const focus = await page.evaluate(() => ({
+      id: document.activeElement?.id || document.activeElement?.tagName,
+      inLayer: Boolean(
+        document
+          .getElementById('cityWalkLayer')
+          ?.contains(document.activeElement)
+      ),
+    }))
+    expect(focus.id).toBe('cityWalkThemeBtn')
+    expect(focus.inLayer).toBe(true)
+
+    // The keys still reach the game: focus staying put is only worth
+    // asserting if the city still answers to it (CW-13's lesson).
+    await page.keyboard.down('ArrowRight')
+    await page.waitForTimeout(1300)
+    await page.keyboard.up('ArrowRight')
+    await expect.poll(() => hudHeading(page)).not.toBe('north')
+
+    // And Tab does not escape the modal.
+    await page.keyboard.press('Tab')
+    const after = await page.evaluate(() =>
+      Boolean(
+        document
+          .getElementById('cityWalkLayer')
+          ?.contains(document.activeElement)
+      )
+    )
+    expect(after).toBe(true)
+  })
+
+  test('the toggles stay legible at rest and hovered, in every in-game state', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // The layer forces the mono variant on, so the states the game can
+    // actually be in are theme x high contrast. Each is reached by clicking
+    // the real buttons, so the tokens under test are the shipped ones.
+    const measure = (locator) =>
+      locator.evaluate((el) => {
+        const cs = getComputedStyle(el)
+        const read = (css) =>
+          (css.match(/\d+(\.\d+)?/g) || []).slice(0, 3).map(Number)
+        const luminance = (rgb) =>
+          rgb
+            .map((v) => {
+              const s = v / 255
+              return s <= 0.03928
+                ? s / 12.92
+                : Math.pow((s + 0.055) / 1.055, 2.4)
+            })
+            .reduce((sum, c, i) => sum + [0.2126, 0.7152, 0.0722][i] * c, 0)
+        const l1 = luminance(read(cs.color))
+        const l2 = luminance(read(cs.backgroundColor))
+        return {
+          color: cs.color,
+          background: cs.backgroundColor,
+          ratio:
+            Math.round(
+              ((Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)) * 100
+            ) / 100,
+        }
+      })
+
+    const check = async (label) => {
+      for (const [name, locator] of [
+        ['high contrast', contrastBtn(page)],
+        ['theme', themeBtn(page)],
+      ]) {
+        for (const state of ['rest', 'hovered']) {
+          if (state === 'hovered') await locator.hover()
+          else await page.mouse.move(0, 0)
+          await page.waitForTimeout(200)
+          const m = await measure(locator)
+          console.log(
+            `[cw14] ${label} / ${name} / ${state}: ${m.color} on ${m.background} = ${m.ratio}:1`
+          )
+          expect(
+            m.ratio,
+            `${label} / ${name} / ${state} is ${m.color} on ${m.background} = ${m.ratio}:1`
+          ).toBeGreaterThanOrEqual(4.5)
+        }
+      }
+    }
+
+    await themeBtn(page).click() // auto -> light
+    await check('mono light, contrast off')
+    await contrastBtn(page).click()
+    await check('mono light, contrast on')
+    await themeBtn(page).click() // light -> dark
+    await check('mono dark, contrast on')
+    await contrastBtn(page).click()
+    await check('mono dark, contrast off')
+  })
+
+  test('axe: the in-game layer has no violations with a toggle pressed and hovered', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+    await contrastBtn(page).click()
+    await expect(contrastBtn(page)).toHaveAttribute('aria-pressed', 'true')
+    // Hovering matters: a hover state is invisible to a scan unless
+    // something is hovering (D-55), and the pressed pair is repainted here.
+    await contrastBtn(page).hover()
+
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .include('#cityWalkLayer')
+      .analyze()
+    expectOnlyAllowedViolations(results)
+  })
+})
+
 test.describe('ASCII City Walk — without WebGL', () => {
   test('says so accessibly, and Escape still leaves as promised', async ({
     page,
