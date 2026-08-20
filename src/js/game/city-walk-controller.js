@@ -5,11 +5,12 @@
  * DOM, forces the mono (Alt View) variant on while open, loads a bundled
  * city extract, and renders its own three.js scene through a dedicated
  * instance of the Alt View ASCII converter (initAltView — per-instance
- * since CW-1). Every action has a key (Q-67): arrows/WASD walk, Q/E turn,
- * R/F look up and down, V levels the gaze, Shift is faster, M toggles the
- * top-down map view, H help, Escape leaves. Dragging the viewport with a
- * pointer looks around too (CW-13) — an addition for mouse players, never
- * the only way to reach anything.
+ * since CW-1). Every action in the city has a key (Q-67): arrows/WASD
+ * walk, Q/E turn, R/F look up and down, V levels the gaze, Shift is faster,
+ * M toggles the top-down map view, H help, Escape leaves. Dragging the
+ * viewport with a pointer looks around too (CW-13) — an addition for mouse
+ * players, never the only way to reach anything. The header's high-contrast
+ * and theme toggles (CW-14) are buttons in the tab order rather than keys.
  *
  * The layer is modal: document-level capture focus trap, Escape on the
  * capture phase, focus restored to the launching control on exit. The
@@ -64,6 +65,7 @@ import {
 import { initAltView } from '../_hfm.js';
 import { createDocumentFocusTrap } from '../focus-trap.js';
 import { announce } from '../announcer.js';
+import { themeManager } from '../theme-manager.js';
 import { HC_PALETTE_GREEN, HC_PALETTE_AMBER } from './hc-palettes.js';
 import {
   safeGetItem,
@@ -92,6 +94,16 @@ const DRAG_RAD_PER_PX = (0.25 * Math.PI) / 180;
 // A press that travels less than this is a click, not a drag, so a stray tap
 // on the viewport never nudges the view.
 const DRAG_THRESHOLD_PX = 4;
+
+// CW-14: what the header's theme button calls each setting the app cycles
+// through. 'auto' resolves to light or dark, which is what the phosphor
+// colour follows, so the button names the SETTING and the announcement
+// carries the manager's own fuller message.
+const THEME_SETTING_LABELS = {
+  auto: 'Auto',
+  light: 'Light',
+  dark: 'Dark',
+};
 
 let activeSession = null;
 
@@ -139,6 +151,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     keys: new Set(),
     shiftHeld: false,
     drag: null,
+    themeUnsub: null,
     refs: {},
   };
 
@@ -162,6 +175,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     layer.addEventListener('keyup', handleGameKeyUp);
     window.addEventListener('blur', clearHeldKeys);
 
+    // CW-14: keep the header toggles honest when the flip comes from
+    // somewhere else - the system switching schemes under 'auto', say.
+    state.themeUnsub = themeManager.addListener(syncThemeButtons);
+
     announceInLayer('ASCII City Walk opened. Choose a city to start walking.');
   }
 
@@ -172,6 +189,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     layer.removeEventListener('keydown', handleGameKeyDown);
     layer.removeEventListener('keyup', handleGameKeyUp);
     window.removeEventListener('blur', clearHeldKeys);
+    state.themeUnsub?.();
+    state.themeUnsub = null;
 
     layer.hidden = true;
     layer.replaceChildren();
@@ -232,6 +251,31 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
 
     const headerActions = document.createElement('div');
     headerActions.className = 'city-walk-header-actions';
+
+    // CW-14: the layer is aria-modal, so the app header's accessibility
+    // controls are unreachable while playing. These two call the same theme
+    // manager the header does, in the header's owner-signed order (U-16):
+    // high contrast, theme, then the rest.
+    const contrastBtn = document.createElement('button');
+    contrastBtn.type = 'button';
+    contrastBtn.className = 'btn btn-secondary city-walk-btn';
+    contrastBtn.id = 'cityWalkContrastBtn';
+    contrastBtn.textContent = 'High contrast';
+    contrastBtn.addEventListener('click', () => {
+      const enabled = themeManager.toggleHighContrast();
+      announceInLayer(enabled ? 'High contrast on.' : 'High contrast off.');
+    });
+    headerActions.appendChild(contrastBtn);
+
+    const themeBtn = document.createElement('button');
+    themeBtn.type = 'button';
+    themeBtn.className = 'btn btn-secondary city-walk-btn';
+    themeBtn.id = 'cityWalkThemeBtn';
+    themeBtn.addEventListener('click', () => {
+      // cycleTheme() returns the app's own user-facing message.
+      announceInLayer(themeManager.cycleTheme());
+    });
+    headerActions.appendChild(themeBtn);
 
     const helpBtn = document.createElement('button');
     helpBtn.type = 'button';
@@ -358,6 +402,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       `Minus and Equals in street view: smaller or larger characters (${Math.round(
         CHAR_SCALE_MIN * 100
       )}% to 100%)`,
+      'High contrast and theme: the two buttons at the top of the screen',
       'H: open or close this help',
       'Escape: close this help, or leave the game',
     ];
@@ -399,6 +444,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     layer.appendChild(announcer);
 
     state.refs = {
+      contrastBtn,
+      themeBtn,
       helpBtn,
       exitBtn,
       startPanel,
@@ -412,6 +459,35 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       legend,
       announcer,
     };
+
+    syncThemeButtons();
+  }
+
+  /**
+   * Mirror the document's contrast and theme attributes onto the header
+   * toggles. High contrast is a two-state toggle, so it carries
+   * aria-pressed; the theme is the app's three-state cycle, so its visible
+   * label names the current setting instead and the aria-label says what
+   * pressing it does (U-7).
+   */
+  function syncThemeButtons() {
+    const { contrastBtn, themeBtn } = state.refs;
+    if (!contrastBtn || !themeBtn) return;
+
+    const hc = root.getAttribute('data-high-contrast') === 'true';
+    contrastBtn.setAttribute('aria-pressed', hc ? 'true' : 'false');
+    contrastBtn.setAttribute(
+      'aria-label',
+      hc ? 'Turn high contrast off' : 'Turn high contrast on'
+    );
+
+    const setting = root.getAttribute('data-theme-setting') ?? 'auto';
+    const label = THEME_SETTING_LABELS[setting] ?? THEME_SETTING_LABELS.auto;
+    themeBtn.textContent = `Theme: ${label}`;
+    themeBtn.setAttribute(
+      'aria-label',
+      `Theme: ${label}. Press to cycle themes.`
+    );
   }
 
   /** Fill the map-view legend with this city's landmarks. */
