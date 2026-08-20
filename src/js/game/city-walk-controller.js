@@ -50,6 +50,10 @@ import {
   stepMapCamera,
   recenterMapCamera,
   mapCameraFrustum,
+  clampCharScale,
+  seedCharScale,
+  CHAR_SCALE_MIN,
+  CHAR_SCALE_STEP,
 } from './walk-controls.js';
 import { initAltView } from '../_hfm.js';
 import { createDocumentFocusTrap } from '../focus-trap.js';
@@ -60,6 +64,7 @@ import {
   safeSetItem,
   STORAGE_KEY_HFM_FONT_SCALE,
   STORAGE_KEY_CITY_WALK_SPEED,
+  STORAGE_KEY_CITY_WALK_FONT_SCALE,
 } from '../storage-keys.js';
 
 // Bundled extracts (Q-68). Slugs match public/examples/ascii-city/*.json.
@@ -330,7 +335,9 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       'M: switch between street view and map view',
       'On the map: arrow keys pan, Minus and Equals zoom, Home returns to you',
       'L and Shift+L: cycle landmarks on the map',
-      'Minus and Equals in street view: smaller or larger characters',
+      `Minus and Equals in street view: smaller or larger characters (${Math.round(
+        CHAR_SCALE_MIN * 100
+      )}% to 100%)`,
       'H: open or close this help',
       'Escape: close this help, or leave the game',
     ];
@@ -618,11 +625,16 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     };
     game.altView = await initAltView(managerLike);
 
-    // Character size seeds from the saved Alt View preference so the game
-    // matches the preview's ASCII look; in-game adjustment (-/=) stays
-    // session-local and never writes the shared pref back.
-    const savedFont = parseFloat(safeGetItem(STORAGE_KEY_HFM_FONT_SCALE) ?? '');
-    if (Number.isFinite(savedFont)) game.altView.setFontScale(savedFont);
+    // Character size (CW-Q10): the game's own saved value wins, then the
+    // shared Alt View preference clamped into the game's range, then 50%.
+    // The game persists to its OWN key and never writes the shared pref back,
+    // because the game's range reaches far below the preview slider's floor.
+    game.altView.setFontScale(
+      seedCharScale(
+        safeGetItem(STORAGE_KEY_CITY_WALK_FONT_SCALE),
+        safeGetItem(STORAGE_KEY_HFM_FONT_SCALE)
+      )
+    );
 
     // CW-Q2/CW-Q5/CW-Q6: multicolor exists ONLY under high contrast —
     // neon in amber (light), the ANSI bright set in green (dark). The
@@ -792,7 +804,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
         // Map mode: -/= are HELD zoom keys (see frame()).
         state.keys.add(minus ? 'zoomOut' : 'zoomIn');
       } else {
-        adjustCharacterSize(minus ? -0.1 : 0.1);
+        adjustCharacterSize(minus ? -CHAR_SCALE_STEP : CHAR_SCALE_STEP);
       }
       return;
     }
@@ -855,8 +867,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   function adjustCharacterSize(delta) {
     const game = state.game;
     if (!game) return;
-    const next = game.altView.setFontScale(game.altView.getFontScale() + delta);
+    // Clamp to the GAME's range before the renderer sees it: the renderer
+    // instance itself accepts down to 0.05, which is below the smallest size
+    // that changes anything on screen.
+    const next = clampCharScale(game.altView.getFontScale() + delta);
+    game.altView.setFontScale(next);
     game.altView.invalidate();
+    safeSetItem(STORAGE_KEY_CITY_WALK_FONT_SCALE, String(next));
     announceInLayer(`Character size ${Math.round(next * 100)} percent.`);
   }
 

@@ -526,6 +526,93 @@ test.describe('ASCII City Walk — map navigation and walking speed (CW-9)', () 
   })
 })
 
+test.describe('ASCII City Walk — character size (CW-12)', () => {
+  const scaleOf = (page) =>
+    page.evaluate(() => window.__cityWalkGame?.altView?.getFontScale() ?? null)
+
+  test('steps in tens between the measured floor and 100%, and persists', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // Opens at the game's own 50% default with nothing saved.
+    expect(await scaleOf(page)).toBeCloseTo(0.5, 5)
+
+    await page.keyboard.press('Equal')
+    await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
+      /Character size 60 percent/
+    )
+
+    // Down to the floor: 60 → 10 is five steps.
+    for (let i = 0; i < 5; i++) await page.keyboard.press('Minus')
+    await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
+      /Character size 10 percent/
+    )
+    expect(await scaleOf(page)).toBeCloseTo(0.1, 5)
+
+    // The floor holds: another press announces the same value, and the
+    // renderer never drops below it (its own instance clamp goes to 0.05).
+    await page.keyboard.press('Minus')
+    await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
+      /Character size 10 percent/
+    )
+    expect(await scaleOf(page)).toBeCloseTo(0.1, 5)
+
+    // Up to the ceiling: 10 → 100 is nine steps, every one a whole ten.
+    for (let i = 0; i < 9; i++) await page.keyboard.press('Equal')
+    await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
+      /Character size 100 percent/
+    )
+
+    // The ceiling holds too — 250% is gone (CW-Q10).
+    await page.keyboard.press('Equal')
+    await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
+      /Character size 100 percent/
+    )
+    expect(await scaleOf(page)).toBeCloseTo(1, 5)
+
+    // Persisted under the game's own key, and a fresh session opens there.
+    expect(
+      await page.evaluate(() =>
+        localStorage.getItem('openscad-forge-city-walk-font-scale')
+      )
+    ).toBe('1')
+
+    await page.keyboard.press('Escape')
+    await expect(page.locator('#cityWalkLayer')).toBeHidden()
+    await page.locator('#cityWalkLaunchBtn').click()
+    await expect(page.locator('#cityWalkLayer')).toBeVisible()
+    await enterCity(page, 'Denver, Colorado')
+    expect(await scaleOf(page)).toBeCloseTo(1, 5)
+  })
+
+  test('a saved Alt View preference seeds the game, snapped into range', async ({
+    page,
+  }) => {
+    // 2.5 is a legal preview-slider value and far outside the game's range;
+    // it must arrive as the game's 100% ceiling, not as 250%.
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-hfm-font-scale', '2.5')
+    })
+    await launchGame(page)
+    await enterCity(page)
+    expect(await scaleOf(page)).toBeCloseTo(1, 5)
+  })
+
+  test('the help panel states the range it actually offers', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+    await page.keyboard.press('KeyH')
+    await expect(page.locator('#cityWalkHelpPanel')).toBeVisible()
+    await expect(page.locator('#cityWalkHelpPanel')).toContainText(
+      'smaller or larger characters (10% to 100%)'
+    )
+  })
+})
+
 test.describe('ASCII City Walk — landmarks (CW-10)', () => {
   test('legend lists landmarks in map view; L cycles, announces, and highlights', async ({
     page,
@@ -604,10 +691,11 @@ test.describe('ASCII City Walk — high contrast (CW-6)', () => {
     )
     expect(paletteOn).toBeGreaterThanOrEqual(4)
 
-    // …character size keys still work…
+    // …character size keys still work. The game opens at its own 50%
+    // default now (CW-12), so one step up is 60, not 110.
     await page.keyboard.press('Equal')
     await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
-      /Character size 110 percent/
+      /Character size 60 percent/
     )
 
     // …and walking still walks. Exact label, not substring (see hudHeading).

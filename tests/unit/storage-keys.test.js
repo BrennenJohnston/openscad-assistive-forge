@@ -89,6 +89,9 @@ const EXPECTED_KEYS = {
 
   // City Walk game (CW-Q8): persistent walking-speed multiplier
   STORAGE_KEY_CITY_WALK_SPEED: 'openscad-forge-city-walk-speed',
+
+  // City Walk game (CW-Q10): persistent ASCII character scale
+  STORAGE_KEY_CITY_WALK_FONT_SCALE: 'openscad-forge-city-walk-font-scale',
 };
 
 describe('storage-keys exported constants', () => {

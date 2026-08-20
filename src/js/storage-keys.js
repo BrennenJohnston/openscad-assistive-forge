@@ -521,3 +521,14 @@ export const STORAGE_KEY_HFM_PERSIST_FADE = 'openscad-forge-hfm-persist-fade';
  * so it persists across sessions.
  */
 export const STORAGE_KEY_CITY_WALK_SPEED = getAppPrefKey('city-walk-speed');
+
+/**
+ * localStorage key for the City Walk game's ASCII character scale (CW-Q10).
+ * Decimal string on the game's own 10-point grid in [0.1, 1]; kept separate
+ * from STORAGE_KEY_HFM_FONT_SCALE because the game's range goes far smaller
+ * than the preview Alt View slider's 0.5 floor. A comfort/accessibility
+ * preference, so it persists across sessions.
+ */
+export const STORAGE_KEY_CITY_WALK_FONT_SCALE = getAppPrefKey(
+  'city-walk-font-scale'
+);

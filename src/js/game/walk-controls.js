@@ -418,3 +418,59 @@ export function mapCameraFrustum(cam, boundsM, aspect) {
     centerY: cam.centerY,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Character size (CW-12): the in-game ASCII glyph scale
+// ---------------------------------------------------------------------------
+// The floor is MEASURED, not guessed (CW-Q10). At a 1920x993 game viewport the
+// converter's auto base font is 21 px, so 10% lands on the renderer's own 3 px
+// font floor - the smallest size that still changes anything. 5% and 15% both
+// render identically to 10%, which is why the range stops here.
+//
+// This range belongs to the GAME. The preview's Alt View keeps its own
+// 0.5-2.5 slider (_HFM_FONT_SCALE_RANGE in hfm-controller.js); a value seeded
+// from that shared preference is clamped and snapped into this range first.
+
+export const CHAR_SCALE_MIN = 0.1;
+export const CHAR_SCALE_MAX = 1;
+export const CHAR_SCALE_STEP = 0.1;
+export const CHAR_SCALE_DEFAULT = 0.5;
+
+/**
+ * Clamp a character scale into the game's range and snap it onto the
+ * 10-point step grid, so every announced value is a whole ten percent.
+ *
+ * Snapping matters for seeded values: the shared Alt View preference is a
+ * 0.05-step slider, so 0.85 would otherwise start a ladder of 85/95/100 that
+ * never lines up with the steps the help text promises.
+ *
+ * @param {number} scale
+ * @returns {number} a value in [CHAR_SCALE_MIN, CHAR_SCALE_MAX] on the grid
+ */
+export function clampCharScale(scale) {
+  const raw = Number.isFinite(scale) ? scale : CHAR_SCALE_DEFAULT;
+  const stepped = Math.round(raw / CHAR_SCALE_STEP) * CHAR_SCALE_STEP;
+  const bounded = Math.min(CHAR_SCALE_MAX, Math.max(CHAR_SCALE_MIN, stepped));
+  // Binary floats: 0.1*3 is 0.30000000000000004, and that reaches the player
+  // as "Character size 30.000000000000004 percent" without this.
+  return Math.round(bounded * 100) / 100;
+}
+
+/**
+ * Decide the character scale a session opens at (CW-Q10).
+ *
+ * Order: the game's own saved value, then the shared Alt View preference
+ * clamped into the game's range, then the default. Both stored values are
+ * raw strings straight from localStorage and may be absent or junk.
+ *
+ * @param {string|null|undefined} savedGame - the game's own persisted value
+ * @param {string|null|undefined} savedAltView - the shared Alt View preference
+ * @returns {number}
+ */
+export function seedCharScale(savedGame, savedAltView) {
+  const game = parseFloat(savedGame ?? '');
+  if (Number.isFinite(game)) return clampCharScale(game);
+  const altView = parseFloat(savedAltView ?? '');
+  if (Number.isFinite(altView)) return clampCharScale(altView);
+  return CHAR_SCALE_DEFAULT;
+}

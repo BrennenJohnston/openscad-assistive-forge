@@ -19,6 +19,12 @@ import {
   FAST_SPEED_MPS,
   TURN_SPEED_RADPS,
   EYE_HEIGHT_M,
+  clampCharScale,
+  seedCharScale,
+  CHAR_SCALE_MIN,
+  CHAR_SCALE_MAX,
+  CHAR_SCALE_STEP,
+  CHAR_SCALE_DEFAULT,
 } from '../../../src/js/game/walk-controls.js'
 import { parseCityExtract } from '../../../src/js/game/city-data.js'
 
@@ -374,5 +380,75 @@ describe('integration — the bundled Seattle extract', () => {
       }
     }
     expect(moved).toBe(true)
+  })
+})
+
+describe('character size (CW-12)', () => {
+  it('the range is the measured one: 10% to 100% in 10-point steps', () => {
+    expect(CHAR_SCALE_MIN).toBe(0.1)
+    expect(CHAR_SCALE_MAX).toBe(1)
+    expect(CHAR_SCALE_STEP).toBe(0.1)
+    expect(CHAR_SCALE_DEFAULT).toBe(0.5)
+  })
+
+  it('clamps to the range at both ends', () => {
+    expect(clampCharScale(0)).toBe(CHAR_SCALE_MIN)
+    expect(clampCharScale(-5)).toBe(CHAR_SCALE_MIN)
+    expect(clampCharScale(2.5)).toBe(CHAR_SCALE_MAX)
+    expect(clampCharScale(99)).toBe(CHAR_SCALE_MAX)
+  })
+
+  it('snaps onto the 10-point grid so every step announces a whole ten', () => {
+    // A seed off the shared Alt View slider (0.05 steps) must not start a
+    // ladder of 85 / 95 / 100 that the help text never promised.
+    expect(clampCharScale(0.85)).toBe(0.9)
+    expect(clampCharScale(0.84)).toBe(0.8)
+    expect(clampCharScale(0.55)).toBe(0.6)
+  })
+
+  it('never announces a binary-float value', () => {
+    // 0.1 * 3 is 0.30000000000000004; unrounded that reaches the player as
+    // "Character size 30.000000000000004 percent".
+    let v = CHAR_SCALE_MIN
+    const seen = []
+    for (let i = 0; i < 9; i++) {
+      v = clampCharScale(v + CHAR_SCALE_STEP)
+      seen.push(Math.round(v * 100))
+      expect(Number.isInteger(Math.round(v * 100))).toBe(true)
+      expect(v * 100).toBeCloseTo(Math.round(v * 100), 9)
+    }
+    expect(seen).toEqual([20, 30, 40, 50, 60, 70, 80, 90, 100])
+  })
+
+  it('stepping down from the floor stays on the floor', () => {
+    expect(clampCharScale(CHAR_SCALE_MIN - CHAR_SCALE_STEP)).toBe(
+      CHAR_SCALE_MIN
+    )
+    expect(clampCharScale(CHAR_SCALE_MAX + CHAR_SCALE_STEP)).toBe(
+      CHAR_SCALE_MAX
+    )
+  })
+
+  describe('seed order', () => {
+    it("prefers the game's own saved value", () => {
+      expect(seedCharScale('0.3', '0.9')).toBe(0.3)
+    })
+
+    it('falls back to the shared Alt View preference, clamped in', () => {
+      expect(seedCharScale(null, '0.9')).toBe(0.9)
+      // 2.5 is legal for the preview slider and far outside the game's range.
+      expect(seedCharScale(null, '2.5')).toBe(CHAR_SCALE_MAX)
+    })
+
+    it('falls back to the default when neither is usable', () => {
+      expect(seedCharScale(null, null)).toBe(CHAR_SCALE_DEFAULT)
+      expect(seedCharScale(undefined, undefined)).toBe(CHAR_SCALE_DEFAULT)
+      expect(seedCharScale('', '')).toBe(CHAR_SCALE_DEFAULT)
+      expect(seedCharScale('banana', 'nonsense')).toBe(CHAR_SCALE_DEFAULT)
+    })
+
+    it('survives a junk game value by falling through, not by throwing', () => {
+      expect(seedCharScale('NaN', '0.4')).toBe(0.4)
+    })
   })
 })
