@@ -91,8 +91,12 @@ function _createInstanceState() {
     // Render-on-demand scheduling
     dirty: true,
     lastFrameMs: 0,
-    lastConvertMs: 0,
+    lastConvertMs: 0, // timestamp of the last conversion, not a duration
     dynamicInterval: _MIN_INTERVAL_MS,
+
+    // CW-12 bench instrumentation: how long each conversion actually took.
+    // Written on every frame; read only through the DEV-only getters.
+    convertStats: { last: 0, sum: 0, max: 0, samples: 0 },
 
     contrastScale: 1,
     contrastExp: _DEFAULT_CONTRAST_EXP,
@@ -143,9 +147,13 @@ function _setContrastScale(st, scale) {
 
 function _setFontScale(st, scale) {
   const next = Number.isFinite(scale) ? scale : 1;
-  // - Min 0.5 → smaller chars, higher resolution (may be hard to read)
+  // Instance floor is 0.05, not the preview slider's 0.5 (CW-12): the City
+  // Walk asks for characters small enough to disappear into, and
+  // _HFM_FONT_SCALE_RANGE in hfm-controller.js still holds the preview's
+  // Alt View to 0.5-2.5. Below ~0.15 the fontSizePx floor takes over and
+  // the glyphs stop shrinking.
   // - Max 2.5 → larger chars, lower resolution (more legible)
-  st.fontScale = Math.max(0.5, Math.min(2.5, next));
+  st.fontScale = Math.max(0.05, Math.min(2.5, next));
   st.dirty = true;
   return st.fontScale;
 }
@@ -587,7 +595,9 @@ export async function initAltView(previewManager) {
     // Approximate fontSize from targetCharW (monospace: fontSize * 0.6 ≈ charW)
     const approxSize = Math.round(targetCharW / 0.6);
     const scaled = Math.round(approxSize * st.fontScale);
-    fontSizePx = Math.max(6, Math.min(24, scaled));
+    // 3 px is the physical floor: below it a monospace cell is ~2x4 device
+    // pixels and the glyph stops being a glyph (CW-12).
+    fontSizePx = Math.max(3, Math.min(24, scaled));
     metrics = _getFontMetrics(fontFamily, fontSizePx);
   }
 
@@ -599,7 +609,7 @@ export async function initAltView(previewManager) {
     st.dirty = true;
   };
 
-  return {
+  const api = {
     enable() {
       // Re-check reduced-motion on every enable so media-query changes are respected
       st.reducedMotion = _checkReducedMotion();
@@ -693,6 +703,12 @@ export async function initAltView(previewManager) {
       // Frame governor: back off proportionally on slow conversions, decay
       // back toward 30 fps one step per fast conversion (no ping-ponging).
       const duration = after - now;
+      const cs = st.convertStats;
+      cs.last = duration;
+      cs.sum += duration;
+      cs.samples += 1;
+      if (duration > cs.max) cs.max = duration;
+
       if (duration > _MIN_INTERVAL_MS) {
         st.dynamicInterval = Math.min(
           _MAX_INTERVAL_MS,
@@ -837,4 +853,31 @@ export async function initAltView(previewManager) {
       }
     },
   };
+
+  if (import.meta.env.DEV) {
+    // CW-12 bench readout. Read-only; the production API is unchanged.
+    // Call resetConvertStats() at the start of a measured walking loop and
+    // read getConvertStats() at the end - polling `last` would miss frames.
+    api.getConvertStats = () => {
+      const cs = st.convertStats;
+      return {
+        lastMs: cs.last,
+        avgMs: cs.samples ? cs.sum / cs.samples : 0,
+        maxMs: cs.max,
+        samples: cs.samples,
+        // Where the frame governor settled: _MIN_INTERVAL_MS means it never
+        // had to back off, _MAX_INTERVAL_MS is the 4 fps floor.
+        dynamicIntervalMs: st.dynamicInterval,
+        fontScale: st.fontScale,
+        fontSizePx,
+        charW: metrics.charW,
+        charH: metrics.charH,
+      };
+    };
+    api.resetConvertStats = () => {
+      st.convertStats = { last: 0, sum: 0, max: 0, samples: 0 };
+    };
+  }
+
+  return api;
 }
