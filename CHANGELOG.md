@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **City Walk characters small enough to disappear into** (CW-12) - the game's character size now
+  runs from 10% to 100% in ten-point steps, replacing the old 50-250%, and persists across
+  sessions on its own preference key. The floor was MEASURED rather than guessed: at a fullscreen
+  game viewport the converter's automatic base font is 21 px, so 10% lands on the renderer's own
+  3 px floor - the smallest size that still changes anything on screen. Getting there needed two
+  renderer fixes. Painting a frame of 238,000 character cells was calling drawImage once per cell,
+  which cost more than everything else in the conversion put together; below a 4 px cell the
+  glyphs are now composed into one buffer and handed to the canvas in a single putImageData,
+  measured 4-5x faster (30% went from 143 ms a frame to 34 ms) and proven pixel-identical to the
+  old path. And a glyph rasterized into a 2x4 pixel cell is almost all antialiasing, which was
+  quietly dimming the whole city as the characters shrank - in amber the brightest pixel of a
+  frame measured 4.08:1 on black - so tiny glyph atlases are now normalized back to full opacity
+  (amber's floor measures 8.99:1 after, high contrast dark 19.43:1). The brightness
+  treatment is opt-in per caller, so the main app's Alt View keeps exactly the rendering it had;
+  it does share the faster paint path, which changes speed and not one pixel
+
 - **City Walk is desktop-only, like Classic** (CW-11) - the hidden game card's "Enter the City"
   button now gates on the same viewport shape as the Classic interface (at least 1024 px wide and
   not portrait, U-10/Q-24a). On a phone-shaped window it reads as unavailable, shows a
@@ -26,7 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bright terminal set in green+HC, the cyberpunk neon set in amber+HC, single phosphor everywhere
   else, via a new per-instance palette mode in the Alt View converter (per-color glyph atlases,
   chroma-normalized per-cell picks that survive fog, guarded ≥4.5:1 on black). Character size is
-  adjustable in-game (-/=, 50–250%, seeded from the saved Alt View preference). The map view is
+  adjustable in-game (-/=; see CW-12 below for the range that superseded this one). The map view is
   navigable: arrows pan at constant screen speed, -/= and the mouse wheel zoom 0.4×–8×, Home
   recenters on the player (follow mode), solid emissive-free block masses over dark street
   corridors. Walking speed is a persistent 0.5×–3× multiplier on [ and ]. And every city carries
