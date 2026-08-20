@@ -6,11 +6,13 @@
  * worker unpacks; the per-file path stays as the SPOKEN fallback, so an
  * old deployment keeps working.
  *
- * dotSCAD is the probe, deliberately: it is the 695-file poster child, it
- * is NOT preloaded inside the WASM image (MCAD is - a bare include of
- * MCAD resolves at /tmp/MCAD without any mount, measured), and
- * referencing it makes the Libraries panel auto-expand with its row
- * detected.
+ * dotSCAD is the probe, deliberately: it is the 695-file poster child, and
+ * an earlier render in the same page can leave MCAD-shaped leftovers
+ * (mounted files plus a /tmp symlink) in the worker filesystem that make a
+ * bare MCAD include resolve with no mount in sight - first misread as MCAD
+ * being preloaded in the WASM image, actually the D-42 leftover-mount
+ * defect fixed in this same release. dotSCAD keeps the measurement
+ * unambiguous.
  *
  * These cases need the real downloaded bundles (public/libraries/ is
  * populated by the setup script and gitignored), so like the companion
@@ -83,12 +85,24 @@ test('dotSCAD mounts from its archive: a handful of requests, not hundreds', asy
 
   await renderWithDotscad(page);
 
+  // Not exactly one: the worker's WASM module is re-created whenever a
+  // render supersedes an in-flight one (hard cancel is the only way to stop
+  // a blocking callMain), and each fresh module re-mounts - measured 1 to 3
+  // archive fetches for this flow depending on timing. The property that
+  // holds regardless is the CLASS of request: everything is the manifest or
+  // the archive, never the per-file storm.
   const archiveHits = libRequests.filter((u) => u.endsWith('archive.zip'));
-  expect(archiveHits.length, 'the archive was never requested').toBe(1);
+  const perFileFetches = libRequests.filter(
+    (u) => !u.endsWith('archive.zip') && !u.endsWith('manifest.json')
+  );
   expect(
-    libRequests.length,
-    `expected a handful of dotSCAD requests, saw:\n${libRequests.join('\n')}`
-  ).toBeLessThanOrEqual(3);
+    archiveHits.length,
+    'the archive was never requested'
+  ).toBeGreaterThanOrEqual(1);
+  expect(
+    perFileFetches,
+    `every dotSCAD request must be the manifest or the archive; per-file fetches seen:\n${perFileFetches.join('\n')}`
+  ).toEqual([]);
 });
 
 test('without the archive, the spoken per-file fallback still mounts', async ({

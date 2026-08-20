@@ -523,8 +523,51 @@ describe('AutoPreviewController', () => {
 
     it('handles null libraries', () => {
       controller.setEnabledLibraries(null)
-      
+
       expect(controller.enabledLibraries).toEqual([])
+    })
+
+    // D-42: a library toggle changes what a render produces without moving
+    // any parameter, so the already-current early return and the parameter-
+    // keyed cache must both be defeated.
+    it('onLibrariesChange schedules a re-render although parameters did not move', () => {
+      const params = { size: 10 }
+      const hash = controller.hashParams(params)
+      const { qualityKey } = controller.resolvePreviewQualityInfo(params)
+      const key = controller.getPreviewCacheKey(hash, qualityKey)
+      controller.currentParamHash = hash
+      controller.currentPreviewKey = key
+      controller.previewCacheKey = key
+      controller.previewCache.set(key, { stl: new ArrayBuffer(1), stats: {} })
+      controller.state = PREVIEW_STATE.CURRENT
+
+      controller.onLibrariesChange(params)
+
+      expect(controller.previewCache.size).toBe(0)
+      expect(controller.state).toBe(PREVIEW_STATE.PENDING)
+      expect(controller.debounceTimer).not.toBeNull()
+    })
+
+    it('onLibrariesChange with auto-preview off marks the preview stale and schedules nothing', () => {
+      controller.setEnabled(false, 'user')
+      controller.previewCacheKey = 'hash|model'
+      controller.previewCache.set('hash|model', { stl: new ArrayBuffer(1), stats: {} })
+      controller.state = PREVIEW_STATE.CURRENT
+
+      controller.onLibrariesChange({ size: 10 })
+
+      expect(controller.previewCache.size).toBe(0)
+      expect(controller.state).toBe(PREVIEW_STATE.STALE)
+      expect(controller.debounceTimer).toBeNull()
+    })
+
+    it('onLibrariesChange without content is a no-op', () => {
+      const empty = new AutoPreviewController(renderController, previewManager)
+      empty.previewCache.set('k', { stl: new ArrayBuffer(1), stats: {} })
+
+      empty.onLibrariesChange({ size: 10 })
+
+      expect(empty.previewCache.size).toBe(1)
     })
   })
 
