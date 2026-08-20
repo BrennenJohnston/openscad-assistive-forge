@@ -9,6 +9,10 @@ import { stateManager } from './state.js';
 import { escapeHtml, setupNotesCounter } from './html-utils.js';
 import { formatFileSize } from './download.js';
 import { openModal, closeModal } from './modal-manager.js';
+
+// AF-7: the delete dialog's title, exported so the terminology suite can
+// pin the exact string at the module boundary.
+export const DELETE_CONFIRM_TITLE = 'Delete Saved Project';
 import {
   buildNestedTree,
   getNodeAtPath,
@@ -1393,7 +1397,7 @@ export function initSavedProjectsUI({
 
       dismissOverlay();
       updateCompanionSaveButton();
-      stateManager.announceChange(`Loaded saved design: ${project.name}`);
+      stateManager.announceChange(`Loaded saved project: ${project.name}`);
       updateStatus(`Loaded: ${project.name}`);
       await renderSavedProjectsList();
     } catch (error) {
@@ -1481,7 +1485,7 @@ export function initSavedProjectsUI({
       updateCompanionSaveButton();
 
       // Announce success
-      stateManager.announceChange(`Loaded saved design: ${project.name}`);
+      stateManager.announceChange(`Loaded saved project: ${project.name}`);
       updateStatus(`Loaded: ${project.name}`);
 
       // Re-render list to update "last opened" time
@@ -1843,7 +1847,7 @@ export function initSavedProjectsUI({
 
       const confirmed = await showConfirmDialog(
         `Delete "${project.name}"?\n\nThis cannot be undone.`,
-        'Delete Saved Design',
+        DELETE_CONFIRM_TITLE,
         'Delete',
         'Cancel'
       );
