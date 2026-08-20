@@ -453,14 +453,6 @@ body[data-ui-mode='classic'] .classic-slot {
   border: 1px solid var(--color-border);
 }
 
-/* The moved <details> panes act as always-open panels in Classic mode */
-body[data-ui-mode='classic'] .classic-slot > details {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
 /* Desktop shell grid, matching the owner's desktop screenshots: the editor
    runs full height down the left, the 3D view sits centre with the camera bar
    along its bottom edge, the Console/Error-Log strip spans between the editor
@@ -1012,8 +1004,9 @@ body[data-ui-mode='classic'] .classic-error-log-slot .error-log-output {
 
    Every link in the chain has to give up its content height for the flex to
    reach the log. Two of them needed help. The <details> is not a direct child
-   of .classic-slot (the fold wrapper sits between), so the
-   .classic-slot > details rule never applied to it. And a <details> does not
+   of .classic-slot (the fold wrapper sits between), so the old
+   .classic-slot > details rule never applied to it - to anything, in fact,
+   which is why AF-8 deleted it. And a <details> does not
    make its own content a flex item — MEASURED: with display:flex on the panel
    and flex:1/min-height:0 on .console-content, the content still laid out at
    its full 648px inside a 225px panel. Positioning the content against the
@@ -1992,7 +1985,6 @@ body[data-ui-mode='classic'] #paramPanel > .panel-header,
 /* Camera panel and the floating in-viewport overlay — drag/orbit plus the
    View menu and toolbar snaps cover every camera action */
 body[data-ui-mode='classic'] #cameraPanel,
-body[data-ui-mode='classic'] .camera-controls,
 /* Manifest info banner — informational only, suppressed in classic */
 body[data-ui-mode='classic'] #manifestInfoBanner {
   display: none !important;
@@ -2129,15 +2121,14 @@ body[data-ui-mode='classic'][data-app-surface='welcome'] #classicDensityToggle {
 }
 
 /* Both code-facing docks leave the shell in Simplified. The strip covers the
-   Console, Error-Log, Animate and Font List panes it contains; the explicit
-   .classic-console-slot entry is kept because it is what the existing
-   Simplified regression test asserts on. */
+   Console, Error-Log, Animate and Font List panes it contains. D-6's
+   redundant .classic-console-slot entry is gone (AF-8): the comment that
+   kept it claimed a regression test asserted on it, and no such test exists
+   - the only spec using the class targets the dock field, not this list. */
 body[data-ui-mode='classic'][data-classic-density='simplified']
   .classic-editor-slot,
 body[data-ui-mode='classic'][data-classic-density='simplified']
   .classic-bottom-strip,
-body[data-ui-mode='classic'][data-classic-density='simplified']
-  .classic-console-slot,
 /* Programmer toolbar buttons: file authoring. The parameter Undo/Redo group
    is no longer here — U-5/Q-18 made it Simplified-ONLY instead (see the
    .classic-simplified-only rule below): in Standard the editor toolbar shows

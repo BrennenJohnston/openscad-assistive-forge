@@ -56,8 +56,6 @@ import {
   STORAGE_KEY_AUTO_BED,
   STORAGE_KEY_ZOOM_TO_CURSOR,
   STORAGE_KEY_VIEWPORT_SCHEME,
-  STORAGE_KEY_CAMERA_COLLAPSED,
-  STORAGE_KEY_CAMERA_POSITION,
   STORAGE_KEY_LOD_WARNING_DISMISSED,
   safeGetItem,
   safeSetItem,
@@ -693,7 +691,6 @@ export class PreviewManager {
       this.controls.zoomToCursor = this.zoomToCursorEnabled;
 
       this.setupKeyboardControls();
-      this.setupCameraControls();
     }
 
     // Handle window resize with view preservation
@@ -1528,266 +1525,15 @@ export class PreviewManager {
    * On mobile, the camera drawer in the actions bar handles controls.
    * Floating controls are only created as a fallback if neither exists.
    */
-  setupCameraControls() {
-    // Check if the camera panel drawer exists (desktop view)
-    // If it does, skip creating floating controls as they're redundant
-    const cameraPanelDrawer = document.getElementById('cameraPanel');
-    if (cameraPanelDrawer && window.innerWidth >= 768) {
-      console.log(
-        '[Preview] Camera panel drawer exists - skipping floating controls'
-      );
-      return;
-    }
-
-    // Check if the mobile camera drawer exists (mobile view)
-    // If it does, skip creating floating controls
-    const mobileCameraDrawer = document.getElementById('cameraDrawer');
-    if (mobileCameraDrawer && window.innerWidth < 768) {
-      console.log(
-        '[Preview] Mobile camera drawer exists - skipping floating controls'
-      );
-      return;
-    }
-
-    // Create control panel (for mobile or when drawer doesn't exist)
-    const controlPanel = document.createElement('div');
-    controlPanel.className = 'camera-controls';
-    controlPanel.setAttribute('role', 'group');
-    controlPanel.setAttribute('aria-label', 'Camera controls');
-
-    // Persisted preferences: collapsed + position (keyboard-accessible “move”)
-    const isCollapsed =
-      localStorage.getItem(STORAGE_KEY_CAMERA_COLLAPSED) === 'true';
-    const position =
-      localStorage.getItem(STORAGE_KEY_CAMERA_POSITION) || 'bottom-right'; // bottom-right | bottom-left | top-right | top-left
-    controlPanel.dataset.collapsed = isCollapsed ? 'true' : 'false';
-    controlPanel.dataset.position = position;
-
-    // Header with collapse + move controls (a11y: clear labels, aria-expanded)
-    const header = document.createElement('div');
-    header.className = 'camera-controls-header';
-
-    const toggleBtn = document.createElement('button');
-    toggleBtn.type = 'button';
-    toggleBtn.className = 'camera-controls-toggle';
-    toggleBtn.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
-    toggleBtn.setAttribute('aria-controls', 'cameraControlsBody');
-    toggleBtn.setAttribute(
-      'aria-label',
-      isCollapsed ? 'Expand camera controls' : 'Collapse camera controls'
-    );
-    toggleBtn.title = isCollapsed
-      ? 'Show camera controls'
-      : 'Hide camera controls';
-    toggleBtn.textContent = 'Camera controls';
-
-    const moveBtn = document.createElement('button');
-    moveBtn.type = 'button';
-    moveBtn.className = 'camera-controls-move';
-    moveBtn.setAttribute(
-      'aria-label',
-      'Move camera controls to a different corner'
-    );
-    moveBtn.title = 'Move camera controls';
-    moveBtn.textContent = 'Move';
-
-    header.appendChild(toggleBtn);
-    header.appendChild(moveBtn);
-    controlPanel.appendChild(header);
-
-    const body = document.createElement('div');
-    body.className = 'camera-controls-body';
-    body.id = 'cameraControlsBody';
-
-    // Rotation controls
-    const rotateGroup = document.createElement('div');
-    rotateGroup.className = 'camera-control-group';
-    rotateGroup.innerHTML = `
-      <button type="button" class="camera-control-btn" id="cameraRotateLeft" aria-label="Rotate view left" title="Rotate left (Arrow Left)">
-        ◀
-      </button>
-      <button type="button" class="camera-control-btn" id="cameraRotateUp" aria-label="Rotate view up" title="Rotate up (Arrow Up)">
-        ▲
-      </button>
-      <button type="button" class="camera-control-btn" id="cameraRotateDown" aria-label="Rotate view down" title="Rotate down (Arrow Down)">
-        ▼
-      </button>
-      <button type="button" class="camera-control-btn" id="cameraRotateRight" aria-label="Rotate view right" title="Rotate right (Arrow Right)">
-        ▶
-      </button>
-    `;
-
-    // Pan controls
-    const panGroup = document.createElement('div');
-    panGroup.className = 'camera-control-group camera-pan-group';
-    panGroup.innerHTML = `
-      <button type="button" class="camera-control-btn" id="cameraPanLeft" aria-label="Pan view left" title="Pan left (Shift + Arrow Left)">
-        ⟵
-      </button>
-      <button type="button" class="camera-control-btn" id="cameraPanUp" aria-label="Pan view up" title="Pan up (Shift + Arrow Up)">
-        ⟰
-      </button>
-      <button type="button" class="camera-control-btn" id="cameraPanDown" aria-label="Pan view down" title="Pan down (Shift + Arrow Down)">
-        ⟱
-      </button>
-      <button type="button" class="camera-control-btn" id="cameraPanRight" aria-label="Pan view right" title="Pan right (Shift + Arrow Right)">
-        ⟶
-      </button>
-    `;
-
-    // Zoom controls
-    const zoomGroup = document.createElement('div');
-    zoomGroup.className = 'camera-control-group camera-zoom-group';
-    zoomGroup.innerHTML = `
-      <button type="button" class="camera-control-btn" id="cameraZoomIn" aria-label="Zoom in" title="Zoom in (+)">
-        +
-      </button>
-      <button type="button" class="camera-control-btn" id="cameraZoomOut" aria-label="Zoom out" title="Zoom out (-)">
-        −
-      </button>
-      <button type="button" class="camera-control-btn" id="cameraResetView" aria-label="Reset camera to default view" title="Reset view (Home)">
-        ⌂
-      </button>
-    `;
-
-    body.appendChild(rotateGroup);
-    body.appendChild(panGroup);
-    body.appendChild(zoomGroup);
-    controlPanel.appendChild(body);
-    this.container.appendChild(controlPanel);
-
-    // Apply initial collapsed state (hide body if collapsed)
-    if (isCollapsed) {
-      body.hidden = true;
-    }
-
-    const setCollapsed = (nextCollapsed) => {
-      controlPanel.dataset.collapsed = nextCollapsed ? 'true' : 'false';
-      body.hidden = !!nextCollapsed;
-      toggleBtn.setAttribute('aria-expanded', nextCollapsed ? 'false' : 'true');
-      toggleBtn.setAttribute(
-        'aria-label',
-        nextCollapsed ? 'Expand camera controls' : 'Collapse camera controls'
-      );
-      toggleBtn.title = nextCollapsed
-        ? 'Show camera controls'
-        : 'Hide camera controls';
-      localStorage.setItem(
-        STORAGE_KEY_CAMERA_COLLAPSED,
-        nextCollapsed ? 'true' : 'false'
-      );
-    };
-
-    const positions = ['bottom-right', 'bottom-left', 'top-right', 'top-left'];
-    const cyclePosition = () => {
-      const current = controlPanel.dataset.position || 'bottom-right';
-      const idx = positions.indexOf(current);
-      const next = positions[(idx + 1 + positions.length) % positions.length];
-      controlPanel.dataset.position = next;
-      localStorage.setItem(STORAGE_KEY_CAMERA_POSITION, next);
-    };
-
-    toggleBtn.addEventListener('click', () => {
-      setCollapsed(controlPanel.dataset.collapsed !== 'true' ? true : false);
-    });
-    moveBtn.addEventListener('click', () => {
-      cyclePosition();
-    });
-
-    // Wire up button events
-    this.setupCameraControlButtons();
-  }
-
   /**
-   * Setup camera control button event handlers
+   * Camera controls live in the #cameraPanel drawer (>=768px) and the
+   * #cameraDrawer actions bar (<768px), both always present in index.html.
+   * The floating-fallback builder that used to follow the old guards here
+   * was therefore unreachable at every width - proven with a throw at its
+   * head across the desktop, Classic and mobile camera suites (36 cases, 0
+   * reached) - and was deleted with its second set of view-button bindings
+   * (AF-8, owner-approved 2026-08-19; the UF-26/UF-30 reports).
    */
-  setupCameraControlButtons() {
-    const rotationSpeed = 0.1;
-    const panSpeed = 6;
-    const zoomSpeed = 15;
-
-    // Rotation buttons — delegate to shared methods that correctly
-    // orbit around controls.target and work with both camera types.
-    document
-      .getElementById('cameraRotateLeft')
-      ?.addEventListener('click', () => {
-        this.rotateHorizontal(rotationSpeed);
-        this.announceCameraAction('Rotate left');
-      });
-
-    document
-      .getElementById('cameraRotateRight')
-      ?.addEventListener('click', () => {
-        this.rotateHorizontal(-rotationSpeed);
-        this.announceCameraAction('Rotate right');
-      });
-
-    document.getElementById('cameraRotateUp')?.addEventListener('click', () => {
-      this.rotateVertical(rotationSpeed);
-      this.announceCameraAction('Rotate up');
-    });
-
-    document
-      .getElementById('cameraRotateDown')
-      ?.addEventListener('click', () => {
-        this.rotateVertical(-rotationSpeed);
-        this.announceCameraAction('Rotate down');
-      });
-
-    // Pan buttons
-    document.getElementById('cameraPanLeft')?.addEventListener('click', () => {
-      this.panCamera(-panSpeed, 0);
-      this.announceCameraAction('Pan left');
-    });
-
-    document.getElementById('cameraPanRight')?.addEventListener('click', () => {
-      this.panCamera(panSpeed, 0);
-      this.announceCameraAction('Pan right');
-    });
-
-    document.getElementById('cameraPanUp')?.addEventListener('click', () => {
-      this.panCamera(0, panSpeed);
-      this.announceCameraAction('Pan up');
-    });
-
-    document.getElementById('cameraPanDown')?.addEventListener('click', () => {
-      this.panCamera(0, -panSpeed);
-      this.announceCameraAction('Pan down');
-    });
-
-    // Zoom buttons — delegate to shared zoomCamera() which handles
-    // both perspective (translate) and orthographic (adjust zoom property).
-    document.getElementById('cameraZoomIn')?.addEventListener('click', () => {
-      this.zoomCamera(zoomSpeed);
-      this.announceCameraAction('Zoom in');
-    });
-
-    document.getElementById('cameraZoomOut')?.addEventListener('click', () => {
-      this.zoomCamera(-zoomSpeed);
-      this.announceCameraAction('Zoom out');
-    });
-
-    // Reset view button
-    document
-      .getElementById('cameraResetView')
-      ?.addEventListener('click', () => {
-        if (this.mesh) {
-          this.fitCameraToModel();
-          this.announceCameraAction('Reset view');
-        }
-      });
-
-    // Standard view buttons for consistent viewing angles
-    const viewButtons = document.querySelectorAll('.camera-view-btn');
-    viewButtons.forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const viewName = btn.dataset.view;
-        if (viewName) {
-          this.setCameraView(viewName);
-        }
-      });
-    });
-  }
 
   /**
    * Announce camera actions to screen readers

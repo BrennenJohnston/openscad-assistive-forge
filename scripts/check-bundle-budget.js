@@ -2,11 +2,13 @@
 /**
  * Bundle Size Budget Checker (Milestone 3: Performance & Stability)
  *
- * Enforces bundle size budgets per LAYER_2_BUILD_PLAN.md B.4.3
+ * Enforces the bundle size budgets below. (They were first set in a
+ * planning doc, LAYER_2_BUILD_PLAN.md, that never shipped in this repo -
+ * the numbers here are the authority now. AF-8.)
  *
  * Budgets:
- * - Core app (no Monaco): < 500 KB gzipped
- * - Total (Expert Mode): < 1.5 MB gzipped
+ * - Core app: < 500 KB gzipped
+ * - Total (Expert Mode / CodeMirror editor): < 1.5 MB gzipped
  *
  * Usage:
  *   node scripts/check-bundle-budget.js

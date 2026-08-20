@@ -901,6 +901,43 @@ jobs:
   # ignore list in .markdownlint-cli2.jsonc: cli2 appends the config's ignores
   # to the command-line globs, so node_modules and the vendored folders stay
   # out either way. The input is kept as it was; only the gate changed.
+  # AF-8 (the UF-30 finding: three dead links survived years of green boards).
+  # NON-required by design - a flaky external site must never block a merge -
+  # and no continue-on-error: when it is red, it is honestly red (Q-55).
+  #
+  # SCOPE, declared: the LIVING documentation - README, docs top level and
+  # docs/guides. The records trees (docs/audit, docs/research, docs/vpat
+  # evidence) are point-in-time documents, and OPENSCAD_LANGUAGE_REFERENCE.md
+  # mirrors upstream, whose link rot is not ours to chase. 403 is accepted
+  # because every one the first sweep found was a bot-wall on a LIVE site
+  # (w3.org's WCAG page included); two shop hosts that reject CI outright are
+  # excluded by name.
+  link-check:
+    name: Docs Link Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check documentation links
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --no-progress
+            --max-retries 2
+            --timeout 20
+            --accept 200..=204,403,429
+            --exclude '^https?://(localhost|127\.0\.0\.1)'
+            --exclude '^https://www\.bestbuy\.com'
+            --exclude '^https://www\.sovol\.tech'
+            --exclude-path docs/OPENSCAD_LANGUAGE_REFERENCE.md
+            'README.md'
+            'docs/*.md'
+            'docs/guides/**/*.md'
+          fail: true
+
   lint-markdown:
     name: Lint Markdown
     runs-on: ubuntu-latest

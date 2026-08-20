@@ -148,7 +148,7 @@ These projects are used during development and testing only.
 
 ### png-to-ico
 
-- **Repo**: https://github.com/nicktindall/png-to-ico
+- **Repo**: https://www.npmjs.com/package/png-to-ico
 - **License**: MIT
 - **Usage**: Converts PNG assets to `.ico` format for favicon generation
 
