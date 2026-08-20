@@ -80,7 +80,51 @@ export function buildGlyphAtlas({
     ctx.fillText(ch, i * cellW + cellW / 2, cellH / 2);
   }
 
+  _restoreTinyGlyphBrightness(ctx, canvas, charW);
+
   return { canvas, cellW, cellH, dpr, color };
+}
+
+/**
+ * Give a tiny atlas back the brightness the rasterizer took from it (CW-12).
+ *
+ * A glyph drawn into a 2x4 pixel cell is almost entirely antialiasing: MEASURED
+ * on the owner's machine, the strongest pixel in a 3 px atlas reaches alpha 164
+ * of 255, and 188 at 4 px, against a solid 255 at 12 px and above. Everything
+ * the converter paints at the smallest character sizes was therefore being
+ * multiplied by roughly 0.64 — the city dimmed as the characters shrank, and
+ * in amber the brightest pixel of a whole frame measured 4.08:1 on black,
+ * under the 4.5:1 this project holds itself to elsewhere. Scaling each atlas so
+ * its strongest pixel is fully opaque restores the intended mapping (amber's
+ * floor measures 8.99:1 after, high-contrast dark 19.43:1).
+ *
+ * Scope: only cells at most _TINY_CELL_MAX_CSS_PX wide, the same threshold the
+ * composite paint path uses. Atlases at font 12 px and up are already at full
+ * alpha, so this would be a no-op for the preview's Alt View anyway; the guard
+ * makes that a fact rather than a coincidence of the font.
+ *
+ * @param {CanvasRenderingContext2D} ctx - the atlas context, already drawn
+ * @param {HTMLCanvasElement} canvas
+ * @param {number} charW - character cell width in CSS px
+ */
+function _restoreTinyGlyphBrightness(ctx, canvas, charW) {
+  if (charW > _TINY_CELL_MAX_CSS_PX) return;
+
+  const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const px = img.data;
+  let maxAlpha = 0;
+  for (let i = 3; i < px.length; i += 4) {
+    if (px[i] > maxAlpha) maxAlpha = px[i];
+  }
+  // Nothing drawn, or already fully opaque somewhere: leave it exactly alone.
+  if (maxAlpha === 0 || maxAlpha === 255) return;
+
+  const gain = 255 / maxAlpha;
+  for (let i = 3; i < px.length; i += 4) {
+    const lifted = px[i] * gain;
+    px[i] = lifted > 255 ? 255 : Math.round(lifted);
+  }
+  ctx.putImageData(img, 0, 0);
 }
 
 /**
