@@ -69,8 +69,8 @@ describe('setup-libraries', () => {
   })
 
   describe('generatePerLibraryManifest', () => {
-    it('returns null for non-existent library directory', () => {
-      const result = generatePerLibraryManifest('NonExistent')
+    it('returns null for non-existent library directory', async () => {
+      const result = await generatePerLibraryManifest('NonExistent')
       expect(result).toBeNull()
     })
   })

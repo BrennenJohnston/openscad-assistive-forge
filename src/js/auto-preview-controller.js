@@ -201,6 +201,37 @@ export class AutoPreviewController {
   }
 
   /**
+   * Called when the enabled-library set changes (a library switched on or
+   * off). Libraries are a render input just like parameters, but they are
+   * not part of the preview cache key, so every cached preview may embed
+   * the previous library set - none can be reused. Re-render the unchanged
+   * parameters through the normal debounced path so a model that needs the
+   * switched-off library says so instead of showing leftovers (D-42).
+   * @param {Object} parameters - Current parameter values
+   */
+  onLibrariesChange(parameters) {
+    if (!this.currentScadContent) return;
+
+    this.previewCache.clear();
+
+    // With auto-preview off nothing will be scheduled; the shown preview
+    // is simply stale now (mirrors onParameterChange's disabled handling).
+    if (!this.enabled && this.pauseReason !== 'complexity') {
+      if (this.previewCacheKey && this.state === PREVIEW_STATE.CURRENT) {
+        this.setState(PREVIEW_STATE.STALE);
+      }
+      this.previewCacheKey = null;
+      return;
+    }
+
+    // Nulling the stored key defeats both the already-current early return
+    // and the just-rendered dedupe: the parameters have not moved, but the
+    // world they render against has.
+    this.previewCacheKey = null;
+    this.onParameterChange(parameters);
+  }
+
+  /**
    * Set parameter type metadata from schema
    * Used to distinguish boolean params from string "yes"/"no" dropdown params
    * @param {Object} paramTypes - Map of parameter names to schema types (e.g. { expose_home_button: 'string', MW_version: 'boolean' })

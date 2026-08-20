@@ -184,6 +184,72 @@ test.describe('Rendering through a library bundle', () => {
     expect(status).not.toContain('current settings');
   });
 
+  test('prod-library-off-after-mount: a library already in the filesystem still refuses when switched off (D-42)', async ({
+    page,
+  }) => {
+    // The sibling case above unchecks while the first render is still in
+    // flight, so the superseded render's worker gets torn down and the next
+    // one starts from a clean filesystem. Here the with-MCAD render is
+    // allowed to FINISH first - the worker module lives for the whole page,
+    // so the mounted files are still sitting in its filesystem when the
+    // library is switched off. The disabled render used to resolve the
+    // include from those leftovers and silently succeed (measured: 268
+    // triangles, "Preview ready", no message) on exactly this timing.
+    test.setTimeout(240_000);
+
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
+      localStorage.removeItem('openscad-forge-libraries');
+      localStorage.setItem(
+        'openscad-forge-ui-mode',
+        JSON.stringify({ mode: 'standard', lastCustomMode: 'standard' })
+      );
+    });
+
+    await page.goto('/?example=library-test');
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: WASM_READY_TIMEOUT,
+    });
+
+    await page
+      .locator('#param-style')
+      .waitFor({ state: 'attached', timeout: 60_000 });
+    await page.evaluate(() => {
+      let node = document.querySelector('#param-style')?.parentElement;
+      while (node) {
+        if (node.tagName === 'DETAILS') node.open = true;
+        node = node.parentElement;
+      }
+    });
+    await page.locator('#param-style').selectOption('Rounded');
+    await expect(page.locator('#library-MCAD')).toBeChecked();
+
+    // Let the with-MCAD render complete so MCAD is really mounted.
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () => document.getElementById('statusArea')?.textContent || ''
+          ),
+        { timeout: 120_000 }
+      )
+      .toContain('Preview ready');
+
+    await page.locator('#library-MCAD').uncheck();
+
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () => document.getElementById('statusArea')?.textContent || ''
+          ),
+        { timeout: 90_000 }
+      )
+      .toContain('MCAD library, which is switched off');
+  });
+
   test('prod-library-nested: a module three folders deep inside a bundle resolves', async ({
     page,
   }) => {

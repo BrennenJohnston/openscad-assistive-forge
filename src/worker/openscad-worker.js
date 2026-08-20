@@ -40,6 +40,7 @@ import { parseOffTriangleCount } from './mesh-stats.js';
 import { generateMissingFileWarnings } from './missing-file-warnings.js';
 import { resolveMountContent } from './mount-content.js';
 import { ensureLibraryDir, writeLibraryFile } from './library-fs.js';
+import { unpackLibraryArchive } from './lib-archive.js';
 import {
   translateWorkerError,
   MODEL_NOT_2D_SUGGESTION,
@@ -55,6 +56,10 @@ let initialized = false;
 let currentRenderTimeout = null;
 const mountedFiles = new Map(); // Track files in virtual filesystem
 const mountedLibraries = new Set(); // Track mounted library IDs
+// Libraries unmounted by the last reconcile, so the render path can also
+// remove their include-resolution symlinks (whose directory only the render
+// path knows). See mountLibraries.
+const staleLibraryIds = new Set();
 let assetBaseUrl = ''; // Base URL for fetching assets (fonts, libraries, etc.)
 let wasmAssetLogShown = false;
 let openscadConsoleOutput = ''; // Accumulated console output from OpenSCAD
@@ -722,6 +727,35 @@ async function mountFiles(files, options = {}) {
 // with unit tests).
 
 /**
+ * Recursively remove a directory tree from the virtual filesystem.
+ * Missing paths and undeletable entries are expected states, not errors.
+ * @param {Object} FS - Emscripten filesystem
+ * @param {string} path - Directory to remove
+ */
+function rmTreeRecursive(FS, path) {
+  try {
+    const entries = FS.readdir(path);
+    for (const entry of entries) {
+      if (entry === '.' || entry === '..') continue;
+      const fullPath = `${path}/${entry}`;
+      try {
+        const stat = FS.stat(fullPath);
+        if (FS.isDir(stat.mode)) {
+          rmTreeRecursive(FS, fullPath);
+        } else {
+          FS.unlink(fullPath);
+        }
+      } catch (_e) {
+        // Ignore errors for individual entries
+      }
+    }
+    FS.rmdir(path);
+  } catch (_e) {
+    // Directory may not exist or be already removed
+  }
+}
+
+/**
  * Clear all mounted files from virtual filesystem
  * Also cleans up the /work/ directory for design packages
  */
@@ -742,34 +776,10 @@ function clearMountedFiles() {
     }
   }
 
-  // Recursively remove the work directory and all its contents
-  function rmRecursive(path) {
-    try {
-      const entries = FS.readdir(path);
-      for (const entry of entries) {
-        if (entry === '.' || entry === '..') continue;
-        const fullPath = `${path}/${entry}`;
-        try {
-          const stat = FS.stat(fullPath);
-          if (FS.isDir(stat.mode)) {
-            rmRecursive(fullPath);
-          } else {
-            FS.unlink(fullPath);
-          }
-        } catch (_e) {
-          // Ignore errors for individual entries
-        }
-      }
-      FS.rmdir(path);
-    } catch (_e) {
-      // Directory may not exist or be already removed
-    }
-  }
-
   try {
     const workDirAnalysis = FS.analyzePath(WORK_DIR);
     if (workDirAnalysis.exists) {
-      rmRecursive(WORK_DIR);
+      rmTreeRecursive(FS, WORK_DIR);
     }
   } catch (_error) {
     // Work directory may not exist, ignore
@@ -797,6 +807,28 @@ async function mountLibraries(libraries) {
   const ensureDir = (dirPath) => ensureLibraryDir(FS, dirPath);
 
   ensureDir(baseRoot);
+
+  // D-42 leftovers: this module lives for the whole page, so a library
+  // mounted for an earlier render stays in the filesystem after the user
+  // switches it off - and the next render would resolve its includes from
+  // the leftovers and silently succeed instead of naming the cause. Remove
+  // whatever this render did not ask for. The ids are also queued for the
+  // render path to unlink their include-resolution symlinks, whose
+  // directory depends on where the input file sits.
+  const requestedIds = new Set(libraries.map((lib) => lib.id));
+  for (const mountedId of [...mountedLibraries]) {
+    if (requestedIds.has(mountedId)) continue;
+    rmTreeRecursive(FS, `${baseRoot}/${mountedId}`);
+    try {
+      FS.unlink(`/tmp/${mountedId}`);
+    } catch (_e) {
+      // No symlink at the default input location
+    }
+    mountedLibraries.delete(mountedId);
+    staleLibraryIds.add(mountedId);
+    if (import.meta.env.DEV)
+      console.log(`[Worker FS] Unmounted switched-off library: ${mountedId}`);
+  }
 
   for (const lib of libraries) {
     const libRoot = lib.path.startsWith('/') ? lib.path : `/${lib.path}`;
@@ -839,8 +871,40 @@ async function mountLibraries(libraries) {
 
         ensureDir(libRoot);
 
+        // AF-12: one archive instead of one request per file (695 for
+        // dotSCAD). Anything wrong on this path - missing archive, corrupt
+        // bytes - is SAID and then the per-file loop below takes over, so
+        // an old deployment without archives keeps working.
+        let mountedFromArchive = false;
+        if (manifest.archive) {
+          try {
+            const zipResponse = await fetch(
+              `${assetBaseUrl}${lib.path}/${manifest.archive}`
+            );
+            if (!zipResponse.ok) {
+              throw new Error(`HTTP ${zipResponse.status}`);
+            }
+            const entries = await unpackLibraryArchive(
+              await zipResponse.arrayBuffer()
+            );
+            for (const entry of entries) {
+              writeLibraryFile(FS, libRoot, entry.path, entry.text);
+              totalMounted++;
+            }
+            mountedFromArchive = true;
+            if (import.meta.env.DEV)
+              console.log(
+                `[Worker FS] Mounted ${lib.id} from ${manifest.archive} (${entries.length} files)`
+              );
+          } catch (error) {
+            console.warn(
+              `[Worker FS] Archive mount failed for ${lib.id} (${error.message}); falling back to per-file fetches`
+            );
+          }
+        }
+
         // Fetch and mount each file
-        for (const file of files) {
+        for (const file of mountedFromArchive ? [] : files) {
           try {
             const fileResponse = await fetch(
               `${assetBaseUrl}${lib.path}/${file}`
@@ -1093,6 +1157,21 @@ async function renderWithCallMain(
     // before OPENSCADPATH. Create symlinks so that search succeeds.
     const symlinkInputDir =
       inputFile.substring(0, inputFile.lastIndexOf('/')) || '/tmp';
+    // A library unmounted by the reconcile in mountLibraries may have left
+    // its symlink beside a previous input file; resolved through it, the
+    // include would find nothing (the target is gone) but a fresh mount at
+    // the same id would be shadowed. Remove them here, where the input
+    // directory is known.
+    if (symlinkInputDir && staleLibraryIds.size > 0) {
+      for (const staleId of staleLibraryIds) {
+        try {
+          module.FS.unlink(`${symlinkInputDir}/${staleId}`);
+        } catch (_e) {
+          // No symlink for this id beside this input file
+        }
+      }
+      staleLibraryIds.clear();
+    }
     if (symlinkInputDir && mountedLibraries.size > 0) {
       for (const libId of mountedLibraries) {
         const libPath = `/libraries/${libId}`;
@@ -1555,28 +1634,34 @@ async function render(payload) {
       payload: { requestId, percent: 10, message: 'Preparing model...' },
     });
 
-    // Mount libraries if provided
-    if (libraries && libraries.length > 0) {
-      self.postMessage({
-        type: 'PROGRESS',
-        payload: {
-          requestId,
-          percent: 12,
-          message: `Mounting ${libraries.length} libraries...`,
-        },
-      });
-
-      try {
-        await mountLibraries(libraries);
-
+    // Mount libraries if provided. An EMPTY list still goes through:
+    // mountLibraries also unmounts leftovers from earlier renders, and a
+    // render with every library switched off needs that cleanup most (D-42).
+    if (Array.isArray(libraries)) {
+      if (libraries.length > 0) {
         self.postMessage({
           type: 'PROGRESS',
           payload: {
             requestId,
-            percent: 15,
-            message: 'Libraries mounted successfully',
+            percent: 12,
+            message: `Mounting ${libraries.length} libraries...`,
           },
         });
+      }
+
+      try {
+        await mountLibraries(libraries);
+
+        if (libraries.length > 0) {
+          self.postMessage({
+            type: 'PROGRESS',
+            payload: {
+              requestId,
+              percent: 15,
+              message: 'Libraries mounted successfully',
+            },
+          });
+        }
       } catch (error) {
         console.warn('[Worker] Library mounting failed:', error);
         // Continue rendering - libraries might not be strictly required

@@ -15796,6 +15796,13 @@ function renderLibraryUI(detectedLibraries) {
       if (statusArea) {
         statusArea.textContent = `${lib.name} ${checkbox.checked ? 'enabled' : 'disabled'}`;
       }
+      // A library is a render input: re-preview so a model that needs a
+      // switched-off library says so instead of rendering from leftovers
+      // (D-42). The libraryManager subscription set up alongside the
+      // controller already refreshes its enabled-libraries snapshot.
+      autoPreviewController.onLibrariesChange(
+        stateManager.getState().parameters || {}
+      );
     });
   });
 
