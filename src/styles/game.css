@@ -48,6 +48,29 @@
   min-width: 44px;
 }
 
+/* CW-14: the pressed state of the header's high-contrast toggle. The pair is
+ * the same accent/accent-text one every other toggle in the app uses, but it
+ * has to be written with weight to survive two rules that repaint a
+ * .btn-secondary's SURFACE and nothing else (D-55/D-57): components.css's
+ * .btn-secondary:hover:not(:disabled) at (0,3,0) and, because the layer forces
+ * the mono variant on, variant.css's :root[data-ui-variant='mono'] .btn:hover
+ * at (0,4,0). A rule that only set the background here would leave black
+ * accent-text sitting on the hover surface. Guarded by the e2e case that
+ * measures this button pressed, at rest and hovered, in all four in-game
+ * states - not by this selector. */
+.city-walk-layer .city-walk-btn.btn-secondary[aria-pressed='true'] {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  border-color: var(--color-accent);
+}
+
+.city-walk-layer
+  .city-walk-btn.btn-secondary[aria-pressed='true']:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+  color: var(--color-accent-text);
+  border-color: var(--color-accent-hover);
+}
+
 .city-walk-start {
   flex: 1 1 auto;
   overflow-y: auto;
