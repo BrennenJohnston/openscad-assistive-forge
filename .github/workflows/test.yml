@@ -921,7 +921,6 @@ jobs:
             --max-retries 2
             --timeout 20
             --accept 200..=204,429
-            --exclude-mail
             --exclude '^https?://(localhost|127\.0\.0\.1)'
             'README.md'
             'docs/**/*.md'
