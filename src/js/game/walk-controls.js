@@ -284,6 +284,14 @@ export function buildCollisionGrid(model, options = {}) {
     rasterizePolygon(building, originX, originY, cols, rows, cellM, cells);
   }
 
+  const blockCell = (cx, cy) => {
+    if (cx < 0 || cy < 0 || cx >= cols || cy >= rows) return 0;
+    const i = cy * cols + cx;
+    if (cells[i] === 1) return 0;
+    cells[i] = 1;
+    return 1;
+  };
+
   return {
     cols,
     rows,
@@ -294,7 +302,73 @@ export function buildCollisionGrid(model, options = {}) {
       if (cx < 0 || cy < 0 || cx >= cols || cy >= rows) return true;
       return cells[cy * cols + cx] === 1;
     },
+    /**
+     * Block the cells a rotated rectangle covers (CW-16 street props).
+     * Returns how many cells this call newly blocked.
+     *
+     * @param {{x:number, y:number, halfLengthM:number, halfWidthM:number, rotationRad?:number}} rect
+     * @returns {number}
+     */
+    blockRect(rect) {
+      const { x, y, halfLengthM, halfWidthM } = rect ?? {};
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return 0;
+      const hl = Math.max(0, halfLengthM ?? 0);
+      const hw = Math.max(0, halfWidthM ?? 0);
+      const rot = Number.isFinite(rect.rotationRad) ? rect.rotationRad : 0;
+      const cos = Math.cos(rot);
+      const sin = Math.sin(rot);
+
+      let blocked = 0;
+      // A parked car is wider than a cell, a tree trunk is far narrower. The
+      // cell the prop STANDS in always blocks, or a 0.3 m trunk whose cell
+      // center happens to fall outside it would stop nobody.
+      blocked += blockCell(
+        Math.floor((x - originX) / cellM),
+        Math.floor((y - originY) / cellM)
+      );
+
+      const extX = Math.abs(cos) * hl + Math.abs(sin) * hw;
+      const extY = Math.abs(sin) * hl + Math.abs(cos) * hw;
+      const c0 = Math.max(0, Math.floor((x - extX - originX) / cellM));
+      const c1 = Math.min(cols - 1, Math.floor((x + extX - originX) / cellM));
+      const r0 = Math.max(0, Math.floor((y - extY - originY) / cellM));
+      const r1 = Math.min(rows - 1, Math.floor((y + extY - originY) / cellM));
+
+      for (let r = r0; r <= r1; r++) {
+        const dy = originY + (r + 0.5) * cellM - y;
+        for (let c = c0; c <= c1; c++) {
+          const dx = originX + (c + 0.5) * cellM - x;
+          // Into the rectangle's own frame: +length along its rotation.
+          const lx = dx * cos + dy * sin;
+          const ly = -dx * sin + dy * cos;
+          if (Math.abs(lx) <= hl && Math.abs(ly) <= hw)
+            blocked += blockCell(c, r);
+        }
+      }
+      return blocked;
+    },
   };
+}
+
+/**
+ * Stamp street props into an existing collision grid (CW-16). Cars and tree
+ * trunks block; canopies are overhead and never reach this list.
+ *
+ * Order matters at the call site: the grid must exist before the props are
+ * placed (they need it to avoid building footprints), so the stamping is a
+ * second pass rather than an argument to buildCollisionGrid.
+ *
+ * @param {{blockRect: (rect: Object) => number}} collision
+ * @param {Array<{x:number, y:number, halfLengthM:number, halfWidthM:number, rotationRad?:number}>} obstacles
+ * @returns {number} how many obstacles actually landed on the grid
+ */
+export function stampObstacles(collision, obstacles = []) {
+  if (!collision || typeof collision.blockRect !== 'function') return 0;
+  let stamped = 0;
+  for (const rect of obstacles) {
+    if (collision.blockRect(rect) > 0) stamped++;
+  }
+  return stamped;
 }
 
 function rasterizePolygon(

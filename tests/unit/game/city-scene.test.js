@@ -4,9 +4,11 @@ import {
   buildCityGroup,
   attachCityLighting,
   buildingTint,
+  buildStreetProps,
   ROAD_TONES,
 } from '../../../src/js/game/city-scene.js'
 import { parseCityExtract } from '../../../src/js/game/city-data.js'
+import { buildCollisionGrid } from '../../../src/js/game/walk-controls.js'
 
 const CENTER = { lat: 40, lon: -100 }
 const COS_LAT = Math.cos((CENTER.lat * Math.PI) / 180)
@@ -218,5 +220,228 @@ describe('attachCityLighting', () => {
     expect(ambient.intensity).toBe(street)
 
     lighting.detach()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Street props (CW-16)
+// ---------------------------------------------------------------------------
+
+/**
+ * Two far-apart buildings set the playable bounds (props are culled to the
+ * building core), one straight residential road along y = 0 carries the
+ * infill and the parked cars, and one mapped OSM tree sits at (10, 6).
+ */
+function propsModel(extraElements = []) {
+  return parseCityExtract(
+    {
+      elements: [
+        {
+          type: 'way',
+          id: 1,
+          tags: { building: 'yes', height: '20' },
+          geometry: squareRing(-60, -60, 6),
+        },
+        {
+          type: 'way',
+          id: 2,
+          tags: { building: 'yes', height: '20' },
+          geometry: squareRing(60, 60, 6),
+        },
+        {
+          type: 'way',
+          id: 3,
+          tags: { highway: 'residential' },
+          geometry: [pt(-50, 0), pt(50, 0)],
+        },
+        { type: 'node', id: 4, tags: { natural: 'tree' }, ...pt(10, 6) },
+        ...extraElements,
+      ],
+    },
+    { center: CENTER }
+  )
+}
+
+function positionsOf(group, name) {
+  const mesh = group.children.find((c) => c.name === name)
+  return mesh ? mesh.geometry.getAttribute('position').array : null
+}
+
+/** Any vertex of the named mesh within `tol` meters of (x, y) in plan. */
+function hasVertexNear(group, name, x, y, tol) {
+  const a = positionsOf(group, name)
+  if (!a) return false
+  for (let i = 0; i < a.length; i += 3) {
+    if (Math.hypot(a[i] - x, a[i + 1] - y) <= tol) return true
+  }
+  return false
+}
+
+/** Any vertex of the named mesh inside the axis-aligned rect. */
+function hasVertexInRect(group, name, minX, minY, maxX, maxY) {
+  const a = positionsOf(group, name)
+  if (!a) return false
+  for (let i = 0; i < a.length; i += 3) {
+    if (a[i] >= minX && a[i] <= maxX && a[i + 1] >= minY && a[i + 1] <= maxY) {
+      return true
+    }
+  }
+  return false
+}
+
+describe('buildStreetProps (CW-16)', () => {
+  it('plants the trees the map actually records', () => {
+    const m = propsModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+
+    expect(props.stats.treeCount).toBeGreaterThan(0)
+    // The mapped tree is 6 m off the centerline; the procedural infill line
+    // sits on the curb at 4.2 m, so a trunk out at y = 6 can only be the
+    // OSM one.
+    expect(hasVertexNear(props.group, 'tree-trunks', 10, 6, 0.5)).toBe(true)
+    expect(props.stats.mappedTreeCount).toBe(1)
+
+    props.dispose()
+  })
+
+  it('walks under the crown but not through the trunk', () => {
+    const m = propsModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    const trunks = props.group.children.find((c) => c.name === 'tree-trunks')
+    const canopies = props.group.children.find(
+      (c) => c.name === 'tree-canopies'
+    )
+
+    trunks.geometry.computeBoundingBox()
+    canopies.geometry.computeBoundingBox()
+    expect(trunks.geometry.boundingBox.min.z).toBeCloseTo(0, 5)
+    // Eye height is 1.7 m: the canopy must start above it.
+    expect(canopies.geometry.boundingBox.min.z).toBeGreaterThan(1.9)
+
+    props.dispose()
+  })
+
+  it('parks cars parallel to the curb, inside the curb line', () => {
+    const m = propsModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    const cars = props.group.children.find((c) => c.name === 'cars')
+
+    expect(props.stats.carCount).toBeGreaterThan(0)
+    expect(cars).toBeDefined()
+    const a = cars.geometry.getAttribute('position').array
+    let maxAbsY = 0
+    let minAbsY = Infinity
+    let maxZ = 0
+    for (let i = 0; i < a.length; i += 3) {
+      maxAbsY = Math.max(maxAbsY, Math.abs(a[i + 1]))
+      minAbsY = Math.min(minAbsY, Math.abs(a[i + 1]))
+      maxZ = Math.max(maxZ, a[i + 2])
+    }
+    // The residential road is 6 m wide, so its curb line runs at 2.5-3.0 m.
+    // A car turned across the road, or parked on the sidewalk, breaks this.
+    expect(maxAbsY).toBeLessThanOrEqual(2.5)
+    expect(minAbsY).toBeGreaterThan(0.4)
+    expect(maxZ).toBeCloseTo(1.35, 2)
+
+    props.dispose()
+  })
+
+  it('is deterministic: the same extract lays out the same street twice', () => {
+    const m = propsModel()
+    const a = buildStreetProps(m, buildCollisionGrid(m))
+    const b = buildStreetProps(m, buildCollisionGrid(m))
+
+    for (const name of ['tree-trunks', 'tree-canopies', 'cars']) {
+      const pa = positionsOf(a.group, name)
+      const pb = positionsOf(b.group, name)
+      expect(pa).not.toBeNull()
+      expect(Array.from(pa)).toEqual(Array.from(pb))
+    }
+    expect(a.obstacles).toEqual(b.obstacles)
+
+    a.dispose()
+    b.dispose()
+  })
+
+  it('never plants a prop where a building already stands', () => {
+    // A block sitting on the +y sidewalk, x in [6, 14], y in [3, 11].
+    const blocker = {
+      type: 'way',
+      id: 7,
+      tags: { building: 'yes', height: '12' },
+      geometry: squareRing(10, 7, 4),
+    }
+    const clear = propsModel()
+    const built = propsModel([blocker])
+
+    const withoutBlocker = buildStreetProps(clear, buildCollisionGrid(clear))
+    const withBlocker = buildStreetProps(built, buildCollisionGrid(built))
+
+    // Not vacuous: that stretch of sidewalk IS furnished when it is empty.
+    expect(
+      hasVertexInRect(withoutBlocker.group, 'tree-trunks', 6, 3, 14, 11)
+    ).toBe(true)
+    expect(
+      hasVertexInRect(withBlocker.group, 'tree-trunks', 6, 3, 14, 11)
+    ).toBe(false)
+    expect(hasVertexInRect(withBlocker.group, 'cars', 6, 3, 14, 11)).toBe(false)
+
+    withoutBlocker.dispose()
+    withBlocker.dispose()
+  })
+
+  it('hands back one obstacle per car and trunk, and none per canopy', () => {
+    const m = propsModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+
+    expect(props.obstacles).toHaveLength(
+      props.stats.carCount + props.stats.treeCount
+    )
+    for (const o of props.obstacles) {
+      expect(Number.isFinite(o.x)).toBe(true)
+      expect(Number.isFinite(o.y)).toBe(true)
+      expect(o.halfLengthM).toBeGreaterThan(0)
+      expect(o.halfWidthM).toBeGreaterThan(0)
+      expect(Number.isFinite(o.rotationRad)).toBe(true)
+    }
+
+    props.dispose()
+  })
+
+  it('keeps the map view clean and disposes with the group', () => {
+    const m = propsModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+
+    expect(props.group.visible).toBe(true)
+    props.setMapView(true)
+    expect(props.group.visible).toBe(false)
+    props.setMapView(false)
+    expect(props.group.visible).toBe(true)
+
+    props.dispose()
+    expect(props.group.children).toHaveLength(0)
+  })
+
+  it('survives a model with no roads and no trees', () => {
+    const bare = parseCityExtract(
+      {
+        elements: [
+          {
+            type: 'way',
+            id: 1,
+            tags: { building: 'yes', height: '9' },
+            geometry: squareRing(0, 0, 8),
+          },
+        ],
+      },
+      { center: CENTER }
+    )
+    const props = buildStreetProps(bare, buildCollisionGrid(bare))
+
+    expect(props.stats.treeCount).toBe(0)
+    expect(props.stats.carCount).toBe(0)
+    expect(props.obstacles).toEqual([])
+
+    props.dispose()
   })
 })

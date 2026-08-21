@@ -7,6 +7,7 @@ import {
   firstPersonPose,
   headingLabel,
   buildCollisionGrid,
+  stampObstacles,
   findSpawn,
   fitOrthoToBounds,
   createMapCamera,
@@ -640,5 +641,88 @@ describe('looking around (CW-13)', () => {
       expect(pitchLabel(1 * DEG)).toBe('up')
       expect(pitchLabel(undefined)).toBe(null)
     })
+  })
+})
+
+describe('stampObstacles (CW-16)', () => {
+  function gridWithOneBuilding() {
+    const model = parseCityExtract(
+      {
+        elements: [
+          {
+            type: 'way',
+            id: 1,
+            tags: { building: 'yes', height: '20' },
+            geometry: [
+              pt(-40, -40),
+              pt(40, -40),
+              pt(40, 40),
+              pt(-40, 40),
+              pt(-40, -40),
+            ],
+          },
+        ],
+      },
+      { center: CENTER }
+    )
+    return buildCollisionGrid(model)
+  }
+
+  it('blocks a parked car along its length, not across the street', () => {
+    const collision = gridWithOneBuilding()
+    // Just outside the building's north wall, a car lying east-west.
+    expect(collision.isBlocked(50, 45)).toBe(false)
+    expect(collision.isBlocked(48, 45)).toBe(false)
+
+    const stamped = stampObstacles(collision, [
+      { x: 50, y: 45, halfLengthM: 2.2, halfWidthM: 0.9, rotationRad: 0 },
+    ])
+
+    expect(stamped).toBe(1)
+    expect(collision.isBlocked(50, 45)).toBe(true)
+    // Along the car (east-west) it blocks...
+    expect(collision.isBlocked(48.5, 45)).toBe(true)
+    // ...but two meters to the side, the roadway is still open.
+    expect(collision.isBlocked(50, 47.5)).toBe(false)
+  })
+
+  it('follows the car around when it is parked on a north-south street', () => {
+    const collision = gridWithOneBuilding()
+    const rotated = {
+      x: 50,
+      y: 45,
+      halfLengthM: 2.2,
+      halfWidthM: 0.9,
+      rotationRad: Math.PI / 2,
+    }
+
+    stampObstacles(collision, [rotated])
+
+    expect(collision.isBlocked(50, 45)).toBe(true)
+    // Now the long axis runs north-south.
+    expect(collision.isBlocked(50, 46.5)).toBe(true)
+    expect(collision.isBlocked(52.5, 45)).toBe(false)
+  })
+
+  it('gives a slim tree trunk its own cell', () => {
+    const collision = gridWithOneBuilding()
+    expect(collision.isBlocked(60, 60)).toBe(false)
+
+    stampObstacles(collision, [
+      { x: 60, y: 60, halfLengthM: 0.15, halfWidthM: 0.15, rotationRad: 0 },
+    ])
+
+    // A 0.3 m trunk is narrower than a grid cell: it must still stop a walker.
+    expect(collision.isBlocked(60, 60)).toBe(true)
+    expect(collision.isBlocked(63, 60)).toBe(false)
+  })
+
+  it('ignores obstacles beyond the grid instead of throwing', () => {
+    const collision = gridWithOneBuilding()
+    expect(() =>
+      stampObstacles(collision, [
+        { x: 9000, y: 9000, halfLengthM: 2.2, halfWidthM: 0.9, rotationRad: 0 },
+      ])
+    ).not.toThrow()
   })
 })

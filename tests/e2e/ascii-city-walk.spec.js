@@ -1713,6 +1713,154 @@ test.describe('ASCII City Walk — C and T reach the toggles (CW-Q15)', () => {
   })
 })
 
+test.describe('ASCII City Walk — trees and parked cars (CW-16)', () => {
+  const propStats = (page) =>
+    page.evaluate(() => window.__cityWalkGame?.props?.stats ?? null)
+
+  test('Seattle is furnished with real map trees, infill, and parked cars', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const stats = await propStats(page)
+    expect(stats).not.toBeNull()
+    // Seattle's extract carries 119 natural=tree nodes; the rest of the
+    // trees are the deterministic curbside infill.
+    expect(stats.mappedTreeCount).toBeGreaterThan(50)
+    expect(stats.treeCount).toBeGreaterThan(stats.mappedTreeCount)
+    expect(stats.carCount).toBeGreaterThan(50)
+  })
+
+  test('a parked car is solid: you press against it, never through it', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // Stand the player on the roadway three meters off a parked car's flank,
+    // facing it, and watch every frame of the walk from inside the page. The
+    // approach side is chosen by asking the collision grid which one is open,
+    // so the walk starts on clear tarmac.
+    const setup = await page.evaluate(() => {
+      const game = window.__cityWalkGame
+      const cars = game.props.obstacles.filter((o) => o.halfLengthM > 1)
+      for (const car of cars) {
+        // Across the car, not along it.
+        const wx = -Math.sin(car.rotationRad)
+        const wy = Math.cos(car.rotationRad)
+        for (const side of [1, -1]) {
+          const x = car.x + wx * 3 * side
+          const y = car.y + wy * 3 * side
+          if (game.collision.isBlocked(x, y)) continue
+          if (
+            game.collision.isBlocked(
+              car.x + wx * 2 * side,
+              car.y + wy * 2 * side
+            )
+          ) {
+            continue
+          }
+          const w = game.walkState
+          w.x = x
+          w.y = y
+          // Heading is a compass bearing: 0 faces +Y, increasing clockwise.
+          w.headingRad = Math.atan2(car.x - x, car.y - y)
+          w.pitchRad = 0
+
+          // Watch the approach in the car's own frame: lx runs along the car,
+          // ly across it. Sampled per frame rather than polled on a clock.
+          const cos = Math.cos(car.rotationRad)
+          const sin = Math.sin(car.rotationRad)
+          const startSide = Math.sign(-(x - car.x) * sin + (y - car.y) * cos)
+          window.__cwCar = {
+            frames: 0,
+            walked: 0,
+            closest: 99,
+            crossings: 0,
+          }
+          let px = x
+          let py = y
+          const tick = () => {
+            const p = game.walkState
+            const watch = window.__cwCar
+            watch.frames++
+            watch.walked += Math.hypot(p.x - px, p.y - py)
+            px = p.x
+            py = p.y
+            const dx = p.x - car.x
+            const dy = p.y - car.y
+            const lx = dx * cos + dy * sin
+            const ly = -dx * sin + dy * cos
+            if (Math.abs(lx) <= car.halfLengthM) {
+              watch.closest = Math.min(watch.closest, Math.abs(ly))
+              if (Math.sign(ly) !== startSide) watch.crossings++
+            }
+            window.__cwCarTick = requestAnimationFrame(tick)
+          }
+          window.__cwCarTick = requestAnimationFrame(tick)
+          return { x, y }
+        }
+      }
+      return null
+    })
+
+    expect(
+      setup,
+      'no parked car with an open approach was found'
+    ).not.toBeNull()
+
+    await page.keyboard.down('ArrowUp')
+    try {
+      // Waiting on FRAMES, never on the clock: a loaded runner renders them
+      // slowly, but each frame still advances the walk by up to the 0.1 s
+      // step clamp, so 150 frames is far more travel than the three meters
+      // it would take to cross an unsolid car. A runner that renders nothing
+      // fails here rather than passing vacuously.
+      await expect
+        .poll(() => page.evaluate(() => window.__cwCar?.frames ?? 0), {
+          timeout: 30000,
+          intervals: [200],
+        })
+        .toBeGreaterThan(150)
+    } finally {
+      await page.keyboard.up('ArrowUp')
+    }
+
+    const watch = await page.evaluate(() => {
+      cancelAnimationFrame(window.__cwCarTick)
+      return window.__cwCar
+    })
+
+    // The walk really happened, and it really arrived at the car's flank.
+    expect(watch.walked).toBeGreaterThan(1.5)
+    expect(watch.closest).toBeLessThan(1.3)
+    // ...and stopped outside it. The car is 1.8 m across, so its own surface
+    // is at 0.9 m; the collision grid's 1 m cells hold the player a little
+    // further out than that, and never let them reach the far side.
+    expect(watch.closest).toBeGreaterThan(0.5)
+    expect(watch.crossings).toBe(0)
+  })
+
+  test('the map view stays a clean street network', async ({ page }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const propsVisible = () =>
+      page.evaluate(() => window.__cityWalkGame?.props?.group?.visible ?? null)
+
+    expect(await propsVisible()).toBe(true)
+
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
+    expect(await propsVisible()).toBe(false)
+
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('street view')
+    expect(await propsVisible()).toBe(true)
+  })
+})
+
 test.describe('ASCII City Walk — without WebGL', () => {
   test('says so accessibly, and Escape still leaves as promised', async ({
     page,

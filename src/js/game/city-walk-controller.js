@@ -41,6 +41,7 @@ import {
 } from './city-data.js';
 import {
   buildCityGroup,
+  buildStreetProps,
   attachCityLighting,
   buildLandmarkBeacons,
 } from './city-scene.js';
@@ -53,6 +54,7 @@ import {
   headingLabel,
   pitchLabel,
   buildCollisionGrid,
+  stampObstacles,
   findSpawn,
   createMapCamera,
   stepMapCamera,
@@ -1023,7 +1025,14 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     marker.visible = false;
     scene.add(marker);
 
+    // Order matters here. The collision grid is built from the buildings
+    // first so the props can refuse to stand inside one; the props then hand
+    // back their own footprints, which are stamped in BEFORE the spawn probe
+    // runs — otherwise the player can start the game inside a parked car.
     const collision = buildCollisionGrid(model);
+    const props = buildStreetProps(model, collision);
+    scene.add(props.group);
+    stampObstacles(collision, props.obstacles);
     const spawn = findSpawn(model, collision);
     const walkState = createWalkState({ ...spawn, headingRad: 0 });
     const mapCam = createMapCamera(model.boundsM);
@@ -1044,6 +1053,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       fpCamera,
       orthoCamera,
       city3d,
+      props,
       lighting,
       marker,
       markerGeom,
@@ -1193,6 +1203,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     game.lighting?.detach();
     game.beacons?.dispose();
     game.city3d?.dispose();
+    game.props?.dispose();
     game.markerGeom?.dispose();
     game.markerMat?.dispose();
     game.renderer?.dispose();
@@ -1589,6 +1600,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     game.mapView = !game.mapView;
     game.marker.visible = game.mapView;
     game.city3d.setMapView(game.mapView);
+    game.props.setMapView(game.mapView);
     game.lighting.setMapBoost(game.mapView);
     game.beacons.group.visible = game.mapView;
     state.refs.legend.hidden = !game.mapView;

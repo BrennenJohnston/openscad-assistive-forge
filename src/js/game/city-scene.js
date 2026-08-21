@@ -39,6 +39,7 @@ import {
   ExtrudeGeometry,
   Fog,
   Group,
+  IcosahedronGeometry,
   Mesh,
   MeshBasicMaterial,
   MeshLambertMaterial,
@@ -141,17 +142,49 @@ const LUM_B = 0.0722;
  */
 export function buildingTint(index, name) {
   const h = hashBuilding(index, name);
-  const tier = TINT_TIERS[h % TINT_TIERS.length];
-  const hue = TINT_HUES_DEG[(h >>> 3) % TINT_HUES_DEG.length];
+  return tintOf(
+    TINT_TIERS[h % TINT_TIERS.length],
+    TINT_HUES_DEG[(h >>> 3) % TINT_HUES_DEG.length],
+    TINT_CHROMA
+  );
+}
 
-  const [hr, hg, hb] = hueToRgb(hue);
+/**
+ * Tint of a given luminance tier, pushed toward a hue without changing that
+ * luminance: mono sees the tier, the high-contrast quantizer sees the hue.
+ *
+ * @param {number} tier - target luminance in [0, 1]
+ * @param {number} hueDeg
+ * @param {number} chroma - how far toward the hue, 0 = neutral gray
+ * @returns {[number, number, number]}
+ */
+function tintOf(tier, hueDeg, chroma) {
+  const [hr, hg, hb] = hueToRgb(hueDeg);
   const hueLum = hr * LUM_R + hg * LUM_G + hb * LUM_B;
   const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
   return [
-    clamp01(tier + (hr - hueLum) * TINT_CHROMA),
-    clamp01(tier + (hg - hueLum) * TINT_CHROMA),
-    clamp01(tier + (hb - hueLum) * TINT_CHROMA),
+    clamp01(tier + (hr - hueLum) * chroma),
+    clamp01(tier + (hg - hueLum) * chroma),
+    clamp01(tier + (hb - hueLum) * chroma),
   ];
+}
+
+/**
+ * Flood a geometry's vertex-color attribute with one tint, which is what
+ * lets every prop of a kind merge into a single draw call.
+ *
+ * @param {import('three').BufferGeometry} geometry
+ * @param {[number, number, number]} tint
+ */
+function paintGeometry(geometry, tint) {
+  const count = geometry.getAttribute('position').count;
+  const colors = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    colors[i * 3] = tint[0];
+    colors[i * 3 + 1] = tint[1];
+    colors[i * 3 + 2] = tint[2];
+  }
+  geometry.setAttribute('color', new BufferAttribute(colors, 3));
 }
 
 // ---------------------------------------------------------------------------
@@ -323,14 +356,7 @@ function extrudeBuilding(building, tint, options = {}) {
     geometry.translate(0, 0, building.minHeightM);
   }
 
-  const positionCount = geometry.getAttribute('position').count;
-  const colors = new Float32Array(positionCount * 3);
-  for (let i = 0; i < positionCount; i++) {
-    colors[i * 3] = tint[0];
-    colors[i * 3 + 1] = tint[1];
-    colors[i * 3 + 2] = tint[2];
-  }
-  geometry.setAttribute('color', new BufferAttribute(colors, 3));
+  paintGeometry(geometry, tint);
 
   return geometry;
 }
@@ -579,6 +605,416 @@ export function buildCityGroup(model) {
       group.clear();
     },
     stats: { buildingTriangles, storefrontTriangles, roadTriangles },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Street props: trees and parked cars (CW-16)
+// ---------------------------------------------------------------------------
+
+// Sizes are ordinary real-world meters; the ASCII sampler turns them into
+// glyph clusters, so what matters is that a canopy clears the player's eyes
+// and a car reads as a bright block at the curb.
+const CAR_LENGTH_M = 4.4;
+const CAR_WIDTH_M = 1.8;
+const CAR_HEIGHT_M = 1.35;
+const CAR_BODY_HEIGHT_M = 0.75;
+const CAR_CABIN_INSET_M = 0.55;
+const CAR_SLOT_M = 6;
+const CAR_OCCUPANCY_MIN = 0.4;
+const CAR_OCCUPANCY_MAX = 0.6;
+const CAR_MIN_GAP_M = 5;
+// Cars park along ordinary streets. Motorways, trunks and primaries get none:
+// nobody leaves a car on an arterial, and their ribbons carry the through
+// traffic CW-19 will animate.
+const CAR_ROAD_KINDS = new Set([
+  'residential',
+  'tertiary',
+  'secondary',
+  'unclassified',
+  'living_street',
+]);
+// No car within this distance of a road vertex: OSM splits ways at junctions,
+// so the segment ends ARE the intersections.
+const JUNCTION_MARGIN_M = 5;
+
+const TREE_ROAD_KINDS = new Set([
+  'residential',
+  'tertiary',
+  'pedestrian',
+  'living_street',
+]);
+const TREE_SPACING_M = 18;
+const TREE_END_MARGIN_M = 3;
+// Outside the curb line, on the sidewalk side.
+const TREE_SIDEWALK_OFFSET_M = 1.2;
+const TRUNK_SIDE_M = 0.3;
+const TRUNK_HEIGHT_M = 2.5;
+const CANOPY_RADIUS_M = 1.25;
+// The crown starts above eye height (1.7 m) so the player walks under it.
+const CANOPY_BASE_M = 2;
+const MAPPED_TREE_MIN_GAP_M = 2.5;
+const INFILL_TREE_MIN_GAP_M = 6;
+const PROP_SPATIAL_CELL_M = 8;
+
+// Props live in the walkable core, matching the collision grid's own margin —
+// past that the roads are scenery and nobody can reach them anyway.
+const PROP_MARGIN_M = 30;
+
+// Trunks are dark and nearly neutral (a thin stem of sparse glyphs); canopies
+// carry a strong green so the HC quantizer lands on the palette's green/lime
+// rather than a neighboring hue.
+const TRUNK_TINT = tintOf(0.28, 30, 0.2);
+const CANOPY_TIERS = [0.55, 0.7];
+const CANOPY_HUE_DEG = 120;
+const CANOPY_CHROMA = 0.7;
+const CAR_CHROMA = 0.5;
+const CAR_CABIN_LIFT = 0.12;
+
+/**
+ * Small spatial hash for "is anything already standing here?". Query
+ * distances must not exceed the cell size, which is why the cell is bigger
+ * than every gap below.
+ *
+ * @param {number} cellM
+ */
+function makePointGrid(cellM) {
+  const buckets = new Map();
+  let count = 0;
+  const key = (cx, cy) => cx + ',' + cy;
+  return {
+    get size() {
+      return count;
+    },
+    add(x, y) {
+      const k = key(Math.floor(x / cellM), Math.floor(y / cellM));
+      const list = buckets.get(k);
+      if (list) list.push(x, y);
+      else buckets.set(k, [x, y]);
+      count++;
+    },
+    /** @returns {boolean} whether any stored point is within distM */
+    occupied(x, y, distM) {
+      const cx = Math.floor(x / cellM);
+      const cy = Math.floor(y / cellM);
+      const d2 = distM * distM;
+      for (let gy = cy - 1; gy <= cy + 1; gy++) {
+        for (let gx = cx - 1; gx <= cx + 1; gx++) {
+          const list = buckets.get(key(gx, gy));
+          if (!list) continue;
+          for (let i = 0; i < list.length; i += 2) {
+            const dx = list[i] - x;
+            const dy = list[i + 1] - y;
+            if (dx * dx + dy * dy < d2) return true;
+          }
+        }
+      }
+      return false;
+    },
+  };
+}
+
+/**
+ * A tinted box placed in the world: built in its own frame, rotated about Z,
+ * then moved into place, so it merges with its neighbors into one mesh.
+ */
+function makeBox(sizeX, sizeY, sizeZ, x, y, z, rotationRad, tint) {
+  const geom = new BoxGeometry(sizeX, sizeY, sizeZ);
+  if (rotationRad) geom.rotateZ(rotationRad);
+  geom.translate(x, y, z);
+  paintGeometry(geom, tint);
+  return geom;
+}
+
+/**
+ * Furnish the streets with trees and parked cars (CW-16).
+ *
+ * Trees are the ones OpenStreetMap actually records first, then a
+ * deterministic infill along ordinary curbs so a city with thin tree data
+ * still looks planted. Cars park in hashed runs with gaps along the curb.
+ * Nothing here moves — ambient traffic is a later release.
+ *
+ * The collision grid is an INPUT: props must not land inside a building, so
+ * the grid has to exist before they are placed. The trunk and car footprints
+ * it should gain come back as `obstacles` for the caller to stamp.
+ *
+ * @param {ReturnType<import('./city-data.js').parseCityExtract>} model
+ * @param {{isBlocked: (x:number, y:number) => boolean}} [collision]
+ * @returns {{
+ *   group: Group,
+ *   obstacles: Array<{x:number, y:number, halfLengthM:number, halfWidthM:number, rotationRad:number}>,
+ *   setMapView: (isMap: boolean) => void,
+ *   dispose: () => void,
+ *   stats: {treeCount:number, mappedTreeCount:number, carCount:number, triangles:number}
+ * }}
+ */
+export function buildStreetProps(model, collision = null) {
+  const group = new Group();
+  group.name = 'street-props';
+  const disposables = [];
+  const obstacles = [];
+
+  const trunkGeoms = [];
+  const canopyGeoms = [];
+  const carGeoms = [];
+
+  const b = model.boundsM;
+  const inCore = (x, y) =>
+    x >= b.minX - PROP_MARGIN_M &&
+    x <= b.maxX + PROP_MARGIN_M &&
+    y >= b.minY - PROP_MARGIN_M &&
+    y <= b.maxY + PROP_MARGIN_M;
+  const isBlocked = (x, y) => (collision ? collision.isBlocked(x, y) : false);
+
+  const treeSpots = makePointGrid(PROP_SPATIAL_CELL_M);
+  const carSpots = makePointGrid(PROP_SPATIAL_CELL_M);
+  let mappedTreeCount = 0;
+
+  const plantTree = (x, y, seed) => {
+    const tier = CANOPY_TIERS[seed % CANOPY_TIERS.length];
+    trunkGeoms.push(
+      makeBox(
+        TRUNK_SIDE_M,
+        TRUNK_SIDE_M,
+        TRUNK_HEIGHT_M,
+        x,
+        y,
+        TRUNK_HEIGHT_M / 2,
+        0,
+        TRUNK_TINT
+      )
+    );
+    // A faceted crown, not a smooth ball: the flat facets give the sampler
+    // the luminance steps it needs to read as leaves rather than a blob.
+    const canopy = new IcosahedronGeometry(CANOPY_RADIUS_M, 0);
+    canopy.translate(x, y, CANOPY_BASE_M + CANOPY_RADIUS_M);
+    paintGeometry(canopy, tintOf(tier, CANOPY_HUE_DEG, CANOPY_CHROMA));
+    canopyGeoms.push(canopy);
+
+    treeSpots.add(x, y);
+    obstacles.push({
+      x,
+      y,
+      halfLengthM: TRUNK_SIDE_M / 2,
+      halfWidthM: TRUNK_SIDE_M / 2,
+      rotationRad: 0,
+    });
+  };
+
+  // 1. The trees the map records. Real data wins every argument with the
+  //    infill below, so these are placed first and only skipped where a
+  //    building stands on them (or a duplicate node repeats one).
+  model.trees.forEach(([x, y], index) => {
+    if (!inCore(x, y) || isBlocked(x, y)) return;
+    if (treeSpots.occupied(x, y, MAPPED_TREE_MIN_GAP_M)) return;
+    plantTree(x, y, hashBuilding(index, 'osm-tree'));
+    mappedTreeCount++;
+  });
+
+  // 2. Procedural infill along ordinary curbs, and the parked cars. Both
+  //    walk the road segments; each road carries its own deterministic
+  //    number stream so a city lays out identically on every machine.
+  model.roads.forEach((road, roadIndex) => {
+    const treeRng = TREE_ROAD_KINDS.has(road.kind)
+      ? makeLcg(hashBuilding(roadIndex, road.kind + ':trees'))
+      : null;
+    const carRng = CAR_ROAD_KINDS.has(road.kind)
+      ? makeLcg(hashBuilding(roadIndex, road.kind + ':cars'))
+      : null;
+    if (!treeRng && !carRng) return;
+
+    const occupancy =
+      CAR_OCCUPANCY_MIN +
+      (carRng ? carRng() : 0) * (CAR_OCCUPANCY_MAX - CAR_OCCUPANCY_MIN);
+    const treeOffset = road.widthM / 2 + TREE_SIDEWALK_OFFSET_M;
+    // Inside the curb line, one car-half clear of it.
+    const carOffset = road.widthM / 2 - CURB_WIDTH_M - 1;
+
+    for (let i = 0; i < road.points.length - 1; i++) {
+      const [x1, y1] = road.points[i];
+      const [x2, y2] = road.points[i + 1];
+      if (!inCore(x1, y1) && !inCore(x2, y2)) continue;
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const len = Math.hypot(dx, dy);
+      if (len < 1e-6) continue;
+      const ux = dx / len;
+      const uy = dy / len;
+      // Left normal, mirrored for the other side of the street.
+      const nx = -uy;
+      const ny = ux;
+      const angle = Math.atan2(dy, dx);
+
+      for (const side of [1, -1]) {
+        if (treeRng) {
+          const ox = nx * treeOffset * side;
+          const oy = ny * treeOffset * side;
+          const phase = treeRng() * TREE_SPACING_M;
+          for (
+            let s = TREE_END_MARGIN_M + phase;
+            s <= len - TREE_END_MARGIN_M;
+            s += TREE_SPACING_M
+          ) {
+            const jitter = (treeRng() - 0.5) * 2;
+            const along = Math.min(
+              Math.max(s + jitter, TREE_END_MARGIN_M),
+              Math.max(len - TREE_END_MARGIN_M, TREE_END_MARGIN_M)
+            );
+            const x = x1 + ux * along + ox;
+            const y = y1 + uy * along + oy;
+            if (!inCore(x, y)) continue;
+            if (treeSpots.occupied(x, y, INFILL_TREE_MIN_GAP_M)) continue;
+            const h = TRUNK_SIDE_M / 2;
+            if (
+              isBlocked(x, y) ||
+              isBlocked(x + h, y + h) ||
+              isBlocked(x - h, y - h) ||
+              isBlocked(x + h, y - h) ||
+              isBlocked(x - h, y + h)
+            ) {
+              continue;
+            }
+            plantTree(
+              x,
+              y,
+              hashBuilding(roadIndex * 131 + i, 'infill:' + side)
+            );
+          }
+        }
+
+        if (carRng && carOffset >= 0.8) {
+          const ox = nx * carOffset * side;
+          const oy = ny * carOffset * side;
+          for (
+            let s = JUNCTION_MARGIN_M + CAR_LENGTH_M / 2;
+            s + CAR_LENGTH_M / 2 <= len - JUNCTION_MARGIN_M;
+            s += CAR_SLOT_M
+          ) {
+            const seed = hashBuilding(
+              roadIndex * 977 + i,
+              'car:' + side + ':' + Math.round(s)
+            );
+            if (carRng() >= occupancy) continue;
+            const x = x1 + ux * s + ox;
+            const y = y1 + uy * s + oy;
+            if (!inCore(x, y)) continue;
+            if (carSpots.occupied(x, y, CAR_MIN_GAP_M)) continue;
+            // The whole footprint has to be clear, not just the middle.
+            const hl = CAR_LENGTH_M / 2;
+            const hw = CAR_WIDTH_M / 2;
+            let clear = !isBlocked(x, y);
+            for (const corner of [
+              [hl, hw],
+              [hl, -hw],
+              [-hl, hw],
+              [-hl, -hw],
+            ]) {
+              if (!clear) break;
+              clear = !isBlocked(
+                x + ux * corner[0] + nx * corner[1],
+                y + uy * corner[0] + ny * corner[1]
+              );
+            }
+            if (!clear) continue;
+
+            const tier = TINT_TIERS[seed % TINT_TIERS.length];
+            const hue = TINT_HUES_DEG[(seed >>> 5) % TINT_HUES_DEG.length];
+            const bodyTint = tintOf(tier, hue, CAR_CHROMA);
+            const cabinTint = tintOf(
+              Math.min(1, tier + CAR_CABIN_LIFT),
+              hue,
+              CAR_CHROMA
+            );
+            carGeoms.push(
+              makeBox(
+                CAR_LENGTH_M,
+                CAR_WIDTH_M,
+                CAR_BODY_HEIGHT_M,
+                x,
+                y,
+                CAR_BODY_HEIGHT_M / 2,
+                angle,
+                bodyTint
+              )
+            );
+            // Cabin: shorter, narrower, set back, and overlapping the body by
+            // a hair so the two boxes never share an exact face.
+            const cabinLen = CAR_LENGTH_M - CAR_CABIN_INSET_M * 2;
+            const cabinBottom = CAR_BODY_HEIGHT_M - 0.05;
+            const cabinH = CAR_HEIGHT_M - cabinBottom;
+            const back = -CAR_CABIN_INSET_M / 2;
+            carGeoms.push(
+              makeBox(
+                cabinLen,
+                CAR_WIDTH_M - 0.2,
+                cabinH,
+                x + ux * back,
+                y + uy * back,
+                cabinBottom + cabinH / 2,
+                angle,
+                cabinTint
+              )
+            );
+
+            carSpots.add(x, y);
+            obstacles.push({
+              x,
+              y,
+              halfLengthM: hl,
+              halfWidthM: hw,
+              rotationRad: angle,
+            });
+          }
+        }
+      }
+    }
+  });
+
+  let triangles = 0;
+  const addMerged = (geoms, name, material) => {
+    if (geoms.length === 0) {
+      material.dispose();
+      return;
+    }
+    const merged = mergeGeometries(geoms, false);
+    for (const g of geoms) g.dispose();
+    const mesh = new Mesh(merged, material);
+    mesh.name = name;
+    group.add(mesh);
+    disposables.push(merged, material);
+    triangles += merged.index
+      ? merged.index.count / 3
+      : merged.getAttribute('position').count / 3;
+  };
+
+  const propMaterial = () =>
+    new MeshLambertMaterial({ color: 0xffffff, vertexColors: true });
+  addMerged(trunkGeoms, 'tree-trunks', propMaterial());
+  addMerged(canopyGeoms, 'tree-canopies', propMaterial());
+  addMerged(carGeoms, 'cars', propMaterial());
+
+  return {
+    group,
+    obstacles,
+    /**
+     * The map view is a clean street network seen from a kilometer up:
+     * street furniture there is overhead fuzz, exactly like the curb lines
+     * and the wall textures that already hide.
+     * @param {boolean} isMap
+     */
+    setMapView(isMap) {
+      group.visible = !isMap;
+    },
+    dispose() {
+      for (const d of disposables) d.dispose();
+      group.clear();
+    },
+    stats: {
+      treeCount: treeSpots.size,
+      mappedTreeCount,
+      carCount: carSpots.size,
+      triangles,
+    },
   };
 }
 
