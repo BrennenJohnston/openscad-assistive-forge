@@ -414,7 +414,7 @@ function rasterizePolygon(
 }
 
 /** Even-odd ray cast. Ring is an open polygon (no repeated last point). */
-function pointInRing(x, y, ring) {
+export function pointInRing(x, y, ring) {
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
     const [xi, yi] = ring[i];

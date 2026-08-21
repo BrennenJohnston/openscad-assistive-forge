@@ -8,7 +8,10 @@ import {
   ROAD_TONES,
 } from '../../../src/js/game/city-scene.js'
 import { parseCityExtract } from '../../../src/js/game/city-data.js'
-import { buildCollisionGrid } from '../../../src/js/game/walk-controls.js'
+import {
+  buildCollisionGrid,
+  pointInRing,
+} from '../../../src/js/game/walk-controls.js'
 
 const CENTER = { lat: 40, lon: -100 }
 const COS_LAT = Math.cos((CENTER.lat * Math.PI) / 180)
@@ -351,7 +354,13 @@ describe('buildStreetProps (CW-16)', () => {
     const a = buildStreetProps(m, buildCollisionGrid(m))
     const b = buildStreetProps(m, buildCollisionGrid(m))
 
-    for (const name of ['tree-trunks', 'tree-canopies', 'cars']) {
+    for (const name of [
+      'tree-trunks',
+      'tree-canopies',
+      'cars',
+      'lamp-poles',
+      'lamp-heads',
+    ]) {
       const pa = positionsOf(a.group, name)
       const pb = positionsOf(b.group, name)
       expect(pa).not.toBeNull()
@@ -395,7 +404,7 @@ describe('buildStreetProps (CW-16)', () => {
     const props = buildStreetProps(m, buildCollisionGrid(m))
 
     expect(props.obstacles).toHaveLength(
-      props.stats.carCount + props.stats.treeCount
+      props.stats.carCount + props.stats.treeCount + props.stats.lampCount
     )
     for (const o of props.obstacles) {
       expect(Number.isFinite(o.x)).toBe(true)
@@ -443,5 +452,293 @@ describe('buildStreetProps (CW-16)', () => {
     expect(props.obstacles).toEqual([])
 
     props.dispose()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Street life, standing still (CW-18)
+// ---------------------------------------------------------------------------
+
+/** Every vertex of a named mesh, as [x, y, z] triples. */
+function verticesOf(group, name) {
+  const a = positionsOf(group, name)
+  if (!a) return []
+  const out = []
+  for (let i = 0; i < a.length; i += 3) out.push([a[i], a[i + 1], a[i + 2]])
+  return out
+}
+
+describe('buildStreetProps — streetlights (CW-18)', () => {
+  it('marches lamps down the street, alternating sides', () => {
+    const m = propsModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+
+    expect(props.stats.lampCount).toBeGreaterThan(1)
+    const poles = verticesOf(props.group, 'lamp-poles')
+    expect(poles.length).toBeGreaterThan(0)
+
+    // The road runs along y = 0 at width 6, so every pole stands on the
+    // 3.45 m sidewalk line of one side or the other and nowhere in between
+    // (a vertex sits half the 0.15 m post off that line).
+    const sides = new Set()
+    for (const [, y] of poles) {
+      expect(Math.abs(Math.abs(y) - 3.45)).toBeLessThanOrEqual(0.076)
+      sides.add(Math.sign(y))
+    }
+    expect(sides.size).toBe(2)
+
+    props.dispose()
+  })
+
+  it('hangs the head above head height and out over the roadway', () => {
+    const m = propsModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+
+    const heads = verticesOf(props.group, 'lamp-heads')
+    expect(heads.length).toBeGreaterThan(0)
+    for (const [, y, z] of heads) {
+      // 5.8 m give or take half the head's thickness: clear of the 1.7 m eye
+      // line by more than three metres.
+      expect(z).toBeGreaterThan(5.7)
+      expect(z).toBeLessThan(5.9)
+      // Reaching back toward the centerline from the 3.45 m pole line.
+      expect(Math.abs(y)).toBeLessThan(3.45)
+    }
+
+    for (const [, , z] of verticesOf(props.group, 'lamp-poles')) {
+      expect(z).toBeGreaterThanOrEqual(0)
+      expect(z).toBeLessThanOrEqual(6)
+    }
+
+    props.dispose()
+  })
+
+  it('blocks the pole so a walker cannot pass through it', () => {
+    const m = propsModel()
+    const collision = buildCollisionGrid(m)
+    const props = buildStreetProps(m, collision)
+
+    const poles = verticesOf(props.group, 'lamp-poles')
+    const lampObstacles = props.obstacles.filter((o) =>
+      poles.some((v) => Math.hypot(v[0] - o.x, v[1] - o.y) < 0.2)
+    )
+    expect(lampObstacles).toHaveLength(props.stats.lampCount)
+
+    const spot = lampObstacles[0]
+    expect(collision.isBlocked(spot.x, spot.y)).toBe(false)
+    collision.blockRect(spot)
+    expect(collision.isBlocked(spot.x, spot.y)).toBe(true)
+
+    props.dispose()
+  })
+
+  it('never stands a lamp inside a building', () => {
+    const blocker = {
+      type: 'way',
+      id: 8,
+      tags: { building: 'yes', height: '12' },
+      geometry: squareRing(-20, 4, 3),
+    }
+    const built = propsModel([blocker])
+    const props = buildStreetProps(built, buildCollisionGrid(built))
+
+    // The footprint covers x in [-23, -17], y in [1, 7] — the sidewalk line
+    // at y = 3.45 runs straight through it.
+    expect(hasVertexInRect(props.group, 'lamp-poles', -23, 1, -17, 7)).toBe(
+      false
+    )
+
+    props.dispose()
+  })
+})
+
+/** One tower, one shed, and a row of shopfronts to hang signs on. */
+function dressingModel() {
+  const elements = [
+    {
+      type: 'way',
+      id: 1,
+      tags: { building: 'yes', height: '60', name: 'Tower' },
+      geometry: squareRing(0, 0, 12),
+    },
+    {
+      type: 'way',
+      id: 2,
+      tags: { building: 'yes', height: '5', name: 'Shed' },
+      geometry: squareRing(60, 0, 5),
+    },
+  ]
+  for (let i = 0; i < 10; i++) {
+    elements.push({
+      type: 'way',
+      id: 10 + i,
+      tags: { building: 'yes', height: '9', name: 'Shop ' + i },
+      geometry: squareRing(-80 + i * 16, 40, 6),
+    })
+  }
+  return parseCityExtract({ elements }, { center: CENTER })
+}
+
+describe('buildCityGroup — signs and rooftop masts (CW-18)', () => {
+  it('hangs signs on the outside of the wall, never inside the footprint', () => {
+    const m = dressingModel()
+    const { group, stats, dispose } = buildCityGroup(m)
+
+    expect(stats.signCount).toBeGreaterThan(0)
+    const plates = verticesOf(group, 'sign-plates')
+    expect(plates.length).toBeGreaterThan(0)
+    for (const [x, y] of plates) {
+      for (const building of m.buildings) {
+        expect(pointInRing(x, y, building.outer)).toBe(false)
+      }
+    }
+
+    dispose()
+  })
+
+  it('lays a tinted face inside the plate, standing proud of it', () => {
+    const m = dressingModel()
+    const { group, dispose } = buildCityGroup(m)
+
+    const zOf = (name) => verticesOf(group, name).map(([, , z]) => z)
+    const plateZ = zOf('sign-plates')
+    const faceZ = zOf('sign-faces')
+    expect(faceZ.length).toBeGreaterThan(0)
+
+    // The face is inset by the frame at the top and the bottom...
+    expect(Math.min(...faceZ)).toBeGreaterThan(Math.min(...plateZ))
+    expect(Math.max(...faceZ)).toBeLessThan(Math.max(...plateZ))
+
+    // ...and it is the coloured one: the plate is near-neutral, so only the
+    // face gives the high-contrast quantizer a hue to find.
+    const spread = (name) => {
+      const c = group.children.find((x) => x.name === name).geometry.attributes
+        .color.array
+      return Math.max(c[0], c[1], c[2]) - Math.min(c[0], c[1], c[2])
+    }
+    expect(spread('sign-plates')).toBeLessThan(0.01)
+    expect(spread('sign-faces')).toBeGreaterThan(0.1)
+
+    dispose()
+  })
+
+  it('puts the sign on the wall that faces the street', () => {
+    // A 40 x 24 m block: the long walls run north-south along x = ±20, the
+    // short ones east-west along y = ±12, and the only road runs past the
+    // SHORT south wall. Both clear the length rule, so the street decides.
+    const withRoad = parseCityExtract(
+      {
+        elements: [
+          {
+            type: 'way',
+            id: 1,
+            tags: { building: 'yes', height: '40', name: 'Block' },
+            geometry: [
+              pt(-20, -12),
+              pt(20, -12),
+              pt(20, 12),
+              pt(-20, 12),
+              pt(-20, -12),
+            ],
+          },
+          {
+            type: 'way',
+            id: 2,
+            tags: { highway: 'secondary' },
+            geometry: [pt(-60, -20), pt(60, -20)],
+          },
+        ],
+      },
+      { center: CENTER }
+    )
+    const { group, dispose } = buildCityGroup(withRoad)
+    const plates = verticesOf(group, 'sign-plates')
+    expect(plates.length).toBeGreaterThan(0)
+    for (const [, y] of plates) {
+      // Hanging off the south wall, on the road side of it.
+      expect(y).toBeLessThan(-12)
+    }
+    dispose()
+  })
+
+  it('gives masts to the tower and none to the shed', () => {
+    const m = dressingModel()
+    const { group, stats, dispose } = buildCityGroup(m)
+
+    expect(stats.antennaCount).toBeGreaterThan(0)
+    const masts = verticesOf(group, 'antennas')
+    expect(masts.length).toBeGreaterThan(0)
+    for (const [x, y, z] of masts) {
+      // Only the 60 m tower clears the cutoff, so every mast stands on its
+      // roof and inside its footprint.
+      expect(z).toBeGreaterThanOrEqual(60)
+      expect(Math.abs(x)).toBeLessThanOrEqual(12)
+      expect(Math.abs(y)).toBeLessThanOrEqual(12)
+    }
+
+    dispose()
+  })
+
+  it('leaves a city of sheds undressed', () => {
+    const sheds = parseCityExtract(
+      {
+        elements: [
+          {
+            type: 'way',
+            id: 1,
+            tags: { building: 'yes', height: '3' },
+            geometry: squareRing(0, 0, 5),
+          },
+          {
+            type: 'way',
+            id: 2,
+            tags: { building: 'yes', height: '3.2' },
+            geometry: squareRing(30, 0, 5),
+          },
+        ],
+      },
+      { center: CENTER }
+    )
+    const { group, stats, dispose } = buildCityGroup(sheds)
+
+    expect(stats.signCount).toBe(0)
+    expect(stats.antennaCount).toBe(0)
+    const names = group.children.map((c) => c.name)
+    expect(names).not.toContain('sign-plates')
+    expect(names).not.toContain('antennas')
+
+    dispose()
+  })
+
+  it('hides the dressing overhead and restores it in the street', () => {
+    const { group, setMapView, dispose } = buildCityGroup(dressingModel())
+    const dressing = ['sign-plates', 'sign-faces', 'antennas'].map((n) =>
+      group.children.find((c) => c.name === n)
+    )
+    expect(dressing.every(Boolean)).toBe(true)
+
+    setMapView(true)
+    for (const mesh of dressing) expect(mesh.visible).toBe(false)
+    setMapView(false)
+    for (const mesh of dressing) expect(mesh.visible).toBe(true)
+
+    dispose()
+  })
+
+  it('is deterministic: the same city dresses itself the same way twice', () => {
+    const m = dressingModel()
+    const a = buildCityGroup(m)
+    const b = buildCityGroup(m)
+
+    for (const name of ['sign-plates', 'sign-faces', 'antennas']) {
+      expect(Array.from(positionsOf(a.group, name))).toEqual(
+        Array.from(positionsOf(b.group, name))
+      )
+    }
+    expect(a.stats.signCount).toBe(b.stats.signCount)
+    expect(a.stats.antennaCount).toBe(b.stats.antennaCount)
+
+    a.dispose()
+    b.dispose()
   })
 })
