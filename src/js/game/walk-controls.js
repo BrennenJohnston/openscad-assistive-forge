@@ -15,20 +15,27 @@ export const EYE_HEIGHT_M = 1.7;
 export const WALK_SPEED_MPS = 1.6;
 export const FAST_SPEED_MPS = 4.0;
 export const TURN_SPEED_RADPS = (90 * Math.PI) / 180;
+export const PITCH_SPEED_RADPS = (45 * Math.PI) / 180;
+// Gaze limit (CW-13). lookAt() with a fixed world up degenerates when the
+// gaze becomes parallel to that up vector; +/-60 degrees keeps a wide margin
+// from the +/-90 singularity while still reaching the top of a tower from the
+// pavement below it.
+export const PITCH_LIMIT_RAD = Math.PI / 3;
 export const PLAYER_RADIUS_M = 0.3;
 
 // Integration clamp: a background tab must not teleport the player.
 const MAX_STEP_DT_S = 0.1;
 
 /**
- * @param {{x: number, y: number, headingRad?: number}} spawn
- * @returns {{x: number, y: number, headingRad: number}}
+ * @param {{x: number, y: number, headingRad?: number, pitchRad?: number}} spawn
+ * @returns {{x: number, y: number, headingRad: number, pitchRad: number}}
  */
 export function createWalkState(spawn) {
   return {
     x: spawn.x,
     y: spawn.y,
     headingRad: normalizeHeading(spawn.headingRad ?? 0),
+    pitchRad: clampPitch(spawn.pitchRad ?? 0),
   };
 }
 
@@ -38,23 +45,35 @@ function normalizeHeading(h) {
 }
 
 /**
+ * Pitch never wraps: it is a bounded gaze angle, not a bearing. States
+ * written before CW-13 (and the test fixtures that build them by hand) carry
+ * no pitchRad at all, which reads as level.
+ */
+function clampPitch(p) {
+  if (!Number.isFinite(p)) return 0;
+  return Math.min(PITCH_LIMIT_RAD, Math.max(-PITCH_LIMIT_RAD, p));
+}
+
+/**
  * Advance the walk state by one frame.
  *
- * @param {{x:number,y:number,headingRad:number}} state - mutated in place
- * @param {{forward?: number, strafe?: number, turn?: number, fast?: boolean, speedScale?: number}} input
+ * @param {{x:number,y:number,headingRad:number,pitchRad?:number}} state - mutated in place
+ * @param {{forward?: number, strafe?: number, turn?: number, pitch?: number, fast?: boolean, speedScale?: number}} input
  *   forward: +1 forward / -1 back; strafe: +1 right / -1 left;
- *   turn: +1 clockwise (right) / -1 counter-clockwise; speedScale: the
+ *   turn: +1 clockwise (right) / -1 counter-clockwise;
+ *   pitch: +1 look up / -1 look down (CW-13); speedScale: the
  *   CW-Q8 walking-speed multiplier (0.5–3.0, default 1) — Shift sprint
  *   never drops below its 4 m/s floor but scales up past it
  * @param {number} dtS - seconds since last frame
  * @param {{isBlocked: (x: number, y: number) => boolean}} [collision]
- * @returns {{moved: boolean, turned: boolean}}
+ * @returns {{moved: boolean, turned: boolean, pitched: boolean}}
  */
 export function stepWalk(state, input, dtS, collision) {
   const dt = Math.min(Math.max(dtS, 0), MAX_STEP_DT_S);
   const turn = clampAxis(input.turn);
   const forward = clampAxis(input.forward);
   const strafe = clampAxis(input.strafe);
+  const pitch = clampAxis(input.pitch);
 
   let turned = false;
   if (turn !== 0) {
@@ -64,7 +83,20 @@ export function stepWalk(state, input, dtS, collision) {
     turned = true;
   }
 
-  if (forward === 0 && strafe === 0) return { moved: false, turned };
+  // A key held against the limit reports no change, so a gaze parked at the
+  // top of its travel does not re-convert the whole screen every frame.
+  let pitched = false;
+  if (pitch !== 0) {
+    const next = clampPitch(
+      currentPitch(state) + pitch * PITCH_SPEED_RADPS * dt
+    );
+    if (next !== state.pitchRad) {
+      state.pitchRad = next;
+      pitched = true;
+    }
+  }
+
+  if (forward === 0 && strafe === 0) return { moved: false, turned, pitched };
 
   const userScale = Number.isFinite(input.speedScale)
     ? Math.max(0.5, Math.min(3, input.speedScale))
@@ -94,7 +126,54 @@ export function stepWalk(state, input, dtS, collision) {
     state.y += dy; // slide along X-facing wall
     moved = true;
   }
-  return { moved, turned };
+  return { moved, turned, pitched };
+}
+
+/** Level for anything built before CW-13 or by a fixture that omits it. */
+function currentPitch(state) {
+  return Number.isFinite(state.pitchRad) ? state.pitchRad : 0;
+}
+
+/**
+ * Rotate the gaze by absolute angles rather than by a held-key rate: the
+ * drag-look path (CW-13) converts pointer travel straight into radians.
+ * Clamping lives here so the controller never re-implements the limit.
+ *
+ * @param {{headingRad:number, pitchRad?:number}} state - mutated in place
+ * @param {number} yawDeltaRad - positive turns right (clockwise)
+ * @param {number} pitchDeltaRad - positive looks up
+ * @returns {{turned: boolean, pitched: boolean}}
+ */
+export function applyLookDelta(state, yawDeltaRad, pitchDeltaRad) {
+  let turned = false;
+  let pitched = false;
+
+  if (Number.isFinite(yawDeltaRad) && yawDeltaRad !== 0) {
+    state.headingRad = normalizeHeading(state.headingRad + yawDeltaRad);
+    turned = true;
+  }
+
+  if (Number.isFinite(pitchDeltaRad) && pitchDeltaRad !== 0) {
+    const next = clampPitch(currentPitch(state) + pitchDeltaRad);
+    if (next !== state.pitchRad) {
+      state.pitchRad = next;
+      pitched = true;
+    }
+  }
+
+  return { turned, pitched };
+}
+
+/**
+ * Return the gaze to the horizon (CW-13).
+ *
+ * @param {{pitchRad?: number}} state - mutated in place
+ * @returns {boolean} whether anything actually moved
+ */
+export function levelView(state) {
+  const changed = currentPitch(state) !== 0;
+  state.pitchRad = 0;
+  return changed;
 }
 
 function clampAxis(v) {
@@ -117,18 +196,45 @@ function isCircleBlocked(collision, x, y) {
 
 /**
  * First-person camera pose for the current state: eye position plus a
- * look-at target one meter ahead along the bearing, gaze level.
+ * look-at target one meter along the gaze.
  *
- * @param {{x:number,y:number,headingRad:number}} state
+ * The target is a point on the unit sphere around the eye, so the horizontal
+ * reach shortens by cos(pitch) as the gaze tips - which is what keeps the
+ * bearing unchanged while looking up or down.
+ *
+ * @param {{x:number,y:number,headingRad:number,pitchRad?:number}} state
  * @returns {{eye: [number,number,number], target: [number,number,number]}}
  */
 export function firstPersonPose(state) {
+  const pitch = clampPitch(currentPitch(state));
+  const cosP = Math.cos(pitch);
   const sin = Math.sin(state.headingRad);
   const cos = Math.cos(state.headingRad);
   return {
     eye: [state.x, state.y, EYE_HEIGHT_M],
-    target: [state.x + sin, state.y + cos, EYE_HEIGHT_M],
+    target: [
+      state.x + sin * cosP,
+      state.y + cos * cosP,
+      EYE_HEIGHT_M + Math.sin(pitch),
+    ],
   };
+}
+
+// Below half a degree the gaze reads as level on screen, and floating-point
+// residue from a drag must not leave the HUD claiming otherwise.
+const PITCH_LEVEL_EPS_RAD = (0.5 * Math.PI) / 180;
+
+/**
+ * Plain word for the HUD and announcements, or null when level.
+ *
+ * @param {number} pitchRad
+ * @returns {'up'|'down'|null}
+ */
+export function pitchLabel(pitchRad) {
+  if (!Number.isFinite(pitchRad)) return null;
+  if (pitchRad > PITCH_LEVEL_EPS_RAD) return 'up';
+  if (pitchRad < -PITCH_LEVEL_EPS_RAD) return 'down';
+  return null;
 }
 
 /**
@@ -417,4 +523,60 @@ export function mapCameraFrustum(cam, boundsM, aspect) {
     centerX: cam.centerX,
     centerY: cam.centerY,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Character size (CW-12): the in-game ASCII glyph scale
+// ---------------------------------------------------------------------------
+// The floor is MEASURED, not guessed (CW-Q10). At a 1920x993 game viewport the
+// converter's auto base font is 21 px, so 10% lands on the renderer's own 3 px
+// font floor - the smallest size that still changes anything. 5% and 15% both
+// render identically to 10%, which is why the range stops here.
+//
+// This range belongs to the GAME. The preview's Alt View keeps its own
+// 0.5-2.5 slider (_HFM_FONT_SCALE_RANGE in hfm-controller.js); a value seeded
+// from that shared preference is clamped and snapped into this range first.
+
+export const CHAR_SCALE_MIN = 0.1;
+export const CHAR_SCALE_MAX = 1;
+export const CHAR_SCALE_STEP = 0.1;
+export const CHAR_SCALE_DEFAULT = 0.5;
+
+/**
+ * Clamp a character scale into the game's range and snap it onto the
+ * 10-point step grid, so every announced value is a whole ten percent.
+ *
+ * Snapping matters for seeded values: the shared Alt View preference is a
+ * 0.05-step slider, so 0.85 would otherwise start a ladder of 85/95/100 that
+ * never lines up with the steps the help text promises.
+ *
+ * @param {number} scale
+ * @returns {number} a value in [CHAR_SCALE_MIN, CHAR_SCALE_MAX] on the grid
+ */
+export function clampCharScale(scale) {
+  const raw = Number.isFinite(scale) ? scale : CHAR_SCALE_DEFAULT;
+  const stepped = Math.round(raw / CHAR_SCALE_STEP) * CHAR_SCALE_STEP;
+  const bounded = Math.min(CHAR_SCALE_MAX, Math.max(CHAR_SCALE_MIN, stepped));
+  // Binary floats: 0.1*3 is 0.30000000000000004, and that reaches the player
+  // as "Character size 30.000000000000004 percent" without this.
+  return Math.round(bounded * 100) / 100;
+}
+
+/**
+ * Decide the character scale a session opens at (CW-Q10).
+ *
+ * Order: the game's own saved value, then the shared Alt View preference
+ * clamped into the game's range, then the default. Both stored values are
+ * raw strings straight from localStorage and may be absent or junk.
+ *
+ * @param {string|null|undefined} savedGame - the game's own persisted value
+ * @param {string|null|undefined} savedAltView - the shared Alt View preference
+ * @returns {number}
+ */
+export function seedCharScale(savedGame, savedAltView) {
+  const game = parseFloat(savedGame ?? '');
+  if (Number.isFinite(game)) return clampCharScale(game);
+  const altView = parseFloat(savedAltView ?? '');
+  if (Number.isFinite(altView)) return clampCharScale(altView);
+  return CHAR_SCALE_DEFAULT;
 }

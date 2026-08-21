@@ -9,6 +9,10 @@
  */
 
 .city-walk-layer {
+  /* Measured by the controller whenever the toolbar's height can change, so
+   * the two floating panels below can stop above it instead of covering the
+   * buttons (found by eye at 1280x800, where the toolbar wraps to two rows). */
+  --city-walk-toolbar-height: 0px;
   position: fixed;
   inset: 0;
   z-index: var(--z-index-modal);
@@ -46,6 +50,29 @@
 .city-walk-btn {
   min-height: 44px;
   min-width: 44px;
+}
+
+/* CW-14: the pressed state of the header's high-contrast toggle. The pair is
+ * the same accent/accent-text one every other toggle in the app uses, but it
+ * has to be written with weight to survive two rules that repaint a
+ * .btn-secondary's SURFACE and nothing else (D-55/D-57): components.css's
+ * .btn-secondary:hover:not(:disabled) at (0,3,0) and, because the layer forces
+ * the mono variant on, variant.css's :root[data-ui-variant='mono'] .btn:hover
+ * at (0,4,0). A rule that only set the background here would leave black
+ * accent-text sitting on the hover surface. Guarded by the e2e case that
+ * measures this button pressed, at rest and hovered, in all four in-game
+ * states - not by this selector. */
+.city-walk-layer .city-walk-btn.btn-secondary[aria-pressed='true'] {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  border-color: var(--color-accent);
+}
+
+.city-walk-layer
+  .city-walk-btn.btn-secondary[aria-pressed='true']:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+  color: var(--color-accent-text);
+  border-color: var(--color-accent-hover);
 }
 
 .city-walk-start {
@@ -98,6 +125,50 @@
   display: block;
 }
 
+/* CW-15: the mouse route to every key, between the viewport and the HUD.
+ * Nothing here is the only way to reach anything - each button drives the
+ * same action its key does - so it is free to wrap by group when the window
+ * is too narrow for one row. Only tokens: the layer runs under whichever
+ * phosphor and contrast mode the player has chosen. */
+.city-walk-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm) var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  border-top: 1px solid var(--color-border);
+  flex: 0 0 auto;
+}
+
+/* display:flex outranks the hidden attribute's UA display:none, exactly as
+ * it does on .city-walk-layer above. */
+.city-walk-toolbar[hidden] {
+  display: none;
+}
+
+.city-walk-toolbar-group {
+  display: flex;
+  align-items: center;
+  /* Wide enough that a 3px focus ring at a 2px offset does not sit on the
+   * neighbouring button. */
+  gap: var(--space-xs);
+}
+
+.city-walk-toolbar-group-label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+/* Tighter than a default .btn so the whole strip fits a desktop row; the
+ * 44px floor comes from .city-walk-btn and is untouched. */
+.city-walk-toolbar-btn {
+  padding: var(--space-2xs) var(--space-sm);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+}
+
 .city-walk-hud {
   display: flex;
   align-items: center;
@@ -126,7 +197,7 @@
   top: calc(var(--space-lg) + 44px + var(--space-md));
   right: var(--space-md);
   max-width: min(480px, calc(100vw - 2 * var(--space-md)));
-  max-height: calc(100% - 120px);
+  max-height: calc(100% - 120px - var(--city-walk-toolbar-height));
   overflow-y: auto;
   padding: var(--space-md);
   background: var(--color-bg-secondary);
@@ -160,7 +231,7 @@
   top: calc(var(--space-lg) + 44px + var(--space-md));
   left: var(--space-md);
   max-width: min(340px, calc(100vw - 2 * var(--space-md)));
-  max-height: calc(100% - 160px);
+  max-height: calc(100% - 160px - var(--city-walk-toolbar-height));
   overflow-y: auto;
   padding: var(--space-md);
   background: var(--color-bg-secondary);
@@ -198,4 +269,30 @@
 /* Welcome card: attribution rides at the card's foot in a small size. */
 .city-walk-card .city-walk-attribution {
   margin-top: var(--space-sm);
+}
+
+/* CW-11 gate: the launch button stays focusable (aria-disabled, not
+   disabled) so keyboard and screen-reader users can find it and hear why,
+   and it must read as unavailable without relying on colour alone. Same
+   treatment as the Classic header toggle's gate (layout.css).
+
+   0.7, not the header toggle's 0.5: MEASURED composited, 0.5 puts the
+   label at 2.86:1 in light and 2.81:1 under high contrast - legal for an
+   inactive control, but high contrast is the mode people choose BECAUSE
+   they need contrast. 0.7 still reads as dimmed and keeps every mode
+   above 4.5:1.
+
+   Colours are deliberately NOT pinned for the gated hover, only the
+   lift. Pinning the background to --color-accent measured 1:1 in the
+   mono variant, whose D-58 rule flips the primary label TO the accent at
+   a higher specificity: amber label on amber surface. The variant's own
+   hover pair is already complete, so the cascade is left alone. */
+.city-walk-card .btn-role-try[aria-disabled='true'] {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.city-walk-card .btn-role-try[aria-disabled='true']:hover,
+.city-walk-card .btn-role-try[aria-disabled='true']:active {
+  transform: none;
 }

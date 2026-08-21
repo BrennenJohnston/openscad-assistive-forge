@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { readFileSync } from 'fs'
+import { join } from 'path'
 
 function createMockCanvasContext(opts = {}) {
   return {
@@ -353,9 +355,26 @@ describe('initAltView — API surface', () => {
     expect(api.setContrastScale(99)).toBe(4.0)
     expect(api.setContrastScale(0)).toBe(0.5)
     expect(api.setFontScale(99)).toBe(2.5)
-    expect(api.setFontScale(0)).toBe(0.5)
+    // CW-12: the instance floor is 0.05 so the City Walk can go tiny. The
+    // preview's Alt View never sees it - hfm-controller.js clamps to 0.5
+    // first (guarded by the next test).
+    expect(api.setFontScale(0)).toBe(0.05)
 
     api.dispose()
+  })
+
+  it('leaves the preview Alt View slider range at 0.5-2.5 (CW-12 scope)', () => {
+    // CW-12 opened the INSTANCE font-scale floor to 0.05 for the game. The
+    // preview's own control must keep refusing anything below 0.5, or the
+    // main app silently gains sizes nobody benchmarked. _HFM_FONT_SCALE_RANGE
+    // is module-private, so this guard reads the declaration itself.
+    const src = readFileSync(
+      join(process.cwd(), 'src', 'js', 'hfm-controller.js'),
+      'utf8'
+    )
+    expect(src).toContain(
+      'const _HFM_FONT_SCALE_RANGE = { min: 0.5, max: 2.5, step: 0.05, default: 1 };'
+    )
   })
 })
 

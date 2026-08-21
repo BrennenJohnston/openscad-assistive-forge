@@ -9,6 +9,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Every City Walk key gets a button** (CW-15) - the game was a keyboard game. Someone playing with a
+  mouse alone could launch it and pick a city, and then reach nothing: walking, turning, looking, the
+  map, the landmarks and both size controls were keys and only keys. A toolbar now runs along the
+  bottom of the layer, one button per key, in six named groups - Camera, Move, Speed, Characters, Map
+  and Landmarks - with the group names shown, so the two smaller/larger pairs are never a guess. Hold
+  a movement button and the player keeps moving for as long as the mouse is down; click it and you get
+  one 250 ms step, which is also what Enter or Space does when the button has focus, because a key
+  press has no duration of its own. Every button drives the action its key already drove, so the map
+  view reinterprets them exactly as it does the keys: Forward walks a street and pans a map. Buttons
+  that would do nothing in the view you are in are not left lying there - Look up, Look down and Fast
+  step aside in map view, and Center on you, Zoom out and Zoom in take their place, announced. Fast is
+  a sticky toggle rather than a held key, because a mouse cannot hold Shift; it carries its pressed
+  state and Shift still works alongside it. The strip is one row on a wide window and wraps by group
+  on a narrower one, every button keeps the 44 px hit-target floor, and the help panel and landmark
+  legend now measure the toolbar and stop above it instead of covering the buttons. Contrast was
+  measured on the real buttons at rest and hovered in all four in-game states, the pressed toggle
+  among them; the worst of the twenty readings is 7.22:1
+
+- **C and T in the City Walk** (CW-Q15) - the two accessibility toggles CW-14 put in the game's header
+  now have keys as well: C turns high contrast on and off, T cycles the theme. Both run through the
+  same handlers the buttons call, so there is one announcement and one place the labels are kept
+  honest, and Ctrl+T still belongs to the browser
+
+- **Accessibility toggles inside the City Walk** (CW-14) - the game layer is a modal that traps focus,
+  so the app header's high contrast and theme buttons were out of reach for as long as you were
+  walking. The game's own header now carries both, in the same order the app header uses: High
+  contrast, Theme, then Help and Exit game. They call the app's existing theme manager, so a flip made
+  inside the game is the same flip as one made outside it, and it is still in force when you leave.
+  High contrast is a toggle button that carries its pressed state, and switching it on mid-walk raises
+  the multicolour high-contrast palette over the city without a reload; switching it off returns the
+  single phosphor. The theme button cycles the app's three settings and names the one it is on - Auto,
+  Light or Dark - and because the phosphor colour is the theme's accent, dark walks the city in green
+  and light walks it in amber, swapping live as you press. Both buttons announce what happened through
+  the game's own in-layer announcer rather than the app's status line, which a modal hides, and both
+  keep their labels honest when the flip arrives from somewhere else. The pressed pair was measured on
+  the real button at rest and hovered in all four states the game can be in; the worst of the eight
+  readings is 9.46:1
+
+- **Look up at the towers in the City Walk** (CW-13) - the game's camera is no longer fixed to the
+  horizon. R and F tilt the gaze up and down at 45 degrees a second, stopping at 60 degrees either
+  way, and V returns it to level and says so. Dragging the viewport with a mouse looks around too,
+  at a quarter of a degree per pixel, with no pointer lock and no cursor capture - a press that
+  travels less than four pixels is still an ordinary click. The bearing survives every tilt, so
+  looking up at a tower and then walking still walks the way you were facing, and the HUD adds
+  "looking up" or "looking down" while the gaze is tilted. Every look action has a key; the mouse
+  drag is an addition, never the only way to reach anything. The map view keeps both hands off:
+  walking is suspended there and so is looking around
+
+- **City Walk characters small enough to disappear into** (CW-12) - the game's character size now
+  runs from 10% to 100% in ten-point steps, replacing the old 50-250%, and persists across
+  sessions on its own preference key. The floor was MEASURED rather than guessed: at a fullscreen
+  game viewport the converter's automatic base font is 21 px, so 10% lands on the renderer's own
+  3 px floor - the smallest size that still changes anything on screen. Getting there needed two
+  renderer fixes. Painting a frame of 238,000 character cells was calling drawImage once per cell,
+  which cost more than everything else in the conversion put together; below a 4 px cell the
+  glyphs are now composed into one buffer and handed to the canvas in a single putImageData,
+  measured 4-5x faster (30% went from 143 ms a frame to 34 ms) and proven pixel-identical to the
+  old path. And a glyph rasterized into a 2x4 pixel cell is almost all antialiasing, which was
+  quietly dimming the whole city as the characters shrank - in amber the brightest pixel of a
+  frame measured 4.08:1 on black - so tiny glyph atlases are now normalized back to full opacity
+  (amber's floor measures 8.99:1 after, high contrast dark 19.43:1). The brightness
+  treatment is opt-in per caller, so the main app's Alt View keeps exactly the rendering it had;
+  it does share the faster paint path, which changes speed and not one pixel
+
+- **City Walk is desktop-only, like Classic** (CW-11) - the hidden game card's "Enter the City"
+  button now gates on the same viewport shape as the Classic interface (at least 1024 px wide and
+  not portrait, U-10/Q-24a). On a phone-shaped window it reads as unavailable, shows a
+  plain-language reason on the card that is also its accessible description, and a press announces
+  the refusal instead of starting a game whose controls were never designed for that shape. The
+  gate is ENTRY only: a session already running survives any resize, Escape always leaves, and the
+  button re-enables live when a desktop-shaped window returns, with no reload
+
 - **ASCII City Walk Round 2 — a city that looks alive** (CW-8, CW-6, CW-9, CW-10) — the game's
   comprehensive visual pass and feature round. Buildings are now distinct: window-grid wall
   textures (world-meter UVs, no custom mapping), deterministic per-building lightness tiers and
@@ -18,7 +90,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bright terminal set in green+HC, the cyberpunk neon set in amber+HC, single phosphor everywhere
   else, via a new per-instance palette mode in the Alt View converter (per-color glyph atlases,
   chroma-normalized per-cell picks that survive fog, guarded ≥4.5:1 on black). Character size is
-  adjustable in-game (-/=, 50–250%, seeded from the saved Alt View preference). The map view is
+  adjustable in-game (-/=; see CW-12 below for the range that superseded this one). The map view is
   navigable: arrows pan at constant screen speed, -/= and the mouse wheel zoom 0.4×–8×, Home
   recenters on the player (follow mode), solid emissive-free block masses over dark street
   corridors. Walking speed is a persistent 0.5×–3× multiplier on [ and ]. And every city carries
@@ -51,6 +123,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   open layer)
 
 ### Fixed
+
+- **A click on the City Walk killed the keyboard** (D-59) - the game's viewport is not a focusable
+  element, so a plain click anywhere on the city moved focus to the page body, outside the layer
+  the game's key handler is bound to. Every key stopped working for the rest of the session, in
+  both the street and map views, with only Escape and Tab as a way back and nothing on screen to
+  say so. Present since the game first shipped; found while checking that the new mouse drag left
+  the focus trap alone, and measured on the release base before and after the fix
 
 - **Mono variant: primary buttons keep a legible label while hovered** (D-55 pattern) — the mono
   theme's generic button hover repaints the surface with `--color-hover-bg` and nothing else,

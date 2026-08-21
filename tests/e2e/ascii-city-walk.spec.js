@@ -123,6 +123,226 @@ test.describe('ASCII City Walk — gating', () => {
   })
 })
 
+/**
+ * CW-11: the game is desktop-only, on the same viewport predicate as Classic
+ * (U-10/Q-24a). ENTRY is what gates: a session already running survives any
+ * resize, and Escape always leaves.
+ *
+ * Nothing here enters a city, so every case runs on every browser - no WebGL
+ * capability gate needed.
+ */
+test.describe('ASCII City Walk — desktop-only gate (CW-11)', () => {
+  const REASON_TEXT =
+    'Desktop only for now. The city walk needs a wide landscape window. ' +
+    'Try it on a computer, or widen this window.'
+
+  test.describe('phone-shaped viewport', () => {
+    // Plain viewport, set through test.use: isMobile is rejected by Firefox at
+    // context creation, and a setViewportSize after load re-opens drawers
+    // (UF-32).
+    test.use({ viewport: { width: 390, height: 844 } })
+
+    test('the launch button is gated, says why, and refuses to start the game', async ({
+      page,
+    }) => {
+      await page.goto('/?hfm=unlock')
+      await expect(page.locator('#cityWalkCard')).toBeVisible({
+        timeout: 30000,
+      })
+
+      const btn = page.locator('#cityWalkLaunchBtn')
+      await expect(btn).toHaveAttribute('aria-disabled', 'true')
+      await expect(btn).toHaveAttribute(
+        'aria-describedby',
+        'cityWalkGateReason'
+      )
+
+      // On the card, not sr-only: a phone has no hover tooltip, so the reason
+      // has to be readable by a sighted player too.
+      const reason = page.locator('#cityWalkGateReason')
+      await expect(reason).toBeVisible()
+      expect((await reason.textContent()).replace(/\s+/g, ' ').trim()).toBe(
+        REASON_TEXT
+      )
+
+      // Keyboard first: Playwright refuses .click() on aria-disabled elements,
+      // and the keyboard is the path that matters anyway.
+      await btn.focus()
+      await page.keyboard.press('Enter')
+      await expect(page.locator('#srAnnouncer')).toContainText(
+        'ASCII City Walk unavailable',
+        { timeout: 3000 }
+      )
+      await expect(page.locator('#cityWalkLayer')).toBeHidden()
+
+      // A real mouse press is refused too. force: skips the actionability
+      // check that would stop the click before the listener ever sees it.
+      await btn.click({ force: true })
+      await expect(page.locator('#cityWalkLayer')).toBeHidden()
+    })
+
+    test('axe: the gated card has no violations', async ({ page }) => {
+      await page.goto('/?hfm=unlock')
+      await expect(page.locator('#cityWalkCard')).toBeVisible({
+        timeout: 30000,
+      })
+      await expect(page.locator('#cityWalkLaunchBtn')).toHaveAttribute(
+        'aria-disabled',
+        'true'
+      )
+
+      // Scanned WITH the gated button hovered (D-55): a hover state is
+      // invisible to a scan unless something happens to be hovering.
+      await page.locator('#cityWalkLaunchBtn').hover()
+
+      const results = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+        .include('#cityWalkCard')
+        .analyze()
+      expectOnlyAllowedViolations(results)
+    })
+
+    /**
+     * The gated button dims, so its label/surface pair is a COMPOSITE over the
+     * card: the token guards in tests/unit/color-contrast.test.js cannot see
+     * it, and axe skips contrast checks on aria-disabled controls. Nothing
+     * would have caught this while writing CW-11: pinning the gated hover
+     * background to --color-accent measured 1:1 in the mono variant, whose
+     * D-58 rule flips a primary label TO the accent at a higher specificity -
+     * amber on amber, the same erasure D-55/D-57/D-58 each found once. Same
+     * shape as the D-57 guard in accessibility.spec.js, plus the opacity.
+     */
+    test('the gated label stays legible at rest and hovered, in every theme', async ({
+      page,
+    }) => {
+      const THEMES = [
+        ['Forge light', { theme: 'light' }],
+        ['Forge dark', { theme: 'dark' }],
+        ['High contrast light', { theme: 'light', hc: true }],
+        ['High contrast dark', { theme: 'dark', hc: true }],
+        ['Mono light', { theme: 'light', variant: 'mono' }],
+        ['Mono dark', { theme: 'dark', variant: 'mono' }],
+      ]
+
+      await page.goto('/?hfm=unlock')
+      await expect(page.locator('#cityWalkCard')).toBeVisible({
+        timeout: 30000,
+      })
+      const btn = page.locator('#cityWalkLaunchBtn')
+      await expect(btn).toHaveAttribute('aria-disabled', 'true')
+
+      for (const [label, cfg] of THEMES) {
+        await page.evaluate((c) => {
+          const r = document.documentElement
+          r.dataset.theme = c.theme
+          if (c.hc) r.dataset.highContrast = 'true'
+          else delete r.dataset.highContrast
+          if (c.variant) r.dataset.uiVariant = c.variant
+          else delete r.dataset.uiVariant
+        }, cfg)
+        await page.waitForTimeout(300)
+
+        for (const state of ['rest', 'hovered']) {
+          if (state === 'hovered') await btn.hover()
+          else await page.mouse.move(0, 0)
+          await page.waitForTimeout(250)
+
+          const measured = await btn.evaluate((el) => {
+            const cs = getComputedStyle(el)
+            const read = (css) =>
+              (css.match(/\d+(\.\d+)?/g) || []).slice(0, 3).map(Number)
+            const luminance = (rgb) =>
+              rgb
+                .map((v) => {
+                  const s = v / 255
+                  return s <= 0.03928
+                    ? s / 12.92
+                    : Math.pow((s + 0.055) / 1.055, 2.4)
+                })
+                .reduce((sum, c, i) => sum + [0.2126, 0.7152, 0.0722][i] * c, 0)
+            // The dim composites the whole button over the first opaque
+            // ancestor, so BOTH halves have to be mixed before measuring.
+            let backdrop = [255, 255, 255]
+            for (let n = el.parentElement; n; n = n.parentElement) {
+              const bg = getComputedStyle(n).backgroundColor
+              const parts = bg.match(/[\d.]+/g)
+              if (parts && (parts.length < 4 || Number(parts[3]) > 0)) {
+                backdrop = parts.slice(0, 3).map(Number)
+                break
+              }
+            }
+            const alpha = Number(cs.opacity)
+            const mix = (rgb) =>
+              rgb.map((v, i) => alpha * v + (1 - alpha) * backdrop[i])
+            const l1 = luminance(mix(read(cs.color)))
+            const l2 = luminance(mix(read(cs.backgroundColor)))
+            return {
+              color: cs.color,
+              background: cs.backgroundColor,
+              opacity: alpha,
+              ratio:
+                Math.round(
+                  ((Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)) * 100
+                ) / 100,
+            }
+          })
+
+          console.log(
+            `[cw11] ${label} ${state}: ${measured.color} on ${measured.background} @ ${measured.opacity} = ${measured.ratio}:1`
+          )
+          expect(
+            measured.ratio,
+            `${label} ${state} is ${measured.color} on ${measured.background} at opacity ${measured.opacity} = ${measured.ratio}:1`
+          ).toBeGreaterThanOrEqual(4.5)
+        }
+      }
+    })
+  })
+
+  test.describe('desktop-shaped viewport', () => {
+    test.use({ viewport: { width: 1280, height: 800 } })
+
+    test('the gate is inert: no gate state on the button, and it opens the game', async ({
+      page,
+    }) => {
+      await page.goto('/?hfm=unlock')
+      await expect(page.locator('#cityWalkCard')).toBeVisible({
+        timeout: 30000,
+      })
+
+      const btn = page.locator('#cityWalkLaunchBtn')
+      await expect(btn).not.toHaveAttribute('aria-disabled', 'true')
+      await expect(btn).not.toHaveAttribute('aria-describedby', /.+/)
+      await expect(page.locator('#cityWalkGateReason')).toBeHidden()
+
+      await btn.click()
+      await expect(page.locator('#cityWalkLayer')).toBeVisible({
+        timeout: 20000,
+      })
+    })
+
+    test('narrowing a running game leaves it open; only re-entry is gated', async ({
+      page,
+    }) => {
+      await launchGame(page)
+
+      await page.setViewportSize({ width: 390, height: 844 })
+      // Q-24a's shape: the session STAYS. Nothing ejects a player mid-game.
+      await expect(page.locator('#cityWalkLayer')).toBeVisible()
+      // The trigger behind the layer is gated for the NEXT entry. The
+      // subscription is debounced (150ms); the retrying assertion absorbs it.
+      await expect(page.locator('#cityWalkLaunchBtn')).toHaveAttribute(
+        'aria-disabled',
+        'true'
+      )
+
+      // And the way out is never gated.
+      await page.keyboard.press('Escape')
+      await expect(page.locator('#cityWalkLayer')).toBeHidden()
+    })
+  })
+})
+
 test.describe('ASCII City Walk — playing', () => {
   test('launch, walk, turn, map view, and exit restore', async ({ page }) => {
     await launchGame(page)
@@ -306,6 +526,284 @@ test.describe('ASCII City Walk — map navigation and walking speed (CW-9)', () 
   })
 })
 
+test.describe('ASCII City Walk — character size (CW-12)', () => {
+  const scaleOf = (page) =>
+    page.evaluate(() => window.__cityWalkGame?.altView?.getFontScale() ?? null)
+
+  test('steps in tens between the measured floor and 100%, and persists', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // Opens at the game's own 50% default with nothing saved.
+    expect(await scaleOf(page)).toBeCloseTo(0.5, 5)
+
+    await page.keyboard.press('Equal')
+    await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
+      /Character size 60 percent/
+    )
+
+    // Down to the floor: 60 → 10 is five steps.
+    for (let i = 0; i < 5; i++) await page.keyboard.press('Minus')
+    await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
+      /Character size 10 percent/
+    )
+    expect(await scaleOf(page)).toBeCloseTo(0.1, 5)
+
+    // The floor holds: another press announces the same value, and the
+    // renderer never drops below it (its own instance clamp goes to 0.05).
+    await page.keyboard.press('Minus')
+    await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
+      /Character size 10 percent/
+    )
+    expect(await scaleOf(page)).toBeCloseTo(0.1, 5)
+
+    // Up to the ceiling: 10 → 100 is nine steps, every one a whole ten.
+    for (let i = 0; i < 9; i++) await page.keyboard.press('Equal')
+    await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
+      /Character size 100 percent/
+    )
+
+    // The ceiling holds too — 250% is gone (CW-Q10).
+    await page.keyboard.press('Equal')
+    await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
+      /Character size 100 percent/
+    )
+    expect(await scaleOf(page)).toBeCloseTo(1, 5)
+
+    // Persisted under the game's own key, and a fresh session opens there.
+    expect(
+      await page.evaluate(() =>
+        localStorage.getItem('openscad-forge-city-walk-font-scale')
+      )
+    ).toBe('1')
+
+    await page.keyboard.press('Escape')
+    await expect(page.locator('#cityWalkLayer')).toBeHidden()
+    await page.locator('#cityWalkLaunchBtn').click()
+    await expect(page.locator('#cityWalkLayer')).toBeVisible()
+    await enterCity(page, 'Denver, Colorado')
+    expect(await scaleOf(page)).toBeCloseTo(1, 5)
+  })
+
+  test('a saved Alt View preference seeds the game, snapped into range', async ({
+    page,
+  }) => {
+    // 2.5 is a legal preview-slider value and far outside the game's range;
+    // it must arrive as the game's 100% ceiling, not as 250%.
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-hfm-font-scale', '2.5')
+    })
+    await launchGame(page)
+    await enterCity(page)
+    expect(await scaleOf(page)).toBeCloseTo(1, 5)
+  })
+
+  test('the help panel states the range it actually offers', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+    await page.keyboard.press('KeyH')
+    await expect(page.locator('#cityWalkHelpPanel')).toBeVisible()
+    await expect(page.locator('#cityWalkHelpPanel')).toContainText(
+      'smaller or larger characters (10% to 100%)'
+    )
+  })
+})
+
+test.describe('ASCII City Walk — looking around (CW-13)', () => {
+  const DEG = Math.PI / 180
+
+  /** The live gaze, straight off the DEV handle the game exposes. */
+  const gaze = (page) =>
+    page.evaluate(() => {
+      const w = window.__cityWalkGame?.walkState
+      return { pitch: w?.pitchRad ?? null, heading: w?.headingRad ?? null }
+    })
+
+  /** Where focus sits, and whether it is still inside the modal layer. */
+  const focusState = (page) =>
+    page.evaluate(() => ({
+      id: document.activeElement?.id || document.activeElement?.tagName,
+      inLayer: Boolean(
+        document
+          .getElementById('cityWalkLayer')
+          ?.contains(document.activeElement)
+      ),
+    }))
+
+  async function dragViewport(page, dx, dy, steps = 20) {
+    const box = await page.locator('#cityWalkViewport').boundingBox()
+    const x = box.x + box.width / 2
+    const y = box.y + box.height / 2
+    await page.mouse.move(x, y)
+    await page.mouse.down()
+    for (let i = 1; i <= steps; i++) {
+      await page.mouse.move(x + (dx * i) / steps, y + (dy * i) / steps)
+    }
+    await page.mouse.up()
+  }
+
+  test('R and F tilt the gaze, the HUD says so, and V levels it', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    expect((await gaze(page)).pitch).toBe(0)
+    await expect(page.locator('#cityWalkHudStatus')).not.toContainText(
+      'looking'
+    )
+
+    // Held R climbs; 45 deg/s means half a second cannot reach the clamp, so
+    // this asserts real integration rather than a jump to the limit.
+    await page.keyboard.down('KeyR')
+    await page.waitForTimeout(600)
+    await page.keyboard.up('KeyR')
+    await expect
+      .poll(async () => (await gaze(page)).pitch > 5 * DEG)
+      .toBe(true)
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('looking up')
+
+    // The bearing is untouched by looking up - pitch and yaw are separate.
+    expect((await gaze(page)).heading).toBe(0)
+
+    // Held to the stop: the clamp is exactly 60 degrees, never beyond.
+    await page.keyboard.down('KeyR')
+    await page.waitForTimeout(2200)
+    await page.keyboard.up('KeyR')
+    await expect
+      .poll(async () => Math.round((await gaze(page)).pitch / DEG))
+      .toBe(60)
+
+    await page.keyboard.press('KeyV')
+    await expect(page.locator('#cityWalkAnnouncer')).toHaveText(/View level/)
+    expect((await gaze(page)).pitch).toBe(0)
+    await expect(page.locator('#cityWalkHudStatus')).not.toContainText(
+      'looking'
+    )
+
+    // F goes the other way, and the HUD words it differently.
+    await page.keyboard.down('KeyF')
+    await page.waitForTimeout(600)
+    await page.keyboard.up('KeyF')
+    await expect
+      .poll(async () => (await gaze(page)).pitch < -5 * DEG)
+      .toBe(true)
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'looking down'
+    )
+  })
+
+  test('a mouse drag turns and tilts; a plain click does neither', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const before = await gaze(page)
+
+    // Under the 4 px threshold this is a click, not a drag.
+    const box = await page.locator('#cityWalkViewport').boundingBox()
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width / 2 + 2, box.y + box.height / 2 + 1)
+    await page.mouse.up()
+    expect(await gaze(page)).toEqual(before)
+
+    // 200 px right and 100 px up at 0.25 deg/px: +50 deg of yaw, +25 of pitch.
+    await dragViewport(page, 200, -100)
+    await expect
+      .poll(async () => Math.round((await gaze(page)).heading / DEG))
+      .toBe(50)
+    expect(Math.round((await gaze(page)).pitch / DEG)).toBe(25)
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('looking up')
+  })
+
+  test('the map view ignores the look keys and the drag', async ({ page }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // Positive control first: without proof the same press WORKS in street
+    // view, "the map ignores it" would pass on a build that has no pitch at
+    // all - which is exactly what the release base is.
+    await page.keyboard.down('KeyR')
+    await page.waitForTimeout(700)
+    await page.keyboard.up('KeyR')
+    await expect
+      .poll(async () => (await gaze(page)).pitch > 5 * DEG)
+      .toBe(true)
+    await page.keyboard.press('KeyV')
+    expect((await gaze(page)).pitch).toBe(0)
+
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
+    const before = await gaze(page)
+
+    await page.keyboard.down('KeyR')
+    await page.waitForTimeout(700)
+    await page.keyboard.up('KeyR')
+    await dragViewport(page, 150, 80, 10)
+
+    // Walking is suspended in the map view, and so is looking around.
+    expect(await gaze(page)).toEqual(before)
+    await expect(page.locator('#cityWalkHudStatus')).not.toContainText(
+      'looking'
+    )
+  })
+
+  test('D-59: a click in the viewport leaves the keyboard working', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // Pre-existing since CW-4: the viewport is not focusable, so a plain
+    // click sent focus to <body> - outside the layer the key listener is
+    // bound to - and every key died for the rest of the session.
+    for (const view of ['street', 'map']) {
+      if (view === 'map') {
+        await page.keyboard.press('KeyM')
+        await expect(page.locator('#cityWalkHudStatus')).toContainText(
+          'map view'
+        )
+      }
+
+      const box = await page.locator('#cityWalkViewport').boundingBox()
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+
+      const focus = await focusState(page)
+      expect(focus.inLayer, `focus left the layer in ${view} view`).toBe(true)
+
+      // Proof the keyboard still reaches the game: H opens the help panel.
+      await page.keyboard.press('KeyH')
+      await expect(page.locator('#cityWalkHelpPanel')).toBeVisible()
+      await page.keyboard.press('KeyH')
+      await expect(page.locator('#cityWalkHelpPanel')).toBeHidden()
+
+      if (view === 'map') await page.keyboard.press('KeyM')
+    }
+  })
+
+  test('the help panel names the look controls', async ({ page }) => {
+    await launchGame(page)
+    await enterCity(page)
+    await page.keyboard.press('KeyH')
+    await expect(page.locator('#cityWalkHelpPanel')).toBeVisible()
+    await expect(page.locator('#cityWalkHelpPanel')).toContainText(
+      'R and F: look up and down'
+    )
+    await expect(page.locator('#cityWalkHelpPanel')).toContainText(
+      'V: level the view'
+    )
+    await expect(page.locator('#cityWalkHelpPanel')).toContainText(
+      'Drag with the mouse in street view: look around'
+    )
+  })
+})
+
 test.describe('ASCII City Walk — landmarks (CW-10)', () => {
   test('legend lists landmarks in map view; L cycles, announces, and highlights', async ({
     page,
@@ -384,10 +882,11 @@ test.describe('ASCII City Walk — high contrast (CW-6)', () => {
     )
     expect(paletteOn).toBeGreaterThanOrEqual(4)
 
-    // …character size keys still work…
+    // …character size keys still work. The game opens at its own 50%
+    // default now (CW-12), so one step up is 60, not 110.
     await page.keyboard.press('Equal')
     await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
-      /Character size 110 percent/
+      /Character size 60 percent/
     )
 
     // …and walking still walks. Exact label, not substring (see hudHeading).
@@ -398,6 +897,819 @@ test.describe('ASCII City Walk — high contrast (CW-6)', () => {
 
     await page.keyboard.press('Escape')
     await expect(page.locator('#cityWalkLayer')).toBeHidden()
+  })
+})
+
+test.describe('ASCII City Walk — accessibility toggles (CW-14)', () => {
+  const contrastBtn = (page) => page.locator('#cityWalkContrastBtn')
+  const themeBtn = (page) => page.locator('#cityWalkThemeBtn')
+  const announcer = (page) => page.locator('#cityWalkAnnouncer')
+
+  /** How many colours the converter is quantizing to, or null for phosphor. */
+  const paletteSize = (page) =>
+    page.evaluate(
+      () => window.__cityWalkGame?.altView?.getPalette()?.length ?? null
+    )
+
+  /** The phosphor colour the ASCII painter reads (_hfm-paint getPhosphorColor). */
+  const accent = (page) =>
+    page.evaluate(() =>
+      getComputedStyle(document.documentElement)
+        .getPropertyValue('--color-accent')
+        .trim()
+    )
+
+  test('the high contrast button turns the palette on and off mid-walk', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    await expect(contrastBtn(page)).toHaveAttribute('aria-pressed', 'false')
+    await expect(contrastBtn(page)).toHaveAttribute(
+      'aria-label',
+      'Turn high contrast on'
+    )
+    await expect(page.locator('html')).not.toHaveAttribute(
+      'data-high-contrast',
+      'true'
+    )
+    expect(await paletteSize(page)).toBeNull()
+
+    await contrastBtn(page).click()
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-high-contrast',
+      'true'
+    )
+    await expect(contrastBtn(page)).toHaveAttribute('aria-pressed', 'true')
+    await expect(contrastBtn(page)).toHaveAttribute(
+      'aria-label',
+      'Turn high contrast off'
+    )
+    await expect(announcer(page)).toHaveText('High contrast on.')
+    // CW-Q2: multicolour exists only under high contrast, and the game's
+    // own MutationObserver is what applies it without a reload.
+    await expect.poll(() => paletteSize(page)).toBeGreaterThanOrEqual(4)
+
+    await contrastBtn(page).click()
+    await expect(page.locator('html')).not.toHaveAttribute(
+      'data-high-contrast',
+      'true'
+    )
+    await expect(contrastBtn(page)).toHaveAttribute('aria-pressed', 'false')
+    await expect(announcer(page)).toHaveText('High contrast off.')
+    await expect.poll(() => paletteSize(page)).toBeNull()
+  })
+
+  test('the theme button cycles the app setting and swaps the phosphor', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // A fresh profile starts on the app's default 'auto' setting.
+    await expect(themeBtn(page)).toHaveText('Theme: Auto')
+    await expect(themeBtn(page)).toHaveAttribute(
+      'aria-label',
+      'Theme: Auto. Press to cycle themes.'
+    )
+
+    // The hexes are the game's phosphor identity, documented in
+    // _hfm-paint.js: green in the dark scheme, amber in the light one. If
+    // either ever changes, this case should be the thing that notices.
+    await themeBtn(page).click()
+    await expect(themeBtn(page)).toHaveText('Theme: Light')
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-theme-setting',
+      'light'
+    )
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+    await expect(announcer(page)).toHaveText('Theme: Light')
+    expect(await accent(page)).toBe('#ffb000')
+
+    await themeBtn(page).click()
+    await expect(themeBtn(page)).toHaveText('Theme: Dark')
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    await expect(announcer(page)).toHaveText('Theme: Dark')
+    expect(await accent(page)).toBe('#00ff00')
+
+    await themeBtn(page).click()
+    await expect(themeBtn(page)).toHaveText('Theme: Auto')
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-theme-setting',
+      'auto'
+    )
+    await expect(announcer(page)).toHaveText('Theme: Auto (follows system)')
+
+    // The game keeps playing through every flip.
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'street view'
+    )
+  })
+
+  test('high contrast switched on before launch opens the game already pressed', async ({
+    page,
+  }) => {
+    await page.goto('/?hfm=unlock')
+    await expect(page.locator('#cityWalkCard')).toBeVisible({ timeout: 30000 })
+    await page.locator('#contrastToggle').click()
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-high-contrast',
+      'true'
+    )
+
+    await page.locator('#cityWalkLaunchBtn').click()
+    await expect(page.locator('#cityWalkLayer')).toBeVisible({ timeout: 20000 })
+
+    // Built pressed, before anything in the layer has been clicked.
+    await expect(contrastBtn(page)).toHaveAttribute('aria-pressed', 'true')
+    await expect(contrastBtn(page)).toHaveAttribute(
+      'aria-label',
+      'Turn high contrast off'
+    )
+  })
+
+  test('a click on a header toggle leaves the keyboard working (D-59 pattern)', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    await themeBtn(page).click()
+    const focus = await page.evaluate(() => ({
+      id: document.activeElement?.id || document.activeElement?.tagName,
+      inLayer: Boolean(
+        document
+          .getElementById('cityWalkLayer')
+          ?.contains(document.activeElement)
+      ),
+    }))
+    expect(focus.id).toBe('cityWalkThemeBtn')
+    expect(focus.inLayer).toBe(true)
+
+    // The keys still reach the game: focus staying put is only worth
+    // asserting if the city still answers to it (CW-13's lesson).
+    await page.keyboard.down('ArrowRight')
+    await page.waitForTimeout(1300)
+    await page.keyboard.up('ArrowRight')
+    await expect.poll(() => hudHeading(page)).not.toBe('north')
+
+    // And Tab does not escape the modal.
+    await page.keyboard.press('Tab')
+    const after = await page.evaluate(() =>
+      Boolean(
+        document
+          .getElementById('cityWalkLayer')
+          ?.contains(document.activeElement)
+      )
+    )
+    expect(after).toBe(true)
+  })
+
+  test('the toggles stay legible at rest and hovered, in every in-game state', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // The layer forces the mono variant on, so the states the game can
+    // actually be in are theme x high contrast. Each is reached by clicking
+    // the real buttons, so the tokens under test are the shipped ones.
+    const measure = (locator) =>
+      locator.evaluate((el) => {
+        const cs = getComputedStyle(el)
+        const read = (css) =>
+          (css.match(/\d+(\.\d+)?/g) || []).slice(0, 3).map(Number)
+        const luminance = (rgb) =>
+          rgb
+            .map((v) => {
+              const s = v / 255
+              return s <= 0.03928
+                ? s / 12.92
+                : Math.pow((s + 0.055) / 1.055, 2.4)
+            })
+            .reduce((sum, c, i) => sum + [0.2126, 0.7152, 0.0722][i] * c, 0)
+        const l1 = luminance(read(cs.color))
+        const l2 = luminance(read(cs.backgroundColor))
+        return {
+          color: cs.color,
+          background: cs.backgroundColor,
+          ratio:
+            Math.round(
+              ((Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)) * 100
+            ) / 100,
+        }
+      })
+
+    const check = async (label) => {
+      for (const [name, locator] of [
+        ['high contrast', contrastBtn(page)],
+        ['theme', themeBtn(page)],
+      ]) {
+        for (const state of ['rest', 'hovered']) {
+          if (state === 'hovered') await locator.hover()
+          else await page.mouse.move(0, 0)
+          await page.waitForTimeout(200)
+          const m = await measure(locator)
+          console.log(
+            `[cw14] ${label} / ${name} / ${state}: ${m.color} on ${m.background} = ${m.ratio}:1`
+          )
+          expect(
+            m.ratio,
+            `${label} / ${name} / ${state} is ${m.color} on ${m.background} = ${m.ratio}:1`
+          ).toBeGreaterThanOrEqual(4.5)
+        }
+      }
+    }
+
+    await themeBtn(page).click() // auto -> light
+    await check('mono light, contrast off')
+    await contrastBtn(page).click()
+    await check('mono light, contrast on')
+    await themeBtn(page).click() // light -> dark
+    await check('mono dark, contrast on')
+    await contrastBtn(page).click()
+    await check('mono dark, contrast off')
+  })
+
+  test('axe: the in-game layer has no violations with a toggle pressed and hovered', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+    await contrastBtn(page).click()
+    await expect(contrastBtn(page)).toHaveAttribute('aria-pressed', 'true')
+    // Hovering matters: a hover state is invisible to a scan unless
+    // something is hovering (D-55), and the pressed pair is repainted here.
+    await contrastBtn(page).hover()
+
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .include('#cityWalkLayer')
+      .analyze()
+    expectOnlyAllowedViolations(results)
+  })
+})
+
+test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
+  const announcer = (page) => page.locator('#cityWalkAnnouncer')
+  const btn = (page, id) => page.locator('#' + id)
+
+  const walkPos = (page) =>
+    page.evaluate(() => {
+      const w = window.__cityWalkGame?.walkState
+      return w ? { x: w.x, y: w.y } : null
+    })
+
+  const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y)
+
+  /** A counter that ticks with the game's own render loop. */
+  const startFrameCounter = (page) =>
+    page.evaluate(() => {
+      window.__cwFrames = 0
+      const tick = () => {
+        window.__cwFrames++
+        requestAnimationFrame(tick)
+      }
+      requestAnimationFrame(tick)
+    })
+
+  const frameCount = (page) => page.evaluate(() => window.__cwFrames ?? 0)
+
+  /** Wait until the game has rendered n more animation frames. */
+  async function waitForFrames(page, n) {
+    const from = await frameCount(page)
+    await expect
+      .poll(() => frameCount(page), { timeout: 20000 })
+      .toBeGreaterThanOrEqual(from + n)
+  }
+
+  /** Settle function: hold for a fixed number of the game's own frames. */
+  const forFrames = (page, n) => () => waitForFrames(page, n)
+
+  /**
+   * Press and hold a toolbar button with the real mouse until `settle`
+   * resolves, then release and park the pointer clear of everything.
+   *
+   * NEVER hold for a wall-clock duration and then assert. The game only
+   * moves inside animation frames, and a loaded CI runner can render NONE
+   * inside a 700 ms window - which is exactly how the first version of this
+   * suite went red on Edge in CI while passing three times over locally, on
+   * the same browser, and again under a 25x CPU throttle. Parking the mouse
+   * matters too: Playwright leaves it where it last acted, and an overlay
+   * flow silently hovers whatever is under it.
+   */
+  async function holdButton(page, id, settle) {
+    await btn(page, id).hover()
+    await page.mouse.down()
+    try {
+      await settle()
+    } finally {
+      await page.mouse.up()
+      await page.mouse.move(2, 2)
+    }
+  }
+
+  test('a mouse alone walks, turns, and opens the map', async ({ page }) => {
+    await launchGame(page)
+    await enterCity(page)
+    await expect(page.locator('#cityWalkToolbar')).toBeVisible()
+    await startFrameCounter(page)
+    await waitForFrames(page, 3)
+
+    const start = await walkPos(page)
+    await holdButton(page, 'cityWalkForwardBtn', () =>
+      expect
+        .poll(async () => distance(start, await walkPos(page)), {
+          timeout: 15000,
+        })
+        .toBeGreaterThan(0.5)
+    )
+
+    // Holding Turn right moves the compass off north - to ANY other sector.
+    // Exact label, not substring (see hudHeading).
+    await expect.poll(() => hudHeading(page)).toBe('north')
+    await holdButton(page, 'cityWalkTurnRightBtn', () =>
+      expect.poll(() => hudHeading(page), { timeout: 15000 }).not.toBe('north')
+    )
+
+    await btn(page, 'cityWalkMapBtn').click()
+    await expect(btn(page, 'cityWalkMapBtn')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    )
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
+    await expect(announcer(page)).toHaveText(
+      /The toolbar now shows the map buttons/
+    )
+
+    await btn(page, 'cityWalkMapBtn').click()
+    await expect(btn(page, 'cityWalkMapBtn')).toHaveAttribute(
+      'aria-pressed',
+      'false'
+    )
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'street view'
+    )
+  })
+
+  test('the map buttons arrive with the map, and the street buttons leave', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+    await startFrameCounter(page)
+    await waitForFrames(page, 3)
+
+    const streetOnly = [
+      'cityWalkLookUpBtn',
+      'cityWalkLookDownBtn',
+      'cityWalkFastBtn',
+    ]
+    const mapOnly = [
+      'cityWalkCenterBtn',
+      'cityWalkZoomOutBtn',
+      'cityWalkZoomInBtn',
+    ]
+
+    for (const id of streetOnly) await expect(btn(page, id)).toBeVisible()
+    for (const id of mapOnly) await expect(btn(page, id)).toBeHidden()
+
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
+    for (const id of streetOnly) await expect(btn(page, id)).toBeHidden()
+    for (const id of mapOnly) await expect(btn(page, id)).toBeVisible()
+
+    // The map buttons drive the map: held Zoom in zooms exponentially…
+    const zoom = () => page.evaluate(() => window.__cityWalkGame.mapCam.zoom)
+    await holdButton(page, 'cityWalkZoomInBtn', () =>
+      expect.poll(zoom, { timeout: 15000 }).toBeGreaterThan(1.2)
+    )
+    await expect(page.locator('#cityWalkHudStatus')).not.toContainText(
+      'zoom 1.0x'
+    )
+
+    // …a pan breaks follow mode, and Center on you restores it.
+    const follow = () =>
+      page.evaluate(() => window.__cityWalkGame.mapCam.follow)
+    await holdButton(page, 'cityWalkStepRightBtn', () =>
+      expect.poll(follow, { timeout: 15000 }).toBe(false)
+    )
+
+    // The 250 ms minimum step keeps the pan running for a moment after
+    // the release - and a pan is what turns follow OFF - so let it finish
+    // before asking Center on you to turn it back on.
+    await page.waitForTimeout(400)
+    await waitForFrames(page, 2)
+
+    await btn(page, 'cityWalkCenterBtn').click()
+    await expect(announcer(page)).toHaveText(/Map centered on you/)
+    expect(await follow()).toBe(true)
+
+    // Back on the street the swap reverses, and the toolbar says so.
+    await btn(page, 'cityWalkMapBtn').click()
+    await expect(announcer(page)).toHaveText(
+      /The toolbar now shows the walking buttons/
+    )
+    for (const id of streetOnly) await expect(btn(page, id)).toBeVisible()
+    for (const id of mapOnly) await expect(btn(page, id)).toBeHidden()
+  })
+
+  test('Enter on a hold button takes one step and then stops', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    await startFrameCounter(page)
+    await waitForFrames(page, 3)
+
+    const before = await walkPos(page)
+    await btn(page, 'cityWalkForwardBtn').focus()
+    await expect(btn(page, 'cityWalkForwardBtn')).toBeFocused()
+
+    await page.keyboard.press('Enter')
+    await expect
+      .poll(async () => distance(before, await walkPos(page)), {
+        timeout: 15000,
+      })
+      .toBeGreaterThan(0.15)
+
+    // A key press has no release, so the step has to end by itself. If it
+    // did not, the player would still be walking here. Measured in frames,
+    // not milliseconds - a stalled runner would otherwise "prove" it
+    // stopped simply by rendering nothing.
+    await page.waitForTimeout(1000)
+    await waitForFrames(page, 2)
+    const settled = await walkPos(page)
+    await waitForFrames(page, 10)
+    expect(distance(settled, await walkPos(page))).toBeLessThan(0.05)
+  })
+
+  test('the speed, size, level and landmark buttons announce what they did', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('speed 100%')
+
+    await btn(page, 'cityWalkSpeedUpBtn').click()
+    await expect(announcer(page)).toHaveText(/Walking speed 125 percent/)
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('speed 125%')
+    await btn(page, 'cityWalkSpeedDownBtn').click()
+    await expect(announcer(page)).toHaveText(/Walking speed 100 percent/)
+
+    // The game opens at its own 50% default (CW-12), in ten-point steps.
+    await btn(page, 'cityWalkCharDownBtn').click()
+    await expect(announcer(page)).toHaveText(/Character size 40 percent/)
+    await btn(page, 'cityWalkCharUpBtn').click()
+    await expect(announcer(page)).toHaveText(/Character size 50 percent/)
+
+    await btn(page, 'cityWalkLevelBtn').click()
+    await expect(announcer(page)).toHaveText(/View level/)
+
+    // Landmarks live on the map, so Next opens it exactly as L does.
+    await btn(page, 'cityWalkLandmarkNextBtn').click()
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
+    await expect(announcer(page)).toHaveText(/Landmark 1 of \d+: /)
+    await btn(page, 'cityWalkLandmarkPrevBtn').click()
+    await expect(announcer(page)).toHaveText(/Landmark \d+ of \d+: /)
+  })
+
+  test('Fast is a sticky toggle, because a mouse cannot hold Shift', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    await startFrameCounter(page)
+    await waitForFrames(page, 3)
+
+    const fast = btn(page, 'cityWalkFastBtn')
+    await expect(fast).toHaveAttribute('aria-pressed', 'false')
+
+    // The two legs are matched by FRAME COUNT, not by wall clock: distance
+    // is a function of frames rendered, so comparing two fixed-duration
+    // holds on a runner whose frame rate wanders compares nothing.
+    const a = await walkPos(page)
+    await holdButton(page, 'cityWalkForwardBtn', forFrames(page, 12))
+    const b = await walkPos(page)
+    const strolled = distance(a, b)
+    expect(strolled).toBeGreaterThan(0.1)
+
+    await fast.click()
+    await page.mouse.move(2, 2)
+    await expect(fast).toHaveAttribute('aria-pressed', 'true')
+    await expect(announcer(page)).toHaveText('Fast walking on.')
+
+    // FAST_SPEED_MPS is 2.5x WALK_SPEED_MPS; 1.5x is the margin that still
+    // fails loudly if the toggle never reaches stepWalk.
+    await holdButton(page, 'cityWalkForwardBtn', forFrames(page, 12))
+    const hurried = distance(b, await walkPos(page))
+    expect(
+      hurried,
+      `strolled ${strolled.toFixed(2)} m, hurried ${hurried.toFixed(2)} m`
+    ).toBeGreaterThan(strolled * 1.5)
+
+    await fast.click()
+    await page.mouse.move(2, 2)
+    await expect(fast).toHaveAttribute('aria-pressed', 'false')
+    await expect(announcer(page)).toHaveText('Fast walking off.')
+  })
+
+  test('a click in the toolbar leaves the keyboard working (D-59 pattern)', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    await btn(page, 'cityWalkLevelBtn').click()
+    const focus = await page.evaluate(() => ({
+      id: document.activeElement?.id || document.activeElement?.tagName,
+      inLayer: Boolean(
+        document
+          .getElementById('cityWalkLayer')
+          ?.contains(document.activeElement)
+      ),
+    }))
+    expect(focus.id).toBe('cityWalkLevelBtn')
+    expect(focus.inLayer).toBe(true)
+
+    await page.keyboard.down('ArrowRight')
+    await page.waitForTimeout(1300)
+    await page.keyboard.up('ArrowRight')
+    await expect.poll(() => hudHeading(page)).not.toBe('north')
+  })
+
+  test('a hidden button hands its focus back instead of dropping it', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // Focus a street-only button, then switch views with the key. The
+    // button disappears under the focus; if focus fell to <body> every key
+    // would die for the rest of the session (D-59).
+    await btn(page, 'cityWalkLookUpBtn').focus()
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
+
+    const landed = await page.evaluate(
+      () => document.activeElement?.id || document.activeElement?.tagName
+    )
+    expect(landed).toBe('cityWalkMapBtn')
+
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'street view'
+    )
+  })
+
+  test('the height a session measured does not outlive it', async ({ page }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const measured = () =>
+      page.evaluate(() =>
+        document
+          .getElementById('cityWalkLayer')
+          .style.getPropertyValue('--city-walk-toolbar-height')
+      )
+    expect(parseInt(await measured(), 10)).toBeGreaterThan(40)
+
+    await page.keyboard.press('Escape')
+    await expect(page.locator('#cityWalkLayer')).toBeHidden()
+    await page.locator('#cityWalkLaunchBtn').click()
+    await expect(page.locator('#cityWalkLayer')).toBeVisible()
+
+    // Back on the picker there is no toolbar, and the layer element
+    // outlives the session that measured one - so the help panel must not
+    // be shortened here by the last strip.
+    expect(await measured()).toBe('0px')
+  })
+
+  test('the toolbar stays legible at rest and hovered, in every in-game state', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // Measured against the layer's own background, because the group
+    // captions have none of their own - a transparent element reports
+    // rgba(0,0,0,0) and would score itself against black by accident.
+    const measure = (locator) =>
+      locator.evaluate((el) => {
+        const read = (css) =>
+          (css.match(/\d+(\.\d+)?/g) || []).slice(0, 3).map(Number)
+        const luminance = (rgb) =>
+          rgb
+            .map((v) => {
+              const s = v / 255
+              return s <= 0.03928
+                ? s / 12.92
+                : Math.pow((s + 0.055) / 1.055, 2.4)
+            })
+            .reduce((sum, c, i) => sum + [0.2126, 0.7152, 0.0722][i] * c, 0)
+        const cs = getComputedStyle(el)
+        const own = cs.backgroundColor
+        const opaque = own && !/rgba\(0, 0, 0, 0\)|transparent/.test(own)
+        const background = opaque
+          ? own
+          : getComputedStyle(document.querySelector('.city-walk-layer'))
+              .backgroundColor
+        const l1 = luminance(read(cs.color))
+        const l2 = luminance(read(background))
+        return {
+          color: cs.color,
+          background,
+          ratio:
+            Math.round(
+              ((Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)) * 100
+            ) / 100,
+        }
+      })
+
+    const check = async (label) => {
+      const targets = [
+        ['plain button', btn(page, 'cityWalkTurnLeftBtn'), true],
+        ['pressed Fast', btn(page, 'cityWalkFastBtn'), true],
+        ['group caption', page.locator('#cityWalkToolbarCameraLabel'), false],
+      ]
+      for (const [name, locator, hoverable] of targets) {
+        for (const state of hoverable ? ['rest', 'hovered'] : ['rest']) {
+          if (state === 'hovered') await locator.hover()
+          else await page.mouse.move(2, 2)
+          await page.waitForTimeout(200)
+          const m = await measure(locator)
+          console.log(
+            `[cw15] ${label} / ${name} / ${state}: ${m.color} on ${m.background} = ${m.ratio}:1`
+          )
+          expect(
+            m.ratio,
+            `${label} / ${name} / ${state} is ${m.color} on ${m.background} = ${m.ratio}:1`
+          ).toBeGreaterThanOrEqual(4.5)
+        }
+      }
+    }
+
+    // Fast is measured in its pressed state, which is the pair CW-14's rule
+    // repaints and the one nothing else in the suite covers.
+    await btn(page, 'cityWalkFastBtn').click()
+    await expect(btn(page, 'cityWalkFastBtn')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    )
+
+    const contrastBtn = page.locator('#cityWalkContrastBtn')
+    const themeBtn = page.locator('#cityWalkThemeBtn')
+
+    await themeBtn.click() // auto -> light
+    await check('mono light, contrast off')
+    await contrastBtn.click()
+    await check('mono light, contrast on')
+    await themeBtn.click() // light -> dark
+    await check('mono dark, contrast on')
+    await contrastBtn.click()
+    await check('mono dark, contrast off')
+  })
+
+  test('axe: the in-game layer has no violations with a toolbar button hovered', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+    // A hover state is invisible to a scan unless something is hovering
+    // (D-55), and the pressed pair is repainted on hover.
+    await btn(page, 'cityWalkMapBtn').click()
+    await expect(btn(page, 'cityWalkMapBtn')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    )
+    await btn(page, 'cityWalkMapBtn').hover()
+
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .include('#cityWalkLayer')
+      .analyze()
+    expectOnlyAllowedViolations(results)
+  })
+})
+
+test.describe('ASCII City Walk — C and T reach the toggles (CW-Q15)', () => {
+  const announcer = (page) => page.locator('#cityWalkAnnouncer')
+
+  const paletteSize = (page) =>
+    page.evaluate(
+      () => window.__cityWalkGame?.altView?.getPalette()?.length ?? null
+    )
+
+  test('C flips high contrast, and the button follows', async ({ page }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const contrastBtn = page.locator('#cityWalkContrastBtn')
+    await expect(contrastBtn).toHaveAttribute('aria-pressed', 'false')
+    expect(await paletteSize(page)).toBeNull()
+
+    await page.keyboard.press('KeyC')
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-high-contrast',
+      'true'
+    )
+    await expect(contrastBtn).toHaveAttribute('aria-pressed', 'true')
+    await expect(contrastBtn).toHaveAttribute(
+      'aria-label',
+      'Turn high contrast off'
+    )
+    await expect(announcer(page)).toHaveText('High contrast on.')
+    await expect.poll(() => paletteSize(page)).toBeGreaterThanOrEqual(4)
+
+    await page.keyboard.press('KeyC')
+    await expect(page.locator('html')).not.toHaveAttribute(
+      'data-high-contrast',
+      'true'
+    )
+    await expect(contrastBtn).toHaveAttribute('aria-pressed', 'false')
+    await expect(announcer(page)).toHaveText('High contrast off.')
+    await expect.poll(() => paletteSize(page)).toBeNull()
+  })
+
+  test('T cycles the theme, and the visible label follows', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const themeBtn = page.locator('#cityWalkThemeBtn')
+    await expect(themeBtn).toHaveText('Theme: Auto')
+
+    await page.keyboard.press('KeyT')
+    await expect(themeBtn).toHaveText('Theme: Light')
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-theme-setting',
+      'light'
+    )
+    await expect(announcer(page)).toHaveText('Theme: Light')
+
+    await page.keyboard.press('KeyT')
+    await expect(themeBtn).toHaveText('Theme: Dark')
+    await expect(announcer(page)).toHaveText('Theme: Dark')
+
+    await page.keyboard.press('KeyT')
+    await expect(themeBtn).toHaveText('Theme: Auto')
+    await expect(announcer(page)).toHaveText('Theme: Auto (follows system)')
+
+    // The game keeps playing through every flip.
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'street view'
+    )
+  })
+
+  test('both keys work on the city picker, before any city is loaded', async ({
+    page,
+  }) => {
+    await launchGame(page)
+
+    await page.keyboard.press('KeyC')
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-high-contrast',
+      'true'
+    )
+    await expect(announcer(page)).toHaveText('High contrast on.')
+
+    await page.keyboard.press('KeyT')
+    await expect(page.locator('#cityWalkThemeBtn')).toHaveText('Theme: Light')
+    await expect(announcer(page)).toHaveText('Theme: Light')
+  })
+
+  test('Ctrl+T still belongs to the browser and the app, not the game', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    await page.keyboard.press('KeyT')
+    await expect(announcer(page)).toHaveText('Theme: Light')
+
+    // The game's guard drops every ctrl/meta/alt combo before reaching its
+    // own keys. MEASURED at this HEAD: the app's Ctrl+T and Ctrl+H are
+    // themselves suppressed while the modal layer is open, so nothing at
+    // all moves - and above all the GAME never answers a modified combo.
+    await page.keyboard.press('Control+KeyT')
+    await page.waitForTimeout(400)
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-theme-setting',
+      'light'
+    )
+    await expect(announcer(page)).toHaveText('Theme: Light')
+
+    await page.keyboard.press('Control+KeyH')
+    await page.waitForTimeout(400)
+    await expect(page.locator('html')).not.toHaveAttribute(
+      'data-high-contrast',
+      'true'
+    )
+    await expect(announcer(page)).toHaveText('Theme: Light')
   })
 })
 

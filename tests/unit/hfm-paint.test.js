@@ -85,6 +85,125 @@ describe('buildGlyphAtlas', () => {
     expect(atlas.dpr).toBe(2)
   })
 
+  /**
+   * Install a getImageData that hands back a one-glyph-worth buffer whose
+   * strongest alpha is `maxAlpha`, and capture what putImageData writes back.
+   */
+  function stubAtlasPixels(maxAlpha) {
+    const pixels = new Uint8ClampedArray(4 * 4)
+    // Four pixels: transparent, half of max, max, transparent.
+    pixels[3] = 0
+    pixels[7] = Math.round(maxAlpha / 2)
+    pixels[11] = maxAlpha
+    pixels[15] = 0
+    atlasCtx.getImageData = vi.fn(() => ({ data: pixels }))
+    atlasCtx.putImageData = vi.fn()
+    return pixels
+  }
+
+  it('restores brightness a tiny atlas lost to antialiasing (CW-12)', () => {
+    let pixels
+    const orig = HTMLCanvasElement.prototype.getContext
+    HTMLCanvasElement.prototype.getContext = function () {
+      atlasCtx = createMockCtx()
+      atlasCtx.canvas = this
+      pixels = stubAtlasPixels(164) // MEASURED: a 3 px atlas peaks at 164/255
+      return atlasCtx
+    }
+    buildGlyphAtlas({
+      fontFamily: 'monospace',
+      fontSizePx: 3,
+      charW: 2,
+      charH: 4,
+      dpr: 1,
+      color: '#00ff00',
+      normalizeTinyAlpha: true,
+    })
+    HTMLCanvasElement.prototype.getContext = orig
+
+    expect(atlasCtx.putImageData).toHaveBeenCalledTimes(1)
+    // The strongest pixel reaches full opacity; the rest scale with it and
+    // fully transparent pixels stay transparent.
+    expect(pixels[11]).toBe(255)
+    expect(pixels[7]).toBe(128)
+    expect(pixels[3]).toBe(0)
+    expect(pixels[15]).toBe(0)
+  })
+
+  it('leaves an already-opaque tiny atlas untouched', () => {
+    const orig = HTMLCanvasElement.prototype.getContext
+    HTMLCanvasElement.prototype.getContext = function () {
+      atlasCtx = createMockCtx()
+      atlasCtx.canvas = this
+      stubAtlasPixels(255)
+      return atlasCtx
+    }
+    buildGlyphAtlas({
+      fontFamily: 'monospace',
+      fontSizePx: 4,
+      charW: 3,
+      charH: 5,
+      dpr: 1,
+      color: '#00ff00',
+      normalizeTinyAlpha: true,
+    })
+    HTMLCanvasElement.prototype.getContext = orig
+
+    expect(atlasCtx.putImageData).not.toHaveBeenCalled()
+  })
+
+  it('never touches an atlas big enough for the preview to use', () => {
+    // The preview's Alt View bottoms out around a 5-6 px cell. Above the
+    // 4 px threshold the atlas is not even read, let alone rewritten.
+    const orig = HTMLCanvasElement.prototype.getContext
+    HTMLCanvasElement.prototype.getContext = function () {
+      atlasCtx = createMockCtx()
+      atlasCtx.canvas = this
+      stubAtlasPixels(120) // faint on purpose: it must STILL be left alone
+      return atlasCtx
+    }
+    buildGlyphAtlas({
+      fontFamily: 'monospace',
+      fontSizePx: 10,
+      charW: 5,
+      charH: 13,
+      dpr: 1,
+      color: '#00ff00',
+      normalizeTinyAlpha: true,
+    })
+    HTMLCanvasElement.prototype.getContext = orig
+
+    expect(atlasCtx.getImageData).not.toHaveBeenCalled()
+    expect(atlasCtx.putImageData).not.toHaveBeenCalled()
+  })
+
+  it('leaves a tiny atlas alone when the caller did not opt in', () => {
+    // THE guard for the main app. Iosevka Term advances at about half its
+    // size, so the preview slider's own 0.5 minimum lands on a 7 px font and
+    // a 4 px cell - inside the width threshold. Only the missing opt-in keeps
+    // the preview's Alt View rendering exactly as it always has.
+    const orig = HTMLCanvasElement.prototype.getContext
+    HTMLCanvasElement.prototype.getContext = function () {
+      atlasCtx = createMockCtx()
+      atlasCtx.canvas = this
+      stubAtlasPixels(164)
+      return atlasCtx
+    }
+    buildGlyphAtlas({
+      fontFamily: 'monospace',
+      fontSizePx: 7,
+      charW: 4,
+      charH: 9,
+      dpr: 1,
+      color: '#00ff00',
+      // no normalizeTinyAlpha - this is the preview's call shape
+    })
+    HTMLCanvasElement.prototype.getContext = orig
+
+    expect(atlasCtx.getImageData).not.toHaveBeenCalled()
+    expect(atlasCtx.putImageData).not.toHaveBeenCalled()
+  })
+
   it('renders all 95 printable ASCII glyphs centered with the tint color', () => {
     buildGlyphAtlas({
       fontFamily: 'monospace',

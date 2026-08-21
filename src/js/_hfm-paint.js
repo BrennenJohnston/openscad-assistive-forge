@@ -60,6 +60,7 @@ export function buildGlyphAtlas({
   charH,
   dpr,
   color,
+  normalizeTinyAlpha = false,
 }) {
   const cellW = Math.max(1, Math.round(charW * dpr));
   const cellH = Math.max(1, Math.round(charH * dpr));
@@ -80,7 +81,54 @@ export function buildGlyphAtlas({
     ctx.fillText(ch, i * cellW + cellW / 2, cellH / 2);
   }
 
+  if (normalizeTinyAlpha) _restoreTinyGlyphBrightness(ctx, canvas, charW);
+
   return { canvas, cellW, cellH, dpr, color };
+}
+
+/**
+ * Give a tiny atlas back the brightness the rasterizer took from it (CW-12).
+ *
+ * A glyph drawn into a 2x4 pixel cell is almost entirely antialiasing: MEASURED
+ * on the owner's machine, the strongest pixel in a 3 px atlas reaches alpha 164
+ * of 255, and 188 at 4 px, against a solid 255 at 12 px and above. Everything
+ * the converter paints at the smallest character sizes was therefore being
+ * multiplied by roughly 0.64 — the city dimmed as the characters shrank, and
+ * in amber the brightest pixel of a whole frame measured 4.08:1 on black,
+ * under the 4.5:1 this project holds itself to elsewhere. Scaling each atlas so
+ * its strongest pixel is fully opaque restores the intended mapping (amber's
+ * floor measures 8.99:1 after, high-contrast dark 19.43:1).
+ *
+ * Scope: the CALLER must opt in (the City Walk does; the preview's Alt View
+ * does not), AND the cell must be at most _TINY_CELL_MAX_CSS_PX wide. The
+ * opt-in is what makes this game-only, and it is not decoration: Iosevka Term
+ * advances at about half its size, so the preview slider's own 0.5 minimum
+ * lands on a 7 px font and a 4 px cell — inside the width threshold. A width
+ * test alone would have brightened the main app's Alt View by about 11% at its
+ * smallest setting, which this release promised not to touch.
+ *
+ * @param {CanvasRenderingContext2D} ctx - the atlas context, already drawn
+ * @param {HTMLCanvasElement} canvas
+ * @param {number} charW - character cell width in CSS px
+ */
+function _restoreTinyGlyphBrightness(ctx, canvas, charW) {
+  if (charW > _TINY_CELL_MAX_CSS_PX) return;
+
+  const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const px = img.data;
+  let maxAlpha = 0;
+  for (let i = 3; i < px.length; i += 4) {
+    if (px[i] > maxAlpha) maxAlpha = px[i];
+  }
+  // Nothing drawn, or already fully opaque somewhere: leave it exactly alone.
+  if (maxAlpha === 0 || maxAlpha === 255) return;
+
+  const gain = 255 / maxAlpha;
+  for (let i = 3; i < px.length; i += 4) {
+    const lifted = px[i] * gain;
+    px[i] = lifted > 255 ? 255 : Math.round(lifted);
+  }
+  ctx.putImageData(img, 0, 0);
 }
 
 /**
@@ -160,6 +208,122 @@ export function resizeOverlay(canvas, cssW, cssH, dpr, persistCanvas) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Tiny-cell composite path (CW-12)
+// ---------------------------------------------------------------------------
+// At a few device pixels per character cell the per-cell ctx.drawImage() call
+// dominates the entire ASCII conversion — MEASURED at 271 ms of a 433 ms frame
+// (63%) with 238k cells, because the cost is per CALL, not per pixel. Composing
+// every glyph into one reusable buffer and handing the canvas a single
+// putImageData replaces ~238k canvas calls with ~1.9M typed-array writes.
+//
+// Entered only when a character cell is at most _TINY_CELL_MAX_CSS_PX wide in
+// CSS pixels AND afterglow is off. The preview's Alt View CAN reach this at
+// its own 0.5 minimum (Iosevka Term advances at about half its size, so a 7 px
+// font is a 4 px cell) and that is fine on purpose: the two paths are
+// pixel-identical — 0 of 1,906,560 differed in an A/B at 30% and 20% — so the
+// preview gets the speed and none of the change. The brightness treatment,
+// which IS visible, is gated on a caller opt-in instead; see
+// _restoreTinyGlyphBrightness.
+//
+// The threshold is deliberately in CSS pixels, not device pixels: what makes
+// the old path expensive is the NUMBER of drawImage calls, and that follows
+// the cell count, which follows charW in CSS px. Gating on device px would
+// have switched the fast path off at 30% on a 2x display — exactly the
+// machines that need it — while every bench number was taken at dpr 1.
+
+const _TINY_CELL_MAX_CSS_PX = 4;
+
+/** One reusable frame buffer per overlay context, resized with the canvas. */
+const _frameBuffers = new WeakMap();
+
+function _frameBuffer(ctx, w, h) {
+  const held = _frameBuffers.get(ctx);
+  if (held && held.width === w && held.height === h) return held;
+  const made = ctx.createImageData(w, h);
+  _frameBuffers.set(ctx, made);
+  return made;
+}
+
+/**
+ * An atlas's pixels as one Uint32Array, computed once and cached on the atlas
+ * object itself — atlases are rebuilt (and the cache thrown away with them)
+ * whenever font metrics or theme colors change. The atlas canvas is already
+ * created with willReadFrequently, so this read is the cheap direction.
+ */
+function _atlasPixels32(atlas) {
+  if (atlas._pixels32) return atlas._pixels32;
+  const ctx = atlas.canvas.getContext('2d', { willReadFrequently: true });
+  const img = ctx.getImageData(0, 0, atlas.canvas.width, atlas.canvas.height);
+  atlas._pixels32 = new Uint32Array(img.data.buffer);
+  return atlas._pixels32;
+}
+
+function _paintTinyCells(
+  ctx,
+  glyphIndices,
+  cols,
+  rows,
+  atlas,
+  stepX,
+  stepY,
+  colorIndices,
+  colorAtlases
+) {
+  const w = ctx.canvas.width;
+  const h = ctx.canvas.height;
+  const img = _frameBuffer(ctx, w, h);
+  const dst = new Uint32Array(img.data.buffer);
+  dst.fill(0);
+
+  const { cellW, cellH } = atlas;
+  const basePixels = _atlasPixels32(atlas);
+  const baseStride = atlas.canvas.width;
+
+  for (let row = 0; row < rows; row++) {
+    const rowBase = row * cols;
+    const dy0 = (row * stepY) | 0;
+    if (dy0 >= h) break;
+    const runH = Math.min(cellH, h - dy0);
+
+    for (let col = 0; col < cols; col++) {
+      const cell = rowBase + col;
+      const idx = glyphIndices[cell];
+      if (idx === SPACE_INDEX) continue;
+
+      const dx0 = (col * stepX) | 0;
+      if (dx0 >= w) continue;
+      const runW = Math.min(cellW, w - dx0);
+
+      let src = basePixels;
+      let stride = baseStride;
+      if (colorAtlases && colorIndices) {
+        const layer = colorAtlases[colorIndices[cell]];
+        if (layer) {
+          src = _atlasPixels32(layer);
+          stride = layer.canvas.width;
+        }
+      }
+
+      const sx0 = idx * cellW;
+      for (let y = 0; y < runH; y++) {
+        let s = y * stride + sx0;
+        let d = (dy0 + y) * w + dx0;
+        for (let x = 0; x < runW; x++, s++, d++) {
+          // Fully transparent atlas pixels leave the buffer alone, which is
+          // what source-over does. Cells never overlap here (charW is an
+          // integer and stepX === cellW at every dpr we ship), so a copy and
+          // a source-over composite produce the same pixels.
+          const px = src[s];
+          if (px !== 0) dst[d] = px;
+        }
+      }
+    }
+  }
+
+  ctx.putImageData(img, 0, 0);
+}
+
 /**
  * Paint one frame of ASCII art by blitting glyphs from the atlas.
  *
@@ -212,6 +376,21 @@ export function paintFrame(
   const stepY = charH * dpr;
   const colorIndices = colorLayers?.indices ?? null;
   const colorAtlases = colorLayers?.atlases ?? null;
+
+  if (fade === 0 && charW <= _TINY_CELL_MAX_CSS_PX) {
+    _paintTinyCells(
+      ctx,
+      glyphIndices,
+      cols,
+      rows,
+      atlas,
+      stepX,
+      stepY,
+      colorIndices,
+      colorAtlases
+    );
+    return;
+  }
 
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 

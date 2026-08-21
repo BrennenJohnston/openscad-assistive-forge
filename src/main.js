@@ -10755,7 +10755,56 @@ if (rounded) {
     // someone who found the unlock actually plays.
     const cityWalkLaunchBtn = document.getElementById('cityWalkLaunchBtn');
     if (cityWalkLaunchBtn) {
-      cityWalkLaunchBtn.addEventListener('click', async () => {
+      // CW-11: the game is desktop-only, gated on the same viewport shape as
+      // Classic (U-10/Q-24a). ENTRY only — a session already running survives
+      // any resize, and Escape always leaves.
+      const cityWalkGateReason = () =>
+        document
+          .getElementById('cityWalkGateReason')
+          ?.textContent.replace(/\s+/g, ' ')
+          .trim();
+
+      const updateCityWalkGate = () => {
+        const gated = !isViewportDesktopShaped();
+        const reasonEl = document.getElementById('cityWalkGateReason');
+        // Shown, not sr-only: on a phone there is no hover tooltip, so the
+        // reason has to be on the card for a sighted player to read.
+        if (reasonEl) reasonEl.hidden = !gated;
+        if (gated) {
+          cityWalkLaunchBtn.setAttribute('aria-disabled', 'true');
+          cityWalkLaunchBtn.setAttribute(
+            'aria-describedby',
+            'cityWalkGateReason'
+          );
+          const reason = cityWalkGateReason();
+          if (reason) {
+            cityWalkLaunchBtn.setAttribute(
+              'title',
+              `Enter the City. ${reason}`
+            );
+          }
+        } else {
+          cityWalkLaunchBtn.removeAttribute('aria-disabled');
+          cityWalkLaunchBtn.removeAttribute('aria-describedby');
+          cityWalkLaunchBtn.removeAttribute('title');
+        }
+      };
+      updateCityWalkGate();
+      subscribeViewportShape(updateCityWalkGate);
+
+      cityWalkLaunchBtn.addEventListener('click', async (event) => {
+        // Gated means aria-disabled, not disabled: the click still arrives, so
+        // say why rather than doing nothing (the Classic toggle's pattern).
+        if (cityWalkLaunchBtn.getAttribute('aria-disabled') === 'true') {
+          event.preventDefault();
+          const reason = cityWalkGateReason();
+          announceImmediate(
+            reason
+              ? `ASCII City Walk unavailable. ${reason}`
+              : 'ASCII City Walk unavailable.'
+          );
+          return;
+        }
         // No disabled toggle here: disabling the button would blur it, and
         // the controller restores focus to this trigger on exit. Re-entry is
         // already guarded by the controller's session singleton.
