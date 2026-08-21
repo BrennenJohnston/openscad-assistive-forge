@@ -28,6 +28,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The header toggles no longer lie about the state they are in** (D-60) - the high contrast and
+  theme buttons each wrote their spoken label only inside their own click handler, so any other route
+  left the label saying the opposite of the truth, to the one group of people who cannot see the
+  button change. Three routes reached it: the keyboard shortcut, the City Walk's in-game toggles
+  (which act on the same setting from inside a modal that hides the header), and - under the Auto
+  theme setting - the system simply changing colour scheme, with nobody touching anything at all.
+  Both labels now follow the theme manager itself, which every route already notifies
+
+- **The Classic button reads clearly while it is unavailable** (CW-Q13c) - on a window too narrow for
+  Classic the header button stays focusable and explains why, dimmed so it also reads as unavailable
+  without relying on colour. That dimming was quietly costing the label its legibility: measured
+  across all eight theme states, five sat below the 4.5:1 minimum, the worst of them in high contrast
+  and the mono Alt View - the modes people choose because they need contrast. The dimming is gentler
+  now, so the worst reading is 5.35:1 and the button still reads as unavailable. Nothing had caught
+  this because nothing could: a dimmed control blends with whatever is behind it, and automated
+  contrast checks skip disabled controls entirely, so the guard added here does the blending itself
+
 - **City Walk: help panel rendered under the ASCII glyphs** — the overlay canvas carries
   z-index 5 and the help panel (and the new landmark legend) defaulted below it, so both panels
   were occluded by the rendered city; visibility assertions cannot detect occlusion, which is why
