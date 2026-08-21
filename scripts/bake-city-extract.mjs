@@ -31,7 +31,10 @@ import {
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
 const USER_AGENT =
   'openscad-assistive-forge bake-city-extract (https://github.com/BrennenJohnston/openscad-assistive-forge)';
-const SIZE_WARN_BYTES = 800 * 1024;
+// CW-Q9 doubled each city's AREA (bake radius 500 -> 707 m), which roughly
+// doubles every extract. The warning is advisory - it marks a bake that has
+// outgrown the deliberate size, not one that is broken.
+const SIZE_WARN_BYTES = 1600 * 1024;
 
 function parseArgs(argv) {
   const args = {};
