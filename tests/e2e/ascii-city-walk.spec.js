@@ -671,12 +671,25 @@ test.describe('ASCII City Walk — looking around (CW-13)', () => {
     expect((await gaze(page)).heading).toBe(0)
 
     // Held to the stop: the clamp is exactly 60 degrees, never beyond.
+    //
+    // The key is held until the gaze ARRIVES, not for a fixed 2.2 s. Pitch
+    // integrates per FRAME with dt clamped to 0.1 s, so on a slow renderer
+    // wall time and simulated time come apart: CI reached 45 deg in the 2.2 s
+    // this used to allow. Polling for exactly 60 still proves the clamp - an
+    // uncapped gaze sails past it and never equals 60, so this times out.
     await page.keyboard.down('KeyR')
-    await page.waitForTimeout(2200)
-    await page.keyboard.up('KeyR')
-    await expect
-      .poll(async () => Math.round((await gaze(page)).pitch / DEG))
-      .toBe(60)
+    try {
+      await expect
+        .poll(async () => Math.round((await gaze(page)).pitch / DEG), {
+          timeout: 30000,
+          intervals: [200],
+        })
+        .toBe(60)
+    } finally {
+      await page.keyboard.up('KeyR')
+    }
+    // And it stays there once the key is up.
+    expect(Math.round((await gaze(page)).pitch / DEG)).toBe(60)
 
     await page.keyboard.press('KeyV')
     await expect(page.locator('#cityWalkAnnouncer')).toHaveText(/View level/)
@@ -1075,6 +1088,9 @@ test.describe('ASCII City Walk — accessibility toggles (CW-14)', () => {
     // The layer forces the mono variant on, so the states the game can
     // actually be in are theme x high contrast. Each is reached by clicking
     // the real buttons, so the tokens under test are the shipped ones.
+    // The 30 s timeout is for the RUNNER, not the assertion: this reads static
+    // CSS, but CI renders the city through SwiftShader and the converter holds
+    // the main thread in long stretches, which the default 10 s can miss.
     const measure = (locator) =>
       locator.evaluate((el) => {
         const cs = getComputedStyle(el)
@@ -1099,7 +1115,7 @@ test.describe('ASCII City Walk — accessibility toggles (CW-14)', () => {
               ((Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)) * 100
             ) / 100,
         }
-      })
+      }, undefined, { timeout: 30000 })
 
     const check = async (label) => {
       for (const [name, locator] of [
@@ -1497,6 +1513,9 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     // Measured against the layer's own background, because the group
     // captions have none of their own - a transparent element reports
     // rgba(0,0,0,0) and would score itself against black by accident.
+    // The 30 s timeout is for the RUNNER, not the assertion: this reads
+    // static CSS, but CI renders the city through SwiftShader and the
+    // converter holds the main thread in long stretches.
     const measure = (locator) =>
       locator.evaluate((el) => {
         const read = (css) =>
@@ -1527,7 +1546,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
               ((Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)) * 100
             ) / 100,
         }
-      })
+      }, undefined, { timeout: 30000 })
 
     const check = async (label) => {
       const targets = [
