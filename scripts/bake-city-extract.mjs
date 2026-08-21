@@ -76,6 +76,7 @@ const query = `[out:json][timeout:60];
   way["building"](around:${radiusM},${center.lat},${center.lon});
   relation["building"]["type"="multipolygon"](around:${radiusM},${center.lat},${center.lon});
   way["highway"](around:${radiusM},${center.lat},${center.lon});
+  node["natural"="tree"](around:${radiusM},${center.lat},${center.lon});
 );
 out tags geom;`;
 
@@ -139,7 +140,8 @@ const sizeKb = Math.round(json.length / 1024);
 console.log(
   `Wrote ${outPath}\n` +
     `  ${sizeKb} KB · ${rawElements.length} raw elements → ${elements.length} kept\n` +
-    `  parsed: ${model.stats.buildingCount} buildings, ${model.stats.roadCount} roads` +
+    `  parsed: ${model.stats.buildingCount} buildings, ${model.stats.roadCount} roads,` +
+    ` ${model.stats.treeCount} trees` +
     ` (dropped ${model.stats.droppedRings} rings, ${model.stats.droppedElements} elements)`
 );
 if (json.length > SIZE_WARN_BYTES) {
