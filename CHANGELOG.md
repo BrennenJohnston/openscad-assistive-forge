@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Trees and parked cars along the streets** (CW-16) - the City Walk's streets were empty tarmac
+  between the buildings: correct, and nothing like a city anybody has stood in. Trees and parked cars
+  now furnish them. The trees are the real ones first - the bake script asks OpenStreetMap for its
+  `natural=tree` nodes, and Seattle's extract carries 119 of them, planted where the map says they
+  stand - and then a deterministic infill fills the gaps along residential, tertiary, pedestrian and
+  living-street curbs about every 18 m, on the sidewalk side of the curb line. A trunk is 2.5 m of
+  dark stem and the crown starts at 2.2 m, above eye height, so you walk under the leaves and around
+  the trunk. Cars park in hashed runs with gaps, 40 to 60 percent of the slots filled, parallel to the
+  curb and just inside it, on ordinary streets only - nobody leaves a car on a motorway. Each is two
+  boxes, a body and a slightly brighter cabin, in varied tones so a parked row reads as separate cars
+  rather than one long block. Under the monochrome modes the props are what the reference calls the
+  life band: a bright seam of glyphs where the buildings meet the road. Under high contrast the crowns
+  quantize to the palette's green in dark mode and its lime in amber, so a tree is a tree at a glance.
+  The map view stays a clean street network - props hide there exactly as the curb lines do. Cars and
+  trunks are solid: walk into one and you stop. Crowns are not, because they are over your head. The
+  same rule that keeps a prop out of a building keeps the player out of a prop - the collision grid is
+  built from the buildings first, so nothing is ever placed inside one, and the props' own footprints
+  are stamped in before the spawn point is chosen, so nobody starts a game inside a parked car.
+  Measured across the four cities: 594 to 809 trees and 952 to 1213 cars each, all merged into three
+  draw calls
+
 - **Every City Walk key gets a button** (CW-15) - the game was a keyboard game. Someone playing with a
   mouse alone could launch it and pick a city, and then reach nothing: walking, turning, looking, the
   map, the landmarks and both size controls were keys and only keys. A toolbar now runs along the

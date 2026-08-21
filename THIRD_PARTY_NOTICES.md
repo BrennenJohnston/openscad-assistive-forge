@@ -220,6 +220,26 @@ Certain rendering techniques in this project were inspired by research and educa
 **Usage**: Educational reference for technique concepts  
 **Note**: Implementation is original/clean-room; no code was copied
 
+### ASCII City Walk — street content references
+
+The hidden ASCII City Walk game's street furniture (trees, parked cars, and
+the later street-life props) follows placement conventions demonstrated by two
+open-source procedural-city projects. Both were read as references only: our
+implementation is original, and no code from either is included.
+
+**ludthor/ascii-city**  
+**License**: MIT  
+**Source**: https://github.com/ludthor/ascii-city  
+**Usage**: Reference for first-person ASCII city content — park trees, parked
+cars, and the rules that decide where street props belong
+
+**PixelCity (Shamus Young)**  
+**License**: GPL-3.0  
+**Source**: https://github.com/skarkkai/pixelcity  
+**Usage**: Reference for the procedural night-city content playbook — the
+catalog of small lifelike details a generated downtown needs, and the density
+and spacing conventions behind them
+
 ### Three.js Examples Modules (MIT)
 
 This project uses modules from the Three.js examples collection (e.g., controls and loaders).
