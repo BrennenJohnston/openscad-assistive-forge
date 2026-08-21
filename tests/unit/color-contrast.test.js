@@ -1032,4 +1032,36 @@ describe('City Walk high-contrast glyph palettes (CW-Q5 / CW-Q6)', () => {
       expect(ratio, `${hex} on black`).toBeGreaterThanOrEqual(4.5);
     }
   });
+
+  // CW-Q16 made colour a toggle of its own, so a player can now turn it OFF
+  // while high contrast is ON, and land on a single phosphor. THAT is what
+  // has to stay legible, and it is a token in variant.css that somebody may
+  // one day retune -- so the phosphor is read from the same token the ASCII
+  // painter reads and measured, rather than trusted.
+  //
+  // Note on what is NOT asserted: "the phosphor beats every palette entry"
+  // is false (cyan 16.75:1 and yellow 19.56:1 both beat green's 15.30:1),
+  // and "the phosphor beats the palette's worst entry" was tried and proved
+  // VACUOUS -- green is so luminous that brightening both of its dim entries
+  // still could not fail it. Only the 4.5:1 floor below can actually fire.
+  it('the bare phosphor is legible on its own, colour or no colour', async () => {
+    const { HC_PALETTE_GREEN, HC_PALETTE_AMBER } = await import(
+      '../../src/js/game/hc-palettes.js'
+    );
+    // The phosphors are read from the tokens the ASCII painter itself reads
+    // (getPhosphorColor -> --color-accent under [data-ui-variant='mono']), so
+    // changing a phosphor is measured here rather than assumed.
+    const phosphors = [
+      [monoGreen['--color-accent'], HC_PALETTE_GREEN],
+      [monoAmber['--color-accent'], HC_PALETTE_AMBER],
+    ];
+    for (const [hex, palette] of phosphors) {
+      expect(hex, 'mono --color-accent must be defined').toBeTruthy();
+      const bare = getContrastRatio(hex, black);
+      expect(bare, `${hex} phosphor on black`).toBeGreaterThanOrEqual(4.5);
+      // And the palette it replaces is still guarded above, so both sides of
+      // the toggle clear the same floor.
+      expect(palette.length).toBeGreaterThanOrEqual(4);
+    }
+  });
 });

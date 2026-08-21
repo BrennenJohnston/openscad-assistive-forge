@@ -31,7 +31,10 @@ import {
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
 const USER_AGENT =
   'openscad-assistive-forge bake-city-extract (https://github.com/BrennenJohnston/openscad-assistive-forge)';
-const SIZE_WARN_BYTES = 800 * 1024;
+// CW-Q9 doubled each city's AREA (bake radius 500 -> 707 m), which roughly
+// doubles every extract. The warning is advisory - it marks a bake that has
+// outgrown the deliberate size, not one that is broken.
+const SIZE_WARN_BYTES = 1600 * 1024;
 
 function parseArgs(argv) {
   const args = {};
@@ -76,6 +79,7 @@ const query = `[out:json][timeout:60];
   way["building"](around:${radiusM},${center.lat},${center.lon});
   relation["building"]["type"="multipolygon"](around:${radiusM},${center.lat},${center.lon});
   way["highway"](around:${radiusM},${center.lat},${center.lon});
+  node["natural"="tree"](around:${radiusM},${center.lat},${center.lon});
 );
 out tags geom;`;
 
@@ -139,7 +143,8 @@ const sizeKb = Math.round(json.length / 1024);
 console.log(
   `Wrote ${outPath}\n` +
     `  ${sizeKb} KB · ${rawElements.length} raw elements → ${elements.length} kept\n` +
-    `  parsed: ${model.stats.buildingCount} buildings, ${model.stats.roadCount} roads` +
+    `  parsed: ${model.stats.buildingCount} buildings, ${model.stats.roadCount} roads,` +
+    ` ${model.stats.treeCount} trees` +
     ` (dropped ${model.stats.droppedRings} rings, ${model.stats.droppedElements} elements)`
 );
 if (json.length > SIZE_WARN_BYTES) {

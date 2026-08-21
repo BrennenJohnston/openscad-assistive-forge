@@ -532,3 +532,12 @@ export const STORAGE_KEY_CITY_WALK_SPEED = getAppPrefKey('city-walk-speed');
 export const STORAGE_KEY_CITY_WALK_FONT_SCALE = getAppPrefKey(
   'city-walk-font-scale'
 );
+
+/**
+ * localStorage key for the City Walk game's colour/monochrome choice
+ * (CW-Q16). 'on' or 'off'. ABSENT is meaningful and is the shipped state:
+ * with no stored value colour follows high contrast, exactly as it did when
+ * the palettes were HC-only. The key is written only when the player works
+ * the Colour toggle themselves, and from then on their choice wins.
+ */
+export const STORAGE_KEY_CITY_WALK_COLOUR = getAppPrefKey('city-walk-colour');

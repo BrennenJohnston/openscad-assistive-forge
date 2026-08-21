@@ -9,6 +9,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Street life, standing still** (CW-18) - the City Walk's streets had trees and parked cars but
+  nothing above head height and nothing on the walls. Now streetlights march down every ordinary
+  street and arterial, one every 30 m, alternating sides: a slim post with a bright head reaching out
+  over the roadway, which at glyph scale is the row of bright dashes overhead that the reference
+  screenshots show. Shop signs hang over the storefront glass, and the rarer big billboard high on a
+  tower's flank. A sign is two pieces on purpose - a bright near-white plate with a deeply coloured
+  face laid on it - because one piece cannot do both jobs: a tone bright enough to be the brightest
+  thing on the street is too close to white for the colour quantizer to read as anything but white.
+  So monochrome sees a bright bordered panel and colour sees a vivid one. Signs pick the wall people
+  actually walk past rather than simply the longest, which moves the typical sign from about 20 m off
+  the nearest street to about 13. A long parade of shops is a single footprint in OpenStreetMap, so a
+  long frontage carries a row of up to four signs rather than one lonely one. Towers grow rooftop
+  masts, and the pavement gets its scuffs back: the ground texture went from 150 single pixels to
+  about 2400 short streaks laid in patches, so the near field reads as worn tarmac with lighter and
+  darker stretches instead of near-black. Per city that is 659 to 1071 lamps, 226 to 343 signs and
+  54 to 130 masts. The cost, measured on this machine's real GPU: about one frame per second at the
+  default character size and a third of one at the smallest
+
+- **Colour is now a switch of its own** (CW-Q16) - colour used to arrive only with high contrast, so
+  anybody who wanted the city in colour had to take high contrast with it, and anybody who wanted the
+  authentic single-colour retro screen had to give up high contrast to keep it. The game's header
+  carries a third button, Colour, with O as its key, and the two are independent. Nothing changes for
+  anyone who does not press it: with no choice stored, colour still follows high contrast exactly as
+  it did. Once you press it, your choice is remembered and outranks high contrast in both directions.
+  Turning colour off is not a step down in legibility - the single phosphor measures 15.3:1 (green)
+  and 11.5:1 (amber) against the black screen, and a test now reads those from the same token the
+  renderer reads so that stays true
+
+### Changed
+
+- **The retro colour palettes read as colour more of the time** (CW-Q11) - measured by counting the
+  pixels the game actually paints, nearly half of a high-contrast street had no colour in it at all.
+  Three changes cut that to about a quarter: the quantizer's chroma boost rises from 3.5 to 5.0,
+  which is the point where every tinted surface in the scene lands on a colour rather than washing
+  out to white (genuinely grey things - pavement, curbs, lamp posts, sign plates - still come out
+  white, as they should); the amber neon set gains a seventh entry, a foliage green, because tree
+  crowns and yellow-green buildings had both been landing on the same lime; and the green set's soft
+  red becomes a saturated one, which was carrying the most work of any entry and now hands the
+  warm-yellow hues back to yellow. Every entry is still guarded at 4.5:1 or better against black
+
+- **Twice the city** (CW-17) - each of the four City Walk cities now covers twice the ground it did.
+  The bake radius moves from 500 m to 707 m, which is the number that doubles the AREA; doubling the
+  radius would have quadrupled it. All four extracts were rebaked from OpenStreetMap at the same
+  centers. Seattle grows from 272 to 475 buildings and 569 KB to 1016 KB, Denver from 190 to 330 and
+  343 KB to 893 KB, Albuquerque from 248 to 638 and 310 KB to 610 KB, Burnaby from 183 to 436 and
+  351 KB to 628 KB; the playable area of each goes from about 1.1 square kilometers to about 2.1.
+  Only Seattle had real map trees before, because the tree query arrived with CW-16 and only Seattle
+  was rebaked then. Now all four do - Denver alone carries 2291 of them, and its downtown streets read
+  as the leafy ones they are. Two things the extra ground does not cost you: the far city still fades
+  into the fog at the same distance, because that is a look and not a boundary, and the frame rate at
+  the default character size is unchanged, because the whole city has always been a handful of merged
+  meshes rather than one mesh per building. The extra ground is emptier than the middle, so the city
+  is in fact more walkable than it was: the share of it blocked by buildings falls in three cities of
+  four. What it does cost is the download - the largest city goes from 76 KB to 137 KB compressed -
+  and about a fifth of a second more to open a city on this machine
+
+- **Trees and parked cars along the streets** (CW-16) - the City Walk's streets were empty tarmac
+  between the buildings: correct, and nothing like a city anybody has stood in. Trees and parked cars
+  now furnish them. The trees are the real ones first - the bake script asks OpenStreetMap for its
+  `natural=tree` nodes, and Seattle's extract carries 119 of them, planted where the map says they
+  stand - and then a deterministic infill fills the gaps along residential, tertiary, pedestrian and
+  living-street curbs about every 18 m, on the sidewalk side of the curb line. A trunk is 2.5 m of
+  dark stem and the crown starts at 2.2 m, above eye height, so you walk under the leaves and around
+  the trunk. Cars park in hashed runs with gaps, 40 to 60 percent of the slots filled, parallel to the
+  curb and just inside it, on ordinary streets only - nobody leaves a car on a motorway. Each is two
+  boxes, a body and a slightly brighter cabin, in varied tones so a parked row reads as separate cars
+  rather than one long block, and a tone below the buildings so the lit shopfronts stay the brightest
+  thing at street level. Under the monochrome modes the props are what the reference calls the life
+  band: a seam of glyphs where the buildings meet the road. Under high contrast the crowns
+  quantize to the palette's green in dark mode and its lime in amber, so a tree is a tree at a glance.
+  The map view stays a clean street network - props hide there exactly as the curb lines do. Cars and
+  trunks are solid: walk into one and you stop. Crowns are not, because they are over your head. The
+  same rule that keeps a prop out of a building keeps the player out of a prop - the collision grid is
+  built from the buildings first, so nothing is ever placed inside one, and the props' own footprints
+  are stamped in before the spawn point is chosen, so nobody starts a game inside a parked car.
+  Measured across the four cities: 594 to 809 trees and 952 to 1213 cars each, all merged into three
+  draw calls
+
 - **Every City Walk key gets a button** (CW-15) - the game was a keyboard game. Someone playing with a
   mouse alone could launch it and pick a city, and then reach nothing: walking, turning, looking, the
   map, the landmarks and both size controls were keys and only keys. A toolbar now runs along the

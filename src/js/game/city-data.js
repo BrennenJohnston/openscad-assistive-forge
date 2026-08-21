@@ -250,8 +250,9 @@ export function signedArea(pts) {
  *   attribution: string,
  *   buildings: Array<{outer: Array<[number,number]>, holes: Array<Array<[number,number]>>, heightM: number, minHeightM: number, name: (string|undefined)}>,
  *   roads: Array<{points: Array<[number,number]>, widthM: number, kind: string}>,
+ *   trees: Array<[number,number]>,
  *   boundsM: {minX:number, minY:number, maxX:number, maxY:number},
- *   stats: {buildingCount:number, roadCount:number, droppedRings:number, droppedElements:number}
+ *   stats: {buildingCount:number, roadCount:number, treeCount:number, droppedRings:number, droppedElements:number}
  * }}
  */
 export function parseCityExtract(extract, options = {}) {
@@ -263,6 +264,7 @@ export function parseCityExtract(extract, options = {}) {
 
   const buildings = [];
   const roads = [];
+  const trees = [];
   let droppedRings = 0;
   let droppedElements = 0;
 
@@ -283,6 +285,18 @@ export function parseCityExtract(extract, options = {}) {
 
   for (const el of elements) {
     const tags = el.tags ?? {};
+
+    // Point props (CW-16): mapped street trees, projected but deliberately
+    // NOT fed to growBounds - the playable core stays building-derived.
+    if (el.type === 'node') {
+      if (tags.natural !== 'tree') continue;
+      if (!Number.isFinite(el.lat) || !Number.isFinite(el.lon)) {
+        droppedElements++;
+        continue;
+      }
+      trees.push(projectLatLon(el.lat, el.lon, center));
+      continue;
+    }
 
     if (el.type === 'way' && isBuildingTags(tags)) {
       if (relationMemberWayIds.has(el.id)) continue;
@@ -390,10 +404,12 @@ export function parseCityExtract(extract, options = {}) {
         : 'Map data © OpenStreetMap contributors',
     buildings,
     roads,
+    trees,
     boundsM,
     stats: {
       buildingCount: buildings.length,
       roadCount: roads.length,
+      treeCount: trees.length,
       droppedRings,
       droppedElements,
     },
@@ -421,6 +437,8 @@ export function trimOverpassElement(el) {
     'tourism',
     'historic',
     'amenity',
+    // Street trees (CW-16)
+    'natural',
   ];
 
   const trimTags = (tags) => {
@@ -456,6 +474,18 @@ export function trimOverpassElement(el) {
       }));
     if (members.length === 0) return null;
     return { type: 'relation', id: el.id, tags, members };
+  }
+
+  // Standalone nodes are point props (CW-16 street trees), not geometry.
+  if (
+    el.type === 'node' &&
+    Number.isFinite(el.lat) &&
+    Number.isFinite(el.lon)
+  ) {
+    const tags = trimTags(el.tags);
+    if (!tags || !tags.natural) return null;
+    const { lat, lon } = roundPt(el);
+    return { type: 'node', id: el.id, tags, lat, lon };
   }
 
   return null;

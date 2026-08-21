@@ -463,3 +463,98 @@ describe('nearestLandmarkName (CW-10)', () => {
     expect(nearestLandmarkName([], 0, 0, null)).toBeNull()
   })
 })
+
+describe('trimOverpassElement — tree nodes (CW-16)', () => {
+  it('keeps a natural=tree node with rounded coordinates', () => {
+    const trimmed = trimOverpassElement({
+      type: 'node',
+      id: 77,
+      lat: 47.61234561234,
+      lon: -122.34567891234,
+      tags: {
+        natural: 'tree',
+        name: 'Big Leaf Maple',
+        species: 'Acer macrophyllum',
+        'addr:street': 'Pine Street',
+      },
+    })
+
+    expect(trimmed).toEqual({
+      type: 'node',
+      id: 77,
+      tags: { natural: 'tree', name: 'Big Leaf Maple' },
+      lat: 47.612346,
+      lon: -122.345679,
+    })
+  })
+
+  it('drops nodes the game has no use for', () => {
+    expect(
+      trimOverpassElement({
+        type: 'node',
+        id: 78,
+        lat: 47.6,
+        lon: -122.3,
+        tags: { amenity: 'cafe' },
+      })
+    ).toBeNull()
+    expect(
+      trimOverpassElement({
+        type: 'node',
+        id: 79,
+        tags: { natural: 'tree' },
+      })
+    ).toBeNull()
+  })
+})
+
+describe('parseCityExtract — trees (CW-16)', () => {
+  it('projects tree nodes into meter points and counts them', () => {
+    const model = parseCityExtract(
+      extractOf(
+        {
+          type: 'node',
+          id: 1,
+          tags: { natural: 'tree' },
+          ...pt(30, -40),
+        },
+        {
+          type: 'node',
+          id: 2,
+          tags: { natural: 'peak' },
+          ...pt(10, 10),
+        }
+      ),
+      { center: CENTER }
+    )
+
+    expect(model.stats.treeCount).toBe(1)
+    expect(model.trees).toHaveLength(1)
+    expect(model.trees[0][0]).toBeCloseTo(30, 2)
+    expect(model.trees[0][1]).toBeCloseTo(-40, 2)
+  })
+
+  it('leaves the building-derived bounds alone', () => {
+    const building = {
+      type: 'way',
+      id: 5,
+      tags: { building: 'yes' },
+      geometry: squareRing(0, 0, 20),
+    }
+    const withoutTrees = parseCityExtract(extractOf(building), {
+      center: CENTER,
+    })
+    const withTrees = parseCityExtract(
+      extractOf(building, {
+        type: 'node',
+        id: 6,
+        tags: { natural: 'tree' },
+        ...pt(4000, 4000),
+      }),
+      { center: CENTER }
+    )
+
+    expect(withTrees.trees).toHaveLength(1)
+    expect(withTrees.boundsM).toEqual(withoutTrees.boundsM)
+  })
+})

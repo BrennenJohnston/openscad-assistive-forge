@@ -649,6 +649,9 @@ test.describe('ASCII City Walk — looking around (CW-13)', () => {
   test('R and F tilt the gaze, the HUD says so, and V levels it', async ({
     page,
   }) => {
+    // Holding a key to the 60 deg clamp takes as long as the renderer needs,
+    // and CI's renderer is software.
+    test.setTimeout(120_000)
     await launchGame(page)
     await enterCity(page)
 
@@ -671,12 +674,25 @@ test.describe('ASCII City Walk — looking around (CW-13)', () => {
     expect((await gaze(page)).heading).toBe(0)
 
     // Held to the stop: the clamp is exactly 60 degrees, never beyond.
+    //
+    // The key is held until the gaze ARRIVES, not for a fixed 2.2 s. Pitch
+    // integrates per FRAME with dt clamped to 0.1 s, so on a slow renderer
+    // wall time and simulated time come apart: CI reached 45 deg in the 2.2 s
+    // this used to allow. Polling for exactly 60 still proves the clamp - an
+    // uncapped gaze sails past it and never equals 60, so this times out.
     await page.keyboard.down('KeyR')
-    await page.waitForTimeout(2200)
-    await page.keyboard.up('KeyR')
-    await expect
-      .poll(async () => Math.round((await gaze(page)).pitch / DEG))
-      .toBe(60)
+    try {
+      await expect
+        .poll(async () => Math.round((await gaze(page)).pitch / DEG), {
+          timeout: 30000,
+          intervals: [200],
+        })
+        .toBe(60)
+    } finally {
+      await page.keyboard.up('KeyR')
+    }
+    // And it stays there once the key is up.
+    expect(Math.round((await gaze(page)).pitch / DEG)).toBe(60)
 
     await page.keyboard.press('KeyV')
     await expect(page.locator('#cityWalkAnnouncer')).toHaveText(/View level/)
@@ -1069,12 +1085,20 @@ test.describe('ASCII City Walk — accessibility toggles (CW-14)', () => {
   test('the toggles stay legible at rest and hovered, in every in-game state', async ({
     page,
   }) => {
+    // Four states x two buttons x rest/hovered is sixteen hover-and-measure
+    // cycles with a city rendering behind them, and CI draws that city in
+    // software. It is the length that overruns the default 60 s, not any one
+    // step: the assertions below are unchanged and still fail fast.
+    test.setTimeout(180_000)
     await launchGame(page)
     await enterCity(page)
 
     // The layer forces the mono variant on, so the states the game can
     // actually be in are theme x high contrast. Each is reached by clicking
     // the real buttons, so the tokens under test are the shipped ones.
+    // The 30 s timeout is for the RUNNER, not the assertion: this reads static
+    // CSS, but CI renders the city through SwiftShader and the converter holds
+    // the main thread in long stretches, which the default 10 s can miss.
     const measure = (locator) =>
       locator.evaluate((el) => {
         const cs = getComputedStyle(el)
@@ -1099,7 +1123,7 @@ test.describe('ASCII City Walk — accessibility toggles (CW-14)', () => {
               ((Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)) * 100
             ) / 100,
         }
-      })
+      }, undefined, { timeout: 30000 })
 
     const check = async (label) => {
       for (const [name, locator] of [
@@ -1491,12 +1515,18 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
   test('the toolbar stays legible at rest and hovered, in every in-game state', async ({
     page,
   }) => {
+    // The longest measurement in the lane - four states across three targets,
+    // most of them hovered too. Same reason as CW-14's: length, not a step.
+    test.setTimeout(180_000)
     await launchGame(page)
     await enterCity(page)
 
     // Measured against the layer's own background, because the group
     // captions have none of their own - a transparent element reports
     // rgba(0,0,0,0) and would score itself against black by accident.
+    // The 30 s timeout is for the RUNNER, not the assertion: this reads
+    // static CSS, but CI renders the city through SwiftShader and the
+    // converter holds the main thread in long stretches.
     const measure = (locator) =>
       locator.evaluate((el) => {
         const read = (css) =>
@@ -1527,7 +1557,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
               ((Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)) * 100
             ) / 100,
         }
-      })
+      }, undefined, { timeout: 30000 })
 
     const check = async (label) => {
       const targets = [
@@ -1710,6 +1740,333 @@ test.describe('ASCII City Walk — C and T reach the toggles (CW-Q15)', () => {
       'true'
     )
     await expect(announcer(page)).toHaveText('Theme: Light')
+  })
+})
+
+test.describe('ASCII City Walk — trees and parked cars (CW-16)', () => {
+  const propStats = (page) =>
+    page.evaluate(() => window.__cityWalkGame?.props?.stats ?? null)
+
+  test('Seattle is furnished with real map trees, infill, and parked cars', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const stats = await propStats(page)
+    expect(stats).not.toBeNull()
+    // Seattle's extract carries 119 natural=tree nodes; the rest of the
+    // trees are the deterministic curbside infill.
+    expect(stats.mappedTreeCount).toBeGreaterThan(50)
+    expect(stats.treeCount).toBeGreaterThan(stats.mappedTreeCount)
+    expect(stats.carCount).toBeGreaterThan(50)
+  })
+
+  test('a parked car is solid: you press against it, never through it', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // Stand the player on the roadway three meters off a parked car's flank,
+    // facing it, and watch every frame of the walk from inside the page. The
+    // approach side is chosen by asking the collision grid which one is open,
+    // so the walk starts on clear tarmac.
+    const setup = await page.evaluate(() => {
+      const game = window.__cityWalkGame
+      const cars = game.props.obstacles.filter((o) => o.halfLengthM > 1)
+      for (const car of cars) {
+        // Across the car, not along it.
+        const wx = -Math.sin(car.rotationRad)
+        const wy = Math.cos(car.rotationRad)
+        for (const side of [1, -1]) {
+          const x = car.x + wx * 3 * side
+          const y = car.y + wy * 3 * side
+          if (game.collision.isBlocked(x, y)) continue
+          if (
+            game.collision.isBlocked(
+              car.x + wx * 2 * side,
+              car.y + wy * 2 * side
+            )
+          ) {
+            continue
+          }
+          const w = game.walkState
+          w.x = x
+          w.y = y
+          // Heading is a compass bearing: 0 faces +Y, increasing clockwise.
+          w.headingRad = Math.atan2(car.x - x, car.y - y)
+          w.pitchRad = 0
+
+          // Watch the approach in the car's own frame: lx runs along the car,
+          // ly across it. Sampled per frame rather than polled on a clock.
+          const cos = Math.cos(car.rotationRad)
+          const sin = Math.sin(car.rotationRad)
+          const startSide = Math.sign(-(x - car.x) * sin + (y - car.y) * cos)
+          window.__cwCar = {
+            frames: 0,
+            walked: 0,
+            closest: 99,
+            crossings: 0,
+          }
+          let px = x
+          let py = y
+          const tick = () => {
+            const p = game.walkState
+            const watch = window.__cwCar
+            watch.frames++
+            watch.walked += Math.hypot(p.x - px, p.y - py)
+            px = p.x
+            py = p.y
+            const dx = p.x - car.x
+            const dy = p.y - car.y
+            const lx = dx * cos + dy * sin
+            const ly = -dx * sin + dy * cos
+            if (Math.abs(lx) <= car.halfLengthM) {
+              watch.closest = Math.min(watch.closest, Math.abs(ly))
+              if (Math.sign(ly) !== startSide) watch.crossings++
+            }
+            window.__cwCarTick = requestAnimationFrame(tick)
+          }
+          window.__cwCarTick = requestAnimationFrame(tick)
+          return { x, y }
+        }
+      }
+      return null
+    })
+
+    expect(
+      setup,
+      'no parked car with an open approach was found'
+    ).not.toBeNull()
+
+    await page.keyboard.down('ArrowUp')
+    try {
+      // Waiting on FRAMES, never on the clock: a loaded runner renders them
+      // slowly, but each frame still advances the walk by up to the 0.1 s
+      // step clamp, so 150 frames is far more travel than the three meters
+      // it would take to cross an unsolid car. A runner that renders nothing
+      // fails here rather than passing vacuously.
+      //
+      // The patience is 90 s, not 30. CI renders through SwiftShader, where
+      // triangle count is real time, and CW-18's street furniture took the
+      // Chromium runner from comfortably over 150 frames to 123 - about
+      // 4.1 fps where the old budget needed 5. The BAR is the frame count,
+      // which is the invariant; the timeout is only how long we are willing
+      // to wait for it, and on a software renderer drawing a furnished city
+      // it has to be longer. On a real GPU this takes about 5 s.
+      await expect
+        .poll(() => page.evaluate(() => window.__cwCar?.frames ?? 0), {
+          timeout: 90000,
+          intervals: [200],
+        })
+        .toBeGreaterThan(150)
+    } finally {
+      await page.keyboard.up('ArrowUp')
+    }
+
+    const watch = await page.evaluate(() => {
+      cancelAnimationFrame(window.__cwCarTick)
+      return window.__cwCar
+    })
+
+    // The walk really happened, and it really arrived at the car's flank.
+    expect(watch.walked).toBeGreaterThan(1.5)
+    expect(watch.closest).toBeLessThan(1.3)
+    // ...and stopped outside it. The car is 1.8 m across, so its own surface
+    // is at 0.9 m; the collision grid's 1 m cells hold the player a little
+    // further out than that, and never let them reach the far side.
+    expect(watch.closest).toBeGreaterThan(0.5)
+    expect(watch.crossings).toBe(0)
+  })
+
+  test('the map view stays a clean street network', async ({ page }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const propsVisible = () =>
+      page.evaluate(() => window.__cityWalkGame?.props?.group?.visible ?? null)
+
+    expect(await propsVisible()).toBe(true)
+
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
+    expect(await propsVisible()).toBe(false)
+
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('street view')
+    expect(await propsVisible()).toBe(true)
+  })
+})
+
+test.describe('ASCII City Walk — the colour toggle (CW-Q16)', () => {
+  const colourBtn = (page) => page.locator('#cityWalkColourBtn')
+  const contrastBtn = (page) => page.locator('#cityWalkContrastBtn')
+  const announcer = (page) => page.locator('#cityWalkAnnouncer')
+
+  /** How many colours the converter is quantizing to, or null for phosphor. */
+  const paletteSize = (page) =>
+    page.evaluate(
+      () => window.__cityWalkGame?.altView?.getPalette()?.length ?? null
+    )
+
+  const storedChoice = (page) =>
+    page.evaluate(() =>
+      localStorage.getItem('openscad-forge-city-walk-colour')
+    )
+
+  test('starts by following high contrast, and stores nothing until you press it', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // Nothing stored: the shipped behaviour is exactly what CW-Q2 gave -
+    // high contrast off means a single phosphor.
+    expect(await storedChoice(page)).toBeNull()
+    await expect(colourBtn(page)).toHaveAttribute('aria-pressed', 'false')
+    await expect(colourBtn(page)).toHaveAttribute(
+      'aria-label',
+      'Colour off. Press to show the city in colour.'
+    )
+    expect(await paletteSize(page)).toBeNull()
+
+    // High contrast alone still brings the palette, and the colour button
+    // follows it without being touched.
+    await contrastBtn(page).click()
+    await expect.poll(() => paletteSize(page)).toBeGreaterThanOrEqual(4)
+    await expect(colourBtn(page)).toHaveAttribute('aria-pressed', 'true')
+    expect(await storedChoice(page)).toBeNull()
+  })
+
+  test('turns the palette on with high contrast off, and says so', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    await colourBtn(page).click()
+    await expect(colourBtn(page)).toHaveAttribute('aria-pressed', 'true')
+    await expect(announcer(page)).toHaveText(
+      'Colour on. The city is drawn in the retro palette.'
+    )
+    await expect.poll(() => paletteSize(page)).toBeGreaterThanOrEqual(4)
+    // The point of CW-Q16: colour without high contrast.
+    await expect(page.locator('html')).not.toHaveAttribute(
+      'data-high-contrast',
+      'true'
+    )
+    expect(await storedChoice(page)).toBe('on')
+
+    await colourBtn(page).click()
+    await expect(colourBtn(page)).toHaveAttribute('aria-pressed', 'false')
+    await expect(announcer(page)).toHaveText(
+      'Colour off. The city is drawn in a single phosphor.'
+    )
+    await expect.poll(() => paletteSize(page)).toBeNull()
+    expect(await storedChoice(page)).toBe('off')
+  })
+
+  test('O works the button, on the picker as well as in the city', async ({
+    page,
+  }) => {
+    await launchGame(page)
+
+    // Above the game guard, like C and T: it works before a city loads.
+    await page.keyboard.press('KeyO')
+    await expect(colourBtn(page)).toHaveAttribute('aria-pressed', 'true')
+    expect(await storedChoice(page)).toBe('on')
+
+    await enterCity(page)
+    await expect.poll(() => paletteSize(page)).toBeGreaterThanOrEqual(4)
+
+    await page.keyboard.press('KeyO')
+    await expect(colourBtn(page)).toHaveAttribute('aria-pressed', 'false')
+    await expect.poll(() => paletteSize(page)).toBeNull()
+  })
+
+  test('a choice you made yourself outranks high contrast, both ways', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // Choose monochrome, then turn high contrast ON: the city stays a single
+    // phosphor, because the player asked for it. This is the whole point of
+    // storing the choice, and it is the case that would silently regress if
+    // colourIsOn() ever read the attribute first.
+    await colourBtn(page).click()
+    await colourBtn(page).click()
+    expect(await storedChoice(page)).toBe('off')
+
+    await contrastBtn(page).click()
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-high-contrast',
+      'true'
+    )
+    await expect(colourBtn(page)).toHaveAttribute('aria-pressed', 'false')
+    await expect.poll(() => paletteSize(page)).toBeNull()
+
+    // And the other way: colour ON survives high contrast being turned off.
+    await colourBtn(page).click()
+    await contrastBtn(page).click()
+    await expect(page.locator('html')).not.toHaveAttribute(
+      'data-high-contrast',
+      'true'
+    )
+    await expect.poll(() => paletteSize(page)).toBeGreaterThanOrEqual(4)
+  })
+
+  test('a stored choice is honoured on the next visit', async ({ page }) => {
+    // Seeded before the first script runs, which is what a returning player's
+    // browser looks like. Reloading in-place would not do: the app restores
+    // its last surface, so the second load lands on Get Started and the
+    // Classic welcome card is not on the page at all.
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-city-walk-colour', 'on')
+    })
+    await launchGame(page)
+
+    await expect(colourBtn(page)).toHaveAttribute('aria-pressed', 'true')
+    await expect(colourBtn(page)).toHaveAttribute(
+      'aria-label',
+      'Colour on. Press for a single-colour screen.'
+    )
+    await enterCity(page)
+    // Colour from the stored choice alone - high contrast never touched.
+    await expect(page.locator('html')).not.toHaveAttribute(
+      'data-high-contrast',
+      'true'
+    )
+    await expect.poll(() => paletteSize(page)).toBeGreaterThanOrEqual(4)
+  })
+
+  test('the help panel and the header agree about the three toggles', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await page.locator('#cityWalkHelpBtn').click()
+
+    const help = page.locator('#cityWalkHelpPanel')
+    await expect(help).toBeVisible()
+    await expect(help).toContainText(
+      'O: colour on or off (off is a single-colour retro screen)'
+    )
+    await expect(help).toContainText(
+      'High contrast, theme and colour: the three buttons at the top of the screen'
+    )
+
+    // The header really does carry all three, in the order the help names.
+    const ids = await page.evaluate(() =>
+      Array.from(
+        document.querySelectorAll('.city-walk-header-actions button')
+      ).map((b) => b.id)
+    )
+    expect(ids.slice(0, 3)).toEqual([
+      'cityWalkContrastBtn',
+      'cityWalkThemeBtn',
+      'cityWalkColourBtn',
+    ])
   })
 })
 
