@@ -615,3 +615,108 @@ test.describe('Editor follows the app theme, not the OS (U-4)', () => {
     expect(await editorBrightness(page)).toBeLessThan(80)
   })
 })
+
+test.describe('The header toggles describe the state they are in (D-60)', () => {
+  // Both labels used to be written only inside their own button's click
+  // handler, so every other route left them saying the opposite of the
+  // truth - to the one group of people who cannot see the button change.
+  // The chords are Ctrl+Shift+T and Ctrl+Shift+H, not Ctrl+T / Ctrl+H:
+  // DEFAULT_SHORTCUTS shifts them "to avoid OpenSCAD conflicts", and the
+  // unshifted pair belongs to the opt-in LEGACY_FORGE_SHORTCUTS preset.
+  const themeLabel = (page) =>
+    page.locator('#themeToggle').getAttribute('aria-label')
+  const contrastLabel = (page) =>
+    page.locator('#contrastToggle').getAttribute('aria-label')
+
+  test('the keyboard shortcut flips high contrast and the label follows', async ({
+    page,
+  }) => {
+    await page.goto('/')
+    await page.locator('#contrastToggle').waitFor()
+    // The chord is only live once the app has finished booting: the shortcut
+    // TABLE is registered early, but the handlers that act on it are
+    // attached late, so an earlier press matches, calls preventDefault, and
+    // finds nothing to call. MEASURED: it starts working at about +1.4s, by
+    // which point this marker is set - the same gate this suite already uses.
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      timeout: 60000,
+    })
+
+    await expect(page.locator('html')).not.toHaveAttribute(
+      'data-high-contrast',
+      'true'
+    )
+    expect(await contrastLabel(page)).toBe(
+      'High contrast mode: OFF. Click to enable.'
+    )
+
+    await page.keyboard.press('Control+Shift+h')
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-high-contrast',
+      'true'
+    )
+    expect(await contrastLabel(page)).toBe(
+      'High contrast mode: ON. Click to disable.'
+    )
+
+    await page.keyboard.press('Control+Shift+h')
+    await expect(page.locator('html')).not.toHaveAttribute(
+      'data-high-contrast',
+      'true'
+    )
+    expect(await contrastLabel(page)).toBe(
+      'High contrast mode: OFF. Click to enable.'
+    )
+  })
+
+  test('the keyboard shortcut cycles the theme and the label follows', async ({
+    page,
+  }) => {
+    await page.goto('/')
+    await page.locator('#themeToggle').waitFor()
+    // The chord is only live once the app has finished booting: the shortcut
+    // TABLE is registered early, but the handlers that act on it are
+    // attached late, so an earlier press matches, calls preventDefault, and
+    // finds nothing to call. MEASURED: it starts working at about +1.4s, by
+    // which point this marker is set - the same gate this suite already uses.
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      timeout: 60000,
+    })
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+    expect(await themeLabel(page)).toBe(
+      'Current theme: light. Click to cycle themes.'
+    )
+
+    // The label names the RESOLVED theme, so cycle until the resolved value
+    // actually moves rather than assuming one press is enough.
+    await page.keyboard.press('Control+Shift+t')
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    expect(await themeLabel(page)).toBe(
+      'Current theme: dark. Click to cycle themes.'
+    )
+  })
+
+  test('the system changing scheme under Auto relabels the button by itself', async ({
+    page,
+  }) => {
+    // The purest form of the defect: nobody touches anything at all, and the
+    // button still has to stop lying.
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-theme', 'auto')
+    })
+    await page.emulateMedia({ colorScheme: 'light' })
+    await page.goto('/')
+    await page.locator('#themeToggle').waitFor()
+
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+    expect(await themeLabel(page)).toBe(
+      'Current theme: light. Click to cycle themes.'
+    )
+
+    await page.emulateMedia({ colorScheme: 'dark' })
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    await expect
+      .poll(() => themeLabel(page))
+      .toBe('Current theme: dark. Click to cycle themes.')
+  })
+})

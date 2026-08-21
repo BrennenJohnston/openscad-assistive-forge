@@ -5151,17 +5151,23 @@ async function initApp() {
   // Initialize high contrast toggle button
   const contrastBtn = document.getElementById('contrastToggle');
   if (contrastBtn) {
+    // D-60, the same defect as the theme button's: the label was written
+    // only inside this handler, so Ctrl+H and the City Walk's in-game
+    // toggle left it saying the opposite of the truth to the one group of
+    // people who cannot see the button change.
+    const syncContrastLabel = () => {
+      const on = themeManager.highContrast;
+      contrastBtn.setAttribute(
+        'aria-label',
+        `High contrast mode: ${on ? 'ON' : 'OFF'}. Click to ${on ? 'disable' : 'enable'}.`
+      );
+    };
+
     contrastBtn.addEventListener('click', () => {
       const enabled = themeManager.toggleHighContrast();
       const message = enabled ? 'High Contrast: ON' : 'High Contrast: OFF';
       console.log(`[App] ${message}`);
       updateStatus(message);
-
-      // Update ARIA label
-      contrastBtn.setAttribute(
-        'aria-label',
-        `High contrast mode: ${enabled ? 'ON' : 'OFF'}. Click to ${enabled ? 'disable' : 'enable'}.`
-      );
 
       setTimeout(() => {
         const state = stateManager.getState();
@@ -5171,12 +5177,8 @@ async function initApp() {
       }, 2000);
     });
 
-    // Set initial ARIA label
-    const initialState = themeManager.highContrast;
-    contrastBtn.setAttribute(
-      'aria-label',
-      `High contrast mode: ${initialState ? 'ON' : 'OFF'}. Click to ${initialState ? 'disable' : 'enable'}.`
-    );
+    themeManager.addListener(syncContrastLabel);
+    syncContrastLabel();
   }
 
   // Initialize keyboard shortcuts toggle button

@@ -361,20 +361,30 @@ export function initThemeToggle(buttonId, onToggle = null) {
     return;
   }
 
+  // D-60: the label used to be written only inside this button's own click
+  // handler, so every other route left it lying - Ctrl+T, a City Walk
+  // in-game toggle, and, under 'auto', the system simply changing scheme
+  // with nobody touching anything at all. Subscribing to the manager means
+  // the button describes the state it is actually in, whoever changed it.
+  const syncLabel = () => {
+    button.setAttribute(
+      'aria-label',
+      `Current theme: ${themeManager.getActiveTheme()}. Click to cycle themes.`
+    );
+  };
+
   // Handle click
   button.addEventListener('click', () => {
     const message = themeManager.cycleTheme();
 
-    // Update ARIA label
-    const activeTheme = themeManager.getActiveTheme();
-    button.setAttribute(
-      'aria-label',
-      `Current theme: ${activeTheme}. Click to cycle themes.`
-    );
-
-    // Optional callback
+    // Optional callback. cycleTheme() has already notified listeners, so
+    // the label is correct by the time this runs.
     if (onToggle) {
-      onToggle(themeManager.currentTheme, activeTheme, message);
+      onToggle(
+        themeManager.currentTheme,
+        themeManager.getActiveTheme(),
+        message
+      );
     }
   });
 
@@ -386,12 +396,8 @@ export function initThemeToggle(buttonId, onToggle = null) {
     }
   });
 
-  // Set initial ARIA label
-  const activeTheme = themeManager.getActiveTheme();
-  button.setAttribute(
-    'aria-label',
-    `Current theme: ${activeTheme}. Click to cycle themes.`
-  );
+  themeManager.addListener(syncLabel);
+  syncLabel();
 
   console.log('[Theme] Toggle button initialized');
 }
