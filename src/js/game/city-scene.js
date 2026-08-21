@@ -668,6 +668,11 @@ const TRUNK_TINT = tintOf(0.28, 30, 0.2);
 const CANOPY_TIERS = [0.55, 0.7];
 const CANOPY_HUE_DEG = 120;
 const CANOPY_CHROMA = 0.7;
+// One tier below the building set, on the owner's call. The lit storefront
+// strip and CW-18's sign panels own the top of the street-level band; cars
+// read as accents underneath them rather than competing for the same
+// brightness. Still four tiers, so a parked row stays varied.
+const CAR_TIERS = [0.35, 0.5, 0.65, 0.8];
 const CAR_CHROMA = 0.5;
 const CAR_CABIN_LIFT = 0.12;
 
@@ -917,7 +922,7 @@ export function buildStreetProps(model, collision = null) {
             }
             if (!clear) continue;
 
-            const tier = TINT_TIERS[seed % TINT_TIERS.length];
+            const tier = CAR_TIERS[seed % CAR_TIERS.length];
             const hue = TINT_HUES_DEG[(seed >>> 5) % TINT_HUES_DEG.length];
             const bodyTint = tintOf(tier, hue, CAR_CHROMA);
             const cabinTint = tintOf(

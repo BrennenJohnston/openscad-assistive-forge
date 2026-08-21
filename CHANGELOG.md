@@ -19,8 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the trunk. Cars park in hashed runs with gaps, 40 to 60 percent of the slots filled, parallel to the
   curb and just inside it, on ordinary streets only - nobody leaves a car on a motorway. Each is two
   boxes, a body and a slightly brighter cabin, in varied tones so a parked row reads as separate cars
-  rather than one long block. Under the monochrome modes the props are what the reference calls the
-  life band: a bright seam of glyphs where the buildings meet the road. Under high contrast the crowns
+  rather than one long block, and a tone below the buildings so the lit shopfronts stay the brightest
+  thing at street level. Under the monochrome modes the props are what the reference calls the life
+  band: a seam of glyphs where the buildings meet the road. Under high contrast the crowns
   quantize to the palette's green in dark mode and its lime in amber, so a tree is a tree at a glance.
   The map view stays a clean street network - props hide there exactly as the curb lines do. Cars and
   trunks are solid: walk into one and you stop. Crowns are not, because they are over your head. The
