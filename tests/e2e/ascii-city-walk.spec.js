@@ -1861,6 +1861,177 @@ test.describe('ASCII City Walk — trees and parked cars (CW-16)', () => {
   })
 })
 
+test.describe('ASCII City Walk — the colour toggle (CW-Q16)', () => {
+  const colourBtn = (page) => page.locator('#cityWalkColourBtn')
+  const contrastBtn = (page) => page.locator('#cityWalkContrastBtn')
+  const announcer = (page) => page.locator('#cityWalkAnnouncer')
+
+  /** How many colours the converter is quantizing to, or null for phosphor. */
+  const paletteSize = (page) =>
+    page.evaluate(
+      () => window.__cityWalkGame?.altView?.getPalette()?.length ?? null
+    )
+
+  const storedChoice = (page) =>
+    page.evaluate(() =>
+      localStorage.getItem('openscad-forge-city-walk-colour')
+    )
+
+  test('starts by following high contrast, and stores nothing until you press it', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // Nothing stored: the shipped behaviour is exactly what CW-Q2 gave -
+    // high contrast off means a single phosphor.
+    expect(await storedChoice(page)).toBeNull()
+    await expect(colourBtn(page)).toHaveAttribute('aria-pressed', 'false')
+    await expect(colourBtn(page)).toHaveAttribute(
+      'aria-label',
+      'Colour off. Press to show the city in colour.'
+    )
+    expect(await paletteSize(page)).toBeNull()
+
+    // High contrast alone still brings the palette, and the colour button
+    // follows it without being touched.
+    await contrastBtn(page).click()
+    await expect.poll(() => paletteSize(page)).toBeGreaterThanOrEqual(4)
+    await expect(colourBtn(page)).toHaveAttribute('aria-pressed', 'true')
+    expect(await storedChoice(page)).toBeNull()
+  })
+
+  test('turns the palette on with high contrast off, and says so', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    await colourBtn(page).click()
+    await expect(colourBtn(page)).toHaveAttribute('aria-pressed', 'true')
+    await expect(announcer(page)).toHaveText(
+      'Colour on. The city is drawn in the retro palette.'
+    )
+    await expect.poll(() => paletteSize(page)).toBeGreaterThanOrEqual(4)
+    // The point of CW-Q16: colour without high contrast.
+    await expect(page.locator('html')).not.toHaveAttribute(
+      'data-high-contrast',
+      'true'
+    )
+    expect(await storedChoice(page)).toBe('on')
+
+    await colourBtn(page).click()
+    await expect(colourBtn(page)).toHaveAttribute('aria-pressed', 'false')
+    await expect(announcer(page)).toHaveText(
+      'Colour off. The city is drawn in a single phosphor.'
+    )
+    await expect.poll(() => paletteSize(page)).toBeNull()
+    expect(await storedChoice(page)).toBe('off')
+  })
+
+  test('O works the button, on the picker as well as in the city', async ({
+    page,
+  }) => {
+    await launchGame(page)
+
+    // Above the game guard, like C and T: it works before a city loads.
+    await page.keyboard.press('KeyO')
+    await expect(colourBtn(page)).toHaveAttribute('aria-pressed', 'true')
+    expect(await storedChoice(page)).toBe('on')
+
+    await enterCity(page)
+    await expect.poll(() => paletteSize(page)).toBeGreaterThanOrEqual(4)
+
+    await page.keyboard.press('KeyO')
+    await expect(colourBtn(page)).toHaveAttribute('aria-pressed', 'false')
+    await expect.poll(() => paletteSize(page)).toBeNull()
+  })
+
+  test('a choice you made yourself outranks high contrast, both ways', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // Choose monochrome, then turn high contrast ON: the city stays a single
+    // phosphor, because the player asked for it. This is the whole point of
+    // storing the choice, and it is the case that would silently regress if
+    // colourIsOn() ever read the attribute first.
+    await colourBtn(page).click()
+    await colourBtn(page).click()
+    expect(await storedChoice(page)).toBe('off')
+
+    await contrastBtn(page).click()
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-high-contrast',
+      'true'
+    )
+    await expect(colourBtn(page)).toHaveAttribute('aria-pressed', 'false')
+    await expect.poll(() => paletteSize(page)).toBeNull()
+
+    // And the other way: colour ON survives high contrast being turned off.
+    await colourBtn(page).click()
+    await contrastBtn(page).click()
+    await expect(page.locator('html')).not.toHaveAttribute(
+      'data-high-contrast',
+      'true'
+    )
+    await expect.poll(() => paletteSize(page)).toBeGreaterThanOrEqual(4)
+  })
+
+  test('a stored choice is honoured on the next visit', async ({ page }) => {
+    // Seeded before the first script runs, which is what a returning player's
+    // browser looks like. Reloading in-place would not do: the app restores
+    // its last surface, so the second load lands on Get Started and the
+    // Classic welcome card is not on the page at all.
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-city-walk-colour', 'on')
+    })
+    await launchGame(page)
+
+    await expect(colourBtn(page)).toHaveAttribute('aria-pressed', 'true')
+    await expect(colourBtn(page)).toHaveAttribute(
+      'aria-label',
+      'Colour on. Press for a single-colour screen.'
+    )
+    await enterCity(page)
+    // Colour from the stored choice alone - high contrast never touched.
+    await expect(page.locator('html')).not.toHaveAttribute(
+      'data-high-contrast',
+      'true'
+    )
+    await expect.poll(() => paletteSize(page)).toBeGreaterThanOrEqual(4)
+  })
+
+  test('the help panel and the header agree about the three toggles', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await page.locator('#cityWalkHelpBtn').click()
+
+    const help = page.locator('#cityWalkHelpPanel')
+    await expect(help).toBeVisible()
+    await expect(help).toContainText(
+      'O: colour on or off (off is a single-colour retro screen)'
+    )
+    await expect(help).toContainText(
+      'High contrast, theme and colour: the three buttons at the top of the screen'
+    )
+
+    // The header really does carry all three, in the order the help names.
+    const ids = await page.evaluate(() =>
+      Array.from(
+        document.querySelectorAll('.city-walk-header-actions button')
+      ).map((b) => b.id)
+    )
+    expect(ids.slice(0, 3)).toEqual([
+      'cityWalkContrastBtn',
+      'cityWalkThemeBtn',
+      'cityWalkColourBtn',
+    ])
+  })
+})
+
 test.describe('ASCII City Walk — without WebGL', () => {
   test('says so accessibly, and Escape still leaves as promised', async ({
     page,

@@ -92,6 +92,9 @@ const EXPECTED_KEYS = {
 
   // City Walk game (CW-Q10): persistent ASCII character scale
   STORAGE_KEY_CITY_WALK_FONT_SCALE: 'openscad-forge-city-walk-font-scale',
+
+  // City Walk game (CW-Q16): colour on/off; absent means follow high contrast
+  STORAGE_KEY_CITY_WALK_COLOUR: 'openscad-forge-city-walk-colour',
 };
 
 describe('storage-keys exported constants', () => {

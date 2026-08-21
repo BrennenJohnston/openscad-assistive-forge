@@ -76,6 +76,7 @@ import {
   STORAGE_KEY_HFM_FONT_SCALE,
   STORAGE_KEY_CITY_WALK_SPEED,
   STORAGE_KEY_CITY_WALK_FONT_SCALE,
+  STORAGE_KEY_CITY_WALK_COLOUR,
 } from '../storage-keys.js';
 
 // Bundled extracts (Q-68). Slugs match public/examples/ascii-city/*.json.
@@ -287,6 +288,17 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     themeBtn.addEventListener('click', cycleAppTheme);
     headerActions.appendChild(themeBtn);
 
+    // CW-Q16: colour is the game's own switch now, not a side effect of high
+    // contrast. It sits after the two app-wide controls because it changes
+    // only this game.
+    const colourBtn = document.createElement('button');
+    colourBtn.type = 'button';
+    colourBtn.className = 'btn btn-secondary city-walk-btn';
+    colourBtn.id = 'cityWalkColourBtn';
+    colourBtn.textContent = 'Colour';
+    colourBtn.addEventListener('click', flipColour);
+    headerActions.appendChild(colourBtn);
+
     const helpBtn = document.createElement('button');
     helpBtn.type = 'button';
     helpBtn.className = 'btn btn-secondary city-walk-btn';
@@ -419,7 +431,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       )}% to 100%)`,
       'C: high contrast on or off',
       'T: change the theme',
-      'High contrast and theme: the two buttons at the top of the screen',
+      'O: colour on or off (off is a single-colour retro screen)',
+      'High contrast, theme and colour: the three buttons at the top of the screen',
       'Every key also has a button in the toolbar along the bottom',
       'H: open or close this help',
       'Escape: close this help, or leave the game',
@@ -464,6 +477,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     state.refs = {
       contrastBtn,
       themeBtn,
+      colourBtn,
       helpBtn,
       exitBtn,
       startPanel,
@@ -497,8 +511,19 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
    * pressing it does (U-7).
    */
   function syncThemeButtons() {
-    const { contrastBtn, themeBtn } = state.refs;
+    const { contrastBtn, themeBtn, colourBtn } = state.refs;
     if (!contrastBtn || !themeBtn) return;
+
+    if (colourBtn) {
+      const on = colourIsOn();
+      colourBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      colourBtn.setAttribute(
+        'aria-label',
+        on
+          ? 'Colour on. Press for a single-colour screen.'
+          : 'Colour off. Press to show the city in colour.'
+      );
+    }
 
     const hc = root.getAttribute('data-high-contrast') === 'true';
     contrastBtn.setAttribute('aria-pressed', hc ? 'true' : 'false');
@@ -526,6 +551,43 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   function cycleAppTheme() {
     // cycleTheme() returns the app's own user-facing message.
     announceInLayer(themeManager.cycleTheme());
+  }
+
+  /**
+   * Is the city drawn in colour right now? (CW-Q16.)
+   *
+   * With nothing stored, colour follows high contrast — which is exactly what
+   * the palettes did when they were HC-only, so a player who never finds the
+   * button sees no change at all. Once the player works the toggle their
+   * choice is stored and wins from then on, in both directions.
+   *
+   * Turning colour off costs no contrast: the bare phosphors measure 15.30:1
+   * (green) and 11.46:1 (amber) on black, above every palette entry.
+   *
+   * @returns {boolean}
+   */
+  function colourIsOn() {
+    const stored = safeGetItem(STORAGE_KEY_CITY_WALK_COLOUR);
+    if (stored === 'on') return true;
+    if (stored === 'off') return false;
+    return root.getAttribute('data-high-contrast') === 'true';
+  }
+
+  /** Colour on/off, from the header button and from O (CW-Q16). */
+  function flipColour() {
+    const next = !colourIsOn();
+    safeSetItem(STORAGE_KEY_CITY_WALK_COLOUR, next ? 'on' : 'off');
+    syncThemeButtons();
+    if (state.game) {
+      applyHcPalette(state.game);
+      state.game.altView.rebuildGlyphs?.();
+      state.game.altView.invalidate();
+    }
+    announceInLayer(
+      next
+        ? 'Colour on. The city is drawn in the retro palette.'
+        : 'Colour off. The city is drawn in a single phosphor.'
+    );
   }
 
   /**
@@ -1170,22 +1232,27 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   }
 
   /**
-   * CW-Q2 gate: palette only when high contrast is on; scheme picks the set
-   * (light = amber -> neon, dark = green -> ANSI bright). Otherwise the
-   * classic single phosphor.
+   * Colour gate (CW-Q2, amended by CW-Q16): the palette applies when the
+   * game's Colour toggle is on, and the scheme picks the set (light = amber
+   * -> neon, dark = green -> ANSI bright). Otherwise the classic single
+   * phosphor.
    */
   function applyHcPalette(game) {
     const root = document.documentElement;
-    const hc = root.getAttribute('data-high-contrast') === 'true';
-    if (!hc) {
+    if (!colourIsOn()) {
       game.altView.setPalette(null);
       return;
     }
     const light = root.getAttribute('data-theme') === 'light';
     // chromaBoost exaggerates the scene's deliberately mild tints (kept low
     // so monochrome stays luminance-true) into decisive palette picks.
+    // CW-Q11 raised it from 3.5: measured on a Seattle canyon, that cut the
+    // share of the frame with no colour at all from 47.3% to 37.9%, and it
+    // is the point at which every TINTED surface lands on a coloured entry.
+    // Genuinely grey ones still land on white - dividing by the brightest
+    // channel leaves a grey unchanged, whatever the boost.
     game.altView.setPalette(light ? HC_PALETTE_AMBER : HC_PALETTE_GREEN, {
-      chromaBoost: 3.5,
+      chromaBoost: 5,
     });
   }
 
@@ -1263,6 +1330,15 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       event.preventDefault();
       event.stopPropagation();
       cycleAppTheme();
+      return;
+    }
+
+    // CW-Q16: colour on or off. C is spoken for by high contrast, so the
+    // key is O. Like the two above it, it works on the picker as well.
+    if (event.code === 'KeyO') {
+      event.preventDefault();
+      event.stopPropagation();
+      flipColour();
       return;
     }
 
