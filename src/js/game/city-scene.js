@@ -172,11 +172,13 @@ const SIGN_BILLBOARD_MAX_FRAC = 0.7;
 // 15% are 9 m sheds, so an absolute floor decides what counts as a tower.
 const ANTENNA_HEIGHT_PERCENTILE = 0.85;
 const ANTENNA_MIN_HEIGHT_M = 20;
-const ANTENNA_MAST_SIDE_M = 0.14;
+// Found by eye: at 0.14 m a mast is thinner than a pixel past about 60 m, so
+// no roofline in any shot showed one. A real rooftop mast is 0.2-0.5 m.
+const ANTENNA_MAST_SIDE_M = 0.4;
 const ANTENNA_MAST_MIN_M = 2.5;
 const ANTENNA_MAST_MAX_M = 6;
-const ANTENNA_TUFT_SPAN_M = 1.1;
-const ANTENNA_TUFT_THICK_M = 0.12;
+const ANTENNA_TUFT_SPAN_M = 1.2;
+const ANTENNA_TUFT_THICK_M = 0.2;
 const ANTENNA_TIER = 0.72;
 const ANTENNA_CHROMA = 0.5;
 
@@ -1138,9 +1140,13 @@ const LAMP_HEAD_THICK_M = 0.15;
 const LAMP_HEAD_Z_M = 5.8;
 // The head hangs over the roadway, the way a cantilever arm does.
 const LAMP_HEAD_REACH_M = 0.5;
-// A dim metal stem, and a head at the very top of the street-level band: at
-// glyph scale the pole is a thin dark stroke and the head a bright dash.
-const POLE_TINT = tintOf(0.3, 210, 0.12);
+// A mid-grey metal stem, and a head at the very top of the street-level band.
+// The stem started at tier 0.3 and had to come up: measured against the night
+// sky a dark pole is invisible, so the bright head read as a box floating with
+// nothing under it - proved by hiding the two lamp meshes and watching the box
+// go. It is neutral on purpose too, so the high-contrast quantizer files a
+// steel post with the curbs and the pavement instead of tinting it cyan.
+const POLE_TINT = [0.45, 0.45, 0.45];
 const LAMP_HEAD_TINT = [0.97, 0.97, 0.97];
 
 /**
