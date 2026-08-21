@@ -649,6 +649,9 @@ test.describe('ASCII City Walk — looking around (CW-13)', () => {
   test('R and F tilt the gaze, the HUD says so, and V levels it', async ({
     page,
   }) => {
+    // Holding a key to the 60 deg clamp takes as long as the renderer needs,
+    // and CI's renderer is software.
+    test.setTimeout(120_000)
     await launchGame(page)
     await enterCity(page)
 
@@ -1082,6 +1085,11 @@ test.describe('ASCII City Walk — accessibility toggles (CW-14)', () => {
   test('the toggles stay legible at rest and hovered, in every in-game state', async ({
     page,
   }) => {
+    // Four states x two buttons x rest/hovered is sixteen hover-and-measure
+    // cycles with a city rendering behind them, and CI draws that city in
+    // software. It is the length that overruns the default 60 s, not any one
+    // step: the assertions below are unchanged and still fail fast.
+    test.setTimeout(180_000)
     await launchGame(page)
     await enterCity(page)
 
@@ -1507,6 +1515,9 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
   test('the toolbar stays legible at rest and hovered, in every in-game state', async ({
     page,
   }) => {
+    // The longest measurement in the lane - four states across three targets,
+    // most of them hovered too. Same reason as CW-14's: length, not a step.
+    test.setTimeout(180_000)
     await launchGame(page)
     await enterCity(page)
 
