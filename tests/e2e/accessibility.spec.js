@@ -1813,7 +1813,20 @@ test.describe('Enhanced Contrast Preference (prefers-contrast)', () => {
     console.log('prefers-contrast: more - No violations, borders enhanced');
   });
 
-  test('should handle prefers-contrast: more in dark mode', async ({ page }) => {
+  test('should handle prefers-contrast: more in dark mode', async ({
+    page,
+    browserName,
+  }) => {
+    // Same limitation the sibling case above records: Playwright Firefox
+    // does not emulate the contrast media feature, so the preference never
+    // reaches the page and the ring stays at its ordinary width. The app
+    // high-contrast case below needs no emulation, so Firefox still guards
+    // this rule through the mode more people actually use.
+    test.skip(
+      browserName === 'firefox',
+      'Firefox does not support contrast media emulation in Playwright'
+    );
+
     await page.emulateMedia({ colorScheme: 'dark', contrast: 'more' });
     await page.goto('/')
     await page.waitForLoadState('networkidle')
