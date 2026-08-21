@@ -481,6 +481,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     };
 
     syncThemeButtons();
+    // The layer element outlives a session, so a value left by the last
+    // one would shorten the help panel on the picker, where there is no
+    // toolbar at all. Rebuilding the DOM resets it to a measured zero.
+    measureToolbar();
   }
 
   /**

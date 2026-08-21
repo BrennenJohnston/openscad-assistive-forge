@@ -1163,35 +1163,75 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
 
   const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y)
 
+  /** A counter that ticks with the game's own render loop. */
+  const startFrameCounter = (page) =>
+    page.evaluate(() => {
+      window.__cwFrames = 0
+      const tick = () => {
+        window.__cwFrames++
+        requestAnimationFrame(tick)
+      }
+      requestAnimationFrame(tick)
+    })
+
+  const frameCount = (page) => page.evaluate(() => window.__cwFrames ?? 0)
+
+  /** Wait until the game has rendered n more animation frames. */
+  async function waitForFrames(page, n) {
+    const from = await frameCount(page)
+    await expect
+      .poll(() => frameCount(page), { timeout: 20000 })
+      .toBeGreaterThanOrEqual(from + n)
+  }
+
+  /** Settle function: hold for a fixed number of the game's own frames. */
+  const forFrames = (page, n) => () => waitForFrames(page, n)
+
   /**
-   * Press and hold a toolbar button with the real mouse, then park the
-   * pointer away from everything: Playwright leaves the mouse where it last
-   * acted, and a button left hovered repaints the very pair a later
-   * measurement is about to read.
+   * Press and hold a toolbar button with the real mouse until `settle`
+   * resolves, then release and park the pointer clear of everything.
+   *
+   * NEVER hold for a wall-clock duration and then assert. The game only
+   * moves inside animation frames, and a loaded CI runner can render NONE
+   * inside a 700 ms window - which is exactly how the first version of this
+   * suite went red on Edge in CI while passing three times over locally, on
+   * the same browser, and again under a 25x CPU throttle. Parking the mouse
+   * matters too: Playwright leaves it where it last acted, and an overlay
+   * flow silently hovers whatever is under it.
    */
-  async function holdButton(page, id, ms) {
-    const box = await btn(page, id).boundingBox()
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  async function holdButton(page, id, settle) {
+    await btn(page, id).hover()
     await page.mouse.down()
-    await page.waitForTimeout(ms)
-    await page.mouse.up()
-    await page.mouse.move(2, 2)
+    try {
+      await settle()
+    } finally {
+      await page.mouse.up()
+      await page.mouse.move(2, 2)
+    }
   }
 
   test('a mouse alone walks, turns, and opens the map', async ({ page }) => {
     await launchGame(page)
     await enterCity(page)
     await expect(page.locator('#cityWalkToolbar')).toBeVisible()
+    await startFrameCounter(page)
+    await waitForFrames(page, 3)
 
     const start = await walkPos(page)
-    await holdButton(page, 'cityWalkForwardBtn', 900)
-    expect(distance(start, await walkPos(page))).toBeGreaterThan(0.5)
+    await holdButton(page, 'cityWalkForwardBtn', () =>
+      expect
+        .poll(async () => distance(start, await walkPos(page)), {
+          timeout: 15000,
+        })
+        .toBeGreaterThan(0.5)
+    )
 
-    // Turning right for >1s moves the compass off north - to ANY other
-    // sector. Exact label, not substring (see hudHeading).
+    // Holding Turn right moves the compass off north - to ANY other sector.
+    // Exact label, not substring (see hudHeading).
     await expect.poll(() => hudHeading(page)).toBe('north')
-    await holdButton(page, 'cityWalkTurnRightBtn', 1300)
-    await expect.poll(() => hudHeading(page)).not.toBe('north')
+    await holdButton(page, 'cityWalkTurnRightBtn', () =>
+      expect.poll(() => hudHeading(page), { timeout: 15000 }).not.toBe('north')
+    )
 
     await btn(page, 'cityWalkMapBtn').click()
     await expect(btn(page, 'cityWalkMapBtn')).toHaveAttribute(
@@ -1218,6 +1258,8 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
   }) => {
     await launchGame(page)
     await enterCity(page)
+    await startFrameCounter(page)
+    await waitForFrames(page, 3)
 
     const streetOnly = [
       'cityWalkLookUpBtn',
@@ -1239,23 +1281,30 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     for (const id of mapOnly) await expect(btn(page, id)).toBeVisible()
 
     // The map buttons drive the map: held Zoom in zooms exponentially…
-    await holdButton(page, 'cityWalkZoomInBtn', 700)
-    const hud = await page.textContent('#cityWalkHudStatus')
-    expect(parseFloat(/zoom (\d+\.\d)x/.exec(hud)?.[1] ?? '0')).toBeGreaterThan(
-      1.2
+    const zoom = () => page.evaluate(() => window.__cityWalkGame.mapCam.zoom)
+    await holdButton(page, 'cityWalkZoomInBtn', () =>
+      expect.poll(zoom, { timeout: 15000 }).toBeGreaterThan(1.2)
+    )
+    await expect(page.locator('#cityWalkHudStatus')).not.toContainText(
+      'zoom 1.0x'
     )
 
     // …a pan breaks follow mode, and Center on you restores it.
-    await holdButton(page, 'cityWalkStepRightBtn', 600)
-    expect(
-      await page.evaluate(() => window.__cityWalkGame.mapCam.follow)
-    ).toBe(false)
+    const follow = () =>
+      page.evaluate(() => window.__cityWalkGame.mapCam.follow)
+    await holdButton(page, 'cityWalkStepRightBtn', () =>
+      expect.poll(follow, { timeout: 15000 }).toBe(false)
+    )
+
+    // The 250 ms minimum step keeps the pan running for a moment after
+    // the release - and a pan is what turns follow OFF - so let it finish
+    // before asking Center on you to turn it back on.
+    await page.waitForTimeout(400)
+    await waitForFrames(page, 2)
 
     await btn(page, 'cityWalkCenterBtn').click()
     await expect(announcer(page)).toHaveText(/Map centered on you/)
-    expect(
-      await page.evaluate(() => window.__cityWalkGame.mapCam.follow)
-    ).toBe(true)
+    expect(await follow()).toBe(true)
 
     // Back on the street the swap reverses, and the toolbar says so.
     await btn(page, 'cityWalkMapBtn').click()
@@ -1272,19 +1321,29 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     await launchGame(page)
     await enterCity(page)
 
+    await startFrameCounter(page)
+    await waitForFrames(page, 3)
+
     const before = await walkPos(page)
     await btn(page, 'cityWalkForwardBtn').focus()
     await expect(btn(page, 'cityWalkForwardBtn')).toBeFocused()
 
     await page.keyboard.press('Enter')
-    await page.waitForTimeout(700)
-    const after = await walkPos(page)
-    expect(distance(before, after)).toBeGreaterThan(0.15)
+    await expect
+      .poll(async () => distance(before, await walkPos(page)), {
+        timeout: 15000,
+      })
+      .toBeGreaterThan(0.15)
 
     // A key press has no release, so the step has to end by itself. If it
-    // did not, the player would still be walking here.
-    await page.waitForTimeout(600)
-    expect(distance(after, await walkPos(page))).toBeLessThan(0.05)
+    // did not, the player would still be walking here. Measured in frames,
+    // not milliseconds - a stalled runner would otherwise "prove" it
+    // stopped simply by rendering nothing.
+    await page.waitForTimeout(1000)
+    await waitForFrames(page, 2)
+    const settled = await walkPos(page)
+    await waitForFrames(page, 10)
+    expect(distance(settled, await walkPos(page))).toBeLessThan(0.05)
   })
 
   test('the speed, size, level and landmark buttons announce what they did', async ({
@@ -1323,14 +1382,20 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     await launchGame(page)
     await enterCity(page)
 
+    await startFrameCounter(page)
+    await waitForFrames(page, 3)
+
     const fast = btn(page, 'cityWalkFastBtn')
     await expect(fast).toHaveAttribute('aria-pressed', 'false')
 
+    // The two legs are matched by FRAME COUNT, not by wall clock: distance
+    // is a function of frames rendered, so comparing two fixed-duration
+    // holds on a runner whose frame rate wanders compares nothing.
     const a = await walkPos(page)
-    await holdButton(page, 'cityWalkForwardBtn', 400)
+    await holdButton(page, 'cityWalkForwardBtn', forFrames(page, 12))
     const b = await walkPos(page)
     const strolled = distance(a, b)
-    expect(strolled).toBeGreaterThan(0.2)
+    expect(strolled).toBeGreaterThan(0.1)
 
     await fast.click()
     await page.mouse.move(2, 2)
@@ -1339,8 +1404,12 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
 
     // FAST_SPEED_MPS is 2.5x WALK_SPEED_MPS; 1.5x is the margin that still
     // fails loudly if the toggle never reaches stepWalk.
-    await holdButton(page, 'cityWalkForwardBtn', 400)
-    expect(distance(b, await walkPos(page))).toBeGreaterThan(strolled * 1.5)
+    await holdButton(page, 'cityWalkForwardBtn', forFrames(page, 12))
+    const hurried = distance(b, await walkPos(page))
+    expect(
+      hurried,
+      `strolled ${strolled.toFixed(2)} m, hurried ${hurried.toFixed(2)} m`
+    ).toBeGreaterThan(strolled * 1.5)
 
     await fast.click()
     await page.mouse.move(2, 2)
@@ -1394,6 +1463,29 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     await expect(page.locator('#cityWalkHudStatus')).toContainText(
       'street view'
     )
+  })
+
+  test('the height a session measured does not outlive it', async ({ page }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const measured = () =>
+      page.evaluate(() =>
+        document
+          .getElementById('cityWalkLayer')
+          .style.getPropertyValue('--city-walk-toolbar-height')
+      )
+    expect(parseInt(await measured(), 10)).toBeGreaterThan(40)
+
+    await page.keyboard.press('Escape')
+    await expect(page.locator('#cityWalkLayer')).toBeHidden()
+    await page.locator('#cityWalkLaunchBtn').click()
+    await expect(page.locator('#cityWalkLayer')).toBeVisible()
+
+    // Back on the picker there is no toolbar, and the layer element
+    // outlives the session that measured one - so the help panel must not
+    // be shortened here by the last strip.
+    expect(await measured()).toBe('0px')
   })
 
   test('the toolbar stays legible at rest and hovered, in every in-game state', async ({
