@@ -1817,9 +1817,17 @@ test.describe('ASCII City Walk — trees and parked cars (CW-16)', () => {
       // step clamp, so 150 frames is far more travel than the three meters
       // it would take to cross an unsolid car. A runner that renders nothing
       // fails here rather than passing vacuously.
+      //
+      // The patience is 90 s, not 30. CI renders through SwiftShader, where
+      // triangle count is real time, and CW-18's street furniture took the
+      // Chromium runner from comfortably over 150 frames to 123 - about
+      // 4.1 fps where the old budget needed 5. The BAR is the frame count,
+      // which is the invariant; the timeout is only how long we are willing
+      // to wait for it, and on a software renderer drawing a furnished city
+      // it has to be longer. On a real GPU this takes about 5 s.
       await expect
         .poll(() => page.evaluate(() => window.__cwCar?.frames ?? 0), {
-          timeout: 30000,
+          timeout: 90000,
           intervals: [200],
         })
         .toBeGreaterThan(150)
