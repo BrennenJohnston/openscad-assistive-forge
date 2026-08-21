@@ -28,6 +28,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The contrast modes finally get the thicker focus ring they ask for** - both the app's own high
+  contrast mode and the operating system's "increase contrast" preference are supposed to draw a
+  heavier ring around whatever has keyboard focus, and neither ever did on a button or a link. The
+  rule that paints those rings carried a hardcoded width that overrode the setting, so people who had
+  asked for a stronger focus indicator were quietly getting the ordinary one. Nothing changes for
+  anyone who has not asked for more contrast. The test that was supposed to cover this could not:
+  it measured whatever the first Tab press happened to reach, and accepted the ordinary ring as a
+  pass, so it now focuses a known control and checks the ring both with the preference and without it
+
 - **The header toggles no longer lie about the state they are in** (D-60) - the high contrast and
   theme buttons each wrote their spoken label only inside their own click handler, so any other route
   left the label saying the opposite of the truth, to the one group of people who cannot see the
