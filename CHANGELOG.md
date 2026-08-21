@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Every City Walk key gets a button** (CW-15) - the game was a keyboard game. Someone playing with a
+  mouse alone could launch it and pick a city, and then reach nothing: walking, turning, looking, the
+  map, the landmarks and both size controls were keys and only keys. A toolbar now runs along the
+  bottom of the layer, one button per key, in six named groups - Camera, Move, Speed, Characters, Map
+  and Landmarks - with the group names shown, so the two smaller/larger pairs are never a guess. Hold
+  a movement button and the player keeps moving for as long as the mouse is down; click it and you get
+  one 250 ms step, which is also what Enter or Space does when the button has focus, because a key
+  press has no duration of its own. Every button drives the action its key already drove, so the map
+  view reinterprets them exactly as it does the keys: Forward walks a street and pans a map. Buttons
+  that would do nothing in the view you are in are not left lying there - Look up, Look down and Fast
+  step aside in map view, and Center on you, Zoom out and Zoom in take their place, announced. Fast is
+  a sticky toggle rather than a held key, because a mouse cannot hold Shift; it carries its pressed
+  state and Shift still works alongside it. The strip is one row on a wide window and wraps by group
+  on a narrower one, every button keeps the 44 px hit-target floor, and the help panel and landmark
+  legend now measure the toolbar and stop above it instead of covering the buttons. Contrast was
+  measured on the real buttons at rest and hovered in all four in-game states, the pressed toggle
+  among them; the worst of the twenty readings is 7.22:1
+
+- **C and T in the City Walk** (CW-Q15) - the two accessibility toggles CW-14 put in the game's header
+  now have keys as well: C turns high contrast on and off, T cycles the theme. Both run through the
+  same handlers the buttons call, so there is one announcement and one place the labels are kept
+  honest, and Ctrl+T still belongs to the browser
+
 - **Accessibility toggles inside the City Walk** (CW-14) - the game layer is a modal that traps focus,
   so the app header's high contrast and theme buttons were out of reach for as long as you were
   walking. The game's own header now carries both, in the same order the app header uses: High
