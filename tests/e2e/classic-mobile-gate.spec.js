@@ -268,3 +268,122 @@ test.describe('In-session narrowing keeps Classic alive (U-10, Q-24a)', () => {
     );
   });
 });
+
+test.describe('Classic gate: the dimmed toggle stays legible (CW-Q13c)', () => {
+  // 1023px landscape is still gated (see the boundary case above) and is wide
+  // enough that the button is on screen, which a phone width cannot promise —
+  // the header row wraps it out of view there.
+  test.use({ viewport: { width: 1023, height: 700 } });
+
+  /**
+   * The COMPOSITED pair. opacity blends the whole control over its backdrop,
+   * so what a person sees is not what getComputedStyle reports, and nothing
+   * else in the suite measures it: axe skips contrast on aria-disabled
+   * controls entirely, and the token guards cannot see a composite.
+   */
+  const composited = (page) =>
+    page.evaluate(() => {
+      const el = document.getElementById('classicModeToggle');
+      const rgb = (css) =>
+        (css.match(/\d+(\.\d+)?/g) || []).slice(0, 3).map(Number);
+      const opaque = (css) =>
+        Boolean(css) && !/rgba\(0, 0, 0, 0\)|transparent/.test(css);
+
+      // The nearest ancestor that actually paints is the backdrop.
+      let backdrop = [255, 255, 255];
+      for (let n = el.parentElement; n; n = n.parentElement) {
+        const bg = getComputedStyle(n).backgroundColor;
+        if (opaque(bg)) {
+          backdrop = rgb(bg);
+          break;
+        }
+      }
+
+      const cs = getComputedStyle(el);
+      const alpha = parseFloat(cs.opacity);
+      const surface = opaque(cs.backgroundColor)
+        ? rgb(cs.backgroundColor)
+        : backdrop;
+      const blend = (fg) =>
+        fg.map((c, i) => alpha * c + (1 - alpha) * backdrop[i]);
+      const lum = (c) =>
+        c
+          .map((v) => {
+            const s = v / 255;
+            return s <= 0.03928
+              ? s / 12.92
+              : Math.pow((s + 0.055) / 1.055, 2.4);
+          })
+          .reduce((sum, x, i) => sum + [0.2126, 0.7152, 0.0722][i] * x, 0);
+
+      const l1 = lum(blend(rgb(cs.color)));
+      const l2 = lum(blend(surface));
+      return {
+        alpha,
+        ratio:
+          Math.round(
+            ((Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)) * 100
+          ) / 100,
+      };
+    });
+
+  test('gate-dim-contrast: the gated label stays legible at rest and hovered, in every theme', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    const toggle = page.locator('#classicModeToggle');
+    await expect(toggle).toHaveAttribute('aria-disabled', 'true');
+
+    const check = async (label) => {
+      for (const state of ['rest', 'hovered']) {
+        if (state === 'hovered') {
+          // Moved by hand rather than .hover(): Playwright's actionability
+          // refuses an aria-disabled control, and this one has to be
+          // measured hovered precisely because a hover repaints one half of
+          // the pair (D-55).
+          const box = await toggle.boundingBox();
+          await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+        } else {
+          await page.mouse.move(0, 0);
+        }
+        await page.waitForTimeout(200);
+        const m = await composited(page);
+        console.log(
+          `[cwq13c] ${label} / ${state}: opacity ${m.alpha} -> ${m.ratio}:1`
+        );
+        expect(
+          m.ratio,
+          `${label} / ${state} composites to ${m.ratio}:1 at opacity ${m.alpha}`
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+    };
+
+    const theme = () => page.locator('#themeToggle').click();
+    const contrast = () => page.locator('#contrastToggle').click();
+
+    await theme(); // auto -> light
+    await check('light');
+    await contrast();
+    await check('light + HC');
+    await theme(); // light -> dark
+    await check('dark + HC');
+    await contrast();
+    await check('dark');
+
+    // The mono (Alt View) variant, set the way the app itself sets it.
+    await page.evaluate(() =>
+      document.documentElement.setAttribute('data-ui-variant', 'mono')
+    );
+    await check('mono dark');
+    await contrast();
+    await check('mono dark + HC');
+    await theme(); // dark -> auto
+    await theme(); // auto -> light
+    await check('mono light + HC');
+    await contrast();
+    await check('mono light');
+
+    // None of that touched the gate itself.
+    await expect(toggle).toHaveAttribute('aria-disabled', 'true');
+  });
+});

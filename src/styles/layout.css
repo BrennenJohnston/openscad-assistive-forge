@@ -215,9 +215,20 @@ body {
    button stays focusable (aria-disabled, not disabled) so keyboard and
    screen-reader users can find it and hear why; it must read as
    unavailable without relying on colour alone (dimmed AND the cursor
-   changes), matching the Classic toolbar's disabled-with-reason look. */
+   changes), matching the Classic toolbar's disabled-with-reason look.
+
+   CW-Q13(c), owner-signed: 0.7, not 0.5, so this gate reads like the City
+   Walk card's (game.css). opacity composites the WHOLE control over its
+   backdrop, so the pair a person sees is not the pair getComputedStyle
+   reports, and nothing measures it unless a guard does the blending —
+   axe skips contrast on aria-disabled entirely. MEASURED across all eight
+   theme states at 0.5, five sat below 4.5:1: light 3.32:1, dark 3.29:1,
+   mono light 3.16:1, mono dark 3.85:1, dark + HC 4.06:1. At 0.7 the worst
+   of the eight is 5.4:1 and it still reads as dimmed. High contrast is the
+   mode people choose BECAUSE they need contrast, which is what made the
+   old value worst exactly where it mattered most. */
 .classic-toggle[aria-disabled='true'] {
-  opacity: 0.5;
+  opacity: 0.7;
   cursor: not-allowed;
 }
 

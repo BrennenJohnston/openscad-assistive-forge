@@ -23,7 +23,17 @@
   outline-offset: 2px;
 }
 
-/* Global focus ring for interactive elements that are not `.btn` */
+/* Global focus ring for interactive elements that are not `.btn`.
+ *
+ * The width and offset come from the tokens, not from numbers written here.
+ * They used to be hardcoded 3px/2px, and because this rule carries
+ * `!important` it beat every attempt to thicken them: `--focus-ring-width`
+ * is already raised to 4px by `:root[data-high-contrast='true']` and now by
+ * the `prefers-contrast: more` block, and neither reached a single button or
+ * link. That media query's own `*:focus-visible { outline-width: 4px
+ * !important }` lost the same way — it sits at (0,1,0) and
+ * `button:focus-visible` here is (0,1,1). MEASURED on WebKit before the
+ * change: a focused button under `prefers-contrast: more` reported 3px. */
 a:focus,
 button:focus,
 summary:focus,
@@ -34,8 +44,8 @@ button:focus-visible,
 summary:focus-visible,
 [role='button']:focus-visible,
 [tabindex]:focus-visible {
-  outline: 3px solid var(--color-focus) !important;
-  outline-offset: 2px !important;
+  outline: var(--focus-ring-width, 3px) solid var(--color-focus) !important;
+  outline-offset: var(--focus-ring-offset, 2px) !important;
 }
 
 /* ============================================================================

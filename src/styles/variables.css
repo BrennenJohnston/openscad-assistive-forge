@@ -599,7 +599,11 @@
     --color-hover-bg-strong: var(--color-hover-bg);
     --color-border-light: #333333;
 
-    /* Stronger focus indicators */
+    /* Stronger focus indicators. The width token is what the global focus
+       rule reads; `--focus-ring` is the box-shadow form used elsewhere.
+       Both are needed - a mode that asks for more contrast and then draws
+       the same ring as everyone else has answered nobody. */
+    --focus-ring-width: 4px;
     --focus-ring: 0 0 0 4px rgba(0, 82, 204, 0.5);
   }
 

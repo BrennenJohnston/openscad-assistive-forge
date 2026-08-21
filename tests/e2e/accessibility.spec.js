@@ -1813,26 +1813,75 @@ test.describe('Enhanced Contrast Preference (prefers-contrast)', () => {
     console.log('prefers-contrast: more - No violations, borders enhanced');
   });
 
-  test('should handle prefers-contrast: more in dark mode', async ({ page }) => {
+  test('should handle prefers-contrast: more in dark mode', async ({
+    page,
+    browserName,
+  }) => {
+    // Same limitation the sibling case above records: Playwright Firefox
+    // does not emulate the contrast media feature, so the preference never
+    // reaches the page and the ring stays at its ordinary width. The app
+    // high-contrast case below needs no emulation, so Firefox still guards
+    // this rule through the mode more people actually use.
+    test.skip(
+      browserName === 'firefox',
+      'Firefox does not support contrast media emulation in Playwright'
+    );
+
     await page.emulateMedia({ colorScheme: 'dark', contrast: 'more' });
     await page.goto('/')
     await page.waitForLoadState('networkidle')
-    
-    // Check focus indicator width
-    await page.keyboard.press('Tab');
-    
-    const focusInfo = await page.evaluate(() => {
-      const el = document.activeElement;
-      const styles = window.getComputedStyle(el);
-      return {
-        outlineWidth: styles.outlineWidth
-      };
-    });
-    
-    const outlineWidthPx = parseFloat(focusInfo.outlineWidth);
-    expect(outlineWidthPx).toBeGreaterThanOrEqual(3);
-    
+
+    // Focus a KNOWN control rather than whatever one Tab happens to reach.
+    // The old version pressed Tab and measured document.activeElement, which
+    // depends on how much of the page has been built: on a loaded CI runner
+    // it landed on a control the app does not style and read the browser's
+    // own 1px ring, which is how this case went red on WebKit while passing
+    // six times over locally.
+    //
+    // It also asserted only ">= 3px", which the ORDINARY ring already
+    // satisfies - so it could never have noticed the enhancement failing,
+    // and the enhancement WAS failing. --focus-ring-width is raised to 4px
+    // both here and by :root[data-high-contrast='true'], but the global
+    // focus rule hardcoded 3px behind !important and beat both. Asserting
+    // the exact width, and then that it drops back without the preference,
+    // is what makes this case able to fail.
+    const focusWidth = () =>
+      page.evaluate(() => {
+        const el = document.getElementById('themeToggle');
+        el.focus();
+        return window.getComputedStyle(el).outlineWidth;
+      });
+
+    expect(await focusWidth()).toBe('4px');
+
+    await page.emulateMedia({ colorScheme: 'dark', contrast: 'no-preference' });
+    expect(await focusWidth()).toBe('3px');
+
     console.log('prefers-contrast: more (dark) - Enhanced focus indicators');
+  });
+
+  test('the app own high contrast mode thickens the focus ring too', async ({
+    page,
+  }) => {
+    // The same token, the same rule, the mode far more people actually use:
+    // :root[data-high-contrast='true'] raises --focus-ring-width to 4px and
+    // it never reached a button either.
+    await page.goto('/')
+    await page.waitForLoadState('networkidle')
+
+    const focusWidth = () =>
+      page.evaluate(() => {
+        const el = document.getElementById('themeToggle');
+        el.focus();
+        return window.getComputedStyle(el).outlineWidth;
+      });
+
+    expect(await focusWidth()).toBe('3px');
+
+    await page.evaluate(() =>
+      document.documentElement.setAttribute('data-high-contrast', 'true')
+    );
+    expect(await focusWidth()).toBe('4px');
   });
 });
 
