@@ -92,6 +92,16 @@ const WINDOW_TILE_BAYS_Y = 3;
 
 const STOREFRONT_HEIGHT_M = 3.5;
 const GROUND_TILE_M = 48;
+// Ground dither (CW-18). The 256 px tile covers GROUND_TILE_M, so a pixel is
+// about 19 cm and a streak runs up to a metre and a half.
+const GROUND_TONE_MIN = 0x26;
+const GROUND_TONE_SPAN = 0x14;
+const GROUND_STREAK_MAX_PX = 8;
+const GROUND_STREAK_ALONG_SHARE = 0.75;
+const GROUND_PATCHES = 40;
+const GROUND_PATCH_STREAKS = 40;
+const GROUND_PATCH_RADIUS_PX = 26;
+const GROUND_LOOSE_STREAKS = 800;
 
 // Building tint model. TIERS drive luminance (what monochrome sees);
 // HUES are the CW-Q5/Q6 palette families (what HC quantization sees).
@@ -364,8 +374,19 @@ function createStorefrontTexture() {
 }
 
 /**
- * Ground dot-noise texture: sparse dim speckles on black for the near-field
- * dither; everything else stays exact black (empty cells).
+ * Ground dither texture: dim streaks on black for the near-field pavement
+ * (CW-18 retune); everything else stays exact black, which is the only tone
+ * the converter reads as an empty cell.
+ *
+ * Three rules, all learned the hard way:
+ * - Tones stay inside a narrow dim band. A visible SURFACE tone carpets the
+ *   lower half of the street view, because perspective stacks every metre of
+ *   road between here and the horizon into a few cell rows.
+ * - The marks are STREAKS, not dots. The reference's pavement reads as scuffs
+ *   and tyre lines; single pixels sub-sample to nothing at a distance and to
+ *   a regular stipple up close.
+ * - The density is uneven. A flat scatter reads as a carpet however dim it
+ *   is, so most marks arrive in patches with bare tarmac between them.
  * @returns {CanvasTexture|null}
  */
 function createGroundTexture() {
@@ -378,13 +399,34 @@ function createGroundTexture() {
   ctx.fillRect(0, 0, size, size);
 
   const rand = makeLcg(0x5eed6a0d);
-  const dots = 150;
-  for (let i = 0; i < dots; i++) {
-    const x = Math.floor(rand() * size);
-    const y = Math.floor(rand() * size);
-    const tone = 0x26 + Math.floor(rand() * 0x14);
-    ctx.fillStyle = `rgb(${tone}, ${tone}, ${tone})`;
-    ctx.fillRect(x, y, rand() < 0.3 ? 2 : 1, 1);
+  const tone = () => {
+    const v = GROUND_TONE_MIN + Math.floor(rand() * GROUND_TONE_SPAN);
+    return `rgb(${v}, ${v}, ${v})`;
+  };
+  // One streak: a run of pixels along one axis, mostly the long way.
+  const streak = (x, y) => {
+    const len = 2 + Math.floor(rand() * GROUND_STREAK_MAX_PX);
+    ctx.fillStyle = tone();
+    if (rand() < GROUND_STREAK_ALONG_SHARE) ctx.fillRect(x, y, len, 1);
+    else ctx.fillRect(x, y, 1, len);
+  };
+
+  // Patches first: a scuffed stretch of tarmac, then the sparse scatter that
+  // keeps the bare ground from reading as a hard edge around them.
+  for (let p = 0; p < GROUND_PATCHES; p++) {
+    const cx = rand() * size;
+    const cy = rand() * size;
+    for (let i = 0; i < GROUND_PATCH_STREAKS; i++) {
+      const dx = (rand() - 0.5) * 2 * GROUND_PATCH_RADIUS_PX;
+      const dy = (rand() - 0.5) * 2 * GROUND_PATCH_RADIUS_PX;
+      streak(
+        Math.floor(cx + dx) & (size - 1),
+        Math.floor(cy + dy) & (size - 1)
+      );
+    }
+  }
+  for (let i = 0; i < GROUND_LOOSE_STREAKS; i++) {
+    streak(Math.floor(rand() * size), Math.floor(rand() * size));
   }
 
   return makeRepeatingTexture(canvas, 1 / GROUND_TILE_M, 1 / GROUND_TILE_M);
