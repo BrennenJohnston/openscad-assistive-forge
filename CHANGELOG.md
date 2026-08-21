@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Twice the city** (CW-17) - each of the four City Walk cities now covers twice the ground it did.
+  The bake radius moves from 500 m to 707 m, which is the number that doubles the AREA; doubling the
+  radius would have quadrupled it. All four extracts were rebaked from OpenStreetMap at the same
+  centers. Seattle grows from 272 to 475 buildings and 569 KB to 1016 KB, Denver from 190 to 330 and
+  343 KB to 893 KB, Albuquerque from 248 to 638 and 310 KB to 610 KB, Burnaby from 183 to 436 and
+  351 KB to 628 KB; the playable area of each goes from about 1.1 square kilometers to about 2.1.
+  Only Seattle had real map trees before, because the tree query arrived with CW-16 and only Seattle
+  was rebaked then. Now all four do - Denver alone carries 2291 of them, and its downtown streets read
+  as the leafy ones they are. Two things the extra ground does not cost you: the far city still fades
+  into the fog at the same distance, because that is a look and not a boundary, and the frame rate at
+  the default character size is unchanged, because the whole city has always been a handful of merged
+  meshes rather than one mesh per building. The extra ground is emptier than the middle, so the city
+  is in fact more walkable than it was: the share of it blocked by buildings falls in three cities of
+  four. What it does cost is the download - the largest city goes from 76 KB to 137 KB compressed -
+  and about a fifth of a second more to open a city on this machine
+
 - **Trees and parked cars along the streets** (CW-16) - the City Walk's streets were empty tarmac
   between the buildings: correct, and nothing like a city anybody has stood in. Trees and parked cars
   now furnish them. The trees are the real ones first - the bake script asks OpenStreetMap for its
