@@ -1663,7 +1663,14 @@ details.param-group.forge-disclosure[open] > summary::before {
 }
 
 /* Smart Cache Clear Dialog Styles */
-.cache-clear-dialog {
+/* D-69 (found by UF-36, fixed here). `.cache-clear-dialog` is on the
+   `.preset-modal` SCRIM (main.js:1795 sets both classes), not on the box, so
+   this max-width was shrinking the full-screen flex centring container.
+   MEASURED at b4e55bd: at 800px and 1280px the scrim rendered w=500 pinned to
+   the left edge, taking the dark backdrop and the centring with it; only
+   phones were unaffected, because there the max-width never binds. Size the
+   content box, which is what every other dialog here does. */
+.cache-clear-dialog .preset-modal-content {
   max-width: 500px;
 }
 
@@ -10119,10 +10126,16 @@ button.file-nav-folder-row {
   position: relative;
 }
 
+/* One source for the hint's words, used by both the wide and the narrow
+   placement below, so the two can never drift apart. */
+#featuresGuideModal .modal-content.tutorial-target-highlight {
+  --features-guide-close-hint: 'Close to continue';
+}
+
 #featuresGuideModal
   .modal-content.tutorial-target-highlight
   .modal-close::after {
-  content: 'Close to continue';
+  content: var(--features-guide-close-hint);
   position: absolute;
   right: 100%;
   top: 50%;
@@ -10133,6 +10146,37 @@ button.file-nav-folder-row {
   font-weight: 500;
   opacity: 0.9;
   pointer-events: none;
+}
+
+/* D-66 (UF-38). `right: 100%` anchors the hint to the X and lets it run
+   leftward across whatever is there. On a phone the title, the hint and the X
+   share one row, so it printed straight over "Features Guide" - the owner
+   photographed it (164657). Give the hint its own row inside the header bar
+   instead: `flex-wrap` plus a full-basis pseudo-element reserves real space,
+   so it cannot overlap anything rather than merely being aimed elsewhere.
+   The close button's pulse is untouched. */
+@media (max-width: 600px) {
+  #featuresGuideModal
+    .modal-content.tutorial-target-highlight
+    .modal-close::after {
+    content: none;
+  }
+
+  #featuresGuideModal .modal-content.tutorial-target-highlight .modal-header {
+    flex-wrap: wrap;
+  }
+
+  #featuresGuideModal
+    .modal-content.tutorial-target-highlight
+    .modal-header::after {
+    content: var(--features-guide-close-hint);
+    flex: 0 0 100%;
+    margin-top: var(--space-2xs);
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    opacity: 0.9;
+    pointer-events: none;
+  }
 }
 
 @keyframes closeButtonHint {
@@ -11080,15 +11124,62 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   outline-offset: 1px;
 }
 
-/* Body content area */
+/* Body content area.
+   D-65 (UF-38): `flex: 1` means the body is whatever the header and footer
+   leave, and two separate rules cap the card - the JS dock cap
+   (viewport.height * 0.45) and the `50dvh` further down this file. Neither
+   left the body a floor, so on a phone-height viewport the instructions were
+   the only part of the card that could vanish. */
 .tutorial-body {
   flex: 1;
+  min-height: var(--tutorial-body-min-height);
   overflow-y: auto;
   padding: 0 var(--space-md) var(--space-md);
 }
 
 .tutorial-content {
   color: var(--color-text-primary);
+}
+
+/* The cue that admits there is more below the fold (D-65).
+   A zero-height flex item between the body and the footer: it cannot take
+   space from the body it is reporting on, and being positioned it paints over
+   the body's last, half-cut line. Decorative throughout - `aria-hidden` on the
+   element, no tab stop, and the scroll position it describes is already
+   available to assistive tech through the scroll container itself. */
+.tutorial-scroll-cue {
+  position: relative;
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
+  opacity: 0;
+  color: var(--color-text-secondary);
+  transition: opacity var(--motion-base) ease;
+}
+
+.tutorial-panel.tutorial-has-more .tutorial-scroll-cue {
+  opacity: 1;
+}
+
+.tutorial-scroll-cue::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--tutorial-scroll-cue-height);
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    var(--color-bg-primary) 85%
+  );
+}
+
+.tutorial-scroll-cue svg {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .tutorial-step-title {
@@ -11290,43 +11381,6 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 
 .tutorial-requirement-pulse {
   animation: requirementPulse 0.5s ease;
-}
-
-/* Drawer reopen prompt styling */
-.tutorial-requirement-action {
-  background: var(--color-info-bg, rgba(23, 162, 184, 0.1));
-  border-left-color: var(--color-info, #17a2b8);
-}
-
-.tutorial-drawer-prompt {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2xs);
-}
-
-.tutorial-reopen-drawer-btn {
-  display: inline-flex;
-  align-items: center;
-  padding: var(--space-2xs) var(--space-xs);
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  background: var(--color-accent);
-  color: var(--color-on-accent);
-  border: none;
-  border-radius: var(--border-radius-sm);
-  cursor: pointer;
-  transition: background-color var(--motion-fast) ease;
-}
-
-.tutorial-reopen-drawer-btn:hover,
-.tutorial-reopen-drawer-btn:focus {
-  background: var(--color-accent-hover);
-  outline: none;
-}
-
-.tutorial-reopen-drawer-btn:focus-visible {
-  box-shadow: 0 0 0 2px var(--color-focus);
 }
 
 /* Footer with navigation */
@@ -11713,6 +11767,17 @@ body:has(#featuresGuideModal .modal-content.tutorial-target-highlight)
   outline-width: 4px !important;
 }
 
+/* A soft fade is the wrong instrument at high contrast: draw the fold as a
+   hard edge instead, so "there is more below" survives the theme. */
+[data-high-contrast='true'] .tutorial-scroll-cue {
+  color: var(--color-text-primary);
+}
+
+[data-high-contrast='true'] .tutorial-scroll-cue::before {
+  background: var(--color-bg-primary);
+  border-top: var(--border-width-base) solid var(--color-border);
+}
+
 /* High Contrast Mode - Tutorial buttons */
 [data-high-contrast='true'] .tutorial-btn-back {
   background: var(--color-bg-tertiary);
@@ -11757,6 +11822,18 @@ body:has(#featuresGuideModal .modal-content.tutorial-target-highlight)
     stroke: Highlight;
     stroke-width: 3px;
   }
+
+  /* Gradients do not render in forced colors, so the fade would simply be
+     absent. The fold has to be a drawn edge. */
+  .tutorial-scroll-cue::before {
+    background: Canvas;
+    border-top: 1px solid CanvasText;
+    forced-color-adjust: none;
+  }
+
+  .tutorial-scroll-cue {
+    color: CanvasText;
+  }
 }
 
 /* Enhanced Contrast Mode (prefers-contrast: more) - Tutorial */
@@ -11783,6 +11860,15 @@ body:has(#featuresGuideModal .modal-content.tutorial-target-highlight)
 
   .tutorial-target-highlight {
     outline-width: 4px !important;
+  }
+
+  .tutorial-scroll-cue {
+    color: var(--color-text-primary);
+  }
+
+  .tutorial-scroll-cue::before {
+    background: var(--color-bg-primary);
+    border-top: var(--border-width-thin) solid var(--color-border);
   }
 }
 
@@ -11841,6 +11927,7 @@ body:has(#featuresGuideModal .modal-content.tutorial-target-highlight)
   .tutorial-panel,
   .tutorial-spotlight-cutout,
   .tutorial-requirement,
+  .tutorial-scroll-cue,
   .tutorial-target-highlight {
     animation: none !important;
     transition: none !important;
@@ -11860,7 +11947,16 @@ body:has(#featuresGuideModal .modal-content.tutorial-target-highlight)
    When a target is highlighted, allow JS positioning so the panel can move
    out of the way instead of covering the control. */
 @media (max-width: 600px) {
-  .tutorial-panel:not(.tutorial-panel-positioned) {
+  /* D-65 (UF-38): `:not(.tutorial-panel-positioned)` was also catching the
+     two branches that CENTRE the card - "position: center" steps and the
+     target-not-found fallback - which set `top: 50%` and a centring transform
+     in JS. Those cards then inherited bottom-sheet geometry they never asked
+     for, including the safe-area `padding-bottom` below: MEASURED at 412x810,
+     16px of dead band under the footer taken straight out of the body, and
+     ~48px on a real gesture-nav phone. A centred card is not a sheet. */
+  .tutorial-panel:not(.tutorial-panel-positioned):not(
+      .tutorial-panel-centered
+    ) {
     position: fixed;
     bottom: 0;
     left: 0;

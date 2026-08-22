@@ -2162,6 +2162,13 @@ function clearTutorialProgress() {
 /** Fired on document whenever a registry field is written. */
 export const TUTORIAL_STATE_EVENT = 'forge:tutorial-state-change';
 
+/**
+ * Fired on document when a tour appears or leaves. `detail.running` is true
+ * while the overlay is on screen. Consumed by the mobile drawer, which must
+ * not claim `aria-modal` over a tour card sitting outside it (D-70).
+ */
+export const TUTORIAL_RUN_EVENT = 'forge:tutorial-run-change';
+
 // A mode variant is the same tutorial wearing the current interface — one
 // welcome card, one family record ('classic-intro' counts as 'intro').
 const TUTORIAL_FAMILY_OF = (() => {
@@ -3104,7 +3111,13 @@ function createTutorialOverlay() {
         <div id="tutorial-panel-content" class="tutorial-content"></div>
         <div class="tutorial-requirement" id="tutorialRequirement" role="status" aria-live="polite"></div>
       </div>
-      
+
+      <div class="tutorial-scroll-cue" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </div>
+
       <div class="tutorial-footer">
         <div class="tutorial-progress" aria-live="polite">
           Step <span id="tutorial-step-current">1</span> of <span id="tutorial-step-total">${activeTutorial.steps.length}</span>
@@ -3169,6 +3182,23 @@ function createTutorialOverlay() {
 
   // Handle browser navigation (back/forward) during tutorial
   window.addEventListener('popstate', handlePopState);
+
+  announceTutorialRunState(true);
+}
+
+/**
+ * Tell the rest of the app that a tour is or is not on screen (D-70).
+ *
+ * A document event rather than an import, for the reason the drawer's own
+ * `ui-mode-changed` listener already gives: the drawer must not depend on the
+ * tutorial module, and the tutorial must not reach into the drawer.
+ *
+ * @param {boolean} running
+ */
+function announceTutorialRunState(running) {
+  document.dispatchEvent(
+    new CustomEvent(TUTORIAL_RUN_EVENT, { detail: { running } })
+  );
 }
 
 /**
@@ -3192,6 +3222,11 @@ function setupTutorialListeners() {
     navigateToStep(currentStepIndex - 1)
   );
   nextBtn?.addEventListener('click', handleNextClick);
+
+  // The cue has to retire as the reader reaches the end, not just appear.
+  tutorialOverlay
+    .querySelector('.tutorial-body')
+    ?.addEventListener('scroll', updateScrollCue, { passive: true });
 
   // Click outside panel to focus target (if there is one)
   tutorialOverlay.addEventListener('click', handleOverlayClick);
@@ -3846,6 +3881,13 @@ async function showStep(stepIndex) {
     `;
   }
 
+  // D-65 (UF-38). The body is a scroll container and it keeps its offset
+  // across an innerHTML swap, so a reader who scrolled the previous step to
+  // the bottom arrived at the next one with its title already scrolled off the
+  // top. MEASURED at 412x810 while checking the new cue.
+  const bodyEl = tutorialOverlay.querySelector('.tutorial-body');
+  if (bodyEl) bodyEl.scrollTop = 0;
+
   // Update progress
   const stepCurrentEl = tutorialOverlay.querySelector('#tutorial-step-current');
   if (stepCurrentEl) stepCurrentEl.textContent = stepIndex + 1;
@@ -3901,10 +3943,58 @@ async function showStep(stepIndex) {
 }
 
 /**
+ * Park the card in the middle of the screen: the step asked for `center`, or
+ * its target could not be resolved.
+ *
+ * D-65 (UF-38). Both callers used to do this by hand, and both left `dock()`'s
+ * inline `width` and `maxHeight` behind while dropping the class that keeps
+ * the mobile bottom-sheet rule away - so a centred card was sized by one
+ * step's dock arithmetic and padded by another rule's safe-area inset.
+ * `tutorial-panel-centered` says which of the two un-docked states this is.
+ *
+ * @param {HTMLElement} panel
+ * @param {HTMLElement} arrow
+ */
+function centerPanel(panel, arrow) {
+  panel.style.position = 'fixed';
+  panel.style.top = '50%';
+  panel.style.left = '50%';
+  panel.style.right = '';
+  panel.style.bottom = '';
+  panel.style.width = '';
+  panel.style.maxHeight = '';
+  panel.style.transform = 'translate(-50%, -50%)';
+  panel.classList.remove('tutorial-panel-positioned');
+  panel.classList.add('tutorial-panel-centered');
+  if (arrow) arrow.style.display = 'none';
+}
+
+/**
+ * Say out loud that the card's body has more text below the fold (D-65).
+ *
+ * The body is a scroll container with two independent caps above it, and until
+ * now it clipped mid-sentence in silence. Presentation only: the cue element
+ * is `aria-hidden`, takes no tab stop, and adds nothing to the live regions -
+ * a screen-reader user reaches the rest through the scroll container itself.
+ */
+function updateScrollCue() {
+  if (!tutorialOverlay) return;
+  const panel = tutorialOverlay.querySelector('.tutorial-panel');
+  const body = tutorialOverlay.querySelector('.tutorial-body');
+  if (!panel || !body) return;
+  const hidden = body.scrollHeight - body.scrollTop - body.clientHeight;
+  panel.classList.toggle('tutorial-has-more', hidden > 2);
+}
+
+/**
  * Update spotlight cutout and panel position
  */
 function updateSpotlightAndPosition() {
   if (!tutorialOverlay || isMinimized) return;
+
+  // Every branch below can change the card's height, and several return early.
+  // One frame later the layout has settled whichever way it went.
+  requestAnimationFrame(updateScrollCue);
 
   const step = activeTutorial.steps[currentStepIndex];
   const panel = tutorialOverlay.querySelector('.tutorial-panel');
@@ -3928,15 +4018,7 @@ function updateSpotlightAndPosition() {
     // No highlight - center the panel, hide spotlight
     cutout.setAttribute('width', '0');
     cutout.setAttribute('height', '0');
-    panel.style.position = 'fixed';
-    panel.style.top = '50%';
-    panel.style.left = '50%';
-    // Clear any docked constraints from mobile CSS so centering is reliable
-    panel.style.right = '';
-    panel.style.bottom = '';
-    panel.style.transform = 'translate(-50%, -50%)';
-    panel.classList.remove('tutorial-panel-positioned');
-    arrow.style.display = 'none';
+    centerPanel(panel, arrow);
     currentTarget = null;
     return;
   }
@@ -3953,12 +4035,7 @@ function updateSpotlightAndPosition() {
     // Target not found - center panel
     cutout.setAttribute('width', '0');
     cutout.setAttribute('height', '0');
-    panel.style.position = 'fixed';
-    panel.style.top = '50%';
-    panel.style.left = '50%';
-    panel.style.transform = 'translate(-50%, -50%)';
-    panel.classList.remove('tutorial-panel-positioned');
-    arrow.style.display = 'none';
+    centerPanel(panel, arrow);
     return;
   }
 
@@ -4190,6 +4267,7 @@ function updateSpotlightAndPosition() {
       panel.style.maxHeight = `${Math.min(available, viewport.height * 0.45)}px`;
 
       panel.classList.add('tutorial-panel-positioned');
+      panel.classList.remove('tutorial-panel-centered');
       arrow.style.display = 'none';
     };
 
@@ -4242,6 +4320,7 @@ function updateSpotlightAndPosition() {
   const position = calculateBestPosition(rect, step.position, panelRect);
   positionPanel(panel, arrow, rect, position);
   panel.classList.add('tutorial-panel-positioned');
+  panel.classList.remove('tutorial-panel-centered');
 
   // Desktop/tablet: keep arrow enabled as-is (no further changes).
 }
@@ -4999,6 +5078,7 @@ export function closeTutorial(completed = false, options = {}) {
 
   tutorialOverlay.remove();
   tutorialOverlay = null;
+  announceTutorialRunState(false);
 
   // Store step info for announcement before clearing
   const stepsTotal = activeTutorial?.steps?.length || 0;
