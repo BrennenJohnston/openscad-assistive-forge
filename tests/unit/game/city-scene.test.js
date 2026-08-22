@@ -7,6 +7,7 @@ import {
   buildStreetProps,
   ROAD_TONES,
   trafficLightState,
+  buildRain,
 } from '../../../src/js/game/city-scene.js'
 import { parseCityExtract } from '../../../src/js/game/city-data.js'
 import {
@@ -930,5 +931,74 @@ describe('trafficLightState (CW-19)', () => {
   it('is stable for a negative or huge elapsed time', () => {
     expect(['red', 'amber', 'green']).toContain(trafficLightState(-5000, 0))
     expect(['red', 'amber', 'green']).toContain(trafficLightState(1e9, 1))
+  })
+})
+
+describe('buildRain (CW-20)', () => {
+  const drops = (rain) => rain.group.children.filter((m) => m.visible)
+
+  it('starts dry, and shows more drops the heavier it gets', () => {
+    const rain = buildRain()
+    expect(rain.group.visible).toBe(false)
+    expect(drops(rain)).toHaveLength(0)
+
+    rain.setLevel(0)
+    const light = drops(rain).length
+    rain.setLevel(1)
+    const heavy = drops(rain).length
+    expect(light).toBeGreaterThan(0)
+    expect(heavy).toBeGreaterThan(light)
+
+    rain.setLevel(null)
+    expect(rain.group.visible).toBe(false)
+    expect(drops(rain)).toHaveLength(0)
+    rain.dispose()
+  })
+
+  it('recycles drops instead of allocating them', () => {
+    // The pool is built once at the heaviest size and only ever changes which
+    // drops are VISIBLE, so switching intensity mid-storm cannot stutter.
+    const rain = buildRain()
+    const total = rain.group.children.length
+    rain.setLevel(0)
+    rain.update(0.1, 0, 0)
+    rain.setLevel(1)
+    rain.update(0.1, 0, 0)
+    expect(rain.group.children).toHaveLength(total)
+    rain.dispose()
+  })
+
+  it('lifts a drop back to the top once it has fallen through', () => {
+    const rain = buildRain()
+    rain.setLevel(0)
+    // Long enough that every drop must have passed the bottom at least once.
+    for (let i = 0; i < 60; i++) rain.update(0.1, 0, 0)
+    for (const m of drops(rain)) {
+      expect(m.position.z).toBeGreaterThan(0)
+    }
+    rain.dispose()
+  })
+
+  it('keeps the rain around the player instead of leaving it behind', () => {
+    const rain = buildRain()
+    rain.setLevel(0)
+    rain.update(0.016, 0, 0)
+    rain.update(0.016, 400, -250)
+    // The box follows, so a player who walks across the city is still in it.
+    expect(rain.group.position.x).toBe(400)
+    expect(rain.group.position.y).toBe(-250)
+    for (const m of drops(rain)) {
+      expect(Math.abs(m.position.x)).toBeLessThanOrEqual(40)
+      expect(Math.abs(m.position.y)).toBeLessThanOrEqual(40)
+    }
+    rain.dispose()
+  })
+
+  it('does nothing at all while it is not raining', () => {
+    const rain = buildRain()
+    const before = rain.group.children.map((m) => m.position.z)
+    rain.update(1, 10, 10)
+    expect(rain.group.children.map((m) => m.position.z)).toEqual(before)
+    rain.dispose()
   })
 })
