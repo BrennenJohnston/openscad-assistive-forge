@@ -890,3 +890,69 @@ describe('a turret does not delete its hall (CW-26)', () => {
     expect(model.buildings[0].partsAreMass).toBe(false)
   })
 })
+
+describe('roofs resolve from tags, or stay flat (CW-26)', () => {
+  const load = () => import('../../../src/js/game/city-data.js')
+
+  it('takes roof:height literally', async () => {
+    const { resolveRoof } = await load()
+    const r = resolveRoof({ 'roof:shape': 'gabled', 'roof:height': '4' }, 20, 0)
+    expect(r).toEqual({
+      shape: 'gabled',
+      heightM: 4,
+      orientation: undefined,
+    })
+  })
+
+  it('falls back to roof:levels, then to a share of the body', async () => {
+    const { resolveRoof, LEVEL_HEIGHT_M } = await load()
+    expect(
+      resolveRoof({ 'roof:shape': 'hipped', 'roof:levels': '1' }, 20, 0).heightM
+    ).toBe(LEVEL_HEIGHT_M)
+    // No roof height tagged at all: a quarter of the body.
+    expect(resolveRoof({ 'roof:shape': 'hipped' }, 20, 0).heightM).toBe(5)
+  })
+
+  it('never lets the roof eat the building', async () => {
+    const { resolveRoof } = await load()
+    // A roof taller than the building is a tagging error, not a spire.
+    const r = resolveRoof(
+      { 'roof:shape': 'pyramidal', 'roof:height': '80' },
+      20,
+      0
+    )
+    expect(r.heightM).toBeLessThanOrEqual(12)
+    expect(r.heightM).toBeLessThan(20)
+  })
+
+  it('treats flat and untagged as no roof at all', async () => {
+    const { resolveRoof } = await load()
+    expect(resolveRoof({ 'roof:shape': 'flat' }, 20, 0)).toBeNull()
+    expect(resolveRoof({}, 20, 0)).toBeNull()
+  })
+
+  it('refuses a roof too shallow to be worth the triangles', async () => {
+    const { resolveRoof } = await load()
+    expect(
+      resolveRoof({ 'roof:shape': 'gabled', 'roof:height': '0.4' }, 20, 0)
+    ).toBeNull()
+  })
+
+  it('measures the roof against the BODY, not the ground', async () => {
+    const { resolveRoof } = await load()
+    // An elevated volume 10 m tall starting at 30 m: the quarter share is of
+    // the 10, not the 40, or a skybridge would grow a mountain.
+    expect(resolveRoof({ 'roof:shape': 'hipped' }, 40, 30).heightM).toBe(2.5)
+  })
+
+  it('carries roof:orientation through untouched', async () => {
+    const { resolveRoof } = await load()
+    expect(
+      resolveRoof(
+        { 'roof:shape': 'gabled', 'roof:orientation': 'across' },
+        20,
+        0
+      ).orientation
+    ).toBe('across')
+  })
+})

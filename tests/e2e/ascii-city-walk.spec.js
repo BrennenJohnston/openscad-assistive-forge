@@ -2626,3 +2626,96 @@ test.describe('ASCII City Walk — rain stays in the street (CW-20)', () => {
     ).toBe(true)
   })
 })
+
+/**
+ * CW-26: the cities carry building:part volumes and pitched roofs, and both
+ * have to survive all the way into the rendered scene — not merely into the
+ * parsed model.
+ */
+test.describe('ASCII City Walk — real silhouettes (CW-26)', () => {
+  test('a part-mapped tower is drawn as its parts, not as one box', async ({
+    page,
+  }) => {
+    test.setTimeout(90000)
+    await launchGame(page)
+    await enterCity(page)
+
+    const shape = await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const hosts = g.model.buildings.filter((b) => b.parts?.length > 0)
+      const best = hosts.sort((a, b) => b.parts.length - a.parts.length)[0]
+      if (!best) return null
+      const heights = best.parts
+        .map((p) => p.heightM)
+        .sort((a, b) => b - a)
+      return {
+        hostCount: hosts.length,
+        parts: best.parts.length,
+        partsAreMass: best.partsAreMass,
+        tallest: heights[0],
+        shortest: heights[heights.length - 1],
+        outline: best.heightM,
+      }
+    })
+
+    expect(shape, 'Seattle carries no building:part volumes').not.toBeNull()
+    // The bake keeps them and the parser files them under their outline.
+    expect(shape.hostCount).toBeGreaterThan(20)
+    expect(shape.parts).toBeGreaterThan(1)
+    // This tower's parts cover it, so they ARE its mass and the plain
+    // outline box stands down.
+    expect(shape.partsAreMass).toBe(true)
+    // A stepped tower: the parts are not all one height, which is the whole
+    // reason for shipping them.
+    expect(shape.tallest - shape.shortest).toBeGreaterThan(10)
+  })
+
+  test('a pitched roof caps its building instead of sitting on top', async ({
+    page,
+  }) => {
+    test.setTimeout(90000)
+    await launchGame(page)
+    await enterCity(page, 'Burnaby, British Columbia')
+
+    const roof = await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const target = g.model.buildings.find(
+        (b) => b.roof && b.roof.shape === 'pyramidal'
+      )
+      if (!target) return null
+      const xs = target.outer.map((p) => p[0])
+      const ys = target.outer.map((p) => p[1])
+      const cx = xs.reduce((a, c) => a + c, 0) / xs.length
+      const cy = ys.reduce((a, c) => a + c, 0) / ys.length
+      const apexZ = target.heightM
+
+      let apexVerts = 0
+      let above = 0
+      g.scene.traverse((o) => {
+        if (!o.isMesh || !o.geometry?.getAttribute) return
+        const pos = o.geometry.getAttribute('position')
+        if (!pos) return
+        for (let i = 0; i < pos.count; i++) {
+          const x = pos.getX(i)
+          const y = pos.getY(i)
+          const z = pos.getZ(i)
+          if (Math.hypot(x - cx, y - cy) > 12) continue
+          if (z > apexZ + 0.05) above++
+          if (Math.hypot(x - cx, y - cy) < 1.5 && Math.abs(z - apexZ) < 0.05) {
+            apexVerts++
+          }
+        }
+      })
+      return { apexZ, apexVerts, above, roofM: target.roof.heightM }
+    })
+
+    expect(roof, 'Burnaby grew no pyramidal roof').not.toBeNull()
+    // Vertices meet at a point directly over the footprint, at exactly the
+    // height the building is tagged with.
+    expect(roof.apexVerts).toBeGreaterThan(0)
+    // The roof CAPS the body rather than being stacked on a full-height box:
+    // nothing at all pokes above the tagged height.
+    expect(roof.above, 'something is drawn above the roof apex').toBe(0)
+    expect(roof.roofM).toBeGreaterThan(0)
+  })
+})

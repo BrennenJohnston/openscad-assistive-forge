@@ -44,6 +44,46 @@ const MAX_BUILDING_HEIGHT_M = 700;
 // stand proud of it.
 export const PART_COVERAGE_MIN = 0.6;
 
+// CW-26 roofs. A roof shallower than this is not worth the triangles at the
+// distance a walker sees it, and one deeper than a fifth of the building
+// starts to look like a circus tent, so an untagged pitch takes a quarter of
+// the body and everything is clamped into a believable band.
+const ROOF_DEFAULT_SHARE = 0.25;
+const ROOF_MAX_SHARE = 0.6;
+const ROOF_MIN_M = 1.5;
+const ROOF_MAX_M = 10;
+
+/**
+ * Resolve a roof from its tags, or null when the building has none worth
+ * building. Height cascade mirrors the body: roof:height → roof:levels ×
+ * LEVEL_HEIGHT_M → a share of the body.
+ *
+ * @param {Object} tags
+ * @param {number} heightM - total building height
+ * @param {number} minHeightM - where the body starts
+ * @returns {{shape: string, heightM: number, orientation: string|undefined}|null}
+ */
+export function resolveRoof(tags = {}, heightM = 0, minHeightM = 0) {
+  const shape = tags['roof:shape'];
+  if (typeof shape !== 'string' || shape === '' || shape === 'flat') {
+    return null;
+  }
+  const body = heightM - minHeightM;
+  if (!(body > 0)) return null;
+
+  let roofM = parseLengthMeters(tags['roof:height']);
+  if (roofM === null) {
+    const levels = parseFloat(tags['roof:levels']);
+    roofM =
+      Number.isFinite(levels) && levels > 0 ? levels * LEVEL_HEIGHT_M : null;
+  }
+  if (roofM === null) roofM = body * ROOF_DEFAULT_SHARE;
+  roofM = Math.min(roofM, body * ROOF_MAX_SHARE, ROOF_MAX_M);
+  if (!(roofM >= ROOF_MIN_M)) return null;
+
+  return { shape, heightM: roofM, orientation: tags['roof:orientation'] };
+}
+
 // Visual approximation of paved width per highway class, in meters. These
 // are game-world ribbons, not survey data.
 export const ROAD_WIDTHS_M = {
@@ -379,7 +419,14 @@ export function parseCityExtract(extract, options = {}) {
         continue;
       }
       const { heightM, minHeightM } = resolveBuildingHeight(tags);
-      partWays.push({ outer: ring, holes: [], heightM, minHeightM, tags });
+      partWays.push({
+        outer: ring,
+        holes: [],
+        heightM,
+        minHeightM,
+        tags,
+        roof: resolveRoof(tags, heightM, minHeightM),
+      });
       continue;
     }
 
@@ -399,6 +446,7 @@ export function parseCityExtract(extract, options = {}) {
         heightM,
         minHeightM,
         name: tags.name,
+        roof: resolveRoof(tags, heightM, minHeightM),
         tags,
         parts: [],
         partsAreMass: false,
@@ -441,6 +489,7 @@ export function parseCityExtract(extract, options = {}) {
           heightM,
           minHeightM,
           name: tags.name,
+          roof: resolveRoof(tags, heightM, minHeightM),
           tags,
           parts: [],
           partsAreMass: false,

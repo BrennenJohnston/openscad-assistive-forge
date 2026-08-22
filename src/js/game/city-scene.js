@@ -521,6 +521,157 @@ function extrudeBuilding(building, tint, options = {}) {
   return geometry;
 }
 
+// CW-26 roofs. Only these three become geometry. Each has an exact
+// construction a walker can recognise on a skyline; round, dome, mansard,
+// skillion and the rest keep their flat top rather than being guessed at,
+// because a wrong roof reads worse than no roof.
+const ROOF_SHAPES_BUILT = new Set(['pyramidal', 'gabled', 'hipped']);
+
+// A gable needs a ridge, and a ridge needs to know which way the building
+// runs. That question only has an honest answer when the footprint really is
+// a rectangle, so anything baggier than this keeps its flat top.
+const ROOF_RECT_FILL_MIN = 0.85;
+
+/** Unsigned shoelace area of a projected ring. */
+function ringAreaM2(ring) {
+  let sum = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    sum += ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
+  }
+  return Math.abs(sum / 2);
+}
+
+/**
+ * Smallest-area oriented bounding box of a ring, swept in one-degree steps.
+ * Exact enough to place a ridge and far less code than rotating calipers.
+ *
+ * @param {Array<[number,number]>} ring
+ * @returns {{area:number,c:number,s:number,minU:number,maxU:number,minV:number,maxV:number}|null}
+ */
+function orientedBox(ring) {
+  let best = null;
+  for (let deg = 0; deg < 90; deg++) {
+    const a = (deg * Math.PI) / 180;
+    const c = Math.cos(a);
+    const s = Math.sin(a);
+    let minU = Infinity;
+    let maxU = -Infinity;
+    let minV = Infinity;
+    let maxV = -Infinity;
+    for (const [x, y] of ring) {
+      const u = x * c + y * s;
+      const v = -x * s + y * c;
+      if (u < minU) minU = u;
+      if (u > maxU) maxU = u;
+      if (v < minV) minV = v;
+      if (v > maxV) maxV = v;
+    }
+    const area = (maxU - minU) * (maxV - minV);
+    if (best === null || area < best.area) {
+      best = { area, c, s, minU, maxU, minV, maxV };
+    }
+  }
+  return best && best.area > 0 ? best : null;
+}
+
+/**
+ * A sloped roof solid standing on a volume's footprint, or null when the
+ * shape is not one we build or the footprint cannot carry an honest ridge.
+ * The body below has already been shortened by the roof's height, so this
+ * caps it rather than sitting on top of a full-height box.
+ *
+ * @param {Object} volume - a building or building:part, carrying .roof
+ * @param {[number, number, number]} tint
+ * @returns {BufferGeometry|null}
+ */
+function roofGeometry(volume, tint) {
+  const roof = volume.roof;
+  if (!roof || !ROOF_SHAPES_BUILT.has(roof.shape)) return null;
+  const ring = volume.outer;
+  if (!Array.isArray(ring) || ring.length < 3) return null;
+
+  const topZ = volume.heightM;
+  const baseZ = topZ - roof.heightM;
+  if (!(baseZ > volume.minHeightM)) return null;
+
+  const tris = [];
+  const push = (a, b, c) => {
+    tris.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
+  };
+
+  if (roof.shape === 'pyramidal') {
+    // Exact for ANY polygon: every footprint edge rises to one apex.
+    let cx = 0;
+    let cy = 0;
+    for (const [x, y] of ring) {
+      cx += x;
+      cy += y;
+    }
+    const apex = [cx / ring.length, cy / ring.length, topZ];
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      push(
+        [ring[j][0], ring[j][1], baseZ],
+        [ring[i][0], ring[i][1], baseZ],
+        apex
+      );
+    }
+  } else {
+    const box = orientedBox(ring);
+    if (!box) return null;
+    if (ringAreaM2(ring) / box.area < ROOF_RECT_FILL_MIN) return null;
+
+    const { c, s, minU, maxU, minV, maxV } = box;
+    // The ridge runs along the LONG axis unless the mapper said otherwise.
+    let alongU = maxU - minU >= maxV - minV;
+    if (roof.orientation === 'across') alongU = !alongU;
+
+    // One construction serves both axes: p runs along the ridge, q across it.
+    const at = alongU
+      ? (p, q, z) => [p * c - q * s, p * s + q * c, z]
+      : (p, q, z) => [q * c - p * s, q * s + p * c, z];
+    const p0 = alongU ? minU : minV;
+    const p1 = alongU ? maxU : maxV;
+    const q0 = alongU ? minV : minU;
+    const q1 = alongU ? maxV : maxU;
+
+    const qMid = (q0 + q1) / 2;
+    // A hip pulls the ridge in by half the width at each end; a gable does
+    // not, which leaves its ends vertical triangles instead of slopes.
+    const inset =
+      roof.shape === 'hipped'
+        ? Math.min((q1 - q0) / 2, (p1 - p0) / 2 - 0.01)
+        : 0;
+
+    const r0 = at(p0 + inset, qMid, topZ);
+    const r1 = at(p1 - inset, qMid, topZ);
+    const c00 = at(p0, q0, baseZ);
+    const c10 = at(p1, q0, baseZ);
+    const c11 = at(p1, q1, baseZ);
+    const c01 = at(p0, q1, baseZ);
+
+    push(c00, c10, r1);
+    push(c00, r1, r0);
+    push(c11, c01, r0);
+    push(c11, r0, r1);
+    push(c10, c11, r1);
+    push(c01, c00, r0);
+  }
+
+  if (tris.length === 0) return null;
+  const geometry = new BufferGeometry();
+  const position = new Float32Array(tris);
+  geometry.setAttribute('position', new BufferAttribute(position, 3));
+  // The buildings merge as one geometry, so the attribute set has to match
+  // what ExtrudeGeometry produces or mergeGeometries refuses the batch.
+  geometry.setAttribute(
+    'uv',
+    new BufferAttribute(new Float32Array((position.length / 3) * 2), 2)
+  );
+  geometry.computeVertexNormals();
+  paintGeometry(geometry, tint);
+  return geometry;
+}
+
 /**
  * Build flat ribbon strips along a road centerline: two triangles per
  * segment, unmitred joins (adjacent quads simply overlap). With
@@ -882,11 +1033,20 @@ export function buildCityGroup(model) {
       : [building, ...(building.parts ?? [])];
     let anyGeom = false;
     for (const volume of volumes) {
-      const geom = extrudeBuilding(volume, tint);
-      if (!geom) continue;
+      // A pitched roof CAPS its volume rather than sitting on top of it: the
+      // body is shortened by exactly what the roof occupies, so the building
+      // still finishes at its tagged height.
+      const roof = roofGeometry(volume, tint);
+      const body = roof
+        ? { ...volume, heightM: volume.heightM - volume.roof.heightM }
+        : volume;
+      const geom = extrudeBuilding(body, tint);
+      if (!geom && !roof) continue;
       // The same hash that fixes a building's colour fixes its facade, so a
       // tower keeps both for as long as the extract does.
-      buildingGeoms[h % WINDOW_LETTER_FAMILIES.length].push(geom);
+      const bucket = buildingGeoms[h % WINDOW_LETTER_FAMILIES.length];
+      if (geom) bucket.push(geom);
+      if (roof) bucket.push(roof);
       anyGeom = true;
     }
     if (!anyGeom) return;
