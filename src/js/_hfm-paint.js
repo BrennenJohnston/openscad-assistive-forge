@@ -61,6 +61,8 @@ export function buildGlyphAtlas({
   dpr,
   color,
   normalizeTinyAlpha = false,
+  reverse = false,
+  bloom = 0,
 }) {
   const cellW = Math.max(1, Math.round(charW * dpr));
   const cellH = Math.max(1, Math.round(charH * dpr));
@@ -76,14 +78,39 @@ export function buildGlyphAtlas({
   ctx.textBaseline = 'middle';
   ctx.font = `${fontSizePx * dpr}px ${fontFamily}`;
 
+  if (bloom > 0 && !reverse) {
+    // CW-21 P4: a halo around each glyph, the way an overdriven CRT spread
+    // light past the beam. Built into the ATLAS so it costs nothing per
+    // frame — every cell that uses this atlas is already bloomed.
+    ctx.shadowColor = color;
+    ctx.shadowBlur = bloom * dpr;
+  }
+
+  if (reverse) {
+    // Reverse video (CW-21): the cell is solid phosphor and the glyph is
+    // knocked OUT of it, which is the only way past the ASCII coverage
+    // ceiling — the densest printable glyph inks 43-58% of a cell, so no
+    // character can make a cell brighter than about half full. Punching a
+    // SPARSE glyph out of a solid cell reaches the other end of the range.
+    // Painting stays one atlas and one blit; only the atlas is built
+    // differently.
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.globalCompositeOperation = 'destination-out';
+  }
+
   for (let i = 0; i < GLYPH_COUNT; i++) {
     const ch = String.fromCharCode(FIRST_CHAR_CODE + i);
     ctx.fillText(ch, i * cellW + cellW / 2, cellH / 2);
   }
 
+  if (reverse) ctx.globalCompositeOperation = 'source-over';
+  if (bloom > 0) ctx.shadowBlur = 0;
+
+  // A reverse atlas is already fully opaque somewhere, so the tiny-glyph
+  // treatment is a no-op on it by its own maxAlpha === 255 guard.
   if (normalizeTinyAlpha) _restoreTinyGlyphBrightness(ctx, canvas, charW);
 
-  return { canvas, cellW, cellH, dpr, color };
+  return { canvas, cellW, cellH, dpr, color, reverse };
 }
 
 /**
@@ -100,7 +127,7 @@ export function buildGlyphAtlas({
  * floor measures 8.99:1 after, high-contrast dark 19.43:1).
  *
  * Scope: the CALLER must opt in (the City Walk does; the preview's Alt View
- * does not), AND the cell must be at most _TINY_CELL_MAX_CSS_PX wide. The
+ * does not), AND the cell must be at most _TINY_BRIGHTNESS_MAX_CSS_PX wide. The
  * opt-in is what makes this game-only, and it is not decoration: Iosevka Term
  * advances at about half its size, so the preview slider's own 0.5 minimum
  * lands on a 7 px font and a 4 px cell — inside the width threshold. A width
@@ -112,7 +139,7 @@ export function buildGlyphAtlas({
  * @param {number} charW - character cell width in CSS px
  */
 function _restoreTinyGlyphBrightness(ctx, canvas, charW) {
-  if (charW > _TINY_CELL_MAX_CSS_PX) return;
+  if (charW > _TINY_BRIGHTNESS_MAX_CSS_PX) return;
 
   const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const px = img.data;
@@ -209,30 +236,43 @@ export function resizeOverlay(canvas, cssW, cssH, dpr, persistCanvas) {
 }
 
 // ---------------------------------------------------------------------------
-// Tiny-cell composite path (CW-12)
+// The composite paint path (CW-12, generalized in CW-22)
 // ---------------------------------------------------------------------------
-// At a few device pixels per character cell the per-cell ctx.drawImage() call
-// dominates the entire ASCII conversion — MEASURED at 271 ms of a 433 ms frame
-// (63%) with 238k cells, because the cost is per CALL, not per pixel. Composing
-// every glyph into one reusable buffer and handing the canvas a single
-// putImageData replaces ~238k canvas calls with ~1.9M typed-array writes.
+// The per-cell ctx.drawImage() call dominates the ASCII conversion — MEASURED
+// at 271 ms of a 433 ms frame (63%) with 238k cells, because the cost is per
+// CALL, not per pixel. Composing every glyph into one reusable buffer and
+// handing the canvas a single putImageData replaces those calls with typed-
+// array writes.
 //
-// Entered only when a character cell is at most _TINY_CELL_MAX_CSS_PX wide in
-// CSS pixels AND afterglow is off. The preview's Alt View CAN reach this at
-// its own 0.5 minimum (Iosevka Term advances at about half its size, so a 7 px
-// font is a 4 px cell) and that is fine on purpose: the two paths are
-// pixel-identical — 0 of 1,906,560 differed in an A/B at 30% and 20% — so the
-// preview gets the speed and none of the change. The brightness treatment,
-// which IS visible, is gated on a caller opt-in instead; see
-// _restoreTinyGlyphBrightness.
+// CW-12 shipped this for cells up to 4 CSS px wide, where the win was largest.
+// CW-22 measured the rest of the range with in-code stage timers and removed
+// the size gate altogether, because the blit path lost EVERYWHERE (Seattle,
+// same session, Intel Iris Xe, before -> after convert ms / rAF fps):
 //
-// The threshold is deliberately in CSS pixels, not device pixels: what makes
-// the old path expensive is the NUMBER of drawImage calls, and that follows
-// the cell count, which follows charW in CSS px. Gating on device px would
-// have switched the fast path off at 30% on a 2x display — exactly the
-// machines that need it — while every bench number was taken at dpr 1.
+//     50% (charW 5, the shipped default)  40.7 -> 17.5   42.3 -> 59.5   2.33x
+//     60% (charW 6)                       48.7 -> 15.6   37.6 -> 59.5   3.11x
+//     80% (charW 7)                       25.9 -> 13.0   51.8 -> 59.6   1.99x
+//    100% (charW 9)                       25.0 -> 12.9   51.3 -> 59.6   1.93x
+//
+// Cell COUNT is not what costs: 60% has fewer cells than 50% and was the
+// slowest size in the game, purely because it fell off this path. Above charW
+// ~12 the two paths converge to within noise, so there is no size worth gating
+// back to the blit path for. The blit path stays as the afterglow path (fade >
+// 0 composites the previous frame on top, which this one buffer cannot do) and
+// as the reference implementation the parity test measures against.
+//
+// The paths are pixel-identical, which is the only reason this is allowed to
+// reach the preview's Alt View as well: 40 of 40 full-frame comparisons across
+// two cities, mono and palette, charW 2 through 12, differed in 0 of ~1.6M
+// pixels on every channel (tests/e2e/ascii-city-walk.spec.js keeps this true).
+// The brightness treatment, which IS visible, is gated separately — it keeps
+// CW-12's 4 px scope, because widening it would brighten the game at its own
+// default size and, since the shape vectors are read from the brightened
+// atlas, change which glyph each cell picks. That is an art change, not a
+// paint optimization; see _restoreTinyGlyphBrightness.
 
-const _TINY_CELL_MAX_CSS_PX = 4;
+/** Brightness gate (CW-12 scope, deliberately NOT the paint gate). */
+const _TINY_BRIGHTNESS_MAX_CSS_PX = 4;
 
 /** One reusable frame buffer per overlay context, resized with the canvas. */
 const _frameBuffers = new WeakMap();
@@ -242,6 +282,23 @@ function _frameBuffer(ctx, w, h) {
   if (held && held.width === w && held.height === h) return held;
   const made = ctx.createImageData(w, h);
   _frameBuffers.set(ctx, made);
+  return made;
+}
+
+/**
+ * The previous composited frame, per overlay context, for afterglow (CW-21).
+ *
+ * Kept as its own Uint8ClampedArray rather than a canvas: the composite path
+ * never touches a canvas until its single putImageData, and reading one back
+ * to get the last frame would throw that away.
+ */
+const _glowBuffers = new WeakMap();
+
+function _glowBuffer(ctx, byteLength) {
+  const held = _glowBuffers.get(ctx);
+  if (held && held.length === byteLength) return held;
+  const made = new Uint8ClampedArray(byteLength);
+  _glowBuffers.set(ctx, made);
   return made;
 }
 
@@ -259,7 +316,7 @@ function _atlasPixels32(atlas) {
   return atlas._pixels32;
 }
 
-function _paintTinyCells(
+function _paintComposited(
   ctx,
   glyphIndices,
   cols,
@@ -268,7 +325,9 @@ function _paintTinyCells(
   stepX,
   stepY,
   colorIndices,
-  colorAtlases
+  colorAtlases,
+  glowFade,
+  scanlineDim
 ) {
   const w = ctx.canvas.width;
   const h = ctx.canvas.height;
@@ -321,7 +380,68 @@ function _paintTinyCells(
     }
   }
 
+  if (glowFade > 0) _applyAfterglow(ctx, img, glowFade);
+  if (scanlineDim > 0) _applyScanlines(img, w, scanlineDim);
+
   ctx.putImageData(img, 0, 0);
+}
+
+/**
+ * Scanlines (CW-21 P4): every other device-pixel row loses some of its alpha,
+ * the way the gaps between a CRT's lines darkened the picture.
+ *
+ * Applied to the finished frame rather than to the atlas, because the gap
+ * belongs to the SCREEN and not to the character — an atlas-level version
+ * would move with the glyphs instead of staying still under them.
+ *
+ * @param {ImageData} img - updated in place
+ * @param {number} w - frame width in device pixels
+ * @param {number} dim - 0..1, how much alpha a dark row keeps
+ */
+function _applyScanlines(img, w, dim) {
+  const data = img.data;
+  const rowBytes = w * 4;
+  const keep = 1 - dim;
+  for (let y = 1; y * rowBytes < data.length; y += 2) {
+    const start = y * rowBytes;
+    const end = Math.min(start + rowBytes, data.length);
+    for (let i = start + 3; i < end; i += 4) data[i] *= keep;
+  }
+}
+
+/**
+ * Phosphor afterglow on the composite path (CW-21).
+ *
+ * A real phosphor keeps EMITTING as it decays, so what the tube shows is the
+ * new frame plus whatever the previous one is still giving off. That is a
+ * per-channel maximum against the decayed previous frame rather than a
+ * source-over blend — and it is also the cheap arithmetic, a comparison and a
+ * copy per pixel with no division, which is what lets afterglow ride the
+ * composite path instead of dropping the whole frame back onto the per-cell
+ * blit path CW-22 measured at 2-3x slower.
+ *
+ * @param {CanvasRenderingContext2D} ctx - the key for this overlay's history
+ * @param {ImageData} img - the frame just composited; updated in place
+ * @param {number} fade - 0..1, how much of the previous frame still glows
+ */
+function _applyAfterglow(ctx, img, fade) {
+  const cur = img.data;
+  const prev = _glowBuffer(ctx, cur.length);
+  for (let i = 0; i < cur.length; i += 4) {
+    const decayed = prev[i + 3] * fade;
+    if (decayed > cur[i + 3]) {
+      // The decaying pixel still out-glows the new one: keep its colour at the
+      // decayed alpha, so a trail dims away instead of changing hue.
+      cur[i] = prev[i];
+      cur[i + 1] = prev[i + 1];
+      cur[i + 2] = prev[i + 2];
+      cur[i + 3] = decayed;
+    }
+    prev[i] = cur[i];
+    prev[i + 1] = cur[i + 1];
+    prev[i + 2] = cur[i + 2];
+    prev[i + 3] = cur[i + 3];
+  }
 }
 
 /**
@@ -352,6 +472,10 @@ function _paintTinyCells(
  * @param {{ indices: Int8Array|number[], atlases: Array<{canvas: HTMLCanvasElement}> }} [colorLayers]
  *   per-cell palette indices + one atlas per palette color (all atlases share
  *   the base atlas's cell metrics)
+ * @param {boolean} [glowInComposite=false] - CW-21: carry the trail inside the
+ *   composite path (a decaying per-channel maximum) instead of dropping to the
+ *   per-cell blit path for it. Needs no persistence canvas; the caller opts in
+ *   because it changes how a trail LOOKS, not just how fast it paints.
  */
 export function paintFrame(
   ctx,
@@ -364,10 +488,13 @@ export function paintFrame(
   persistCanvas,
   persistCtx,
   persistFade,
-  colorLayers
+  colorLayers,
+  glowInComposite = false,
+  scanlineDim = 0
 ) {
-  const fade =
-    persistCanvas && persistCtx && typeof persistFade === 'number'
+  const fade = glowInComposite
+    ? Math.max(0, Math.min(1, Number(persistFade) || 0))
+    : persistCanvas && persistCtx && typeof persistFade === 'number'
       ? Math.max(0, Math.min(1, persistFade))
       : 0;
 
@@ -377,8 +504,13 @@ export function paintFrame(
   const colorIndices = colorLayers?.indices ?? null;
   const colorAtlases = colorLayers?.atlases ?? null;
 
-  if (fade === 0 && charW <= _TINY_CELL_MAX_CSS_PX) {
-    _paintTinyCells(
+  // The composite path carries afterglow itself (CW-21), so switching a trail
+  // on no longer costs the frame the CW-22 paint speed-up. The per-cell blit
+  // path below stays for callers that hand in a persistence CANVAS pair and
+  // expect the source-over trail it has always produced — the main app's Alt
+  // View slider is one.
+  if (fade === 0 || glowInComposite) {
+    _paintComposited(
       ctx,
       glyphIndices,
       cols,
@@ -387,7 +519,9 @@ export function paintFrame(
       stepX,
       stepY,
       colorIndices,
-      colorAtlases
+      colorAtlases,
+      glowInComposite ? fade : 0,
+      scanlineDim
     );
     return;
   }
@@ -428,6 +562,67 @@ export function paintFrame(
     persistCtx.clearRect(0, 0, persistCanvas.width, persistCanvas.height);
     persistCtx.drawImage(ctx.canvas, 0, 0);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Phosphor drive levels (CW-21) — pure math, unit-tested directly
+// ---------------------------------------------------------------------------
+
+/**
+ * A single phosphor driven harder or softer, the way a monochrome tube's
+ * intensity attribute worked.
+ *
+ * Below full drive the beam is simply weaker, so every channel scales together
+ * and the hue is unchanged. ABOVE full drive a real tube cannot make the
+ * phosphor a new colour — it saturates and blooms toward white, and that is
+ * what the extra energy looks like. So drive > 1 blends toward white rather
+ * than multiplying, and green (already near maximum) gains very little from
+ * it: MEASURED, #00ff00 is 15.30:1 on black while drive 1.5 reaches only
+ * 16.53:1. The DOWNWARD range is the useful one — 6.45:1 at drive 0.65, a
+ * 2.4x luminance span.
+ *
+ * The dim floor is 0.65 drive: at 0.55 amber measures 3.82:1 and fails the
+ * 4.5:1 this project holds itself to. tests/unit/color-contrast.test.js
+ * imports this function and re-measures every level the renderer ships.
+ *
+ * @param {string} css - #rrggbb phosphor colour
+ * @param {number} drive - below 1 dims, 1 is the phosphor itself, above 1
+ *   blooms toward white
+ * @returns {string} #rrggbb
+ */
+export function driveColor(css, drive) {
+  const [r, g, b] = parsePaletteColor(css);
+  const d = Number.isFinite(drive) ? Math.max(0, drive) : 1;
+  const out =
+    d <= 1
+      ? [r * d, g * d, b * d]
+      : (() => {
+          const t = Math.min(1, d - 1);
+          return [r + (1 - r) * t, g + (1 - g) * t, b + (1 - b) * t];
+        })();
+  const hex = (v) =>
+    Math.max(0, Math.min(255, Math.round(v * 255)))
+      .toString(16)
+      .padStart(2, '0');
+  return `#${hex(out[0])}${hex(out[1])}${hex(out[2])}`;
+}
+
+/**
+ * Pick an intensity level for a cell from its mean luminance.
+ *
+ * Levels are ordered dimmest first, so the brightest cells take the last
+ * entry. The split is even across the luminance range: with two levels that is
+ * the hardware's single intensity BIT, with four it is a smooth ramp.
+ *
+ * @param {number} lum - cell mean luminance in [0, 1]
+ * @param {number} levelCount
+ * @returns {number} index into the levels array
+ */
+export function pickIntensityIndex(lum, levelCount) {
+  if (!(levelCount > 1)) return 0;
+  const v = Number.isFinite(lum) ? lum : 0;
+  const i = Math.floor(v * levelCount);
+  return i < 0 ? 0 : i >= levelCount ? levelCount - 1 : i;
 }
 
 // ---------------------------------------------------------------------------

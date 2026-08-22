@@ -14,6 +14,10 @@ import { describe, it, expect } from 'vitest';
 import Color from 'colorjs.io';
 import { amber, green, red, slate, slateDark, teal, yellow } from '@radix-ui/colors';
 import { readFileSync } from 'fs';
+// CW-21: the guard drives the SAME function the renderer does, so a change to
+// the drive maths is measured here rather than re-derived.
+import { driveColor } from '../../src/js/_hfm-paint.js';
+import { MONO_INTENSITY_LEVELS } from '../../src/js/game/hc-palettes.js';
 import { resolve as resolvePath, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -1062,6 +1066,70 @@ describe('City Walk high-contrast glyph palettes (CW-Q5 / CW-Q6)', () => {
       // And the palette it replaces is still guarded above, so both sides of
       // the toggle clear the same floor.
       expect(palette.length).toBeGreaterThanOrEqual(4);
+    }
+  });
+});
+
+/**
+ * CW-21 — the monochrome intensity levels.
+ *
+ * The City Walk dims the darker half of its cells so a single-phosphor city
+ * has depth instead of one flat tone. Dimming is exactly the direction that
+ * can break legibility, so every level the renderer ships is re-measured here
+ * against the real phosphor tokens, through the renderer's own driveColor.
+ *
+ * The 4.5:1 floor is what fixes 0.65 as the dimmest allowed drive: 0.55
+ * measures 3.82:1 in amber and fails.
+ */
+describe('Color Contrast - Mono intensity levels (CW-21)', () => {
+  const black = '#000000';
+  const phosphors = [
+    { name: 'green (dark theme)', css: monoGreen['--color-accent'] },
+    { name: 'amber (light theme)', css: monoAmber['--color-accent'] },
+  ];
+
+  it('reads a real phosphor token for each theme', () => {
+    for (const p of phosphors) {
+      expect(p.css, `${p.name} token missing from variant.css`).toMatch(
+        /^#[0-9a-f]{6}$/i
+      );
+    }
+  });
+
+  it('ships at least two levels, dimmest first, none above full drive', () => {
+    expect(MONO_INTENSITY_LEVELS.length).toBeGreaterThanOrEqual(2);
+    const sorted = [...MONO_INTENSITY_LEVELS].sort((a, b) => a - b);
+    expect(MONO_INTENSITY_LEVELS).toEqual(sorted);
+    // Nothing brighter than the bare phosphor: the peak the game already had
+    // is what the guards elsewhere in this file measured.
+    expect(Math.max(...MONO_INTENSITY_LEVELS)).toBeLessThanOrEqual(1);
+  });
+
+  for (const p of phosphors) {
+    it(`every shipped level of ${p.name} stays at or above 4.5:1 on black`, () => {
+      const measured = MONO_INTENSITY_LEVELS.map((drive) => {
+        const css = driveColor(p.css, drive);
+        return { drive, css, ratio: getContrastRatio(css, black) };
+      });
+      const detail = measured
+        .map((m) => `drive ${m.drive} -> ${m.css} = ${m.ratio.toFixed(2)}:1`)
+        .join('; ');
+      for (const m of measured) {
+        expect(m.ratio, `${p.name}: ${detail}`).toBeGreaterThanOrEqual(4.5);
+      }
+    });
+  }
+
+  it('the dim floor is where it is because below it amber fails', () => {
+    // The measurement that fixes the constant. If this ever stops failing,
+    // the phosphor token changed and the floor needs re-deriving.
+    const tooDim = driveColor(monoAmber['--color-accent'], 0.55);
+    expect(getContrastRatio(tooDim, black)).toBeLessThan(4.5);
+  });
+
+  it('full drive leaves each phosphor exactly as it is', () => {
+    for (const p of phosphors) {
+      expect(driveColor(p.css, 1).toLowerCase()).toBe(p.css.toLowerCase());
     }
   });
 });

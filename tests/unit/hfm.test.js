@@ -17,6 +17,14 @@ function createMockCanvasContext(opts = {}) {
     getImageData: vi.fn(() => ({
       data: new Uint8ClampedArray(4),
     })),
+    // CW-22: the composite path is now the default paint path, so every mock
+    // context must be able to hand out and receive a frame buffer.
+    createImageData: vi.fn((w, h) => ({
+      width: w,
+      height: h,
+      data: new Uint8ClampedArray(Math.max(1, w * h) * 4),
+    })),
+    putImageData: vi.fn(),
     measureText: vi.fn(() => ({
       width: 6,
       actualBoundingBoxAscent: 8,
@@ -172,8 +180,82 @@ describe('initAltView — sampler imageSmoothingEnabled', () => {
   })
 })
 
+/**
+ * Swap in a canvas mock that actually produces ink.
+ *
+ * The default mock reports an all-black sample frame, so every cell resolves
+ * to SPACE and any test that inspects painted cells silently measures nothing.
+ * Here the sampler reports a bright frame and atlas readbacks ramp their alpha
+ * along x, so glyph vectors differ and cells land on real glyphs.
+ */
+function installInkingCanvasMock() {
+  origGetContext = HTMLCanvasElement.prototype.getContext
+  HTMLCanvasElement.prototype.getContext = function (type, opts) {
+    const ctx = createMockCanvasContext()
+    ctx.canvas = this
+    ctx._creationOpts = opts || {}
+    ctx._isSampler = false
+    ctx.drawImage = vi.fn((source) => {
+      if (source && source.__isRendererCanvas) ctx._isSampler = true
+    })
+    ctx.getImageData = vi.fn((x, y, w, h) => {
+      const data = new Uint8ClampedArray(Math.max(1, w * h) * 4)
+      for (let i = 0; i < data.length; i += 4) {
+        if (ctx._isSampler) {
+          data[i] = 220
+          data[i + 1] = 220
+          data[i + 2] = 220
+          data[i + 3] = 255
+        } else {
+          data[i + 3] = ((i / 4) * 7) % 256
+        }
+      }
+      return { data }
+    })
+    allContexts.push(ctx)
+    return ctx
+  }
+}
+
 describe('initAltView — integer paint destinations', () => {
   it('any overlay drawImage blit receives integer destination coordinates', async () => {
+    removeCanvasMock()
+    installInkingCanvasMock()
+    vi.resetModules()
+    const { initAltView } = await import('../../src/js/_hfm.js')
+    const pm = createMockPreviewManager()
+    pm.renderer.domElement.__isRendererCanvas = true
+    const api = await initAltView(pm)
+
+    vi.spyOn(performance, 'now').mockReturnValue(10000)
+    api.enable()
+    // Afterglow is what still paints cell by cell since CW-22 removed the
+    // size gate. Without it this loop finds no blits at all and passes while
+    // asserting nothing — drive the blit path deliberately. Reduced motion
+    // forces the fade back to 0, so state it explicitly rather than trusting
+    // whatever the test environment reports for the media query.
+    api.setReducedMotion(false)
+    api.setPersistFade(0.85)
+    expect(api.getPersistFade()).toBeGreaterThan(0)
+    api.render()
+
+    // 9-arg drawImage calls are atlas blits: (atlas, sx, sy, sw, sh, dx, dy, dw, dh)
+    let blits = 0
+    for (const ctx of allContexts) {
+      for (const call of ctx.drawImage.mock.calls) {
+        if (call.length === 9) {
+          blits++
+          expect(Number.isInteger(call[5])).toBe(true)
+          expect(Number.isInteger(call[6])).toBe(true)
+        }
+      }
+    }
+    expect(blits).toBeGreaterThan(0)
+
+    api.dispose()
+  })
+
+  it('the default paint path composites the frame in one putImageData', async () => {
     vi.resetModules()
     const { initAltView } = await import('../../src/js/_hfm.js')
     const pm = createMockPreviewManager()
@@ -183,15 +265,16 @@ describe('initAltView — integer paint destinations', () => {
     api.enable()
     api.render()
 
-    // 9-arg drawImage calls are atlas blits: (atlas, sx, sy, sw, sh, dx, dy, dw, dh)
-    for (const ctx of allContexts) {
-      for (const call of ctx.drawImage.mock.calls) {
-        if (call.length === 9) {
-          expect(Number.isInteger(call[5])).toBe(true)
-          expect(Number.isInteger(call[6])).toBe(true)
-        }
-      }
-    }
+    // CW-22: with afterglow off, no cell is painted by its own drawImage call
+    // at ANY character size — that per-call cost was the conversion's largest
+    // slice at the shipped default.
+    const overlayCtx = allContexts.find((c) => c.putImageData.mock.calls.length)
+    expect(overlayCtx).toBeDefined()
+    expect(overlayCtx.putImageData).toHaveBeenCalledOnce()
+    const nineArgBlits = allContexts.flatMap((c) =>
+      c.drawImage.mock.calls.filter((call) => call.length === 9)
+    )
+    expect(nineArgBlits).toHaveLength(0)
 
     api.dispose()
   })

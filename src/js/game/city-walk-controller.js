@@ -69,7 +69,13 @@ import { initAltView } from '../_hfm.js';
 import { createDocumentFocusTrap } from '../focus-trap.js';
 import { announce } from '../announcer.js';
 import { themeManager } from '../theme-manager.js';
-import { HC_PALETTE_GREEN, HC_PALETTE_AMBER } from './hc-palettes.js';
+import {
+  HC_PALETTE_GREEN,
+  HC_PALETTE_AMBER,
+  MONO_INTENSITY_LEVELS,
+  MONO_REVERSE_THRESHOLD,
+  MONO_GLOW_FADE,
+} from './hc-palettes.js';
 import {
   safeGetItem,
   safeSetItem,
@@ -1148,7 +1154,12 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // allowTinyCells: the game's range reaches a 2 px character cell, where a
     // glyph is almost all antialiasing. Without this the city dims as the
     // characters shrink (CW-12). The preview's Alt View does not opt in.
-    game.altView = await initAltView(managerLike, { allowTinyCells: true });
+    game.altView = await initAltView(managerLike, {
+      allowTinyCells: true,
+      // CW-21: the phosphor trail rides the fast paint path rather than
+      // dropping the frame back onto per-cell blits for it.
+      glowInComposite: true,
+    });
 
     // Character size (CW-Q10): the game's own saved value wins, then the
     // shared Alt View preference clamped into the game's range, then 50%.
@@ -1160,6 +1171,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
         safeGetItem(STORAGE_KEY_HFM_FONT_SCALE)
       )
     );
+
+    // CW-21: with colour off the city used to be one flat green or amber —
+    // pavement, walls and lit windows all at the same drive. A monochrome
+    // tube's intensity bit separates them, and the converter ignores this
+    // whenever a palette is active, so it costs colour mode nothing.
+    game.altView.setIntensityLevels(MONO_INTENSITY_LEVELS);
+    game.altView.setReverseVideo(MONO_REVERSE_THRESHOLD);
 
     // CW-Q2/CW-Q5/CW-Q6: multicolor exists ONLY under high contrast —
     // neon in amber (light), the ANSI bright set in green (dark). The
@@ -1177,6 +1195,26 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     });
 
     game.altView.enable();
+
+    // CW-21: the phosphor trail. enable() resets the fade to the shared
+    // default, so this has to follow it rather than sit with the other
+    // display settings above.
+    //
+    // A trail is motion by definition, so it follows prefers-reduced-motion
+    // and keeps following it LIVE — setPersistFade already refuses to set a
+    // fade while reduced motion is on, and the listener below covers someone
+    // turning the preference on mid-walk.
+    game.applyGlow = () => {
+      game.altView.setPersistFade(MONO_GLOW_FADE);
+      game.altView.invalidate();
+    };
+    game.motionQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    game.onMotionChange = (event) => {
+      game.altView.setReducedMotion(event.matches);
+      game.applyGlow();
+    };
+    game.motionQuery?.addEventListener?.('change', game.onMotionChange);
+    game.applyGlow();
 
     if (import.meta.env.DEV) {
       // Dev-lane debug handle (mirrors hfm-controller's DEV-only logging).
@@ -1266,6 +1304,9 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
 
     game.themeObserver?.disconnect();
     game.resizeObserver?.disconnect();
+    if (game.motionQuery && game.onMotionChange) {
+      game.motionQuery.removeEventListener?.('change', game.onMotionChange);
+    }
     game.altView?.dispose();
     game.lighting?.detach();
     game.beacons?.dispose();

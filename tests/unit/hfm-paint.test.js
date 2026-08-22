@@ -15,6 +15,14 @@ function createMockCtx(canvasWidth = 100, canvasHeight = 80) {
     clearRect: vi.fn(),
     fillText: vi.fn(),
     drawImage: vi.fn(),
+    // CW-22: the composite path is now the default paint path, so the mock
+    // has to be able to hand out and receive a frame buffer.
+    createImageData: vi.fn((w, h) => ({
+      width: w,
+      height: h,
+      data: new Uint8ClampedArray(w * h * 4),
+    })),
+    putImageData: vi.fn(),
     font: '',
     textAlign: '',
     textBaseline: '',
@@ -22,6 +30,40 @@ function createMockCtx(canvasWidth = 100, canvasHeight = 80) {
     globalAlpha: 1,
   }
   return ctx
+}
+
+/**
+ * Decode the frame the composite path handed to putImageData.
+ *
+ * createMockAtlas paints each glyph cell as a solid block carrying its own
+ * index in the red channel, so a painted frame can be read back as "which
+ * glyph landed at which pixel" without a real canvas. This is what lets the
+ * CW-22 tests assert the PIXELS a player sees instead of a drawImage call log.
+ */
+function paintedFrame(ctx) {
+  const calls = ctx.putImageData.mock.calls
+  const img = calls[calls.length - 1][0]
+  return {
+    width: img.width,
+    height: img.height,
+    /** Glyph index at a pixel, or null where nothing was painted. */
+    glyphAt(x, y) {
+      const p = (y * img.width + x) * 4
+      return img.data[p + 3] === 0 ? null : img.data[p]
+    },
+    /** Cell origins that received a glyph, as "x,y" strings. */
+    inkedOrigins(cols, rows, stepX, stepY) {
+      const out = []
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const x = (c * stepX) | 0
+          const y = (r * stepY) | 0
+          if (this.glyphAt(x, y) !== null) out.push(`${x},${y}`)
+        }
+      }
+      return out
+    },
+  }
 }
 
 function createMockPersistCanvas(width = 100, height = 80) {
@@ -36,8 +78,26 @@ function createMockPersistCtx() {
 }
 
 function createMockAtlas({ cellW = 12, cellH = 24, dpr = 1 } = {}) {
+  const width = GLYPH_COUNT * cellW
+  const height = cellH
+  // Every glyph cell is a solid opaque block whose RED channel carries that
+  // glyph's own index, so painted output decodes back to glyph identity.
+  const data = new Uint8ClampedArray(width * height * 4)
+  for (let i = 0; i < GLYPH_COUNT; i++) {
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < cellW; x++) {
+        const p = (y * width + i * cellW + x) * 4
+        data[p] = i
+        data[p + 3] = 255
+      }
+    }
+  }
   return {
-    canvas: { width: GLYPH_COUNT * cellW, height: cellH },
+    canvas: {
+      width,
+      height,
+      getContext: () => ({ getImageData: () => ({ data, width, height }) }),
+    },
     cellW,
     cellH,
     dpr,
@@ -239,72 +299,116 @@ describe('paintFrame', () => {
     ctx = createMockCtx()
   })
 
-  it('clears once and blits one glyph per non-space cell', () => {
+  it('composites one glyph per non-space cell in a single putImageData', () => {
     const cols = 4
     const rows = 3
-    const atlas = createMockAtlas()
+    const atlas = createMockAtlas({ cellW: 10, cellH: 12 })
     const glyphs = buildGrid(cols, rows, 33) // 'A'
 
     paintFrame(ctx, glyphs, cols, rows, atlas, 10, 12, null, null, 0)
 
-    expect(ctx.clearRect).toHaveBeenCalledOnce()
-    expect(ctx.drawImage).toHaveBeenCalledTimes(cols * rows)
+    // The whole frame reaches the canvas as ONE call, not one call per cell:
+    // that is the entire point of the composite path (CW-12, CW-22).
+    expect(ctx.putImageData).toHaveBeenCalledOnce()
+    expect(ctx.drawImage).not.toHaveBeenCalled()
+    const frame = paintedFrame(ctx)
+    expect(frame.inkedOrigins(cols, rows, 10, 12)).toHaveLength(cols * rows)
   })
 
   it('skips blank (space) cells entirely', () => {
     const cols = 4
     const rows = 3
-    const atlas = createMockAtlas()
+    const atlas = createMockAtlas({ cellW: 10, cellH: 12 })
     const glyphs = buildGrid(cols, rows, SPACE_INDEX)
-    glyphs[5] = 33 // a single visible glyph
+    glyphs[5] = 33 // a single visible glyph, at col 1 of row 1
 
     paintFrame(ctx, glyphs, cols, rows, atlas, 10, 12, null, null, 0)
 
-    expect(ctx.drawImage).toHaveBeenCalledTimes(1)
+    const frame = paintedFrame(ctx)
+    expect(frame.inkedOrigins(cols, rows, 10, 12)).toEqual(['10,12'])
+    expect(frame.glyphAt(10, 12)).toBe(33)
   })
 
   it('selects the source rect from the atlas by glyph index', () => {
     const cols = 2
     const rows = 1
-    const atlas = createMockAtlas({ cellW: 12, cellH: 24 })
+    const atlas = createMockAtlas({ cellW: 10, cellH: 12 })
     const glyphs = new Int16Array([33, 65]) // 'A' and 'a'
 
     paintFrame(ctx, glyphs, cols, rows, atlas, 10, 12, null, null, 0)
 
-    const calls = ctx.drawImage.mock.calls
-    expect(calls[0][0]).toBe(atlas.canvas)
-    // (atlas, sx, sy, sw, sh, dx, dy, dw, dh)
-    expect(calls[0].slice(1, 5)).toEqual([33 * 12, 0, 12, 24])
-    expect(calls[1].slice(1, 5)).toEqual([65 * 12, 0, 12, 24])
+    // Each cell carries the pixels of ITS OWN glyph, across the full cell.
+    const frame = paintedFrame(ctx)
+    expect(frame.glyphAt(0, 0)).toBe(33)
+    expect(frame.glyphAt(9, 11)).toBe(33)
+    expect(frame.glyphAt(10, 0)).toBe(65)
+    expect(frame.glyphAt(19, 11)).toBe(65)
   })
 
   it('paints destinations at integer coordinates even with fractional metrics', () => {
     const cols = 3
     const rows = 2
-    const atlas = createMockAtlas({ cellW: 13, cellH: 27, dpr: 1.5 })
-    const glyphs = buildGrid(cols, rows, 2)
+    const atlas = createMockAtlas({ cellW: 13, cellH: 23, dpr: 1.5 })
+    // A different glyph per column, so cell boundaries are visible in output.
+    const glyphs = new Int16Array([11, 22, 33, 11, 22, 33])
 
     paintFrame(ctx, glyphs, cols, rows, atlas, 8.7, 15.3, null, null, 0)
 
-    for (const call of ctx.drawImage.mock.calls) {
-      const [, , , , , dx, dy] = call
-      expect(Number.isInteger(dx)).toBe(true)
-      expect(Number.isInteger(dy)).toBe(true)
-    }
-    expect(ctx.drawImage).toHaveBeenCalledTimes(cols * rows)
+    // stepX 13.05 and stepY 22.95 truncate to whole pixels — glyph edges stay
+    // crisp instead of landing on a fractional boundary.
+    const frame = paintedFrame(ctx)
+    expect(frame.glyphAt(0, 0)).toBe(11)
+    expect(frame.glyphAt(13, 0)).toBe(22)
+    expect(frame.glyphAt(26, 0)).toBe(33)
+    expect(frame.glyphAt(0, 22)).toBe(11)
   })
 
   it('scales destination steps by the atlas dpr', () => {
     const cols = 2
     const rows = 1
     const atlas = createMockAtlas({ cellW: 20, cellH: 24, dpr: 2 })
-    const glyphs = new Int16Array([1, 1])
+    const glyphs = new Int16Array([1, 2])
 
     paintFrame(ctx, glyphs, cols, rows, atlas, 10, 12, null, null, 0)
 
-    const calls = ctx.drawImage.mock.calls
-    expect(calls[0][5]).toBe(0)
-    expect(calls[1][5]).toBe(20) // col 1 * charW 10 * dpr 2
+    const frame = paintedFrame(ctx)
+    expect(frame.glyphAt(0, 0)).toBe(1)
+    expect(frame.glyphAt(20, 0)).toBe(2) // col 1 * charW 10 * dpr 2
+  })
+
+  it('composites at large character cells too — CW-22 removed the size gate', () => {
+    // Until CW-22 a cell wider than 4 CSS px fell back to one drawImage per
+    // cell, which MEASURED 2-3x slower at every size from the 50% default up.
+    // Cell size no longer chooses the path; only afterglow does.
+    const cols = 3
+    const rows = 2
+    const atlas = createMockAtlas({ cellW: 20, cellH: 30 })
+    const glyphs = buildGrid(cols, rows, 40)
+
+    paintFrame(ctx, glyphs, cols, rows, atlas, 20, 30, null, null, 0)
+
+    expect(ctx.putImageData).toHaveBeenCalledOnce()
+    expect(ctx.drawImage).not.toHaveBeenCalled()
+    expect(paintedFrame(ctx).glyphAt(40, 30)).toBe(40)
+  })
+
+  it('afterglow still paints per cell — the one buffer cannot layer frames', () => {
+    const cols = 2
+    const rows = 2
+    const atlas = createMockAtlas({ cellW: 10, cellH: 12 })
+    const glyphs = buildGrid(cols, rows, 33)
+    const persistCanvas = createMockPersistCanvas()
+    const persistCtx = createMockPersistCtx()
+
+    paintFrame(
+      ctx, glyphs, cols, rows, atlas, 10, 12,
+      persistCanvas, persistCtx, 0.85
+    )
+
+    expect(ctx.putImageData).not.toHaveBeenCalled()
+    expect(ctx.clearRect).toHaveBeenCalledOnce()
+    // cols*rows glyph blits plus the one persistence composite
+    expect(ctx.drawImage).toHaveBeenCalledTimes(cols * rows + 1)
   })
 
   it('composites persistence canvas when persistFade > 0', () => {
@@ -348,15 +452,19 @@ describe('paintFrame', () => {
   it('degrades gracefully when persistCanvas is null', () => {
     const cols = 2
     const rows = 2
-    const atlas = createMockAtlas()
+    const atlas = createMockAtlas({ cellW: 10, cellH: 12 })
     const glyphs = buildGrid(cols, rows, 33)
 
     expect(() => {
       paintFrame(ctx, glyphs, cols, rows, atlas, 10, 12, null, null, 0.85)
     }).not.toThrow()
 
-    // only atlas blits, no persistence composite
-    expect(ctx.drawImage).toHaveBeenCalledTimes(cols * rows)
+    // No persistence canvas means no afterglow, which means the fade collapses
+    // to 0 and the frame composites normally — glyphs, no trail.
+    expect(ctx.putImageData).toHaveBeenCalledOnce()
+    expect(paintedFrame(ctx).inkedOrigins(cols, rows, 10, 12)).toHaveLength(
+      cols * rows
+    )
   })
 
   it('degrades gracefully when persistCtx is null but persistCanvas is provided', () => {
@@ -452,5 +560,158 @@ describe('resizeOverlay', () => {
 
     expect(canvas.width).toBe(640)
     expect(canvas.height).toBe(480)
+  })
+})
+
+describe('reverse-video atlas (CW-21)', () => {
+  let origGetContext
+  let ctxCalls
+
+  beforeEach(() => {
+    ctxCalls = []
+    origGetContext = HTMLCanvasElement.prototype.getContext
+    HTMLCanvasElement.prototype.getContext = function () {
+      const ctx = {
+        canvas: this,
+        globalCompositeOperation: 'source-over',
+        font: '',
+        textAlign: '',
+        textBaseline: '',
+        fillStyle: '',
+        clearRect: vi.fn(),
+        fillRect: vi.fn(function (...a) {
+          ctxCalls.push(['fillRect', ctx.globalCompositeOperation, ...a])
+        }),
+        fillText: vi.fn(function (ch) {
+          ctxCalls.push(['fillText', ctx.globalCompositeOperation, ch])
+        }),
+        getImageData: vi.fn(() => ({ data: new Uint8ClampedArray(4) })),
+        putImageData: vi.fn(),
+      }
+      return ctx
+    }
+  })
+
+  afterEach(() => {
+    HTMLCanvasElement.prototype.getContext = origGetContext
+  })
+
+  const build = (reverse) =>
+    buildGlyphAtlas({
+      fontFamily: 'monospace',
+      fontSizePx: 10,
+      charW: 6,
+      charH: 12,
+      dpr: 1,
+      color: '#00ff00',
+      reverse,
+    })
+
+  it('fills the whole atlas and knocks the glyphs out of it', () => {
+    build(true)
+    const fills = ctxCalls.filter((c) => c[0] === 'fillRect')
+    const texts = ctxCalls.filter((c) => c[0] === 'fillText')
+    // One solid fill, laid down BEFORE any glyph, in normal compositing.
+    expect(fills).toHaveLength(1)
+    expect(fills[0][1]).toBe('source-over')
+    expect(ctxCalls.indexOf(fills[0])).toBeLessThan(ctxCalls.indexOf(texts[0]))
+    // Every glyph is then punched out of that fill, not painted onto it.
+    expect(texts).toHaveLength(GLYPH_COUNT)
+    for (const t of texts) expect(t[1]).toBe('destination-out')
+  })
+
+  it('leaves the normal atlas exactly as it was', () => {
+    build(false)
+    expect(ctxCalls.filter((c) => c[0] === 'fillRect')).toHaveLength(0)
+    const texts = ctxCalls.filter((c) => c[0] === 'fillText')
+    expect(texts).toHaveLength(GLYPH_COUNT)
+    for (const t of texts) expect(t[1]).toBe('source-over')
+  })
+
+  it('restores normal compositing so the caller is not left inverted', () => {
+    const atlas = build(true)
+    expect(atlas.reverse).toBe(true)
+    expect(build(false).reverse).toBe(false)
+  })
+})
+
+describe('CRT decoration (CW-21 P4)', () => {
+  it('bloom asks the rasterizer for a halo, and only when requested', () => {
+    const seen = []
+    const orig = HTMLCanvasElement.prototype.getContext
+    HTMLCanvasElement.prototype.getContext = function () {
+      const ctx = createMockCtx()
+      ctx.canvas = this
+      ctx.shadowBlur = 0
+      ctx.shadowColor = ''
+      ctx.fillText = vi.fn(() => {
+        seen.push({ blur: ctx.shadowBlur, color: ctx.shadowColor })
+      })
+      return ctx
+    }
+    const build = (bloom, dpr = 1) =>
+      buildGlyphAtlas({
+        fontFamily: 'monospace',
+        fontSizePx: 10,
+        charW: 6,
+        charH: 12,
+        dpr,
+        color: '#00ff00',
+        bloom,
+      })
+
+    build(0)
+    expect(seen.every((s) => s.blur === 0)).toBe(true)
+
+    seen.length = 0
+    build(2)
+    // Every glyph is drawn with the halo, tinted the same phosphor.
+    expect(seen).toHaveLength(GLYPH_COUNT)
+    expect(seen.every((s) => s.blur === 2 && s.color === '#00ff00')).toBe(true)
+
+    // The radius is in CSS px, so a 2x display gets the same apparent halo.
+    seen.length = 0
+    build(2, 2)
+    expect(seen[0].blur).toBe(4)
+
+    HTMLCanvasElement.prototype.getContext = orig
+  })
+
+  it('scanlines take alpha off alternate rows and leave the rest alone', () => {
+    const cols = 4
+    const rows = 4
+    const atlas = createMockAtlas({ cellW: 10, cellH: 12 })
+    const glyphs = buildGrid(cols, rows, 33)
+    const ctx = createMockCtx(cols * 10, rows * 12)
+
+    paintFrame(
+      ctx, glyphs, cols, rows, atlas, 10, 12,
+      null, null, 0, undefined, false, 0.5
+    )
+
+    const img = ctx.putImageData.mock.calls[0][0]
+    const w = img.width
+    const alphaAt = (x, y) => img.data[(y * w + x) * 4 + 3]
+    // Row 0 is untouched, row 1 keeps half its alpha, row 2 untouched again.
+    expect(alphaAt(0, 0)).toBe(255)
+    expect(alphaAt(0, 1)).toBe(128)
+    expect(alphaAt(0, 2)).toBe(255)
+    expect(alphaAt(0, 3)).toBe(128)
+  })
+
+  it('no scanline dim leaves every row at full alpha', () => {
+    const cols = 4
+    const rows = 4
+    const atlas = createMockAtlas({ cellW: 10, cellH: 12 })
+    const glyphs = buildGrid(cols, rows, 33)
+    const ctx = createMockCtx(cols * 10, rows * 12)
+
+    paintFrame(ctx, glyphs, cols, rows, atlas, 10, 12, null, null, 0)
+
+    const img = ctx.putImageData.mock.calls[0][0]
+    const w = img.width
+    for (let y = 0; y < 4; y++) {
+      expect(img.data[(y * w) * 4 + 3]).toBe(255)
+    }
   })
 })

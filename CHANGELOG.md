@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Monochrome is a choice now, not a loss** (CW-21) - with colour switched off the City Walk was a
+  single flat tone: pavement, walls and lit shop signs all painted at exactly the same brightness, so
+  turning colour off cost depth as well as hue. Real single-colour terminals never had that problem,
+  because they separated things with an intensity attribute rather than with more characters - which
+  matters here, since this project only ever draws the 95 printable ASCII characters and the densest
+  one of those fills less than half its cell. Three things change. Darker parts of the picture are
+  now driven at 65% of the phosphor rather than 100%, so pavement and distant walls sit back and lit
+  surfaces come forward; nothing is brighter than it used to be, and the dim level is still
+  6.45:1 against black in green and 5.03:1 in amber, both above the 4.5:1 this project holds itself
+  to. The brightest cells - lit shop signs, billboards, lamp heads - flip to reverse video, a solid
+  block of phosphor with the character knocked out of it, which is the only way to make a cell read
+  as genuinely LIT when no available character can fill more than half of one; it claims about 1.9%
+  of a street, chosen by counting: at a lower threshold every lit window turns solid too and the
+  signs stop being the brightest thing you can see. And the picture now keeps a soft phosphor trail
+  while you move, the way a slow tube smeared when it scrolled, gone within about three frames and
+  gone entirely when you stop. The trail is motion, so it turns itself off for anyone who asks for
+  reduced motion, including if that preference changes while you are walking. All of this is
+  monochrome only - with colour on, each cell is already picked out by its own hue - and none of it
+  reaches the main app's Alt View. Measured cost at the size the game starts at: the intensity and
+  reverse-video work is lost in the noise, the trail adds about 5 ms and the game stays at 60 frames
+  a second; at the smallest characters the trail takes it from 30.0 to 28.3
+
 - **Street life, standing still** (CW-18) - the City Walk's streets had trees and parked cars but
   nothing above head height and nothing on the walls. Now streetlights march down every ordinary
   street and arterial, one every 30 m, alternating sides: a slim post with a bright head reaching out
@@ -38,6 +60,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   renderer reads so that stays true
 
 ### Changed
+
+- **The City Walk runs at full frame rate from its default size upwards** (CW-22) - the game draws
+  its picture by stamping one character at a time onto a canvas, and asking the canvas to draw
+  something costs about the same whether the thing is big or small. At the size the game starts at,
+  that stamping was over half of all the work in a frame. There was already a faster way in the code
+  - build the whole frame in memory and hand the canvas one finished picture - but it was only used
+  for characters 4 pixels wide and under, and the game starts at 5. Measured with timers inside the
+  converter, the faster way wins at every size, so the size limit is gone. At the default size a
+  conversion drops from 40.7 to 17.5 ms and the game goes from about 42 to 60 frames a second; at 60%
+  character size, which was the slowest setting in the whole game despite drawing fewer characters
+  than the default, from 48.7 to 15.6 ms and 38 to 60 frames a second; at the largest characters from
+  25.0 to 12.9 ms. Everything from 40% down was already using the faster way and is unchanged.
+  Nothing looks different, and that is checked rather than asserted: 40 full-frame comparisons across
+  two cities, monochrome and colour, at every character size from 2 to 12 pixels wide, found 0
+  differing pixels out of about 1.6 million on every colour channel, and the suite now carries that
+  comparison against a hand-written reference so it stays true. The main app's Alt View gets the same
+  speed-up and the same unchanged picture. The phosphor afterglow still draws character by character,
+  because layering the previous frame on top is the one thing a single buffer cannot do
 
 - **The retro colour palettes read as colour more of the time** (CW-Q11) - measured by counting the
   pixels the game actually paints, nearly half of a high-contrast street had no colour in it at all.
