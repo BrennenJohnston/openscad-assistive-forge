@@ -68,6 +68,65 @@ async function startWelcomeTour(page) {
   await expect(page.locator('.tutorial-panel')).toBeVisible({ timeout: 15_000 });
 }
 
+/**
+ * What the tour is still painting while a dialog is up (UF-36, D-61).
+ *
+ * `topmost` answers the only question that matters for WCAG 2.4.11: if a
+ * person aims at the middle of this control, does the browser hand the press
+ * to it? A veil with `pointer-events: none` passes that test while still
+ * painting over the dialog, so the veil is checked separately - it is the
+ * thing that dimmed the owner's dialog, not the thing that swallowed the tap.
+ */
+function tourPaintingOver(page, selectors = []) {
+  return page.evaluate((sels) => {
+    const name = (el) =>
+      `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ''}`;
+    const svg = document.querySelector('.tutorial-spotlight-svg');
+    const topmost = {};
+    for (const sel of sels) {
+      const el = document.querySelector(sel);
+      if (!el) {
+        topmost[sel] = 'missing';
+        continue;
+      }
+      const r = el.getBoundingClientRect();
+      const hit = document.elementFromPoint(
+        Math.round(r.left + r.width / 2),
+        Math.round(r.top + r.height / 2)
+      );
+      topmost[sel] = !hit
+        ? 'nothing'
+        : el === hit || el.contains(hit)
+          ? 'self'
+          : name(hit);
+    }
+    return {
+      veilRendered: svg ? svg.checkVisibility() : false,
+      highlighted: [
+        ...document.querySelectorAll('.tutorial-target-highlight'),
+      ].map(name),
+      topmost,
+    };
+  }, selectors);
+}
+
+/** Walk the Main Page tour to the Clear Cache step and press what it points at. */
+async function pressTheSpotlightedClearCache(page) {
+  await boot(page);
+  await startWelcomeTour(page);
+  await walkTo(page, 'Clear Cache');
+  await expect(page.locator('#clearStorageBtn')).toHaveClass(
+    /tutorial-target-highlight/
+  );
+
+  await page.locator('#clearStorageBtn').click();
+  await expect(page.locator('.cache-clear-dialog')).toBeVisible({
+    timeout: 10_000,
+  });
+  // the watcher syncs on a rAF after the mutation, then the pill is placed
+  await page.waitForTimeout(700);
+}
+
 /** Walk Next until the panel shows `title`. Welcome steps are all passive. */
 async function walkTo(page, title, cap = 20) {
   for (let i = 0; i < cap; i++) {
@@ -212,6 +271,21 @@ test.describe('U-28: a tour survives the control it highlights', () => {
     await expect(page.locator('.tutorial-panel')).toBeHidden();
     await expect(page.locator('.tutorial-overlay')).toBeAttached();
 
+    // UF-36 (D-61). This case only ever asked whether the panel got out of the
+    // way, and shrinking to a bar is not standing down: at the base the veil
+    // kept painting the dialog at 0.3 and the target kept the elevation and
+    // ring its highlight class carries. That is the vacuous green this closes.
+    await page.waitForTimeout(400);
+    const aside = await tourPaintingOver(page);
+    expect(
+      aside.veilRendered,
+      'the veil must not paint over a dialog the user opened'
+    ).toBe(false);
+    expect(
+      aside.highlighted,
+      'no target may keep its ring or its elevation while a dialog is up'
+    ).toEqual([]);
+
     // Escape belongs to the dialog first
     await page.keyboard.press('Escape');
     await expect(page.locator('.tutorial-panel')).toBeVisible({
@@ -220,6 +294,11 @@ test.describe('U-28: a tour survives the control it highlights', () => {
     await expect(page.locator('#tutorial-step-title')).toHaveText(
       'Keyboard shortcuts'
     );
+    // and the tour comes back WHOLE, not just visible
+    await expect(page.locator('#shortcutsToggle')).toHaveClass(
+      /tutorial-target-highlight/
+    );
+    expect((await tourPaintingOver(page)).veilRendered).toBe(true);
 
     // the next Escape is the tour's
     await page.keyboard.press('Escape');
@@ -504,5 +583,199 @@ test.describe('U-29: the welcome page does not offer an inert switch', () => {
     );
     await walkTo(page, 'Open or start a project');
     expect(await page.locator('#tutorial-step-current').textContent()).toBe('3');
+  });
+});
+
+/**
+ * U-40 / D-61 (owner, 2026-08-21): the curiosity path.
+ *
+ * The owner followed the Main Page tour to step 12 of 13 on their phone,
+ * pressed the Clear Cache button it was pointing at, and could not answer the
+ * dialog that opened. The tour had "stood aside" by shrinking to a bar, but the
+ * veil still painted the dialog at 0.3, the button kept the z-index and ring
+ * its highlight class carries, and the pill kept the dialog's footer corner.
+ * Their words: "they will get stuck in a loop, deleting the app and starting
+ * the tutorial again over and over."
+ *
+ * The round's standing test method: assume a curious new user CLICKS what the
+ * tour highlights, and prove they can get back.
+ */
+test.describe('UF-36: a dialog you can always answer', () => {
+  test.describe('on a phone-shaped viewport', () => {
+    test.use({ viewport: { width: 412, height: 915 } });
+
+    test('D-61: pressing the spotlighted Clear Cache leaves the dialog operable, and Cancel returns to the tour', async ({
+      page,
+    }) => {
+      await pressTheSpotlightedClearCache(page);
+
+      const state = await tourPaintingOver(page, [
+        '#cacheClearCancelBtn',
+        '#cacheClearConfirmBtn',
+      ]);
+
+      expect(
+        state.veilRendered,
+        `the veil must not paint over the dialog: ${JSON.stringify(state)}`
+      ).toBe(false);
+      expect(
+        state.highlighted,
+        'the page button must not keep the ring that invites another press'
+      ).not.toContain('button#clearStorageBtn');
+      expect(state.topmost['#cacheClearCancelBtn']).toBe('self');
+      expect(state.topmost['#cacheClearConfirmBtn']).toBe('self');
+
+      // the pill may stay pressable, but never over the dialog's own box
+      expect(
+        await page.evaluate(() => {
+          const pill = document.querySelector('.tutorial-minimized');
+          const box = document.querySelector(
+            '.cache-clear-dialog .preset-modal-content'
+          );
+          if (!pill || !box || !pill.checkVisibility()) return false;
+          const a = pill.getBoundingClientRect();
+          const b = box.getBoundingClientRect();
+          return !(
+            a.right <= b.left ||
+            a.left >= b.right ||
+            a.bottom <= b.top ||
+            a.top >= b.bottom
+          );
+        }),
+        'the minimized pill must not overlap the dialog'
+      ).toBe(false);
+
+      // and the way back is real: Cancel restores the tour WHERE IT WAS
+      await page.locator('#cacheClearCancelBtn').click();
+      await expect(page.locator('.cache-clear-dialog')).toHaveCount(0, {
+        timeout: 10_000,
+      });
+      await expect(page.locator('.tutorial-panel')).toBeVisible({
+        timeout: 10_000,
+      });
+      await expect(page.locator('#tutorial-step-title')).toHaveText(
+        'Clear Cache'
+      );
+      await expect(page.locator('#clearStorageBtn')).toHaveClass(
+        /tutorial-target-highlight/
+      );
+      expect((await tourPaintingOver(page)).veilRendered).toBe(true);
+    });
+  });
+
+  test.describe("at the owner's device height, where the button lands ON the footer", () => {
+    // 412px wide with the phone browser's chrome taken off the height. At the
+    // full 915 the elevated button sat just BELOW the dialog's footer and the
+    // occlusion did not reproduce; here it lands squarely on Cancel and the red
+    // confirm, which is the state the owner photographed.
+    test.use({ viewport: { width: 412, height: 730 } });
+
+    test('D-61: the elevated button cannot bury the dialog it opened, and pressing where it was does not stack another', async ({
+      page,
+    }) => {
+      await pressTheSpotlightedClearCache(page);
+
+      const overlap = await page.evaluate(() => {
+        const btn = document.getElementById('clearStorageBtn');
+        const footer = document.getElementById('cacheClearCancelBtn');
+        if (!btn || !footer) return null;
+        const a = btn.getBoundingClientRect();
+        const b = footer.getBoundingClientRect();
+        return !(
+          a.right <= b.left ||
+          a.left >= b.right ||
+          a.bottom <= b.top ||
+          a.top >= b.bottom
+        );
+      });
+      expect(
+        overlap,
+        'this case is only meaningful while the page button still lies across the footer'
+      ).toBe(true);
+
+      const state = await tourPaintingOver(page, [
+        '#cacheClearCancelBtn',
+        '#cacheClearConfirmBtn',
+      ]);
+      // MEASURED at the base: both returned button#clearStorageBtn.
+      expect(state.topmost['#cacheClearCancelBtn']).toBe('self');
+      expect(state.topmost['#cacheClearConfirmBtn']).toBe('self');
+
+      // The loop itself. At the base a second press on the ringed button opened
+      // a SECOND dialog on top of the first, each with its Cancel buried under
+      // that same button.
+      const before = await page.locator('.cache-clear-dialog').count();
+      const box = await page.locator('#clearStorageBtn').boundingBox();
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+      await page.waitForTimeout(1000);
+      expect(
+        await page.locator('.cache-clear-dialog').count(),
+        'pressing where the ring was must not stack another dialog'
+      ).toBe(before);
+    });
+  });
+
+  test('D-61 on the desktop the tour was built for: the dialog is topmost there too', async ({
+    page,
+  }) => {
+    await pressTheSpotlightedClearCache(page);
+
+    const state = await tourPaintingOver(page, [
+      '#cacheClearCancelBtn',
+      '#cacheClearConfirmBtn',
+    ]);
+    expect(state.veilRendered).toBe(false);
+    expect(state.highlighted).not.toContain('button#clearStorageBtn');
+    expect(state.topmost['#cacheClearCancelBtn']).toBe('self');
+    expect(state.topmost['#cacheClearConfirmBtn']).toBe('self');
+
+    await page.locator('#cacheClearCancelBtn').click();
+    await expect(page.locator('.tutorial-panel')).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.locator('#tutorial-step-title')).toHaveText('Clear Cache');
+  });
+
+  test('D-67: the overlay stops re-raising itself above its own highlight', async ({
+    page,
+  }) => {
+    await boot(page);
+    await startWelcomeTour(page);
+    await walkTo(page, 'Clear Cache');
+    await expect(page.locator('#clearStorageBtn')).toHaveClass(
+      /tutorial-target-highlight/
+    );
+
+    const stack = await page.evaluate(() => {
+      const root = getComputedStyle(document.documentElement);
+      const token = (n) =>
+        parseInt(root.getPropertyValue(`--z-index-tutorial-${n}`), 10);
+      const z = (sel) => {
+        const el = document.querySelector(sel);
+        return el ? parseInt(getComputedStyle(el).zIndex, 10) : null;
+      };
+      return {
+        // MEASURED at the base: 10002/10003/10004, escalated off the engine's
+        // own ring on a page whose real ancestors all sit below 950.
+        escalated:
+          document.querySelector('.tutorial-overlay')?.style.getPropertyValue(
+            '--z-index-tutorial-backdrop'
+          ) || '',
+        overlay: z('.tutorial-overlay'),
+        veil: z('.tutorial-spotlight-svg'),
+        card: z('.tutorial-panel'),
+        target: z('#clearStorageBtn'),
+        highlightToken: token('highlight'),
+      };
+    });
+
+    expect(
+      stack.escalated,
+      `no ordinary step may escalate the overlay: ${JSON.stringify(stack)}`
+    ).toBe('');
+    // the ordering the escalation used to provide by accident, now stated
+    expect(stack.target).toBe(stack.highlightToken);
+    expect(stack.overlay).toBeGreaterThan(stack.target);
+    expect(stack.card).toBeGreaterThan(stack.veil);
   });
 });
