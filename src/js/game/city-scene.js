@@ -733,6 +733,64 @@ function antennaHeightCutoff(buildings) {
  *   stats: {buildingTriangles: number, storefrontTriangles: number, roadTriangles: number, signCount: number, antennaCount: number, dressingTriangles: number}
  * }}
  */
+/**
+ * How much of a building face survives the fog at any distance (CW-24).
+ *
+ * The fog fades to BLACK at 260 m, and only EXACT black reads as an empty
+ * cell (the CW-1 finding), so every tower past the fog was being deleted from
+ * the picture rather than pushed into the distance — the middle of the frame
+ * came out as a void while the bake holds real geometry out to 707 m.
+ *
+ * Clamping the fog factor leaves this fraction of the lit surface behind at
+ * any distance, so a far tower is a dim silhouette instead of a hole. Only
+ * the BUILDINGS get this: ground, roads and curbs must still vanish, because
+ * a dim carpet across the lower half of the frame is the recorded round-1
+ * failure and perspective stacks every road between here and the horizon into
+ * a few rows of cells.
+ */
+const FAR_SILHOUETTE_KEEP = 0.14;
+
+/**
+ * Give a material a fog FLOOR: it fogs normally with distance, then stops.
+ *
+ * three.js has no such knob, so this rewrites the stock fog chunk. The stock
+ * chunk computes a fog factor and mixes to the fog colour; this one clamps
+ * that factor first. Both fog kinds are handled because the chunk is replaced
+ * whole and the scene's fog kind is not this function's business to assume.
+ *
+ * @param {import('three').Material} material
+ * @param {number} [keep] - fraction of the surface that survives at any range
+ */
+function applyFarSilhouetteFog(material, keep = FAR_SILHOUETTE_KEEP) {
+  const maxFactor = Math.max(0, Math.min(1, 1 - keep));
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uMaxFogFactor = { value: maxFactor };
+    // Kept reachable so the floor can be measured and tuned against a live
+    // frame: writing the uniform takes effect on the next draw, where
+    // changing the constant would mean a rebuild and a different session.
+    material.userData.maxFogFactor = shader.uniforms.uMaxFogFactor;
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <fog_pars_fragment>',
+        '#include <fog_pars_fragment>\nuniform float uMaxFogFactor;'
+      )
+      .replace(
+        '#include <fog_fragment>',
+        `#ifdef USE_FOG
+          #ifdef FOG_EXP2
+            float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
+          #else
+            float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );
+          #endif
+          fogFactor = min( fogFactor, uMaxFogFactor );
+          gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );
+        #endif`
+      );
+  };
+  // Materials that compile differently must not share a cached program.
+  material.customProgramCacheKey = () => `farSilhouette:${maxFactor}`;
+}
+
 export function buildCityGroup(model) {
   const group = new Group();
   group.name = 'ascii-city';
@@ -868,6 +926,7 @@ export function buildCityGroup(model) {
       map: windowTexture ?? null,
       vertexColors: true,
     });
+    applyFarSilhouetteFog(buildingsMat);
     const mesh = new Mesh(merged, buildingsMat);
     mesh.name = 'buildings';
     group.add(mesh);

@@ -742,3 +742,76 @@ describe('buildCityGroup — signs and rooftop masts (CW-18)', () => {
     b.dispose()
   })
 })
+
+describe('buildCityGroup — CW-24 the far city', () => {
+  /**
+   * The fog fades to BLACK, and only exact black reads as an empty cell, so
+   * every tower past 260 m was being deleted from the picture rather than
+   * pushed into the distance. Buildings now keep a floor of their own tone at
+   * any range; everything else must still vanish, because a dim carpet across
+   * the lower half of the frame is the recorded round-1 failure.
+   */
+  const shaderFor = (material) => {
+    const shader = {
+      uniforms: {},
+      fragmentShader:
+        '#include <fog_pars_fragment>\nvoid main(){\n#include <fog_fragment>\n}',
+    }
+    material.onBeforeCompile(shader)
+    return shader
+  }
+
+  it('gives the buildings a fog floor, and nothing else one', () => {
+    const { group, dispose } = buildCityGroup(model())
+
+    const buildings = group.children.find((c) => c.name === 'buildings')
+    expect(typeof buildings.material.onBeforeCompile).toBe('function')
+
+    for (const name of ['ground', 'roads', 'curbs']) {
+      const mesh = group.children.find((c) => c.name === name)
+      if (!mesh) continue
+      // An untouched material has three.js's own empty hook.
+      const patched = shaderFor(mesh.material)
+      expect(
+        patched.uniforms.uMaxFogFactor,
+        `${name} must keep the stock fog and fade to black`
+      ).toBeUndefined()
+    }
+
+    dispose()
+  })
+
+  it('clamps the fog factor below one, so far faces keep some tone', () => {
+    const { group, dispose } = buildCityGroup(model())
+    const buildings = group.children.find((c) => c.name === 'buildings')
+    const shader = shaderFor(buildings.material)
+
+    expect(shader.uniforms.uMaxFogFactor).toBeDefined()
+    const max = shader.uniforms.uMaxFogFactor.value
+    // Exactly 1 would be the stock fog: fully faded, i.e. exactly black,
+    // i.e. an empty cell — the whole defect this release exists to fix.
+    expect(max).toBeGreaterThan(0)
+    expect(max).toBeLessThan(1)
+    // The floor is a silhouette, not a haze: most of the fade must survive.
+    expect(max).toBeGreaterThan(0.5)
+
+    expect(shader.fragmentShader).toContain('uniform float uMaxFogFactor;')
+    expect(shader.fragmentShader).toContain('min( fogFactor, uMaxFogFactor )')
+    // The clamp has to come BEFORE the mix, or it changes nothing.
+    expect(shader.fragmentShader.indexOf('min( fogFactor')).toBeLessThan(
+      shader.fragmentShader.indexOf('mix( gl_FragColor.rgb, fogColor')
+    )
+
+    dispose()
+  })
+
+  it('keeps a distinct program cache key so the patch cannot be shared away', () => {
+    const { group, dispose } = buildCityGroup(model())
+    const buildings = group.children.find((c) => c.name === 'buildings')
+    expect(typeof buildings.material.customProgramCacheKey).toBe('function')
+    expect(buildings.material.customProgramCacheKey()).toContain(
+      'farSilhouette'
+    )
+    dispose()
+  })
+})
