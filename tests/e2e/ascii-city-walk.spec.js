@@ -2491,3 +2491,138 @@ test.describe('ASCII City Walk — traffic signals (CW-19)', () => {
     ).toBe(true)
   })
 })
+
+/**
+ * CW-20: photo mode. The picture a player sees is the overlay canvas, so a
+ * photo is that canvas composed onto black — not a second render path and not
+ * a screenshot of the page.
+ */
+test.describe('ASCII City Walk — photo mode (CW-20)', () => {
+  test('P saves a PNG of the city, named for the city and the day', async ({
+    page,
+  }) => {
+    test.setTimeout(90000)
+    await launchGame(page)
+    await enterCity(page)
+    // Give the converter a frame to paint before photographing it.
+    await page.waitForTimeout(1200)
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: 20000 }),
+      page.keyboard.press('KeyP'),
+    ])
+
+    expect(download.suggestedFilename()).toMatch(
+      /^ascii-city-seattle-\d{4}-\d{2}-\d{2}\.png$/
+    )
+
+    // A file that exists is not the same as a file with a picture in it: an
+    // empty or truncated canvas would still download happily.
+    const path = await download.path()
+    expect(path).toBeTruthy()
+    const { readFileSync } = await import('node:fs')
+    const bytes = readFileSync(path)
+    expect(bytes.length).toBeGreaterThan(2000)
+    expect([...bytes.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10])
+
+    await expect(page.locator('#cityWalkAnnouncer')).toHaveText('Photo saved.')
+  })
+
+  test('the photo button is in the toolbar in both views', async ({ page }) => {
+    await launchGame(page)
+    await enterCity(page)
+    const btn = page.locator('#cityWalkPhotoBtn')
+    await expect(btn).toBeVisible()
+    await expect(btn).toHaveAccessibleName('Photo')
+
+    // The map is a view of the same city; it deserves a photo too.
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
+    await expect(btn).toBeVisible()
+  })
+})
+
+/**
+ * CW-20: a reason to wander. The HUD counts the landmarks this session has
+ * walked past and the legend marks them off.
+ */
+test.describe('ASCII City Walk — landmark tracker (CW-20)', () => {
+  test('walking to a landmark counts it and marks the legend', async ({
+    page,
+  }) => {
+    test.setTimeout(90000)
+    await launchGame(page)
+    await enterCity(page)
+
+    const hud = page.locator('#cityWalkHudStatus')
+    await expect(hud).toContainText('landmarks 0/')
+
+    // Stand on open ground near a landmark and take a real step: the count
+    // rides the same movement branch a walking player uses, so teleporting
+    // alone would prove nothing.
+    const placed = await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      if (!g.landmarks.length) return false
+      const lm = g.landmarks[0]
+      const ang = Math.atan2(lm.y - g.walkState.y, lm.x - g.walkState.x)
+      g.walkState.x = lm.x - Math.cos(ang) * 45
+      g.walkState.y = lm.y - Math.sin(ang) * 45
+      return true
+    })
+    test.skip(!placed, 'this extract has no landmarks to walk to')
+
+    await page.keyboard.down('ArrowUp')
+    await page.waitForTimeout(600)
+    await page.keyboard.up('ArrowUp')
+
+    await expect(hud).not.toContainText('landmarks 0/')
+    await expect(hud).toContainText(/landmarks [1-9]\d*\//)
+
+    // The legend belongs to the map view, so that is where the marks are
+    // read. It marks with real TEXT, so a screen reader and a high-contrast
+    // theme both carry the information rather than a colour doing it alone.
+    await page.keyboard.press('KeyM')
+    await expect(hud).toContainText('map view')
+    const marked = page.locator('.city-walk-legend-list li', { hasText: '✓' })
+    await expect(marked.first()).toBeVisible()
+    await expect(marked.first()).toContainText('visited')
+  })
+})
+
+/**
+ * CW-20: the weather belongs to the street.
+ *
+ * Seen from the overhead map the drops streak diagonally across the whole
+ * picture and read as scratches on the screen rather than as rain — this was
+ * caught by eye in the four-city tour, not by a test, which is why there is
+ * now a test.
+ */
+test.describe('ASCII City Walk — rain stays in the street (CW-20)', () => {
+  test('the map view has no rain in it, and the street gets it back', async ({
+    page,
+  }) => {
+    test.setTimeout(90000)
+    await launchGame(page)
+    await enterCity(page)
+
+    await page.keyboard.press('KeyG')
+    await expect(page.locator('#cityWalkAnnouncer')).toContainText('Rain')
+    expect(
+      await page.evaluate(() => window.__cityWalkGame.rain.group.visible)
+    ).toBe(true)
+
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
+    expect(
+      await page.evaluate(() => window.__cityWalkGame.rain.group.visible),
+      'rain is still drawn over the map'
+    ).toBe(false)
+
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('street view')
+    expect(
+      await page.evaluate(() => window.__cityWalkGame.rain.group.visible),
+      'rain did not come back when the street did'
+    ).toBe(true)
+  })
+})

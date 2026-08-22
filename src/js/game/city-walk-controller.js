@@ -76,6 +76,7 @@ import {
   MONO_REVERSE_THRESHOLD,
   MONO_GLOW_FADE,
 } from './hc-palettes.js';
+import { buildRain, RAIN_LEVEL_COUNT, RAIN_LEVEL_NAMES } from './city-scene.js';
 import { createClassPass } from './city-class-pass.js';
 import { GLYPH_VOCABULARIES } from './glyph-vocabularies.js';
 import {
@@ -111,6 +112,16 @@ const DRAG_THRESHOLD_PX = 4;
 // down, but a click and a keyboard activation have no duration at all. Both
 // are stretched to this, so every button does something visible once.
 const TOOLBAR_STEP_MS = 250;
+
+// CW-20 weather strings. ACCESSIBILITY-CRITICAL (D-35): these are announced
+// to screen readers, so they are flagged for the owner and collected in the
+// round text pack rather than being quietly final.
+const RAIN_OFF_MESSAGE = 'Rain off.';
+const PHOTO_SAVED_MESSAGE = 'Photo saved.';
+const ALL_LANDMARKS_MESSAGE = 'All landmarks found.';
+const RAIN_BLOCKED_MESSAGE = 'Rain is off because reduced motion is on.';
+// Thunder no closer together than this, so it stays an event.
+const THUNDER_GAP_MS = 30000;
 
 // CW-14: what the header's theme button calls each setting the app cycles
 // through. 'auto' resolves to light or dark, which is what the phosphor
@@ -440,6 +451,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       'C: high contrast on or off',
       'T: change the theme',
       'O: colour on or off (off is a single-colour retro screen)',
+      'G: rain off, light, heavy (stays off if you use reduced motion)',
+      'P: save a picture of what you can see',
       'High contrast, theme and colour: the three buttons at the top of the screen',
       'Every key also has a button in the toolbar along the bottom',
       'H: open or close this help',
@@ -729,6 +742,26 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       ],
     },
     {
+      name: 'Weather',
+      buttons: [
+        {
+          id: 'cityWalkPhotoBtn',
+          label: 'Photo',
+          keys: 'P',
+          press: savePhoto,
+          views: 'both',
+        },
+        {
+          id: 'cityWalkRainBtn',
+          label: 'Rain',
+          keys: 'G',
+          press: cycleRain,
+          toggle: true,
+          views: 'street',
+        },
+      ],
+    },
+    {
       name: 'Map',
       buttons: [
         {
@@ -902,9 +935,25 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     mapBtn?.setAttribute('aria-pressed', mapView ? 'true' : 'false');
     fastBtn?.setAttribute('aria-pressed', state.fastWalk ? 'true' : 'false');
 
+    const rainBtn = toolbarButtons.find(
+      (b) => b.spec.id === 'cityWalkRainBtn'
+    )?.btn;
+    if (rainBtn) {
+      rainBtn.setAttribute(
+        'aria-pressed',
+        state.game?.rainLevel === null || state.game?.rainLevel === undefined
+          ? 'false'
+          : 'true'
+      );
+    }
+
     for (const { spec, btn } of toolbarButtons) {
       if (spec.views === 'both') continue;
-      const show = spec.views === (mapView ? 'map' : 'street');
+      // Rain is motion: with reduced motion on there is nothing for this
+      // button to do, so it goes away rather than sitting there inert.
+      const blocked =
+        spec.id === 'cityWalkRainBtn' && Boolean(state.game?.motionReduced);
+      const show = !blocked && spec.views === (mapView ? 'map' : 'street');
       if (!show && !btn.hidden) {
         if (spec.hold) forceReleaseAction(spec.hold);
         if (document.activeElement === btn) mapBtn?.focus();
@@ -961,7 +1010,17 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
         lm.x - game.walkState.x,
         lm.y - game.walkState.y
       );
-      li.textContent = `${lm.name} — ${headingLabel(bearing)}`;
+      const seen = game.visited?.has(lm.name);
+      // A real text mark, not a colour and not an icon font: the tick has
+      // to survive a screen reader and a high-contrast theme alike, and
+      // the word after it is what actually gets read out.
+      li.textContent = `${seen ? '✓ ' : ''}${lm.name} — ${headingLabel(bearing)}`;
+      if (seen) {
+        const sr = document.createElement('span');
+        sr.className = 'sr-only';
+        sr.textContent = ' visited';
+        li.appendChild(sr);
+      }
       if (i === game.landmarkIndex) {
         li.setAttribute('aria-current', 'true');
         li.classList.add('selected');
@@ -1101,6 +1160,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // runs — otherwise the player can start the game inside a parked car.
     const collision = buildCollisionGrid(model);
     const props = buildStreetProps(model, collision);
+    // CW-20: weather. The drops are scene geometry going through the same
+    // pipeline as the city, so the converter turns them into streak
+    // characters for free — no DOM rain, no converter changes.
+    const rain = buildRain();
+    scene.add(rain.group);
     scene.add(props.group);
     stampObstacles(collision, props.obstacles);
     const spawn = findSpawn(model, collision);
@@ -1124,6 +1188,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       orthoCamera,
       city3d,
       props,
+      rain,
       lighting,
       marker,
       markerGeom,
@@ -1225,6 +1290,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       game.altView.invalidate();
     };
     game.startedAtMs = performance.now();
+    // CW-20: which landmarks this session has walked past. Per-session on
+    // purpose — a fresh city is a fresh walk, and nothing is stored.
+    game.visited = new Set();
+    game.announcedAllFound = false;
+    game.rainLevel = null;
+    game.thunderStartMs = 0;
+    game.nextThunderMs = THUNDER_GAP_MS;
     game.motionQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)');
     game.motionReduced = Boolean(game.motionQuery?.matches);
     game.onMotionChange = (event) => {
@@ -1328,6 +1400,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     if (game.motionQuery && game.onMotionChange) {
       game.motionQuery.removeEventListener?.('change', game.onMotionChange);
     }
+    game.rain?.dispose();
     game.classPass?.dispose();
     game.altView?.dispose();
     game.lighting?.detach();
@@ -1398,6 +1471,20 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
 
     // CW-Q16: colour on or off. C is spoken for by high contrast, so the
     // key is O. Like the two above it, it works on the picker as well.
+    if (event.code === 'KeyP') {
+      event.preventDefault();
+      event.stopPropagation();
+      savePhoto();
+      return;
+    }
+
+    if (event.code === 'KeyG') {
+      event.preventDefault();
+      event.stopPropagation();
+      cycleRain();
+      return;
+    }
+
     if (event.code === 'KeyO') {
       event.preventDefault();
       event.stopPropagation();
@@ -1693,6 +1780,154 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     }
   }
 
+  /**
+   * Remember that the player has been here (CW-20).
+   *
+   * The proximity machinery already existed with its own hysteresis, so a
+   * landmark you linger beside does not tick over and over; this only has
+   * to notice the first arrival. The completion line is announced ONCE per
+   * session — a message that repeats every time you re-approach the last
+   * landmark stops being a reward and becomes noise.
+   */
+  function markVisited(game, name) {
+    if (game.visited.has(name)) return;
+    game.visited.add(name);
+    refreshLegend(game);
+    updateHud();
+    if (
+      !game.announcedAllFound &&
+      game.landmarks.length > 0 &&
+      game.visited.size >= game.landmarks.length
+    ) {
+      game.announcedAllFound = true;
+      // ACCESSIBILITY-CRITICAL STRING (D-35) — flagged for owner review.
+      announceInLayer(ALL_LANDMARKS_MESSAGE);
+    }
+  }
+  /**
+   * Save what the player is looking at as a PNG (CW-20).
+   *
+   * The visible picture IS the overlay canvas — the WebGL canvas underneath
+   * is transparent while the Alt View is on — so this composes that overlay
+   * onto black rather than inventing a second render path. A PNG of the
+   * overlay alone would come out as glyphs floating on transparency, which
+   * is not what anyone means by a photo of the city.
+   */
+  function savePhoto() {
+    const game = state.game;
+    if (!game) return;
+    const source = state.refs.viewport?.querySelector('.hfm-overlay-canvas');
+    if (!source || !source.width || !source.height) return;
+
+    const out = document.createElement('canvas');
+    out.width = source.width;
+    out.height = source.height;
+    const ctx = out.getContext('2d');
+    if (!ctx) return;
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, out.width, out.height);
+    ctx.drawImage(source, 0, 0);
+
+    out.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = photoFilename(game);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // Revoking immediately can cancel the download in some browsers;
+      // one turn of the event loop is enough for it to have started.
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+      // ACCESSIBILITY-CRITICAL STRING (D-35) — flagged for owner review.
+      announceInLayer(PHOTO_SAVED_MESSAGE);
+    }, 'image/png');
+  }
+
+  /** ascii-city-<city>-<date>.png, so a folder of these sorts sensibly. */
+  function photoFilename(game) {
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const slug = game.city?.slug ?? 'city';
+    return `ascii-city-${slug}-${date}.png`;
+  }
+  /**
+   * Off, light, heavy, off again (CW-20, CW-Q18).
+   *
+   * Rain is motion, so reduced motion refuses it outright rather than
+   * silently doing nothing: a key that answers with an explanation is a key
+   * the player can trust. The toolbar button is hidden in that state, so the
+   * only way to arrive here is the keyboard.
+   */
+  function cycleRain() {
+    const game = state.game;
+    if (!game) return;
+    if (game.motionReduced) {
+      // ACCESSIBILITY-CRITICAL STRING (D-35) — flagged for owner review.
+      announceInLayer(RAIN_BLOCKED_MESSAGE);
+      return;
+    }
+    const next = game.rainLevel === null ? 0 : game.rainLevel + 1;
+    game.rainLevel = next >= RAIN_LEVEL_COUNT ? null : next;
+    game.rain.setLevel(game.rainLevel);
+    syncToolbarView();
+    // ACCESSIBILITY-CRITICAL STRINGS (D-35) — flagged for owner review.
+    announceInLayer(
+      game.rainLevel === null
+        ? RAIN_OFF_MESSAGE
+        : `Rain: ${RAIN_LEVEL_NAMES[game.rainLevel]}.`
+    );
+    game.altView.invalidate();
+  }
+
+  /**
+   * Weather that moves: the drops fall, the fog drifts, thunder swells.
+   *
+   * Called from the frame loop and ONLY while the street view is up and
+   * reduced motion is off. Rain makes every frame dirty, which is the one
+   * thing in this city that legitimately does — a still frame of falling
+   * rain is not rain.
+   *
+   * @returns {boolean} whether the frame needs converting again
+   */
+  function stepWeather(game, dtS, nowMs) {
+    let dirty = false;
+
+    if (game.rainLevel !== null) {
+      game.rain.update(dtS, game.walkState.x, game.walkState.y);
+      dirty = true;
+
+      // Thunder: rare, hashed off the session clock so it is not random
+      // enough to surprise twice in a row, and never closer than its own
+      // gap. A swell up and back down, not a switch.
+      if (nowMs >= game.nextThunderMs) {
+        game.thunderStartMs = nowMs;
+        game.nextThunderMs = nowMs + THUNDER_GAP_MS + (nowMs % 7919) * 4;
+      }
+      const since = nowMs - game.thunderStartMs;
+      const span = game.lighting.weatherTiming.thunderMs;
+      if (game.thunderStartMs > 0 && since <= span) {
+        // A single smooth hump: up over the first half, down over the
+        // second, so there is no edge anywhere in it.
+        const k = since / span;
+        game.lighting.setThunder(Math.sin(k * Math.PI));
+      } else if (game.thunderStartMs > 0) {
+        game.lighting.setThunder(0);
+        game.thunderStartMs = 0;
+      }
+
+      // Fog drift, minutes-scale: a slow breathe between a clear night and
+      // a murky one. Only while it is raining — a clear night should not
+      // wander on its own.
+      const period = game.lighting.weatherTiming.fogDriftPeriodMs;
+      const phase = (nowMs % period) / period;
+      game.lighting.setFogDensity((1 - Math.cos(phase * Math.PI * 2)) / 2);
+    }
+
+    return dirty;
+  }
   function adjustCharacterSize(delta) {
     const game = state.game;
     if (!game) return;
@@ -1740,6 +1975,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     game.marker.visible = game.mapView;
     game.city3d.setMapView(game.mapView);
     game.props.setMapView(game.mapView);
+    // CW-20: the weather belongs to the street. Seen from overhead the drops
+    // streak diagonally across the whole map and read as scratches on the
+    // picture rather than as rain — caught by eye in the four-city tour.
+    if (game.rain)
+      game.rain.group.visible = !game.mapView && game.rainLevel !== null;
     game.lighting.setMapBoost(game.mapView);
     game.beacons.group.visible = game.mapView;
     state.refs.legend.hidden = !game.mapView;
@@ -1824,9 +2064,14 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       !game.mapView && game.nearLandmark ? ` · near ${game.nearLandmark}` : '';
     const looking = game.mapView ? null : pitchLabel(game.walkState.pitchRad);
     const gaze = looking ? ` · looking ${looking}` : '';
+    // CW-20: a reason to wander. Only while there is something to count.
+    const found =
+      game.landmarks?.length > 0
+        ? ` · landmarks ${game.visited?.size ?? 0}/${game.landmarks.length}`
+        : '';
     const text =
       `${game.city.label} · facing ${headingLabel(game.walkState.headingRad)}` +
-      `${gaze} · ${view}${near}`;
+      `${gaze} · ${view}${near}${found}`;
     if (text !== game.lastHudText) {
       game.lastHudText = text;
       state.refs.hudStatus.textContent = text;
@@ -1930,7 +2175,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
         );
         if (near !== game.nearLandmark) {
           game.nearLandmark = near;
-          if (near) announceInLayer(`Near ${near}.`);
+          if (near) {
+            announceInLayer(`Near ${near}.`);
+            markVisited(game, near);
+          }
         }
       }
       game.altView.invalidate();
@@ -1943,10 +2191,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // the clock entirely, which leaves every light holding a real state
     // rather than going dark.
     if (!game.mapView && !game.motionReduced) {
-      const changed = game.props?.trafficLights?.update(
-        performance.now() - game.startedAtMs
-      );
-      if (changed) game.altView.invalidate();
+      const elapsed = performance.now() - game.startedAtMs;
+      const changed = game.props?.trafficLights?.update(elapsed);
+      const weatherMoved = stepWeather(game, dtS, elapsed);
+      if (changed || weatherMoved) game.altView.invalidate();
     }
 
     game.altView.render();

@@ -558,3 +558,81 @@ describe('parseCityExtract — trees (CW-16)', () => {
     expect(withTrees.boundsM).toEqual(withoutTrees.boundsM)
   })
 })
+
+describe('the visited set and the proximity hysteresis (CW-20)', () => {
+  let nearestLandmarkName
+  beforeAll(async () => {
+    ;({ nearestLandmarkName } = await import(
+      '../../../src/js/game/city-data.js'
+    ))
+  })
+
+  const landmarks = [
+    { name: 'Library', x: 0, y: 0 },
+    { name: 'Tower', x: 300, y: 0 },
+  ]
+
+  /** What the frame loop does: only a CHANGE of nearest landmark counts. */
+  function walk(path) {
+    const visited = new Set()
+    let current = null
+    for (const [x, y] of path) {
+      const near = nearestLandmarkName(landmarks, x, y, current)
+      if (near !== current) {
+        current = near
+        if (near) visited.add(near)
+      }
+    }
+    return { visited, current }
+  }
+
+  it('counts a landmark once however long you stand beside it', () => {
+    // The hysteresis is what makes this safe: while you are close, the same
+    // name keeps coming back, so the transition never re-fires. Without it a
+    // player idling by a landmark would tick it up forever.
+    const { visited } = walk([
+      [200, 0],
+      [40, 0],
+      [10, 0],
+      [5, 0],
+      [10, 0],
+      [5, 0],
+      [30, 0],
+    ])
+    expect([...visited]).toEqual(['Library'])
+  })
+
+  it('does not re-count a landmark you leave and come back to', () => {
+    const { visited } = walk([
+      [10, 0], // arrive
+      [200, 0], // leave, past the 80 m exit
+      [10, 0], // come back
+    ])
+    expect(visited.size).toBe(1)
+  })
+
+  it('counts each landmark as you reach it', () => {
+    const { visited } = walk([
+      [10, 0],
+      [200, 0],
+      [290, 0],
+    ])
+    expect([...visited].sort()).toEqual(['Library', 'Tower'])
+  })
+
+  it('holds the current landmark through the gap between enter and exit', () => {
+    // Enter at 60 m, leave at 80: between the two, the answer must not flicker
+    // to null, or a player walking the boundary would re-count endlessly.
+    let current = nearestLandmarkName(landmarks, 10, 0, null)
+    expect(current).toBe('Library')
+    current = nearestLandmarkName(landmarks, 70, 0, current)
+    expect(current).toBe('Library')
+    current = nearestLandmarkName(landmarks, 100, 0, current)
+    expect(current).toBeNull()
+  })
+
+  it('says nothing when there is nothing near', () => {
+    expect(nearestLandmarkName(landmarks, 150, 500, null)).toBeNull()
+    expect(nearestLandmarkName([], 0, 0, null)).toBeNull()
+  })
+})

@@ -2288,6 +2288,134 @@ export function buildLandmarkBeacons(landmarks) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Rain (CW-20)
+// ---------------------------------------------------------------------------
+// Slivers of geometry falling inside a box that travels with the player, dim
+// enough that the converter turns them into sparse streak characters rather
+// than a wall of ink. Nothing about this is drawn in the DOM or bolted onto
+// the converter: it is scene geometry going through the same pipeline as the
+// city, which is what makes it look like it belongs there.
+//
+// A pool, not a spawner. The drops are created once and recycled: a drop that
+// falls out of the bottom of the box is lifted back to the top with a new
+// horizontal position, so the count never changes and nothing is allocated
+// per frame.
+const RAIN_BOX_M = 34;
+const RAIN_TOP_M = 22;
+const RAIN_DROP_LEN_M = 0.72;
+const RAIN_DROP_THICK_M = 0.035;
+// Light and heavy (CW-Q18). Heavy is not simply "more": the drops also fall
+// faster and lean further, because rain that only gets denser reads as fog.
+const RAIN_LEVELS = [
+  { name: 'light', drops: 150, speedMS: 15, leanMS: 1.4, tint: 0.34 },
+  { name: 'heavy', drops: 420, speedMS: 24, leanMS: 3.2, tint: 0.46 },
+];
+
+/**
+ * A pool of falling drops that follows the player.
+ *
+ * @param {number} [maxDrops] - pool size; the level decides how many are
+ *   actually visible, so switching intensity never rebuilds geometry
+ * @returns {{
+ *   group: Group,
+ *   setLevel: (index: number|null) => void,
+ *   update: (dtS: number, x: number, y: number) => void,
+ *   dispose: () => void
+ * }}
+ */
+export function buildRain(
+  maxDrops = RAIN_LEVELS[RAIN_LEVELS.length - 1].drops
+) {
+  const group = new Group();
+  group.name = 'rain';
+  group.visible = false;
+
+  const geom = new BoxGeometry(
+    RAIN_DROP_THICK_M,
+    RAIN_DROP_THICK_M,
+    RAIN_DROP_LEN_M
+  );
+  const material = new MeshBasicMaterial({ color: 0x555555 });
+  const drops = [];
+  const rand = makeLcg(0x5a1d0b0b);
+
+  for (let i = 0; i < maxDrops; i++) {
+    const mesh = new Mesh(geom, material);
+    mesh.position.set(
+      (rand() - 0.5) * RAIN_BOX_M,
+      (rand() - 0.5) * RAIN_BOX_M,
+      rand() * RAIN_TOP_M
+    );
+    mesh.visible = false;
+    group.add(mesh);
+    drops.push(mesh);
+  }
+
+  let level = null;
+  let centreX = 0;
+  let centreY = 0;
+
+  return {
+    group,
+
+    /**
+     * @param {number|null} index - RAIN_LEVELS index, or null for no rain
+     */
+    setLevel(index) {
+      level = Number.isInteger(index) ? (RAIN_LEVELS[index] ?? null) : null;
+      group.visible = level !== null;
+      const shown = level ? level.drops : 0;
+      for (let i = 0; i < drops.length; i++) drops[i].visible = i < shown;
+      if (level) material.color.setScalar(level.tint);
+    },
+
+    /**
+     * Fall, and keep the box centred on the player. Re-centring MOVES the
+     * drops with the box rather than leaving them behind, so walking never
+     * outruns the weather.
+     */
+    update(dtS, x, y) {
+      if (!level) return;
+      const dx = x - centreX;
+      const dy = y - centreY;
+      centreX = x;
+      centreY = y;
+      group.position.set(x, y, 0);
+
+      const fall = level.speedMS * dtS;
+      const lean = level.leanMS * dtS;
+      const half = RAIN_BOX_M / 2;
+      const shown = level.drops;
+      for (let i = 0; i < shown; i++) {
+        const p = drops[i].position;
+        p.z -= fall;
+        p.x += lean;
+        // The box moved under the drops; keep them where they were in world
+        // terms so the rain does not slide sideways when the player walks.
+        p.x -= dx;
+        p.y -= dy;
+        if (p.z < 0 || p.x > half || p.x < -half || p.y > half || p.y < -half) {
+          p.x = (rand() - 0.5) * RAIN_BOX_M;
+          p.y = (rand() - 0.5) * RAIN_BOX_M;
+          p.z = RAIN_TOP_M * (0.6 + rand() * 0.4);
+        }
+      }
+    },
+
+    dispose() {
+      group.clear();
+      geom.dispose();
+      material.dispose();
+    },
+  };
+}
+
+/** How many rain levels there are, for callers cycling through them. */
+export const RAIN_LEVEL_COUNT = RAIN_LEVELS.length;
+/** Level names, for the announcements the owner reviews. */
+export const RAIN_LEVEL_NAMES = RAIN_LEVELS.map((l) => l.name);
+
 /**
  * Attach the game's lighting: a dim ambient fill plus a headlight parented
  * to the camera (the same view-space arrangement the model preview uses, so
@@ -2323,9 +2451,67 @@ export function attachCityLighting(scene, camera) {
   camera.add(headlight);
   camera.add(headlight.target);
 
+  // CW-20: the fog can drift between clear and murky nights, and a rare
+  // thunder swell can lift the ambient light. Both are AMBIENT MOTION and
+  // both are driven by the controller, which owns the reduced-motion state —
+  // nothing here starts moving on its own.
+  //
+  // The drift moves the fog FAR plane, not the near one, and it never
+  // reaches the buildings’ silhouette floor from CW-24: a murky night pulls
+  // the skyline closer, it does not delete it, because the floor is applied
+  // after the fog factor and survives any density.
+  const FOG_FAR_CLEAR = 260;
+  const FOG_FAR_MURKY = 150;
+  // Minutes-scale, deliberately. This is weather, and it also puts the
+  // change rate orders of magnitude below anything WCAG 2.3.1 concerns
+  // itself with: a full clear-to-murky sweep takes about three minutes.
+  const FOG_DRIFT_PERIOD_MS = 360000;
+  // A swell, not a flash: it rises and falls over about a third of a second
+  // and lifts the ambient by well under half again. Thunder in this city is
+  // mood lighting, and the amplitude is chosen so that even at its peak the
+  // frame-to-frame change is a gentle ramp rather than a transition.
+  const THUNDER_PEAK = 0.22;
+  const THUNDER_MS = 320;
+  let ambientBase = AMBIENT_STREET;
+
   return {
     setMapBoost(isMap) {
-      ambient.intensity = isMap ? AMBIENT_MAP : AMBIENT_STREET;
+      ambientBase = isMap ? AMBIENT_MAP : AMBIENT_STREET;
+      ambient.intensity = ambientBase;
+    },
+
+    /**
+     * Slide the fog between a clear night and a murky one (CW-Q18).
+     *
+     * @param {number} t - 0 clear, 1 murky
+     */
+    setFogDensity(t) {
+      const k = Math.max(0, Math.min(1, Number(t) || 0));
+      fog.far = FOG_FAR_CLEAR + (FOG_FAR_MURKY - FOG_FAR_CLEAR) * k;
+    },
+
+    /** Where the fog sits now, so the release record can state it. */
+    getFogFar() {
+      return fog.far;
+    },
+
+    /**
+     * A thunder swell: 0 at rest, 1 at the peak of the flash.
+     *
+     * @param {number} amount - 0..1
+     */
+    setThunder(amount) {
+      const a = Math.max(0, Math.min(1, Number(amount) || 0));
+      ambient.intensity = ambientBase * (1 + THUNDER_PEAK * a);
+    },
+
+    /** The drift period and swell length, for the record and the tests. */
+    weatherTiming: {
+      fogDriftPeriodMs: FOG_DRIFT_PERIOD_MS,
+      thunderMs: THUNDER_MS,
+      fogFarClear: FOG_FAR_CLEAR,
+      fogFarMurky: FOG_FAR_MURKY,
+      thunderPeak: THUNDER_PEAK,
     },
     detach() {
       camera.remove(headlight);
