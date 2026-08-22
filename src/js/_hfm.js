@@ -37,6 +37,7 @@ import {
   driveColor,
   pickIntensityIndex,
   GLYPH_COUNT,
+  SPACE_INDEX,
 } from './_hfm-paint.js';
 
 // Tuning knobs
@@ -97,6 +98,18 @@ function _createInstanceState() {
     intensityLevels: null, // number[] drive factors, dimmest first, or null
     intensityAtlases: null,
     intensityIndices: null, // Int8Array, rows*cols
+
+    // CW-21 reverse video: an extra atlas at the END of intensityAtlases whose
+    // cells are solid phosphor with the glyph knocked out. Only cells at or
+    // above reverseThreshold take it, because a band of solid cells reads as a
+    // painted wall rather than a city.
+    reverseThreshold: null, // 0..1, or null for no reverse video
+    reverseAtlasIndex: -1,
+
+    // CW-21: carry the afterglow inside the composite path. Opt-in, because
+    // it changes how a trail looks (a decaying maximum rather than a
+    // source-over blend) as well as what it costs.
+    glowInComposite: false,
 
     // Render-on-demand scheduling
     dirty: true,
@@ -380,7 +393,7 @@ function _ensureGlyphModel(st, { fontFamily, fontSizePx, charW, charH, dpr }) {
     st.intensityAtlases = null;
   } else {
     st.paletteAtlases = null;
-    const atlasAt = (tint) =>
+    const atlasAt = (tint, reverse = false) =>
       buildGlyphAtlas({
         fontFamily,
         fontSizePx,
@@ -389,26 +402,59 @@ function _ensureGlyphModel(st, { fontFamily, fontSizePx, charW, charH, dpr }) {
         dpr,
         color: tint,
         normalizeTinyAlpha: st.tinyCellsAllowed,
+        reverse,
       });
-    if (st.intensityLevels) {
+    const wantsReverse = st.reverseThreshold !== null;
+    if (st.intensityLevels || wantsReverse) {
       // One atlas per drive level. Glyph coverage is alpha, which is identical
       // across tints, so the shape vectors below are unaffected by intensity —
       // a dim cell picks the same character it would have picked at full
       // drive, and only its brightness changes. MEASURED: about 0.2 ms per
       // atlas at any character size, so a handful of levels is not a cost.
-      st.intensityAtlases = st.intensityLevels.map((drive) =>
+      const levels = st.intensityLevels ?? [1];
+      st.intensityAtlases = levels.map((drive) =>
         atlasAt(driveColor(color, drive))
       );
-      // The base atlas stays the full-drive one, so everything that reads
-      // st.atlas (cell metrics, the no-layers fallback) sees today's picture.
+      // The full-drive atlas is what everything else reads (cell metrics, the
+      // no-layers fallback, and the shape vectors below), so it must stay the
+      // NORMAL one — vectors built from a reverse atlas would describe the
+      // holes rather than the glyphs.
       st.atlas = st.intensityAtlases[st.intensityAtlases.length - 1];
+      if (wantsReverse) {
+        st.reverseAtlasIndex = st.intensityAtlases.length;
+        st.intensityAtlases = st.intensityAtlases.concat([
+          atlasAt(color, true),
+        ]);
+      } else {
+        st.reverseAtlasIndex = -1;
+      }
     } else {
       st.intensityAtlases = null;
+      st.reverseAtlasIndex = -1;
       st.atlas = atlasAt(color);
     }
   }
   st.glyphVectors = _buildGlyphVectors(st.atlas);
   st.lookup = createLookup(st.glyphVectors);
+  // The emptiest glyph that is not the space character. A reverse cell wants
+  // the SPARSEST glyph it can get — the less is punched out, the brighter the
+  // cell — but the painter skips SPACE_INDEX as a blank, so asking for space
+  // would leave a hole exactly where the brightest cell should be solid.
+  // Which glyph is emptiest depends on the font, so it is measured from the
+  // vectors rather than assumed.
+  let emptiest = -1;
+  let emptiestInk = Infinity;
+  for (let g = 0; g < st.glyphVectors.length; g++) {
+    if (g === SPACE_INDEX) continue;
+    const vec = st.glyphVectors[g];
+    let ink = 0;
+    for (let i = 0; i < vec.length; i++) ink += vec[i];
+    if (ink < emptiestInk) {
+      emptiestInk = ink;
+      emptiest = g;
+    }
+  }
+  st.sparsestNonSpace = emptiest >= 0 ? emptiest : SPACE_INDEX;
   st.atlasKey = key;
 }
 
@@ -504,7 +550,14 @@ function _renderFrame(
   if (useIntensity && st.intensityIndices?.length !== rows * cols) {
     st.intensityIndices = new Int8Array(rows * cols);
   }
-  const intensityCount = useIntensity ? st.intensityAtlases.length : 0;
+  const reverseIdx = useIntensity ? st.reverseAtlasIndex : -1;
+  // The reverse atlas rides at the end of the array and is NOT one of the
+  // drive levels, so it must not take a share of the luminance split.
+  const intensityCount = useIntensity
+    ? st.intensityAtlases.length - (reverseIdx >= 0 ? 1 : 0)
+    : 0;
+  const reverseAt = reverseIdx >= 0 ? st.reverseThreshold : Infinity;
+  let reverseCells = 0;
   let idx = 0;
 
   for (let y = 0; y < rows; y++) {
@@ -542,15 +595,17 @@ function _renderFrame(
         }
         if (useIntensity) sumLum += v[i];
       }
+      // The cell's brightness BEFORE the contrast curves reshape v for glyph
+      // matching: intensity answers "how bright is this cell", the glyph
+      // answers "what shape is it", and the two must not be the same signal
+      // twice over.
+      const cellLum = useIntensity ? sumLum / 6 : 0;
+      const cellReversed = cellLum >= reverseAt;
       if (useIntensity) {
-        // The cell's brightness BEFORE the contrast curves reshape v for glyph
-        // matching: intensity answers "how bright is this cell", the glyph
-        // answers "what shape is it", and the two must not be the same signal
-        // twice over.
-        st.intensityIndices[idx] = pickIntensityIndex(
-          sumLum / 6,
-          intensityCount
-        );
+        st.intensityIndices[idx] = cellReversed
+          ? reverseIdx
+          : pickIntensityIndex(cellLum, intensityCount);
+        if (cellReversed) reverseCells++;
       }
       if (usePalette) {
         st.colorIndices[idx] = pickPaletteIndex(
@@ -582,6 +637,19 @@ function _renderFrame(
       _applyDirectionalContrast(st, v, extSamples);
       _applyCellContrast(st, v);
 
+      if (cellReversed) {
+        // In a reverse cell the phosphor is the BACKGROUND and the glyph is a
+        // hole, so brightness is one minus coverage. Matching the cell against
+        // the inverted shape puts the holes where the cell is dark and leaves
+        // the lit part solid — ask for the same dense glyph a normal cell
+        // would use and the cell comes back no brighter than it started.
+        for (let i = 0; i < 6; i++) v[i] = 1 - v[i];
+        const picked = st.lookup.nearestIndex(v);
+        glyphIndices[idx++] =
+          picked === SPACE_INDEX ? st.sparsestNonSpace : picked;
+        continue;
+      }
+
       glyphIndices[idx++] = st.lookup.nearestIndex(v);
     }
   }
@@ -611,8 +679,15 @@ function _renderFrame(
       ? { indices: st.colorIndices, atlases: st.paletteAtlases }
       : useIntensity
         ? { indices: st.intensityIndices, atlases: st.intensityAtlases }
-        : undefined
+        : undefined,
+    st.glowInComposite
   );
+
+  // Bench readout only (DEV): how much of the frame reverse video claimed.
+  // A rising share is the "carpeting" failure showing up as a number before
+  // it shows up as a wall of solid cells.
+  st.lastCellCount = rows * cols;
+  st.lastReverseCells = reverseCells;
 }
 
 /**
@@ -631,6 +706,7 @@ export async function initAltView(previewManager, options = {}) {
 
   const st = _createInstanceState();
   st.tinyCellsAllowed = Boolean(options.allowTinyCells);
+  st.glowInComposite = Boolean(options.glowInComposite);
 
   _ensureOverlay(st, container);
 
@@ -854,7 +930,7 @@ export async function initAltView(previewManager, options = {}) {
       } else {
         st.intensityLevels = null;
       }
-      if (!st.intensityLevels) {
+      if (!st.intensityLevels && st.reverseThreshold === null) {
         st.intensityAtlases = null;
         st.intensityIndices = null;
       }
@@ -864,6 +940,35 @@ export async function initAltView(previewManager, options = {}) {
     },
     getIntensityLevels() {
       return st.intensityLevels ? st.intensityLevels.slice() : null;
+    },
+    /**
+     * Reverse video for the top of the ramp (CW-21), monochrome only.
+     *
+     * Pass a luminance threshold in [0, 1]: cells at or above it are painted
+     * as solid phosphor with their glyph knocked out, which is the only way
+     * past the ASCII coverage ceiling (the densest printable glyph inks
+     * 43-58% of a cell). Pass null to switch it off.
+     *
+     * Keep the threshold HIGH. A band of solid cells stops reading as a
+     * bright surface and starts reading as a painted wall — the recorded
+     * "carpeting" failure — so this is a highlight for the few brightest
+     * cells, not a tone in the ramp.
+     *
+     * @param {number|null} threshold
+     * @returns {number|null} the active threshold
+     */
+    setReverseVideo(threshold) {
+      st.reverseThreshold =
+        Number.isFinite(threshold) && threshold >= 0 && threshold <= 1
+          ? threshold
+          : null;
+      if (st.reverseThreshold === null) st.reverseAtlasIndex = -1;
+      st.atlasKey = '';
+      st.dirty = true;
+      return st.reverseThreshold;
+    },
+    getReverseVideo() {
+      return st.reverseThreshold;
     },
     setContrastScale(scale) {
       return _setContrastScale(st, scale);
@@ -971,6 +1076,10 @@ export async function initAltView(previewManager, options = {}) {
         fontSizePx,
         charW: metrics.charW,
         charH: metrics.charH,
+        // CW-21: cells in the last converted frame, and how many of them
+        // reverse video claimed.
+        cells: st.lastCellCount ?? 0,
+        reverseCells: st.lastReverseCells ?? 0,
       };
     };
     api.resetConvertStats = () => {

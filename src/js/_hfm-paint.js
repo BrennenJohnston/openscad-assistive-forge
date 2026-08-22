@@ -61,6 +61,7 @@ export function buildGlyphAtlas({
   dpr,
   color,
   normalizeTinyAlpha = false,
+  reverse = false,
 }) {
   const cellW = Math.max(1, Math.round(charW * dpr));
   const cellH = Math.max(1, Math.round(charH * dpr));
@@ -76,14 +77,30 @@ export function buildGlyphAtlas({
   ctx.textBaseline = 'middle';
   ctx.font = `${fontSizePx * dpr}px ${fontFamily}`;
 
+  if (reverse) {
+    // Reverse video (CW-21): the cell is solid phosphor and the glyph is
+    // knocked OUT of it, which is the only way past the ASCII coverage
+    // ceiling — the densest printable glyph inks 43-58% of a cell, so no
+    // character can make a cell brighter than about half full. Punching a
+    // SPARSE glyph out of a solid cell reaches the other end of the range.
+    // Painting stays one atlas and one blit; only the atlas is built
+    // differently.
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.globalCompositeOperation = 'destination-out';
+  }
+
   for (let i = 0; i < GLYPH_COUNT; i++) {
     const ch = String.fromCharCode(FIRST_CHAR_CODE + i);
     ctx.fillText(ch, i * cellW + cellW / 2, cellH / 2);
   }
 
+  if (reverse) ctx.globalCompositeOperation = 'source-over';
+
+  // A reverse atlas is already fully opaque somewhere, so the tiny-glyph
+  // treatment is a no-op on it by its own maxAlpha === 255 guard.
   if (normalizeTinyAlpha) _restoreTinyGlyphBrightness(ctx, canvas, charW);
 
-  return { canvas, cellW, cellH, dpr, color };
+  return { canvas, cellW, cellH, dpr, color, reverse };
 }
 
 /**
@@ -259,6 +276,23 @@ function _frameBuffer(ctx, w, h) {
 }
 
 /**
+ * The previous composited frame, per overlay context, for afterglow (CW-21).
+ *
+ * Kept as its own Uint8ClampedArray rather than a canvas: the composite path
+ * never touches a canvas until its single putImageData, and reading one back
+ * to get the last frame would throw that away.
+ */
+const _glowBuffers = new WeakMap();
+
+function _glowBuffer(ctx, byteLength) {
+  const held = _glowBuffers.get(ctx);
+  if (held && held.length === byteLength) return held;
+  const made = new Uint8ClampedArray(byteLength);
+  _glowBuffers.set(ctx, made);
+  return made;
+}
+
+/**
  * An atlas's pixels as one Uint32Array, computed once and cached on the atlas
  * object itself — atlases are rebuilt (and the cache thrown away with them)
  * whenever font metrics or theme colors change. The atlas canvas is already
@@ -281,7 +315,8 @@ function _paintComposited(
   stepX,
   stepY,
   colorIndices,
-  colorAtlases
+  colorAtlases,
+  glowFade
 ) {
   const w = ctx.canvas.width;
   const h = ctx.canvas.height;
@@ -334,7 +369,44 @@ function _paintComposited(
     }
   }
 
+  if (glowFade > 0) _applyAfterglow(ctx, img, glowFade);
+
   ctx.putImageData(img, 0, 0);
+}
+
+/**
+ * Phosphor afterglow on the composite path (CW-21).
+ *
+ * A real phosphor keeps EMITTING as it decays, so what the tube shows is the
+ * new frame plus whatever the previous one is still giving off. That is a
+ * per-channel maximum against the decayed previous frame rather than a
+ * source-over blend — and it is also the cheap arithmetic, a comparison and a
+ * copy per pixel with no division, which is what lets afterglow ride the
+ * composite path instead of dropping the whole frame back onto the per-cell
+ * blit path CW-22 measured at 2-3x slower.
+ *
+ * @param {CanvasRenderingContext2D} ctx - the key for this overlay's history
+ * @param {ImageData} img - the frame just composited; updated in place
+ * @param {number} fade - 0..1, how much of the previous frame still glows
+ */
+function _applyAfterglow(ctx, img, fade) {
+  const cur = img.data;
+  const prev = _glowBuffer(ctx, cur.length);
+  for (let i = 0; i < cur.length; i += 4) {
+    const decayed = prev[i + 3] * fade;
+    if (decayed > cur[i + 3]) {
+      // The decaying pixel still out-glows the new one: keep its colour at the
+      // decayed alpha, so a trail dims away instead of changing hue.
+      cur[i] = prev[i];
+      cur[i + 1] = prev[i + 1];
+      cur[i + 2] = prev[i + 2];
+      cur[i + 3] = decayed;
+    }
+    prev[i] = cur[i];
+    prev[i + 1] = cur[i + 1];
+    prev[i + 2] = cur[i + 2];
+    prev[i + 3] = cur[i + 3];
+  }
 }
 
 /**
@@ -365,6 +437,10 @@ function _paintComposited(
  * @param {{ indices: Int8Array|number[], atlases: Array<{canvas: HTMLCanvasElement}> }} [colorLayers]
  *   per-cell palette indices + one atlas per palette color (all atlases share
  *   the base atlas's cell metrics)
+ * @param {boolean} [glowInComposite=false] - CW-21: carry the trail inside the
+ *   composite path (a decaying per-channel maximum) instead of dropping to the
+ *   per-cell blit path for it. Needs no persistence canvas; the caller opts in
+ *   because it changes how a trail LOOKS, not just how fast it paints.
  */
 export function paintFrame(
   ctx,
@@ -377,10 +453,12 @@ export function paintFrame(
   persistCanvas,
   persistCtx,
   persistFade,
-  colorLayers
+  colorLayers,
+  glowInComposite = false
 ) {
-  const fade =
-    persistCanvas && persistCtx && typeof persistFade === 'number'
+  const fade = glowInComposite
+    ? Math.max(0, Math.min(1, Number(persistFade) || 0))
+    : persistCanvas && persistCtx && typeof persistFade === 'number'
       ? Math.max(0, Math.min(1, persistFade))
       : 0;
 
@@ -390,7 +468,12 @@ export function paintFrame(
   const colorIndices = colorLayers?.indices ?? null;
   const colorAtlases = colorLayers?.atlases ?? null;
 
-  if (fade === 0) {
+  // The composite path carries afterglow itself (CW-21), so switching a trail
+  // on no longer costs the frame the CW-22 paint speed-up. The per-cell blit
+  // path below stays for callers that hand in a persistence CANVAS pair and
+  // expect the source-over trail it has always produced — the main app's Alt
+  // View slider is one.
+  if (fade === 0 || glowInComposite) {
     _paintComposited(
       ctx,
       glyphIndices,
@@ -400,7 +483,8 @@ export function paintFrame(
       stepX,
       stepY,
       colorIndices,
-      colorAtlases
+      colorAtlases,
+      glowInComposite ? fade : 0
     );
     return;
   }

@@ -562,3 +562,75 @@ describe('resizeOverlay', () => {
     expect(canvas.height).toBe(480)
   })
 })
+
+describe('reverse-video atlas (CW-21)', () => {
+  let origGetContext
+  let ctxCalls
+
+  beforeEach(() => {
+    ctxCalls = []
+    origGetContext = HTMLCanvasElement.prototype.getContext
+    HTMLCanvasElement.prototype.getContext = function () {
+      const ctx = {
+        canvas: this,
+        globalCompositeOperation: 'source-over',
+        font: '',
+        textAlign: '',
+        textBaseline: '',
+        fillStyle: '',
+        clearRect: vi.fn(),
+        fillRect: vi.fn(function (...a) {
+          ctxCalls.push(['fillRect', ctx.globalCompositeOperation, ...a])
+        }),
+        fillText: vi.fn(function (ch) {
+          ctxCalls.push(['fillText', ctx.globalCompositeOperation, ch])
+        }),
+        getImageData: vi.fn(() => ({ data: new Uint8ClampedArray(4) })),
+        putImageData: vi.fn(),
+      }
+      return ctx
+    }
+  })
+
+  afterEach(() => {
+    HTMLCanvasElement.prototype.getContext = origGetContext
+  })
+
+  const build = (reverse) =>
+    buildGlyphAtlas({
+      fontFamily: 'monospace',
+      fontSizePx: 10,
+      charW: 6,
+      charH: 12,
+      dpr: 1,
+      color: '#00ff00',
+      reverse,
+    })
+
+  it('fills the whole atlas and knocks the glyphs out of it', () => {
+    build(true)
+    const fills = ctxCalls.filter((c) => c[0] === 'fillRect')
+    const texts = ctxCalls.filter((c) => c[0] === 'fillText')
+    // One solid fill, laid down BEFORE any glyph, in normal compositing.
+    expect(fills).toHaveLength(1)
+    expect(fills[0][1]).toBe('source-over')
+    expect(ctxCalls.indexOf(fills[0])).toBeLessThan(ctxCalls.indexOf(texts[0]))
+    // Every glyph is then punched out of that fill, not painted onto it.
+    expect(texts).toHaveLength(GLYPH_COUNT)
+    for (const t of texts) expect(t[1]).toBe('destination-out')
+  })
+
+  it('leaves the normal atlas exactly as it was', () => {
+    build(false)
+    expect(ctxCalls.filter((c) => c[0] === 'fillRect')).toHaveLength(0)
+    const texts = ctxCalls.filter((c) => c[0] === 'fillText')
+    expect(texts).toHaveLength(GLYPH_COUNT)
+    for (const t of texts) expect(t[1]).toBe('source-over')
+  })
+
+  it('restores normal compositing so the caller is not left inverted', () => {
+    const atlas = build(true)
+    expect(atlas.reverse).toBe(true)
+    expect(build(false).reverse).toBe(false)
+  })
+})
