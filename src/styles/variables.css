@@ -59,6 +59,16 @@
   --size-icon-lg: 24px;
   --size-icon-xl: 32px;
 
+  /* Tutorial card sizing (UF-38, D-65)
+     The card's body is a flex item with `flex: 1`, so it takes whatever the
+     header and footer leave. MEASURED at 412x810 on Firefox, the height a
+     phone actually has: the dock cap clipped 47px off the "Preview Settings
+     & Info" step with no affordance at all. The floor keeps the step title
+     (27px) and one line of body text visible whatever the arithmetic says;
+     the cue height is the fade that admits the rest is below the fold. */
+  --tutorial-body-min-height: 72px;
+  --tutorial-scroll-cue-height: 32px;
+
   /* Border Widths */
   --border-width-thin: 1px;
   --border-width-base: 2px;
