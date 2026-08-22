@@ -3463,9 +3463,6 @@ function isAppDialogOpen() {
   return findOpenAppDialogs().length > 0;
 }
 
-/** 44px of target plus room to breathe on both sides of it. */
-const PILL_CLEARANCE = 60;
-
 /** The box a dialog actually paints, not its full-viewport scrim. */
 function dialogContentBox(dialog) {
   const content =
@@ -3521,11 +3518,21 @@ function applyDialogStandDown(dialogs) {
 }
 
 /**
- * Park the pill in whichever gap the dialog leaves, or take it away when it
- * leaves none. Covering a dialog's own controls is the defect being fixed, and
- * a focusable control outside an `aria-modal` dialog is a focus-trap leak
- * besides - so when there is no room, no pill. The dialog closing restores it,
- * and the tour with it.
+ * Keep the pill off the dialog's own box - and otherwise leave it exactly where
+ * it lives.
+ *
+ * The first cut of this measured only the vertical gaps a dialog left, and CI
+ * Firefox caught what that costs: the keyboard-shortcuts dialog paints
+ * x 290-990 while the pill sits at x 1152, so it could never have been covered,
+ * yet a 51px vertical gap was enough to make this function hide it. MEASURED at
+ * 1280x600. A dialog the pill does not touch is a dialog it does not need to
+ * dodge.
+ *
+ * So: only act on a real intersection. Then prefer a gap above, then below, and
+ * only when neither can hold it does the pill go - because covering a dialog's
+ * controls is the defect being fixed, and a focusable control outside an
+ * `aria-modal` dialog is a focus-trap leak besides. Closing the dialog restores
+ * it, and the tour with it.
  */
 function keepPillClearOfDialogs(pill, dialogs) {
   if (!pill) return;
@@ -3533,21 +3540,34 @@ function keepPillClearOfDialogs(pill, dialogs) {
   const boxes = dialogs.map(dialogContentBox).filter(Boolean);
   if (!boxes.length) return;
 
-  const highest = Math.min(...boxes.map((b) => b.top));
-  const lowest = Math.max(...boxes.map((b) => b.bottom));
-  const pillHeight = pill.getBoundingClientRect().height || 44;
-  const needed = pillHeight + 16;
-
+  // Always decide from the pill's resting corner, never from wherever an
+  // earlier pass parked it.
+  pill.style.top = dialogStandDown?.pillTop ?? '';
+  pill.style.bottom = dialogStandDown?.pillBottom ?? '';
   pill.style.display = dialogStandDown?.pillDisplay ?? '';
 
-  if (highest >= needed && highest >= PILL_CLEARANCE) {
-    pill.style.top = `${Math.max(8, Math.round((highest - pillHeight) / 2))}px`;
+  const resting = pill.getBoundingClientRect();
+  const overlaps = (box) =>
+    !(
+      resting.right <= box.left ||
+      resting.left >= box.right ||
+      resting.bottom <= box.top ||
+      resting.top >= box.bottom
+    );
+  if (!boxes.some(overlaps)) return;
+
+  const pillHeight = resting.height || 44;
+  const needed = pillHeight + 16;
+  const above = Math.min(...boxes.map((b) => b.top));
+  const below = window.innerHeight - Math.max(...boxes.map((b) => b.bottom));
+
+  if (above >= needed) {
+    pill.style.top = `${Math.max(8, Math.round((above - pillHeight) / 2))}px`;
     pill.style.bottom = 'auto';
     return;
   }
 
-  const below = window.innerHeight - lowest;
-  if (below >= needed && below >= PILL_CLEARANCE) {
+  if (below >= needed) {
     pill.style.top = 'auto';
     pill.style.bottom = `${Math.max(8, Math.round((below - pillHeight) / 2))}px`;
     return;

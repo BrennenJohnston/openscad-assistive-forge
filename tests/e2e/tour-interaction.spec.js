@@ -110,6 +110,26 @@ function tourPaintingOver(page, selectors = []) {
   }, selectors);
 }
 
+/** Does the minimized pill intersect the box this dialog actually paints? */
+function pillOverlapsDialog(page, dialogSelector) {
+  return page.evaluate((sel) => {
+    const pill = document.querySelector('.tutorial-minimized');
+    const dialog = document.querySelector(sel);
+    if (!pill || !dialog) return null;
+    if (!pill.checkVisibility()) return false;
+    const box = dialog.querySelector('.preset-modal-content, .modal-content');
+    if (!box) return null;
+    const a = pill.getBoundingClientRect();
+    const b = box.getBoundingClientRect();
+    return !(
+      a.right <= b.left ||
+      a.left >= b.right ||
+      a.bottom <= b.top ||
+      a.top >= b.bottom
+    );
+  }, dialogSelector);
+}
+
 /** Walk the Main Page tour to the Clear Cache step and press what it points at. */
 async function pressTheSpotlightedClearCache(page) {
   await boot(page);
@@ -285,6 +305,11 @@ test.describe('U-28: a tour survives the control it highlights', () => {
       aside.highlighted,
       'no target may keep its ring or its elevation while a dialog is up'
     ).toEqual([]);
+    // This dialog paints a centred box the pill's corner never reaches, so the
+    // pill must be left exactly where it lives. The assertion above it (the
+    // pill is visible) is the one CI Firefox used to catch an over-eager first
+    // cut of the placement rule.
+    expect(await pillOverlapsDialog(page, '#shortcutsModal')).toBe(false);
 
     // Escape belongs to the dialog first
     await page.keyboard.press('Escape');
@@ -719,6 +744,51 @@ test.describe('UF-36: a dialog you can always answer', () => {
         after,
         `pressing where the ring was must not stack another dialog (was ${before}, now ${after})`
       ).toBeLessThanOrEqual(before);
+    });
+  });
+
+  test.describe('on a short desktop, where the first placement rule went wrong', () => {
+    // 1280x600 is where CI Firefox's fonts put the keyboard-shortcuts dialog:
+    // it paints x 290-990 and leaves only ~51px above and below. The pill lives
+    // at x 1152, so it was never in danger - but a rule that looked only at
+    // vertical gaps hid it anyway, and the Q-50c case went red on that lane
+    // alone. MEASURED before the fix: pill display:none at this exact size.
+    test.use({ viewport: { width: 1280, height: 600 } });
+
+    test('a dialog the pill does not touch leaves the pill exactly where it lives', async ({
+      page,
+    }) => {
+      await boot(page);
+      await startWelcomeTour(page);
+      await walkTo(page, 'Keyboard shortcuts');
+
+      const restingCorner = await page.evaluate(() => {
+        const pill = document.querySelector('.tutorial-minimized');
+        // it is hidden behind .hidden while the panel is up, so read the CSS
+        return getComputedStyle(pill).right;
+      });
+
+      await page.locator('#shortcutsToggle').click();
+      await expect(page.locator('.tutorial-minimized')).toBeVisible({
+        timeout: 10_000,
+      });
+      await page.waitForTimeout(500);
+
+      expect(await pillOverlapsDialog(page, '#shortcutsModal')).toBe(false);
+      // and it was not moved at all: no inline placement was written
+      const placement = await page.evaluate(() => {
+        const pill = document.querySelector('.tutorial-minimized');
+        return {
+          top: pill.style.top,
+          bottom: pill.style.bottom,
+          display: pill.style.display,
+          right: getComputedStyle(pill).right,
+        };
+      });
+      expect(placement.display).not.toBe('none');
+      expect(placement.top).toBe('');
+      expect(placement.bottom).toBe('');
+      expect(placement.right).toBe(restingCorner);
     });
   });
 
