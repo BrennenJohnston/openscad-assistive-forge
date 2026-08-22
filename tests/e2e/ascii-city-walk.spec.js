@@ -2415,3 +2415,79 @@ test.describe('ASCII City Walk — composite paint parity (CW-22)', () => {
     ).toBe(0)
   })
 })
+
+/**
+ * CW-19: the signals are the only thing in this deliberately time-frozen city
+ * that moves, so they are also the only thing that can move when it should
+ * not — and the only thing that can stop looking like a signal when it stops.
+ */
+test.describe('ASCII City Walk — traffic signals (CW-19)', () => {
+  /** The colour of every signal head, as one comparable string. */
+  const headColours = (page) =>
+    page.evaluate(() => {
+      const out = []
+      window.__cityWalkGame.props.group.traverse((o) => {
+        if (o.isMesh && o.name === 'light-heads') {
+          out.push(o.material.color.getHexString())
+        }
+      })
+      return out.join(',')
+    })
+
+  test('the signals cycle, and never show both directions green', async ({
+    page,
+  }) => {
+    test.setTimeout(90000)
+    await launchGame(page)
+    await enterCity(page)
+
+    const lit = await page.evaluate(
+      () => window.__cityWalkGame.props.trafficLights.count
+    )
+    // No signals means nothing below is testing anything.
+    expect(lit, 'the city grew no traffic signals').toBeGreaterThan(0)
+
+    const first = await headColours(page)
+    // Longer than one green-plus-amber, so a change MUST have happened.
+    await page.waitForTimeout(8000)
+    const second = await headColours(page)
+    expect(second, 'the signals never changed').not.toBe(first)
+
+    // Exactly one head lit per phase group at any moment: a signal showing two
+    // colours at once, or a junction letting both directions go, is the
+    // failure that matters here rather than a cosmetic one.
+    for (const frame of [first, second]) {
+      const heads = frame.split(',')
+      const lightsOn = heads.filter((c) => c !== '2b2b2b')
+      expect(
+        lightsOn.length,
+        `expected one lit head per phase, saw ${frame}`
+      ).toBeLessThanOrEqual(2)
+      // Green appears at most once across the phase groups.
+      const greens = heads.filter((c) => c.startsWith('21ff'))
+      expect(greens.length, `two directions green at once: ${frame}`).toBeLessThanOrEqual(1)
+    }
+  })
+
+  test('reduced motion stops the cycle without killing the signals', async ({
+    page,
+  }) => {
+    test.setTimeout(90000)
+    // The defect this guards: with no initial paint the heads all sat at their
+    // dark tint, so the people who asked for less movement got a city of dead
+    // traffic lights instead of still ones.
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await launchGame(page)
+    await enterCity(page)
+
+    const before = await headColours(page)
+    await page.waitForTimeout(8000)
+    const after = await headColours(page)
+
+    expect(after, 'the signals cycled under reduced motion').toBe(before)
+    expect(
+      before.split(',').some((c) => c !== '2b2b2b'),
+      `every head is dark under reduced motion: ${before}`
+    ).toBe(true)
+  })
+})
