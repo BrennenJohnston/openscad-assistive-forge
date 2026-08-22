@@ -178,6 +178,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The Getting Started tour stopped arguing with you on a phone** (UF-37, D-62 and D-63) - three
+  quarters of that tour lives in the Customizer panel, and on a phone that panel is a drawer covering
+  the screen. Because a drawer that covers the screen has to say so for a screen reader, the tour read
+  it as a dialog somebody had opened over the top of it and politely got out of the way - collapsing
+  to a small yellow pill on every single one of those steps. So step 3 arrived with the drawer already
+  open, a ring around a Close button nobody had been told about, and not one word of instruction on
+  screen. Pressing the pill to get the instructions back closed the drawer, and pressing Next opened
+  it again, and the instructions vanished again. On step 4 it was worse: the pill did nothing at all
+  that you could see, because the drawer was still open and the tour minimised itself again in the
+  same instant. Closing the drawer by hand did not work either, since the tour reopened it within half
+  a second. Four things change. The tour now knows the Customizer is part of the app rather than a
+  dialog you opened, so the instruction card stays on screen next to the open drawer instead of
+  hiding - and it docks below the drawer's title so it never sits on the drawer's only Close button.
+  Step 3 arrives with the drawer shut and the ring on the Params button, which is what its words tell
+  you to press; open the drawer and the ring walks over to the Close button, so the one step teaches
+  both halves. If you close the drawer while a step still needs it, it stays closed: the tour rings
+  the button that opens it again and says "Open Params to continue." rather than dragging it back
+  open. And Escape now takes one surface at a time - the first press closes the drawer, the second
+  ends the tour - where before, once the drawer stopped counting as a dialog, a single press would
+  have taken both. Minimising and restoring the card by hand works and stays worked. The same rules
+  apply to the collapsing panel on a desktop, where the line reads "Expand Parameters to continue."
+
 - **A dialog you open during a tour is now a dialog you can answer** (UF-36, D-61) - following the
   Main Page tour on a phone to the Clear Cache step and pressing the button it points at left people
   stuck. The tour did shrink to its pill, but shrinking is not standing aside: the dimming veil kept
