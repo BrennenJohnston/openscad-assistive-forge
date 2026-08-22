@@ -178,6 +178,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A dialog you open during a tour is now a dialog you can answer** (UF-36, D-61) - following the
+  Main Page tour on a phone to the Clear Cache step and pressing the button it points at left people
+  stuck. The tour did shrink to its pill, but shrinking is not standing aside: the dimming veil kept
+  painting over the dialog, the highlighted button kept the ring and the raised position the
+  spotlight gives it, and the pill kept the dialog's bottom corner. On a phone-sized screen that
+  button lands squarely across the dialog's own Cancel and its red confirm, so aiming at either one
+  pressed the page button underneath instead - and each press opened another copy of the same dialog,
+  every one of them with its Cancel buried the same way. Now, whenever a dialog you opened is on
+  screen, the tour stands down completely: no veil, no ring, and the pill moves to a gap the dialog
+  leaves or steps off screen when it leaves none. Close the dialog and the tour comes back exactly
+  where it was, ring and all. This covers every dialog a highlighted control can open, not only Clear
+  Cache. The one case that keeps its spotlight is a step whose subject IS the open dialog, like the
+  Features Guide step, which is unchanged. The Clear Cache step also now says what Cancel does, and
+  still tells you about the checkbox that keeps your saved projects
+
+- **The tour overlay stopped climbing above its own head** (UF-36, D-67) - the code that lifts the
+  tour above awkward parts of the page measured the highlighted element itself, which the tour had
+  just raised a moment earlier. So on every single step it read its own work back and lifted itself
+  higher again, which is how the dimming veil ended up above dialogs it should never have covered.
+  The layering is now written down once, in the design tokens, instead of being rediscovered on each
+  step, and the last hardcoded stacking numbers in the tutorial code moved onto those tokens. Nothing
+  about the finished picture changes: the ring still shows through the veil, the tour card still sits
+  above both, and the tour's own dialogs still sit above the card
+
 - **The contrast modes finally get the thicker focus ring they ask for** - both the app's own high
   contrast mode and the operating system's "increase contrast" preference are supposed to draw a
   heavier ring around whatever has keyboard focus, and neither ever did on a button or a link. The

@@ -703,15 +703,22 @@ test.describe('UF-36: a dialog you can always answer', () => {
 
       // The loop itself. At the base a second press on the ringed button opened
       // a SECOND dialog on top of the first, each with its Cancel buried under
-      // that same button.
+      // that same button, and every press added another.
+      //
+      // Once the button is no longer elevated the press belongs to the dialog
+      // lying over it, and what that means differs by engine: Chromium hands it
+      // to the dialog's own body and nothing happens, Firefox hands it to the
+      // scrim and the dialog dismisses. Both are the dialog answering for
+      // itself. Only growth is the defect, so only growth is asserted.
       const before = await page.locator('.cache-clear-dialog').count();
       const box = await page.locator('#clearStorageBtn').boundingBox();
       await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
       await page.waitForTimeout(1000);
+      const after = await page.locator('.cache-clear-dialog').count();
       expect(
-        await page.locator('.cache-clear-dialog').count(),
-        'pressing where the ring was must not stack another dialog'
-      ).toBe(before);
+        after,
+        `pressing where the ring was must not stack another dialog (was ${before}, now ${after})`
+      ).toBeLessThanOrEqual(before);
     });
   });
 
