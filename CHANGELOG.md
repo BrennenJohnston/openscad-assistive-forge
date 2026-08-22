@@ -178,6 +178,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Tour cards that admit when there is more to read** (UF-38, D-65) - on a phone the instruction
+  card was cut off mid-sentence with nothing to say so. One step ended on "You can resize this drawer
+  using the handle. With", and that was simply where the text stopped; there was no scrollbar, no
+  fade, no arrow, nothing. The card is capped at 45% of the screen height, and a phone screen is not
+  as tall as the emulator's - once the browser's address bar and the gesture bar are taken off a
+  1080x2520 phone there are about 810 usable points, not 915. At 810 three steps of the Getting
+  Started tour overflow that cap, by 47, 19 and 40 points. Nothing about that was visible. Now the
+  card's text area fades out at the bottom and shows a small chevron whenever there is more below,
+  and both disappear the moment you reach the end. The cue costs the text no room at all, is
+  invisible to screen readers and cannot be tabbed to, and at high contrast it is drawn as a hard
+  rule rather than a fade, because a soft gradient is exactly the wrong instrument there. The text
+  area also keeps a floor now - enough for the step's heading and a line of its text - so it can
+  never be squeezed away to a clipped headline the way the reported screenshots showed. And a step
+  you scrolled through no longer hands its scroll position to the next step, which was arriving with
+  its own title already scrolled off the top
+
+- **"Close to continue" no longer prints across the Features Guide's title** (UF-38, D-66) - the
+  hint was pinned to the left of the modal's X, which on a wide window puts it in empty space and on
+  a phone puts it straight on top of the words "Features Guide". At phone widths it now takes its own
+  line under the title, where it has room, and the close button keeps its pulse
+
+- **The Clear Cache dialog is centred again, and its backdrop covers the screen** (UF-38, D-69) - a
+  `max-width` meant for the dialog had been applied to the full-screen layer behind it, so on any
+  window wider than 500 points the dialog sat against the left edge and the dark backdrop was a
+  narrow strip beside it instead of dimming the page. Phones were never affected, which is why this
+  went unseen. Measured at 800 and 1280 points wide, the backdrop now spans the window and the dialog
+  sits in the middle
+
+- **The tour card can be reached and heard while the Customizer is open** (UF-38, D-70) - on a phone
+  the Customizer is a drawer that covers the screen, so it correctly tells a screen reader to ignore
+  everything behind it. Since the tour card started staying on screen next to that drawer, "behind
+  it" included the instructions. A blind user got no instructions at all on the drawer steps, which
+  is most of the tour, and a keyboard user could not reach Next, Back, minimise or Close - measured
+  at eighty consecutive Tab presses without once leaving the panel. While a tour is running, the
+  drawer and the card stop competing to be the only thing on screen, and the drawer's keyboard trap
+  now spans the card as well: one Shift+Tab from the top of the drawer reaches it. Everything is put
+  back the moment the drawer closes, and the drawer is unchanged for anyone not on a tour
+
 - **The Getting Started tour stopped arguing with you on a phone** (UF-37, D-62 and D-63) - three
   quarters of that tour lives in the Customizer panel, and on a phone that panel is a drawer covering
   the screen. Because a drawer that covers the screen has to say so for a screen reader, the tour read
