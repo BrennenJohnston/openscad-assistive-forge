@@ -69,7 +69,11 @@ import { initAltView } from '../_hfm.js';
 import { createDocumentFocusTrap } from '../focus-trap.js';
 import { announce } from '../announcer.js';
 import { themeManager } from '../theme-manager.js';
-import { HC_PALETTE_GREEN, HC_PALETTE_AMBER } from './hc-palettes.js';
+import {
+  HC_PALETTE_GREEN,
+  HC_PALETTE_AMBER,
+  MONO_INTENSITY_LEVELS,
+} from './hc-palettes.js';
 import {
   safeGetItem,
   safeSetItem,
@@ -1160,6 +1164,12 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
         safeGetItem(STORAGE_KEY_HFM_FONT_SCALE)
       )
     );
+
+    // CW-21: with colour off the city used to be one flat green or amber —
+    // pavement, walls and lit windows all at the same drive. A monochrome
+    // tube's intensity bit separates them, and the converter ignores this
+    // whenever a palette is active, so it costs colour mode nothing.
+    game.altView.setIntensityLevels(MONO_INTENSITY_LEVELS);
 
     // CW-Q2/CW-Q5/CW-Q6: multicolor exists ONLY under high contrast —
     // neon in amber (light), the ANSI bright set in green (dark). The

@@ -45,3 +45,22 @@ export const HC_PALETTE_AMBER = [
   '#ff9f00', // neon orange
   '#ffffff', // white
 ];
+
+/**
+ * CW-21 — the monochrome intensity levels, dimmest first.
+ *
+ * A monochrome tube had ONE intensity bit, and this is it: a cell is either
+ * driven fully or driven down. Nothing here is brighter than the bare
+ * phosphor, so the peak the game has always had is unchanged and only the
+ * darker half of the picture separates out from it.
+ *
+ * 0.65 is the floor the phosphors allow, not a taste: MEASURED on black,
+ * green dims 15.30:1 -> 6.45:1 and amber 11.46:1 -> 5.03:1, both still over
+ * the 4.5:1 this project holds itself to, while 0.55 drops amber to 3.82:1
+ * and fails. tests/unit/color-contrast.test.js drives the same function the
+ * renderer does and re-measures both phosphors at every level.
+ *
+ * Applies to MONOCHROME only — with colour on, each cell's atlas is already
+ * chosen by its palette entry.
+ */
+export const MONO_INTENSITY_LEVELS = [0.65, 1];

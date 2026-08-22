@@ -3,6 +3,8 @@ import {
   parsePaletteColor,
   normalizeChroma,
   pickPaletteIndex,
+  driveColor,
+  pickIntensityIndex,
 } from '../../src/js/_hfm-paint.js'
 
 /**
@@ -252,5 +254,73 @@ describe('initAltView palette mode', () => {
 
     a.dispose()
     b.dispose()
+  })
+})
+
+describe('phosphor drive levels (CW-21)', () => {
+  it('full drive returns the phosphor unchanged', () => {
+    expect(driveColor('#00ff00', 1)).toBe('#00ff00')
+    expect(driveColor('#ffb000', 1)).toBe('#ffb000')
+  })
+
+  it('dimming scales every channel together, so the hue survives', () => {
+    // A dimmed green is still pure green: a monochrome tube driven softly is
+    // the same phosphor with less beam, not a different colour.
+    expect(driveColor('#00ff00', 0.65)).toBe('#00a600')
+    expect(driveColor('#00ff00', 0.5)).toBe('#008000')
+    // Amber keeps its red:green ratio through the dim.
+    expect(driveColor('#ffb000', 0.65)).toBe('#a67200')
+  })
+
+  it('drive above 1 blooms toward white rather than overflowing', () => {
+    // Multiplying would clip green to itself and change nothing; a real tube
+    // saturates and washes out, which is what the extra energy looks like.
+    expect(driveColor('#00ff00', 1.5)).toBe('#80ff80')
+    expect(driveColor('#00ff00', 2)).toBe('#ffffff')
+    expect(driveColor('#00ff00', 5)).toBe('#ffffff')
+  })
+
+  it('drive 0 is black and negative or non-finite drives do not throw', () => {
+    expect(driveColor('#00ff00', 0)).toBe('#000000')
+    expect(driveColor('#00ff00', -3)).toBe('#000000')
+    expect(driveColor('#00ff00', NaN)).toBe('#00ff00')
+    expect(driveColor('#00ff00', undefined)).toBe('#00ff00')
+  })
+
+  it('an unparseable phosphor degrades to white instead of throwing', () => {
+    expect(driveColor('rebeccapurple', 1)).toBe('#ffffff')
+  })
+})
+
+describe('intensity selection (CW-21)', () => {
+  it('splits the luminance range evenly, brightest cells last', () => {
+    // Two levels is the hardware's single intensity bit.
+    expect(pickIntensityIndex(0, 2)).toBe(0)
+    expect(pickIntensityIndex(0.49, 2)).toBe(0)
+    expect(pickIntensityIndex(0.5, 2)).toBe(1)
+    expect(pickIntensityIndex(1, 2)).toBe(1)
+  })
+
+  it('never indexes past the last level, whatever the luminance', () => {
+    // A luminance of exactly 1 must not select levels[levelCount], which
+    // would hand paintFrame an undefined atlas.
+    for (const n of [2, 3, 4, 8]) {
+      expect(pickIntensityIndex(1, n)).toBe(n - 1)
+      expect(pickIntensityIndex(1.4, n)).toBe(n - 1)
+      expect(pickIntensityIndex(-0.2, n)).toBe(0)
+      expect(pickIntensityIndex(NaN, n)).toBe(0)
+    }
+  })
+
+  it('collapses to a single level when there is nothing to choose between', () => {
+    expect(pickIntensityIndex(0.9, 1)).toBe(0)
+    expect(pickIntensityIndex(0.9, 0)).toBe(0)
+  })
+
+  it('gives each level an equal share of the range at four levels', () => {
+    expect(pickIntensityIndex(0.1, 4)).toBe(0)
+    expect(pickIntensityIndex(0.3, 4)).toBe(1)
+    expect(pickIntensityIndex(0.6, 4)).toBe(2)
+    expect(pickIntensityIndex(0.8, 4)).toBe(3)
   })
 })

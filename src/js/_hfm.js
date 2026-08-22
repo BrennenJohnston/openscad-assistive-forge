@@ -34,6 +34,8 @@ import {
   parsePaletteColor,
   normalizeChroma,
   pickPaletteIndex,
+  driveColor,
+  pickIntensityIndex,
   GLYPH_COUNT,
 } from './_hfm-paint.js';
 
@@ -87,6 +89,14 @@ function _createInstanceState() {
     paletteChromaBoost: 1,
     paletteAtlases: null,
     colorIndices: null, // Int8Array, rows*cols
+
+    // CW-21 intensity: one atlas of the SAME phosphor per drive level, chosen
+    // per cell by luminance. Monochrome only — in palette mode the per-cell
+    // atlas selector is already spoken for by the colour, and colour carries
+    // the identity intensity would have added.
+    intensityLevels: null, // number[] drive factors, dimmest first, or null
+    intensityAtlases: null,
+    intensityIndices: null, // Int8Array, rows*cols
 
     // Render-on-demand scheduling
     dirty: true,
@@ -347,7 +357,9 @@ function _buildGlyphVectors(atlas) {
 function _ensureGlyphModel(st, { fontFamily, fontSizePx, charW, charH, dpr }) {
   const color = getPhosphorColor();
   const paletteKey = st.palette ? st.palette.join(',') : '';
-  const key = `${fontFamily}|${fontSizePx}|${charW}|${charH}|${dpr}|${color}|${paletteKey}`;
+  const intensityKey =
+    !st.palette && st.intensityLevels ? st.intensityLevels.join(',') : '';
+  const key = `${fontFamily}|${fontSizePx}|${charW}|${charH}|${dpr}|${color}|${paletteKey}|${intensityKey}`;
   if (st.atlas && st.atlasKey === key) return;
 
   if (st.palette) {
@@ -365,17 +377,35 @@ function _ensureGlyphModel(st, { fontFamily, fontSizePx, charW, charH, dpr }) {
       })
     );
     st.atlas = st.paletteAtlases[0];
+    st.intensityAtlases = null;
   } else {
     st.paletteAtlases = null;
-    st.atlas = buildGlyphAtlas({
-      fontFamily,
-      fontSizePx,
-      charW,
-      charH,
-      dpr,
-      color,
-      normalizeTinyAlpha: st.tinyCellsAllowed,
-    });
+    const atlasAt = (tint) =>
+      buildGlyphAtlas({
+        fontFamily,
+        fontSizePx,
+        charW,
+        charH,
+        dpr,
+        color: tint,
+        normalizeTinyAlpha: st.tinyCellsAllowed,
+      });
+    if (st.intensityLevels) {
+      // One atlas per drive level. Glyph coverage is alpha, which is identical
+      // across tints, so the shape vectors below are unaffected by intensity —
+      // a dim cell picks the same character it would have picked at full
+      // drive, and only its brightness changes. MEASURED: about 0.2 ms per
+      // atlas at any character size, so a handful of levels is not a cost.
+      st.intensityAtlases = st.intensityLevels.map((drive) =>
+        atlasAt(driveColor(color, drive))
+      );
+      // The base atlas stays the full-drive one, so everything that reads
+      // st.atlas (cell metrics, the no-layers fallback) sees today's picture.
+      st.atlas = st.intensityAtlases[st.intensityAtlases.length - 1];
+    } else {
+      st.intensityAtlases = null;
+      st.atlas = atlasAt(color);
+    }
   }
   st.glyphVectors = _buildGlyphVectors(st.atlas);
   st.lookup = createLookup(st.glyphVectors);
@@ -470,6 +500,11 @@ function _renderFrame(
   if (usePalette && st.colorIndices?.length !== rows * cols) {
     st.colorIndices = new Int8Array(rows * cols);
   }
+  const useIntensity = Boolean(!usePalette && st.intensityAtlases);
+  if (useIntensity && st.intensityIndices?.length !== rows * cols) {
+    st.intensityIndices = new Int8Array(rows * cols);
+  }
+  const intensityCount = useIntensity ? st.intensityAtlases.length : 0;
   let idx = 0;
 
   for (let y = 0; y < rows; y++) {
@@ -483,6 +518,7 @@ function _renderFrame(
       let sumR = 0;
       let sumG = 0;
       let sumB = 0;
+      let sumLum = 0;
       for (let i = 0; i < 6; i++) {
         const sx = Math.min(
           sampleW - 1,
@@ -504,6 +540,17 @@ function _renderFrame(
           sumG += imgData[pidx + 1];
           sumB += imgData[pidx + 2];
         }
+        if (useIntensity) sumLum += v[i];
+      }
+      if (useIntensity) {
+        // The cell's brightness BEFORE the contrast curves reshape v for glyph
+        // matching: intensity answers "how bright is this cell", the glyph
+        // answers "what shape is it", and the two must not be the same signal
+        // twice over.
+        st.intensityIndices[idx] = pickIntensityIndex(
+          sumLum / 6,
+          intensityCount
+        );
       }
       if (usePalette) {
         st.colorIndices[idx] = pickPaletteIndex(
@@ -562,7 +609,9 @@ function _renderFrame(
     st.persistFade,
     usePalette
       ? { indices: st.colorIndices, atlases: st.paletteAtlases }
-      : undefined
+      : useIntensity
+        ? { indices: st.intensityIndices, atlases: st.intensityAtlases }
+        : undefined
   );
 }
 
@@ -779,6 +828,42 @@ export async function initAltView(previewManager, options = {}) {
     },
     getPalette() {
       return st.palette ? st.palette.slice() : null;
+    },
+    /**
+     * Per-cell intensity (CW-21). Pass drive factors DIMMEST FIRST — one glyph
+     * atlas of the same phosphor is built per level and each cell takes the
+     * level its luminance falls in. Pass null for the single-drive rendering
+     * every caller had before.
+     *
+     * Callers opt in exactly as they do for setPalette: nothing changes for an
+     * instance that never calls this, which is what keeps the main app's Alt
+     * View untouched. Ignored while a palette is active — colour already gives
+     * each cell an identity, and the per-cell atlas selector cannot serve two
+     * masters.
+     *
+     * @param {number[]|null} levels - e.g. [0.65, 1] for the hardware's single
+     *   intensity bit; values above 1 bloom toward white (see driveColor)
+     * @returns {number[]|null} the active levels
+     */
+    setIntensityLevels(levels) {
+      if (Array.isArray(levels) && levels.length > 1) {
+        st.intensityLevels = levels
+          .map(Number)
+          .filter((n) => Number.isFinite(n) && n >= 0);
+        if (st.intensityLevels.length < 2) st.intensityLevels = null;
+      } else {
+        st.intensityLevels = null;
+      }
+      if (!st.intensityLevels) {
+        st.intensityAtlases = null;
+        st.intensityIndices = null;
+      }
+      st.atlasKey = '';
+      st.dirty = true;
+      return st.intensityLevels;
+    },
+    getIntensityLevels() {
+      return st.intensityLevels ? st.intensityLevels.slice() : null;
     },
     setContrastScale(scale) {
       return _setContrastScale(st, scale);

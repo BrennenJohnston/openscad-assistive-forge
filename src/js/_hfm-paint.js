@@ -444,6 +444,67 @@ export function paintFrame(
 }
 
 // ---------------------------------------------------------------------------
+// Phosphor drive levels (CW-21) — pure math, unit-tested directly
+// ---------------------------------------------------------------------------
+
+/**
+ * A single phosphor driven harder or softer, the way a monochrome tube's
+ * intensity attribute worked.
+ *
+ * Below full drive the beam is simply weaker, so every channel scales together
+ * and the hue is unchanged. ABOVE full drive a real tube cannot make the
+ * phosphor a new colour — it saturates and blooms toward white, and that is
+ * what the extra energy looks like. So drive > 1 blends toward white rather
+ * than multiplying, and green (already near maximum) gains very little from
+ * it: MEASURED, #00ff00 is 15.30:1 on black while drive 1.5 reaches only
+ * 16.53:1. The DOWNWARD range is the useful one — 6.45:1 at drive 0.65, a
+ * 2.4x luminance span.
+ *
+ * The dim floor is 0.65 drive: at 0.55 amber measures 3.82:1 and fails the
+ * 4.5:1 this project holds itself to. tests/unit/color-contrast.test.js
+ * imports this function and re-measures every level the renderer ships.
+ *
+ * @param {string} css - #rrggbb phosphor colour
+ * @param {number} drive - below 1 dims, 1 is the phosphor itself, above 1
+ *   blooms toward white
+ * @returns {string} #rrggbb
+ */
+export function driveColor(css, drive) {
+  const [r, g, b] = parsePaletteColor(css);
+  const d = Number.isFinite(drive) ? Math.max(0, drive) : 1;
+  const out =
+    d <= 1
+      ? [r * d, g * d, b * d]
+      : (() => {
+          const t = Math.min(1, d - 1);
+          return [r + (1 - r) * t, g + (1 - g) * t, b + (1 - b) * t];
+        })();
+  const hex = (v) =>
+    Math.max(0, Math.min(255, Math.round(v * 255)))
+      .toString(16)
+      .padStart(2, '0');
+  return `#${hex(out[0])}${hex(out[1])}${hex(out[2])}`;
+}
+
+/**
+ * Pick an intensity level for a cell from its mean luminance.
+ *
+ * Levels are ordered dimmest first, so the brightest cells take the last
+ * entry. The split is even across the luminance range: with two levels that is
+ * the hardware's single intensity BIT, with four it is a smooth ramp.
+ *
+ * @param {number} lum - cell mean luminance in [0, 1]
+ * @param {number} levelCount
+ * @returns {number} index into the levels array
+ */
+export function pickIntensityIndex(lum, levelCount) {
+  if (!(levelCount > 1)) return 0;
+  const v = Number.isFinite(lum) ? lum : 0;
+  const i = Math.floor(v * levelCount);
+  return i < 0 ? 0 : i >= levelCount ? levelCount - 1 : i;
+}
+
+// ---------------------------------------------------------------------------
 // Palette mode helpers (CW-6) — pure math, unit-tested directly
 // ---------------------------------------------------------------------------
 
