@@ -782,29 +782,62 @@ function handleDrawerStateChange(isNowOpen) {
     // @mobile-drawer-toggle when closed)
     const newTarget = resolveStepTarget(step, { requireVisible: true });
 
-    if (newTarget && newTarget !== currentTarget) {
-      // Update to the new visible target and reposition spotlight
-      currentTarget = newTarget;
-      updateSpotlightAndPosition();
-    } else if (!newTarget && !stepCompleted) {
-      // All targets are hidden - check if any are inside the closed drawer
-      const hasTargetInsideDrawer = checkIfAnyTargetInsideDrawer(step);
-      if (hasTargetInsideDrawer && !isNowOpen) {
-        // Automatically reopen the panel - user closed it but tutorial needs it
-        openParamPanel();
-        // Wait for animation
-        await waitForTransition(document.getElementById('paramPanel'), 400);
-        // Re-resolve target after panel is open
-        const reopenedTarget = resolveStepTarget(step, {
-          requireVisible: true,
-        });
-        if (reopenedTarget) {
-          currentTarget = reopenedTarget;
-          updateSpotlightAndPosition();
-        }
+    if (newTarget) {
+      if (newTarget !== currentTarget) {
+        // Update to the new visible target and reposition spotlight
+        currentTarget = newTarget;
+        updateSpotlightAndPosition();
       }
+      resetStepRequirement(step);
+    } else if (
+      !stepCompleted &&
+      !isNowOpen &&
+      checkIfAnyTargetInsideDrawer(step)
+    ) {
+      // D-63 (U-42, owner's phone). This branch used to call openParamPanel()
+      // and drag the panel back open, on the grounds that the tutorial needed
+      // it. MEASURED at the release base, 412x915, intro step 4: the user
+      // pressed Close, the observer reopened the drawer inside 500ms, and at
+      // 2000ms it was still open - the close never took. Together with D-62
+      // that is what made Restore look dead: close, reopen, re-minimize, back
+      // to the pill, "no input or button pressing registers".
+      //
+      // The user's close wins now. The tour points at the way back in, says
+      // so, and waits.
+      showDrawerRequirement();
     }
   }, 100); // Debounce for 100ms
+}
+
+/**
+ * Every element a step could point at, visible or not: its targetKey first,
+ * then each entry of its highlightSelector list, in the order the resolver
+ * would try them.
+ * @param {Object} step - Tutorial step
+ * @returns {HTMLElement[]}
+ */
+function stepTargetCandidates(step) {
+  const found = [];
+  const add = (el) => {
+    if (el && !found.includes(el)) found.push(el);
+  };
+
+  if (step.targetKey) {
+    add(document.querySelector(`[data-tutorial-target="${step.targetKey}"]`));
+  }
+  if (step.highlightSelector) {
+    for (const selector of step.highlightSelector.split(',')) {
+      const trimmed = selector.trim();
+      add(
+        document.querySelector(
+          trimmed.startsWith('@')
+            ? `[data-tutorial-target="${trimmed.slice(1)}"]`
+            : trimmed
+        )
+      );
+    }
+  }
+  return found;
 }
 
 /**
@@ -813,70 +846,89 @@ function handleDrawerStateChange(isNowOpen) {
  * @returns {boolean}
  */
 function checkIfAnyTargetInsideDrawer(step) {
-  if (!step.highlightSelector) return false;
-
-  const selectors = step.highlightSelector.split(',').map((s) => s.trim());
-
-  for (const selector of selectors) {
-    let el;
-    if (selector.startsWith('@')) {
-      el = document.querySelector(
-        `[data-tutorial-target="${selector.slice(1)}"]`
-      );
-    } else {
-      el = document.querySelector(selector);
-    }
-    if (el && isInsideParamPanel(el)) {
-      return true;
-    }
-  }
-  return false;
+  return stepTargetCandidates(step).some(isInsideParamPanel);
 }
 
 /**
- * Show a prompt in the tutorial panel to reopen/expand the param panel
- * Works for both mobile drawer and desktop collapsed panel
+ * Does this step need the Customizer panel opened before it can be shown?
+ *
+ * U-42 (owner's phone, 2026-08-21): "step 3 does not highlight anything for
+ * the user to interact with". The old answer was "does ANY target live inside
+ * the panel", and step 3 - the step that TEACHES opening the panel - lists
+ * `@mobile-drawer-close` first. That resolves in the DOM while the drawer is
+ * shut, so the engine opened the drawer for it and then ringed the Close
+ * button, teaching the opposite of what the card said.
+ *
+ * The honest question is whether the step can be shown at all without opening
+ * it. If some target is inside the panel but another one outside is already on
+ * screen, the step has something to point at and the panel stays as the user
+ * left it. Step 3 then arrives with the drawer shut and the ring on the
+ * Customizer button, and the drawer observer moves the ring to the Close
+ * button when the user opens it - the step follows the user through both
+ * halves of what it is teaching.
+ *
+ * A collapsed desktop panel still expands: there the only visible candidate
+ * IS inside the panel.
+ * @param {Object} step - Tutorial step
+ * @returns {boolean}
  */
-function _showDrawerReopenPrompt() {
+function stepNeedsParamPanelOpen(step) {
+  const candidates = stepTargetCandidates(step);
+  if (!candidates.some(isInsideParamPanel)) return false;
+  return !candidates.some(
+    (el) => !isInsideParamPanel(el) && isElementVisible(el)
+  );
+}
+
+/** What the requirement line says while a step's action is still outstanding. */
+const REQUIREMENT_PENDING_TEXT = '↑ Complete the action above to continue';
+
+/**
+ * Q-74 (owner, 2026-08-22): the drawer requirement names the button by the
+ * label it wears today. UF-40's rename sweeps this string with the rest.
+ */
+const DRAWER_REQUIREMENT_TEXT = 'Open Params to continue.';
+
+/**
+ * The user closed the Customizer while a step still points inside it (D-63).
+ * Ring the control that opens it again and say what is needed, instead of
+ * reopening the panel against them.
+ *
+ * The ring only moves if that control is genuinely on screen: a collapsed
+ * desktop panel keeps its expand button inside the panel, where the engine's
+ * own visibility rule counts it as hidden. The line is shown either way.
+ */
+function showDrawerRequirement() {
   if (!tutorialOverlay) return;
 
-  const requirementEl = tutorialOverlay.querySelector('#tutorialRequirement');
-  if (!requirementEl) return;
+  const opener = isMobileViewport()
+    ? document.getElementById('mobileDrawerToggle')
+    : document.getElementById('collapseParamPanelBtn');
 
-  // Determine the appropriate message based on viewport
-  const isMobile = isMobileViewport();
-  const actionText = isMobile ? 'Reopen Parameters' : 'Expand Parameters';
-  const statusText = isMobile ? 'Panel closed.' : 'Panel collapsed.';
-
-  // Create or update the reopen prompt
-  requirementEl.innerHTML = `
-    <span class="tutorial-drawer-prompt">
-      <span>${statusText} </span>
-      <button class="tutorial-reopen-drawer-btn" type="button">
-        ${actionText}
-      </button>
-      <span> to continue.</span>
-    </span>
-  `;
-  requirementEl.classList.add('tutorial-requirement-action');
-
-  // Wire up the reopen button
-  const reopenBtn = requirementEl.querySelector('.tutorial-reopen-drawer-btn');
-  if (reopenBtn) {
-    reopenBtn.addEventListener('click', () => {
-      openParamPanel();
-      // Reset the requirement text after a short delay
-      setTimeout(() => {
-        if (requirementEl && !stepCompleted) {
-          requirementEl.textContent = '↑ Complete the action above to continue';
-          requirementEl.classList.remove('tutorial-requirement-action');
-        }
-      }, 400);
-    });
-  }
-
-  // Update spotlight to show centered panel
+  currentTarget = opener && isElementVisible(opener) ? opener : null;
   updateSpotlightAndPosition();
+
+  const requirementEl = tutorialOverlay.querySelector('#tutorialRequirement');
+  // #tutorialRequirement is role="status" aria-live="polite": writing it IS
+  // the announcement, so announcing again would say it twice.
+  if (requirementEl && requirementEl.textContent !== DRAWER_REQUIREMENT_TEXT) {
+    requirementEl.textContent = DRAWER_REQUIREMENT_TEXT;
+    requirementEl.classList.remove('tutorial-requirement-done');
+  }
+}
+
+/**
+ * Put the requirement line back to whatever this step normally says, after the
+ * drawer requirement has been standing in for it.
+ * @param {Object} step - Tutorial step
+ */
+function resetStepRequirement(step) {
+  const requirementEl = tutorialOverlay?.querySelector('#tutorialRequirement');
+  if (!requirementEl || stepCompleted) return;
+  const normal = step.completion ? REQUIREMENT_PENDING_TEXT : '';
+  if (requirementEl.textContent !== normal) {
+    requirementEl.textContent = normal;
+  }
 }
 
 /**
@@ -973,16 +1025,14 @@ const TUTORIALS = {
       {
         title: 'Open and close Parameters',
         content: `
-          <p><strong>Parameters</strong> is where you customize the model.</p>
+          <p><strong>Parameters</strong> is where you change the model.</p>
           <ul>
-            <li><strong>Small screens:</strong> use the <strong>Params</strong> button to open the panel. When it’s open, use the <strong>Close</strong> (X) button or tap outside the panel.</li>
-            <li><strong>Wide screens:</strong> the Parameters panel is on the left. Use the edge <strong>collapse</strong> button to shrink/expand it.</li>
+            <li><strong>Small screens:</strong> press the highlighted <strong>Params</strong> button to open the panel. When it is open, the highlight moves to the <strong>Close</strong> (X) button so you can close it again.</li>
+            <li><strong>Wide screens:</strong> the Parameters panel is on the left. Use the edge <strong>collapse</strong> button to shrink or expand it.</li>
           </ul>
-          <p class="tutorial-hint">Tip: if you rotate your phone and the layout changes, look for whichever control is visible.</p>
         `,
         contentCompact: `
-          <p>Tap the highlighted button to open/close <strong>Parameters</strong>.</p>
-          <p class="tutorial-hint">Button changes based on screen size.</p>
+          <p>Press the highlighted <strong>Params</strong> button to open <strong>Parameters</strong>. The highlight then moves to <strong>Close</strong>.</p>
         `,
         highlightSelector:
           '@mobile-drawer-close, @mobile-drawer-toggle, @collapse-param-panel',
@@ -3728,29 +3778,16 @@ async function showStep(stepIndex) {
     // Set guard flag to prevent drawer observer from interfering during setup
     isSettingUpStep = true;
 
-    // First try to resolve the target (even if not yet visible)
-    const target = resolveStepTarget(step, { requireVisible: false });
-    let needsDrawerOpen = target ? isInsideParamPanel(target) : false;
-
-    // If no target yet but we have selectors, check if any would be inside drawer
-    if (!target && step.highlightSelector) {
-      const selectors = step.highlightSelector.split(',').map((s) => s.trim());
-      for (const selector of selectors) {
-        const query = selector.startsWith('@')
-          ? `[data-tutorial-target="${selector.slice(1)}"]`
-          : selector;
-        const el = document.querySelector(query);
-        if (el && isInsideParamPanel(el)) {
-          needsDrawerOpen = true;
-          break;
-        }
-      }
-    }
-
-    if (needsDrawerOpen) {
+    // Watch the panel whenever the step has anything inside it to point at,
+    // not only when the step opens it. Step 3 teaches BOTH halves - press
+    // Params to open, press Close to shut - and it now arrives with the panel
+    // shut (P2), so without this the ring could not follow the user in.
+    if (checkIfAnyTargetInsideDrawer(step)) {
       // Set up observer to detect drawer/panel state changes (mobile + desktop)
       setupDrawerObserver();
+    }
 
+    if (stepNeedsParamPanelOpen(step)) {
       // CRITICAL: Automatically open/expand the panel on BOTH mobile AND desktop
       // The tutorial CANNOT proceed if the target element is hidden in a collapsed panel
       if (!isParamPanelOpen()) {
@@ -3758,13 +3795,11 @@ async function showStep(stepIndex) {
         // Wait for animation to complete
         await waitForTransition(document.getElementById('paramPanel'), 400);
       }
-    } else {
-      // Target is NOT inside the param panel, so close the drawer on mobile
-      // to ensure the target element is visible (not hidden behind drawer)
-      if (isMobileViewport() && isMobileDrawerOpen()) {
-        closeMobileDrawer();
-        await waitForTransition(document.getElementById('paramPanel'), 400);
-      }
+    } else if (isMobileViewport() && isMobileDrawerOpen()) {
+      // Nothing here needs the drawer, so close it on mobile: it covers the
+      // screen, and whatever this step points at is behind it.
+      closeMobileDrawer();
+      await waitForTransition(document.getElementById('paramPanel'), 400);
     }
   }
 
@@ -4525,7 +4560,7 @@ function setupCompletion(step) {
   stepCompleted = !step.completion;
 
   if (step.completion) {
-    requirementEl.textContent = '↑ Complete the action above to continue';
+    requirementEl.textContent = REQUIREMENT_PENDING_TEXT;
     requirementEl.classList.remove('tutorial-requirement-done');
   } else {
     requirementEl.textContent = '';
