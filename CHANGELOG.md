@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The cities get the shapes they were actually mapped with** (CW-26) - a tall building is rarely
+  one plain box, and until now every one of them was. Mappers describe a stepped tower by drawing
+  its separate volumes, and describe a house roof by naming its shape; the bake threw both away
+  before the game ever saw them. Seattle, Burnaby and Albuquerque have been rebaked to keep them.
+  One Seattle tower that used to be a single 259 m block is now twenty-six stacked volumes
+  stepping 255, 147, 126, 110 m and down - and the skyline as a whole gained about a sixth more
+  steps in it. Pitched roofs - pyramidal, gabled and hipped - are built as real shapes that finish
+  at the height the building is tagged with, rather than being stacked on top of it. Roof shapes
+  nobody can draw honestly from the tags, and buildings too irregular to say which way they run,
+  keep their flat tops rather than being guessed at. **Denver is unchanged for now**: its 3,013
+  mapped parts are mostly tiny architectural details and carrying them all would nearly double the
+  download, so that trade is written up for a decision rather than made quietly
 - **Weather, photographs, and a reason to wander** (CW-20) - three things the City Walk did not
   have. **Rain**, on the G key or the Rain button, in two strengths: heavy is not simply more
   drops but faster and more slanted ones, because rain that only gets denser reads as fog. The
