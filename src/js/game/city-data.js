@@ -597,3 +597,148 @@ export function nearestLandmarkName(
   if (nearest && nearestDist <= enterM) return nearest.name;
   return null;
 }
+
+// ---------------------------------------------------------------------------
+// The road graph (CW-19)
+// ---------------------------------------------------------------------------
+
+/**
+ * Highway classes a car would actually be driven on.
+ *
+ * Service roads, footways and pedestrian streets are left out: a car frozen
+ * in an alley or on a footpath reads as a mistake rather than as traffic.
+ */
+export const DRIVABLE_ROAD_KINDS = new Set([
+  'motorway',
+  'trunk',
+  'primary',
+  'secondary',
+  'tertiary',
+  'residential',
+  'unclassified',
+  'living_street',
+]);
+
+/** Endpoints closer than this share a node, in meters. */
+const NODE_SNAP_M = 1.5;
+
+/**
+ * Cars per kilometre of road, by class — the open-data proxy for how busy a
+ * street is (CW-19, signed at CW-Q17a).
+ *
+ * This is the honest part of the design, so it is written down rather than
+ * hidden: there is no uniform open feed of live congestion. Real-time traffic
+ * is commercial data. What open map data DOES carry is what kind of road it
+ * is and how many lanes it has, and how busy a street looks follows from that
+ * closely enough for a frozen scene.
+ *
+ * Lane counts are not in the extract today — the bake keeps a fixed tag list
+ * and `lanes` is not on it — so this reads road class alone and multiplies by
+ * a lane factor when a road record ever carries one. That is the seam a
+ * future live source, or a re-bake that keeps `lanes`, plugs into: one
+ * function, one call site.
+ *
+ * @param {{kind: string, lanes?: number}} road
+ * @returns {number} cars per kilometre
+ */
+export function trafficDensityFor(road) {
+  const perKm = {
+    motorway: 34,
+    trunk: 30,
+    primary: 26,
+    secondary: 20,
+    tertiary: 14,
+    residential: 8,
+    unclassified: 8,
+    living_street: 4,
+  };
+  const base = perKm[road?.kind] ?? 0;
+  const lanes = Number(road?.lanes);
+  // Two lanes is the unstated default a class figure already assumes.
+  const laneFactor = Number.isFinite(lanes) && lanes > 0 ? lanes / 2 : 1;
+  return base * laneFactor;
+}
+
+/**
+ * Build a graph of the drivable road network: chains and the nodes they meet
+ * at (CW-19).
+ *
+ * OSM splits ways at junctions, so a road record's polyline already IS a
+ * chain and its ENDS already are the junctions — this does not have to search
+ * for crossings, only to notice which chains share an end. Endpoints within
+ * NODE_SNAP_M of each other are treated as the same node, because the extract
+ * rounds coordinates and two ways that meet in the data can land a few
+ * centimetres apart after projection.
+ *
+ * Degree is what makes a node useful: 1 is a dead end or the edge of the
+ * bake, 2 is a road simply continuing under a new name, and 3 or more is a
+ * real intersection — which is where a traffic light belongs.
+ *
+ * @param {Array<{points: number[][], widthM: number, kind: string}>} roads
+ * @param {{snapM?: number}} [options]
+ * @returns {{
+ *   chains: Array<{points: number[][], kind: string, widthM: number, startNode: number, endNode: number}>,
+ *   nodes: Array<{x: number, y: number, degree: number, chains: number[]}>,
+ *   intersections: number[]
+ * }}
+ */
+export function buildRoadGraph(roads, options = {}) {
+  const snap = options.snapM ?? NODE_SNAP_M;
+  const nodes = [];
+  const byCell = new Map();
+
+  const nodeAt = (x, y) => {
+    // A snap grid alone would split two points that straddle a cell edge, so
+    // the neighbouring cells are searched too.
+    const cx = Math.round(x / snap);
+    const cy = Math.round(y / snap);
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        const bucket = byCell.get(`${cx + dx},${cy + dy}`);
+        if (!bucket) continue;
+        for (const index of bucket) {
+          const n = nodes[index];
+          if (Math.hypot(n.x - x, n.y - y) <= snap) return index;
+        }
+      }
+    }
+    const index = nodes.length;
+    nodes.push({ x, y, degree: 0, chains: [] });
+    const key = `${cx},${cy}`;
+    if (!byCell.has(key)) byCell.set(key, []);
+    byCell.get(key).push(index);
+    return index;
+  };
+
+  const chains = [];
+  for (const road of roads ?? []) {
+    if (!DRIVABLE_ROAD_KINDS.has(road?.kind)) continue;
+    const points = road.points;
+    if (!Array.isArray(points) || points.length < 2) continue;
+    const first = points[0];
+    const last = points[points.length - 1];
+    const startNode = nodeAt(first[0], first[1]);
+    const endNode = nodeAt(last[0], last[1]);
+    const index = chains.length;
+    chains.push({
+      points,
+      kind: road.kind,
+      widthM: road.widthM,
+      startNode,
+      endNode,
+    });
+    for (const node of new Set([startNode, endNode])) {
+      nodes[node].chains.push(index);
+    }
+    // A loop that starts and ends at one node still arrives there twice.
+    nodes[startNode].degree += 1;
+    nodes[endNode].degree += 1;
+  }
+
+  const intersections = [];
+  for (let i = 0; i < nodes.length; i++) {
+    if (nodes[i].degree >= 3) intersections.push(i);
+  }
+
+  return { chains, nodes, intersections };
+}

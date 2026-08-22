@@ -1224,10 +1224,15 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       game.altView.setPersistFade(MONO_GLOW_FADE);
       game.altView.invalidate();
     };
+    game.startedAtMs = performance.now();
     game.motionQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    game.motionReduced = Boolean(game.motionQuery?.matches);
     game.onMotionChange = (event) => {
+      game.motionReduced = event.matches;
       game.altView.setReducedMotion(event.matches);
       game.applyGlow();
+      // A freeze must be visible immediately, not at the next state change.
+      game.altView.invalidate();
     };
     game.motionQuery?.addEventListener?.('change', game.onMotionChange);
     game.applyGlow();
@@ -1930,6 +1935,18 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       }
       game.altView.invalidate();
       updateHud();
+    }
+
+    // CW-19: the signals are the one thing in this time-frozen city that
+    // moves, and they only ask for a repaint when a head actually changes —
+    // about once every two seconds, not once a frame. Reduced motion stops
+    // the clock entirely, which leaves every light holding a real state
+    // rather than going dark.
+    if (!game.mapView && !game.motionReduced) {
+      const changed = game.props?.trafficLights?.update(
+        performance.now() - game.startedAtMs
+      );
+      if (changed) game.altView.invalidate();
     }
 
     game.altView.render();

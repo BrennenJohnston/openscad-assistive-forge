@@ -6,6 +6,7 @@ import {
   buildingTint,
   buildStreetProps,
   ROAD_TONES,
+  trafficLightState,
 } from '../../../src/js/game/city-scene.js'
 import { parseCityExtract } from '../../../src/js/game/city-data.js'
 import {
@@ -399,12 +400,21 @@ describe('buildStreetProps (CW-16)', () => {
     withBlocker.dispose()
   })
 
-  it('hands back one obstacle per car and trunk, and none per canopy', () => {
+  it('hands back one obstacle per solid thing, and none per canopy', () => {
     const m = propsModel()
     const props = buildStreetProps(m, buildCollisionGrid(m))
 
+    // Everything a walker would bump into is here: parked cars, tree trunks,
+    // lamp posts, and since CW-19 the signal posts and the standing figures.
+    // FROZEN TRAFFIC IS DELIBERATELY ABSENT — a car standing in a travel lane
+    // is scenery, and walling off the lanes would turn the street into a maze
+    // (decided and recorded in CW-19). This count is what proves that.
     expect(props.obstacles).toHaveLength(
-      props.stats.carCount + props.stats.treeCount + props.stats.lampCount
+      props.stats.carCount +
+        props.stats.treeCount +
+        props.stats.lampCount +
+        props.trafficLights.count +
+        props.peopleCount
     )
     for (const o of props.obstacles) {
       expect(Number.isFinite(o.x)).toBe(true)
@@ -874,5 +884,51 @@ describe('buildCityGroup — CW-25 letter-family facades', () => {
     setMapView(false)
     expect(meshes.map((m) => m.material.map)).toEqual(before)
     dispose()
+  })
+})
+
+describe('trafficLightState (CW-19)', () => {
+  it('runs green, then amber, then red, and comes back round', () => {
+    const seen = new Set()
+    for (let t = 0; t < 20000; t += 100) seen.add(trafficLightState(t, 0))
+    expect([...seen].sort()).toEqual(['amber', 'green', 'red'])
+  })
+
+  it('holds every state for at least two seconds', () => {
+    // A state SWAP, never a strobe: WCAG 2.3.1 stays untriggered because
+    // nothing here can change faster than this.
+    let last = trafficLightState(0, 0)
+    let since = 0
+    for (let t = 100; t <= 60000; t += 100) {
+      const now = trafficLightState(t, 0)
+      if (now !== last) {
+        expect(since, `${last} lasted only ${since} ms`).toBeGreaterThanOrEqual(
+          2000
+        )
+        last = now
+        since = 0
+      }
+      since += 100
+    }
+  })
+
+  it('never lets both phases show green at once', () => {
+    // The whole point of a phase group: when this street goes, the cross
+    // street stops.
+    for (let t = 0; t < 30000; t += 50) {
+      const a = trafficLightState(t, 0)
+      const b = trafficLightState(t, 1)
+      expect(
+        a === 'green' && b === 'green',
+        `both phases green at ${t} ms`
+      ).toBe(false)
+      // Nor may both be mid-change at the same moment.
+      expect(a === 'amber' && b === 'amber').toBe(false)
+    }
+  })
+
+  it('is stable for a negative or huge elapsed time', () => {
+    expect(['red', 'amber', 'green']).toContain(trafficLightState(-5000, 0))
+    expect(['red', 'amber', 'green']).toContain(trafficLightState(1e9, 1))
   })
 })

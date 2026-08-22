@@ -54,6 +54,7 @@ import {
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { pointInRing } from './walk-controls.js';
+import { buildRoadGraph, trafficDensityFor } from './city-data.js';
 
 // Per-view road treatment. Any visible SURFACE tone carpets the lower half
 // of the street view — perspective stacks every road between here and the
@@ -1179,6 +1180,210 @@ const CAR_MIN_GAP_M = 5;
 // Cars park along ordinary streets. Motorways, trunks and primaries get none:
 // nobody leaves a car on an arterial, and their ribbons carry the through
 // traffic CW-19 will animate.
+// Frozen traffic (CW-19). Cars standing ON the travel lanes, in faux
+// movement: placed along the lane and turned to face the way they would be
+// going. Nothing about them moves — the round's directive is that everything
+// movement-capable ships time-frozen — and the seam that decides HOW MANY is
+// trafficDensityFor(), so a future live source or a re-bake that keeps lane
+// counts plugs in there rather than here.
+//
+// They do NOT block the player. That is a decision, recorded: a frozen car is
+// scenery, and walling off a travel lane with invisible obstacles would make
+// the street feel like a maze. Parked cars keep their collision, because they
+// stand where a walker actually goes.
+// Silhouette people (CW-19).
+//
+// The owner's recorded dislike of the reference is its people: two coloured
+// blobs read as debris rather than as anyone. A figure through this converter
+// is a SHAPE — a dark cutout against a lit shopfront, or a lit form against
+// the dark street — so what it needs is an outline a person recognises, which
+// two boxes cannot give. These are built from head, shoulders, torso, two
+// arms and two legs: seven small boxes, cheap enough to merge with everything
+// else and specific enough to read as a human at a few character cells.
+//
+// They are static, like the traffic. Placement is stamped into collision the
+// way trees are, because a person standing on the pavement is furniture the
+// player should walk around rather than through.
+const PERSON_HEIGHT_M = 1.72;
+const PERSON_HEAD_M = 0.2;
+const PERSON_SHOULDER_W_M = 0.46;
+const PERSON_TORSO_W_M = 0.34;
+const PERSON_DEPTH_M = 0.24;
+const PERSON_LEG_W_M = 0.13;
+const PERSON_ARM_W_M = 0.1;
+// Skin and clothing are irrelevant here; what matters is that a person is
+// BRIGHTER than the pavement and dimmer than a lit sign, so they read as a
+// figure in front of things rather than as part of them.
+const PERSON_TINT = [0.82, 0.82, 0.82];
+const PERSON_DARK_TINT = [0.5, 0.5, 0.5];
+// One figure every so many metres of shopfront-facing pavement.
+const PERSON_SPACING_M = 26;
+const PERSON_MIN_GAP_M = 3;
+const PERSON_CURB_OFFSET_M = 1.1;
+const DOG_HEIGHT_M = 0.45;
+const DOG_LENGTH_M = 0.6;
+const DOG_WIDTH_M = 0.2;
+
+/**
+ * One standing figure, as a list of boxes in world space.
+ *
+ * The stride swings the legs and the opposite arms, which is what makes a
+ * frozen figure read as caught mid-step rather than as a mannequin. At 0 the
+ * figure stands still.
+ *
+ * @param {number} x
+ * @param {number} y
+ * @param {number} facingRad
+ * @param {number} stride - -1..1, how far through a step the figure is frozen
+ * @returns {import('three').BufferGeometry[]}
+ */
+function makePersonGeoms(x, y, facingRad, stride) {
+  const out = [];
+  const cos = Math.cos(facingRad);
+  const sin = Math.sin(facingRad);
+  // Along the facing direction (a step goes forward), and across it (limbs
+  // sit left and right).
+  const fwd = (d) => [x + cos * d, y + sin * d];
+  const side = (d) => [-sin * d, cos * d];
+
+  const legH = PERSON_HEIGHT_M * 0.47;
+  const torsoH = PERSON_HEIGHT_M * 0.3;
+  const torsoZ = legH + torsoH / 2;
+  const headZ = PERSON_HEIGHT_M - PERSON_HEAD_M / 2;
+
+  // Legs: one forward, one back, by the stride.
+  for (const lr of [-1, 1]) {
+    const swing = stride * 0.28 * lr;
+    const [lx, ly] = fwd(swing);
+    const [ox, oy] = side(PERSON_LEG_W_M * 0.85 * lr);
+    out.push(
+      makeBox(
+        PERSON_LEG_W_M + Math.abs(swing) * 0.5,
+        PERSON_LEG_W_M,
+        legH,
+        lx + ox,
+        ly + oy,
+        legH / 2,
+        facingRad,
+        PERSON_DARK_TINT
+      )
+    );
+  }
+
+  out.push(
+    makeBox(
+      PERSON_DEPTH_M,
+      PERSON_TORSO_W_M,
+      torsoH,
+      x,
+      y,
+      torsoZ,
+      facingRad,
+      PERSON_TINT
+    )
+  );
+  // Shoulders: a little wider than the torso, at the top of it — the line
+  // that separates a person from a post.
+  out.push(
+    makeBox(
+      PERSON_DEPTH_M * 0.9,
+      PERSON_SHOULDER_W_M,
+      PERSON_HEIGHT_M * 0.08,
+      x,
+      y,
+      legH + torsoH - PERSON_HEIGHT_M * 0.02,
+      facingRad,
+      PERSON_TINT
+    )
+  );
+  // Arms swing opposite the legs.
+  for (const lr of [-1, 1]) {
+    const swing = -stride * 0.22 * lr;
+    const [ax, ay] = fwd(swing);
+    const [ox, oy] = side((PERSON_SHOULDER_W_M / 2) * lr);
+    out.push(
+      makeBox(
+        PERSON_ARM_W_M + Math.abs(swing) * 0.4,
+        PERSON_ARM_W_M,
+        torsoH * 0.92,
+        ax + ox,
+        ay + oy,
+        torsoZ,
+        facingRad,
+        PERSON_DARK_TINT
+      )
+    );
+  }
+  out.push(
+    makeBox(
+      PERSON_HEAD_M,
+      PERSON_HEAD_M,
+      PERSON_HEAD_M,
+      x,
+      y,
+      headZ,
+      facingRad,
+      PERSON_TINT
+    )
+  );
+  return out;
+}
+
+/**
+ * A dog on a lead beside its walker: a low body, four short legs and a head.
+ */
+function makeDogGeoms(x, y, facingRad) {
+  const out = [];
+  const bodyZ = DOG_HEIGHT_M * 0.62;
+  out.push(
+    makeBox(
+      DOG_LENGTH_M,
+      DOG_WIDTH_M,
+      DOG_HEIGHT_M * 0.42,
+      x,
+      y,
+      bodyZ,
+      facingRad,
+      PERSON_DARK_TINT
+    )
+  );
+  const cos = Math.cos(facingRad);
+  const sin = Math.sin(facingRad);
+  out.push(
+    makeBox(
+      DOG_WIDTH_M,
+      DOG_WIDTH_M,
+      DOG_WIDTH_M,
+      x + cos * DOG_LENGTH_M * 0.5,
+      y + sin * DOG_LENGTH_M * 0.5,
+      DOG_HEIGHT_M * 0.86,
+      facingRad,
+      PERSON_TINT
+    )
+  );
+  for (const along of [0.34, -0.34]) {
+    for (const across of [0.5, -0.5]) {
+      out.push(
+        makeBox(
+          0.07,
+          0.07,
+          bodyZ,
+          x + cos * DOG_LENGTH_M * along - sin * DOG_WIDTH_M * across,
+          y + sin * DOG_LENGTH_M * along + cos * DOG_WIDTH_M * across,
+          bodyZ / 2,
+          facingRad,
+          PERSON_DARK_TINT
+        )
+      );
+    }
+  }
+  return out;
+}
+
+const TRAFFIC_LANE_INSET_M = 1.6;
+const TRAFFIC_MIN_SPACING_M = 9;
+const TRAFFIC_END_MARGIN_M = 6;
+
 const CAR_ROAD_KINDS = new Set([
   'residential',
   'tertiary',
@@ -1261,6 +1466,62 @@ const LAMP_HEAD_REACH_M = 0.5;
 // nothing under it - proved by hiding the two lamp meshes and watching the box
 // go. It is neutral on purpose too, so the high-contrast quantizer files a
 // steel post with the curbs and the pavement instead of tinting it cyan.
+// ---------------------------------------------------------------------------
+// Traffic lights (CW-19)
+// ---------------------------------------------------------------------------
+// A signal is a pole with THREE stacked heads, of which exactly one is lit —
+// the reference's look, and the shape a player reads as a traffic light even
+// at a few character cells. The world is time-frozen by the round's standing
+// directive, and these are the one exception the owner signed: a light that
+// never changes is not a traffic light.
+//
+// The lit head is a flat, unlit colour rather than a shaded surface, because a
+// signal EMITS. The dark heads are a dim grey rather than black: only exact
+// black reads as an empty cell, and a head that vanishes leaves the lit one
+// floating with nothing under it — the same failure the lamp posts hit in
+// CW-18 and were fixed for.
+const LIGHT_POLE_SIDE_M = 0.14;
+const LIGHT_POLE_HEIGHT_M = 4.2;
+const LIGHT_HEAD_SIZE_M = 0.34;
+const LIGHT_HEAD_DEPTH_M = 0.22;
+const LIGHT_HEAD_PITCH_M = 0.42;
+const LIGHT_HEAD_BASE_Z_M = 3.0;
+// Clear of the curb ribbon and of anything the street furniture already holds.
+const LIGHT_CURB_OFFSET_M = 1.2;
+const LIGHT_MIN_GAP_M = 6;
+const LIGHT_TINTS = {
+  red: [1, 0.13, 0.1],
+  amber: [1, 0.62, 0.05],
+  green: [0.13, 1, 0.28],
+  dark: [0.17, 0.17, 0.17],
+};
+// Two phase groups, so the cross street is red while this one is green.
+const LIGHT_PHASE_COUNT = 2;
+// >= 2 s per state keeps this a state SWAP and nowhere near WCAG 2.3.1's
+// flash threshold. Green is the long one, amber the brief one, and a phase
+// spends the rest of the cycle red while the other phase runs.
+const LIGHT_GREEN_MS = 5000;
+const LIGHT_AMBER_MS = 2000;
+const LIGHT_CYCLE_MS = (LIGHT_GREEN_MS + LIGHT_AMBER_MS) * LIGHT_PHASE_COUNT;
+
+/**
+ * Which head is lit for a phase group at a moment in the cycle.
+ *
+ * @param {number} elapsedMs
+ * @param {number} phase - 0..LIGHT_PHASE_COUNT-1
+ * @returns {'red'|'amber'|'green'}
+ */
+export function trafficLightState(elapsedMs, phase) {
+  const cycle =
+    ((elapsedMs % LIGHT_CYCLE_MS) + LIGHT_CYCLE_MS) % LIGHT_CYCLE_MS;
+  const slot = (LIGHT_GREEN_MS + LIGHT_AMBER_MS) * phase;
+  const since =
+    (((cycle - slot) % LIGHT_CYCLE_MS) + LIGHT_CYCLE_MS) % LIGHT_CYCLE_MS;
+  if (since < LIGHT_GREEN_MS) return 'green';
+  if (since < LIGHT_GREEN_MS + LIGHT_AMBER_MS) return 'amber';
+  return 'red';
+}
+
 const POLE_TINT = [0.45, 0.45, 0.45];
 const LAMP_HEAD_TINT = [0.97, 0.97, 0.97];
 
@@ -1372,6 +1633,11 @@ export function buildStreetProps(model, collision = null) {
   const trunkGeoms = [];
   const canopyGeoms = [];
   const carGeoms = [];
+  const trafficGeoms = [];
+  let trafficCount = 0;
+  const personGeoms = [];
+  let personCount = 0;
+  const personSpots = makePointGrid(PROP_SPATIAL_CELL_M);
   const poleGeoms = [];
   const lampHeadGeoms = [];
 
@@ -1442,7 +1708,21 @@ export function buildStreetProps(model, collision = null) {
     const lampRng = LAMP_ROAD_KINDS.has(road.kind)
       ? makeLcg(hashBuilding(roadIndex, road.kind + ':lamps'))
       : null;
-    if (!treeRng && !carRng && !lampRng) return;
+    const trafficDensity = trafficDensityFor(road);
+    const trafficRng =
+      trafficDensity > 0
+        ? makeLcg(hashBuilding(roadIndex, road.kind + ':traffic'))
+        : null;
+    // Cars per kilometre becomes metres between cars, floored so a busy
+    // arterial does not end up bumper to bumper.
+    const trafficSpacingM = Math.max(
+      TRAFFIC_MIN_SPACING_M,
+      trafficDensity > 0 ? 1000 / trafficDensity : Infinity
+    );
+    const peopleRng = LAMP_ROAD_KINDS.has(road.kind)
+      ? makeLcg(hashBuilding(roadIndex, road.kind + ':people'))
+      : null;
+    if (!treeRng && !carRng && !lampRng && !trafficRng && !peopleRng) return;
 
     const occupancy =
       CAR_OCCUPANCY_MIN +
@@ -1455,6 +1735,13 @@ export function buildStreetProps(model, collision = null) {
     // side carry ACROSS segments: OSM splits a street into many short
     // segments, and restarting the spacing at each vertex would stand a lamp
     // at every bend.
+    let peopleCursor = peopleRng ? peopleRng() * PERSON_SPACING_M : 0;
+    const trafficCursor = trafficRng
+      ? [
+          TRAFFIC_END_MARGIN_M + trafficRng() * trafficSpacingM,
+          TRAFFIC_END_MARGIN_M + trafficRng() * trafficSpacingM,
+        ]
+      : [0, 0];
     let lampCursor = lampRng
       ? LAMP_END_MARGIN_M + lampRng() * LAMP_SPACING_M
       : 0;
@@ -1474,6 +1761,111 @@ export function buildStreetProps(model, collision = null) {
       const nx = -uy;
       const ny = ux;
       const angle = Math.atan2(dy, dx);
+
+      if (peopleRng) {
+        // People stand on the pavement, on the shopfront side, facing the
+        // street or along it — where a person waiting or walking would be.
+        let cursor = peopleCursor;
+        while (cursor <= len) {
+          const along = cursor;
+          cursor += PERSON_SPACING_M * (0.5 + peopleRng() * 1.1);
+          const walkSide = peopleRng() < 0.5 ? -1 : 1;
+          const offset = road.widthM / 2 + PERSON_CURB_OFFSET_M;
+          const px = x1 + ux * along + nx * offset * walkSide;
+          const py = y1 + uy * along + ny * offset * walkSide;
+          if (!inCore(px, py)) continue;
+          if (isBlocked(px, py)) continue;
+          if (treeSpots.occupied(px, py, PERSON_MIN_GAP_M)) continue;
+          if (lampSpots.occupied(px, py, PERSON_MIN_GAP_M)) continue;
+          if (personSpots.occupied(px, py, PERSON_MIN_GAP_M)) continue;
+
+          const roll = peopleRng();
+          // Along the pavement, or turned a quarter to face the shopfronts.
+          const facing =
+            angle +
+            (roll < 0.25 ? Math.PI / 2 : 0) +
+            (walkSide < 0 ? Math.PI : 0);
+          // Most are frozen mid-stride; a quarter simply stand.
+          const stride = roll < 0.25 ? 0 : (peopleRng() * 2 - 1) * 0.9;
+          personGeoms.push(...makePersonGeoms(px, py, facing, stride));
+          personCount++;
+          // Roughly one walker in six has a dog a pace ahead.
+          if (peopleRng() < 0.17) {
+            const dx2 = px + Math.cos(facing) * 0.85;
+            const dy2 = py + Math.sin(facing) * 0.85;
+            if (inCore(dx2, dy2) && !isBlocked(dx2, dy2)) {
+              personGeoms.push(...makeDogGeoms(dx2, dy2, facing));
+            }
+          }
+          personSpots.add(px, py);
+          obstacles.push({
+            x: px,
+            y: py,
+            halfLengthM: PERSON_DEPTH_M / 2,
+            halfWidthM: PERSON_SHOULDER_W_M / 2,
+            rotationRad: facing,
+          });
+        }
+        peopleCursor = Math.max(0, cursor - len);
+      }
+
+      if (trafficRng) {
+        // Both directions: one lane each side of the centreline, each facing
+        // the way that lane runs.
+        for (const dir of [1, -1]) {
+          let cursor = trafficCursor[dir > 0 ? 0 : 1];
+          while (cursor <= len) {
+            const along = cursor;
+            cursor += trafficSpacingM * (0.7 + trafficRng() * 0.6);
+            const lane = road.widthM / 2 - TRAFFIC_LANE_INSET_M;
+            if (lane <= 0.5) break;
+            const x = x1 + ux * along + nx * lane * dir;
+            const y = y1 + uy * along + ny * lane * dir;
+            if (!inCore(x, y)) continue;
+            if (isBlocked(x, y)) continue;
+            if (carSpots.occupied(x, y, CAR_MIN_GAP_M)) continue;
+            const seed = Math.floor(trafficRng() * 0xffff);
+            const tier = CAR_TIERS[seed % CAR_TIERS.length];
+            const hue = TINT_HUES_DEG[(seed >>> 5) % TINT_HUES_DEG.length];
+            const heading = dir > 0 ? angle : angle + Math.PI;
+            const bodyTint = tintOf(tier, hue, CAR_CHROMA);
+            const cabinTint = tintOf(
+              Math.min(1, tier + CAR_CABIN_LIFT),
+              hue,
+              CAR_CHROMA
+            );
+            trafficGeoms.push(
+              makeBox(
+                CAR_LENGTH_M,
+                CAR_WIDTH_M,
+                CAR_BODY_HEIGHT_M,
+                x,
+                y,
+                CAR_BODY_HEIGHT_M / 2,
+                heading,
+                bodyTint
+              )
+            );
+            const cabinLen = CAR_LENGTH_M - CAR_CABIN_INSET_M * 2;
+            const cabinBottom = CAR_BODY_HEIGHT_M - 0.05;
+            const cabinH = CAR_HEIGHT_M - cabinBottom;
+            trafficGeoms.push(
+              makeBox(
+                cabinLen,
+                CAR_WIDTH_M - 0.2,
+                cabinH,
+                x - ux * (CAR_CABIN_INSET_M / 2) * dir,
+                y - uy * (CAR_CABIN_INSET_M / 2) * dir,
+                cabinBottom + cabinH / 2,
+                heading,
+                cabinTint
+              )
+            );
+            trafficCount++;
+          }
+          trafficCursor[dir > 0 ? 0 : 1] = Math.max(0, cursor - len);
+        }
+      }
 
       if (lampRng) {
         while (lampCursor <= len) {
@@ -1672,11 +2064,167 @@ export function buildStreetProps(model, collision = null) {
   addMerged(trunkGeoms, 'tree-trunks', propMaterial());
   addMerged(canopyGeoms, 'tree-canopies', propMaterial());
   addMerged(carGeoms, 'cars', propMaterial());
+  addMerged(trafficGeoms, 'traffic-cars', propMaterial());
+  addMerged(personGeoms, 'people', propMaterial());
   addMerged(poleGeoms, 'lamp-poles', propMaterial());
   addMerged(lampHeadGeoms, 'lamp-heads', propMaterial());
 
+  // Traffic lights (CW-19). Placed on the road GRAPH rather than on the road
+  // list: a signal belongs where streets actually meet, and OSM splits ways at
+  // junctions, so the graph's nodes of degree 3 or more already are those
+  // corners.
+  const lightSpots = makePointGrid(PROP_SPATIAL_CELL_M);
+  const lightPoleGeoms = [];
+  // One geometry list per phase group and head position, because a head has
+  // to be able to light up on its own.
+  const lightHeadGeoms = [];
+  for (let phase = 0; phase < LIGHT_PHASE_COUNT; phase++) {
+    lightHeadGeoms.push({ red: [], amber: [], green: [] });
+  }
+
+  const graph = buildRoadGraph(model.roads);
+  for (const nodeIndex of graph.intersections) {
+    const node = graph.nodes[nodeIndex];
+    // The signal stands on a corner, not in the carriageway. Offset along the
+    // first chain's direction, turned ninety degrees, on a side fixed by the
+    // node index so a rebuild puts it back in the same place.
+    const chain = graph.chains[node.chains[0]];
+    const pts = chain.points;
+    const near = pts[0];
+    const far = pts[pts.length - 1];
+    let dx = far[0] - near[0];
+    let dy = far[1] - near[1];
+    const len = Math.hypot(dx, dy) || 1;
+    dx /= len;
+    dy /= len;
+    const side = nodeIndex % 2 === 0 ? 1 : -1;
+    const reach = chain.widthM / 2 + LIGHT_CURB_OFFSET_M;
+    const x = node.x + -dy * reach * side + dx * reach * side;
+    const y = node.y + dx * reach * side + dy * reach * side;
+
+    if (!inCore(x, y)) continue;
+    if (isBlocked(x, y)) continue;
+    if (treeSpots.occupied(x, y, LAMP_MIN_TREE_GAP_M)) continue;
+    if (lampSpots.occupied(x, y, LAMP_MIN_LAMP_GAP_M)) continue;
+    if (lightSpots.occupied(x, y, LIGHT_MIN_GAP_M)) continue;
+
+    lightPoleGeoms.push(
+      makeBox(
+        LIGHT_POLE_SIDE_M,
+        LIGHT_POLE_SIDE_M,
+        LIGHT_POLE_HEIGHT_M,
+        x,
+        y,
+        LIGHT_POLE_HEIGHT_M / 2,
+        0,
+        POLE_TINT
+      )
+    );
+
+    // Red on top, then amber, then green — the order every signal uses, and
+    // the one a player reads without being told.
+    const phase = nodeIndex % LIGHT_PHASE_COUNT;
+    const facing = Math.atan2(dy, dx);
+    const stack = ['red', 'amber', 'green'];
+    stack.forEach((slot, i) => {
+      lightHeadGeoms[phase][slot].push(
+        makeBox(
+          LIGHT_HEAD_DEPTH_M,
+          LIGHT_HEAD_SIZE_M,
+          LIGHT_HEAD_SIZE_M,
+          x,
+          y,
+          LIGHT_HEAD_BASE_Z_M + (stack.length - 1 - i) * LIGHT_HEAD_PITCH_M,
+          facing,
+          LIGHT_TINTS.dark
+        )
+      );
+    });
+
+    lightSpots.add(x, y);
+    obstacles.push({
+      x,
+      y,
+      halfLengthM: LIGHT_POLE_SIDE_M / 2,
+      halfWidthM: LIGHT_POLE_SIDE_M / 2,
+      angleRad: 0,
+    });
+  }
+
+  // A material per head so a state change is a colour write, not a rebuild.
+  const lightMaterials = [];
+  addMerged(lightPoleGeoms, 'light-poles', propMaterial());
+  for (let phase = 0; phase < LIGHT_PHASE_COUNT; phase++) {
+    const slots = {};
+    for (const slot of ['red', 'amber', 'green']) {
+      const geoms = lightHeadGeoms[phase][slot];
+      if (geoms.length === 0) continue;
+      const material = new MeshBasicMaterial({
+        color: new Color(...LIGHT_TINTS.dark),
+      });
+      const merged = mergeGeometries(geoms, false);
+      for (const g of geoms) g.dispose();
+      const mesh = new Mesh(merged, material);
+      mesh.name = 'light-heads';
+      group.add(mesh);
+      disposables.push(merged, material);
+      slots[slot] = material;
+    }
+    if (Object.keys(slots).length > 0) lightMaterials.push(slots);
+  }
+
+  let litFor = null;
+  const paintLights = (state) => {
+    lightMaterials.forEach((slots, phase) => {
+      const lit = state === null ? null : trafficLightState(state, phase);
+      for (const slot of ['red', 'amber', 'green']) {
+        const material = slots[slot];
+        if (!material) continue;
+        const tint = lit === slot ? LIGHT_TINTS[slot] : LIGHT_TINTS.dark;
+        material.color.setRGB(tint[0], tint[1], tint[2]);
+      }
+    });
+  };
+  // Light them once at build. Reduced motion simply never calls update, and
+  // a stopped cycle has to look like a real signal rather than a dead one —
+  // with no initial paint every head sits at its dark tint and a player who
+  // asked for reduced motion gets a city of broken traffic lights.
+  paintLights(0);
+  litFor = lightMaterials
+    .map((_, phase) => trafficLightState(0, phase))
+    .join('|');
+
+  const trafficLights = {
+    /**
+     * Advance the signals. Returns true ONLY when a head actually changed,
+     * which is what keeps this off the per-frame path: the converter is asked
+     * to re-run once per state change — about once every two seconds and only
+     * while lights are in view — rather than every frame.
+     *
+     * @param {number} elapsedMs
+     * @returns {boolean} whether anything on screen changed
+     */
+    update(elapsedMs) {
+      if (lightMaterials.length === 0) return false;
+      const key = lightMaterials
+        .map((_, phase) => trafficLightState(elapsedMs, phase))
+        .join('|');
+      if (key === litFor) return false;
+      litFor = key;
+      paintLights(elapsedMs);
+      return true;
+    },
+    /** How many signals the city got — for the release record and the tests. */
+    count: lightPoleGeoms.length,
+  };
+
   return {
     group,
+    trafficLights,
+    /** Frozen cars standing on the travel lanes (CW-19). */
+    frozenTrafficCount: trafficCount,
+    /** Static silhouette figures on the pavements (CW-19). */
+    peopleCount: personCount,
     obstacles,
     /**
      * The map view is a clean street network seen from a kilometer up:
