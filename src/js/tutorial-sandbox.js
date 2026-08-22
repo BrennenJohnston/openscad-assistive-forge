@@ -63,6 +63,7 @@ let targetRemovalObserver = null; // Watch for target removal
 let surfaceObserver = null; // Watch for welcome -> project while a welcome-surface tour runs
 let dialogObserver = null; // Watch for a user-opened dialog while a tutorial runs
 let dialogOpenAtKeydown = false; // Was a dialog up when this Escape was pressed?
+let dialogStandDown = null; // What the stand-down took away, so it can give it back
 let currentTarget = null; // Currently highlighted target
 let scrollYBeforeLock = 0; // Store scroll position for body lock
 let didLockBodyScroll = false; // Avoid fighting other scroll locks (e.g. mobile drawer)
@@ -3290,6 +3291,9 @@ function scheduleReposition() {
   }
   repositionTimeout = requestAnimationFrame(() => {
     updateSpotlightAndPosition();
+    // A dialog that resizes (orientation, on-screen keyboard) moves the gap
+    // the pill was parked in.
+    syncDialogStandDown();
     repositionTimeout = null;
   });
 }
@@ -3400,6 +3404,10 @@ function setMinimized(minimized, { auto = false } = {}) {
     minimizedEl.classList.add('hidden');
     svg.style.opacity = '1';
     updateSpotlightAndPosition();
+    // A restore while a dialog is still up re-applies the very ring the
+    // stand-down removed (showStep restores unconditionally). Stand it back
+    // down in the same frame rather than letting it paint over the dialog.
+    syncDialogStandDown();
   }
 
   announceToScreenReader(
@@ -3430,16 +3438,163 @@ const isRendered = (el) =>
     : getComputedStyle(el).display !== 'none';
 
 /**
+ * Every dialog the USER has open, outermost only. Document order puts an
+ * ancestor before its own `.modal-overlay` child, so the first match of a
+ * nested pair is the one worth measuring.
+ * @returns {HTMLElement[]}
+ */
+function findOpenAppDialogs() {
+  const open = [];
+  for (const el of document.querySelectorAll(APP_DIALOG_SELECTOR)) {
+    if (tutorialOverlay?.contains(el)) continue;
+    if (el.closest(TUTORIAL_OWN_DIALOGS)) continue;
+    if (!isRendered(el)) continue;
+    if (open.some((outer) => outer.contains(el))) continue;
+    open.push(el);
+  }
+  return open;
+}
+
+/**
  * Is a dialog the USER opened currently on screen?
  * @returns {boolean}
  */
 function isAppDialogOpen() {
-  for (const el of document.querySelectorAll(APP_DIALOG_SELECTOR)) {
-    if (tutorialOverlay?.contains(el)) continue;
-    if (el.closest(TUTORIAL_OWN_DIALOGS)) continue;
-    if (isRendered(el)) return true;
+  return findOpenAppDialogs().length > 0;
+}
+
+/** 44px of target plus room to breathe on both sides of it. */
+const PILL_CLEARANCE = 60;
+
+/** The box a dialog actually paints, not its full-viewport scrim. */
+function dialogContentBox(dialog) {
+  const content =
+    dialog.querySelector('.preset-modal-content, .modal-content') || dialog;
+  const rect = content.getBoundingClientRect();
+  return rect.height > 0 && rect.width > 0 ? rect : null;
+}
+
+/**
+ * D-61 / Q-66 (owner, 2026-08-21). A dialog opened from a spotlighted control
+ * has to be the topmost thing on screen, and Q-50c's minimize alone never made
+ * it one: the veil kept painting over the dialog at 0.3, the target kept the
+ * elevation and ring the highlight class gives it, and the pill kept its
+ * bottom-right corner. MEASURED at 412x730 - the owner's phone once its
+ * browser chrome is taken off the height - `document.elementFromPoint` at the
+ * Clear Cache dialog's Cancel AND its red confirm both returned
+ * `#clearStorageBtn`, and pressing that ringed button again stacked a second
+ * dialog on the first. That is the loop the owner hit.
+ *
+ * So while a user-opened dialog is up the tour stands down completely. The one
+ * exception is a step whose own target lives inside that dialog - the Features
+ * Guide steps, where the dialog IS the subject and its deliberate
+ * lit-through-the-cutout presentation is the step.
+ */
+function applyDialogStandDown(dialogs) {
+  if (!tutorialOverlay) return;
+
+  // The dialog is the thing the step is teaching: leave the spotlight alone.
+  if (currentTarget && dialogs.some((d) => d.contains(currentTarget))) {
+    releaseDialogStandDown();
+    return;
   }
-  return false;
+
+  const svg = tutorialOverlay.querySelector('.tutorial-spotlight-svg');
+  const pill = tutorialOverlay.querySelector('.tutorial-minimized');
+
+  if (!dialogStandDown) {
+    dialogStandDown = {
+      svgDisplay: svg ? svg.style.display : '',
+      pillTop: pill ? pill.style.top : '',
+      pillBottom: pill ? pill.style.bottom : '',
+      pillDisplay: pill ? pill.style.display : '',
+    };
+  }
+
+  // Every pass, not just the first: a restore re-applies the ring underneath
+  // us, and showStep restores unconditionally.
+  document.querySelectorAll('.tutorial-target-highlight').forEach((el) => {
+    el.classList.remove('tutorial-target-highlight');
+  });
+  if (svg) svg.style.display = 'none';
+  keepPillClearOfDialogs(pill, dialogs);
+}
+
+/**
+ * Park the pill in whichever gap the dialog leaves, or take it away when it
+ * leaves none. Covering a dialog's own controls is the defect being fixed, and
+ * a focusable control outside an `aria-modal` dialog is a focus-trap leak
+ * besides - so when there is no room, no pill. The dialog closing restores it,
+ * and the tour with it.
+ */
+function keepPillClearOfDialogs(pill, dialogs) {
+  if (!pill) return;
+
+  const boxes = dialogs.map(dialogContentBox).filter(Boolean);
+  if (!boxes.length) return;
+
+  const highest = Math.min(...boxes.map((b) => b.top));
+  const lowest = Math.max(...boxes.map((b) => b.bottom));
+  const pillHeight = pill.getBoundingClientRect().height || 44;
+  const needed = pillHeight + 16;
+
+  pill.style.display = dialogStandDown?.pillDisplay ?? '';
+
+  if (highest >= needed && highest >= PILL_CLEARANCE) {
+    pill.style.top = `${Math.max(8, Math.round((highest - pillHeight) / 2))}px`;
+    pill.style.bottom = 'auto';
+    return;
+  }
+
+  const below = window.innerHeight - lowest;
+  if (below >= needed && below >= PILL_CLEARANCE) {
+    pill.style.top = 'auto';
+    pill.style.bottom = `${Math.max(8, Math.round((below - pillHeight) / 2))}px`;
+    return;
+  }
+
+  pill.style.display = 'none';
+}
+
+/**
+ * Give back everything the stand-down took. The ring goes back on whatever the
+ * step points at NOW, never on whoever happened to be wearing it when the
+ * dialog opened: on the Features Guide steps the modal opens while the ring is
+ * still on the Help button, and handing that button its ring back leaves a
+ * blue orphan burning behind the modal.
+ */
+function releaseDialogStandDown() {
+  if (!dialogStandDown) return;
+
+  const { svgDisplay, pillTop, pillBottom, pillDisplay } = dialogStandDown;
+  dialogStandDown = null;
+
+  if (currentTarget?.isConnected) {
+    currentTarget.classList.add('tutorial-target-highlight');
+  }
+
+  const svg = tutorialOverlay?.querySelector('.tutorial-spotlight-svg');
+  if (svg) svg.style.display = svgDisplay;
+
+  const pill = tutorialOverlay?.querySelector('.tutorial-minimized');
+  if (pill) {
+    pill.style.top = pillTop;
+    pill.style.bottom = pillBottom;
+    pill.style.display = pillDisplay;
+  }
+}
+
+/**
+ * Re-decide the stand-down against whatever is on screen right now. Called by
+ * the dialog watcher, by every restore, and by the reposition scheduler, so a
+ * dialog that resizes or a ring re-applied underneath us cannot leave the tour
+ * painting over it.
+ */
+function syncDialogStandDown() {
+  if (!activeTutorial || !tutorialOverlay) return;
+  const dialogs = findOpenAppDialogs();
+  if (dialogs.length) applyDialogStandDown(dialogs);
+  else releaseDialogStandDown();
 }
 
 /**
@@ -3455,12 +3610,18 @@ function watchDialogsDuringTutorial() {
 
   const sync = () => {
     if (!activeTutorial || !tutorialOverlay) return;
-    const dialogUp = isAppDialogOpen();
+    const dialogs = findOpenAppDialogs();
+    const dialogUp = dialogs.length > 0;
     if (dialogUp && !isMinimized) {
       setMinimized(true, { auto: true });
     } else if (!dialogUp && isMinimized && wasAutoMinimized) {
+      // Give the ring and the veil back before the panel returns, so the
+      // restore recomputes from a whole spotlight rather than a stripped one.
+      releaseDialogStandDown();
       setMinimized(false, { auto: true });
     }
+    if (dialogUp) applyDialogStandDown(dialogs);
+    else releaseDialogStandDown();
   };
 
   dialogObserver = new MutationObserver(() => {
@@ -4683,6 +4844,10 @@ export function closeTutorial(completed = false, options = {}) {
     dialogObserver.disconnect();
     dialogObserver = null;
   }
+
+  // Drop what the stand-down was holding without restoring it - the sweep
+  // below strips every highlight anyway, and the overlay is about to go.
+  dialogStandDown = null;
 
   // Remove highlight from any targeted elements
   document.querySelectorAll('.tutorial-target-highlight').forEach((el) => {
