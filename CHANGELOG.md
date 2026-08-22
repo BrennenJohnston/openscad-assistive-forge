@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Weather, photographs, and a reason to wander** (CW-20) - three things the City Walk did not
+  have. **Rain**, on the G key or the Rain button, in two strengths: heavy is not simply more
+  drops but faster and more slanted ones, because rain that only gets denser reads as fog. The
+  drops are real objects in the world rather than something painted over the top, so the same
+  machinery that turns the city into characters turns them into streaks - look up while it is
+  raining and they converge overhead the way falling rain actually does. While it rains the fog
+  slowly breathes between a clear night and a murky one, taking about three minutes to cross,
+  and distant thunder lifts the light by a fifth for a third of a second every half minute or so.
+  All of that is movement, so all of it stops for anyone who has asked for reduced motion - and
+  the G key says so out loud rather than ignoring the press, while the button removes itself
+  instead of sitting there doing nothing. **Photo mode**, on P, saves a PNG of exactly what is on
+  screen, named for the city and the date. **A landmark tracker**: the status line counts the
+  landmarks you have walked past, the map legend ticks them off, and when you have found them all
+  the game says so once. Nothing is stored - a fresh visit is a fresh walk
 - **The streets have people, parked traffic and working signals** (CW-19) - the city was
   furnished but empty: nothing stood on the pavements and nothing sat in the road. It now has
   standing figures built from a real outline - head, shoulders, body, arms and legs, most of them

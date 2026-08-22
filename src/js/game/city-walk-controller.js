@@ -1975,6 +1975,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     game.marker.visible = game.mapView;
     game.city3d.setMapView(game.mapView);
     game.props.setMapView(game.mapView);
+    // CW-20: the weather belongs to the street. Seen from overhead the drops
+    // streak diagonally across the whole map and read as scratches on the
+    // picture rather than as rain — caught by eye in the four-city tour.
+    if (game.rain)
+      game.rain.group.visible = !game.mapView && game.rainLevel !== null;
     game.lighting.setMapBoost(game.mapView);
     game.beacons.group.visible = game.mapView;
     state.refs.legend.hidden = !game.mapView;

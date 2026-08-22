@@ -2588,3 +2588,41 @@ test.describe('ASCII City Walk — landmark tracker (CW-20)', () => {
     await expect(marked.first()).toContainText('visited')
   })
 })
+
+/**
+ * CW-20: the weather belongs to the street.
+ *
+ * Seen from the overhead map the drops streak diagonally across the whole
+ * picture and read as scratches on the screen rather than as rain — this was
+ * caught by eye in the four-city tour, not by a test, which is why there is
+ * now a test.
+ */
+test.describe('ASCII City Walk — rain stays in the street (CW-20)', () => {
+  test('the map view has no rain in it, and the street gets it back', async ({
+    page,
+  }) => {
+    test.setTimeout(90000)
+    await launchGame(page)
+    await enterCity(page)
+
+    await page.keyboard.press('KeyG')
+    await expect(page.locator('#cityWalkAnnouncer')).toContainText('Rain')
+    expect(
+      await page.evaluate(() => window.__cityWalkGame.rain.group.visible)
+    ).toBe(true)
+
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
+    expect(
+      await page.evaluate(() => window.__cityWalkGame.rain.group.visible),
+      'rain is still drawn over the map'
+    ).toBe(false)
+
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('street view')
+    expect(
+      await page.evaluate(() => window.__cityWalkGame.rain.group.visible),
+      'rain did not come back when the street did'
+    ).toBe(true)
+  })
+})
