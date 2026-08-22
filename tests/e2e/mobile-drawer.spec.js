@@ -75,8 +75,16 @@ test.describe('Mobile Drawer', () => {
     await expect(backdrop).toHaveClass(/visible/);
     await expect(toggle).toHaveAttribute('aria-expanded', 'true');
     
-    // Close with backdrop click
-    await backdrop.click();
+    // Close with backdrop click.
+    //
+    // Q-78 (UF-38): a bare `backdrop.click()` aims at the element's centre,
+    // and the backdrop is the whole 375x667 viewport while the drawer covers
+    // 337.5 of those 375px - so the centre IS the drawer, the actionability
+    // check never passes, and this timed out on local Firefox. MEASURED: at
+    // the backdrop's centre `elementFromPoint` returns the drawer's summary;
+    // at x=369 it returns `#drawerBackdrop`, and tapping there closes the
+    // drawer on every repeat. The app was never at fault, the aim was.
+    await backdrop.click({ position: { x: 369, y: 333 } });
     await expect(drawer).not.toHaveClass(/drawer-open/);
     await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   });
