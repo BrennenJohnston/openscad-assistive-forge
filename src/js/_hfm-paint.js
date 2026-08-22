@@ -62,6 +62,7 @@ export function buildGlyphAtlas({
   color,
   normalizeTinyAlpha = false,
   reverse = false,
+  bloom = 0,
 }) {
   const cellW = Math.max(1, Math.round(charW * dpr));
   const cellH = Math.max(1, Math.round(charH * dpr));
@@ -76,6 +77,14 @@ export function buildGlyphAtlas({
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.font = `${fontSizePx * dpr}px ${fontFamily}`;
+
+  if (bloom > 0 && !reverse) {
+    // CW-21 P4: a halo around each glyph, the way an overdriven CRT spread
+    // light past the beam. Built into the ATLAS so it costs nothing per
+    // frame — every cell that uses this atlas is already bloomed.
+    ctx.shadowColor = color;
+    ctx.shadowBlur = bloom * dpr;
+  }
 
   if (reverse) {
     // Reverse video (CW-21): the cell is solid phosphor and the glyph is
@@ -95,6 +104,7 @@ export function buildGlyphAtlas({
   }
 
   if (reverse) ctx.globalCompositeOperation = 'source-over';
+  if (bloom > 0) ctx.shadowBlur = 0;
 
   // A reverse atlas is already fully opaque somewhere, so the tiny-glyph
   // treatment is a no-op on it by its own maxAlpha === 255 guard.
@@ -316,7 +326,8 @@ function _paintComposited(
   stepY,
   colorIndices,
   colorAtlases,
-  glowFade
+  glowFade,
+  scanlineDim
 ) {
   const w = ctx.canvas.width;
   const h = ctx.canvas.height;
@@ -370,8 +381,32 @@ function _paintComposited(
   }
 
   if (glowFade > 0) _applyAfterglow(ctx, img, glowFade);
+  if (scanlineDim > 0) _applyScanlines(img, w, scanlineDim);
 
   ctx.putImageData(img, 0, 0);
+}
+
+/**
+ * Scanlines (CW-21 P4): every other device-pixel row loses some of its alpha,
+ * the way the gaps between a CRT's lines darkened the picture.
+ *
+ * Applied to the finished frame rather than to the atlas, because the gap
+ * belongs to the SCREEN and not to the character — an atlas-level version
+ * would move with the glyphs instead of staying still under them.
+ *
+ * @param {ImageData} img - updated in place
+ * @param {number} w - frame width in device pixels
+ * @param {number} dim - 0..1, how much alpha a dark row keeps
+ */
+function _applyScanlines(img, w, dim) {
+  const data = img.data;
+  const rowBytes = w * 4;
+  const keep = 1 - dim;
+  for (let y = 1; y * rowBytes < data.length; y += 2) {
+    const start = y * rowBytes;
+    const end = Math.min(start + rowBytes, data.length);
+    for (let i = start + 3; i < end; i += 4) data[i] *= keep;
+  }
 }
 
 /**
@@ -454,7 +489,8 @@ export function paintFrame(
   persistCtx,
   persistFade,
   colorLayers,
-  glowInComposite = false
+  glowInComposite = false,
+  scanlineDim = 0
 ) {
   const fade = glowInComposite
     ? Math.max(0, Math.min(1, Number(persistFade) || 0))
@@ -484,7 +520,8 @@ export function paintFrame(
       stepY,
       colorIndices,
       colorAtlases,
-      glowInComposite ? fade : 0
+      glowInComposite ? fade : 0,
+      scanlineDim
     );
     return;
   }

@@ -111,6 +111,10 @@ function _createInstanceState() {
     // source-over blend) as well as what it costs.
     glowInComposite: false,
 
+    // CW-21 P4: CRT decoration, both off unless a caller asks.
+    bloomPx: 0,
+    scanlineDim: 0,
+
     // Render-on-demand scheduling
     dirty: true,
     lastFrameMs: 0,
@@ -370,9 +374,10 @@ function _buildGlyphVectors(atlas) {
 function _ensureGlyphModel(st, { fontFamily, fontSizePx, charW, charH, dpr }) {
   const color = getPhosphorColor();
   const paletteKey = st.palette ? st.palette.join(',') : '';
+  const effectKey = `${st.bloomPx}`;
   const intensityKey =
     !st.palette && st.intensityLevels ? st.intensityLevels.join(',') : '';
-  const key = `${fontFamily}|${fontSizePx}|${charW}|${charH}|${dpr}|${color}|${paletteKey}|${intensityKey}`;
+  const key = `${fontFamily}|${fontSizePx}|${charW}|${charH}|${dpr}|${color}|${paletteKey}|${intensityKey}|${effectKey}`;
   if (st.atlas && st.atlasKey === key) return;
 
   if (st.palette) {
@@ -387,6 +392,7 @@ function _ensureGlyphModel(st, { fontFamily, fontSizePx, charW, charH, dpr }) {
         dpr,
         color: paletteColor,
         normalizeTinyAlpha: st.tinyCellsAllowed,
+        bloom: st.bloomPx,
       })
     );
     st.atlas = st.paletteAtlases[0];
@@ -403,6 +409,7 @@ function _ensureGlyphModel(st, { fontFamily, fontSizePx, charW, charH, dpr }) {
         color: tint,
         normalizeTinyAlpha: st.tinyCellsAllowed,
         reverse,
+        bloom: st.bloomPx,
       });
     const wantsReverse = st.reverseThreshold !== null;
     if (st.intensityLevels || wantsReverse) {
@@ -680,7 +687,8 @@ function _renderFrame(
       : useIntensity
         ? { indices: st.intensityIndices, atlases: st.intensityAtlases }
         : undefined,
-    st.glowInComposite
+    st.glowInComposite,
+    st.scanlineDim
   );
 
   // Bench readout only (DEV): how much of the frame reverse video claimed.
@@ -969,6 +977,31 @@ export async function initAltView(previewManager, options = {}) {
     },
     getReverseVideo() {
       return st.reverseThreshold;
+    },
+    /**
+     * CRT decoration (CW-21 P4), both off unless a caller asks.
+     *
+     * `bloomPx` halos each glyph at atlas-build time, so it costs nothing per
+     * frame; `scanlineDim` takes that fraction of the alpha off every other
+     * device-pixel row of the finished frame. Both COST LEGIBILITY by
+     * definition — one spreads ink past the glyph, the other removes it — so
+     * neither is on by default and the release record carries the measurement
+     * that decided that.
+     *
+     * @param {{bloomPx?: number, scanlineDim?: number}} options
+     */
+    setCrtEffects(options = {}) {
+      st.bloomPx = Math.max(0, Number(options.bloomPx) || 0);
+      st.scanlineDim = Math.max(
+        0,
+        Math.min(1, Number(options.scanlineDim) || 0)
+      );
+      st.atlasKey = '';
+      st.dirty = true;
+      return { bloomPx: st.bloomPx, scanlineDim: st.scanlineDim };
+    },
+    getCrtEffects() {
+      return { bloomPx: st.bloomPx, scanlineDim: st.scanlineDim };
     },
     setContrastScale(scale) {
       return _setContrastScale(st, scale);

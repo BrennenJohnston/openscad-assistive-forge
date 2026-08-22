@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Monochrome is a choice now, not a loss** (CW-21) - with colour switched off the City Walk was a
+  single flat tone: pavement, walls and lit shop signs all painted at exactly the same brightness, so
+  turning colour off cost depth as well as hue. Real single-colour terminals never had that problem,
+  because they separated things with an intensity attribute rather than with more characters - which
+  matters here, since this project only ever draws the 95 printable ASCII characters and the densest
+  one of those fills less than half its cell. Three things change. Darker parts of the picture are
+  now driven at 65% of the phosphor rather than 100%, so pavement and distant walls sit back and lit
+  surfaces come forward; nothing is brighter than it used to be, and the dim level is still
+  6.45:1 against black in green and 5.03:1 in amber, both above the 4.5:1 this project holds itself
+  to. The brightest cells - lit shop signs, billboards, lamp heads - flip to reverse video, a solid
+  block of phosphor with the character knocked out of it, which is the only way to make a cell read
+  as genuinely LIT when no available character can fill more than half of one; it claims about 1.9%
+  of a street, chosen by counting: at a lower threshold every lit window turns solid too and the
+  signs stop being the brightest thing you can see. And the picture now keeps a soft phosphor trail
+  while you move, the way a slow tube smeared when it scrolled, gone within about three frames and
+  gone entirely when you stop. The trail is motion, so it turns itself off for anyone who asks for
+  reduced motion, including if that preference changes while you are walking. All of this is
+  monochrome only - with colour on, each cell is already picked out by its own hue - and none of it
+  reaches the main app's Alt View. Measured cost at the size the game starts at: the intensity and
+  reverse-video work is lost in the noise, the trail adds about 5 ms and the game stays at 60 frames
+  a second; at the smallest characters the trail takes it from 30.0 to 28.3
+
 - **Street life, standing still** (CW-18) - the City Walk's streets had trees and parked cars but
   nothing above head height and nothing on the walls. Now streetlights march down every ordinary
   street and arterial, one every 30 m, alternating sides: a slim post with a bright head reaching out

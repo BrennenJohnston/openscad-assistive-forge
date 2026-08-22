@@ -634,3 +634,84 @@ describe('reverse-video atlas (CW-21)', () => {
     expect(build(false).reverse).toBe(false)
   })
 })
+
+describe('CRT decoration (CW-21 P4)', () => {
+  it('bloom asks the rasterizer for a halo, and only when requested', () => {
+    const seen = []
+    const orig = HTMLCanvasElement.prototype.getContext
+    HTMLCanvasElement.prototype.getContext = function () {
+      const ctx = createMockCtx()
+      ctx.canvas = this
+      ctx.shadowBlur = 0
+      ctx.shadowColor = ''
+      ctx.fillText = vi.fn(() => {
+        seen.push({ blur: ctx.shadowBlur, color: ctx.shadowColor })
+      })
+      return ctx
+    }
+    const build = (bloom, dpr = 1) =>
+      buildGlyphAtlas({
+        fontFamily: 'monospace',
+        fontSizePx: 10,
+        charW: 6,
+        charH: 12,
+        dpr,
+        color: '#00ff00',
+        bloom,
+      })
+
+    build(0)
+    expect(seen.every((s) => s.blur === 0)).toBe(true)
+
+    seen.length = 0
+    build(2)
+    // Every glyph is drawn with the halo, tinted the same phosphor.
+    expect(seen).toHaveLength(GLYPH_COUNT)
+    expect(seen.every((s) => s.blur === 2 && s.color === '#00ff00')).toBe(true)
+
+    // The radius is in CSS px, so a 2x display gets the same apparent halo.
+    seen.length = 0
+    build(2, 2)
+    expect(seen[0].blur).toBe(4)
+
+    HTMLCanvasElement.prototype.getContext = orig
+  })
+
+  it('scanlines take alpha off alternate rows and leave the rest alone', () => {
+    const cols = 4
+    const rows = 4
+    const atlas = createMockAtlas({ cellW: 10, cellH: 12 })
+    const glyphs = buildGrid(cols, rows, 33)
+    const ctx = createMockCtx(cols * 10, rows * 12)
+
+    paintFrame(
+      ctx, glyphs, cols, rows, atlas, 10, 12,
+      null, null, 0, undefined, false, 0.5
+    )
+
+    const img = ctx.putImageData.mock.calls[0][0]
+    const w = img.width
+    const alphaAt = (x, y) => img.data[(y * w + x) * 4 + 3]
+    // Row 0 is untouched, row 1 keeps half its alpha, row 2 untouched again.
+    expect(alphaAt(0, 0)).toBe(255)
+    expect(alphaAt(0, 1)).toBe(128)
+    expect(alphaAt(0, 2)).toBe(255)
+    expect(alphaAt(0, 3)).toBe(128)
+  })
+
+  it('no scanline dim leaves every row at full alpha', () => {
+    const cols = 4
+    const rows = 4
+    const atlas = createMockAtlas({ cellW: 10, cellH: 12 })
+    const glyphs = buildGrid(cols, rows, 33)
+    const ctx = createMockCtx(cols * 10, rows * 12)
+
+    paintFrame(ctx, glyphs, cols, rows, atlas, 10, 12, null, null, 0)
+
+    const img = ctx.putImageData.mock.calls[0][0]
+    const w = img.width
+    for (let y = 0; y < 4; y++) {
+      expect(img.data[(y * w) * 4 + 3]).toBe(255)
+    }
+  })
+})
