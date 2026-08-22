@@ -34,6 +34,16 @@ export const DEFAULT_BUILDING_HEIGHT_M = 8.0;
 // Anything taller than this is a tagging error, not a building.
 const MAX_BUILDING_HEIGHT_M = 700;
 
+// CW-26. Simple 3D Buildings says a building's parts replace its outline, and
+// where mappers tile the whole footprint that is exactly right. Real extracts
+// are not so tidy: Seattle has 32 of 122 part-hosts under 60% covered and
+// Albuquerque's lower quartile host is covered TWO PERCENT - one turret on a
+// plain hall. Dropping those outlines would delete the building and leave the
+// turret hanging, so the outline only stands down when the parts really are
+// the mass. Above this ratio the parts replace the outline; below it they
+// stand proud of it.
+export const PART_COVERAGE_MIN = 0.6;
+
 // Visual approximation of paved width per highway class, in meters. These
 // are game-world ribbons, not survey data.
 export const ROAD_WIDTHS_M = {
@@ -391,6 +401,7 @@ export function parseCityExtract(extract, options = {}) {
         name: tags.name,
         tags,
         parts: [],
+        partsAreMass: false,
       });
       continue;
     }
@@ -432,6 +443,7 @@ export function parseCityExtract(extract, options = {}) {
           name: tags.name,
           tags,
           parts: [],
+          partsAreMass: false,
         });
         emitted = true;
       }
@@ -484,7 +496,26 @@ export function parseCityExtract(extract, options = {}) {
       // A part whose outline is outside the extract radius is still a real
       // volume standing on a real street; drawing it beats dropping it.
       orphanParts++;
-      buildings.push({ ...part, name: part.tags.name, parts: [] });
+      buildings.push({
+        ...part,
+        name: part.tags.name,
+        parts: [],
+        partsAreMass: false,
+      });
+    }
+
+    // Decide, per host, whether its parts ARE the building or merely sit on
+    // it. Overlapping parts can push the ratio past 1, which only makes the
+    // answer more certain.
+    for (const b of buildings) {
+      if (b.parts.length === 0) continue;
+      const outlineArea = Math.abs(signedArea(b.outer));
+      const partArea = b.parts.reduce(
+        (sum, p) => sum + Math.abs(signedArea(p.outer)),
+        0
+      );
+      b.partsAreMass =
+        outlineArea > 0 && partArea / outlineArea >= PART_COVERAGE_MIN;
     }
   }
 

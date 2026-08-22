@@ -816,3 +816,77 @@ describe('building parts become the silhouette (CW-26)', () => {
     expect(model.stats.orphanParts).toBe(0)
   })
 })
+
+describe('a turret does not delete its hall (CW-26)', () => {
+  const CENTER = { lat: 47.6062, lon: -122.3321 }
+  const D = 0.00036
+  const ring = (dLat, dLon, sLat, sLon) => [
+    { lat: CENTER.lat + dLat, lon: CENTER.lon + dLon },
+    { lat: CENTER.lat + dLat + sLat, lon: CENTER.lon + dLon },
+    { lat: CENTER.lat + dLat + sLat, lon: CENTER.lon + dLon + sLon },
+    { lat: CENTER.lat + dLat, lon: CENTER.lon + dLon + sLon },
+    { lat: CENTER.lat + dLat, lon: CENTER.lon + dLon },
+  ]
+  const outline = {
+    type: 'way',
+    id: 1,
+    tags: { building: 'yes', name: 'Hall' },
+    geometry: ring(0, 0, D, D),
+  }
+  const parse = async (elements) => {
+    const { parseCityExtract } = await import(
+      '../../../src/js/game/city-data.js'
+    )
+    return parseCityExtract({ center: CENTER, elements })
+  }
+
+  it('leaves the outline standing when the parts barely cover it', async () => {
+    // One small turret on a big hall - the Albuquerque shape.
+    const model = await parse([
+      outline,
+      {
+        type: 'way',
+        id: 2,
+        tags: { 'building:part': 'yes', height: '20' },
+        geometry: ring(D * 0.4, D * 0.4, D * 0.12, D * 0.12),
+      },
+    ])
+    const host = model.buildings[0]
+    expect(host.parts).toHaveLength(1)
+    expect(host.partsAreMass).toBe(false)
+  })
+
+  it('stands the outline down when the parts ARE the building', async () => {
+    // Two halves tiling the whole footprint - the well-mapped downtown shape.
+    const model = await parse([
+      outline,
+      {
+        type: 'way',
+        id: 3,
+        tags: { 'building:part': 'yes', height: '40' },
+        geometry: ring(0, 0, D * 0.5, D),
+      },
+      {
+        type: 'way',
+        id: 4,
+        tags: { 'building:part': 'yes', height: '90' },
+        geometry: ring(D * 0.5, 0, D * 0.5, D),
+      },
+    ])
+    const host = model.buildings[0]
+    expect(host.parts).toHaveLength(2)
+    expect(host.partsAreMass).toBe(true)
+  })
+
+  it('sits exactly on the documented threshold deliberately', async () => {
+    const { PART_COVERAGE_MIN } = await import(
+      '../../../src/js/game/city-data.js'
+    )
+    expect(PART_COVERAGE_MIN).toBe(0.6)
+  })
+
+  it('never marks a partless building as mass', async () => {
+    const model = await parse([outline])
+    expect(model.buildings[0].partsAreMass).toBe(false)
+  })
+})

@@ -871,11 +871,15 @@ export function buildCityGroup(model) {
   model.buildings.forEach((building, index) => {
     const h = hashBuilding(index, building.name);
     const tint = buildingTint(index, building.name);
-    // CW-26: where an outline has parts, the PARTS are the building's mass -
-    // extruding the outline as well would bury them inside a plain box, which
-    // is the very thing the Simple 3D Buildings convention exists to avoid.
-    // Collision is untouched by this: it reads outlines and never parts.
-    const volumes = building.parts?.length ? building.parts : [building];
+    // CW-26: where the parts really are the mass (they cover the outline)
+    // they REPLACE it - extruding the outline as well would bury them inside
+    // a plain box, the very thing Simple 3D Buildings exists to avoid. Where
+    // they merely sit on it, BOTH are drawn, or a turret mapped onto a plain
+    // hall would delete the hall and leave the turret hanging. Collision is
+    // untouched either way: it reads outlines and never parts.
+    const volumes = building.partsAreMass
+      ? building.parts
+      : [building, ...(building.parts ?? [])];
     let anyGeom = false;
     for (const volume of volumes) {
       const geom = extrudeBuilding(volume, tint);
