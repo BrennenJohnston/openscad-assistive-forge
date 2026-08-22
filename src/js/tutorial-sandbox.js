@@ -884,10 +884,15 @@ function stepNeedsParamPanelOpen(step) {
 const REQUIREMENT_PENDING_TEXT = '↑ Complete the action above to continue';
 
 /**
- * Q-74 (owner, 2026-08-22): the drawer requirement names the button by the
- * label it wears today. UF-40's rename sweeps this string with the rest.
+ * Q-74 + Q-76 (owner, 2026-08-22): the requirement names the control by the
+ * label it wears on the surface the reader is looking at. On a phone the panel
+ * is a drawer you OPEN with a button marked Params; on a desktop it is a panel
+ * you EXPAND. UF-40's rename sweeps both strings with the rest.
  */
-const DRAWER_REQUIREMENT_TEXT = 'Open Params to continue.';
+const DRAWER_REQUIREMENT_TEXT = {
+  mobile: 'Open Params to continue.',
+  desktop: 'Expand Parameters to continue.',
+};
 
 /**
  * The user closed the Customizer while a step still points inside it (D-63).
@@ -901,18 +906,20 @@ const DRAWER_REQUIREMENT_TEXT = 'Open Params to continue.';
 function showDrawerRequirement() {
   if (!tutorialOverlay) return;
 
-  const opener = isMobileViewport()
+  const onMobile = isMobileViewport();
+  const opener = onMobile
     ? document.getElementById('mobileDrawerToggle')
     : document.getElementById('collapseParamPanelBtn');
 
   currentTarget = opener && isElementVisible(opener) ? opener : null;
   updateSpotlightAndPosition();
 
+  const wanted = DRAWER_REQUIREMENT_TEXT[onMobile ? 'mobile' : 'desktop'];
   const requirementEl = tutorialOverlay.querySelector('#tutorialRequirement');
   // #tutorialRequirement is role="status" aria-live="polite": writing it IS
   // the announcement, so announcing again would say it twice.
-  if (requirementEl && requirementEl.textContent !== DRAWER_REQUIREMENT_TEXT) {
-    requirementEl.textContent = DRAWER_REQUIREMENT_TEXT;
+  if (requirementEl && requirementEl.textContent !== wanted) {
+    requirementEl.textContent = wanted;
     requirementEl.classList.remove('tutorial-requirement-done');
   }
 }

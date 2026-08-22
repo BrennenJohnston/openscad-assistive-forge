@@ -856,3 +856,273 @@ test.describe('UF-36: a dialog you can always answer', () => {
     expect(stack.card).toBeGreaterThan(stack.veil);
   });
 });
+
+/**
+ * UF-37 (U-42: D-62, D-63). The owner's phone report: "step 3 does not
+ * highlight anything for the user to interact with. Then when the user
+ * attempts to press the Tutorial button to re open the dialog, the drawer's
+ * auto open command overrides any other user attempts... no input or button
+ * pressing registers."
+ *
+ * MEASURED at the release base d27c623, 412x915, Beginners card path - the
+ * whole sequence these cases pin, and every line of it failed:
+ *
+ *   step-3 arrival   drawer OPEN (the engine opened it), card HIDDEN, ring on
+ *                    the Close button, veil 0.3, only a "Tutorial 3/17" pill
+ *   pill +500ms      drawer closed, card back - the only way to read the step
+ *   step-4 setup     drawer OPEN, card HIDDEN again
+ *   pill +500ms      drawer STILL open, card STILL hidden, cutout 0x0
+ *   pill +2000ms     unchanged: Restore is visibly dead
+ *   user closes it   reopened inside 500ms, still open at 2000ms
+ *
+ * The engine now leaves the drawer to the user and keeps the card up beside
+ * it. These cases are written against the states above, so each one is red on
+ * the base for the reason the owner photographed.
+ */
+test.describe('UF-37: a tour that follows the user', () => {
+  const REQUIREMENT_PENDING = '↑ Complete the action above to continue';
+
+  /** Boot the intro tour and stop on the step that teaches the panel. */
+  async function introTourAtStep3(page) {
+    await startBoxTour(page);
+    await walkTo(page, 'Open and close Parameters');
+    await page.waitForTimeout(500);
+  }
+
+  const drawerOpen = (page) =>
+    page.evaluate(
+      () =>
+        !!document.getElementById('paramPanel')?.classList.contains(
+          'drawer-open'
+        )
+    );
+
+  test.describe('on a phone-shaped viewport', () => {
+    test.use({ viewport: { width: 412, height: 915 } });
+
+    test('D-62: step 3 arrives with the panel shut and the ring on the button that opens it', async ({
+      page,
+    }) => {
+      test.setTimeout(240_000);
+      await introTourAtStep3(page);
+
+      // The step teaches "press Params to open the panel". It cannot do that
+      // from behind a panel it opened itself.
+      expect(await drawerOpen(page)).toBe(false);
+      await expect(page.locator('.tutorial-panel')).toBeVisible();
+      await expect(page.locator('#mobileDrawerToggle')).toHaveClass(
+        /tutorial-target-highlight/
+      );
+      // and the instructions are readable, not folded into a pill
+      await expect(page.locator('.tutorial-minimized')).toBeHidden();
+      await expect(page.locator('#tutorial-step-title')).toHaveText(
+        'Open and close Parameters'
+      );
+    });
+
+    test('D-62: opening the panel keeps the card up and walks the ring to the Close button', async ({
+      page,
+    }) => {
+      test.setTimeout(240_000);
+      await introTourAtStep3(page);
+
+      await page.locator('#mobileDrawerToggle').click();
+      await expect(page.locator('#drawerCloseBtn')).toHaveClass(
+        /tutorial-target-highlight/,
+        { timeout: 10_000 }
+      );
+
+      expect(await drawerOpen(page)).toBe(true);
+      await expect(page.locator('.tutorial-panel')).toBeVisible();
+      await expect(page.locator('.tutorial-minimized')).toBeHidden();
+      await expect(page.locator('#mobileDrawerToggle')).not.toHaveClass(
+        /tutorial-target-highlight/
+      );
+
+      // The card must not be sitting on the drawer's only way out. MEASURED
+      // during this release: a top dock started at y 8 and covered the X.
+      const closeIsPressable = await page.evaluate(() => {
+        const btn = document.getElementById('drawerCloseBtn');
+        const r = btn.getBoundingClientRect();
+        const hit = document.elementFromPoint(
+          Math.round(r.left + r.width / 2),
+          Math.round(r.top + r.height / 2)
+        );
+        return !!hit && (hit === btn || btn.contains(hit));
+      });
+      expect(closeIsPressable).toBe(true);
+    });
+
+    test('D-44 re-proved impossible: Restore restores, holds, and leaves the drawer alone', async ({
+      page,
+    }) => {
+      test.setTimeout(240_000);
+      await introTourAtStep3(page);
+      await page.locator('#tutorialNextBtn').click();
+      await expect(page.locator('#tutorial-step-title')).toHaveText(
+        'Expand a parameter group',
+        { timeout: 15_000 }
+      );
+      await expect(page.locator('.tutorial-panel')).toBeVisible();
+      expect(await drawerOpen(page)).toBe(true);
+
+      await page.locator('.tutorial-minimize').click();
+      await expect(page.locator('.tutorial-minimized')).toBeVisible();
+      await expect(page.locator('.tutorial-panel')).toBeHidden();
+
+      await page.locator('.tutorial-restore').click();
+      await expect(page.locator('.tutorial-panel')).toBeVisible();
+
+      // D-44's symptom was a restore that lasted less than a frame. Two
+      // seconds is long enough for the watcher, the drawer transition and the
+      // reposition scheduler to have had their say.
+      await page.waitForTimeout(2000);
+      await expect(page.locator('.tutorial-panel')).toBeVisible();
+      await expect(page.locator('.tutorial-minimized')).toBeHidden();
+      // and Restore no longer has to shut the drawer to work
+      expect(await drawerOpen(page)).toBe(true);
+    });
+
+    test('D-63: closing the panel sticks, and the tour asks instead of fighting', async ({
+      page,
+    }) => {
+      test.setTimeout(240_000);
+      await introTourAtStep3(page);
+      await page.locator('#tutorialNextBtn').click();
+      await expect(page.locator('#tutorial-step-title')).toHaveText(
+        'Expand a parameter group',
+        { timeout: 15_000 }
+      );
+      expect(await drawerOpen(page)).toBe(true);
+
+      await page.locator('#drawerCloseBtn').click();
+      await expect(page.locator('#tutorialRequirement')).toHaveText(
+        'Open Params to continue.',
+        { timeout: 10_000 }
+      );
+      await expect(page.locator('#mobileDrawerToggle')).toHaveClass(
+        /tutorial-target-highlight/
+      );
+      expect(await drawerOpen(page)).toBe(false);
+
+      // The base reopened it inside 500ms. Hold past that and past the 400ms
+      // transition wait the old branch used.
+      await page.waitForTimeout(2000);
+      expect(await drawerOpen(page)).toBe(false);
+      await expect(page.locator('.tutorial-panel')).toBeVisible();
+
+      // ...and the way back in still leads to the step it left.
+      await page.locator('#mobileDrawerToggle').click();
+      await expect(page.locator('#tutorialRequirement')).toHaveText(
+        REQUIREMENT_PENDING,
+        { timeout: 10_000 }
+      );
+      await expect(
+        page.locator('.param-group[data-group-id="Dimensions"] summary')
+      ).toHaveClass(/tutorial-target-highlight/);
+    });
+
+    test('the step still completes and advances once the group is expanded', async ({
+      page,
+    }) => {
+      test.setTimeout(240_000);
+      await introTourAtStep3(page);
+      await page.locator('#tutorialNextBtn').click();
+      await expect(page.locator('#tutorial-step-title')).toHaveText(
+        'Expand a parameter group',
+        { timeout: 15_000 }
+      );
+      await expect(page.locator('#tutorialNextBtn')).toBeDisabled();
+
+      await page
+        .locator('.param-group[data-group-id="Dimensions"] summary')
+        .click();
+      await expect(page.locator('#tutorialNextBtn')).toBeEnabled({
+        timeout: 10_000,
+      });
+
+      await page.locator('#tutorialNextBtn').click();
+      await expect(page.locator('#tutorial-step-title')).toHaveText(
+        'Adjust a parameter',
+        { timeout: 15_000 }
+      );
+    });
+
+    test('UF-21 exit table, new row: Escape closes the drawer first and the tour second', async ({
+      page,
+    }) => {
+      test.setTimeout(240_000);
+      await introTourAtStep3(page);
+      await page.locator('#tutorialNextBtn').click();
+      await expect(page.locator('#tutorial-step-title')).toHaveText(
+        'Expand a parameter group',
+        { timeout: 15_000 }
+      );
+      expect(await drawerOpen(page)).toBe(true);
+
+      // The drawer's focus trap answers Escape by closing itself and does not
+      // stop the event, so one press must not also end the tour.
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(600);
+      expect(await drawerOpen(page)).toBe(false);
+      await expect(page.locator('.tutorial-panel')).toBeVisible();
+
+      await page.keyboard.press('Escape');
+      await expect(page.locator('.tutorial-overlay')).toHaveCount(0, {
+        timeout: 10_000,
+      });
+    });
+  });
+
+  /**
+   * The desktop half of the same two rules. The panel is a collapsing sidebar
+   * rather than a drawer, so Q-76 gives the requirement its own wording, and
+   * the engine still has to expand a collapsed panel on the way IN - the case
+   * a flat "every target lives inside" rule would have broken, because when
+   * the panel is shut the only candidate it has left is inside it.
+   */
+  test('desktop: a collapse the user asked for holds, and the panel still opens for the step that needs it', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await introTourAtStep3(page);
+
+    // Here the only control this step can point at IS inside the panel, so the
+    // ring lands there and the panel is left open.
+    await expect(page.locator('#collapseParamPanelBtn')).toHaveClass(
+      /tutorial-target-highlight/
+    );
+    await expect(page.locator('#paramPanel')).not.toHaveClass(/collapsed/);
+
+    await page.locator('#tutorialNextBtn').click();
+    await expect(page.locator('#tutorial-step-title')).toHaveText(
+      'Expand a parameter group',
+      { timeout: 15_000 }
+    );
+    await expect(
+      page.locator('.param-group[data-group-id="Dimensions"] summary')
+    ).toHaveClass(/tutorial-target-highlight/);
+
+    // Collapse it mid-step. The old branch expanded it again; the tour now
+    // says what it needs and leaves it shut.
+    await page.locator('#collapseParamPanelBtn').click();
+    await expect(page.locator('#tutorialRequirement')).toHaveText(
+      'Expand Parameters to continue.',
+      { timeout: 10_000 }
+    );
+    await page.waitForTimeout(2000);
+    await expect(page.locator('#paramPanel')).toHaveClass(/collapsed/);
+
+    // Stepping back into a panel step opens it, though: that is setup, not a
+    // fight with the user.
+    await page.locator('#tutorialBackBtn').click();
+    await expect(page.locator('#tutorial-step-title')).toHaveText(
+      'Open and close Parameters',
+      { timeout: 15_000 }
+    );
+    await expect(page.locator('#paramPanel')).not.toHaveClass(/collapsed/);
+    await expect(page.locator('#collapseParamPanelBtn')).toHaveClass(
+      /tutorial-target-highlight/
+    );
+  });
+});
