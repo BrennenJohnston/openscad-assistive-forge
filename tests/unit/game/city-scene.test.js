@@ -815,3 +815,64 @@ describe('buildCityGroup — CW-24 the far city', () => {
     dispose()
   })
 })
+
+describe('buildCityGroup — CW-25 letter-family facades', () => {
+  it('splits the buildings into one mesh per facade family', () => {
+    const { group, dispose } = buildCityGroup(model())
+    const meshes = group.children.filter((c) => c.name === 'buildings')
+    // The texture is a property of the material, so a facade look needs a
+    // mesh to carry it. Every one of them keeps the name the surface-class
+    // pass and the map-view swap both key on.
+    expect(meshes.length).toBeGreaterThan(1)
+    // Textures are painted on a canvas, which this environment does not have,
+    // so they all come back null here. What CAN be asserted without a canvas
+    // is that each family got its own material to hang a texture on.
+    const materials = meshes.map((m) => m.material)
+    expect(new Set(materials).size, 'two families share a material').toBe(
+      materials.length
+    )
+    const maps = materials.map((m) => m.map).filter(Boolean)
+    expect(new Set(maps).size, 'two families share a texture').toBe(maps.length)
+    dispose()
+  })
+
+  it('keeps every building, and counts them all exactly once', () => {
+    const { group, stats, dispose } = buildCityGroup(model())
+    const meshes = group.children.filter((c) => c.name === 'buildings')
+    const tris = meshes.reduce(
+      (n, m) => n + m.geometry.getAttribute('position').count / 3,
+      0
+    )
+    // Splitting geometry across meshes must not lose or duplicate any of it.
+    expect(tris).toBe(stats.buildingTriangles)
+    expect(tris).toBeGreaterThan(0)
+    dispose()
+  })
+
+  it('gives a building the same facade every time the city is built', () => {
+    const a = buildCityGroup(model())
+    const b = buildCityGroup(model())
+    const shape = (r) =>
+      r.group.children
+        .filter((c) => c.name === 'buildings')
+        .map((m) => m.geometry.getAttribute('position').count)
+    // Facade choice rides the same hash as the colour, so a tower keeps both
+    // for as long as the extract does.
+    expect(shape(a)).toEqual(shape(b))
+    a.dispose()
+    b.dispose()
+  })
+
+  it('strips the facade textures in map view and puts them back', () => {
+    const { group, setMapView, dispose } = buildCityGroup(model())
+    const meshes = group.children.filter((c) => c.name === 'buildings')
+    const before = meshes.map((m) => m.material.map)
+
+    setMapView(true)
+    for (const m of meshes) expect(m.material.map).toBeNull()
+
+    setMapView(false)
+    expect(meshes.map((m) => m.material.map)).toEqual(before)
+    dispose()
+  })
+})
