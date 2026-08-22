@@ -1542,7 +1542,7 @@ const TUTORIALS = {
       {
         title: 'Clear Cache',
         content: `
-          <p>This button frees the browser storage the app uses. Take care with it: by default it also deletes your saved projects. The dialog it opens has a checkbox to keep them, and exporting a backup first is always the safe move. Nothing to do here now. It is good to know where it lives.</p>
+          <p>This button opens a dialog that frees the browser storage the app uses. Take care: by default it also deletes your saved projects. The dialog has a checkbox to keep them, and exporting a backup first is always the safe move. You do not need it now. If you open it to look, press <strong>Cancel</strong> to come back to this tour.</p>
         `,
         highlightSelector: '#clearStorageBtn',
         position: 'top',
@@ -1648,7 +1648,7 @@ const TUTORIALS = {
       {
         title: 'Clear Cache',
         content: `
-          <p>This button frees the browser storage the app uses. Take care with it: by default it also deletes your saved projects. The dialog it opens has a checkbox to keep them, and exporting a backup first is always the safe move. Nothing to do here now. It is good to know where it lives.</p>
+          <p>This button opens a dialog that frees the browser storage the app uses. Take care: by default it also deletes your saved projects. The dialog has a checkbox to keep them, and exporting a backup first is always the safe move. You do not need it now. If you open it to look, press <strong>Cancel</strong> to come back to this tour.</p>
         `,
         highlightSelector: '#clearStorageBtn',
         position: 'top',
