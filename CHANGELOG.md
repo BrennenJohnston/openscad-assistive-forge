@@ -9,6 +9,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Every surface speaks in its own characters** (CW-23) - the City Walk picked each character by
+  how BRIGHT a patch of the screen was and nothing else, so a stretch of pavement and the side of a
+  tower that happened to be equally bright came out looking like the same material. The game now
+  draws a second, tiny picture behind the scenes - one pixel per character cell - whose only job is
+  to say what each cell is looking at, and a small table decides which characters each surface may
+  use. Roads get characters that lie down, so the roadway stacks into receding bands instead of a
+  field of noise; walls get characters that stand up; foliage gets characters that clump;
+  shopfronts and signs get the round, heavy ones. The table is plain data, one line per surface,
+  meant to be adjusted by eye. Two of its rules are not taste, and the suite enforces both: every
+  surface must be allowed the space character, or the darkest cells can no longer stay empty and
+  the black the whole picture is built on fills in with texture; and every surface needs light,
+  middle and heavy characters, or that surface flattens to one tone. Measured cost: about 1.1 ms a
+  frame at the default character size and 1.7 ms at the smallest, against a budget of 3
+
+- **A skyline past the fog** (CW-24) - the fog faded everything to black beyond about 260 metres,
+  and a cell that is exactly black is an empty cell, so every tower past the fog was not being
+  pushed into the distance - it was being deleted. The middle of the frame was a void even though
+  the city data reaches 700 metres. Buildings now keep about a seventh of their brightness however
+  far away they are, so a distant tower reads as a dim silhouette. Only buildings: the ground,
+  roads and kerbs still fade to true black, because a dim carpet across the lower half of the
+  screen is a failure this project has already made once. In colour the far towers keep their own
+  hue, so the skyline reads as a coloured city rather than a grey smudge
+
+- **Buildings no longer all wear the same windows** (CW-25) - every building used one identical
+  window pattern, so once the picture had become characters, one tower's wall was
+  indistinguishable from the next: colour told them apart, texture did not. There are now eight
+  facade patterns, each cutting a different letter shape out of its lit window panes - not writing,
+  just glazing bars, the way a leaded window has a pattern. Which one a building gets is fixed by
+  the same identity that fixes its colour, so a building keeps its face for as long as the city
+  data does. The patterns are painted when the city loads, so eight of them add nothing to the
+  download
+
 - **Monochrome is a choice now, not a loss** (CW-21) - with colour switched off the City Walk was a
   single flat tone: pavement, walls and lit shop signs all painted at exactly the same brightness, so
   turning colour off cost depth as well as hue. Real single-colour terminals never had that problem,

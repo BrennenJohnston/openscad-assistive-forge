@@ -303,11 +303,34 @@ function makeRepeatingTexture(canvas, repeatX, repeatY, offsetY = 0) {
 }
 
 /**
- * Window-grid wall texture: lit window rectangles on dark grout, one 4×3-bay
+ * The letter families a facade's windows can be cut from (CW-25).
+ *
+ * Every building wore the same rectangular window, so once the converter had
+ * turned a frame into characters one tower's wall was indistinguishable from
+ * the next: colour told them apart but TEXTURE did not. Each family gives its
+ * buildings a differently-shaped lit pane, which is variation the sampler can
+ * actually see.
+ *
+ * These are SHAPES, not writing. The letters are chosen for how they fill a
+ * window bay — an X reads as a cross-braced pane, an O as a round one — and a
+ * wall built from one repeated letter carries no more meaning than a brick
+ * bond does. Readable text through the converter stays impossible; that is a
+ * recorded limitation, not something this is sneaking up on.
+ *
+ * `null` is the plain rectangular pane the city has always had, kept as a
+ * family so a share of the buildings still look exactly as they did.
+ */
+const WINDOW_LETTER_FAMILIES = [null, 'X', 'O', '8', 'H', 'Z', 'M', 'A'];
+
+/**
+ * Window-grid wall texture: lit window shapes on dark grout, one 4×3-bay
  * tile with a deterministic quarter of the windows gone dark.
+ *
+ * @param {string|null} [family] - the letter this facade's panes are cut
+ *   from, or null for the plain rectangular pane
  * @returns {CanvasTexture|null}
  */
-function createWindowTexture() {
+function createWindowTexture(family = null) {
   const bayW = 96;
   const bayH = 72;
   const c = make2dContext(bayW * WINDOW_TILE_BAYS_X, bayH * WINDOW_TILE_BAYS_Y);
@@ -317,7 +340,17 @@ function createWindowTexture() {
   ctx.fillStyle = '#101010';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  const rand = makeLcg(0xc17b0011);
+  if (family) {
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `bold ${Math.round(bayH * 0.62)}px monospace`;
+  }
+
+  // Seeded per family, so a family always paints the same wall and no two
+  // families share a lit/dark pattern that would give them away as the same
+  // texture in different clothes.
+  const familySeed = Math.max(0, WINDOW_LETTER_FAMILIES.indexOf(family));
+  const rand = makeLcg(0xc17b0011 + familySeed * 0x9e37);
   for (let by = 0; by < WINDOW_TILE_BAYS_Y; by++) {
     for (let bx = 0; bx < WINDOW_TILE_BAYS_X; bx++) {
       const x0 = bx * bayW;
@@ -325,6 +358,17 @@ function createWindowTexture() {
       const dark = rand() < 0.25;
       ctx.fillStyle = dark ? '#2c2c2c' : '#dcdcdc';
       ctx.fillRect(x0 + bayW * 0.2, y0 + bayH * 0.2, bayW * 0.6, bayH * 0.56);
+      if (family) {
+        // The letter is CUT OUT of the lit pane rather than drawn on the dark
+        // wall. Drawn, a thin glyph replaces a solid lit rectangle with a few
+        // strokes and the whole facade goes dark — photographed, buildings
+        // stopped reading as lit at all. Cut out, the pane keeps its brightness
+        // and the family shows as the shape of its glazing bars.
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.fillText(family, x0 + bayW * 0.5, y0 + bayH * 0.48);
+        ctx.globalCompositeOperation = 'source-over';
+        continue;
+      }
       // Center mullion splits each window into two panes.
       ctx.fillStyle = '#101010';
       ctx.fillRect(x0 + bayW * 0.48, y0 + bayH * 0.2, bayW * 0.04, bayH * 0.56);
@@ -733,21 +777,84 @@ function antennaHeightCutoff(buildings) {
  *   stats: {buildingTriangles: number, storefrontTriangles: number, roadTriangles: number, signCount: number, antennaCount: number, dressingTriangles: number}
  * }}
  */
+/**
+ * How much of a building face survives the fog at any distance (CW-24).
+ *
+ * The fog fades to BLACK at 260 m, and only EXACT black reads as an empty
+ * cell (the CW-1 finding), so every tower past the fog was being deleted from
+ * the picture rather than pushed into the distance — the middle of the frame
+ * came out as a void while the bake holds real geometry out to 707 m.
+ *
+ * Clamping the fog factor leaves this fraction of the lit surface behind at
+ * any distance, so a far tower is a dim silhouette instead of a hole. Only
+ * the BUILDINGS get this: ground, roads and curbs must still vanish, because
+ * a dim carpet across the lower half of the frame is the recorded round-1
+ * failure and perspective stacks every road between here and the horizon into
+ * a few rows of cells.
+ */
+const FAR_SILHOUETTE_KEEP = 0.14;
+
+/**
+ * Give a material a fog FLOOR: it fogs normally with distance, then stops.
+ *
+ * three.js has no such knob, so this rewrites the stock fog chunk. The stock
+ * chunk computes a fog factor and mixes to the fog colour; this one clamps
+ * that factor first. Both fog kinds are handled because the chunk is replaced
+ * whole and the scene's fog kind is not this function's business to assume.
+ *
+ * @param {import('three').Material} material
+ * @param {number} [keep] - fraction of the surface that survives at any range
+ */
+function applyFarSilhouetteFog(material, keep = FAR_SILHOUETTE_KEEP) {
+  const maxFactor = Math.max(0, Math.min(1, 1 - keep));
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uMaxFogFactor = { value: maxFactor };
+    // Kept reachable so the floor can be measured and tuned against a live
+    // frame: writing the uniform takes effect on the next draw, where
+    // changing the constant would mean a rebuild and a different session.
+    material.userData.maxFogFactor = shader.uniforms.uMaxFogFactor;
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <fog_pars_fragment>',
+        '#include <fog_pars_fragment>\nuniform float uMaxFogFactor;'
+      )
+      .replace(
+        '#include <fog_fragment>',
+        `#ifdef USE_FOG
+          #ifdef FOG_EXP2
+            float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
+          #else
+            float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );
+          #endif
+          fogFactor = min( fogFactor, uMaxFogFactor );
+          gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );
+        #endif`
+      );
+  };
+  // Materials that compile differently must not share a cached program.
+  material.customProgramCacheKey = () => `farSilhouette:${maxFactor}`;
+}
+
 export function buildCityGroup(model) {
   const group = new Group();
   group.name = 'ascii-city';
   const disposables = [];
 
-  const windowTexture = createWindowTexture();
+  // CW-25: one window texture per letter family. Painted at runtime, so eight
+  // facade looks cost nothing in the bundle.
+  const windowTextures = WINDOW_LETTER_FAMILIES.map((f) =>
+    createWindowTexture(f)
+  );
   const storefrontTexture = createStorefrontTexture();
   const groundTexture = createGroundTexture();
-  for (const t of [windowTexture, storefrontTexture, groundTexture]) {
+  for (const t of [...windowTextures, storefrontTexture, groundTexture]) {
     if (t) disposables.push(t);
   }
 
-  // Buildings — one merged, vertex-tinted, window-textured mesh, dressed with
-  // the CW-18 signs and rooftop masts.
-  const buildingGeoms = [];
+  // Buildings — merged, vertex-tinted, window-textured meshes, dressed with
+  // the CW-18 signs and rooftop masts. One mesh per letter family (CW-25):
+  // the texture is per-material, so a facade look means a mesh to carry it.
+  const buildingGeoms = WINDOW_LETTER_FAMILIES.map(() => []);
   const storefrontGeoms = [];
   const signOut = { plates: [], faces: [] };
   const roadIndex = makePointGrid(SIGN_ROAD_CELL_M);
@@ -765,7 +872,9 @@ export function buildCityGroup(model) {
     const tint = buildingTint(index, building.name);
     const geom = extrudeBuilding(building, tint);
     if (!geom) return;
-    buildingGeoms.push(geom);
+    // The same hash that fixes a building's colour fixes its facade, so a
+    // tower keeps both for as long as the extract does.
+    buildingGeoms[h % WINDOW_LETTER_FAMILIES.length].push(geom);
 
     // Grounded buildings tall enough to have an upstairs get the lit
     // storefront strip; elevated parts (skybridges) do not.
@@ -859,21 +968,27 @@ export function buildCityGroup(model) {
   });
 
   let buildingTriangles = 0;
-  let buildingsMat = null;
-  if (buildingGeoms.length > 0) {
-    const merged = mergeGeometries(buildingGeoms, false);
-    for (const geom of buildingGeoms) geom.dispose();
-    buildingsMat = new MeshLambertMaterial({
+  // One entry per family that actually got buildings; every mesh keeps the
+  // name 'buildings', which is what the surface-class pass (CW-23) and the
+  // map-view swap below both key on.
+  const buildingMats = [];
+  buildingGeoms.forEach((geoms, familyIndex) => {
+    if (geoms.length === 0) return;
+    const merged = mergeGeometries(geoms, false);
+    for (const geom of geoms) geom.dispose();
+    const material = new MeshLambertMaterial({
       color: 0xffffff,
-      map: windowTexture ?? null,
+      map: windowTextures[familyIndex] ?? null,
       vertexColors: true,
     });
-    const mesh = new Mesh(merged, buildingsMat);
+    applyFarSilhouetteFog(material);
+    const mesh = new Mesh(merged, material);
     mesh.name = 'buildings';
     group.add(mesh);
-    disposables.push(merged, buildingsMat);
-    buildingTriangles = merged.getAttribute('position').count / 3;
-  }
+    disposables.push(merged, material);
+    buildingMats.push({ material, texture: windowTextures[familyIndex] });
+    buildingTriangles += merged.getAttribute('position').count / 3;
+  });
 
   let storefrontTriangles = 0;
   if (storefrontGeoms.length > 0) {
@@ -1021,9 +1136,9 @@ export function buildCityGroup(model) {
       }
       if (curbMesh) curbMesh.visible = !isMap;
       for (const mesh of dressingMeshes) mesh.visible = !isMap;
-      if (buildingsMat) {
-        buildingsMat.map = isMap ? null : (windowTexture ?? null);
-        buildingsMat.needsUpdate = true;
+      for (const { material, texture } of buildingMats) {
+        material.map = isMap ? null : (texture ?? null);
+        material.needsUpdate = true;
       }
       groundMat.map = isMap ? null : (groundTexture ?? null);
       if (!groundTexture || isMap) groundMat.color.setHex(0x000000);

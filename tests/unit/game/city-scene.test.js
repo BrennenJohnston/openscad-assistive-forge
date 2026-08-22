@@ -742,3 +742,137 @@ describe('buildCityGroup — signs and rooftop masts (CW-18)', () => {
     b.dispose()
   })
 })
+
+describe('buildCityGroup — CW-24 the far city', () => {
+  /**
+   * The fog fades to BLACK, and only exact black reads as an empty cell, so
+   * every tower past 260 m was being deleted from the picture rather than
+   * pushed into the distance. Buildings now keep a floor of their own tone at
+   * any range; everything else must still vanish, because a dim carpet across
+   * the lower half of the frame is the recorded round-1 failure.
+   */
+  const shaderFor = (material) => {
+    const shader = {
+      uniforms: {},
+      fragmentShader:
+        '#include <fog_pars_fragment>\nvoid main(){\n#include <fog_fragment>\n}',
+    }
+    material.onBeforeCompile(shader)
+    return shader
+  }
+
+  it('gives the buildings a fog floor, and nothing else one', () => {
+    const { group, dispose } = buildCityGroup(model())
+
+    const buildings = group.children.find((c) => c.name === 'buildings')
+    expect(typeof buildings.material.onBeforeCompile).toBe('function')
+
+    for (const name of ['ground', 'roads', 'curbs']) {
+      const mesh = group.children.find((c) => c.name === name)
+      if (!mesh) continue
+      // An untouched material has three.js's own empty hook.
+      const patched = shaderFor(mesh.material)
+      expect(
+        patched.uniforms.uMaxFogFactor,
+        `${name} must keep the stock fog and fade to black`
+      ).toBeUndefined()
+    }
+
+    dispose()
+  })
+
+  it('clamps the fog factor below one, so far faces keep some tone', () => {
+    const { group, dispose } = buildCityGroup(model())
+    const buildings = group.children.find((c) => c.name === 'buildings')
+    const shader = shaderFor(buildings.material)
+
+    expect(shader.uniforms.uMaxFogFactor).toBeDefined()
+    const max = shader.uniforms.uMaxFogFactor.value
+    // Exactly 1 would be the stock fog: fully faded, i.e. exactly black,
+    // i.e. an empty cell — the whole defect this release exists to fix.
+    expect(max).toBeGreaterThan(0)
+    expect(max).toBeLessThan(1)
+    // The floor is a silhouette, not a haze: most of the fade must survive.
+    expect(max).toBeGreaterThan(0.5)
+
+    expect(shader.fragmentShader).toContain('uniform float uMaxFogFactor;')
+    expect(shader.fragmentShader).toContain('min( fogFactor, uMaxFogFactor )')
+    // The clamp has to come BEFORE the mix, or it changes nothing.
+    expect(shader.fragmentShader.indexOf('min( fogFactor')).toBeLessThan(
+      shader.fragmentShader.indexOf('mix( gl_FragColor.rgb, fogColor')
+    )
+
+    dispose()
+  })
+
+  it('keeps a distinct program cache key so the patch cannot be shared away', () => {
+    const { group, dispose } = buildCityGroup(model())
+    const buildings = group.children.find((c) => c.name === 'buildings')
+    expect(typeof buildings.material.customProgramCacheKey).toBe('function')
+    expect(buildings.material.customProgramCacheKey()).toContain(
+      'farSilhouette'
+    )
+    dispose()
+  })
+})
+
+describe('buildCityGroup — CW-25 letter-family facades', () => {
+  it('splits the buildings into one mesh per facade family', () => {
+    const { group, dispose } = buildCityGroup(model())
+    const meshes = group.children.filter((c) => c.name === 'buildings')
+    // The texture is a property of the material, so a facade look needs a
+    // mesh to carry it. Every one of them keeps the name the surface-class
+    // pass and the map-view swap both key on.
+    expect(meshes.length).toBeGreaterThan(1)
+    // Textures are painted on a canvas, which this environment does not have,
+    // so they all come back null here. What CAN be asserted without a canvas
+    // is that each family got its own material to hang a texture on.
+    const materials = meshes.map((m) => m.material)
+    expect(new Set(materials).size, 'two families share a material').toBe(
+      materials.length
+    )
+    const maps = materials.map((m) => m.map).filter(Boolean)
+    expect(new Set(maps).size, 'two families share a texture').toBe(maps.length)
+    dispose()
+  })
+
+  it('keeps every building, and counts them all exactly once', () => {
+    const { group, stats, dispose } = buildCityGroup(model())
+    const meshes = group.children.filter((c) => c.name === 'buildings')
+    const tris = meshes.reduce(
+      (n, m) => n + m.geometry.getAttribute('position').count / 3,
+      0
+    )
+    // Splitting geometry across meshes must not lose or duplicate any of it.
+    expect(tris).toBe(stats.buildingTriangles)
+    expect(tris).toBeGreaterThan(0)
+    dispose()
+  })
+
+  it('gives a building the same facade every time the city is built', () => {
+    const a = buildCityGroup(model())
+    const b = buildCityGroup(model())
+    const shape = (r) =>
+      r.group.children
+        .filter((c) => c.name === 'buildings')
+        .map((m) => m.geometry.getAttribute('position').count)
+    // Facade choice rides the same hash as the colour, so a tower keeps both
+    // for as long as the extract does.
+    expect(shape(a)).toEqual(shape(b))
+    a.dispose()
+    b.dispose()
+  })
+
+  it('strips the facade textures in map view and puts them back', () => {
+    const { group, setMapView, dispose } = buildCityGroup(model())
+    const meshes = group.children.filter((c) => c.name === 'buildings')
+    const before = meshes.map((m) => m.material.map)
+
+    setMapView(true)
+    for (const m of meshes) expect(m.material.map).toBeNull()
+
+    setMapView(false)
+    expect(meshes.map((m) => m.material.map)).toEqual(before)
+    dispose()
+  })
+})
