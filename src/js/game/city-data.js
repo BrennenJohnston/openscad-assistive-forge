@@ -290,27 +290,6 @@ export function signedArea(pts) {
   return sum / 2;
 }
 
-/**
- * Parse a city extract into renderer-ready data.
- *
- * Accepts either raw Overpass `out tags geom` JSON ({elements: [...]}) or
- * the wrapper written by scripts/bake-city-extract.mjs ({format, center,
- * elements, ...}). A center is required from the wrapper or options.
- *
- * @param {Object} extract - Overpass JSON or baked wrapper
- * @param {Object} [options]
- * @param {{lat:number,lon:number}} [options.center] - projection center
- *   (overrides the wrapper's)
- * @returns {{
- *   center: {lat:number,lon:number},
- *   attribution: string,
- *   buildings: Array<{outer: Array<[number,number]>, holes: Array<Array<[number,number]>>, heightM: number, minHeightM: number, name: (string|undefined)}>,
- *   roads: Array<{points: Array<[number,number]>, widthM: number, kind: string}>,
- *   trees: Array<[number,number]>,
- *   boundsM: {minX:number, minY:number, maxX:number, maxY:number},
- *   stats: {buildingCount:number, roadCount:number, treeCount:number, droppedRings:number, droppedElements:number}
- * }}
- */
 /** Axis-aligned bounds of a projected ring, for the part-host prefilter. */
 function ringBounds(ring) {
   let minX = Infinity;
@@ -356,6 +335,27 @@ function ringCentroid(ring) {
   return [sx / ring.length, sy / ring.length];
 }
 
+/**
+ * Parse a city extract into renderer-ready data.
+ *
+ * Accepts either raw Overpass `out tags geom` JSON ({elements: [...]}) or
+ * the wrapper written by scripts/bake-city-extract.mjs ({format, center,
+ * elements, ...}). A center is required from the wrapper or options.
+ *
+ * @param {Object} extract - Overpass JSON or baked wrapper
+ * @param {Object} [options]
+ * @param {{lat:number,lon:number}} [options.center] - projection center
+ *   (overrides the wrapper's)
+ * @returns {{
+ *   center: {lat:number,lon:number},
+ *   attribution: string,
+ *   buildings: Array<{outer: Array<[number,number]>, holes: Array<Array<[number,number]>>, heightM: number, minHeightM: number, name: (string|undefined), parts: Array<Object>, partsAreMass: boolean, roof: (Object|null)}>,
+ *   roads: Array<{points: Array<[number,number]>, widthM: number, kind: string, name: (string|undefined)}>,
+ *   trees: Array<[number,number]>,
+ *   boundsM: {minX:number, minY:number, maxX:number, maxY:number},
+ *   stats: {buildingCount:number, roadCount:number, treeCount:number, partCount:number, orphanParts:number, droppedRings:number, droppedElements:number}
+ * }}
+ */
 export function parseCityExtract(extract, options = {}) {
   const center = options.center ?? extract?.center;
   if (!center || !Number.isFinite(center.lat) || !Number.isFinite(center.lon)) {
