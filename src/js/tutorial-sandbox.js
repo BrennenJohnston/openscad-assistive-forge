@@ -2238,7 +2238,7 @@ function showTutorialResumeDialog(stepIndex, totalSteps) {
     modal.setAttribute('aria-labelledby', 'tutorialResumeTitle');
     modal.setAttribute('aria-describedby', 'tutorialResumeMessage');
     modal.dataset.testid = 'tutorial-resume-dialog';
-    modal.style.zIndex = '10005';
+    modal.style.setProperty('z-index', 'var(--z-index-tutorial-dialog)');
 
     modal.innerHTML = `
       <div class="preset-modal-content confirm-modal-content">
@@ -2297,7 +2297,7 @@ function showTutorialErrorDialog(message) {
     modal.setAttribute('aria-labelledby', 'tutorialErrorTitle');
     modal.setAttribute('aria-describedby', 'tutorialErrorMessage');
     modal.dataset.testid = 'tutorial-error-dialog';
-    modal.style.zIndex = '10005';
+    modal.style.setProperty('z-index', 'var(--z-index-tutorial-dialog)');
 
     modal.innerHTML = `
       <div class="preset-modal-content confirm-modal-content">
@@ -2364,7 +2364,7 @@ function showTutorialModeChoiceDialog(tutorial) {
     modal.setAttribute('aria-labelledby', 'tutorialModeChoiceTitle');
     modal.setAttribute('aria-describedby', 'tutorialModeChoiceMessage');
     modal.dataset.testid = 'tutorial-mode-choice-dialog';
-    modal.style.zIndex = '10005';
+    modal.style.setProperty('z-index', 'var(--z-index-tutorial-dialog)');
 
     modal.innerHTML = `
       <div class="preset-modal-content confirm-modal-content">
@@ -4408,10 +4408,21 @@ function adjustTutorialZIndex(targetElement) {
   const rootStyles = getComputedStyle(document.documentElement);
   const baseBackdrop =
     parseInt(rootStyles.getPropertyValue('--z-index-tutorial-backdrop'), 10) ||
-    9998;
+    10005;
 
   let maxZ = 0;
   const collectZ = (el) => {
+    // D-67 (UF-36). The caller adds .tutorial-target-highlight one line before
+    // calling this, and that class elevates the target to
+    // --z-index-tutorial-highlight. Reading it back made the overlay measure
+    // its own work and climb above its own head on EVERY highlighted step, not
+    // just the awkward ones: MEASURED on the Clear Cache step before the fix,
+    // backdrop 10002 / spotlight 10003 / panel 10004 on a page whose real
+    // ancestors all sit below 950 - and a veil at 10003 is what buried the
+    // dialog at --z-index-modal. The overlay now starts above the whole
+    // highlight family by token, so this function is left with the job it was
+    // named for: genuinely high-z ancestors in the page.
+    if (el.classList.contains('tutorial-target-highlight')) return;
     const zIndex = parseInt(getComputedStyle(el).zIndex, 10);
     if (!Number.isNaN(zIndex)) {
       maxZ = Math.max(maxZ, zIndex);

@@ -92,11 +92,12 @@
 
   /* Z-Index Scale
    * CAUTION: The processing overlay (.processing-overlay) uses a hardcoded
-   * z-index: 10000 in components.css, placing it at the same level as the
-   * tutorial panel. Because modals sit at z: 1000, any overlay shown while
-   * a modal is open will cover the modal's buttons. Always gate overlay
-   * display behind waitForFirstVisitAcceptance() in JS. See the
-   * "FIRST-VISIT GATE" comment block in src/main.js. */
+   * z-index: 10000 in components.css, level with --z-index-app-overlay.
+   * Because modals sit at z: 1000, any overlay shown while a modal is open
+   * will cover the modal's buttons. Always gate overlay display behind
+   * waitForFirstVisitAcceptance() in JS. See the "FIRST-VISIT GATE" comment
+   * block in src/main.js. The tutorial family sits above all of this, and
+   * stands down rather than paint over a dialog - see D-67 below. */
   --z-index-base: 1;
   --z-index-sticky: 10;
   --z-index-dropdown: 100;
@@ -107,10 +108,42 @@
   --z-index-nudge-spotlight: 960;
   --z-index-modal: 1000;
   --z-index-skip-link: 9999;
-  --z-index-tutorial-backdrop: 9998;
-  --z-index-tutorial-spotlight: 9999;
-  --z-index-tutorial-panel: 10000;
-  --z-index-tutorial-minimized: 10000;
+  /* Full-screen app states that are not the tutorial but used to borrow its
+     panel token: the memory banner and the WASM loading overlay. The same
+     value they have always had; they simply stopped riding a name that is
+     about to mean something else. */
+  --z-index-app-overlay: 10000;
+  /* D-67 (UF-36). The tutorial family, in the order it paints.
+   *
+   * The elevations from --z-index-tutorial-highlight down were bare numbers in
+   * components.css and in tutorial-sandbox.js, against the house
+   * no-hardcoded-z-index rule.
+   *
+   * The overlay's own backdrop token moved from 9998 to 10005, and that is the
+   * substance of D-67 rather than a renumbering. `.tutorial-overlay` is a
+   * stacking context, so the value on IT - not the panel's inner z - is what
+   * decides whether the tour card can be reached over a highlighted target
+   * sitting at 10001 in the root context. At 9998 it could not, and the engine
+   * papered over that at runtime: adjustTutorialZIndex read the highlight z
+   * back off its own target and re-raised the whole overlay above it on EVERY
+   * step. That is how the veil arrived at 10003, painting over dialogs at
+   * --z-index-modal. Stating the floor here means the escalation is left to do
+   * only its real job - genuinely high-z ancestors in the page - and the
+   * painted order is unchanged.
+   *
+   * MEASURED before and after on the welcome tour: veil above the ring, card
+   * above both, the tour's own dialogs above the card, the Features Guide step
+   * identical. */
+  --z-index-tutorial-highlight: 10001;
+  --z-index-tutorial-highlight-modal: 10002;
+  --z-index-tutorial-guide-modal: 10003;
+  --z-index-tutorial-guide-content: 10004;
+  --z-index-tutorial-backdrop: 10005;
+  --z-index-tutorial-spotlight: 10006;
+  --z-index-tutorial-panel: 10007;
+  --z-index-tutorial-minimized: 10007;
+  --z-index-tutorial-dialog: 10008;
+  --z-index-tutorial-panel-over-modal: 10009;
 
   /* Drawer Dimensions */
   --drawer-collapsed-width: 48px;

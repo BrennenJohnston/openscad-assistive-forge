@@ -2739,13 +2739,23 @@ async function initApp() {
   //   ┌──────────────────────────────────────────────────────────────────┐
   //   │  Z-INDEX STACK (highest on top)                                 │
   //   │                                                                 │
+  //   │  z: 10009  Tour card over the Features Guide                    │
+  //   │  z: 10008  The tour's own dialogs (resume / error / mode)       │
+  //   │  z: 10007  Tutorial panel + pill (--z-index-tutorial-panel)     │
+  //   │  z: 10006  Tutorial veil       (--z-index-tutorial-spotlight)   │
+  //   │  z: 10005  Tutorial overlay    (--z-index-tutorial-backdrop)    │
+  //   │  z: 10001..10004  Tutorial highlight family (D-67 tokens)       │
   //   │  z: 10000  Processing overlay  (.processing-overlay)            │
-  //   │  z: 10000  Tutorial panel      (--z-index-tutorial-panel)       │
-  //   │  z:  9999  Skip-link / Tutorial spotlight                       │
+  //   │  z: 10000  Memory banner / WASM overlay (--z-index-app-overlay) │
+  //   │  z:  9999  Skip-link                                            │
   //   │  z:  1000  Modals              (--z-index-modal)                │
   //   │  z:   950  Modal backdrop      (--z-index-modal-backdrop)       │
   //   │  z:   900  Drawers             (--z-index-drawer)               │
   //   └──────────────────────────────────────────────────────────────────┘
+  //
+  // A tutorial layer above a modal is NOT a licence to paint over one: while
+  // a user-opened dialog is on screen the tour stands down entirely (D-61,
+  // Q-66). See applyDialogStandDown in tutorial-sandbox.js.
   //
   // INVARIANT: The processing overlay (z: 10000) MUST NEVER be shown while
   // the first-visit modal (z: 1000) is open. Because the overlay sits

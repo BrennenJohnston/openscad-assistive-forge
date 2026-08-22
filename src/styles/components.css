@@ -9146,7 +9146,7 @@ button.file-nav-folder-row {
   top: 0;
   left: 0;
   right: 0;
-  z-index: var(--z-index-tutorial-panel);
+  z-index: var(--z-index-app-overlay);
   padding: var(--space-sm) var(--space-md);
   display: flex;
   align-items: center;
@@ -9677,7 +9677,7 @@ button.file-nav-folder-row {
 .wasm-loading-overlay {
   position: fixed;
   inset: 0;
-  z-index: var(--z-index-tutorial-panel);
+  z-index: var(--z-index-app-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -10223,7 +10223,7 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-panel {
   top: auto !important;
   transform: translateX(-50%) !important;
   max-width: min(400px, calc(100vw - var(--space-lg) * 2)) !important;
-  z-index: 10006 !important;
+  z-index: var(--z-index-tutorial-panel-over-modal) !important;
   box-shadow:
     0 -4px 20px rgba(0, 0, 0, 0.3),
     0 0 0 3px var(--color-accent) !important;
@@ -11553,7 +11553,7 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   outline: 3px solid var(--color-focus) !important;
   outline-offset: 4px !important;
   position: relative;
-  z-index: 10001;
+  z-index: var(--z-index-tutorial-highlight);
   animation: tutorialTargetPulse 2s ease-in-out infinite;
 }
 
@@ -11564,7 +11564,7 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 
 /* Ensure modals can appear above tutorial overlay when spotlighted */
 .tutorial-target-highlight.modal {
-  z-index: 10002 !important;
+  z-index: var(--z-index-tutorial-highlight-modal) !important;
 }
 
 /* Features Guide Modal base styles */
@@ -11583,12 +11583,12 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 
 /* When Features Guide modal is open during tutorial, bring it above the overlay */
 #featuresGuideModal:not(.hidden) {
-  z-index: 10003;
+  z-index: var(--z-index-tutorial-guide-modal);
 }
 
 /* When the Features Guide content is highlighted by tutorial */
 #featuresGuideModal .modal-content.tutorial-target-highlight {
-  z-index: 10004 !important;
+  z-index: var(--z-index-tutorial-guide-content) !important;
   opacity: 1 !important;
   background: var(--color-bg-primary) !important;
   box-shadow:
