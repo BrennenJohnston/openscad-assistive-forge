@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The city file format is written down, and so is where this is going** (CW-28) - two new
+  documents. The first describes the city extract format field by field, so that someone who has
+  never seen this project could write a valid city file, or write a second program that reads one.
+  The second records two things the City Walk is deliberately built to grow into: letting people
+  search for an address and walk there, and feeding tactile maps for readers who cannot see the
+  screen. The roadmap is a record of intent and of the seams already in the code, not a schedule -
+  and it states plainly that when tactile work does begin, every dimension a hand reads is a
+  safety value that needs a signed-off number, with no exceptions
 - **The status line knows which street you are on** (CW-27) - walk down a street and the line at
   the top now reads "on 4th Avenue", changing as you turn onto another one. If you are not
   actually on a street it says "near" the closest one, and if there is nothing close it says

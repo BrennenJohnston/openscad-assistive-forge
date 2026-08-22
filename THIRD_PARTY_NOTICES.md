@@ -244,10 +244,13 @@ and spacing conventions behind them
 **"A Walkable ASCII Cyberpunk City in One HTML File" (Grow Now! Games)**  
 **License**: none — closed source, credited by courtesy  
 **Source**: https://www.youtube.com/watch?v=3YtygAx_C6A  
-**Usage**: The concept that prompted this work. Its published video and
+**Also**: https://youtu.be/UCKEDWowc0o (later update video)  
+**Usage**: The concept that prompted this work. Its published videos and
 screenshots were studied for feel — the fine glyph grid, the green tree band
 at street level, the small coloured accents along the curb. No source code was
-available, none was sought, and no code or asset from it is included
+available, none was sought, and no code or asset from it is included.
+Everything here is a clean-room reimplementation of ideas explained publicly
+in those videos
 
 ### Three.js Examples Modules (MIT)
 

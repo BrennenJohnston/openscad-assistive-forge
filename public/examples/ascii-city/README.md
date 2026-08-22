@@ -21,6 +21,14 @@ redistributed under the ODbL. Each file carries its own `attribution`,
 `license`, `center`, `radiusM`, and `generated` fields. The game displays
 the attribution wherever the data is shown.
 
+## The file format
+
+The wrapper fields, the element shapes, the full kept-tag list and the
+versioning promise are written up in
+[docs/ASCII_CITY_EXTRACT_SCHEMA.md](../../../docs/ASCII_CITY_EXTRACT_SCHEMA.md).
+That document is the contract; this one is the provenance of the four files
+that ship here.
+
 ## Regenerating or adding a city
 
 ```
