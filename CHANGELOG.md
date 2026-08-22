@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The streets have people, parked traffic and working signals** (CW-19) - the city was
+  furnished but empty: nothing stood on the pavements and nothing sat in the road. It now has
+  standing figures built from a real outline - head, shoulders, body, arms and legs, most of them
+  frozen mid-step, and about one in six walking a dog - along with cars stopped in the travel lanes
+  facing the way they would be going, and traffic lights at the junctions where three or more
+  streets actually meet. Nothing moves except the signals, which is deliberate: this city is
+  deliberately held still, and a traffic light that never changes is not a traffic light. The
+  signals run in two groups so that when one street goes green the cross street is red, every
+  colour holds for at least two seconds, and they stop entirely - holding a real colour rather than
+  going dark - for anyone who has asked for reduced motion. They also only ask the screen to
+  redraw when a light actually changes, roughly once every two seconds, rather than every frame.
+  You can walk around the people, the signal posts and the parked cars; the cars stopped in the
+  traffic lanes are scenery you pass through, because fencing off the lanes would turn the street
+  into a maze. How many cars a street gets comes from what kind of street it is, which is the
+  honest limit of what open map data can say - live traffic information is not freely available -
+  and the code is arranged so a better source can be dropped in one place. Per city: 101 signals
+  and 1,419 stopped cars in Seattle, 87 and 908 in Denver, 46 and 887 in Albuquerque, 52 and 539
+  in Burnaby
+
 - **Every surface speaks in its own characters** (CW-23) - the City Walk picked each character by
   how BRIGHT a patch of the screen was and nothing else, so a stretch of pavement and the side of a
   tower that happened to be equally bright came out looking like the same material. The game now
