@@ -1722,9 +1722,9 @@ test.describe('ASCII City Walk — C and T reach the toggles (CW-Q15)', () => {
     await expect(announcer(page)).toHaveText('Theme: Light')
 
     // The game's guard drops every ctrl/meta/alt combo before reaching its
-    // own keys. MEASURED at this HEAD: the app's Ctrl+T and Ctrl+H are
-    // themselves suppressed while the modal layer is open, so nothing at
-    // all moves - and above all the GAME never answers a modified combo.
+    // own keys. The app's own chords are Ctrl+Shift+T and Ctrl+Shift+H — the
+    // unshifted pair below was never bound to anything — so nothing at all
+    // moves, and above all the GAME never answers a modified combo.
     await page.keyboard.press('Control+KeyT')
     await page.waitForTimeout(400)
     await expect(page.locator('html')).toHaveAttribute(
@@ -2128,5 +2128,290 @@ test.describe('ASCII City Walk — accessibility', () => {
       .include('#cityWalkLayer')
       .analyze()
     expectOnlyAllowedViolations(inGameResults)
+  })
+})
+
+/**
+ * CW-22: the composite paint path is now THE paint path, at every character
+ * size, and it reaches the main app's Alt View as well as the game. That is
+ * only allowed because it paints the same pixels the per-cell blit path did —
+ * so this suite owns the proof, not a one-off bench script.
+ *
+ * The reference here is written out by hand rather than taken from the module,
+ * so the test cannot pass by comparing the code against itself.
+ */
+test.describe('ASCII City Walk — composite paint parity (CW-22)', () => {
+  /** charW is what used to choose the path; 4 and below was composited. */
+  const SIZES = [
+    { fontSizePx: 3, charW: 2, charH: 4 }, // the game's 10% floor
+    { fontSizePx: 7, charW: 4, charH: 9 }, // the old gate's edge
+    { fontSizePx: 10, charW: 5, charH: 12 }, // the shipped 50% default
+    { fontSizePx: 12, charW: 6, charH: 15 }, // the slowest size before CW-22
+    { fontSizePx: 18, charW: 9, charH: 22 }, // the game's 100%
+    { fontSizePx: 25, charW: 12, charH: 30 }, // the preview slider's ceiling
+  ]
+
+  test('composited frames match per-cell blits exactly, at every size', async ({
+    page,
+  }) => {
+    test.setTimeout(90000)
+    await page.goto('/?hfm=unlock')
+    await expect(page.locator('#cityWalkCard')).toBeVisible({ timeout: 30000 })
+
+    const results = await page.evaluate(async (sizes) => {
+      const { buildGlyphAtlas, paintFrame, SPACE_INDEX, GLYPH_COUNT } =
+        await import('/src/js/_hfm-paint.js')
+      const fontFamily = "'Iosevka Term', ui-monospace, monospace"
+      const dpr = 1
+      const cols = 40
+      const rows = 20
+
+      // The FIRST getImageData on a 2D canvas reads back from a GPU-backed
+      // surface and can round a channel by one; the canvas is CPU-backed from
+      // then on. Warm every canvas before it is measured, or this comparison
+      // reports the readback rather than the painter.
+      const warm = (ctx) => ctx.getImageData(0, 0, 1, 1)
+
+      const out = []
+      for (const size of sizes) {
+        const { fontSizePx, charW, charH } = size
+        const atlas = buildGlyphAtlas({
+          fontFamily,
+          fontSizePx,
+          charW,
+          charH,
+          dpr,
+          color: '#00ff00',
+        })
+        const w = cols * charW * dpr
+        const h = rows * charH * dpr
+        const glyphs = new Int16Array(cols * rows)
+        for (let i = 0; i < glyphs.length; i++) {
+          // A deterministic mix that includes blank cells, which the painter
+          // must skip rather than paint as a space glyph.
+          glyphs[i] = i % 7 === 0 ? SPACE_INDEX : (i * 37) % GLYPH_COUNT
+        }
+
+        const composited = document.createElement('canvas')
+        composited.width = w
+        composited.height = h
+        const cctx = composited.getContext('2d')
+        warm(cctx)
+        paintFrame(cctx, glyphs, cols, rows, atlas, charW, charH, null, null, 0)
+
+        // The hand-written reference: one drawImage per non-blank cell.
+        const blitted = document.createElement('canvas')
+        blitted.width = w
+        blitted.height = h
+        const bctx = blitted.getContext('2d')
+        warm(bctx)
+        bctx.clearRect(0, 0, w, h)
+        const stepX = charW * dpr
+        const stepY = charH * dpr
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const idx = glyphs[r * cols + c]
+            if (idx === SPACE_INDEX) continue
+            bctx.drawImage(
+              atlas.canvas,
+              idx * atlas.cellW,
+              0,
+              atlas.cellW,
+              atlas.cellH,
+              (c * stepX) | 0,
+              (r * stepY) | 0,
+              atlas.cellW,
+              atlas.cellH
+            )
+          }
+        }
+
+        const da = cctx.getImageData(0, 0, w, h).data
+        const db = bctx.getImageData(0, 0, w, h).data
+        let differing = 0
+        let inked = 0
+        for (let i = 0; i < da.length; i += 4) {
+          if (da[i + 3] !== 0) inked++
+          if (
+            da[i] !== db[i] ||
+            da[i + 1] !== db[i + 1] ||
+            da[i + 2] !== db[i + 2] ||
+            da[i + 3] !== db[i + 3]
+          ) {
+            differing++
+          }
+        }
+
+        // Prove the comparison can see a difference at all: shift one cell's
+        // glyph and the same arithmetic must report a mismatch.
+        const broken = document.createElement('canvas')
+        broken.width = w
+        broken.height = h
+        const brctx = broken.getContext('2d')
+        warm(brctx)
+        const nudged = Int16Array.from(glyphs)
+        nudged[1] = ((nudged[1] + 5) % (GLYPH_COUNT - 1)) + 1
+        paintFrame(
+          brctx,
+          nudged,
+          cols,
+          rows,
+          atlas,
+          charW,
+          charH,
+          null,
+          null,
+          0
+        )
+        const dn = brctx.getImageData(0, 0, w, h).data
+        let brokenDiffering = 0
+        for (let i = 0; i < da.length; i += 4) {
+          if (
+            da[i] !== dn[i] ||
+            da[i + 1] !== dn[i + 1] ||
+            da[i + 2] !== dn[i + 2] ||
+            da[i + 3] !== dn[i + 3]
+          ) {
+            brokenDiffering++
+          }
+        }
+
+        out.push({
+          charW,
+          charH,
+          totalPixels: da.length / 4,
+          differing,
+          inked,
+          brokenDiffering,
+        })
+      }
+      return out
+    }, SIZES)
+
+    expect(results).toHaveLength(SIZES.length)
+    for (const r of results) {
+      // A blank frame would compare equal while proving nothing.
+      expect(r.inked, `charW ${r.charW} painted nothing`).toBeGreaterThan(0)
+      expect(
+        r.differing,
+        `charW ${r.charW}: ${r.differing} of ${r.totalPixels} pixels differ ` +
+          `between the composited frame and the per-cell blits`
+      ).toBe(0)
+      expect(
+        r.brokenDiffering,
+        `charW ${r.charW}: the comparison cannot detect a changed glyph`
+      ).toBeGreaterThan(0)
+    }
+  })
+
+  test('palette cells composite from their own atlas, blit for blit', async ({
+    page,
+  }) => {
+    test.setTimeout(90000)
+    await page.goto('/?hfm=unlock')
+    await expect(page.locator('#cityWalkCard')).toBeVisible({ timeout: 30000 })
+
+    const result = await page.evaluate(async () => {
+      const { buildGlyphAtlas, paintFrame, SPACE_INDEX, GLYPH_COUNT } =
+        await import('/src/js/_hfm-paint.js')
+      const fontFamily = "'Iosevka Term', ui-monospace, monospace"
+      const dpr = 1
+      const charW = 6
+      const charH = 15
+      const cols = 30
+      const rows = 16
+      const palette = ['#00ff00', '#00ffff', '#ffff00', '#ff00ff', '#ffffff']
+      const atlases = palette.map((color) =>
+        buildGlyphAtlas({
+          fontFamily,
+          fontSizePx: 12,
+          charW,
+          charH,
+          dpr,
+          color,
+        })
+      )
+      const glyphs = new Int16Array(cols * rows)
+      const indices = new Int8Array(cols * rows)
+      for (let i = 0; i < glyphs.length; i++) {
+        glyphs[i] = i % 9 === 0 ? SPACE_INDEX : (i * 23) % GLYPH_COUNT
+        indices[i] = i % palette.length
+      }
+
+      const w = cols * charW * dpr
+      const h = rows * charH * dpr
+      const warm = (ctx) => ctx.getImageData(0, 0, 1, 1)
+
+      const a = document.createElement('canvas')
+      a.width = w
+      a.height = h
+      const actx = a.getContext('2d')
+      warm(actx)
+      paintFrame(
+        actx,
+        glyphs,
+        cols,
+        rows,
+        atlases[0],
+        charW,
+        charH,
+        null,
+        null,
+        0,
+        { indices, atlases }
+      )
+
+      const b = document.createElement('canvas')
+      b.width = w
+      b.height = h
+      const bctx = b.getContext('2d')
+      warm(bctx)
+      bctx.clearRect(0, 0, w, h)
+      const stepX = charW * dpr
+      const stepY = charH * dpr
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const cell = r * cols + c
+          const idx = glyphs[cell]
+          if (idx === SPACE_INDEX) continue
+          const src = atlases[indices[cell]] ?? atlases[0]
+          bctx.drawImage(
+            src.canvas,
+            idx * src.cellW,
+            0,
+            src.cellW,
+            src.cellH,
+            (c * stepX) | 0,
+            (r * stepY) | 0,
+            src.cellW,
+            src.cellH
+          )
+        }
+      }
+
+      const da = actx.getImageData(0, 0, w, h).data
+      const db = bctx.getImageData(0, 0, w, h).data
+      let differing = 0
+      const hues = new Set()
+      for (let i = 0; i < da.length; i += 4) {
+        if (da[i + 3] !== 0) hues.add(`${da[i]},${da[i + 1]},${da[i + 2]}`)
+        if (
+          da[i] !== db[i] ||
+          da[i + 1] !== db[i + 1] ||
+          da[i + 2] !== db[i + 2] ||
+          da[i + 3] !== db[i + 3]
+        ) {
+          differing++
+        }
+      }
+      return { differing, totalPixels: da.length / 4, distinctHues: hues.size }
+    })
+
+    // More than one hue proves the frame really used several palette atlases.
+    expect(result.distinctHues).toBeGreaterThan(1)
+    expect(
+      result.differing,
+      `${result.differing} of ${result.totalPixels} palette pixels differ`
+    ).toBe(0)
   })
 })

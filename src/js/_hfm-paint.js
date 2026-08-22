@@ -100,7 +100,7 @@ export function buildGlyphAtlas({
  * floor measures 8.99:1 after, high-contrast dark 19.43:1).
  *
  * Scope: the CALLER must opt in (the City Walk does; the preview's Alt View
- * does not), AND the cell must be at most _TINY_CELL_MAX_CSS_PX wide. The
+ * does not), AND the cell must be at most _TINY_BRIGHTNESS_MAX_CSS_PX wide. The
  * opt-in is what makes this game-only, and it is not decoration: Iosevka Term
  * advances at about half its size, so the preview slider's own 0.5 minimum
  * lands on a 7 px font and a 4 px cell — inside the width threshold. A width
@@ -112,7 +112,7 @@ export function buildGlyphAtlas({
  * @param {number} charW - character cell width in CSS px
  */
 function _restoreTinyGlyphBrightness(ctx, canvas, charW) {
-  if (charW > _TINY_CELL_MAX_CSS_PX) return;
+  if (charW > _TINY_BRIGHTNESS_MAX_CSS_PX) return;
 
   const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const px = img.data;
@@ -209,30 +209,43 @@ export function resizeOverlay(canvas, cssW, cssH, dpr, persistCanvas) {
 }
 
 // ---------------------------------------------------------------------------
-// Tiny-cell composite path (CW-12)
+// The composite paint path (CW-12, generalized in CW-22)
 // ---------------------------------------------------------------------------
-// At a few device pixels per character cell the per-cell ctx.drawImage() call
-// dominates the entire ASCII conversion — MEASURED at 271 ms of a 433 ms frame
-// (63%) with 238k cells, because the cost is per CALL, not per pixel. Composing
-// every glyph into one reusable buffer and handing the canvas a single
-// putImageData replaces ~238k canvas calls with ~1.9M typed-array writes.
+// The per-cell ctx.drawImage() call dominates the ASCII conversion — MEASURED
+// at 271 ms of a 433 ms frame (63%) with 238k cells, because the cost is per
+// CALL, not per pixel. Composing every glyph into one reusable buffer and
+// handing the canvas a single putImageData replaces those calls with typed-
+// array writes.
 //
-// Entered only when a character cell is at most _TINY_CELL_MAX_CSS_PX wide in
-// CSS pixels AND afterglow is off. The preview's Alt View CAN reach this at
-// its own 0.5 minimum (Iosevka Term advances at about half its size, so a 7 px
-// font is a 4 px cell) and that is fine on purpose: the two paths are
-// pixel-identical — 0 of 1,906,560 differed in an A/B at 30% and 20% — so the
-// preview gets the speed and none of the change. The brightness treatment,
-// which IS visible, is gated on a caller opt-in instead; see
-// _restoreTinyGlyphBrightness.
+// CW-12 shipped this for cells up to 4 CSS px wide, where the win was largest.
+// CW-22 measured the rest of the range with in-code stage timers and removed
+// the size gate altogether, because the blit path lost EVERYWHERE (Seattle,
+// same session, Intel Iris Xe, before -> after convert ms / rAF fps):
 //
-// The threshold is deliberately in CSS pixels, not device pixels: what makes
-// the old path expensive is the NUMBER of drawImage calls, and that follows
-// the cell count, which follows charW in CSS px. Gating on device px would
-// have switched the fast path off at 30% on a 2x display — exactly the
-// machines that need it — while every bench number was taken at dpr 1.
+//     50% (charW 5, the shipped default)  40.7 -> 17.5   42.3 -> 59.5   2.33x
+//     60% (charW 6)                       48.7 -> 15.6   37.6 -> 59.5   3.11x
+//     80% (charW 7)                       25.9 -> 13.0   51.8 -> 59.6   1.99x
+//    100% (charW 9)                       25.0 -> 12.9   51.3 -> 59.6   1.93x
+//
+// Cell COUNT is not what costs: 60% has fewer cells than 50% and was the
+// slowest size in the game, purely because it fell off this path. Above charW
+// ~12 the two paths converge to within noise, so there is no size worth gating
+// back to the blit path for. The blit path stays as the afterglow path (fade >
+// 0 composites the previous frame on top, which this one buffer cannot do) and
+// as the reference implementation the parity test measures against.
+//
+// The paths are pixel-identical, which is the only reason this is allowed to
+// reach the preview's Alt View as well: 40 of 40 full-frame comparisons across
+// two cities, mono and palette, charW 2 through 12, differed in 0 of ~1.6M
+// pixels on every channel (tests/e2e/ascii-city-walk.spec.js keeps this true).
+// The brightness treatment, which IS visible, is gated separately — it keeps
+// CW-12's 4 px scope, because widening it would brighten the game at its own
+// default size and, since the shape vectors are read from the brightened
+// atlas, change which glyph each cell picks. That is an art change, not a
+// paint optimization; see _restoreTinyGlyphBrightness.
 
-const _TINY_CELL_MAX_CSS_PX = 4;
+/** Brightness gate (CW-12 scope, deliberately NOT the paint gate). */
+const _TINY_BRIGHTNESS_MAX_CSS_PX = 4;
 
 /** One reusable frame buffer per overlay context, resized with the canvas. */
 const _frameBuffers = new WeakMap();
@@ -259,7 +272,7 @@ function _atlasPixels32(atlas) {
   return atlas._pixels32;
 }
 
-function _paintTinyCells(
+function _paintComposited(
   ctx,
   glyphIndices,
   cols,
@@ -377,8 +390,8 @@ export function paintFrame(
   const colorIndices = colorLayers?.indices ?? null;
   const colorAtlases = colorLayers?.atlases ?? null;
 
-  if (fade === 0 && charW <= _TINY_CELL_MAX_CSS_PX) {
-    _paintTinyCells(
+  if (fade === 0) {
+    _paintComposited(
       ctx,
       glyphIndices,
       cols,

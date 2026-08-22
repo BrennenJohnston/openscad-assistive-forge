@@ -25,6 +25,11 @@ function installCanvasMock() {
       canvas,
       _creationOpts: opts || {},
       _isSampler: false,
+      // A distinct non-zero tag per context, written into the red channel of
+      // that atlas's pixels so the painted frame carries the identity of the
+      // atlas each cell was drawn from (CW-22: cells are composited, not
+      // blitted, so the drawImage call log no longer records the source).
+      _ctxId: (allContexts.length % 200) + 1,
       font: '',
       textAlign: '',
       textBaseline: '',
@@ -65,16 +70,24 @@ function installCanvasMock() {
           }
         } else {
           // Atlas readback: alpha ramps with x so glyph vectors differ and
-          // a bright uniform cell maps to a non-space glyph.
+          // a bright uniform cell maps to a non-space glyph. Red carries this
+          // atlas's identity so painted cells can be traced back to it.
           for (let py = 0; py < h; py++) {
             for (let px = 0; px < w; px++) {
               const i = (py * w + px) * 4
+              data[i] = ctx._ctxId
               data[i + 3] = (px * 7) % 256
             }
           }
         }
         return { data }
       }),
+      createImageData: vi.fn((w, h) => ({
+        width: w,
+        height: h,
+        data: new Uint8ClampedArray(Math.max(1, w * h) * 4),
+      })),
+      putImageData: vi.fn(),
     }
     allContexts.push(ctx)
     return ctx
@@ -104,15 +117,29 @@ function createMockPreviewManager() {
   }
 }
 
-/** All 9-arg atlas-blit sources drawn onto the overlay context. */
-function blitSources() {
-  const sources = new Set()
+/**
+ * Which atlases the painted frame actually drew from.
+ *
+ * Before CW-22 this read the 9-arg drawImage call log. The composite path
+ * paints every cell into one buffer instead, so the source is recovered from
+ * the pixels themselves: each atlas stamps its own _ctxId into the red
+ * channel, and a painted cell carries that tag through untouched.
+ */
+function paintedAtlasIds() {
+  const ids = new Set()
   for (const ctx of allContexts) {
-    for (const call of ctx.drawImage.mock.calls) {
-      if (call.length === 9) sources.add(call[0])
+    for (const call of ctx.putImageData.mock.calls) {
+      const { data } = call[0]
+      for (let i = 0; i < data.length; i += 4) {
+        // The painter only writes non-transparent-black source pixels, so any
+        // non-zero quad here came from some atlas.
+        if (data[i] || data[i + 1] || data[i + 2] || data[i + 3]) {
+          if (data[i]) ids.add(data[i])
+        }
+      }
     }
   }
-  return sources
+  return ids
 }
 
 beforeEach(() => {
@@ -190,7 +217,7 @@ describe('initAltView palette mode', () => {
     api.enable()
     api.render()
 
-    const sources = blitSources()
+    const sources = paintedAtlasIds()
     // The red-left/cyan-right frame must route to BOTH palette atlases.
     expect(sources.size).toBeGreaterThanOrEqual(2)
 
@@ -207,7 +234,7 @@ describe('initAltView palette mode', () => {
     api.enable()
     api.render()
 
-    const sources = blitSources()
+    const sources = paintedAtlasIds()
     expect(sources.size).toBe(1)
 
     api.dispose()

@@ -39,6 +39,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The City Walk runs at full frame rate from its default size upwards** (CW-22) - the game draws
+  its picture by stamping one character at a time onto a canvas, and asking the canvas to draw
+  something costs about the same whether the thing is big or small. At the size the game starts at,
+  that stamping was over half of all the work in a frame. There was already a faster way in the code
+  - build the whole frame in memory and hand the canvas one finished picture - but it was only used
+  for characters 4 pixels wide and under, and the game starts at 5. Measured with timers inside the
+  converter, the faster way wins at every size, so the size limit is gone. At the default size a
+  conversion drops from 40.7 to 17.5 ms and the game goes from about 42 to 60 frames a second; at 60%
+  character size, which was the slowest setting in the whole game despite drawing fewer characters
+  than the default, from 48.7 to 15.6 ms and 38 to 60 frames a second; at the largest characters from
+  25.0 to 12.9 ms. Everything from 40% down was already using the faster way and is unchanged.
+  Nothing looks different, and that is checked rather than asserted: 40 full-frame comparisons across
+  two cities, monochrome and colour, at every character size from 2 to 12 pixels wide, found 0
+  differing pixels out of about 1.6 million on every colour channel, and the suite now carries that
+  comparison against a hand-written reference so it stays true. The main app's Alt View gets the same
+  speed-up and the same unchanged picture. The phosphor afterglow still draws character by character,
+  because layering the previous frame on top is the one thing a single buffer cannot do
+
 - **The retro colour palettes read as colour more of the time** (CW-Q11) - measured by counting the
   pixels the game actually paints, nearly half of a high-contrast street had no colour in it at all.
   Three changes cut that to about a quarter: the quantizer's chroma boost rises from 3.5 to 5.0,
