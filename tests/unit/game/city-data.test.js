@@ -956,3 +956,142 @@ describe('roofs resolve from tags, or stay flat (CW-26)', () => {
     ).toBe('across')
   })
 })
+
+describe('road names survive parsing (CW-27)', () => {
+  it('carries a named way through to the road record', async () => {
+    const { parseCityExtract } = await import(
+      '../../../src/js/game/city-data.js'
+    )
+    const center = { lat: 47.6062, lon: -122.3321 }
+    const model = parseCityExtract({
+      center,
+      elements: [
+        {
+          type: 'way',
+          id: 1,
+          tags: { highway: 'residential', name: 'Pike Street' },
+          geometry: [
+            { lat: 47.6062, lon: -122.3321 },
+            { lat: 47.6065, lon: -122.3321 },
+          ],
+        },
+        {
+          type: 'way',
+          id: 2,
+          tags: { highway: 'service' },
+          geometry: [
+            { lat: 47.607, lon: -122.3321 },
+            { lat: 47.6072, lon: -122.3321 },
+          ],
+        },
+      ],
+    })
+    expect(model.roads).toHaveLength(2)
+    // The bake kept this name all along; the parser used to drop it.
+    expect(model.roads[0].name).toBe('Pike Street')
+    // An unnamed way stays unnamed rather than inheriting anything.
+    expect(model.roads[1].name).toBeUndefined()
+  })
+})
+
+describe('the street index answers where you are (CW-27)', () => {
+  const load = () => import('../../../src/js/game/city-data.js')
+  // A cross: Main Street east-west along y=0, Cross Road north-south at x=0.
+  const roads = [
+    {
+      name: 'Main Street',
+      kind: 'residential',
+      points: [
+        [-100, 0],
+        [100, 0],
+      ],
+    },
+    {
+      name: 'Cross Road',
+      kind: 'residential',
+      points: [
+        [0, -100],
+        [0, 100],
+      ],
+    },
+    {
+      // Unnamed ways can never answer the question and are left out.
+      kind: 'service',
+      points: [
+        [-100, 6],
+        [100, 6],
+      ],
+    },
+  ]
+
+  it('names the street you are standing on', async () => {
+    const { buildStreetIndex } = await load()
+    const idx = buildStreetIndex(roads)
+    const hit = idx.nearest(50, 2, 30)
+    expect(hit.name).toBe('Main Street')
+    expect(hit.distM).toBeCloseTo(2, 5)
+  })
+
+  it('says nothing rather than naming a street too far away', async () => {
+    const { buildStreetIndex } = await load()
+    const idx = buildStreetIndex(roads)
+    expect(idx.nearest(50, 200, 30)).toBeNull()
+  })
+
+  it('leaves unnamed ways out of the index entirely', async () => {
+    const { buildStreetIndex } = await load()
+    const idx = buildStreetIndex(roads)
+    // Stand right on the unnamed service road: the answer is the named
+    // street 6 m away, never the way underfoot.
+    const hit = idx.nearest(50, 6, 30)
+    expect(hit.name).toBe('Main Street')
+  })
+
+  it('returns the runner-up so an intersection can be debounced', async () => {
+    const { buildStreetIndex } = await load()
+    const idx = buildStreetIndex(roads)
+    // Near the crossing both streets are close, and the caller needs to see
+    // the gap between them rather than only the winner.
+    const hits = idx.query(3, 2, 30)
+    const names = hits.map((h) => h.name)
+    expect(names).toContain('Main Street')
+    expect(names).toContain('Cross Road')
+    expect(hits[0].name).toBe('Main Street')
+    expect(hits[1].rank - hits[0].rank).toBeLessThan(4)
+  })
+
+  it('prefers the street to the cycletrack running beside it', async () => {
+    const { buildStreetIndex } = await load()
+    // The real Seattle case: the cycletrack is nearer, the street is what a
+    // player would say they are on.
+    const idx = buildStreetIndex([
+      { name: '4th Avenue', kind: 'primary', points: [[-100, 0], [100, 0]] },
+      {
+        name: '4th Avenue Cycletrack',
+        kind: 'cycleway',
+        points: [[-100, 4], [100, 4]],
+      },
+    ])
+    expect(idx.nearest(0, 5, 30).name).toBe('4th Avenue')
+  })
+
+  it('still lets a path win when you are genuinely on it', async () => {
+    const { buildStreetIndex } = await load()
+    const idx = buildStreetIndex([
+      { name: 'Far Street', kind: 'primary', points: [[-100, 40], [100, 40]] },
+      { name: 'Park Trail', kind: 'footway', points: [[-100, 0], [100, 0]] },
+    ])
+    expect(idx.nearest(0, 1, 60).name).toBe('Park Trail')
+  })
+
+  it('reports the true distance, not the ranking distance', async () => {
+    const { buildStreetIndex } = await load()
+    const idx = buildStreetIndex([
+      { name: 'Park Trail', kind: 'footway', points: [[-100, 0], [100, 0]] },
+    ])
+    const hit = idx.nearest(0, 3, 30)
+    // Ranked at 11 by the path penalty, but the player really is 3 m away
+    // and the announcement must not inherit the penalty.
+    expect(hit.distM).toBeCloseTo(3, 5)
+  })
+})

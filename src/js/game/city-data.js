@@ -513,6 +513,9 @@ export function parseCityExtract(extract, options = {}) {
         points,
         widthM: ROAD_WIDTHS_M[tags.highway] ?? DEFAULT_ROAD_WIDTH_M,
         kind: tags.highway,
+        // CW-27: the bake has always kept road names; this is where they
+        // were being dropped on the floor.
+        name: tags.name,
       });
     }
   }
@@ -948,4 +951,125 @@ export function buildRoadGraph(roads, options = {}) {
   }
 
   return { chains, nodes, intersections };
+}
+
+// CW-27. Street lookup runs on movement frames, so it is a grid rather than
+// a scan: 40 m cells, the same size the sign placer found workable, and a
+// query only ever visits the rings it needs to cover its own limit.
+const STREET_CELL_M = 40;
+
+// A cycletrack or footpath usually runs a few metres from the street it
+// parallels, so the NEAREST named way is often not the street a player
+// would say they are on: at the Seattle spawn it is "4th Avenue Cycletrack"
+// at 4.1 m with "4th Avenue" itself at 8.1 m. A small penalty prefers the
+// street, while still letting a genuinely separate path win when you really
+// are on one.
+const PATH_KINDS = new Set(['cycleway', 'footway', 'path', 'steps', 'track']);
+const PATH_PENALTY_M = 8;
+
+/** Squared distance from a point to a segment, and where along it that fell. */
+function pointSegDist2(px, py, ax, ay, bx, by) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  let t = 0;
+  if (len2 > 0) {
+    t = ((px - ax) * dx + (py - ay) * dy) / len2;
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+  }
+  const cx = ax + dx * t;
+  const cy = ay + dy * t;
+  return (px - cx) * (px - cx) + (py - cy) * (py - cy);
+}
+
+/**
+ * Index every NAMED road segment for nearest-name queries.
+ *
+ * Unnamed ways are left out entirely: they can never answer the question,
+ * and a downtown extract is mostly unnamed service spurs and footpaths.
+ *
+ * @param {Array<{points: Array<[number,number]>, name?: string}>} roads
+ * @param {number} [cellM]
+ * @returns {{nearest: (x:number, y:number, maxM:number) => {name:string, distM:number}|null, segmentCount: number}}
+ */
+export function buildStreetIndex(roads, cellM = STREET_CELL_M) {
+  const segs = [];
+  const cells = new Map();
+  const key = (cx, cy) => `${cx},${cy}`;
+
+  for (const road of roads ?? []) {
+    if (typeof road?.name !== 'string' || road.name === '') continue;
+    const pts = road.points ?? [];
+    for (let i = 1; i < pts.length; i++) {
+      const [ax, ay] = pts[i - 1];
+      const [bx, by] = pts[i];
+      const index = segs.length;
+      segs.push({ ax, ay, bx, by, name: road.name, kind: road.kind });
+      const c0x = Math.floor(Math.min(ax, bx) / cellM);
+      const c1x = Math.floor(Math.max(ax, bx) / cellM);
+      const c0y = Math.floor(Math.min(ay, by) / cellM);
+      const c1y = Math.floor(Math.max(ay, by) / cellM);
+      for (let cx = c0x; cx <= c1x; cx++) {
+        for (let cy = c0y; cy <= c1y; cy++) {
+          const k = key(cx, cy);
+          let list = cells.get(k);
+          if (!list) {
+            list = [];
+            cells.set(k, list);
+          }
+          list.push(index);
+        }
+      }
+    }
+  }
+
+  return {
+    segmentCount: segs.length,
+    /**
+     * Every named street within maxM, nearest first, one entry per NAME.
+     * The controller needs the runner-up as well as the winner: at an
+     * intersection two streets are almost equidistant, and knowing the gap
+     * is what stops the HUD flapping between them.
+     *
+     * @param {number} x
+     * @param {number} y
+     * @param {number} maxM
+     * @returns {Array<{name: string, distM: number}>}
+     */
+    query(x, y, maxM) {
+      if (!(maxM > 0) || segs.length === 0) return [];
+      const rings = Math.ceil(maxM / cellM);
+      const cx = Math.floor(x / cellM);
+      const cy = Math.floor(y / cellM);
+      const max2 = maxM * maxM;
+      const bestByName = new Map();
+      const seen = new Set();
+      for (let ix = cx - rings; ix <= cx + rings; ix++) {
+        for (let iy = cy - rings; iy <= cy + rings; iy++) {
+          const list = cells.get(key(ix, iy));
+          if (!list) continue;
+          for (const index of list) {
+            if (seen.has(index)) continue;
+            seen.add(index);
+            const s = segs[index];
+            const d2 = pointSegDist2(x, y, s.ax, s.ay, s.bx, s.by);
+            if (d2 > max2) continue;
+            const distM = Math.sqrt(d2);
+            const rank = distM + (PATH_KINDS.has(s.kind) ? PATH_PENALTY_M : 0);
+            const prev = bestByName.get(s.name);
+            if (prev === undefined || rank < prev.rank) {
+              bestByName.set(s.name, { distM, rank });
+            }
+          }
+        }
+      }
+      return [...bestByName.entries()]
+        .map(([name, v]) => ({ name, distM: v.distM, rank: v.rank }))
+        .sort((a, b) => a.rank - b.rank);
+    },
+    /** The single nearest named street, or null. */
+    nearest(x, y, maxM) {
+      return this.query(x, y, maxM)[0] ?? null;
+    },
+  };
 }

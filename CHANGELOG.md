@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The status line knows which street you are on** (CW-27) - walk down a street and the line at
+  the top now reads "on 4th Avenue", changing as you turn onto another one. If you are not
+  actually on a street it says "near" the closest one, and if there is nothing close it says
+  nothing at all rather than naming a street you cannot see. Press **X**, or the new **Where am
+  I?** button in the toolbar, and the game says the whole thing out loud through the same
+  announcer everything else uses: which street, which landmark is nearby, and which way you are
+  facing. The names were in the map data all along - the game had been throwing them away while
+  reading the file
 - **The cities get the shapes they were actually mapped with** (CW-26) - a tall building is rarely
   one plain box, and until now every one of them was. Mappers describe a stepped tower by drawing
   its separate volumes, and describe a house roof by naming its shape; the bake threw both away
@@ -295,6 +303,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The status line stopped spilling onto a second row in Denver** (D-71) - standing near the
+  Embassy Suites by Hilton Denver Downtown Convention Center made the line long enough to wrap,
+  which pushed the game view down by a row. Very long street and landmark names are now shortened
+  with an ellipsis in the status line only; anything the game says out loud still uses the full
+  name
 - **A dialog you open during a tour is now a dialog you can answer** (UF-36, D-61) - following the
   Main Page tour on a phone to the Clear Cache step and pressing the button it points at left people
   stuck. The tour did shrink to its pill, but shrinking is not standing aside: the dimming veil kept
