@@ -38,6 +38,7 @@ import {
   pickIntensityIndex,
   GLYPH_COUNT,
   SPACE_INDEX,
+  FIRST_CHAR_CODE,
 } from './_hfm-paint.js';
 
 // Tuning knobs
@@ -114,6 +115,14 @@ function _createInstanceState() {
     // CW-21 P4: CRT decoration, both off unless a caller asks.
     bloomPx: 0,
     scanlineDim: 0,
+
+    // CW-23 surface classes: a per-cell class map supplied by the caller,
+    // plus one glyph vocabulary per class. Both are handed IN so the
+    // converter stays ignorant of what a "road" is — it only knows that
+    // cells carrying class N choose from vocabulary N.
+    classMapProvider: null,
+    classVocabularies: null,
+    classLookups: null,
 
     // Render-on-demand scheduling
     dirty: true,
@@ -462,7 +471,48 @@ function _ensureGlyphModel(st, { fontFamily, fontSizePx, charW, charH, dpr }) {
     }
   }
   st.sparsestNonSpace = emptiest >= 0 ? emptiest : SPACE_INDEX;
+  st.classLookups = _buildClassLookups(st);
   st.atlasKey = key;
+}
+
+/**
+ * One lookup per surface class, over the same shape vectors as the main one
+ * but restricted to that class's allowed glyphs (CW-23).
+ *
+ * createLookup returns positions in the array it was handed, so each subset
+ * carries an index table that maps its answer back to a real atlas index.
+ * Rebuilt with the atlas, because the vectors it searches are read from the
+ * atlas bitmap.
+ *
+ * A vocabulary that survives to here always contains the space character:
+ * without it the darkest cells cannot stay empty and the black the picture is
+ * built on fills in with texture. A row that omits it has one added rather
+ * than being rejected — an art edit should not be able to break the render.
+ *
+ * @returns {Map<number, {nearestIndex: (v: Float32Array) => number}>|null}
+ */
+function _buildClassLookups(st) {
+  if (!st.classVocabularies) return null;
+  const lookups = new Map();
+  for (const key of Object.keys(st.classVocabularies)) {
+    const classId = Number(key);
+    if (!Number.isFinite(classId)) continue;
+    const chars = String(st.classVocabularies[key] ?? '');
+    const indices = new Set([SPACE_INDEX]);
+    for (const ch of chars) {
+      const idx = ch.charCodeAt(0) - FIRST_CHAR_CODE;
+      if (idx >= 0 && idx < GLYPH_COUNT) indices.add(idx);
+    }
+    // One usable glyph plus the space is not a vocabulary, it is a stamp.
+    if (indices.size < 2) continue;
+    const table = [...indices].sort((a, b) => a - b);
+    const subset = table.map((i) => st.glyphVectors[i]);
+    const inner = createLookup(subset);
+    lookups.set(classId, {
+      nearestIndex: (v) => table[inner.nearestIndex(v)],
+    });
+  }
+  return lookups.size > 0 ? lookups : null;
 }
 
 function _ensureOverlay(st, container) {
@@ -565,6 +615,15 @@ function _renderFrame(
     : 0;
   const reverseAt = reverseIdx >= 0 ? st.reverseThreshold : Infinity;
   let reverseCells = 0;
+
+  // CW-23: what each cell is looking at, if the caller can say. A provider
+  // that returns the wrong size is ignored rather than trusted — a stale map
+  // would hand cells the vocabulary of whatever used to be there.
+  let classMap = null;
+  if (st.classLookups && st.classMapProvider) {
+    const supplied = st.classMapProvider(cols, rows);
+    if (supplied && supplied.length === rows * cols) classMap = supplied;
+  }
   let idx = 0;
 
   for (let y = 0; y < rows; y++) {
@@ -657,7 +716,10 @@ function _renderFrame(
         continue;
       }
 
-      glyphIndices[idx++] = st.lookup.nearestIndex(v);
+      const cellLookup = classMap
+        ? (st.classLookups.get(classMap[idx]) ?? st.lookup)
+        : st.lookup;
+      glyphIndices[idx++] = cellLookup.nearestIndex(v);
     }
   }
 
@@ -715,6 +777,14 @@ export async function initAltView(previewManager, options = {}) {
   const st = _createInstanceState();
   st.tinyCellsAllowed = Boolean(options.allowTinyCells);
   st.glowInComposite = Boolean(options.glowInComposite);
+  // CW-23: surface classes. The provider is asked for a class map once per
+  // conversion; the vocabularies say what each class may be drawn with. An
+  // instance that passes neither behaves exactly as it did before.
+  st.classMapProvider =
+    typeof options.classMapProvider === 'function'
+      ? options.classMapProvider
+      : null;
+  st.classVocabularies = options.glyphVocabularies ?? null;
 
   _ensureOverlay(st, container);
 

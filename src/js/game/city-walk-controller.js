@@ -76,6 +76,8 @@ import {
   MONO_REVERSE_THRESHOLD,
   MONO_GLOW_FADE,
 } from './hc-palettes.js';
+import { createClassPass } from './city-class-pass.js';
+import { GLYPH_VOCABULARIES } from './glyph-vocabularies.js';
 import {
   safeGetItem,
   safeSetItem,
@@ -1154,11 +1156,25 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // allowTinyCells: the game's range reaches a 2 px character cell, where a
     // glyph is almost all antialiasing. Without this the city dims as the
     // characters shrink (CW-12). The preview's Alt View does not opt in.
+    // CW-23: a second, tiny render that says what each character cell is
+    // looking at, so the converter can give pavement and a tower face their
+    // own glyph voices instead of judging both on brightness alone.
+    game.classPass = createClassPass(renderer, scene);
+
     game.altView = await initAltView(managerLike, {
       allowTinyCells: true,
       // CW-21: the phosphor trail rides the fast paint path rather than
       // dropping the frame back onto per-cell blits for it.
       glowInComposite: true,
+      // The provider is asked once per conversion, not per rAF: the class
+      // pass only has to run on the frames the converter actually converts.
+      classMapProvider: (cols, rows) =>
+        game.classPass?.read(
+          game.mapView ? orthoCamera : fpCamera,
+          cols,
+          rows
+        ) ?? null,
+      glyphVocabularies: GLYPH_VOCABULARIES,
     });
 
     // Character size (CW-Q10): the game's own saved value wins, then the
@@ -1307,6 +1323,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     if (game.motionQuery && game.onMotionChange) {
       game.motionQuery.removeEventListener?.('change', game.onMotionChange);
     }
+    game.classPass?.dispose();
     game.altView?.dispose();
     game.lighting?.detach();
     game.beacons?.dispose();
