@@ -42,6 +42,7 @@ export const SURFACE_CLASS = {
   TREE: 9,
   CAR: 10,
   LAMP: 11,
+  PERSON: 12,
 };
 
 /**
@@ -67,8 +68,15 @@ const CLASS_BY_MESH_NAME = new Map([
   ['tree-trunks', SURFACE_CLASS.TREE],
   ['tree-canopies', SURFACE_CLASS.TREE],
   ['cars', SURFACE_CLASS.CAR],
+  ['traffic-cars', SURFACE_CLASS.CAR],
+  ['people', SURFACE_CLASS.PERSON],
   ['lamp-poles', SURFACE_CLASS.LAMP],
   ['lamp-heads', SURFACE_CLASS.LAMP],
+  // CW-19: a signal is a post with lit heads, so it borrows both voices — the
+  // post reads like a lamp post because it is one, and the heads read like
+  // the other small bright things on the street.
+  ['light-poles', SURFACE_CLASS.LAMP],
+  ['light-heads', SURFACE_CLASS.SIGN],
 ]);
 
 /**

@@ -84,6 +84,10 @@ export const GLYPH_VOCABULARIES = {
   // A parked car is a small bright block with a cabin on it.
   [SURFACE_CLASS.CAR]: ' .-=ocnuD0O8#',
 
+  // A figure is a small upright with a head on it: the vocabulary has to be
+  // able to draw a narrow body and a distinct top in very few cells.
+  [SURFACE_CLASS.PERSON]: " .:'!ilj|1tTfhko0",
+
   // A pole with a bright head: uprights, plus the round characters the head
   // needs to be able to reach.
   [SURFACE_CLASS.LAMP]: " .'!|iltT1oO0",
