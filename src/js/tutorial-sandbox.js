@@ -62,7 +62,7 @@ let isPaused = false; // Pause state for visibility changes
 let targetRemovalObserver = null; // Watch for target removal
 let surfaceObserver = null; // Watch for welcome -> project while a welcome-surface tour runs
 let dialogObserver = null; // Watch for a user-opened dialog while a tutorial runs
-let dialogOpenAtKeydown = false; // Was a dialog up when this Escape was pressed?
+let escapeOwnedElsewhere = false; // Did a dialog or the drawer own this Escape?
 let dialogStandDown = null; // What the stand-down took away, so it can give it back
 let currentTarget = null; // Currently highlighted target
 let scrollYBeforeLock = 0; // Store scroll position for body lock
@@ -3144,13 +3144,18 @@ function setupTutorialListeners() {
 }
 
 /**
- * Record, before anyone has had a chance to close it, whether a dialog was on
- * screen when Escape was pressed (Q-50c). Capture phase, so this runs ahead of
- * the dialog's own handler.
+ * Record, before anyone has had a chance to close it, whether something else
+ * owned this Escape (Q-50c). Capture phase, so this runs ahead of the dialog's
+ * own handler.
+ *
+ * The open Customizer drawer counts here even though D-62 stopped it counting
+ * as a dialog anywhere else: its focus trap answers Escape by closing itself
+ * and does not stop the event, so without this the one press would close the
+ * drawer AND end the tour. One Escape, one surface; the next Escape exits.
  */
 function noteDialogBeforeKeydown(e) {
   if (e.key === 'Escape') {
-    dialogOpenAtKeydown = isAppDialogOpen();
+    escapeOwnedElsewhere = isAppDialogOpen() || isMobileDrawerOpen();
   }
 }
 
@@ -3176,7 +3181,8 @@ function handleKeydown(e) {
     // The dialog's own handler usually runs FIRST and removes the dialog, so
     // by the time this one is reached there is nothing left to see. That is
     // what noteDialogBeforeKeydown records, on the capture phase.
-    if (dialogOpenAtKeydown || isAppDialogOpen()) return;
+    if (escapeOwnedElsewhere || isAppDialogOpen() || isMobileDrawerOpen())
+      return;
     e.preventDefault();
     closeTutorial();
   } else if (
@@ -3356,26 +3362,20 @@ function toggleMinimize() {
 }
 
 /**
- * Defect D-44 (UF-25, owner 2026-08-15). On a phone the parameter panel is a
- * full-screen drawer carrying role="dialog", so Q-50c's dialog watcher
- * minimizes the tour as soon as a drawer step opens it - and then re-minimizes
- * it in the same frame every time Restore was pressed. MEASURED: the button
- * was visible, labelled "Restore tutorial", and did nothing at all.
+ * D-44 (UF-25, owner 2026-08-15) is SUPERSEDED here, not re-fixed.
  *
- * Restore now closes that drawer first, which is what a person had to do by
- * hand to get the tour back. It deliberately does NOT dismiss real dialogs:
- * a confirm or a save prompt is a decision the user is in the middle of, and
- * a tour button must not answer it for them.
+ * Its symptom was that Restore did nothing on a phone while the drawer was
+ * open: the watcher re-minimized the tour in the same frame, so the button was
+ * visible, labelled, and inert. The patch was to make Restore close the drawer
+ * first - the move a person had to make by hand to get the tour back.
+ *
+ * That was a patch over D-62. With the drawer no longer counted as a dialog
+ * there is nothing to re-minimize the tour, so Restore is a plain restore
+ * again, and the tour comes back over the drawer the user is working in
+ * instead of shutting it. UF-37's suite re-proves the dead-Restore scenario
+ * impossible rather than trusting this comment.
  */
 function restoreFromBar() {
-  const drawer = document.getElementById('paramPanel');
-  if (
-    isMinimized &&
-    drawer?.classList.contains('drawer-open') &&
-    isRendered(drawer)
-  ) {
-    document.getElementById('mobileDrawerToggle')?.click();
-  }
   toggleMinimize();
 }
 
@@ -3432,6 +3432,22 @@ const APP_DIALOG_SELECTOR =
 const TUTORIAL_OWN_DIALOGS =
   '.tutorial-resume-modal, .tutorial-error-modal, .tutorial-mode-choice-modal';
 
+/**
+ * D-62 (U-42, owner's phone, 2026-08-21). The Customizer drawer wears
+ * role="dialog" for as long as it is open (drawer-controller.js), because on a
+ * phone it covers the screen and holds focus. To the dialog watcher that read
+ * as "the user opened a dialog over the tour", so the tour stood down on EVERY
+ * drawer step on a phone - and the drawer steps are most of the tour.
+ * MEASURED at the release base, 412x915, steps 3 and 4 of the intro tour: card
+ * hidden, veil at 0.3, nothing on screen but a "Tutorial 3/17" pill.
+ *
+ * The drawer is the app's own chrome and usually the very thing a step is
+ * teaching, so it is not a dialog the tour has to get out of the way of. A real
+ * dialog rendered INSIDE the drawer still counts: only the panel itself is
+ * skipped, never its contents.
+ */
+const APP_CHROME_DIALOG_SELECTOR = '#paramPanel';
+
 const isRendered = (el) =>
   typeof el.checkVisibility === 'function'
     ? el.checkVisibility()
@@ -3448,6 +3464,7 @@ function findOpenAppDialogs() {
   for (const el of document.querySelectorAll(APP_DIALOG_SELECTOR)) {
     if (tutorialOverlay?.contains(el)) continue;
     if (el.closest(TUTORIAL_OWN_DIALOGS)) continue;
+    if (el.matches(APP_CHROME_DIALOG_SELECTOR)) continue;
     if (!isRendered(el)) continue;
     if (open.some((outer) => outer.contains(el))) continue;
     open.push(el);
@@ -4063,7 +4080,21 @@ function updateSpotlightAndPosition() {
         ? Math.max(0, actionsBarRect.height || 0)
         : 0;
 
-    const topOffset = Math.max(8, safeAreas.top + 8);
+    // UF-37: since D-62 the card stays up over the open Customizer drawer
+    // instead of collapsing to a pill, so a top dock now has something to
+    // respect. The drawer's title row carries its only Close button; a card
+    // starting at the viewport top lands squarely on it. MEASURED at 412x915
+    // on step 4 of the intro tour: the card covered y 8-348 and Playwright
+    // could not reach #drawerCloseBtn at all. Start below that row instead.
+    const drawerTitleRow = isMobileDrawerOpen()
+      ? document.querySelector('#paramPanel .panel-header-title-row')
+      : null;
+    const drawerHeaderBottom =
+      drawerTitleRow && isRendered(drawerTitleRow)
+        ? drawerTitleRow.getBoundingClientRect().bottom + 8
+        : 0;
+
+    const topOffset = Math.max(8, safeAreas.top + 8, drawerHeaderBottom);
     const bottomOffset = Math.max(8, safeAreas.bottom + actionsBarHeight + 8);
 
     const intersects = (a, b, pad = 6) => {
@@ -4922,7 +4953,7 @@ export function closeTutorial(completed = false, options = {}) {
 
   document.removeEventListener('keydown', noteDialogBeforeKeydown, true);
   document.removeEventListener('keydown', handleKeydown);
-  dialogOpenAtKeydown = false;
+  escapeOwnedElsewhere = false;
 
   tutorialOverlay.remove();
   tutorialOverlay = null;
