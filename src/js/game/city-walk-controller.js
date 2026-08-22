@@ -117,6 +117,8 @@ const TOOLBAR_STEP_MS = 250;
 // to screen readers, so they are flagged for the owner and collected in the
 // round text pack rather than being quietly final.
 const RAIN_OFF_MESSAGE = 'Rain off.';
+const PHOTO_SAVED_MESSAGE = 'Photo saved.';
+const ALL_LANDMARKS_MESSAGE = 'All landmarks found.';
 const RAIN_BLOCKED_MESSAGE = 'Rain is off because reduced motion is on.';
 // Thunder no closer together than this, so it stays an event.
 const THUNDER_GAP_MS = 30000;
@@ -449,6 +451,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       'C: high contrast on or off',
       'T: change the theme',
       'O: colour on or off (off is a single-colour retro screen)',
+      'G: rain off, light, heavy (stays off if you use reduced motion)',
+      'P: save a picture of what you can see',
       'High contrast, theme and colour: the three buttons at the top of the screen',
       'Every key also has a button in the toolbar along the bottom',
       'H: open or close this help',
@@ -741,6 +745,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       name: 'Weather',
       buttons: [
         {
+          id: 'cityWalkPhotoBtn',
+          label: 'Photo',
+          keys: 'P',
+          press: savePhoto,
+          views: 'both',
+        },
+        {
           id: 'cityWalkRainBtn',
           label: 'Rain',
           keys: 'G',
@@ -999,7 +1010,17 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
         lm.x - game.walkState.x,
         lm.y - game.walkState.y
       );
-      li.textContent = `${lm.name} — ${headingLabel(bearing)}`;
+      const seen = game.visited?.has(lm.name);
+      // A real text mark, not a colour and not an icon font: the tick has
+      // to survive a screen reader and a high-contrast theme alike, and
+      // the word after it is what actually gets read out.
+      li.textContent = `${seen ? '✓ ' : ''}${lm.name} — ${headingLabel(bearing)}`;
+      if (seen) {
+        const sr = document.createElement('span');
+        sr.className = 'sr-only';
+        sr.textContent = ' visited';
+        li.appendChild(sr);
+      }
       if (i === game.landmarkIndex) {
         li.setAttribute('aria-current', 'true');
         li.classList.add('selected');
@@ -1269,6 +1290,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       game.altView.invalidate();
     };
     game.startedAtMs = performance.now();
+    // CW-20: which landmarks this session has walked past. Per-session on
+    // purpose — a fresh city is a fresh walk, and nothing is stored.
+    game.visited = new Set();
+    game.announcedAllFound = false;
     game.rainLevel = null;
     game.thunderStartMs = 0;
     game.nextThunderMs = THUNDER_GAP_MS;
@@ -1446,6 +1471,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
 
     // CW-Q16: colour on or off. C is spoken for by high contrast, so the
     // key is O. Like the two above it, it works on the picker as well.
+    if (event.code === 'KeyP') {
+      event.preventDefault();
+      event.stopPropagation();
+      savePhoto();
+      return;
+    }
+
     if (event.code === 'KeyG') {
       event.preventDefault();
       event.stopPropagation();
@@ -1749,6 +1781,79 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   }
 
   /**
+   * Remember that the player has been here (CW-20).
+   *
+   * The proximity machinery already existed with its own hysteresis, so a
+   * landmark you linger beside does not tick over and over; this only has
+   * to notice the first arrival. The completion line is announced ONCE per
+   * session — a message that repeats every time you re-approach the last
+   * landmark stops being a reward and becomes noise.
+   */
+  function markVisited(game, name) {
+    if (game.visited.has(name)) return;
+    game.visited.add(name);
+    refreshLegend(game);
+    updateHud();
+    if (
+      !game.announcedAllFound &&
+      game.landmarks.length > 0 &&
+      game.visited.size >= game.landmarks.length
+    ) {
+      game.announcedAllFound = true;
+      // ACCESSIBILITY-CRITICAL STRING (D-35) — flagged for owner review.
+      announceInLayer(ALL_LANDMARKS_MESSAGE);
+    }
+  }
+  /**
+   * Save what the player is looking at as a PNG (CW-20).
+   *
+   * The visible picture IS the overlay canvas — the WebGL canvas underneath
+   * is transparent while the Alt View is on — so this composes that overlay
+   * onto black rather than inventing a second render path. A PNG of the
+   * overlay alone would come out as glyphs floating on transparency, which
+   * is not what anyone means by a photo of the city.
+   */
+  function savePhoto() {
+    const game = state.game;
+    if (!game) return;
+    const source = state.refs.viewport?.querySelector('.hfm-overlay-canvas');
+    if (!source || !source.width || !source.height) return;
+
+    const out = document.createElement('canvas');
+    out.width = source.width;
+    out.height = source.height;
+    const ctx = out.getContext('2d');
+    if (!ctx) return;
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, out.width, out.height);
+    ctx.drawImage(source, 0, 0);
+
+    out.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = photoFilename(game);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // Revoking immediately can cancel the download in some browsers;
+      // one turn of the event loop is enough for it to have started.
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+      // ACCESSIBILITY-CRITICAL STRING (D-35) — flagged for owner review.
+      announceInLayer(PHOTO_SAVED_MESSAGE);
+    }, 'image/png');
+  }
+
+  /** ascii-city-<city>-<date>.png, so a folder of these sorts sensibly. */
+  function photoFilename(game) {
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const slug = game.city?.slug ?? 'city';
+    return `ascii-city-${slug}-${date}.png`;
+  }
+  /**
    * Off, light, heavy, off again (CW-20, CW-Q18).
    *
    * Rain is motion, so reduced motion refuses it outright rather than
@@ -1954,9 +2059,14 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       !game.mapView && game.nearLandmark ? ` · near ${game.nearLandmark}` : '';
     const looking = game.mapView ? null : pitchLabel(game.walkState.pitchRad);
     const gaze = looking ? ` · looking ${looking}` : '';
+    // CW-20: a reason to wander. Only while there is something to count.
+    const found =
+      game.landmarks?.length > 0
+        ? ` · landmarks ${game.visited?.size ?? 0}/${game.landmarks.length}`
+        : '';
     const text =
       `${game.city.label} · facing ${headingLabel(game.walkState.headingRad)}` +
-      `${gaze} · ${view}${near}`;
+      `${gaze} · ${view}${near}${found}`;
     if (text !== game.lastHudText) {
       game.lastHudText = text;
       state.refs.hudStatus.textContent = text;
@@ -2060,7 +2170,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
         );
         if (near !== game.nearLandmark) {
           game.nearLandmark = near;
-          if (near) announceInLayer(`Near ${near}.`);
+          if (near) {
+            announceInLayer(`Near ${near}.`);
+            markVisited(game, near);
+          }
         }
       }
       game.altView.invalidate();
