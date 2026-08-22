@@ -16,6 +16,12 @@
  * @license GPL-3.0-or-later
  */
 
+// The only import here, and deliberate: pointInRing is the even-odd ray cast
+// walk-controls already owns, and CW-26 needs exactly it to decide which
+// outline a building:part stands inside. walk-controls is itself DOM-free and
+// import-free, so the Node bake path stays clean.
+import { pointInRing } from './walk-controls.js';
+
 // One storey when only building:levels is tagged. 3 m/level is the common
 // renderer convention (OSM Simple 3D Buildings recommends explicit height
 // over levels; levels are a fallback).
@@ -255,6 +261,51 @@ export function signedArea(pts) {
  *   stats: {buildingCount:number, roadCount:number, treeCount:number, droppedRings:number, droppedElements:number}
  * }}
  */
+/** Axis-aligned bounds of a projected ring, for the part-host prefilter. */
+function ringBounds(ring) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const [x, y] of ring) {
+    if (x < minX) minX = x;
+    if (y < minY) minY = y;
+    if (x > maxX) maxX = x;
+    if (y > maxY) maxY = y;
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+/**
+ * Area-weighted centroid of a projected ring. On a degenerate (zero-area)
+ * ring the shoelace term vanishes, so this falls back to the vertex mean
+ * rather than dividing by zero.
+ *
+ * @param {Array<[number,number]>} ring
+ * @returns {[number, number]}
+ */
+function ringCentroid(ring) {
+  let twiceArea = 0;
+  let cx = 0;
+  let cy = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    const cross = xj * yi - xi * yj;
+    twiceArea += cross;
+    cx += (xj + xi) * cross;
+    cy += (yj + yi) * cross;
+  }
+  if (twiceArea !== 0) return [cx / (3 * twiceArea), cy / (3 * twiceArea)];
+  let sx = 0;
+  let sy = 0;
+  for (const [x, y] of ring) {
+    sx += x;
+    sy += y;
+  }
+  return [sx / ring.length, sy / ring.length];
+}
+
 export function parseCityExtract(extract, options = {}) {
   const center = options.center ?? extract?.center;
   if (!center || !Number.isFinite(center.lat) || !Number.isFinite(center.lon)) {
@@ -265,8 +316,10 @@ export function parseCityExtract(extract, options = {}) {
   const buildings = [];
   const roads = [];
   const trees = [];
+  const partWays = [];
   let droppedRings = 0;
   let droppedElements = 0;
+  let orphanParts = 0;
 
   const isBuildingTags = (tags) =>
     tags && typeof tags.building === 'string' && tags.building !== 'no';
@@ -298,6 +351,28 @@ export function parseCityExtract(extract, options = {}) {
       continue;
     }
 
+    // CW-26: a building:part is a VOLUME INSIDE an outline, not a building of
+    // its own, so it is collected here and matched to its outline after the
+    // loop. A way tagged BOTH building and building:part is its own outline
+    // and falls through to the branch below.
+    if (
+      el.type === 'way' &&
+      typeof tags['building:part'] === 'string' &&
+      tags['building:part'] !== 'no' &&
+      !isBuildingTags(tags)
+    ) {
+      const ring = Array.isArray(el.geometry)
+        ? projectRing(el.geometry, center, true)
+        : null;
+      if (!ring) {
+        droppedElements++;
+        continue;
+      }
+      const { heightM, minHeightM } = resolveBuildingHeight(tags);
+      partWays.push({ outer: ring, holes: [], heightM, minHeightM, tags });
+      continue;
+    }
+
     if (el.type === 'way' && isBuildingTags(tags)) {
       if (relationMemberWayIds.has(el.id)) continue;
       const outer = Array.isArray(el.geometry)
@@ -315,6 +390,7 @@ export function parseCityExtract(extract, options = {}) {
         minHeightM,
         name: tags.name,
         tags,
+        parts: [],
       });
       continue;
     }
@@ -355,6 +431,7 @@ export function parseCityExtract(extract, options = {}) {
           minHeightM,
           name: tags.name,
           tags,
+          parts: [],
         });
         emitted = true;
       }
@@ -376,6 +453,38 @@ export function parseCityExtract(extract, options = {}) {
         widthM: ROAD_WIDTHS_M[tags.highway] ?? DEFAULT_ROAD_WIDTH_M,
         kind: tags.highway,
       });
+    }
+  }
+
+  // CW-26: match every part to the outline that contains it. Simple 3D
+  // Buildings can bind them with a type=building relation, but in the real
+  // extracts CONTAINMENT is the association that is actually there - Denver
+  // carries 3,013 parts and no such relations. The host search is bounding-box
+  // filtered first, which is what keeps 3,013 x 330 honest.
+  if (partWays.length > 0) {
+    const outlineCount = buildings.length;
+    const boxes = buildings.map((b) => ringBounds(b.outer));
+    for (const part of partWays) {
+      const [cx, cy] = ringCentroid(part.outer);
+      let host = -1;
+      for (let i = 0; i < outlineCount; i++) {
+        const bb = boxes[i];
+        if (cx < bb.minX || cx > bb.maxX || cy < bb.minY || cy > bb.maxY) {
+          continue;
+        }
+        if (pointInRing(cx, cy, buildings[i].outer)) {
+          host = i;
+          break;
+        }
+      }
+      if (host >= 0) {
+        buildings[host].parts.push(part);
+        continue;
+      }
+      // A part whose outline is outside the extract radius is still a real
+      // volume standing on a real street; drawing it beats dropping it.
+      orphanParts++;
+      buildings.push({ ...part, name: part.tags.name, parts: [] });
     }
   }
 
@@ -410,6 +519,8 @@ export function parseCityExtract(extract, options = {}) {
       buildingCount: buildings.length,
       roadCount: roads.length,
       treeCount: trees.length,
+      partCount: partWays.length,
+      orphanParts,
       droppedRings,
       droppedElements,
     },
@@ -439,6 +550,18 @@ export function trimOverpassElement(el) {
     'amenity',
     // Street trees (CW-16)
     'natural',
+    // CW-26: the real silhouettes. Whole-building roof:shape is nearly absent
+    // in US downtowns (1.5% Seattle, 3.6% Denver, 0% Albuquerque) but rich in
+    // residential Burnaby (26.8%); the downtown shapes live in building:part
+    // instead (Denver: 3,013 parts with 2,981 heights for 330 buildings).
+    // Keeping both is what lets one renderer serve both kinds of city.
+    'building:part',
+    'roof:shape',
+    'roof:height',
+    'roof:levels',
+    'roof:orientation',
+    // Crowd proxy for where people stand (CW-19's placement seam).
+    'shop',
   ];
 
   const trimTags = (tags) => {
@@ -457,7 +580,11 @@ export function trimOverpassElement(el) {
 
   if (el.type === 'way' && Array.isArray(el.geometry)) {
     const tags = trimTags(el.tags);
-    if (!tags || (!tags.building && !tags.highway)) return null;
+    // CW-26: a building:part way usually carries NO building tag — in Simple
+    // 3D Buildings the parts sit inside a separately-tagged outline. Keeping
+    // the tag is not enough; this gate has to let the part through too.
+    if (!tags || (!tags.building && !tags.highway && !tags['building:part']))
+      return null;
     return { type: 'way', id: el.id, tags, geometry: el.geometry.map(roundPt) };
   }
 

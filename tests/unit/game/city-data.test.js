@@ -636,3 +636,183 @@ describe('the visited set and the proximity hysteresis (CW-20)', () => {
     expect(nearestLandmarkName([], 0, 0, null)).toBeNull()
   })
 })
+
+describe('the bake keeps what the silhouettes need (CW-26)', () => {
+  it('keeps building:part and the roof tags', async () => {
+    const { trimOverpassElement } = await import(
+      '../../../src/js/game/city-data.js'
+    )
+    const el = trimOverpassElement({
+      type: 'way',
+      id: 1,
+      geometry: [{ lat: 0, lon: 0 }],
+      tags: {
+        'building:part': 'yes',
+        'roof:shape': 'gabled',
+        'roof:height': '4',
+        'roof:levels': '1',
+        'roof:orientation': 'along',
+        height: '30',
+        shop: 'bakery',
+      },
+    })
+    // Whole-building roof:shape is nearly absent in US downtowns and the
+    // silhouettes live in building:part instead, so BOTH have to survive the
+    // bake or one kind of city loses its shape.
+    expect(el.tags['building:part']).toBe('yes')
+    expect(el.tags['roof:shape']).toBe('gabled')
+    expect(el.tags['roof:height']).toBe('4')
+    expect(el.tags['roof:levels']).toBe('1')
+    expect(el.tags['roof:orientation']).toBe('along')
+    expect(el.tags.shop).toBe('bakery')
+    expect(el.tags.height).toBe('30')
+  })
+
+  it('still throws away everything it never needed', async () => {
+    const { trimOverpassElement } = await import(
+      '../../../src/js/game/city-data.js'
+    )
+    const el = trimOverpassElement({
+      type: 'way',
+      id: 2,
+      geometry: [{ lat: 0, lon: 0 }],
+      tags: {
+        building: 'yes',
+        'addr:housenumber': '12',
+        'source:date': '2019',
+        wikidata: 'Q1',
+        operator: 'Someone',
+      },
+    })
+    expect(el.tags.building).toBe('yes')
+    expect(el.tags['addr:housenumber']).toBeUndefined()
+    expect(el.tags['source:date']).toBeUndefined()
+    expect(el.tags.wikidata).toBeUndefined()
+    expect(el.tags.operator).toBeUndefined()
+  })
+})
+
+describe('building parts become the silhouette (CW-26)', () => {
+  const CENTER = { lat: 47.6062, lon: -122.3321 }
+  // A 40 m square outline with two parts inside it: a low wing and a tower.
+  const ring = (dLat, dLon, sLat, sLon) => [
+    { lat: CENTER.lat + dLat, lon: CENTER.lon + dLon },
+    { lat: CENTER.lat + dLat + sLat, lon: CENTER.lon + dLon },
+    { lat: CENTER.lat + dLat + sLat, lon: CENTER.lon + dLon + sLon },
+    { lat: CENTER.lat + dLat, lon: CENTER.lon + dLon + sLon },
+    { lat: CENTER.lat + dLat, lon: CENTER.lon + dLon },
+  ]
+  const D = 0.00036 // ~40 m of latitude
+  const extract = {
+    center: CENTER,
+    elements: [
+      {
+        type: 'way',
+        id: 1,
+        tags: { building: 'yes', name: 'Host' },
+        geometry: ring(0, 0, D, D * 1.5),
+      },
+      {
+        type: 'way',
+        id: 2,
+        tags: { 'building:part': 'yes', height: '12' },
+        geometry: ring(D * 0.1, D * 0.15, D * 0.3, D * 0.4),
+      },
+      {
+        type: 'way',
+        id: 3,
+        tags: { 'building:part': 'yes', height: '90', min_height: '12' },
+        geometry: ring(D * 0.5, D * 0.6, D * 0.3, D * 0.4),
+      },
+    ],
+  }
+
+  it('files each part under the outline that contains it', async () => {
+    const { parseCityExtract } = await import(
+      '../../../src/js/game/city-data.js'
+    )
+    const model = parseCityExtract(extract)
+    // One BUILDING, not three: the parts are its mass, not neighbours.
+    expect(model.buildings).toHaveLength(1)
+    expect(model.stats.partCount).toBe(2)
+    expect(model.stats.orphanParts).toBe(0)
+    const host = model.buildings[0]
+    expect(host.name).toBe('Host')
+    expect(host.parts).toHaveLength(2)
+    expect(host.parts.map((p) => p.heightM).sort((a, b) => a - b)).toEqual([
+      12, 90,
+    ])
+    // The tower part starts where the wing stops - that stepped profile IS
+    // the silhouette this release exists to recover.
+    const tower = host.parts.find((p) => p.heightM === 90)
+    expect(tower.minHeightM).toBe(12)
+  })
+
+  it('keeps the OUTLINE for collision, whatever the parts do', async () => {
+    const { parseCityExtract } = await import(
+      '../../../src/js/game/city-data.js'
+    )
+    const { pointInRing } = await import(
+      '../../../src/js/game/walk-controls.js'
+    )
+    const model = parseCityExtract(extract)
+    const host = model.buildings[0]
+    // Find a spot inside the outline that is in NO part - the gap between
+    // the wing and the tower. If collision ever read parts instead of the
+    // outline, a player would walk into the middle of a solid building here.
+    const xs = host.outer.map((pt) => pt[0])
+    const ys = host.outer.map((pt) => pt[1])
+    const lo = [Math.min(...xs), Math.min(...ys)]
+    const hi = [Math.max(...xs), Math.max(...ys)]
+    let gap = null
+    for (let gx = 0; gx <= 40 && !gap; gx++) {
+      for (let gy = 0; gy <= 40 && !gap; gy++) {
+        const x = lo[0] + ((hi[0] - lo[0]) * gx) / 40
+        const y = lo[1] + ((hi[1] - lo[1]) * gy) / 40
+        if (!pointInRing(x, y, host.outer)) continue
+        if (host.parts.some((pt) => pointInRing(x, y, pt.outer))) continue
+        gap = [x, y]
+      }
+    }
+    expect(gap).not.toBeNull()
+    expect(pointInRing(gap[0], gap[1], host.outer)).toBe(true)
+    expect(host.parts.some((pt) => pointInRing(gap[0], gap[1], pt.outer))).toBe(
+      false
+    )
+  })
+
+  it('still draws a part whose outline is outside the extract', async () => {
+    const { parseCityExtract } = await import(
+      '../../../src/js/game/city-data.js'
+    )
+    const model = parseCityExtract({
+      center: CENTER,
+      elements: [extract.elements[1]],
+    })
+    expect(model.buildings).toHaveLength(1)
+    expect(model.stats.orphanParts).toBe(1)
+    expect(model.buildings[0].heightM).toBe(12)
+    expect(model.buildings[0].parts).toEqual([])
+  })
+
+  it('treats a way tagged both building and building:part as an outline', async () => {
+    const { parseCityExtract } = await import(
+      '../../../src/js/game/city-data.js'
+    )
+    const model = parseCityExtract({
+      center: CENTER,
+      elements: [
+        {
+          type: 'way',
+          id: 9,
+          tags: { building: 'yes', 'building:part': 'yes', name: 'Self' },
+          geometry: ring(0, 0, D, D),
+        },
+      ],
+    })
+    expect(model.buildings).toHaveLength(1)
+    expect(model.buildings[0].name).toBe('Self')
+    expect(model.stats.partCount).toBe(0)
+    expect(model.stats.orphanParts).toBe(0)
+  })
+})

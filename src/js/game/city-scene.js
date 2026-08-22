@@ -871,11 +871,21 @@ export function buildCityGroup(model) {
   model.buildings.forEach((building, index) => {
     const h = hashBuilding(index, building.name);
     const tint = buildingTint(index, building.name);
-    const geom = extrudeBuilding(building, tint);
-    if (!geom) return;
-    // The same hash that fixes a building's colour fixes its facade, so a
-    // tower keeps both for as long as the extract does.
-    buildingGeoms[h % WINDOW_LETTER_FAMILIES.length].push(geom);
+    // CW-26: where an outline has parts, the PARTS are the building's mass -
+    // extruding the outline as well would bury them inside a plain box, which
+    // is the very thing the Simple 3D Buildings convention exists to avoid.
+    // Collision is untouched by this: it reads outlines and never parts.
+    const volumes = building.parts?.length ? building.parts : [building];
+    let anyGeom = false;
+    for (const volume of volumes) {
+      const geom = extrudeBuilding(volume, tint);
+      if (!geom) continue;
+      // The same hash that fixes a building's colour fixes its facade, so a
+      // tower keeps both for as long as the extract does.
+      buildingGeoms[h % WINDOW_LETTER_FAMILIES.length].push(geom);
+      anyGeom = true;
+    }
+    if (!anyGeom) return;
 
     // Grounded buildings tall enough to have an upstairs get the lit
     // storefront strip; elevated parts (skybridges) do not.
