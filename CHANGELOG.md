@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The city file format is written down, and so is where this is going** (CW-28) - two new
+  documents. The first describes the city extract format field by field, so that someone who has
+  never seen this project could write a valid city file, or write a second program that reads one.
+  The second records two things the City Walk is deliberately built to grow into: letting people
+  search for an address and walk there, and feeding tactile maps for readers who cannot see the
+  screen. The roadmap is a record of intent and of the seams already in the code, not a schedule -
+  and it states plainly that when tactile work does begin, every dimension a hand reads is a
+  safety value that needs a signed-off number, with no exceptions
+- **The status line knows which street you are on** (CW-27) - walk down a street and the line at
+  the top now reads "on 4th Avenue", changing as you turn onto another one. If you are not
+  actually on a street it says "near" the closest one, and if there is nothing close it says
+  nothing at all rather than naming a street you cannot see. Press **X**, or the new **Where am
+  I?** button in the toolbar, and the game says the whole thing out loud through the same
+  announcer everything else uses: which street, which landmark is nearby, and which way you are
+  facing. The names were in the map data all along - the game had been throwing them away while
+  reading the file
+- **The cities get the shapes they were actually mapped with** (CW-26) - a tall building is rarely
+  one plain box, and until now every one of them was. Mappers describe a stepped tower by drawing
+  its separate volumes, and describe a house roof by naming its shape; the bake threw both away
+  before the game ever saw them. Seattle, Burnaby and Albuquerque have been rebaked to keep them.
+  One Seattle tower that used to be a single 259 m block is now twenty-six stacked volumes
+  stepping 255, 147, 126, 110 m and down - and the skyline as a whole gained about a sixth more
+  steps in it. Pitched roofs - pyramidal, gabled and hipped - are built as real shapes that finish
+  at the height the building is tagged with, rather than being stacked on top of it. Roof shapes
+  nobody can draw honestly from the tags, and buildings too irregular to say which way they run,
+  keep their flat tops rather than being guessed at. **Denver is unchanged for now**: its 3,013
+  mapped parts are mostly tiny architectural details and carrying them all would nearly double the
+  download, so that trade is written up for a decision rather than made quietly
 - **Weather, photographs, and a reason to wander** (CW-20) - three things the City Walk did not
   have. **Rain**, on the G key or the Rain button, in two strengths: heavy is not simply more
   drops but faster and more slanted ones, because rain that only gets denser reads as fog. The
@@ -283,6 +311,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The status line stopped spilling onto a second row in Denver** (D-71) - standing near the
+  Embassy Suites by Hilton Denver Downtown Convention Center made the line long enough to wrap,
+  which pushed the game view down by a row. Very long street and landmark names are now shortened
+  with an ellipsis in the status line only; anything the game says out loud still uses the full
+  name
 - **A dialog you open during a tour is now a dialog you can answer** (UF-36, D-61) - following the
   Main Page tour on a phone to the Clear Cache step and pressing the button it points at left people
   stuck. The tour did shrink to its pill, but shrinking is not standing aside: the dimming veil kept

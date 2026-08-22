@@ -2626,3 +2626,260 @@ test.describe('ASCII City Walk — rain stays in the street (CW-20)', () => {
     ).toBe(true)
   })
 })
+
+/**
+ * CW-26: the cities carry building:part volumes and pitched roofs, and both
+ * have to survive all the way into the rendered scene — not merely into the
+ * parsed model.
+ */
+test.describe('ASCII City Walk — real silhouettes (CW-26)', () => {
+  test('a part-mapped tower is drawn as its parts, not as one box', async ({
+    page,
+  }) => {
+    test.setTimeout(90000)
+    await launchGame(page)
+    await enterCity(page)
+
+    const shape = await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const hosts = g.model.buildings.filter((b) => b.parts?.length > 0)
+      const best = hosts.sort((a, b) => b.parts.length - a.parts.length)[0]
+      if (!best) return null
+      const heights = best.parts
+        .map((p) => p.heightM)
+        .sort((a, b) => b - a)
+      return {
+        hostCount: hosts.length,
+        parts: best.parts.length,
+        partsAreMass: best.partsAreMass,
+        tallest: heights[0],
+        shortest: heights[heights.length - 1],
+        outline: best.heightM,
+      }
+    })
+
+    expect(shape, 'Seattle carries no building:part volumes').not.toBeNull()
+    // The bake keeps them and the parser files them under their outline.
+    expect(shape.hostCount).toBeGreaterThan(20)
+    expect(shape.parts).toBeGreaterThan(1)
+    // This tower's parts cover it, so they ARE its mass and the plain
+    // outline box stands down.
+    expect(shape.partsAreMass).toBe(true)
+    // A stepped tower: the parts are not all one height, which is the whole
+    // reason for shipping them.
+    expect(shape.tallest - shape.shortest).toBeGreaterThan(10)
+  })
+
+  test('a pitched roof caps its building instead of sitting on top', async ({
+    page,
+  }) => {
+    test.setTimeout(90000)
+    await launchGame(page)
+    await enterCity(page, 'Burnaby, British Columbia')
+
+    const roof = await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const target = g.model.buildings.find(
+        (b) => b.roof && b.roof.shape === 'pyramidal'
+      )
+      if (!target) return null
+      const xs = target.outer.map((p) => p[0])
+      const ys = target.outer.map((p) => p[1])
+      const cx = xs.reduce((a, c) => a + c, 0) / xs.length
+      const cy = ys.reduce((a, c) => a + c, 0) / ys.length
+      const apexZ = target.heightM
+
+      let apexVerts = 0
+      let above = 0
+      g.scene.traverse((o) => {
+        if (!o.isMesh || !o.geometry?.getAttribute) return
+        const pos = o.geometry.getAttribute('position')
+        if (!pos) return
+        for (let i = 0; i < pos.count; i++) {
+          const x = pos.getX(i)
+          const y = pos.getY(i)
+          const z = pos.getZ(i)
+          if (Math.hypot(x - cx, y - cy) > 12) continue
+          if (z > apexZ + 0.05) above++
+          if (Math.hypot(x - cx, y - cy) < 1.5 && Math.abs(z - apexZ) < 0.05) {
+            apexVerts++
+          }
+        }
+      })
+      return { apexZ, apexVerts, above, roofM: target.roof.heightM }
+    })
+
+    expect(roof, 'Burnaby grew no pyramidal roof').not.toBeNull()
+    // Vertices meet at a point directly over the footprint, at exactly the
+    // height the building is tagged with.
+    expect(roof.apexVerts).toBeGreaterThan(0)
+    // The roof CAPS the body rather than being stacked on a full-height box:
+    // nothing at all pokes above the tagged height.
+    expect(roof.above, 'something is drawn above the roof apex').toBe(0)
+    expect(roof.roofM).toBeGreaterThan(0)
+  })
+})
+
+/**
+ * CW-27: the HUD knows where you are, and X says it out loud.
+ */
+test.describe('ASCII City Walk — where you are (CW-27)', () => {
+  // Walk one real step so the street lookup, which runs on movement frames,
+  // has actually run. Teleporting alone never moves the camera or the HUD.
+  const stepOnce = async (page) => {
+    await page.keyboard.down('ArrowUp')
+    await page.waitForTimeout(220)
+    await page.keyboard.up('ArrowUp')
+    await page.waitForTimeout(260)
+  }
+
+  const standOn = async (page, name) =>
+    page.evaluate((want) => {
+      const g = window.__cityWalkGame
+      for (const road of g.model.roads) {
+        if (road.name !== want || road.points.length < 2) continue
+        const [x, y] = road.points[Math.floor(road.points.length / 2)]
+        g.walkState.x = x
+        g.walkState.y = y
+        return true
+      }
+      return false
+    }, name)
+
+  test('the HUD names the street, and names a different one after moving', async ({
+    page,
+  }) => {
+    test.setTimeout(90000)
+    await launchGame(page)
+    await enterCity(page)
+
+    const two = await page.evaluate(() => {
+      const named = window.__cityWalkGame.model.roads
+        .filter((r) => r.name && r.points.length > 2 && r.kind !== 'cycleway')
+        .map((r) => r.name)
+      return [...new Set(named)].slice(0, 40)
+    })
+    expect(two.length).toBeGreaterThan(1)
+
+    const hud = page.locator('#cityWalkHudStatus')
+    const seen = []
+    for (const name of two) {
+      if (!(await standOn(page, name))) continue
+      await stepOnce(page)
+      const text = await hud.textContent()
+      const match = text.match(/ · (?:on|near) ([^·]+?) · /)
+      if (match) seen.push(match[1].trim())
+      if (seen.length >= 2 && seen[0] !== seen[seen.length - 1]) break
+    }
+
+    // The clause appears at all...
+    expect(seen.length, 'the HUD never showed a street clause').toBeGreaterThan(
+      0
+    )
+    // ...and it FOLLOWS the player rather than sticking to the first answer.
+    expect(
+      new Set(seen).size,
+      `the street clause never changed: ${JSON.stringify(seen)}`
+    ).toBeGreaterThan(1)
+  })
+
+  test('never claims a street when there is none nearby', async ({ page }) => {
+    test.setTimeout(90000)
+    await launchGame(page)
+    await enterCity(page)
+
+    // Far outside the extract there is no named way within the honesty
+    // radius, and the HUD must say nothing rather than name the last one.
+    await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      g.walkState.x = 9000
+      g.walkState.y = 9000
+    })
+    await stepOnce(page)
+    const text = await page.locator('#cityWalkHudStatus').textContent()
+    expect(text).not.toMatch(/ · (?:on|near) /)
+  })
+
+  test('X says where you are, once, through the in-layer announcer', async ({
+    page,
+  }) => {
+    test.setTimeout(90000)
+    await launchGame(page)
+    await enterCity(page)
+    await stepOnce(page)
+
+    const announcer = page.locator('#cityWalkAnnouncer')
+    // Count how many times the live region is written, not just its value:
+    // two announcements per press would be read out twice.
+    await page.evaluate(() => {
+      window.__cw27Writes = 0
+      const el = document.querySelector('#cityWalkAnnouncer')
+      // announceInLayer deliberately clears the region and sets it again on
+      // the next frame, so a screen reader re-reads identical text. That is
+      // TWO mutations for ONE announcement - count only the ones that put
+      // words in, or this asserts the implementation instead of the promise.
+      new MutationObserver(() => {
+        if ((el.textContent ?? '').trim() !== '') window.__cw27Writes++
+      }).observe(el, { childList: true, characterData: true, subtree: true })
+    })
+
+    await page.keyboard.press('x')
+    await expect(announcer).toHaveText(/^You are .*, facing [a-z]+\.$/)
+    const said = await announcer.textContent()
+    await page.waitForTimeout(400)
+    expect(await page.evaluate(() => window.__cw27Writes)).toBe(1)
+
+    // The sentence is a real one: no empty clause, no dangling comma.
+    expect(said).not.toMatch(/,\s*,/)
+    expect(said).not.toMatch(/\bnear\s*,/)
+    expect(said).not.toMatch(/\bon\s*,/)
+  })
+
+  test('the toolbar carries the same question for a mouse-only player', async ({
+    page,
+  }) => {
+    test.setTimeout(90000)
+    await launchGame(page)
+    await enterCity(page)
+    await stepOnce(page)
+
+    const btn = page.locator('#cityWalkWhereBtn')
+    await expect(btn).toBeVisible()
+    // The CW-15 promise: every key also has a button, and the button says
+    // which key it is.
+    await expect(btn).toHaveAttribute('title', /X/)
+    await btn.click()
+    await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
+      /^You are .*, facing [a-z]+\.$/
+    )
+  })
+
+  test('the HUD stays one line at 1280 with the longest real names (D-71)', async ({
+    page,
+  }) => {
+    test.setTimeout(90000)
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await launchGame(page)
+    await enterCity(page, 'Denver, Colorado')
+    await stepOnce(page)
+
+    // Denver carries the longest landmark name in the four extracts, and it
+    // wrapped this line to two lines before CW-27 shortened both names.
+    await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      g.nearLandmark = g.landmarks.reduce((a, b) =>
+        b.name.length > a.name.length ? b : a
+      ).name
+    })
+    await stepOnce(page)
+
+    const box = await page.locator('#cityWalkHudStatus').evaluate((el) => {
+      const lineH = parseFloat(getComputedStyle(el).lineHeight || '20')
+      return {
+        lines: Math.round(el.getBoundingClientRect().height / lineH),
+        text: el.textContent,
+      }
+    })
+    expect(box.lines, `HUD wrapped: ${box.text}`).toBe(1)
+  })
+})

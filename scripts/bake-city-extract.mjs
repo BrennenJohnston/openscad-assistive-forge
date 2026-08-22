@@ -78,6 +78,7 @@ const query = `[out:json][timeout:60];
 (
   way["building"](around:${radiusM},${center.lat},${center.lon});
   relation["building"]["type"="multipolygon"](around:${radiusM},${center.lat},${center.lon});
+  way["building:part"](around:${radiusM},${center.lat},${center.lon});
   way["highway"](around:${radiusM},${center.lat},${center.lon});
   node["natural"="tree"](around:${radiusM},${center.lat},${center.lon});
 );

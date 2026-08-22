@@ -38,6 +38,7 @@ import {
   parseCityExtract,
   extractLandmarks,
   nearestLandmarkName,
+  buildStreetIndex,
 } from './city-data.js';
 import {
   buildCityGroup,
@@ -445,6 +446,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       'M: switch between street view and map view',
       'On the map: arrow keys pan, Minus and Equals zoom, Home returns to you',
       'L and Shift+L: cycle landmarks on the map',
+      'X: say where you are',
       `Minus and Equals in street view: smaller or larger characters (${Math.round(
         CHAR_SCALE_MIN * 100
       )}% to 100%)`,
@@ -810,6 +812,15 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
           label: 'Next',
           keys: 'L',
           press: () => cycleLandmark(1),
+          views: 'both',
+        },
+        // CW-27: wayfinding belongs beside the landmarks, because it answers
+        // the same question a player asks when they are lost.
+        {
+          id: 'cityWalkWhereBtn',
+          label: 'Where am I?',
+          keys: 'X',
+          press: sayWhereYouAre,
           views: 'both',
         },
       ],
@@ -1198,6 +1209,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       mapCam,
       speedScale,
       landmarks,
+      // CW-27: named road segments, indexed once at city build.
+      streetIndex: buildStreetIndex(model.roads),
+      streetName: null,
+      streetOn: false,
       beacons,
       landmarkIndex: -1,
       nearLandmark: null,
@@ -1512,6 +1527,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       event.preventDefault();
       event.stopPropagation();
       cycleLandmark(event.shiftKey ? -1 : 1);
+      return;
+    }
+
+    if (event.code === 'KeyX') {
+      event.preventDefault();
+      event.stopPropagation();
+      sayWhereYouAre();
       return;
     }
 
@@ -2054,6 +2076,90 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     );
   }
 
+  // CW-27 wayfinding. A walker on the pavement of a 6 m residential street
+  // sits about 5 m from its centreline, and on a 12 m primary about 8, so
+  // ON_M covers standing in the street itself. Between that and NEAR_M the
+  // HUD says "near" instead, and past it says nothing rather than lying.
+  const STREET_ON_M = 12;
+  const STREET_NEAR_M = 30;
+  // At an intersection two streets are almost equidistant (at the Seattle
+  // spawn, 4th Avenue at 8.1 m and Union Street at 9.0 m). Without a margin
+  // the clause would flap between them on every step.
+  const STREET_SWITCH_M = 4;
+  // D-71: the HUD is one line and has to stay one line at 1280 px, and its
+  // budget is about 1010 px. MEASURED in Denver: standing near "Embassy
+  // Suites by Hilton Denver Downtown Convention Center" wrapped the line to
+  // TWO lines at 1028 px BEFORE this release existed - a pre-existing defect
+  // CW-27 only made easier to reach. Both long names are therefore shortened
+  // here, which brings the same worst case back to 1008 px and one line.
+  // Nothing is lost: the announcements always speak both names in full.
+  const HUD_NAME_MAX_CHARS = 28;
+
+  /** Shorten a name for the HUD ONLY, on a word boundary where it can. */
+  function hudShortName(name) {
+    if (name.length <= HUD_NAME_MAX_CHARS) return name;
+    const cut = name.slice(0, HUD_NAME_MAX_CHARS);
+    const space = cut.lastIndexOf(String.fromCharCode(32));
+    return (
+      (space > 12 ? cut.slice(0, space) : cut).trimEnd() +
+      String.fromCharCode(8230)
+    );
+  }
+
+  /**
+   * Update which street the player is on. Keeps the current answer unless a
+   * different street is clearly closer, so an intersection does not flap.
+   */
+  function updateStreet(game) {
+    const hits = game.streetIndex.query(
+      game.walkState.x,
+      game.walkState.y,
+      STREET_NEAR_M
+    );
+    let pick = hits[0] ?? null;
+    if (pick && game.streetName && pick.name !== game.streetName) {
+      const held = hits.find((h) => h.name === game.streetName);
+      if (held && held.rank - pick.rank < STREET_SWITCH_M) pick = held;
+    }
+    game.streetName = pick ? pick.name : null;
+    game.streetOn = pick ? pick.distM <= STREET_ON_M : false;
+  }
+
+  /**
+   * CW-27: "Where am I?" on the X key and the toolbar button. One
+   * announcement per press, whichever clauses are true — an empty clause is
+   * never spoken, and a street the player is not on is never claimed.
+   *
+   * Every string here is FLAGGED for the owner (D-35).
+   */
+  function whereAmIMessage(game) {
+    const facing = headingLabel(game.walkState.headingRad);
+    const street = game.streetName;
+    const landmark = game.nearLandmark;
+    if (street && game.streetOn) {
+      return landmark
+        ? `You are on ${street}, near ${landmark}, facing ${facing}.`
+        : `You are on ${street}, facing ${facing}.`;
+    }
+    if (street) {
+      return landmark
+        ? `You are near ${street} and ${landmark}, facing ${facing}.`
+        : `You are near ${street}, facing ${facing}.`;
+    }
+    if (landmark) return `You are near ${landmark}, facing ${facing}.`;
+    return `You are not near a named street, facing ${facing}.`;
+  }
+
+  function sayWhereYouAre() {
+    const game = state.game;
+    if (!game) return;
+    // The street is normally refreshed on movement frames; standing still
+    // and pressing X must still get a true answer.
+    updateStreet(game);
+    announceInLayer(whereAmIMessage(game));
+    updateHud();
+  }
+
   function updateHud() {
     const game = state.game;
     if (!game) return;
@@ -2061,7 +2167,9 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       ? `map view · zoom ${game.mapCam.zoom.toFixed(1)}x`
       : `street view · speed ${Math.round(game.speedScale * 100)}%`;
     const near =
-      !game.mapView && game.nearLandmark ? ` · near ${game.nearLandmark}` : '';
+      !game.mapView && game.nearLandmark
+        ? ` · near ${hudShortName(game.nearLandmark)}`
+        : '';
     const looking = game.mapView ? null : pitchLabel(game.walkState.pitchRad);
     const gaze = looking ? ` · looking ${looking}` : '';
     // CW-20: a reason to wander. Only while there is something to count.
@@ -2069,9 +2177,15 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       game.landmarks?.length > 0
         ? ` · landmarks ${game.visited?.size ?? 0}/${game.landmarks.length}`
         : '';
+    // CW-27: where you are, next to which way you are facing. Says nothing
+    // at all rather than naming a street the player is nowhere near.
+    const street =
+      !game.mapView && game.streetName
+        ? ` · ${game.streetOn ? 'on' : 'near'} ${hudShortName(game.streetName)}`
+        : '';
     const text =
       `${game.city.label} · facing ${headingLabel(game.walkState.headingRad)}` +
-      `${gaze} · ${view}${near}${found}`;
+      `${street}${gaze} · ${view}${near}${found}`;
     if (text !== game.lastHudText) {
       game.lastHudText = text;
       state.refs.hudStatus.textContent = text;
@@ -2167,6 +2281,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     if (moved || turned || pitched) {
       applyFirstPersonCamera();
       if (moved) {
+        updateStreet(game);
         const near = nearestLandmarkName(
           game.landmarks,
           game.walkState.x,
