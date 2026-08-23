@@ -15,6 +15,7 @@
 import { createFocusTrap } from './focus-trap.js';
 import { getUIModeController } from './ui-mode-controller.js';
 import { announceImmediate, announceError } from './announcer.js';
+import { backGuardAnsweredPop } from './back-guard.js';
 import {
   STORAGE_KEY_TUTORIAL_STATE,
   safeGetItem,
@@ -2786,12 +2787,18 @@ function handleBeforeUnload() {
 
 /**
  * Handle browser back/forward navigation during tutorial
+ *
+ * Q-86 (owner, 2026-08-22): a Back press used to mean the document was on its
+ * way out, so ending the tour was the only honest thing to do with it. Since
+ * UF-39 the app answers that press with a dialog, and the person who chose
+ * "Stay in the app" is standing on the step they were on. Progress is still
+ * saved either way, so a tour that does end here can be resumed.
  */
 function handlePopState() {
-  if (activeTutorial) {
-    saveTutorialProgress(currentStepIndex);
-    closeTutorial();
-  }
+  if (!activeTutorial) return;
+  saveTutorialProgress(currentStepIndex);
+  if (backGuardAnsweredPop()) return;
+  closeTutorial();
 }
 
 // ============================================================================

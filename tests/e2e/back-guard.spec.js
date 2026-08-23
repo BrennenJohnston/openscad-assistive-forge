@@ -87,6 +87,9 @@ for (const vp of VIEWPORTS) {
       const stayed = await appState(page);
       expect(stayed.hasApp).toBe(true);
       expect(stayed.surface).toBe('project');
+      // Staying puts the address bar back where it was too: the deep link
+      // cleaned its own URL on the way in, and a Back press must not undo that.
+      expect(stayed.href).toBe(`${new URL(page.url()).origin}/`);
 
       // Re-armed: the guard is not a one-shot.
       await page.goBack();
@@ -110,6 +113,10 @@ test.describe('U-41: the warning answers like every other dialog in the app', ()
 
     await page.goBack();
     await expect(leaveDialog(page)).toBeVisible({ timeout: 10_000 });
+    // The trap takes its initial focus on a rAF, and Escape is bound to the
+    // modal, so a press before that lands on <body> and is not heard (the
+    // UF-23 probe lesson, not a defect of this dialog).
+    await expect(stayBtn(page)).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(leaveDialog(page)).toHaveCount(0);
 
@@ -153,6 +160,9 @@ test.describe('Q-85: the guard belongs to the project surface', () => {
       { timeout: 30_000 }
     );
 
+    // Retracting the sentinel must not drag a stale address bar back with it.
+    expect(await page.evaluate(() => location.search)).toBe('');
+
     // On the Main Page, Back is the browser's own again: it leaves, and it
     // does so in ONE press, with no swallowed press in between.
     await page.goBack();
@@ -181,6 +191,67 @@ test.describe('Q-85: the guard belongs to the project surface', () => {
 
     await page.goBack();
     await expect(leaveDialog(page)).toBeVisible({ timeout: 10_000 });
+  });
+});
+
+test.describe('U-41: one Back press, one answer', () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test('the comparison view answers the press itself, and no dialog stacks on top', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await openProject(page);
+
+    await page.locator('#actionsDrawerToggle').click();
+    await page.locator('#addToComparisonBtn').click();
+    await expect(page.locator('#comparisonView')).toBeVisible({
+      timeout: 30_000,
+    });
+
+    // The comparison listener predates the guard and could never fire before
+    // it: nothing in the app pushed history. Now that something does, this
+    // press belongs to the view that is open, not to the app's front door.
+    await page.goBack();
+    await expect(page.locator('#comparisonView')).toBeHidden({
+      timeout: 15_000,
+    });
+    await expect(leaveDialog(page)).toHaveCount(0);
+    expect((await appState(page)).surface).toBe('project');
+
+    // and the press was spent, not the guard: the next one asks.
+    await page.goBack();
+    await expect(leaveDialog(page)).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('Q-86: a tour is still on its step after Stay', async ({ page }) => {
+    test.setTimeout(240_000);
+    await seed(page);
+    await page.goto('/');
+    await page.locator('.btn-role-try[data-tutorial="intro"]').click();
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-app-surface',
+      'project',
+      { timeout: 180_000 }
+    );
+    await expect(page.locator('.tutorial-panel')).toBeVisible({
+      timeout: 60_000,
+    });
+    await page.locator('#tutorialNextBtn').click();
+    const step = await page.locator('#tutorial-step-title').textContent();
+    const number = await page.locator('#tutorial-step-current').textContent();
+
+    await page.goBack();
+    await expect(leaveDialog(page)).toBeVisible({ timeout: 10_000 });
+    await stayBtn(page).click();
+
+    // The tour stands down for any dialog (UF-36) and comes back when it
+    // closes, so this also proves the two mechanisms compose.
+    await expect(page.locator('.tutorial-panel')).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.locator('#tutorial-step-title')).toHaveText(step);
+    await expect(page.locator('#tutorial-step-current')).toHaveText(number);
   });
 });
 
