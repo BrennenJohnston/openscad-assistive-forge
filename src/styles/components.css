@@ -625,6 +625,42 @@ details.param-group.forge-disclosure[open] > summary::before {
   text-overflow: ellipsis;
 }
 
+/* ============================================================================
+   U-46 / Q-73a: the workflow row's four controls join this one
+   ============================================================================
+   mobile-toolbar.js owns the decision — mobile-shaped viewport AND an open
+   project — and writes body[data-mobile-toolbar]. Everything below follows
+   from that one attribute so the predicate is never restated.
+
+   The four controls arrive inside their own .workflow-actions container, so
+   they keep the 44px minimum and the icon-only treatment that container's
+   rules give them. Nothing here shrinks a hit area.
+   ============================================================================ */
+
+body[data-mobile-toolbar='relocated'] .preview-drawer-header-right {
+  gap: var(--space-xs);
+}
+
+/* The heading goes sr-only (mobile-toolbar.js adds the class) and it is what
+   pays for the four controls: 148px of text in a 376px row. It keeps naming
+   #previewInfoContent through aria-labelledby, so no accessible name is lost.
+   position: relative here is the R2a/UF-5 lesson: an absolute sr-only box in
+   a static container resolves against <html> and adds phantom page scroll. */
+body[data-mobile-toolbar='relocated'] .preview-drawer-header-left {
+  position: relative;
+  flex: 0 1 auto;
+}
+
+/* The row the controls left. In Standard the menu bar still lives there and
+   the row stays; in Simplified nothing visible remains, and a 54px band of
+   padding around nothing is exactly what U-46 asked us to give back. Keyed on
+   the menu bar's real state rather than on the density, because Simplified
+   can show menus too when the panel registry says so. */
+body[data-mobile-toolbar='relocated']
+  #workflowProgress:not(:has(#toolbarMenuBar:not(.hidden))) {
+  display: none;
+}
+
 /* Match Camera/Parameters collapse toggle button styling */
 .preview-drawer-toggle-btn.btn-collapse-panel {
   border: 1px solid var(--color-border);

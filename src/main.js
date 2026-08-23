@@ -220,6 +220,8 @@ import {
   isViewportDesktopShaped,
   subscribeViewportShape,
 } from './js/classic-availability.js';
+// U-46: the four app-chrome controls join the Customizer row on a phone
+import { initMobileToolbar } from './js/mobile-toolbar.js';
 import {
   initClassicLayoutController,
   getClassicLayoutController,
@@ -3157,6 +3159,12 @@ async function initApp() {
   getUIModeController().subscribe((newMode) => {
     applyToolbarModeVisibility(newMode);
   });
+
+  // U-46 (Q-73a): on a mobile-shaped project surface the four app-chrome
+  // controls move out of their own row and into the Customizer row. Wired
+  // after applyToolbarModeVisibility so the row it collapses has already
+  // settled into the density it is going to hold.
+  initMobileToolbar();
 
   // Initialize HFM/Alt View controller (hidden feature mode)
   const hfmCtrl = initHfmController({
