@@ -1,6 +1,6 @@
 /**
  * Mobile Drawer Controller
- * Implements off-canvas drawer pattern for parameters panel on mobile devices
+ * Implements off-canvas drawer pattern for the Customizer panel on mobile devices
  * Based on Bootstrap Offcanvas and WAI-ARIA Dialog practices
  *
  * STATE CONVENTION: Additive open — `drawer-open` class = open.

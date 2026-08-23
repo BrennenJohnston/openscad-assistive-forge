@@ -88,12 +88,12 @@ test.describe('Welcome spotlight (U-23, UF-16)', () => {
     await expect(page.locator(SPOTLIGHT_CARD)).toHaveCount(0);
     await page.locator('.tour-nudge-dismiss').click();
 
-    // Now exactly ONE card carries the halo — the Welcome Page Tour card
+    // Now exactly ONE card carries the halo — the Main Page Tour card
     // (Q-44a precedence), with the tag and a real dismiss button.
     await expect(page.locator(SPOTLIGHT_CARD)).toHaveCount(1);
     const card = page.locator(SPOTLIGHT_CARD);
     await expect(card.locator('.role-path-title')).toHaveText(
-      'Welcome Page Tour'
+      'Main Page Tour'
     );
     await expect(card.locator('.welcome-spotlight-tag-text')).toHaveText(
       'New here? Start with this tour'
@@ -110,7 +110,7 @@ test.describe('Welcome spotlight (U-23, UF-16)', () => {
       .poll(
         () =>
           page.evaluate(() =>
-            window.__said.some((t) => t.includes('Welcome Page Tour'))
+            window.__said.some((t) => t.includes('Main Page Tour'))
           ),
         { timeout: 5_000 }
       )
@@ -246,7 +246,7 @@ test.describe('Welcome spotlight (U-23, UF-16)', () => {
     await expect(page.locator(SPOTLIGHT_CARD)).toHaveCount(1);
     await expect(
       page.locator(SPOTLIGHT_CARD).locator('.role-path-title')
-    ).toHaveText('Welcome Page Tour');
+    ).toHaveText('Main Page Tour');
   });
 
   test('reduced motion collapses the pulse to a static halo', async ({

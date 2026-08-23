@@ -1203,7 +1203,7 @@ test.describe('Screen Reader Support', () => {
       const stepTitle = page.locator('.tutorial-step-title')
 
       await nextTo(page, 'The 3 main areas')
-      await nextTo(page, 'Open and close Parameters')
+      await nextTo(page, 'Open and close the Customizer')
       await nextTo(page, 'Expand a parameter group')
 
       // This step is gated: expand the Dimensions group to enable Next.
