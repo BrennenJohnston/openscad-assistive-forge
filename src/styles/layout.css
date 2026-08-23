@@ -3913,7 +3913,24 @@ details summary:focus,
     object-fit: contain;
   }
 
-  /* Buttons align right on same row as logo */
+  /* Buttons align right on same row as logo.
+     UF-42: they WRAP rather than refuse to. nowrap plus justify-content:
+     flex-end overflows to the LEFT, where there is no scrollbar and no way
+     back — measured in high contrast at 412x810, where the row's own
+     controls grow (the Main Page button 100.8 -> 116.6px, the interface
+     switch 193.6 -> 213.8px) and push the content past the 396px available.
+     The result was #app carrying 24px of hidden scroll range, scrolled to
+     23, with the Main Page button starting at x -15 and its label cut. On
+     the release base the same measurement read 100px of range with the
+     Classic button 96px off the right edge, so this is older than this
+     release and worse before it.
+     Wrapping costs a header row exactly when the contents genuinely do not
+     fit — in high contrast at 412px the header goes 48px -> 96px — and a
+     taller header is the right price for a control you can still reach.
+     At 412px without high contrast the row measures 394.4px against 396 and
+     does not wrap, which is why the reclaimed rows survive; a platform whose
+     fonts need more gets the extra row instead of a hidden control, so the
+     budget cases assert a ceiling and the structure, not a magic number. */
   :root .header-controls {
     flex: 1 1 auto;
     width: auto;
@@ -3921,7 +3938,8 @@ details summary:focus,
     margin-left: auto;
     order: 2;
     gap: var(--space-xs);
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
+    row-gap: var(--space-2xs);
   }
 }
 

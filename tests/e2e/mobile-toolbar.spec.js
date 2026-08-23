@@ -25,7 +25,9 @@ const WASM_READY_TIMEOUT = 180_000;
 // phone actually has.
 const HEIGHTS = [915, 810];
 
+// What Chromium measures after UF-42, and what the release base spent.
 const TOP_CHROME = { simplified: 93, standard: 135 };
+const BASE_TOP_CHROME = { simplified: 147, standard: 187 };
 const QUARTET = [
   '#contrastToggle',
   '#themeToggle',
@@ -89,16 +91,48 @@ for (const height of HEIGHTS) {
       test.setTimeout(240_000);
       await loadSampleProject(page);
 
+      // UF-41's lesson, taken to heart: do not assert a measurement as a
+      // promise. The header row WRAPS rather than clips when a platform's
+      // fonts need more width than 412px allows (see layout.css), so its
+      // height is font-dependent and a lane with 2px wider glyphs would fail
+      // here on a font rather than on a lost row.
+      //
+      // What UF-42 actually promises is the structure: the four icons' row is
+      // gone, they are in the Customizer row, and the top chrome costs less
+      // than the 147px / 187px it cost before. Chromium measures 93 and 135;
+      // those numbers are the record, and the ceiling is the promise.
+      const simplified = await topChrome(page);
       expect(
-        await topChrome(page),
-        'Simplified: header + Customizer row, and nothing between them'
-      ).toBe(TOP_CHROME.simplified);
+        simplified,
+        `Simplified: header + Customizer row and nothing between them (was 147px, Chromium measures 93px, got ${simplified})`
+      ).toBeLessThan(BASE_TOP_CHROME.simplified);
+      expect(
+        await page.evaluate(
+          () =>
+            getComputedStyle(document.getElementById('workflowProgress'))
+              .display
+        ),
+        'the row the four icons left has collapsed'
+      ).toBe('none');
 
       await switchToStandard(page);
+      const standard = await topChrome(page);
       expect(
-        await topChrome(page),
-        'Standard: the menu bar keeps its own row, the action icons do not'
-      ).toBe(TOP_CHROME.standard);
+        standard,
+        `Standard: the menu bar keeps its own row, the action icons do not (was 187px, Chromium measures 135px, got ${standard})`
+      ).toBeLessThan(BASE_TOP_CHROME.standard);
+      expect(
+        await page.locator('#toolbarMenuBar').isVisible(),
+        'Standard keeps its menu bar'
+      ).toBe(true);
+      expect(
+        await page.evaluate(() =>
+          document
+            .querySelector('.workflow-actions')
+            .closest('#workflowProgress')
+        ),
+        'and the action icons are not in it'
+      ).toBeNull();
     });
 
     test('toolbar-fits: nothing in the top chrome runs off the screen or sits on a neighbour', async ({
@@ -302,6 +336,78 @@ for (const height of HEIGHTS) {
     });
   });
 }
+
+test.describe('UF-42: high contrast grows the row rather than hiding it', () => {
+  test.use({ viewport: { width: 412, height: 810 } });
+
+  test('toolbar-high-contrast: nothing slides off the left edge, and #app gains no hidden scroll', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await page.goto('/');
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: WASM_READY_TIMEOUT,
+    });
+    await page.evaluate(() =>
+      document.documentElement.setAttribute('data-high-contrast', 'true')
+    );
+    await page.locator('#fileInput').setInputFiles(FIXTURE);
+    await expect(page.locator('#welcomeScreen')).toBeHidden({ timeout: 60_000 });
+    await expect(page.locator('#mainInterface')).toBeVisible({
+      timeout: 20_000,
+    });
+    const notNow = page.locator('#saveProjectNotNow');
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 3_000 });
+      await notNow.click();
+    } catch {
+      // no modal
+    }
+    await switchToStandard(page);
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-high-contrast',
+      'true'
+    );
+
+    // High contrast thickens every border, so the header's own controls grow:
+    // the Main Page button 100.8 -> 116.6px and the interface switch
+    // 193.6 -> 213.8px. Measured on the release base, the row then overflowed
+    // to the LEFT — #app held 100px of hidden scroll range and the Classic
+    // button sat 96px off the right edge. There is no scrollbar on a
+    // display:hidden overflow, so those pixels were simply gone.
+    const state = await page.evaluate(() => {
+      const app = document.getElementById('app');
+      const clipped = [];
+      const selector =
+        '.app-header button, .app-header a, #workflowProgress button, ' +
+        '.preview-drawer-header button';
+      for (const el of document.querySelectorAll(selector)) {
+        const cs = getComputedStyle(el);
+        if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+        const r = el.getBoundingClientRect();
+        if (!r.width) continue;
+        if (r.right > window.innerWidth + 0.5 || r.left < -0.5) {
+          clipped.push(
+            `${el.id || String(el.className).split(' ')[0]} [${Math.round(r.left)}..${Math.round(r.right)}]`
+          );
+        }
+      }
+      return {
+        clipped,
+        hiddenScrollRange: app.scrollWidth - app.clientWidth,
+        appScrollLeft: app.scrollLeft,
+      };
+    });
+
+    expect(state.clipped, 'no control is pushed off an edge').toEqual([]);
+    expect(
+      state.hiddenScrollRange,
+      '#app carries no horizontal scroll a user cannot see or reach'
+    ).toBe(0);
+    expect(state.appScrollLeft).toBe(0);
+  });
+});
 
 test.describe('UF-42: the row goes home when the window grows', () => {
   test.use({ viewport: { width: 412, height: 915 } });

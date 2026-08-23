@@ -641,6 +641,18 @@ body[data-mobile-toolbar='relocated'] .preview-drawer-header-right {
   gap: var(--space-xs);
 }
 
+/* The branding is already squeezed to zero width on this surface — the Main
+   Page button and the interface switch take the row — so all it contributes
+   is the two 4px gaps around an invisible box. Measured at 412px: the row's
+   content is 289.6px against 287.2px available, and those 8px are the whole
+   difference between one line and two. Nothing leaves the screen that was on
+   it; the logo and title were not rendering here before this rule.
+   Scoped to the relocated (mobile + project) state, because the welcome
+   surface has no Main Page button and the branding really does show there. */
+body[data-mobile-toolbar='relocated'] .header-branding {
+  display: none;
+}
+
 /* The heading goes sr-only (mobile-toolbar.js adds the class) and it is what
    pays for the four controls: 148px of text in a 376px row. It keeps naming
    #previewInfoContent through aria-labelledby, so no accessible name is lost.
