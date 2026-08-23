@@ -154,6 +154,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The two halves of the browser test suite now take the same amount of time** (CW-29, D-72) - the
+  Chromium and Edge test lanes each run in two halves side by side, and each half was being given
+  the same NUMBER of tests: 476 against 475. The work was nowhere near equal, because the slow
+  files happen to sort first alphabetically - one of them, the City Walk's own suite, is a quarter
+  of the whole lane on its own. One half ran for 32 to 35 minutes against a 35-minute limit and
+  failed three times on the clock rather than on anything being wrong; its sibling finished in 12.
+  The halves are now packed by measured cost, from real timings read out of a green run, and come
+  out at about 20 minutes each. The list of files is read off disk every time, so a test file added
+  later cannot fall between the two halves and quietly stop being run
 - **The City Walk runs at full frame rate from its default size upwards** (CW-22) - the game draws
   its picture by stamping one character at a time onto a canvas, and asking the canvas to draw
   something costs about the same whether the thing is big or small. At the size the game starts at,
@@ -311,6 +320,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Walls you look straight at are drawn as walls again** (CW-29, D-73) - the City Walk decides what
+  each character is looking at before it picks the character, so that a road can be drawn with
+  characters that lie down and a wall with characters that stand up. It worked out which way a
+  building face pointed relative to the CAMERA rather than relative to the world, so any facade you
+  stood square to was filed as a rooftop and drawn with the flat horizontal characters rooftops
+  get - the venetian-blind banding the wall vocabulary exists to avoid, on whichever building you
+  happened to be looking at. Standing at one Seattle corner with the view level, 28.6% of the
+  screen was being called rooftop; from street level with a level view the true answer is
+  essentially none, and now is. Every other surface classified identically before and after, and
+  the map view - where the camera really does look down and roofs really are roofs - is unchanged
+- **The fog no longer outstays the rain that brought it** (CW-29, D-74) - while it rains the fog
+  slowly breathes between a clear night and a murky one, over about three minutes. That drift was
+  read off a clock that kept running whether or not it was raining, and was only ever applied while
+  it was. Stop the rain on the murky half and the fog stayed at its thickest for the rest of the
+  session, on a clear night, with nothing on screen to explain why you could not see across the
+  street. Start it again and the fog jumped in a single frame to wherever the clock had got to.
+  Now a shower picks the drift up from the fog that is actually on screen and carries on
+  thickening from there, and ending a shower hands back the clear night it borrowed
+- **Thunder lets go of the city** (CW-29, D-75) - a thunder swell lifts the ambient light by up to
+  22% over a third of a second and then puts it back. Putting it back needs a frame, and both ways
+  out of the rain skip those frames: stopping the rain, and turning on reduced motion. Either one,
+  caught mid-swell, left the whole city sitting under a raised light with no rain and no thunder
+  in it, until something unrelated happened to reset it. Both exits now put the light down
+- **Asking for less movement ends the shower** (CW-29, D-76) - the rain key has always refused to
+  START rain while reduced motion is on. Rain already falling was left exactly where it stood,
+  because turning the preference on stops the frames that move the drops rather than stopping the
+  rain: the shower froze in mid-air as a field of static diagonal streaks, and the Rain button
+  stayed in a toolbar where pressing it now only produced the refusal message. Turning reduced
+  motion on now ends the shower the same way the key does - the drops go, the fog goes back to
+  clear, the button leaves the toolbar, and it says so
 - **The status line stopped spilling onto a second row in Denver** (D-71) - standing near the
   Embassy Suites by Hilton Denver Downtown Convention Center made the line long enough to wrap,
   which pushed the game view down by a row. Very long street and landmark names are now shortened
