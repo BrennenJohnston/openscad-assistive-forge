@@ -647,10 +647,32 @@ body[data-mobile-toolbar='relocated'] .preview-drawer-header-right {
    content is 289.6px against 287.2px available, and those 8px are the whole
    difference between one line and two. Nothing leaves the screen that was on
    it; the logo and title were not rendering here before this rule.
+
+   Taken out of the FLOW, not out of the accessibility tree. `display: none`
+   was tried first and measured to remove the document's only <h1> — 0px wide
+   on the base but still announced, gone entirely with display:none. A page
+   losing its main heading on a phone is not a trade this release gets to
+   make, so this is the sr-only treatment instead: no layout cost, same
+   heading. `.header-content` carries position: relative for it, which is the
+   R2a/UF-5 lesson — an absolute box in a static container resolves against
+   <html> and adds phantom page scroll.
+
    Scoped to the relocated (mobile + project) state, because the welcome
    surface has no Main Page button and the branding really does show there. */
+body[data-mobile-toolbar='relocated'] .header-content {
+  position: relative;
+}
+
 body[data-mobile-toolbar='relocated'] .header-branding {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }
 
 /* The heading goes sr-only (mobile-toolbar.js adds the class) and it is what

@@ -256,6 +256,31 @@ for (const height of HEIGHTS) {
         expect(ring, `${selector} paints a focus indicator`).toBe(true);
       }
 
+      // The page keeps its only <h1>. The branding is taken out of the FLOW
+      // here — it has measured 0px wide on this surface for as long as the
+      // Main Page button has been in the row, and its two 4px gaps are what
+      // buys the row a single line — but taking it out of the ACCESSIBILITY
+      // TREE is a different thing entirely. display:none was tried first and
+      // did exactly that.
+      const heading1 = await page.evaluate(() => {
+        const h = document.querySelector('.header-branding h1');
+        if (!h) return { present: false };
+        for (let n = h; n; n = n.parentElement) {
+          if (getComputedStyle(n).display === 'none') {
+            return {
+              present: false,
+              hiddenBy: n.id || String(n.className).split(' ')[0],
+            };
+          }
+        }
+        return { present: true, text: h.textContent.replace(/\s+/g, ' ').trim() };
+      });
+      expect(
+        heading1.present,
+        `the document's only h1 is still announced${heading1.hiddenBy ? ` (display:none on .${heading1.hiddenBy})` : ''}`
+      ).toBe(true);
+      expect(heading1.text).toContain('OpenSCAD');
+
       // The heading that stood down is still the region's accessible name.
       const heading = page.locator('.preview-drawer-title');
       await expect(heading).toHaveClass(/sr-only/);
