@@ -95,9 +95,14 @@ const ROOF_NORMAL_Z = 0.9;
 const VERTEX_SHADER = /* glsl */ `
   varying float vUp;
   void main() {
-    // Object space is world space here: the city group is never rotated, and
-    // the merged meshes bake their own transforms in at build time.
-    vUp = normalize(normalMatrix * normal).z;
+    // Object space is world space here: the city group is never rotated, the
+    // merged meshes bake their own transforms in at build time, and nothing in
+    // the scene is scaled — so the object normal already points where the face
+    // points in the world, and no matrix belongs in this line. normalMatrix is
+    // built from modelViewMatrix, so multiplying by it would ask which way the
+    // face points relative to the CAMERA, and the roof test below would then
+    // fire on whatever the walker happens to be looking straight at (D-73).
+    vUp = normalize(normal).z;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }
 `;
