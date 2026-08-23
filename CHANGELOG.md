@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The buildings stop repeating** (CW-34) - two things you photographed. The first: at your
+  character size the near towers read as literal giant letters, because each family of buildings
+  had a letter cut out of its window panes to tell it from the next. The letters are gone. What
+  identifies a building now is the shape of its glazing - nine kinds, from a plain pane to a
+  vertical slot to a continuous horizontal band - and, more than that, **which of its windows are
+  lit**. The old pattern lit each window independently, which produces an even scatter that repeats
+  every four windows across; the city read as wallpaper because it was. Windows are now lit in
+  runs, with the run length and how many are lit re-rolled every few floors, so a tower reads as
+  offices working late. Each building also slides its own pattern along the tile, so two neighbours
+  of the same family are not the same wall twice
+- **Ground floors that are not all the same** (CW-34) - the second: every building's first level was
+  literally one repeating strip. There are five now - a glass front, an awning, a closed roller
+  shutter, an arcade, and a blank service wall, because a street where every ground floor is a shop
+  reads as a film set. Which one a building gets comes from the nearest shop or cafe in the map
+  data where there is one, and from the building itself where there is not
+
 ### Added
 
 - **Real ground under your feet** (CW-33) - the city had one floor: a roadway, a kerb line and a
