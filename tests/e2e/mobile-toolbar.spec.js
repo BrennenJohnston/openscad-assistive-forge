@@ -487,6 +487,85 @@ test.describe('UF-42: the row goes home when the window grows', () => {
   });
 });
 
+test.describe('UF-42: the row follows the surface, not just the viewport', () => {
+  test.use({ viewport: { width: 412, height: 810 } });
+
+  test('toolbar-surface-round-trip: Main Page, into a project, and back again', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    // The relocation has two conditions and the specs above only exercise one
+    // of them. This is the other: the Customizer row does not exist on the
+    // welcome screen, so the four controls must come home when a project
+    // closes, and go back when one opens — via onAppSurfaceChange, not a
+    // resize.
+    await page.goto('/');
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: WASM_READY_TIMEOUT,
+    });
+    const state = () =>
+      page.evaluate(() => ({
+        surface: document.body.dataset.appSurface,
+        toolbar: document.body.dataset.mobileToolbar,
+        inWorkflowRow: !!document
+          .querySelector('.workflow-actions')
+          ?.closest('#workflowProgress'),
+        titleSrOnly: document
+          .querySelector('.preview-drawer-title')
+          ?.classList.contains('sr-only'),
+      }));
+
+    expect(await state()).toMatchObject({
+      surface: 'welcome',
+      toolbar: 'home',
+      inWorkflowRow: true,
+      titleSrOnly: false,
+    });
+
+    await page.locator('#fileInput').setInputFiles(FIXTURE);
+    await expect(page.locator('#welcomeScreen')).toBeHidden({ timeout: 60_000 });
+    await expect(page.locator('#mainInterface')).toBeVisible({
+      timeout: 20_000,
+    });
+    const notNow = page.locator('#saveProjectNotNow');
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 3_000 });
+      await notNow.click();
+    } catch {
+      // no modal
+    }
+    await expect
+      .poll(async () => (await state()).toolbar)
+      .toBe('relocated');
+    expect(await state()).toMatchObject({
+      surface: 'project',
+      inWorkflowRow: false,
+      titleSrOnly: true,
+    });
+
+    // The button warns before it leaves — "Go back to the Main Page? Any
+    // unsaved changes to your current project will be lost." — so the trip
+    // home is two steps, not one.
+    await page.locator('#clearFileBtn').click();
+    await page.getByRole('button', { name: 'Confirm', exact: true }).click();
+    await expect(page.locator('#welcomeScreen')).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect.poll(async () => (await state()).toolbar).toBe('home');
+    expect(await state()).toMatchObject({
+      surface: 'welcome',
+      inWorkflowRow: true,
+      titleSrOnly: false,
+    });
+    // and they are on screen there, which is the point of coming home
+    for (const selector of ['#contrastToggle', '#themeToggle']) {
+      await expect(page.locator(selector)).toBeVisible();
+    }
+  });
+});
+
 test.describe('UF-42: the welcome surface is left alone', () => {
   test.use({ viewport: { width: 412, height: 915 } });
 
