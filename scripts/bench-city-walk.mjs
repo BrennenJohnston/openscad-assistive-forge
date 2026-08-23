@@ -76,6 +76,10 @@ const DEFAULTS = {
   // out over the SAME view - which is what a comparison of two converter
   // paths actually needs.
   walk: 1,
+  // --shot=<prefix> writes <prefix>-<city>-<variant>.png of the viewport at
+  // the end of each run, for the eyes-on gates. Pair it with --rain=none
+  // --walk=0 so the two variants photograph the same standing scene.
+  shot: '',
 }
 
 /** Variant name -> the setBenchLegacy payload that selects it. */
@@ -167,7 +171,7 @@ function selfTimeTable(profile) {
   return [...merged].sort((a, b) => b[1] - a[1])
 }
 
-async function benchCity(page, cdp, city, variant, opts) {
+async function benchCity(page, cdp, city, variant, opts, runIndex) {
   const buttonName = CITY_BUTTONS[city]
   if (!buttonName) throw new Error(`unknown city: ${city}`)
 
@@ -211,10 +215,15 @@ async function benchCity(page, cdp, city, variant, opts) {
   }
 
   // Character size, driven through the real key so the game's own clamp and
-  // persistence run. The setting is read back rather than assumed.
-  const steps = Math.round((1 - opts.charScale) / 0.1) + 4
-  for (let i = 0; i < steps; i++) {
-    await page.keyboard.press('Minus')
+  // persistence run. Step from wherever the size actually IS: the game saves
+  // it, so a second run in the same browser profile does not start at 100%.
+  const startScale = await page.evaluate(() =>
+    window.__cityWalkGame.altView.getFontScale()
+  )
+  const steps = Math.round((startScale - opts.charScale) / 0.1)
+  const key = steps >= 0 ? 'Minus' : 'Equal'
+  for (let i = 0; i < Math.abs(steps); i++) {
+    await page.keyboard.press(key)
   }
   const fontScale = await page.evaluate(() =>
     window.__cityWalkGame.altView.getFontScale()
@@ -322,6 +331,19 @@ async function benchCity(page, cdp, city, variant, opts) {
     }
   })
 
+  // The eyes-on capture. Taken with --rain=none --walk=0 the pose and the
+  // scene are identical between variants, so two shots differ only where the
+  // code does - which is what makes looking at them worth anything.
+  if (opts.shot) {
+    await page.waitForTimeout(400)
+    // The run index is in the name so that repeating a variant - the control
+    // that tells a real difference from session noise - does not overwrite
+    // its own first shot.
+    await page
+      .locator('#cityWalkViewport')
+      .screenshot({ path: `${opts.shot}-${runIndex}-${city}-${variant}.png` })
+  }
+
   let profileRows = null
   if (opts.profile) {
     const stopped = await cdp.send('Profiler.stop')
@@ -418,7 +440,7 @@ async function main() {
         console.log(
           `\n--- ${city} / ${variant} (${opts.seconds}s, ${opts.throttle}x CPU throttle) ---`
         )
-        const row = await benchCity(page, cdp, city, variant, opts)
+        const row = await benchCity(page, cdp, city, variant, opts, rows.length)
         console.log(`GL renderer: ${row.glRenderer}`)
         rows.push(row)
       }
