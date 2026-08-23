@@ -150,6 +150,13 @@ function _createInstanceState() {
     // step, so the old and the new can be measured in the SAME session — the
     // only comparison this machine's numbers support.
     benchLegacyTaps: false,
+    benchLegacyContrast: false,
+
+    // CW-30 contrast curves: pow(t, exp) tabulated per exponent, rebuilt only
+    // when the contrast setting moves.
+    cellCurve: null,
+    dirCurve: null,
+    curveKey: '',
 
     contrastScale: 1,
     contrastExp: _DEFAULT_CONTRAST_EXP,
@@ -364,9 +371,56 @@ function _buildTapPlan(cellW, cellH) {
   };
 }
 
+// Contrast curve resolution (CW-30). Both contrast passes raise a number in
+// [0, 1] to a power that is constant for the whole frame, so the curve can be
+// tabulated once and read instead of recomputed 12 times per cell. 2048 steps
+// with linear interpolation keeps the worst-case error near 6e-7 - four
+// orders of magnitude below the 1/11 quantization step the glyph key rounds
+// to - while the two tables together stay inside 16 KB and so inside L1.
+const _CURVE_STEPS = 2048;
+
+/**
+ * Tabulate pow(t, exp) for t in [0, 1].
+ *
+ * The array carries one extra entry past the end so that t === 1 lands on
+ * index _CURVE_STEPS with a real neighbour to interpolate against; reading
+ * one off the end of a Float32Array yields undefined, and undefined would
+ * turn the whole cell into NaN.
+ */
+function _buildContrastCurve(exp) {
+  const table = new Float32Array(_CURVE_STEPS + 2);
+  for (let i = 0; i <= _CURVE_STEPS; i++) {
+    table[i] = Math.pow(i / _CURVE_STEPS, exp);
+  }
+  table[_CURVE_STEPS + 1] = table[_CURVE_STEPS];
+  return table;
+}
+
+function _ensureContrastCurves(st) {
+  const key = `${st.contrastExp}|${st.dirContrastExp}`;
+  if (st.curveKey === key) return;
+  st.cellCurve = _buildContrastCurve(st.contrastExp);
+  st.dirCurve = _buildContrastCurve(st.dirContrastExp);
+  st.curveKey = key;
+}
+
+/**
+ * Read a tabulated curve at t, which callers guarantee is within [0, 1].
+ *
+ * Both call sites divide by a value proven to be the larger, and every input
+ * to them has been through _clamp01, so t cannot go negative or past one.
+ */
+function _curveAt(table, t) {
+  const x = t * _CURVE_STEPS;
+  const i = x | 0;
+  const a = table[i];
+  return a + (table[i + 1] - a) * (x - i);
+}
+
 function _applyDirectionalContrast(st, v, extSamples) {
   // Component-wise directional contrast: normalize each internal component
   // to the max of its affecting external samples, then sharpen.
+  const curve = st.benchLegacyContrast ? null : st.dirCurve;
   for (let i = 0; i < 6; i++) {
     let maxExt = v[i];
     const affecting = _EXT_AFFECTING[i];
@@ -377,7 +431,9 @@ function _applyDirectionalContrast(st, v, extSamples) {
 
     if (maxExt > v[i] && maxExt > 0.01) {
       const normalized = v[i] / maxExt;
-      const enhanced = Math.pow(normalized, st.dirContrastExp);
+      const enhanced = curve
+        ? _curveAt(curve, normalized)
+        : Math.pow(normalized, st.dirContrastExp);
       v[i] = _clamp01(enhanced * maxExt);
     }
   }
@@ -389,9 +445,12 @@ function _applyCellContrast(st, v) {
   // Global contrast: max-normalize the cell then apply the exponent.
   const max = Math.max(v[0], v[1], v[2], v[3], v[4], v[5]);
   if (!(max > 0)) return v;
+  const curve = st.benchLegacyContrast ? null : st.cellCurve;
   for (let i = 0; i < 6; i++) {
     const n = v[i] / max;
-    v[i] = _clamp01(Math.pow(_clamp01(n), st.contrastExp) * max);
+    v[i] = _clamp01(
+      (curve ? _curveAt(curve, n) : Math.pow(_clamp01(n), st.contrastExp)) * max
+    );
   }
   return v;
 }
@@ -686,6 +745,7 @@ function _renderFrame(
     st.tapPlanKey = planKey;
   }
   const tapPlan = st.benchLegacyTaps ? null : st.tapPlan;
+  _ensureContrastCurves(st);
 
   const v = new Float32Array(6);
   const extSamples = new Float32Array(10);
@@ -1351,14 +1411,23 @@ export async function initAltView(previewManager, options = {}) {
      * that cannot be run side by side cannot be trusted; this is what makes
      * the comparison possible at all.
      *
-     * @param {{taps?: boolean}} flags
+     * @param {{taps?: boolean, contrast?: boolean}} flags
      */
     api.setBenchLegacy = (flags = {}) => {
       if ('taps' in flags) st.benchLegacyTaps = Boolean(flags.taps);
+      if ('contrast' in flags) {
+        st.benchLegacyContrast = Boolean(flags.contrast);
+      }
       st.dirty = true;
-      return { taps: st.benchLegacyTaps };
+      return {
+        taps: st.benchLegacyTaps,
+        contrast: st.benchLegacyContrast,
+      };
     };
-    api.getBenchLegacy = () => ({ taps: st.benchLegacyTaps });
+    api.getBenchLegacy = () => ({
+      taps: st.benchLegacyTaps,
+      contrast: st.benchLegacyContrast,
+    });
   }
 
   return api;

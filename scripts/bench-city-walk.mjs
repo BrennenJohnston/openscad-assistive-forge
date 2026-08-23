@@ -82,6 +82,8 @@ const DEFAULTS = {
 const VARIANTS = {
   new: {},
   'legacy-taps': { taps: true },
+  'legacy-contrast': { contrast: true },
+  'legacy-all': { taps: true, contrast: true },
 }
 
 const CITY_BUTTONS = {
@@ -239,7 +241,9 @@ async function benchCity(page, cdp, city, variant, opts) {
   const applied = await page.evaluate((flags) => {
     const api = window.__cityWalkGame.altView
     if (typeof api.setBenchLegacy !== 'function') return null
-    api.setBenchLegacy({ taps: false })
+    // Clear every switch first, so a variant that names fewer of them than
+    // the previous run cannot inherit one.
+    api.setBenchLegacy({ taps: false, contrast: false })
     return api.setBenchLegacy(flags)
   }, legacyFlags)
   if (!applied) {
@@ -248,12 +252,14 @@ async function benchCity(page, cdp, city, variant, opts) {
   // Read back what the renderer actually holds, rather than trusting that the
   // call landed: a variant that silently failed to apply would report the
   // other path's number under this one's name.
-  const wantTaps = Boolean(legacyFlags.taps)
-  if (applied.taps !== wantTaps) {
-    throw new Error(
-      `variant "${variant}" asked for legacy taps=${wantTaps} but the ` +
-        `renderer reports ${applied.taps}`
-    )
+  for (const flag of ['taps', 'contrast']) {
+    const want = Boolean(legacyFlags[flag])
+    if (applied[flag] !== want) {
+      throw new Error(
+        `variant "${variant}" asked for legacy ${flag}=${want} but the ` +
+          `renderer reports ${applied[flag]}`
+      )
+    }
   }
 
   // Let the first few conversions at the new size settle before the clock
