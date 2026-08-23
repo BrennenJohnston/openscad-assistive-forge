@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The tour ends by telling you the way out** (UF-39, U-45) - the Getting Started tour used to
+  finish with "You're ready!" and leave you standing in a project with no word about how to get back
+  to your own files. The way people reached for was the browser's Back button, which closed the app.
+  Both project tours, Forge and Classic, now end on one more step that points at the Main Page button
+  in the top left corner and says to use that instead. Pressing the button it is pointing at is a
+  first-class way to finish: the tour closes with the project, announces that it did, and keeps your
+  progress. The Main Page tour gained the same sentence in its closing step, so the button is named
+  from both directions. Both project tours are 18 steps rather than 17
+
 - **Street life, standing still** (CW-18) - the City Walk's streets had trees and parked cars but
   nothing above head height and nothing on the walls. Now streetlights march down every ordinary
   street and arterial, one every 30 m, alternating sides: a slim post with a bright head reaching out
@@ -177,6 +186,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "near NAME" street-view proximity announcements with hysteresis
 
 ### Fixed
+
+- **The Back button asks before it closes the app** (UF-39, U-41) - on a phone, halfway through the
+  Getting Started tour, pressing the browser's Back button closed the whole app. Not the panel, not
+  the tour, the app: the next thing on screen was the browser's home page. Nothing the app did had
+  ever put an entry in the browser's history, so the first Back press was always a step out of the
+  document, with no chance to say anything about it. Opening a project now adds one history entry of
+  its own, and that is the entry Back lands on, so instead of leaving you get a dialog: "Leave the
+  app? The browser's Back button closes this app. It does not go back to the Main Page or the
+  previous menu. Your saved projects stay in this browser." Stay in the app puts you back exactly
+  where you were, including the address bar, and it works every time rather than once. Leave really
+  leaves. Escape and a press outside the box both choose Stay, and Stay is the button that already
+  has focus when the dialog opens. A tour that is running stays running, on the step it was on. The
+  Main Page keeps the browser's own behaviour: the guard is for a project you are inside of, and it
+  takes its entry back out of the history when you return to the Main Page, so nothing stale is left
+  behind. If you press Back twice, the second press leaves, the same as it always did
 
 - **Tour cards that admit when there is more to read** (UF-38, D-65) - on a phone the instruction
   card was cut off mid-sentence with nothing to say so. One step ended on "You can resize this drawer
