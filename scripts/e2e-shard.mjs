@@ -42,7 +42,21 @@ import { fileURLToPath } from 'node:url'
 
 /** Measured Chromium seconds per spec file (run 32589505121, 2026-08-22). */
 export const MEASURED_SECONDS = {
-  'ascii-city-walk.spec.js': 1079.0,
+  // The City Walk suite was one 1,079-second file until D-78. Packing by cost
+  // put all of it on one shard, where two workers then spent most of the run
+  // driving 3D city sessions at the same time on a two-core runner with
+  // software rendering. That shard's overhead - wall time beyond the work
+  // divided by its workers - went from 1.6 to 5.6 minutes, its flaky count
+  // from 6 to 11, and two cases tipped over into failing. Splitting the file
+  // does nothing for Playwright's own --shard, since the pieces sort next to
+  // their parent, but it is exactly what a cost packer needs: it can put the
+  // pieces on DIFFERENT shards. These three weights are the old file's own
+  // describe blocks, re-summed from the same run.
+  'ascii-city-walk-controls.spec.js': 417.4,
+  'ascii-city-walk.spec.js': 372.6,
+  // 289.0 measured, plus ~40 for the two weather describes CW-29 added, which
+  // no CI run has timed yet. The next board replaces this with a measurement.
+  'ascii-city-walk-street.spec.js': 329.0,
   'classic-panels.spec.js': 432.7,
   'classic-mode.spec.js': 395.1,
   'menu-parity.spec.js': 210.5,
