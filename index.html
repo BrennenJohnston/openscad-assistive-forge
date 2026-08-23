@@ -8567,6 +8567,50 @@ No console output yet. Generate a model to see output.</pre
                 app itself.
               </li>
             </ul>
+            <!-- UF-41 (U-39, Q-69): the same four approved sentences behind
+                 concept-title rows, stowed on first view, for mobile-shaped
+                 viewports only. Exactly one of the two lists is in the layout
+                 (and therefore in the accessibility tree) at a time; the
+                 swap rides .first-visit-mobile-shaped, which is set from the
+                 SAME isViewportDesktopShaped() predicate that gates the
+                 Classic card, so the modal has one definition of "mobile".
+
+                 The bodies are duplicated text on purpose: native
+                 details/summary cannot be un-disclosed by CSS for the desktop
+                 view, and the owner kept the full bullets there (Q-69). The
+                 two copies are pinned equal by an e2e case so they cannot
+                 drift. -->
+            <div class="first-visit-note-rows">
+              <details class="first-visit-note-row">
+                <summary>Browser based process</summary>
+                <p>
+                  This app runs entirely in your browser. All of your work stays
+                  on your device. No information is sent to or collected by
+                  anyone else.
+                </p>
+              </details>
+              <details class="first-visit-note-row">
+                <summary>Initial download, about 15 to 30 MB</summary>
+                <p>
+                  Your first render downloads the OpenSCAD engine, about 15 to
+                  30 MB. It downloads once and is saved for your next visit.
+                </p>
+              </details>
+              <details class="first-visit-note-row">
+                <summary>Local project storage</summary>
+                <p>
+                  Your work can be saved in your browser's storage. You can also
+                  link a folder on your own drive if you prefer.
+                </p>
+              </details>
+              <details class="first-visit-note-row">
+                <summary>Completely removable</summary>
+                <p>
+                  Clearing the browser's site data removes all saved work and
+                  the app itself.
+                </p>
+              </details>
+            </div>
           </div>
           <fieldset class="first-visit-choice">
             <legend>Choose your interface</legend>
@@ -8588,7 +8632,7 @@ No console output yet. Generate a model to see output.</pre
                       id="firstVisitChoiceForge"
                       value="forge"
                       aria-labelledby="firstVisitForgeName firstVisitForgeBadge"
-                      aria-describedby="firstVisitForgeShot firstVisitForgeGuide"
+                      aria-describedby="firstVisitForgeShotDesc firstVisitForgeGuide"
                     />
                     <span
                       class="first-visit-option-name"
@@ -8599,14 +8643,27 @@ No console output yet. Generate a model to see output.</pre
                       >Recommended for new users</span
                     >
                   </span>
+                  <!-- UF-41 (U-39): the layout description moved off the img's
+                       alt and onto an always-present sr-only span, because the
+                       picture itself leaves the layout on mobile-shaped
+                       viewports. The radio's accessible DESCRIPTION is
+                       unchanged either way — same words, same place — but it
+                       now survives the picture's removal. The img is alt=""
+                       so a desktop reader is not told the same thing twice. -->
                   <img
                     class="first-visit-shot"
                     id="firstVisitForgeShot"
                     src="/screenshots/forge-standard.webp"
                     width="1400"
                     height="900"
-                    alt="The Assistive Forge interface with a model open. Menus and workflow buttons are at the top, the Customizer parameter panel is on the left, and the 3D preview of the model is on the right."
+                    alt=""
                   />
+                  <span class="sr-only" id="firstVisitForgeShotDesc"
+                    >The Assistive Forge interface with a model open. Menus and
+                    workflow buttons are at the top, the Customizer parameter
+                    panel is on the left, and the 3D preview of the model is on
+                    the right.</span
+                  >
                   <span class="first-visit-guidance" id="firstVisitForgeGuide"
                     >Choose Assistive Forge for the most accessible
                     experience.</span
@@ -8630,7 +8687,7 @@ No console output yet. Generate a model to see output.</pre
                       id="firstVisitChoiceClassic"
                       value="classic"
                       aria-labelledby="firstVisitClassicName"
-                      aria-describedby="firstVisitClassicShot firstVisitClassicGuide"
+                      aria-describedby="firstVisitClassicShotDesc firstVisitClassicGuide"
                     />
                     <span
                       class="first-visit-option-name"
@@ -8654,8 +8711,15 @@ No console output yet. Generate a model to see output.</pre
                     src="/screenshots/classic-standard.webp"
                     width="1400"
                     height="900"
-                    alt="The Classic interface with the same model open. Desktop style menus and toolbars are at the top, the code editor is on the left, the 3D preview is in the middle, the Customizer panel is on the right, and the console is at the bottom."
+                    alt=""
                   />
+                  <span class="sr-only" id="firstVisitClassicShotDesc"
+                    >The Classic interface with the same model open. Desktop
+                    style menus and toolbars are at the top, the code editor is
+                    on the left, the 3D preview is in the middle, the Customizer
+                    panel is on the right, and the console is at the
+                    bottom.</span
+                  >
                   <span class="first-visit-guidance" id="firstVisitClassicGuide"
                     >Choose this if you already use the OpenSCAD desktop
                     application or are following an OpenSCAD tutorial.</span
@@ -8708,6 +8772,24 @@ No console output yet. Generate a model to see output.</pre
               >WASM download help (opens in new tab)</a
             >
           </p>
+        </div>
+        <!-- UF-41 (U-39): the fold made visible. Zero-height, so it can never
+             take space from the content it is reporting on; aria-hidden with
+             no tab stop and nothing written to a live region, because a
+             screen-reader user already knows the body scrolls. Shown only
+             while there is something below the fold. -->
+        <div class="first-visit-scroll-cue" aria-hidden="true">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
         </div>
         <div class="modal-footer">
           <button

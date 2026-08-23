@@ -67,7 +67,14 @@
      (27px) and one line of body text visible whatever the arithmetic says;
      the cue height is the fade that admits the rest is below the fold. */
   --tutorial-body-min-height: 72px;
-  --tutorial-scroll-cue-height: 32px;
+
+  /* The fold cue's fade height, shared by every scroller that admits it has
+     more below: the tutorial card (UF-38) and the first-visit modal body
+     (UF-41). One value, so the two folds cannot start looking different from
+     each other. The tutorial's own name is kept as an alias — it is spelled
+     that way at six call sites and renaming them is not this release's job. */
+  --scroll-cue-height: 32px;
+  --tutorial-scroll-cue-height: var(--scroll-cue-height);
 
   /* Border Widths */
   --border-width-thin: 1px;
