@@ -724,10 +724,20 @@ test.describe('ASCII City Walk — traffic signals (CW-19)', () => {
     expect(lit, 'the city grew no traffic signals').toBeGreaterThan(0)
 
     const first = await headColours(page)
-    // Longer than one green-plus-amber, so a change MUST have happened.
-    await page.waitForTimeout(8000)
-    const second = await headColours(page)
-    expect(second, 'the signals never changed').not.toBe(first)
+    // Wait for the signals to CHANGE rather than for eight seconds to pass.
+    // The old fixed sleep was a wall-clock gate wearing a disguise: the
+    // signals are advanced by the frame loop, so sleeping asserts that the
+    // runner rendered enough frames in eight seconds, which on a loaded CI
+    // machine is not a fact about the signals at all. It has been the
+    // flakiest case in this suite for three rounds, and it went from flaky to
+    // failing outright the moment the shard around it got busier (D-78).
+    let second = first
+    await expect
+      .poll(async () => (second = await headColours(page)), {
+        message: 'the signals never changed',
+        timeout: 60000,
+      })
+      .not.toBe(first)
 
     // Exactly one head lit per phase group at any moment: a signal showing two
     // colours at once, or a junction letting both directions go, is the
