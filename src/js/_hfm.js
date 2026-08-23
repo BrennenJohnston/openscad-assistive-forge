@@ -140,6 +140,17 @@ function _createInstanceState() {
     // setting renders exactly as it always has.
     tinyCellsAllowed: false,
 
+    // CW-30 sampling plan: the distinct sample pixels a cell's sixteen taps
+    // resolve to, deduped once per cell geometry rather than per cell.
+    tapPlan: null,
+    tapPlanKey: '',
+
+    // CW-30 A/B switches, off in production and flipped only by the bench
+    // (setBenchLegacy, DEV-only). Each one forces the pre-CW-30 path for one
+    // step, so the old and the new can be measured in the SAME session — the
+    // only comparison this machine's numbers support.
+    benchLegacyTaps: false,
+
     contrastScale: 1,
     contrastExp: _DEFAULT_CONTRAST_EXP,
     dirContrastExp: _DEFAULT_DIR_CONTRAST_EXP,
@@ -282,6 +293,76 @@ const _EXT_AFFECTING = [
   [4, 6, 8, 9], // internal 4 (bottom-left)
   [5, 7, 8, 9], // internal 5 (bottom-right)
 ];
+
+// Tap-plan packing: offsets are small (a sample-space cell is at most 4 px
+// wide, because _computeSampleScale caps the scale at 0.5 and targets 4), so
+// a bias of 1024 leaves room to spare while keeping the key a small integer.
+const _TAP_PACK_BIAS = 1024;
+
+/**
+ * The distinct sample pixels a cell's 16 taps actually read (CW-30).
+ *
+ * The 6 internal and 10 external taps are named as 16 positions, but they are
+ * ROUNDED to whole sample pixels, and at small character sizes several of
+ * them round to the same pixel. At the 10% floor a cell is 1x2 sample pixels
+ * and all sixteen taps land on SIX distinct pixels - the external ring reads
+ * exactly the pixels the internal points already read. Reading each one once
+ * and handing the value to every tap that asked for it is not an
+ * approximation: every tap receives the number it would have computed.
+ *
+ * This only works when a cell lands on whole sample pixels, because then
+ * `Math.round(base + p)` is exactly `base + Math.round(p)` and the offsets are
+ * the same for every cell in the frame. Otherwise there is no shared plan and
+ * the caller falls back to rounding per tap per cell.
+ *
+ * @returns {object|null} the plan, or null when the grid is not integral
+ */
+function _buildTapPlan(cellW, cellH) {
+  if (!Number.isInteger(cellW) || !Number.isInteger(cellH)) return null;
+
+  const pts = _getSixSamplePoints(cellW, cellH);
+  const extPts = _getExternalSamplePoints(cellW, cellH);
+  const dx = [];
+  const dy = [];
+  const slots = new Map();
+  const slotFor = (ox, oy) => {
+    const packed = (ox + _TAP_PACK_BIAS) * 4096 + (oy + _TAP_PACK_BIAS);
+    let slot = slots.get(packed);
+    if (slot === undefined) {
+      slot = dx.length;
+      dx.push(ox);
+      dy.push(oy);
+      slots.set(packed, slot);
+    }
+    return slot;
+  };
+
+  const internal = new Int32Array(6);
+  for (let i = 0; i < 6; i++) {
+    internal[i] = slotFor(Math.round(pts[i][0]), Math.round(pts[i][1]));
+  }
+  const external = new Int32Array(10);
+  for (let i = 0; i < 10; i++) {
+    external[i] = slotFor(Math.round(extPts[i][0]), Math.round(extPts[i][1]));
+  }
+
+  const count = dx.length;
+  return {
+    count,
+    dx: Int32Array.from(dx),
+    dy: Int32Array.from(dy),
+    internal,
+    external,
+    lum: new Float32Array(count),
+    // Internal taps CLAMP to the edge of the sample buffer; external taps read
+    // as 0 when they fall outside it. One shared read serves both, so the
+    // clamped value and the in-bounds answer are stored separately.
+    inBounds: new Uint8Array(count),
+    red: new Float32Array(count),
+    green: new Float32Array(count),
+    blue: new Float32Array(count),
+  };
+}
 
 function _applyDirectionalContrast(st, v, extSamples) {
   // Component-wise directional contrast: normalize each internal component
@@ -597,6 +678,15 @@ function _renderFrame(
   const pts = _getSixSamplePoints(cellW, cellH);
   const extPts = _getExternalSamplePoints(cellW, cellH);
 
+  // CW-30: read each distinct sample pixel once per cell instead of once per
+  // tap. Rebuilt only when the cell geometry changes.
+  const planKey = `${cellW}x${cellH}`;
+  if (st.tapPlanKey !== planKey) {
+    st.tapPlan = _buildTapPlan(cellW, cellH);
+    st.tapPlanKey = planKey;
+  }
+  const tapPlan = st.benchLegacyTaps ? null : st.tapPlan;
+
   const v = new Float32Array(6);
   const extSamples = new Float32Array(10);
   const glyphIndices = new Int16Array(rows * cols);
@@ -639,28 +729,69 @@ function _renderFrame(
       let sumG = 0;
       let sumB = 0;
       let sumLum = 0;
-      for (let i = 0; i < 6; i++) {
-        const sx = Math.min(
-          sampleW - 1,
-          Math.max(0, Math.round(baseX + pts[i][0]))
-        );
-        const sy = Math.min(
-          sampleH - 1,
-          Math.max(0, Math.round(baseY + pts[i][1]))
-        );
-        const pidx = (sy * sampleW + sx) * 4;
-        const lum = _relLum01(
-          imgData[pidx],
-          imgData[pidx + 1],
-          imgData[pidx + 2]
-        );
-        v[i] = _clamp01(invert ? 1 - lum : lum);
-        if (usePalette) {
-          sumR += imgData[pidx];
-          sumG += imgData[pidx + 1];
-          sumB += imgData[pidx + 2];
+
+      if (tapPlan) {
+        // Read every distinct pixel once, then hand each tap the value it
+        // asked for. A pixel two taps share is still counted twice in the
+        // colour average, exactly as sampling it twice would.
+        const tCount = tapPlan.count;
+        const tdx = tapPlan.dx;
+        const tdy = tapPlan.dy;
+        const tLum = tapPlan.lum;
+        const tIn = tapPlan.inBounds;
+        for (let t = 0; t < tCount; t++) {
+          const rx = baseX + tdx[t];
+          const ry = baseY + tdy[t];
+          tIn[t] = rx >= 0 && rx < sampleW && ry >= 0 && ry < sampleH ? 1 : 0;
+          const sx = rx < 0 ? 0 : rx >= sampleW ? sampleW - 1 : rx;
+          const sy = ry < 0 ? 0 : ry >= sampleH ? sampleH - 1 : ry;
+          const pidx = (sy * sampleW + sx) * 4;
+          const r = imgData[pidx];
+          const g = imgData[pidx + 1];
+          const b = imgData[pidx + 2];
+          const lum = _relLum01(r, g, b);
+          tLum[t] = _clamp01(invert ? 1 - lum : lum);
+          if (usePalette) {
+            tapPlan.red[t] = r;
+            tapPlan.green[t] = g;
+            tapPlan.blue[t] = b;
+          }
         }
-        if (useIntensity) sumLum += v[i];
+        const internal = tapPlan.internal;
+        for (let i = 0; i < 6; i++) {
+          const t = internal[i];
+          v[i] = tLum[t];
+          if (usePalette) {
+            sumR += tapPlan.red[t];
+            sumG += tapPlan.green[t];
+            sumB += tapPlan.blue[t];
+          }
+          if (useIntensity) sumLum += v[i];
+        }
+      } else {
+        for (let i = 0; i < 6; i++) {
+          const sx = Math.min(
+            sampleW - 1,
+            Math.max(0, Math.round(baseX + pts[i][0]))
+          );
+          const sy = Math.min(
+            sampleH - 1,
+            Math.max(0, Math.round(baseY + pts[i][1]))
+          );
+          const pidx = (sy * sampleW + sx) * 4;
+          const lum = _relLum01(
+            imgData[pidx],
+            imgData[pidx + 1],
+            imgData[pidx + 2]
+          );
+          v[i] = _clamp01(invert ? 1 - lum : lum);
+          if (usePalette) {
+            sumR += imgData[pidx];
+            sumG += imgData[pidx + 1];
+            sumB += imgData[pidx + 2];
+          }
+          if (useIntensity) sumLum += v[i];
+        }
       }
       // The cell's brightness BEFORE the contrast curves reshape v for glyph
       // matching: intensity answers "how bright is this cell", the glyph
@@ -685,19 +816,29 @@ function _renderFrame(
       }
 
       // External boundary points for edge detection; out-of-bounds clamp to 0
-      for (let i = 0; i < 10; i++) {
-        const sx = Math.round(baseX + extPts[i][0]);
-        const sy = Math.round(baseY + extPts[i][1]);
-        if (sx >= 0 && sx < sampleW && sy >= 0 && sy < sampleH) {
-          const pidx = (sy * sampleW + sx) * 4;
-          const lum = _relLum01(
-            imgData[pidx],
-            imgData[pidx + 1],
-            imgData[pidx + 2]
-          );
-          extSamples[i] = _clamp01(invert ? 1 - lum : lum);
-        } else {
-          extSamples[i] = 0;
+      if (tapPlan) {
+        const external = tapPlan.external;
+        const tLum = tapPlan.lum;
+        const tIn = tapPlan.inBounds;
+        for (let i = 0; i < 10; i++) {
+          const t = external[i];
+          extSamples[i] = tIn[t] ? tLum[t] : 0;
+        }
+      } else {
+        for (let i = 0; i < 10; i++) {
+          const sx = Math.round(baseX + extPts[i][0]);
+          const sy = Math.round(baseY + extPts[i][1]);
+          if (sx >= 0 && sx < sampleW && sy >= 0 && sy < sampleH) {
+            const pidx = (sy * sampleW + sx) * 4;
+            const lum = _relLum01(
+              imgData[pidx],
+              imgData[pidx + 1],
+              imgData[pidx + 2]
+            );
+            extSamples[i] = _clamp01(invert ? 1 - lum : lum);
+          } else {
+            extSamples[i] = 0;
+          }
         }
       }
 
@@ -1110,6 +1251,8 @@ export async function initAltView(previewManager, options = {}) {
       st.atlasKey = '';
       st.paletteAtlases = null;
       st.colorIndices = null;
+      st.tapPlan = null;
+      st.tapPlanKey = '';
       st.dirty = true;
     },
     isEnabled: () => st.enabled,
@@ -1201,6 +1344,21 @@ export async function initAltView(previewManager, options = {}) {
     api.resetConvertStats = () => {
       st.convertStats = { last: 0, sum: 0, max: 0, samples: 0 };
     };
+    /**
+     * CW-30: force the pre-CW-30 path for one step at a time, so a bench can
+     * measure the old and the new back to back in ONE session. Numbers from
+     * two different sessions on this machine are not comparable, so an A/B
+     * that cannot be run side by side cannot be trusted; this is what makes
+     * the comparison possible at all.
+     *
+     * @param {{taps?: boolean}} flags
+     */
+    api.setBenchLegacy = (flags = {}) => {
+      if ('taps' in flags) st.benchLegacyTaps = Boolean(flags.taps);
+      st.dirty = true;
+      return { taps: st.benchLegacyTaps };
+    };
+    api.getBenchLegacy = () => ({ taps: st.benchLegacyTaps });
   }
 
   return api;
