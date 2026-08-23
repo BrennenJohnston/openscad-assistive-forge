@@ -918,6 +918,13 @@ body[data-app-surface='welcome'] #uiModeToggle {
   margin-bottom: var(--space-xl);
 }
 
+/* The Main Page heading's supporting line. It sits inside
+   .features-overview, so the rule above cannot reach it. */
+.welcome-lede {
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-lg);
+}
+
 /* Main Interface */
 .main-interface {
   flex: 1;

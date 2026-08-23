@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The graphics card now chooses the characters** (CW-32) - deciding which character to draw in
+  each cell was the single most expensive thing the City Walk did: sixteen brightness samples, two
+  contrast curves and a nearest-shape search, on the processor, about 140,000 times per frame at the
+  smallest character size. All of it is now one drawing pass on the graphics card, which is the kind
+  of work graphics cards exist for. Same session, same standing view, heavy rain, 10% characters,
+  with the processor slowed to a quarter speed: a conversion fell from 220 ms to 65 ms in
+  monochrome, and from 268 ms to 34 ms in colour. The picture refreshes about three times as often
+  and the frame rate roughly tripled. The city looks the same - the two paths were photographed side
+  by side at 10% and 50%, in monochrome, colour and high contrast, and the differences are subtle
+  changes in how densely a few cells are inked, about half of them cases where the graphics card
+  picks the *nearer* character than the processor's cache did. Nothing depends on it: a machine
+  without WebGL2, a shader that will not compile, or a readback that fails all fall back to the
+  processor permanently and silently, and that path is unchanged and still runs everywhere. **The
+  goal of thirty frames a second on a low-end machine is still not met** - drawing the finished
+  picture is now the expensive step, and it was not part of this work
+
+- **The city runs colder at the smallest characters** (CW-30) - at the 10% character size a cell is
+  about two device pixels wide, and the converter was reading sixteen samples for it. Measured,
+  those sixteen land on six distinct pixels: the ring of samples meant to see a cell's surroundings
+  was reading the very pixels the cell itself had already read. Each pixel is now read once and
+  handed to every sample that asked for it, which is not an approximation - the picture comes out
+  the same character for character. The two contrast curves, which raise a number to a fixed power
+  up to twelve times per cell, are now read from a table built once per frame rather than computed
+  per cell. Same session, same standing view, heavy rain, 10% characters, under a 4x CPU throttle:
+  a conversion took 287-346 ms before and 179-190 ms after, and the picture refreshed about three
+  times a second before and about five after. Nothing about how it looks has changed - at 50%
+  characters the frame is pixel-for-pixel identical to the old path, and at 10% it differs in 17
+  pixels out of 1,129,600, against a 31,000-pixel floor from capturing the same code twice. This
+  is the first of three staged pieces of performance work; the goal of thirty frames a second on a
+  low-end machine is not met yet
+
 ### Added
 
 - **The tour ends by telling you the way out** (UF-39, U-45) - the Getting Started tour used to
@@ -162,6 +195,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **One name per thing** (UF-40, U-44) - the app used four names for two things. The page you land
+  on was the "welcome page", the "welcome screen" and the "Main Page" depending on which tour, button
+  or message you happened to read; the panel where you change a model was "Params" on a phone,
+  "Parameters" in the tours, and "Customizer" on its own heading. It is now the **Main Page** and the
+  **Customizer**, everywhere a user can read it, in both interfaces and every theme. The Main Page
+  also says its own name now, in its heading, with a line explaining what it is for: your projects,
+  organized like folders on a desktop computer. Five controls that named the panel indirectly came
+  with it, so **Export Params** is **Export Customizer Settings**, **View Params JSON** is **View
+  Customizer JSON**, **Color Parameters** is **Color Settings**, **Reset All Parameters?** is **Reset
+  the Customizer?**, and the search box says **Search the Customizer**. The individual values inside
+  the panel are still parameters, which is what desktop OpenSCAD calls them, and nothing in a .scad
+  file was touched. Two controls also had accessible names that did not contain the words printed on
+  them, so someone using speech input could read "Main Page" or "Customizer" on screen and have
+  nothing happen when they said it; both now match (WCAG 2.5.3). The tour that walks you around the
+  Main Page is the **Main Page Tour**, and the step that used to say "Click Generate" now names both
+  labels that button can wear, because once a file exists it says Download
 - **The two halves of the browser test suite now take the same amount of time** (CW-29, D-72) - the
   Chromium and Edge test lanes each run in two halves side by side, and each half was being given
   the same NUMBER of tests: 476 against 475. The work was nowhere near equal, because the slow

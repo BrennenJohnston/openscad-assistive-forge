@@ -1247,10 +1247,23 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       // CW-21: the phosphor trail rides the fast paint path rather than
       // dropping the frame back onto per-cell blits for it.
       glowInComposite: true,
+      // CW-32: the per-cell sampling and glyph choice run on the GPU where
+      // the machine allows it. Any failure disables it for the session and
+      // the CPU path carries on.
+      gpuSample: true,
       // The provider is asked once per conversion, not per rAF: the class
       // pass only has to run on the frames the converter actually converts.
       classMapProvider: (cols, rows) =>
         game.classPass?.read(
+          game.mapView ? orthoCamera : fpCamera,
+          cols,
+          rows
+        ) ?? null,
+      // The same class frame, handed over as a TEXTURE rather than read back
+      // to the CPU — on the GPU path the shader samples it directly, so the
+      // class pass's own readback disappears too.
+      gpuClassTextureProvider: (cols, rows) =>
+        game.classPass?.texture(
           game.mapView ? orthoCamera : fpCamera,
           cols,
           rows

@@ -24,6 +24,7 @@
 // surfaces) each hold their own overlay, atlas, and scheduling state without
 // interfering. Pure helpers (sampling layouts, vector math) stay module-level.
 
+import { createGpuGlyphPass } from './_hfm-gpu.js';
 import { createLookup } from './_hfm-lookup.js';
 import {
   clearAfterglow,
@@ -139,6 +140,33 @@ function _createInstanceState() {
     // sets it; the preview's Alt View leaves it false so its own smallest
     // setting renders exactly as it always has.
     tinyCellsAllowed: false,
+
+    // CW-30 sampling plan: the distinct sample pixels a cell's sixteen taps
+    // resolve to, deduped once per cell geometry rather than per cell.
+    tapPlan: null,
+    tapPlanKey: '',
+
+    // CW-30 A/B switches, off in production and flipped only by the bench
+    // (setBenchLegacy, DEV-only). Each one forces the pre-CW-30 path for one
+    // step, so the old and the new can be measured in the SAME session — the
+    // only comparison this machine's numbers support.
+    benchLegacyTaps: false,
+    benchLegacyContrast: false,
+    benchLegacyCpuSample: false,
+
+    // CW-32 GPU glyph pick: caller opt-in, built lazily on the first frame
+    // and disabled permanently for the session the moment anything fails.
+    gpuSample: false,
+    gpuPass: null,
+    gpuInternal: null,
+    gpuExternal: null,
+    gpuClassTextureProvider: null,
+
+    // CW-30 contrast curves: pow(t, exp) tabulated per exponent, rebuilt only
+    // when the contrast setting moves.
+    cellCurve: null,
+    dirCurve: null,
+    curveKey: '',
 
     contrastScale: 1,
     contrastExp: _DEFAULT_CONTRAST_EXP,
@@ -283,9 +311,126 @@ const _EXT_AFFECTING = [
   [5, 7, 8, 9], // internal 5 (bottom-right)
 ];
 
+// Tap-plan packing: offsets are small (a sample-space cell is at most 4 px
+// wide, because _computeSampleScale caps the scale at 0.5 and targets 4), so
+// a bias of 1024 leaves room to spare while keeping the key a small integer.
+const _TAP_PACK_BIAS = 1024;
+
+/**
+ * The distinct sample pixels a cell's 16 taps actually read (CW-30).
+ *
+ * The 6 internal and 10 external taps are named as 16 positions, but they are
+ * ROUNDED to whole sample pixels, and at small character sizes several of
+ * them round to the same pixel. At the 10% floor a cell is 1x2 sample pixels
+ * and all sixteen taps land on SIX distinct pixels - the external ring reads
+ * exactly the pixels the internal points already read. Reading each one once
+ * and handing the value to every tap that asked for it is not an
+ * approximation: every tap receives the number it would have computed.
+ *
+ * This only works when a cell lands on whole sample pixels, because then
+ * `Math.round(base + p)` is exactly `base + Math.round(p)` and the offsets are
+ * the same for every cell in the frame. Otherwise there is no shared plan and
+ * the caller falls back to rounding per tap per cell.
+ *
+ * @returns {object|null} the plan, or null when the grid is not integral
+ */
+function _buildTapPlan(cellW, cellH) {
+  if (!Number.isInteger(cellW) || !Number.isInteger(cellH)) return null;
+
+  const pts = _getSixSamplePoints(cellW, cellH);
+  const extPts = _getExternalSamplePoints(cellW, cellH);
+  const dx = [];
+  const dy = [];
+  const slots = new Map();
+  const slotFor = (ox, oy) => {
+    const packed = (ox + _TAP_PACK_BIAS) * 4096 + (oy + _TAP_PACK_BIAS);
+    let slot = slots.get(packed);
+    if (slot === undefined) {
+      slot = dx.length;
+      dx.push(ox);
+      dy.push(oy);
+      slots.set(packed, slot);
+    }
+    return slot;
+  };
+
+  const internal = new Int32Array(6);
+  for (let i = 0; i < 6; i++) {
+    internal[i] = slotFor(Math.round(pts[i][0]), Math.round(pts[i][1]));
+  }
+  const external = new Int32Array(10);
+  for (let i = 0; i < 10; i++) {
+    external[i] = slotFor(Math.round(extPts[i][0]), Math.round(extPts[i][1]));
+  }
+
+  const count = dx.length;
+  return {
+    count,
+    dx: Int32Array.from(dx),
+    dy: Int32Array.from(dy),
+    internal,
+    external,
+    lum: new Float32Array(count),
+    // Internal taps CLAMP to the edge of the sample buffer; external taps read
+    // as 0 when they fall outside it. One shared read serves both, so the
+    // clamped value and the in-bounds answer are stored separately.
+    inBounds: new Uint8Array(count),
+    red: new Float32Array(count),
+    green: new Float32Array(count),
+    blue: new Float32Array(count),
+  };
+}
+
+// Contrast curve resolution (CW-30). Both contrast passes raise a number in
+// [0, 1] to a power that is constant for the whole frame, so the curve can be
+// tabulated once and read instead of recomputed 12 times per cell. 2048 steps
+// with linear interpolation keeps the worst-case error near 6e-7 - four
+// orders of magnitude below the 1/11 quantization step the glyph key rounds
+// to - while the two tables together stay inside 16 KB and so inside L1.
+const _CURVE_STEPS = 2048;
+
+/**
+ * Tabulate pow(t, exp) for t in [0, 1].
+ *
+ * The array carries one extra entry past the end so that t === 1 lands on
+ * index _CURVE_STEPS with a real neighbour to interpolate against; reading
+ * one off the end of a Float32Array yields undefined, and undefined would
+ * turn the whole cell into NaN.
+ */
+function _buildContrastCurve(exp) {
+  const table = new Float32Array(_CURVE_STEPS + 2);
+  for (let i = 0; i <= _CURVE_STEPS; i++) {
+    table[i] = Math.pow(i / _CURVE_STEPS, exp);
+  }
+  table[_CURVE_STEPS + 1] = table[_CURVE_STEPS];
+  return table;
+}
+
+function _ensureContrastCurves(st) {
+  const key = `${st.contrastExp}|${st.dirContrastExp}`;
+  if (st.curveKey === key) return;
+  st.cellCurve = _buildContrastCurve(st.contrastExp);
+  st.dirCurve = _buildContrastCurve(st.dirContrastExp);
+  st.curveKey = key;
+}
+
+/**
+ * Read a tabulated curve at t, which callers guarantee is within [0, 1].
+ *
+ * Both call sites divide by a value proven to be the larger, and every input
+ * to them has been through _clamp01, so t cannot go negative or past one.
+ */
+function _curveAt(table, t) {
+  const x = t * _CURVE_STEPS;
+  const i = x | 0;
+  const a = table[i];
+  return a + (table[i + 1] - a) * (x - i);
+}
+
 function _applyDirectionalContrast(st, v, extSamples) {
   // Component-wise directional contrast: normalize each internal component
   // to the max of its affecting external samples, then sharpen.
+  const curve = st.benchLegacyContrast ? null : st.dirCurve;
   for (let i = 0; i < 6; i++) {
     let maxExt = v[i];
     const affecting = _EXT_AFFECTING[i];
@@ -296,7 +441,9 @@ function _applyDirectionalContrast(st, v, extSamples) {
 
     if (maxExt > v[i] && maxExt > 0.01) {
       const normalized = v[i] / maxExt;
-      const enhanced = Math.pow(normalized, st.dirContrastExp);
+      const enhanced = curve
+        ? _curveAt(curve, normalized)
+        : Math.pow(normalized, st.dirContrastExp);
       v[i] = _clamp01(enhanced * maxExt);
     }
   }
@@ -308,9 +455,12 @@ function _applyCellContrast(st, v) {
   // Global contrast: max-normalize the cell then apply the exponent.
   const max = Math.max(v[0], v[1], v[2], v[3], v[4], v[5]);
   if (!(max > 0)) return v;
+  const curve = st.benchLegacyContrast ? null : st.cellCurve;
   for (let i = 0; i < 6; i++) {
     const n = v[i] / max;
-    v[i] = _clamp01(Math.pow(_clamp01(n), st.contrastExp) * max);
+    v[i] = _clamp01(
+      (curve ? _curveAt(curve, n) : Math.pow(_clamp01(n), st.contrastExp)) * max
+    );
   }
   return v;
 }
@@ -511,6 +661,9 @@ function _buildClassLookups(st) {
     const inner = createLookup(subset);
     lookups.set(classId, {
       nearestIndex: (v) => table[inner.nearestIndex(v)],
+      // The same list the CPU searches, for the shader's lookup texture —
+      // so the two paths cannot end up with different vocabularies.
+      glyphIds: table,
     });
   }
   return lookups.size > 0 ? lookups : null;
@@ -561,31 +714,142 @@ function _computeSampleScale(charW) {
   return Math.max(0.05, Math.min(0.5, _TARGET_SAMPLE_PX / Math.max(1, charW)));
 }
 
+/**
+ * Ask the GPU pass for this frame's glyphs, or get null and use the CPU.
+ *
+ * Everything the shader needs that the CPU already computes is handed over
+ * rather than recomputed, so the two paths cannot drift on tap positions,
+ * contrast exponents or the glyph vectors themselves.
+ *
+ * Palette mode goes through the shader too. The colour selector needs each
+ * cell's mean tint, which the taps already have, so it is picked there and
+ * rides back in the green channel — the one that otherwise carries only a
+ * debug class byte. Without this the game's colour mode would have been the
+ * one mode the release did not speed up, and it is the mode the owner's own
+ * screenshots were taken in.
+ */
+function _sampleOnGpu(
+  st,
+  {
+    renderer,
+    scene,
+    camera,
+    sampleW,
+    sampleH,
+    cellW,
+    cellH,
+    cols,
+    rows,
+    pts,
+    extPts,
+    invert,
+    usePalette,
+  }
+) {
+  if (!st.gpuSample || st.benchLegacyCpuSample) return null;
+  if (!camera || !st.glyphVectors) return null;
+  if (!st.gpuPass) {
+    st.gpuPass = createGpuGlyphPass(renderer);
+    if (!st.gpuPass.available && import.meta.env.DEV) {
+      console.warn('[hfm] GPU glyph pass unavailable:', st.gpuPass.reason);
+    }
+  }
+  if (!st.gpuPass.available) return null;
+
+  const flat = (points, out) => {
+    for (let i = 0; i < points.length; i++) {
+      out[i * 2] = points[i][0];
+      out[i * 2 + 1] = points[i][1];
+    }
+    return out;
+  };
+  st.gpuInternal ??= new Float32Array(12);
+  st.gpuExternal ??= new Float32Array(20);
+
+  const reverseAt =
+    st.reverseAtlasIndex >= 0 && st.reverseThreshold !== null
+      ? st.reverseThreshold
+      : 2;
+
+  return st.gpuPass.sample({
+    scene,
+    camera,
+    cols,
+    rows,
+    sampleW,
+    sampleH,
+    cellW,
+    cellH,
+    internalPoints: flat(pts, st.gpuInternal),
+    externalPoints: flat(extPts, st.gpuExternal),
+    glyphVectors: st.glyphVectors,
+    glyphKey: st.atlasKey,
+    vocabLists: _gpuVocabLists(st),
+    vocabKey: st.atlasKey,
+    classTexture: usePalette
+      ? null
+      : (st.gpuClassTextureProvider?.(cols, rows) ?? null),
+    paletteChroma: usePalette ? st.paletteChroma : null,
+    chromaBoost: st.paletteChromaBoost,
+    contrastExp: st.contrastExp,
+    dirContrastExp: st.dirContrastExp,
+    invert,
+    // The scene is rendered at FULL resolution, as it always was, and the
+    // shader reads it the way the CPU's downscale would have. CW-31 measured
+    // that rendering smaller saves nothing on this hardware and costs the
+    // antialiasing the downscale was quietly providing.
+    sourceW: renderer.domElement.width,
+    sourceH: renderer.domElement.height,
+    // Written in the same colour space the canvas is, so that the hardware's
+    // linear filtering averages encoded values exactly as drawImage does.
+    sceneColorSpace: renderer.outputColorSpace,
+    reverseAt,
+    spaceIndex: SPACE_INDEX,
+    sparsestNonSpace: st.sparsestNonSpace ?? SPACE_INDEX,
+  });
+}
+
+/**
+ * The vocabularies as glyph-id lists for the shader's lookup texture.
+ *
+ * Span 0 is the full vocabulary, which is what a cell falls back to when its
+ * class has no row and what a reverse-video cell always uses. Span N+1 is
+ * class N, matching the shader's `int(classId) + 1`.
+ */
+function _gpuVocabLists(st) {
+  const all = [];
+  for (let g = 0; g < st.glyphVectors.length; g++) all.push(g);
+  const lists = [{ spanIndex: 0, ids: all }];
+  if (st.classLookups) {
+    for (const [classId, lookup] of st.classLookups) {
+      if (!lookup.glyphIds) continue;
+      lists.push({ spanIndex: classId + 1, ids: lookup.glyphIds });
+    }
+  }
+  return lists;
+}
+
 function _renderFrame(
   st,
-  { renderer, scene, width, height, fontFamily, fontSizePx, charW, charH }
+  {
+    renderer,
+    scene,
+    camera,
+    width,
+    height,
+    fontFamily,
+    fontSizePx,
+    charW,
+    charH,
+  }
 ) {
-  _ensureSampler(st);
-
   const dpr = _getDpr();
   _ensureGlyphModel(st, { fontFamily, fontSizePx, charW, charH, dpr });
 
   const sampleScale = _computeSampleScale(charW);
   const sampleW = Math.max(1, Math.floor(width * sampleScale));
   const sampleH = Math.max(1, Math.floor(height * sampleScale));
-  // Resizing a canvas clears it and resets context state — only do it when
-  // the dimensions actually change.
-  if (st.sampleCanvas.width !== sampleW || st.sampleCanvas.height !== sampleH) {
-    st.sampleCanvas.width = sampleW;
-    st.sampleCanvas.height = sampleH;
-  }
-  // Bilinear downscale = GPU box filter, standing in for area-average
-  // supersampling; one tap per sample point then suffices.
-  st.sampleCtx.imageSmoothingEnabled = true;
-  st.sampleCtx.clearRect(0, 0, sampleW, sampleH);
-  st.sampleCtx.drawImage(renderer.domElement, 0, 0, sampleW, sampleH);
 
-  const imgData = st.sampleCtx.getImageData(0, 0, sampleW, sampleH).data;
   const invert = _computeInvertFromScene(scene);
 
   const cellW = Math.max(1, charW * sampleScale);
@@ -597,10 +861,62 @@ function _renderFrame(
   const pts = _getSixSamplePoints(cellW, cellH);
   const extPts = _getExternalSamplePoints(cellW, cellH);
 
+  const usePalette = Boolean(st.palette && st.paletteChroma);
+
+  // CW-32: try the GPU first. It renders the scene into a texture and picks
+  // every cell's glyph in one draw, so when it works none of the sampling
+  // below happens at all — no downscale, no frame readback, no cell loop. It
+  // returns null the moment anything is unavailable, and the CPU path then
+  // runs exactly as it always has.
+  const gpu = _sampleOnGpu(st, {
+    renderer,
+    scene,
+    camera,
+    sampleW,
+    sampleH,
+    cellW,
+    cellH,
+    cols,
+    rows,
+    pts,
+    extPts,
+    invert,
+    usePalette,
+  });
+
+  let imgData = null;
+  if (!gpu) {
+    _ensureSampler(st);
+    // Resizing a canvas clears it and resets context state — only do it when
+    // the dimensions actually change.
+    if (
+      st.sampleCanvas.width !== sampleW ||
+      st.sampleCanvas.height !== sampleH
+    ) {
+      st.sampleCanvas.width = sampleW;
+      st.sampleCanvas.height = sampleH;
+    }
+    // Bilinear downscale = GPU box filter, standing in for area-average
+    // supersampling; one tap per sample point then suffices.
+    st.sampleCtx.imageSmoothingEnabled = true;
+    st.sampleCtx.clearRect(0, 0, sampleW, sampleH);
+    st.sampleCtx.drawImage(renderer.domElement, 0, 0, sampleW, sampleH);
+    imgData = st.sampleCtx.getImageData(0, 0, sampleW, sampleH).data;
+  }
+
+  // CW-30: read each distinct sample pixel once per cell instead of once per
+  // tap. Rebuilt only when the cell geometry changes.
+  const planKey = `${cellW}x${cellH}`;
+  if (st.tapPlanKey !== planKey) {
+    st.tapPlan = _buildTapPlan(cellW, cellH);
+    st.tapPlanKey = planKey;
+  }
+  const tapPlan = st.benchLegacyTaps ? null : st.tapPlan;
+  _ensureContrastCurves(st);
+
   const v = new Float32Array(6);
   const extSamples = new Float32Array(10);
   const glyphIndices = new Int16Array(rows * cols);
-  const usePalette = Boolean(st.palette && st.paletteChroma);
   if (usePalette && st.colorIndices?.length !== rows * cols) {
     st.colorIndices = new Int8Array(rows * cols);
   }
@@ -617,6 +933,103 @@ function _renderFrame(
   const reverseAt = reverseIdx >= 0 ? st.reverseThreshold : Infinity;
   let reverseCells = 0;
 
+  // CW-32: the shader already chose every glyph. All that is left is the
+  // per-cell atlas selection, which stays on the CPU because it is what the
+  // painter consumes — the shader hands back the pre-contrast brightness it
+  // needs in the blue channel, so nothing is re-sampled to get it.
+  if (gpu) {
+    const cellCount = rows * cols;
+    for (let i = 0; i < cellCount; i++) {
+      glyphIndices[i] = gpu.indices[i];
+      if (usePalette) st.colorIndices[i] = gpu.colors[i];
+      if (useIntensity) {
+        const cellLum = gpu.lum[i] / 255;
+        if (cellLum >= reverseAt) {
+          st.intensityIndices[i] = reverseIdx;
+          reverseCells++;
+        } else {
+          st.intensityIndices[i] = pickIntensityIndex(cellLum, intensityCount);
+        }
+      }
+    }
+  } else {
+    _convertOnCpu(st, {
+      imgData,
+      glyphIndices,
+      cols,
+      rows,
+      cellW,
+      cellH,
+      sampleW,
+      sampleH,
+      pts,
+      extPts,
+      tapPlan,
+      invert,
+      v,
+      extSamples,
+      usePalette,
+      useIntensity,
+      reverseAt,
+      reverseIdx,
+      intensityCount,
+      onReverseCell: () => reverseCells++,
+    });
+  }
+
+  // Sync overlay canvas backing store to container size at device resolution
+  _paintConverted(st, {
+    glyphIndices,
+    cols,
+    rows,
+    width,
+    height,
+    dpr,
+    charW,
+    charH,
+    usePalette,
+    useIntensity,
+  });
+
+  // Bench readout only (DEV): how much of the frame reverse video claimed.
+  // A rising share is the "carpeting" failure showing up as a number before
+  // it shows up as a wall of solid cells.
+  st.lastCellCount = rows * cols;
+  st.lastReverseCells = reverseCells;
+  st.lastUsedGpu = Boolean(gpu);
+}
+
+/**
+ * The CPU sampling loop: sixteen taps, two contrast curves and a
+ * nearest-glyph search per cell. Unchanged in behaviour by CW-32 — it is now
+ * one of two paths rather than the only one, and it remains the only path on
+ * WebGL1 and wherever the GPU pass declines.
+ */
+function _convertOnCpu(
+  st,
+  {
+    imgData,
+    glyphIndices,
+    cols,
+    rows,
+    cellW,
+    cellH,
+    sampleW,
+    sampleH,
+    pts,
+    extPts,
+    tapPlan,
+    invert,
+    v,
+    extSamples,
+    usePalette,
+    useIntensity,
+    reverseAt,
+    reverseIdx,
+    intensityCount,
+    onReverseCell,
+  }
+) {
   // CW-23: what each cell is looking at, if the caller can say. A provider
   // that returns the wrong size is ignored rather than trusted — a stale map
   // would hand cells the vocabulary of whatever used to be there.
@@ -639,28 +1052,69 @@ function _renderFrame(
       let sumG = 0;
       let sumB = 0;
       let sumLum = 0;
-      for (let i = 0; i < 6; i++) {
-        const sx = Math.min(
-          sampleW - 1,
-          Math.max(0, Math.round(baseX + pts[i][0]))
-        );
-        const sy = Math.min(
-          sampleH - 1,
-          Math.max(0, Math.round(baseY + pts[i][1]))
-        );
-        const pidx = (sy * sampleW + sx) * 4;
-        const lum = _relLum01(
-          imgData[pidx],
-          imgData[pidx + 1],
-          imgData[pidx + 2]
-        );
-        v[i] = _clamp01(invert ? 1 - lum : lum);
-        if (usePalette) {
-          sumR += imgData[pidx];
-          sumG += imgData[pidx + 1];
-          sumB += imgData[pidx + 2];
+
+      if (tapPlan) {
+        // Read every distinct pixel once, then hand each tap the value it
+        // asked for. A pixel two taps share is still counted twice in the
+        // colour average, exactly as sampling it twice would.
+        const tCount = tapPlan.count;
+        const tdx = tapPlan.dx;
+        const tdy = tapPlan.dy;
+        const tLum = tapPlan.lum;
+        const tIn = tapPlan.inBounds;
+        for (let t = 0; t < tCount; t++) {
+          const rx = baseX + tdx[t];
+          const ry = baseY + tdy[t];
+          tIn[t] = rx >= 0 && rx < sampleW && ry >= 0 && ry < sampleH ? 1 : 0;
+          const sx = rx < 0 ? 0 : rx >= sampleW ? sampleW - 1 : rx;
+          const sy = ry < 0 ? 0 : ry >= sampleH ? sampleH - 1 : ry;
+          const pidx = (sy * sampleW + sx) * 4;
+          const r = imgData[pidx];
+          const g = imgData[pidx + 1];
+          const b = imgData[pidx + 2];
+          const lum = _relLum01(r, g, b);
+          tLum[t] = _clamp01(invert ? 1 - lum : lum);
+          if (usePalette) {
+            tapPlan.red[t] = r;
+            tapPlan.green[t] = g;
+            tapPlan.blue[t] = b;
+          }
         }
-        if (useIntensity) sumLum += v[i];
+        const internal = tapPlan.internal;
+        for (let i = 0; i < 6; i++) {
+          const t = internal[i];
+          v[i] = tLum[t];
+          if (usePalette) {
+            sumR += tapPlan.red[t];
+            sumG += tapPlan.green[t];
+            sumB += tapPlan.blue[t];
+          }
+          if (useIntensity) sumLum += v[i];
+        }
+      } else {
+        for (let i = 0; i < 6; i++) {
+          const sx = Math.min(
+            sampleW - 1,
+            Math.max(0, Math.round(baseX + pts[i][0]))
+          );
+          const sy = Math.min(
+            sampleH - 1,
+            Math.max(0, Math.round(baseY + pts[i][1]))
+          );
+          const pidx = (sy * sampleW + sx) * 4;
+          const lum = _relLum01(
+            imgData[pidx],
+            imgData[pidx + 1],
+            imgData[pidx + 2]
+          );
+          v[i] = _clamp01(invert ? 1 - lum : lum);
+          if (usePalette) {
+            sumR += imgData[pidx];
+            sumG += imgData[pidx + 1];
+            sumB += imgData[pidx + 2];
+          }
+          if (useIntensity) sumLum += v[i];
+        }
       }
       // The cell's brightness BEFORE the contrast curves reshape v for glyph
       // matching: intensity answers "how bright is this cell", the glyph
@@ -672,7 +1126,7 @@ function _renderFrame(
         st.intensityIndices[idx] = cellReversed
           ? reverseIdx
           : pickIntensityIndex(cellLum, intensityCount);
-        if (cellReversed) reverseCells++;
+        if (cellReversed) onReverseCell();
       }
       if (usePalette) {
         st.colorIndices[idx] = pickPaletteIndex(
@@ -685,19 +1139,29 @@ function _renderFrame(
       }
 
       // External boundary points for edge detection; out-of-bounds clamp to 0
-      for (let i = 0; i < 10; i++) {
-        const sx = Math.round(baseX + extPts[i][0]);
-        const sy = Math.round(baseY + extPts[i][1]);
-        if (sx >= 0 && sx < sampleW && sy >= 0 && sy < sampleH) {
-          const pidx = (sy * sampleW + sx) * 4;
-          const lum = _relLum01(
-            imgData[pidx],
-            imgData[pidx + 1],
-            imgData[pidx + 2]
-          );
-          extSamples[i] = _clamp01(invert ? 1 - lum : lum);
-        } else {
-          extSamples[i] = 0;
+      if (tapPlan) {
+        const external = tapPlan.external;
+        const tLum = tapPlan.lum;
+        const tIn = tapPlan.inBounds;
+        for (let i = 0; i < 10; i++) {
+          const t = external[i];
+          extSamples[i] = tIn[t] ? tLum[t] : 0;
+        }
+      } else {
+        for (let i = 0; i < 10; i++) {
+          const sx = Math.round(baseX + extPts[i][0]);
+          const sy = Math.round(baseY + extPts[i][1]);
+          if (sx >= 0 && sx < sampleW && sy >= 0 && sy < sampleH) {
+            const pidx = (sy * sampleW + sx) * 4;
+            const lum = _relLum01(
+              imgData[pidx],
+              imgData[pidx + 1],
+              imgData[pidx + 2]
+            );
+            extSamples[i] = _clamp01(invert ? 1 - lum : lum);
+          } else {
+            extSamples[i] = 0;
+          }
         }
       }
 
@@ -723,7 +1187,24 @@ function _renderFrame(
       glyphIndices[idx++] = cellLookup.nearestIndex(v);
     }
   }
+}
 
+/** Blit the chosen glyphs to the overlay. Identical for both sampling paths. */
+function _paintConverted(
+  st,
+  {
+    glyphIndices,
+    cols,
+    rows,
+    width,
+    height,
+    dpr,
+    charW,
+    charH,
+    usePalette,
+    useIntensity,
+  }
+) {
   // Sync overlay canvas backing store to container size at device resolution
   const backingW = Math.max(1, Math.round(width * dpr));
   const backingH = Math.max(1, Math.round(height * dpr));
@@ -753,12 +1234,6 @@ function _renderFrame(
     st.glowInComposite,
     st.scanlineDim
   );
-
-  // Bench readout only (DEV): how much of the frame reverse video claimed.
-  // A rising share is the "carpeting" failure showing up as a number before
-  // it shows up as a wall of solid cells.
-  st.lastCellCount = rows * cols;
-  st.lastReverseCells = reverseCells;
 }
 
 /**
@@ -778,6 +1253,11 @@ export async function initAltView(previewManager, options = {}) {
   const st = _createInstanceState();
   st.tinyCellsAllowed = Boolean(options.allowTinyCells);
   st.glowInComposite = Boolean(options.glowInComposite);
+  st.gpuSample = Boolean(options.gpuSample);
+  st.gpuClassTextureProvider =
+    typeof options.gpuClassTextureProvider === 'function'
+      ? options.gpuClassTextureProvider
+      : null;
   // CW-23: surface classes. The provider is asked for a class map once per
   // conversion; the vocabularies say what each class may be drawn with. An
   // instance that passes neither behaves exactly as it did before.
@@ -883,8 +1363,21 @@ export async function initAltView(previewManager, options = {}) {
       return st.enabled;
     },
     render() {
-      // Always render the underlying scene so controls + animation stay correct.
-      renderer.render(scene, previewManager.getActiveCamera());
+      // On the GPU path the scene is rendered by the glyph pass, into its own
+      // target, so drawing it to the canvas as well would be rendering the
+      // city twice a frame for a canvas nobody can see (enable() sets it to
+      // opacity 0). If the pass ever gives up, `available` turns false and
+      // the canvas render resumes on the next frame.
+      const gpuWillRender =
+        st.enabled &&
+        st.gpuSample &&
+        !st.benchLegacyCpuSample &&
+        st.gpuPass?.available === true;
+      if (!gpuWillRender) {
+        // Always render the underlying scene so controls + animation stay
+        // correct.
+        renderer.render(scene, previewManager.getActiveCamera());
+      }
 
       if (!st.enabled) return;
 
@@ -907,6 +1400,7 @@ export async function initAltView(previewManager, options = {}) {
       _renderFrame(st, {
         renderer,
         scene,
+        camera: previewManager.getActiveCamera(),
         width: w,
         height: h,
         fontFamily,
@@ -1110,6 +1604,10 @@ export async function initAltView(previewManager, options = {}) {
       st.atlasKey = '';
       st.paletteAtlases = null;
       st.colorIndices = null;
+      st.tapPlan = null;
+      st.tapPlanKey = '';
+      st.gpuPass?.dispose();
+      st.gpuPass = null;
       st.dirty = true;
     },
     isEnabled: () => st.enabled,
@@ -1196,11 +1694,45 @@ export async function initAltView(previewManager, options = {}) {
         // reverse video claimed.
         cells: st.lastCellCount ?? 0,
         reverseCells: st.lastReverseCells ?? 0,
+        // CW-32: which path actually converted the last frame, so a bench
+        // cannot report a GPU number that the CPU produced.
+        usedGpu: Boolean(st.lastUsedGpu),
+        gpuAvailable: Boolean(st.gpuPass?.available),
+        gpuFailure: st.gpuPass?.failure ?? '',
       };
     };
     api.resetConvertStats = () => {
       st.convertStats = { last: 0, sum: 0, max: 0, samples: 0 };
     };
+    /**
+     * CW-30: force the pre-CW-30 path for one step at a time, so a bench can
+     * measure the old and the new back to back in ONE session. Numbers from
+     * two different sessions on this machine are not comparable, so an A/B
+     * that cannot be run side by side cannot be trusted; this is what makes
+     * the comparison possible at all.
+     *
+     * @param {{taps?: boolean, contrast?: boolean}} flags
+     */
+    api.setBenchLegacy = (flags = {}) => {
+      if ('taps' in flags) st.benchLegacyTaps = Boolean(flags.taps);
+      if ('contrast' in flags) {
+        st.benchLegacyContrast = Boolean(flags.contrast);
+      }
+      if ('cpuSample' in flags) {
+        st.benchLegacyCpuSample = Boolean(flags.cpuSample);
+      }
+      st.dirty = true;
+      return {
+        taps: st.benchLegacyTaps,
+        contrast: st.benchLegacyContrast,
+        cpuSample: st.benchLegacyCpuSample,
+      };
+    };
+    api.getBenchLegacy = () => ({
+      taps: st.benchLegacyTaps,
+      contrast: st.benchLegacyContrast,
+      cpuSample: st.benchLegacyCpuSample,
+    });
   }
 
   return api;

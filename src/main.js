@@ -5909,7 +5909,7 @@ async function initApp() {
       : 'Look for a required option (often “enable/show/include/has…”) and try again.';
 
     const findHint = label
-      ? `Tip: use the “Search parameters” box and type "${label}".`
+      ? `Tip: use the “Search the Customizer” box and type "${label}".`
       : '';
 
     updateStatus(`${headline} ${nextStep} ${findHint}`.trim(), 'error');
@@ -7887,7 +7887,7 @@ async function initApp() {
       // Confirm before going back - warn about unsaved changes
       const confirmed = await showConfirmDialog(
         'Any unsaved changes to your current project will be lost.',
-        'Go back to welcome screen?',
+        'Go back to the Main Page?',
         'Confirm',
         'Cancel'
       );
@@ -8915,7 +8915,7 @@ if (rounded) {
         autoPreviewController.onParameterChange(state.defaults);
       }
 
-      updateStatus('Parameters reset to defaults');
+      updateStatus('Customizer reset to defaults');
       // Update button state after reset
       updatePrimaryActionButton();
     }
@@ -8936,7 +8936,7 @@ if (rounded) {
       // Show confirmation dialog for COGA compliance
       const confirmed = await showConfirmDialog(
         'This will reset all parameters to their default values. Any unsaved changes will be lost. You can undo this action.',
-        'Reset All Parameters?',
+        'Reset the Customizer?',
         'Reset',
         'Keep Changes'
       );
@@ -11742,7 +11742,7 @@ if (rounded) {
       a.click();
 
       URL.revokeObjectURL(url);
-      updateStatus(`Parameters exported to JSON`);
+      updateStatus(`Customizer settings exported to JSON`);
     });
   }
 
@@ -15131,7 +15131,7 @@ if (rounded) {
     try {
       await navigator.clipboard.writeText(paramsJsonContent.value);
       paramsJsonCopy.textContent = '✅ Copied!';
-      updateStatus('Parameters JSON copied to clipboard');
+      updateStatus('Customizer JSON copied to clipboard');
       setTimeout(() => {
         paramsJsonCopy.textContent = '📋 Copy';
       }, 2000);

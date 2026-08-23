@@ -178,6 +178,41 @@ export function createClassPass(renderer, root) {
 
   const clearColor = new Color();
 
+  /** Render one class frame into the target. Shared by read() and texture(). */
+  const renderClassFrame = (camera, cols, rows) => {
+    ensureTarget(cols, rows);
+
+    // Dress EVERY mesh, not only the known ones. A mesh left in its own
+    // material would paint its own colour into the id buffer and be read
+    // back as whatever class that number happens to be; an unknown mesh
+    // writes 0 instead and is reported as sky, which falls back to the full
+    // glyph vocabulary the converter has always used.
+    originals.clear();
+    root.traverse((obj) => {
+      if (!obj.isMesh) return;
+      const id = CLASS_BY_MESH_NAME.get(obj.name) ?? SURFACE_CLASS.SKY;
+      originals.set(obj, obj.material);
+      obj.material = materialFor(id, ROOF_SPLIT.get(obj.name) ?? 0);
+    });
+
+    const prevTarget = renderer.getRenderTarget();
+    renderer.getClearColor(clearColor);
+    const prevAlpha = renderer.getClearAlpha();
+    renderer.setRenderTarget(target);
+    // Everything the city does not cover is sky, which is class 0.
+    renderer.setClearColor(0x000000, 1);
+    renderer.clear();
+    renderer.render(root, camera);
+    return { prevTarget, prevAlpha };
+  };
+
+  const restoreAfterRender = ({ prevTarget, prevAlpha }) => {
+    renderer.setRenderTarget(prevTarget);
+    renderer.setClearColor(clearColor, prevAlpha);
+    for (const [mesh, material] of originals) mesh.material = material;
+    originals.clear();
+  };
+
   return {
     /**
      * Render one class frame and return it as one byte per cell, row 0 at the
@@ -187,35 +222,9 @@ export function createClassPass(renderer, root) {
      */
     read(camera, cols, rows) {
       if (disposed || !(cols > 0) || !(rows > 0)) return null;
-      ensureTarget(cols, rows);
-
-      // Dress EVERY mesh, not only the known ones. A mesh left in its own
-      // material would paint its own colour into the id buffer and be read
-      // back as whatever class that number happens to be; an unknown mesh
-      // writes 0 instead and is reported as sky, which falls back to the full
-      // glyph vocabulary the converter has always used.
-      originals.clear();
-      root.traverse((obj) => {
-        if (!obj.isMesh) return;
-        const id = CLASS_BY_MESH_NAME.get(obj.name) ?? SURFACE_CLASS.SKY;
-        originals.set(obj, obj.material);
-        obj.material = materialFor(id, ROOF_SPLIT.get(obj.name) ?? 0);
-      });
-
-      const prevTarget = renderer.getRenderTarget();
-      renderer.getClearColor(clearColor);
-      const prevAlpha = renderer.getClearAlpha();
-      renderer.setRenderTarget(target);
-      // Everything the city does not cover is sky, which is class 0.
-      renderer.setClearColor(0x000000, 1);
-      renderer.clear();
-      renderer.render(root, camera);
+      const restore = renderClassFrame(camera, cols, rows);
       renderer.readRenderTargetPixels(target, 0, 0, cols, rows, pixels);
-      renderer.setRenderTarget(prevTarget);
-      renderer.setClearColor(clearColor, prevAlpha);
-
-      for (const [mesh, material] of originals) mesh.material = material;
-      originals.clear();
+      restoreAfterRender(restore);
 
       // readRenderTargetPixels hands back rows bottom-up, which is upside
       // down against the converter's grid.
@@ -225,6 +234,24 @@ export function createClassPass(renderer, root) {
         for (let x = 0; x < cols; x++) classMap[dst + x] = pixels[src + x * 4];
       }
       return classMap;
+    },
+
+    /**
+     * The same class frame, left on the GPU (CW-32).
+     *
+     * When the glyph pick runs in a shader there is no reason to bring these
+     * bytes to the CPU at all: the shader samples this texture directly, and
+     * the readback above — the second synchronous stall of every dirty frame
+     * — simply does not happen. Rows are bottom-up here, as the GPU wrote
+     * them; the shader indexes accordingly.
+     *
+     * @returns {import('three').Texture|null}
+     */
+    texture(camera, cols, rows) {
+      if (disposed || !(cols > 0) || !(rows > 0)) return null;
+      const restore = renderClassFrame(camera, cols, rows);
+      restoreAfterRender(restore);
+      return target.texture;
     },
 
     dispose() {

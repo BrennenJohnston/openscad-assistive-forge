@@ -1,6 +1,6 @@
 /**
  * Welcome tour nudge (U-27, UF-22) — the app asks, once per load, whether
- * the user would like the Welcome Page Tour, and shows them where the tour
+ * the user would like the Main Page Tour, and shows them where the tour
  * starts from.
  *
  * The report behind it: the welcome card's tip "is still not highlighted well
@@ -54,7 +54,7 @@ const COVERING_SELECTOR =
 // D-35: every string owner-approved verbatim 2026-08-15 (Q-52d, pack A).
 const COPY = {
   title: 'Take a quick tour of this page?',
-  body: 'There is more on this page than it first looks. The Welcome Page Tour walks you through it in about two minutes, and you can leave it at any time.',
+  body: 'There is more on this page than it first looks. The Main Page Tour walks you through it in about two minutes, and you can leave it at any time.',
   never: 'Do not show this again',
   dismiss: 'Not now',
   start: 'Start the tour',
@@ -130,7 +130,7 @@ function waitForClearScreen() {
  * modal would point at something the user cannot see. The welcome screen is
  * its own scroll container, not the document.
  *
- * @param {HTMLElement} card - The Welcome Page Tour card
+ * @param {HTMLElement} card - The Main Page Tour card
  */
 function scrollMenuIntoView(card) {
   const scroller = card.closest('#welcomeScreen');
