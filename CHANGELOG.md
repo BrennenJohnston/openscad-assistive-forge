@@ -451,6 +451,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The welcome dialog fits the phone, and the Download button never leaves the screen** (UF-41,
+  U-39) - the first thing a new person saw on a phone was a dialog with two enormous screenshots in
+  it, nothing to say it scrolled, and the button that starts the app hidden somewhere below the
+  bottom of the screen. The whole Classic card was down there too. Measured across six screen sizes,
+  **Download & Continue was below an unmarked fold on every one of them**, laptops included - a
+  1366x768 screen missed it by about 90 pixels, so this was never only a phone problem. The dialog
+  is now built as three parts instead of one: the title at the top and the button at the bottom stay
+  put, and only the middle scrolls. Download & Continue is on screen and pressable at every size
+  tested, down to 360x640, where fitting everything without scrolling is simply not possible. On a
+  phone the two interface screenshots are gone - Classic cannot be chosen on a phone anyway, so they
+  were pictures of a choice you are not being offered - and the four "note for first time users"
+  facts become four tappable rows you can open one at a time: **Browser based process**, **Initial
+  download, about 15 to 30 MB**, **Local project storage**, **Completely removable**. On a computer
+  nothing is hidden: the four facts stay written out in full, and the two screenshots are still
+  there, just small enough to sit side by side. Where the dialog does still scroll, a fade and a
+  small chevron above the button now say so, and they go away when you reach the end. In high
+  contrast the fade becomes a hard line instead, because a soft gradient is the wrong instrument
+  there and does not render at all in Windows' forced-colours mode. Screen-reader users lose
+  nothing when the pictures go: the description of each interface's layout moved to text that is
+  always present, so it is read out exactly as before
+- **The welcome dialog's title no longer hides under the browser's toolbar** (UF-41, U-39) - on a
+  phone the title was cut off at the top by the browser's own chrome. The dialog was being sized
+  against the height a phone has with its toolbar hidden, so whenever the toolbar was showing the
+  box was taller than the space it was being centred in, and it overflowed off the top and the
+  bottom at once. It is now sized against the space that actually exists, with the phone's safe
+  areas already taken out of it
 - **The Back button asks before it closes the app** (UF-39, U-41) - on a phone, halfway through the
   Getting Started tour, pressing the browser's Back button closed the whole app. Not the panel, not
   the tour, the app: the next thing on screen was the browser's home page. Nothing the app did had

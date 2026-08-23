@@ -5446,8 +5446,47 @@ body.first-visit-blocking #app {
   /* U-19: the note list and card links made the modal taller than the
      shared 90vh cap; at 900px-tall desktops that pushed Download &
      Continue below the modal's internal scroll fold. A slimmer margin
-     keeps the primary action on screen without scrolling. */
-  max-height: calc(100vh - 40px);
+     keeps the primary action on screen without scrolling.
+
+     UF-41 (U-39): that was not enough — Download & Continue sat below an
+     UNMARKED internal fold at all six sizes measured, 1366x768 included,
+     because the whole box scrolled as one. It is now a column: the title
+     row and the footer are fixed, and only the body between them scrolls.
+     Wherever the content still overflows, the primary action is on screen
+     anyway, which is the half of the owner's directive that survives a
+     360x640 viewport.
+
+     max-height was calc(100vh - 40px). 100vh is the LARGE viewport height —
+     the height a phone has with its browser chrome hidden — so on a phone
+     showing its chrome the box was taller than the space it is centred in,
+     and align-items:center cuts an overflowing item off at BOTH ends. That
+     is the title disappearing under the browser chrome (164304), and it is
+     why it never reproduced in emulation, where there is no chrome and
+     100vh equals the visible height. 100% is measured against .modal's own
+     content box, which is the space that actually exists and already has
+     the safe-area insets taken out of it by .modal's padding. */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-height: 100%;
+}
+
+.modal-first-visit .modal-header,
+.modal-first-visit .modal-footer {
+  flex: 0 0 auto;
+}
+
+.modal-first-visit .modal-body {
+  flex: 1 1 auto;
+  /* Without this a flex item refuses to shrink below its content height and
+     the box grows past the viewport instead of scrolling inside it. */
+  min-height: 0;
+  overflow-y: auto;
+  /* A SUPPLEMENT, never the affordance: Android's overlay scrollbars fade
+     out on their own, so a styled scrollbar cannot be the thing that tells
+     a phone user there is more below. The gutter is here so the text does
+     not reflow at the moment a scrollbar appears. */
+  scrollbar-gutter: stable;
 }
 
 /* U-20: reset.css strips colour and underline from every anchor, and no
@@ -5505,6 +5544,86 @@ body.first-visit-blocking #app {
   gap: var(--space-xs) var(--space-lg);
   margin: 0;
   padding-left: var(--space-lg);
+}
+
+/* UF-41 (U-39): the mobile half of the intro. Native details/summary — the
+   summary IS the button, so there is no ARIA here and no tabindex, and
+   Enter/Space/click all work without a line of JavaScript. Hidden outright
+   on desktop-shaped viewports, where the four bullets above stay (Q-69). */
+.first-visit-note-rows {
+  display: none;
+  margin-top: var(--space-xs);
+}
+
+.first-visit-note-row {
+  border: var(--border-width-thin) solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  margin-bottom: var(--space-2xs);
+  background: var(--color-bg-primary);
+}
+
+.first-visit-note-row > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  /* 44px hit target: the row is the control, and it is the only way into
+     the sentence behind it. */
+  min-height: var(--size-touch-target);
+  padding: var(--space-xs) var(--space-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  list-style: none;
+}
+
+.first-visit-note-row > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* The house chevron, copied from `.forge-disclosure summary::after` rather
+   than re-invented: same 0.5em box so it scales with the user's text size,
+   same border technique, and the same direction convention the app's other
+   disclosures use (points right when closed, down when open). Drawn from the
+   summary itself so it cannot become a second control inside the control
+   (UF-35's nested-interactive rule). */
+.first-visit-note-row > summary::after {
+  content: '';
+  flex-shrink: 0;
+  margin-left: auto;
+  width: 0.5em;
+  height: 0.5em;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--motion-base) ease;
+}
+
+.first-visit-note-row[open] > summary::after {
+  transform: rotate(45deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .first-visit-note-row > summary::after {
+    transition: none;
+  }
+}
+
+.first-visit-note-row > summary:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: -3px;
+}
+
+@supports not selector(:focus-visible) {
+  .first-visit-note-row > summary:focus {
+    outline: 3px solid var(--color-focus);
+    outline-offset: -3px;
+  }
+}
+
+.first-visit-note-row > p {
+  margin: 0;
+  padding: 0 var(--space-sm) var(--space-sm);
+  color: var(--color-text-primary);
 }
 
 .first-visit-choice {
@@ -5621,13 +5740,22 @@ body.first-visit-blocking #app {
   opacity: 0.5;
 }
 
+/* UF-41 (Q-68b): the same two 1400x900 captures, rendered as small
+   side-by-side thumbnails instead of full-width. At 353px each they were
+   the single biggest reason a 1366x768 laptop could not see Download &
+   Continue; at 176px the whole layout of each interface still reads — one
+   panel and a big preview against four panes and a code editor, which is
+   the thing that actually tells them apart at a glance — and the desktop
+   budget closes with room to spare. No new asset, so nothing to keep in
+   step with the UI and no new bytes in the bundle. */
 .first-visit-shot {
   display: block;
-  width: 100%;
-  height: auto;
+  width: auto;
+  height: 176px;
+  max-width: 100%;
+  margin: 0 auto var(--space-xs);
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius-sm);
-  margin-bottom: var(--space-xs);
 }
 
 .first-visit-guidance {
@@ -5663,6 +5791,82 @@ body.first-visit-blocking #app {
   flex-shrink: 0;
   margin-top: 3px;
   accent-color: var(--color-accent);
+}
+
+/* UF-41 (U-39): the same shape UF-38 reviewed for the tutorial card. Height
+   zero and overflow visible, so the cue paints UPWARD over the last line of
+   the body and can never be the reason something is cut off. */
+.first-visit-scroll-cue {
+  position: relative;
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
+  opacity: 0;
+  color: var(--color-text-secondary);
+  transition: opacity var(--motion-base) ease;
+}
+
+.first-visit-has-more .first-visit-scroll-cue {
+  opacity: 1;
+}
+
+.first-visit-scroll-cue::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--scroll-cue-height);
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    var(--color-bg-primary) 85%
+  );
+}
+
+.first-visit-scroll-cue svg {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .first-visit-scroll-cue {
+    transition: none;
+  }
+}
+
+/* A soft fade is the wrong instrument at high contrast, and gradients do not
+   render in forced colours at all: draw the fold as a hard edge instead, so
+   "there is more below" survives the theme. */
+[data-high-contrast='true'] .first-visit-scroll-cue,
+[data-high-contrast='true'] .first-visit-scroll-cue::before {
+  color: var(--color-text-primary);
+}
+
+[data-high-contrast='true'] .first-visit-scroll-cue::before {
+  background: var(--color-bg-primary);
+  border-top: var(--border-width-base) solid var(--color-border);
+}
+
+@media (prefers-contrast: more) {
+  .first-visit-scroll-cue::before {
+    background: var(--color-bg-primary);
+    border-top: var(--border-width-base) solid var(--color-border);
+  }
+}
+
+@media (forced-colors: active) {
+  .first-visit-scroll-cue::before {
+    background: Canvas;
+    border-top: 1px solid CanvasText;
+  }
+
+  .first-visit-scroll-cue svg {
+    forced-color-adjust: none;
+    stroke: CanvasText;
+  }
 }
 
 #first-visit-modal .modal-footer {
@@ -5708,6 +5912,79 @@ body.first-visit-blocking #app {
   .modal-first-visit a:hover {
     color: ActiveText;
   }
+}
+
+/* ── UF-41 (U-39): the mobile-shaped modal ────────────────────────────────
+   The class is set by updateFirstVisitClassicGate() from the same
+   isViewportDesktopShaped() predicate that disables the Classic card, so
+   the pictures go exactly where the choice they illustrate is not offered.
+   A media query cannot say "at least 1024 wide AND not portrait", and a
+   second definition of "mobile" inside one modal is the cross-file drift
+   this project keeps paying for. */
+
+/* The four bullets become the four stowed rows. Exactly one list is in the
+   layout at a time, so a screen reader is never offered both. */
+.first-visit-mobile-shaped .first-visit-note-list {
+  display: none;
+}
+
+.first-visit-mobile-shaped .first-visit-note-rows {
+  display: block;
+}
+
+/* Q-68a: no screenshots on a phone. The layout description they carried is
+   not lost — it moved to the always-present sr-only span each radio is
+   described by, so a screen-reader user hears exactly what they heard
+   before. (Both files are fetched regardless: the split backdrop behind
+   this modal paints from the same two URLs.) */
+.first-visit-mobile-shaped .first-visit-shot {
+  display: none;
+}
+
+/* Names a capability that does not exist on the surface it is being read
+   on: the button it describes lives in a desktop-only header row, and the
+   Classic card immediately above already says Classic is desktop-only. */
+.first-visit-mobile-shaped .first-visit-compromise {
+  display: none;
+}
+
+/* The remaining gap is spacing, not words. Every trim below tightens
+   padding or margins; nothing a first-time user reads is removed. */
+.first-visit-mobile-shaped .modal-first-visit {
+  padding: var(--space-md);
+}
+
+.first-visit-mobile-shaped .modal-header {
+  margin-bottom: var(--space-sm);
+  padding-bottom: var(--space-xs);
+}
+
+.first-visit-mobile-shaped #first-visit-title {
+  font-size: var(--font-size-xl);
+}
+
+.first-visit-mobile-shaped .first-visit-choice {
+  margin: var(--space-xs) 0 0;
+}
+
+.first-visit-mobile-shaped .first-visit-options {
+  gap: var(--space-sm);
+}
+
+.first-visit-mobile-shaped .first-visit-option-cell {
+  padding: var(--space-xs);
+}
+
+.first-visit-mobile-shaped .first-visit-option-head {
+  margin-bottom: var(--space-2xs);
+}
+
+.first-visit-mobile-shaped .first-visit-gate-note {
+  margin-bottom: var(--space-xs);
+}
+
+.first-visit-mobile-shaped .first-visit-learn-more {
+  margin-bottom: 0;
 }
 
 @media (max-width: 900px) {

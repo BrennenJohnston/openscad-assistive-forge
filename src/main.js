@@ -2833,12 +2833,22 @@ async function initApp() {
     radio.setAttribute(
       'aria-describedby',
       gated
-        ? 'firstVisitClassicGate firstVisitClassicShot firstVisitClassicGuide'
-        : 'firstVisitClassicShot firstVisitClassicGuide'
+        ? 'firstVisitClassicGate firstVisitClassicShotDesc firstVisitClassicGuide'
+        : 'firstVisitClassicShotDesc firstVisitClassicGuide'
     );
     if (gated && radio.checked) {
       radio.checked = false;
     }
+    // UF-41 (U-39): the modal's mobile layout — stowed concept rows instead
+    // of the four bullets, no screenshots, no desktop-switching line — rides
+    // this same predicate rather than a second breakpoint of its own, so the
+    // pictures disappear exactly where the choice they illustrate is not
+    // offered. A media query cannot express "at least 1024 wide AND not
+    // portrait", and two definitions of "mobile" in one modal is the
+    // cross-file drift this project keeps paying for.
+    document
+      .getElementById('first-visit-modal')
+      ?.classList.toggle('first-visit-mobile-shaped', gated);
   };
 
   // First-visit modal check
@@ -2867,14 +2877,64 @@ async function initApp() {
     firstVisitModal?.classList.toggle('first-visit-forge-dark', dark);
   };
 
+  // UF-41 (U-39): the modal's body scrolls on the sizes where the content
+  // still cannot fit (360x640 and 375x667 are arithmetically out of reach —
+  // see the release record's height table), and before this there was no
+  // affordance of any kind: `overflow: auto` with Android's overlay
+  // scrollbars, which fade out on their own. The cue is the fade; the class
+  // is the only thing driving it, so it can never be shown at the scroll end.
+  const firstVisitBody = firstVisitModal?.querySelector('.modal-body');
+  const updateFirstVisitScrollCue = () => {
+    const box = firstVisitModal?.querySelector('.modal-first-visit');
+    if (!box || !firstVisitBody) return;
+    const hidden =
+      firstVisitBody.scrollHeight -
+      firstVisitBody.scrollTop -
+      firstVisitBody.clientHeight;
+    box.classList.toggle('first-visit-has-more', hidden > 2);
+  };
+
   if (firstVisitCheck && firstVisitModal) {
     setFirstVisitBlocking(true);
     updateFirstVisitClassicGate();
-    subscribeViewportShape(() => updateFirstVisitClassicGate());
+    subscribeViewportShape(() => {
+      updateFirstVisitClassicGate();
+      updateFirstVisitScrollCue();
+    });
+    firstVisitBody?.addEventListener('scroll', updateFirstVisitScrollCue, {
+      passive: true,
+    });
+    // Opening a note row changes how much is below the fold, and `toggle`
+    // is the only event a native <details> fires for it.
+    firstVisitModal
+      .querySelectorAll('.first-visit-note-row')
+      .forEach((row) =>
+        row.addEventListener('toggle', updateFirstVisitScrollCue)
+      );
+    // subscribeViewportShape only fires when the desktop/mobile ANSWER
+    // changes, so it cannot carry an ordinary resize or an on-screen
+    // keyboard opening. This can.
+    window.addEventListener('resize', updateFirstVisitScrollCue);
+    // And this catches everything neither of those can see: a web font
+    // arriving, high contrast resolving late, a user's own text-size
+    // setting. MEASURED without it — booting into high contrast at
+    // 1280x800 leaves 22px below the fold and no cue at all, because
+    // nothing the other listeners watch for has happened. The scroller
+    // itself is watched for the viewport half; its children are watched
+    // because content growing INSIDE a fixed-height scroller never changes
+    // that scroller's own box.
+    if (typeof ResizeObserver !== 'undefined' && firstVisitBody) {
+      const cueObserver = new ResizeObserver(updateFirstVisitScrollCue);
+      cueObserver.observe(firstVisitBody);
+      [...firstVisitBody.children].forEach((child) =>
+        cueObserver.observe(child)
+      );
+    }
     // Delay slightly to ensure DOM is ready
     setTimeout(() => {
       applyFirstVisitThemeAssets();
       openModal(firstVisitModal);
+      updateFirstVisitScrollCue();
     }, 500);
   }
 
