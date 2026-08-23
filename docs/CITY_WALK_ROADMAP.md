@@ -91,9 +91,10 @@ Re-check that list before relying on it; documents move.
 
 ### One seam that already exists
 
-`trafficDensityFor(road)` in `city-data.js` decides how many parked cars a
-street gets. It works from the road's class, with a lane multiplier that is
-ready for a `lanes` tag the current extracts do not carry.
+`trafficDensityFor(road)` in `city-data.js` decides how much frozen traffic a
+street gets - the cars standing in the travel lanes, not the ones parked at the
+kerb. It works from the road's class, with a lane multiplier that is ready for
+a `lanes` tag the current extracts do not carry.
 
 It is a proxy, and an honest one: real congestion data is a commercial product,
 and this project uses open data. If that ever changes, that function is the one

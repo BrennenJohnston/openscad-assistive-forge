@@ -2321,7 +2321,7 @@ export function buildStreetProps(model, collision = null) {
       y,
       halfLengthM: LIGHT_POLE_SIDE_M / 2,
       halfWidthM: LIGHT_POLE_SIDE_M / 2,
-      angleRad: 0,
+      rotationRad: 0,
     });
   }
 
