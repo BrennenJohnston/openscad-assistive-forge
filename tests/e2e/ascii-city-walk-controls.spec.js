@@ -502,6 +502,198 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
   })
 })
 
+test.describe('ASCII City Walk — the Camera panel (CW-35)', () => {
+  const btn = (page, id) => page.locator('#' + id)
+  const announcer = (page) => page.locator('#cityWalkAnnouncer')
+
+  /**
+   * Every control the panel offers, in the order a Tab key would reach
+   * them. Sorted by document position, not by the order querySelectorAll
+   * happens to return - a panel is nested markup and the two are not the
+   * same walk (UF-38).
+   */
+  const panelControls = (page) =>
+    page.evaluate(() => {
+      const panel = document.getElementById('cityWalkCameraPanel')
+      return [...panel.querySelectorAll('button')]
+        .filter((b) => !b.disabled && b.offsetParent !== null)
+        .sort((a, b) =>
+          a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING
+            ? -1
+            : 1
+        )
+        .map((b) => b.id)
+    })
+
+  test('every panel control is reachable by Tab and names itself', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const expected = await panelControls(page)
+    expect(expected.length).toBeGreaterThan(10)
+
+    // Start from the panel's own first control rather than tabbing in from
+    // the page: this asks whether the panel's INTERNAL order is walkable,
+    // which is what breaks when a d-pad is laid out by grid area.
+    await btn(page, expected[0]).focus()
+    const reached = [expected[0]]
+    for (let i = 1; i < expected.length; i++) {
+      await page.keyboard.press('Tab')
+      const id = await page.evaluate(() => document.activeElement?.id)
+      // A Tab that lands nowhere new means the walk stalled; say where,
+      // rather than reporting a mismatched array a dozen entries long.
+      expect(id, `Tab ${i} from ${reached[i - 1]}`).not.toBe(reached[i - 1])
+      reached.push(id)
+    }
+    expect(reached).toEqual(expected)
+
+    // An icon-only button is nameless without one (02-accessibility rule 3).
+    const unnamed = await page.evaluate(() =>
+      [
+        ...document
+          .getElementById('cityWalkCameraPanel')
+          .querySelectorAll('button'),
+      ]
+        .filter((b) => !(b.getAttribute('aria-label') || b.textContent).trim())
+        .map((b) => b.id)
+    )
+    expect(unnamed).toEqual([])
+  })
+
+  test('the view buttons carry the pressed state, in both views', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const pressed = (id) => btn(page, id).getAttribute('aria-pressed')
+    expect(await pressed('cityWalkCamViewBottom')).toBe('true')
+    expect(await pressed('cityWalkCamViewTop')).toBe('false')
+
+    await btn(page, 'cityWalkCamViewTop').click()
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
+    expect(await pressed('cityWalkCamViewTop')).toBe('true')
+    expect(await pressed('cityWalkCamViewBottom')).toBe('false')
+
+    // The key route and the buttons are one state, not two copies of it.
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'street view'
+    )
+    expect(await pressed('cityWalkCamViewBottom')).toBe('true')
+    expect(await pressed('cityWalkCamViewTop')).toBe('false')
+  })
+
+  test('Reset and the standard views work from the keyboard alone', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const pitch = () =>
+      page.evaluate(() => window.__cityWalkGame.walkState.pitchRad)
+    const heading = () =>
+      page.evaluate(() => window.__cityWalkGame.walkState.headingRad)
+
+    await btn(page, 'cityWalkCamViewDiagonal').focus()
+    await page.keyboard.press('Enter')
+    await expect(announcer(page)).toHaveText(/Looking up at the towers/)
+    expect(await pitch()).toBeGreaterThan(0.5)
+
+    await btn(page, 'cityWalkCamReset').focus()
+    await page.keyboard.press('Space')
+    await expect(announcer(page)).toHaveText(/View level/)
+    expect(Math.abs(await pitch())).toBeLessThan(0.001)
+
+    await btn(page, 'cityWalkCamViewRight').focus()
+    await page.keyboard.press('Enter')
+    await expect(announcer(page)).toHaveText(/Facing east/)
+    expect(Math.abs((await heading()) - Math.PI / 2)).toBeLessThan(0.001)
+  })
+
+  test('the panel collapses, says so, and remembers', async ({ page }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const toggle = btn(page, 'cityWalkCameraToggle')
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    await expect(btn(page, 'cityWalkCamReset')).toBeVisible()
+
+    await toggle.click()
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    await expect(btn(page, 'cityWalkCamReset')).toBeHidden()
+
+    // Leaving and re-entering the city builds the panel again from scratch.
+    await page.keyboard.press('Escape')
+    await expect(page.locator('#cityWalkLayer')).toBeHidden()
+    await launchGame(page)
+    await enterCity(page)
+    await expect(btn(page, 'cityWalkCameraToggle')).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    )
+  })
+
+  test('no panel control is smaller than the touch target', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // The panel's buttons inherit the Forge preview panel's sizing, which
+    // is drawn for a desktop pointer. The game is played on touch too, so
+    // the game layer raises them to --size-touch-target - and axe cannot
+    // see this, because it scores target size against the 24px WCAG 2.2
+    // minimum, not the 44px this project holds itself to.
+    const small = await page.evaluate(() => {
+      const min = parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue(
+          '--size-touch-target'
+        )
+      )
+      return [
+        ...document
+          .getElementById('cityWalkCameraPanel')
+          .querySelectorAll('button'),
+      ]
+        .filter((b) => b.offsetParent !== null)
+        .map((b) => ({ id: b.id, r: b.getBoundingClientRect() }))
+        .filter(({ r }) => r.height < min - 0.5 || r.width < min - 0.5)
+        .map(
+          ({ id, r }) => `${id} ${Math.round(r.width)}x${Math.round(r.height)}`
+        )
+    })
+    expect(small).toEqual([])
+  })
+
+  test('axe: no violations with the panel showing, in either view', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    for (const view of ['street', 'map']) {
+      if (view === 'map') {
+        await page.keyboard.press('KeyM')
+        await expect(page.locator('#cityWalkHudStatus')).toContainText(
+          'map view'
+        )
+      }
+      // A hover state is invisible to a scan unless something is hovering
+      // (D-55), and the panel's buttons repaint their pair on hover.
+      await btn(page, 'cityWalkCamPanUp').hover()
+      const results = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+        .include('#cityWalkCameraPanel')
+        .analyze()
+      expectOnlyAllowedViolations(results)
+      await page.mouse.move(2, 2)
+    }
+  })
+})
+
 test.describe('ASCII City Walk — C and T reach the toggles (CW-Q15)', () => {
   const announcer = (page) => page.locator('#cityWalkAnnouncer')
 

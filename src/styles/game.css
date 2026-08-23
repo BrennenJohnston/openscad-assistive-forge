@@ -252,15 +252,19 @@
   box-shadow: var(--shadow-lg, none);
 }
 
-/* The D-pad and zoom buttons wear `btn-sm` so they match the Forge panel's
+/* Every button in the panel wears `btn-sm` so it matches the Forge panel's
  * look, and `btn-sm` caps min-height at --size-touch-target-sm. Measured on a
- * touch pointer that left them 44 wide and 36 TALL - eight pixels short of a
- * square target, on the controls a finger uses most. The token is already
- * 36px on a mouse and 44px on touch, so asking for it here gives the right
- * answer on both without touching the Forge panel, whose own buttons measure
- * the same and are reported rather than changed from inside this release.
+ * touch pointer that left the D-pads 44 wide and 36 TALL - eight pixels short
+ * of a square target, on the controls a finger uses most - and the Standard
+ * Views and Reset rows shorter still at 32. The token is already 36px on a
+ * mouse and 44px on touch, so asking for it here gives the right answer on
+ * both without touching the Forge panel, whose own buttons measure the same
+ * and are reported rather than changed from inside this release.
+ *
+ * Named by the panel rather than by button class: a control added to this
+ * panel later should not be able to arrive under the target size unnoticed.
  */
-.city-walk-camera-panel .camera-btn {
+.city-walk-camera-panel .camera-panel-body button {
   min-height: var(--size-touch-target);
 }
 
