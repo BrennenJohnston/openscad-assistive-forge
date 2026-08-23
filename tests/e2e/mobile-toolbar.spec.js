@@ -12,9 +12,15 @@ import path from 'path';
 // Q-73b moved the preview status line to the top of the preview on mobile,
 // where it is readable in both camera-pad states.
 //
-// Everything asserted here was measured before it was written. The px budget
-// cases are deliberately exact rather than "less than before": a re-layout
-// that silently drifts back up a row is the thing this release exists to stop.
+// Everything asserted here was measured before it was written, and the
+// measurements are in the messages. What is ASSERTED is the structure — the
+// four icons' row is gone and they are in the Customizer row — plus a ceiling
+// against what the base spent. The px totals are deliberately NOT asserted
+// exactly: the header row wraps rather than clips when a platform's fonts need
+// more width than 412px allows (see layout.css), so its height is
+// font-dependent by design, and a lane with wider glyphs must fail here on a
+// lost row and not on a font. That is UF-41's "do not assert a measurement as
+// a promise", applied before CI could teach it again.
 
 const FIXTURE = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
 const WASM_READY_TIMEOUT = 180_000;
