@@ -4332,8 +4332,10 @@ function updateSpotlightAndPosition() {
     const clearanceOverlap = (pr) =>
       clearanceRects().reduce((sum, c) => sum + overlapArea(pr, c), 0);
 
-    const blocks = (pr) =>
-      intersects(pr, rect) || isBlockedAtCenter() || clearanceOverlap(pr) > 0;
+    // The clearance figure is wanted twice per dock — once to disqualify and
+    // once to rank — and it walks the DOM, so it is measured once and passed.
+    const blocks = (pr, clearance) =>
+      intersects(pr, rect) || isBlockedAtCenter() || clearance > 0;
 
     const dock = (side) => {
       // Compact floating bubble (not full-width sheet) for portrait usability.
@@ -4372,10 +4374,11 @@ function updateSpotlightAndPosition() {
     dock(first);
     const pr1 = panel.getBoundingClientRect();
     const c1 = clearanceOverlap(pr1);
-    if (blocks(pr1)) {
+    if (blocks(pr1, c1)) {
       dock(second);
       const pr2 = panel.getBoundingClientRect();
-      if (blocks(pr2)) {
+      const c2 = clearanceOverlap(pr2);
+      if (blocks(pr2, c2)) {
         // If the highlighted target is a large region (e.g. preview container),
         // it may be impossible to avoid overlap. Only auto-minimize when the
         // current step is gating progress on a required interaction.
@@ -4389,7 +4392,7 @@ function updateSpotlightAndPosition() {
         // side that buries the least — the target it points at plus (D-77)
         // the chrome it does not.
         const a1 = overlapArea(pr1, rect) + c1;
-        const a2 = overlapArea(pr2, rect) + clearanceOverlap(pr2);
+        const a2 = overlapArea(pr2, rect) + c2;
         if (a1 < a2) {
           dock(first);
         }
