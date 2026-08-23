@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The city runs colder at the smallest characters** (CW-30) - at the 10% character size a cell is
+  about two device pixels wide, and the converter was reading sixteen samples for it. Measured,
+  those sixteen land on six distinct pixels: the ring of samples meant to see a cell's surroundings
+  was reading the very pixels the cell itself had already read. Each pixel is now read once and
+  handed to every sample that asked for it, which is not an approximation - the picture comes out
+  the same character for character. The two contrast curves, which raise a number to a fixed power
+  up to twelve times per cell, are now read from a table built once per frame rather than computed
+  per cell. Same session, same standing view, heavy rain, 10% characters, under a 4x CPU throttle:
+  a conversion took 287-346 ms before and 179-190 ms after, and the picture refreshed about three
+  times a second before and about five after. Nothing about how it looks has changed - at 50%
+  characters the frame is pixel-for-pixel identical to the old path, and at 10% it differs in 17
+  pixels out of 1,129,600, against a 31,000-pixel floor from capturing the same code twice. This
+  is the first of three staged pieces of performance work; the goal of thirty frames a second on a
+  low-end machine is not met yet
+
 ### Added
 
 - **The tour ends by telling you the way out** (UF-39, U-45) - the Getting Started tour used to
