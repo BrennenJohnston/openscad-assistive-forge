@@ -67,8 +67,8 @@
             type="button"
             id="clearFileBtn"
             class="btn btn-sm btn-outline"
-            aria-label="Return to the main projects page. Warning: unsaved changes will be lost"
-            title="Return to the main projects page (unsaved changes will be lost)"
+            aria-label="Main Page. Warning: unsaved changes will be lost"
+            title="Main Page (unsaved changes will be lost)"
             data-tutorial-target="clear-file"
           >
             ← Main Page
@@ -1091,7 +1091,14 @@
               role="region"
               aria-labelledby="features-heading"
             >
-              <h2 id="features-heading">Get Started</h2>
+              <h2 id="features-heading">Main Page</h2>
+              <!-- UF-40 (U-44): the landing surface carries the name the
+                   tours, the header button and the docs all use, so the
+                   vocabulary is visible where it is introduced. The id and
+                   the aria-labelledby coupling stay (Q-40 facade). -->
+              <p class="welcome-lede">
+                Your projects, organized like folders on a desktop computer.
+              </p>
               <!-- W3: one decluttered surface — start actions and
                    saved projects side by side under a single heading -->
               <div class="welcome-columns">
@@ -1407,7 +1414,7 @@
                      unified [data-example] handler never sees it; main.js
                      wires it directly to startTutorial('welcome'). -->
                 <div class="role-path-card">
-                  <h3 class="role-path-title">Welcome Page Tour</h3>
+                  <h3 class="role-path-title">Main Page Tour</h3>
                   <p class="role-path-meta">Guided tour • about 2 minutes</p>
                   <p class="role-path-description">
                     See what everything on this page does, including what works
@@ -1429,7 +1436,7 @@
                       id="startWelcomeTourBtn"
                       data-tutorial="welcome"
                     >
-                      Start Welcome Tour
+                      Start Main Page Tour
                     </button>
                   </div>
                 </div>
@@ -3825,9 +3832,9 @@
                       type="button"
                       id="viewParamsJsonBtn"
                       class="btn btn-sm btn-outline advanced-btn"
-                      aria-label="View current parameters as JSON"
+                      aria-label="View Customizer JSON"
                     >
-                      { } View Params JSON
+                      { } View Customizer JSON
                     </button>
                   </div>
                   <!-- Export Changed Settings (troubleshooting support) -->
@@ -4109,14 +4116,14 @@
                 <div class="param-search-row">
                   <div class="param-search-input-wrapper">
                     <label for="paramSearchInput" class="sr-only"
-                      >Search parameters</label
+                      >Search the Customizer</label
                     >
                     <input
                       type="search"
                       id="paramSearchInput"
                       class="param-search-input"
-                      placeholder="Search parameters..."
-                      aria-label="Search parameters by name or description"
+                      placeholder="Search the Customizer..."
+                      aria-label="Search the Customizer by name or description"
                       autocomplete="off"
                     />
                     <button
@@ -4502,14 +4509,14 @@
                 <!-- Drawer toggle header with mobile params button -->
                 <div class="preview-drawer-header">
                   <div class="preview-drawer-header-left">
-                    <!-- Parameters button FIRST (left position) -->
+                    <!-- Customizer button FIRST (left position) -->
                     <button
                       type="button"
                       id="mobileDrawerToggle"
                       class="btn btn-sm btn-icon mobile-only"
                       aria-expanded="false"
                       aria-controls="paramPanel"
-                      aria-label="Open customizer panel"
+                      aria-label="Customizer panel"
                       title="Customizer"
                       data-tutorial-target="mobile-drawer-toggle"
                     >
@@ -4526,9 +4533,9 @@
                         <line x1="3" y1="6" x2="21" y2="6"></line>
                         <line x1="3" y1="18" x2="21" y2="18"></line>
                       </svg>
-                      <span class="btn-label">Params</span>
+                      <span class="btn-label">Customizer</span>
                     </button>
-                    <!-- Preview Settings button SECOND (right of Parameters) -->
+                    <!-- Preview Settings button SECOND (right of the Customizer) -->
                     <button
                       type="button"
                       id="previewDrawerToggle"
@@ -5236,7 +5243,7 @@
                     type="button"
                     id="exportParamsBtn"
                     class="btn btn-sm btn-secondary actions-drawer-btn"
-                    aria-label="Download parameters as JSON file"
+                    aria-label="Export Customizer Settings as a JSON file"
                   >
                     <svg
                       class="btn-icon-svg"
@@ -5254,7 +5261,7 @@
                       <polyline points="7 10 12 15 17 10"></polyline>
                       <line x1="12" y1="15" x2="12" y2="3"></line>
                     </svg>
-                    <span class="btn-text">Export Params</span>
+                    <span class="btn-text">Export Customizer Settings</span>
                   </button>
                   <button
                     type="button"
@@ -6550,7 +6557,7 @@
         </div>
       </div>
     </div>
-    <!-- Parameters JSON Viewer Modal -->
+    <!-- Customizer JSON Viewer Modal -->
     <div
       class="modal hidden"
       id="paramsJsonModal"
@@ -6562,13 +6569,13 @@
       <div class="modal-overlay" id="paramsJsonOverlay"></div>
       <div class="modal-content modal-medium">
         <div class="modal-header">
-          <h2 id="paramsJsonTitle">Current Parameters (JSON)</h2>
+          <h2 id="paramsJsonTitle">Current Customizer JSON</h2>
           <div class="params-json-actions">
             <button
               type="button"
               class="btn btn-sm btn-outline"
               id="paramsJsonCopy"
-              aria-label="Copy parameters JSON"
+              aria-label="Copy Customizer JSON"
             >
               📋 Copy
             </button>
@@ -6576,7 +6583,7 @@
               type="button"
               class="modal-close"
               id="paramsJsonClose"
-              aria-label="Close parameters viewer"
+              aria-label="Close Customizer JSON viewer"
             >
               <svg
                 width="24"
@@ -6597,7 +6604,7 @@
             id="paramsJsonContent"
             class="params-json-textarea"
             readonly
-            aria-label="Parameters JSON"
+            aria-label="Customizer JSON"
             spellcheck="false"
           ></textarea>
         </div>
@@ -6665,7 +6672,7 @@
               id="tab-colors"
               tabindex="-1"
             >
-              Color Parameters
+              Color Settings
             </button>
             <button
               type="button"
@@ -6807,7 +6814,7 @@
             aria-labelledby="tab-colors"
             hidden
           >
-            <h3>Color Parameters</h3>
+            <h3>Color Settings</h3>
             <p>
               Add interactive color pickers to your models by using the
               <code>[color]</code> annotation in your OpenSCAD parameters.
@@ -6909,8 +6916,8 @@
             <h4>Sharing Your Configuration</h4>
             <ul class="features-list">
               <li>
-                <strong>Export Params</strong> (Actions menu) – Download your
-                current settings as a JSON file
+                <strong>Export Customizer Settings</strong> (Actions menu) –
+                Download your current settings as a JSON file
               </li>
             </ul>
             <h4>Sort Designs</h4>
@@ -6982,7 +6989,8 @@
             <h4>Parameter Search &amp; Jump</h4>
             <ul class="features-list">
               <li>
-                <strong>Search parameters</strong> – Filter by name/description
+                <strong>Search the Customizer</strong> – Filter by
+                name/description
               </li>
               <li>
                 <strong>Jump to group</strong> – Quickly navigate long parameter
@@ -7052,9 +7060,9 @@
               files, from the Advanced menu. This helps verify that multi-file
               projects are loaded correctly.
             </p>
-            <h4>Current Parameters as JSON</h4>
+            <h4>Current Customizer JSON</h4>
             <p>
-              Use <strong>Advanced → View Params JSON</strong> to copy or
+              Use <strong>Advanced → View Customizer JSON</strong> to copy or
               archive your current configuration (useful for clinics,
               classrooms, or troubleshooting).
             </p>
@@ -7148,8 +7156,8 @@
             </p>
             <ul class="features-list">
               <li>
-                <strong>Export Params</strong> – Download your configuration as
-                JSON
+                <strong>Export Customizer Settings</strong> – Download your
+                configuration as JSON
               </li>
               <li>
                 <strong>Compare</strong> – Track and compare parameter changes
@@ -7555,7 +7563,7 @@
       <div class="modal-overlay" id="resetConfirmOverlay"></div>
       <div class="modal-content modal-small confirm-modal-content">
         <div class="modal-header">
-          <h2 id="resetConfirmTitle">Reset All Parameters?</h2>
+          <h2 id="resetConfirmTitle">Reset the Customizer?</h2>
           <button
             type="button"
             class="modal-close"

@@ -3,7 +3,7 @@
  * affordance on ONE welcome card at a time, while its tutorial family was
  * never opened, never completed, and never dismissed.
  *
- * Precedence (Q-44a): the Welcome Page Tour card wears the tip first.
+ * Precedence (Q-44a): the Main Page Tour card wears the tip first.
  * Completing that tour hands the spotlight to the Beginners Start Here
  * card immediately (the U-24 chain, once); opening it without finishing
  * or dismissing the tip hands over on the next visit instead. Once the
@@ -46,9 +46,9 @@ const INTRO_FAMILY = 'intro';
 const TAG_TEXT = 'New here? Start with this tour';
 const DISMISS_LABEL = 'Dismiss tip';
 const ANNOUNCEMENT_WELCOME =
-  'Tip: the Welcome Page Tour card explains this screen in about two minutes.';
+  'Tip: the Main Page Tour card explains this screen in about two minutes.';
 const ANNOUNCEMENT_INTRO =
-  'Tip: the Beginners Start Here card on the welcome screen offers a guided three-minute tour.';
+  'Tip: the Beginners Start Here card on the Main Page offers a guided three-minute tour.';
 
 function isFamilyCleared(familyId) {
   const state = getTutorialFamilyState(familyId);
