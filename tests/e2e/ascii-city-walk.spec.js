@@ -2628,6 +2628,101 @@ test.describe('ASCII City Walk — rain stays in the street (CW-20)', () => {
 })
 
 /**
+ * D-75: the thunder swell is driven frame by frame and only lands back on
+ * zero when a frame arrives to bring it down. Both ways out of the rain skip
+ * those frames - stopping the rain, and reduced motion turning on - so a
+ * swell caught halfway through used to leave the whole city sitting under a
+ * lifted ambient light until something unrelated happened to reset it.
+ *
+ * The swell is a third of a second long, which is not a window a test can aim
+ * at by hand. These cases lengthen it (the timing object is read fresh every
+ * frame) and then take the two exits deliberately, which is the honest
+ * reproduction: the bug is about the exit, not about the swell's length.
+ */
+test.describe('ASCII City Walk — the thunder lets go (D-75)', () => {
+  const ambient = (page) =>
+    page.evaluate(
+      () =>
+        window.__cityWalkGame.scene.children.find((c) => c.isAmbientLight)
+          .intensity
+    )
+
+  /** Start a swell that will still be rising in a second's time. */
+  async function beginLongSwell(page) {
+    await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      g.lighting.weatherTiming.thunderMs = 60000
+      g.thunderStartMs = performance.now() - g.startedAtMs
+    })
+    await page.waitForTimeout(900)
+  }
+
+  const rainLevel = (page) =>
+    page.evaluate(() => window.__cityWalkGame.rainLevel)
+
+  /**
+   * G cycles: off -> light -> ... -> off. Read the level rather than the
+   * announcer, which clears itself once it has spoken.
+   */
+  async function rainUntilOff(page) {
+    for (let i = 0; i < 8; i++) {
+      await page.keyboard.press('KeyG')
+      if ((await rainLevel(page)) === null) return
+    }
+    throw new Error('the rain never cycled back to off')
+  }
+
+  test('rain stopping mid-swell puts the ambient light back down', async ({
+    page,
+  }) => {
+    test.setTimeout(90000)
+    await launchGame(page)
+    await enterCity(page)
+
+    const base = await ambient(page)
+    await page.keyboard.press('KeyG')
+    await expect(page.locator('#cityWalkAnnouncer')).toContainText('Rain')
+    await beginLongSwell(page)
+
+    const lifted = await ambient(page)
+    expect(lifted, 'the swell never lifted the ambient light').toBeGreaterThan(
+      base
+    )
+
+    await rainUntilOff(page)
+    expect(
+      await ambient(page),
+      'the city stayed lit by a thunderclap that had already stopped'
+    ).toBeCloseTo(base, 6)
+    expect(
+      await page.evaluate(() => window.__cityWalkGame.thunderStartMs),
+      'a finished swell is still recorded as in progress'
+    ).toBe(0)
+  })
+
+  test('reduced motion arriving mid-swell puts the ambient light back down', async ({
+    page,
+  }) => {
+    test.setTimeout(90000)
+    await launchGame(page)
+    await enterCity(page)
+
+    const base = await ambient(page)
+    await page.keyboard.press('KeyG')
+    await expect(page.locator('#cityWalkAnnouncer')).toContainText('Rain')
+    await beginLongSwell(page)
+    expect(await ambient(page)).toBeGreaterThan(base)
+
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await expect
+      .poll(() => ambient(page), {
+        message: 'asking for less movement left the thunder lift on screen',
+      })
+      .toBeCloseTo(base, 6)
+  })
+})
+
+/**
  * CW-26: the cities carry building:part volumes and pitched roofs, and both
  * have to survive all the way into the rendered scene — not merely into the
  * parsed model.

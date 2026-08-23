@@ -1317,6 +1317,9 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     game.onMotionChange = (event) => {
       game.motionReduced = event.matches;
       game.altView.setReducedMotion(event.matches);
+      // Reduced motion stops the weather frames, so a swell caught halfway
+      // through would be frozen at its brightest (D-75).
+      if (event.matches) clearThunder(game);
       game.applyGlow();
       // A freeze must be visible immediately, not at the next state change.
       game.altView.invalidate();
@@ -1889,6 +1892,19 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   }
 
   /**
+   * Put the ambient light down, wherever in the swell it happened to be.
+   *
+   * The swell only lands back on zero if a frame arrives to bring it down,
+   * and it is 320 ms long: stop the rain inside that window - or turn on
+   * reduced motion, which stops the frames outright - and the lift stays on
+   * the city until something else happens to reset it (D-75).
+   */
+  function clearThunder(game) {
+    game.lighting.setThunder(0);
+    game.thunderStartMs = 0;
+  }
+
+  /**
    * Move the rain to a level and take the weather that hangs off it with it.
    *
    * The fog and the thunder are only ever driven WHILE it is raining, so
@@ -1905,6 +1921,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
 
     if (next === null) {
       game.lighting.setFogDensity(0);
+      clearThunder(game);
     } else if (!wasRaining) {
       game.lighting.beginFogDrift(sessionNowMs(game));
     }
