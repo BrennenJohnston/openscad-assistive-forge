@@ -41,6 +41,49 @@ export function initDrawerController() {
   let focusTrap = null;
 
   /**
+   * D-70 (UF-38, signed Q-77). The drawer is a modal dialog, and since UF-37
+   * the tour card stays on screen over it. Two consequences, both MEASURED at
+   * 412x915 on intro step 4 before this change: eight consecutive Tabs never
+   * left `#paramPanel`, so Next / Back / minimize / Close were unreachable;
+   * and `aria-modal="true"` told assistive technology to ignore everything
+   * outside the drawer, so a screen-reader user got no instructions at all on
+   * the drawer steps - which is most of the tour.
+   *
+   * The drawer stays modal for every ordinary use. It only stands its
+   * modality down for the one surface that is deliberately outside it.
+   *
+   * Both surfaces have to stand down together, and that is the one place this
+   * goes further than Q-77's wording. The tour card is itself
+   * `role="dialog" aria-modal="true"`, so dropping the drawer's claim alone
+   * would not open the tour up - it would just swap which surface assistive
+   * technology hides, leaving the reader with instructions they cannot act on.
+   * While the two are on screen together, neither claims to be the only thing
+   * there. The card's own claim is restored the moment the drawer closes;
+   * whether a coach mark should ever have been `aria-modal` is a wider
+   * question, raised for the owner rather than answered here.
+   */
+  const tourOverlay = () => document.querySelector('.tutorial-overlay');
+
+  /** Claim modality only when nothing legitimate is sharing the screen. */
+  function syncModality() {
+    const overlay = tourOverlay();
+    const card = overlay?.querySelector('.tutorial-panel');
+
+    if (!isOpen) {
+      // The drawer is gone; the card is alone again and may speak for itself.
+      card?.setAttribute('aria-modal', 'true');
+      return;
+    }
+
+    if (overlay) {
+      drawer.removeAttribute('aria-modal');
+      card?.removeAttribute('aria-modal');
+    } else {
+      drawer.setAttribute('aria-modal', 'true');
+    }
+  }
+
+  /**
    * Open the drawer
    */
   function open(trigger) {
@@ -58,7 +101,7 @@ export function initDrawerController() {
 
     // Transform drawer to dialog on mobile
     drawer.setAttribute('role', 'dialog');
-    drawer.setAttribute('aria-modal', 'true');
+    syncModality();
     drawer.setAttribute('aria-labelledby', 'parameters-heading');
     drawer.removeAttribute('aria-label');
     // Ensure the dialog container itself can receive focus (needed for reliable focus trapping)
@@ -88,6 +131,9 @@ export function initDrawerController() {
     focusTrap = createDocumentFocusTrap(drawer, {
       onEscape: close,
       fallbackFocus: drawer,
+      // Re-read on every Tab: a tour can start or finish while the drawer
+      // is open, and the card must be reachable exactly while it exists.
+      alsoTrap: tourOverlay,
     });
     focusTrap.activate({
       initialFocusDelay: 250, // --motion-slow (240ms) + 10ms buffer
@@ -107,6 +153,7 @@ export function initDrawerController() {
       drawer.setAttribute('role', originalAttrs.role);
     }
     drawer.removeAttribute('aria-modal');
+    syncModality(); // hands the card back its own modality (D-70)
     drawer.removeAttribute('aria-labelledby');
     if (originalAttrs.ariaLabel) {
       drawer.setAttribute('aria-label', originalAttrs.ariaLabel);
@@ -241,6 +288,10 @@ export function initDrawerController() {
     }
   });
 
+  // A tour can start or end while the drawer is already open, so modality is
+  // re-decided rather than fixed at open time (D-70).
+  document.addEventListener('forge:tutorial-run-change', syncModality);
+
   // Wire up close button
   if (closeBtn) {
     closeBtn.addEventListener('click', close);
@@ -266,6 +317,7 @@ export function initDrawerController() {
         document.body.classList.remove('drawer-open');
         document.body.style.removeProperty('top');
         isOpen = false;
+        syncModality(); // D-70, as in close()
 
         // Deactivate focus trap
         if (focusTrap) {

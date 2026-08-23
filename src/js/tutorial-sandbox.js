@@ -62,7 +62,7 @@ let isPaused = false; // Pause state for visibility changes
 let targetRemovalObserver = null; // Watch for target removal
 let surfaceObserver = null; // Watch for welcome -> project while a welcome-surface tour runs
 let dialogObserver = null; // Watch for a user-opened dialog while a tutorial runs
-let dialogOpenAtKeydown = false; // Was a dialog up when this Escape was pressed?
+let escapeOwnedElsewhere = false; // Did a dialog or the drawer own this Escape?
 let dialogStandDown = null; // What the stand-down took away, so it can give it back
 let currentTarget = null; // Currently highlighted target
 let scrollYBeforeLock = 0; // Store scroll position for body lock
@@ -782,29 +782,62 @@ function handleDrawerStateChange(isNowOpen) {
     // @mobile-drawer-toggle when closed)
     const newTarget = resolveStepTarget(step, { requireVisible: true });
 
-    if (newTarget && newTarget !== currentTarget) {
-      // Update to the new visible target and reposition spotlight
-      currentTarget = newTarget;
-      updateSpotlightAndPosition();
-    } else if (!newTarget && !stepCompleted) {
-      // All targets are hidden - check if any are inside the closed drawer
-      const hasTargetInsideDrawer = checkIfAnyTargetInsideDrawer(step);
-      if (hasTargetInsideDrawer && !isNowOpen) {
-        // Automatically reopen the panel - user closed it but tutorial needs it
-        openParamPanel();
-        // Wait for animation
-        await waitForTransition(document.getElementById('paramPanel'), 400);
-        // Re-resolve target after panel is open
-        const reopenedTarget = resolveStepTarget(step, {
-          requireVisible: true,
-        });
-        if (reopenedTarget) {
-          currentTarget = reopenedTarget;
-          updateSpotlightAndPosition();
-        }
+    if (newTarget) {
+      if (newTarget !== currentTarget) {
+        // Update to the new visible target and reposition spotlight
+        currentTarget = newTarget;
+        updateSpotlightAndPosition();
       }
+      resetStepRequirement(step);
+    } else if (
+      !stepCompleted &&
+      !isNowOpen &&
+      checkIfAnyTargetInsideDrawer(step)
+    ) {
+      // D-63 (U-42, owner's phone). This branch used to call openParamPanel()
+      // and drag the panel back open, on the grounds that the tutorial needed
+      // it. MEASURED at the release base, 412x915, intro step 4: the user
+      // pressed Close, the observer reopened the drawer inside 500ms, and at
+      // 2000ms it was still open - the close never took. Together with D-62
+      // that is what made Restore look dead: close, reopen, re-minimize, back
+      // to the pill, "no input or button pressing registers".
+      //
+      // The user's close wins now. The tour points at the way back in, says
+      // so, and waits.
+      showDrawerRequirement();
     }
   }, 100); // Debounce for 100ms
+}
+
+/**
+ * Every element a step could point at, visible or not: its targetKey first,
+ * then each entry of its highlightSelector list, in the order the resolver
+ * would try them.
+ * @param {Object} step - Tutorial step
+ * @returns {HTMLElement[]}
+ */
+function stepTargetCandidates(step) {
+  const found = [];
+  const add = (el) => {
+    if (el && !found.includes(el)) found.push(el);
+  };
+
+  if (step.targetKey) {
+    add(document.querySelector(`[data-tutorial-target="${step.targetKey}"]`));
+  }
+  if (step.highlightSelector) {
+    for (const selector of step.highlightSelector.split(',')) {
+      const trimmed = selector.trim();
+      add(
+        document.querySelector(
+          trimmed.startsWith('@')
+            ? `[data-tutorial-target="${trimmed.slice(1)}"]`
+            : trimmed
+        )
+      );
+    }
+  }
+  return found;
 }
 
 /**
@@ -813,70 +846,96 @@ function handleDrawerStateChange(isNowOpen) {
  * @returns {boolean}
  */
 function checkIfAnyTargetInsideDrawer(step) {
-  if (!step.highlightSelector) return false;
-
-  const selectors = step.highlightSelector.split(',').map((s) => s.trim());
-
-  for (const selector of selectors) {
-    let el;
-    if (selector.startsWith('@')) {
-      el = document.querySelector(
-        `[data-tutorial-target="${selector.slice(1)}"]`
-      );
-    } else {
-      el = document.querySelector(selector);
-    }
-    if (el && isInsideParamPanel(el)) {
-      return true;
-    }
-  }
-  return false;
+  return stepTargetCandidates(step).some(isInsideParamPanel);
 }
 
 /**
- * Show a prompt in the tutorial panel to reopen/expand the param panel
- * Works for both mobile drawer and desktop collapsed panel
+ * Does this step need the Customizer panel opened before it can be shown?
+ *
+ * U-42 (owner's phone, 2026-08-21): "step 3 does not highlight anything for
+ * the user to interact with". The old answer was "does ANY target live inside
+ * the panel", and step 3 - the step that TEACHES opening the panel - lists
+ * `@mobile-drawer-close` first. That resolves in the DOM while the drawer is
+ * shut, so the engine opened the drawer for it and then ringed the Close
+ * button, teaching the opposite of what the card said.
+ *
+ * The honest question is whether the step can be shown at all without opening
+ * it. If some target is inside the panel but another one outside is already on
+ * screen, the step has something to point at and the panel stays as the user
+ * left it. Step 3 then arrives with the drawer shut and the ring on the
+ * Customizer button, and the drawer observer moves the ring to the Close
+ * button when the user opens it - the step follows the user through both
+ * halves of what it is teaching.
+ *
+ * A collapsed desktop panel still expands: there the only visible candidate
+ * IS inside the panel.
+ * @param {Object} step - Tutorial step
+ * @returns {boolean}
  */
-function _showDrawerReopenPrompt() {
+function stepNeedsParamPanelOpen(step) {
+  const candidates = stepTargetCandidates(step);
+  if (!candidates.some(isInsideParamPanel)) return false;
+  return !candidates.some(
+    (el) => !isInsideParamPanel(el) && isElementVisible(el)
+  );
+}
+
+/** What the requirement line says while a step's action is still outstanding. */
+const REQUIREMENT_PENDING_TEXT = '↑ Complete the action above to continue';
+
+/**
+ * Q-74 + Q-76 (owner, 2026-08-22): the requirement names the control by the
+ * label it wears on the surface the reader is looking at. On a phone the panel
+ * is a drawer you OPEN with a button marked Params; on a desktop it is a panel
+ * you EXPAND. UF-40's rename sweeps both strings with the rest.
+ */
+const DRAWER_REQUIREMENT_TEXT = {
+  mobile: 'Open Params to continue.',
+  desktop: 'Expand Parameters to continue.',
+};
+
+/**
+ * The user closed the Customizer while a step still points inside it (D-63).
+ * Ring the control that opens it again and say what is needed, instead of
+ * reopening the panel against them.
+ *
+ * The ring only moves if that control is genuinely on screen: a collapsed
+ * desktop panel keeps its expand button inside the panel, where the engine's
+ * own visibility rule counts it as hidden. The line is shown either way.
+ */
+function showDrawerRequirement() {
   if (!tutorialOverlay) return;
 
-  const requirementEl = tutorialOverlay.querySelector('#tutorialRequirement');
-  if (!requirementEl) return;
+  const onMobile = isMobileViewport();
+  const opener = onMobile
+    ? document.getElementById('mobileDrawerToggle')
+    : document.getElementById('collapseParamPanelBtn');
 
-  // Determine the appropriate message based on viewport
-  const isMobile = isMobileViewport();
-  const actionText = isMobile ? 'Reopen Parameters' : 'Expand Parameters';
-  const statusText = isMobile ? 'Panel closed.' : 'Panel collapsed.';
-
-  // Create or update the reopen prompt
-  requirementEl.innerHTML = `
-    <span class="tutorial-drawer-prompt">
-      <span>${statusText} </span>
-      <button class="tutorial-reopen-drawer-btn" type="button">
-        ${actionText}
-      </button>
-      <span> to continue.</span>
-    </span>
-  `;
-  requirementEl.classList.add('tutorial-requirement-action');
-
-  // Wire up the reopen button
-  const reopenBtn = requirementEl.querySelector('.tutorial-reopen-drawer-btn');
-  if (reopenBtn) {
-    reopenBtn.addEventListener('click', () => {
-      openParamPanel();
-      // Reset the requirement text after a short delay
-      setTimeout(() => {
-        if (requirementEl && !stepCompleted) {
-          requirementEl.textContent = '↑ Complete the action above to continue';
-          requirementEl.classList.remove('tutorial-requirement-action');
-        }
-      }, 400);
-    });
-  }
-
-  // Update spotlight to show centered panel
+  currentTarget = opener && isElementVisible(opener) ? opener : null;
   updateSpotlightAndPosition();
+
+  const wanted = DRAWER_REQUIREMENT_TEXT[onMobile ? 'mobile' : 'desktop'];
+  const requirementEl = tutorialOverlay.querySelector('#tutorialRequirement');
+  // #tutorialRequirement is role="status" aria-live="polite": writing it IS
+  // the announcement, so announcing again would say it twice.
+  if (requirementEl && requirementEl.textContent !== wanted) {
+    requirementEl.textContent = wanted;
+    requirementEl.classList.remove('tutorial-requirement-done');
+  }
+}
+
+/**
+ * Put the requirement line back to whatever this step normally says, after the
+ * drawer requirement has been standing in for it.
+ * @param {Object} step - Tutorial step
+ */
+function resetStepRequirement(step) {
+  const requirementEl = tutorialOverlay?.querySelector('#tutorialRequirement');
+  if (!requirementEl || stepCompleted) return;
+  const normal = step.completion ? REQUIREMENT_PENDING_TEXT : '';
+  if (requirementEl.textContent !== normal) {
+    requirementEl.textContent = normal;
+  }
 }
 
 /**
@@ -973,16 +1032,14 @@ const TUTORIALS = {
       {
         title: 'Open and close Parameters',
         content: `
-          <p><strong>Parameters</strong> is where you customize the model.</p>
+          <p><strong>Parameters</strong> is where you change the model.</p>
           <ul>
-            <li><strong>Small screens:</strong> use the <strong>Params</strong> button to open the panel. When it’s open, use the <strong>Close</strong> (X) button or tap outside the panel.</li>
-            <li><strong>Wide screens:</strong> the Parameters panel is on the left. Use the edge <strong>collapse</strong> button to shrink/expand it.</li>
+            <li><strong>Small screens:</strong> press the highlighted <strong>Params</strong> button to open the panel. When it is open, the highlight moves to the <strong>Close</strong> (X) button so you can close it again.</li>
+            <li><strong>Wide screens:</strong> the Parameters panel is on the left. Use the edge <strong>collapse</strong> button to shrink or expand it.</li>
           </ul>
-          <p class="tutorial-hint">Tip: if you rotate your phone and the layout changes, look for whichever control is visible.</p>
         `,
         contentCompact: `
-          <p>Tap the highlighted button to open/close <strong>Parameters</strong>.</p>
-          <p class="tutorial-hint">Button changes based on screen size.</p>
+          <p>Press the highlighted <strong>Params</strong> button to open <strong>Parameters</strong>. The highlight then moves to <strong>Close</strong>.</p>
         `,
         highlightSelector:
           '@mobile-drawer-close, @mobile-drawer-toggle, @collapse-param-panel',
@@ -2105,6 +2162,13 @@ function clearTutorialProgress() {
 /** Fired on document whenever a registry field is written. */
 export const TUTORIAL_STATE_EVENT = 'forge:tutorial-state-change';
 
+/**
+ * Fired on document when a tour appears or leaves. `detail.running` is true
+ * while the overlay is on screen. Consumed by the mobile drawer, which must
+ * not claim `aria-modal` over a tour card sitting outside it (D-70).
+ */
+export const TUTORIAL_RUN_EVENT = 'forge:tutorial-run-change';
+
 // A mode variant is the same tutorial wearing the current interface — one
 // welcome card, one family record ('classic-intro' counts as 'intro').
 const TUTORIAL_FAMILY_OF = (() => {
@@ -3047,7 +3111,13 @@ function createTutorialOverlay() {
         <div id="tutorial-panel-content" class="tutorial-content"></div>
         <div class="tutorial-requirement" id="tutorialRequirement" role="status" aria-live="polite"></div>
       </div>
-      
+
+      <div class="tutorial-scroll-cue" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </div>
+
       <div class="tutorial-footer">
         <div class="tutorial-progress" aria-live="polite">
           Step <span id="tutorial-step-current">1</span> of <span id="tutorial-step-total">${activeTutorial.steps.length}</span>
@@ -3112,6 +3182,23 @@ function createTutorialOverlay() {
 
   // Handle browser navigation (back/forward) during tutorial
   window.addEventListener('popstate', handlePopState);
+
+  announceTutorialRunState(true);
+}
+
+/**
+ * Tell the rest of the app that a tour is or is not on screen (D-70).
+ *
+ * A document event rather than an import, for the reason the drawer's own
+ * `ui-mode-changed` listener already gives: the drawer must not depend on the
+ * tutorial module, and the tutorial must not reach into the drawer.
+ *
+ * @param {boolean} running
+ */
+function announceTutorialRunState(running) {
+  document.dispatchEvent(
+    new CustomEvent(TUTORIAL_RUN_EVENT, { detail: { running } })
+  );
 }
 
 /**
@@ -3136,6 +3223,11 @@ function setupTutorialListeners() {
   );
   nextBtn?.addEventListener('click', handleNextClick);
 
+  // The cue has to retire as the reader reaches the end, not just appear.
+  tutorialOverlay
+    .querySelector('.tutorial-body')
+    ?.addEventListener('scroll', updateScrollCue, { passive: true });
+
   // Click outside panel to focus target (if there is one)
   tutorialOverlay.addEventListener('click', handleOverlayClick);
 
@@ -3144,13 +3236,18 @@ function setupTutorialListeners() {
 }
 
 /**
- * Record, before anyone has had a chance to close it, whether a dialog was on
- * screen when Escape was pressed (Q-50c). Capture phase, so this runs ahead of
- * the dialog's own handler.
+ * Record, before anyone has had a chance to close it, whether something else
+ * owned this Escape (Q-50c). Capture phase, so this runs ahead of the dialog's
+ * own handler.
+ *
+ * The open Customizer drawer counts here even though D-62 stopped it counting
+ * as a dialog anywhere else: its focus trap answers Escape by closing itself
+ * and does not stop the event, so without this the one press would close the
+ * drawer AND end the tour. One Escape, one surface; the next Escape exits.
  */
 function noteDialogBeforeKeydown(e) {
   if (e.key === 'Escape') {
-    dialogOpenAtKeydown = isAppDialogOpen();
+    escapeOwnedElsewhere = isAppDialogOpen() || isMobileDrawerOpen();
   }
 }
 
@@ -3176,7 +3273,8 @@ function handleKeydown(e) {
     // The dialog's own handler usually runs FIRST and removes the dialog, so
     // by the time this one is reached there is nothing left to see. That is
     // what noteDialogBeforeKeydown records, on the capture phase.
-    if (dialogOpenAtKeydown || isAppDialogOpen()) return;
+    if (escapeOwnedElsewhere || isAppDialogOpen() || isMobileDrawerOpen())
+      return;
     e.preventDefault();
     closeTutorial();
   } else if (
@@ -3356,26 +3454,20 @@ function toggleMinimize() {
 }
 
 /**
- * Defect D-44 (UF-25, owner 2026-08-15). On a phone the parameter panel is a
- * full-screen drawer carrying role="dialog", so Q-50c's dialog watcher
- * minimizes the tour as soon as a drawer step opens it - and then re-minimizes
- * it in the same frame every time Restore was pressed. MEASURED: the button
- * was visible, labelled "Restore tutorial", and did nothing at all.
+ * D-44 (UF-25, owner 2026-08-15) is SUPERSEDED here, not re-fixed.
  *
- * Restore now closes that drawer first, which is what a person had to do by
- * hand to get the tour back. It deliberately does NOT dismiss real dialogs:
- * a confirm or a save prompt is a decision the user is in the middle of, and
- * a tour button must not answer it for them.
+ * Its symptom was that Restore did nothing on a phone while the drawer was
+ * open: the watcher re-minimized the tour in the same frame, so the button was
+ * visible, labelled, and inert. The patch was to make Restore close the drawer
+ * first - the move a person had to make by hand to get the tour back.
+ *
+ * That was a patch over D-62. With the drawer no longer counted as a dialog
+ * there is nothing to re-minimize the tour, so Restore is a plain restore
+ * again, and the tour comes back over the drawer the user is working in
+ * instead of shutting it. UF-37's suite re-proves the dead-Restore scenario
+ * impossible rather than trusting this comment.
  */
 function restoreFromBar() {
-  const drawer = document.getElementById('paramPanel');
-  if (
-    isMinimized &&
-    drawer?.classList.contains('drawer-open') &&
-    isRendered(drawer)
-  ) {
-    document.getElementById('mobileDrawerToggle')?.click();
-  }
   toggleMinimize();
 }
 
@@ -3432,6 +3524,22 @@ const APP_DIALOG_SELECTOR =
 const TUTORIAL_OWN_DIALOGS =
   '.tutorial-resume-modal, .tutorial-error-modal, .tutorial-mode-choice-modal';
 
+/**
+ * D-62 (U-42, owner's phone, 2026-08-21). The Customizer drawer wears
+ * role="dialog" for as long as it is open (drawer-controller.js), because on a
+ * phone it covers the screen and holds focus. To the dialog watcher that read
+ * as "the user opened a dialog over the tour", so the tour stood down on EVERY
+ * drawer step on a phone - and the drawer steps are most of the tour.
+ * MEASURED at the release base, 412x915, steps 3 and 4 of the intro tour: card
+ * hidden, veil at 0.3, nothing on screen but a "Tutorial 3/17" pill.
+ *
+ * The drawer is the app's own chrome and usually the very thing a step is
+ * teaching, so it is not a dialog the tour has to get out of the way of. A real
+ * dialog rendered INSIDE the drawer still counts: only the panel itself is
+ * skipped, never its contents.
+ */
+const APP_CHROME_DIALOG_SELECTOR = '#paramPanel';
+
 const isRendered = (el) =>
   typeof el.checkVisibility === 'function'
     ? el.checkVisibility()
@@ -3448,6 +3556,7 @@ function findOpenAppDialogs() {
   for (const el of document.querySelectorAll(APP_DIALOG_SELECTOR)) {
     if (tutorialOverlay?.contains(el)) continue;
     if (el.closest(TUTORIAL_OWN_DIALOGS)) continue;
+    if (el.matches(APP_CHROME_DIALOG_SELECTOR)) continue;
     if (!isRendered(el)) continue;
     if (open.some((outer) => outer.contains(el))) continue;
     open.push(el);
@@ -3711,29 +3820,16 @@ async function showStep(stepIndex) {
     // Set guard flag to prevent drawer observer from interfering during setup
     isSettingUpStep = true;
 
-    // First try to resolve the target (even if not yet visible)
-    const target = resolveStepTarget(step, { requireVisible: false });
-    let needsDrawerOpen = target ? isInsideParamPanel(target) : false;
-
-    // If no target yet but we have selectors, check if any would be inside drawer
-    if (!target && step.highlightSelector) {
-      const selectors = step.highlightSelector.split(',').map((s) => s.trim());
-      for (const selector of selectors) {
-        const query = selector.startsWith('@')
-          ? `[data-tutorial-target="${selector.slice(1)}"]`
-          : selector;
-        const el = document.querySelector(query);
-        if (el && isInsideParamPanel(el)) {
-          needsDrawerOpen = true;
-          break;
-        }
-      }
-    }
-
-    if (needsDrawerOpen) {
+    // Watch the panel whenever the step has anything inside it to point at,
+    // not only when the step opens it. Step 3 teaches BOTH halves - press
+    // Params to open, press Close to shut - and it now arrives with the panel
+    // shut (P2), so without this the ring could not follow the user in.
+    if (checkIfAnyTargetInsideDrawer(step)) {
       // Set up observer to detect drawer/panel state changes (mobile + desktop)
       setupDrawerObserver();
+    }
 
+    if (stepNeedsParamPanelOpen(step)) {
       // CRITICAL: Automatically open/expand the panel on BOTH mobile AND desktop
       // The tutorial CANNOT proceed if the target element is hidden in a collapsed panel
       if (!isParamPanelOpen()) {
@@ -3741,13 +3837,11 @@ async function showStep(stepIndex) {
         // Wait for animation to complete
         await waitForTransition(document.getElementById('paramPanel'), 400);
       }
-    } else {
-      // Target is NOT inside the param panel, so close the drawer on mobile
-      // to ensure the target element is visible (not hidden behind drawer)
-      if (isMobileViewport() && isMobileDrawerOpen()) {
-        closeMobileDrawer();
-        await waitForTransition(document.getElementById('paramPanel'), 400);
-      }
+    } else if (isMobileViewport() && isMobileDrawerOpen()) {
+      // Nothing here needs the drawer, so close it on mobile: it covers the
+      // screen, and whatever this step points at is behind it.
+      closeMobileDrawer();
+      await waitForTransition(document.getElementById('paramPanel'), 400);
     }
   }
 
@@ -3786,6 +3880,13 @@ async function showStep(stepIndex) {
       <div class="tutorial-step-content">${getStepContent(step)}</div>
     `;
   }
+
+  // D-65 (UF-38). The body is a scroll container and it keeps its offset
+  // across an innerHTML swap, so a reader who scrolled the previous step to
+  // the bottom arrived at the next one with its title already scrolled off the
+  // top. MEASURED at 412x810 while checking the new cue.
+  const bodyEl = tutorialOverlay.querySelector('.tutorial-body');
+  if (bodyEl) bodyEl.scrollTop = 0;
 
   // Update progress
   const stepCurrentEl = tutorialOverlay.querySelector('#tutorial-step-current');
@@ -3842,10 +3943,58 @@ async function showStep(stepIndex) {
 }
 
 /**
+ * Park the card in the middle of the screen: the step asked for `center`, or
+ * its target could not be resolved.
+ *
+ * D-65 (UF-38). Both callers used to do this by hand, and both left `dock()`'s
+ * inline `width` and `maxHeight` behind while dropping the class that keeps
+ * the mobile bottom-sheet rule away - so a centred card was sized by one
+ * step's dock arithmetic and padded by another rule's safe-area inset.
+ * `tutorial-panel-centered` says which of the two un-docked states this is.
+ *
+ * @param {HTMLElement} panel
+ * @param {HTMLElement} arrow
+ */
+function centerPanel(panel, arrow) {
+  panel.style.position = 'fixed';
+  panel.style.top = '50%';
+  panel.style.left = '50%';
+  panel.style.right = '';
+  panel.style.bottom = '';
+  panel.style.width = '';
+  panel.style.maxHeight = '';
+  panel.style.transform = 'translate(-50%, -50%)';
+  panel.classList.remove('tutorial-panel-positioned');
+  panel.classList.add('tutorial-panel-centered');
+  if (arrow) arrow.style.display = 'none';
+}
+
+/**
+ * Say out loud that the card's body has more text below the fold (D-65).
+ *
+ * The body is a scroll container with two independent caps above it, and until
+ * now it clipped mid-sentence in silence. Presentation only: the cue element
+ * is `aria-hidden`, takes no tab stop, and adds nothing to the live regions -
+ * a screen-reader user reaches the rest through the scroll container itself.
+ */
+function updateScrollCue() {
+  if (!tutorialOverlay) return;
+  const panel = tutorialOverlay.querySelector('.tutorial-panel');
+  const body = tutorialOverlay.querySelector('.tutorial-body');
+  if (!panel || !body) return;
+  const hidden = body.scrollHeight - body.scrollTop - body.clientHeight;
+  panel.classList.toggle('tutorial-has-more', hidden > 2);
+}
+
+/**
  * Update spotlight cutout and panel position
  */
 function updateSpotlightAndPosition() {
   if (!tutorialOverlay || isMinimized) return;
+
+  // Every branch below can change the card's height, and several return early.
+  // One frame later the layout has settled whichever way it went.
+  requestAnimationFrame(updateScrollCue);
 
   const step = activeTutorial.steps[currentStepIndex];
   const panel = tutorialOverlay.querySelector('.tutorial-panel');
@@ -3869,15 +4018,7 @@ function updateSpotlightAndPosition() {
     // No highlight - center the panel, hide spotlight
     cutout.setAttribute('width', '0');
     cutout.setAttribute('height', '0');
-    panel.style.position = 'fixed';
-    panel.style.top = '50%';
-    panel.style.left = '50%';
-    // Clear any docked constraints from mobile CSS so centering is reliable
-    panel.style.right = '';
-    panel.style.bottom = '';
-    panel.style.transform = 'translate(-50%, -50%)';
-    panel.classList.remove('tutorial-panel-positioned');
-    arrow.style.display = 'none';
+    centerPanel(panel, arrow);
     currentTarget = null;
     return;
   }
@@ -3894,12 +4035,7 @@ function updateSpotlightAndPosition() {
     // Target not found - center panel
     cutout.setAttribute('width', '0');
     cutout.setAttribute('height', '0');
-    panel.style.position = 'fixed';
-    panel.style.top = '50%';
-    panel.style.left = '50%';
-    panel.style.transform = 'translate(-50%, -50%)';
-    panel.classList.remove('tutorial-panel-positioned');
-    arrow.style.display = 'none';
+    centerPanel(panel, arrow);
     return;
   }
 
@@ -4063,7 +4199,21 @@ function updateSpotlightAndPosition() {
         ? Math.max(0, actionsBarRect.height || 0)
         : 0;
 
-    const topOffset = Math.max(8, safeAreas.top + 8);
+    // UF-37: since D-62 the card stays up over the open Customizer drawer
+    // instead of collapsing to a pill, so a top dock now has something to
+    // respect. The drawer's title row carries its only Close button; a card
+    // starting at the viewport top lands squarely on it. MEASURED at 412x915
+    // on step 4 of the intro tour: the card covered y 8-348 and Playwright
+    // could not reach #drawerCloseBtn at all. Start below that row instead.
+    const drawerTitleRow = isMobileDrawerOpen()
+      ? document.querySelector('#paramPanel .panel-header-title-row')
+      : null;
+    const drawerHeaderBottom =
+      drawerTitleRow && isRendered(drawerTitleRow)
+        ? drawerTitleRow.getBoundingClientRect().bottom + 8
+        : 0;
+
+    const topOffset = Math.max(8, safeAreas.top + 8, drawerHeaderBottom);
     const bottomOffset = Math.max(8, safeAreas.bottom + actionsBarHeight + 8);
 
     const intersects = (a, b, pad = 6) => {
@@ -4117,6 +4267,7 @@ function updateSpotlightAndPosition() {
       panel.style.maxHeight = `${Math.min(available, viewport.height * 0.45)}px`;
 
       panel.classList.add('tutorial-panel-positioned');
+      panel.classList.remove('tutorial-panel-centered');
       arrow.style.display = 'none';
     };
 
@@ -4169,6 +4320,7 @@ function updateSpotlightAndPosition() {
   const position = calculateBestPosition(rect, step.position, panelRect);
   positionPanel(panel, arrow, rect, position);
   panel.classList.add('tutorial-panel-positioned');
+  panel.classList.remove('tutorial-panel-centered');
 
   // Desktop/tablet: keep arrow enabled as-is (no further changes).
 }
@@ -4494,7 +4646,7 @@ function setupCompletion(step) {
   stepCompleted = !step.completion;
 
   if (step.completion) {
-    requirementEl.textContent = '↑ Complete the action above to continue';
+    requirementEl.textContent = REQUIREMENT_PENDING_TEXT;
     requirementEl.classList.remove('tutorial-requirement-done');
   } else {
     requirementEl.textContent = '';
@@ -4922,10 +5074,11 @@ export function closeTutorial(completed = false, options = {}) {
 
   document.removeEventListener('keydown', noteDialogBeforeKeydown, true);
   document.removeEventListener('keydown', handleKeydown);
-  dialogOpenAtKeydown = false;
+  escapeOwnedElsewhere = false;
 
   tutorialOverlay.remove();
   tutorialOverlay = null;
+  announceTutorialRunState(false);
 
   // Store step info for announcement before clearing
   const stepsTotal = activeTutorial?.steps?.length || 0;

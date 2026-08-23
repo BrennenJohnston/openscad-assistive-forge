@@ -856,3 +856,592 @@ test.describe('UF-36: a dialog you can always answer', () => {
     expect(stack.card).toBeGreaterThan(stack.veil);
   });
 });
+
+/**
+ * UF-37 (U-42: D-62, D-63). The owner's phone report: "step 3 does not
+ * highlight anything for the user to interact with. Then when the user
+ * attempts to press the Tutorial button to re open the dialog, the drawer's
+ * auto open command overrides any other user attempts... no input or button
+ * pressing registers."
+ *
+ * MEASURED at the release base d27c623, 412x915, Beginners card path - the
+ * whole sequence these cases pin, and every line of it failed:
+ *
+ *   step-3 arrival   drawer OPEN (the engine opened it), card HIDDEN, ring on
+ *                    the Close button, veil 0.3, only a "Tutorial 3/17" pill
+ *   pill +500ms      drawer closed, card back - the only way to read the step
+ *   step-4 setup     drawer OPEN, card HIDDEN again
+ *   pill +500ms      drawer STILL open, card STILL hidden, cutout 0x0
+ *   pill +2000ms     unchanged: Restore is visibly dead
+ *   user closes it   reopened inside 500ms, still open at 2000ms
+ *
+ * The engine now leaves the drawer to the user and keeps the card up beside
+ * it. These cases are written against the states above, so each one is red on
+ * the base for the reason the owner photographed.
+ */
+test.describe('UF-37: a tour that follows the user', () => {
+  const REQUIREMENT_PENDING = '↑ Complete the action above to continue';
+
+  /** Boot the intro tour and stop on the step that teaches the panel. */
+  async function introTourAtStep3(page) {
+    await startBoxTour(page);
+    await walkTo(page, 'Open and close Parameters');
+    await page.waitForTimeout(500);
+  }
+
+  const drawerOpen = (page) =>
+    page.evaluate(
+      () =>
+        !!document.getElementById('paramPanel')?.classList.contains(
+          'drawer-open'
+        )
+    );
+
+  test.describe('on a phone-shaped viewport', () => {
+    test.use({ viewport: { width: 412, height: 915 } });
+
+    test('D-62: step 3 arrives with the panel shut and the ring on the button that opens it', async ({
+      page,
+    }) => {
+      test.setTimeout(240_000);
+      await introTourAtStep3(page);
+
+      // The step teaches "press Params to open the panel". It cannot do that
+      // from behind a panel it opened itself.
+      expect(await drawerOpen(page)).toBe(false);
+      await expect(page.locator('.tutorial-panel')).toBeVisible();
+      await expect(page.locator('#mobileDrawerToggle')).toHaveClass(
+        /tutorial-target-highlight/
+      );
+      // and the instructions are readable, not folded into a pill
+      await expect(page.locator('.tutorial-minimized')).toBeHidden();
+      await expect(page.locator('#tutorial-step-title')).toHaveText(
+        'Open and close Parameters'
+      );
+    });
+
+    test('D-62: opening the panel keeps the card up and walks the ring to the Close button', async ({
+      page,
+    }) => {
+      test.setTimeout(240_000);
+      await introTourAtStep3(page);
+
+      await page.locator('#mobileDrawerToggle').click();
+      await expect(page.locator('#drawerCloseBtn')).toHaveClass(
+        /tutorial-target-highlight/,
+        { timeout: 10_000 }
+      );
+
+      expect(await drawerOpen(page)).toBe(true);
+      await expect(page.locator('.tutorial-panel')).toBeVisible();
+      await expect(page.locator('.tutorial-minimized')).toBeHidden();
+      await expect(page.locator('#mobileDrawerToggle')).not.toHaveClass(
+        /tutorial-target-highlight/
+      );
+
+      // The card must not be sitting on the drawer's only way out. MEASURED
+      // during this release: a top dock started at y 8 and covered the X.
+      const closeIsPressable = await page.evaluate(() => {
+        const btn = document.getElementById('drawerCloseBtn');
+        const r = btn.getBoundingClientRect();
+        const hit = document.elementFromPoint(
+          Math.round(r.left + r.width / 2),
+          Math.round(r.top + r.height / 2)
+        );
+        return !!hit && (hit === btn || btn.contains(hit));
+      });
+      expect(closeIsPressable).toBe(true);
+    });
+
+    test('D-44 re-proved impossible: Restore restores, holds, and leaves the drawer alone', async ({
+      page,
+    }) => {
+      test.setTimeout(240_000);
+      await introTourAtStep3(page);
+      await page.locator('#tutorialNextBtn').click();
+      await expect(page.locator('#tutorial-step-title')).toHaveText(
+        'Expand a parameter group',
+        { timeout: 15_000 }
+      );
+      await expect(page.locator('.tutorial-panel')).toBeVisible();
+      expect(await drawerOpen(page)).toBe(true);
+
+      await page.locator('.tutorial-minimize').click();
+      await expect(page.locator('.tutorial-minimized')).toBeVisible();
+      await expect(page.locator('.tutorial-panel')).toBeHidden();
+
+      await page.locator('.tutorial-restore').click();
+      await expect(page.locator('.tutorial-panel')).toBeVisible();
+
+      // D-44's symptom was a restore that lasted less than a frame. Two
+      // seconds is long enough for the watcher, the drawer transition and the
+      // reposition scheduler to have had their say.
+      await page.waitForTimeout(2000);
+      await expect(page.locator('.tutorial-panel')).toBeVisible();
+      await expect(page.locator('.tutorial-minimized')).toBeHidden();
+      // and Restore no longer has to shut the drawer to work
+      expect(await drawerOpen(page)).toBe(true);
+    });
+
+    test('D-63: closing the panel sticks, and the tour asks instead of fighting', async ({
+      page,
+    }) => {
+      test.setTimeout(240_000);
+      await introTourAtStep3(page);
+      await page.locator('#tutorialNextBtn').click();
+      await expect(page.locator('#tutorial-step-title')).toHaveText(
+        'Expand a parameter group',
+        { timeout: 15_000 }
+      );
+      expect(await drawerOpen(page)).toBe(true);
+
+      await page.locator('#drawerCloseBtn').click();
+      await expect(page.locator('#tutorialRequirement')).toHaveText(
+        'Open Params to continue.',
+        { timeout: 10_000 }
+      );
+      await expect(page.locator('#mobileDrawerToggle')).toHaveClass(
+        /tutorial-target-highlight/
+      );
+      expect(await drawerOpen(page)).toBe(false);
+
+      // The base reopened it inside 500ms. Hold past that and past the 400ms
+      // transition wait the old branch used.
+      await page.waitForTimeout(2000);
+      expect(await drawerOpen(page)).toBe(false);
+      await expect(page.locator('.tutorial-panel')).toBeVisible();
+
+      // ...and the way back in still leads to the step it left.
+      await page.locator('#mobileDrawerToggle').click();
+      await expect(page.locator('#tutorialRequirement')).toHaveText(
+        REQUIREMENT_PENDING,
+        { timeout: 10_000 }
+      );
+      await expect(
+        page.locator('.param-group[data-group-id="Dimensions"] summary')
+      ).toHaveClass(/tutorial-target-highlight/);
+    });
+
+    test('the step still completes and advances once the group is expanded', async ({
+      page,
+    }) => {
+      test.setTimeout(240_000);
+      await introTourAtStep3(page);
+      await page.locator('#tutorialNextBtn').click();
+      await expect(page.locator('#tutorial-step-title')).toHaveText(
+        'Expand a parameter group',
+        { timeout: 15_000 }
+      );
+      await expect(page.locator('#tutorialNextBtn')).toBeDisabled();
+
+      await page
+        .locator('.param-group[data-group-id="Dimensions"] summary')
+        .click();
+      await expect(page.locator('#tutorialNextBtn')).toBeEnabled({
+        timeout: 10_000,
+      });
+
+      await page.locator('#tutorialNextBtn').click();
+      await expect(page.locator('#tutorial-step-title')).toHaveText(
+        'Adjust a parameter',
+        { timeout: 15_000 }
+      );
+    });
+
+    test('UF-21 exit table, new row: Escape closes the drawer first and the tour second', async ({
+      page,
+    }) => {
+      test.setTimeout(240_000);
+      await introTourAtStep3(page);
+      await page.locator('#tutorialNextBtn').click();
+      await expect(page.locator('#tutorial-step-title')).toHaveText(
+        'Expand a parameter group',
+        { timeout: 15_000 }
+      );
+      expect(await drawerOpen(page)).toBe(true);
+
+      // The drawer's focus trap answers Escape by closing itself and does not
+      // stop the event, so one press must not also end the tour.
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(600);
+      expect(await drawerOpen(page)).toBe(false);
+      await expect(page.locator('.tutorial-panel')).toBeVisible();
+
+      await page.keyboard.press('Escape');
+      await expect(page.locator('.tutorial-overlay')).toHaveCount(0, {
+        timeout: 10_000,
+      });
+    });
+  });
+
+  /**
+   * The desktop half of the same two rules. The panel is a collapsing sidebar
+   * rather than a drawer, so Q-76 gives the requirement its own wording, and
+   * the engine still has to expand a collapsed panel on the way IN - the case
+   * a flat "every target lives inside" rule would have broken, because when
+   * the panel is shut the only candidate it has left is inside it.
+   */
+  test('desktop: a collapse the user asked for holds, and the panel still opens for the step that needs it', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await introTourAtStep3(page);
+
+    // Here the only control this step can point at IS inside the panel, so the
+    // ring lands there and the panel is left open.
+    await expect(page.locator('#collapseParamPanelBtn')).toHaveClass(
+      /tutorial-target-highlight/
+    );
+    await expect(page.locator('#paramPanel')).not.toHaveClass(/collapsed/);
+
+    await page.locator('#tutorialNextBtn').click();
+    await expect(page.locator('#tutorial-step-title')).toHaveText(
+      'Expand a parameter group',
+      { timeout: 15_000 }
+    );
+    await expect(
+      page.locator('.param-group[data-group-id="Dimensions"] summary')
+    ).toHaveClass(/tutorial-target-highlight/);
+
+    // Collapse it mid-step. The old branch expanded it again; the tour now
+    // says what it needs and leaves it shut.
+    await page.locator('#collapseParamPanelBtn').click();
+    await expect(page.locator('#tutorialRequirement')).toHaveText(
+      'Expand Parameters to continue.',
+      { timeout: 10_000 }
+    );
+    await page.waitForTimeout(2000);
+    await expect(page.locator('#paramPanel')).toHaveClass(/collapsed/);
+
+    // Stepping back into a panel step opens it, though: that is setup, not a
+    // fight with the user.
+    await page.locator('#tutorialBackBtn').click();
+    await expect(page.locator('#tutorial-step-title')).toHaveText(
+      'Open and close Parameters',
+      { timeout: 15_000 }
+    );
+    await expect(page.locator('#paramPanel')).not.toHaveClass(/collapsed/);
+    await expect(page.locator('#collapseParamPanelBtn')).toHaveClass(
+      /tutorial-target-highlight/
+    );
+  });
+});
+
+/**
+ * UF-38: cards that stay readable (U-43, U-47, D-65, D-66, D-69, D-70).
+ *
+ * The viewport here is 412x**810**, not 412x915, and that is the whole reason
+ * this family went unseen. The owner's frames are 1080x2520 at DPR ~2.62 = 960
+ * CSS px of screen; status bar, URL bar and gesture nav take roughly 43 + 60 +
+ * 48 of it. At 915 every card fits and nothing clips. At 810 the dock cap
+ * `viewport.height * 0.45` lands on 364.5 and three steps of the intro tour
+ * clip - MEASURED before the fix at 47px, 19px and 40px, none of them
+ * announced.
+ */
+test.describe('UF-38: cards that stay readable', () => {
+  /** Read the card's internals the way the P0 probe did. */
+  const cardGeometry = (page) =>
+    page.evaluate(() => {
+      const panel = document.querySelector('.tutorial-panel');
+      const body = panel.querySelector('.tutorial-body');
+      const title = panel.querySelector('#tutorial-step-title');
+      const cue = panel.querySelector('.tutorial-scroll-cue');
+      return {
+        bodyHeight: body.getBoundingClientRect().height,
+        contentHeight: body.scrollHeight,
+        hiddenBelow: body.scrollHeight - body.scrollTop - body.clientHeight,
+        hasMore: panel.classList.contains('tutorial-has-more'),
+        cueOpacity: cue ? Number(getComputedStyle(cue).opacity) : null,
+        cueTakesSpace: cue ? cue.getBoundingClientRect().height : null,
+        cueAriaHidden: cue ? cue.getAttribute('aria-hidden') : null,
+        cueTabbable: cue ? cue.tabIndex >= 0 : null,
+        titleBottom: title.getBoundingClientRect().bottom,
+        bodyBottom: body.getBoundingClientRect().bottom,
+      };
+    });
+
+  /** End clears every completion gate; ArrowLeft walks back through them. */
+  async function stepBackTo(page, title, cap = 24) {
+    await page.keyboard.press('End');
+    await expect(page.locator('#tutorial-step-title')).toHaveText(
+      "You're ready!",
+      { timeout: 15_000 }
+    );
+    for (let i = 0; i < cap; i++) {
+      if ((await page.locator('#tutorial-step-title').textContent()) === title) {
+        await page.waitForTimeout(400);
+        return;
+      }
+      await page.keyboard.press('ArrowLeft');
+      await page.waitForTimeout(350);
+    }
+    await expect(page.locator('#tutorial-step-title')).toHaveText(title);
+  }
+
+  test.describe('on a phone-shaped viewport of the height a phone has', () => {
+    test.use({ viewport: { width: 412, height: 810 } });
+
+    test('D-65: a clipped body says so, and stops saying so at the end', async ({
+      page,
+    }) => {
+      test.setTimeout(240_000);
+      await startBoxTour(page);
+      await stepBackTo(page, 'Preview Settings & Info');
+
+      // This is the owner's 164634: the body's last visible line was "You can
+      // resize this drawer using the handle. With", cut mid-glyph in silence.
+      const clipped = await cardGeometry(page);
+      expect(clipped.hiddenBelow).toBeGreaterThan(2);
+      expect(clipped.hasMore).toBe(true);
+      expect(clipped.cueOpacity).toBe(1);
+
+      // The cue reports on the body; it must never take room from it.
+      expect(clipped.cueTakesSpace).toBe(0);
+      // ...and it is decoration, not another thing to Tab through or hear.
+      expect(clipped.cueAriaHidden).toBe('true');
+      expect(clipped.cueTabbable).toBe(false);
+
+      await page.evaluate(() => {
+        const body = document.querySelector('.tutorial-body');
+        body.scrollTop = body.scrollHeight;
+      });
+      await page.waitForTimeout(400);
+
+      const atEnd = await cardGeometry(page);
+      expect(atEnd.hiddenBelow).toBeLessThanOrEqual(2);
+      expect(atEnd.hasMore).toBe(false);
+      expect(atEnd.cueOpacity).toBe(0);
+    });
+
+    test('D-65: the body keeps a floor, and the step title with it', async ({
+      page,
+    }) => {
+      test.setTimeout(240_000);
+      await startBoxTour(page);
+      await stepBackTo(page, 'Preview Settings & Info');
+
+      // The photographed fold left the body at ~22px: the top of the title and
+      // nothing else. The floor is the title plus one line of text.
+      const geo = await cardGeometry(page);
+      expect(geo.bodyHeight).toBeGreaterThanOrEqual(72);
+      expect(geo.titleBottom).toBeLessThanOrEqual(geo.bodyBottom + 0.5);
+    });
+
+    test('D-65: a new step opens at the top of its own text', async ({
+      page,
+    }) => {
+      test.setTimeout(240_000);
+      await startBoxTour(page);
+      // Both of these steps overflow at this height (MEASURED: 19px and 47px),
+      // which is what makes the carried-over offset visible. Between two steps
+      // where only the first overflows, the browser clamps the offset to 0 on
+      // its own and the defect hides.
+      await stepBackTo(page, 'Actions menu');
+
+      // Read to the bottom of one step...
+      await page.evaluate(() => {
+        const body = document.querySelector('.tutorial-body');
+        body.scrollTop = body.scrollHeight;
+      });
+      await page.waitForTimeout(300);
+      expect(
+        await page.evaluate(
+          () => document.querySelector('.tutorial-body').scrollTop
+        )
+      ).toBeGreaterThan(0);
+
+      // ...and the next one must not inherit that offset. The body is a scroll
+      // container and it survives the innerHTML swap.
+      await page.keyboard.press('ArrowLeft');
+      await expect(page.locator('#tutorial-step-title')).toHaveText(
+        'Preview Settings & Info',
+        { timeout: 15_000 }
+      );
+      await page.waitForTimeout(700);
+      const geo = await cardGeometry(page);
+      expect(
+        await page.evaluate(
+          () => document.querySelector('.tutorial-body').scrollTop
+        )
+      ).toBe(0);
+      expect(geo.titleBottom).toBeLessThanOrEqual(geo.bodyBottom + 0.5);
+    });
+  });
+
+  test.describe('the Features Guide header at phone width', () => {
+    test.use({ viewport: { width: 412, height: 810 } });
+
+    test('D-66: the hint takes its own row instead of printing over the title', async ({
+      page,
+    }) => {
+      test.setTimeout(240_000);
+      await startBoxTour(page);
+      await stepBackTo(page, 'Help & Examples');
+
+      await page.locator('#featuresGuideBtn').click();
+      await expect(page.locator('#tutorial-step-title')).toHaveText(
+        'Features Guide',
+        { timeout: 15_000 }
+      );
+      await expect(
+        page.locator('#featuresGuideModal .modal-content')
+      ).toHaveClass(/tutorial-target-highlight/);
+      await page.waitForTimeout(500);
+
+      // A pseudo-element has no rect to ask for, so this pins the two things
+      // that decide whether it can collide: which rule is painting the words,
+      // and whether the header grew a row to hold them. On the base the hint
+      // hangs off the close button at `right: 100%` and the header stays one
+      // row high - the owner's 164657, "Close to continue" printed straight
+      // across "Features Guide".
+      const header = await page.evaluate(() => {
+        const modal = document.querySelector(
+          '#featuresGuideModal .modal-content'
+        );
+        const head = modal.querySelector('.modal-header');
+        const title = modal.querySelector('#featuresGuideTitle');
+        const close = modal.querySelector('.modal-close');
+        const text = (el, pseudo) =>
+          getComputedStyle(el, pseudo).content.replace(/^"|"$/g, '');
+        return {
+          onCloseButton: text(close, '::after'),
+          onHeader: text(head, '::after'),
+          headerHeight: head.getBoundingClientRect().height,
+          titleHeight: title.getBoundingClientRect().height,
+          closeHeight: close.getBoundingClientRect().height,
+        };
+      });
+
+      expect(header.onCloseButton).toBe('none');
+      expect(header.onHeader).toBe('Close to continue');
+      // A second row: the header is now taller than its tallest first-row item
+      // by at least a line of the hint's own text.
+      const firstRow = Math.max(header.titleHeight, header.closeHeight);
+      expect(header.headerHeight).toBeGreaterThan(firstRow + 12);
+    });
+  });
+
+  /**
+   * D-69, found by UF-36 and scheduled here. `.cache-clear-dialog` names the
+   * `.preset-modal` SCRIM, not the box inside it, so a `max-width` meant for
+   * the dialog was shrinking the full-screen centring container.
+   */
+  for (const width of [800, 1280]) {
+    test.describe(`D-69: the Clear Cache dialog at ${width}px`, () => {
+      test.use({ viewport: { width, height: 800 } });
+
+      test('the backdrop covers the viewport and the dialog is centred', async ({
+        page,
+      }) => {
+        test.setTimeout(240_000);
+        await boot(page);
+        await page.locator('#clearStorageBtn').click();
+        await expect(page.locator('.cache-clear-dialog')).toBeVisible({
+          timeout: 10_000,
+        });
+
+        const geo = await page.evaluate(() => {
+          const scrim = document.querySelector('.cache-clear-dialog');
+          const box = scrim.querySelector('.preset-modal-content');
+          const s = scrim.getBoundingClientRect();
+          const b = box.getBoundingClientRect();
+          return {
+            scrimLeft: s.left,
+            scrimWidth: s.width,
+            viewportWidth: window.innerWidth,
+            boxCentre: b.left + b.width / 2,
+            boxWidth: b.width,
+          };
+        });
+
+        // MEASURED on the base at both widths: scrim w=500 pinned at x=0, so
+        // the dark backdrop was a strip and the dialog sat against the left
+        // edge.
+        expect(geo.scrimLeft).toBe(0);
+        expect(geo.scrimWidth).toBe(geo.viewportWidth);
+        expect(Math.abs(geo.boxCentre - geo.viewportWidth / 2)).toBeLessThan(2);
+        // and the dialog itself is still the narrow one it was meant to be
+        expect(geo.boxWidth).toBeLessThanOrEqual(500);
+      });
+    });
+  }
+
+  /**
+   * D-70 (signed Q-77). The mobile drawer is a modal dialog and the tour card
+   * lives outside it, so the drawer's `aria-modal` hid the instructions from a
+   * screen reader and its focus trap made the card's buttons unreachable.
+   */
+  test.describe('D-70: the card is reachable and announced over the drawer', () => {
+    test.use({ viewport: { width: 412, height: 915 } });
+
+    async function introStep4WithDrawerOpen(page) {
+      await startBoxTour(page);
+      await walkTo(page, 'Open and close Parameters');
+      await page.waitForTimeout(500);
+      await page.locator('#mobileDrawerToggle').click();
+      await page.waitForTimeout(800);
+      await page.locator('#tutorialNextBtn').click();
+      await expect(page.locator('#tutorial-step-title')).toHaveText(
+        'Expand a parameter group',
+        { timeout: 15_000 }
+      );
+      await page.waitForTimeout(700);
+    }
+
+    test('the drawer stops claiming to be the only thing on screen', async ({
+      page,
+    }) => {
+      test.setTimeout(240_000);
+      await introStep4WithDrawerOpen(page);
+
+      // Neither surface may claim `aria-modal` while both are up: whichever
+      // one does, assistive technology hides the other. MEASURED on the base:
+      // the drawer said "true" and the card was never announced.
+      const drawer = page.locator('#paramPanel');
+      await expect(drawer).toHaveAttribute('role', 'dialog');
+      expect(await drawer.getAttribute('aria-modal')).toBeNull();
+      expect(
+        await page.locator('.tutorial-panel').getAttribute('aria-modal')
+      ).toBeNull();
+
+      // Closing the drawer hands the card its own modality back.
+      await page.locator('#drawerCloseBtn').click();
+      await page.waitForTimeout(800);
+      await expect(page.locator('.tutorial-panel')).toHaveAttribute(
+        'aria-modal',
+        'true'
+      );
+    });
+
+    test('the keyboard can get to Next, Back and Close', async ({ page }) => {
+      test.setTimeout(240_000);
+      await introStep4WithDrawerOpen(page);
+
+      const inTour = () =>
+        page.evaluate(() => {
+          const overlay = document.querySelector('.tutorial-overlay');
+          return !!overlay && overlay.contains(document.activeElement);
+        });
+
+      // MEASURED on the base: eight presses, then eighty, never left
+      // `#paramPanel`. Backwards is the short way round - the card's controls
+      // sit at the end of the document, so one Shift+Tab from the drawer's
+      // first control reaches them.
+      await page.locator('#drawerCloseBtn').focus();
+      await page.keyboard.press('Shift+Tab');
+      expect(await inTour()).toBe(true);
+
+      // and forwards arrives too, rather than cycling the drawer forever
+      await page.locator('#drawerCloseBtn').focus();
+      let reached = 0;
+      for (let i = 1; i <= 60; i++) {
+        await page.keyboard.press('Tab');
+        if (await inTour()) {
+          reached = i;
+          break;
+        }
+      }
+      expect(reached).toBeGreaterThan(0);
+    });
+  });
+});
