@@ -209,6 +209,15 @@ jobs:
   # playwright-results.json with a result on each (proved for Edge in UF-27),
   # so the never-started guard still works per shard rather than seeing the
   # other half as missing.
+  #
+  # D-72 (CW-29, 2026-08-22): --shard is no longer what divides these lanes.
+  # It balances the COUNT of tests, and the count was never the problem - the
+  # halves were 476 and 475 tests and 50.3 against 20.9 test-minutes, because
+  # the expensive files sort early in the path order --shard walks. Both lanes
+  # now take their file list from scripts/e2e-shard.mjs, which packs the suite
+  # by MEASURED cost; a run that gives a file list still reports exactly those
+  # tests, so the guard below is unaffected. The job names are untouched, so
+  # no ruleset context moves.
   e2e-tests-chromium-shard:
     name: E2E Tests (Chromium ${{ matrix.shard }}/2)
     runs-on: ubuntu-latest
@@ -260,7 +269,19 @@ jobs:
           fi
       
       - name: Run E2E tests (Chromium shard ${{ matrix.shard }} of 2)
-        run: npx playwright test --project=chromium --shard=${{ matrix.shard }}/2
+        # D-72: the division comes from scripts/e2e-shard.mjs, not from
+        # Playwright's --shard. --shard divides by TEST COUNT in path order,
+        # which balanced the counts (476 / 475) and not the work (50.3 / 20.9
+        # test-minutes), because the expensive files all sort early -
+        # ascii-city-walk.spec.js alone is 18 minutes of this lane and sorts
+        # under "a". That is why this shard failed on the ceiling three times
+        # at 32.5, 32.5 and 34.7 minutes while its sibling sat at 12.5. The
+        # script reads tests/e2e itself, so a new spec cannot fall between the
+        # shards; its header says how to re-measure the weights.
+        run: |
+          FILES=$(node scripts/e2e-shard.mjs ${{ matrix.shard }} 2)
+          echo "shard ${{ matrix.shard }}/2 runs: $FILES"
+          npx playwright test --project=chromium $FILES
         env:
           # R2a added 17 Classic e2e cases, each booting WASM and loading a
           # project, which pushed this job past the default 10-minute global
@@ -479,7 +500,17 @@ jobs:
           npx playwright install ffmpeg
       
       - name: Run E2E tests (Edge shard ${{ matrix.shard }} of 2)
-        run: npx playwright test --project=msedge --shard=${{ matrix.shard }}/2
+        # D-72, the same division Chromium uses and for the same reason: this
+        # lane is lopsided in the same shape and by the same files, because
+        # both inherited it from the alphabet. Measured here: 32m32s against
+        # 15m14s on the green board of 2026-08-22. The weights in
+        # scripts/e2e-shard.mjs are Chromium seconds - Edge is slower across
+        # the board, but the packing works off the RATIOS between files, and
+        # those are a property of what the tests do rather than of the browser.
+        run: |
+          FILES=$(node scripts/e2e-shard.mjs ${{ matrix.shard }} 2)
+          echo "shard ${{ matrix.shard }}/2 runs: $FILES"
+          npx playwright test --project=msedge $FILES
         env:
           # R2a added 17 Classic e2e cases, each booting WASM and loading a
           # project, which pushed this job past the default 10-minute global
