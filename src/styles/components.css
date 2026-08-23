@@ -625,6 +625,79 @@ details.param-group.forge-disclosure[open] > summary::before {
   text-overflow: ellipsis;
 }
 
+/* ============================================================================
+   U-46 / Q-73a: the workflow row's four controls join this one
+   ============================================================================
+   mobile-toolbar.js owns the decision — mobile-shaped viewport AND an open
+   project — and writes body[data-mobile-toolbar]. Everything below follows
+   from that one attribute so the predicate is never restated.
+
+   The four controls arrive inside their own .workflow-actions container, so
+   they keep the 44px minimum and the icon-only treatment that container's
+   rules give them. Nothing here shrinks a hit area.
+   ============================================================================ */
+
+body[data-mobile-toolbar='relocated'] .preview-drawer-header-right {
+  gap: var(--space-xs);
+}
+
+/* The branding is already squeezed to zero width on this surface — the Main
+   Page button and the interface switch take the row — so all it contributes
+   is the two 4px gaps around an invisible box. Measured at 412px: the header
+   controls need 289.6px, and the row offers 287.2px with the branding in the
+   flow and 291.2px without it. Those 8px are the whole difference between one
+   line and two, and 1.6px is all the margin there is — which is why the row
+   is also given permission to wrap rather than clip (see layout.css). Nothing
+   leaves the screen that was on it; the logo and title were not rendering
+   here before this rule.
+
+   Taken out of the FLOW, not out of the accessibility tree. `display: none`
+   was tried first and measured to remove the document's only <h1> — 0px wide
+   on the base but still announced, gone entirely with display:none. A page
+   losing its main heading on a phone is not a trade this release gets to
+   make, so this is the sr-only treatment instead: no layout cost, same
+   heading. `.header-content` carries position: relative for it, which is the
+   R2a/UF-5 lesson — an absolute box in a static container resolves against
+   <html> and adds phantom page scroll.
+
+   Scoped to the relocated (mobile + project) state, because the welcome
+   surface has no Main Page button and the branding really does show there. */
+body[data-mobile-toolbar='relocated'] .header-content {
+  position: relative;
+}
+
+body[data-mobile-toolbar='relocated'] .header-branding {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* The heading goes sr-only (mobile-toolbar.js adds the class) and it is what
+   pays for the four controls: 148px of text in a 376px row. It keeps naming
+   #previewInfoContent through aria-labelledby, so no accessible name is lost.
+   position: relative here is the R2a/UF-5 lesson: an absolute sr-only box in
+   a static container resolves against <html> and adds phantom page scroll. */
+body[data-mobile-toolbar='relocated'] .preview-drawer-header-left {
+  position: relative;
+  flex: 0 1 auto;
+}
+
+/* The row the controls left. In Standard the menu bar still lives there and
+   the row stays; in Simplified nothing visible remains, and a 54px band of
+   padding around nothing is exactly what U-46 asked us to give back. Keyed on
+   the menu bar's real state rather than on the density, because Simplified
+   can show menus too when the panel registry says so. */
+body[data-mobile-toolbar='relocated']
+  #workflowProgress:not(:has(#toolbarMenuBar:not(.hidden))) {
+  display: none;
+}
+
 /* Match Camera/Parameters collapse toggle button styling */
 .preview-drawer-toggle-btn.btn-collapse-panel {
   border: 1px solid var(--color-border);

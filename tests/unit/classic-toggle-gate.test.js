@@ -1,10 +1,15 @@
 /**
- * Unit tests for the header Classic toggle's U-10 viewport gate (UF-5 P2).
+ * Unit tests for the header Classic toggle's viewport gate.
  *
- * The button is aria-disabled with a reason while the viewport is
- * mobile-shaped and it points INTO Classic; the way out of Classic is
- * never gated; a click while gated announces instead of switching; and
- * the availability subscription re-enables it live on resize.
+ * U-10 (UF-5) made the button disabled-with-reason while the viewport was
+ * mobile-shaped and it pointed INTO Classic. U-46 (UF-42) changed what that
+ * looks like on the owner's order: the button is REMOVED there instead of
+ * greyed out. Q-73c settled the boundary as one predicate — the same one the
+ * gate always used — so the button is present exactly when pressing it would
+ * work, and absent otherwise.
+ *
+ * The half U-46 did not touch: the way OUT of Classic is never gated, so a
+ * live Classic session keeps its button at any viewport shape.
  *
  * classic-availability.js keeps listeners and a last-notified value at
  * module scope, so each test imports a fresh controller module tree.
@@ -55,8 +60,9 @@ function buildToggleDom() {
 
 async function freshController() {
   vi.resetModules();
-  const { UIModeController } =
-    await import('../../src/js/ui-mode-controller.js');
+  const { UIModeController } = await import(
+    '../../src/js/ui-mode-controller.js'
+  );
   const { announceImmediate } = await import('../../src/js/announcer.js');
   return { UIModeController, announceImmediate };
 }
@@ -72,7 +78,7 @@ describe('Classic toggle viewport gate', () => {
     vi.restoreAllMocks();
   });
 
-  it('marks the toggle disabled-with-reason on a phone-shaped viewport', async () => {
+  it('removes the toggle on a phone-shaped viewport', async () => {
     setViewport(375, 812);
     const { UIModeController } = await freshController();
     const btn = buildToggleDom();
@@ -80,15 +86,15 @@ describe('Classic toggle viewport gate', () => {
     const controller = new UIModeController();
     controller.init();
 
-    expect(btn.getAttribute('aria-disabled')).toBe('true');
-    expect(btn.getAttribute('aria-describedby')).toBe(
-      'classicModeToggleReason'
-    );
-    expect(btn.getAttribute('title')).toContain('desktop-only for now');
-    expect(btn.classList.contains('hidden')).toBe(false);
+    expect(btn.classList.contains('hidden')).toBe(true);
+    // The old contract's attributes must be gone, not merely unread: an
+    // aria-describedby left on a removed control is an orphan pointing at
+    // text nothing can reach.
+    expect(btn.hasAttribute('aria-disabled')).toBe(false);
+    expect(btn.hasAttribute('aria-describedby')).toBe(false);
   });
 
-  it('leaves the toggle fully enabled on a desktop-shaped viewport', async () => {
+  it('shows the toggle, undecorated, on a desktop-shaped viewport', async () => {
     setViewport(1280, 800);
     const { UIModeController } = await freshController();
     const btn = buildToggleDom();
@@ -96,28 +102,13 @@ describe('Classic toggle viewport gate', () => {
     const controller = new UIModeController();
     controller.init();
 
+    expect(btn.classList.contains('hidden')).toBe(false);
     expect(btn.hasAttribute('aria-disabled')).toBe(false);
     expect(btn.hasAttribute('aria-describedby')).toBe(false);
+    expect(btn.getAttribute('title')).toBe('Switch to Classic desktop layout');
   });
 
-  it('announces the refusal instead of switching when clicked while gated', async () => {
-    setViewport(375, 812);
-    const { UIModeController, announceImmediate } = await freshController();
-    const btn = buildToggleDom();
-
-    const controller = new UIModeController();
-    controller.init();
-    const modeBefore = controller.getMode();
-
-    btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-
-    expect(controller.getMode()).toBe(modeBefore);
-    expect(announceImmediate).toHaveBeenCalledWith(
-      `Classic unavailable. ${REASON_TEXT}`
-    );
-  });
-
-  it('never gates the way out: inside Classic the toggle stays enabled at phone shapes', async () => {
+  it('never gates the way out: inside Classic the toggle stays on screen at phone shapes', async () => {
     setViewport(1280, 800);
     const { UIModeController } = await freshController();
     const btn = buildToggleDom();
@@ -128,31 +119,82 @@ describe('Classic toggle viewport gate', () => {
 
     setViewport(375, 812);
     controller._updateClassicToggleButton();
-    expect(btn.hasAttribute('aria-disabled')).toBe(false);
+    expect(btn.classList.contains('hidden')).toBe(false);
+    expect(btn.getAttribute('aria-label')).toBe(
+      'Switch back to the Assistive Forge interface'
+    );
 
-    // Leaving works, and the button locks again once it points back in.
+    // Leaving works, and the button goes away once it points back in.
     controller.toggleClassic();
     expect(controller.getMode()).not.toBe('classic');
-    expect(btn.getAttribute('aria-disabled')).toBe('true');
+    expect(btn.classList.contains('hidden')).toBe(true);
   });
 
-  it('re-enables live when a resize makes the viewport desktop-shaped', async () => {
+  it('reappears live when a resize makes the viewport desktop-shaped', async () => {
     setViewport(375, 812);
     const { UIModeController } = await freshController();
     const btn = buildToggleDom();
 
     const controller = new UIModeController();
     controller.init();
-    expect(btn.getAttribute('aria-disabled')).toBe('true');
+    expect(btn.classList.contains('hidden')).toBe(true);
 
     vi.useFakeTimers();
     try {
       setViewport(1280, 800);
       window.dispatchEvent(new Event('resize'));
       vi.runAllTimers();
-      expect(btn.hasAttribute('aria-disabled')).toBe(false);
+      expect(btn.classList.contains('hidden')).toBe(false);
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('refuses out loud whenever a click arrives and Classic cannot be entered', async () => {
+    setViewport(375, 812);
+    const { UIModeController, announceImmediate } = await freshController();
+    const btn = buildToggleDom();
+
+    const controller = new UIModeController();
+    controller.init();
+    const modeBefore = controller.getMode();
+
+    // The refusal used to key off aria-disabled, which Q-73c made unreachable
+    // — and switchMode's own refusal is silent, so keying off the attribute
+    // would have dropped a spoken message U-10 shipped. The handler asks the
+    // GATE now, so the announcement survives however the click arrives: a
+    // script, a ?uiMode= deep link, or a future change that puts the button
+    // back on screen while entry is closed. No attribute is set here, on
+    // purpose — that is the whole point of the change.
+    btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    expect(controller.getMode()).toBe(modeBefore);
+    expect(announceImmediate).toHaveBeenCalledWith(
+      `Classic unavailable. ${REASON_TEXT}`
+    );
+  });
+
+  it('leaves the saved Classic preference alone while the viewport defers it', async () => {
+    localStorage.setItem(
+      'openscad-forge-ui-mode',
+      JSON.stringify({ mode: 'classic', lastCustomMode: 'standard' })
+    );
+    setViewport(375, 812);
+    const { UIModeController } = await freshController();
+    buildToggleDom();
+
+    const controller = new UIModeController();
+    controller.init();
+
+    // AF-D56 proposed a boot race here. There is no window for one: the
+    // viewport is consulted synchronously in the constructor, before anything
+    // mounts, so a phone boot can only ever land in a custom mode.
+    expect(controller.getMode()).toBe('standard');
+    expect(controller.isClassicDeferredByViewport()).toBe(true);
+
+    controller.setClassicDensity('simplified');
+    expect(JSON.parse(localStorage.getItem('openscad-forge-ui-mode')).mode).toBe(
+      'classic'
+    );
   });
 });

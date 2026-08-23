@@ -21,6 +21,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A phone toolbar that earns its rows** (UF-42) - with a project open on a phone, the app used to
+  spend four stacked rows before you saw anything you came for: the header, a row holding four
+  icons, the menu row, and the Customizer row. That is 147 pixels in the Simplified view and 187 in
+  Standard, on a screen about 810 pixels tall. High contrast, theme, Full Screen and Help now sit in
+  the Customizer row, which had the width going spare, and the row they came from is gone.
+  Simplified spends **93** pixels of chrome instead of 147; Standard spends **135** instead of 187.
+  On a real phone that is about a tenth more preview. Nothing was hidden or shrunk to do it: all
+  four controls are the same size, in the same order, with the same names, still reachable by
+  keyboard, and every tour that points at one of them still finds it. On a desktop-shaped window
+  they move straight back where they were, live, with no reload. The Main Page keeps its own row
+  exactly as it was, because high contrast and theme have to be reachable before you open anything
+
+- **The Classic button no longer sits greyed out on a phone** (UF-42) - Classic is a desktop layout
+  and is not being offered on phones for now, so on a phone-shaped screen the button is simply not
+  there, rather than sitting there dimmed and unusable. It comes straight back when the window
+  becomes desktop-shaped, without a reload, and if you are already in Classic on a window you have
+  narrowed, the button stays put - the way out is never taken away. The explanation you used to get
+  from the greyed-out button is still there, on the first-visit screen, in the same place it was
+
 - **Where the City Walk's speed actually landed** (CW-37) - this round set out to hold 30 frames a
   second at the smallest character size, with heavy rain, on a machine running four times slow.
   Measured on all four cities, walking, on a real graphics card: **on a normal machine the target is
@@ -62,6 +81,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shutter, an arcade, and a blank service wall, because a street where every ground floor is a shop
   reads as a film set. Which one a building gets comes from the nearest shop or cafe in the map
   data where there is one, and from the building itself where there is not
+
+### Fixed
+
+- **The preview status line can actually be read on a phone** (UF-42) - the line that tells you the
+  preview is ready, how big the file is and how many triangles it has was written into a corner
+  that, on a phone, always had something on top of it: the Actions and Camera bar when the camera
+  pad was shut, and the camera pad itself when it was open, where it came out washed-out with the
+  pad's own headings printed through it. It now reads at the top of the preview, clear of both.
+  One thing this quietly repairs: pressing the theme button writes "Theme: Light" to that same line,
+  so on a phone the first press looked like it did nothing at all. It has been saying so all along
+- **The Main Page button is whole again** (UF-42) - at phone width the GitHub button was painted
+  over the last 19 pixels of "Main Page", and a tap that landed on the tail of the label opened
+  GitHub instead of going back
+- **High contrast no longer pushes the toolbar off the side of the screen** (UF-42) - high contrast
+  makes every control a little wider, and the header row had no way to give: it slid its contents
+  off the left edge, where there is no scrollbar to bring them back. "Main Page", "File" and
+  "Customizer" were all cut. The row now wraps onto a second line when it genuinely cannot fit,
+  which costs a little height in high contrast and keeps every control on screen and tappable
+- **A tour card no longer sits on top of buttons it is not talking about** (UF-42) - on a phone, a
+  step pointing at something near the bottom of the screen put its card over the whole top of the
+  app: ten controls were underneath it and could not be tapped. The card now starts below the app's
+  own toolbar
+- **High contrast advertises its keyboard shortcut** (UF-42) - the high-contrast button never told
+  screen readers about Ctrl+Shift+H, though the theme button beside it always had
 
 ### Added
 

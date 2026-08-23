@@ -455,6 +455,31 @@ test.describe('Classic on mobile (375px, touch)', () => {
 
     await expect(page.locator('#drawerBackdrop')).toBeHidden();
 
+    // D-56 SOLVED (UF-42). The flake was never a boot race, and it was never
+    // this layout being too tight. Narrowing a live Classic session shows the
+    // Q-24a "phone-shaped" notice, which is IN FLOW and 165px tall at 375px,
+    // and it arrives 150ms late because subscribeViewportShape is debounced.
+    // Whichever side of that 150ms the scroll below lands on decides the
+    // result: scroll first and the notice then pushes #paramPanel down 161px,
+    // out of the viewport, and the poll that follows only re-reads geometry —
+    // it never scrolls again, so it can never recover.
+    //
+    // Measured at the release base by replicating this flow: 6 of 6 runs
+    // failed when the scroll came first (panel top 492 -> 654, bottom 946
+    // against an 812 viewport), and 3 of 3 recovered when a second scroll
+    // followed the notice (top 457, bottom 749). The claimed boot race did not
+    // exist: 20/20 Chromium and 20/20 Firefox boots with a stored Classic
+    // preference at 375x812 landed in Forge Standard, because
+    // _loadPreferences() consults isViewportDesktopShaped() synchronously in
+    // the controller's constructor, before anything mounts.
+    //
+    // So: let the notice land, THEN scroll. The requirement below is unchanged
+    // and is asserted against the layout the user actually ends up with.
+    await expect(page.locator('#classicGateBanner')).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.locator('#classicGateLiveText')).toBeVisible();
+
     // Reachable: scrolling the main area brings it fully on screen
     await page.evaluate(() =>
       document.getElementById('paramPanel').scrollIntoView({ block: 'start' })
@@ -463,17 +488,11 @@ test.describe('Classic on mobile (375px, touch)', () => {
     // — top edge above the viewport midpoint — only held while the panel was
     // tall enough to force extra scroll range; C2 shortened it by moving the
     // preset controls into the dock header, so assert the requirement itself.
-    // D-56: this poll has failed roughly once in ten runs and has never
-    // reproduced on demand — 4/4 alone and 4/4 in a full nine-suite x4 gate.
-    // It was suspected of being UF-35's disclosure wrapper, and MEASURED not
-    // to be: #paramPanel is 292px tall and ends 64px clear of the 812px
-    // viewport, identical to the pixel with and without that release. So the
-    // boundary is not tight and the cause is timing.
-    //
-    // The assertion is unchanged. It just records what the poll actually saw,
-    // so the next occurrence arrives with evidence rather than a bare
-    // predicate timeout. Do not soften this into a retry — a test that stops
-    // failing is worth less than one that explains itself.
+    // The sampling below stays. It is what turned D-56 from "flaky" into a
+    // mechanism, and if this ever moves again the next occurrence should
+    // arrive with evidence rather than a bare predicate timeout. Do not soften
+    // it into a retry — a test that stops failing is worth less than one that
+    // explains itself.
     const d56Samples = [];
     try {
       await expect
@@ -576,7 +595,7 @@ test.describe('Classic on mobile (375px, touch)', () => {
     await page.keyboard.press('Escape');
   });
 
-  test('classic-mobile-gate-programmatic: a DOM click on the gated toggle is refused; the drawer is untouched', async ({
+  test('classic-mobile-gate-programmatic: a DOM click on the removed toggle is refused out loud; the drawer is untouched', async ({
     page,
   }) => {
     test.setTimeout(240_000);
@@ -595,6 +614,14 @@ test.describe('Classic on mobile (375px, touch)', () => {
     // longer take over here. The same DOM path (a programmatic click, the
     // deep-link shape) now pins the REFUSAL: no mode change, the drawer
     // still open and working, and the gate's announcement spoken.
+    //
+    // UF-42 removed the button here rather than greying it, which is why the
+    // click below is the only way to reach this path at all — and it is what
+    // very nearly took the announcement away with it. The refusal used to key
+    // off aria-disabled, which is now unreachable, and switchMode's own
+    // refusal is silent. This case is what caught it: the handler asks the
+    // gate directly now, so the spoken refusal survives whatever puts a click
+    // on this control.
     await page.evaluate(() =>
       document.getElementById('classicModeToggle').click()
     );
