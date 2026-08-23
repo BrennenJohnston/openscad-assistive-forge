@@ -360,6 +360,14 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     // The longest measurement in the lane - four states across three targets,
     // most of them hovered too. Same reason as CW-14's: length, not a step.
     test.setTimeout(180_000)
+    // Every interaction below pays a longer action timeout than the 10 s
+    // default. That default is a budget for finding and reaching a control,
+    // and it is not enough on this page: the city is converted to characters
+    // every frame, and on a software-rendering CI runner both a click and a
+    // hover have failed at 10 s with Playwright's own log saying the element
+    // was already visible and stable - a starved main thread, not a control
+    // anyone could not reach (D-79). Nothing being asserted changes.
+    const SLOW = { timeout: 45000 }
     await launchGame(page)
     await enterCity(page)
 
@@ -409,7 +417,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
       ]
       for (const [name, locator, hoverable] of targets) {
         for (const state of hoverable ? ['rest', 'hovered'] : ['rest']) {
-          if (state === 'hovered') await locator.hover()
+          if (state === 'hovered') await locator.hover(SLOW)
           else await page.mouse.move(2, 2)
           await page.waitForTimeout(200)
           const m = await measure(locator)
@@ -426,7 +434,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
 
     // Fast is measured in its pressed state, which is the pair CW-14's rule
     // repaints and the one nothing else in the suite covers.
-    await btn(page, 'cityWalkFastBtn').click()
+    await btn(page, 'cityWalkFastBtn').click(SLOW)
     await expect(btn(page, 'cityWalkFastBtn')).toHaveAttribute(
       'aria-pressed',
       'true'
@@ -435,13 +443,13 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     const contrastBtn = page.locator('#cityWalkContrastBtn')
     const themeBtn = page.locator('#cityWalkThemeBtn')
 
-    await themeBtn.click() // auto -> light
+    await themeBtn.click(SLOW) // auto -> light
     await check('mono light, contrast off')
-    await contrastBtn.click()
+    await contrastBtn.click(SLOW)
     await check('mono light, contrast on')
-    await themeBtn.click() // light -> dark
+    await themeBtn.click(SLOW) // light -> dark
     await check('mono dark, contrast on')
-    await contrastBtn.click()
+    await contrastBtn.click(SLOW)
     await check('mono dark, contrast off')
   })
 

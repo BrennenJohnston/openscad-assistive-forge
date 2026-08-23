@@ -39,6 +39,14 @@ test.describe('ASCII City Walk — trees and parked cars (CW-16)', () => {
   test('a parked car is solid: you press against it, never through it', async ({
     page,
   }) => {
+    // This case waits up to 90 s for 150 rendered frames, and says why in the
+    // comment at that poll. It never got to spend them: the test's own budget
+    // is 60 s by default, so the 90 s patience was unreachable and the case
+    // died at 60 with `keyboard.up: Test timeout of 60000ms exceeded` - the
+    // cleanup line, not the assertion. It measured 72 s on a loaded runner.
+    // The budget now covers the patience the poll asks for (D-79). The BAR is
+    // still the frame count; this only makes the waiting possible.
+    test.setTimeout(150_000)
     await launchGame(page)
     await enterCity(page)
 

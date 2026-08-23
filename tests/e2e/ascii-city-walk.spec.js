@@ -1017,6 +1017,14 @@ test.describe('ASCII City Walk — accessibility toggles (CW-14)', () => {
     // software. It is the length that overruns the default 60 s, not any one
     // step: the assertions below are unchanged and still fail fast.
     test.setTimeout(180_000)
+    // Every interaction below pays a longer action timeout than the 10 s
+    // default. That default is a budget for finding and reaching a control,
+    // and it is not enough on this page: the city is converted to characters
+    // every frame, and on a software-rendering CI runner both a click and a
+    // hover have failed at 10 s with Playwright's own log saying the element
+    // was already visible and stable - a starved main thread, not a control
+    // anyone could not reach (D-79). Nothing being asserted changes.
+    const SLOW = { timeout: 45000 }
     await launchGame(page)
     await enterCity(page)
 
@@ -1058,7 +1066,14 @@ test.describe('ASCII City Walk — accessibility toggles (CW-14)', () => {
         ['theme', themeBtn(page)],
       ]) {
         for (const state of ['rest', 'hovered']) {
-          if (state === 'hovered') await locator.hover()
+          // The 10 s default action timeout is a budget for finding and
+          // reaching a control, and it is not enough here: this page is
+          // converting a 3D city to characters every frame, and on a
+          // software-rendering CI runner a hover has failed at 10 s with
+          // Playwright's own log saying the element was already visible and
+          // stable - a starved main thread, not an unreachable button
+          // (D-79). Nothing about what is being asserted changes.
+          if (state === 'hovered') await locator.hover(SLOW)
           else await page.mouse.move(0, 0)
           await page.waitForTimeout(200)
           const m = await measure(locator)
@@ -1073,13 +1088,13 @@ test.describe('ASCII City Walk — accessibility toggles (CW-14)', () => {
       }
     }
 
-    await themeBtn(page).click() // auto -> light
+    await themeBtn(page).click(SLOW) // auto -> light
     await check('mono light, contrast off')
-    await contrastBtn(page).click()
+    await contrastBtn(page).click(SLOW)
     await check('mono light, contrast on')
-    await themeBtn(page).click() // light -> dark
+    await themeBtn(page).click(SLOW) // light -> dark
     await check('mono dark, contrast on')
-    await contrastBtn(page).click()
+    await contrastBtn(page).click(SLOW)
     await check('mono dark, contrast off')
   })
 
