@@ -419,7 +419,9 @@ export function buildCityCameraPanel(actions) {
     id: 'cityWalkCamReset',
     className: 'btn-sm btn-outline camera-btn-full',
     text: 'Reset View',
-    label: (isMap) => (isMap ? 'Centre the map on you' : 'Level the view'),
+    // "Center", not "Centre": the toolbar button beside it already says
+    // "Center on you" and the announcement says "Map centered on you".
+    label: (isMap) => (isMap ? 'Center the map on you' : 'Level the view'),
     onPress: (isMap) => {
       if (isMap) actions.recenterMap();
       else actions.levelView();

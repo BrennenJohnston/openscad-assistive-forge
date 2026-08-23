@@ -488,7 +488,12 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       'G: rain off, light, heavy (stays off if you use reduced motion)',
       'P: save a picture of what you can see',
       'High contrast, theme and colour: the three buttons at the top of the screen',
-      'Every key also has a button in the toolbar along the bottom',
+      // CW-35: the toolbar no longer holds all of them. Walking, turning,
+      // looking and the standard views moved into the Camera panel, and a
+      // help panel that still said "the toolbar" would send a mouse user
+      // hunting along the bottom for buttons that are not there.
+      'Walking, turning, looking and the standard views: the Camera panel on the right',
+      'Every other key also has a button in the toolbar along the bottom',
       'H: open or close this help',
       'Escape: close this help, or leave the game',
     ];

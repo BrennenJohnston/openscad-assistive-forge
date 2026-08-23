@@ -537,15 +537,26 @@ test.describe('ASCII City Walk — the Camera panel (CW-35)', () => {
     // Start from the panel's own first control rather than tabbing in from
     // the page: this asks whether the panel's INTERNAL order is walkable,
     // which is what breaks when a d-pad is laid out by grid area.
+    //
+    // Only the BUTTONS are checked, in order, because a stop between two of
+    // them is not necessarily a fault. Firefox puts the scrollable panel
+    // body into the tab order on purpose, so that a keyboard user can
+    // scroll it with the arrow keys - which matters here, since the body is
+    // exactly what scrolls when high contrast makes the panel too tall for
+    // the viewport. Chromium does not. Suppressing it to make the two agree
+    // would take that scroll route away from the browser that offers it.
     await btn(page, expected[0]).focus()
     const reached = [expected[0]]
-    for (let i = 1; i < expected.length; i++) {
+    let last = expected[0]
+    for (let i = 0; i < expected.length + 6; i++) {
+      if (reached.length === expected.length) break
       await page.keyboard.press('Tab')
       const id = await page.evaluate(() => document.activeElement?.id)
       // A Tab that lands nowhere new means the walk stalled; say where,
       // rather than reporting a mismatched array a dozen entries long.
-      expect(id, `Tab ${i} from ${reached[i - 1]}`).not.toBe(reached[i - 1])
-      reached.push(id)
+      expect(id, `Tab ${i + 1} from ${last}`).not.toBe(last)
+      last = id
+      if (expected.includes(id)) reached.push(id)
     }
     expect(reached).toEqual(expected)
 
