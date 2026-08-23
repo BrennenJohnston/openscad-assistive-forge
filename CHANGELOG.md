@@ -7,8 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Drop yourself onto any street** (CW-36) - the map was somewhere to look at the city; it is now
+  somewhere to travel from. Click a street on the overhead map and the game tells you which street
+  you picked, marks it with a ring, and waits. Press J and you are standing there, looking along the
+  street rather than at a wall. Nothing is picked and you press J: you land on the middle of the
+  map, which matters because the arrow keys already steer that middle - so the whole thing works
+  from the keyboard alone, without needing to click anything. There is a **Teleport here** button on
+  the map toolbar for the same job. You can never land inside a building: the landing uses the same
+  test the walker itself uses to decide whether a step is possible, and if there is genuinely
+  nowhere to stand near where you picked, it says so instead of putting you somewhere wrong
+
 ### Changed
 
+- **The camera controls are the ones you already know** (CW-35) - the game had its own vocabulary
+  along the bottom of the screen - Turn left, Look up, Forward, Step left - which is a second thing
+  to learn for the same job the Forge's 3D preview already does with a Camera panel down its
+  right-hand side. That panel is in the game now, same sections in the same order: Rotate View, Pan
+  View, Zoom, Standard Views, Reset View. The buttons do not reinvent anything; each one drives an
+  action the game already had. Two words changed to fit a city: the Forge's `Bottom` view is
+  `Street` here, and its Front/Back/Left/Right are `North`/`East`/`South`/`West`, because the game
+  has a real compass and the status line already speaks in bearings. `Towers` tilts your gaze up at
+  the skyline. The panel collapses if you want the city back, and remembers that you collapsed it
+- **The same panel works over the map** (CW-35) - it does not disappear when you switch to the
+  overhead view, it re-labels: the D-pads pan the map, Zoom becomes the map's own zoom, and Reset
+  centers it back on you. The four compass buttons and Towers stand down there, because there is no
+  walker on screen to turn. What still swaps on the toolbar is only what genuinely means nothing
+  overhead - Fast and Rain leave, and the map's own three arrive
 - **The buildings stop repeating** (CW-34) - two things you photographed. The first: at your
   character size the near towers read as literal giant letters, because each family of buildings
   had a letter cut out of its window panes to tell it from the next. The letters are gone. What
