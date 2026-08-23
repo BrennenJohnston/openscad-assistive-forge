@@ -32,13 +32,25 @@ async function seed(page) {
   });
 }
 
+/** Somewhere to have come FROM. Any same-origin document that is not the app. */
+const ELSEWHERE = '/icons/logo.png';
+
 /**
- * A project surface with no tour running. The Beginners card carries
- * data-tutorial, so the deep link is the quiet door; it also exercises the
- * replaceState URL cleanup the guard must leave alone.
+ * A project surface with no tour running, reached the way people reach it:
+ * from somewhere else. The Beginners card carries data-tutorial, so the deep
+ * link is the quiet door; it also exercises the replaceState URL cleanup the
+ * guard must leave alone.
+ *
+ * MEASURED, and the reason for the first goto: a plain page.goto('/') leaves
+ * the app as history entry 1 in Firefox (history.length is 1), while Chromium
+ * keeps its own initial about:blank as an entry. With no real document
+ * underneath, "Leave" has nowhere to go and the case cannot be written
+ * honestly. An explicit goto('about:blank') does not help - Firefox does not
+ * keep it. The first-entry situation is a real one and is pinned separately.
  */
 async function openProject(page) {
   await seed(page);
+  await page.goto(ELSEWHERE);
   await page.goto('/?example=simple-box');
   await expect(page.locator('body')).toHaveAttribute(
     'data-app-surface',
@@ -96,7 +108,7 @@ for (const vp of VIEWPORTS) {
       await expect(leaveDialog(page)).toBeVisible({ timeout: 10_000 });
 
       await leaveBtn(page).click();
-      await page.waitForURL('about:blank', { timeout: 15_000 });
+      await page.waitForURL(`**${ELSEWHERE}`, { timeout: 15_000 });
       const left = await appState(page);
       expect(left.hasApp).toBe(false);
       expect(left.surface).toBe(null);
@@ -166,7 +178,7 @@ test.describe('Q-85: the guard belongs to the project surface', () => {
     // On the Main Page, Back is the browser's own again: it leaves, and it
     // does so in ONE press, with no swallowed press in between.
     await page.goBack();
-    await page.waitForURL('about:blank', { timeout: 15_000 });
+    await page.waitForURL(`**${ELSEWHERE}`, { timeout: 15_000 });
     expect((await appState(page)).hasApp).toBe(false);
   });
 
@@ -252,6 +264,107 @@ test.describe('U-41: one Back press, one answer', () => {
     });
     await expect(page.locator('#tutorial-step-title')).toHaveText(step);
     await expect(page.locator('#tutorial-step-current')).toHaveText(number);
+  });
+});
+
+/**
+ * A reload leaves the tab standing ON the sentinel. The app boots to the Main
+ * Page knowing nothing about it, so opening a project again stacks a second
+ * one, and a single history.back() then lands on the app's own earlier entry
+ * rather than leaving. MEASURED at this release's own HEAD before the fix: the
+ * app was still on screen after "Leave" and the address bar had jumped back to
+ * ?example=simple-box. Recognising the leftover by its state does not work -
+ * the deep-link cleanup replaceStates it away.
+ */
+test.describe('U-41: a reload leaves an entry behind', () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  async function reloadAndReopen(page) {
+    await openProject(page);
+    await page.reload();
+    await expect(page.locator('#welcomeScreen')).toBeVisible({
+      timeout: 60_000,
+    });
+  }
+
+  test('Leave still leaves', async ({ page }) => {
+    test.setTimeout(240_000);
+    await reloadAndReopen(page);
+
+    await page
+      .locator('.btn-role-try[data-example="simple-box"]')
+      .first()
+      .click();
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-app-surface',
+      'project',
+      { timeout: 180_000 }
+    );
+
+    await page.goBack();
+    await expect(leaveDialog(page)).toBeVisible({ timeout: 10_000 });
+    await leaveBtn(page).click();
+
+    await page.waitForURL(`**${ELSEWHERE}`, { timeout: 15_000 });
+    expect((await appState(page)).hasApp).toBe(false);
+  });
+
+  test('Back on the Main Page still leaves, with no press swallowed', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await reloadAndReopen(page);
+
+    // One press, from the Main Page, with a leftover entry underneath it.
+    await page.goBack();
+    await page.waitForURL(`**${ELSEWHERE}`, { timeout: 15_000 });
+    expect((await appState(page)).hasApp).toBe(false);
+  });
+});
+
+/**
+ * The honest limit, pinned rather than described. When the app is the first
+ * page in the tab there is no earlier document, so "Leave" has nothing to go
+ * back to. The important half is what does NOT happen: the guard stands down
+ * instead of asking again, because a guard that re-armed behind someone who
+ * asked to leave would be a trap they could never get out of.
+ */
+test.describe('U-41: when the app is the first page in the tab', () => {
+  test.use({ viewport: { width: 412, height: 810 } });
+
+  test('Leave stands the guard down rather than trapping the user', async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(
+      browserName !== 'firefox',
+      'Only Firefox starts the app as history entry 1 here; Chromium keeps its own about:blank entry, so this situation cannot be built there.'
+    );
+    test.setTimeout(240_000);
+    await seed(page);
+    await page.goto('/?example=simple-box');
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-app-surface',
+      'project',
+      { timeout: 180_000 }
+    );
+    // The app plus one sentinel, and nothing underneath them.
+    expect(await page.evaluate(() => history.length)).toBe(2);
+
+    await page.goBack();
+    await expect(leaveDialog(page)).toBeVisible({ timeout: 10_000 });
+    await leaveBtn(page).click();
+    await expect(leaveDialog(page)).toHaveCount(0);
+
+    // Nowhere to go, so the app is still here. Said out loud because it is
+    // the limit, not the goal.
+    expect((await appState(page)).hasApp).toBe(true);
+
+    // And the guard is down: a further Back does not ask again. In a real
+    // browser that press closes the tab, which is what it did before UF-39.
+    await page.goBack().catch(() => {});
+    await page.waitForTimeout(1000);
+    await expect(leaveDialog(page)).toHaveCount(0);
   });
 });
 

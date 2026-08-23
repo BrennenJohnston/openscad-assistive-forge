@@ -55,6 +55,13 @@ let answeredPop = false;
 let leaving = false;
 /** The warning is on screen; a second popstate must not stack a second copy. */
 let asking = false;
+/** The address bar to put back once a retraction has actually landed. */
+let restoreHref = null;
+/** A walk out of the document is under way; further pops are its own. */
+let walking = false;
+
+/** Enough to clear the entries a few reload cycles can leave behind. */
+const MAX_WALK_STEPS = 5;
 
 let isComparisonMode = () => false;
 
@@ -104,17 +111,15 @@ function standDown() {
   if (!armed) return;
   armed = false;
   retracting = true;
-  // Going back consumes our own entry. The URL of the entry underneath is
-  // restored with it, so put the address bar back the way the app left it:
-  // the deep-link doors clean their URLs with replaceState AFTER the surface
-  // flips, which edits the sentinel rather than the entry below it.
-  const href = window.location.href;
+  // Going back consumes our own entry, and the URL of the entry underneath
+  // comes back with it: the deep-link doors clean their URLs with
+  // replaceState AFTER the surface flips, which edits the sentinel rather than
+  // the entry below it. Record the address bar here and restore it in the
+  // popstate, which is the moment it has actually changed. MEASURED: doing it
+  // on a timer instead is a race that Chromium happens to win and Firefox
+  // loses, and losing it puts a stale ?example= back on the Main Page.
+  restoreHref = window.location.href;
   window.history.back();
-  window.setTimeout(() => {
-    if (window.location.href !== href) {
-      window.history.replaceState(null, '', href);
-    }
-  }, 0);
 }
 
 async function ask() {
@@ -140,11 +145,45 @@ async function ask() {
   }
 
   // The user's own choice, honoured without argument: the guard does not
-  // re-arm behind it. If the app is the first entry in a fresh tab there is
-  // nothing to go back to, and this call does nothing; the next Back press
-  // then does what it did before this module existed, which is close the tab.
+  // re-arm behind it.
   leaving = true;
-  window.history.back();
+  walkOut();
+}
+
+/**
+ * Leave the document, stepping past any entries of our own on the way.
+ *
+ * One `history.back()` is not enough, and MEASURED is the only way that shows
+ * up. A reload leaves the tab standing ON a sentinel; the app boots to the
+ * Main Page and knows nothing about it, and opening a project pushes a second
+ * one. "Leave" then went back exactly one step and landed on the app's own
+ * earlier entry, so the app was still there and the URL had jumped back to
+ * `?example=simple-box`. Reading the entry's state to recognise it does not
+ * work either: the deep-link cleanup calls `replaceState(null, ...)` and wipes
+ * the marker.
+ *
+ * So this asks the simpler question. Leaving means leaving the DOCUMENT, and
+ * nothing in this app pushes history except this module, so every entry that
+ * keeps us alive is one of ours to step past. Each step that reaches a real
+ * earlier document ends the walk by ending the document; if the app is the
+ * first entry in the tab there is nothing to reach, the walk runs out, and
+ * Back behaves as it did before this module existed.
+ */
+function walkOut() {
+  if (walking) return;
+  walking = true;
+  let steps = 0;
+  const step = () => {
+    if (steps >= MAX_WALK_STEPS) {
+      walking = false;
+      return;
+    }
+    steps += 1;
+    window.history.back();
+    // Still running means the step landed on another entry of ours.
+    window.setTimeout(step, 150);
+  };
+  step();
 }
 
 /**
@@ -165,9 +204,14 @@ function markAnswered() {
 }
 
 function handlePopState() {
+  if (walking) return;
   if (retracting) {
     retracting = false;
     markAnswered();
+    if (restoreHref && window.location.href !== restoreHref) {
+      window.history.replaceState(null, '', restoreHref);
+    }
+    restoreHref = null;
     return;
   }
   if (readvancing) {
@@ -176,7 +220,14 @@ function handlePopState() {
     markAnswered();
     return;
   }
-  if (!armed) return;
+  if (!armed) {
+    // Nothing of ours was armed, yet the document is still here, so the entry
+    // just consumed was a leftover of ours from before a reload. Q-85 says the
+    // Main Page keeps the browser's own behaviour, and the browser's own
+    // behaviour is to leave, so carry on out rather than swallowing the press.
+    walkOut();
+    return;
+  }
 
   // Our sentinel is what the browser just consumed, so the document stays.
   armed = false;
