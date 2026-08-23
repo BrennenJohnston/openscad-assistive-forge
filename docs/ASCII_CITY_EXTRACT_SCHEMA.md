@@ -209,16 +209,26 @@ draws it.
       roof: { shape, heightM, orientation } | null
     }
   ],
-  roads: [{ points: [[x, y], ...], widthM, kind, name }],
+  roads: [{ points: [[x, y], ...], widthM, kind, name, sidewalk, surface }],
   trees: [[x, y], ...],
+  greens: [{ outer: [[x, y], ...], kind }],
+  pois: [{ x, y, kind }],
   boundsM: { minX, minY, maxX, maxY },
   stats: {
     buildingCount, roadCount, treeCount,
     partCount, orphanParts,
+    greenCount, sidewalkCount, surfacedRoadCount, poiCount,
     droppedRings, droppedElements
   }
 }
 ```
+
+`greens` are the parks, gardens, pitches and playgrounds listed under
+[Greenspace](#greenspace); `kind` is the `leisure` or `landuse` value they came
+from. `pois` are the shop and cafe nodes a facade generator uses to decide what
+a ground floor looks like; `kind` is the `shop` value, or the `amenity` value
+where there is no `shop`. A road's `sidewalk` and `surface` carry its tags
+through unchanged, and are `undefined` where the mapper did not say.
 
 ### How a height is decided
 

@@ -47,11 +47,24 @@ The four bundled cities were baked with these centers:
 The script trims tags to what the game reads (`building`, `height`,
 `building:height`, `building:levels`, `min_height`, `building:min_level`,
 `name`, `highway`, `tourism`, `historic`, `amenity`, `natural`,
-and since CW-26 `building:part`, `roof:shape`, `roof:height`,
-`roof:levels`, `roof:orientation` and `shop`), rounds coordinates
-to ~0.1 m, and self-checks that the game parser accepts the result.
+since CW-26 `building:part`, `roof:shape`, `roof:height`, `roof:levels`,
+`roof:orientation` and `shop`, and since CW-33 `surface`, `footway`, `lanes`,
+`width`, `landuse`, `leisure`, `building:material` and `building:colour`),
+rounds coordinates to ~0.1 m, and self-checks that the game parser accepts the
+result. `KEPT_TAGS` in `src/js/game/city-data.js` is the authoritative list.
 
-## Building parts, and why Denver has none (CW-26)
+## What is in the four files
+
+Measured from the files as they ship, not from the bake logs:
+
+| city | size | buildings | parts | outlines with parts | greens | sidewalks | roads with a surface | shop/cafe nodes | trees |
+|---|---|---|---|---|---|---|---|---|---|
+| seattle | 1474 KB | 485 | 418 | 122 | 17 | 1539 | 3150/3564 | 674 | 265 |
+| denver | 1478 KB | 363 | 895 | 152 | 249 | 493 | 690/1941 | 255 | 2325 |
+| albuquerque | 670 KB | 639 | 35 | 15 | 24 | 260 | 130/1383 | 137 | 142 |
+| burnaby | 862 KB | 537 | 182 | 24 | 80 | 256 | 1209/1717 | 534 | 244 |
+
+## Building parts, and how Denver got its shape (CW-26, CW-33)
 
 Whole-building `roof:shape` is nearly absent from US downtowns - about 1.5%
 of Seattle and 3.6% of Denver carry it - while residential Burnaby has it on
@@ -59,29 +72,27 @@ of Seattle and 3.6% of Denver carry it - while residential Burnaby has it on
 volumes standing inside a plain outline. Those parts are what make a stepped
 tower look stepped, and until CW-26 the bake stripped every one of them.
 
-Three of the four cities were rebaked with parts. **Denver was not**, and the
-file here is still its CW-17 bake:
-
-| city | size | parts kept | outlines carrying parts |
-|---|---|---|---|
-| seattle | 1256 KB | 423 | 122 |
-| burnaby | 726 KB | 182 | 24 |
-| albuquerque | 623 KB | 35 | 15 |
-| **denver** | **893 KB (not rebaked)** | **0** | **0** |
-
-Denver has 3,013 parts, and they are mostly very small: the median part covers
-2.76 m2 and a quarter of them are under 0.59 m2. Carrying them all takes the
-extract to 2303 KB, well past the 1600 KB bar the bake script warns at. The
-measured trade, for whoever picks this up:
+CW-26 rebaked three of the four cities with parts and left **Denver** out: it
+has 3,013 of them, mostly tiny — the median part covers 2.76 m2 and a quarter
+are under 0.59 m2 — and carrying them all took the extract to 2303 KB, well
+past the 1600 KB bar the bake script warns at. Denver was the one city still
+drawn as plain boxes, and the measured trade looked like this:
 
 | minimum part area | parts kept | extract size |
 |---|---|---|
 | none (all parts) | 2365 | 1922 KB |
 | 5 m2 | 1190 | 1419 KB |
-| 10 m2 | 897 | 1288 KB |
+| **10 m2** | **897** | **1288 KB** |
 | 20 m2 | 677 | 1218 KB |
 | 50 m2 | 516 | 1161 KB |
 
-Choosing a floor there is a product decision, not a mechanical one, so Denver
-keeps its old extract until someone makes it. Nothing breaks meanwhile: an
-extract without parts renders exactly as it did before CW-26.
+**CW-Q31 chose 10 m2 and CW-33 rebaked all four cities with it**, so every
+city now has its parts and its roofs. A ledge or setback smaller than ten
+square metres is under a tenth of the area of a single character cell at the
+sizes this game is played at — nothing that small could ever be seen, which is
+what makes the floor a saving rather than a loss. Denver drops 2,118 slivers
+that way and keeps 895 real volumes, which is what finally gave it stepped
+towers.
+
+`MIN_PART_AREA_M2` in `src/js/game/city-data.js` is the floor, applied by the
+bake script so the saving is in the file rather than in every page load.

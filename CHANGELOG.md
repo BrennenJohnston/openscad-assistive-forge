@@ -21,6 +21,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Where the City Walk's speed actually landed** (CW-37) - this round set out to hold 30 frames a
+  second at the smallest character size, with heavy rain, on a machine running four times slow.
+  Measured on all four cities, walking, on a real graphics card: **on a normal machine the target is
+  met with room to spare** - 18.6 to 22.2 ms a frame against an allowance of 33, and 60 frames a
+  second. At the character size most people play at, the frame-rate target is met even on the
+  four-times-slow machine. At the smallest size on that slow machine it is **not** met: 25 to 28
+  frames a second instead of 30. The round took that case from 3 frames a second to 26, and the
+  reason it stops there is now measured rather than guessed - between 39 and 49 ms of every frame
+  does not depend on the number of characters at all, so no further work on the characters can
+  reach the target. What is left is the painting and the phosphor trail, which are not part of this
+  round's plan and are a question for the owner rather than a decision for it
+
 - **The camera controls are the ones you already know** (CW-35) - the game had its own vocabulary
   along the bottom of the screen - Turn left, Look up, Forward, Step left - which is a second thing
   to learn for the same job the Forge's 3D preview already does with a Camera panel down its

@@ -64,6 +64,9 @@ export const MEASURED_SECONDS = {
   // unlisted it would be booked at DEFAULT_WEIGHT_S, 60, and lopside a shard
   // by two minutes. The next board replaces this with a measurement.
   'ascii-city-walk-teleport.spec.js': 190.0,
+  // Same estimate, same caveat: 29.4 s here against the controls file's 84 s,
+  // so 29.4 / 84 * 417.4 ~= 146. Two cases, both of which load a city.
+  'ascii-city-walk-perf-smoke.spec.js': 150.0,
   'classic-panels.spec.js': 432.7,
   'classic-mode.spec.js': 395.1,
   'menu-parity.spec.js': 210.5,
