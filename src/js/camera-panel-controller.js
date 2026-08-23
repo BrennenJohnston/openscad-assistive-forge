@@ -2,10 +2,10 @@
  * Camera Panel Controller
  * Right-side collapsible drawer for camera controls (desktop).
  * Mobile camera drawer for portrait/mobile view.
- * Mirrors the Parameters panel behavior on the left side.
+ * Mirrors the Customizer panel behavior on the left side.
  *
  * STATE CONVENTION: Additive close — `collapsed` class = closed.
- * This is the opposite of the Parameters drawer which uses
+ * This is the opposite of the Customizer drawer which uses
  * additive open (`drawer-open` class = open). See UI_STANDARDS.md.
  * @license GPL-3.0-or-later
  */

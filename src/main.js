@@ -5909,7 +5909,7 @@ async function initApp() {
       : 'Look for a required option (often “enable/show/include/has…”) and try again.';
 
     const findHint = label
-      ? `Tip: use the “Search parameters” box and type "${label}".`
+      ? `Tip: use the “Search the Customizer” box and type "${label}".`
       : '';
 
     updateStatus(`${headline} ${nextStep} ${findHint}`.trim(), 'error');
