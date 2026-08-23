@@ -244,6 +244,18 @@ for (const height of HEIGHTS) {
         );
 
         // Reachable and operable from the keyboard, with a visible ring.
+        //
+        // Reachable, and honestly: measured at 412x810, these four moved from
+        // tab stops 9-12 to 28-31, because the Customizer row sits after
+        // #paramPanel in the document. They are now immediately after the two
+        // controls they share that row with (26, 27), so the ORDER agrees with
+        // the layout — which is what WCAG 2.4.3 asks. The distance is D-90's
+        // doing, not this release's: 18 of the stops in between are inside the
+        // CLOSED off-canvas Customizer, which is fully tabbable on the base
+        // too (20 of the first 40 stops are off screen, identically, before
+        // and after). Fix D-90 and these four land around stop 10, earlier
+        // than the base. Both chords are advertised now (see the case below),
+        // which is the direct route in the meantime.
         const reachable = await control.evaluate((el) => {
           el.focus();
           return document.activeElement === el;
