@@ -6,6 +6,8 @@ import {
   buildingTint,
   buildStreetProps,
   ROAD_TONES,
+  trafficLightState,
+  buildRain,
 } from '../../../src/js/game/city-scene.js'
 import { parseCityExtract } from '../../../src/js/game/city-data.js'
 import {
@@ -224,6 +226,64 @@ describe('attachCityLighting', () => {
 
     lighting.detach()
   })
+
+  /**
+   * D-74. The drift used to be read straight off the session clock, so it
+   * only ran while it was raining and was wherever that clock had reached
+   * whenever it was next asked. Two things went wrong: a shower that ended on
+   * a murky night left the murk there for good, and the next shower snapped
+   * the fog to a thickness nothing had walked into.
+   */
+  describe('fog drift (D-74)', () => {
+    const lit = () => {
+      const scene = new Scene()
+      const lighting = attachCityLighting(scene, new PerspectiveCamera())
+      return { lighting, timing: lighting.weatherTiming }
+    }
+
+    it('resuming reproduces the fog that is on screen, at every thickness', () => {
+      const { lighting } = lit()
+      for (const density of [0, 0.13, 0.5, 0.87, 1]) {
+        lighting.setFogDensity(density)
+        const before = lighting.getFogFar()
+        // Anchor at an arbitrary point on the clock, then ask for that very
+        // instant back: the first driven frame must not move the fog at all.
+        lighting.beginFogDrift(1234567)
+        lighting.stepFogDrift(1234567)
+        expect(lighting.getFogFar()).toBeCloseTo(before, 6)
+      }
+    })
+
+    it('resumes on the thickening branch, so fog that was closing in keeps closing in', () => {
+      const { lighting, timing } = lit()
+      lighting.setFogDensity(0.5)
+      lighting.beginFogDrift(0)
+      const half = lighting.getFogFar()
+      lighting.stepFogDrift(timing.fogDriftPeriodMs * 0.05)
+      expect(lighting.getFogFar()).toBeLessThan(half)
+    })
+
+    it('never leaves the clear/murky band, whatever the clock says', () => {
+      const { lighting, timing } = lit()
+      lighting.beginFogDrift(0)
+      for (let t = -timing.fogDriftPeriodMs; t <= timing.fogDriftPeriodMs * 3; t += 5000) {
+        lighting.stepFogDrift(t)
+        expect(lighting.getFogFar()).toBeGreaterThanOrEqual(timing.fogFarMurky - 1e-9)
+        expect(lighting.getFogFar()).toBeLessThanOrEqual(timing.fogFarClear + 1e-9)
+      }
+    })
+
+    it('a shower that ends on a murky night hands back a clear one', () => {
+      const { lighting, timing } = lit()
+      lighting.beginFogDrift(0)
+      lighting.stepFogDrift(timing.fogDriftPeriodMs / 2)
+      expect(lighting.getFogFar()).toBeCloseTo(timing.fogFarMurky, 6)
+
+      // What the controller does when the rain goes off.
+      lighting.setFogDensity(0)
+      expect(lighting.getFogFar()).toBe(timing.fogFarClear)
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -399,12 +459,21 @@ describe('buildStreetProps (CW-16)', () => {
     withBlocker.dispose()
   })
 
-  it('hands back one obstacle per car and trunk, and none per canopy', () => {
+  it('hands back one obstacle per solid thing, and none per canopy', () => {
     const m = propsModel()
     const props = buildStreetProps(m, buildCollisionGrid(m))
 
+    // Everything a walker would bump into is here: parked cars, tree trunks,
+    // lamp posts, and since CW-19 the signal posts and the standing figures.
+    // FROZEN TRAFFIC IS DELIBERATELY ABSENT — a car standing in a travel lane
+    // is scenery, and walling off the lanes would turn the street into a maze
+    // (decided and recorded in CW-19). This count is what proves that.
     expect(props.obstacles).toHaveLength(
-      props.stats.carCount + props.stats.treeCount + props.stats.lampCount
+      props.stats.carCount +
+        props.stats.treeCount +
+        props.stats.lampCount +
+        props.trafficLights.count +
+        props.peopleCount
     )
     for (const o of props.obstacles) {
       expect(Number.isFinite(o.x)).toBe(true)
@@ -740,5 +809,254 @@ describe('buildCityGroup — signs and rooftop masts (CW-18)', () => {
 
     a.dispose()
     b.dispose()
+  })
+})
+
+describe('buildCityGroup — CW-24 the far city', () => {
+  /**
+   * The fog fades to BLACK, and only exact black reads as an empty cell, so
+   * every tower past 260 m was being deleted from the picture rather than
+   * pushed into the distance. Buildings now keep a floor of their own tone at
+   * any range; everything else must still vanish, because a dim carpet across
+   * the lower half of the frame is the recorded round-1 failure.
+   */
+  const shaderFor = (material) => {
+    const shader = {
+      uniforms: {},
+      fragmentShader:
+        '#include <fog_pars_fragment>\nvoid main(){\n#include <fog_fragment>\n}',
+    }
+    material.onBeforeCompile(shader)
+    return shader
+  }
+
+  it('gives the buildings a fog floor, and nothing else one', () => {
+    const { group, dispose } = buildCityGroup(model())
+
+    const buildings = group.children.find((c) => c.name === 'buildings')
+    expect(typeof buildings.material.onBeforeCompile).toBe('function')
+
+    for (const name of ['ground', 'roads', 'curbs']) {
+      const mesh = group.children.find((c) => c.name === name)
+      if (!mesh) continue
+      // An untouched material has three.js's own empty hook.
+      const patched = shaderFor(mesh.material)
+      expect(
+        patched.uniforms.uMaxFogFactor,
+        `${name} must keep the stock fog and fade to black`
+      ).toBeUndefined()
+    }
+
+    dispose()
+  })
+
+  it('clamps the fog factor below one, so far faces keep some tone', () => {
+    const { group, dispose } = buildCityGroup(model())
+    const buildings = group.children.find((c) => c.name === 'buildings')
+    const shader = shaderFor(buildings.material)
+
+    expect(shader.uniforms.uMaxFogFactor).toBeDefined()
+    const max = shader.uniforms.uMaxFogFactor.value
+    // Exactly 1 would be the stock fog: fully faded, i.e. exactly black,
+    // i.e. an empty cell — the whole defect this release exists to fix.
+    expect(max).toBeGreaterThan(0)
+    expect(max).toBeLessThan(1)
+    // The floor is a silhouette, not a haze: most of the fade must survive.
+    expect(max).toBeGreaterThan(0.5)
+
+    expect(shader.fragmentShader).toContain('uniform float uMaxFogFactor;')
+    expect(shader.fragmentShader).toContain('min( fogFactor, uMaxFogFactor )')
+    // The clamp has to come BEFORE the mix, or it changes nothing.
+    expect(shader.fragmentShader.indexOf('min( fogFactor')).toBeLessThan(
+      shader.fragmentShader.indexOf('mix( gl_FragColor.rgb, fogColor')
+    )
+
+    dispose()
+  })
+
+  it('keeps a distinct program cache key so the patch cannot be shared away', () => {
+    const { group, dispose } = buildCityGroup(model())
+    const buildings = group.children.find((c) => c.name === 'buildings')
+    expect(typeof buildings.material.customProgramCacheKey).toBe('function')
+    expect(buildings.material.customProgramCacheKey()).toContain(
+      'farSilhouette'
+    )
+    dispose()
+  })
+})
+
+describe('buildCityGroup — CW-25 letter-family facades', () => {
+  it('splits the buildings into one mesh per facade family', () => {
+    const { group, dispose } = buildCityGroup(model())
+    const meshes = group.children.filter((c) => c.name === 'buildings')
+    // The texture is a property of the material, so a facade look needs a
+    // mesh to carry it. Every one of them keeps the name the surface-class
+    // pass and the map-view swap both key on.
+    expect(meshes.length).toBeGreaterThan(1)
+    // Textures are painted on a canvas, which this environment does not have,
+    // so they all come back null here. What CAN be asserted without a canvas
+    // is that each family got its own material to hang a texture on.
+    const materials = meshes.map((m) => m.material)
+    expect(new Set(materials).size, 'two families share a material').toBe(
+      materials.length
+    )
+    const maps = materials.map((m) => m.map).filter(Boolean)
+    expect(new Set(maps).size, 'two families share a texture').toBe(maps.length)
+    dispose()
+  })
+
+  it('keeps every building, and counts them all exactly once', () => {
+    const { group, stats, dispose } = buildCityGroup(model())
+    const meshes = group.children.filter((c) => c.name === 'buildings')
+    const tris = meshes.reduce(
+      (n, m) => n + m.geometry.getAttribute('position').count / 3,
+      0
+    )
+    // Splitting geometry across meshes must not lose or duplicate any of it.
+    expect(tris).toBe(stats.buildingTriangles)
+    expect(tris).toBeGreaterThan(0)
+    dispose()
+  })
+
+  it('gives a building the same facade every time the city is built', () => {
+    const a = buildCityGroup(model())
+    const b = buildCityGroup(model())
+    const shape = (r) =>
+      r.group.children
+        .filter((c) => c.name === 'buildings')
+        .map((m) => m.geometry.getAttribute('position').count)
+    // Facade choice rides the same hash as the colour, so a tower keeps both
+    // for as long as the extract does.
+    expect(shape(a)).toEqual(shape(b))
+    a.dispose()
+    b.dispose()
+  })
+
+  it('strips the facade textures in map view and puts them back', () => {
+    const { group, setMapView, dispose } = buildCityGroup(model())
+    const meshes = group.children.filter((c) => c.name === 'buildings')
+    const before = meshes.map((m) => m.material.map)
+
+    setMapView(true)
+    for (const m of meshes) expect(m.material.map).toBeNull()
+
+    setMapView(false)
+    expect(meshes.map((m) => m.material.map)).toEqual(before)
+    dispose()
+  })
+})
+
+describe('trafficLightState (CW-19)', () => {
+  it('runs green, then amber, then red, and comes back round', () => {
+    const seen = new Set()
+    for (let t = 0; t < 20000; t += 100) seen.add(trafficLightState(t, 0))
+    expect([...seen].sort()).toEqual(['amber', 'green', 'red'])
+  })
+
+  it('holds every state for at least two seconds', () => {
+    // A state SWAP, never a strobe: WCAG 2.3.1 stays untriggered because
+    // nothing here can change faster than this.
+    let last = trafficLightState(0, 0)
+    let since = 0
+    for (let t = 100; t <= 60000; t += 100) {
+      const now = trafficLightState(t, 0)
+      if (now !== last) {
+        expect(since, `${last} lasted only ${since} ms`).toBeGreaterThanOrEqual(
+          2000
+        )
+        last = now
+        since = 0
+      }
+      since += 100
+    }
+  })
+
+  it('never lets both phases show green at once', () => {
+    // The whole point of a phase group: when this street goes, the cross
+    // street stops.
+    for (let t = 0; t < 30000; t += 50) {
+      const a = trafficLightState(t, 0)
+      const b = trafficLightState(t, 1)
+      expect(
+        a === 'green' && b === 'green',
+        `both phases green at ${t} ms`
+      ).toBe(false)
+      // Nor may both be mid-change at the same moment.
+      expect(a === 'amber' && b === 'amber').toBe(false)
+    }
+  })
+
+  it('is stable for a negative or huge elapsed time', () => {
+    expect(['red', 'amber', 'green']).toContain(trafficLightState(-5000, 0))
+    expect(['red', 'amber', 'green']).toContain(trafficLightState(1e9, 1))
+  })
+})
+
+describe('buildRain (CW-20)', () => {
+  const drops = (rain) => rain.group.children.filter((m) => m.visible)
+
+  it('starts dry, and shows more drops the heavier it gets', () => {
+    const rain = buildRain()
+    expect(rain.group.visible).toBe(false)
+    expect(drops(rain)).toHaveLength(0)
+
+    rain.setLevel(0)
+    const light = drops(rain).length
+    rain.setLevel(1)
+    const heavy = drops(rain).length
+    expect(light).toBeGreaterThan(0)
+    expect(heavy).toBeGreaterThan(light)
+
+    rain.setLevel(null)
+    expect(rain.group.visible).toBe(false)
+    expect(drops(rain)).toHaveLength(0)
+    rain.dispose()
+  })
+
+  it('recycles drops instead of allocating them', () => {
+    // The pool is built once at the heaviest size and only ever changes which
+    // drops are VISIBLE, so switching intensity mid-storm cannot stutter.
+    const rain = buildRain()
+    const total = rain.group.children.length
+    rain.setLevel(0)
+    rain.update(0.1, 0, 0)
+    rain.setLevel(1)
+    rain.update(0.1, 0, 0)
+    expect(rain.group.children).toHaveLength(total)
+    rain.dispose()
+  })
+
+  it('lifts a drop back to the top once it has fallen through', () => {
+    const rain = buildRain()
+    rain.setLevel(0)
+    // Long enough that every drop must have passed the bottom at least once.
+    for (let i = 0; i < 60; i++) rain.update(0.1, 0, 0)
+    for (const m of drops(rain)) {
+      expect(m.position.z).toBeGreaterThan(0)
+    }
+    rain.dispose()
+  })
+
+  it('keeps the rain around the player instead of leaving it behind', () => {
+    const rain = buildRain()
+    rain.setLevel(0)
+    rain.update(0.016, 0, 0)
+    rain.update(0.016, 400, -250)
+    // The box follows, so a player who walks across the city is still in it.
+    expect(rain.group.position.x).toBe(400)
+    expect(rain.group.position.y).toBe(-250)
+    for (const m of drops(rain)) {
+      expect(Math.abs(m.position.x)).toBeLessThanOrEqual(40)
+      expect(Math.abs(m.position.y)).toBeLessThanOrEqual(40)
+    }
+    rain.dispose()
+  })
+
+  it('does nothing at all while it is not raining', () => {
+    const rain = buildRain()
+    const before = rain.group.children.map((m) => m.position.z)
+    rain.update(1, 10, 10)
+    expect(rain.group.children.map((m) => m.position.z)).toEqual(before)
+    rain.dispose()
   })
 })

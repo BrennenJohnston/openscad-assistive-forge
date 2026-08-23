@@ -54,6 +54,7 @@ import {
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { pointInRing } from './walk-controls.js';
+import { buildRoadGraph, trafficDensityFor } from './city-data.js';
 
 // Per-view road treatment. Any visible SURFACE tone carpets the lower half
 // of the street view — perspective stacks every road between here and the
@@ -303,11 +304,34 @@ function makeRepeatingTexture(canvas, repeatX, repeatY, offsetY = 0) {
 }
 
 /**
- * Window-grid wall texture: lit window rectangles on dark grout, one 4×3-bay
+ * The letter families a facade's windows can be cut from (CW-25).
+ *
+ * Every building wore the same rectangular window, so once the converter had
+ * turned a frame into characters one tower's wall was indistinguishable from
+ * the next: colour told them apart but TEXTURE did not. Each family gives its
+ * buildings a differently-shaped lit pane, which is variation the sampler can
+ * actually see.
+ *
+ * These are SHAPES, not writing. The letters are chosen for how they fill a
+ * window bay — an X reads as a cross-braced pane, an O as a round one — and a
+ * wall built from one repeated letter carries no more meaning than a brick
+ * bond does. Readable text through the converter stays impossible; that is a
+ * recorded limitation, not something this is sneaking up on.
+ *
+ * `null` is the plain rectangular pane the city has always had, kept as a
+ * family so a share of the buildings still look exactly as they did.
+ */
+const WINDOW_LETTER_FAMILIES = [null, 'X', 'O', '8', 'H', 'Z', 'M', 'A'];
+
+/**
+ * Window-grid wall texture: lit window shapes on dark grout, one 4×3-bay
  * tile with a deterministic quarter of the windows gone dark.
+ *
+ * @param {string|null} [family] - the letter this facade's panes are cut
+ *   from, or null for the plain rectangular pane
  * @returns {CanvasTexture|null}
  */
-function createWindowTexture() {
+function createWindowTexture(family = null) {
   const bayW = 96;
   const bayH = 72;
   const c = make2dContext(bayW * WINDOW_TILE_BAYS_X, bayH * WINDOW_TILE_BAYS_Y);
@@ -317,7 +341,17 @@ function createWindowTexture() {
   ctx.fillStyle = '#101010';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  const rand = makeLcg(0xc17b0011);
+  if (family) {
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `bold ${Math.round(bayH * 0.62)}px monospace`;
+  }
+
+  // Seeded per family, so a family always paints the same wall and no two
+  // families share a lit/dark pattern that would give them away as the same
+  // texture in different clothes.
+  const familySeed = Math.max(0, WINDOW_LETTER_FAMILIES.indexOf(family));
+  const rand = makeLcg(0xc17b0011 + familySeed * 0x9e37);
   for (let by = 0; by < WINDOW_TILE_BAYS_Y; by++) {
     for (let bx = 0; bx < WINDOW_TILE_BAYS_X; bx++) {
       const x0 = bx * bayW;
@@ -325,6 +359,17 @@ function createWindowTexture() {
       const dark = rand() < 0.25;
       ctx.fillStyle = dark ? '#2c2c2c' : '#dcdcdc';
       ctx.fillRect(x0 + bayW * 0.2, y0 + bayH * 0.2, bayW * 0.6, bayH * 0.56);
+      if (family) {
+        // The letter is CUT OUT of the lit pane rather than drawn on the dark
+        // wall. Drawn, a thin glyph replaces a solid lit rectangle with a few
+        // strokes and the whole facade goes dark — photographed, buildings
+        // stopped reading as lit at all. Cut out, the pane keeps its brightness
+        // and the family shows as the shape of its glazing bars.
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.fillText(family, x0 + bayW * 0.5, y0 + bayH * 0.48);
+        ctx.globalCompositeOperation = 'source-over';
+        continue;
+      }
       // Center mullion splits each window into two panes.
       ctx.fillStyle = '#101010';
       ctx.fillRect(x0 + bayW * 0.48, y0 + bayH * 0.2, bayW * 0.04, bayH * 0.56);
@@ -473,6 +518,157 @@ function extrudeBuilding(building, tint, options = {}) {
 
   paintGeometry(geometry, tint);
 
+  return geometry;
+}
+
+// CW-26 roofs. Only these three become geometry. Each has an exact
+// construction a walker can recognise on a skyline; round, dome, mansard,
+// skillion and the rest keep their flat top rather than being guessed at,
+// because a wrong roof reads worse than no roof.
+const ROOF_SHAPES_BUILT = new Set(['pyramidal', 'gabled', 'hipped']);
+
+// A gable needs a ridge, and a ridge needs to know which way the building
+// runs. That question only has an honest answer when the footprint really is
+// a rectangle, so anything baggier than this keeps its flat top.
+const ROOF_RECT_FILL_MIN = 0.85;
+
+/** Unsigned shoelace area of a projected ring. */
+function ringAreaM2(ring) {
+  let sum = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    sum += ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
+  }
+  return Math.abs(sum / 2);
+}
+
+/**
+ * Smallest-area oriented bounding box of a ring, swept in one-degree steps.
+ * Exact enough to place a ridge and far less code than rotating calipers.
+ *
+ * @param {Array<[number,number]>} ring
+ * @returns {{area:number,c:number,s:number,minU:number,maxU:number,minV:number,maxV:number}|null}
+ */
+function orientedBox(ring) {
+  let best = null;
+  for (let deg = 0; deg < 90; deg++) {
+    const a = (deg * Math.PI) / 180;
+    const c = Math.cos(a);
+    const s = Math.sin(a);
+    let minU = Infinity;
+    let maxU = -Infinity;
+    let minV = Infinity;
+    let maxV = -Infinity;
+    for (const [x, y] of ring) {
+      const u = x * c + y * s;
+      const v = -x * s + y * c;
+      if (u < minU) minU = u;
+      if (u > maxU) maxU = u;
+      if (v < minV) minV = v;
+      if (v > maxV) maxV = v;
+    }
+    const area = (maxU - minU) * (maxV - minV);
+    if (best === null || area < best.area) {
+      best = { area, c, s, minU, maxU, minV, maxV };
+    }
+  }
+  return best && best.area > 0 ? best : null;
+}
+
+/**
+ * A sloped roof solid standing on a volume's footprint, or null when the
+ * shape is not one we build or the footprint cannot carry an honest ridge.
+ * The body below has already been shortened by the roof's height, so this
+ * caps it rather than sitting on top of a full-height box.
+ *
+ * @param {Object} volume - a building or building:part, carrying .roof
+ * @param {[number, number, number]} tint
+ * @returns {BufferGeometry|null}
+ */
+function roofGeometry(volume, tint) {
+  const roof = volume.roof;
+  if (!roof || !ROOF_SHAPES_BUILT.has(roof.shape)) return null;
+  const ring = volume.outer;
+  if (!Array.isArray(ring) || ring.length < 3) return null;
+
+  const topZ = volume.heightM;
+  const baseZ = topZ - roof.heightM;
+  if (!(baseZ > volume.minHeightM)) return null;
+
+  const tris = [];
+  const push = (a, b, c) => {
+    tris.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
+  };
+
+  if (roof.shape === 'pyramidal') {
+    // Exact for ANY polygon: every footprint edge rises to one apex.
+    let cx = 0;
+    let cy = 0;
+    for (const [x, y] of ring) {
+      cx += x;
+      cy += y;
+    }
+    const apex = [cx / ring.length, cy / ring.length, topZ];
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      push(
+        [ring[j][0], ring[j][1], baseZ],
+        [ring[i][0], ring[i][1], baseZ],
+        apex
+      );
+    }
+  } else {
+    const box = orientedBox(ring);
+    if (!box) return null;
+    if (ringAreaM2(ring) / box.area < ROOF_RECT_FILL_MIN) return null;
+
+    const { c, s, minU, maxU, minV, maxV } = box;
+    // The ridge runs along the LONG axis unless the mapper said otherwise.
+    let alongU = maxU - minU >= maxV - minV;
+    if (roof.orientation === 'across') alongU = !alongU;
+
+    // One construction serves both axes: p runs along the ridge, q across it.
+    const at = alongU
+      ? (p, q, z) => [p * c - q * s, p * s + q * c, z]
+      : (p, q, z) => [q * c - p * s, q * s + p * c, z];
+    const p0 = alongU ? minU : minV;
+    const p1 = alongU ? maxU : maxV;
+    const q0 = alongU ? minV : minU;
+    const q1 = alongU ? maxV : maxU;
+
+    const qMid = (q0 + q1) / 2;
+    // A hip pulls the ridge in by half the width at each end; a gable does
+    // not, which leaves its ends vertical triangles instead of slopes.
+    const inset =
+      roof.shape === 'hipped'
+        ? Math.min((q1 - q0) / 2, (p1 - p0) / 2 - 0.01)
+        : 0;
+
+    const r0 = at(p0 + inset, qMid, topZ);
+    const r1 = at(p1 - inset, qMid, topZ);
+    const c00 = at(p0, q0, baseZ);
+    const c10 = at(p1, q0, baseZ);
+    const c11 = at(p1, q1, baseZ);
+    const c01 = at(p0, q1, baseZ);
+
+    push(c00, c10, r1);
+    push(c00, r1, r0);
+    push(c11, c01, r0);
+    push(c11, r0, r1);
+    push(c10, c11, r1);
+    push(c01, c00, r0);
+  }
+
+  if (tris.length === 0) return null;
+  const geometry = new BufferGeometry();
+  const position = new Float32Array(tris);
+  geometry.setAttribute('position', new BufferAttribute(position, 3));
+  // The buildings merge as one geometry, so the attribute set has to match
+  // what ExtrudeGeometry produces or mergeGeometries refuses the batch.
+  geometry.setAttribute(
+    'uv',
+    new BufferAttribute(new Float32Array((position.length / 3) * 2), 2)
+  );
+  geometry.computeVertexNormals();
+  paintGeometry(geometry, tint);
   return geometry;
 }
 
@@ -733,21 +929,84 @@ function antennaHeightCutoff(buildings) {
  *   stats: {buildingTriangles: number, storefrontTriangles: number, roadTriangles: number, signCount: number, antennaCount: number, dressingTriangles: number}
  * }}
  */
+/**
+ * How much of a building face survives the fog at any distance (CW-24).
+ *
+ * The fog fades to BLACK at 260 m, and only EXACT black reads as an empty
+ * cell (the CW-1 finding), so every tower past the fog was being deleted from
+ * the picture rather than pushed into the distance — the middle of the frame
+ * came out as a void while the bake holds real geometry out to 707 m.
+ *
+ * Clamping the fog factor leaves this fraction of the lit surface behind at
+ * any distance, so a far tower is a dim silhouette instead of a hole. Only
+ * the BUILDINGS get this: ground, roads and curbs must still vanish, because
+ * a dim carpet across the lower half of the frame is the recorded round-1
+ * failure and perspective stacks every road between here and the horizon into
+ * a few rows of cells.
+ */
+const FAR_SILHOUETTE_KEEP = 0.14;
+
+/**
+ * Give a material a fog FLOOR: it fogs normally with distance, then stops.
+ *
+ * three.js has no such knob, so this rewrites the stock fog chunk. The stock
+ * chunk computes a fog factor and mixes to the fog colour; this one clamps
+ * that factor first. Both fog kinds are handled because the chunk is replaced
+ * whole and the scene's fog kind is not this function's business to assume.
+ *
+ * @param {import('three').Material} material
+ * @param {number} [keep] - fraction of the surface that survives at any range
+ */
+function applyFarSilhouetteFog(material, keep = FAR_SILHOUETTE_KEEP) {
+  const maxFactor = Math.max(0, Math.min(1, 1 - keep));
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uMaxFogFactor = { value: maxFactor };
+    // Kept reachable so the floor can be measured and tuned against a live
+    // frame: writing the uniform takes effect on the next draw, where
+    // changing the constant would mean a rebuild and a different session.
+    material.userData.maxFogFactor = shader.uniforms.uMaxFogFactor;
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <fog_pars_fragment>',
+        '#include <fog_pars_fragment>\nuniform float uMaxFogFactor;'
+      )
+      .replace(
+        '#include <fog_fragment>',
+        `#ifdef USE_FOG
+          #ifdef FOG_EXP2
+            float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
+          #else
+            float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );
+          #endif
+          fogFactor = min( fogFactor, uMaxFogFactor );
+          gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );
+        #endif`
+      );
+  };
+  // Materials that compile differently must not share a cached program.
+  material.customProgramCacheKey = () => `farSilhouette:${maxFactor}`;
+}
+
 export function buildCityGroup(model) {
   const group = new Group();
   group.name = 'ascii-city';
   const disposables = [];
 
-  const windowTexture = createWindowTexture();
+  // CW-25: one window texture per letter family. Painted at runtime, so eight
+  // facade looks cost nothing in the bundle.
+  const windowTextures = WINDOW_LETTER_FAMILIES.map((f) =>
+    createWindowTexture(f)
+  );
   const storefrontTexture = createStorefrontTexture();
   const groundTexture = createGroundTexture();
-  for (const t of [windowTexture, storefrontTexture, groundTexture]) {
+  for (const t of [...windowTextures, storefrontTexture, groundTexture]) {
     if (t) disposables.push(t);
   }
 
-  // Buildings — one merged, vertex-tinted, window-textured mesh, dressed with
-  // the CW-18 signs and rooftop masts.
-  const buildingGeoms = [];
+  // Buildings — merged, vertex-tinted, window-textured meshes, dressed with
+  // the CW-18 signs and rooftop masts. One mesh per letter family (CW-25):
+  // the texture is per-material, so a facade look means a mesh to carry it.
+  const buildingGeoms = WINDOW_LETTER_FAMILIES.map(() => []);
   const storefrontGeoms = [];
   const signOut = { plates: [], faces: [] };
   const roadIndex = makePointGrid(SIGN_ROAD_CELL_M);
@@ -763,9 +1022,34 @@ export function buildCityGroup(model) {
   model.buildings.forEach((building, index) => {
     const h = hashBuilding(index, building.name);
     const tint = buildingTint(index, building.name);
-    const geom = extrudeBuilding(building, tint);
-    if (!geom) return;
-    buildingGeoms.push(geom);
+    // CW-26: where the parts really are the mass (they cover the outline)
+    // they REPLACE it - extruding the outline as well would bury them inside
+    // a plain box, the very thing Simple 3D Buildings exists to avoid. Where
+    // they merely sit on it, BOTH are drawn, or a turret mapped onto a plain
+    // hall would delete the hall and leave the turret hanging. Collision is
+    // untouched either way: it reads outlines and never parts.
+    const volumes = building.partsAreMass
+      ? building.parts
+      : [building, ...(building.parts ?? [])];
+    let anyGeom = false;
+    for (const volume of volumes) {
+      // A pitched roof CAPS its volume rather than sitting on top of it: the
+      // body is shortened by exactly what the roof occupies, so the building
+      // still finishes at its tagged height.
+      const roof = roofGeometry(volume, tint);
+      const body = roof
+        ? { ...volume, heightM: volume.heightM - volume.roof.heightM }
+        : volume;
+      const geom = extrudeBuilding(body, tint);
+      if (!geom && !roof) continue;
+      // The same hash that fixes a building's colour fixes its facade, so a
+      // tower keeps both for as long as the extract does.
+      const bucket = buildingGeoms[h % WINDOW_LETTER_FAMILIES.length];
+      if (geom) bucket.push(geom);
+      if (roof) bucket.push(roof);
+      anyGeom = true;
+    }
+    if (!anyGeom) return;
 
     // Grounded buildings tall enough to have an upstairs get the lit
     // storefront strip; elevated parts (skybridges) do not.
@@ -859,21 +1143,27 @@ export function buildCityGroup(model) {
   });
 
   let buildingTriangles = 0;
-  let buildingsMat = null;
-  if (buildingGeoms.length > 0) {
-    const merged = mergeGeometries(buildingGeoms, false);
-    for (const geom of buildingGeoms) geom.dispose();
-    buildingsMat = new MeshLambertMaterial({
+  // One entry per family that actually got buildings; every mesh keeps the
+  // name 'buildings', which is what the surface-class pass (CW-23) and the
+  // map-view swap below both key on.
+  const buildingMats = [];
+  buildingGeoms.forEach((geoms, familyIndex) => {
+    if (geoms.length === 0) return;
+    const merged = mergeGeometries(geoms, false);
+    for (const geom of geoms) geom.dispose();
+    const material = new MeshLambertMaterial({
       color: 0xffffff,
-      map: windowTexture ?? null,
+      map: windowTextures[familyIndex] ?? null,
       vertexColors: true,
     });
-    const mesh = new Mesh(merged, buildingsMat);
+    applyFarSilhouetteFog(material);
+    const mesh = new Mesh(merged, material);
     mesh.name = 'buildings';
     group.add(mesh);
-    disposables.push(merged, buildingsMat);
-    buildingTriangles = merged.getAttribute('position').count / 3;
-  }
+    disposables.push(merged, material);
+    buildingMats.push({ material, texture: windowTextures[familyIndex] });
+    buildingTriangles += merged.getAttribute('position').count / 3;
+  });
 
   let storefrontTriangles = 0;
   if (storefrontGeoms.length > 0) {
@@ -1021,9 +1311,9 @@ export function buildCityGroup(model) {
       }
       if (curbMesh) curbMesh.visible = !isMap;
       for (const mesh of dressingMeshes) mesh.visible = !isMap;
-      if (buildingsMat) {
-        buildingsMat.map = isMap ? null : (windowTexture ?? null);
-        buildingsMat.needsUpdate = true;
+      for (const { material, texture } of buildingMats) {
+        material.map = isMap ? null : (texture ?? null);
+        material.needsUpdate = true;
       }
       groundMat.map = isMap ? null : (groundTexture ?? null);
       if (!groundTexture || isMap) groundMat.color.setHex(0x000000);
@@ -1064,6 +1354,210 @@ const CAR_MIN_GAP_M = 5;
 // Cars park along ordinary streets. Motorways, trunks and primaries get none:
 // nobody leaves a car on an arterial, and their ribbons carry the through
 // traffic CW-19 will animate.
+// Frozen traffic (CW-19). Cars standing ON the travel lanes, in faux
+// movement: placed along the lane and turned to face the way they would be
+// going. Nothing about them moves — the round's directive is that everything
+// movement-capable ships time-frozen — and the seam that decides HOW MANY is
+// trafficDensityFor(), so a future live source or a re-bake that keeps lane
+// counts plugs in there rather than here.
+//
+// They do NOT block the player. That is a decision, recorded: a frozen car is
+// scenery, and walling off a travel lane with invisible obstacles would make
+// the street feel like a maze. Parked cars keep their collision, because they
+// stand where a walker actually goes.
+// Silhouette people (CW-19).
+//
+// The owner's recorded dislike of the reference is its people: two coloured
+// blobs read as debris rather than as anyone. A figure through this converter
+// is a SHAPE — a dark cutout against a lit shopfront, or a lit form against
+// the dark street — so what it needs is an outline a person recognises, which
+// two boxes cannot give. These are built from head, shoulders, torso, two
+// arms and two legs: seven small boxes, cheap enough to merge with everything
+// else and specific enough to read as a human at a few character cells.
+//
+// They are static, like the traffic. Placement is stamped into collision the
+// way trees are, because a person standing on the pavement is furniture the
+// player should walk around rather than through.
+const PERSON_HEIGHT_M = 1.72;
+const PERSON_HEAD_M = 0.2;
+const PERSON_SHOULDER_W_M = 0.46;
+const PERSON_TORSO_W_M = 0.34;
+const PERSON_DEPTH_M = 0.24;
+const PERSON_LEG_W_M = 0.13;
+const PERSON_ARM_W_M = 0.1;
+// Skin and clothing are irrelevant here; what matters is that a person is
+// BRIGHTER than the pavement and dimmer than a lit sign, so they read as a
+// figure in front of things rather than as part of them.
+const PERSON_TINT = [0.82, 0.82, 0.82];
+const PERSON_DARK_TINT = [0.5, 0.5, 0.5];
+// One figure every so many metres of shopfront-facing pavement.
+const PERSON_SPACING_M = 26;
+const PERSON_MIN_GAP_M = 3;
+const PERSON_CURB_OFFSET_M = 1.1;
+const DOG_HEIGHT_M = 0.45;
+const DOG_LENGTH_M = 0.6;
+const DOG_WIDTH_M = 0.2;
+
+/**
+ * One standing figure, as a list of boxes in world space.
+ *
+ * The stride swings the legs and the opposite arms, which is what makes a
+ * frozen figure read as caught mid-step rather than as a mannequin. At 0 the
+ * figure stands still.
+ *
+ * @param {number} x
+ * @param {number} y
+ * @param {number} facingRad
+ * @param {number} stride - -1..1, how far through a step the figure is frozen
+ * @returns {import('three').BufferGeometry[]}
+ */
+function makePersonGeoms(x, y, facingRad, stride) {
+  const out = [];
+  const cos = Math.cos(facingRad);
+  const sin = Math.sin(facingRad);
+  // Along the facing direction (a step goes forward), and across it (limbs
+  // sit left and right).
+  const fwd = (d) => [x + cos * d, y + sin * d];
+  const side = (d) => [-sin * d, cos * d];
+
+  const legH = PERSON_HEIGHT_M * 0.47;
+  const torsoH = PERSON_HEIGHT_M * 0.3;
+  const torsoZ = legH + torsoH / 2;
+  const headZ = PERSON_HEIGHT_M - PERSON_HEAD_M / 2;
+
+  // Legs: one forward, one back, by the stride.
+  for (const lr of [-1, 1]) {
+    const swing = stride * 0.28 * lr;
+    const [lx, ly] = fwd(swing);
+    const [ox, oy] = side(PERSON_LEG_W_M * 0.85 * lr);
+    out.push(
+      makeBox(
+        PERSON_LEG_W_M + Math.abs(swing) * 0.5,
+        PERSON_LEG_W_M,
+        legH,
+        lx + ox,
+        ly + oy,
+        legH / 2,
+        facingRad,
+        PERSON_DARK_TINT
+      )
+    );
+  }
+
+  out.push(
+    makeBox(
+      PERSON_DEPTH_M,
+      PERSON_TORSO_W_M,
+      torsoH,
+      x,
+      y,
+      torsoZ,
+      facingRad,
+      PERSON_TINT
+    )
+  );
+  // Shoulders: a little wider than the torso, at the top of it — the line
+  // that separates a person from a post.
+  out.push(
+    makeBox(
+      PERSON_DEPTH_M * 0.9,
+      PERSON_SHOULDER_W_M,
+      PERSON_HEIGHT_M * 0.08,
+      x,
+      y,
+      legH + torsoH - PERSON_HEIGHT_M * 0.02,
+      facingRad,
+      PERSON_TINT
+    )
+  );
+  // Arms swing opposite the legs.
+  for (const lr of [-1, 1]) {
+    const swing = -stride * 0.22 * lr;
+    const [ax, ay] = fwd(swing);
+    const [ox, oy] = side((PERSON_SHOULDER_W_M / 2) * lr);
+    out.push(
+      makeBox(
+        PERSON_ARM_W_M + Math.abs(swing) * 0.4,
+        PERSON_ARM_W_M,
+        torsoH * 0.92,
+        ax + ox,
+        ay + oy,
+        torsoZ,
+        facingRad,
+        PERSON_DARK_TINT
+      )
+    );
+  }
+  out.push(
+    makeBox(
+      PERSON_HEAD_M,
+      PERSON_HEAD_M,
+      PERSON_HEAD_M,
+      x,
+      y,
+      headZ,
+      facingRad,
+      PERSON_TINT
+    )
+  );
+  return out;
+}
+
+/**
+ * A dog on a lead beside its walker: a low body, four short legs and a head.
+ */
+function makeDogGeoms(x, y, facingRad) {
+  const out = [];
+  const bodyZ = DOG_HEIGHT_M * 0.62;
+  out.push(
+    makeBox(
+      DOG_LENGTH_M,
+      DOG_WIDTH_M,
+      DOG_HEIGHT_M * 0.42,
+      x,
+      y,
+      bodyZ,
+      facingRad,
+      PERSON_DARK_TINT
+    )
+  );
+  const cos = Math.cos(facingRad);
+  const sin = Math.sin(facingRad);
+  out.push(
+    makeBox(
+      DOG_WIDTH_M,
+      DOG_WIDTH_M,
+      DOG_WIDTH_M,
+      x + cos * DOG_LENGTH_M * 0.5,
+      y + sin * DOG_LENGTH_M * 0.5,
+      DOG_HEIGHT_M * 0.86,
+      facingRad,
+      PERSON_TINT
+    )
+  );
+  for (const along of [0.34, -0.34]) {
+    for (const across of [0.5, -0.5]) {
+      out.push(
+        makeBox(
+          0.07,
+          0.07,
+          bodyZ,
+          x + cos * DOG_LENGTH_M * along - sin * DOG_WIDTH_M * across,
+          y + sin * DOG_LENGTH_M * along + cos * DOG_WIDTH_M * across,
+          bodyZ / 2,
+          facingRad,
+          PERSON_DARK_TINT
+        )
+      );
+    }
+  }
+  return out;
+}
+
+const TRAFFIC_LANE_INSET_M = 1.6;
+const TRAFFIC_MIN_SPACING_M = 9;
+const TRAFFIC_END_MARGIN_M = 6;
+
 const CAR_ROAD_KINDS = new Set([
   'residential',
   'tertiary',
@@ -1146,6 +1640,62 @@ const LAMP_HEAD_REACH_M = 0.5;
 // nothing under it - proved by hiding the two lamp meshes and watching the box
 // go. It is neutral on purpose too, so the high-contrast quantizer files a
 // steel post with the curbs and the pavement instead of tinting it cyan.
+// ---------------------------------------------------------------------------
+// Traffic lights (CW-19)
+// ---------------------------------------------------------------------------
+// A signal is a pole with THREE stacked heads, of which exactly one is lit —
+// the reference's look, and the shape a player reads as a traffic light even
+// at a few character cells. The world is time-frozen by the round's standing
+// directive, and these are the one exception the owner signed: a light that
+// never changes is not a traffic light.
+//
+// The lit head is a flat, unlit colour rather than a shaded surface, because a
+// signal EMITS. The dark heads are a dim grey rather than black: only exact
+// black reads as an empty cell, and a head that vanishes leaves the lit one
+// floating with nothing under it — the same failure the lamp posts hit in
+// CW-18 and were fixed for.
+const LIGHT_POLE_SIDE_M = 0.14;
+const LIGHT_POLE_HEIGHT_M = 4.2;
+const LIGHT_HEAD_SIZE_M = 0.34;
+const LIGHT_HEAD_DEPTH_M = 0.22;
+const LIGHT_HEAD_PITCH_M = 0.42;
+const LIGHT_HEAD_BASE_Z_M = 3.0;
+// Clear of the curb ribbon and of anything the street furniture already holds.
+const LIGHT_CURB_OFFSET_M = 1.2;
+const LIGHT_MIN_GAP_M = 6;
+const LIGHT_TINTS = {
+  red: [1, 0.13, 0.1],
+  amber: [1, 0.62, 0.05],
+  green: [0.13, 1, 0.28],
+  dark: [0.17, 0.17, 0.17],
+};
+// Two phase groups, so the cross street is red while this one is green.
+const LIGHT_PHASE_COUNT = 2;
+// >= 2 s per state keeps this a state SWAP and nowhere near WCAG 2.3.1's
+// flash threshold. Green is the long one, amber the brief one, and a phase
+// spends the rest of the cycle red while the other phase runs.
+const LIGHT_GREEN_MS = 5000;
+const LIGHT_AMBER_MS = 2000;
+const LIGHT_CYCLE_MS = (LIGHT_GREEN_MS + LIGHT_AMBER_MS) * LIGHT_PHASE_COUNT;
+
+/**
+ * Which head is lit for a phase group at a moment in the cycle.
+ *
+ * @param {number} elapsedMs
+ * @param {number} phase - 0..LIGHT_PHASE_COUNT-1
+ * @returns {'red'|'amber'|'green'}
+ */
+export function trafficLightState(elapsedMs, phase) {
+  const cycle =
+    ((elapsedMs % LIGHT_CYCLE_MS) + LIGHT_CYCLE_MS) % LIGHT_CYCLE_MS;
+  const slot = (LIGHT_GREEN_MS + LIGHT_AMBER_MS) * phase;
+  const since =
+    (((cycle - slot) % LIGHT_CYCLE_MS) + LIGHT_CYCLE_MS) % LIGHT_CYCLE_MS;
+  if (since < LIGHT_GREEN_MS) return 'green';
+  if (since < LIGHT_GREEN_MS + LIGHT_AMBER_MS) return 'amber';
+  return 'red';
+}
+
 const POLE_TINT = [0.45, 0.45, 0.45];
 const LAMP_HEAD_TINT = [0.97, 0.97, 0.97];
 
@@ -1257,6 +1807,11 @@ export function buildStreetProps(model, collision = null) {
   const trunkGeoms = [];
   const canopyGeoms = [];
   const carGeoms = [];
+  const trafficGeoms = [];
+  let trafficCount = 0;
+  const personGeoms = [];
+  let personCount = 0;
+  const personSpots = makePointGrid(PROP_SPATIAL_CELL_M);
   const poleGeoms = [];
   const lampHeadGeoms = [];
 
@@ -1327,7 +1882,21 @@ export function buildStreetProps(model, collision = null) {
     const lampRng = LAMP_ROAD_KINDS.has(road.kind)
       ? makeLcg(hashBuilding(roadIndex, road.kind + ':lamps'))
       : null;
-    if (!treeRng && !carRng && !lampRng) return;
+    const trafficDensity = trafficDensityFor(road);
+    const trafficRng =
+      trafficDensity > 0
+        ? makeLcg(hashBuilding(roadIndex, road.kind + ':traffic'))
+        : null;
+    // Cars per kilometre becomes metres between cars, floored so a busy
+    // arterial does not end up bumper to bumper.
+    const trafficSpacingM = Math.max(
+      TRAFFIC_MIN_SPACING_M,
+      trafficDensity > 0 ? 1000 / trafficDensity : Infinity
+    );
+    const peopleRng = LAMP_ROAD_KINDS.has(road.kind)
+      ? makeLcg(hashBuilding(roadIndex, road.kind + ':people'))
+      : null;
+    if (!treeRng && !carRng && !lampRng && !trafficRng && !peopleRng) return;
 
     const occupancy =
       CAR_OCCUPANCY_MIN +
@@ -1340,6 +1909,13 @@ export function buildStreetProps(model, collision = null) {
     // side carry ACROSS segments: OSM splits a street into many short
     // segments, and restarting the spacing at each vertex would stand a lamp
     // at every bend.
+    let peopleCursor = peopleRng ? peopleRng() * PERSON_SPACING_M : 0;
+    const trafficCursor = trafficRng
+      ? [
+          TRAFFIC_END_MARGIN_M + trafficRng() * trafficSpacingM,
+          TRAFFIC_END_MARGIN_M + trafficRng() * trafficSpacingM,
+        ]
+      : [0, 0];
     let lampCursor = lampRng
       ? LAMP_END_MARGIN_M + lampRng() * LAMP_SPACING_M
       : 0;
@@ -1359,6 +1935,111 @@ export function buildStreetProps(model, collision = null) {
       const nx = -uy;
       const ny = ux;
       const angle = Math.atan2(dy, dx);
+
+      if (peopleRng) {
+        // People stand on the pavement, on the shopfront side, facing the
+        // street or along it — where a person waiting or walking would be.
+        let cursor = peopleCursor;
+        while (cursor <= len) {
+          const along = cursor;
+          cursor += PERSON_SPACING_M * (0.5 + peopleRng() * 1.1);
+          const walkSide = peopleRng() < 0.5 ? -1 : 1;
+          const offset = road.widthM / 2 + PERSON_CURB_OFFSET_M;
+          const px = x1 + ux * along + nx * offset * walkSide;
+          const py = y1 + uy * along + ny * offset * walkSide;
+          if (!inCore(px, py)) continue;
+          if (isBlocked(px, py)) continue;
+          if (treeSpots.occupied(px, py, PERSON_MIN_GAP_M)) continue;
+          if (lampSpots.occupied(px, py, PERSON_MIN_GAP_M)) continue;
+          if (personSpots.occupied(px, py, PERSON_MIN_GAP_M)) continue;
+
+          const roll = peopleRng();
+          // Along the pavement, or turned a quarter to face the shopfronts.
+          const facing =
+            angle +
+            (roll < 0.25 ? Math.PI / 2 : 0) +
+            (walkSide < 0 ? Math.PI : 0);
+          // Most are frozen mid-stride; a quarter simply stand.
+          const stride = roll < 0.25 ? 0 : (peopleRng() * 2 - 1) * 0.9;
+          personGeoms.push(...makePersonGeoms(px, py, facing, stride));
+          personCount++;
+          // Roughly one walker in six has a dog a pace ahead.
+          if (peopleRng() < 0.17) {
+            const dx2 = px + Math.cos(facing) * 0.85;
+            const dy2 = py + Math.sin(facing) * 0.85;
+            if (inCore(dx2, dy2) && !isBlocked(dx2, dy2)) {
+              personGeoms.push(...makeDogGeoms(dx2, dy2, facing));
+            }
+          }
+          personSpots.add(px, py);
+          obstacles.push({
+            x: px,
+            y: py,
+            halfLengthM: PERSON_DEPTH_M / 2,
+            halfWidthM: PERSON_SHOULDER_W_M / 2,
+            rotationRad: facing,
+          });
+        }
+        peopleCursor = Math.max(0, cursor - len);
+      }
+
+      if (trafficRng) {
+        // Both directions: one lane each side of the centreline, each facing
+        // the way that lane runs.
+        for (const dir of [1, -1]) {
+          let cursor = trafficCursor[dir > 0 ? 0 : 1];
+          while (cursor <= len) {
+            const along = cursor;
+            cursor += trafficSpacingM * (0.7 + trafficRng() * 0.6);
+            const lane = road.widthM / 2 - TRAFFIC_LANE_INSET_M;
+            if (lane <= 0.5) break;
+            const x = x1 + ux * along + nx * lane * dir;
+            const y = y1 + uy * along + ny * lane * dir;
+            if (!inCore(x, y)) continue;
+            if (isBlocked(x, y)) continue;
+            if (carSpots.occupied(x, y, CAR_MIN_GAP_M)) continue;
+            const seed = Math.floor(trafficRng() * 0xffff);
+            const tier = CAR_TIERS[seed % CAR_TIERS.length];
+            const hue = TINT_HUES_DEG[(seed >>> 5) % TINT_HUES_DEG.length];
+            const heading = dir > 0 ? angle : angle + Math.PI;
+            const bodyTint = tintOf(tier, hue, CAR_CHROMA);
+            const cabinTint = tintOf(
+              Math.min(1, tier + CAR_CABIN_LIFT),
+              hue,
+              CAR_CHROMA
+            );
+            trafficGeoms.push(
+              makeBox(
+                CAR_LENGTH_M,
+                CAR_WIDTH_M,
+                CAR_BODY_HEIGHT_M,
+                x,
+                y,
+                CAR_BODY_HEIGHT_M / 2,
+                heading,
+                bodyTint
+              )
+            );
+            const cabinLen = CAR_LENGTH_M - CAR_CABIN_INSET_M * 2;
+            const cabinBottom = CAR_BODY_HEIGHT_M - 0.05;
+            const cabinH = CAR_HEIGHT_M - cabinBottom;
+            trafficGeoms.push(
+              makeBox(
+                cabinLen,
+                CAR_WIDTH_M - 0.2,
+                cabinH,
+                x - ux * (CAR_CABIN_INSET_M / 2) * dir,
+                y - uy * (CAR_CABIN_INSET_M / 2) * dir,
+                cabinBottom + cabinH / 2,
+                heading,
+                cabinTint
+              )
+            );
+            trafficCount++;
+          }
+          trafficCursor[dir > 0 ? 0 : 1] = Math.max(0, cursor - len);
+        }
+      }
 
       if (lampRng) {
         while (lampCursor <= len) {
@@ -1557,11 +2238,167 @@ export function buildStreetProps(model, collision = null) {
   addMerged(trunkGeoms, 'tree-trunks', propMaterial());
   addMerged(canopyGeoms, 'tree-canopies', propMaterial());
   addMerged(carGeoms, 'cars', propMaterial());
+  addMerged(trafficGeoms, 'traffic-cars', propMaterial());
+  addMerged(personGeoms, 'people', propMaterial());
   addMerged(poleGeoms, 'lamp-poles', propMaterial());
   addMerged(lampHeadGeoms, 'lamp-heads', propMaterial());
 
+  // Traffic lights (CW-19). Placed on the road GRAPH rather than on the road
+  // list: a signal belongs where streets actually meet, and OSM splits ways at
+  // junctions, so the graph's nodes of degree 3 or more already are those
+  // corners.
+  const lightSpots = makePointGrid(PROP_SPATIAL_CELL_M);
+  const lightPoleGeoms = [];
+  // One geometry list per phase group and head position, because a head has
+  // to be able to light up on its own.
+  const lightHeadGeoms = [];
+  for (let phase = 0; phase < LIGHT_PHASE_COUNT; phase++) {
+    lightHeadGeoms.push({ red: [], amber: [], green: [] });
+  }
+
+  const graph = buildRoadGraph(model.roads);
+  for (const nodeIndex of graph.intersections) {
+    const node = graph.nodes[nodeIndex];
+    // The signal stands on a corner, not in the carriageway. Offset along the
+    // first chain's direction, turned ninety degrees, on a side fixed by the
+    // node index so a rebuild puts it back in the same place.
+    const chain = graph.chains[node.chains[0]];
+    const pts = chain.points;
+    const near = pts[0];
+    const far = pts[pts.length - 1];
+    let dx = far[0] - near[0];
+    let dy = far[1] - near[1];
+    const len = Math.hypot(dx, dy) || 1;
+    dx /= len;
+    dy /= len;
+    const side = nodeIndex % 2 === 0 ? 1 : -1;
+    const reach = chain.widthM / 2 + LIGHT_CURB_OFFSET_M;
+    const x = node.x + -dy * reach * side + dx * reach * side;
+    const y = node.y + dx * reach * side + dy * reach * side;
+
+    if (!inCore(x, y)) continue;
+    if (isBlocked(x, y)) continue;
+    if (treeSpots.occupied(x, y, LAMP_MIN_TREE_GAP_M)) continue;
+    if (lampSpots.occupied(x, y, LAMP_MIN_LAMP_GAP_M)) continue;
+    if (lightSpots.occupied(x, y, LIGHT_MIN_GAP_M)) continue;
+
+    lightPoleGeoms.push(
+      makeBox(
+        LIGHT_POLE_SIDE_M,
+        LIGHT_POLE_SIDE_M,
+        LIGHT_POLE_HEIGHT_M,
+        x,
+        y,
+        LIGHT_POLE_HEIGHT_M / 2,
+        0,
+        POLE_TINT
+      )
+    );
+
+    // Red on top, then amber, then green — the order every signal uses, and
+    // the one a player reads without being told.
+    const phase = nodeIndex % LIGHT_PHASE_COUNT;
+    const facing = Math.atan2(dy, dx);
+    const stack = ['red', 'amber', 'green'];
+    stack.forEach((slot, i) => {
+      lightHeadGeoms[phase][slot].push(
+        makeBox(
+          LIGHT_HEAD_DEPTH_M,
+          LIGHT_HEAD_SIZE_M,
+          LIGHT_HEAD_SIZE_M,
+          x,
+          y,
+          LIGHT_HEAD_BASE_Z_M + (stack.length - 1 - i) * LIGHT_HEAD_PITCH_M,
+          facing,
+          LIGHT_TINTS.dark
+        )
+      );
+    });
+
+    lightSpots.add(x, y);
+    obstacles.push({
+      x,
+      y,
+      halfLengthM: LIGHT_POLE_SIDE_M / 2,
+      halfWidthM: LIGHT_POLE_SIDE_M / 2,
+      rotationRad: 0,
+    });
+  }
+
+  // A material per head so a state change is a colour write, not a rebuild.
+  const lightMaterials = [];
+  addMerged(lightPoleGeoms, 'light-poles', propMaterial());
+  for (let phase = 0; phase < LIGHT_PHASE_COUNT; phase++) {
+    const slots = {};
+    for (const slot of ['red', 'amber', 'green']) {
+      const geoms = lightHeadGeoms[phase][slot];
+      if (geoms.length === 0) continue;
+      const material = new MeshBasicMaterial({
+        color: new Color(...LIGHT_TINTS.dark),
+      });
+      const merged = mergeGeometries(geoms, false);
+      for (const g of geoms) g.dispose();
+      const mesh = new Mesh(merged, material);
+      mesh.name = 'light-heads';
+      group.add(mesh);
+      disposables.push(merged, material);
+      slots[slot] = material;
+    }
+    if (Object.keys(slots).length > 0) lightMaterials.push(slots);
+  }
+
+  let litFor = null;
+  const paintLights = (state) => {
+    lightMaterials.forEach((slots, phase) => {
+      const lit = state === null ? null : trafficLightState(state, phase);
+      for (const slot of ['red', 'amber', 'green']) {
+        const material = slots[slot];
+        if (!material) continue;
+        const tint = lit === slot ? LIGHT_TINTS[slot] : LIGHT_TINTS.dark;
+        material.color.setRGB(tint[0], tint[1], tint[2]);
+      }
+    });
+  };
+  // Light them once at build. Reduced motion simply never calls update, and
+  // a stopped cycle has to look like a real signal rather than a dead one —
+  // with no initial paint every head sits at its dark tint and a player who
+  // asked for reduced motion gets a city of broken traffic lights.
+  paintLights(0);
+  litFor = lightMaterials
+    .map((_, phase) => trafficLightState(0, phase))
+    .join('|');
+
+  const trafficLights = {
+    /**
+     * Advance the signals. Returns true ONLY when a head actually changed,
+     * which is what keeps this off the per-frame path: the converter is asked
+     * to re-run once per state change — about once every two seconds and only
+     * while lights are in view — rather than every frame.
+     *
+     * @param {number} elapsedMs
+     * @returns {boolean} whether anything on screen changed
+     */
+    update(elapsedMs) {
+      if (lightMaterials.length === 0) return false;
+      const key = lightMaterials
+        .map((_, phase) => trafficLightState(elapsedMs, phase))
+        .join('|');
+      if (key === litFor) return false;
+      litFor = key;
+      paintLights(elapsedMs);
+      return true;
+    },
+    /** How many signals the city got — for the release record and the tests. */
+    count: lightPoleGeoms.length,
+  };
+
   return {
     group,
+    trafficLights,
+    /** Frozen cars standing on the travel lanes (CW-19). */
+    frozenTrafficCount: trafficCount,
+    /** Static silhouette figures on the pavements (CW-19). */
+    peopleCount: personCount,
     obstacles,
     /**
      * The map view is a clean street network seen from a kilometer up:
@@ -1625,6 +2462,134 @@ export function buildLandmarkBeacons(landmarks) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Rain (CW-20)
+// ---------------------------------------------------------------------------
+// Slivers of geometry falling inside a box that travels with the player, dim
+// enough that the converter turns them into sparse streak characters rather
+// than a wall of ink. Nothing about this is drawn in the DOM or bolted onto
+// the converter: it is scene geometry going through the same pipeline as the
+// city, which is what makes it look like it belongs there.
+//
+// A pool, not a spawner. The drops are created once and recycled: a drop that
+// falls out of the bottom of the box is lifted back to the top with a new
+// horizontal position, so the count never changes and nothing is allocated
+// per frame.
+const RAIN_BOX_M = 34;
+const RAIN_TOP_M = 22;
+const RAIN_DROP_LEN_M = 0.72;
+const RAIN_DROP_THICK_M = 0.035;
+// Light and heavy (CW-Q18). Heavy is not simply "more": the drops also fall
+// faster and lean further, because rain that only gets denser reads as fog.
+const RAIN_LEVELS = [
+  { name: 'light', drops: 150, speedMS: 15, leanMS: 1.4, tint: 0.34 },
+  { name: 'heavy', drops: 420, speedMS: 24, leanMS: 3.2, tint: 0.46 },
+];
+
+/**
+ * A pool of falling drops that follows the player.
+ *
+ * @param {number} [maxDrops] - pool size; the level decides how many are
+ *   actually visible, so switching intensity never rebuilds geometry
+ * @returns {{
+ *   group: Group,
+ *   setLevel: (index: number|null) => void,
+ *   update: (dtS: number, x: number, y: number) => void,
+ *   dispose: () => void
+ * }}
+ */
+export function buildRain(
+  maxDrops = RAIN_LEVELS[RAIN_LEVELS.length - 1].drops
+) {
+  const group = new Group();
+  group.name = 'rain';
+  group.visible = false;
+
+  const geom = new BoxGeometry(
+    RAIN_DROP_THICK_M,
+    RAIN_DROP_THICK_M,
+    RAIN_DROP_LEN_M
+  );
+  const material = new MeshBasicMaterial({ color: 0x555555 });
+  const drops = [];
+  const rand = makeLcg(0x5a1d0b0b);
+
+  for (let i = 0; i < maxDrops; i++) {
+    const mesh = new Mesh(geom, material);
+    mesh.position.set(
+      (rand() - 0.5) * RAIN_BOX_M,
+      (rand() - 0.5) * RAIN_BOX_M,
+      rand() * RAIN_TOP_M
+    );
+    mesh.visible = false;
+    group.add(mesh);
+    drops.push(mesh);
+  }
+
+  let level = null;
+  let centreX = 0;
+  let centreY = 0;
+
+  return {
+    group,
+
+    /**
+     * @param {number|null} index - RAIN_LEVELS index, or null for no rain
+     */
+    setLevel(index) {
+      level = Number.isInteger(index) ? (RAIN_LEVELS[index] ?? null) : null;
+      group.visible = level !== null;
+      const shown = level ? level.drops : 0;
+      for (let i = 0; i < drops.length; i++) drops[i].visible = i < shown;
+      if (level) material.color.setScalar(level.tint);
+    },
+
+    /**
+     * Fall, and keep the box centred on the player. Re-centring MOVES the
+     * drops with the box rather than leaving them behind, so walking never
+     * outruns the weather.
+     */
+    update(dtS, x, y) {
+      if (!level) return;
+      const dx = x - centreX;
+      const dy = y - centreY;
+      centreX = x;
+      centreY = y;
+      group.position.set(x, y, 0);
+
+      const fall = level.speedMS * dtS;
+      const lean = level.leanMS * dtS;
+      const half = RAIN_BOX_M / 2;
+      const shown = level.drops;
+      for (let i = 0; i < shown; i++) {
+        const p = drops[i].position;
+        p.z -= fall;
+        p.x += lean;
+        // The box moved under the drops; keep them where they were in world
+        // terms so the rain does not slide sideways when the player walks.
+        p.x -= dx;
+        p.y -= dy;
+        if (p.z < 0 || p.x > half || p.x < -half || p.y > half || p.y < -half) {
+          p.x = (rand() - 0.5) * RAIN_BOX_M;
+          p.y = (rand() - 0.5) * RAIN_BOX_M;
+          p.z = RAIN_TOP_M * (0.6 + rand() * 0.4);
+        }
+      }
+    },
+
+    dispose() {
+      group.clear();
+      geom.dispose();
+      material.dispose();
+    },
+  };
+}
+
+/** How many rain levels there are, for callers cycling through them. */
+export const RAIN_LEVEL_COUNT = RAIN_LEVELS.length;
+/** Level names, for the announcements the owner reviews. */
+export const RAIN_LEVEL_NAMES = RAIN_LEVELS.map((l) => l.name);
+
 /**
  * Attach the game's lighting: a dim ambient fill plus a headlight parented
  * to the camera (the same view-space arrangement the model preview uses, so
@@ -1660,9 +2625,112 @@ export function attachCityLighting(scene, camera) {
   camera.add(headlight);
   camera.add(headlight.target);
 
+  // CW-20: the fog can drift between clear and murky nights, and a rare
+  // thunder swell can lift the ambient light. Both are AMBIENT MOTION and
+  // both are driven by the controller, which owns the reduced-motion state —
+  // nothing here starts moving on its own.
+  //
+  // The drift moves the fog FAR plane, not the near one, and it never
+  // reaches the buildings’ silhouette floor from CW-24: a murky night pulls
+  // the skyline closer, it does not delete it, because the floor is applied
+  // after the fog factor and survives any density.
+  const FOG_FAR_CLEAR = 260;
+  const FOG_FAR_MURKY = 150;
+  // Minutes-scale, deliberately. This is weather, and it also puts the
+  // change rate orders of magnitude below anything WCAG 2.3.1 concerns
+  // itself with: a full clear-to-murky sweep takes about three minutes.
+  const FOG_DRIFT_PERIOD_MS = 360000;
+  // A swell, not a flash: it rises and falls over about a third of a second
+  // and lifts the ambient by well under half again. Thunder in this city is
+  // mood lighting, and the amplitude is chosen so that even at its peak the
+  // frame-to-frame change is a gentle ramp rather than a transition.
+  const THUNDER_PEAK = 0.22;
+  const THUNDER_MS = 320;
+  let ambientBase = AMBIENT_STREET;
+
+  // Where phase 0 of the drift sits on the caller's clock. The drift used to
+  // be read straight off that clock, which meant the fog was wherever the
+  // session happened to have reached whenever it was asked - so the first
+  // frame of a shower jumped to a thickness nothing had walked into (D-74).
+  let fogDriftAnchorMs = 0;
+
+  const applyFogDensity = (t) => {
+    const k = Math.max(0, Math.min(1, Number(t) || 0));
+    fog.far = FOG_FAR_CLEAR + (FOG_FAR_MURKY - FOG_FAR_CLEAR) * k;
+  };
+
   return {
     setMapBoost(isMap) {
-      ambient.intensity = isMap ? AMBIENT_MAP : AMBIENT_STREET;
+      ambientBase = isMap ? AMBIENT_MAP : AMBIENT_STREET;
+      ambient.intensity = ambientBase;
+    },
+
+    /**
+     * Slide the fog between a clear night and a murky one (CW-Q18).
+     *
+     * @param {number} t - 0 clear, 1 murky
+     */
+    setFogDensity(t) {
+      applyFogDensity(t);
+    },
+
+    /**
+     * Start or resume the drift so its first driven frame reproduces the fog
+     * that is on screen right now, rather than snapping to wherever a
+     * free-running clock had got to (D-74).
+     *
+     * @param {number} nowMs - the caller's clock, the same one stepFogDrift
+     *   will be given
+     */
+    beginFogDrift(nowMs) {
+      const span = FOG_FAR_CLEAR - FOG_FAR_MURKY;
+      const density = Math.max(
+        0,
+        Math.min(1, (FOG_FAR_CLEAR - fog.far) / span)
+      );
+      // density(p) = (1 - cos(2*pi*p)) / 2, so p = acos(1 - 2*density) / 2*pi.
+      // acos returns the RISING branch, which is the one to resume on: fog
+      // that is already thickening carries on thickening.
+      const phase = Math.acos(1 - 2 * density) / (Math.PI * 2);
+      fogDriftAnchorMs = Number(nowMs) - phase * FOG_DRIFT_PERIOD_MS;
+    },
+
+    /**
+     * One frame of drift, measured from the anchor beginFogDrift set.
+     *
+     * @param {number} nowMs - the caller's clock
+     */
+    stepFogDrift(nowMs) {
+      let phase =
+        (((Number(nowMs) - fogDriftAnchorMs) % FOG_DRIFT_PERIOD_MS) /
+          FOG_DRIFT_PERIOD_MS) %
+        1;
+      if (phase < 0) phase += 1;
+      applyFogDensity((1 - Math.cos(phase * Math.PI * 2)) / 2);
+    },
+
+    /** Where the fog sits now, so the release record can state it. */
+    getFogFar() {
+      return fog.far;
+    },
+
+    /**
+     * A thunder swell: 0 at rest, 1 at the peak of the flash.
+     *
+     * @param {number} amount - 0..1
+     */
+    setThunder(amount) {
+      const a = Math.max(0, Math.min(1, Number(amount) || 0));
+      ambient.intensity = ambientBase * (1 + THUNDER_PEAK * a);
+    },
+
+    /** The drift period and swell length, for the record and the tests. */
+    weatherTiming: {
+      fogDriftPeriodMs: FOG_DRIFT_PERIOD_MS,
+      thunderMs: THUNDER_MS,
+      fogFarClear: FOG_FAR_CLEAR,
+      fogFarMurky: FOG_FAR_MURKY,
+      thunderPeak: THUNDER_PEAK,
     },
     detach() {
       camera.remove(headlight);

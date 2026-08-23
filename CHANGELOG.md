@@ -9,6 +9,121 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The city file format is written down, and so is where this is going** (CW-28) - two new
+  documents. The first describes the city extract format field by field, so that someone who has
+  never seen this project could write a valid city file, or write a second program that reads one.
+  The second records two things the City Walk is deliberately built to grow into: letting people
+  search for an address and walk there, and feeding tactile maps for readers who cannot see the
+  screen. The roadmap is a record of intent and of the seams already in the code, not a schedule -
+  and it states plainly that when tactile work does begin, every dimension a hand reads is a
+  safety value that needs a signed-off number, with no exceptions
+- **The status line knows which street you are on** (CW-27) - walk down a street and the line at
+  the top now reads "on 4th Avenue", changing as you turn onto another one. If you are not
+  actually on a street it says "near" the closest one, and if there is nothing close it says
+  nothing at all rather than naming a street you cannot see. Press **X**, or the new **Where am
+  I?** button in the toolbar, and the game says the whole thing out loud through the same
+  announcer everything else uses: which street, which landmark is nearby, and which way you are
+  facing. The names were in the map data all along - the game had been throwing them away while
+  reading the file
+- **The cities get the shapes they were actually mapped with** (CW-26) - a tall building is rarely
+  one plain box, and until now every one of them was. Mappers describe a stepped tower by drawing
+  its separate volumes, and describe a house roof by naming its shape; the bake threw both away
+  before the game ever saw them. Seattle, Burnaby and Albuquerque have been rebaked to keep them.
+  One Seattle tower that used to be a single 259 m block is now twenty-six stacked volumes
+  stepping 255, 147, 126, 110 m and down - and the skyline as a whole gained about a sixth more
+  steps in it. Pitched roofs - pyramidal, gabled and hipped - are built as real shapes that finish
+  at the height the building is tagged with, rather than being stacked on top of it. Roof shapes
+  nobody can draw honestly from the tags, and buildings too irregular to say which way they run,
+  keep their flat tops rather than being guessed at. **Denver is unchanged for now**: its 3,013
+  mapped parts are mostly tiny architectural details and carrying them all would nearly double the
+  download, so that trade is written up for a decision rather than made quietly
+- **Weather, photographs, and a reason to wander** (CW-20) - three things the City Walk did not
+  have. **Rain**, on the G key or the Rain button, in two strengths: heavy is not simply more
+  drops but faster and more slanted ones, because rain that only gets denser reads as fog. The
+  drops are real objects in the world rather than something painted over the top, so the same
+  machinery that turns the city into characters turns them into streaks - look up while it is
+  raining and they converge overhead the way falling rain actually does. While it rains the fog
+  slowly breathes between a clear night and a murky one, taking about three minutes to cross,
+  and distant thunder lifts the light by a fifth for a third of a second every half minute or so.
+  All of that is movement, so all of it stops for anyone who has asked for reduced motion - and
+  the G key says so out loud rather than ignoring the press, while the button removes itself
+  instead of sitting there doing nothing. **Photo mode**, on P, saves a PNG of exactly what is on
+  screen, named for the city and the date. **A landmark tracker**: the status line counts the
+  landmarks you have walked past, the map legend ticks them off, and when you have found them all
+  the game says so once. Nothing is stored - a fresh visit is a fresh walk
+- **The streets have people, parked traffic and working signals** (CW-19) - the city was
+  furnished but empty: nothing stood on the pavements and nothing sat in the road. It now has
+  standing figures built from a real outline - head, shoulders, body, arms and legs, most of them
+  frozen mid-step, and about one in six walking a dog - along with cars stopped in the travel lanes
+  facing the way they would be going, and traffic lights at the junctions where three or more
+  streets actually meet. Nothing moves except the signals, which is deliberate: this city is
+  deliberately held still, and a traffic light that never changes is not a traffic light. The
+  signals run in two groups so that when one street goes green the cross street is red, every
+  colour holds for at least two seconds, and they stop entirely - holding a real colour rather than
+  going dark - for anyone who has asked for reduced motion. They also only ask the screen to
+  redraw when a light actually changes, roughly once every two seconds, rather than every frame.
+  You can walk around the people, the signal posts and the parked cars; the cars stopped in the
+  traffic lanes are scenery you pass through, because fencing off the lanes would turn the street
+  into a maze. How many cars a street gets comes from what kind of street it is, which is the
+  honest limit of what open map data can say - live traffic information is not freely available -
+  and the code is arranged so a better source can be dropped in one place. Per city: 101 signals
+  and 1,419 stopped cars in Seattle, 87 and 908 in Denver, 46 and 887 in Albuquerque, 52 and 539
+  in Burnaby
+
+- **Every surface speaks in its own characters** (CW-23) - the City Walk picked each character by
+  how BRIGHT a patch of the screen was and nothing else, so a stretch of pavement and the side of a
+  tower that happened to be equally bright came out looking like the same material. The game now
+  draws a second, tiny picture behind the scenes - one pixel per character cell - whose only job is
+  to say what each cell is looking at, and a small table decides which characters each surface may
+  use. Roads get characters that lie down, so the roadway stacks into receding bands instead of a
+  field of noise; walls get characters that stand up; foliage gets characters that clump;
+  shopfronts and signs get the round, heavy ones. The table is plain data, one line per surface,
+  meant to be adjusted by eye. Two of its rules are not taste, and the suite enforces both: every
+  surface must be allowed the space character, or the darkest cells can no longer stay empty and
+  the black the whole picture is built on fills in with texture; and every surface needs light,
+  middle and heavy characters, or that surface flattens to one tone. Measured cost: about 1.1 ms a
+  frame at the default character size and 1.7 ms at the smallest, against a budget of 3
+
+- **A skyline past the fog** (CW-24) - the fog faded everything to black beyond about 260 metres,
+  and a cell that is exactly black is an empty cell, so every tower past the fog was not being
+  pushed into the distance - it was being deleted. The middle of the frame was a void even though
+  the city data reaches 700 metres. Buildings now keep about a seventh of their brightness however
+  far away they are, so a distant tower reads as a dim silhouette. Only buildings: the ground,
+  roads and kerbs still fade to true black, because a dim carpet across the lower half of the
+  screen is a failure this project has already made once. In colour the far towers keep their own
+  hue, so the skyline reads as a coloured city rather than a grey smudge
+
+- **Buildings no longer all wear the same windows** (CW-25) - every building used one identical
+  window pattern, so once the picture had become characters, one tower's wall was
+  indistinguishable from the next: colour told them apart, texture did not. There are now eight
+  facade patterns, each cutting a different letter shape out of its lit window panes - not writing,
+  just glazing bars, the way a leaded window has a pattern. Which one a building gets is fixed by
+  the same identity that fixes its colour, so a building keeps its face for as long as the city
+  data does. The patterns are painted when the city loads, so eight of them add nothing to the
+  download
+
+- **Monochrome is a choice now, not a loss** (CW-21) - with colour switched off the City Walk was a
+  single flat tone: pavement, walls and lit shop signs all painted at exactly the same brightness, so
+  turning colour off cost depth as well as hue. Real single-colour terminals never had that problem,
+  because they separated things with an intensity attribute rather than with more characters - which
+  matters here, since this project only ever draws the 95 printable ASCII characters and the densest
+  one of those fills less than half its cell. Three things change. Darker parts of the picture are
+  now driven at 65% of the phosphor rather than 100%, so pavement and distant walls sit back and lit
+  surfaces come forward; nothing is brighter than it used to be, and the dim level is still
+  6.45:1 against black in green and 5.03:1 in amber, both above the 4.5:1 this project holds itself
+  to. The brightest cells - lit shop signs, billboards, lamp heads - flip to reverse video, a solid
+  block of phosphor with the character knocked out of it, which is the only way to make a cell read
+  as genuinely LIT when no available character can fill more than half of one; it claims about 1.9%
+  of a street, chosen by counting: at a lower threshold every lit window turns solid too and the
+  signs stop being the brightest thing you can see. And the picture now keeps a soft phosphor trail
+  while you move, the way a slow tube smeared when it scrolled, gone within about three frames and
+  gone entirely when you stop. The trail is motion, so it turns itself off for anyone who asks for
+  reduced motion, including if that preference changes while you are walking. All of this is
+  monochrome only - with colour on, each cell is already picked out by its own hue - and none of it
+  reaches the main app's Alt View. Measured cost at the size the game starts at: the intensity and
+  reverse-video work is lost in the noise, the trail adds about 5 ms and the game stays at 60 frames
+  a second; at the smallest characters the trail takes it from 30.0 to 28.3
+
 - **Street life, standing still** (CW-18) - the City Walk's streets had trees and parked cars but
   nothing above head height and nothing on the walls. Now streetlights march down every ordinary
   street and arterial, one every 30 m, alternating sides: a slim post with a bright head reaching out
@@ -38,6 +153,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   renderer reads so that stays true
 
 ### Changed
+
+- **The two halves of the browser test suite now take the same amount of time** (CW-29, D-72) - the
+  Chromium and Edge test lanes each run in two halves side by side, and each half was being given
+  the same NUMBER of tests: 476 against 475. The work was nowhere near equal, because the slow
+  files happen to sort first alphabetically - one of them, the City Walk's own suite, is a quarter
+  of the whole lane on its own. One half ran for 32 to 35 minutes against a 35-minute limit and
+  failed three times on the clock rather than on anything being wrong; its sibling finished in 12.
+  The halves are now packed by measured cost, from real timings read out of a green run, and come
+  out at about 20 minutes each. The list of files is read off disk every time, so a test file added
+  later cannot fall between the two halves and quietly stop being run
+- **The City Walk runs at full frame rate from its default size upwards** (CW-22) - the game draws
+  its picture by stamping one character at a time onto a canvas, and asking the canvas to draw
+  something costs about the same whether the thing is big or small. At the size the game starts at,
+  that stamping was over half of all the work in a frame. There was already a faster way in the code
+  - build the whole frame in memory and hand the canvas one finished picture - but it was only used
+  for characters 4 pixels wide and under, and the game starts at 5. Measured with timers inside the
+  converter, the faster way wins at every size, so the size limit is gone. At the default size a
+  conversion drops from 40.7 to 17.5 ms and the game goes from about 42 to 60 frames a second; at 60%
+  character size, which was the slowest setting in the whole game despite drawing fewer characters
+  than the default, from 48.7 to 15.6 ms and 38 to 60 frames a second; at the largest characters from
+  25.0 to 12.9 ms. Everything from 40% down was already using the faster way and is unchanged.
+  Nothing looks different, and that is checked rather than asserted: 40 full-frame comparisons across
+  two cities, monochrome and colour, at every character size from 2 to 12 pixels wide, found 0
+  differing pixels out of about 1.6 million on every colour channel, and the suite now carries that
+  comparison against a hand-written reference so it stays true. The main app's Alt View gets the same
+  speed-up and the same unchanged picture. The phosphor afterglow still draws character by character,
+  because layering the previous frame on top is the one thing a single buffer cannot do
 
 - **The retro colour palettes read as colour more of the time** (CW-Q11) - measured by counting the
   pixels the game actually paints, nearly half of a high-contrast street had no colour in it at all.
@@ -177,6 +319,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "near NAME" street-view proximity announcements with hysteresis
 
 ### Fixed
+
+- **Walls you look straight at are drawn as walls again** (CW-29, D-73) - the City Walk decides what
+  each character is looking at before it picks the character, so that a road can be drawn with
+  characters that lie down and a wall with characters that stand up. It worked out which way a
+  building face pointed relative to the CAMERA rather than relative to the world, so any facade you
+  stood square to was filed as a rooftop and drawn with the flat horizontal characters rooftops
+  get - the venetian-blind banding the wall vocabulary exists to avoid, on whichever building you
+  happened to be looking at. Standing at one Seattle corner with the view level, 28.6% of the
+  screen was being called rooftop; from street level with a level view the true answer is
+  essentially none, and now is. Every other surface classified identically before and after, and
+  the map view - where the camera really does look down and roofs really are roofs - is unchanged
+- **The fog no longer outstays the rain that brought it** (CW-29, D-74) - while it rains the fog
+  slowly breathes between a clear night and a murky one, over about three minutes. That drift was
+  read off a clock that kept running whether or not it was raining, and was only ever applied while
+  it was. Stop the rain on the murky half and the fog stayed at its thickest for the rest of the
+  session, on a clear night, with nothing on screen to explain why you could not see across the
+  street. Start it again and the fog jumped in a single frame to wherever the clock had got to.
+  Now a shower picks the drift up from the fog that is actually on screen and carries on
+  thickening from there, and ending a shower hands back the clear night it borrowed
+- **Thunder lets go of the city** (CW-29, D-75) - a thunder swell lifts the ambient light by up to
+  22% over a third of a second and then puts it back. Putting it back needs a frame, and both ways
+  out of the rain skip those frames: stopping the rain, and turning on reduced motion. Either one,
+  caught mid-swell, left the whole city sitting under a raised light with no rain and no thunder
+  in it, until something unrelated happened to reset it. Both exits now put the light down
+- **Asking for less movement ends the shower** (CW-29, D-76) - the rain key has always refused to
+  START rain while reduced motion is on. Rain already falling was left exactly where it stood,
+  because turning the preference on stops the frames that move the drops rather than stopping the
+  rain: the shower froze in mid-air as a field of static diagonal streaks, and the Rain button
+  stayed in a toolbar where pressing it now only produced the refusal message. Turning reduced
+  motion on now ends the shower the same way the key does - the drops go, the fog goes back to
+  clear, the button leaves the toolbar, and it says so
+- **The status line stopped spilling onto a second row in Denver** (D-71) - standing near the
+  Embassy Suites by Hilton Denver Downtown Convention Center made the line long enough to wrap,
+  which pushed the game view down by a row. Very long street and landmark names are now shortened
+  with an ellipsis in the status line only; anything the game says out loud still uses the full
+  name
 
 - **Tour cards that admit when there is more to read** (UF-38, D-65) - on a phone the instruction
   card was cut off mid-sentence with nothing to say so. One step ended on "You can resize this drawer

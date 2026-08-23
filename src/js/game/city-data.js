@@ -16,6 +16,12 @@
  * @license GPL-3.0-or-later
  */
 
+// The only import here, and deliberate: pointInRing is the even-odd ray cast
+// walk-controls already owns, and CW-26 needs exactly it to decide which
+// outline a building:part stands inside. walk-controls is itself DOM-free and
+// import-free, so the Node bake path stays clean.
+import { pointInRing } from './walk-controls.js';
+
 // One storey when only building:levels is tagged. 3 m/level is the common
 // renderer convention (OSM Simple 3D Buildings recommends explicit height
 // over levels; levels are a fallback).
@@ -27,6 +33,56 @@ export const DEFAULT_BUILDING_HEIGHT_M = 8.0;
 
 // Anything taller than this is a tagging error, not a building.
 const MAX_BUILDING_HEIGHT_M = 700;
+
+// CW-26. Simple 3D Buildings says a building's parts replace its outline, and
+// where mappers tile the whole footprint that is exactly right. Real extracts
+// are not so tidy: Seattle has 32 of 122 part-hosts under 60% covered and
+// Albuquerque's lower quartile host is covered TWO PERCENT - one turret on a
+// plain hall. Dropping those outlines would delete the building and leave the
+// turret hanging, so the outline only stands down when the parts really are
+// the mass. Above this ratio the parts replace the outline; below it they
+// stand proud of it.
+export const PART_COVERAGE_MIN = 0.6;
+
+// CW-26 roofs. A roof shallower than this is not worth the triangles at the
+// distance a walker sees it, and one deeper than a fifth of the building
+// starts to look like a circus tent, so an untagged pitch takes a quarter of
+// the body and everything is clamped into a believable band.
+const ROOF_DEFAULT_SHARE = 0.25;
+const ROOF_MAX_SHARE = 0.6;
+const ROOF_MIN_M = 1.5;
+const ROOF_MAX_M = 10;
+
+/**
+ * Resolve a roof from its tags, or null when the building has none worth
+ * building. Height cascade mirrors the body: roof:height → roof:levels ×
+ * LEVEL_HEIGHT_M → a share of the body.
+ *
+ * @param {Object} tags
+ * @param {number} heightM - total building height
+ * @param {number} minHeightM - where the body starts
+ * @returns {{shape: string, heightM: number, orientation: string|undefined}|null}
+ */
+export function resolveRoof(tags = {}, heightM = 0, minHeightM = 0) {
+  const shape = tags['roof:shape'];
+  if (typeof shape !== 'string' || shape === '' || shape === 'flat') {
+    return null;
+  }
+  const body = heightM - minHeightM;
+  if (!(body > 0)) return null;
+
+  let roofM = parseLengthMeters(tags['roof:height']);
+  if (roofM === null) {
+    const levels = parseFloat(tags['roof:levels']);
+    roofM =
+      Number.isFinite(levels) && levels > 0 ? levels * LEVEL_HEIGHT_M : null;
+  }
+  if (roofM === null) roofM = body * ROOF_DEFAULT_SHARE;
+  roofM = Math.min(roofM, body * ROOF_MAX_SHARE, ROOF_MAX_M);
+  if (!(roofM >= ROOF_MIN_M)) return null;
+
+  return { shape, heightM: roofM, orientation: tags['roof:orientation'] };
+}
 
 // Visual approximation of paved width per highway class, in meters. These
 // are game-world ribbons, not survey data.
@@ -234,6 +290,51 @@ export function signedArea(pts) {
   return sum / 2;
 }
 
+/** Axis-aligned bounds of a projected ring, for the part-host prefilter. */
+function ringBounds(ring) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const [x, y] of ring) {
+    if (x < minX) minX = x;
+    if (y < minY) minY = y;
+    if (x > maxX) maxX = x;
+    if (y > maxY) maxY = y;
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+/**
+ * Area-weighted centroid of a projected ring. On a degenerate (zero-area)
+ * ring the shoelace term vanishes, so this falls back to the vertex mean
+ * rather than dividing by zero.
+ *
+ * @param {Array<[number,number]>} ring
+ * @returns {[number, number]}
+ */
+function ringCentroid(ring) {
+  let twiceArea = 0;
+  let cx = 0;
+  let cy = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    const cross = xj * yi - xi * yj;
+    twiceArea += cross;
+    cx += (xj + xi) * cross;
+    cy += (yj + yi) * cross;
+  }
+  if (twiceArea !== 0) return [cx / (3 * twiceArea), cy / (3 * twiceArea)];
+  let sx = 0;
+  let sy = 0;
+  for (const [x, y] of ring) {
+    sx += x;
+    sy += y;
+  }
+  return [sx / ring.length, sy / ring.length];
+}
+
 /**
  * Parse a city extract into renderer-ready data.
  *
@@ -248,11 +349,11 @@ export function signedArea(pts) {
  * @returns {{
  *   center: {lat:number,lon:number},
  *   attribution: string,
- *   buildings: Array<{outer: Array<[number,number]>, holes: Array<Array<[number,number]>>, heightM: number, minHeightM: number, name: (string|undefined)}>,
- *   roads: Array<{points: Array<[number,number]>, widthM: number, kind: string}>,
+ *   buildings: Array<{outer: Array<[number,number]>, holes: Array<Array<[number,number]>>, heightM: number, minHeightM: number, name: (string|undefined), parts: Array<Object>, partsAreMass: boolean, roof: (Object|null)}>,
+ *   roads: Array<{points: Array<[number,number]>, widthM: number, kind: string, name: (string|undefined)}>,
  *   trees: Array<[number,number]>,
  *   boundsM: {minX:number, minY:number, maxX:number, maxY:number},
- *   stats: {buildingCount:number, roadCount:number, treeCount:number, droppedRings:number, droppedElements:number}
+ *   stats: {buildingCount:number, roadCount:number, treeCount:number, partCount:number, orphanParts:number, droppedRings:number, droppedElements:number}
  * }}
  */
 export function parseCityExtract(extract, options = {}) {
@@ -265,8 +366,10 @@ export function parseCityExtract(extract, options = {}) {
   const buildings = [];
   const roads = [];
   const trees = [];
+  const partWays = [];
   let droppedRings = 0;
   let droppedElements = 0;
+  let orphanParts = 0;
 
   const isBuildingTags = (tags) =>
     tags && typeof tags.building === 'string' && tags.building !== 'no';
@@ -298,6 +401,35 @@ export function parseCityExtract(extract, options = {}) {
       continue;
     }
 
+    // CW-26: a building:part is a VOLUME INSIDE an outline, not a building of
+    // its own, so it is collected here and matched to its outline after the
+    // loop. A way tagged BOTH building and building:part is its own outline
+    // and falls through to the branch below.
+    if (
+      el.type === 'way' &&
+      typeof tags['building:part'] === 'string' &&
+      tags['building:part'] !== 'no' &&
+      !isBuildingTags(tags)
+    ) {
+      const ring = Array.isArray(el.geometry)
+        ? projectRing(el.geometry, center, true)
+        : null;
+      if (!ring) {
+        droppedElements++;
+        continue;
+      }
+      const { heightM, minHeightM } = resolveBuildingHeight(tags);
+      partWays.push({
+        outer: ring,
+        holes: [],
+        heightM,
+        minHeightM,
+        tags,
+        roof: resolveRoof(tags, heightM, minHeightM),
+      });
+      continue;
+    }
+
     if (el.type === 'way' && isBuildingTags(tags)) {
       if (relationMemberWayIds.has(el.id)) continue;
       const outer = Array.isArray(el.geometry)
@@ -314,7 +446,10 @@ export function parseCityExtract(extract, options = {}) {
         heightM,
         minHeightM,
         name: tags.name,
+        roof: resolveRoof(tags, heightM, minHeightM),
         tags,
+        parts: [],
+        partsAreMass: false,
       });
       continue;
     }
@@ -354,7 +489,10 @@ export function parseCityExtract(extract, options = {}) {
           heightM,
           minHeightM,
           name: tags.name,
+          roof: resolveRoof(tags, heightM, minHeightM),
           tags,
+          parts: [],
+          partsAreMass: false,
         });
         emitted = true;
       }
@@ -375,7 +513,61 @@ export function parseCityExtract(extract, options = {}) {
         points,
         widthM: ROAD_WIDTHS_M[tags.highway] ?? DEFAULT_ROAD_WIDTH_M,
         kind: tags.highway,
+        // CW-27: the bake has always kept road names; this is where they
+        // were being dropped on the floor.
+        name: tags.name,
       });
+    }
+  }
+
+  // CW-26: match every part to the outline that contains it. Simple 3D
+  // Buildings can bind them with a type=building relation, but in the real
+  // extracts CONTAINMENT is the association that is actually there - Denver
+  // carries 3,013 parts and no such relations. The host search is bounding-box
+  // filtered first, which is what keeps 3,013 x 330 honest.
+  if (partWays.length > 0) {
+    const outlineCount = buildings.length;
+    const boxes = buildings.map((b) => ringBounds(b.outer));
+    for (const part of partWays) {
+      const [cx, cy] = ringCentroid(part.outer);
+      let host = -1;
+      for (let i = 0; i < outlineCount; i++) {
+        const bb = boxes[i];
+        if (cx < bb.minX || cx > bb.maxX || cy < bb.minY || cy > bb.maxY) {
+          continue;
+        }
+        if (pointInRing(cx, cy, buildings[i].outer)) {
+          host = i;
+          break;
+        }
+      }
+      if (host >= 0) {
+        buildings[host].parts.push(part);
+        continue;
+      }
+      // A part whose outline is outside the extract radius is still a real
+      // volume standing on a real street; drawing it beats dropping it.
+      orphanParts++;
+      buildings.push({
+        ...part,
+        name: part.tags.name,
+        parts: [],
+        partsAreMass: false,
+      });
+    }
+
+    // Decide, per host, whether its parts ARE the building or merely sit on
+    // it. Overlapping parts can push the ratio past 1, which only makes the
+    // answer more certain.
+    for (const b of buildings) {
+      if (b.parts.length === 0) continue;
+      const outlineArea = Math.abs(signedArea(b.outer));
+      const partArea = b.parts.reduce(
+        (sum, p) => sum + Math.abs(signedArea(p.outer)),
+        0
+      );
+      b.partsAreMass =
+        outlineArea > 0 && partArea / outlineArea >= PART_COVERAGE_MIN;
     }
   }
 
@@ -410,6 +602,8 @@ export function parseCityExtract(extract, options = {}) {
       buildingCount: buildings.length,
       roadCount: roads.length,
       treeCount: trees.length,
+      partCount: partWays.length,
+      orphanParts,
       droppedRings,
       droppedElements,
     },
@@ -439,6 +633,18 @@ export function trimOverpassElement(el) {
     'amenity',
     // Street trees (CW-16)
     'natural',
+    // CW-26: the real silhouettes. Whole-building roof:shape is nearly absent
+    // in US downtowns (1.5% Seattle, 3.6% Denver, 0% Albuquerque) but rich in
+    // residential Burnaby (26.8%); the downtown shapes live in building:part
+    // instead (Denver: 3,013 parts with 2,981 heights for 330 buildings).
+    // Keeping both is what lets one renderer serve both kinds of city.
+    'building:part',
+    'roof:shape',
+    'roof:height',
+    'roof:levels',
+    'roof:orientation',
+    // Crowd proxy for where people stand (CW-19's placement seam).
+    'shop',
   ];
 
   const trimTags = (tags) => {
@@ -457,7 +663,11 @@ export function trimOverpassElement(el) {
 
   if (el.type === 'way' && Array.isArray(el.geometry)) {
     const tags = trimTags(el.tags);
-    if (!tags || (!tags.building && !tags.highway)) return null;
+    // CW-26: a building:part way usually carries NO building tag — in Simple
+    // 3D Buildings the parts sit inside a separately-tagged outline. Keeping
+    // the tag is not enough; this gate has to let the part through too.
+    if (!tags || (!tags.building && !tags.highway && !tags['building:part']))
+      return null;
     return { type: 'way', id: el.id, tags, geometry: el.geometry.map(roundPt) };
   }
 
@@ -596,4 +806,270 @@ export function nearestLandmarkName(
   if (currentName !== null && currentDist <= exitM) return currentName;
   if (nearest && nearestDist <= enterM) return nearest.name;
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// The road graph (CW-19)
+// ---------------------------------------------------------------------------
+
+/**
+ * Highway classes a car would actually be driven on.
+ *
+ * Service roads, footways and pedestrian streets are left out: a car frozen
+ * in an alley or on a footpath reads as a mistake rather than as traffic.
+ */
+export const DRIVABLE_ROAD_KINDS = new Set([
+  'motorway',
+  'trunk',
+  'primary',
+  'secondary',
+  'tertiary',
+  'residential',
+  'unclassified',
+  'living_street',
+]);
+
+/** Endpoints closer than this share a node, in meters. */
+const NODE_SNAP_M = 1.5;
+
+/**
+ * Cars per kilometre of road, by class — the open-data proxy for how busy a
+ * street is (CW-19, signed at CW-Q17a).
+ *
+ * This is the honest part of the design, so it is written down rather than
+ * hidden: there is no uniform open feed of live congestion. Real-time traffic
+ * is commercial data. What open map data DOES carry is what kind of road it
+ * is and how many lanes it has, and how busy a street looks follows from that
+ * closely enough for a frozen scene.
+ *
+ * Lane counts are not in the extract today — the bake keeps a fixed tag list
+ * and `lanes` is not on it — so this reads road class alone and multiplies by
+ * a lane factor when a road record ever carries one. That is the seam a
+ * future live source, or a re-bake that keeps `lanes`, plugs into: one
+ * function, one call site.
+ *
+ * @param {{kind: string, lanes?: number}} road
+ * @returns {number} cars per kilometre
+ */
+export function trafficDensityFor(road) {
+  const perKm = {
+    motorway: 34,
+    trunk: 30,
+    primary: 26,
+    secondary: 20,
+    tertiary: 14,
+    residential: 8,
+    unclassified: 8,
+    living_street: 4,
+  };
+  const base = perKm[road?.kind] ?? 0;
+  const lanes = Number(road?.lanes);
+  // Two lanes is the unstated default a class figure already assumes.
+  const laneFactor = Number.isFinite(lanes) && lanes > 0 ? lanes / 2 : 1;
+  return base * laneFactor;
+}
+
+/**
+ * Build a graph of the drivable road network: chains and the nodes they meet
+ * at (CW-19).
+ *
+ * OSM splits ways at junctions, so a road record's polyline already IS a
+ * chain and its ENDS already are the junctions — this does not have to search
+ * for crossings, only to notice which chains share an end. Endpoints within
+ * NODE_SNAP_M of each other are treated as the same node, because the extract
+ * rounds coordinates and two ways that meet in the data can land a few
+ * centimetres apart after projection.
+ *
+ * Degree is what makes a node useful: 1 is a dead end or the edge of the
+ * bake, 2 is a road simply continuing under a new name, and 3 or more is a
+ * real intersection — which is where a traffic light belongs.
+ *
+ * @param {Array<{points: number[][], widthM: number, kind: string}>} roads
+ * @param {{snapM?: number}} [options]
+ * @returns {{
+ *   chains: Array<{points: number[][], kind: string, widthM: number, startNode: number, endNode: number}>,
+ *   nodes: Array<{x: number, y: number, degree: number, chains: number[]}>,
+ *   intersections: number[]
+ * }}
+ */
+export function buildRoadGraph(roads, options = {}) {
+  const snap = options.snapM ?? NODE_SNAP_M;
+  const nodes = [];
+  const byCell = new Map();
+
+  const nodeAt = (x, y) => {
+    // A snap grid alone would split two points that straddle a cell edge, so
+    // the neighbouring cells are searched too.
+    const cx = Math.round(x / snap);
+    const cy = Math.round(y / snap);
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        const bucket = byCell.get(`${cx + dx},${cy + dy}`);
+        if (!bucket) continue;
+        for (const index of bucket) {
+          const n = nodes[index];
+          if (Math.hypot(n.x - x, n.y - y) <= snap) return index;
+        }
+      }
+    }
+    const index = nodes.length;
+    nodes.push({ x, y, degree: 0, chains: [] });
+    const key = `${cx},${cy}`;
+    if (!byCell.has(key)) byCell.set(key, []);
+    byCell.get(key).push(index);
+    return index;
+  };
+
+  const chains = [];
+  for (const road of roads ?? []) {
+    if (!DRIVABLE_ROAD_KINDS.has(road?.kind)) continue;
+    const points = road.points;
+    if (!Array.isArray(points) || points.length < 2) continue;
+    const first = points[0];
+    const last = points[points.length - 1];
+    const startNode = nodeAt(first[0], first[1]);
+    const endNode = nodeAt(last[0], last[1]);
+    const index = chains.length;
+    chains.push({
+      points,
+      kind: road.kind,
+      widthM: road.widthM,
+      startNode,
+      endNode,
+    });
+    for (const node of new Set([startNode, endNode])) {
+      nodes[node].chains.push(index);
+    }
+    // A loop that starts and ends at one node still arrives there twice.
+    nodes[startNode].degree += 1;
+    nodes[endNode].degree += 1;
+  }
+
+  const intersections = [];
+  for (let i = 0; i < nodes.length; i++) {
+    if (nodes[i].degree >= 3) intersections.push(i);
+  }
+
+  return { chains, nodes, intersections };
+}
+
+// CW-27. Street lookup runs on movement frames, so it is a grid rather than
+// a scan: 40 m cells, the same size the sign placer found workable, and a
+// query only ever visits the rings it needs to cover its own limit.
+const STREET_CELL_M = 40;
+
+// A cycletrack or footpath usually runs a few metres from the street it
+// parallels, so the NEAREST named way is often not the street a player
+// would say they are on: at the Seattle spawn it is "4th Avenue Cycletrack"
+// at 4.1 m with "4th Avenue" itself at 8.1 m. A small penalty prefers the
+// street, while still letting a genuinely separate path win when you really
+// are on one.
+const PATH_KINDS = new Set(['cycleway', 'footway', 'path', 'steps', 'track']);
+const PATH_PENALTY_M = 8;
+
+/** Squared distance from a point to a segment, and where along it that fell. */
+function pointSegDist2(px, py, ax, ay, bx, by) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  let t = 0;
+  if (len2 > 0) {
+    t = ((px - ax) * dx + (py - ay) * dy) / len2;
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+  }
+  const cx = ax + dx * t;
+  const cy = ay + dy * t;
+  return (px - cx) * (px - cx) + (py - cy) * (py - cy);
+}
+
+/**
+ * Index every NAMED road segment for nearest-name queries.
+ *
+ * Unnamed ways are left out entirely: they can never answer the question,
+ * and a downtown extract is mostly unnamed service spurs and footpaths.
+ *
+ * @param {Array<{points: Array<[number,number]>, name?: string}>} roads
+ * @param {number} [cellM]
+ * @returns {{nearest: (x:number, y:number, maxM:number) => {name:string, distM:number}|null, segmentCount: number}}
+ */
+export function buildStreetIndex(roads, cellM = STREET_CELL_M) {
+  const segs = [];
+  const cells = new Map();
+  const key = (cx, cy) => `${cx},${cy}`;
+
+  for (const road of roads ?? []) {
+    if (typeof road?.name !== 'string' || road.name === '') continue;
+    const pts = road.points ?? [];
+    for (let i = 1; i < pts.length; i++) {
+      const [ax, ay] = pts[i - 1];
+      const [bx, by] = pts[i];
+      const index = segs.length;
+      segs.push({ ax, ay, bx, by, name: road.name, kind: road.kind });
+      const c0x = Math.floor(Math.min(ax, bx) / cellM);
+      const c1x = Math.floor(Math.max(ax, bx) / cellM);
+      const c0y = Math.floor(Math.min(ay, by) / cellM);
+      const c1y = Math.floor(Math.max(ay, by) / cellM);
+      for (let cx = c0x; cx <= c1x; cx++) {
+        for (let cy = c0y; cy <= c1y; cy++) {
+          const k = key(cx, cy);
+          let list = cells.get(k);
+          if (!list) {
+            list = [];
+            cells.set(k, list);
+          }
+          list.push(index);
+        }
+      }
+    }
+  }
+
+  return {
+    segmentCount: segs.length,
+    /**
+     * Every named street within maxM, nearest first, one entry per NAME.
+     * The controller needs the runner-up as well as the winner: at an
+     * intersection two streets are almost equidistant, and knowing the gap
+     * is what stops the HUD flapping between them.
+     *
+     * @param {number} x
+     * @param {number} y
+     * @param {number} maxM
+     * @returns {Array<{name: string, distM: number}>}
+     */
+    query(x, y, maxM) {
+      if (!(maxM > 0) || segs.length === 0) return [];
+      const rings = Math.ceil(maxM / cellM);
+      const cx = Math.floor(x / cellM);
+      const cy = Math.floor(y / cellM);
+      const max2 = maxM * maxM;
+      const bestByName = new Map();
+      const seen = new Set();
+      for (let ix = cx - rings; ix <= cx + rings; ix++) {
+        for (let iy = cy - rings; iy <= cy + rings; iy++) {
+          const list = cells.get(key(ix, iy));
+          if (!list) continue;
+          for (const index of list) {
+            if (seen.has(index)) continue;
+            seen.add(index);
+            const s = segs[index];
+            const d2 = pointSegDist2(x, y, s.ax, s.ay, s.bx, s.by);
+            if (d2 > max2) continue;
+            const distM = Math.sqrt(d2);
+            const rank = distM + (PATH_KINDS.has(s.kind) ? PATH_PENALTY_M : 0);
+            const prev = bestByName.get(s.name);
+            if (prev === undefined || rank < prev.rank) {
+              bestByName.set(s.name, { distM, rank });
+            }
+          }
+        }
+      }
+      return [...bestByName.entries()]
+        .map(([name, v]) => ({ name, distM: v.distM, rank: v.rank }))
+        .sort((a, b) => a.rank - b.rank);
+    },
+    /** The single nearest named street, or null. */
+    nearest(x, y, maxM) {
+      return this.query(x, y, maxM)[0] ?? null;
+    },
+  };
 }
