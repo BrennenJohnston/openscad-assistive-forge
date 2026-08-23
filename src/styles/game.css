@@ -223,6 +223,54 @@
   max-width: 48ch;
 }
 
+/* The Camera panel (CW-35).
+ *
+ * In the Forge it is a flex child of a horizontal layout - a drawer down the
+ * right-hand edge. The game layer is a COLUMN, so left as a flex child the
+ * panel became a full-width band under the city and squashed the viewport to
+ * a strip (seen, and fixed here). It floats instead, the way this layer's
+ * other two panels already do: absolute, above the ASCII overlay canvas, and
+ * stopping short of the toolbar.
+ *
+ * Right-hand edge, because that is the edge a Forge user reaches for. The
+ * help panel shares that corner, but help is a transient overlay that already
+ * covers the city while it is open.
+ */
+.city-walk-camera-panel {
+  position: absolute;
+  /* Above the ASCII overlay canvas, like .city-walk-help. */
+  z-index: var(--z-index-dropdown);
+  /* The help panel offsets itself past the header because it is a child of
+   * the layer. This one is inside the VIEWPORT, which already begins below
+   * the header and ends above the toolbar, so it needs neither allowance -
+   * and with them it clipped its own Reset button off the bottom. */
+  top: var(--space-md);
+  right: var(--space-md);
+  max-height: calc(100% - 2 * var(--space-md));
+  overflow-y: auto;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg, none);
+}
+
+/* The D-pad and zoom buttons wear `btn-sm` so they match the Forge panel's
+ * look, and `btn-sm` caps min-height at --size-touch-target-sm. Measured on a
+ * touch pointer that left them 44 wide and 36 TALL - eight pixels short of a
+ * square target, on the controls a finger uses most. The token is already
+ * 36px on a mouse and 44px on touch, so asking for it here gives the right
+ * answer on both without touching the Forge panel, whose own buttons measure
+ * the same and are reported rather than changed from inside this release.
+ */
+.city-walk-camera-panel .camera-btn {
+  min-height: var(--size-touch-target);
+}
+
+/* Collapsed, only the toggle shows - the Forge panel's own behaviour, but it
+ * sizes itself by flex there and has nothing to size against here. */
+.city-walk-camera-panel.collapsed {
+  width: auto;
+  min-width: 0;
+}
+
 /* Landmark legend (map view): real text over the map's left edge. */
 .city-walk-legend {
   position: absolute;

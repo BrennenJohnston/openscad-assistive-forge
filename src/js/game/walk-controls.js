@@ -39,7 +39,7 @@ export function createWalkState(spawn) {
   };
 }
 
-function normalizeHeading(h) {
+export function normalizeHeading(h) {
   const tau = Math.PI * 2;
   return ((h % tau) + tau) % tau;
 }
@@ -49,7 +49,7 @@ function normalizeHeading(h) {
  * written before CW-13 (and the test fixtures that build them by hand) carry
  * no pitchRad at all, which reads as level.
  */
-function clampPitch(p) {
+export function clampPitch(p) {
   if (!Number.isFinite(p)) return 0;
   return Math.min(PITCH_LIMIT_RAD, Math.max(-PITCH_LIMIT_RAD, p));
 }

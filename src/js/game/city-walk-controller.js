@@ -52,6 +52,8 @@ import {
   firstPersonPose,
   applyLookDelta,
   levelView,
+  normalizeHeading,
+  clampPitch,
   headingLabel,
   pitchLabel,
   buildCollisionGrid,
@@ -79,6 +81,7 @@ import {
   MONO_GLOW_FADE,
 } from './hc-palettes.js';
 import { buildRain, RAIN_LEVEL_COUNT, RAIN_LEVEL_NAMES } from './city-scene.js';
+import { buildCityCameraPanel } from './city-camera-panel.js';
 import { createClassPass } from './city-class-pass.js';
 import { GLYPH_VOCABULARIES } from './glyph-vocabularies.js';
 import {
@@ -88,6 +91,7 @@ import {
   STORAGE_KEY_CITY_WALK_SPEED,
   STORAGE_KEY_CITY_WALK_FONT_SCALE,
   STORAGE_KEY_CITY_WALK_COLOUR,
+  STORAGE_KEY_CITY_WALK_CAMERA_PANEL,
 } from '../storage-keys.js';
 
 // Bundled extracts (Q-68). Slugs match public/examples/ascii-city/*.json.
@@ -403,6 +407,33 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     const toolbar = buildToolbar();
     layer.appendChild(toolbar.el);
 
+    // CW-35: the Camera panel, the one Forge users already know.
+    const cameraPanel = buildCityCameraPanel({
+      hold: (action) => pressToolbarAction(action),
+      release: (action) => releaseToolbarAction(action),
+      isMapView: () => Boolean(state.game?.mapView),
+      toggleMapView: () => toggleMapView(),
+      levelView: () => levelTheView(),
+      recenterMap: () => recenterMap(),
+      adjustCharacterSize: (steps) =>
+        adjustCharacterSize(steps * CHAR_SCALE_STEP),
+      setHeading: (rad) => faceHeading(rad),
+      setPitch: (rad) => setGazePitch(rad),
+      announce: (text) => announceInLayer(text),
+      collapsedStore: {
+        read: () => safeGetItem(STORAGE_KEY_CITY_WALK_CAMERA_PANEL) === 'true',
+        write: (collapsed) =>
+          safeSetItem(
+            STORAGE_KEY_CITY_WALK_CAMERA_PANEL,
+            collapsed ? 'true' : 'false'
+          ),
+      },
+    });
+    cameraPanel.el.hidden = true;
+    // Inside the viewport, which is the positioned ancestor the other two
+    // floating panels use.
+    viewport.appendChild(cameraPanel.el);
+
     // HUD: real text, updated on state changes (not a live region — discrete
     // events are announced instead).
     const hud = document.createElement('div');
@@ -511,6 +542,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       viewport,
       toolbar: toolbar.el,
       toolbarButtons: toolbar.buttons,
+      cameraPanel,
       mapBtn: toolbar.mapBtn,
       fastBtn: toolbar.fastBtn,
       hud,
@@ -624,88 +656,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
    * same characters and their size is a comfort setting, so it keeps both
    * buttons.
    */
+  // CW-35/CW-Q32: the Camera and Move groups have RETIRED from this toolbar.
+  // Their jobs moved to the Camera panel, which is the panel Forge users
+  // already know from the 3D preview, so the same controls are in the same
+  // place whichever part of the app they are in. The press-and-hold machinery
+  // below stays exactly as it was - Speed, Characters, Weather, Map and
+  // Landmarks all still use it.
   const TOOLBAR_GROUPS = [
-    {
-      name: 'Camera',
-      buttons: [
-        {
-          id: 'cityWalkTurnLeftBtn',
-          label: 'Turn left',
-          keys: 'Arrow Left or Q',
-          hold: 'turnLeft',
-          views: 'both',
-        },
-        {
-          id: 'cityWalkLookUpBtn',
-          label: 'Look up',
-          keys: 'R',
-          hold: 'lookUp',
-          views: 'street',
-        },
-        {
-          id: 'cityWalkLevelBtn',
-          label: 'Level view',
-          keys: 'V',
-          press: levelTheView,
-          views: 'both',
-        },
-        {
-          id: 'cityWalkLookDownBtn',
-          label: 'Look down',
-          keys: 'F',
-          hold: 'lookDown',
-          views: 'street',
-        },
-        {
-          id: 'cityWalkTurnRightBtn',
-          label: 'Turn right',
-          keys: 'Arrow Right or E',
-          hold: 'turnRight',
-          views: 'both',
-        },
-      ],
-    },
-    {
-      name: 'Move',
-      buttons: [
-        {
-          id: 'cityWalkForwardBtn',
-          label: 'Forward',
-          keys: 'Arrow Up or W',
-          hold: 'forward',
-          views: 'both',
-        },
-        {
-          id: 'cityWalkBackBtn',
-          label: 'Back',
-          keys: 'Arrow Down or S',
-          hold: 'back',
-          views: 'both',
-        },
-        {
-          id: 'cityWalkStepLeftBtn',
-          label: 'Step left',
-          keys: 'A',
-          hold: 'strafeLeft',
-          views: 'both',
-        },
-        {
-          id: 'cityWalkStepRightBtn',
-          label: 'Step right',
-          keys: 'D',
-          hold: 'strafeRight',
-          views: 'both',
-        },
-        {
-          id: 'cityWalkFastBtn',
-          label: 'Fast',
-          keys: 'Shift (hold)',
-          press: toggleFastWalk,
-          toggle: true,
-          views: 'street',
-        },
-      ],
-    },
     {
       name: 'Speed',
       buttons: [
@@ -722,6 +679,18 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
           keys: 'Right Bracket',
           press: () => adjustWalkSpeed(0.25),
           views: 'both',
+        },
+        // CW-35: Fast moved here when the Move group retired. The Camera
+        // panel has no equivalent, and Shift is a KEYBOARD route only — with
+        // no button, anyone walking the city by mouse or touch would have
+        // lost the ability to hurry entirely. It belongs with Speed anyway.
+        {
+          id: 'cityWalkFastBtn',
+          label: 'Fast',
+          keys: 'Shift (hold)',
+          press: toggleFastWalk,
+          toggle: true,
+          views: 'street',
         },
       ],
     },
@@ -940,6 +909,9 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   }
 
   function syncToolbarView() {
+    // The Camera panel reads the same view flag and relabels itself: the same
+    // arrow that walks in the street pans over the map, and it has to say so.
+    state.refs.cameraPanel?.syncView();
     const { toolbarButtons, mapBtn, fastBtn } = state.refs;
     if (!toolbarButtons) return;
     const mapView = Boolean(state.game?.mapView);
@@ -1099,6 +1071,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     refs.startPanel.hidden = true;
     refs.viewport.hidden = false;
     refs.toolbar.hidden = false;
+    refs.cameraPanel.el.hidden = false;
     refs.hud.hidden = false;
 
     const started = await startGame(city, model);
@@ -1740,6 +1713,33 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
    * my looking" cannot strand it. The announcement is unconditional - a key
    * that answers with silence reads as broken.
    */
+  /**
+   * Turn the walker to a compass bearing (CW-35).
+   *
+   * Instant, not a slow turn: the panel's Front/Back/Left/Right are the
+   * game's answer to the preview's standard views, and a standard view
+   * arrives rather than being steered to. The announcement is what tells a
+   * screen-reader user it happened, since the picture cannot.
+   */
+  function faceHeading(headingRad) {
+    const game = state.game;
+    if (!game || game.mapView) return;
+    game.walkState.headingRad = normalizeHeading(headingRad);
+    applyFirstPersonCamera();
+    game.altView.invalidate();
+    updateHud();
+  }
+
+  /** Tilt the gaze to a fixed pitch — the panel's Diagonal view (CW-35). */
+  function setGazePitch(pitchRad) {
+    const game = state.game;
+    if (!game || game.mapView) return;
+    game.walkState.pitchRad = clampPitch(pitchRad);
+    applyFirstPersonCamera();
+    game.altView.invalidate();
+    updateHud();
+  }
+
   function levelTheView() {
     const game = state.game;
     if (!game) return;
