@@ -2083,6 +2083,14 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       game.beacons.setSelected(null);
     }
     syncToolbarView();
+    // The phosphor trail is a persistence buffer: every painted frame is laid
+    // over a fading copy of the one before, which is what makes movement leave
+    // a wake. Between the street and the map those two pictures have nothing
+    // in common, so the wake becomes a double exposure — the city you were
+    // standing in shuttering over the map you just opened, and back again.
+    // Nothing ever emptied that buffer here; the Forge preview has always
+    // emptied it on an abrupt change (main.js) and the game never did (D-81).
+    game.altView.clearPersistence();
     game.altView.invalidate();
     updateHud();
     announceInLayer(

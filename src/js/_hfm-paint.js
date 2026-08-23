@@ -294,6 +294,21 @@ function _frameBuffer(ctx, w, h) {
  */
 const _glowBuffers = new WeakMap();
 
+/**
+ * Forget the previous frame, so the next one has nothing to trail from.
+ *
+ * A trail is a memory of where things were, and it is only ever wanted when
+ * the next picture is a continuation of the last. When the picture is CUT -
+ * the City Walk's map and street views share nothing at all - that memory
+ * paints the old view over the new one for as long as it takes to decay,
+ * which reads as a double exposure rather than as an afterglow (D-81).
+ *
+ * @param {CanvasRenderingContext2D} ctx - the overlay context to forget
+ */
+export function clearAfterglow(ctx) {
+  _glowBuffers.get(ctx)?.fill(0);
+}
+
 function _glowBuffer(ctx, byteLength) {
   const held = _glowBuffers.get(ctx);
   if (held && held.length === byteLength) return held;

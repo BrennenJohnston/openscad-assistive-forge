@@ -453,6 +453,76 @@ test.describe('ASCII City Walk — map navigation and walking speed (CW-9)', () 
   })
 })
 
+/**
+ * D-81: the phosphor trail lays each painted frame over a fading copy of the
+ * one before, which is what gives movement a wake. Between the street and the
+ * map those two pictures have nothing in common, so the wake became a double
+ * exposure - the city shuttering over the map and back again, which is how
+ * the owner reported it.
+ *
+ * Measured rather than eyeballed: the frame right after the toggle is
+ * compared with the settled frame a moment later. With the trail carried over
+ * they differ; with it dropped they are the same picture.
+ */
+test.describe('ASCII City Walk — the view cuts, it does not cross-fade (D-81)', () => {
+  test('switching between map and street leaves no ghost of the other', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000)
+    await launchGame(page)
+    await enterCity(page)
+    await page.waitForTimeout(1500)
+    await page.locator('#cityWalkViewport').click({ position: { x: 5, y: 5 } })
+
+    /** Mean absolute difference in level between two PNG buffers, 0-255. */
+    const ghost = (a, b) =>
+      page.evaluate(
+        async ([x, y]) => {
+          const load = async (u) => {
+            const i = new Image()
+            i.src = u
+            await i.decode()
+            const c = document.createElement('canvas')
+            c.width = i.width
+            c.height = i.height
+            c.getContext('2d').drawImage(i, 0, 0)
+            return c
+              .getContext('2d')
+              .getImageData(0, 0, c.width, c.height).data
+          }
+          const [p, q] = [await load(x), await load(y)]
+          let sum = 0
+          for (let i = 0; i < p.length; i += 4) {
+            sum += Math.abs(
+              Math.max(p[i], p[i + 1], p[i + 2]) -
+                Math.max(q[i], q[i + 1], q[i + 2])
+            )
+          }
+          return sum / (p.length / 4)
+        },
+        [a, b]
+      )
+    const url = (buf) => 'data:image/png;base64,' + buf.toString('base64')
+    const shot = () => page.locator('#cityWalkViewport').screenshot()
+
+    for (const into of ['map', 'street']) {
+      await page.keyboard.press('m')
+      const immediate = await shot()
+      await page.waitForTimeout(1400)
+      const settled = await shot()
+      const carried = await ghost(url(immediate), url(settled))
+      // Measured on this pose: 2.68 into the map and 1.16 back to the street
+      // with the trail carried, 0.00 both ways once it is dropped. The bar
+      // sits between, nearer zero.
+      expect(
+        carried,
+        `${into} view still carried ${carried.toFixed(2)} levels of the other view`
+      ).toBeLessThan(0.5)
+      await page.waitForTimeout(400)
+    }
+  })
+})
+
 test.describe('ASCII City Walk — character size (CW-12)', () => {
   const scaleOf = (page) =>
     page.evaluate(() => window.__cityWalkGame?.altView?.getFontScale() ?? null)

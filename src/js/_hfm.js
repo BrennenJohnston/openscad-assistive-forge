@@ -26,6 +26,7 @@
 
 import { createLookup } from './_hfm-lookup.js';
 import {
+  clearAfterglow,
   createOverlay,
   resizeOverlay,
   buildGlyphAtlas,
@@ -1148,6 +1149,17 @@ export async function initAltView(previewManager, options = {}) {
         st.dirty = true;
       }
     },
+    /**
+     * Drop the afterglow, whichever path is carrying it.
+     *
+     * There are two. The per-cell blit path keeps the previous frame on a
+     * persistence CANVAS; the composite path (glowInComposite, which the City
+     * Walk uses) keeps it in a pixel buffer inside the painter and never
+     * touches that canvas at all. This method used to clear only the first,
+     * so for a composite-path caller it did nothing while looking like it had
+     * worked - and the City Walk's map/street cut kept its double exposure
+     * (D-81). Both are cleared now.
+     */
     clearPersistence() {
       if (st.persistCanvas && st.persistCtx) {
         st.persistCtx.clearRect(
@@ -1156,8 +1168,9 @@ export async function initAltView(previewManager, options = {}) {
           st.persistCanvas.width,
           st.persistCanvas.height
         );
-        st.dirty = true;
       }
+      if (st.overlayCtx) clearAfterglow(st.overlayCtx);
+      st.dirty = true;
     },
   };
 
