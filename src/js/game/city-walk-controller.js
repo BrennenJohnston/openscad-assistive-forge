@@ -61,7 +61,6 @@ import {
   stampObstacles,
   findSpawn,
   findLandingNear,
-  LANDING_SNAP_M,
   createMapCamera,
   stepMapCamera,
   recenterMapCamera,
@@ -136,12 +135,16 @@ const THUNDER_GAP_MS = 30000;
 // round text pack. Picking and landing are separate sentences on purpose: a
 // screen-reader user hears what they picked before committing to it, which is
 // the only preview of the choice they get.
-const TELEPORT_PICK_MESSAGE = (street) =>
-  `Teleport target set on ${street}. Press J to go.`;
+// "on" and "near" are the game's existing vocabulary for the same distinction
+// the HUD draws (CW-27): inside the street, or beside it. Using the same two
+// words here means the sentence a screen-reader user hears and the line a
+// sighted user reads say the same thing about the same spot.
+const TELEPORT_PICK_MESSAGE = (street, on) =>
+  `Teleport target set ${on ? 'on' : 'near'} ${street}. Press J to go.`;
 const TELEPORT_PICK_OPEN_MESSAGE =
   'Teleport target set on open ground. Press J to go.';
-const TELEPORT_LANDED_MESSAGE = (street, compass) =>
-  `Teleported to ${street}, facing ${compass}.`;
+const TELEPORT_LANDED_MESSAGE = (street, on, compass) =>
+  `Teleported ${on ? 'to' : 'near'} ${street}, facing ${compass}.`;
 const TELEPORT_LANDED_OPEN_MESSAGE = (compass) =>
   `Teleported to open ground, facing ${compass}.`;
 const TELEPORT_REFUSED_MESSAGE =
@@ -2241,29 +2244,56 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     };
   }
 
-  /** The street name at a world point, for naming a pick or a landing. */
-  function streetNameAt(x, y) {
-    const hit = state.game?.streetIndex?.nearest(x, y, LANDING_SNAP_M);
-    return hit ? hit.name : null;
+  /**
+   * What the HUD would say about a world point: the nearest named street and
+   * whether you are standing in it or beside it. Same thresholds updateStreet
+   * uses, minus its hysteresis - which exists to stop the HUD flapping at a
+   * junction as you walk, and has nothing to say about a point on a map.
+   */
+  function streetAt(x, y) {
+    const hit = state.game?.streetIndex?.query(x, y, STREET_NEAR_M)[0];
+    return hit ? { name: hit.name, on: hit.distM <= STREET_ON_M } : null;
   }
 
   /**
-   * Mark a spot on the map as where a teleport would go.
+   * Mark where a teleport would put you.
    *
-   * Picking is separate from going: the announcement names the street so a
-   * screen-reader user can hear what they picked BEFORE committing, and a
-   * mis-click costs nothing but another click.
+   * The marker goes on the LANDING, not on the pixel that was clicked, and
+   * the announcement names the landing too - so what you are told before you
+   * commit is what you actually get. Naming the raw click instead was tried
+   * and photographed: it said "open ground" and then landed the player on
+   * University Street, because the click was 25 m from a road the snap could
+   * still reach.
+   *
+   * Picking is separate from going so a screen-reader user hears the choice
+   * before taking it, and a mis-click costs nothing but another click.
    */
   function setTeleportTarget(x, y) {
     const game = state.game;
     if (!game?.mapView) return;
-    game.teleportTarget = { x, y };
-    game.targetMarker.position.set(x, y, game.targetMarker.position.z);
+
+    const landing = findLandingNear(game.model, game.collision, x, y);
+    if (!landing) {
+      clearTeleportTarget();
+      game.altView.invalidate();
+      announceInLayer(TELEPORT_REFUSED_MESSAGE);
+      return;
+    }
+
+    game.teleportTarget = landing;
+    game.targetMarker.position.set(
+      landing.x,
+      landing.y,
+      game.targetMarker.position.z
+    );
     game.targetMarker.visible = true;
     game.altView.invalidate();
-    const street = streetNameAt(x, y);
+
+    const street = landing.onRoad ? streetAt(landing.x, landing.y) : null;
     announceInLayer(
-      street ? TELEPORT_PICK_MESSAGE(street) : TELEPORT_PICK_OPEN_MESSAGE
+      street
+        ? TELEPORT_PICK_MESSAGE(street.name, street.on)
+        : TELEPORT_PICK_OPEN_MESSAGE
     );
   }
 
@@ -2285,16 +2315,18 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     const game = state.game;
     if (!game || !game.mapView) return;
 
-    const target = game.teleportTarget ?? {
-      x: game.mapCam.centerX,
-      y: game.mapCam.centerY,
-    };
-    const landing = findLandingNear(
-      game.model,
-      game.collision,
-      target.x,
-      target.y
-    );
+    // A pick has already been resolved to a landing, so it is used as it is:
+    // searching again would be a second chance to disagree with what the
+    // player was told they had chosen. Only the keyboard route, which picks
+    // nothing and means "the middle of the map", searches here.
+    const landing =
+      game.teleportTarget ??
+      findLandingNear(
+        game.model,
+        game.collision,
+        game.mapCam.centerX,
+        game.mapCam.centerY
+      );
     if (!landing) {
       announceInLayer(TELEPORT_REFUSED_MESSAGE);
       return;
@@ -2334,10 +2366,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     game.altView.invalidate();
     updateHud();
 
+    // game.streetName and game.streetOn are what the HUD is now showing —
+    // updateStreet has just written them, with the old street's stickiness
+    // cleared — so the sentence and the line cannot disagree.
     const compass = headingLabel(game.walkState.headingRad);
     announceInLayer(
-      landing.onRoad && game.streetName
-        ? TELEPORT_LANDED_MESSAGE(game.streetName, compass)
+      game.streetName
+        ? TELEPORT_LANDED_MESSAGE(game.streetName, game.streetOn, compass)
         : TELEPORT_LANDED_OPEN_MESSAGE(compass)
     );
   }

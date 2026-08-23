@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Drop yourself onto any street** (CW-36) - the map was somewhere to look at the city; it is now
+  somewhere to travel from. Click a street on the overhead map and the game tells you which street
+  you picked, marks it with a ring, and waits. Press J and you are standing there, looking along the
+  street rather than at a wall. Nothing is picked and you press J: you land on the middle of the
+  map, which matters because the arrow keys already steer that middle - so the whole thing works
+  from the keyboard alone, without needing to click anything. There is a **Teleport here** button on
+  the map toolbar for the same job. You can never land inside a building: the landing uses the same
+  test the walker itself uses to decide whether a step is possible, and if there is genuinely
+  nowhere to stand near where you picked, it says so instead of putting you somewhere wrong
+
 ### Changed
 
 - **The camera controls are the ones you already know** (CW-35) - the game had its own vocabulary
