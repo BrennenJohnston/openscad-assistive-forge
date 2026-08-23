@@ -643,10 +643,13 @@ body[data-mobile-toolbar='relocated'] .preview-drawer-header-right {
 
 /* The branding is already squeezed to zero width on this surface — the Main
    Page button and the interface switch take the row — so all it contributes
-   is the two 4px gaps around an invisible box. Measured at 412px: the row's
-   content is 289.6px against 287.2px available, and those 8px are the whole
-   difference between one line and two. Nothing leaves the screen that was on
-   it; the logo and title were not rendering here before this rule.
+   is the two 4px gaps around an invisible box. Measured at 412px: the header
+   controls need 289.6px, and the row offers 287.2px with the branding in the
+   flow and 291.2px without it. Those 8px are the whole difference between one
+   line and two, and 1.6px is all the margin there is — which is why the row
+   is also given permission to wrap rather than clip (see layout.css). Nothing
+   leaves the screen that was on it; the logo and title were not rendering
+   here before this rule.
 
    Taken out of the FLOW, not out of the accessibility tree. `display: none`
    was tried first and measured to remove the document's only <h1> — 0px wide
