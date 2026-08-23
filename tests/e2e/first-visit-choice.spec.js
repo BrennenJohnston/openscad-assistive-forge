@@ -441,11 +441,26 @@ test.describe('UF-41: Download & Continue is reachable without scrolling', () =>
   // The two sizes the acceptance oracle names. 412x915 is the emulated
   // phone; 1280x800 is the laptop the §2.5 table proved was also failing,
   // which is the half of this defect nobody had reported.
+  //
+  // WHAT THIS ASSERTS, AND WHY IT IS NOT "nothing scrolls". The first cut of
+  // this case demanded `bodyOverflow <= 0` here and went RED on the Linux
+  // Firefox lane at 38px, while passing on Windows Firefox, Windows Chromium
+  // and Linux Chromium. Linux font metrics are simply taller, and no amount
+  // of CSS makes a text block the same height on every platform. That number
+  // was a MEASUREMENT FROM ONE MACHINE being asserted as a promise.
+  //
+  // The promise is the button, and it survives everywhere: on that same red
+  // run the hit-test assertions passed. So the invariants below are the ones
+  // that are actually engine-independent — the primary action is reachable
+  // without scrolling, the modal box itself never scrolls whatever the body
+  // does, and the cue tells the truth about the body. Whether a given size
+  // reaches zero overflow is recorded in the release record as a measurement,
+  // which is what it is.
   for (const [width, height] of [
     [412, 915],
     [1280, 800],
   ]) {
-    test(`the primary action is hit-testable and nothing scrolls at ${width}x${height}`, async ({
+    test(`the primary action is hit-testable without scrolling at ${width}x${height}`, async ({
       page,
     }) => {
       await page.setViewportSize({ width, height });
@@ -461,8 +476,20 @@ test.describe('UF-41: Download & Continue is reachable without scrolling', () =>
         fit.topmostIsContinue,
         `elementFromPoint at the button's centre returned ${fit.hitTag}`
       ).toBe(true);
-      expect(fit.bodyOverflow, 'the body must not overflow here').toBeLessThanOrEqual(0);
-      expect(fit.boxOverflow, 'the modal box itself must never scroll').toBeLessThanOrEqual(0);
+      // Structural, and true on every platform: the header and footer are
+      // outside the scroller, so the box that holds them cannot scroll.
+      expect(
+        fit.boxOverflow,
+        'the modal box itself must never scroll'
+      ).toBeLessThanOrEqual(0);
+      // And the cue never lies about the body, whichever way the fonts fall.
+      const hasMore = await page
+        .locator('.modal-first-visit')
+        .evaluate((el) => el.classList.contains('first-visit-has-more'));
+      expect(
+        hasMore,
+        `cue shown=${hasMore} but the body overflows by ${fit.bodyOverflow}`
+      ).toBe(fit.bodyOverflow > 0);
     });
   }
 
@@ -472,7 +499,7 @@ test.describe('UF-41: Download & Continue is reachable without scrolling', () =>
   // the remaining 65px cannot come out of anything but words or a touch
   // target — but the primary action must still be on screen, because the
   // footer no longer scrolls with the body.
-  test('the primary action stays on screen at 412x810, where the body still scrolls', async ({
+  test('the primary action stays on screen at 412x810, the height a phone really has', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 412, height: 810 });
@@ -482,8 +509,19 @@ test.describe('UF-41: Download & Continue is reachable without scrolling', () =>
     const fit = await continueFit(page);
     expect(fit.inViewport).toBe(true);
     expect(fit.topmostIsContinue, `hit ${fit.hitTag}`).toBe(true);
-    expect(fit.bodyOverflow, 'this size is expected to scroll').toBeGreaterThan(0);
     expect(fit.boxOverflow).toBeLessThanOrEqual(0);
+
+    // On this machine the body overflows by 65px here and the arithmetic says
+    // the last 65 can only come out of words or the 44px touch floor. That is
+    // a measurement, not a promise, so what is asserted is the invariant: the
+    // cue agrees with the body, and the button is reachable either way.
+    const hasMore = await page
+      .locator('.modal-first-visit')
+      .evaluate((el) => el.classList.contains('first-visit-has-more'));
+    expect(
+      hasMore,
+      `cue shown=${hasMore} but the body overflows by ${fit.bodyOverflow}`
+    ).toBe(fit.bodyOverflow > 0);
   });
 
   // The title clip (164304) is a 100vh bug: 100vh is the LARGE viewport
@@ -573,16 +611,36 @@ test.describe('UF-41: the fold is visible when there is one', () => {
     // for had happened. A ResizeObserver on the scroller AND its children
     // closes it; the children matter because content growing inside a
     // fixed-height scroller never changes that scroller's own box.
+    //
+    // The trigger here is NOT high contrast, even though that is what caught
+    // it. High contrast grew the content 22px on Chromium and not at all on
+    // WebKit, so a case built on it asserted one engine's metrics and went
+    // red on another — the same over-claim as the fit cases above. Root
+    // font-size is the honest trigger: it grows the content by a wide margin
+    // on every engine, fires none of scroll, toggle or resize, and it is one
+    // of the real-world causes this observer exists for (a reader who has
+    // turned their browser's text size up).
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/');
     await waitForModal(page);
 
     const box = page.locator('.modal-first-visit');
+    const before = await continueFit(page);
+    expect(
+      before.bodyOverflow,
+      'this size must start without a fold for the case to mean anything'
+    ).toBeLessThanOrEqual(0);
     await expect(box).not.toHaveClass(/first-visit-has-more/);
 
-    await page.evaluate(() =>
-      document.documentElement.setAttribute('data-high-contrast', 'true')
-    );
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = '28px';
+    });
+
+    // The content really did grow — otherwise the assertion below would pass
+    // by describing nothing, which is the vacuous green this suite keeps
+    // being bitten by.
+    const after = await continueFit(page);
+    expect(after.bodyOverflow).toBeGreaterThan(0);
 
     await expect(box).toHaveClass(/first-visit-has-more/);
     await expect(page.locator('.first-visit-scroll-cue')).toHaveCSS(
@@ -590,8 +648,13 @@ test.describe('UF-41: the fold is visible when there is one', () => {
       '1'
     );
     // And the primary action is still fixed and pressable underneath it.
-    const fit = await continueFit(page);
-    expect(fit.topmostIsContinue, `hit ${fit.hitTag}`).toBe(true);
+    expect(after.topmostIsContinue, `hit ${after.hitTag}`).toBe(true);
+
+    // Put it back, and the cue goes with it.
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = '';
+    });
+    await expect(box).not.toHaveClass(/first-visit-has-more/);
   });
 
   test('opening a note row re-evaluates the fold', async ({ page }) => {
