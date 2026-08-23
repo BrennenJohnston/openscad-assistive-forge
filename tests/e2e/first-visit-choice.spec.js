@@ -721,7 +721,7 @@ test.describe('UF-41: the collapsible intro on a mobile-shaped viewport', () => 
       [
         '#firstVisitChoiceForge',
         'firstVisitForgeShotDesc',
-        'the Customizer parameter panel is on the left',
+        'the Customizer panel is on the left',
       ],
       [
         '#firstVisitChoiceClassic',
