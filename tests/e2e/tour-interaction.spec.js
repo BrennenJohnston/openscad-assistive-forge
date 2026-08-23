@@ -1452,3 +1452,97 @@ test.describe('UF-38: cards that stay readable', () => {
     });
   });
 });
+
+test.describe('UF-42 / D-77: a docked card does not sit on a control it is not pointing at', () => {
+  test.use({ viewport: { width: 412, height: 810 } });
+
+  /** End clears every completion gate; ArrowLeft walks back through them. */
+  async function walkBackTo(page, title, cap = 24) {
+    await page.keyboard.press('End');
+    await expect(page.locator('#tutorial-step-title')).toHaveText(
+      'Back to the Main Page',
+      { timeout: 15_000 }
+    );
+    for (let i = 0; i < cap; i++) {
+      if ((await page.locator('#tutorial-step-title').textContent()) === title) {
+        await page.waitForTimeout(400);
+        return;
+      }
+      await page.keyboard.press('ArrowLeft');
+      await page.waitForTimeout(350);
+    }
+    await expect(page.locator('#tutorial-step-title')).toHaveText(title);
+  }
+
+  /**
+   * Which app controls does the card's own box hit-test over? This is the
+   * measurement that minted D-77: at 412x810 on the step below, the card
+   * covered #uiModeToggle and document.elementFromPoint at that button's
+   * centre returned the card. It asks about every control in the top chrome,
+   * not only the one that was photographed, because the defect is the
+   * positioner never asking at all.
+   */
+  const buriedControls = (page) =>
+    page.evaluate(() => {
+      const panel = document.querySelector('.tutorial-panel');
+      if (!panel) return ['no tutorial panel'];
+      const selector =
+        '.app-header button, .app-header a, #workflowProgress button, ' +
+        '.preview-drawer-header button';
+      const buried = [];
+      for (const el of document.querySelectorAll(selector)) {
+        const cs = getComputedStyle(el);
+        if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+        const r = el.getBoundingClientRect();
+        if (!r.width || !r.height) continue;
+        const top = document.elementFromPoint(
+          r.x + r.width / 2,
+          r.y + r.height / 2
+        );
+        if (top && (top === panel || panel.contains(top))) {
+          buried.push(el.id || String(el.className).split(' ')[0]);
+        }
+      }
+      return buried;
+    });
+
+  test('D-77: the card clears the header on a step that points at the bottom of the screen', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await startBoxTour(page);
+    await walkBackTo(page, 'Generate and download your file');
+
+    // The step points at #primaryActionBtn, low on the screen, so the card
+    // docks upward — straight over the chrome, until UF-42 gave the top dock
+    // the app's own top chrome to clear.
+    await expect(page.locator('#tutorial-step-title')).toHaveText(
+      'Generate and download your file'
+    );
+    expect(await buriedControls(page)).toEqual([]);
+
+    // And the control it IS pointing at stays tappable.
+    const targetReachable = await page.evaluate(() => {
+      const btn = document.getElementById('primaryActionBtn');
+      const r = btn.getBoundingClientRect();
+      const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+      return !!top && (btn === top || btn.contains(top));
+    });
+    expect(targetReachable, 'the spotlighted button is still hit-testable').toBe(
+      true
+    );
+  });
+
+  test('D-77: the same holds on the camera step, which also docks upward', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await startBoxTour(page);
+    await walkBackTo(page, 'Camera controls');
+
+    await expect(page.locator('#tutorial-step-title')).toHaveText(
+      'Camera controls'
+    );
+    expect(await buriedControls(page)).toEqual([]);
+  });
+});

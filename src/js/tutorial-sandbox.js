@@ -4246,7 +4246,33 @@ function updateSpotlightAndPosition() {
         ? drawerTitleRow.getBoundingClientRect().bottom + 8
         : 0;
 
-    const topOffset = Math.max(8, safeAreas.top + 8, drawerHeaderBottom);
+    // D-77: the top dock starts below the app's own top chrome. A card
+    // pointing at something low on the screen docks upward, and at 412x810 a
+    // card starting at y 8 buried the header row and the Customizer row on
+    // its way past — measured on the intro tour's "Generate and download your
+    // file" step, where elementFromPoint at #uiModeToggle's centre returned
+    // the card. Docking clear of the chrome is better than disqualifying the
+    // dock, which would cost the card its visibility on those steps.
+    // A bar the target itself lives in is not counted: the spotlight elevates
+    // that on purpose.
+    const topChromeBottom = [
+      '.app-header',
+      '#workflowProgress',
+      '.preview-drawer-header',
+    ]
+      .map((selector) => document.querySelector(selector))
+      .filter((el) => el && isRendered(el) && !el.contains(target))
+      .reduce(
+        (lowest, el) => Math.max(lowest, el.getBoundingClientRect().bottom),
+        0
+      );
+
+    const topOffset = Math.max(
+      8,
+      safeAreas.top + 8,
+      drawerHeaderBottom,
+      topChromeBottom + 8
+    );
     const bottomOffset = Math.max(8, safeAreas.bottom + actionsBarHeight + 8);
 
     const intersects = (a, b, pad = 6) => {
@@ -4274,6 +4300,40 @@ function updateSpotlightAndPosition() {
       const topEl = document.elementFromPoint(cx, cy);
       return !!topEl && (panel.contains(topEl) || topEl === panel);
     };
+
+    // D-77: a docked card must not sit on a control it is not pointing at.
+    // Both tests above ask only about the step's OWN target, so a card that
+    // cleared its target could still bury the rest of the chrome — measured
+    // at 412x810 on the intro tour's "Generate and download your file" step,
+    // where the top-docked card covered #uiModeToggle and elementFromPoint
+    // at that button's centre returned the card.
+    const clearanceRects = () => {
+      const out = [];
+      const selector = [
+        '.app-header button',
+        '.app-header a',
+        '#workflowProgress button',
+        '.preview-drawer-header button',
+        '#actionsBar button',
+      ].join(', ');
+      for (const el of document.querySelectorAll(selector)) {
+        // The step's own target is what the spotlight elevates on purpose,
+        // and the panel's own controls travel with it.
+        if (panel.contains(el)) continue;
+        if (el === target || el.contains(target) || target.contains(el))
+          continue;
+        if (!isRendered(el)) continue;
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) out.push(r);
+      }
+      return out;
+    };
+
+    const clearanceOverlap = (pr) =>
+      clearanceRects().reduce((sum, c) => sum + overlapArea(pr, c), 0);
+
+    const blocks = (pr) =>
+      intersects(pr, rect) || isBlockedAtCenter() || clearanceOverlap(pr) > 0;
 
     const dock = (side) => {
       // Compact floating bubble (not full-width sheet) for portrait usability.
@@ -4311,10 +4371,11 @@ function updateSpotlightAndPosition() {
 
     dock(first);
     const pr1 = panel.getBoundingClientRect();
-    if (intersects(pr1, rect) || isBlockedAtCenter()) {
+    const c1 = clearanceOverlap(pr1);
+    if (blocks(pr1)) {
       dock(second);
       const pr2 = panel.getBoundingClientRect();
-      if (intersects(pr2, rect) || isBlockedAtCenter()) {
+      if (blocks(pr2)) {
         // If the highlighted target is a large region (e.g. preview container),
         // it may be impossible to avoid overlap. Only auto-minimize when the
         // current step is gating progress on a required interaction.
@@ -4325,9 +4386,10 @@ function updateSpotlightAndPosition() {
         }
 
         // Non-interactive step: keep the panel visible, choosing the docked
-        // side that minimizes overlap with the target.
-        const a1 = overlapArea(pr1, rect);
-        const a2 = overlapArea(pr2, rect);
+        // side that buries the least — the target it points at plus (D-77)
+        // the chrome it does not.
+        const a1 = overlapArea(pr1, rect) + c1;
+        const a2 = overlapArea(pr2, rect) + clearanceOverlap(pr2);
         if (a1 < a2) {
           dock(first);
         }
