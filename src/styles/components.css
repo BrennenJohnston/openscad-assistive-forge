@@ -5580,22 +5580,26 @@ body.first-visit-blocking #app {
   display: none;
 }
 
-/* The house chevron, drawn from the summary itself so it cannot become a
-   second control inside the control (UF-35's nested-interactive rule). */
+/* The house chevron, copied from `.forge-disclosure summary::after` rather
+   than re-invented: same 0.5em box so it scales with the user's text size,
+   same border technique, and the same direction convention the app's other
+   disclosures use (points right when closed, down when open). Drawn from the
+   summary itself so it cannot become a second control inside the control
+   (UF-35's nested-interactive rule). */
 .first-visit-note-row > summary::after {
   content: '';
-  flex: 0 0 auto;
+  flex-shrink: 0;
   margin-left: auto;
-  width: 8px;
-  height: 8px;
+  width: 0.5em;
+  height: 0.5em;
   border-right: 2px solid currentColor;
   border-bottom: 2px solid currentColor;
-  transform: rotate(45deg) translate(-2px, -2px);
+  transform: rotate(-45deg);
   transition: transform var(--motion-base) ease;
 }
 
 .first-visit-note-row[open] > summary::after {
-  transform: rotate(-135deg) translate(-2px, -2px);
+  transform: rotate(45deg);
 }
 
 @media (prefers-reduced-motion: reduce) {
