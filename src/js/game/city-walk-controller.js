@@ -1320,6 +1320,20 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       // Reduced motion stops the weather frames, so a swell caught halfway
       // through would be frozen at its brightest (D-75).
       if (event.matches) clearThunder(game);
+      // Rain is motion, and G already refuses to start it while reduced
+      // motion is on. Rain that was ALREADY falling used to be left where it
+      // stood: the drops stopped in mid-air as static diagonal streaks — the
+      // scratches-on-the-picture look CW-20 removed from the map view — and
+      // the Rain button stayed in a toolbar that no longer did anything
+      // (D-76). Asking for less movement now ends the shower, and says so.
+      if (event.matches && game.rainLevel !== null) {
+        applyRainLevel(game, null);
+        syncToolbarView();
+        // ACCESSIBILITY-CRITICAL STRING (D-35) — flagged for owner review.
+        // Reused verbatim from the key that refuses to start rain, because
+        // it is the same fact arriving from the other direction.
+        announceInLayer(RAIN_BLOCKED_MESSAGE);
+      }
       game.applyGlow();
       // A freeze must be visible immediately, not at the next state change.
       game.altView.invalidate();

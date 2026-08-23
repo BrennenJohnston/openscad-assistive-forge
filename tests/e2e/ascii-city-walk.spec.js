@@ -2723,6 +2723,80 @@ test.describe('ASCII City Walk — the thunder lets go (D-75)', () => {
 })
 
 /**
+ * D-76: rain is motion, and G has always refused to START it while reduced
+ * motion is on. Rain that was already falling was another matter: the frames
+ * that move the drops simply stopped arriving, so the shower froze in mid-air
+ * as a field of static diagonal streaks - the scratches-on-the-picture look
+ * CW-20 took out of the map view, arriving in the street instead - and the
+ * Rain button sat on in a toolbar where it no longer did anything.
+ */
+test.describe('ASCII City Walk — reduced motion ends the shower (D-76)', () => {
+  test('turning reduced motion on mid-rain stops the rain and says so', async ({
+    page,
+  }) => {
+    test.setTimeout(90000)
+    await launchGame(page)
+    await enterCity(page)
+
+    await page.keyboard.press('KeyG')
+    await expect(page.locator('#cityWalkAnnouncer')).toContainText('Rain')
+    await expect(page.locator('#cityWalkRainBtn')).toBeVisible()
+    expect(
+      await page.evaluate(() => window.__cityWalkGame.rain.group.visible),
+      'the rain never started, so nothing below is testing anything'
+    ).toBe(true)
+
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+
+    await expect
+      .poll(() => page.evaluate(() => window.__cityWalkGame.rainLevel), {
+        message: 'the rain kept falling after reduced motion came on',
+      })
+      .toBe(null)
+    expect(
+      await page.evaluate(() => window.__cityWalkGame.rain.group.visible),
+      'the drops are still on screen, frozen where they stood'
+    ).toBe(false)
+    await expect(
+      page.locator('#cityWalkRainBtn'),
+      'the Rain button stayed in a toolbar where it does nothing'
+    ).toBeHidden()
+    await expect(page.locator('#cityWalkAnnouncer')).toContainText(
+      'Rain is off because reduced motion is on.'
+    )
+  })
+
+  test('a shower ended this way hands back a clear night, not a murky one', async ({
+    page,
+  }) => {
+    test.setTimeout(90000)
+    await launchGame(page)
+    await enterCity(page)
+
+    await page.keyboard.press('KeyG')
+    await expect(page.locator('#cityWalkAnnouncer')).toContainText('Rain')
+    // Drive the fog to its murky end so there is something to hand back.
+    const murky = await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      g.lighting.setFogDensity(1)
+      return g.lighting.getFogFar()
+    })
+    const clear = await page.evaluate(
+      () => window.__cityWalkGame.lighting.weatherTiming.fogFarClear
+    )
+    expect(murky).toBeLessThan(clear)
+
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+
+    await expect
+      .poll(() => page.evaluate(() => window.__cityWalkGame.lighting.getFogFar()), {
+        message: 'the murk outlived the rain that brought it',
+      })
+      .toBeCloseTo(clear, 6)
+  })
+})
+
+/**
  * CW-26: the cities carry building:part volumes and pitched roofs, and both
  * have to survive all the way into the rendered scene — not merely into the
  * parsed model.
