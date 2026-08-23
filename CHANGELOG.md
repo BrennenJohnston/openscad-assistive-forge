@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Real ground under your feet** (CW-33) - the city had one floor: a roadway, a kerb line and a
+  dotted plane. It has three now. Pavements that are mapped separately from the road - and there
+  are 1,539 of them in Seattle alone - are drawn as their own narrow ribbons, lighter than the
+  carriageway and written with their own set of characters, so you can see where the kerb is
+  instead of inferring it. Parks, gardens, pitches and playgrounds appear as greenspace, with their
+  own characters again: clumps and tufts rather than the lines the road uses. And where the map
+  says what a road is paved with - asphalt, concrete, paving stones - the texture shifts to suit;
+  where it does not, a roadway is assumed asphalt and a pavement concrete, which is what
+  OpenStreetMap itself assumes. All four cities were rebaked to collect this
+- **Denver has its shape at last** (CW-33, CW-Q31) - it has been the one city drawn as plain boxes
+  since the stepped towers arrived, because it is mapped in unusual detail: 3,013 separate volumes,
+  more than the file budget allowed. **2,118 of those are smaller than ten square metres** - ledges
+  and setbacks a few centimetres across that no character on screen could ever show. Dropping them
+  leaves 895 real volumes and brings the city inside the budget, so Denver now has its stepped
+  towers and its roofs
+
 ### Changed
 
 - **The graphics card now chooses the characters** (CW-32) - deciding which character to draw in

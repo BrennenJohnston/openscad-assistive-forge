@@ -71,10 +71,15 @@ these three, or that carries none of the kept tags, is dropped during the bake.
 }
 ```
 
-A way is kept only if its surviving tags include `building`, `highway`, or
-`building:part`. Coordinates are rounded to six decimal places, which is about
-0.1 m; keeping more digits would grow the file without changing anything a
-walker can see.
+A way is kept only if its surviving tags include `building`, `highway`,
+`building:part`, or one of the greenspace values listed under
+[Greenspace](#greenspace). Coordinates are rounded to six decimal places, which
+is about 0.1 m; keeping more digits would grow the file without changing
+anything a walker can see.
+
+Keeping a tag is not enough on its own: the gate above decides whether the way
+survives at all, and a way whose only tags are kept ones it does not recognise
+is still dropped. Both have to be changed together.
 
 ### Relation
 
@@ -126,7 +131,47 @@ the size of the raw Overpass response.
 | `natural` | Street trees. |
 | `building:part` | A volume inside a building outline. See below. |
 | `roof:shape`, `roof:height`, `roof:levels`, `roof:orientation` | Pitched roofs. |
-| `shop` | A proxy for where people gather. |
+| `shop` | A proxy for where people gather, and the storefront a ground floor takes. |
+| `surface` | What a road or pavement is paved with, which shifts its texture. Absent on most ways; see the class defaults below. |
+| `footway` | `footway=sidewalk` is what tells a kerbside pavement from a path through a park. |
+| `lanes`, `width` | Kept for a future release. Too sparse to design on today: at most fourteen `width` tags in any of the four bundled cities. |
+| `landuse`, `leisure` | Greenspace, for the named values below. |
+| `building:material`, `building:colour` | Facade variety, where a mapper has said. |
+
+### Greenspace
+
+Greenspace is kept for a NAMED set of values, not for every way carrying
+`landuse` or `leisure`. A downtown is wall to wall
+`landuse=commercial`/`retail`/`industrial`, and keeping those would multiply
+the file for ground that is already drawn as ground.
+
+| key | values kept |
+| --- | --- |
+| `leisure` | `park`, `garden`, `pitch`, `playground`, `grass` |
+| `landuse` | `grass`, `recreation_ground`, `forest`, `meadow`, `village_green` |
+
+The list lives once, as `GREEN_LEISURE_VALUES` and `GREEN_LANDUSE_VALUES` in
+`src/js/game/city-data.js`; the bake builds its Overpass filter from it and the
+trim gate admits exactly the same values, so an extract cannot carry a polygon
+the game will not draw.
+
+**Ways only.** A park mapped as a multipolygon relation is not kept. That is a
+known gap rather than an oversight.
+
+### Surfaces, and what is assumed when there is none
+
+`surface` is tagged on most of some cities' roads and almost none of others'
+(88% of Seattle's, 9% of Albuquerque's). Where it is absent the renderer
+assumes the OSM default for the class: **asphalt** for a roadway, **concrete**
+for a pavement. A pavement with no `width` is drawn 1.8 m wide.
+
+### The part-area floor
+
+A `building:part` whose footprint is smaller than **10 m²** is dropped at bake
+time. Downtowns are mapped with thousands of sliver parts - ledges and setbacks
+a few centimetres across - that no character cell could ever show, and dropping
+them is what lets a densely-modelled city fit inside the size budget at all.
+The number is `MIN_PART_AREA_M2` in `src/js/game/city-data.js`.
 
 ### A note on `building:part`
 
