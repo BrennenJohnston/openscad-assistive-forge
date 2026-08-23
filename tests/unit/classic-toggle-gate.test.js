@@ -150,7 +150,7 @@ describe('Classic toggle viewport gate', () => {
     }
   });
 
-  it('keeps refusing, out loud, if anything ever puts a gated button on screen', async () => {
+  it('refuses out loud whenever a click arrives and Classic cannot be entered', async () => {
     setViewport(375, 812);
     const { UIModeController, announceImmediate } = await freshController();
     const btn = buildToggleDom();
@@ -159,12 +159,13 @@ describe('Classic toggle viewport gate', () => {
     controller.init();
     const modeBefore = controller.getMode();
 
-    // Q-73c made this state unreachable through the UI: gated and hidden are
-    // now the same condition. The controller keeps the refusal as a safety
-    // net, and this case is what stops that net rotting — switching into a
-    // layout the window cannot hold would be worse than a button that says no.
-    btn.classList.remove('hidden');
-    btn.setAttribute('aria-disabled', 'true');
+    // The refusal used to key off aria-disabled, which Q-73c made unreachable
+    // — and switchMode's own refusal is silent, so keying off the attribute
+    // would have dropped a spoken message U-10 shipped. The handler asks the
+    // GATE now, so the announcement survives however the click arrives: a
+    // script, a ?uiMode= deep link, or a future change that puts the button
+    // back on screen while entry is closed. No attribute is set here, on
+    // purpose — that is the whole point of the change.
     btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
     expect(controller.getMode()).toBe(modeBefore);

@@ -595,7 +595,7 @@ test.describe('Classic on mobile (375px, touch)', () => {
     await page.keyboard.press('Escape');
   });
 
-  test('classic-mobile-gate-programmatic: a DOM click on the gated toggle is refused; the drawer is untouched', async ({
+  test('classic-mobile-gate-programmatic: a DOM click on the removed toggle is refused out loud; the drawer is untouched', async ({
     page,
   }) => {
     test.setTimeout(240_000);
@@ -614,6 +614,14 @@ test.describe('Classic on mobile (375px, touch)', () => {
     // longer take over here. The same DOM path (a programmatic click, the
     // deep-link shape) now pins the REFUSAL: no mode change, the drawer
     // still open and working, and the gate's announcement spoken.
+    //
+    // UF-42 removed the button here rather than greying it, which is why the
+    // click below is the only way to reach this path at all — and it is what
+    // very nearly took the announcement away with it. The refusal used to key
+    // off aria-disabled, which is now unreachable, and switchMode's own
+    // refusal is silent. This case is what caught it: the handler asks the
+    // gate directly now, so the spoken refusal survives whatever puts a click
+    // on this control.
     await page.evaluate(() =>
       document.getElementById('classicModeToggle').click()
     );

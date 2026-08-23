@@ -794,11 +794,19 @@ export class UIModeController {
     if (classicBtn) {
       if (isEnabled('classic_mode')) {
         classicBtn.addEventListener('click', (event) => {
-          // Belt and braces. Under Q-73c the gated state is also the
-          // hidden state, so this cannot fire today — but if anything ever
-          // puts the button on screen while entry is closed, refusing out
-          // loud beats switching into a layout the window cannot hold.
-          if (classicBtn.getAttribute('aria-disabled') === 'true') {
+          // A click that arrives while Classic cannot be entered is refused
+          // OUT LOUD. It used to key off aria-disabled, which Q-73c made
+          // unreachable — and switchMode's own refusal is silent, so keying
+          // off the attribute would have quietly dropped the announcement
+          // that U-10 shipped. The condition is the gate itself instead, so
+          // the refusal survives however the click got here: a script, a
+          // deep link, or a future change that puts the button back on
+          // screen while entry is closed.
+          //
+          // Leaving Classic is never gated, so a live Classic session is
+          // never refused — that is the same boundary as the visibility rule
+          // in _updateClassicToggleButton.
+          if (this.currentMode !== 'classic' && !this.isClassicAvailable()) {
             event.preventDefault();
             this._announceClassicUnavailable();
             return;

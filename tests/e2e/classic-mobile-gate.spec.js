@@ -18,10 +18,13 @@ import { test, expect } from '@playwright/test';
 // ui-mode-controller.js) and the dimmed-contrast case at the end of this file
 // is skipped with its reason rather than deleted.
 //
-// The keyboard lessons that shaped the original file still hold: state is
-// asserted, never viewport visibility, because the header row can wrap a
-// button out of view at phone widths (UF-4); and the toggle is driven by
-// keyboard, which is the path that matters.
+// The original file asserted STATE and never visibility, because the header
+// row can wrap a button out of view at phone widths (UF-4) and being off the
+// visible scroll was not the same as being gated. Under this contract the two
+// have merged and the cases below do assert visibility — safely, because
+// Playwright's toBeHidden means "not rendered", not "scrolled out of view", so
+// a wrapped-but-present button still reads as visible. The other lesson
+// stands: the toggle is driven by keyboard, which is the path that matters.
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -30,8 +33,19 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
+/**
+ * The button ships with the `hidden` class and the controller takes it off
+ * during init, so focusing it the instant `goto` resolves can land before
+ * there is anything to focus — Enter then goes nowhere and the mode never
+ * changes. Seen once in 4 under three-way CPU contention, and green 6/6 on
+ * the release base, which is exactly what a load-sensitive race looks like:
+ * present in both, visible only when the machine is busy. Waiting for the
+ * button costs nothing and removes it.
+ */
 async function pressToggle(page) {
-  await page.locator('#classicModeToggle').focus();
+  const toggle = page.locator('#classicModeToggle');
+  await expect(toggle).toBeVisible({ timeout: 15_000 });
+  await toggle.focus();
   await page.keyboard.press('Enter');
 }
 
