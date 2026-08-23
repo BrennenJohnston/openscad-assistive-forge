@@ -264,6 +264,21 @@
   min-height: var(--size-touch-target);
 }
 
+/* CW-35, and the D-55/D-57 fault for the third time. The layer forces the
+ * mono variant on, and variant.css's :root[data-ui-variant='mono'] .btn:hover
+ * at (0,4,0) repaints a button's SURFACE and nothing else. layout.css's
+ * .btn.camera-btn:hover at (0,3,0) sets the accent PAIR but loses the
+ * background, so a hovered panel button came out black accent-text on the
+ * mono hover surface: measured at 1.12:1 by the e2e case that hovers every
+ * control in every in-game state. Written here with enough weight to carry
+ * both halves, for every button in the panel rather than just the D-pad.
+ */
+.city-walk-layer .city-walk-camera-panel .btn:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+  color: var(--color-accent-text);
+  border-color: var(--color-accent-hover);
+}
+
 /* Collapsed, only the toggle shows - the Forge panel's own behaviour, but it
  * sizes itself by flex there and has nothing to size against here. */
 .city-walk-camera-panel.collapsed {

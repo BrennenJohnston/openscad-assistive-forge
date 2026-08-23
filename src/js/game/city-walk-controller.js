@@ -1762,6 +1762,15 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     if (!game) return;
     if (event.button !== 0) return;
 
+    // CW-35: the Camera panel floats INSIDE the viewport, so its buttons'
+    // pointer events bubble to this handler. The preventDefault below would
+    // then stop the browser generating their click and moving focus to them
+    // - the panel looked right and did nothing at all, and Reset announced
+    // nothing when pressed. The panel's own controls are real buttons: they
+    // are focusable, so the reason for refusing the default does not apply
+    // to them.
+    if (event.target?.closest?.('#cityWalkCameraPanel')) return;
+
     // D-59, pre-existing since CW-4 and measured on this release's base: the
     // viewport is not focusable, so the browser's default press moves focus
     // to <body> - outside the layer the game's key listener is bound to. One

@@ -84,7 +84,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     await waitForFrames(page, 3)
 
     const start = await walkPos(page)
-    await holdButton(page, 'cityWalkForwardBtn', () =>
+    await holdButton(page, 'cityWalkCamPanUp', () =>
       expect
         .poll(async () => distance(start, await walkPos(page)), {
           timeout: 15000,
@@ -95,7 +95,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     // Holding Turn right moves the compass off north - to ANY other sector.
     // Exact label, not substring (see hudHeading).
     await expect.poll(() => hudHeading(page)).toBe('north')
-    await holdButton(page, 'cityWalkTurnRightBtn', () =>
+    await holdButton(page, 'cityWalkCamRotateRight', () =>
       expect.poll(() => hudHeading(page), { timeout: 15000 }).not.toBe('north')
     )
 
@@ -127,11 +127,10 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     await startFrameCounter(page)
     await waitForFrames(page, 3)
 
-    const streetOnly = [
-      'cityWalkLookUpBtn',
-      'cityWalkLookDownBtn',
-      'cityWalkFastBtn',
-    ]
+    // CW-35 retired the toolbar's Camera and Move groups into the Camera
+    // panel, so what swaps here is only what is still ON the toolbar: Fast
+    // and Rain mean nothing overhead, and the map's own three arrive.
+    const streetOnly = ['cityWalkFastBtn', 'cityWalkRainBtn']
     const mapOnly = [
       'cityWalkCenterBtn',
       'cityWalkZoomOutBtn',
@@ -141,10 +140,27 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     for (const id of streetOnly) await expect(btn(page, id)).toBeVisible()
     for (const id of mapOnly) await expect(btn(page, id)).toBeHidden()
 
+    // The panel does NOT swap. It stays put and re-labels, because the same
+    // D-pad drives both views (CW-Q32) - and a control that vanished under
+    // the pointer would cost the map the only mouse route it has to pan.
+    await expect(btn(page, 'cityWalkCamPanUp')).toHaveAttribute(
+      'aria-label',
+      'Walk forward'
+    )
+
     await page.keyboard.press('KeyM')
     await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
     for (const id of streetOnly) await expect(btn(page, id)).toBeHidden()
     for (const id of mapOnly) await expect(btn(page, id)).toBeVisible()
+
+    await expect(btn(page, 'cityWalkCamPanUp')).toBeVisible()
+    await expect(btn(page, 'cityWalkCamPanUp')).toHaveAttribute(
+      'aria-label',
+      'Pan map up'
+    )
+    // Face north/east/south/west have no meaning with no walker on screen,
+    // so they stand down rather than take a second job (CW-35 P3).
+    await expect(btn(page, 'cityWalkCamViewFront')).toBeHidden()
 
     // The map buttons drive the map: held Zoom in zooms exponentially…
     const zoom = () => page.evaluate(() => window.__cityWalkGame.mapCam.zoom)
@@ -158,7 +174,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     // …a pan breaks follow mode, and Center on you restores it.
     const follow = () =>
       page.evaluate(() => window.__cityWalkGame.mapCam.follow)
-    await holdButton(page, 'cityWalkStepRightBtn', () =>
+    await holdButton(page, 'cityWalkCamPanRight', () =>
       expect.poll(follow, { timeout: 15000 }).toBe(false)
     )
 
@@ -179,6 +195,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     )
     for (const id of streetOnly) await expect(btn(page, id)).toBeVisible()
     for (const id of mapOnly) await expect(btn(page, id)).toBeHidden()
+    await expect(btn(page, 'cityWalkCamViewFront')).toBeVisible()
   })
 
   test('Enter on a hold button takes one step and then stops', async ({
@@ -191,8 +208,8 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     await waitForFrames(page, 3)
 
     const before = await walkPos(page)
-    await btn(page, 'cityWalkForwardBtn').focus()
-    await expect(btn(page, 'cityWalkForwardBtn')).toBeFocused()
+    await btn(page, 'cityWalkCamPanUp').focus()
+    await expect(btn(page, 'cityWalkCamPanUp')).toBeFocused()
 
     await page.keyboard.press('Enter')
     await expect
@@ -231,7 +248,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     await btn(page, 'cityWalkCharUpBtn').click()
     await expect(announcer(page)).toHaveText(/Character size 50 percent/)
 
-    await btn(page, 'cityWalkLevelBtn').click()
+    await btn(page, 'cityWalkCamReset').click()
     await expect(announcer(page)).toHaveText(/View level/)
 
     // Landmarks live on the map, so Next opens it exactly as L does.
@@ -258,7 +275,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     // is a function of frames rendered, so comparing two fixed-duration
     // holds on a runner whose frame rate wanders compares nothing.
     const a = await walkPos(page)
-    await holdButton(page, 'cityWalkForwardBtn', forFrames(page, 12))
+    await holdButton(page, 'cityWalkCamPanUp', forFrames(page, 12))
     const b = await walkPos(page)
     const strolled = distance(a, b)
     expect(strolled).toBeGreaterThan(0.1)
@@ -270,7 +287,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
 
     // FAST_SPEED_MPS is 2.5x WALK_SPEED_MPS; 1.5x is the margin that still
     // fails loudly if the toggle never reaches stepWalk.
-    await holdButton(page, 'cityWalkForwardBtn', forFrames(page, 12))
+    await holdButton(page, 'cityWalkCamPanUp', forFrames(page, 12))
     const hurried = distance(b, await walkPos(page))
     expect(
       hurried,
@@ -289,7 +306,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     await launchGame(page)
     await enterCity(page)
 
-    await btn(page, 'cityWalkLevelBtn').click()
+    await btn(page, 'cityWalkCamReset').click()
     const focus = await page.evaluate(() => ({
       id: document.activeElement?.id || document.activeElement?.tagName,
       inLayer: Boolean(
@@ -298,7 +315,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
           ?.contains(document.activeElement)
       ),
     }))
-    expect(focus.id).toBe('cityWalkLevelBtn')
+    expect(focus.id).toBe('cityWalkCamReset')
     expect(focus.inLayer).toBe(true)
 
     await page.keyboard.down('ArrowRight')
@@ -316,7 +333,11 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     // Focus a street-only button, then switch views with the key. The
     // button disappears under the focus; if focus fell to <body> every key
     // would die for the rest of the session (D-59).
-    await btn(page, 'cityWalkLookUpBtn').focus()
+    //
+    // CW-35: Fast, not a camera button. The Camera panel's controls now
+    // survive the swap, so the only buttons that can still vanish under a
+    // focus ring are the toolbar's own street-only pair.
+    await btn(page, 'cityWalkFastBtn').focus()
     await page.keyboard.press('KeyM')
     await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
 
@@ -411,9 +432,15 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
 
     const check = async (label) => {
       const targets = [
-        ['plain button', btn(page, 'cityWalkTurnLeftBtn'), true],
+        ['plain button', btn(page, 'cityWalkSpeedDownBtn'), true],
         ['pressed Fast', btn(page, 'cityWalkFastBtn'), true],
-        ['group caption', page.locator('#cityWalkToolbarCameraLabel'), false],
+        // CW-35: the Camera group retired into the Camera panel, so its
+        // caption is gone and Speed's is the one to measure. The panel is a
+        // mouse route too now, and its hover pair broke the moment it
+        // arrived (black accent-text on the mono hover surface, 1.12:1), so
+        // it is measured here rather than trusted.
+        ['group caption', page.locator('#cityWalkToolbarSpeedLabel'), false],
+        ['camera panel button', btn(page, 'cityWalkCamRotateLeft'), true],
       ]
       for (const [name, locator, hoverable] of targets) {
         for (const state of hoverable ? ['rest', 'hovered'] : ['rest']) {
