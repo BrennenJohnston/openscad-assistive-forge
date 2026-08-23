@@ -50,6 +50,7 @@ import {
   PlaneGeometry,
   RepeatWrapping,
   Shape,
+  ShapeGeometry,
   Vector2,
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -66,6 +67,58 @@ import { buildRoadGraph, trafficDensityFor } from './city-data.js';
 export const ROAD_TONES = { street: 0x000000, map: 0x4a4a4a };
 const CURB_TONE = 0x303030;
 const CURB_WIDTH_M = 0.5;
+
+/**
+ * Pavement tones (CW-33). A separately-mapped pavement is lighter than the
+ * roadway it runs beside - that difference is the whole point of drawing it,
+ * because it is what tells a walker where the kerb is.
+ *
+ * Street level stays dark: this city is read through a converter that turns
+ * brightness into characters, and a pavement bright enough to be obvious in
+ * the 3D frame would carpet the bottom of the screen in glyphs. It is lifted
+ * just far enough off the roadway to separate, and the SIDEWALK glyph
+ * vocabulary does the rest of the work.
+ */
+const SIDEWALK_TONES = { street: 0x161616, map: 0x6a6a6a };
+
+/**
+ * Greenspace tones (CW-33). Dim at street level for the same reason, and
+ * distinctly lighter than the roadway overhead so a park reads as a shape on
+ * the map rather than a hole in the grid.
+ */
+const GREEN_TONES = { street: 0x101410, map: 0x3f5a3f };
+
+/**
+ * How the `surface` tag shifts a ribbon's tone, where OSM has one (CW-33).
+ *
+ * The multiplier is deliberately gentle: this is texture, not colour-coding,
+ * and the converter sees only brightness. Anything stronger would turn a
+ * change of paving into a change of material.
+ *
+ * Roads carry a surface tag on 88% of Seattle's ways and 9% of
+ * Albuquerque's, so most ribbons take the class default below and that is
+ * stated rather than hidden - an untagged road is assumed asphalt, an
+ * untagged pavement concrete, which is the OSM default assumption.
+ */
+const SURFACE_TONE_SCALE = {
+  asphalt: 0.85,
+  concrete: 1.25,
+  concrete_plates: 1.25,
+  paving_stones: 1.4,
+  sett: 1.35,
+  cobblestone: 1.35,
+  bricks: 1.3,
+  gravel: 1.15,
+  compacted: 1.1,
+  ground: 1.05,
+  dirt: 1.05,
+  grass: 1.0,
+  wood: 1.2,
+};
+
+/** What a ribbon is assumed to be made of when OSM does not say. */
+const DEFAULT_ROAD_SURFACE = 'asphalt';
+const DEFAULT_SIDEWALK_SURFACE = 'concrete';
 
 // Minor path classes are parsed (city-data keeps them for future rounds)
 // but not drawn: dense downtowns carry footpaths everywhere, and under
@@ -718,7 +771,20 @@ function appendRoadRibbon(road, positions, cullBounds, shape = {}) {
     const d = [cx2 + px, cy2 + py, lift];
     // Two CCW triangles (normal +Z): a-b-c, a-c-d
     positions.push(...a, ...b, ...c, ...a, ...c, ...d);
+    // CW-33: the surface tint rides as a vertex colour so that every ribbon
+    // stays in ONE merged mesh. Splitting by paving material would multiply
+    // the draw calls and, worse, give the class pass a new mesh name to learn
+    // for every value OSM happens to carry.
+    if (shape.colors) {
+      const t = shape.tint ?? 1;
+      for (let v = 0; v < 6; v++) shape.colors.push(t, t, t);
+    }
   }
+}
+
+/** The tone multiplier a ribbon takes from its `surface` tag (CW-33). */
+function surfaceTint(surface, fallback) {
+  return SURFACE_TONE_SCALE[surface] ?? SURFACE_TONE_SCALE[fallback] ?? 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -1241,10 +1307,33 @@ export function buildCityGroup(model) {
     maxY: b.maxY + GROUND_MARGIN_M,
   };
   const roadPositions = [];
+  const roadColors = [];
   const curbPositions = [];
+  const sidewalkPositions = [];
+  const sidewalkColors = [];
   for (const road of model.roads) {
+    // CW-33: a separately-mapped pavement is drawn even though `footway` is
+    // in the undrawn set. The set exists because a downtown carries footpaths
+    // everywhere and, compressed by first-person perspective, they merge into
+    // a solid glyph carpet that drowns the street grid. A footway=sidewalk
+    // way is the narrow subset that runs along a kerb, and it gets its own
+    // narrower ribbon, its own tone and its own glyph voice rather than
+    // joining the roads - which is what keeps it from being that carpet.
+    // Paths through parks stay undrawn.
+    if (road.sidewalk) {
+      appendRoadRibbon(road, sidewalkPositions, cullBounds, {
+        colors: sidewalkColors,
+        tint: surfaceTint(road.surface, DEFAULT_SIDEWALK_SURFACE),
+        // Above the roadway, so a pavement crossing one reads as on top.
+        liftM: ROAD_LIFT_M + 0.04,
+      });
+      continue;
+    }
     if (UNDRAWN_ROAD_KINDS.has(road.kind)) continue;
-    appendRoadRibbon(road, roadPositions, cullBounds);
+    appendRoadRibbon(road, roadPositions, cullBounds, {
+      colors: roadColors,
+      tint: surfaceTint(road.surface, DEFAULT_ROAD_SURFACE),
+    });
     const edgeOffset = (road.widthM - CURB_WIDTH_M) / 2;
     for (const side of [edgeOffset, -edgeOffset]) {
       appendRoadRibbon(road, curbPositions, cullBounds, {
@@ -1255,7 +1344,7 @@ export function buildCityGroup(model) {
     }
   }
 
-  const makeFlatMesh = (positions, material, name) => {
+  const makeFlatMesh = (positions, material, name, colors) => {
     const geom = new BufferGeometry();
     geom.setAttribute(
       'position',
@@ -1264,6 +1353,12 @@ export function buildCityGroup(model) {
     const normals = new Float32Array(positions.length);
     for (let i = 0; i < normals.length; i += 3) normals[i + 2] = 1;
     geom.setAttribute('normal', new BufferAttribute(normals, 3));
+    if (colors && colors.length === positions.length) {
+      geom.setAttribute(
+        'color',
+        new BufferAttribute(new Float32Array(colors), 3)
+      );
+    }
     const mesh = new Mesh(geom, material);
     mesh.name = name;
     group.add(mesh);
@@ -1277,11 +1372,12 @@ export function buildCityGroup(model) {
   if (roadPositions.length > 0) {
     roadMat = new MeshLambertMaterial({
       color: ROAD_TONES.street,
+      vertexColors: true,
       polygonOffset: true,
       polygonOffsetFactor: -1,
       polygonOffsetUnits: -1,
     });
-    makeFlatMesh(roadPositions, roadMat, 'roads');
+    makeFlatMesh(roadPositions, roadMat, 'roads', roadColors);
     roadTriangles = roadPositions.length / 9;
 
     const curbMat = new MeshLambertMaterial({
@@ -1291,6 +1387,54 @@ export function buildCityGroup(model) {
       polygonOffsetUnits: -2,
     });
     curbMesh = makeFlatMesh(curbPositions, curbMat, 'curbs');
+  }
+
+  // CW-33: pavements, as their own surface.
+  let sidewalkMat = null;
+  if (sidewalkPositions.length > 0) {
+    sidewalkMat = new MeshLambertMaterial({
+      color: SIDEWALK_TONES.street,
+      vertexColors: true,
+      polygonOffset: true,
+      polygonOffsetFactor: -3,
+      polygonOffsetUnits: -3,
+    });
+    makeFlatMesh(sidewalkPositions, sidewalkMat, 'sidewalks', sidewalkColors);
+    roadTriangles += sidewalkPositions.length / 9;
+  }
+
+  // CW-33: greenspace, as flat polygons a hair above the ground plane. The
+  // ring-to-shape path is the one extrudeBuilding already uses, so a park
+  // with a concave edge comes out the shape it is mapped as.
+  let greenMat = null;
+  const greenGeoms = [];
+  for (const green of model.greens ?? []) {
+    const shape = new Shape();
+    const ring = green.outer;
+    if (!ring || ring.length < 3) continue;
+    shape.moveTo(ring[0][0], ring[0][1]);
+    for (let i = 1; i < ring.length; i++) shape.lineTo(ring[i][0], ring[i][1]);
+    shape.closePath();
+    const geom = new ShapeGeometry(shape);
+    geom.translate(0, 0, ROAD_LIFT_M - 0.02);
+    greenGeoms.push(geom);
+  }
+  if (greenGeoms.length > 0) {
+    const merged = mergeGeometries(greenGeoms, false);
+    for (const g of greenGeoms) g.dispose();
+    greenMat = new MeshLambertMaterial({
+      color: GREEN_TONES.street,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
+    });
+    const greenMesh = new Mesh(merged, greenMat);
+    greenMesh.name = 'greens';
+    group.add(greenMesh);
+    disposables.push(merged, greenMat);
+    roadTriangles += merged.index
+      ? merged.index.count / 3
+      : merged.getAttribute('position').count / 3;
   }
 
   return {
@@ -1308,6 +1452,19 @@ export function buildCityGroup(model) {
     setMapView(isMap) {
       if (roadMat) {
         roadMat.color = new Color(isMap ? ROAD_TONES.map : ROAD_TONES.street);
+      }
+      // CW-33: pavements and greens brighten overhead with the roads, so the
+      // map reads as a street network with parks in it rather than a grid
+      // floating on black.
+      if (sidewalkMat) {
+        sidewalkMat.color = new Color(
+          isMap ? SIDEWALK_TONES.map : SIDEWALK_TONES.street
+        );
+      }
+      if (greenMat) {
+        greenMat.color = new Color(
+          isMap ? GREEN_TONES.map : GREEN_TONES.street
+        );
       }
       if (curbMesh) curbMesh.visible = !isMap;
       for (const mesh of dressingMeshes) mesh.visible = !isMap;
