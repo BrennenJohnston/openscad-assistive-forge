@@ -55,7 +55,11 @@ import {
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { pointInRing } from './walk-controls.js';
-import { buildRoadGraph, trafficDensityFor } from './city-data.js';
+import {
+  buildRoadGraph,
+  ringCentroid,
+  trafficDensityFor,
+} from './city-data.js';
 
 // Per-view road treatment. Any visible SURFACE tone carpets the lower half
 // of the street view — perspective stacks every road between here and the
@@ -475,6 +479,32 @@ const WINDOW_ARCHETYPES = [
   },
 ];
 
+/**
+ * What a mapped material biases a building's glazing towards (CW-34 P3).
+ *
+ * A BIAS, never an override: the listed archetypes are the ones that material
+ * chooses among, and the building's own hash still picks which. Denver is 97
+ * glass buildings out of 363, and forcing all of them onto one archetype
+ * would trade the letterform monoculture this release removed for a material
+ * monoculture in its place.
+ *
+ * Indices into WINDOW_ARCHETYPES: 0 plain, 1 slot, 2 pair, 3 blinds,
+ * 4 stripes, 5 wide, 6 cross, 7 narrow, 8 band.
+ */
+const ARCHETYPES_BY_MATERIAL = new Map([
+  // A curtain wall is glazing bars and continuous bands, not punched holes.
+  ['glass', [4, 5, 8]],
+  ['mirror', [4, 5, 8]],
+  ['glass_reinforced_concrete', [4, 8]],
+  // Masonry punches holes in a solid wall.
+  ['brick', [7, 1, 0]],
+  ['stone', [7, 1]],
+  ['sandstone', [7, 1]],
+  ['concrete', [6, 0, 2]],
+  ['plaster', [0, 2]],
+  ['metal', [4, 8]],
+]);
+
 /** The default pane rectangle, as fractions of a bay. */
 const WINDOW_PANE_INSET = [0.2, 0.2, 0.6, 0.56];
 
@@ -593,35 +623,132 @@ function createWindowTexture(archetypeIndex = 0) {
  * strip above — the ground floor glow of the reference.
  * @returns {CanvasTexture|null}
  */
+/**
+ * THE GROUND-FLOOR BANDS (CW-34). Art direction, like WINDOW_ARCHETYPES.
+ *
+ * The owner's second photographed complaint: "the first level of each
+ * building is exactly the same". It was — one texture strip, one merged mesh,
+ * repeating every four metres along every building in the city.
+ *
+ * Each entry paints one storefront kind into a bay. They are stacked
+ * vertically into ONE texture and each building's ground floor slides its UVs
+ * to land on the band it wears, so five kinds still cost one mesh and one
+ * draw call.
+ *
+ * Which one a building gets comes from the nearest shop or eating place in
+ * the map data where there is one, and from the building's hash where there
+ * is not. Albuquerque has the fewest POIs of the four cities and is the
+ * control: it must still look varied on the hash alone.
+ */
+const STOREFRONT_VARIANTS = [
+  {
+    name: 'glass',
+    paint: (ctx, w, h) => {
+      ctx.fillStyle = '#efefef';
+      ctx.fillRect(w * 0.08, h * 0.3, w * 0.84, h * 0.62);
+      ctx.fillStyle = '#7a7a7a';
+      ctx.fillRect(w * 0.08, h * 0.06, w * 0.84, h * 0.14);
+      // A mullion, so a wide shopfront is not one undivided slab of light.
+      ctx.fillStyle = '#181818';
+      ctx.fillRect(w * 0.49, h * 0.3, w * 0.02, h * 0.62);
+    },
+  },
+  {
+    name: 'awning',
+    paint: (ctx, w, h) => {
+      ctx.fillStyle = '#d8d8d8';
+      ctx.fillRect(w * 0.1, h * 0.46, w * 0.8, h * 0.46);
+      // The awning itself: a bright band with its shadow under it.
+      ctx.fillStyle = '#9a9a9a';
+      ctx.fillRect(w * 0.04, h * 0.26, w * 0.92, h * 0.16);
+      ctx.fillStyle = '#101010';
+      ctx.fillRect(w * 0.1, h * 0.42, w * 0.8, h * 0.05);
+    },
+  },
+  {
+    name: 'shutter',
+    paint: (ctx, w, h) => {
+      // Closed for the night: dim, and horizontally ribbed.
+      ctx.fillStyle = '#3a3a3a';
+      ctx.fillRect(w * 0.08, h * 0.24, w * 0.84, h * 0.68);
+      ctx.fillStyle = '#242424';
+      for (let i = 0; i < 7; i++) {
+        ctx.fillRect(w * 0.08, h * (0.28 + i * 0.09), w * 0.84, h * 0.03);
+      }
+    },
+  },
+  {
+    name: 'arcade',
+    paint: (ctx, w, h) => {
+      // A colonnade: two piers with a lit recess between them.
+      ctx.fillStyle = '#c8c8c8';
+      ctx.fillRect(w * 0.22, h * 0.34, w * 0.56, h * 0.58);
+      ctx.fillStyle = '#161616';
+      ctx.fillRect(w * 0.0, h * 0.2, w * 0.2, h * 0.8);
+      ctx.fillRect(w * 0.8, h * 0.2, w * 0.2, h * 0.8);
+    },
+  },
+  {
+    name: 'service',
+    paint: (ctx, w, h) => {
+      // A blank wall with a service door. Not every ground floor is a shop,
+      // and a street where they all are reads as a film set.
+      ctx.fillStyle = '#2a2a2a';
+      ctx.fillRect(w * 0.06, h * 0.2, w * 0.88, h * 0.72);
+      ctx.fillStyle = '#585858';
+      ctx.fillRect(w * 0.4, h * 0.42, w * 0.2, h * 0.5);
+    },
+  },
+];
+
+/** Which storefront band a POI kind asks for; anything else falls to the hash. */
+const STOREFRONT_BY_POI = new Map([
+  ['shop', 0],
+  ['restaurant', 1],
+  ['cafe', 1],
+  ['fast_food', 1],
+  ['bar', 1],
+  ['pub', 1],
+  ['bank', 3],
+  ['pharmacy', 0],
+  ['cinema', 3],
+  ['theatre', 3],
+  ['library', 3],
+  ['post_office', 4],
+  ['marketplace', 1],
+]);
+
+/**
+ * Every storefront band in one texture, stacked vertically.
+ *
+ * A building picks its band by sliding its ground floor's UVs, so five kinds
+ * cost one texture, one material and one mesh — the same trick the window
+ * archetypes use per building, applied to a different axis.
+ *
+ * @returns {CanvasTexture|null}
+ */
 function createStorefrontTexture() {
-  const c = make2dContext(192, 112);
+  const bandH = 112;
+  const c = make2dContext(192, bandH * STOREFRONT_VARIANTS.length);
   if (!c) return null;
   const { canvas, ctx } = c;
 
   ctx.fillStyle = '#181818';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  // Glass
-  ctx.fillStyle = '#efefef';
-  ctx.fillRect(
-    canvas.width * 0.08,
-    canvas.height * 0.3,
-    canvas.width * 0.84,
-    canvas.height * 0.62
-  );
-  // Sign band
-  ctx.fillStyle = '#7a7a7a';
-  ctx.fillRect(
-    canvas.width * 0.08,
-    canvas.height * 0.06,
-    canvas.width * 0.84,
-    canvas.height * 0.14
-  );
 
+  STOREFRONT_VARIANTS.forEach((variant, i) => {
+    ctx.save();
+    ctx.translate(0, i * bandH);
+    variant.paint(ctx, canvas.width, bandH);
+    ctx.restore();
+  });
+
+  const tileHM = STOREFRONT_HEIGHT_M * STOREFRONT_VARIANTS.length;
   return makeRepeatingTexture(
     canvas,
     1 / WINDOW_BAY_W_M,
-    1 / STOREFRONT_HEIGHT_M,
-    -1 / STOREFRONT_HEIGHT_M
+    1 / tileHM,
+    -1 / tileHM
   );
 }
 
@@ -705,16 +832,9 @@ function createGroundTexture() {
  * bay's width moves the pattern one window along on this geometry and nothing
  * else. Eight by twelve gives ninety-six distinct walls per archetype.
  */
-function offsetGeometryUv(geometry, bayU, bayV) {
+function offsetGeometryUv(geometry, du, dv) {
   const uv = geometry.getAttribute('uv');
   if (!uv) return;
-  // WHOLE BAYS, not a continuous slide. The texture's own v offset exists so
-  // that window rows count up from a building's base (`-1 / tileHM` in
-  // makeRepeatingTexture); a fractional shift would put a half-height row of
-  // windows at every ground line. Whole bays move which windows are lit
-  // without moving where the rows sit.
-  const du = bayU * WINDOW_BAY_W_M;
-  const dv = bayV * WINDOW_BAY_H_M;
   for (let i = 0; i < uv.count; i++) {
     uv.setXY(i, uv.getX(i) + du, uv.getY(i) + dv);
   }
@@ -1256,6 +1376,11 @@ export function buildCityGroup(model) {
     for (const [x, y] of road.points) roadIndex.add(x, y);
   }
   const roadDistance = (x, y) => roadIndex.nearest(x, y);
+
+  // CW-34: where the shops and cafes are, so a ground floor can be the kind
+  // of thing that is actually on that corner.
+  const poiIndex = makeKindGrid(STOREFRONT_POI_RANGE_M);
+  for (const poi of model.pois ?? []) poiIndex.add(poi.x, poi.y, poi.kind);
   const antennaGeoms = [];
   const antennaCutoffM = antennaHeightCutoff(model.buildings);
   let signCount = 0;
@@ -1264,6 +1389,16 @@ export function buildCityGroup(model) {
   model.buildings.forEach((building, index) => {
     const h = hashBuilding(index, building.name);
     const tint = buildingTint(index, building.name);
+    // CW-34: the mapped material narrows the choice of glazing; the hash
+    // still makes it. Untagged buildings — which is most of them everywhere
+    // except Denver — choose from all nine, so the city looks right with no
+    // data at all.
+    const materialBias = ARCHETYPES_BY_MATERIAL.get(
+      building.tags?.['building:material']
+    );
+    const archetypeIndex = materialBias
+      ? materialBias[h % materialBias.length]
+      : h % WINDOW_ARCHETYPES.length;
     // CW-26: where the parts really are the mass (they cover the outline)
     // they REPLACE it - extruding the outline as well would bury them inside
     // a plain box, the very thing Simple 3D Buildings exists to avoid. Where
@@ -1286,7 +1421,7 @@ export function buildCityGroup(model) {
       if (!geom && !roof) continue;
       // The same hash that fixes a building's colour fixes its facade, so a
       // tower keeps both for as long as the extract does.
-      const bucket = buildingGeoms[h % WINDOW_ARCHETYPES.length];
+      const bucket = buildingGeoms[archetypeIndex];
       if (geom) {
         // CW-34: slide this building's window pattern along the tile.
         //
@@ -1298,10 +1433,14 @@ export function buildCityGroup(model) {
         // attribute by a hash-derived phase moves where the tile starts on
         // this building alone. It survives the merge because it is baked into
         // the vertex data rather than set on the material.
+        // WHOLE BAYS, not a continuous slide. The texture's own v offset
+        // exists so that window rows count up from a building's base
+        // (`-1 / tileHM` in makeRepeatingTexture); a fractional shift would
+        // put a half-height row of windows at every ground line.
         offsetGeometryUv(
           geom,
-          (h >>> 3) % WINDOW_TILE_BAYS_X,
-          (h >>> 13) % WINDOW_TILE_BAYS_Y
+          ((h >>> 3) % WINDOW_TILE_BAYS_X) * WINDOW_BAY_W_M,
+          ((h >>> 13) % WINDOW_TILE_BAYS_Y) * WINDOW_BAY_H_M
         );
         bucket.push(geom);
       }
@@ -1319,7 +1458,19 @@ export function buildCityGroup(model) {
       const strip = extrudeBuilding(building, STOREFRONT_TINT, {
         depthOverride: STOREFRONT_HEIGHT_M,
       });
-      if (strip) storefrontGeoms.push(strip);
+      if (strip) {
+        // CW-34: which ground floor this building wears. The nearest shop or
+        // eating place in the map data decides where there is one; the
+        // building's own hash decides where there is not, so a city with no
+        // POIs at all still has a varied street.
+        const [cx, cy] = ringCentroid(building.outer);
+        const poiKind = poiIndex.nearestKind(cx, cy, STOREFRONT_POI_RANGE_M);
+        const band =
+          (poiKind !== null ? STOREFRONT_BY_POI.get(poiKind) : undefined) ??
+          (h >>> 23) % STOREFRONT_VARIANTS.length;
+        offsetGeometryUv(strip, 0, band * STOREFRONT_HEIGHT_M);
+        storefrontGeoms.push(strip);
+      }
     }
 
     const wall = signWall(building.outer, roadDistance);
@@ -2056,6 +2207,55 @@ const LAMP_HEAD_TINT = [0.97, 0.97, 0.97];
  *
  * @param {number} cellM
  */
+/** How far a shop may be from a building and still decide its ground floor. */
+const STOREFRONT_POI_RANGE_M = 35;
+
+/**
+ * A point grid that remembers what each point IS, not just where (CW-34).
+ *
+ * makePointGrid below answers "how far to the nearest road"; this answers
+ * "what is the nearest shop, and what kind". Same bucketing, one extra field,
+ * kept separate rather than complicating the distance-only grid that four
+ * other features already depend on.
+ */
+function makeKindGrid(cellM) {
+  const buckets = new Map();
+  const key = (cx, cy) => cx + ',' + cy;
+  return {
+    add(x, y, kind) {
+      const k = key(Math.floor(x / cellM), Math.floor(y / cellM));
+      let bucket = buckets.get(k);
+      if (!bucket) buckets.set(k, (bucket = []));
+      bucket.push({ x, y, kind });
+    },
+    /**
+     * The kind of the nearest point within `rangeM`, or null. Searches the
+     * cell the query falls in and its eight neighbours, which is exact as
+     * long as rangeM does not exceed the cell size.
+     */
+    nearestKind(x, y, rangeM) {
+      const cx = Math.floor(x / cellM);
+      const cy = Math.floor(y / cellM);
+      let best = null;
+      let bestD = rangeM * rangeM;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const bucket = buckets.get(key(cx + dx, cy + dy));
+          if (!bucket) continue;
+          for (const p of bucket) {
+            const d = (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y);
+            if (d < bestD) {
+              bestD = d;
+              best = p.kind;
+            }
+          }
+        }
+      }
+      return best;
+    },
+  };
+}
+
 function makePointGrid(cellM) {
   const buckets = new Map();
   let count = 0;

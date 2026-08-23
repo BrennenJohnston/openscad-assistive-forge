@@ -413,7 +413,7 @@ function ringBounds(ring) {
  * @param {Array<[number,number]>} ring
  * @returns {[number, number]}
  */
-function ringCentroid(ring) {
+export function ringCentroid(ring) {
   let twiceArea = 0;
   let cx = 0;
   let cy = 0;
@@ -452,9 +452,10 @@ function ringCentroid(ring) {
  *   buildings: Array<{outer: Array<[number,number]>, holes: Array<Array<[number,number]>>, heightM: number, minHeightM: number, name: (string|undefined), parts: Array<Object>, partsAreMass: boolean, roof: (Object|null)}>,
  *   roads: Array<{points: Array<[number,number]>, widthM: number, kind: string, name: (string|undefined), sidewalk: boolean, surface: (string|undefined)}>,
  *   greens: Array<{outer: Array<[number,number]>, kind: string}>,
+ *   pois: Array<{x:number, y:number, kind:string}>,
  *   trees: Array<[number,number]>,
  *   boundsM: {minX:number, minY:number, maxX:number, maxY:number},
- *   stats: {buildingCount:number, roadCount:number, greenCount:number, sidewalkCount:number, surfacedRoadCount:number, treeCount:number, partCount:number, orphanParts:number, droppedRings:number, droppedElements:number}
+ *   stats: {buildingCount:number, roadCount:number, greenCount:number, poiCount:number, sidewalkCount:number, surfacedRoadCount:number, treeCount:number, partCount:number, orphanParts:number, droppedRings:number, droppedElements:number}
  * }}
  */
 export function parseCityExtract(extract, options = {}) {
@@ -468,6 +469,7 @@ export function parseCityExtract(extract, options = {}) {
   const roads = [];
   const greens = [];
   const trees = [];
+  const pois = [];
   const partWays = [];
   let droppedRings = 0;
   let droppedElements = 0;
@@ -494,12 +496,22 @@ export function parseCityExtract(extract, options = {}) {
     // Point props (CW-16): mapped street trees, projected but deliberately
     // NOT fed to growBounds - the playable core stays building-derived.
     if (el.type === 'node') {
-      if (tags.natural !== 'tree') continue;
       if (!Number.isFinite(el.lat) || !Number.isFinite(el.lon)) {
         droppedElements++;
         continue;
       }
-      trees.push(projectLatLon(el.lat, el.lon, center));
+      if (tags.natural === 'tree') {
+        trees.push(projectLatLon(el.lat, el.lon, center));
+        continue;
+      }
+      // CW-33/CW-34: a shop or a place to eat, kept as a point with its kind.
+      // Nothing is drawn AT the point - it says what sort of ground floor the
+      // building nearest to it should wear.
+      if (tags.shop || tags.amenity) {
+        const [x, y] = projectLatLon(el.lat, el.lon, center);
+        pois.push({ x, y, kind: tags.shop ? 'shop' : tags.amenity });
+        continue;
+      }
       continue;
     }
 
@@ -726,11 +738,13 @@ export function parseCityExtract(extract, options = {}) {
     roads,
     greens,
     trees,
+    pois,
     boundsM,
     stats: {
       buildingCount: buildings.length,
       roadCount: roads.length,
       greenCount: greens.length,
+      poiCount: pois.length,
       sidewalkCount: roads.filter((r) => r.sidewalk).length,
       surfacedRoadCount: roads.filter((r) => r.surface).length,
       treeCount: trees.length,
