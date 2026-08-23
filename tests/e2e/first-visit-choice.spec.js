@@ -564,6 +564,36 @@ test.describe('UF-41: the fold is visible when there is one', () => {
     expect(h).toBe(0);
   });
 
+  test('a content-height change no listener watches still moves the cue', async ({
+    page,
+  }) => {
+    // FOUND BY MEASUREMENT, not by reasoning: booting into high contrast at
+    // 1280x800 leaves 22px below the fold, and with only scroll/toggle/
+    // resize listeners the cue never appeared — nothing any of them watches
+    // for had happened. A ResizeObserver on the scroller AND its children
+    // closes it; the children matter because content growing inside a
+    // fixed-height scroller never changes that scroller's own box.
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/');
+    await waitForModal(page);
+
+    const box = page.locator('.modal-first-visit');
+    await expect(box).not.toHaveClass(/first-visit-has-more/);
+
+    await page.evaluate(() =>
+      document.documentElement.setAttribute('data-high-contrast', 'true')
+    );
+
+    await expect(box).toHaveClass(/first-visit-has-more/);
+    await expect(page.locator('.first-visit-scroll-cue')).toHaveCSS(
+      'opacity',
+      '1'
+    );
+    // And the primary action is still fixed and pressable underneath it.
+    const fit = await continueFit(page);
+    expect(fit.topmostIsContinue, `hit ${fit.hitTag}`).toBe(true);
+  });
+
   test('opening a note row re-evaluates the fold', async ({ page }) => {
     await page.goto('/');
     await waitForModal(page);

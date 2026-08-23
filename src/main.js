@@ -2915,6 +2915,21 @@ async function initApp() {
     // changes, so it cannot carry an ordinary resize or an on-screen
     // keyboard opening. This can.
     window.addEventListener('resize', updateFirstVisitScrollCue);
+    // And this catches everything neither of those can see: a web font
+    // arriving, high contrast resolving late, a user's own text-size
+    // setting. MEASURED without it — booting into high contrast at
+    // 1280x800 leaves 22px below the fold and no cue at all, because
+    // nothing the other listeners watch for has happened. The scroller
+    // itself is watched for the viewport half; its children are watched
+    // because content growing INSIDE a fixed-height scroller never changes
+    // that scroller's own box.
+    if (typeof ResizeObserver !== 'undefined' && firstVisitBody) {
+      const cueObserver = new ResizeObserver(updateFirstVisitScrollCue);
+      cueObserver.observe(firstVisitBody);
+      [...firstVisitBody.children].forEach((child) =>
+        cueObserver.observe(child)
+      );
+    }
     // Delay slightly to ensure DOM is ready
     setTimeout(() => {
       applyFirstVisitThemeAssets();
