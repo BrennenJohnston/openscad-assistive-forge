@@ -1131,6 +1131,11 @@ body[data-app-surface='welcome'] #uiModeToggle {
     padding-bottom: var(--actions-bar-expanded-offset);
   }
 
+  /* The status line's own mobile placement lives with its base rule further
+     down this file — putting it here would be overridden by that rule, which
+     is later in source order (measured: it stretched the box from y 143 to
+     y 854). See "U-46 / Q-73b" beside .preview-status-bar. */
+
   @media (prefers-reduced-motion: reduce) {
     .preview-panel {
       transition: none;
@@ -1285,6 +1290,29 @@ body[data-app-surface='welcome'] #uiModeToggle {
   .preview-status-bar {
     background-color: var(--color-bg-primary);
     opacity: 0.92;
+  }
+}
+
+/* U-46 / Q-73b: on a phone the status line reads at the TOP of the preview.
+   Bottom-left is the desktop home, and there it is under something in every
+   state — measured at 412x915 with a project open and a finished preview:
+     camera pad shut  y 829..854, and #actionsBar starts at y 816. The bar
+                      paints over it: the line is not visible at all.
+     camera pad open  y 665..690, inside the pad's 498..811 band, washed out
+                      under the translucent pad with the pad's own
+                      "STANDARD VIEWS" heading printed through it.
+   Anchoring to the top puts it clear of both, and clear of the ready badge,
+   which sits at the other end of the row (x 268..395 against x 5..225).
+   Capping the pad's height was measured and rejected: the pad is already
+   34.2% of the viewport at 915 and 38.6% at 810, so a ~40% cap changes
+   nothing, and a cap that does bite makes a control you tap repeatedly
+   scroll.
+   Both edges must be written: leaving `bottom` at its inherited value
+   stretches the box the full height of the preview. */
+@media (max-width: 767px) {
+  .preview-status-bar {
+    top: var(--space-xs);
+    bottom: auto;
   }
 }
 
