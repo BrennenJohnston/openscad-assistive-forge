@@ -30,6 +30,7 @@ import {
   GREEN_LANDUSE_VALUES,
   MIN_PART_AREA_M2,
   ringAreaM2,
+  STOREFRONT_AMENITY_VALUES,
 } from '../src/js/game/city-data.js';
 
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
@@ -91,6 +92,7 @@ const outDir =
 // oversight, and the per-city counts in the release record say what it costs.
 const GREEN_LEISURE = GREEN_LEISURE_VALUES.join('|');
 const GREEN_LANDUSE = GREEN_LANDUSE_VALUES.join('|');
+const STOREFRONT_AMENITY = STOREFRONT_AMENITY_VALUES.join('|');
 
 const query = `[out:json][timeout:90];
 (
@@ -102,12 +104,13 @@ const query = `[out:json][timeout:90];
   way["landuse"~"^(${GREEN_LANDUSE})$"](around:${radiusM},${center.lat},${center.lon});
   node["natural"="tree"](around:${radiusM},${center.lat},${center.lon});
   node["shop"](around:${radiusM},${center.lat},${center.lon});
-  node["amenity"](around:${radiusM},${center.lat},${center.lon});
+  node["amenity"~"^(${STOREFRONT_AMENITY})$"](around:${radiusM},${center.lat},${center.lon});
 );
 out tags geom;`;
 
 async function queryOverpass() {
-  for (let attempt = 1; attempt <= 2; attempt++) {
+  const attempts = 4;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
     const response = await fetch(OVERPASS_URL, {
       method: 'POST',
       headers: {
@@ -116,17 +119,23 @@ async function queryOverpass() {
       },
       body: `data=${encodeURIComponent(query)}`,
     });
-    if (response.status === 429 && attempt === 1) {
-      console.log('Rate limited (429) — pausing 30 s per Overpass policy…');
-      await new Promise((r) => setTimeout(r, 30000));
-      continue;
-    }
-    if (!response.ok) {
+    if (response.ok) return response.json();
+
+    // 429 is the documented rate limit. 502/503/504 are the public instance
+    // being busy or giving up on a heavy query, which happens and clears -
+    // retrying beats making the query smaller than the data needs to be.
+    const retryable = response.status === 429 || response.status >= 500;
+    if (!retryable || attempt === attempts) {
       throw new Error(`Overpass returned HTTP ${response.status}`);
     }
-    return response.json();
+    const waitS = response.status === 429 ? 30 : 20 * attempt;
+    console.log(
+      `Overpass returned HTTP ${response.status} — pausing ${waitS} s ` +
+        `(attempt ${attempt} of ${attempts - 1})…`
+    );
+    await new Promise((r) => setTimeout(r, waitS * 1000));
   }
-  throw new Error('Overpass rate limit persisted after retry');
+  throw new Error('Overpass did not answer after retries');
 }
 
 console.log(
@@ -177,12 +186,18 @@ const json = JSON.stringify(extract);
 writeFileSync(outPath, json);
 
 const sizeKb = Math.round(json.length / 1024);
+// The per-city table CW-33's record is built from: everything a reviewer
+// would otherwise have to re-derive by reading the JSON.
 console.log(
   `Wrote ${outPath}\n` +
-    `  ${sizeKb} KB · ${rawElements.length} raw elements → ${elements.length} kept\n` +
+    `  ${sizeKb} KB · ${rawElements.length} raw elements → ${elements.length} kept` +
+    ` (${droppedTinyParts} parts under ${MIN_PART_AREA_M2} m² dropped)\n` +
     `  parsed: ${model.stats.buildingCount} buildings, ${model.stats.roadCount} roads,` +
-    ` ${model.stats.treeCount} trees` +
-    ` (dropped ${model.stats.droppedRings} rings, ${model.stats.droppedElements} elements)`
+    ` ${model.stats.treeCount} trees, ${model.stats.partCount} parts` +
+    ` (${model.stats.orphanParts} orphaned)\n` +
+    `  CW-33: ${model.stats.greenCount} greens, ${model.stats.sidewalkCount} sidewalks,` +
+    ` ${model.stats.surfacedRoadCount}/${model.stats.roadCount} roads with a surface tag\n` +
+    `  dropped ${model.stats.droppedRings} rings, ${model.stats.droppedElements} elements`
 );
 if (json.length > SIZE_WARN_BYTES) {
   console.warn(

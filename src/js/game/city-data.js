@@ -152,6 +152,35 @@ export const GREEN_LANDUSE_VALUES = [
   'village_green',
 ];
 
+/**
+ * The amenity values that read as a shopfront at street level (CW-33).
+ *
+ * `amenity` unfiltered is the wrong question to ask a downtown: it is mostly
+ * benches, waste baskets, bicycle parking and parking meters, and asking for
+ * all of them timed the Overpass query out (HTTP 504, measured). These are the
+ * ones that put a lit window and a sign on a ground floor, which is what
+ * CW-34 chooses a storefront band from.
+ *
+ * This filters the QUERY. The node gate below stays permissive, because an
+ * amenity node that has arrived in an extract is small and usable whatever it
+ * is; the gate's job is to drop what the game cannot use, not to second-guess
+ * the bake.
+ */
+export const STOREFRONT_AMENITY_VALUES = [
+  'restaurant',
+  'cafe',
+  'fast_food',
+  'bar',
+  'pub',
+  'bank',
+  'pharmacy',
+  'cinema',
+  'theatre',
+  'library',
+  'post_office',
+  'marketplace',
+];
+
 /** Whether a way's tags make it greenspace the game draws. */
 export function isGreenTags(tags) {
   if (!tags) return false;
