@@ -541,3 +541,16 @@ export const STORAGE_KEY_CITY_WALK_FONT_SCALE = getAppPrefKey(
  * the Colour toggle themselves, and from then on their choice wins.
  */
 export const STORAGE_KEY_CITY_WALK_COLOUR = getAppPrefKey('city-walk-colour');
+
+/**
+ * localStorage key for whether the City Walk's Camera panel is collapsed
+ * (CW-35). 'true' or 'false'.
+ *
+ * It is a DRAWER key rather than an app preference because that is what it
+ * is, and it is scoped to the game rather than sharing the preview's
+ * 'camera' drawer: the two panels look alike and do the same job, but one is
+ * beside a model and the other beside a city, and someone who keeps the
+ * preview's collapsed has said nothing about the game's.
+ */
+export const STORAGE_KEY_CITY_WALK_CAMERA_PANEL =
+  getDrawerStateKey('camera-city-walk');

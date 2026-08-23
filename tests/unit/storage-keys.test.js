@@ -95,6 +95,8 @@ const EXPECTED_KEYS = {
 
   // City Walk game (CW-Q16): colour on/off; absent means follow high contrast
   STORAGE_KEY_CITY_WALK_COLOUR: 'openscad-forge-city-walk-colour',
+  STORAGE_KEY_CITY_WALK_CAMERA_PANEL:
+    'openscad-drawer-camera-city-walk-state',
 };
 
 describe('storage-keys exported constants', () => {

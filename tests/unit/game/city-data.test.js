@@ -8,6 +8,12 @@ import {
   LEVEL_HEIGHT_M,
   DEFAULT_BUILDING_HEIGHT_M,
   ROAD_WIDTHS_M,
+  SIDEWALK_WIDTH_M,
+  GREEN_LEISURE_VALUES,
+  GREEN_LANDUSE_VALUES,
+  isGreenTags,
+  ringAreaM2,
+  MIN_PART_AREA_M2,
 } from '../../../src/js/game/city-data.js'
 
 const CENTER = { lat: 40, lon: -100 }
@@ -57,11 +63,15 @@ describe('resolveBuildingHeight', () => {
     expect(resolveBuildingHeight({ height: '12.5' }).heightM).toBe(12.5)
     expect(resolveBuildingHeight({ height: '12,5' }).heightM).toBe(12.5)
     expect(resolveBuildingHeight({ height: '12 m' }).heightM).toBe(12)
-    expect(resolveBuildingHeight({ height: '30 ft' }).heightM).toBeCloseTo(9.144, 3)
-    expect(resolveBuildingHeight({ height: "40'" }).heightM).toBeCloseTo(12.192, 3)
-    expect(
-      resolveBuildingHeight({ 'building:height': '15' }).heightM
-    ).toBe(15)
+    expect(resolveBuildingHeight({ height: '30 ft' }).heightM).toBeCloseTo(
+      9.144,
+      3
+    )
+    expect(resolveBuildingHeight({ height: "40'" }).heightM).toBeCloseTo(
+      12.192,
+      3
+    )
+    expect(resolveBuildingHeight({ 'building:height': '15' }).heightM).toBe(15)
   })
 
   it('falls back to building:levels x 3 m', () => {
@@ -125,7 +135,12 @@ describe('parseCityExtract — buildings from ways', () => {
   it('normalizes clockwise input rings to CCW', () => {
     const cw = squareRing(0, 0, 5).slice().reverse()
     const model = parseCityExtract(
-      extractOf({ type: 'way', id: 1, tags: { building: 'yes' }, geometry: cw }),
+      extractOf({
+        type: 'way',
+        id: 1,
+        tags: { building: 'yes' },
+        geometry: cw,
+      }),
       { center: CENTER }
     )
     expect(signedArea(model.buildings[0].outer)).toBeGreaterThan(0)
@@ -134,7 +149,12 @@ describe('parseCityExtract — buildings from ways', () => {
   it('ignores building=no and drops degenerate footprints', () => {
     const model = parseCityExtract(
       extractOf(
-        { type: 'way', id: 1, tags: { building: 'no' }, geometry: squareRing(0, 0, 5) },
+        {
+          type: 'way',
+          id: 1,
+          tags: { building: 'no' },
+          geometry: squareRing(0, 0, 5),
+        },
         {
           type: 'way',
           id: 2,
@@ -157,8 +177,18 @@ describe('parseCityExtract — multipolygon relations', () => {
         id: 10,
         tags: { building: 'yes', 'building:levels': '4' },
         members: [
-          { type: 'way', ref: 11, role: 'outer', geometry: squareRing(0, 0, 10) },
-          { type: 'way', ref: 12, role: 'inner', geometry: squareRing(0, 0, 3) },
+          {
+            type: 'way',
+            ref: 11,
+            role: 'outer',
+            geometry: squareRing(0, 0, 10),
+          },
+          {
+            type: 'way',
+            ref: 12,
+            role: 'inner',
+            geometry: squareRing(0, 0, 3),
+          },
         ],
       }),
       { center: CENTER }
@@ -353,10 +383,86 @@ describe('trimOverpassElement', () => {
   })
 
   it('returns null for elements the game cannot use', () => {
+    // CW-33: a landuse way is admitted only for the GREEN values the game
+    // draws. Everything else in a downtown - commercial, retail, industrial -
+    // is ground that is already drawn as ground, and admitting it would
+    // multiply the extract for nothing.
     expect(
-      trimOverpassElement({ type: 'way', id: 1, tags: { landuse: 'grass' }, geometry: [] })
+      trimOverpassElement({
+        type: 'way',
+        id: 1,
+        tags: { landuse: 'commercial' },
+        geometry: [{ lat: 1, lon: 2 }],
+      })
     ).toBeNull()
-    expect(trimOverpassElement({ type: 'node', id: 2 })).toBeNull()
+    expect(
+      trimOverpassElement({
+        type: 'way',
+        id: 2,
+        tags: { leisure: 'swimming_pool' },
+        geometry: [{ lat: 1, lon: 2 }],
+      })
+    ).toBeNull()
+    expect(trimOverpassElement({ type: 'node', id: 3 })).toBeNull()
+  })
+
+  it('admits the green ways CW-33 draws, by their tag values', () => {
+    for (const tags of [
+      { leisure: 'park' },
+      { leisure: 'garden' },
+      { leisure: 'pitch' },
+      { leisure: 'playground' },
+      { leisure: 'grass' },
+      { landuse: 'grass' },
+      { landuse: 'recreation_ground' },
+      { landuse: 'forest' },
+      { landuse: 'meadow' },
+      { landuse: 'village_green' },
+    ]) {
+      const trimmed = trimOverpassElement({
+        type: 'way',
+        id: 4,
+        tags,
+        geometry: [{ lat: 1, lon: 2 }],
+      })
+      expect(trimmed, JSON.stringify(tags)).not.toBeNull()
+      expect(trimmed.tags).toEqual(tags)
+    }
+  })
+
+  it('keeps the ground and facade tags CW-33 rebaked for', () => {
+    const trimmed = trimOverpassElement({
+      type: 'way',
+      id: 5,
+      tags: {
+        highway: 'footway',
+        footway: 'sidewalk',
+        surface: 'concrete',
+        lanes: '2',
+        width: '1.8',
+      },
+      geometry: [{ lat: 1, lon: 2 }],
+    })
+    expect(trimmed.tags).toEqual({
+      highway: 'footway',
+      footway: 'sidewalk',
+      surface: 'concrete',
+      lanes: '2',
+      width: '1.8',
+    })
+
+    const building = trimOverpassElement({
+      type: 'way',
+      id: 6,
+      tags: {
+        building: 'yes',
+        'building:material': 'brick',
+        'building:colour': '#8b4513',
+      },
+      geometry: [{ lat: 1, lon: 2 }],
+    })
+    expect(building.tags['building:material']).toBe('brick')
+    expect(building.tags['building:colour']).toBe('#8b4513')
   })
 
   it('keeps relation members with roles and refs', () => {
@@ -383,9 +489,8 @@ describe('extractLandmarks (CW-10)', () => {
   })
 
   it('scores tagged sites and tall/large named buildings, skipping the unnamed', async () => {
-    const { extractLandmarks } = await import(
-      '../../../src/js/game/city-data.js'
-    )
+    const { extractLandmarks } =
+      await import('../../../src/js/game/city-data.js')
     const model = parseCityExtract(
       extractOf(
         buildingEl(1, 0, { name: 'Old Cathedral', historic: 'church' }),
@@ -410,9 +515,8 @@ describe('extractLandmarks (CW-10)', () => {
   })
 
   it('caps the list, orders by score then height, and dedupes names', async () => {
-    const { extractLandmarks } = await import(
-      '../../../src/js/game/city-data.js'
-    )
+    const { extractLandmarks } =
+      await import('../../../src/js/game/city-data.js')
     const many = []
     for (let i = 0; i < 20; i++) {
       many.push(
@@ -422,18 +526,14 @@ describe('extractLandmarks (CW-10)', () => {
     // A duplicate-name part must appear once.
     many.push(buildingEl(999, 900, { name: 'Tower 0', height: '80' }))
     // A tourism site outranks plain towers.
-    many.push(
-      buildingEl(1000, 950, { name: 'City Museum', tourism: 'museum' })
-    )
+    many.push(buildingEl(1000, 950, { name: 'City Museum', tourism: 'museum' }))
 
     const model = parseCityExtract(extractOf(...many), { center: CENTER })
     const landmarks = extractLandmarks(model, { max: 12 })
 
     expect(landmarks).toHaveLength(12)
     expect(landmarks[0].name).toBe('City Museum')
-    expect(
-      landmarks.filter((l) => l.name === 'Tower 0')
-    ).toHaveLength(1)
+    expect(landmarks.filter((l) => l.name === 'Tower 0')).toHaveLength(1)
   })
 })
 
@@ -444,9 +544,8 @@ describe('nearestLandmarkName (CW-10)', () => {
   ]
 
   it('enters at 60 m and holds until 80 m (hysteresis)', async () => {
-    const { nearestLandmarkName } = await import(
-      '../../../src/js/game/city-data.js'
-    )
+    const { nearestLandmarkName } =
+      await import('../../../src/js/game/city-data.js')
     expect(nearestLandmarkName(landmarks, 70, 0, null)).toBeNull()
     expect(nearestLandmarkName(landmarks, 50, 0, null)).toBe('Library')
     // At 70 m out, still held...
@@ -456,9 +555,8 @@ describe('nearestLandmarkName (CW-10)', () => {
   })
 
   it('switches to a nearer landmark once the held one is out of range', async () => {
-    const { nearestLandmarkName } = await import(
-      '../../../src/js/game/city-data.js'
-    )
+    const { nearestLandmarkName } =
+      await import('../../../src/js/game/city-data.js')
     expect(nearestLandmarkName(landmarks, 170, 0, 'Library')).toBe('Tower')
     expect(nearestLandmarkName([], 0, 0, null)).toBeNull()
   })
@@ -489,15 +587,17 @@ describe('trimOverpassElement — tree nodes (CW-16)', () => {
   })
 
   it('drops nodes the game has no use for', () => {
+    // A node with no tag the game reads at all.
     expect(
       trimOverpassElement({
         type: 'node',
         id: 78,
         lat: 47.6,
         lon: -122.3,
-        tags: { amenity: 'cafe' },
+        tags: { barrier: 'bollard' },
       })
     ).toBeNull()
+    // Tagged, but with nowhere to stand.
     expect(
       trimOverpassElement({
         type: 'node',
@@ -505,6 +605,22 @@ describe('trimOverpassElement — tree nodes (CW-16)', () => {
         tags: { natural: 'tree' },
       })
     ).toBeNull()
+  })
+
+  it('keeps shop and amenity nodes, which CW-34 chooses storefronts from', () => {
+    // Not drawn yet. They ride CW-33's rebake so that release does not have
+    // to ask Overpass for all four cities a second time.
+    for (const tags of [{ shop: 'bakery' }, { amenity: 'cafe' }]) {
+      const trimmed = trimOverpassElement({
+        type: 'node',
+        id: 80,
+        lat: 47.6,
+        lon: -122.3,
+        tags,
+      })
+      expect(trimmed, JSON.stringify(tags)).not.toBeNull()
+      expect(trimmed.tags).toEqual(tags)
+    }
   })
 })
 
@@ -562,9 +678,8 @@ describe('parseCityExtract — trees (CW-16)', () => {
 describe('the visited set and the proximity hysteresis (CW-20)', () => {
   let nearestLandmarkName
   beforeAll(async () => {
-    ;({ nearestLandmarkName } = await import(
-      '../../../src/js/game/city-data.js'
-    ))
+    ;({ nearestLandmarkName } =
+      await import('../../../src/js/game/city-data.js'))
   })
 
   const landmarks = [
@@ -639,9 +754,8 @@ describe('the visited set and the proximity hysteresis (CW-20)', () => {
 
 describe('the bake keeps what the silhouettes need (CW-26)', () => {
   it('keeps building:part and the roof tags', async () => {
-    const { trimOverpassElement } = await import(
-      '../../../src/js/game/city-data.js'
-    )
+    const { trimOverpassElement } =
+      await import('../../../src/js/game/city-data.js')
     const el = trimOverpassElement({
       type: 'way',
       id: 1,
@@ -669,9 +783,8 @@ describe('the bake keeps what the silhouettes need (CW-26)', () => {
   })
 
   it('still throws away everything it never needed', async () => {
-    const { trimOverpassElement } = await import(
-      '../../../src/js/game/city-data.js'
-    )
+    const { trimOverpassElement } =
+      await import('../../../src/js/game/city-data.js')
     const el = trimOverpassElement({
       type: 'way',
       id: 2,
@@ -728,9 +841,8 @@ describe('building parts become the silhouette (CW-26)', () => {
   }
 
   it('files each part under the outline that contains it', async () => {
-    const { parseCityExtract } = await import(
-      '../../../src/js/game/city-data.js'
-    )
+    const { parseCityExtract } =
+      await import('../../../src/js/game/city-data.js')
     const model = parseCityExtract(extract)
     // One BUILDING, not three: the parts are its mass, not neighbours.
     expect(model.buildings).toHaveLength(1)
@@ -749,12 +861,10 @@ describe('building parts become the silhouette (CW-26)', () => {
   })
 
   it('keeps the OUTLINE for collision, whatever the parts do', async () => {
-    const { parseCityExtract } = await import(
-      '../../../src/js/game/city-data.js'
-    )
-    const { pointInRing } = await import(
-      '../../../src/js/game/walk-controls.js'
-    )
+    const { parseCityExtract } =
+      await import('../../../src/js/game/city-data.js')
+    const { pointInRing } =
+      await import('../../../src/js/game/walk-controls.js')
     const model = parseCityExtract(extract)
     const host = model.buildings[0]
     // Find a spot inside the outline that is in NO part - the gap between
@@ -782,9 +892,8 @@ describe('building parts become the silhouette (CW-26)', () => {
   })
 
   it('still draws a part whose outline is outside the extract', async () => {
-    const { parseCityExtract } = await import(
-      '../../../src/js/game/city-data.js'
-    )
+    const { parseCityExtract } =
+      await import('../../../src/js/game/city-data.js')
     const model = parseCityExtract({
       center: CENTER,
       elements: [extract.elements[1]],
@@ -796,9 +905,8 @@ describe('building parts become the silhouette (CW-26)', () => {
   })
 
   it('treats a way tagged both building and building:part as an outline', async () => {
-    const { parseCityExtract } = await import(
-      '../../../src/js/game/city-data.js'
-    )
+    const { parseCityExtract } =
+      await import('../../../src/js/game/city-data.js')
     const model = parseCityExtract({
       center: CENTER,
       elements: [
@@ -834,9 +942,8 @@ describe('a turret does not delete its hall (CW-26)', () => {
     geometry: ring(0, 0, D, D),
   }
   const parse = async (elements) => {
-    const { parseCityExtract } = await import(
-      '../../../src/js/game/city-data.js'
-    )
+    const { parseCityExtract } =
+      await import('../../../src/js/game/city-data.js')
     return parseCityExtract({ center: CENTER, elements })
   }
 
@@ -879,9 +986,8 @@ describe('a turret does not delete its hall (CW-26)', () => {
   })
 
   it('sits exactly on the documented threshold deliberately', async () => {
-    const { PART_COVERAGE_MIN } = await import(
-      '../../../src/js/game/city-data.js'
-    )
+    const { PART_COVERAGE_MIN } =
+      await import('../../../src/js/game/city-data.js')
     expect(PART_COVERAGE_MIN).toBe(0.6)
   })
 
@@ -959,9 +1065,8 @@ describe('roofs resolve from tags, or stay flat (CW-26)', () => {
 
 describe('road names survive parsing (CW-27)', () => {
   it('carries a named way through to the road record', async () => {
-    const { parseCityExtract } = await import(
-      '../../../src/js/game/city-data.js'
-    )
+    const { parseCityExtract } =
+      await import('../../../src/js/game/city-data.js')
     const center = { lat: 47.6062, lon: -122.3321 }
     const model = parseCityExtract({
       center,
@@ -1065,11 +1170,21 @@ describe('the street index answers where you are (CW-27)', () => {
     // The real Seattle case: the cycletrack is nearer, the street is what a
     // player would say they are on.
     const idx = buildStreetIndex([
-      { name: '4th Avenue', kind: 'primary', points: [[-100, 0], [100, 0]] },
+      {
+        name: '4th Avenue',
+        kind: 'primary',
+        points: [
+          [-100, 0],
+          [100, 0],
+        ],
+      },
       {
         name: '4th Avenue Cycletrack',
         kind: 'cycleway',
-        points: [[-100, 4], [100, 4]],
+        points: [
+          [-100, 4],
+          [100, 4],
+        ],
       },
     ])
     expect(idx.nearest(0, 5, 30).name).toBe('4th Avenue')
@@ -1078,8 +1193,22 @@ describe('the street index answers where you are (CW-27)', () => {
   it('still lets a path win when you are genuinely on it', async () => {
     const { buildStreetIndex } = await load()
     const idx = buildStreetIndex([
-      { name: 'Far Street', kind: 'primary', points: [[-100, 40], [100, 40]] },
-      { name: 'Park Trail', kind: 'footway', points: [[-100, 0], [100, 0]] },
+      {
+        name: 'Far Street',
+        kind: 'primary',
+        points: [
+          [-100, 40],
+          [100, 40],
+        ],
+      },
+      {
+        name: 'Park Trail',
+        kind: 'footway',
+        points: [
+          [-100, 0],
+          [100, 0],
+        ],
+      },
     ])
     expect(idx.nearest(0, 1, 60).name).toBe('Park Trail')
   })
@@ -1087,11 +1216,168 @@ describe('the street index answers where you are (CW-27)', () => {
   it('reports the true distance, not the ranking distance', async () => {
     const { buildStreetIndex } = await load()
     const idx = buildStreetIndex([
-      { name: 'Park Trail', kind: 'footway', points: [[-100, 0], [100, 0]] },
+      {
+        name: 'Park Trail',
+        kind: 'footway',
+        points: [
+          [-100, 0],
+          [100, 0],
+        ],
+      },
     ])
     const hit = idx.nearest(0, 3, 30)
     // Ranked at 11 by the path penalty, but the player really is 3 m away
     // and the announcement must not inherit the penalty.
     expect(hit.distM).toBeCloseTo(3, 5)
+  })
+})
+
+describe('CW-33 — the greenspace list is one list', () => {
+  it('is the set the coverage table was measured against', () => {
+    // Pinned by value. Adding one means re-measuring what it costs per city
+    // and rebaking; it is not a free edit.
+    expect(GREEN_LEISURE_VALUES).toEqual([
+      'park',
+      'garden',
+      'pitch',
+      'playground',
+      'grass',
+    ])
+    expect(GREEN_LANDUSE_VALUES).toEqual([
+      'grass',
+      'recreation_ground',
+      'forest',
+      'meadow',
+      'village_green',
+    ])
+  })
+
+  it('admits exactly those values and nothing else', () => {
+    for (const v of GREEN_LEISURE_VALUES) {
+      expect(isGreenTags({ leisure: v }), v).toBe(true)
+    }
+    for (const v of GREEN_LANDUSE_VALUES) {
+      expect(isGreenTags({ landuse: v }), v).toBe(true)
+    }
+    expect(isGreenTags({ landuse: 'commercial' })).toBe(false)
+    expect(isGreenTags({ landuse: 'retail' })).toBe(false)
+    expect(isGreenTags({ leisure: 'swimming_pool' })).toBe(false)
+    expect(isGreenTags({ building: 'yes' })).toBe(false)
+    expect(isGreenTags(null)).toBe(false)
+    expect(isGreenTags(undefined)).toBe(false)
+  })
+})
+
+describe('CW-Q31 — the part-area floor', () => {
+  const center = { lat: 47.6, lon: -122.33 }
+  /** A square of `m` metres on a side, as a closed lat/lon ring. */
+  const square = (m) => {
+    const dLat = m / 111320
+    const dLon = dLat / Math.cos((center.lat * Math.PI) / 180)
+    return [
+      { lat: center.lat, lon: center.lon },
+      { lat: center.lat, lon: center.lon + dLon },
+      { lat: center.lat + dLat, lon: center.lon + dLon },
+      { lat: center.lat + dLat, lon: center.lon },
+    ]
+  }
+
+  it('is the number the owner signed', () => {
+    expect(MIN_PART_AREA_M2).toBe(10)
+  })
+
+  it('measures a ring in square metres', () => {
+    // Projection is not exact at this latitude; a few percent either way is
+    // the projection, not the maths.
+    expect(ringAreaM2(square(10), center)).toBeGreaterThan(95)
+    expect(ringAreaM2(square(10), center)).toBeLessThan(105)
+    expect(ringAreaM2(square(2), center)).toBeGreaterThan(3.8)
+    expect(ringAreaM2(square(2), center)).toBeLessThan(4.2)
+  })
+
+  it('puts the slivers below the floor and real parts above it', () => {
+    // A 2 m square ledge is what Denver is full of; a 10 m square is a real
+    // volume a character cell can show.
+    expect(ringAreaM2(square(2), center)).toBeLessThan(MIN_PART_AREA_M2)
+    expect(ringAreaM2(square(4), center)).toBeGreaterThan(MIN_PART_AREA_M2)
+  })
+
+  it('reports zero for a ring that is not one', () => {
+    expect(ringAreaM2([], center)).toBe(0)
+    expect(ringAreaM2([{ lat: 1, lon: 2 }], center)).toBe(0)
+    expect(ringAreaM2(null, center)).toBe(0)
+  })
+})
+
+describe('CW-33 — pavements, surfaces and greens reach the model', () => {
+  const road = (id, tags) => ({
+    type: 'way',
+    id,
+    tags,
+    geometry: [pt(0, 0), pt(60, 0)],
+  })
+
+  it('tells a kerbside pavement apart from a path through a park', () => {
+    const model = parseCityExtract(
+      extractOf(
+        road(1, { highway: 'footway', footway: 'sidewalk' }),
+        road(2, { highway: 'footway' })
+      ),
+      { center: CENTER }
+    )
+    const [pavement, path] = model.roads
+    expect(pavement.sidewalk).toBe(true)
+    expect(pavement.widthM).toBe(SIDEWALK_WIDTH_M)
+    // A footway with no sidewalk sub-tag keeps the wider path default, so a
+    // park path does not become a kerb.
+    expect(path.sidewalk).toBe(false)
+    expect(path.widthM).toBe(ROAD_WIDTHS_M.footway)
+    expect(model.stats.sidewalkCount).toBe(1)
+  })
+
+  it('carries the surface tag through, and leaves it undefined when OSM has none', () => {
+    const model = parseCityExtract(
+      extractOf(
+        road(1, { highway: 'residential', surface: 'asphalt' }),
+        road(2, { highway: 'residential' })
+      ),
+      { center: CENTER }
+    )
+    expect(model.roads[0].surface).toBe('asphalt')
+    expect(model.roads[1].surface).toBeUndefined()
+    expect(model.stats.surfacedRoadCount).toBe(1)
+  })
+
+  it('parses green ways into polygons that carry their kind', () => {
+    const model = parseCityExtract(
+      extractOf(
+        {
+          type: 'way',
+          id: 1,
+          tags: { leisure: 'park' },
+          geometry: squareRing(0, 0, 20),
+        },
+        {
+          type: 'way',
+          id: 2,
+          tags: { landuse: 'forest' },
+          geometry: squareRing(80, 0, 15),
+        }
+      ),
+      { center: CENTER }
+    )
+    expect(model.stats.greenCount).toBe(2)
+    expect(model.greens.map((g) => g.kind)).toEqual(['park', 'forest'])
+    // A projected 40 m square, as the scene will extrude it.
+    expect(Math.abs(signedArea(model.greens[0].outer))).toBeCloseTo(1600, 0)
+  })
+
+  it('leaves greens out when there are none, rather than inventing a list', () => {
+    const model = parseCityExtract(
+      extractOf(road(1, { highway: 'residential' })),
+      { center: CENTER }
+    )
+    expect(model.greens).toEqual([])
+    expect(model.stats.greenCount).toBe(0)
   })
 })

@@ -9,6 +9,113 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Drop yourself onto any street** (CW-36) - the map was somewhere to look at the city; it is now
+  somewhere to travel from. Click a street on the overhead map and the game tells you which street
+  you picked, marks it with a ring, and waits. Press J and you are standing there, looking along the
+  street rather than at a wall. Nothing is picked and you press J: you land on the middle of the
+  map, which matters because the arrow keys already steer that middle - so the whole thing works
+  from the keyboard alone, without needing to click anything. There is a **Teleport here** button on
+  the map toolbar for the same job. You can never land inside a building: the landing uses the same
+  test the walker itself uses to decide whether a step is possible, and if there is genuinely
+  nowhere to stand near where you picked, it says so instead of putting you somewhere wrong
+
+### Changed
+
+- **Where the City Walk's speed actually landed** (CW-37) - this round set out to hold 30 frames a
+  second at the smallest character size, with heavy rain, on a machine running four times slow.
+  Measured on all four cities, walking, on a real graphics card: **on a normal machine the target is
+  met with room to spare** - 18.6 to 22.2 ms a frame against an allowance of 33, and 60 frames a
+  second. At the character size most people play at, the frame-rate target is met even on the
+  four-times-slow machine. At the smallest size on that slow machine it is **not** met: 25 to 28
+  frames a second instead of 30. The round took that case from 3 frames a second to 26, and the
+  reason it stops there is now measured rather than guessed - between 39 and 49 ms of every frame
+  does not depend on the number of characters at all, so no further work on the characters can
+  reach the target. What is left is the painting and the phosphor trail, which are not part of this
+  round's plan and are a question for the owner rather than a decision for it
+
+- **The camera controls are the ones you already know** (CW-35) - the game had its own vocabulary
+  along the bottom of the screen - Turn left, Look up, Forward, Step left - which is a second thing
+  to learn for the same job the Forge's 3D preview already does with a Camera panel down its
+  right-hand side. That panel is in the game now, same sections in the same order: Rotate View, Pan
+  View, Zoom, Standard Views, Reset View. The buttons do not reinvent anything; each one drives an
+  action the game already had. Two words changed to fit a city: the Forge's `Bottom` view is
+  `Street` here, and its Front/Back/Left/Right are `North`/`East`/`South`/`West`, because the game
+  has a real compass and the status line already speaks in bearings. `Towers` tilts your gaze up at
+  the skyline. The panel collapses if you want the city back, and remembers that you collapsed it
+- **The same panel works over the map** (CW-35) - it does not disappear when you switch to the
+  overhead view, it re-labels: the D-pads pan the map, Zoom becomes the map's own zoom, and Reset
+  centers it back on you. The four compass buttons and Towers stand down there, because there is no
+  walker on screen to turn. What still swaps on the toolbar is only what genuinely means nothing
+  overhead - Fast and Rain leave, and the map's own three arrive
+- **The buildings stop repeating** (CW-34) - two things you photographed. The first: at your
+  character size the near towers read as literal giant letters, because each family of buildings
+  had a letter cut out of its window panes to tell it from the next. The letters are gone. What
+  identifies a building now is the shape of its glazing - nine kinds, from a plain pane to a
+  vertical slot to a continuous horizontal band - and, more than that, **which of its windows are
+  lit**. The old pattern lit each window independently, which produces an even scatter that repeats
+  every four windows across; the city read as wallpaper because it was. Windows are now lit in
+  runs, with the run length and how many are lit re-rolled every few floors, so a tower reads as
+  offices working late. Each building also slides its own pattern along the tile, so two neighbours
+  of the same family are not the same wall twice
+- **Ground floors that are not all the same** (CW-34) - the second: every building's first level was
+  literally one repeating strip. There are five now - a glass front, an awning, a closed roller
+  shutter, an arcade, and a blank service wall, because a street where every ground floor is a shop
+  reads as a film set. Which one a building gets comes from the nearest shop or cafe in the map
+  data where there is one, and from the building itself where there is not
+
+### Added
+
+- **Real ground under your feet** (CW-33) - the city had one floor: a roadway, a kerb line and a
+  dotted plane. It has three now. Pavements that are mapped separately from the road - and there
+  are 1,539 of them in Seattle alone - are drawn as their own narrow ribbons, lighter than the
+  carriageway and written with their own set of characters, so you can see where the kerb is
+  instead of inferring it. Parks, gardens, pitches and playgrounds appear as greenspace, with their
+  own characters again: clumps and tufts rather than the lines the road uses. And where the map
+  says what a road is paved with - asphalt, concrete, paving stones - the texture shifts to suit;
+  where it does not, a roadway is assumed asphalt and a pavement concrete, which is what
+  OpenStreetMap itself assumes. All four cities were rebaked to collect this
+- **Denver has its shape at last** (CW-33, CW-Q31) - it has been the one city drawn as plain boxes
+  since the stepped towers arrived, because it is mapped in unusual detail: 3,013 separate volumes,
+  more than the file budget allowed. **2,118 of those are smaller than ten square metres** - ledges
+  and setbacks a few centimetres across that no character on screen could ever show. Dropping them
+  leaves 895 real volumes and brings the city inside the budget, so Denver now has its stepped
+  towers and its roofs
+
+### Changed
+
+- **The graphics card now chooses the characters** (CW-32) - deciding which character to draw in
+  each cell was the single most expensive thing the City Walk did: sixteen brightness samples, two
+  contrast curves and a nearest-shape search, on the processor, about 140,000 times per frame at the
+  smallest character size. All of it is now one drawing pass on the graphics card, which is the kind
+  of work graphics cards exist for. Same session, same standing view, heavy rain, 10% characters,
+  with the processor slowed to a quarter speed: a conversion fell from 220 ms to 65 ms in
+  monochrome, and from 268 ms to 34 ms in colour. The picture refreshes about three times as often
+  and the frame rate roughly tripled. The city looks the same - the two paths were photographed side
+  by side at 10% and 50%, in monochrome, colour and high contrast, and the differences are subtle
+  changes in how densely a few cells are inked, about half of them cases where the graphics card
+  picks the *nearer* character than the processor's cache did. Nothing depends on it: a machine
+  without WebGL2, a shader that will not compile, or a readback that fails all fall back to the
+  processor permanently and silently, and that path is unchanged and still runs everywhere. **The
+  goal of thirty frames a second on a low-end machine is still not met** - drawing the finished
+  picture is now the expensive step, and it was not part of this work
+
+- **The city runs colder at the smallest characters** (CW-30) - at the 10% character size a cell is
+  about two device pixels wide, and the converter was reading sixteen samples for it. Measured,
+  those sixteen land on six distinct pixels: the ring of samples meant to see a cell's surroundings
+  was reading the very pixels the cell itself had already read. Each pixel is now read once and
+  handed to every sample that asked for it, which is not an approximation - the picture comes out
+  the same character for character. The two contrast curves, which raise a number to a fixed power
+  up to twelve times per cell, are now read from a table built once per frame rather than computed
+  per cell. Same session, same standing view, heavy rain, 10% characters, under a 4x CPU throttle:
+  a conversion took 287-346 ms before and 179-190 ms after, and the picture refreshed about three
+  times a second before and about five after. Nothing about how it looks has changed - at 50%
+  characters the frame is pixel-for-pixel identical to the old path, and at 10% it differs in 17
+  pixels out of 1,129,600, against a 31,000-pixel floor from capturing the same code twice. This
+  is the first of three staged pieces of performance work; the goal of thirty frames a second on a
+  low-end machine is not met yet
+
+### Added
+
 - **The tour ends by telling you the way out** (UF-39, U-45) - the Getting Started tour used to
   finish with "You're ready!" and leave you standing in a project with no word about how to get back
   to your own files. The way people reached for was the browser's Back button, which closed the app.

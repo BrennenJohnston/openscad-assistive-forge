@@ -50,11 +50,16 @@ import {
   PlaneGeometry,
   RepeatWrapping,
   Shape,
+  ShapeGeometry,
   Vector2,
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { pointInRing } from './walk-controls.js';
-import { buildRoadGraph, trafficDensityFor } from './city-data.js';
+import {
+  buildRoadGraph,
+  ringCentroid,
+  trafficDensityFor,
+} from './city-data.js';
 
 // Per-view road treatment. Any visible SURFACE tone carpets the lower half
 // of the street view — perspective stacks every road between here and the
@@ -66,6 +71,58 @@ import { buildRoadGraph, trafficDensityFor } from './city-data.js';
 export const ROAD_TONES = { street: 0x000000, map: 0x4a4a4a };
 const CURB_TONE = 0x303030;
 const CURB_WIDTH_M = 0.5;
+
+/**
+ * Pavement tones (CW-33). A separately-mapped pavement is lighter than the
+ * roadway it runs beside - that difference is the whole point of drawing it,
+ * because it is what tells a walker where the kerb is.
+ *
+ * Street level stays dark: this city is read through a converter that turns
+ * brightness into characters, and a pavement bright enough to be obvious in
+ * the 3D frame would carpet the bottom of the screen in glyphs. It is lifted
+ * just far enough off the roadway to separate, and the SIDEWALK glyph
+ * vocabulary does the rest of the work.
+ */
+const SIDEWALK_TONES = { street: 0x161616, map: 0x6a6a6a };
+
+/**
+ * Greenspace tones (CW-33). Dim at street level for the same reason, and
+ * distinctly lighter than the roadway overhead so a park reads as a shape on
+ * the map rather than a hole in the grid.
+ */
+const GREEN_TONES = { street: 0x101410, map: 0x3f5a3f };
+
+/**
+ * How the `surface` tag shifts a ribbon's tone, where OSM has one (CW-33).
+ *
+ * The multiplier is deliberately gentle: this is texture, not colour-coding,
+ * and the converter sees only brightness. Anything stronger would turn a
+ * change of paving into a change of material.
+ *
+ * Roads carry a surface tag on 88% of Seattle's ways and 9% of
+ * Albuquerque's, so most ribbons take the class default below and that is
+ * stated rather than hidden - an untagged road is assumed asphalt, an
+ * untagged pavement concrete, which is the OSM default assumption.
+ */
+const SURFACE_TONE_SCALE = {
+  asphalt: 0.85,
+  concrete: 1.25,
+  concrete_plates: 1.25,
+  paving_stones: 1.4,
+  sett: 1.35,
+  cobblestone: 1.35,
+  bricks: 1.3,
+  gravel: 1.15,
+  compacted: 1.1,
+  ground: 1.05,
+  dirt: 1.05,
+  grass: 1.0,
+  wood: 1.2,
+};
+
+/** What a ribbon is assumed to be made of when OSM does not say. */
+const DEFAULT_ROAD_SURFACE = 'asphalt';
+const DEFAULT_SIDEWALK_SURFACE = 'concrete';
 
 // Minor path classes are parsed (city-data keeps them for future rounds)
 // but not drawn: dense downtowns carry footpaths everywhere, and under
@@ -88,8 +145,11 @@ const GROUND_MARGIN_M = 200;
 // every bay.
 const WINDOW_BAY_W_M = 4;
 const WINDOW_BAY_H_M = 3;
-const WINDOW_TILE_BAYS_X = 4;
-const WINDOW_TILE_BAYS_Y = 3;
+// CW-34: a much larger tile than the 4x3 it was. The lit-run pattern needs
+// room to look unplanned before it wraps, and at 4 bays across the repeat was
+// visible along a whole street.
+const WINDOW_TILE_BAYS_X = 8;
+const WINDOW_TILE_BAYS_Y = 12;
 
 const STOREFRONT_HEIGHT_M = 3.5;
 const GROUND_TILE_M = 48;
@@ -321,7 +381,132 @@ function makeRepeatingTexture(canvas, repeatX, repeatY, offsetY = 0) {
  * `null` is the plain rectangular pane the city has always had, kept as a
  * family so a share of the buildings still look exactly as they did.
  */
-const WINDOW_LETTER_FAMILIES = [null, 'X', 'O', '8', 'H', 'Z', 'M', 'A'];
+/**
+ * THIS ARRAY IS ART DIRECTION, like glyph-vocabularies.js. It is data, not
+ * machinery: each entry says how one family of buildings glazes a window bay,
+ * and adding, removing or reordering entries changes how the city reads
+ * without touching any other code.
+ *
+ * WHY IT REPLACED THE LETTERS (CW-Q26, owner-signed). CW-25 gave each family
+ * a letterform cut out of its panes - X, O, 8, H, Z, M, A - to make one
+ * tower's wall distinguishable from the next. Photographed at the owner's own
+ * character size it did the opposite of its intent: the near towers read as
+ * LITERAL GIANT LETTERS built out of smaller letters. The letters are gone,
+ * entirely, and what replaces them is the shape of the glazing itself.
+ *
+ * The archetypes are the nine window kinds PixelCity's texture generator
+ * draws (see THIRD_PARTY_NOTICES). Ideas only - both projects are GPL-3 and
+ * no code was copied; these are reimplemented from a description of what each
+ * kind looks like.
+ *
+ * RULES FOR EDITING, both learned the hard way:
+ *   1. **Cut out, never draw on.** Each painter fills a LIT pane and then
+ *      removes the glazing bars with `destination-out`. CW-25 tried drawing
+ *      dark bars onto the wall instead; a thin shape replaced a solid lit
+ *      rectangle with a few strokes and whole facades stopped reading as lit
+ *      at all. Photographed, and reverted.
+ *   2. **No shape that reads as a character.** That is the fault this whole
+ *      release exists to remove. Bars, slots and bands only.
+ */
+const WINDOW_ARCHETYPES = [
+  // A plain pane split by a centre mullion - the window the city has always
+  // had, kept as one family so a share of the buildings look unchanged.
+  {
+    name: 'plain',
+    bars: (ctx, x, y, w, h) => {
+      ctx.fillRect(x + w * 0.48, y, w * 0.04, h);
+    },
+  },
+  // One tall slot: a narrow vertical opening in a mostly solid bay.
+  {
+    name: 'slot',
+    inset: [0.36, 0.14, 0.28, 0.72],
+    bars: () => {},
+  },
+  // Two panes side by side, a wide mullion between them.
+  {
+    name: 'pair',
+    bars: (ctx, x, y, w, h) => {
+      ctx.fillRect(x + w * 0.44, y, w * 0.12, h);
+    },
+  },
+  // A pane with the blinds part way down, at a height that varies per bay.
+  {
+    name: 'blinds',
+    bars: (ctx, x, y, w, h, rand) => {
+      const drop = 0.15 + rand() * 0.55;
+      ctx.fillRect(x, y, w, h * drop);
+      ctx.fillRect(x + w * 0.48, y + h * drop, w * 0.04, h * (1 - drop));
+    },
+  },
+  // Vertical stripes: a curtain-walled bay read as glazing bars.
+  {
+    name: 'stripes',
+    bars: (ctx, x, y, w, h) => {
+      for (let i = 1; i < 4; i++)
+        ctx.fillRect(x + w * (i / 4) - w * 0.02, y, w * 0.04, h);
+    },
+  },
+  // One wide horizontal light, short and letterbox-shaped.
+  {
+    name: 'wide',
+    inset: [0.08, 0.3, 0.84, 0.34],
+    bars: () => {},
+  },
+  // Four panes, both mullions crossing.
+  {
+    name: 'cross',
+    bars: (ctx, x, y, w, h) => {
+      ctx.fillRect(x + w * 0.48, y, w * 0.04, h);
+      ctx.fillRect(x, y + h * 0.46, w, h * 0.06);
+    },
+  },
+  // A single narrow punched window in a solid wall - brick, not curtain.
+  {
+    name: 'narrow',
+    inset: [0.3, 0.2, 0.4, 0.56],
+    bars: (ctx, x, y, w, h) => {
+      ctx.fillRect(x + w * 0.46, y, w * 0.08, h);
+    },
+  },
+  // A continuous horizontal band, the pane running the full bay width.
+  {
+    name: 'band',
+    inset: [0.02, 0.26, 0.96, 0.44],
+    bars: (ctx, x, y, w, h) => {
+      ctx.fillRect(x + w * 0.5, y, w * 0.03, h);
+    },
+  },
+];
+
+/**
+ * What a mapped material biases a building's glazing towards (CW-34 P3).
+ *
+ * A BIAS, never an override: the listed archetypes are the ones that material
+ * chooses among, and the building's own hash still picks which. Denver is 97
+ * glass buildings out of 363, and forcing all of them onto one archetype
+ * would trade the letterform monoculture this release removed for a material
+ * monoculture in its place.
+ *
+ * Indices into WINDOW_ARCHETYPES: 0 plain, 1 slot, 2 pair, 3 blinds,
+ * 4 stripes, 5 wide, 6 cross, 7 narrow, 8 band.
+ */
+const ARCHETYPES_BY_MATERIAL = new Map([
+  // A curtain wall is glazing bars and continuous bands, not punched holes.
+  ['glass', [4, 5, 8]],
+  ['mirror', [4, 5, 8]],
+  ['glass_reinforced_concrete', [4, 8]],
+  // Masonry punches holes in a solid wall.
+  ['brick', [7, 1, 0]],
+  ['stone', [7, 1]],
+  ['sandstone', [7, 1]],
+  ['concrete', [6, 0, 2]],
+  ['plaster', [0, 2]],
+  ['metal', [4, 8]],
+]);
+
+/** The default pane rectangle, as fractions of a bay. */
+const WINDOW_PANE_INSET = [0.2, 0.2, 0.6, 0.56];
 
 /**
  * Window-grid wall texture: lit window shapes on dark grout, one 4×3-bay
@@ -331,48 +516,98 @@ const WINDOW_LETTER_FAMILIES = [null, 'X', 'O', '8', 'H', 'Z', 'M', 'A'];
  *   from, or null for the plain rectangular pane
  * @returns {CanvasTexture|null}
  */
-function createWindowTexture(family = null) {
-  const bayW = 96;
-  const bayH = 72;
+/**
+ * The wall texture for one window archetype (CW-34).
+ *
+ * Two things make a facade stop repeating. The first is the archetype: which
+ * shape the glazing takes. The second, and the one the eye actually notices,
+ * is WHICH WINDOWS ARE LIT.
+ *
+ * The old pattern rolled each bay dark with probability 0.25, independently,
+ * over a 4x3 tile. That produces an even scatter that repeats every four bays
+ * across and three up - a texture, in the wallpaper sense, and the city read
+ * as wallpaper. Real towers at night are lit in RUNS: a floor of one firm
+ * working late is a row of lit windows with dark stretches either side.
+ *
+ * So the pattern is painted the way PixelCity paints it (idea credit in
+ * THIRD_PARTY_NOTICES; no code copied). Per band of floors, re-rolled every
+ * few rows, pick a run length and a lit density; walk each row lighting
+ * windows in consecutive runs of that length. Lit panes take a brightness
+ * jitter and sometimes a vertical curtain streak; dark panes take faint
+ * noise, because a dark window is not black.
+ *
+ * The tile is also much larger than it was - 8 bays by 12 instead of 4 by 3 -
+ * so the pattern has room to look unplanned before it wraps.
+ *
+ * @param {number} archetypeIndex - which entry of WINDOW_ARCHETYPES
+ * @returns {CanvasTexture|null}
+ */
+function createWindowTexture(archetypeIndex = 0) {
+  const bayW = 64;
+  const bayH = 48;
   const c = make2dContext(bayW * WINDOW_TILE_BAYS_X, bayH * WINDOW_TILE_BAYS_Y);
   if (!c) return null;
   const { canvas, ctx } = c;
 
+  const archetype = WINDOW_ARCHETYPES[archetypeIndex] ?? WINDOW_ARCHETYPES[0];
+  const [insetX, insetY, insetW, insetH] = archetype.inset ?? WINDOW_PANE_INSET;
+
   ctx.fillStyle = '#101010';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  if (family) {
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = `bold ${Math.round(bayH * 0.62)}px monospace`;
-  }
+  // Seeded per archetype, so a family always paints the same wall and no two
+  // families share a lit pattern that would give them away as one texture in
+  // different clothes.
+  const rand = makeLcg(0xc17b0011 + archetypeIndex * 0x9e37);
 
-  // Seeded per family, so a family always paints the same wall and no two
-  // families share a lit/dark pattern that would give them away as the same
-  // texture in different clothes.
-  const familySeed = Math.max(0, WINDOW_LETTER_FAMILIES.indexOf(family));
-  const rand = makeLcg(0xc17b0011 + familySeed * 0x9e37);
+  const paintBay = (bx, by, lit) => {
+    const x0 = bx * bayW;
+    const y0 = by * bayH;
+    const px = x0 + bayW * insetX;
+    const py = y0 + bayH * insetY;
+    const pw = bayW * insetW;
+    const ph = bayH * insetH;
+
+    if (lit) {
+      // Jitter, so a run of lit windows is not one flat block of light.
+      const level = 196 + Math.floor(rand() * 56);
+      ctx.fillStyle = `rgb(${level},${level},${level})`;
+    } else {
+      const level = 34 + Math.floor(rand() * 16);
+      ctx.fillStyle = `rgb(${level},${level},${level})`;
+    }
+    ctx.fillRect(px, py, pw, ph);
+
+    // The glazing bars are CUT OUT of the pane, never drawn on the wall.
+    ctx.globalCompositeOperation = 'destination-out';
+    archetype.bars(ctx, px, py, pw, ph, rand);
+    // A curtain drawn across part of a lit window: one more thing that
+    // differs bay to bay without differing family to family.
+    if (lit && rand() < 0.22) {
+      const cw = pw * (0.12 + rand() * 0.2);
+      ctx.fillRect(px + rand() * (pw - cw), py, cw, ph);
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  };
+
+  let bandRows = 0;
+  let runLength = 4;
+  let litDensity = 3;
   for (let by = 0; by < WINDOW_TILE_BAYS_Y; by++) {
-    for (let bx = 0; bx < WINDOW_TILE_BAYS_X; bx++) {
-      const x0 = bx * bayW;
-      const y0 = by * bayH;
-      const dark = rand() < 0.25;
-      ctx.fillStyle = dark ? '#2c2c2c' : '#dcdcdc';
-      ctx.fillRect(x0 + bayW * 0.2, y0 + bayH * 0.2, bayW * 0.6, bayH * 0.56);
-      if (family) {
-        // The letter is CUT OUT of the lit pane rather than drawn on the dark
-        // wall. Drawn, a thin glyph replaces a solid lit rectangle with a few
-        // strokes and the whole facade goes dark — photographed, buildings
-        // stopped reading as lit at all. Cut out, the pane keeps its brightness
-        // and the family shows as the shape of its glazing bars.
-        ctx.globalCompositeOperation = 'destination-out';
-        ctx.fillText(family, x0 + bayW * 0.5, y0 + bayH * 0.48);
-        ctx.globalCompositeOperation = 'source-over';
-        continue;
+    if (bandRows <= 0) {
+      // A band is a few floors that share a tenant's habits.
+      bandRows = 2 + Math.floor(rand() * 4);
+      runLength = 2 + Math.floor(rand() * 9);
+      litDensity = 2 + Math.floor(rand() * 4);
+    }
+    bandRows--;
+    let bx = 0;
+    while (bx < WINDOW_TILE_BAYS_X) {
+      const lit = rand() * 5 < litDensity;
+      const run = 1 + Math.floor(rand() * runLength);
+      for (let k = 0; k < run && bx < WINDOW_TILE_BAYS_X; k++, bx++) {
+        paintBay(bx, by, lit);
       }
-      // Center mullion splits each window into two panes.
-      ctx.fillStyle = '#101010';
-      ctx.fillRect(x0 + bayW * 0.48, y0 + bayH * 0.2, bayW * 0.04, bayH * 0.56);
     }
   }
 
@@ -388,35 +623,132 @@ function createWindowTexture(family = null) {
  * strip above — the ground floor glow of the reference.
  * @returns {CanvasTexture|null}
  */
+/**
+ * THE GROUND-FLOOR BANDS (CW-34). Art direction, like WINDOW_ARCHETYPES.
+ *
+ * The owner's second photographed complaint: "the first level of each
+ * building is exactly the same". It was — one texture strip, one merged mesh,
+ * repeating every four metres along every building in the city.
+ *
+ * Each entry paints one storefront kind into a bay. They are stacked
+ * vertically into ONE texture and each building's ground floor slides its UVs
+ * to land on the band it wears, so five kinds still cost one mesh and one
+ * draw call.
+ *
+ * Which one a building gets comes from the nearest shop or eating place in
+ * the map data where there is one, and from the building's hash where there
+ * is not. Albuquerque has the fewest POIs of the four cities and is the
+ * control: it must still look varied on the hash alone.
+ */
+const STOREFRONT_VARIANTS = [
+  {
+    name: 'glass',
+    paint: (ctx, w, h) => {
+      ctx.fillStyle = '#efefef';
+      ctx.fillRect(w * 0.08, h * 0.3, w * 0.84, h * 0.62);
+      ctx.fillStyle = '#7a7a7a';
+      ctx.fillRect(w * 0.08, h * 0.06, w * 0.84, h * 0.14);
+      // A mullion, so a wide shopfront is not one undivided slab of light.
+      ctx.fillStyle = '#181818';
+      ctx.fillRect(w * 0.49, h * 0.3, w * 0.02, h * 0.62);
+    },
+  },
+  {
+    name: 'awning',
+    paint: (ctx, w, h) => {
+      ctx.fillStyle = '#d8d8d8';
+      ctx.fillRect(w * 0.1, h * 0.46, w * 0.8, h * 0.46);
+      // The awning itself: a bright band with its shadow under it.
+      ctx.fillStyle = '#9a9a9a';
+      ctx.fillRect(w * 0.04, h * 0.26, w * 0.92, h * 0.16);
+      ctx.fillStyle = '#101010';
+      ctx.fillRect(w * 0.1, h * 0.42, w * 0.8, h * 0.05);
+    },
+  },
+  {
+    name: 'shutter',
+    paint: (ctx, w, h) => {
+      // Closed for the night: dim, and horizontally ribbed.
+      ctx.fillStyle = '#3a3a3a';
+      ctx.fillRect(w * 0.08, h * 0.24, w * 0.84, h * 0.68);
+      ctx.fillStyle = '#242424';
+      for (let i = 0; i < 7; i++) {
+        ctx.fillRect(w * 0.08, h * (0.28 + i * 0.09), w * 0.84, h * 0.03);
+      }
+    },
+  },
+  {
+    name: 'arcade',
+    paint: (ctx, w, h) => {
+      // A colonnade: two piers with a lit recess between them.
+      ctx.fillStyle = '#c8c8c8';
+      ctx.fillRect(w * 0.22, h * 0.34, w * 0.56, h * 0.58);
+      ctx.fillStyle = '#161616';
+      ctx.fillRect(w * 0.0, h * 0.2, w * 0.2, h * 0.8);
+      ctx.fillRect(w * 0.8, h * 0.2, w * 0.2, h * 0.8);
+    },
+  },
+  {
+    name: 'service',
+    paint: (ctx, w, h) => {
+      // A blank wall with a service door. Not every ground floor is a shop,
+      // and a street where they all are reads as a film set.
+      ctx.fillStyle = '#2a2a2a';
+      ctx.fillRect(w * 0.06, h * 0.2, w * 0.88, h * 0.72);
+      ctx.fillStyle = '#585858';
+      ctx.fillRect(w * 0.4, h * 0.42, w * 0.2, h * 0.5);
+    },
+  },
+];
+
+/** Which storefront band a POI kind asks for; anything else falls to the hash. */
+const STOREFRONT_BY_POI = new Map([
+  ['shop', 0],
+  ['restaurant', 1],
+  ['cafe', 1],
+  ['fast_food', 1],
+  ['bar', 1],
+  ['pub', 1],
+  ['bank', 3],
+  ['pharmacy', 0],
+  ['cinema', 3],
+  ['theatre', 3],
+  ['library', 3],
+  ['post_office', 4],
+  ['marketplace', 1],
+]);
+
+/**
+ * Every storefront band in one texture, stacked vertically.
+ *
+ * A building picks its band by sliding its ground floor's UVs, so five kinds
+ * cost one texture, one material and one mesh — the same trick the window
+ * archetypes use per building, applied to a different axis.
+ *
+ * @returns {CanvasTexture|null}
+ */
 function createStorefrontTexture() {
-  const c = make2dContext(192, 112);
+  const bandH = 112;
+  const c = make2dContext(192, bandH * STOREFRONT_VARIANTS.length);
   if (!c) return null;
   const { canvas, ctx } = c;
 
   ctx.fillStyle = '#181818';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  // Glass
-  ctx.fillStyle = '#efefef';
-  ctx.fillRect(
-    canvas.width * 0.08,
-    canvas.height * 0.3,
-    canvas.width * 0.84,
-    canvas.height * 0.62
-  );
-  // Sign band
-  ctx.fillStyle = '#7a7a7a';
-  ctx.fillRect(
-    canvas.width * 0.08,
-    canvas.height * 0.06,
-    canvas.width * 0.84,
-    canvas.height * 0.14
-  );
 
+  STOREFRONT_VARIANTS.forEach((variant, i) => {
+    ctx.save();
+    ctx.translate(0, i * bandH);
+    variant.paint(ctx, canvas.width, bandH);
+    ctx.restore();
+  });
+
+  const tileHM = STOREFRONT_HEIGHT_M * STOREFRONT_VARIANTS.length;
   return makeRepeatingTexture(
     canvas,
     1 / WINDOW_BAY_W_M,
-    1 / STOREFRONT_HEIGHT_M,
-    -1 / STOREFRONT_HEIGHT_M
+    1 / tileHM,
+    -1 / tileHM
   );
 }
 
@@ -492,6 +824,23 @@ function createGroundTexture() {
  * @param {{depthOverride?: number}} [options]
  * @returns {ExtrudeGeometry|null}
  */
+/**
+ * Slide a geometry's UVs, in tile fractions (CW-34).
+ *
+ * The window texture repeats every WINDOW_TILE_BAYS_X bays across and
+ * WINDOW_TILE_BAYS_Y up, and its `repeat` is set in metres, so a shift of one
+ * bay's width moves the pattern one window along on this geometry and nothing
+ * else. Eight by twelve gives ninety-six distinct walls per archetype.
+ */
+function offsetGeometryUv(geometry, du, dv) {
+  const uv = geometry.getAttribute('uv');
+  if (!uv) return;
+  for (let i = 0; i < uv.count; i++) {
+    uv.setXY(i, uv.getX(i) + du, uv.getY(i) + dv);
+  }
+  uv.needsUpdate = true;
+}
+
 function extrudeBuilding(building, tint, options = {}) {
   const shape = new Shape(building.outer.map(([x, y]) => new Vector2(x, y)));
   for (const hole of building.holes) {
@@ -718,7 +1067,20 @@ function appendRoadRibbon(road, positions, cullBounds, shape = {}) {
     const d = [cx2 + px, cy2 + py, lift];
     // Two CCW triangles (normal +Z): a-b-c, a-c-d
     positions.push(...a, ...b, ...c, ...a, ...c, ...d);
+    // CW-33: the surface tint rides as a vertex colour so that every ribbon
+    // stays in ONE merged mesh. Splitting by paving material would multiply
+    // the draw calls and, worse, give the class pass a new mesh name to learn
+    // for every value OSM happens to carry.
+    if (shape.colors) {
+      const t = shape.tint ?? 1;
+      for (let v = 0; v < 6; v++) shape.colors.push(t, t, t);
+    }
   }
+}
+
+/** The tone multiplier a ribbon takes from its `surface` tag (CW-33). */
+function surfaceTint(surface, fallback) {
+  return SURFACE_TONE_SCALE[surface] ?? SURFACE_TONE_SCALE[fallback] ?? 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -992,10 +1354,10 @@ export function buildCityGroup(model) {
   group.name = 'ascii-city';
   const disposables = [];
 
-  // CW-25: one window texture per letter family. Painted at runtime, so eight
-  // facade looks cost nothing in the bundle.
-  const windowTextures = WINDOW_LETTER_FAMILIES.map((f) =>
-    createWindowTexture(f)
+  // CW-25/CW-34: one window texture per archetype. Painted at runtime, so the
+  // whole set of facade looks costs nothing in the bundle.
+  const windowTextures = WINDOW_ARCHETYPES.map((_, i) =>
+    createWindowTexture(i)
   );
   const storefrontTexture = createStorefrontTexture();
   const groundTexture = createGroundTexture();
@@ -1004,9 +1366,9 @@ export function buildCityGroup(model) {
   }
 
   // Buildings — merged, vertex-tinted, window-textured meshes, dressed with
-  // the CW-18 signs and rooftop masts. One mesh per letter family (CW-25):
+  // the CW-18 signs and rooftop masts. One mesh per archetype (CW-25/CW-34):
   // the texture is per-material, so a facade look means a mesh to carry it.
-  const buildingGeoms = WINDOW_LETTER_FAMILIES.map(() => []);
+  const buildingGeoms = WINDOW_ARCHETYPES.map(() => []);
   const storefrontGeoms = [];
   const signOut = { plates: [], faces: [] };
   const roadIndex = makePointGrid(SIGN_ROAD_CELL_M);
@@ -1014,6 +1376,11 @@ export function buildCityGroup(model) {
     for (const [x, y] of road.points) roadIndex.add(x, y);
   }
   const roadDistance = (x, y) => roadIndex.nearest(x, y);
+
+  // CW-34: where the shops and cafes are, so a ground floor can be the kind
+  // of thing that is actually on that corner.
+  const poiIndex = makeKindGrid(STOREFRONT_POI_RANGE_M);
+  for (const poi of model.pois ?? []) poiIndex.add(poi.x, poi.y, poi.kind);
   const antennaGeoms = [];
   const antennaCutoffM = antennaHeightCutoff(model.buildings);
   let signCount = 0;
@@ -1022,6 +1389,16 @@ export function buildCityGroup(model) {
   model.buildings.forEach((building, index) => {
     const h = hashBuilding(index, building.name);
     const tint = buildingTint(index, building.name);
+    // CW-34: the mapped material narrows the choice of glazing; the hash
+    // still makes it. Untagged buildings — which is most of them everywhere
+    // except Denver — choose from all nine, so the city looks right with no
+    // data at all.
+    const materialBias = ARCHETYPES_BY_MATERIAL.get(
+      building.tags?.['building:material']
+    );
+    const archetypeIndex = materialBias
+      ? materialBias[h % materialBias.length]
+      : h % WINDOW_ARCHETYPES.length;
     // CW-26: where the parts really are the mass (they cover the outline)
     // they REPLACE it - extruding the outline as well would bury them inside
     // a plain box, the very thing Simple 3D Buildings exists to avoid. Where
@@ -1044,8 +1421,29 @@ export function buildCityGroup(model) {
       if (!geom && !roof) continue;
       // The same hash that fixes a building's colour fixes its facade, so a
       // tower keeps both for as long as the extract does.
-      const bucket = buildingGeoms[h % WINDOW_LETTER_FAMILIES.length];
-      if (geom) bucket.push(geom);
+      const bucket = buildingGeoms[archetypeIndex];
+      if (geom) {
+        // CW-34: slide this building's window pattern along the tile.
+        //
+        // Nine archetypes over hundreds of buildings means roughly fifty
+        // towers share each texture, and without this they would share it
+        // EXACTLY - the same lit windows in the same places, which is the
+        // repetition this release exists to remove, only at a coarser grain.
+        // ExtrudeGeometry lays UVs out in world metres, so shifting the
+        // attribute by a hash-derived phase moves where the tile starts on
+        // this building alone. It survives the merge because it is baked into
+        // the vertex data rather than set on the material.
+        // WHOLE BAYS, not a continuous slide. The texture's own v offset
+        // exists so that window rows count up from a building's base
+        // (`-1 / tileHM` in makeRepeatingTexture); a fractional shift would
+        // put a half-height row of windows at every ground line.
+        offsetGeometryUv(
+          geom,
+          ((h >>> 3) % WINDOW_TILE_BAYS_X) * WINDOW_BAY_W_M,
+          ((h >>> 13) % WINDOW_TILE_BAYS_Y) * WINDOW_BAY_H_M
+        );
+        bucket.push(geom);
+      }
       if (roof) bucket.push(roof);
       anyGeom = true;
     }
@@ -1060,7 +1458,19 @@ export function buildCityGroup(model) {
       const strip = extrudeBuilding(building, STOREFRONT_TINT, {
         depthOverride: STOREFRONT_HEIGHT_M,
       });
-      if (strip) storefrontGeoms.push(strip);
+      if (strip) {
+        // CW-34: which ground floor this building wears. The nearest shop or
+        // eating place in the map data decides where there is one; the
+        // building's own hash decides where there is not, so a city with no
+        // POIs at all still has a varied street.
+        const [cx, cy] = ringCentroid(building.outer);
+        const poiKind = poiIndex.nearestKind(cx, cy, STOREFRONT_POI_RANGE_M);
+        const band =
+          (poiKind !== null ? STOREFRONT_BY_POI.get(poiKind) : undefined) ??
+          (h >>> 23) % STOREFRONT_VARIANTS.length;
+        offsetGeometryUv(strip, 0, band * STOREFRONT_HEIGHT_M);
+        storefrontGeoms.push(strip);
+      }
     }
 
     const wall = signWall(building.outer, roadDistance);
@@ -1241,10 +1651,33 @@ export function buildCityGroup(model) {
     maxY: b.maxY + GROUND_MARGIN_M,
   };
   const roadPositions = [];
+  const roadColors = [];
   const curbPositions = [];
+  const sidewalkPositions = [];
+  const sidewalkColors = [];
   for (const road of model.roads) {
+    // CW-33: a separately-mapped pavement is drawn even though `footway` is
+    // in the undrawn set. The set exists because a downtown carries footpaths
+    // everywhere and, compressed by first-person perspective, they merge into
+    // a solid glyph carpet that drowns the street grid. A footway=sidewalk
+    // way is the narrow subset that runs along a kerb, and it gets its own
+    // narrower ribbon, its own tone and its own glyph voice rather than
+    // joining the roads - which is what keeps it from being that carpet.
+    // Paths through parks stay undrawn.
+    if (road.sidewalk) {
+      appendRoadRibbon(road, sidewalkPositions, cullBounds, {
+        colors: sidewalkColors,
+        tint: surfaceTint(road.surface, DEFAULT_SIDEWALK_SURFACE),
+        // Above the roadway, so a pavement crossing one reads as on top.
+        liftM: ROAD_LIFT_M + 0.04,
+      });
+      continue;
+    }
     if (UNDRAWN_ROAD_KINDS.has(road.kind)) continue;
-    appendRoadRibbon(road, roadPositions, cullBounds);
+    appendRoadRibbon(road, roadPositions, cullBounds, {
+      colors: roadColors,
+      tint: surfaceTint(road.surface, DEFAULT_ROAD_SURFACE),
+    });
     const edgeOffset = (road.widthM - CURB_WIDTH_M) / 2;
     for (const side of [edgeOffset, -edgeOffset]) {
       appendRoadRibbon(road, curbPositions, cullBounds, {
@@ -1255,7 +1688,7 @@ export function buildCityGroup(model) {
     }
   }
 
-  const makeFlatMesh = (positions, material, name) => {
+  const makeFlatMesh = (positions, material, name, colors) => {
     const geom = new BufferGeometry();
     geom.setAttribute(
       'position',
@@ -1264,6 +1697,12 @@ export function buildCityGroup(model) {
     const normals = new Float32Array(positions.length);
     for (let i = 0; i < normals.length; i += 3) normals[i + 2] = 1;
     geom.setAttribute('normal', new BufferAttribute(normals, 3));
+    if (colors && colors.length === positions.length) {
+      geom.setAttribute(
+        'color',
+        new BufferAttribute(new Float32Array(colors), 3)
+      );
+    }
     const mesh = new Mesh(geom, material);
     mesh.name = name;
     group.add(mesh);
@@ -1277,11 +1716,12 @@ export function buildCityGroup(model) {
   if (roadPositions.length > 0) {
     roadMat = new MeshLambertMaterial({
       color: ROAD_TONES.street,
+      vertexColors: true,
       polygonOffset: true,
       polygonOffsetFactor: -1,
       polygonOffsetUnits: -1,
     });
-    makeFlatMesh(roadPositions, roadMat, 'roads');
+    makeFlatMesh(roadPositions, roadMat, 'roads', roadColors);
     roadTriangles = roadPositions.length / 9;
 
     const curbMat = new MeshLambertMaterial({
@@ -1291,6 +1731,54 @@ export function buildCityGroup(model) {
       polygonOffsetUnits: -2,
     });
     curbMesh = makeFlatMesh(curbPositions, curbMat, 'curbs');
+  }
+
+  // CW-33: pavements, as their own surface.
+  let sidewalkMat = null;
+  if (sidewalkPositions.length > 0) {
+    sidewalkMat = new MeshLambertMaterial({
+      color: SIDEWALK_TONES.street,
+      vertexColors: true,
+      polygonOffset: true,
+      polygonOffsetFactor: -3,
+      polygonOffsetUnits: -3,
+    });
+    makeFlatMesh(sidewalkPositions, sidewalkMat, 'sidewalks', sidewalkColors);
+    roadTriangles += sidewalkPositions.length / 9;
+  }
+
+  // CW-33: greenspace, as flat polygons a hair above the ground plane. The
+  // ring-to-shape path is the one extrudeBuilding already uses, so a park
+  // with a concave edge comes out the shape it is mapped as.
+  let greenMat = null;
+  const greenGeoms = [];
+  for (const green of model.greens ?? []) {
+    const shape = new Shape();
+    const ring = green.outer;
+    if (!ring || ring.length < 3) continue;
+    shape.moveTo(ring[0][0], ring[0][1]);
+    for (let i = 1; i < ring.length; i++) shape.lineTo(ring[i][0], ring[i][1]);
+    shape.closePath();
+    const geom = new ShapeGeometry(shape);
+    geom.translate(0, 0, ROAD_LIFT_M - 0.02);
+    greenGeoms.push(geom);
+  }
+  if (greenGeoms.length > 0) {
+    const merged = mergeGeometries(greenGeoms, false);
+    for (const g of greenGeoms) g.dispose();
+    greenMat = new MeshLambertMaterial({
+      color: GREEN_TONES.street,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
+    });
+    const greenMesh = new Mesh(merged, greenMat);
+    greenMesh.name = 'greens';
+    group.add(greenMesh);
+    disposables.push(merged, greenMat);
+    roadTriangles += merged.index
+      ? merged.index.count / 3
+      : merged.getAttribute('position').count / 3;
   }
 
   return {
@@ -1308,6 +1796,19 @@ export function buildCityGroup(model) {
     setMapView(isMap) {
       if (roadMat) {
         roadMat.color = new Color(isMap ? ROAD_TONES.map : ROAD_TONES.street);
+      }
+      // CW-33: pavements and greens brighten overhead with the roads, so the
+      // map reads as a street network with parks in it rather than a grid
+      // floating on black.
+      if (sidewalkMat) {
+        sidewalkMat.color = new Color(
+          isMap ? SIDEWALK_TONES.map : SIDEWALK_TONES.street
+        );
+      }
+      if (greenMat) {
+        greenMat.color = new Color(
+          isMap ? GREEN_TONES.map : GREEN_TONES.street
+        );
       }
       if (curbMesh) curbMesh.visible = !isMap;
       for (const mesh of dressingMeshes) mesh.visible = !isMap;
@@ -1706,6 +2207,55 @@ const LAMP_HEAD_TINT = [0.97, 0.97, 0.97];
  *
  * @param {number} cellM
  */
+/** How far a shop may be from a building and still decide its ground floor. */
+const STOREFRONT_POI_RANGE_M = 35;
+
+/**
+ * A point grid that remembers what each point IS, not just where (CW-34).
+ *
+ * makePointGrid below answers "how far to the nearest road"; this answers
+ * "what is the nearest shop, and what kind". Same bucketing, one extra field,
+ * kept separate rather than complicating the distance-only grid that four
+ * other features already depend on.
+ */
+function makeKindGrid(cellM) {
+  const buckets = new Map();
+  const key = (cx, cy) => cx + ',' + cy;
+  return {
+    add(x, y, kind) {
+      const k = key(Math.floor(x / cellM), Math.floor(y / cellM));
+      let bucket = buckets.get(k);
+      if (!bucket) buckets.set(k, (bucket = []));
+      bucket.push({ x, y, kind });
+    },
+    /**
+     * The kind of the nearest point within `rangeM`, or null. Searches the
+     * cell the query falls in and its eight neighbours, which is exact as
+     * long as rangeM does not exceed the cell size.
+     */
+    nearestKind(x, y, rangeM) {
+      const cx = Math.floor(x / cellM);
+      const cy = Math.floor(y / cellM);
+      let best = null;
+      let bestD = rangeM * rangeM;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const bucket = buckets.get(key(cx + dx, cy + dy));
+          if (!bucket) continue;
+          for (const p of bucket) {
+            const d = (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y);
+            if (d < bestD) {
+              bestD = d;
+              best = p.kind;
+            }
+          }
+        }
+      }
+      return best;
+    },
+  };
+}
+
 function makePointGrid(cellM) {
   const buckets = new Map();
   let count = 0;

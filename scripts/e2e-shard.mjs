@@ -57,6 +57,16 @@ export const MEASURED_SECONDS = {
   // 289.0 measured, plus ~40 for the two weather describes CW-29 added, which
   // no CI run has timed yet. The next board replaces this with a measurement.
   'ascii-city-walk-street.spec.js': 329.0,
+  // NOT measured on CI - CW-36 is newer than the last board. Estimated from
+  // this machine, where the file runs 37.5 s against the controls file's
+  // 84 s, and the controls file is 417.4 here: 37.5 / 84 * 417.4 ~= 186,
+  // rounded up because every one of its eight cases builds a city. Left
+  // unlisted it would be booked at DEFAULT_WEIGHT_S, 60, and lopside a shard
+  // by two minutes. The next board replaces this with a measurement.
+  'ascii-city-walk-teleport.spec.js': 190.0,
+  // Same estimate, same caveat: 29.4 s here against the controls file's 84 s,
+  // so 29.4 / 84 * 417.4 ~= 146. Two cases, both of which load a city.
+  'ascii-city-walk-perf-smoke.spec.js': 150.0,
   'classic-panels.spec.js': 432.7,
   'classic-mode.spec.js': 395.1,
   'menu-parity.spec.js': 210.5,

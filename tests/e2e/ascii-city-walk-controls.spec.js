@@ -84,7 +84,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     await waitForFrames(page, 3)
 
     const start = await walkPos(page)
-    await holdButton(page, 'cityWalkForwardBtn', () =>
+    await holdButton(page, 'cityWalkCamPanUp', () =>
       expect
         .poll(async () => distance(start, await walkPos(page)), {
           timeout: 15000,
@@ -95,7 +95,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     // Holding Turn right moves the compass off north - to ANY other sector.
     // Exact label, not substring (see hudHeading).
     await expect.poll(() => hudHeading(page)).toBe('north')
-    await holdButton(page, 'cityWalkTurnRightBtn', () =>
+    await holdButton(page, 'cityWalkCamRotateRight', () =>
       expect.poll(() => hudHeading(page), { timeout: 15000 }).not.toBe('north')
     )
 
@@ -127,11 +127,10 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     await startFrameCounter(page)
     await waitForFrames(page, 3)
 
-    const streetOnly = [
-      'cityWalkLookUpBtn',
-      'cityWalkLookDownBtn',
-      'cityWalkFastBtn',
-    ]
+    // CW-35 retired the toolbar's Camera and Move groups into the Camera
+    // panel, so what swaps here is only what is still ON the toolbar: Fast
+    // and Rain mean nothing overhead, and the map's own three arrive.
+    const streetOnly = ['cityWalkFastBtn', 'cityWalkRainBtn']
     const mapOnly = [
       'cityWalkCenterBtn',
       'cityWalkZoomOutBtn',
@@ -141,10 +140,27 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     for (const id of streetOnly) await expect(btn(page, id)).toBeVisible()
     for (const id of mapOnly) await expect(btn(page, id)).toBeHidden()
 
+    // The panel does NOT swap. It stays put and re-labels, because the same
+    // D-pad drives both views (CW-Q32) - and a control that vanished under
+    // the pointer would cost the map the only mouse route it has to pan.
+    await expect(btn(page, 'cityWalkCamPanUp')).toHaveAttribute(
+      'aria-label',
+      'Walk forward'
+    )
+
     await page.keyboard.press('KeyM')
     await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
     for (const id of streetOnly) await expect(btn(page, id)).toBeHidden()
     for (const id of mapOnly) await expect(btn(page, id)).toBeVisible()
+
+    await expect(btn(page, 'cityWalkCamPanUp')).toBeVisible()
+    await expect(btn(page, 'cityWalkCamPanUp')).toHaveAttribute(
+      'aria-label',
+      'Pan map up'
+    )
+    // Face north/east/south/west have no meaning with no walker on screen,
+    // so they stand down rather than take a second job (CW-35 P3).
+    await expect(btn(page, 'cityWalkCamViewFront')).toBeHidden()
 
     // The map buttons drive the map: held Zoom in zooms exponentially…
     const zoom = () => page.evaluate(() => window.__cityWalkGame.mapCam.zoom)
@@ -158,7 +174,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     // …a pan breaks follow mode, and Center on you restores it.
     const follow = () =>
       page.evaluate(() => window.__cityWalkGame.mapCam.follow)
-    await holdButton(page, 'cityWalkStepRightBtn', () =>
+    await holdButton(page, 'cityWalkCamPanRight', () =>
       expect.poll(follow, { timeout: 15000 }).toBe(false)
     )
 
@@ -179,6 +195,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     )
     for (const id of streetOnly) await expect(btn(page, id)).toBeVisible()
     for (const id of mapOnly) await expect(btn(page, id)).toBeHidden()
+    await expect(btn(page, 'cityWalkCamViewFront')).toBeVisible()
   })
 
   test('Enter on a hold button takes one step and then stops', async ({
@@ -191,8 +208,8 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     await waitForFrames(page, 3)
 
     const before = await walkPos(page)
-    await btn(page, 'cityWalkForwardBtn').focus()
-    await expect(btn(page, 'cityWalkForwardBtn')).toBeFocused()
+    await btn(page, 'cityWalkCamPanUp').focus()
+    await expect(btn(page, 'cityWalkCamPanUp')).toBeFocused()
 
     await page.keyboard.press('Enter')
     await expect
@@ -231,7 +248,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     await btn(page, 'cityWalkCharUpBtn').click()
     await expect(announcer(page)).toHaveText(/Character size 50 percent/)
 
-    await btn(page, 'cityWalkLevelBtn').click()
+    await btn(page, 'cityWalkCamReset').click()
     await expect(announcer(page)).toHaveText(/View level/)
 
     // Landmarks live on the map, so Next opens it exactly as L does.
@@ -258,7 +275,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     // is a function of frames rendered, so comparing two fixed-duration
     // holds on a runner whose frame rate wanders compares nothing.
     const a = await walkPos(page)
-    await holdButton(page, 'cityWalkForwardBtn', forFrames(page, 12))
+    await holdButton(page, 'cityWalkCamPanUp', forFrames(page, 12))
     const b = await walkPos(page)
     const strolled = distance(a, b)
     expect(strolled).toBeGreaterThan(0.1)
@@ -270,7 +287,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
 
     // FAST_SPEED_MPS is 2.5x WALK_SPEED_MPS; 1.5x is the margin that still
     // fails loudly if the toggle never reaches stepWalk.
-    await holdButton(page, 'cityWalkForwardBtn', forFrames(page, 12))
+    await holdButton(page, 'cityWalkCamPanUp', forFrames(page, 12))
     const hurried = distance(b, await walkPos(page))
     expect(
       hurried,
@@ -289,7 +306,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     await launchGame(page)
     await enterCity(page)
 
-    await btn(page, 'cityWalkLevelBtn').click()
+    await btn(page, 'cityWalkCamReset').click()
     const focus = await page.evaluate(() => ({
       id: document.activeElement?.id || document.activeElement?.tagName,
       inLayer: Boolean(
@@ -298,7 +315,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
           ?.contains(document.activeElement)
       ),
     }))
-    expect(focus.id).toBe('cityWalkLevelBtn')
+    expect(focus.id).toBe('cityWalkCamReset')
     expect(focus.inLayer).toBe(true)
 
     await page.keyboard.down('ArrowRight')
@@ -316,7 +333,11 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     // Focus a street-only button, then switch views with the key. The
     // button disappears under the focus; if focus fell to <body> every key
     // would die for the rest of the session (D-59).
-    await btn(page, 'cityWalkLookUpBtn').focus()
+    //
+    // CW-35: Fast, not a camera button. The Camera panel's controls now
+    // survive the swap, so the only buttons that can still vanish under a
+    // focus ring are the toolbar's own street-only pair.
+    await btn(page, 'cityWalkFastBtn').focus()
     await page.keyboard.press('KeyM')
     await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
 
@@ -411,9 +432,15 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
 
     const check = async (label) => {
       const targets = [
-        ['plain button', btn(page, 'cityWalkTurnLeftBtn'), true],
+        ['plain button', btn(page, 'cityWalkSpeedDownBtn'), true],
         ['pressed Fast', btn(page, 'cityWalkFastBtn'), true],
-        ['group caption', page.locator('#cityWalkToolbarCameraLabel'), false],
+        // CW-35: the Camera group retired into the Camera panel, so its
+        // caption is gone and Speed's is the one to measure. The panel is a
+        // mouse route too now, and its hover pair broke the moment it
+        // arrived (black accent-text on the mono hover surface, 1.12:1), so
+        // it is measured here rather than trusted.
+        ['group caption', page.locator('#cityWalkToolbarSpeedLabel'), false],
+        ['camera panel button', btn(page, 'cityWalkCamRotateLeft'), true],
       ]
       for (const [name, locator, hoverable] of targets) {
         for (const state of hoverable ? ['rest', 'hovered'] : ['rest']) {
@@ -472,6 +499,209 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
       .include('#cityWalkLayer')
       .analyze()
     expectOnlyAllowedViolations(results)
+  })
+})
+
+test.describe('ASCII City Walk — the Camera panel (CW-35)', () => {
+  const btn = (page, id) => page.locator('#' + id)
+  const announcer = (page) => page.locator('#cityWalkAnnouncer')
+
+  /**
+   * Every control the panel offers, in the order a Tab key would reach
+   * them. Sorted by document position, not by the order querySelectorAll
+   * happens to return - a panel is nested markup and the two are not the
+   * same walk (UF-38).
+   */
+  const panelControls = (page) =>
+    page.evaluate(() => {
+      const panel = document.getElementById('cityWalkCameraPanel')
+      return [...panel.querySelectorAll('button')]
+        .filter((b) => !b.disabled && b.offsetParent !== null)
+        .sort((a, b) =>
+          a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING
+            ? -1
+            : 1
+        )
+        .map((b) => b.id)
+    })
+
+  test('every panel control is reachable by Tab and names itself', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const expected = await panelControls(page)
+    expect(expected.length).toBeGreaterThan(10)
+
+    // Start from the panel's own first control rather than tabbing in from
+    // the page: this asks whether the panel's INTERNAL order is walkable,
+    // which is what breaks when a d-pad is laid out by grid area.
+    //
+    // Only the BUTTONS are checked, in order, because a stop between two of
+    // them is not necessarily a fault. Firefox puts the scrollable panel
+    // body into the tab order on purpose, so that a keyboard user can
+    // scroll it with the arrow keys - which matters here, since the body is
+    // exactly what scrolls when high contrast makes the panel too tall for
+    // the viewport. Chromium does not. Suppressing it to make the two agree
+    // would take that scroll route away from the browser that offers it.
+    await btn(page, expected[0]).focus()
+    const reached = [expected[0]]
+    let last = expected[0]
+    for (let i = 0; i < expected.length + 6; i++) {
+      if (reached.length === expected.length) break
+      await page.keyboard.press('Tab')
+      const id = await page.evaluate(() => document.activeElement?.id)
+      // A Tab that lands nowhere new means the walk stalled; say where,
+      // rather than reporting a mismatched array a dozen entries long.
+      expect(id, `Tab ${i + 1} from ${last}`).not.toBe(last)
+      last = id
+      if (expected.includes(id)) reached.push(id)
+    }
+    expect(reached).toEqual(expected)
+
+    // An icon-only button is nameless without one (02-accessibility rule 3).
+    const unnamed = await page.evaluate(() =>
+      [
+        ...document
+          .getElementById('cityWalkCameraPanel')
+          .querySelectorAll('button'),
+      ]
+        .filter((b) => !(b.getAttribute('aria-label') || b.textContent).trim())
+        .map((b) => b.id)
+    )
+    expect(unnamed).toEqual([])
+  })
+
+  test('the view buttons carry the pressed state, in both views', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const pressed = (id) => btn(page, id).getAttribute('aria-pressed')
+    expect(await pressed('cityWalkCamViewBottom')).toBe('true')
+    expect(await pressed('cityWalkCamViewTop')).toBe('false')
+
+    await btn(page, 'cityWalkCamViewTop').click()
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
+    expect(await pressed('cityWalkCamViewTop')).toBe('true')
+    expect(await pressed('cityWalkCamViewBottom')).toBe('false')
+
+    // The key route and the buttons are one state, not two copies of it.
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'street view'
+    )
+    expect(await pressed('cityWalkCamViewBottom')).toBe('true')
+    expect(await pressed('cityWalkCamViewTop')).toBe('false')
+  })
+
+  test('Reset and the standard views work from the keyboard alone', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const pitch = () =>
+      page.evaluate(() => window.__cityWalkGame.walkState.pitchRad)
+    const heading = () =>
+      page.evaluate(() => window.__cityWalkGame.walkState.headingRad)
+
+    await btn(page, 'cityWalkCamViewDiagonal').focus()
+    await page.keyboard.press('Enter')
+    await expect(announcer(page)).toHaveText(/Looking up at the towers/)
+    expect(await pitch()).toBeGreaterThan(0.5)
+
+    await btn(page, 'cityWalkCamReset').focus()
+    await page.keyboard.press('Space')
+    await expect(announcer(page)).toHaveText(/View level/)
+    expect(Math.abs(await pitch())).toBeLessThan(0.001)
+
+    await btn(page, 'cityWalkCamViewRight').focus()
+    await page.keyboard.press('Enter')
+    await expect(announcer(page)).toHaveText(/Facing east/)
+    expect(Math.abs((await heading()) - Math.PI / 2)).toBeLessThan(0.001)
+  })
+
+  test('the panel collapses, says so, and remembers', async ({ page }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const toggle = btn(page, 'cityWalkCameraToggle')
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    await expect(btn(page, 'cityWalkCamReset')).toBeVisible()
+
+    await toggle.click()
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    await expect(btn(page, 'cityWalkCamReset')).toBeHidden()
+
+    // Leaving and re-entering the city builds the panel again from scratch.
+    await page.keyboard.press('Escape')
+    await expect(page.locator('#cityWalkLayer')).toBeHidden()
+    await launchGame(page)
+    await enterCity(page)
+    await expect(btn(page, 'cityWalkCameraToggle')).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    )
+  })
+
+  test('no panel control is smaller than the touch target', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // The panel's buttons inherit the Forge preview panel's sizing, which
+    // is drawn for a desktop pointer. The game is played on touch too, so
+    // the game layer raises them to --size-touch-target - and axe cannot
+    // see this, because it scores target size against the 24px WCAG 2.2
+    // minimum, not the 44px this project holds itself to.
+    const small = await page.evaluate(() => {
+      const min = parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue(
+          '--size-touch-target'
+        )
+      )
+      return [
+        ...document
+          .getElementById('cityWalkCameraPanel')
+          .querySelectorAll('button'),
+      ]
+        .filter((b) => b.offsetParent !== null)
+        .map((b) => ({ id: b.id, r: b.getBoundingClientRect() }))
+        .filter(({ r }) => r.height < min - 0.5 || r.width < min - 0.5)
+        .map(
+          ({ id, r }) => `${id} ${Math.round(r.width)}x${Math.round(r.height)}`
+        )
+    })
+    expect(small).toEqual([])
+  })
+
+  test('axe: no violations with the panel showing, in either view', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    for (const view of ['street', 'map']) {
+      if (view === 'map') {
+        await page.keyboard.press('KeyM')
+        await expect(page.locator('#cityWalkHudStatus')).toContainText(
+          'map view'
+        )
+      }
+      // A hover state is invisible to a scan unless something is hovering
+      // (D-55), and the panel's buttons repaint their pair on hover.
+      await btn(page, 'cityWalkCamPanUp').hover()
+      const results = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+        .include('#cityWalkCameraPanel')
+        .analyze()
+      expectOnlyAllowedViolations(results)
+      await page.mouse.move(2, 2)
+    }
   })
 })
 
