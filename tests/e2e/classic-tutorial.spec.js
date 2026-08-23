@@ -56,9 +56,10 @@ test.describe('Classic tutorial (UF-8, U-12)', () => {
       page.locator('[data-testid="tutorial-mode-choice-dialog"]')
     ).toHaveCount(0);
     // 17 since UF-21: the Simplified/Standard step moved here from the
-    // welcome tour (U-29, Q-51b)
+    // welcome tour (U-29, Q-51b). 18 since UF-39: the tour ends by naming
+    // the way back to the Main Page (U-45).
     await expect(page.locator('.tutorial-progress')).toContainText(
-      'Step 1 of 17'
+      'Step 1 of 18'
     );
   });
 

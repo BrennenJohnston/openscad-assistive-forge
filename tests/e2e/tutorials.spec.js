@@ -515,6 +515,27 @@ test.describe('Welcome page tour (U-24, UF-17)', () => {
     )
   })
 
+  test('the closing step names the Main Page button as the way back (U-45)', async ({
+    page,
+  }) => {
+    await setBaseline(page)
+    await page.goto('/')
+    await expect(page.locator('#welcomeScreen')).toBeVisible({ timeout: 30_000 })
+    await page.locator('#startWelcomeTourBtn').click()
+    await expect(page.locator('.tutorial-panel')).toBeVisible({ timeout: 10_000 })
+
+    for (let i = 0; i < 16; i++) {
+      const title = await page.locator('#tutorial-step-title').textContent()
+      if (title === 'Your next step') break
+      await page.locator('#tutorialNextBtn').click()
+      await page.waitForTimeout(250)
+    }
+    await expect(page.locator('#tutorial-step-title')).toHaveText('Your next step')
+    await expect(page.locator('.tutorial-body')).toContainText(
+      'The Main Page button in the top left corner brings you back here from a project.'
+    )
+  })
+
   test('no tour can exist while the first-visit modal blocks', async ({ page }) => {
     // Deliberately no baseline stamp: the modal must be up
     await page.goto('/')
@@ -524,5 +545,80 @@ test.describe('Welcome page tour (U-24, UF-17)', () => {
 
     await expect(page.locator('#app')).toHaveAttribute('inert', '')
     await expect(page.locator('.tutorial-overlay')).toHaveCount(0)
+  })
+})
+
+/**
+ * U-45 (UF-39): the box tour used to stop at "You're ready!" and never say how
+ * to get out of a project. The way people reached for was the browser's Back
+ * button, which closed the app. The tour now ends on the button that does the
+ * job, and pressing it there is a first-class path, not an accident.
+ */
+test.describe('U-45: the box tour ends by naming the way back', () => {
+  test.use({ viewport: { width: 1280, height: 800 } })
+
+  async function startBoxTourAtTheEnd(page) {
+    await setBaseline(page)
+    await page.goto('/')
+    await expect(page.locator('#welcomeScreen')).toBeVisible({ timeout: 30_000 })
+    await page.locator('.btn-role-try[data-tutorial="intro"]').click()
+    await expect(page.locator('body')).toHaveAttribute('data-app-surface', 'project', {
+      timeout: 180_000,
+    })
+    await expect(page.locator('.tutorial-panel')).toBeVisible({ timeout: 60_000 })
+    // End clears every completion gate between here and the last step.
+    await page.keyboard.press('End')
+    await expect(page.locator('#tutorial-step-title')).toHaveText(
+      'Back to the Main Page',
+      { timeout: 15_000 }
+    )
+  }
+
+  test('the last step spotlights the Main Page button', async ({ page }) => {
+    test.setTimeout(240_000)
+    await startBoxTourAtTheEnd(page)
+
+    await expect(page.locator('.tutorial-progress')).toContainText('Step 18 of 18')
+    await expect(page.locator('#clearFileBtn')).toHaveClass(/tutorial-target-highlight/)
+    await expect(page.locator('.tutorial-body')).toContainText(
+      "Use it instead of the browser's Back button"
+    )
+  })
+
+  test('pressing the spotlighted button ends the tour with its surface', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+    await startBoxTourAtTheEnd(page)
+
+    await page.evaluate(() => {
+      window.__said = []
+      for (const id of ['srAnnouncer', 'srAnnouncerAssertive']) {
+        const el = document.getElementById(id)
+        if (!el || el.__watched) continue
+        el.__watched = true
+        new MutationObserver(() => {
+          const text = el.textContent.trim()
+          if (text) window.__said.push(text)
+        }).observe(el, { childList: true, characterData: true, subtree: true })
+      }
+    })
+
+    // The curiosity path: the cutout stays clickable, so press what the step
+    // points at (U-24, Q-66a). The tour stands down for the confirm dialog.
+    await page.locator('#clearFileBtn').click()
+    await expect(page.locator('.confirm-modal')).toBeVisible({ timeout: 10_000 })
+    await page.locator('.confirm-modal [data-action="confirm"]').click()
+
+    await expect(page.locator('body')).toHaveAttribute('data-app-surface', 'welcome', {
+      timeout: 30_000,
+    })
+    // The tour closes with its surface, the same rule the welcome tours have
+    // obeyed since UF-17, now mirrored for the surface a box tour lives on.
+    await expect(page.locator('.tutorial-panel')).toHaveCount(0, { timeout: 10_000 })
+    const announcements = await page.evaluate(() => window.__said)
+    expect(announcements.join(' | ')).toContain(
+      'closed because you went back to the Main Page'
+    )
   })
 })

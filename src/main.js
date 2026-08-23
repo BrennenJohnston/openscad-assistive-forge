@@ -243,6 +243,7 @@ import {
   applyToolbarModeVisibility,
 } from './js/toolbar-menu-controller.js';
 import { setAppSurface } from './js/app-surface.js';
+import { installBackGuard } from './js/back-guard.js';
 import { initParamDetailController } from './js/param-detail-controller.js';
 import { initOverlayGridController } from './js/overlay-grid-controller.js';
 import { initSavedProjectsUI } from './js/saved-projects-ui.js';
@@ -1541,6 +1542,14 @@ async function initApp() {
     if (renderController) {
       renderController.terminate();
     }
+  });
+
+  // U-41 (UF-39): the Back button gets an answer instead of the door. Installed
+  // before any surface can flip, so the very first project opened is guarded.
+  // The comparison view keeps its own popstate consumer, and this hands that
+  // press to it rather than asking on top of it.
+  installBackGuard({
+    isComparisonMode: () => !!stateManager.getState().comparisonMode,
   });
 
   // Initialize theme (before any UI rendering)

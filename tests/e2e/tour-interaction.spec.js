@@ -177,10 +177,17 @@ async function startBoxTour(page, { classic = false } = {}) {
 
 /**
  * Jump to the density step without satisfying every completion gate between
- * here and there: End goes to the last step, one Back reaches step 16 of 17.
+ * here and there: End goes to the last step, and two Backs reach step 16 of 18.
+ * The tour gained its Main Page ending in UF-39 (U-45), so the walk back is one
+ * step longer than it was.
  */
 async function jumpToDensityStep(page) {
   await page.keyboard.press('End');
+  await expect(page.locator('#tutorial-step-title')).toHaveText(
+    'Back to the Main Page',
+    { timeout: 15_000 }
+  );
+  await page.keyboard.press('ArrowLeft');
   await expect(page.locator('#tutorial-step-title')).toHaveText(
     "You're ready!",
     { timeout: 15_000 }
@@ -1164,7 +1171,7 @@ test.describe('UF-38: cards that stay readable', () => {
   async function stepBackTo(page, title, cap = 24) {
     await page.keyboard.press('End');
     await expect(page.locator('#tutorial-step-title')).toHaveText(
-      "You're ready!",
+      'Back to the Main Page',
       { timeout: 15_000 }
     );
     for (let i = 0; i < cap; i++) {

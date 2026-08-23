@@ -15,6 +15,7 @@
 import { createFocusTrap } from './focus-trap.js';
 import { getUIModeController } from './ui-mode-controller.js';
 import { announceImmediate, announceError } from './announcer.js';
+import { backGuardAnsweredPop } from './back-guard.js';
 import {
   STORAGE_KEY_TUTORIAL_STATE,
   safeGetItem,
@@ -1275,6 +1276,18 @@ const TUTORIALS = {
         `,
         position: 'center',
       },
+      // U-45 (UF-39): the tour ends by naming the way back, because the way
+      // back people reached for was the browser's Back button, and it closed
+      // the app.
+      {
+        title: 'Back to the Main Page',
+        content: `
+          <p>You are done here. The <strong>Main Page</strong> button in the top left corner takes you back to your projects. Use it instead of the browser's Back button, which closes the app. If you press that by accident, the app asks first.</p>
+          <p class="tutorial-hint">Press <strong>Finish</strong> to end this tour.</p>
+        `,
+        highlightSelector: '@clear-file',
+        position: 'bottom',
+      },
     ],
   },
   'classic-intro': {
@@ -1476,6 +1489,17 @@ const TUTORIALS = {
         `,
         position: 'center',
       },
+      // U-45 (UF-39): the Classic half of the same ending. One DOM node carries
+      // the Main Page button in both interfaces, so both tours point at it.
+      {
+        title: 'Back to the Main Page',
+        content: `
+          <p>You are done here. The <strong>Main Page</strong> button in the top left corner takes you back to your projects. Use it instead of the browser's Back button, which closes the app. If you press that by accident, the app asks first.</p>
+          <p class="tutorial-hint">Press <strong>Finish</strong> to end this tour.</p>
+        `,
+        highlightSelector: '@clear-file',
+        position: 'bottom',
+      },
     ],
   },
   // U-24 (UF-17): the welcome-page tour. No project loads, no mode is
@@ -1607,7 +1631,7 @@ const TUTORIALS = {
       {
         title: 'Your next step',
         content: `
-          <p>That is the whole welcome page. When you are ready to build something, the <strong>Beginners Start Here</strong> card loads a simple example and walks you through changing parameters and generating your first file. Press <strong>Finish</strong> to end this tour.</p>
+          <p>That is the whole welcome page. When you are ready to build something, the <strong>Beginners Start Here</strong> card loads a simple example and walks you through changing parameters and generating your first file. The <strong>Main Page</strong> button in the top left corner brings you back here from a project. Press <strong>Finish</strong> to end this tour.</p>
         `,
         highlightSelector: '@beginners-card',
         position: 'top',
@@ -1713,7 +1737,7 @@ const TUTORIALS = {
       {
         title: 'Your next step',
         content: `
-          <p>That is the whole welcome page. When you are ready to build something, the <strong>Beginners Start Here</strong> card loads a simple example and starts the Classic tour of the project screen. Press <strong>Finish</strong> to end this tour.</p>
+          <p>That is the whole welcome page. When you are ready to build something, the <strong>Beginners Start Here</strong> card loads a simple example and starts the Classic tour of the project screen. The <strong>Main Page</strong> button in the top left corner brings you back here from a project. Press <strong>Finish</strong> to end this tour.</p>
         `,
         highlightSelector: '@beginners-card',
         position: 'top',
@@ -2786,12 +2810,18 @@ function handleBeforeUnload() {
 
 /**
  * Handle browser back/forward navigation during tutorial
+ *
+ * Q-86 (owner, 2026-08-22): a Back press used to mean the document was on its
+ * way out, so ending the tour was the only honest thing to do with it. Since
+ * UF-39 the app answers that press with a dialog, and the person who chose
+ * "Stay in the app" is standing on the step they were on. Progress is still
+ * saved either way, so a tour that does end here can be resumed.
  */
 function handlePopState() {
-  if (activeTutorial) {
-    saveTutorialProgress(currentStepIndex);
-    closeTutorial();
-  }
+  if (!activeTutorial) return;
+  saveTutorialProgress(currentStepIndex);
+  if (backGuardAnsweredPop()) return;
+  closeTutorial();
 }
 
 // ============================================================================
@@ -3040,10 +3070,13 @@ export async function startTutorial(tutorialId, { triggerEl } = {}) {
   document.addEventListener('classic-density-change', densityChangeListener);
   // U-24: spotlight cutouts stay clickable, so a user can open a project
   // in the middle of a welcome-surface tour. That action wins the same way
-  // a mode switch does; the tour closes with its surface.
-  if (tutorial.surface === 'welcome') {
-    watchSurfaceChangeDuringTutorial();
-  }
+  // a mode switch does; the tour closes with its surface. U-45 (UF-39) makes
+  // it symmetrical: a project tour now ends on a step that invites a press of
+  // the Main Page button, and its steps point at chrome the welcome screen
+  // does not have.
+  watchSurfaceChangeDuringTutorial(
+    tutorial.surface === 'welcome' ? 'welcome' : 'project'
+  );
   watchDialogsDuringTutorial();
   await showStep(startIndex);
   announceToScreenReader(
@@ -4901,15 +4934,20 @@ function clearCompletionListeners() {
  * @param {string} newMode - Mode the user switched into
  */
 /**
- * U-24: close a welcome-surface tour when the app surface flips to
- * 'project' (the user opened something through a spotlight cutout).
+ * U-24: close a tour when the app surface it belongs to goes away. A welcome
+ * tour ends when a project opens through a spotlight cutout; a project tour
+ * ends when the Main Page comes back (U-45, UF-39, where the last step points
+ * at the button that does exactly that).
+ *
  * Mirrors handleModeChangeDuringTutorial: the user's action wins, progress
  * is saved past step one, and the close announces its own reason.
+ *
+ * @param {'welcome'|'project'} homeSurface The surface this tour is built for
  */
-function watchSurfaceChangeDuringTutorial() {
+function watchSurfaceChangeDuringTutorial(homeSurface) {
   surfaceObserver = new MutationObserver(() => {
     if (!activeTutorial) return;
-    if (document.body.dataset.appSurface !== 'project') return;
+    if (document.body.dataset.appSurface === homeSurface) return;
 
     const title = activeTutorial.title;
     const progressSaved = currentStepIndex > 0;
@@ -4920,9 +4958,14 @@ function watchSurfaceChangeDuringTutorial() {
     closeTutorial(false, { skipModeRestore: true, skipAnnouncement: true });
 
     // Q-50d (owner, 2026-08-14): approved as drafted, in its final context.
-    // The D-35 review flag this line carried since UF-17 is retired.
+    // The D-35 review flag this line carried since UF-17 is retired. The
+    // Main Page half is UF-39's, and carries its own flag until signed.
+    const reason =
+      homeSurface === 'welcome'
+        ? 'a project opened'
+        : 'you went back to the Main Page';
     announceToScreenReader(
-      `${title} closed because a project opened.${progressSaved ? ' Progress saved.' : ''}`,
+      `${title} closed because ${reason}.${progressSaved ? ' Progress saved.' : ''}`,
       'assertive'
     );
   });

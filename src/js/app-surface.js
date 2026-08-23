@@ -16,7 +16,26 @@
  * project surface, and it must survive welcome round-trips untouched.
  */
 
+/** @type {Set<(surface: 'welcome'|'project') => void>} */
+const listeners = new Set();
+
+/**
+ * Subscribe to real surface flips. The back guard (UF-39) rides this rather
+ * than the seven call sites: one hook cannot be half-wired, and a repeat call
+ * with the surface already on screen is not a flip and does not notify.
+ *
+ * @param {(surface: 'welcome'|'project') => void} listener
+ * @returns {() => void} unsubscribe
+ */
+export function onAppSurfaceChange(listener) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
 /** @param {'welcome'|'project'} surface */
 export function setAppSurface(surface) {
+  const changed = document.body.dataset.appSurface !== surface;
   document.body.dataset.appSurface = surface;
+  if (!changed) return;
+  for (const listener of listeners) listener(surface);
 }
