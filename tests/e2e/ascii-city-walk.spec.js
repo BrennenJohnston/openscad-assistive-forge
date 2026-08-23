@@ -454,6 +454,31 @@ test.describe('ASCII City Walk — map navigation and walking speed (CW-9)', () 
 })
 
 /**
+ * CW-Q36: the owner turned bloom on after seeing it photographed at their own
+ * character size, and chose it over the alternative of leaving it built but
+ * disabled. It had been off since Round 4. This pins that it is on and that
+ * the radius stays under the value where lit shopfront panes stop having gaps
+ * between them at the 10% floor - separation between characters being the
+ * whole readability of an ASCII picture.
+ */
+test.describe('ASCII City Walk — bloom is on (CW-Q36)', () => {
+  test('the city lights have a halo, and not so much of one that they merge', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const crt = await page.evaluate(() =>
+      window.__cityWalkGame.altView.getCrtEffects()
+    )
+    expect(crt.bloomPx, 'bloom is off again').toBeGreaterThan(0)
+    // 1px closes the shopfront gaps at 2x4px cells; 0.75 does not. Measured,
+    // photographed and chosen at the owner's size.
+    expect(crt.bloomPx, 'bloom is wide enough to merge glyphs at the floor').toBeLessThan(1)
+  })
+})
+
+/**
  * D-81: the phosphor trail lays each painted frame over a fading copy of the
  * one before, which is what gives movement a wake. Between the street and the
  * map those two pictures have nothing in common, so the wake became a double

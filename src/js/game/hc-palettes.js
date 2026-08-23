@@ -103,3 +103,21 @@ export const MONO_REVERSE_THRESHOLD = 0.8;
  * when the preference changes mid-walk.
  */
 export const MONO_GLOW_FADE = 0.45;
+
+/**
+ * Bloom radius in device pixels, haloed into each glyph when the atlas is
+ * built — so it costs nothing per frame, and changing it rebuilds the atlas.
+ *
+ * The owner turned bloom on (CW-Q36) after seeing it photographed at their own
+ * character size, the 10% floor, where a cell is about 2x4 px. The radius is
+ * an absolute pixel count, so it means something quite different at the two
+ * ends of the size range, and the floor is the end that constrains it: at 1 px
+ * the lit shopfront panes stop having gaps between them, and separation
+ * between characters is the whole readability of an ASCII picture. At 0.75 px
+ * the panes stay apart along the full width and the halo is still plainly
+ * there.
+ *
+ * ONE CONSTANT, deliberately, until the slider CW-Q36 records as future work
+ * gives this a home in the interface.
+ */
+export const MONO_BLOOM_PX = 0.75;

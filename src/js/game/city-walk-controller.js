@@ -75,6 +75,7 @@ import {
   HC_PALETTE_AMBER,
   MONO_INTENSITY_LEVELS,
   MONO_REVERSE_THRESHOLD,
+  MONO_BLOOM_PX,
   MONO_GLOW_FADE,
 } from './hc-palettes.js';
 import { buildRain, RAIN_LEVEL_COUNT, RAIN_LEVEL_NAMES } from './city-scene.js';
@@ -1291,6 +1292,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     });
 
     game.altView.enable();
+
+    // CW-Q36: bloom, on the owner's call after seeing it at their own
+    // character size. It is baked into the glyph atlas rather than applied per
+    // frame, so it costs nothing to keep on; enable() does not touch it, but
+    // it sits here with the trail because both are the CRT look and both have
+    // to follow enable() rather than precede it.
+    game.altView.setCrtEffects({ bloomPx: MONO_BLOOM_PX });
 
     // CW-21: the phosphor trail. enable() resets the fade to the shared
     // default, so this has to follow it rather than sit with the other
