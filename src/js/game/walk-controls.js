@@ -461,6 +461,114 @@ export function findSpawn(model, collision) {
 }
 
 /**
+ * How far from a picked point the landing may look for a street before it
+ * gives up on streets, and how far it may then look for any open ground.
+ * Both are owner-reversible in one place (CW-36).
+ */
+export const LANDING_SNAP_M = 25;
+export const LANDING_SEARCH_M = 200;
+
+/** Nearest point on segment a->b to (x, y), and how far along it that is. */
+function projectOnSegment(x, y, ax, ay, bx, by) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return { x: ax, y: ay };
+  let t = ((x - ax) * dx + (y - ay) * dy) / len2;
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  return { x: ax + t * dx, y: ay + t * dy };
+}
+
+/**
+ * Where a player dropped at (targetX, targetY) should actually land (CW-36).
+ *
+ * Generalizes findSpawn from "nearest road to the origin" to "nearest road to
+ * a point the player picked", with the same isCircleBlocked oracle and the
+ * same spiral fallback, so a landing can never be inside a building.
+ *
+ * It snaps to the nearest point ON a road segment rather than to the nearest
+ * road VERTEX the way findSpawn does. OSM digitizes a straight street as two
+ * endpoints and nothing between, so a vertex-only snap would miss the middle
+ * of every long block — exactly where someone clicking a street aims. The
+ * projection also hands back the segment's direction, which is what lets the
+ * player arrive looking ALONG the street instead of at a wall.
+ *
+ * @param {ReturnType<import('./city-data.js').parseCityExtract>} model
+ * @param {{isBlocked: (x:number, y:number) => boolean}} collision
+ * @param {number} targetX
+ * @param {number} targetY
+ * @param {{snapM?: number, searchM?: number}} [options]
+ * @returns {{x:number, y:number, headingRad: number|null, onRoad: boolean}|null}
+ *   null means refuse — every candidate within reach was inside something.
+ */
+export function findLandingNear(
+  model,
+  collision,
+  targetX,
+  targetY,
+  options = {}
+) {
+  if (!Number.isFinite(targetX) || !Number.isFinite(targetY)) return null;
+  const snapM = options.snapM ?? LANDING_SNAP_M;
+  const searchM = options.searchM ?? LANDING_SEARCH_M;
+
+  // Clamp into the city before searching: a click on the black beyond the
+  // extract would otherwise spiral 200 m through cells that are blocked by
+  // definition (buildCollisionGrid counts out-of-bounds as blocked) and
+  // refuse, when the honest answer is the edge of the city.
+  let tx = targetX;
+  let ty = targetY;
+  const b = model?.boundsM;
+  if (b) {
+    tx = Math.min(b.maxX, Math.max(b.minX, tx));
+    ty = Math.min(b.maxY, Math.max(b.minY, ty));
+  }
+
+  let best = null;
+  let bestD2 = snapM * snapM;
+  for (const road of model?.roads ?? []) {
+    const pts = road.points ?? [];
+    for (let i = 1; i < pts.length; i++) {
+      const [ax, ay] = pts[i - 1];
+      const [bxx, byy] = pts[i];
+      const p = projectOnSegment(tx, ty, ax, ay, bxx, byy);
+      const d2 = (p.x - tx) * (p.x - tx) + (p.y - ty) * (p.y - ty);
+      if (d2 >= bestD2) continue;
+      if (isCircleBlocked(collision, p.x, p.y)) continue;
+
+      // Face along the street toward whichever end has more of it left, so
+      // the road stretches away in front rather than stopping at your feet.
+      const toA = (ax - p.x) * (ax - p.x) + (ay - p.y) * (ay - p.y);
+      const toB = (bxx - p.x) * (bxx - p.x) + (byy - p.y) * (byy - p.y);
+      const dx = toB >= toA ? bxx - ax : ax - bxx;
+      const dy = toB >= toA ? byy - ay : ay - byy;
+      bestD2 = d2;
+      best = {
+        x: p.x,
+        y: p.y,
+        headingRad: normalizeHeading(Math.atan2(dx, dy)),
+        onRoad: true,
+      };
+    }
+  }
+  if (best) return best;
+
+  // Same spiral as findSpawn, centered on the pick instead of the origin.
+  for (let radius = 0; radius <= searchM; radius += 2) {
+    const steps = Math.max(1, Math.ceil((radius * Math.PI) / 2));
+    for (let i = 0; i < steps; i++) {
+      const angle = (i / steps) * Math.PI * 2;
+      const x = tx + radius * Math.sin(angle);
+      const y = ty + radius * Math.cos(angle);
+      if (!isCircleBlocked(collision, x, y)) {
+        return { x, y, headingRad: null, onRoad: false };
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * Orthographic frustum that shows the whole extract from above, north up,
  * preserving the viewport aspect ratio.
  *
