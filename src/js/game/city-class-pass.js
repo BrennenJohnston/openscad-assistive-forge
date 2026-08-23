@@ -43,6 +43,11 @@ export const SURFACE_CLASS = {
   CAR: 10,
   LAMP: 11,
   PERSON: 12,
+  // CW-33. APPENDED, never renumbered: these ids are the wire format between
+  // this pass and the glyph vocabularies, and a shifted id would silently
+  // give every surface the voice of its neighbour.
+  SIDEWALK: 13,
+  GREEN: 14,
 };
 
 /**
@@ -77,6 +82,9 @@ const CLASS_BY_MESH_NAME = new Map([
   // the other small bright things on the street.
   ['light-poles', SURFACE_CLASS.LAMP],
   ['light-heads', SURFACE_CLASS.SIGN],
+  // CW-33: the ground you walk on, and the ground you walk past.
+  ['sidewalks', SURFACE_CLASS.SIDEWALK],
+  ['greens', SURFACE_CLASS.GREEN],
 ]);
 
 /**

@@ -91,4 +91,21 @@ export const GLYPH_VOCABULARIES = {
   // A pole with a bright head: uprights, plus the round characters the head
   // needs to be able to reach.
   [SURFACE_CLASS.LAMP]: " .'!|iltT1oO0",
+
+  // The pavement (CW-33). It has to read as a DIFFERENT floor from the
+  // roadway beside it, not a lighter one: the road's row is characters that
+  // lie down, so this one is fine even stipple, which is what a concrete
+  // slab looks like at a glance.
+  //
+  // Deliberately no long horizontals - no dashes, no equals. The road row
+  // owns those, and a pavement drawn with them merges into the carriageway
+  // exactly where the kerb is supposed to be. The same reasoning that kept
+  // E, F, H and T out of the wall row.
+  [SURFACE_CLASS.SIDEWALK]: ' .:\',;"^*oc',
+
+  // Greenspace (CW-33). Foliage seen from above or across: clumps and
+  // tufts, nothing that draws a line, so a park reads as texture rather than
+  // as more paving. Shares its instincts with the TREE row above, which is
+  // the same material at a different distance.
+  [SURFACE_CLASS.GREEN]: ' .,`\'":;*wvVY%&',
 };

@@ -9,6 +9,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The buildings stop repeating** (CW-34) - two things you photographed. The first: at your
+  character size the near towers read as literal giant letters, because each family of buildings
+  had a letter cut out of its window panes to tell it from the next. The letters are gone. What
+  identifies a building now is the shape of its glazing - nine kinds, from a plain pane to a
+  vertical slot to a continuous horizontal band - and, more than that, **which of its windows are
+  lit**. The old pattern lit each window independently, which produces an even scatter that repeats
+  every four windows across; the city read as wallpaper because it was. Windows are now lit in
+  runs, with the run length and how many are lit re-rolled every few floors, so a tower reads as
+  offices working late. Each building also slides its own pattern along the tile, so two neighbours
+  of the same family are not the same wall twice
+- **Ground floors that are not all the same** (CW-34) - the second: every building's first level was
+  literally one repeating strip. There are five now - a glass front, an awning, a closed roller
+  shutter, an arcade, and a blank service wall, because a street where every ground floor is a shop
+  reads as a film set. Which one a building gets comes from the nearest shop or cafe in the map
+  data where there is one, and from the building itself where there is not
+
+### Added
+
+- **Real ground under your feet** (CW-33) - the city had one floor: a roadway, a kerb line and a
+  dotted plane. It has three now. Pavements that are mapped separately from the road - and there
+  are 1,539 of them in Seattle alone - are drawn as their own narrow ribbons, lighter than the
+  carriageway and written with their own set of characters, so you can see where the kerb is
+  instead of inferring it. Parks, gardens, pitches and playgrounds appear as greenspace, with their
+  own characters again: clumps and tufts rather than the lines the road uses. And where the map
+  says what a road is paved with - asphalt, concrete, paving stones - the texture shifts to suit;
+  where it does not, a roadway is assumed asphalt and a pavement concrete, which is what
+  OpenStreetMap itself assumes. All four cities were rebaked to collect this
+- **Denver has its shape at last** (CW-33, CW-Q31) - it has been the one city drawn as plain boxes
+  since the stepped towers arrived, because it is mapped in unusual detail: 3,013 separate volumes,
+  more than the file budget allowed. **2,118 of those are smaller than ten square metres** - ledges
+  and setbacks a few centimetres across that no character on screen could ever show. Dropping them
+  leaves 895 real volumes and brings the city inside the budget, so Denver now has its stepped
+  towers and its roofs
+
+### Changed
+
 - **The graphics card now chooses the characters** (CW-32) - deciding which character to draw in
   each cell was the single most expensive thing the City Walk did: sixteen brightness samples, two
   contrast curves and a nearest-shape search, on the processor, about 140,000 times per frame at the

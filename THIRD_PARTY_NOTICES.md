@@ -239,7 +239,15 @@ cars, and the rules that decide where street props belong
 **Source**: https://github.com/skarkkai/pixelcity  
 **Usage**: Reference for the procedural night-city content playbook — the
 catalog of small lifelike details a generated downtown needs, and the density
-and spacing conventions behind them
+and spacing conventions behind them. Also, from its texture generator, two
+ideas this project reimplemented: the set of window-bay kinds a facade can be
+glazed with (filled pane, vertical slot, side-by-side pair, blinds, stripes,
+wide light, four-pane cross, narrow punched, horizontal band), and the
+lit-window algorithm — lighting windows in consecutive RUNS whose length and
+density are re-rolled every few floors, rather than rolling each window
+independently, so night windows read as offices working late instead of as
+noise. Described, then written from scratch in JavaScript against a canvas;
+no code was copied, and both projects are GPL-3
 
 **"A Walkable ASCII Cyberpunk City in One HTML File" (Grow Now! Games)**  
 **License**: none — closed source, credited by courtesy  
