@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The graphics card now chooses the characters** (CW-32) - deciding which character to draw in
+  each cell was the single most expensive thing the City Walk did: sixteen brightness samples, two
+  contrast curves and a nearest-shape search, on the processor, about 140,000 times per frame at the
+  smallest character size. All of it is now one drawing pass on the graphics card, which is the kind
+  of work graphics cards exist for. Same session, same standing view, heavy rain, 10% characters,
+  with the processor slowed to a quarter speed: a conversion fell from 220 ms to 65 ms in
+  monochrome, and from 268 ms to 34 ms in colour. The picture refreshes about three times as often
+  and the frame rate roughly tripled. The city looks the same - the two paths were photographed side
+  by side at 10% and 50%, in monochrome, colour and high contrast, and the differences are subtle
+  changes in how densely a few cells are inked, about half of them cases where the graphics card
+  picks the *nearer* character than the processor's cache did. Nothing depends on it: a machine
+  without WebGL2, a shader that will not compile, or a readback that fails all fall back to the
+  processor permanently and silently, and that path is unchanged and still runs everywhere. **The
+  goal of thirty frames a second on a low-end machine is still not met** - drawing the finished
+  picture is now the expensive step, and it was not part of this work
+
 - **The city runs colder at the smallest characters** (CW-30) - at the 10% character size a cell is
   about two device pixels wide, and the converter was reading sixteen samples for it. Measured,
   those sixteen land on six distinct pixels: the ring of samples meant to see a cell's surroundings
