@@ -2648,6 +2648,17 @@ export function attachCityLighting(scene, camera) {
   const THUNDER_MS = 320;
   let ambientBase = AMBIENT_STREET;
 
+  // Where phase 0 of the drift sits on the caller's clock. The drift used to
+  // be read straight off that clock, which meant the fog was wherever the
+  // session happened to have reached whenever it was asked - so the first
+  // frame of a shower jumped to a thickness nothing had walked into (D-74).
+  let fogDriftAnchorMs = 0;
+
+  const applyFogDensity = (t) => {
+    const k = Math.max(0, Math.min(1, Number(t) || 0));
+    fog.far = FOG_FAR_CLEAR + (FOG_FAR_MURKY - FOG_FAR_CLEAR) * k;
+  };
+
   return {
     setMapBoost(isMap) {
       ambientBase = isMap ? AMBIENT_MAP : AMBIENT_STREET;
@@ -2660,8 +2671,42 @@ export function attachCityLighting(scene, camera) {
      * @param {number} t - 0 clear, 1 murky
      */
     setFogDensity(t) {
-      const k = Math.max(0, Math.min(1, Number(t) || 0));
-      fog.far = FOG_FAR_CLEAR + (FOG_FAR_MURKY - FOG_FAR_CLEAR) * k;
+      applyFogDensity(t);
+    },
+
+    /**
+     * Start or resume the drift so its first driven frame reproduces the fog
+     * that is on screen right now, rather than snapping to wherever a
+     * free-running clock had got to (D-74).
+     *
+     * @param {number} nowMs - the caller's clock, the same one stepFogDrift
+     *   will be given
+     */
+    beginFogDrift(nowMs) {
+      const span = FOG_FAR_CLEAR - FOG_FAR_MURKY;
+      const density = Math.max(
+        0,
+        Math.min(1, (FOG_FAR_CLEAR - fog.far) / span)
+      );
+      // density(p) = (1 - cos(2*pi*p)) / 2, so p = acos(1 - 2*density) / 2*pi.
+      // acos returns the RISING branch, which is the one to resume on: fog
+      // that is already thickening carries on thickening.
+      const phase = Math.acos(1 - 2 * density) / (Math.PI * 2);
+      fogDriftAnchorMs = Number(nowMs) - phase * FOG_DRIFT_PERIOD_MS;
+    },
+
+    /**
+     * One frame of drift, measured from the anchor beginFogDrift set.
+     *
+     * @param {number} nowMs - the caller's clock
+     */
+    stepFogDrift(nowMs) {
+      let phase =
+        (((Number(nowMs) - fogDriftAnchorMs) % FOG_DRIFT_PERIOD_MS) /
+          FOG_DRIFT_PERIOD_MS) %
+        1;
+      if (phase < 0) phase += 1;
+      applyFogDensity((1 - Math.cos(phase * Math.PI * 2)) / 2);
     },
 
     /** Where the fog sits now, so the release record can state it. */

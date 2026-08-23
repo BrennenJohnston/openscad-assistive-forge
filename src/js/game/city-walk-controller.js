@@ -1883,6 +1883,33 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
    * the player can trust. The toolbar button is hidden in that state, so the
    * only way to arrive here is the keyboard.
    */
+  /** The session clock stepWeather is driven by, so anchors agree with it. */
+  function sessionNowMs(game) {
+    return performance.now() - game.startedAtMs;
+  }
+
+  /**
+   * Move the rain to a level and take the weather that hangs off it with it.
+   *
+   * The fog and the thunder are only ever driven WHILE it is raining, so
+   * every way out of the rain has to put them back itself — otherwise the
+   * murk stays over a clear night and the ambient stays lifted (D-74, D-75).
+   * There are two ways out: the key, and reduced motion turning on.
+   *
+   * @param {number|null} next - the new level, or null for a dry night
+   */
+  function applyRainLevel(game, next) {
+    const wasRaining = game.rainLevel !== null;
+    game.rainLevel = next;
+    game.rain.setLevel(next);
+
+    if (next === null) {
+      game.lighting.setFogDensity(0);
+    } else if (!wasRaining) {
+      game.lighting.beginFogDrift(sessionNowMs(game));
+    }
+  }
+
   function cycleRain() {
     const game = state.game;
     if (!game) return;
@@ -1892,8 +1919,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       return;
     }
     const next = game.rainLevel === null ? 0 : game.rainLevel + 1;
-    game.rainLevel = next >= RAIN_LEVEL_COUNT ? null : next;
-    game.rain.setLevel(game.rainLevel);
+    applyRainLevel(game, next >= RAIN_LEVEL_COUNT ? null : next);
     syncToolbarView();
     // ACCESSIBILITY-CRITICAL STRINGS (D-35) — flagged for owner review.
     announceInLayer(
@@ -1942,10 +1968,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
 
       // Fog drift, minutes-scale: a slow breathe between a clear night and
       // a murky one. Only while it is raining — a clear night should not
-      // wander on its own.
-      const period = game.lighting.weatherTiming.fogDriftPeriodMs;
-      const phase = (nowMs % period) / period;
-      game.lighting.setFogDensity((1 - Math.cos(phase * Math.PI * 2)) / 2);
+      // wander on its own. The drift runs from the anchor the shower set,
+      // never from the session clock, so it picks up where the fog actually
+      // is instead of jumping to where a free-running clock had reached.
+      game.lighting.stepFogDrift(nowMs);
     }
 
     return dirty;

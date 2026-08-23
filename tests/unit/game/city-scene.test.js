@@ -226,6 +226,64 @@ describe('attachCityLighting', () => {
 
     lighting.detach()
   })
+
+  /**
+   * D-74. The drift used to be read straight off the session clock, so it
+   * only ran while it was raining and was wherever that clock had reached
+   * whenever it was next asked. Two things went wrong: a shower that ended on
+   * a murky night left the murk there for good, and the next shower snapped
+   * the fog to a thickness nothing had walked into.
+   */
+  describe('fog drift (D-74)', () => {
+    const lit = () => {
+      const scene = new Scene()
+      const lighting = attachCityLighting(scene, new PerspectiveCamera())
+      return { lighting, timing: lighting.weatherTiming }
+    }
+
+    it('resuming reproduces the fog that is on screen, at every thickness', () => {
+      const { lighting } = lit()
+      for (const density of [0, 0.13, 0.5, 0.87, 1]) {
+        lighting.setFogDensity(density)
+        const before = lighting.getFogFar()
+        // Anchor at an arbitrary point on the clock, then ask for that very
+        // instant back: the first driven frame must not move the fog at all.
+        lighting.beginFogDrift(1234567)
+        lighting.stepFogDrift(1234567)
+        expect(lighting.getFogFar()).toBeCloseTo(before, 6)
+      }
+    })
+
+    it('resumes on the thickening branch, so fog that was closing in keeps closing in', () => {
+      const { lighting, timing } = lit()
+      lighting.setFogDensity(0.5)
+      lighting.beginFogDrift(0)
+      const half = lighting.getFogFar()
+      lighting.stepFogDrift(timing.fogDriftPeriodMs * 0.05)
+      expect(lighting.getFogFar()).toBeLessThan(half)
+    })
+
+    it('never leaves the clear/murky band, whatever the clock says', () => {
+      const { lighting, timing } = lit()
+      lighting.beginFogDrift(0)
+      for (let t = -timing.fogDriftPeriodMs; t <= timing.fogDriftPeriodMs * 3; t += 5000) {
+        lighting.stepFogDrift(t)
+        expect(lighting.getFogFar()).toBeGreaterThanOrEqual(timing.fogFarMurky - 1e-9)
+        expect(lighting.getFogFar()).toBeLessThanOrEqual(timing.fogFarClear + 1e-9)
+      }
+    })
+
+    it('a shower that ends on a murky night hands back a clear one', () => {
+      const { lighting, timing } = lit()
+      lighting.beginFogDrift(0)
+      lighting.stepFogDrift(timing.fogDriftPeriodMs / 2)
+      expect(lighting.getFogFar()).toBeCloseTo(timing.fogFarMurky, 6)
+
+      // What the controller does when the rain goes off.
+      lighting.setFogDensity(0)
+      expect(lighting.getFogFar()).toBe(timing.fogFarClear)
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------
