@@ -785,17 +785,19 @@ export class UIModeController {
     // return below — that flag gates the Simplified/Standard switch only
     // and must never take the Classic entry point down with it.
     //
-    // Visibility is the FLAG's job; usability is the VIEWPORT's (U-10).
-    // With the flag on but the viewport mobile-shaped, the button shows
-    // disabled-with-reason instead of vanishing, and re-enables live when
-    // a desktop-shaped window returns.
+    // Visibility composes the FLAG and the VIEWPORT (U-10, amended by U-46
+    // and Q-73c): _updateClassicToggleButton is the single owner of both,
+    // so there is exactly one place that decides whether the button is on
+    // screen. The viewport half rides the same subscribeViewportShape
+    // subscription that has always driven the gate.
     const classicBtn = document.getElementById('classicModeToggle');
     if (classicBtn) {
       if (isEnabled('classic_mode')) {
-        classicBtn.classList.remove('hidden');
         classicBtn.addEventListener('click', (event) => {
-          // Gated means aria-disabled, not disabled: the click still
-          // arrives — say why instead of doing nothing (house pattern).
+          // Belt and braces. Under Q-73c the gated state is also the
+          // hidden state, so this cannot fire today — but if anything ever
+          // puts the button on screen while entry is closed, refusing out
+          // loud beats switching into a layout the window cannot hold.
           if (classicBtn.getAttribute('aria-disabled') === 'true') {
             event.preventDefault();
             this._announceClassicUnavailable();
@@ -803,11 +805,9 @@ export class UIModeController {
           }
           this.toggleClassic();
         });
-        this._updateClassicToggleButton();
         subscribeViewportShape(() => this._updateClassicToggleButton());
-      } else {
-        classicBtn.classList.add('hidden');
       }
+      this._updateClassicToggleButton();
     }
 
     // The Classic density switch is Classic-only chrome (classic.css keeps
@@ -965,22 +965,27 @@ export class UIModeController {
       visibleLabel.textContent = isClassic ? 'A. Forge' : 'Classic';
     }
 
-    // U-10: the button locks only while it points INTO Classic on a
-    // mobile-shaped viewport. The way OUT of Classic is never gated.
+    // U-10 said the button locks only while it points INTO Classic on a
+    // mobile-shaped viewport, and never on the way OUT. U-46 keeps that
+    // boundary exactly and changes what "locked" looks like: the owner's
+    // 2026-08-21 order removes the button on mobile rather than greying it,
+    // "since we will not be offering classic theme on mobile at this time".
+    // Q-73c settled the boundary as ONE predicate — the button is on screen
+    // when pressing it would work, and absent otherwise — so that the app
+    // never carries a second definition of "mobile" (the reason UF-41's
+    // modal rides this same predicate instead of a media query).
+    //
+    // The INFORMATION the reason span used to carry survives on the
+    // first-visit modal's gate note (#firstVisitClassicGate), which shows
+    // on exactly this predicate.
     const gated = !isClassic && !isViewportDesktopShaped();
-    if (gated) {
-      btn.setAttribute('aria-disabled', 'true');
-      btn.setAttribute('aria-describedby', 'classicModeToggleReason');
-      const reason = document
-        .getElementById('classicModeToggleReason')
-        ?.textContent.replace(/\s+/g, ' ')
-        .trim();
-      btn.setAttribute('title', reason ? `${label}. ${reason}` : label);
-    } else {
-      btn.removeAttribute('aria-disabled');
-      btn.removeAttribute('aria-describedby');
-      btn.setAttribute('title', label);
-    }
+    btn.classList.toggle('hidden', !isEnabled('classic_mode') || gated);
+    // Nothing visible is ever aria-disabled now, so no live control points
+    // at #classicModeToggleReason and no describedby can dangle at a
+    // control the user cannot see.
+    btn.removeAttribute('aria-disabled');
+    btn.removeAttribute('aria-describedby');
+    btn.setAttribute('title', label);
   }
 
   /**
