@@ -38,12 +38,18 @@ import { headingLabel } from './walk-controls.js';
 const FACING_MESSAGE = (word) => `Facing ${word}.`;
 const TOWER_GAZE_MESSAGE = 'Looking up at the towers.';
 
-/** Compass bearings in radians. Heading 0 is north; the world is Z-up. */
+/**
+ * Compass bearings in radians. Heading 0 is north; the world is Z-up.
+ *
+ * `text` is what the button shows and `label` what a screen reader hears:
+ * "North" reads as a place next to Top, Street and Towers, while "Face
+ * north" is the instruction the button carries out.
+ */
 const HEADINGS = [
-  { id: 'front', label: 'Face north', rad: 0 },
-  { id: 'right', label: 'Face east', rad: Math.PI / 2 },
-  { id: 'back', label: 'Face south', rad: Math.PI },
-  { id: 'left', label: 'Face west', rad: -Math.PI / 2 },
+  { id: 'front', text: 'North', label: 'Face north', rad: 0 },
+  { id: 'right', text: 'East', label: 'Face east', rad: Math.PI / 2 },
+  { id: 'back', text: 'South', label: 'Face south', rad: Math.PI },
+  { id: 'left', text: 'West', label: 'Face west', rad: -Math.PI / 2 },
 ];
 
 /** How far up the Diagonal view tilts. Chosen on the photograph (CW-35 P5). */
@@ -376,11 +382,11 @@ export function buildCityCameraPanel(actions) {
   // view there is no walker to turn, and panning to an edge is what the
   // arrows already do, so they are hidden rather than given a second meaning
   // nobody asked for. Recorded reversible.
-  for (const { id, label, rad } of HEADINGS) {
+  for (const { id, text, label, rad } of HEADINGS) {
     const btn = pressButton({
       id: `cityWalkCamView${id[0].toUpperCase()}${id.slice(1)}`,
       className: 'btn-sm btn-outline camera-view-btn',
-      text: label.replace('Face ', ''),
+      text,
       label: (isMap) => (isMap ? null : label),
       onPress: () => {
         actions.setHeading(rad);

@@ -252,6 +252,17 @@
   box-shadow: var(--shadow-lg, none);
 }
 
+/* The Forge's panel stacks its header - title above the collapse control -
+ * and CENTRES the stack. The base `.panel-header` rule carries only the
+ * stacking; the centring is scoped to the Forge's own panel, so the game's
+ * copy came out ragged against a title it should sit under. Measured on
+ * both, side by side, rather than guessed: the Forge computes
+ * align-items:center here and the game computed `normal`.
+ */
+.city-walk-camera-panel .panel-header {
+  align-items: center;
+}
+
 /* Every button in the panel wears `btn-sm` so it matches the Forge panel's
  * look, and `btn-sm` caps min-height at --size-touch-target-sm. Measured on a
  * touch pointer that left the D-pads 44 wide and 36 TALL - eight pixels short
