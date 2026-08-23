@@ -87,7 +87,10 @@ const VARIANTS = {
   new: {},
   'legacy-taps': { taps: true },
   'legacy-contrast': { contrast: true },
-  'legacy-all': { taps: true, contrast: true },
+  // The CPU sampling loop, forced, so the GPU glyph pass can be measured
+  // against it inside one session.
+  'legacy-cpu-sample': { cpuSample: true },
+  'legacy-all': { taps: true, contrast: true, cpuSample: true },
 }
 
 const CITY_BUTTONS = {
@@ -252,7 +255,7 @@ async function benchCity(page, cdp, city, variant, opts, runIndex) {
     if (typeof api.setBenchLegacy !== 'function') return null
     // Clear every switch first, so a variant that names fewer of them than
     // the previous run cannot inherit one.
-    api.setBenchLegacy({ taps: false, contrast: false })
+    api.setBenchLegacy({ taps: false, contrast: false, cpuSample: false })
     return api.setBenchLegacy(flags)
   }, legacyFlags)
   if (!applied) {
@@ -261,7 +264,7 @@ async function benchCity(page, cdp, city, variant, opts, runIndex) {
   // Read back what the renderer actually holds, rather than trusting that the
   // call landed: a variant that silently failed to apply would report the
   // other path's number under this one's name.
-  for (const flag of ['taps', 'contrast']) {
+  for (const flag of ['taps', 'contrast', 'cpuSample']) {
     const want = Boolean(legacyFlags[flag])
     if (applied[flag] !== want) {
       throw new Error(
@@ -368,6 +371,7 @@ async function benchCity(page, cdp, city, variant, opts, runIndex) {
     convertMaxMs: result.stats.maxMs,
     samples: result.stats.samples,
     dynamicIntervalMs: result.stats.dynamicIntervalMs,
+    usedGpu: result.stats.usedGpu,
     cells: result.stats.cells,
     reverseCells: result.stats.reverseCells,
     charW: result.stats.charW,
@@ -455,12 +459,12 @@ async function main() {
     )
     console.log(`GL: ${gl.renderer}`)
     console.log(
-      '| city | variant | conv avg ms | conv max ms | conv/s | rAF fps | governor ms | cells | reverse | cell px | walked m |'
+      '| city | variant | path | conv avg ms | conv max ms | conv/s | rAF fps | governor ms | cells | reverse | cell px | walked m |'
     )
-    console.log('|---|---|---|---|---|---|---|---|---|---|---|')
+    console.log('|---|---|---|---|---|---|---|---|---|---|---|---|')
     for (const r of rows) {
       console.log(
-        `| ${r.city} | ${r.variant} | ${r.convertAvgMs.toFixed(1)} | ${r.convertMaxMs.toFixed(1)} | ` +
+        `| ${r.city} | ${r.variant} | ${r.usedGpu ? 'gpu' : 'cpu'} | ${r.convertAvgMs.toFixed(1)} | ${r.convertMaxMs.toFixed(1)} | ` +
           `${r.convPerS.toFixed(1)} | ${r.rafFps.toFixed(1)} | ${r.dynamicIntervalMs} | ` +
           `${r.cells} | ${r.reverseCells} | ${r.charW}x${r.charH} | ${r.walkedM.toFixed(0)} |`
       )
