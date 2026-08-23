@@ -103,7 +103,7 @@ test.describe('Welcome tour nudge (U-27, UF-22)', () => {
       timeout: 20_000,
     });
     await expect(page.locator('#tutorial-panel-title')).toHaveText(
-      'Welcome Page Tour'
+      'Main Page Tour'
     );
     await expect(page.locator(MODAL)).toHaveCount(0);
     await expect(page.locator(BACKDROP)).toHaveCount(0);
@@ -293,7 +293,7 @@ test.describe('Welcome tour nudge (U-27, UF-22)', () => {
 
     await page.locator('.tour-nudge-start').click();
     await expect(page.locator('#tutorial-panel-title')).toHaveText(
-      'Classic Welcome Page Tour',
+      'Classic Main Page Tour',
       { timeout: 20_000 }
     );
   });

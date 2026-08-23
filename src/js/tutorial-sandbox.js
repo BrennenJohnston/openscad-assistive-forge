@@ -887,12 +887,12 @@ const REQUIREMENT_PENDING_TEXT = '↑ Complete the action above to continue';
 /**
  * Q-74 + Q-76 (owner, 2026-08-22): the requirement names the control by the
  * label it wears on the surface the reader is looking at. On a phone the panel
- * is a drawer you OPEN with a button marked Params; on a desktop it is a panel
- * you EXPAND. UF-40's rename sweeps both strings with the rest.
+ * is a drawer you OPEN with a button marked Customizer; on a desktop it is a
+ * panel you EXPAND. Both labels renamed by UF-40 (Q-70).
  */
 const DRAWER_REQUIREMENT_TEXT = {
-  mobile: 'Open Params to continue.',
-  desktop: 'Expand Parameters to continue.',
+  mobile: 'Open the Customizer to continue.',
+  desktop: 'Expand the Customizer to continue.',
 };
 
 /**
@@ -1004,7 +1004,7 @@ const TUTORIALS = {
           <details class="tutorial-more">
             <summary>What you'll learn</summary>
             <ul>
-              <li>Find Parameters, Preview, Actions</li>
+              <li>Find the Customizer, Preview, Actions</li>
               <li>Change a parameter</li>
               <li>Generate &amp; download</li>
             </ul>
@@ -1018,29 +1018,29 @@ const TUTORIALS = {
         content: `
           <p>The app is organized into three areas:</p>
           <ul>
-            <li><strong>Parameters</strong> — change your model’s settings</li>
-            <li><strong>Preview</strong> — see the 3D model update</li>
-            <li><strong>Actions</strong> — export, share, and other tools</li>
+            <li><strong>Customizer</strong> - change your model’s settings</li>
+            <li><strong>Preview</strong> - see the 3D model update</li>
+            <li><strong>Actions</strong> - export, share, and other tools</li>
           </ul>
           <p class="tutorial-hint">Next, we’ll find each area in your layout.</p>
         `,
         contentCompact: `
-          <p><strong>Parameters</strong> (settings) · <strong>Preview</strong> (3D) · <strong>Actions</strong> (export)</p>
+          <p><strong>Customizer</strong> (settings) · <strong>Preview</strong> (3D) · <strong>Actions</strong> (export)</p>
           <p class="tutorial-hint">Next: find each area.</p>
         `,
         position: 'center',
       },
       {
-        title: 'Open and close Parameters',
+        title: 'Open and close the Customizer',
         content: `
-          <p><strong>Parameters</strong> is where you change the model.</p>
+          <p><strong>Customizer</strong> is where you change the model.</p>
           <ul>
-            <li><strong>Small screens:</strong> press the highlighted <strong>Params</strong> button to open the panel. When it is open, the highlight moves to the <strong>Close</strong> (X) button so you can close it again.</li>
-            <li><strong>Wide screens:</strong> the Parameters panel is on the left. Use the edge <strong>collapse</strong> button to shrink or expand it.</li>
+            <li><strong>Small screens:</strong> press the highlighted <strong>Customizer</strong> button to open the panel. When it is open, the highlight moves to the <strong>Close</strong> (X) button so you can close it again.</li>
+            <li><strong>Wide screens:</strong> the Customizer panel is on the left. Use the edge <strong>collapse</strong> button to shrink or expand it.</li>
           </ul>
         `,
         contentCompact: `
-          <p>Press the highlighted <strong>Params</strong> button to open <strong>Parameters</strong>. The highlight then moves to <strong>Close</strong>.</p>
+          <p>Press the highlighted <strong>Customizer</strong> button to open the panel. The highlight then moves to <strong>Close</strong>.</p>
         `,
         highlightSelector:
           '@mobile-drawer-close, @mobile-drawer-toggle, @collapse-param-panel',
@@ -1049,7 +1049,7 @@ const TUTORIALS = {
       {
         title: 'Expand a parameter group',
         content: `
-          <p>Parameters are organized into <strong>collapsible groups</strong>.</p>
+          <p>Your model’s parameters are organized into <strong>collapsible groups</strong>.</p>
           <p><strong>Try it:</strong> click the <strong>Dimensions</strong> group header to expand it and reveal the sliders inside.</p>
           <p class="tutorial-hint">Each group can be expanded or collapsed independently.</p>
         `,
@@ -1149,9 +1149,9 @@ const TUTORIALS = {
         content: `
           <p>Open the <strong>Actions</strong> drawer for extra tools:</p>
           <ul>
-            <li><strong>Export Params</strong> — download your settings as JSON</li>
-            <li><strong>Compare</strong> — track changes</li>
-            <li><strong>Queue</strong> — batch multiple renders</li>
+            <li><strong>Export Customizer Settings</strong> - download your settings as JSON</li>
+            <li><strong>Compare</strong> - track changes</li>
+            <li><strong>Queue</strong> - batch multiple renders</li>
           </ul>
           <p class="tutorial-hint">On mobile it expands upward from the bottom bar. On desktop it opens from the Actions section next to the main button.</p>
         `,
@@ -1174,8 +1174,8 @@ const TUTORIALS = {
       {
         title: 'Generate and download your file',
         content: `
-          <p>Click <strong>Generate</strong> to create your output file (STL/OBJ/AMF, etc.).</p>
-          <p class="tutorial-hint">The button text updates based on the selected output format in the Parameters panel.</p>
+          <p>Press the highlighted button to build your file. It says <strong>Generate</strong> the first time, and <strong>Download</strong> once a file is ready.</p>
+          <p class="tutorial-hint">The button text also changes with the output format you pick in the Customizer panel.</p>
         `,
         highlightSelector: '@primary-action',
         position: 'top',
@@ -1203,9 +1203,9 @@ const TUTORIALS = {
         },
       },
       {
-        title: 'Close Parameters (mobile)',
+        title: 'Close the Customizer (mobile)',
         content: `
-          <p>On mobile, the <strong>Parameters</strong> drawer sits on top of the app.</p>
+          <p>On mobile, the <strong>Customizer</strong> drawer sits on top of the app.</p>
           <p class="tutorial-hint">Close it now so you can reach the top buttons like <strong>Help</strong>.</p>
         `,
         highlightSelector: '@mobile-drawer-close, @collapse-param-panel',
@@ -1267,7 +1267,7 @@ const TUTORIALS = {
           <p>You now know where the main controls are and how to complete the basic workflow.</p>
           <p><strong>Next steps:</strong></p>
           <ul>
-            <li>Try a different example from the Welcome screen</li>
+            <li>Try a different example from the Main Page</li>
             <li>Upload your own <code>.scad</code> or <code>.zip</code> project</li>
             <li>Save designs and use Import / Export to share your work</li>
             <li>Set the grid to match your printer bed in Preview Settings</li>
@@ -1352,7 +1352,7 @@ const TUTORIALS = {
       {
         title: 'Expand a parameter group',
         content: `
-          <p>Parameters are organized into <strong>collapsible groups</strong>.</p>
+          <p>Your model’s parameters are organized into <strong>collapsible groups</strong>.</p>
           <p><strong>Try it:</strong> click the <strong>Dimensions</strong> group header to open it and see the sliders inside.</p>
         `,
         highlightSelector:
@@ -1483,7 +1483,7 @@ const TUTORIALS = {
           <p>That's the Classic tour.</p>
           <ul>
             <li>The <strong>A. Forge</strong> button returns you to the Assistive Forge interface</li>
-            <li>Run this tour again anytime from the welcome screen</li>
+            <li>Run this tour again anytime from the Main Page</li>
           </ul>
           <p class="tutorial-hint">Happy modeling!</p>
         `,
@@ -1509,14 +1509,14 @@ const TUTORIALS = {
   // All strings are the Q-44-approved D-35 pack, verbatim.
   welcome: {
     id: 'welcome',
-    title: 'Welcome Page Tour',
+    title: 'Main Page Tour',
     surface: 'welcome',
     modeVariants: { classic: 'welcome-classic' },
     steps: [
       {
         title: 'Welcome to the Forge!',
         content: `
-          <p>This short tour shows you what each part of this welcome page does. Everything runs in your browser. There is nothing to install, and your designs stay on your device.</p>
+          <p>This short tour shows you what each part of this Main Page does. Everything runs in your browser. There is nothing to install, and your designs stay on your device.</p>
           <p class="tutorial-hint">About 2 minutes. Press <kbd>Esc</kbd> to exit at any time.</p>
         `,
         position: 'center',
@@ -1607,7 +1607,7 @@ const TUTORIALS = {
       {
         title: 'Charm Customizer',
         content: `
-          <p>This card holds a ready-made creative project: wearable charms, pendants, and logo plates with raised or engraved icons. Pick a shape from the <strong>Shape</strong> menu, and the button opens it as a full project. This tour stays on the welcome page, so we will not open it now.</p>
+          <p>This card holds a ready-made creative project: wearable charms, pendants, and logo plates with raised or engraved icons. Pick a shape from the <strong>Shape</strong> menu, and the button opens it as a full project. This tour stays on the Main Page, so we will not open it now.</p>
         `,
         highlightSelector: '@charm-card',
         position: 'top',
@@ -1631,7 +1631,7 @@ const TUTORIALS = {
       {
         title: 'Your next step',
         content: `
-          <p>That is the whole welcome page. When you are ready to build something, the <strong>Beginners Start Here</strong> card loads a simple example and walks you through changing parameters and generating your first file. The <strong>Main Page</strong> button in the top left corner brings you back here from a project. Press <strong>Finish</strong> to end this tour.</p>
+          <p>That is the whole Main Page. When you are ready to build something, the <strong>Beginners Start Here</strong> card loads a simple example and walks you through changing parameters and generating your first file. The <strong>Main Page</strong> button in the top left corner brings you back here from a project. Press <strong>Finish</strong> to end this tour.</p>
         `,
         highlightSelector: '@beginners-card',
         position: 'top',
@@ -1640,14 +1640,14 @@ const TUTORIALS = {
   },
   'welcome-classic': {
     id: 'welcome-classic',
-    title: 'Classic Welcome Page Tour',
+    title: 'Classic Main Page Tour',
     surface: 'welcome',
     homeModes: ['classic'],
     steps: [
       {
         title: 'Welcome to Classic!',
         content: `
-          <p>This short tour shows you what each part of the welcome page does. You are in the Classic layout, which looks and works like the OpenSCAD desktop app once a project is open. Everything runs in your browser, and there is nothing to install.</p>
+          <p>This short tour shows you what each part of the Main Page does. You are in the Classic layout, which looks and works like the OpenSCAD desktop app once a project is open. Everything runs in your browser, and there is nothing to install.</p>
           <p class="tutorial-hint">About 2 minutes. Press <kbd>Esc</kbd> to exit at any time.</p>
         `,
         position: 'center',
@@ -1713,7 +1713,7 @@ const TUTORIALS = {
       {
         title: 'Charm Customizer',
         content: `
-          <p>This card holds a ready-made creative project: wearable charms, pendants, and logo plates with raised or engraved icons. Pick a shape from the <strong>Shape</strong> menu, and the button opens it as a full project. This tour stays on the welcome page, so we will not open it now.</p>
+          <p>This card holds a ready-made creative project: wearable charms, pendants, and logo plates with raised or engraved icons. Pick a shape from the <strong>Shape</strong> menu, and the button opens it as a full project. This tour stays on the Main Page, so we will not open it now.</p>
         `,
         highlightSelector: '@charm-card',
         position: 'top',
@@ -1737,7 +1737,7 @@ const TUTORIALS = {
       {
         title: 'Your next step',
         content: `
-          <p>That is the whole welcome page. When you are ready to build something, the <strong>Beginners Start Here</strong> card loads a simple example and starts the Classic tour of the project screen. The <strong>Main Page</strong> button in the top left corner brings you back here from a project. Press <strong>Finish</strong> to end this tour.</p>
+          <p>That is the whole Main Page. When you are ready to build something, the <strong>Beginners Start Here</strong> card loads a simple example and starts the Classic tour of the project screen. The <strong>Main Page</strong> button in the top left corner brings you back here from a project. Press <strong>Finish</strong> to end this tour.</p>
         `,
         highlightSelector: '@beginners-card',
         position: 'top',
@@ -1853,7 +1853,7 @@ const TUTORIALS = {
         position: 'bottom',
       },
       {
-        title: 'Navigate Parameters',
+        title: 'Navigate the Customizer',
         content: `
           <p><strong>Try it:</strong> Press <kbd>Tab</kbd> to reach a parameter, then use <kbd>Arrow keys</kbd> to adjust.</p>
           <p class="tutorial-hint"><kbd>Ctrl+Z</kbd> to undo, <kbd>Ctrl+Shift+Z</kbd> to redo.</p>
@@ -2036,7 +2036,7 @@ const TUTORIALS = {
       {
         title: 'Expand Parameter Groups',
         content: `
-          <p>Parameters are in collapsible <strong>disclosure widgets</strong> (details/summary).</p>
+          <p>Your model’s parameters are in collapsible <strong>disclosure widgets</strong> (details/summary).</p>
           <p><strong>Try it:</strong> Navigate to <strong>Dimensions</strong> and activate it to expand.</p>
           <p class="tutorial-hint">Press Enter or Space on the group header to toggle.</p>
         `,
@@ -2073,7 +2073,7 @@ const TUTORIALS = {
           <p>Navigate quickly with landmarks:</p>
           <ul>
             <li><strong>Main</strong> - Main content</li>
-            <li><strong>Region</strong> - Parameters, Preview</li>
+            <li><strong>Region</strong> - Customizer, Preview</li>
           </ul>
           <p class="tutorial-hint">NVDA: D key, VoiceOver: VO+U</p>
         `,
@@ -2090,7 +2090,7 @@ const TUTORIALS = {
       {
         title: 'Console Warnings',
         content: `
-          <p>When a model references a missing file (e.g. <code>include &lt;missing.txt&gt;</code>), the <strong>Console</strong> panel in the Parameters area announces the warning.</p>
+          <p>When a model references a missing file (e.g. <code>include &lt;missing.txt&gt;</code>), the <strong>Console</strong> panel in the Customizer area announces the warning.</p>
           <ul>
             <li>A badge count appears on the Console button</li>
             <li>The live region announces the warning to your screen reader</li>
@@ -2505,7 +2505,7 @@ function showTutorialModeChoiceDialog(tutorial) {
  * Lock body scrolling while tutorial is active
  */
 function lockBodyScroll() {
-  // The mobile Parameters drawer already locks body scroll and sets body.top.
+  // The mobile Customizer drawer already locks body scroll and sets body.top.
   // Locking again here can create weird fixed-position offsets on mobile.
   if (document.body.classList.contains('drawer-open')) {
     didLockBodyScroll = false;
@@ -3855,7 +3855,7 @@ async function showStep(stepIndex) {
 
     // Watch the panel whenever the step has anything inside it to point at,
     // not only when the step opens it. Step 3 teaches BOTH halves - press
-    // Params to open, press Close to shut - and it now arrives with the panel
+    // Customizer to open, press Close to shut - and it now arrives with the panel
     // shut (P2), so without this the ring could not follow the user in.
     if (checkIfAnyTargetInsideDrawer(step)) {
       // Set up observer to detect drawer/panel state changes (mobile + desktop)
@@ -4084,14 +4084,14 @@ function updateSpotlightAndPosition() {
 
   /**
    * On mobile, the bottom actions/camera bar is fixed and can cover content
-   * (including elements inside the Parameters drawer). Treat that area as
+   * (including elements inside the Customizer drawer). Treat that area as
    * "not visible" for spotlight interactions.
    */
   const getEffectiveViewportBottom = () => {
     // Default: use visualViewport height for zoom-safe calculations
     let bottom = viewport.height;
 
-    // Mobile actions bar is fixed at the bottom and can overlap the Parameters drawer.
+    // Mobile actions bar is fixed at the bottom and can overlap the Customizer drawer.
     const actionsBar = document.getElementById('actionsBar');
     if (actionsBar) {
       // If the highlighted element is *inside* the fixed actions bar (e.g. Actions/Camera

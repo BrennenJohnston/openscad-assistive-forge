@@ -265,9 +265,100 @@ test.describe('Customizer terminology (C11)', () => {
     await expect(page.locator('#parameters-heading')).toHaveText('Customizer')
 
     // No aria-label may reference the old "parameters panel" pane name.
-    // Individual VALUES remain "parameters" by design (desktop-consistent).
     await expect(page.locator('[aria-label*="parameters panel" i]')).toHaveCount(0)
     await expect(page.locator('[title="Parameters"]')).toHaveCount(0)
+
+    // UF-40 (Q-70): the button that opens the pane wears the pane's name.
+    // Static markup, so this holds before a project is ever loaded.
+    await expect(page.locator('#mobileDrawerToggle .btn-label')).toHaveText(
+      'Customizer'
+    )
+  })
+
+  // UF-40 (U-44). The landing surface is the Main Page, and it says so on
+  // itself rather than only inside the tours and the header button that
+  // send people back to it.
+  test('the Main Page names itself and its tours', async ({ page }) => {
+    await page.goto('/')
+
+    await expect(page.locator('#features-heading')).toHaveText('Main Page')
+    await expect(page.locator('#startWelcomeTourBtn')).toHaveText(
+      'Start Main Page Tour'
+    )
+    await expect(
+      page.locator('.role-path-card').first().locator('.role-path-title')
+    ).toHaveText('Main Page Tour')
+
+    // The superseded vocabulary is gone from everything the surface shows.
+    const shown = await page.locator('#welcomeScreen').innerText()
+    expect(shown).not.toMatch(/welcome page/i)
+    expect(shown).not.toMatch(/welcome screen/i)
+  })
+
+  // Q-71 (owner, 2026-08-23) moved these five from parameter-value naming to
+  // the Customizer, superseding the recorded C11 boundary for them. Each is
+  // static markup, so none of this needs WASM or a loaded project.
+  test('the Q-71 controls speak Customizer, not Params', async ({ page }) => {
+    await page.goto('/')
+
+    await expect(page.locator('#exportParamsBtn .btn-text')).toHaveText(
+      'Export Customizer Settings'
+    )
+    await expect(page.locator('#viewParamsJsonBtn')).toContainText(
+      'View Customizer JSON'
+    )
+    await expect(page.locator('#paramSearchInput')).toHaveAttribute(
+      'placeholder',
+      'Search the Customizer...'
+    )
+    await expect(page.locator('#paramsJsonTitle')).toHaveText(
+      'Current Customizer JSON'
+    )
+    await expect(page.locator('#resetConfirmTitle')).toHaveText(
+      'Reset the Customizer?'
+    )
+    await expect(page.locator('#tab-colors')).toHaveText('Color Settings')
+  })
+
+  // WCAG 2.5.3 Label in Name: what a control READS must be contained in what
+  // it is CALLED, or speech input cannot act on the words on screen. Both of
+  // these failed before UF-40 - the header button read "Main Page" and was
+  // named "Return to the main projects page", and the toggle read "Params"
+  // and was named "Open customizer panel".
+  //
+  // Scoped to the naming family deliberately: a general sweep still flags 11
+  // unrelated controls (Keys, HC, Help, Full Screen, Back and the welcome
+  // actions), reported rather than quietly widened into this release.
+  test('the renamed controls contain their visible label in their name', async ({
+    page,
+  }) => {
+    await page.goto('/')
+
+    const pairs = await page.evaluate(() =>
+      ['clearFileBtn', 'mobileDrawerToggle'].map((id) => {
+        const el = document.getElementById(id)
+        const clone = el.cloneNode(true)
+        clone
+          .querySelectorAll('svg, [aria-hidden="true"], .sr-only')
+          .forEach((n) => n.remove())
+        return {
+          id,
+          visible: clone.textContent
+            .replace(/\s+/g, ' ')
+            .replace(/[←→]/g, '')
+            .trim(),
+          accessible: el.getAttribute('aria-label') || '',
+        }
+      })
+    )
+
+    for (const pair of pairs) {
+      expect(pair.visible.length, `${pair.id} has a visible label`).toBeGreaterThan(0)
+      expect(
+        pair.accessible.toLowerCase(),
+        `${pair.id}: visible "${pair.visible}" must be contained in accessible name "${pair.accessible}"`
+      ).toContain(pair.visible.toLowerCase())
+    }
   })
 })
 

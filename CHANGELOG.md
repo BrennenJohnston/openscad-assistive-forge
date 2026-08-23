@@ -179,6 +179,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **One name per thing** (UF-40, U-44) - the app used four names for two things. The page you land
+  on was the "welcome page", the "welcome screen" and the "Main Page" depending on which tour, button
+  or message you happened to read; the panel where you change a model was "Params" on a phone,
+  "Parameters" in the tours, and "Customizer" on its own heading. It is now the **Main Page** and the
+  **Customizer**, everywhere a user can read it, in both interfaces and every theme. The Main Page
+  also says its own name now, in its heading, with a line explaining what it is for: your projects,
+  organized like folders on a desktop computer. Five controls that named the panel indirectly came
+  with it, so **Export Params** is **Export Customizer Settings**, **View Params JSON** is **View
+  Customizer JSON**, **Color Parameters** is **Color Settings**, **Reset All Parameters?** is **Reset
+  the Customizer?**, and the search box says **Search the Customizer**. The individual values inside
+  the panel are still parameters, which is what desktop OpenSCAD calls them, and nothing in a .scad
+  file was touched. Two controls also had accessible names that did not contain the words printed on
+  them, so someone using speech input could read "Main Page" or "Customizer" on screen and have
+  nothing happen when they said it; both now match (WCAG 2.5.3). The tour that walks you around the
+  Main Page is the **Main Page Tour**, and the step that used to say "Click Generate" now names both
+  labels that button can wear, because once a file exists it says Download
 - **The two halves of the browser test suite now take the same amount of time** (CW-29, D-72) - the
   Chromium and Edge test lanes each run in two halves side by side, and each half was being given
   the same NUMBER of tests: 476 against 475. The work was nowhere near equal, because the slow

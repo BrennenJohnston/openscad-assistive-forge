@@ -2141,11 +2141,11 @@ export class PreviewManager {
     panel.id = 'colorLegend';
     panel.className = 'color-legend';
     panel.setAttribute('role', 'status');
-    panel.setAttribute('aria-label', 'Model color parameters');
+    panel.setAttribute('aria-label', 'Model color settings');
 
     const heading = document.createElement('span');
     heading.className = 'color-legend-title';
-    heading.textContent = 'Color parameters';
+    heading.textContent = 'Color Settings';
     panel.appendChild(heading);
 
     for (const { name, value } of colorParams) {
