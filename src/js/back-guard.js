@@ -40,6 +40,12 @@ const LEAVE_BODY =
 const LEAVE_LABEL = 'Leave';
 const STAY_LABEL = 'Stay in the app';
 
+/**
+ * Informational only. Do NOT build logic on reading this back: the deep-link
+ * doors call `replaceState(null, ...)` on whatever entry is current, which is
+ * the sentinel while a project is open, so the marker is gone by the time
+ * anyone would want it. MEASURED, after trying exactly that.
+ */
 const SENTINEL_STATE = { forgeBackGuard: true };
 
 let installed = false;
@@ -153,8 +159,8 @@ async function ask() {
 /**
  * Leave the document, stepping past any entries of our own on the way.
  *
- * One `history.back()` is not enough, and MEASURED is the only way that shows
- * up. A reload leaves the tab standing ON a sentinel; the app boots to the
+ * One `history.back()` is not enough, and only measuring shows why. A reload
+ * leaves the tab standing ON a sentinel; the app boots to the
  * Main Page and knows nothing about it, and opening a project pushes a second
  * one. "Leave" then went back exactly one step and landed on the app's own
  * earlier entry, so the app was still there and the URL had jumped back to
