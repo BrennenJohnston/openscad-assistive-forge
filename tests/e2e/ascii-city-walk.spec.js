@@ -1,11 +1,9 @@
 import { test, expect } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 import {
-  ALLOWED_AXE_VIOLATIONS,
   expectOnlyAllowedViolations,
   useCityWalkFixtures,
   launchGame,
-  webglAvailable,
   hudHeading,
   enterCity,
 } from './helpers/city-walk.js'
