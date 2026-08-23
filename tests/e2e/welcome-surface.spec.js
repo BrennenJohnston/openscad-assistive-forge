@@ -1,9 +1,10 @@
 import { test, expect } from '@playwright/test'
 import path from 'path'
 
-// W3: the welcome screen is ONE decluttered surface — a single "Get Started"
-// heading over side-by-side start actions and saved projects, with the guide
-// cards demoted below. No functionality was removed.
+// W3: the welcome screen is ONE decluttered surface — a single "Main Page"
+// heading (renamed from "Get Started" by UF-40) over side-by-side start
+// actions and saved projects, with the guide cards demoted below. No
+// functionality was removed.
 
 const FIXTURE = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
 const WASM_READY_TIMEOUT = 180_000
@@ -59,16 +60,20 @@ async function returnToMainPage(page) {
 }
 
 test.describe('welcome single surface (W3)', () => {
-  test('one Get Started heading; actions and saved projects share the surface', async ({
+  // UF-40 (U-44): the heading is the surface's own name now, so W3's "one
+  // heading over both halves" is asserted against "Main Page".
+  test('one Main Page heading; actions and saved projects share the surface', async ({
     page,
   }) => {
     await page.goto('/')
 
-    const getStartedHeadings = page.locator('#welcomeScreen h2, #welcomeScreen h3', {
-      hasText: 'Get Started',
+    // Exact text: the "Main Page Tour" card heading is also an h3 on this
+    // surface, and a substring match would count it as a second heading.
+    const surfaceHeadings = page.locator('#welcomeScreen h2, #welcomeScreen h3', {
+      hasText: /^\s*Main Page\s*$/,
     })
-    await expect(getStartedHeadings).toHaveCount(1)
-    await expect(page.locator('#features-heading')).toHaveText('Get Started')
+    await expect(surfaceHeadings).toHaveCount(1)
+    await expect(page.locator('#features-heading')).toHaveText('Main Page')
     await expect(page.locator('#upload-panel-heading')).toHaveText(
       'Open or start a project'
     )

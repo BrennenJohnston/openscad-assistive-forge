@@ -892,7 +892,7 @@ test.describe('UF-37: a tour that follows the user', () => {
   /** Boot the intro tour and stop on the step that teaches the panel. */
   async function introTourAtStep3(page) {
     await startBoxTour(page);
-    await walkTo(page, 'Open and close Parameters');
+    await walkTo(page, 'Open and close the Customizer');
     await page.waitForTimeout(500);
   }
 
@@ -923,7 +923,7 @@ test.describe('UF-37: a tour that follows the user', () => {
       // and the instructions are readable, not folded into a pill
       await expect(page.locator('.tutorial-minimized')).toBeHidden();
       await expect(page.locator('#tutorial-step-title')).toHaveText(
-        'Open and close Parameters'
+        'Open and close the Customizer'
       );
     });
 
@@ -1004,7 +1004,7 @@ test.describe('UF-37: a tour that follows the user', () => {
 
       await page.locator('#drawerCloseBtn').click();
       await expect(page.locator('#tutorialRequirement')).toHaveText(
-        'Open Params to continue.',
+        'Open the Customizer to continue.',
         { timeout: 10_000 }
       );
       await expect(page.locator('#mobileDrawerToggle')).toHaveClass(
@@ -1114,7 +1114,7 @@ test.describe('UF-37: a tour that follows the user', () => {
     // says what it needs and leaves it shut.
     await page.locator('#collapseParamPanelBtn').click();
     await expect(page.locator('#tutorialRequirement')).toHaveText(
-      'Expand Parameters to continue.',
+      'Expand the Customizer to continue.',
       { timeout: 10_000 }
     );
     await page.waitForTimeout(2000);
@@ -1124,7 +1124,7 @@ test.describe('UF-37: a tour that follows the user', () => {
     // fight with the user.
     await page.locator('#tutorialBackBtn').click();
     await expect(page.locator('#tutorial-step-title')).toHaveText(
-      'Open and close Parameters',
+      'Open and close the Customizer',
       { timeout: 15_000 }
     );
     await expect(page.locator('#paramPanel')).not.toHaveClass(/collapsed/);
@@ -1383,7 +1383,7 @@ test.describe('UF-38: cards that stay readable', () => {
 
     async function introStep4WithDrawerOpen(page) {
       await startBoxTour(page);
-      await walkTo(page, 'Open and close Parameters');
+      await walkTo(page, 'Open and close the Customizer');
       await page.waitForTimeout(500);
       await page.locator('#mobileDrawerToggle').click();
       await page.waitForTimeout(800);

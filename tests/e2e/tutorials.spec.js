@@ -443,7 +443,7 @@ test.describe('Welcome page tour (U-24, UF-17)', () => {
     // Precedence: the welcome card still wears the tip (its family is clear)
     await expect(
       page.locator('.role-path-card.welcome-spotlight .role-path-title')
-    ).toHaveText('Welcome Page Tour')
+    ).toHaveText('Main Page Tour')
 
     await page.locator('#startWelcomeTourBtn').click()
     await expect(page.locator('.tutorial-panel')).toBeVisible({ timeout: 10_000 })
@@ -511,7 +511,7 @@ test.describe('Welcome page tour (U-24, UF-17)', () => {
     // is pinned rather than left as a D-35 flag in the code.
     const announcements = await page.evaluate(() => window.__said)
     expect(announcements.join(' | ')).toContain(
-      'Welcome Page Tour closed because a project opened. Progress saved.'
+      'Main Page Tour closed because a project opened. Progress saved.'
     )
   })
 
