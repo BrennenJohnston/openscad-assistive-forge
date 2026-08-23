@@ -105,6 +105,16 @@ export const ROAD_WIDTHS_M = {
 };
 const DEFAULT_ROAD_WIDTH_M = 5;
 
+/**
+ * How wide a separately-mapped pavement is drawn (CW-33).
+ *
+ * A footway way defaults to 2.5 m above, which is a path through a park. A
+ * kerbside pavement is narrower and more regular, and `width` is tagged on at
+ * most fourteen ways in any of the four cities - far too sparse to design on -
+ * so this is a stated class default rather than a measurement.
+ */
+export const SIDEWALK_WIDTH_M = 1.8;
+
 // Meters per degree at the equator (equirectangular local projection).
 const M_PER_DEG_LAT = 110540;
 const M_PER_DEG_LON = 111320;
@@ -118,6 +128,39 @@ const M_PER_DEG_LON = 111320;
  * @param {{lat: number, lon: number}} center
  * @returns {[number, number]} [x, y] in meters
  */
+/**
+ * The leisure and landuse values the game treats as greenspace (CW-33).
+ *
+ * ONE list, exported, because two of them would drift: the bake builds its
+ * Overpass filter from these and the trim gate below admits exactly the same
+ * values, so an extract can never carry a polygon the game will not draw or
+ * miss one it would have. Every value was counted across the four cities
+ * before it was chosen (plan section 1d).
+ */
+export const GREEN_LEISURE_VALUES = [
+  'park',
+  'garden',
+  'pitch',
+  'playground',
+  'grass',
+];
+export const GREEN_LANDUSE_VALUES = [
+  'grass',
+  'recreation_ground',
+  'forest',
+  'meadow',
+  'village_green',
+];
+
+/** Whether a way's tags make it greenspace the game draws. */
+export function isGreenTags(tags) {
+  if (!tags) return false;
+  return (
+    GREEN_LEISURE_VALUES.includes(tags.leisure) ||
+    GREEN_LANDUSE_VALUES.includes(tags.landuse)
+  );
+}
+
 export function projectLatLon(lat, lon, center) {
   const cosLat = Math.cos((center.lat * Math.PI) / 180);
   return [
@@ -290,6 +333,34 @@ export function signedArea(pts) {
   return sum / 2;
 }
 
+/**
+ * The smallest building:part the bake keeps, in square metres (CW-Q31).
+ *
+ * Denver's downtown is mapped with thousands of building:part volumes, and a
+ * large share of them are slivers a few centimetres across - ledges and
+ * setbacks that no character cell could ever show. Dropping them at BAKE time
+ * is what brought Denver inside the size bar and finally let it have the
+ * stepped towers and roofs the other three cities already had.
+ *
+ * The owner signed the number. It lives here rather than in the bake script
+ * so the schema documentation and the bake read the same one.
+ */
+export const MIN_PART_AREA_M2 = 10;
+
+/**
+ * Ground area of a lat/lon ring in square metres, as the game would project
+ * it. Pure; used by the bake to apply MIN_PART_AREA_M2.
+ *
+ * @param {Array<{lat:number,lon:number}>} geometry - a closed ring
+ * @param {{lat:number,lon:number}} center
+ * @returns {number} area in m², always positive; 0 for a degenerate ring
+ */
+export function ringAreaM2(geometry, center) {
+  if (!Array.isArray(geometry) || geometry.length < 3) return 0;
+  const pts = geometry.map((p) => projectLatLon(p.lat, p.lon, center));
+  return Math.abs(signedArea(pts));
+}
+
 /** Axis-aligned bounds of a projected ring, for the part-host prefilter. */
 function ringBounds(ring) {
   let minX = Infinity;
@@ -350,10 +421,11 @@ function ringCentroid(ring) {
  *   center: {lat:number,lon:number},
  *   attribution: string,
  *   buildings: Array<{outer: Array<[number,number]>, holes: Array<Array<[number,number]>>, heightM: number, minHeightM: number, name: (string|undefined), parts: Array<Object>, partsAreMass: boolean, roof: (Object|null)}>,
- *   roads: Array<{points: Array<[number,number]>, widthM: number, kind: string, name: (string|undefined)}>,
+ *   roads: Array<{points: Array<[number,number]>, widthM: number, kind: string, name: (string|undefined), sidewalk: boolean, surface: (string|undefined)}>,
+ *   greens: Array<{outer: Array<[number,number]>, kind: string}>,
  *   trees: Array<[number,number]>,
  *   boundsM: {minX:number, minY:number, maxX:number, maxY:number},
- *   stats: {buildingCount:number, roadCount:number, treeCount:number, partCount:number, orphanParts:number, droppedRings:number, droppedElements:number}
+ *   stats: {buildingCount:number, roadCount:number, greenCount:number, sidewalkCount:number, surfacedRoadCount:number, treeCount:number, partCount:number, orphanParts:number, droppedRings:number, droppedElements:number}
  * }}
  */
 export function parseCityExtract(extract, options = {}) {
@@ -365,6 +437,7 @@ export function parseCityExtract(extract, options = {}) {
 
   const buildings = [];
   const roads = [];
+  const greens = [];
   const trees = [];
   const partWays = [];
   let droppedRings = 0;
@@ -509,14 +582,40 @@ export function parseCityExtract(extract, options = {}) {
       const points = el.geometry.map((p) =>
         projectLatLon(p.lat, p.lon, center)
       );
+      // CW-33: a separately-mapped pavement is a footway way with
+      // footway=sidewalk. There are hundreds in every city and until now they
+      // were built as narrow ROADS, which is why a kerbside path read as
+      // another lane. The flag is what lets the scene give them their own
+      // ribbon, their own width and their own surface.
+      const sidewalk =
+        tags.highway === 'footway' && tags.footway === 'sidewalk';
       roads.push({
         points,
-        widthM: ROAD_WIDTHS_M[tags.highway] ?? DEFAULT_ROAD_WIDTH_M,
+        widthM: sidewalk
+          ? SIDEWALK_WIDTH_M
+          : (ROAD_WIDTHS_M[tags.highway] ?? DEFAULT_ROAD_WIDTH_M),
         kind: tags.highway,
         // CW-27: the bake has always kept road names; this is where they
         // were being dropped on the floor.
         name: tags.name,
+        sidewalk,
+        // Undefined where OSM has no opinion; the scene applies a documented
+        // class default rather than inventing one here.
+        surface: tags.surface,
       });
+      continue;
+    }
+
+    // CW-33 greenspace: parks, gardens, pitches and the rest, as flat
+    // polygons. Ways only this round - a park mapped as a multipolygon
+    // relation is missed, and the release record counts what that costs.
+    if (el.type === 'way' && isGreenTags(tags) && Array.isArray(el.geometry)) {
+      const ring = projectRing(el.geometry, center, true);
+      if (ring) {
+        greens.push({ outer: ring, kind: tags.leisure ?? tags.landuse });
+      } else {
+        droppedRings++;
+      }
     }
   }
 
@@ -596,11 +695,15 @@ export function parseCityExtract(extract, options = {}) {
         : 'Map data © OpenStreetMap contributors',
     buildings,
     roads,
+    greens,
     trees,
     boundsM,
     stats: {
       buildingCount: buildings.length,
       roadCount: roads.length,
+      greenCount: greens.length,
+      sidewalkCount: roads.filter((r) => r.sidewalk).length,
+      surfacedRoadCount: roads.filter((r) => r.surface).length,
       treeCount: trees.length,
       partCount: partWays.length,
       orphanParts,
@@ -645,6 +748,25 @@ export function trimOverpassElement(el) {
     'roof:orientation',
     // Crowd proxy for where people stand (CW-19's placement seam).
     'shop',
+    // CW-33: what the ground is actually made of. `surface` is tagged on
+    // 88% of Seattle's roads and 9% of Albuquerque's, so it informs the
+    // texture where present and a documented class default carries the rest.
+    'surface',
+    // A separately-mapped pavement is a highway=footway way with this
+    // sub-tag. There are hundreds in every city and they were already in the
+    // extracts, drawn as if they were roads; this is the tag that tells them
+    // apart.
+    'footway',
+    // Too sparse to design on (at most 14 width tags in any of the four
+    // cities), kept so a later release can use them without another rebake.
+    'lanes',
+    'width',
+    // CW-33 greenspace.
+    'landuse',
+    'leisure',
+    // CW-34's facades ride this rebake rather than asking Overpass twice.
+    'building:material',
+    'building:colour',
   ];
 
   const trimTags = (tags) => {
@@ -666,7 +788,16 @@ export function trimOverpassElement(el) {
     // CW-26: a building:part way usually carries NO building tag — in Simple
     // 3D Buildings the parts sit inside a separately-tagged outline. Keeping
     // the tag is not enough; this gate has to let the part through too.
-    if (!tags || (!tags.building && !tags.highway && !tags['building:part']))
+    // CW-33 repeats the CW-26 lesson: keeping a tag is not enough, this gate
+    // has to admit the way as well. A leisure=park polygon carries none of
+    // the three keys above and would die here with its tags intact.
+    if (
+      !tags ||
+      (!tags.building &&
+        !tags.highway &&
+        !tags['building:part'] &&
+        !isGreenTags(tags))
+    )
       return null;
     return { type: 'way', id: el.id, tags, geometry: el.geometry.map(roundPt) };
   }
@@ -693,7 +824,11 @@ export function trimOverpassElement(el) {
     Number.isFinite(el.lon)
   ) {
     const tags = trimTags(el.tags);
-    if (!tags || !tags.natural) return null;
+    // CW-33: shop and amenity nodes join the trees. They are not drawn yet —
+    // CW-34 uses them to choose a building's ground-floor storefront from
+    // what is actually there — but they ride this rebake so that release
+    // does not have to ask Overpass for the four cities all over again.
+    if (!tags || (!tags.natural && !tags.shop && !tags.amenity)) return null;
     const { lat, lon } = roundPt(el);
     return { type: 'node', id: el.id, tags, lat, lon };
   }
