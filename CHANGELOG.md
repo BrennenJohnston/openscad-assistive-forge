@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The smallest character size now knows your machine** (CW-42) - the game used to open at 50%
+  characters on every machine and let you go down to 10% everywhere, even where 10% turned walking
+  into a slideshow. Now, in the first moments after you enter a city, the game quietly measures how
+  fast your machine actually draws and picks the smallest size in the 10-30% range that can hold
+  30 frames per second: that size becomes both where a fresh session opens and how far down the
+  Smaller control will go, with a spoken reason at the stop. A size you chose yourself is never
+  touched - choose once and the game keeps your choice, today and every day after. On a machine
+  where even 30% cannot keep up, the game says so plainly in one line and keeps the 50% default
+  rather than pretending. Every city entry measures again, so one slow afternoon never brands a
+  fast machine - and the measurement rides the frames the entry was already drawing, so there is
+  nothing extra to see or wait for
+
 - **Drop yourself onto any street** (CW-36) - the map was somewhere to look at the city; it is now
   somewhere to travel from. Click a street on the overhead map and the game tells you which street
   you picked, marks it with a ring, and waits. Press J and you are standing there, looking along the
