@@ -21,6 +21,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The phosphor trail is retired** (CW-39) - moving through the city used to leave a fading
+  double-exposure behind every tree, pole and sign, the way a slow CRT smeared when it scrolled. The
+  owner found it distracting, and it was expensive: measured side by side in one session, drawing
+  without it is 19 to 32 percent faster per frame on a throttled machine, which on this hardware is
+  the difference between about 26 and about 40 frames a second standing in heavy rain at the
+  smallest character size. The night city itself is untouched - the lit windows, the bright
+  storefronts and the dark ground all read exactly as before; only the smear is gone. The main
+  app's Alt View keeps its own afterglow slider exactly as it was
+
 - **The Camera panel speaks the game's language** (CW-38) - its two direction pads were titled
   "Rotate View" and "Pan View", the 3D preview's camera words. In the street they now say
   **Look Around** and **Walk Around**, and over the map both say **Pan Map**, because over the map
