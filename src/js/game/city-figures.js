@@ -35,7 +35,6 @@ export const FIGURE_POSES = ['standing', 'walking', 'jogging', 'sitting'];
 // Proportions as fractions of stature, from the same anthropometric
 // tradition (leg ~47%, head ~11.6% - the Round-4 figure's own ratios, now
 // scaled instead of fixed).
-const LEG_FRACTION = 0.47;
 const THIGH_FRACTION = 0.26;
 const SHIN_FRACTION = 0.21;
 const TORSO_FRACTION = 0.3;
