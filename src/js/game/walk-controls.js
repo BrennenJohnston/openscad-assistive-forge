@@ -461,6 +461,44 @@ export function findSpawn(model, collision) {
 }
 
 /**
+ * The heading a spawned walker should face: the direction with the longest
+ * clear, walkable run, measured with the same collision test the walker
+ * uses (CW-44). The old fixed "face north" stood the CW-44 Seattle player
+ * 2.5 m from a storefront; CI found it before a person did, because
+ * software-rendered frames ride the dt clamp and cover more ground per
+ * frame than a live GPU's do. Deterministic: eight compass directions,
+ * ties keep the northmost-first order.
+ *
+ * @param {{isBlocked: (x:number, y:number) => boolean}} collision
+ * @param {number} x
+ * @param {number} y
+ * @param {{stepM?: number, maxM?: number}} [options]
+ * @returns {number} heading in radians (0 = north, clockwise)
+ */
+export function findClearHeading(collision, x, y, options = {}) {
+  const stepM = options.stepM ?? 0.5;
+  const maxM = options.maxM ?? 30;
+  let bestHeading = 0;
+  let bestRun = -1;
+  for (let i = 0; i < 8; i++) {
+    const heading = (i / 8) * Math.PI * 2;
+    const sin = Math.sin(heading);
+    const cos = Math.cos(heading);
+    let run = 0;
+    while (run < maxM) {
+      const next = run + stepM;
+      if (isCircleBlocked(collision, x + sin * next, y + cos * next)) break;
+      run = next;
+    }
+    if (run > bestRun) {
+      bestRun = run;
+      bestHeading = heading;
+    }
+  }
+  return bestHeading;
+}
+
+/**
  * How far from a picked point the landing may look for a street before it
  * gives up on streets, and how far it may then look for any open ground.
  * Both are owner-reversible in one place (CW-36).
