@@ -21,6 +21,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The shimmering facades hold still** (CW-41) - at small character sizes, building fronts used to
+  carry sliding interference bands - "a fractured polygon" look - because the window pattern sat at
+  the same scale as the characters themselves, and every tiny movement of the view re-rolled which
+  characters lit up. Measured first, then fixed: the facade textures are now filtered for the
+  character grid rather than the pixel grid, so window patterns dissolve smoothly exactly where
+  they become too small to draw honestly, and stay sharp everywhere they fit. Up close nothing
+  changes; the interference is gone at the small sizes, and drawing got no slower - on the densest
+  city it measured slightly faster
+
 - **Teleporting is drop-a-pin now** (CW-40) - press **Teleport** on the map toolbar and the cursor
   becomes a ring; click anywhere on the map and you are there, in one step - the "I'm here" marker
   moves to the spot, the game says which street you landed on, and you stay on the map so you can
