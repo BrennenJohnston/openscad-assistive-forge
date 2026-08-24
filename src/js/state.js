@@ -109,6 +109,8 @@ export class StateManager {
     this.historyEnabled = true; // Flag to disable during rendering
     this._announceTimeout = null;
     this._announceClearTimeout = null;
+    this._createdAt = Date.now();
+    this._urlRestoreConsumed = false;
   }
 
   subscribe(callback) {
@@ -145,9 +147,37 @@ export class StateManager {
     }, 1000); // 1 second debounce
   }
 
+  /**
+   * True while an incoming link still carries a parameter payload nobody has
+   * read yet. Writing in that window would serialize this session's
+   * pre-restore values over the sender's, destroying the link.
+   * @returns {boolean}
+   */
+  isURLRestorePending() {
+    if (this._urlRestoreConsumed) {
+      return false;
+    }
+    if (!hasURLParamPayload(window.location.hash)) {
+      this._urlRestoreConsumed = true;
+      return false;
+    }
+    // Backstop: several load paths set state.defaults without ever calling
+    // loadFromURL(), and a payload nobody has read by now is one nobody will.
+    // Without this the writer would stay silent for the rest of the session.
+    if (Date.now() - this._createdAt > URL_RESTORE_GRACE_MS) {
+      this._urlRestoreConsumed = true;
+      return false;
+    }
+    return true;
+  }
+
   performURLSync() {
     // Only sync if we have parameters to save
     if (!this.state.parameters || !this.state.defaults) {
+      return;
+    }
+
+    if (this.isURLRestorePending()) {
       return;
     }
 
@@ -159,17 +189,25 @@ export class StateManager {
       }
     }
 
-    // Build URL hash
-    const hash = serializeURLParams(nonDefaultParams);
+    // Build URL hash, carrying any fragment keys that are not ours
+    const currentHash = window.location.hash;
+    const hash = serializeURLParams(nonDefaultParams, currentHash);
 
-    // Update URL without triggering page reload
-    if (hash !== window.location.hash) {
-      window.history.replaceState(null, '', hash);
+    // Update URL without triggering page reload. An empty hash is written as
+    // an explicit path+query so the query string survives the clear.
+    if (hash !== currentHash) {
+      const nextUrl =
+        hash === ''
+          ? `${window.location.pathname}${window.location.search}`
+          : hash;
+      window.history.replaceState(null, '', nextUrl);
     }
   }
 
   async loadFromURL() {
     const params = await deserializeURLParams();
+    // The payload has now been read, however it turned out; the writer is free.
+    this._urlRestoreConsumed = true;
     if (params && Object.keys(params).length > 0) {
       // Merge URL params with current parameters
       this.setState({
@@ -455,22 +493,79 @@ export class StateManager {
 }
 
 /**
- * Serialize parameters to URL hash
+ * The URL fragment is a `&`-joined key=value list. Our parameter payload owns
+ * exactly these two keys; every other key in the fragment belongs to whoever
+ * put it there and has to survive our writes.
+ */
+const URL_PARAM_HASH_KEYS = ['v', 'params'];
+
+/**
+ * How long after boot the writer keeps its hands off an unread payload.
+ * @see StateManager#isURLRestorePending
+ */
+export const URL_RESTORE_GRACE_MS = 15000;
+
+/**
+ * Split a URL fragment into ordered [key, rawValue] pairs. A bare key (no `=`)
+ * keeps a null value so it can be written back exactly as it arrived.
+ * @param {string} hash - Fragment, with or without the leading '#'
+ * @returns {Array<[string, string|null]>}
+ */
+function splitHashEntries(hash) {
+  const raw = (hash || '').replace(/^#/, '');
+  if (!raw) return [];
+  return raw.split('&').map((entry) => {
+    const eq = entry.indexOf('=');
+    return eq === -1
+      ? [entry, null]
+      : [entry.slice(0, eq), entry.slice(eq + 1)];
+  });
+}
+
+/**
+ * Rebuild a fragment from ordered [key, rawValue] pairs.
+ * @param {Array<[string, string|null]>} entries
+ * @returns {string} Fragment including '#', or '' when there is nothing to write
+ */
+function joinHashEntries(entries) {
+  if (entries.length === 0) return '';
+  return `#${entries
+    .map(([key, value]) => (value === null ? key : `${key}=${value}`))
+    .join('&')}`;
+}
+
+/**
+ * Check whether a fragment carries a parameter payload.
+ * @param {string} hash
+ * @returns {boolean}
+ */
+function hasURLParamPayload(hash) {
+  return splitHashEntries(hash).some(([key]) => key === 'params');
+}
+
+/**
+ * Serialize parameters to a URL hash, preserving fragment keys that are not
+ * ours.
  * @param {Object} params - Parameters object
+ * @param {string} [currentHash] - The fragment currently on the URL
  * @returns {string} URL hash string
  */
-function serializeURLParams(params) {
+function serializeURLParams(params, currentHash = '') {
+  const foreign = splitHashEntries(currentHash).filter(
+    ([key]) => !URL_PARAM_HASH_KEYS.includes(key)
+  );
+
   if (!params || Object.keys(params).length === 0) {
-    return '';
+    return joinHashEntries(foreign);
   }
 
   try {
     const json = JSON.stringify(params);
     const encoded = encodeURIComponent(json);
-    return `#v=1&params=${encoded}`;
+    return joinHashEntries([['v', '1'], ['params', encoded], ...foreign]);
   } catch (error) {
     console.error('Failed to serialize URL params:', error);
-    return '';
+    return joinHashEntries(foreign);
   }
 }
 

@@ -1386,7 +1386,7 @@ export function initFileHandler({
         }
       }
 
-      const urlParams = stateManager.loadFromURL();
+      const urlParams = await stateManager.loadFromURL();
       if (urlParams && Object.keys(urlParams).length > 0) {
         console.log('Loaded parameters from URL:', urlParams);
 
@@ -1412,12 +1412,6 @@ export function initFileHandler({
 
         stateManager.setState({ parameters: updatedValues });
 
-        if (Object.keys(adjustments).length > 0) {
-          updateStatus(
-            'Some URL parameters were adjusted to fit allowed ranges.'
-          );
-        }
-
         if (getAutoPreviewController()) {
           getAutoPreviewController().onParameterChange(updatedValues);
         }
@@ -1425,6 +1419,15 @@ export function initFileHandler({
         updateStatus(
           `Ready - ${paramCount} parameters loaded (${Object.keys(urlParams).length} from URL)`
         );
+
+        // Last, so it is the status that survives and the announcement that
+        // gets read: the count line above used to overwrite it in the same
+        // tick, which made the adjustment notice unreachable (D-98).
+        if (Object.keys(adjustments).length > 0) {
+          updateStatus(
+            'Some URL parameters were adjusted to fit allowed ranges.'
+          );
+        }
       } else {
         updateStatus(`Ready - ${paramCount} parameters loaded`);
       }

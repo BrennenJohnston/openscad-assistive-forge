@@ -186,6 +186,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A link with your settings in it now actually opens with your settings** (IR-1) - the app has
+  always written the values you changed into the end of the address bar, so a link you copied
+  carried them with it. Opening that link never applied them: the person you sent it to saw the
+  model's plain defaults while the address still promised your numbers. Now the values arrive in
+  the controls, out-of-range numbers are pulled to the nearest allowed value with a spoken note
+  saying so, and a value the model does not have is dropped with the same note rather than
+  silently ignored. Anything else already in the address after the # sign - a marker some other
+  tool put there - is now left alone instead of being wiped when a project loads
+
 - **You spawn facing down the street, not into a wall** (CW-44) - every city entry used to face
   due north no matter what stood there, and the bigger Seattle put a storefront two and a half
   meters that way: the first thing a new player did was walk into a wall. The spawn now faces the

@@ -8145,6 +8145,17 @@ if (rounded) {
   // Note: ?load= is an alias for ?example= (for website embedding convenience)
   // =========================================
   const initUrlParams = new URLSearchParams(window.location.search);
+  /**
+   * Compose the post-load URL from the surviving query parameters. The
+   * fragment is carried over untouched: it holds the shared parameter payload
+   * (`#v=1&params=`, state.js) and anything else the sender put there, and a
+   * cleanup that drops it destroys the link it just opened.
+   * @returns {string}
+   */
+  const cleanUrlKeepingFragment = () =>
+    initUrlParams.toString()
+      ? `${window.location.pathname}?${initUrlParams}${window.location.hash}`
+      : `${window.location.pathname}${window.location.hash}`;
   // Support both ?example= and ?load= (alias for website embedding)
   const exampleParam =
     initUrlParams.get('example') || initUrlParams.get('load');
@@ -8162,9 +8173,7 @@ if (rounded) {
           // Clean up URL to avoid reloading on refresh
           initUrlParams.delete('example');
           initUrlParams.delete('load'); // Also remove ?load= alias
-          const cleanUrl = initUrlParams.toString()
-            ? `${window.location.pathname}?${initUrlParams}`
-            : window.location.pathname;
+          const cleanUrl = cleanUrlKeepingFragment();
           history.replaceState(null, '', cleanUrl);
 
           console.log(`[DeepLink] Successfully loaded: ${exampleParam}`);
@@ -8711,9 +8720,7 @@ if (rounded) {
         initUrlParams.delete('preset');
         initUrlParams.delete('skipWelcome');
         initUrlParams.delete('skipwelcome');
-        const cleanUrl = initUrlParams.toString()
-          ? `${window.location.pathname}?${initUrlParams}`
-          : window.location.pathname;
+        const cleanUrl = cleanUrlKeepingFragment();
         history.replaceState(null, '', cleanUrl);
 
         console.log(`[DeepLink] Manifest load complete: ${projectName}`);
@@ -8772,9 +8779,7 @@ if (rounded) {
         initUrlParams.delete('preset');
         initUrlParams.delete('skipWelcome');
         initUrlParams.delete('skipwelcome');
-        const failCleanUrl = initUrlParams.toString()
-          ? `${window.location.pathname}?${initUrlParams}`
-          : window.location.pathname;
+        const failCleanUrl = cleanUrlKeepingFragment();
         history.replaceState(null, '', failCleanUrl);
 
         // Show welcome screen again on failure so the user isn't stuck
@@ -8838,9 +8843,7 @@ if (rounded) {
         // Clean up URL after loading
         initUrlParams.delete('project');
         initUrlParams.delete('scad');
-        const cleanUrl = initUrlParams.toString()
-          ? `${window.location.pathname}?${initUrlParams}`
-          : window.location.pathname;
+        const cleanUrl = cleanUrlKeepingFragment();
         history.replaceState(null, '', cleanUrl);
 
         console.log(`[DeepLink] Successfully loaded project: ${urlFileName}`);
