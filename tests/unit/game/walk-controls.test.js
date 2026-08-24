@@ -435,6 +435,38 @@ describe('character size (CW-12)', () => {
     )
   })
 
+  describe('calibrated floor (CW-42, CW-Q39)', () => {
+    it('raises the bottom of the range to the calibrated floor', () => {
+      expect(clampCharScale(0.1, 0.3)).toBe(0.3)
+      expect(clampCharScale(0.2, 0.3)).toBe(0.3)
+      expect(clampCharScale(0, 0.3)).toBe(0.3)
+    })
+
+    it('stepping down from the calibrated floor stays on it', () => {
+      expect(clampCharScale(0.3 - CHAR_SCALE_STEP, 0.3)).toBe(0.3)
+      expect(clampCharScale(0.1 - CHAR_SCALE_STEP, 0.1)).toBe(0.1)
+    })
+
+    it('leaves everything above the floor alone', () => {
+      expect(clampCharScale(0.5, 0.3)).toBe(0.5)
+      expect(clampCharScale(2.5, 0.3)).toBe(CHAR_SCALE_MAX)
+    })
+
+    it('a floor of 10% is the uncalibrated range', () => {
+      expect(clampCharScale(0.1, 0.1)).toBe(0.1)
+    })
+
+    it('ignores a junk floor', () => {
+      expect(clampCharScale(0.1, NaN)).toBe(0.1)
+      expect(clampCharScale(0.1, null)).toBe(0.1)
+    })
+
+    it('a floor outside the range is bounded, never widening the range', () => {
+      expect(clampCharScale(0.1, 0.05)).toBe(CHAR_SCALE_MIN)
+      expect(clampCharScale(0.5, 5)).toBe(CHAR_SCALE_MAX)
+    })
+  })
+
   describe('seed order', () => {
     it("prefers the game's own saved value", () => {
       expect(seedCharScale('0.3', '0.9')).toBe(0.3)
@@ -455,6 +487,28 @@ describe('character size (CW-12)', () => {
 
     it('survives a junk game value by falling through, not by throwing', () => {
       expect(seedCharScale('NaN', '0.4')).toBe(0.4)
+    })
+
+    describe('with a stored calibration (CW-42, CW-Q39)', () => {
+      it('the manual choice still wins, even below the calibrated default', () => {
+        expect(seedCharScale('0.1', null, 0.3)).toBe(0.1)
+      })
+
+      it('the calibrated default replaces the landing default', () => {
+        expect(seedCharScale(null, null, 0.1)).toBe(0.1)
+        expect(seedCharScale(null, null, 0.3)).toBe(0.3)
+      })
+
+      it('the calibrated default outranks the Alt View courtesy seed', () => {
+        // Fresh calibration would re-apply over the seed moments after
+        // entry; landing there spares the player the visible jump.
+        expect(seedCharScale(null, '0.9', 0.3)).toBe(0.3)
+      })
+
+      it('a junk calibration falls through to the old order', () => {
+        expect(seedCharScale(null, '0.9', NaN)).toBe(0.9)
+        expect(seedCharScale(null, null, null)).toBe(CHAR_SCALE_DEFAULT)
+      })
     })
   })
 })
