@@ -1431,58 +1431,80 @@ test.describe('ASCII City Walk — cars are cars (CW-46)', () => {
     await enterCity(page)
 
     // Stand off the pickup's TAIL - the part the old 4.4 m footprint did
-    // not cover - facing it, and walk. Same patience arithmetic as the
-    // parked-car case (D-79).
+    // not cover - facing it, and watch the approach in the pickup's OWN
+    // frame per frame, exactly the parked-car pattern above: an end-state
+    // distance check is not slide-proof (CI's dt-clamped frames cover ~6x
+    // the ground of a live GPU's, slid around the corner and away, and
+    // went red on two browsers - this watcher replaced it).
     const setup = await page.evaluate(() => {
       const game = window.__cityWalkGame
       const pickups = game.props.obstacles.filter(
         (o) => Math.abs(o.halfLengthM - 2.9) < 1e-6
       )
-      for (const p of pickups) {
-        const ux = Math.cos(p.rotationRad)
-        const uy = Math.sin(p.rotationRad)
+      for (const car of pickups) {
+        const ux = Math.cos(car.rotationRad)
+        const uy = Math.sin(car.rotationRad)
         for (const dir of [-1, 1]) {
-          const sx = p.x + ux * (p.halfLengthM + 2.5) * dir
-          const sy = p.y + uy * (p.halfLengthM + 2.5) * dir
+          const sx = car.x + ux * (car.halfLengthM + 2.5) * dir
+          const sy = car.y + uy * (car.halfLengthM + 2.5) * dir
           if (game.collision.isBlocked(sx, sy)) continue
-          game.walkState.x = sx
-          game.walkState.y = sy
-          game.walkState.headingRad = Math.atan2(p.x - sx, p.y - sy)
-          return { pickup: { x: p.x, y: p.y }, start: { x: sx, y: sy } }
+          const w = game.walkState
+          w.x = sx
+          w.y = sy
+          w.headingRad = Math.atan2(car.x - sx, car.y - sy)
+          w.pitchRad = 0
+
+          // lx runs along the pickup (the axis we approach on), ly across.
+          const startEnd = Math.sign(
+            (sx - car.x) * ux + (sy - car.y) * uy
+          )
+          window.__cwPickup = { frames: 0, walked: 0, closest: 99, crossings: 0 }
+          let px = sx
+          let py = sy
+          const tick = () => {
+            const p = game.walkState
+            const watch = window.__cwPickup
+            watch.frames++
+            watch.walked += Math.hypot(p.x - px, p.y - py)
+            px = p.x
+            py = p.y
+            const dx = p.x - car.x
+            const dy = p.y - car.y
+            const lx = dx * ux + dy * uy
+            const ly = -dx * uy + dy * ux
+            if (Math.abs(ly) <= car.halfWidthM) {
+              watch.closest = Math.min(watch.closest, Math.abs(lx))
+              if (Math.sign(lx) !== startEnd) watch.crossings++
+            }
+            window.__cwPickupTick = requestAnimationFrame(tick)
+          }
+          window.__cwPickupTick = requestAnimationFrame(tick)
+          return { halfLengthM: car.halfLengthM }
         }
       }
       return null
     })
     expect(setup).not.toBeNull()
 
-    await page.evaluate(() => {
-      window.__walkFrames = 0
-      const count = () => {
-        window.__walkFrames++
-        if (window.__walkFrames < 150) requestAnimationFrame(count)
-      }
-      requestAnimationFrame(count)
-      window.__cityWalkGame.altView.invalidate()
-    })
     await page.keyboard.down('ArrowUp')
-    await page.waitForFunction(() => window.__walkFrames >= 150, null, {
-      timeout: 90_000,
-    })
-    await page.keyboard.up('ArrowUp')
+    try {
+      await expect
+        .poll(() => page.evaluate(() => window.__cwPickup.frames), {
+          timeout: 90_000,
+        })
+        .toBeGreaterThan(150)
+    } finally {
+      await page.keyboard.up('ArrowUp')
+      await page.evaluate(() => cancelAnimationFrame(window.__cwPickupTick))
+    }
 
-    const after = await page.evaluate(() => ({
-      x: window.__cityWalkGame.walkState.x,
-      y: window.__cityWalkGame.walkState.y,
-    }))
-    const toPickup = Math.hypot(
-      after.x - setup.pickup.x,
-      after.y - setup.pickup.y
-    )
-    const walked = Math.hypot(after.x - setup.start.x, after.y - setup.start.y)
-    // Pressed against the tail, never inside the bed: the nose-on stop
-    // distance is the half length plus the walker's radius.
-    expect(walked).toBeGreaterThan(0.3)
-    expect(toPickup).toBeGreaterThan(2.4)
-    expect(toPickup).toBeLessThan(5.4)
+    const watch = await page.evaluate(() => window.__cwPickup)
+    // The walk genuinely moved, came close to the tail while aligned with
+    // the bed, and NEVER crossed the tail plane - through-the-bed is the
+    // only way to flip ends while inside the pickup's width.
+    expect(watch.walked).toBeGreaterThan(1)
+    expect(watch.closest).toBeLessThan(setup.halfLengthM + 1.2)
+    expect(watch.closest).toBeGreaterThan(setup.halfLengthM - 0.05)
+    expect(watch.crossings).toBe(0)
   })
 })
