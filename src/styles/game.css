@@ -301,6 +301,54 @@
   min-width: 0;
 }
 
+/* CW-38 (CW-Q47): in high contrast everything grows - 44px targets, wider
+ * gaps, thicker borders - and the panel stopped fitting: MEASURED at
+ * 1600x900, the body held 754px of content in a 576px box and Reset View
+ * sat off the bottom of the screen behind a scrollbar. The buttons never
+ * shrink (a target is a target), so the room comes back from everywhere
+ * else: the header puts the title beside the toggle instead of above it,
+ * and the margins, paddings and gaps drop to the smallest spacing token.
+ * On smaller windows the body still scrolls - that is what overflow-y is
+ * for - but at the directive's 1600x900 the whole panel is on screen. */
+:root[data-high-contrast='true'] .city-walk-camera-panel {
+  top: var(--space-2xs);
+  max-height: calc(100% - 2 * var(--space-2xs));
+}
+
+:root[data-high-contrast='true'] .city-walk-camera-panel .camera-panel-header {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2xs) var(--space-sm);
+}
+
+:root[data-high-contrast='true'] .city-walk-camera-panel .camera-panel-body {
+  gap: var(--space-2xs);
+  padding: var(--space-2xs);
+}
+
+:root[data-high-contrast='true']
+  .city-walk-camera-panel
+  .camera-control-section,
+:root[data-high-contrast='true'] .city-walk-camera-panel .camera-control-dpad,
+:root[data-high-contrast='true']
+  .city-walk-camera-panel
+  .camera-standard-views {
+  gap: var(--space-2xs);
+}
+
+/* CW-40 (CW-Q40): while pin mode is armed, the pick flow's ring becomes the
+ * CURSOR. Drawn twice - a dark stroke under a light one - so it reads over
+ * bright streets and dark blocks alike, in every phosphor. A data: URI is
+ * same-document (no CSP host involved); `crosshair` is the fallback if the
+ * platform refuses SVG cursors. The hotspot is the ring's centre. */
+.city-walk-viewport.city-walk-teleport-armed {
+  cursor:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Ccircle cx='12' cy='12' r='8' fill='none' stroke='%23000' stroke-width='5'/%3E%3Ccircle cx='12' cy='12' r='8' fill='none' stroke='%23fff' stroke-width='2.5'/%3E%3C/svg%3E")
+      12 12,
+    crosshair;
+}
+
 /* Landmark legend (map view): real text over the map's left edge. */
 .city-walk-legend {
   position: absolute;

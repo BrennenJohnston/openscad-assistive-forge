@@ -647,6 +647,73 @@ test.describe('ASCII City Walk — the Camera panel (CW-35)', () => {
     )
   })
 
+  test('a collapsed panel keeps its reopen control, and the keyboard (CW-38)', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // The owner collapsed the panel and could not get it back: layout.css's
+    // collapsed rule hid every header action except the FORGE panel's toggle,
+    // matched by id, so the game's own reopen button vanished - and the
+    // focused button going display:none dropped focus to <body>, outside the
+    // layer's key listener, which killed every game key with it.
+    const toggle = btn(page, 'cityWalkCameraToggle')
+    await toggle.click()
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+
+    // The reopen control survives its own collapse: visible, still holding
+    // focus, and no smaller than the project's touch target.
+    await expect(toggle).toBeVisible()
+    await expect(toggle).toBeFocused()
+    const min = await page.evaluate(() =>
+      parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue(
+          '--size-touch-target'
+        )
+      )
+    )
+    const box = await toggle.boundingBox()
+    expect(box.width).toBeGreaterThanOrEqual(min - 0.5)
+    expect(box.height).toBeGreaterThanOrEqual(min - 0.5)
+
+    // And the keyboard survives with it: M straight after collapsing must
+    // still open the map. This is the regression that made the stow a trap.
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
+
+    // Expanding brings the sections back.
+    await toggle.click()
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    await expect(btn(page, 'cityWalkCamReset')).toBeVisible()
+  })
+
+  test('high contrast keeps the whole panel on screen at 1600x900 (CW-38, CW-Q47)', async ({
+    page,
+  }) => {
+    // High contrast grows every control - 44px targets, thicker borders,
+    // wider gaps - and before CW-38 the panel's content outgrew its box by
+    // 178px at the directive's screen size: Reset View sat below the fold
+    // behind a scrollbar the owner never found. Smaller windows may still
+    // scroll the body (Firefox tab-stops it by design, and that is its
+    // scroll route); at 1600x900 the whole panel must be on screen.
+    await page.setViewportSize({ width: 1600, height: 900 })
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-high-contrast', 'true')
+    })
+    await launchGame(page)
+    await enterCity(page)
+
+    const overflow = await page.evaluate(() => {
+      const body = document.getElementById('cityWalkCameraBody')
+      return body.scrollHeight - body.clientHeight
+    })
+    expect(overflow).toBeLessThanOrEqual(1)
+
+    const reset = await btn(page, 'cityWalkCamReset').boundingBox()
+    expect(reset.y + reset.height).toBeLessThanOrEqual(900)
+  })
+
   test('no panel control is smaller than the touch target', async ({
     page,
   }) => {

@@ -388,10 +388,10 @@ test.describe('ASCII City Walk — map navigation and walking speed (CW-9)', () 
       'zoom 1.0x'
     )
 
-    // Held Equal zooms in exponentially.
-    await page.keyboard.down('Equal')
+    // Held PageUp zooms in exponentially (CW-Q41 moved map zoom here).
+    await page.keyboard.down('PageUp')
     await page.waitForTimeout(700)
-    await page.keyboard.up('Equal')
+    await page.keyboard.up('PageUp')
     const hud = await page.textContent('#cityWalkHudStatus')
     const zoom = parseFloat(/zoom (\d+\.\d)x/.exec(hud)?.[1] ?? '0')
     expect(zoom).toBeGreaterThan(1.2)
@@ -421,6 +421,84 @@ test.describe('ASCII City Walk — map navigation and walking speed (CW-9)', () 
     await expect(page.locator('#cityWalkHudStatus')).toContainText(
       'street view'
     )
+  })
+
+  test('Minus sizes characters in BOTH views; PageUp and PageDown zoom the map (CW-38, CW-Q41)', async ({
+    page,
+  }) => {
+    // The owner pressed Minus over the map to shrink the characters and got
+    // a zoomed-out map instead - the same key meant two things depending on
+    // a mode not shown anywhere near the key. CW-Q41 separates them.
+    await launchGame(page)
+    await enterCity(page)
+
+    const scaleOf = () =>
+      page.evaluate(() => window.__cityWalkGame.altView.getFontScale())
+    const zoomOf = () =>
+      page.evaluate(() => window.__cityWalkGame.mapCam.zoom)
+
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
+
+    // Minus over the map changes SIZE now, and leaves the zoom alone.
+    const zoomBefore = await zoomOf()
+    await page.keyboard.press('Minus')
+    await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
+      /Character size 40 percent/
+    )
+    expect(await scaleOf()).toBeCloseTo(0.4, 5)
+    expect(await zoomOf()).toBeCloseTo(zoomBefore, 5)
+
+    // Equals brings it back, still without touching the zoom.
+    await page.keyboard.press('Equal')
+    await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
+      /Character size 50 percent/
+    )
+    expect(await zoomOf()).toBeCloseTo(zoomBefore, 5)
+
+    // PageDown is a HELD zoom-out key, and the keyup releases the hold:
+    // after release the zoom stays where the key left it.
+    await page.keyboard.down('PageDown')
+    await expect.poll(zoomOf).toBeLessThan(zoomBefore - 0.05)
+    await page.keyboard.up('PageDown')
+    const zoomReleased = await zoomOf()
+    // Let real animation frames pass, not wall-clock: a loaded machine can
+    // render nothing in a fixed wait and vacuously "hold" the zoom.
+    await page.evaluate(
+      () =>
+        new Promise((resolve) => {
+          let n = 0
+          const tick = () => (++n >= 10 ? resolve() : requestAnimationFrame(tick))
+          requestAnimationFrame(tick)
+        })
+    )
+    expect(await zoomOf()).toBeCloseTo(zoomReleased, 5)
+
+    // PageUp zooms back in.
+    await page.keyboard.down('PageUp')
+    await expect.poll(zoomOf).toBeGreaterThan(zoomReleased + 0.05)
+    await page.keyboard.up('PageUp')
+
+    // The toolbar teaches the new keys.
+    await expect(page.locator('#cityWalkZoomInBtn')).toHaveAttribute(
+      'title',
+      'Keyboard: Page Up'
+    )
+    await expect(page.locator('#cityWalkZoomOutBtn')).toHaveAttribute(
+      'title',
+      'Keyboard: Page Down'
+    )
+
+    // And the street keeps the behaviour it always had.
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'street view'
+    )
+    await page.keyboard.press('Minus')
+    await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
+      /Character size 40 percent/
+    )
+    expect(await scaleOf()).toBeCloseTo(0.4, 5)
   })
 
   test('walking speed adjusts, announces, and persists across sessions', async ({
@@ -532,6 +610,29 @@ test.describe('ASCII City Walk — the view cuts, it does not cross-fade (D-81)'
 
     for (const into of ['map', 'street']) {
       await page.keyboard.press('m')
+      // Wait for the converter to PAINT the new view before the 'immediate'
+      // capture. Under session load the screenshot repeatedly landed before
+      // the first new-view frame existed, and the diff then measured
+      // map-vs-street (18.27 levels, three false reds in one day) instead
+      // of any ghost. The ghost this test guards against lives IN the
+      // painted frames - the persistence canvas blends over several, so the
+      // first painted frames still carry it: re-proven by reinstating the
+      // trap (fade 0.45, clearPersistence commented out), which reads a
+      // MEASURED 0.87 carried levels against the 0.5 bar with this wait in
+      // place.
+      await page.evaluate(
+        () =>
+          new Promise((resolve) => {
+            const g = window.__cityWalkGame
+            const from = g.altView.getConvertStats?.()?.samples ?? 0
+            const tick = () => {
+              const now = g.altView.getConvertStats?.()?.samples ?? 0
+              if (now >= from + 2) resolve()
+              else requestAnimationFrame(tick)
+            }
+            requestAnimationFrame(tick)
+          })
+      )
       const immediate = await shot()
       await page.waitForTimeout(1400)
       const settled = await shot()

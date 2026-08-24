@@ -31,7 +31,6 @@ import {
   OrthographicCamera,
   WebGLRenderer,
   BoxGeometry,
-  RingGeometry,
   Mesh,
   MeshBasicMaterial,
 } from 'three';
@@ -139,10 +138,11 @@ const THUNDER_GAP_MS = 30000;
 // the HUD draws (CW-27): inside the street, or beside it. Using the same two
 // words here means the sentence a screen-reader user hears and the line a
 // sighted user reads say the same thing about the same spot.
-const TELEPORT_PICK_MESSAGE = (street, on) =>
-  `Teleport target set ${on ? 'on' : 'near'} ${street}. Press J to go.`;
-const TELEPORT_PICK_OPEN_MESSAGE =
-  'Teleport target set on open ground. Press J to go.';
+// CW-40 (CW-Q40): the two-step pick-then-J flow retired, and the pick
+// announcements with it. The button arms PIN MODE instead; a click commits.
+const TELEPORT_MODE_ON_MESSAGE =
+  'Teleport mode on. Click the map to travel there.';
+const TELEPORT_MODE_OFF_MESSAGE = 'Teleport mode off.';
 const TELEPORT_LANDED_MESSAGE = (street, on, compass) =>
   `Teleported ${on ? 'to' : 'near'} ${street}, facing ${compass}.`;
 const TELEPORT_LANDED_OPEN_MESSAGE = (compass) =>
@@ -213,6 +213,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     shiftHeld: false,
     fastWalk: false,
     drag: null,
+    // CW-40 (CW-Q40): pin mode. Armed by the Teleport button; a map click
+    // commits while armed. Never persisted - a mode you cannot see the
+    // arming of should never outlive the map it was armed on.
+    teleportArmed: false,
     themeUnsub: null,
     refs: {},
   };
@@ -341,7 +345,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     colourBtn.type = 'button';
     colourBtn.className = 'btn btn-secondary city-walk-btn';
     colourBtn.id = 'cityWalkColourBtn';
-    colourBtn.textContent = 'Colour';
+    // CW-Q38: US English on every player-visible surface ('Color'), while
+    // identifiers and the persisted key keep their spelling - renaming a
+    // stored key strands every saved choice (the UF-14 lesson).
+    colourBtn.textContent = 'Color';
     colourBtn.addEventListener('click', flipColour);
     headerActions.appendChild(colourBtn);
 
@@ -497,19 +504,19 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       'Shift (hold): move faster',
       'Left and Right Bracket: walking speed down or up',
       'M: switch between street view and map view',
-      'On the map: arrow keys pan, Minus and Equals zoom, Home returns to you',
-      'On the map: click a street, then J to drop yourself there (J alone drops you at the middle of the map)',
+      'On the map: arrow keys pan, Page Up and Page Down zoom, Home returns to you',
+      'On the map: press Teleport, then click where you want to go; J drops you at the middle of the map',
       'L and Shift+L: cycle landmarks on the map',
       'X: say where you are',
-      `Minus and Equals in street view: smaller or larger characters (${Math.round(
+      `Minus and Equals: smaller or larger characters (${Math.round(
         CHAR_SCALE_MIN * 100
       )}% to 100%)`,
       'C: high contrast on or off',
       'T: change the theme',
-      'O: colour on or off (off is a single-colour retro screen)',
+      'O: color on or off (off is a single-color retro screen)',
       'G: rain off, light, heavy (stays off if you use reduced motion)',
       'P: save a picture of what you can see',
-      'High contrast, theme and colour: the three buttons at the top of the screen',
+      'High contrast, theme and color: the three buttons at the top of the screen',
       // CW-35: the toolbar no longer holds all of them. Walking, turning,
       // looking and the standard views moved into the Camera panel, and a
       // help panel that still said "the toolbar" would send a mouse user
@@ -603,8 +610,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       colourBtn.setAttribute(
         'aria-label',
         on
-          ? 'Colour on. Press for a single-colour screen.'
-          : 'Colour off. Press to show the city in colour.'
+          ? 'Color on. Press for a single-color screen.'
+          : 'Color off. Press to show the city in color.'
       );
     }
 
@@ -668,8 +675,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     }
     announceInLayer(
       next
-        ? 'Colour on. The city is drawn in the retro palette.'
-        : 'Colour off. The city is drawn in a single phosphor.'
+        ? 'Color on. The city is drawn in the retro palette.'
+        : 'Color off. The city is drawn in a single phosphor.'
     );
   }
 
@@ -678,10 +685,9 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
    * already reads out of state.keys, so a held button reaches street mode
    * and map mode exactly the way its key does; `press` is the same discrete
    * handler the key calls. `views` hides a button in the mode where its key
-   * does nothing. The character-size pair is the one deliberate superset —
-   * in map view its keys are taken by zoom, but the map is drawn in the
-   * same characters and their size is a comfort setting, so it keeps both
-   * buttons.
+   * does nothing. Since CW-Q41 the character-size keys mean character size
+   * in BOTH views (map zoom moved to PageUp/PageDown), so the size pair is
+   * an ordinary `both` group like Speed.
    */
   // CW-35/CW-Q32: the Camera and Move groups have RETIRED from this toolbar.
   // Their jobs moved to the Camera panel, which is the panel Forge users
@@ -781,25 +787,27 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
         {
           id: 'cityWalkZoomOutBtn',
           label: 'Zoom out',
-          keys: 'Minus',
+          keys: 'Page Down',
           hold: 'zoomOut',
           views: 'map',
         },
         {
           id: 'cityWalkZoomInBtn',
           label: 'Zoom in',
-          keys: 'Equals',
+          keys: 'Page Up',
           hold: 'zoomIn',
           views: 'map',
         },
-        // CW-36. "Teleport here" and not "Teleport": with nothing picked it
-        // goes to the middle of the map, which is what "here" names on a
-        // screen whose centre you steer with the arrow keys.
+        // CW-40 (CW-Q40): an ARMING TOGGLE now, not a commit button. Press
+        // it, the cursor becomes the ring, and a click on the map travels
+        // there. J stays the keyboard commit at the centre crosshair, which
+        // is why it is still the key this button teaches.
         {
           id: 'cityWalkTeleportBtn',
-          label: 'Teleport here',
+          label: 'Teleport',
           keys: 'J',
-          press: teleportToTarget,
+          press: toggleTeleportMode,
+          toggle: true,
           views: 'map',
         },
       ],
@@ -967,6 +975,14 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
           : 'true'
       );
     }
+
+    const teleportBtn = toolbarButtons.find(
+      (b) => b.spec.id === 'cityWalkTeleportBtn'
+    )?.btn;
+    teleportBtn?.setAttribute(
+      'aria-pressed',
+      state.teleportArmed ? 'true' : 'false'
+    );
 
     for (const { spec, btn } of toolbarButtons) {
       if (spec.views === 'both') continue;
@@ -1171,28 +1187,45 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     );
     const markerSize = Math.max(14, spanM * 0.025);
     const markerGeom = new BoxGeometry(markerSize, markerSize, 120);
-    const markerMat = new MeshBasicMaterial({ color: 0xffffff });
+    // CW-40: never occluded. Once the marker scales with zoom (see
+    // applyMapCamera) it can reach over a neighbouring building's
+    // footprint, and a taller building would clip it exactly the way the
+    // CW-36 ring was clipped at z=40. The marker is the one thing on the
+    // map that must always win.
+    const markerMat = new MeshBasicMaterial({
+      color: 0xffffff,
+      depthTest: false,
+    });
     const marker = new Mesh(markerGeom, markerMat);
+    marker.renderOrder = 999;
     marker.visible = false;
     scene.add(marker);
 
-    // CW-36: where a teleport would put you. A RING, not a second block —
-    // and the difference has to be in the FOOTPRINT, because from straight
-    // overhead a plan view is all there is; a marker distinguished by being
-    // shorter or darker would either be invisible or read as a second
-    // player. Dimming it was tried first and photographed: at 55% grey the
-    // converter picked glyphs light enough to vanish into the map.
-    // Thick band, not a hairline: the ring is drawn at roughly one metre per
-    // pixel and then read through a character grid, so an arc thinner than a
-    // glyph cell simply is not there. Photographed at 0.55/0.85 first, where
-    // the top and bottom of the ring disappeared and left two vertical bars.
-    const targetGeom = new RingGeometry(markerSize * 0.5, markerSize * 1.1, 24);
-    const targetMat = new MeshBasicMaterial({ color: 0xffffff });
-    const targetMarker = new Mesh(targetGeom, targetMat);
-    // Clear of the ground so it cannot z-fight with the roadway it sits on.
-    targetMarker.position.z = 40;
-    targetMarker.visible = false;
-    scene.add(targetMarker);
+    // CW-40: a two-tone square-in-square, because a solid white block is
+    // camouflage in colour mode - the CW-Q45 palettes fill the map with
+    // white and grey buildings, and the six-teleport eyes-on tour could
+    // not find the marker among them. The inner square is EXACT black,
+    // which is the one value the converter reads as empty (CW-5), so the
+    // marker renders as a bright frame around a hole - a footprint no
+    // building has in any palette. A child of the marker, so the 1/zoom
+    // scale applies to both and the frame stays ~a glyph thick.
+    const markerInnerGeom = new BoxGeometry(
+      markerSize * 0.5,
+      markerSize * 0.5,
+      1
+    );
+    const markerInnerMat = new MeshBasicMaterial({
+      color: 0x000000,
+      depthTest: false,
+    });
+    const markerInner = new Mesh(markerInnerGeom, markerInnerMat);
+    markerInner.renderOrder = 1000;
+    markerInner.position.z = 61;
+    marker.add(markerInner);
+
+    // CW-36's pick-preview ring retired with the pick flow (CW-40): while
+    // pin mode is armed the ring is the CURSOR, and the committed landing
+    // is marked by the player marker itself - the walker is really there.
 
     // Order matters here. The collision grid is built from the buildings
     // first so the props can refuse to stand inside one; the props then hand
@@ -1233,11 +1266,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       marker,
       markerGeom,
       markerMat,
-      targetMarker,
-      targetGeom,
-      targetMat,
-      // CW-36: the picked landing, in world meters, or null for none.
-      teleportTarget: null,
+      markerInnerGeom,
+      markerInnerMat,
       collision,
       walkState,
       mapCam,
@@ -1495,8 +1525,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     game.props?.dispose();
     game.markerGeom?.dispose();
     game.markerMat?.dispose();
-    game.targetGeom?.dispose();
-    game.targetMat?.dispose();
+    game.markerInnerGeom?.dispose();
+    game.markerInnerMat?.dispose();
     game.renderer?.dispose();
     game.renderer?.domElement?.remove();
     state.game = null;
@@ -1610,13 +1640,12 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       return;
     }
 
-    // CW-36. J was the only free letter left that says anything about
-    // jumping; G, P, X, L, V, M, O, C, T and H are all spoken for, and
-    // Escape already means "close the help, or leave the game".
+    // CW-36 chose J (the only free letter that says anything about jumping);
+    // CW-40 keeps it as the one-step keyboard commit at the map's crosshair.
     if (event.code === 'KeyJ') {
       event.preventDefault();
       event.stopPropagation();
-      teleportToTarget();
+      teleportAtCrosshair();
       return;
     }
 
@@ -1628,13 +1657,23 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     ) {
       event.preventDefault();
       event.stopPropagation();
+      // CW-Q41: one key, one meaning. The owner pressed Minus over the map
+      // to shrink the characters and got a zoomed-out map instead; the
+      // overload lost. Size lives here in BOTH views, and map zoom moved
+      // to PageUp/PageDown below.
       const minus = event.code === 'Minus' || event.code === 'NumpadSubtract';
-      if (state.game.mapView) {
-        // Map mode: -/= are HELD zoom keys (see frame()).
-        holdAction(state.keyHeld, minus ? 'zoomOut' : 'zoomIn');
-      } else {
-        adjustCharacterSize(minus ? -CHAR_SCALE_STEP : CHAR_SCALE_STEP);
-      }
+      adjustCharacterSize(minus ? -CHAR_SCALE_STEP : CHAR_SCALE_STEP);
+      return;
+    }
+
+    if (
+      state.game.mapView &&
+      (event.code === 'PageUp' || event.code === 'PageDown')
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      // HELD zoom keys, exactly as -/= used to be over the map (see frame()).
+      holdAction(state.keyHeld, event.code === 'PageUp' ? 'zoomIn' : 'zoomOut');
       return;
     }
 
@@ -1670,10 +1709,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       state.shiftHeld = false;
       return;
     }
-    if (event.code === 'Minus' || event.code === 'NumpadSubtract') {
+    if (event.code === 'PageDown') {
       releaseAction(state.keyHeld, 'zoomOut');
     }
-    if (event.code === 'Equal' || event.code === 'NumpadAdd') {
+    if (event.code === 'PageUp') {
       releaseAction(state.keyHeld, 'zoomIn');
     }
     const action = KEY_ACTIONS.get(event.code);
@@ -1852,11 +1891,16 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     event.preventDefault();
 
     if (game.mapView) {
-      // CW-36: on the map a press picks a teleport target rather than
-      // starting a look-drag — there is nothing to look around at from
-      // overhead, which is why this branch used to just return.
-      const world = mapPointToWorld(event.clientX, event.clientY);
-      if (world) setTeleportTarget(world.x, world.y);
+      // CW-40 (CW-Q40): while pin mode is armed, a click on the map IS the
+      // teleport - one step, no confirmation press. Unarmed, a click does
+      // nothing here again (the pre-CW-36 behaviour): the two-step
+      // pick-then-J flow this branch used to start is retired, and a ring
+      // that no longer led anywhere would be a promise the game cannot
+      // keep.
+      if (state.teleportArmed) {
+        const world = mapPointToWorld(event.clientX, event.clientY);
+        if (world) commitTeleport(world.x, world.y);
+      }
       return;
     }
     if (state.drag) return;
@@ -2155,6 +2199,16 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     cam.position.set(fit.centerX, fit.centerY, ORTHO_CAMERA_HEIGHT_M);
     cam.lookAt(fit.centerX, fit.centerY, 0);
     cam.updateProjectionMatrix();
+
+    // CW-40: the "I'm here" marker keeps a constant GLYPH footprint across
+    // zooms. Metre-sized, it was a two-cell pip at 0.8x - findable only if
+    // you already knew where to look - and it would swallow a block at high
+    // zoom. 2.2 rather than 1.4 because the marker is a hollow frame now,
+    // and a frame's border has to stay comfortably over a glyph cell thick
+    // or the grid eats it (the CW-36 ring's death). Photographed at
+    // 0.8x/1x/2x, in colour mode too, before the factors were chosen.
+    const markerScale = Math.min(3.5, Math.max(0.6, 2.2 / game.mapCam.zoom));
+    game.marker.scale.set(markerScale, markerScale, 1);
   }
 
   function toggleMapView() {
@@ -2162,10 +2216,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     endDrag();
     game.mapView = !game.mapView;
     game.marker.visible = game.mapView;
-    // CW-36: a pick belongs to the map it was made on. Leaving the map
-    // discards it, so re-opening never offers a stale target from minutes
-    // ago as though it were still chosen.
-    if (!game.mapView) clearTeleportTarget();
+    // CW-40: pin mode belongs to the map it was armed on. Leaving the map
+    // disarms it - silently, because this function's own announcement is
+    // the sentence this turn speaks.
+    if (!game.mapView) setTeleportArmed(false, false);
     game.city3d.setMapView(game.mapView);
     game.props.setMapView(game.mapView);
     // CW-20: the weather belongs to the street. Seen from overhead the drops
@@ -2209,7 +2263,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     updateHud();
     announceInLayer(
       game.mapView
-        ? 'Map view, seen from above. Arrow keys pan, minus and equals zoom, Home returns to you. The toolbar now shows the map buttons.'
+        ? 'Map view, seen from above. Arrow keys pan, Page Up and Page Down zoom, Home returns to you. The toolbar now shows the map buttons.'
         : 'Street view. The toolbar now shows the walking buttons.'
     );
   }
@@ -2245,88 +2299,55 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   }
 
   /**
-   * What the HUD would say about a world point: the nearest named street and
-   * whether you are standing in it or beside it. Same thresholds updateStreet
-   * uses, minus its hysteresis - which exists to stop the HUD flapping at a
-   * junction as you walk, and has nothing to say about a point on a map.
+   * CW-40 (CW-Q40): the Teleport button arms PIN MODE. This supersedes
+   * CW-36's pick-then-J: while armed, a left click on the map IS the
+   * teleport, in one step, and the game stays on the map - entering the
+   * street is the player's separate choice. A second press disarms, and
+   * leaving the map disarms silently (the view change's own sentence is
+   * the one announcement that turn makes).
    */
-  function streetAt(x, y) {
-    const hit = state.game?.streetIndex?.query(x, y, STREET_NEAR_M)[0];
-    return hit ? { name: hit.name, on: hit.distM <= STREET_ON_M } : null;
-  }
-
-  /**
-   * Mark where a teleport would put you.
-   *
-   * The marker goes on the LANDING, not on the pixel that was clicked, and
-   * the announcement names the landing too - so what you are told before you
-   * commit is what you actually get. Naming the raw click instead was tried
-   * and photographed: it said "open ground" and then landed the player on
-   * University Street, because the click was 25 m from a road the snap could
-   * still reach.
-   *
-   * Picking is separate from going so a screen-reader user hears the choice
-   * before taking it, and a mis-click costs nothing but another click.
-   */
-  function setTeleportTarget(x, y) {
+  function toggleTeleportMode() {
     const game = state.game;
     if (!game?.mapView) return;
-
-    const landing = findLandingNear(game.model, game.collision, x, y);
-    if (!landing) {
-      clearTeleportTarget();
-      game.altView.invalidate();
-      announceInLayer(TELEPORT_REFUSED_MESSAGE);
-      return;
-    }
-
-    game.teleportTarget = landing;
-    game.targetMarker.position.set(
-      landing.x,
-      landing.y,
-      game.targetMarker.position.z
-    );
-    game.targetMarker.visible = true;
-    game.altView.invalidate();
-
-    const street = landing.onRoad ? streetAt(landing.x, landing.y) : null;
-    announceInLayer(
-      street
-        ? TELEPORT_PICK_MESSAGE(street.name, street.on)
-        : TELEPORT_PICK_OPEN_MESSAGE
-    );
+    setTeleportArmed(!state.teleportArmed, true);
   }
 
-  /** Forget the pick — on leaving the map, and on landing. */
-  function clearTeleportTarget() {
-    const game = state.game;
-    if (!game) return;
-    game.teleportTarget = null;
-    if (game.targetMarker) game.targetMarker.visible = false;
+  function setTeleportArmed(armed, announce) {
+    if (state.teleportArmed === armed) return;
+    state.teleportArmed = armed;
+    // The ring the pick flow used to draw in the world is the CURSOR now.
+    state.refs.viewport?.classList.toggle('city-walk-teleport-armed', armed);
+    syncToolbarView();
+    if (announce) {
+      announceInLayer(
+        armed ? TELEPORT_MODE_ON_MESSAGE : TELEPORT_MODE_OFF_MESSAGE
+      );
+    }
   }
 
   /**
-   * Go. Uses the picked spot, or the middle of the map when nothing has been
-   * picked — which is the whole keyboard route: the arrows already pan the
-   * map and minus/equals already zoom it, so steering the middle of the
-   * screen onto a street needs no new keys at all.
+   * J: commit at the map's centre crosshair, armed or not. The keyboard
+   * route needs no arming, because the arrows already steer the middle of
+   * the screen onto a street and PageUp/PageDown already zoom it (CW-Q41),
+   * so travelling from the keyboard was always one step.
    */
-  function teleportToTarget() {
+  function teleportAtCrosshair() {
+    const game = state.game;
+    if (!game || !game.mapView) return;
+    commitTeleport(game.mapCam.centerX, game.mapCam.centerY);
+  }
+
+  /**
+   * Travel. The landing comes from the same snap-to-a-segment search the
+   * pick flow proved (never a vertex - OSM draws a straight street as two
+   * endpoints), so what the announcement names is where you stand. The
+   * game STAYS in map view (CW-Q40).
+   */
+  function commitTeleport(x, y) {
     const game = state.game;
     if (!game || !game.mapView) return;
 
-    // A pick has already been resolved to a landing, so it is used as it is:
-    // searching again would be a second chance to disagree with what the
-    // player was told they had chosen. Only the keyboard route, which picks
-    // nothing and means "the middle of the map", searches here.
-    const landing =
-      game.teleportTarget ??
-      findLandingNear(
-        game.model,
-        game.collision,
-        game.mapCam.centerX,
-        game.mapCam.centerY
-      );
+    const landing = findLandingNear(game.model, game.collision, x, y);
     if (!landing) {
       announceInLayer(TELEPORT_REFUSED_MESSAGE);
       return;
@@ -2337,7 +2358,6 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     if (landing.headingRad !== null) {
       game.walkState.headingRad = normalizeHeading(landing.headingRad);
     }
-    clearTeleportTarget();
 
     // The street name is sticky on purpose (updateStreet keeps the street you
     // are already on when two are near-equidistant, so the HUD does not flap
@@ -2356,13 +2376,14 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // is only re-posed inside a movement step, so a teleport that only moved
     // walkState would leave the first-person camera standing where the player
     // used to be — and the street view would photograph the spawn. Re-pose it
-    // here, explicitly, before the view changes.
+    // here, explicitly, even though the view is not changing now: M can come
+    // at any moment after, and the street it opens must show the landing.
     applyFirstPersonCamera();
 
-    // toggleMapView announces the view change itself, so this has to be the
-    // one announcement the action makes; ordering it after the toggle means
-    // the teleport's sentence is the one left in the live region.
-    toggleMapView();
+    // The aerial "I'm here" marker is only re-posed on map entry, so the
+    // move has to place it - and the map camera deliberately stays where
+    // the player steered it: the click was made on a visible spot.
+    game.marker.position.set(game.walkState.x, game.walkState.y, 0);
     game.altView.invalidate();
     updateHud();
 

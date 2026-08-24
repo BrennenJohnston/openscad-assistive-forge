@@ -1981,8 +1981,12 @@ body[data-app-surface='welcome'] #uiModeToggle {
     border-bottom: none;
   }
 
-  /* Hide all actions except collapse button when collapsed */
-  .camera-panel.collapsed .camera-header-actions > :not(#cameraPanelToggle) {
+  /* Hide all actions except the collapse button when collapsed. By class,
+   * not id: the game's Camera panel (CW-35) shares this markup with its own
+   * toggle id, and matching the Forge's #cameraPanelToggle here hid the
+   * game's only reopen control - and dropped focus to <body>, outside the
+   * game layer's key listener, killing every game key (CW-38). */
+  .camera-panel.collapsed .camera-header-actions > :not(.btn-collapse-panel) {
     display: none;
   }
 

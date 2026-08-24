@@ -10,16 +10,21 @@ import {
 useCityWalkFixtures()
 
 /**
- * ASCII City Walk - dropping yourself onto a street from the map (CW-36).
+ * ASCII City Walk - dropping yourself onto a street from the map. CW-36
+ * built the mechanics (the segment snap, the trap guard, the naming);
+ * CW-40 (CW-Q40) replaced its two-step pick-then-J gesture with the
+ * owner's pin flow: the Teleport button ARMS, a click on the map travels
+ * there in one step, and the game stays on the map.
  *
  * Its own file rather than an addition to ascii-city-walk.spec.js: that file
  * was already a quarter of the browser lane before D-72 split it, and the
  * cost packer places a new spec automatically (scripts/e2e-shard.mjs).
  */
 
-test.describe('ASCII City Walk — teleport (CW-36)', () => {
+test.describe('ASCII City Walk — teleport (CW-36, CW-40)', () => {
   const announcer = (page) => page.locator('#cityWalkAnnouncer')
   const hud = (page) => page.locator('#cityWalkHudStatus')
+  const teleportBtn = (page) => page.locator('#cityWalkTeleportBtn')
 
   const walk = (page) =>
     page.evaluate(() => {
@@ -30,7 +35,6 @@ test.describe('ASCII City Walk — teleport (CW-36)', () => {
         headingRad: g.walkState.headingRad,
         mapView: g.mapView,
         street: g.streetName,
-        target: g.teleportTarget,
       }
     })
 
@@ -64,56 +68,69 @@ test.describe('ASCII City Walk — teleport (CW-36)', () => {
     await page.keyboard.press('KeyM')
     await expect(hud(page)).toContainText('map view')
     // The map needs a frame on screen before a click means anything: the
-    // pick is read out of the camera frustum, which applyMapCamera writes.
+    // landing is read out of the camera frustum, which applyMapCamera writes.
     await page.waitForTimeout(400)
   }
 
-  /** Click a fraction across the map viewport; returns the world point. */
+  /** Arm pin mode from the toolbar and wait for the state to say so. */
+  const arm = async (page) => {
+    await teleportBtn(page).click()
+    await expect(teleportBtn(page)).toHaveAttribute('aria-pressed', 'true')
+  }
+
+  /** Click a fraction across the map viewport (armed: this commits). */
   async function clickMap(page, fx, fy) {
     const box = await page.locator('#cityWalkViewport').boundingBox()
     await page.mouse.click(box.x + box.width * fx, box.y + box.height * fy)
-    await expect(announcer(page)).toContainText(/Teleport target set/)
-    return (await walk(page)).target
   }
 
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y)
 
-  test('a click picks a spot, and J drops you on it', async ({ page }) => {
+  test('armed, a click travels there in one step, and the map stays (CW-40)', async ({
+    page,
+  }) => {
     await launchGame(page)
     await enterCity(page)
     const start = await walk(page)
 
     await openMap(page)
-    const picked = await clickMap(page, 0.42, 0.34)
-    expect(picked).not.toBeNull()
+    await arm(page)
+    await expect(announcer(page)).toHaveText(/Teleport mode on/)
 
-    await page.keyboard.press('KeyJ')
-    await expect(hud(page)).toContainText('street view')
+    await clickMap(page, 0.42, 0.34)
+    await expect(announcer(page)).toContainText(/Teleported /)
 
     const landed = await walk(page)
-    // Landed near the pick — the snap radius plus the spiral's own reach is
-    // the honest tolerance, and a landing further than that means the pick
-    // was not what moved the player.
-    expect(dist(landed, picked)).toBeLessThan(30)
-    // …and somewhere else entirely from where the session started.
+    // One click, one journey — and the game is still the map, because
+    // entering the street is the player's separate choice (CW-Q40).
+    expect(landed.mapView).toBe(true)
     expect(dist(landed, start)).toBeGreaterThan(50)
 
-    // The HUD names where you are, and the pick is spent.
-    expect(landed.street).toBeTruthy()
-    await expect(hud(page)).toContainText(`on ${landed.street}`)
-    expect(landed.target).toBeNull()
-    await expect(announcer(page)).toContainText(
-      new RegExp(`Teleported to ${landed.street.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}, facing \\w+\\.`)
-    )
+    // The aerial marker stands on the walker.
+    const marker = await page.evaluate(() => {
+      const m = window.__cityWalkGame.marker
+      return { x: m.position.x, y: m.position.y }
+    })
+    expect(dist(marker, landed)).toBeLessThan(0.01)
+
+    // Arming survives the hop: several journeys need no re-press.
+    await expect(teleportBtn(page)).toHaveAttribute('aria-pressed', 'true')
+
+    // The street view, chosen separately, opens on the landing street.
+    await page.keyboard.press('KeyM')
+    await expect(hud(page)).toContainText('street view')
+    expect((await walk(page)).street).toBeTruthy()
   })
 
   test('the landing is never inside a building', async ({ page }) => {
     await launchGame(page)
     await enterCity(page)
 
-    // Five picks spread across the map, including corners that are mostly
-    // rooftop. Every one of them has to leave the player somewhere they
-    // could have walked to.
+    // Five committed clicks spread across the map, including corners that
+    // are mostly rooftop. Every one has to leave the player somewhere they
+    // could have walked to. The map never closes: pin mode stays armed.
+    await openMap(page)
+    await arm(page)
     const picks = [
       [0.3, 0.3],
       [0.5, 0.45],
@@ -122,13 +139,12 @@ test.describe('ASCII City Walk — teleport (CW-36)', () => {
       [0.6, 0.32],
     ]
     for (const [fx, fy] of picks) {
-      await openMap(page)
       await clickMap(page, fx, fy)
-      await page.keyboard.press('KeyJ')
-      await expect(hud(page)).toContainText('street view')
-      expect(await blocked(page), `pick ${fx},${fy} landed inside something`).toBe(
-        false
-      )
+      await expect(announcer(page)).toContainText(/Teleported |Nowhere to land/)
+      expect(
+        await blocked(page),
+        `pick ${fx},${fy} landed inside something`
+      ).toBe(false)
     }
   })
 
@@ -138,9 +154,9 @@ test.describe('ASCII City Walk — teleport (CW-36)', () => {
     const start = await walk(page)
 
     await openMap(page)
-    // No click anywhere: pan with the arrows the map already had, then J,
-    // which lands on the middle of the screen. That is the whole keyboard
-    // route, and it needs no key this release did not add.
+    // No click and no arming: pan with the arrows the map already had, then
+    // J, which lands on the middle of the screen. That is the whole keyboard
+    // route, and it needs no key and no mode.
     await page.keyboard.down('ArrowRight')
     await page.waitForTimeout(900)
     await page.keyboard.up('ArrowRight')
@@ -152,30 +168,52 @@ test.describe('ASCII City Walk — teleport (CW-36)', () => {
     })
 
     await page.keyboard.press('KeyJ')
-    await expect(hud(page)).toContainText('street view')
+    await expect(announcer(page)).toContainText(/Teleported /)
 
     const landed = await walk(page)
-    expect(landed.target).toBeNull()
+    // J stays on the map too (CW-Q40): both routes end the same way.
+    expect(landed.mapView).toBe(true)
     expect(dist(landed, center)).toBeLessThan(30)
     expect(dist(landed, start)).toBeGreaterThan(50)
-    await expect(announcer(page)).toContainText(/Teleported to /)
   })
 
-  test('the toolbar button does what the key does', async ({ page }) => {
+  test('the button arms, disarms, and neither mode outlives the map (CW-40)', async ({
+    page,
+  }) => {
     await launchGame(page)
     await enterCity(page)
     const start = await walk(page)
 
     await openMap(page)
-    await expect(page.locator('#cityWalkTeleportBtn')).toBeVisible()
-    await clickMap(page, 0.45, 0.55)
-    await page.locator('#cityWalkTeleportBtn').click()
+    await expect(teleportBtn(page)).toBeVisible()
+    await expect(teleportBtn(page)).toHaveAttribute('aria-pressed', 'false')
 
+    // A touch target, not just a button (02-accessibility rule 4).
+    const box = await teleportBtn(page).boundingBox()
+    expect(box.height).toBeGreaterThanOrEqual(43.5)
+    expect(box.width).toBeGreaterThanOrEqual(43.5)
+
+    // Second press disarms, and says so.
+    await arm(page)
+    await teleportBtn(page).click()
+    await expect(teleportBtn(page)).toHaveAttribute('aria-pressed', 'false')
+    await expect(announcer(page)).toHaveText(/Teleport mode off/)
+
+    // Unarmed, a click on the map commits nothing and picks nothing — the
+    // two-step flow is retired, so the click simply is not a teleport.
+    await clickMap(page, 0.42, 0.34)
+    await page.waitForTimeout(400)
+    expect(dist(await walk(page), start)).toBeLessThan(0.01)
+
+    // Arm, then leave the map: the mode dies with the view it belongs to,
+    // silently — the view change's sentence is the announcement.
+    await arm(page)
+    await page.keyboard.press('KeyM')
     await expect(hud(page)).toContainText('street view')
-    expect(dist(await walk(page), start)).toBeGreaterThan(50)
-
     // It belongs to the map, and leaves with it.
-    await expect(page.locator('#cityWalkTeleportBtn')).toBeHidden()
+    await expect(teleportBtn(page)).toBeHidden()
+    await openMap(page)
+    await expect(teleportBtn(page)).toHaveAttribute('aria-pressed', 'false')
   })
 
   test('THE TRAP: the street view shows the landing, not the spawn', async ({
@@ -192,11 +230,16 @@ test.describe('ASCII City Walk — teleport (CW-36)', () => {
     const before = await camera(page)
 
     // The control, measured in this run rather than assumed: two captures of
-    // the SAME place, a second apart, with nothing moved. It is never zero -
-    // the phosphor trail carries the previous frame and the traffic lights
-    // tick - and CW-30 nearly filed a false parity alarm for want of exactly
-    // this comparison. Measured here at ~0.024 against a teleport's ~0.10 to
-    // ~0.14, so the picture has to change by several times the noise floor.
+    // the SAME place, a second apart, with nothing moved. In the trail era it
+    // measured ~0.024 (the composite fed each frame a fading copy of the
+    // last, so same-code frames never quite settled) and CW-30 nearly filed
+    // a false parity alarm for want of exactly this comparison. Since CW-39
+    // retired the trail, standing-still frames are deterministic - re-derived
+    // 2026-08-24: 0.0000 across five 1s samples, trail off AND on (standing
+    // still there is no motion to smear) - so the 0.05 epsilon below carries
+    // the whole threshold against a teleport's ~0.10 to ~0.14. The control
+    // stays measured anyway: if the picture ever starts moving on its own
+    // again, the 3x multiplier re-engages without anyone editing this test.
     const control = signatureDistance(
       await inkSignature(page),
       await settledSignature(page)
@@ -204,8 +247,13 @@ test.describe('ASCII City Walk — teleport (CW-36)', () => {
     const beforeInk = await inkSignature(page)
 
     await openMap(page)
+    await arm(page)
     await clickMap(page, 0.42, 0.34)
-    await page.keyboard.press('KeyJ')
+    await expect(announcer(page)).toContainText(/Teleported /)
+    // CW-40: the commit itself stays on the map; the street view is the
+    // player's next, separate press - which is exactly when a camera that
+    // was never re-posed would photograph the spawn.
+    await page.keyboard.press('KeyM')
     await expect(hud(page)).toContainText('street view')
 
     const landed = await walk(page)
@@ -230,7 +278,7 @@ test.describe('ASCII City Walk — teleport (CW-36)', () => {
     await launchGame(page)
     await enterCity(page)
     await openMap(page)
-    await clickMap(page, 0.45, 0.4)
+    await arm(page)
 
     // Count what is WRITTEN into the live region, not how many times the
     // node is touched: an announcer that clears itself and rewrites the same
@@ -246,55 +294,40 @@ test.describe('ASCII City Walk — teleport (CW-36)', () => {
       }).observe(node, { childList: true, characterData: true, subtree: true })
     })
 
-    await page.keyboard.press('KeyJ')
-    await expect(hud(page)).toContainText('street view')
+    await clickMap(page, 0.45, 0.4)
+    await expect(announcer(page)).toContainText(/Teleported /)
     await page.waitForTimeout(600)
 
     const spoken = await page.evaluate(() => window.__cwSpoken)
-    // Exactly one sentence about the teleport. The view-change sentence
-    // toggleMapView would otherwise leave behind is the thing this catches.
-    const teleportLines = spoken.filter((s) => s.startsWith('Teleported to'))
+    // Exactly one sentence about the journey, and it is the one the live
+    // region is left holding.
+    const teleportLines = spoken.filter((s) => s.startsWith('Teleported '))
     expect(teleportLines).toHaveLength(1)
     expect(spoken.at(-1)).toBe(teleportLines[0])
   })
 
-  test('a pick does not outlive the map it was made on', async ({ page }) => {
-    await launchGame(page)
-    await enterCity(page)
-
-    await openMap(page)
-    await clickMap(page, 0.45, 0.45)
-    expect((await walk(page)).target).not.toBeNull()
-
-    // Leave the map without going anywhere.
-    await page.keyboard.press('KeyM')
-    await expect(hud(page)).toContainText('street view')
-    expect((await walk(page)).target).toBeNull()
-
-    // Re-opening offers no stale target: J now uses the map centre, which
-    // follow mode has put back on the player, so nothing moves far.
-    const before = await walk(page)
-    await openMap(page)
-    expect((await walk(page)).target).toBeNull()
-    await page.keyboard.press('KeyJ')
-    await expect(hud(page)).toContainText('street view')
-    expect(dist(await walk(page), before)).toBeLessThan(30)
-  })
-
-  test('axe: the map view with the teleport button has no violations', async ({
+  test('axe: the map view with the teleport button has no violations, armed or not', async ({
     page,
   }) => {
     await launchGame(page)
     await enterCity(page)
     await openMap(page)
-    await clickMap(page, 0.45, 0.45)
-    await page.locator('#cityWalkTeleportBtn').hover()
+    await teleportBtn(page).hover()
 
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
       .include('#cityWalkLayer')
       .analyze()
     expectOnlyAllowedViolations(results)
+
+    // Armed changes the cursor and the pressed state; neither may cost a
+    // violation.
+    await arm(page)
+    const armedResults = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .include('#cityWalkLayer')
+      .analyze()
+    expectOnlyAllowedViolations(armedResults)
   })
 })
 
@@ -302,10 +335,12 @@ test.describe('ASCII City Walk — teleport (CW-36)', () => {
  * A coarse brightness fingerprint of the ASCII picture: mean luminance over
  * an 8x8 grid of the rendered canvas.
  *
- * Deliberately not a pixel diff. The ASCII surface is a phosphor buffer that
- * carries the previous frame, so exact comparison is noisy by construction;
- * an 8x8 average of a whole cityscape is not, and "is this a different place"
- * is all this needs to answer.
+ * Deliberately not a pixel diff. When this guard was written the ASCII
+ * surface was a phosphor buffer that carried the previous frame, so exact
+ * comparison was noisy by construction. CW-39 retired the trail and the
+ * surface is deterministic now, but the coarse signature stays: "is this a
+ * different place" is all this needs to answer, and an 8x8 average keeps
+ * answering it whether or not some future effect makes pixels restless.
  */
 async function inkSignature(page) {
   return page.evaluate(() => {

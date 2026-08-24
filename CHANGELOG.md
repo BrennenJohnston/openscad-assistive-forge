@@ -21,6 +21,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Teleporting is drop-a-pin now** (CW-40) - press **Teleport** on the map toolbar and the cursor
+  becomes a ring; click anywhere on the map and you are there, in one step - the "I'm here" marker
+  moves to the spot, the game says which street you landed on, and you stay on the map so you can
+  keep hopping without re-arming. Enter the street whenever you choose; it opens exactly where you
+  landed. Pressing the button again turns the mode off, and leaving the map turns it off by itself.
+  From the keyboard nothing got harder: the arrows still steer the map and **J** still drops you at
+  the middle of the screen, with no mode to arm. The old two-step flow - click to pick, then press J
+  to go - is gone, along with its "Press J to go" prompt. The marker itself was redrawn as a bright
+  square frame around a dark centre that stays the same size at every zoom level: the old solid
+  block shrank to a dot zoomed out, and in color mode it vanished entirely among white buildings
+
+- **The phosphor trail is retired** (CW-39) - moving through the city used to leave a fading
+  double-exposure behind every tree, pole and sign, the way a slow CRT smeared when it scrolled. The
+  owner found it distracting, and it was expensive: measured side by side in one session, drawing
+  without it is 19 to 32 percent faster per frame on a throttled machine, which on this hardware is
+  the difference between about 26 and about 40 frames a second standing in heavy rain at the
+  smallest character size. The night city itself is untouched - the lit windows, the bright
+  storefronts and the dark ground all read exactly as before; only the smear is gone. The main
+  app's Alt View keeps its own afterglow slider exactly as it was
+
+- **The Camera panel speaks the game's language** (CW-38) - its two direction pads were titled
+  "Rotate View" and "Pan View", the 3D preview's camera words. In the street they now say
+  **Look Around** and **Walk Around**, and over the map both say **Pan Map**, because over the map
+  both pads pan. In high contrast the panel also fits the screen again: every control grows in that
+  mode and the panel had quietly become taller than a 1600x900 display, leaving Reset View stranded
+  below the edge of the screen behind a scrollbar
+
+- **One key, one meaning** (CW-38) - Minus and Equals used to change character size in the street
+  but zoom the map overhead, so the same key did different things depending on where you were
+  standing. They now change character size everywhere, and the map zooms with **Page Up** and
+  **Page Down** instead - held down, exactly the way the old keys worked. The help panel, the spoken
+  map-view announcement and the toolbar tooltips all teach the new keys
+
+- **The Colour button now says Color** (CW-38) - the game speaks US English everywhere a player can
+  see, and this was the one hold-out. Only the words changed: your saved choice is kept, and
+  everything under the hood keeps its old name so nothing you stored is lost
+
 - **A phone toolbar that earns its rows** (UF-42) - with a project open on a phone, the app used to
   spend four stacked rows before you saw anything you came for: the header, a row holding four
   icons, the menu row, and the Customizer row. That is 147 pixels in the Simplified view and 187 in
@@ -83,6 +120,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   data where there is one, and from the building itself where there is not
 
 ### Fixed
+
+- **Collapsing the game's Camera panel no longer traps you** (CW-38) - the collapse arrow hid the
+  panel and then hid itself, so there was no way to bring the panel back - and worse, the vanishing
+  button silently dropped your keyboard: after collapsing, M, the arrows, every game key went dead
+  until you happened to press Tab. The reopen arrow now stays put when the panel is collapsed, keeps
+  your focus, and the keyboard keeps working the whole time
 
 - **The preview status line can actually be read on a phone** (UF-42) - the line that tells you the
   preview is ready, how big the file is and how many triangles it has was written into a corner

@@ -91,7 +91,15 @@ const VARIANTS = {
   // against it inside one session.
   'legacy-cpu-sample': { cpuSample: true },
   'legacy-all': { taps: true, contrast: true, cpuSample: true },
+  // CW-39 (CW-Q37): the game retired the phosphor trail, so 'new' now runs
+  // at persistFade 0. This variant re-enables the retired fade through the
+  // converter's own public API (not a setBenchLegacy switch) so trail-on
+  // can be A/B'd against trail-off inside one session.
+  trail: {},
 }
+
+/** What persistFade each variant runs at. */
+const VARIANT_FADE = { trail: 0.45 }
 
 const CITY_BUTTONS = {
   seattle: 'Seattle, Washington',
@@ -272,6 +280,25 @@ async function benchCity(page, cdp, city, variant, opts, runIndex) {
           `renderer reports ${applied[flag]}`
       )
     }
+  }
+
+  // CW-39: set the variant's persistFade explicitly every time - never
+  // inherit the previous variant's fade - and read it back the same way the
+  // legacy flags are read back. setPersistFade refuses under reduced motion,
+  // which would silently turn a 'trail' run into a trail-off run reported
+  // under the trail's name.
+  const wantFade = VARIANT_FADE[variant] ?? 0
+  const gotFade = await page.evaluate((fade) => {
+    const api = window.__cityWalkGame.altView
+    api.setPersistFade(fade)
+    api.invalidate()
+    return api.getPersistFade()
+  }, wantFade)
+  if (gotFade !== wantFade) {
+    throw new Error(
+      `variant "${variant}" asked for persistFade ${wantFade} but the ` +
+        `renderer reports ${gotFade}`
+    )
   }
 
   // Let the first few conversions at the new size settle before the clock

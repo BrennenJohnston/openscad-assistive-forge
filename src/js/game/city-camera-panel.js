@@ -232,10 +232,25 @@ export function buildCityCameraPanel(actions) {
     return grid;
   };
 
+  /**
+   * CW-38: the owner read "Rotate View" and "Pan View" as camera jargon,
+   * because they are - the Forge preview's words, not the game's. The titles
+   * now speak game verbs and follow the view the way the buttons under them
+   * already do. Over the map BOTH pads pan, and both say so - two identical
+   * titles is the honest description of two pads doing the same job.
+   */
+  const viewTitle = (wrap, street, map) => {
+    const h3 = wrap.querySelector('.camera-control-section-title');
+    viewAware.push((isMap) => {
+      h3.textContent = isMap ? map : street;
+    });
+  };
+
   // --- Rotate --------------------------------------------------------------
   // Street: turn the walker and tilt the gaze. Map: pan, because there is no
   // walker to turn and panning is what the arrows already do overhead.
-  const rotate = section('Rotate View');
+  const rotate = section('Look Around');
+  viewTitle(rotate, 'Look Around', 'Pan Map');
   rotate.appendChild(
     dpad('Rotation controls', [
       holdButton({
@@ -271,7 +286,8 @@ export function buildCityCameraPanel(actions) {
   body.appendChild(rotate);
 
   // --- Pan -----------------------------------------------------------------
-  const pan = section('Pan View');
+  const pan = section('Walk Around');
+  viewTitle(pan, 'Walk Around', 'Pan Map');
   pan.appendChild(
     dpad('Pan controls', [
       holdButton({
