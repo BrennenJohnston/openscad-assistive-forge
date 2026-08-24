@@ -21,6 +21,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fast machine - and the measurement rides the frames the entry was already drawing, so there is
   nothing extra to see or wait for
 
+- **Seattle reaches the Space Needle** (CW-44) - the Seattle map grew from a downtown patch to a
+  1.3 km circle centered toward the waterfront: Pike Place, the Great Wheel piers, Pioneer Square
+  and the Seattle Center are all in one walkable city now. The Space Needle stands at its true spot
+  - and because OpenStreetMap itself records its legs, shaft and saucer as building parts, the
+  ordinary building renderer draws a recognizable Needle with no special treatment; walk up and
+  look straight up. The map legend fills with real places: Space Needle, Smith Tower Observatory,
+  Underground Tour, the Great Wheel and more, each with a compass direction. The bigger download
+  (about 4.9 MB) shows and speaks its progress while it loads - on a slow connection the picker
+  says "Loading Seattle, Washington… 40%" instead of sitting silent for most of a minute
+
 - **The street furniture is real** (CW-43) - bus stops, benches, waste baskets, bicycle racks and
   fire hydrants now stand in every city, each at the exact spot OpenStreetMap records it - never
   scattered for looks, because for a blind traveler the placement is the information. A bus stop is
