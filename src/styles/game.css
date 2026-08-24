@@ -327,9 +327,13 @@
   padding: var(--space-2xs);
 }
 
-:root[data-high-contrast='true'] .city-walk-camera-panel .camera-control-section,
+:root[data-high-contrast='true']
+  .city-walk-camera-panel
+  .camera-control-section,
 :root[data-high-contrast='true'] .city-walk-camera-panel .camera-control-dpad,
-:root[data-high-contrast='true'] .city-walk-camera-panel .camera-standard-views {
+:root[data-high-contrast='true']
+  .city-walk-camera-panel
+  .camera-standard-views {
   gap: var(--space-2xs);
 }
 

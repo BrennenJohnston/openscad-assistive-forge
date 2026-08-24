@@ -1646,10 +1646,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       event.preventDefault();
       event.stopPropagation();
       // HELD zoom keys, exactly as -/= used to be over the map (see frame()).
-      holdAction(
-        state.keyHeld,
-        event.code === 'PageUp' ? 'zoomIn' : 'zoomOut'
-      );
+      holdAction(state.keyHeld, event.code === 'PageUp' ? 'zoomIn' : 'zoomOut');
       return;
     }
 
