@@ -209,7 +209,7 @@ test.describe('ASCII City Walk — the colour toggle (CW-Q16)', () => {
     await expect(colourBtn(page)).toHaveAttribute('aria-pressed', 'false')
     await expect(colourBtn(page)).toHaveAttribute(
       'aria-label',
-      'Colour off. Press to show the city in colour.'
+      'Color off. Press to show the city in color.'
     )
     expect(await paletteSize(page)).toBeNull()
 
@@ -230,7 +230,7 @@ test.describe('ASCII City Walk — the colour toggle (CW-Q16)', () => {
     await colourBtn(page).click()
     await expect(colourBtn(page)).toHaveAttribute('aria-pressed', 'true')
     await expect(announcer(page)).toHaveText(
-      'Colour on. The city is drawn in the retro palette.'
+      'Color on. The city is drawn in the retro palette.'
     )
     await expect.poll(() => paletteSize(page)).toBeGreaterThanOrEqual(4)
     // The point of CW-Q16: colour without high contrast.
@@ -243,7 +243,7 @@ test.describe('ASCII City Walk — the colour toggle (CW-Q16)', () => {
     await colourBtn(page).click()
     await expect(colourBtn(page)).toHaveAttribute('aria-pressed', 'false')
     await expect(announcer(page)).toHaveText(
-      'Colour off. The city is drawn in a single phosphor.'
+      'Color off. The city is drawn in a single phosphor.'
     )
     await expect.poll(() => paletteSize(page)).toBeNull()
     expect(await storedChoice(page)).toBe('off')
@@ -312,7 +312,7 @@ test.describe('ASCII City Walk — the colour toggle (CW-Q16)', () => {
     await expect(colourBtn(page)).toHaveAttribute('aria-pressed', 'true')
     await expect(colourBtn(page)).toHaveAttribute(
       'aria-label',
-      'Colour on. Press for a single-colour screen.'
+      'Color on. Press for a single-color screen.'
     )
     await enterCity(page)
     // Colour from the stored choice alone - high contrast never touched.
@@ -332,10 +332,10 @@ test.describe('ASCII City Walk — the colour toggle (CW-Q16)', () => {
     const help = page.locator('#cityWalkHelpPanel')
     await expect(help).toBeVisible()
     await expect(help).toContainText(
-      'O: colour on or off (off is a single-colour retro screen)'
+      'O: color on or off (off is a single-color retro screen)'
     )
     await expect(help).toContainText(
-      'High contrast, theme and colour: the three buttons at the top of the screen'
+      'High contrast, theme and color: the three buttons at the top of the screen'
     )
 
     // The header really does carry all three, in the order the help names.

@@ -341,7 +341,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     colourBtn.type = 'button';
     colourBtn.className = 'btn btn-secondary city-walk-btn';
     colourBtn.id = 'cityWalkColourBtn';
-    colourBtn.textContent = 'Colour';
+    // CW-Q38: US English on every player-visible surface ('Color'), while
+    // identifiers and the persisted key keep their spelling - renaming a
+    // stored key strands every saved choice (the UF-14 lesson).
+    colourBtn.textContent = 'Color';
     colourBtn.addEventListener('click', flipColour);
     headerActions.appendChild(colourBtn);
 
@@ -506,10 +509,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       )}% to 100%)`,
       'C: high contrast on or off',
       'T: change the theme',
-      'O: colour on or off (off is a single-colour retro screen)',
+      'O: color on or off (off is a single-color retro screen)',
       'G: rain off, light, heavy (stays off if you use reduced motion)',
       'P: save a picture of what you can see',
-      'High contrast, theme and colour: the three buttons at the top of the screen',
+      'High contrast, theme and color: the three buttons at the top of the screen',
       // CW-35: the toolbar no longer holds all of them. Walking, turning,
       // looking and the standard views moved into the Camera panel, and a
       // help panel that still said "the toolbar" would send a mouse user
@@ -603,8 +606,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       colourBtn.setAttribute(
         'aria-label',
         on
-          ? 'Colour on. Press for a single-colour screen.'
-          : 'Colour off. Press to show the city in colour.'
+          ? 'Color on. Press for a single-color screen.'
+          : 'Color off. Press to show the city in color.'
       );
     }
 
@@ -668,8 +671,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     }
     announceInLayer(
       next
-        ? 'Colour on. The city is drawn in the retro palette.'
-        : 'Colour off. The city is drawn in a single phosphor.'
+        ? 'Color on. The city is drawn in the retro palette.'
+        : 'Color off. The city is drawn in a single phosphor.'
     );
   }
 
