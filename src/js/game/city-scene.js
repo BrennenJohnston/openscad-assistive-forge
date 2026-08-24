@@ -409,11 +409,22 @@ function makeRepeatingTexture(canvas, repeatX, repeatY, offsetY = 0) {
  *   2. **No shape that reads as a character.** That is the fault this whole
  *      release exists to remove. Bars, slots and bands only.
  */
+// CW-46 facade rider (the directive's third uniformity: "the buildings
+// surfaces all being the same size windows"): every archetype now carries
+// its OWN bay metre size (bayWM x bayHM), so window rhythm differs between
+// families - a 'narrow' punched wall runs 2.8 m bays where a 'band'
+// curtain wall runs 5 m. The texture tile stays 8x12 bays; only the metre
+// repeat changes, and the per-building phase shift moves in the
+// archetype's own bay units, which is what keeps CW-34's whole-bay law
+// intact (a fractional shift would put half-height window rows at every
+// ground line). The values are a taste table, one line each to reverse.
 const WINDOW_ARCHETYPES = [
   // A plain pane split by a centre mullion - the window the city has always
   // had, kept as one family so a share of the buildings look unchanged.
   {
     name: 'plain',
+    bayWM: 4,
+    bayHM: 3,
     bars: (ctx, x, y, w, h) => {
       ctx.fillRect(x + w * 0.48, y, w * 0.04, h);
     },
@@ -421,12 +432,16 @@ const WINDOW_ARCHETYPES = [
   // One tall slot: a narrow vertical opening in a mostly solid bay.
   {
     name: 'slot',
+    bayWM: 3.2,
+    bayHM: 2.8,
     inset: [0.36, 0.14, 0.28, 0.72],
     bars: () => {},
   },
   // Two panes side by side, a wide mullion between them.
   {
     name: 'pair',
+    bayWM: 4.4,
+    bayHM: 3.1,
     bars: (ctx, x, y, w, h) => {
       ctx.fillRect(x + w * 0.44, y, w * 0.12, h);
     },
@@ -434,6 +449,8 @@ const WINDOW_ARCHETYPES = [
   // A pane with the blinds part way down, at a height that varies per bay.
   {
     name: 'blinds',
+    bayWM: 3.6,
+    bayHM: 2.9,
     bars: (ctx, x, y, w, h, rand) => {
       const drop = 0.15 + rand() * 0.55;
       ctx.fillRect(x, y, w, h * drop);
@@ -443,6 +460,8 @@ const WINDOW_ARCHETYPES = [
   // Vertical stripes: a curtain-walled bay read as glazing bars.
   {
     name: 'stripes',
+    bayWM: 4,
+    bayHM: 3.4,
     bars: (ctx, x, y, w, h) => {
       for (let i = 1; i < 4; i++)
         ctx.fillRect(x + w * (i / 4) - w * 0.02, y, w * 0.04, h);
@@ -451,12 +470,16 @@ const WINDOW_ARCHETYPES = [
   // One wide horizontal light, short and letterbox-shaped.
   {
     name: 'wide',
+    bayWM: 4.8,
+    bayHM: 2.7,
     inset: [0.08, 0.3, 0.84, 0.34],
     bars: () => {},
   },
   // Four panes, both mullions crossing.
   {
     name: 'cross',
+    bayWM: 3.4,
+    bayHM: 3,
     bars: (ctx, x, y, w, h) => {
       ctx.fillRect(x + w * 0.48, y, w * 0.04, h);
       ctx.fillRect(x, y + h * 0.46, w, h * 0.06);
@@ -465,6 +488,8 @@ const WINDOW_ARCHETYPES = [
   // A single narrow punched window in a solid wall - brick, not curtain.
   {
     name: 'narrow',
+    bayWM: 2.8,
+    bayHM: 2.9,
     inset: [0.3, 0.2, 0.4, 0.56],
     bars: (ctx, x, y, w, h) => {
       ctx.fillRect(x + w * 0.46, y, w * 0.08, h);
@@ -473,6 +498,8 @@ const WINDOW_ARCHETYPES = [
   // A continuous horizontal band, the pane running the full bay width.
   {
     name: 'band',
+    bayWM: 5,
+    bayHM: 3.2,
     inset: [0.02, 0.26, 0.96, 0.44],
     bars: (ctx, x, y, w, h) => {
       ctx.fillRect(x + w * 0.5, y, w * 0.03, h);
@@ -612,8 +639,8 @@ function createWindowTexture(archetypeIndex = 0) {
     }
   }
 
-  const tileWM = WINDOW_BAY_W_M * WINDOW_TILE_BAYS_X;
-  const tileHM = WINDOW_BAY_H_M * WINDOW_TILE_BAYS_Y;
+  const tileWM = (archetype.bayWM ?? WINDOW_BAY_W_M) * WINDOW_TILE_BAYS_X;
+  const tileHM = (archetype.bayHM ?? WINDOW_BAY_H_M) * WINDOW_TILE_BAYS_Y;
   // Side-wall v = 1 - z: the -1/tile offset puts a bay boundary at z = 0 so
   // window rows count up from each building's base.
   return makeRepeatingTexture(canvas, 1 / tileWM, 1 / tileHM, -1 / tileHM);
@@ -718,6 +745,41 @@ const STOREFRONT_BY_POI = new Map([
   ['post_office', 4],
   ['marketplace', 1],
 ]);
+
+// CW-46 rider (c): "white shop lights is repetitive" - each storefront's
+// glass now leans warm, cool or neutral. Places that serve food glow warm,
+// retail stays neutral, services lean cool; buildings with no nearby POI
+// hash across the set. Taste table, one line each to reverse; every tint's
+// luminance stays in the ~0.93-0.95 storefront band the CAR_TIERS ladder
+// reserves above the props.
+const STOREFRONT_TEMPERATURES = {
+  warm: [1.0, 0.94, 0.78],
+  neutral: [0.95, 0.95, 0.95],
+  cool: [0.85, 0.95, 1.0],
+};
+const STOREFRONT_TEMP_BY_POI = new Map([
+  ['restaurant', 'warm'],
+  ['cafe', 'warm'],
+  ['fast_food', 'warm'],
+  ['bar', 'warm'],
+  ['pub', 'warm'],
+  ['marketplace', 'warm'],
+  ['shop', 'neutral'],
+  ['pharmacy', 'neutral'],
+  ['bank', 'cool'],
+  ['cinema', 'cool'],
+  ['theatre', 'cool'],
+  ['library', 'cool'],
+  ['post_office', 'cool'],
+]);
+const STOREFRONT_TEMP_KEYS = ['warm', 'neutral', 'cool'];
+
+function storefrontTemperatureTint(h, poiKind) {
+  const biased =
+    poiKind !== null ? STOREFRONT_TEMP_BY_POI.get(poiKind) : undefined;
+  const key = biased ?? STOREFRONT_TEMP_KEYS[(h >>> 17) % 3];
+  return STOREFRONT_TEMPERATURES[key];
+}
 
 /**
  * Every storefront band in one texture, stacked vertically.
@@ -833,6 +895,15 @@ function createGroundTexture() {
  * bay's width moves the pattern one window along on this geometry and nothing
  * else. Eight by twelve gives ninety-six distinct walls per archetype.
  */
+function scaleGeometryUv(geometry, su, sv) {
+  const uv = geometry.getAttribute('uv');
+  if (!uv) return;
+  for (let i = 0; i < uv.count; i++) {
+    uv.setXY(i, uv.getX(i) * su, uv.getY(i) * sv);
+  }
+  uv.needsUpdate = true;
+}
+
 function offsetGeometryUv(geometry, du, dv) {
   const uv = geometry.getAttribute('uv');
   if (!uv) return;
@@ -1480,11 +1551,15 @@ export function buildCityGroup(model) {
         // WHOLE BAYS, not a continuous slide. The texture's own v offset
         // exists so that window rows count up from a building's base
         // (`-1 / tileHM` in makeRepeatingTexture); a fractional shift would
-        // put a half-height row of windows at every ground line.
+        // put a half-height row of windows at every ground line. CW-46: the
+        // bays are the ARCHETYPE'S OWN metre size now, so the phase moves
+        // in those units - same law, per family.
+        const bayW = WINDOW_ARCHETYPES[archetypeIndex]?.bayWM ?? WINDOW_BAY_W_M;
+        const bayH = WINDOW_ARCHETYPES[archetypeIndex]?.bayHM ?? WINDOW_BAY_H_M;
         offsetGeometryUv(
           geom,
-          ((h >>> 3) % WINDOW_TILE_BAYS_X) * WINDOW_BAY_W_M,
-          ((h >>> 13) % WINDOW_TILE_BAYS_Y) * WINDOW_BAY_H_M
+          ((h >>> 3) % WINDOW_TILE_BAYS_X) * bayW,
+          ((h >>> 13) % WINDOW_TILE_BAYS_Y) * bayH
         );
         bucket.push(geom);
       }
@@ -1494,24 +1569,35 @@ export function buildCityGroup(model) {
     if (!anyGeom) return;
 
     // Grounded buildings tall enough to have an upstairs get the lit
-    // storefront strip; elevated parts (skybridges) do not.
+    // storefront strip; elevated parts (skybridges) do not. CW-46 rider:
+    // the ground floor's HEIGHT is per building now (hash within the
+    // documented 3.2-5.0 m range) - the directive's "same size first
+    // floor" complaint. The texture band still spans one
+    // STOREFRONT_HEIGHT_M in v, so the strip's v is scaled to fill its
+    // band exactly before the whole-band offset picks which look it wears.
+    const storefrontHM = 3.2 + (((h >>> 9) % 10) / 9) * 1.8;
     const grounded =
-      building.minHeightM === 0 &&
-      building.heightM >= STOREFRONT_HEIGHT_M + 1.5;
+      building.minHeightM === 0 && building.heightM >= storefrontHM + 1.5;
     if (grounded) {
-      const strip = extrudeBuilding(building, STOREFRONT_TINT, {
-        depthOverride: STOREFRONT_HEIGHT_M,
-      });
+      // CW-34: which ground floor this building wears. The nearest shop or
+      // eating place in the map data decides where there is one; the
+      // building's own hash decides where there is not, so a city with no
+      // POIs at all still has a varied street. CW-46: the same POI answer
+      // now also warms or cools the glass.
+      const [cx, cy] = ringCentroid(building.outer);
+      const poiKind = poiIndex.nearestKind(cx, cy, STOREFRONT_POI_RANGE_M);
+      const strip = extrudeBuilding(
+        building,
+        storefrontTemperatureTint(h, poiKind),
+        {
+          depthOverride: storefrontHM,
+        }
+      );
       if (strip) {
-        // CW-34: which ground floor this building wears. The nearest shop or
-        // eating place in the map data decides where there is one; the
-        // building's own hash decides where there is not, so a city with no
-        // POIs at all still has a varied street.
-        const [cx, cy] = ringCentroid(building.outer);
-        const poiKind = poiIndex.nearestKind(cx, cy, STOREFRONT_POI_RANGE_M);
         const band =
           (poiKind !== null ? STOREFRONT_BY_POI.get(poiKind) : undefined) ??
           (h >>> 23) % STOREFRONT_VARIANTS.length;
+        scaleGeometryUv(strip, 1, STOREFRONT_HEIGHT_M / storefrontHM);
         offsetGeometryUv(strip, 0, band * STOREFRONT_HEIGHT_M);
         storefrontGeoms.push(strip);
       }
@@ -1522,10 +1608,11 @@ export function buildCityGroup(model) {
 
     // Shop signs over the glass: a row along the frontage, each one hashed in
     // or out so a street reads as some shops lit and some dark.
+    const signBaseM = storefrontHM + 0.4;
     if (
       wall &&
       grounded &&
-      building.heightM >= SIGN_BAND_BASE_M + SIGN_BAND_HEIGHT_M + 0.5
+      building.heightM >= signBaseM + SIGN_BAND_HEIGHT_M + 0.5
     ) {
       const slots = Math.max(
         1,
@@ -1544,7 +1631,7 @@ export function buildCityGroup(model) {
         appendSign(signOut, wall, {
           widthM,
           heightM: SIGN_BAND_HEIGHT_M,
-          baseZ: SIGN_BAND_BASE_M,
+          baseZ: signBaseM,
           hueDeg: hueOf(bits >>> 7),
           // Slot centers, measured from the middle of the wall.
           alongM: (wall.lengthM / slots) * (slot + 0.5 - slots / 2),

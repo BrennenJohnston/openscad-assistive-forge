@@ -130,10 +130,14 @@ describe('buildCityGroup — CW-8 distinctness', () => {
     expect(storefronts).toBeDefined()
     expect(stats.storefrontTriangles).toBeGreaterThan(0)
 
-    // The strip stops at 3.5 m and starts at the ground.
+    // The strip starts at the ground and stops at the building's OWN
+    // ground-floor height - per building since CW-46, hash-drawn within
+    // the documented 3.2-5.0 m range (the directive's "same size first
+    // floor" complaint).
     storefronts.geometry.computeBoundingBox()
     expect(storefronts.geometry.boundingBox.min.z).toBe(0)
-    expect(storefronts.geometry.boundingBox.max.z).toBeCloseTo(3.5, 5)
+    expect(storefronts.geometry.boundingBox.max.z).toBeGreaterThanOrEqual(3.2)
+    expect(storefronts.geometry.boundingBox.max.z).toBeLessThanOrEqual(5.0)
 
     // Exactly one of the two buildings qualifies (the skybridge is skipped),
     // so the strip has the same triangle count as one extruded square.
