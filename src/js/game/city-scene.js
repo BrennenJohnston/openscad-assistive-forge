@@ -2170,6 +2170,42 @@ const CAR_TIERS = [0.35, 0.5, 0.65, 0.8];
 const CAR_CHROMA = 0.5;
 const CAR_CABIN_LIFT = 0.12;
 
+// Street furniture (CW-43, CW-Q43). True node positions only: the owner's
+// mission sentence makes this wayfinding data for a blind traveler, and a
+// prop moved for looks is a lie a cane cannot check. Sizes in metres.
+const STOP_POLE_SIDE_M = 0.12;
+const STOP_POLE_HEIGHT_M = 3.2;
+const STOP_FLAG_W_M = 0.6;
+const STOP_FLAG_H_M = 0.4;
+const STOP_SHELTER_L_M = 2.4;
+const STOP_SHELTER_D_M = 1.2;
+const STOP_SHELTER_H_M = 2.2;
+const BENCH_SEAT_L_M = 1.8;
+const BENCH_SEAT_D_M = 0.5;
+const BENCH_SEAT_H_M = 0.45;
+const BENCH_BACK_H_M = 0.45;
+const BENCH_BACK_THICK_M = 0.08;
+const BASKET_SIDE_M = 0.45;
+const BASKET_HEIGHT_M = 0.6;
+const RACK_L_M = 0.9;
+const RACK_THICK_M = 0.08;
+const RACK_HEIGHT_M = 0.8;
+const HYDRANT_SIDE_M = 0.3;
+const HYDRANT_HEIGHT_M = 0.6;
+// Two OSM nodes for the same object (it happens) collapse to one prop.
+const FURNITURE_MIN_GAP_M = 0.4;
+// A mapped tree standing on the node wins - both are real data, the tree
+// planted first.
+const FURNITURE_TREE_GAP_M = 0.6;
+// Procedural infill (trees, lamps, parked cars) must not intersect a real
+// object: real data wins every argument with infill.
+const FURNITURE_CLEAR_M = 1.4;
+// Muted municipal paint next to the cars' 0.5.
+const FURNITURE_CHROMA = 0.4;
+// The segment-angle grid's cell: coarse is fine, furniture stands within a
+// pavement's width of its street.
+const FURNITURE_ROAD_CELL_M = 24;
+
 // Streetlights (CW-18). Ordinary streets and the arterials both get them -
 // the arterials carry no parked cars and no trees today, so lamps are the
 // only furniture they have. Motorways and trunk roads are left alone: their
@@ -2378,6 +2414,67 @@ function makePointGrid(cellM) {
  * A tinted box placed in the world: built in its own frame, rotated about Z,
  * then moved into place, so it merges with its neighbors into one mesh.
  */
+/**
+ * CW-43: street furniture faces the street it serves. A coarse bucket grid
+ * of sampled road points answers "which way does the nearest road run, and
+ * where is it" without scanning every segment per item. Hash jitter is only
+ * for the rare node with no road in reach — OSM gives bus stops and benches
+ * no orientation of their own.
+ */
+function makeSegmentAngleGrid(roads, cellM) {
+  const buckets = new Map();
+  const key = (cx, cy) => cx + ',' + cy;
+  for (const road of roads) {
+    const pts = road.points;
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const [x1, y1] = pts[i];
+      const [x2, y2] = pts[i + 1];
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const len = Math.hypot(dx, dy);
+      if (len < 1e-6) continue;
+      const angle = Math.atan2(dy, dx);
+      // Long segments register at intervals so no cell between the
+      // endpoints goes blind.
+      const steps = Math.max(1, Math.ceil(len / cellM));
+      for (let s = 0; s <= steps; s++) {
+        const t = s / steps;
+        const px = x1 + dx * t;
+        const py = y1 + dy * t;
+        const k = key(Math.floor(px / cellM), Math.floor(py / cellM));
+        const list = buckets.get(k);
+        if (list) list.push(px, py, angle);
+        else buckets.set(k, [px, py, angle]);
+      }
+    }
+  }
+  return {
+    /** @returns {{angle:number, px:number, py:number}|null} nearest sampled road point within ~2 cells */
+    nearest(x, y) {
+      const cx = Math.floor(x / cellM);
+      const cy = Math.floor(y / cellM);
+      let best = null;
+      let bestD2 = Infinity;
+      for (let gy = cy - 2; gy <= cy + 2; gy++) {
+        for (let gx = cx - 2; gx <= cx + 2; gx++) {
+          const list = buckets.get(key(gx, gy));
+          if (!list) continue;
+          for (let i = 0; i < list.length; i += 3) {
+            const dx = list[i] - x;
+            const dy = list[i + 1] - y;
+            const d2 = dx * dx + dy * dy;
+            if (d2 < bestD2) {
+              bestD2 = d2;
+              best = { angle: list[i + 2], px: list[i], py: list[i + 1] };
+            }
+          }
+        }
+      }
+      return best;
+    },
+  };
+}
+
 function makeBox(sizeX, sizeY, sizeZ, x, y, z, rotationRad, tint) {
   const geom = new BoxGeometry(sizeX, sizeY, sizeZ);
   if (rotationRad) geom.rotateZ(rotationRad);
@@ -2426,6 +2523,13 @@ export function buildStreetProps(model, collision = null) {
   const personSpots = makePointGrid(PROP_SPATIAL_CELL_M);
   const poleGeoms = [];
   const lampHeadGeoms = [];
+  // CW-43 street furniture, one merged mesh per class.
+  const stopPoleGeoms = [];
+  const shelterGeoms = [];
+  const benchGeoms = [];
+  const basketGeoms = [];
+  const rackGeoms = [];
+  const hydrantGeoms = [];
 
   const b = model.boundsM;
   const inCore = (x, y) =>
@@ -2479,6 +2583,208 @@ export function buildStreetProps(model, collision = null) {
     if (treeSpots.occupied(x, y, MAPPED_TREE_MIN_GAP_M)) return;
     plantTree(x, y, hashBuilding(index, 'osm-tree'));
     mappedTreeCount++;
+  });
+
+  // 1b. CW-43 street furniture, at the extract's own node positions — the
+  //     accessibility point IS the fidelity, so nothing here invents a
+  //     placement. Each prop faces its street; each is solid (a cane's
+  //     logic must hold against a real pole). Placed before the infill so
+  //     procedural trees, lamps and parked cars keep clear of real objects.
+  const furnitureSpots = makePointGrid(PROP_SPATIAL_CELL_M);
+  const segmentAngles = makeSegmentAngleGrid(
+    model.roads,
+    FURNITURE_ROAD_CELL_M
+  );
+  const furniturePlaced = {};
+  (model.furniture ?? []).forEach((item, index) => {
+    const { x, y } = item;
+    if (!inCore(x, y) || isBlocked(x, y)) return;
+    if (furnitureSpots.occupied(x, y, FURNITURE_MIN_GAP_M)) return;
+    if (treeSpots.occupied(x, y, FURNITURE_TREE_GAP_M)) return;
+    const seed = hashBuilding(index, 'furniture:' + item.kind);
+    const near = segmentAngles.nearest(x, y);
+    const angle = near ? near.angle : ((seed % 360) * Math.PI) / 180;
+    // Away from the road: where a shelter stands relative to its flag, and
+    // which side a bench's back is on. Falls back to the angle's normal
+    // when the node sits exactly on the road line.
+    let awayX = near ? x - near.px : 0;
+    let awayY = near ? y - near.py : 0;
+    const awayLen = Math.hypot(awayX, awayY);
+    if (awayLen > 0.3) {
+      awayX /= awayLen;
+      awayY /= awayLen;
+    } else {
+      const side = seed % 2 === 0 ? 1 : -1;
+      awayX = -Math.sin(angle) * side;
+      awayY = Math.cos(angle) * side;
+    }
+    const tier = CAR_TIERS[seed % CAR_TIERS.length];
+    const hue = TINT_HUES_DEG[(seed >>> 5) % TINT_HUES_DEG.length];
+    const tint = tintOf(tier, hue, FURNITURE_CHROMA);
+
+    if (item.kind === 'bus_stop') {
+      stopPoleGeoms.push(
+        makeBox(
+          STOP_POLE_SIDE_M,
+          STOP_POLE_SIDE_M,
+          STOP_POLE_HEIGHT_M,
+          x,
+          y,
+          STOP_POLE_HEIGHT_M / 2,
+          angle,
+          POLE_TINT
+        )
+      );
+      // The flag plate at the top, its face toward the roadway.
+      stopPoleGeoms.push(
+        makeBox(
+          STOP_FLAG_W_M,
+          0.06,
+          STOP_FLAG_H_M,
+          x,
+          y,
+          STOP_POLE_HEIGHT_M - STOP_FLAG_H_M / 2,
+          angle,
+          tintOf(0.8, hue, FURNITURE_CHROMA)
+        )
+      );
+      obstacles.push({
+        x,
+        y,
+        halfLengthM: STOP_POLE_SIDE_M / 2,
+        halfWidthM: STOP_POLE_SIDE_M / 2,
+        rotationRad: angle,
+      });
+      if (item.shelter) {
+        const sx = x + awayX * (STOP_SHELTER_D_M / 2 + 0.4);
+        const sy = y + awayY * (STOP_SHELTER_D_M / 2 + 0.4);
+        if (!isBlocked(sx, sy)) {
+          shelterGeoms.push(
+            makeBox(
+              STOP_SHELTER_L_M,
+              STOP_SHELTER_D_M,
+              STOP_SHELTER_H_M,
+              sx,
+              sy,
+              STOP_SHELTER_H_M / 2,
+              angle,
+              tintOf(0.45, hue, FURNITURE_CHROMA)
+            )
+          );
+          obstacles.push({
+            x: sx,
+            y: sy,
+            halfLengthM: STOP_SHELTER_L_M / 2,
+            halfWidthM: STOP_SHELTER_D_M / 2,
+            rotationRad: angle,
+          });
+        }
+      }
+    } else if (item.kind === 'bench') {
+      benchGeoms.push(
+        makeBox(
+          BENCH_SEAT_L_M,
+          BENCH_SEAT_D_M,
+          BENCH_SEAT_H_M,
+          x,
+          y,
+          BENCH_SEAT_H_M / 2,
+          angle,
+          tint
+        )
+      );
+      if (item.backrest) {
+        // The back stands on the seat's away-from-road edge, overlapping
+        // the seat by a hair so the boxes never share an exact face.
+        const bx = x + awayX * (BENCH_SEAT_D_M / 2 - BENCH_BACK_THICK_M / 2);
+        const by = y + awayY * (BENCH_SEAT_D_M / 2 - BENCH_BACK_THICK_M / 2);
+        benchGeoms.push(
+          makeBox(
+            BENCH_SEAT_L_M,
+            BENCH_BACK_THICK_M,
+            BENCH_BACK_H_M + 0.01,
+            bx,
+            by,
+            BENCH_SEAT_H_M + BENCH_BACK_H_M / 2 - 0.01,
+            angle,
+            tint
+          )
+        );
+      }
+      obstacles.push({
+        x,
+        y,
+        halfLengthM: BENCH_SEAT_L_M / 2,
+        halfWidthM: BENCH_SEAT_D_M / 2,
+        rotationRad: angle,
+      });
+    } else if (item.kind === 'waste_basket') {
+      basketGeoms.push(
+        makeBox(
+          BASKET_SIDE_M,
+          BASKET_SIDE_M,
+          BASKET_HEIGHT_M,
+          x,
+          y,
+          BASKET_HEIGHT_M / 2,
+          angle,
+          tint
+        )
+      );
+      obstacles.push({
+        x,
+        y,
+        halfLengthM: BASKET_SIDE_M / 2,
+        halfWidthM: BASKET_SIDE_M / 2,
+        rotationRad: angle,
+      });
+    } else if (item.kind === 'bicycle_parking') {
+      // A staple rack stands with its hoop across the kerb line.
+      rackGeoms.push(
+        makeBox(
+          RACK_L_M,
+          RACK_THICK_M,
+          RACK_HEIGHT_M,
+          x,
+          y,
+          RACK_HEIGHT_M / 2,
+          angle + Math.PI / 2,
+          tint
+        )
+      );
+      obstacles.push({
+        x,
+        y,
+        halfLengthM: RACK_L_M / 2,
+        halfWidthM: RACK_THICK_M / 2,
+        rotationRad: angle + Math.PI / 2,
+      });
+    } else if (item.kind === 'fire_hydrant') {
+      hydrantGeoms.push(
+        makeBox(
+          HYDRANT_SIDE_M,
+          HYDRANT_SIDE_M,
+          HYDRANT_HEIGHT_M,
+          x,
+          y,
+          HYDRANT_HEIGHT_M / 2,
+          0,
+          tint
+        )
+      );
+      obstacles.push({
+        x,
+        y,
+        halfLengthM: HYDRANT_SIDE_M / 2,
+        halfWidthM: HYDRANT_SIDE_M / 2,
+        rotationRad: 0,
+      });
+    } else {
+      return;
+    }
+
+    furnitureSpots.add(x, y);
+    furniturePlaced[item.kind] = (furniturePlaced[item.kind] ?? 0) + 1;
   });
 
   // 2. Procedural infill along ordinary curbs, and the parked cars. Both
@@ -2665,6 +2971,7 @@ export function buildStreetProps(model, collision = null) {
           if (isBlocked(x, y)) continue;
           if (treeSpots.occupied(x, y, LAMP_MIN_TREE_GAP_M)) continue;
           if (lampSpots.occupied(x, y, LAMP_MIN_LAMP_GAP_M)) continue;
+          if (furnitureSpots.occupied(x, y, FURNITURE_CLEAR_M)) continue;
 
           poleGeoms.push(
             makeBox(
@@ -2722,6 +3029,7 @@ export function buildStreetProps(model, collision = null) {
             const y = y1 + uy * along + oy;
             if (!inCore(x, y)) continue;
             if (treeSpots.occupied(x, y, INFILL_TREE_MIN_GAP_M)) continue;
+            if (furnitureSpots.occupied(x, y, FURNITURE_CLEAR_M)) continue;
             const h = TRUNK_SIDE_M / 2;
             if (
               isBlocked(x, y) ||
@@ -2757,6 +3065,7 @@ export function buildStreetProps(model, collision = null) {
             const y = y1 + uy * s + oy;
             if (!inCore(x, y)) continue;
             if (carSpots.occupied(x, y, CAR_MIN_GAP_M)) continue;
+            if (furnitureSpots.occupied(x, y, FURNITURE_CLEAR_M)) continue;
             // The whole footprint has to be clear, not just the middle.
             const hl = CAR_LENGTH_M / 2;
             const hw = CAR_WIDTH_M / 2;
@@ -2854,6 +3163,14 @@ export function buildStreetProps(model, collision = null) {
   addMerged(personGeoms, 'people', propMaterial());
   addMerged(poleGeoms, 'lamp-poles', propMaterial());
   addMerged(lampHeadGeoms, 'lamp-heads', propMaterial());
+  // CW-43 street furniture, one mesh per class so the class pass can dress
+  // each in its own voice.
+  addMerged(stopPoleGeoms, 'bus-stop-poles', propMaterial());
+  addMerged(shelterGeoms, 'bus-stop-shelters', propMaterial());
+  addMerged(benchGeoms, 'benches', propMaterial());
+  addMerged(basketGeoms, 'waste-baskets', propMaterial());
+  addMerged(rackGeoms, 'bike-racks', propMaterial());
+  addMerged(hydrantGeoms, 'hydrants', propMaterial());
 
   // Traffic lights (CW-19). Placed on the road GRAPH rather than on the road
   // list: a signal belongs where streets actually meet, and OSM splits ways at
@@ -3030,6 +3347,10 @@ export function buildStreetProps(model, collision = null) {
       mappedTreeCount,
       carCount: carSpots.size,
       lampCount: lampSpots.size,
+      // CW-43: what actually stands in the city, per class — the model's
+      // own counts minus anything out of core or inside a building.
+      furnitureCount: furnitureSpots.size,
+      furnitureByKind: furniturePlaced,
       triangles,
     },
   };
