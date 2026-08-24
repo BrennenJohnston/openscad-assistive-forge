@@ -1344,3 +1344,52 @@ test.describe('ASCII City Walk — where you are (CW-27)', () => {
     expect(box.lines, `HUD wrapped: ${box.text}`).toBe(1)
   })
 })
+
+test.describe('ASCII City Walk — people are people (CW-45)', () => {
+  test('the Seattle census is exact, varied, and deterministic', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // Hash-seeded placement against a versioned extract: these numbers are
+    // facts until the next rebake, never noise. The mix ratios are the
+    // CW-45 record's one-line-reversible choices.
+    const stats = await page.evaluate(
+      () => window.__cityWalkGame.props.stats
+    )
+    expect(stats.figuresByPose).toEqual({
+      sitting: 105,
+      standing: 722,
+      walking: 1890,
+      jogging: 343,
+    })
+    expect(await page.evaluate(() => window.__cityWalkGame.props.peopleCount)).toBe(
+      3060
+    )
+  })
+
+  test('sitting happens only where a real bench stands', async ({ page }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const check = await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const benches = g.model.furniture.filter((f) => f.kind === 'bench')
+      const sitters = g.props.figureSpots.filter((f) => f.pose === 'sitting')
+      let orphans = 0
+      for (const s of sitters) {
+        const seated = benches.some(
+          (b) => Math.hypot(b.x - s.x, b.y - s.y) < 1.5
+        )
+        if (!seated) orphans++
+      }
+      return { sitters: sitters.length, benches: benches.length, orphans }
+    })
+    // Never a scattered seat: every sitter is on a mapped bench, and there
+    // are fewer sitters than benches (at most one each, hash-decided).
+    expect(check.orphans).toBe(0)
+    expect(check.sitters).toBeGreaterThan(0)
+    expect(check.sitters).toBeLessThanOrEqual(check.benches)
+  })
+})
