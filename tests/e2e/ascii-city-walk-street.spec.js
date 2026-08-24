@@ -1488,11 +1488,25 @@ test.describe('ASCII City Walk — cars are cars (CW-46)', () => {
 
     await page.keyboard.down('ArrowUp')
     try {
+      // Arrival is a CONDITION, not a frame quota. A dt-clamped software
+      // runner covers the 2.5 m in ~17 frames where a 60 fps GPU needs
+      // ~100, and the slowest Edge runner painted 130 frames in 90 s - a
+      // fixed frames-versus-clock gate starves there while proving nothing
+      // the arrival itself does not.
+      await expect
+        .poll(() => page.evaluate(() => window.__cwPickup.closest), {
+          timeout: 60_000,
+        })
+        .toBeLessThan(setup.halfLengthM + 1.0)
+      // Then keep pushing on the tail for 40 more OBSERVED frames - the
+      // old 4.4 m footprint lets the walker into the bed within a handful,
+      // which the watcher records as closest dipping under the tail plane.
+      const arrived = await page.evaluate(() => window.__cwPickup.frames)
       await expect
         .poll(() => page.evaluate(() => window.__cwPickup.frames), {
-          timeout: 90_000,
+          timeout: 60_000,
         })
-        .toBeGreaterThan(150)
+        .toBeGreaterThan(arrived + 40)
     } finally {
       await page.keyboard.up('ArrowUp')
       await page.evaluate(() => cancelAnimationFrame(window.__cwPickupTick))
