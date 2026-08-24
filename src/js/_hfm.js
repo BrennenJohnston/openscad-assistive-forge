@@ -1582,6 +1582,15 @@ export async function initAltView(previewManager, options = {}) {
     getFontScale() {
       return st.fontScale;
     },
+    /**
+     * CW-41: the painted cell's size in canvas pixels at the CURRENT font
+     * scale. Read-only, so a caller can filter its scene for the cell
+     * raster (the City Walk's facade textures do); previously this lived
+     * only behind the DEV-gated stats.
+     */
+    getCellPx() {
+      return { w: metrics.charW, h: metrics.charH };
+    },
     dispose() {
       st.enabled = false;
       previewManager.controls?.removeEventListener?.(

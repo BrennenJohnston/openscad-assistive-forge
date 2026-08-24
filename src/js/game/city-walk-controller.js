@@ -1344,6 +1344,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
         safeGetItem(STORAGE_KEY_HFM_FONT_SCALE)
       )
     );
+    syncCellRaster(game);
 
     // CW-21: with colour off the city used to be one flat green or amber —
     // pavement, walls and lit windows all at the same drive. A monochrome
@@ -2169,9 +2170,19 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // that changes anything on screen.
     const next = clampCharScale(game.altView.getFontScale() + delta);
     game.altView.setFontScale(next);
+    syncCellRaster(game);
     game.altView.invalidate();
     safeSetItem(STORAGE_KEY_CITY_WALK_FONT_SCALE, String(next));
     announceInLayer(`Character size ${Math.round(next * 100)} percent.`);
+  }
+
+  /**
+   * CW-41: the facade textures are filtered for the CELL raster (the
+   * shimmer fix), so the scene has to hear about every cell-size change.
+   */
+  function syncCellRaster(game) {
+    const cell = game.altView.getCellPx?.();
+    if (cell) game.city3d.setCellRaster?.(cell.h);
   }
 
   // -------------------------------------------------------------------
