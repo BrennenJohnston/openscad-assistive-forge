@@ -69,7 +69,12 @@ import {
   applyCompanionAliases,
   getOverlaySvgTarget,
 } from './js/zip-handler.js';
-import { loadManifest, ManifestError } from './js/manifest-loader.js';
+import {
+  loadManifest,
+  ManifestError,
+  validateManifest,
+} from './js/manifest-loader.js';
+import { buildProjectManifest } from './js/publish-manifest.js';
 import { getConsolePanel } from './js/console-panel.js';
 import {
   getErrorLogPanel,
@@ -11840,73 +11845,18 @@ if (rounded) {
    */
   function generateManifestFromProject() {
     const state = stateManager.getState();
-    const fileName = state.uploadedFile?.name || 'design.scad';
-
-    const manifest = {
-      forgeManifest: '1.0',
-      name: fileName.replace(/\.scad$/i, ''),
-      files: {
-        main: fileName,
-      },
-    };
-
-    // Add companion files from the project
-    if (state.projectFiles && state.projectFiles.size > 0) {
-      const companions = [];
-      const presets = [];
-
-      for (const filePath of state.projectFiles.keys()) {
-        // Skip the main .scad file
-        if (filePath === fileName) continue;
-
-        if (filePath.toLowerCase().endsWith('.json')) {
-          presets.push(filePath);
-        } else if (!filePath.toLowerCase().endsWith('.scad')) {
-          companions.push(filePath);
-        } else {
-          // Secondary .scad files are companions (included via use/include)
-          companions.push(filePath);
-        }
-      }
-
-      if (companions.length > 0) {
-        manifest.files.companions = companions;
-      }
-      if (presets.length > 0) {
-        manifest.files.presets = presets.length === 1 ? presets[0] : presets;
-      }
-    }
-
-    // Add defaults
-    manifest.defaults = {
-      autoPreview: true,
-    };
-
-    // If a preset is currently selected, include it as the default
-    if (
-      state.currentPresetName &&
-      state.currentPresetName !== 'design default values'
-    ) {
-      manifest.defaults.preset = state.currentPresetName;
-    }
-
-    // Include UI mode preferences so shared links apply the same panel visibility
-    const uiModePrefs = getUIModeController().getPreferencesForExport();
-    if (uiModePrefs.defaultMode !== 'standard') {
-      manifest.defaults.uiMode = uiModePrefs.defaultMode;
-    }
-    const registryDefaults = getUIModeController()
-      .getRegistry()
-      .filter((p) => p.defaultHiddenInBasic)
-      .map((p) => p.id);
-    const prefsChanged =
-      JSON.stringify(uiModePrefs.hiddenPanelsInBasic.sort()) !==
-      JSON.stringify(registryDefaults.sort());
-    if (prefsChanged) {
-      manifest.defaults.hiddenPanels = uiModePrefs.hiddenPanelsInBasic;
-    }
-
-    return manifest;
+    const uiModeController = getUIModeController();
+    return buildProjectManifest({
+      uploadName: state.uploadedFile?.name || 'design.scad',
+      mainFilePath: state.mainFilePath,
+      projectFiles: state.projectFiles,
+      presetName: state.currentPresetName,
+      uiModePrefs: uiModeController.getPreferencesForExport(),
+      registryHiddenDefaults: uiModeController
+        .getRegistry()
+        .filter((p) => p.defaultHiddenInBasic)
+        .map((p) => p.id),
+    });
   }
 
   if (publishProjectBtn && publishProjectModal) {
@@ -11921,6 +11871,22 @@ if (rounded) {
       }
 
       const manifest = generateManifestFromProject();
+
+      // The dialog used to hand out manifests its own loader refuses (D-95).
+      // Checking the emission against the same validator the loader runs makes
+      // that class of defect impossible to ship again.
+      const validation = validateManifest(manifest);
+      if (!validation.valid) {
+        showErrorToast({
+          title: 'Manifest Not Generated',
+          message:
+            `This project produced a manifest the loader would refuse: ` +
+            `${validation.errors.join(' ')} Nothing was copied. Please report ` +
+            `this so it can be fixed.`,
+        });
+        return;
+      }
+
       const manifestJson = JSON.stringify(manifest, null, 2);
 
       if (publishManifestOutput) {
