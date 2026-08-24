@@ -1349,6 +1349,49 @@ function applyFarSilhouetteFog(material, keep = FAR_SILHOUETTE_KEEP) {
   material.customProgramCacheKey = () => `farSilhouette:${maxFactor}`;
 }
 
+/**
+ * CW-41: filter a texture for the CELL raster, not the pixel raster.
+ *
+ * The shimmer the owner reported is the window-bay pattern beating against
+ * the character grid: the scene renders full-res, is box-halved once, and
+ * the converter then reads one or two sample pixels per cell - so any
+ * texture feature near cell frequency re-rolls its cells under sub-cell
+ * view changes. MEASURED (P0): with the bay pattern blurred away, a 0.05
+ * degree turn re-rolls 4.5% of Denver's lit cells instead of 12.4%; with
+ * only sub-bay detail blurred, nothing changes; anisotropy changes
+ * nothing; the exact-CPU path reads the same. The fix follows the numbers:
+ * add a mip bias so the texture's effective texel is the CELL, which
+ * dissolves bays exactly where they fall under about two cells and leaves
+ * near facades sharp - the hardware LOD still carries the distance term.
+ *
+ * Composes with the material's existing onBeforeCompile (the fog floor).
+ * The bias uniform lives in userData so the game can set it before or
+ * after first compile, and per size change, without a rebuild.
+ */
+function applyCellRasterFiltering(material) {
+  material.userData.cellLodBias = { value: 0 };
+  const prev = material.onBeforeCompile;
+  const prevKey = material.customProgramCacheKey;
+  material.onBeforeCompile = (shader, renderer) => {
+    prev?.call(material, shader, renderer);
+    shader.uniforms.uCellLodBias = material.userData.cellLodBias;
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <map_pars_fragment>',
+        '#include <map_pars_fragment>\nuniform float uCellLodBias;'
+      )
+      .replace(
+        '#include <map_fragment>',
+        `#ifdef USE_MAP
+          vec4 sampledDiffuseColor = texture2D( map, vMapUv, uCellLodBias );
+          diffuseColor *= sampledDiffuseColor;
+        #endif`
+      );
+  };
+  material.customProgramCacheKey = () =>
+    `${prevKey ? prevKey.call(material) : ''}|cellRaster`;
+}
+
 export function buildCityGroup(model) {
   const group = new Group();
   group.name = 'ascii-city';
@@ -1557,6 +1600,9 @@ export function buildCityGroup(model) {
   // name 'buildings', which is what the surface-class pass (CW-23) and the
   // map-view swap below both key on.
   const buildingMats = [];
+  // CW-41: every material filtered for the cell raster, so one setter can
+  // follow the character size.
+  const cellRasterMats = [];
   buildingGeoms.forEach((geoms, familyIndex) => {
     if (geoms.length === 0) return;
     const merged = mergeGeometries(geoms, false);
@@ -1567,6 +1613,8 @@ export function buildCityGroup(model) {
       vertexColors: true,
     });
     applyFarSilhouetteFog(material);
+    applyCellRasterFiltering(material);
+    cellRasterMats.push(material);
     const mesh = new Mesh(merged, material);
     mesh.name = 'buildings';
     group.add(mesh);
@@ -1588,6 +1636,8 @@ export function buildCityGroup(model) {
       polygonOffsetFactor: -2,
       polygonOffsetUnits: -2,
     });
+    applyCellRasterFiltering(material);
+    cellRasterMats.push(material);
     const mesh = new Mesh(merged, material);
     mesh.name = 'storefronts';
     group.add(mesh);
@@ -1820,6 +1870,18 @@ export function buildCityGroup(model) {
       if (!groundTexture || isMap) groundMat.color.setHex(0x000000);
       else groundMat.color.setHex(0xffffff);
       groundMat.needsUpdate = true;
+    },
+    /**
+     * CW-41: follow the character size. The bias makes the facade texture's
+     * effective texel one CELL (log2 of the cell height, the axis the
+     * window rows beat against); at 0 the filtering is exactly stock.
+     * @param {number} cellHPx - cell height in canvas pixels
+     */
+    setCellRaster(cellHPx) {
+      const bias = Math.max(0, Math.log2(Math.max(1, cellHPx)));
+      for (const m of cellRasterMats) {
+        if (m.userData.cellLodBias) m.userData.cellLodBias.value = bias;
+      }
     },
     dispose() {
       for (const d of disposables) d.dispose();

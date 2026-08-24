@@ -35,12 +35,22 @@ export function expectOnlyAllowedViolations(results) {
   ).toEqual([])
 }
 
-/** Every City Walk suite starts past the first-visit chrome. */
+/**
+ * Every City Walk suite starts past the first-visit chrome, and with the
+ * CW-42 entry calibration INERT: an empty forced-probe map makes the pass
+ * abort on its first frame - no probing, no stored floor, no applied
+ * default - so every spec that is not about calibration keeps the
+ * deterministic pre-calibration world. CI renders in software and must
+ * never time real frames. A calibration spec overrides the global with its
+ * own forced readings in a later addInitScript (later scripts run later,
+ * so a plain assignment wins).
+ */
 export function useCityWalkFixtures() {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('openscad-forge-first-visit-seen', 'true')
       localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
+      window.__cityWalkCalibrationForce = {}
     })
   })
 }

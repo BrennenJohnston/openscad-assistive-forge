@@ -732,32 +732,52 @@ export const CHAR_SCALE_DEFAULT = 0.5;
  * 0.05-step slider, so 0.85 would otherwise start a ladder of 85/95/100 that
  * never lines up with the steps the help text promises.
  *
+ * CW-42 (CW-Q39): the range's bottom can be raised per machine — the
+ * calibrated floor arrives as an argument so this module stays pure. Only
+ * ADJUSTMENTS pass it: a stored manual choice below today's floor is
+ * grandfathered on seed, never clamped up (auto must not fight it).
+ *
  * @param {number} scale
- * @returns {number} a value in [CHAR_SCALE_MIN, CHAR_SCALE_MAX] on the grid
+ * @param {number|null} [floorScale] the machine's calibrated floor, if any
+ * @returns {number} a value in [floor, CHAR_SCALE_MAX] on the grid
  */
-export function clampCharScale(scale) {
+export function clampCharScale(scale, floorScale = null) {
   const raw = Number.isFinite(scale) ? scale : CHAR_SCALE_DEFAULT;
   const stepped = Math.round(raw / CHAR_SCALE_STEP) * CHAR_SCALE_STEP;
-  const bounded = Math.min(CHAR_SCALE_MAX, Math.max(CHAR_SCALE_MIN, stepped));
+  const floor = Number.isFinite(floorScale)
+    ? Math.min(CHAR_SCALE_MAX, Math.max(CHAR_SCALE_MIN, floorScale))
+    : CHAR_SCALE_MIN;
+  const bounded = Math.min(CHAR_SCALE_MAX, Math.max(floor, stepped));
   // Binary floats: 0.1*3 is 0.30000000000000004, and that reaches the player
   // as "Character size 30.000000000000004 percent" without this.
   return Math.round(bounded * 100) / 100;
 }
 
 /**
- * Decide the character scale a session opens at (CW-Q10).
+ * Decide the character scale a session opens at (CW-Q10, amended CW-Q39).
  *
- * Order: the game's own saved value, then the shared Alt View preference
- * clamped into the game's range, then the default. Both stored values are
- * raw strings straight from localStorage and may be absent or junk.
+ * Order: the game's own saved value (the manual choice — it sticks, even
+ * below today's floor), then the machine's stored calibrated default, then
+ * the shared Alt View preference clamped into the game's range, then the
+ * default. The calibrated default outranks the Alt View courtesy seed
+ * because fresh calibration would re-apply over it moments after entry
+ * anyway — landing there spares the player a visible jump.
  *
  * @param {string|null|undefined} savedGame - the game's own persisted value
  * @param {string|null|undefined} savedAltView - the shared Alt View preference
+ * @param {number|null} [calibratedDefault] - decoded stored calibration
  * @returns {number}
  */
-export function seedCharScale(savedGame, savedAltView) {
+export function seedCharScale(
+  savedGame,
+  savedAltView,
+  calibratedDefault = null
+) {
   const game = parseFloat(savedGame ?? '');
   if (Number.isFinite(game)) return clampCharScale(game);
+  if (Number.isFinite(calibratedDefault)) {
+    return clampCharScale(calibratedDefault);
+  }
   const altView = parseFloat(savedAltView ?? '');
   if (Number.isFinite(altView)) return clampCharScale(altView);
   return CHAR_SCALE_DEFAULT;

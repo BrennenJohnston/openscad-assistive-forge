@@ -96,6 +96,9 @@ const VARIANTS = {
   // converter's own public API (not a setBenchLegacy switch) so trail-on
   // can be A/B'd against trail-off inside one session.
   trail: {},
+  // CW-41: the cell-raster facade filtering OFF (bias forced to zero), so
+  // its cost can be A/B'd against the shipped filtering in one session.
+  'no-cellraster': {},
 }
 
 /** What persistFade each variant runs at. */
@@ -301,6 +304,17 @@ async function benchCity(page, cdp, city, variant, opts, runIndex) {
     )
   }
 
+  // CW-41: set the facade filtering per variant, never inherited. Passing a
+  // cell height of 1 gives log2(1) = 0 - stock filtering; anything else
+  // re-syncs the game's own bias from the converter's real cell size.
+  await page.evaluate((off) => {
+    const g = window.__cityWalkGame
+    if (!g.city3d?.setCellRaster) return
+    if (off) g.city3d.setCellRaster(1)
+    else g.city3d.setCellRaster(g.altView.getCellPx().h)
+    g.altView.invalidate()
+  }, variant === 'no-cellraster')
+
   // Let the first few conversions at the new size settle before the clock
   // starts - the atlas rebuild lands in the first frame after a size change
   // and is not part of what a walk costs.
@@ -434,6 +448,14 @@ async function main() {
   await context.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true')
     localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
+    // CW-42: benches measure the size THEY set. The inert forced-probe map
+    // stops the entry calibration on its first frame, and clearing the
+    // stored floor keeps a previous real calibration from seeding the
+    // landing or blocking the keypress ladder below 30% (the scale
+    // verification would catch it loudly, but a bench that cannot reach
+    // its config is still a dead bench).
+    window.__cityWalkCalibrationForce = {}
+    localStorage.removeItem('openscad-forge-city-walk-calibrated-floor')
   })
   const page = await context.newPage()
 

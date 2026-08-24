@@ -93,6 +93,10 @@ const EXPECTED_KEYS = {
   // City Walk game (CW-Q10): persistent ASCII character scale
   STORAGE_KEY_CITY_WALK_FONT_SCALE: 'openscad-forge-city-walk-font-scale',
 
+  // City Walk game (CW-42, CW-Q39): the machine's LAST calibrated size floor
+  STORAGE_KEY_CITY_WALK_CALIBRATED_FLOOR:
+    'openscad-forge-city-walk-calibrated-floor',
+
   // City Walk game (CW-Q16): colour on/off; absent means follow high contrast
   STORAGE_KEY_CITY_WALK_COLOUR: 'openscad-forge-city-walk-colour',
   STORAGE_KEY_CITY_WALK_CAMERA_PANEL:

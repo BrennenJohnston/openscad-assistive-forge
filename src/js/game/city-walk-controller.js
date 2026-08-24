@@ -70,6 +70,17 @@ import {
   CHAR_SCALE_STEP,
 } from './walk-controls.js';
 import { initAltView } from '../_hfm.js';
+import {
+  CALIBRATION_CANDIDATES,
+  CALIBRATION_SAMPLES_PER_SCALE,
+  chooseCalibratedSize,
+  createProbePhase,
+  decodeCalibration,
+  encodeCalibration,
+  isConclusive,
+  nextProbeScale,
+  stepProbePhase,
+} from './size-calibration.js';
 import { createDocumentFocusTrap } from '../focus-trap.js';
 import { announce } from '../announcer.js';
 import { themeManager } from '../theme-manager.js';
@@ -91,6 +102,7 @@ import {
   STORAGE_KEY_HFM_FONT_SCALE,
   STORAGE_KEY_CITY_WALK_SPEED,
   STORAGE_KEY_CITY_WALK_FONT_SCALE,
+  STORAGE_KEY_CITY_WALK_CALIBRATED_FLOOR,
   STORAGE_KEY_CITY_WALK_COLOUR,
   STORAGE_KEY_CITY_WALK_CAMERA_PANEL,
 } from '../storage-keys.js';
@@ -508,9 +520,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       'On the map: press Teleport, then click where you want to go; J drops you at the middle of the map',
       'L and Shift+L: cycle landmarks on the map',
       'X: say where you are',
-      `Minus and Equals: smaller or larger characters (${Math.round(
-        CHAR_SCALE_MIN * 100
-      )}% to 100%)`,
+      // CW-42 (CW-Q39): the bottom of the range is per machine now, so the
+      // help says how it is set instead of naming a number.
+      'Minus and Equals: smaller or larger characters, up to 100% ' +
+        "(the smallest size is set by this machine's own speed)",
       'C: high contrast on or off',
       'T: change the theme',
       'O: color on or off (off is a single-color retro screen)',
@@ -998,6 +1011,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       btn.hidden = !show;
     }
 
+    syncCharSizeControls();
     measureToolbar();
   }
 
@@ -1334,16 +1348,31 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       glyphVocabularies: GLYPH_VOCABULARIES,
     });
 
-    // Character size (CW-Q10): the game's own saved value wins, then the
-    // shared Alt View preference clamped into the game's range, then 50%.
-    // The game persists to its OWN key and never writes the shared pref back,
-    // because the game's range reaches far below the preview slider's floor.
+    // Character size (CW-Q10, amended CW-Q39): the game's own saved value
+    // wins (the manual choice - it sticks, even below today's floor), then
+    // the machine's last calibrated default, then the shared Alt View
+    // preference clamped into the game's range, then 50%. The game persists
+    // to its OWN key and never writes the shared pref back, because the
+    // game's range reaches far below the preview slider's floor.
+    const savedManualScale = safeGetItem(STORAGE_KEY_CITY_WALK_FONT_SCALE);
+    const storedCalibration = decodeCalibration(
+      safeGetItem(STORAGE_KEY_CITY_WALK_CALIBRATED_FLOOR)
+    );
+    game.calibratedFloor = storedCalibration?.floorScale ?? null;
     game.altView.setFontScale(
       seedCharScale(
-        safeGetItem(STORAGE_KEY_CITY_WALK_FONT_SCALE),
-        safeGetItem(STORAGE_KEY_HFM_FONT_SCALE)
+        savedManualScale,
+        safeGetItem(STORAGE_KEY_HFM_FONT_SCALE),
+        storedCalibration?.defaultScale ?? null
       )
     );
+    syncCellRaster(game);
+
+    // CW-42 (CW-Q39): every entry re-measures this machine - a busy
+    // yesterday must not brand it forever. The pass is stepped from frame();
+    // a stored manual choice is measured where it stands but never applied
+    // over.
+    startCalibration(game, Number.isFinite(parseFloat(savedManualScale ?? '')));
 
     // CW-21: with colour off the city used to be one flat green or amber —
     // pavement, walls and lit windows all at the same drive. A monochrome
@@ -2164,14 +2193,236 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   function adjustCharacterSize(delta) {
     const game = state.game;
     if (!game) return;
+    // A size gesture mid-calibration takes over: the pass stops where the
+    // player can see it (no restore - they are reacting to what is on
+    // screen) and its floor arrives at the next entry instead.
+    if (game.calibration && !game.calibration.done) {
+      abortCalibration(game, { restore: false });
+    }
+    const current = game.altView.getFontScale();
+    const floor = game.calibratedFloor;
+    const floorRaised = Number.isFinite(floor) && floor > CHAR_SCALE_MIN + 1e-9;
+    if (delta < 0 && floorRaised && current <= floor + 1e-9) {
+      // The stop is the calibrated floor, and it says why (CW-Q39). Also
+      // true below the floor (a grandfathered manual choice): calibration
+      // found smaller sizes cannot hold the bar on this machine.
+      announceInLayer(
+        `Character size ${Math.round(current * 100)} percent. Smaller ` +
+          'sizes cannot hold 30 frames per second on this machine.'
+      );
+      return;
+    }
     // Clamp to the GAME's range before the renderer sees it: the renderer
     // instance itself accepts down to 0.05, which is below the smallest size
-    // that changes anything on screen.
-    const next = clampCharScale(game.altView.getFontScale() + delta);
+    // that changes anything on screen. The calibrated floor bounds gestures
+    // only - a stored below-floor manual choice was seeded as-is.
+    const next = clampCharScale(current + delta, floor);
     game.altView.setFontScale(next);
+    syncCellRaster(game);
     game.altView.invalidate();
     safeSetItem(STORAGE_KEY_CITY_WALK_FONT_SCALE, String(next));
+    syncCharSizeControls();
     announceInLayer(`Character size ${Math.round(next * 100)} percent.`);
+  }
+
+  /**
+   * CW-41: the facade textures are filtered for the CELL raster (the
+   * shimmer fix), so the scene has to hear about every cell-size change.
+   */
+  function syncCellRaster(game) {
+    const cell = game.altView.getCellPx?.();
+    if (cell) game.city3d.setCellRaster?.(cell.h);
+  }
+
+  // -------------------------------------------------------------------
+  // Entry size calibration (CW-42, CW-Q39): the floor knows this machine
+  // -------------------------------------------------------------------
+
+  const sameScale = (a, b) => Math.abs(a - b) < 1e-9;
+
+  function startCalibration(game, manual) {
+    game.calibration = {
+      readings: [],
+      phase: null,
+      done: false,
+      manual,
+      entryScale: game.altView.getFontScale(),
+      result: null,
+      aborted: false,
+    };
+  }
+
+  /**
+   * The size the pass should measure next, or null when it is finished.
+   * A manual entry is measured where it stands and never flipped: the pass
+   * may only conclude from what the player's own size reveals. An auto
+   * entry at a non-candidate size measures it first as a free gate - no
+   * flip, and a failure there condemns the whole range below it.
+   */
+  function nextCalibrationScale(game) {
+    const cal = game.calibration;
+    const current = game.altView.getFontScale();
+    const measured = cal.readings.some((r) => sameScale(r.scale, current));
+    if (cal.manual) return measured ? null : current;
+    if (
+      !measured &&
+      cal.readings.length === 0 &&
+      !CALIBRATION_CANDIDATES.some((s) => sameScale(s, current))
+    ) {
+      return current;
+    }
+    return nextProbeScale(cal.readings, undefined, current);
+  }
+
+  function stepCalibration(game, nowMs) {
+    const cal = game.calibration;
+    if (!cal || cal.done) return;
+
+    if (import.meta.env.DEV && window.__cityWalkCalibrationForce) {
+      // E2E determinism hook: forced probe readings resolve the pass
+      // instantly - CI renders in software and must never time real frames.
+      const forced = window.__cityWalkCalibrationForce;
+      for (;;) {
+        const scale = nextCalibrationScale(game);
+        if (scale === null) break;
+        const avgMs = Number(forced[String(scale)]);
+        if (!Number.isFinite(avgMs)) {
+          abortCalibration(game, { restore: true });
+          return;
+        }
+        cal.readings.push({
+          scale,
+          avgMs,
+          samples: CALIBRATION_SAMPLES_PER_SCALE,
+        });
+      }
+      finishCalibration(game);
+      return;
+    }
+
+    const totals = game.altView.getConvertTotals?.();
+    if (!totals) {
+      cal.done = true;
+      return;
+    }
+
+    if (!cal.phase) {
+      const scale = nextCalibrationScale(game);
+      if (scale === null) {
+        finishCalibration(game);
+        return;
+      }
+      if (!sameScale(game.altView.getFontScale(), scale)) {
+        game.altView.setFontScale(scale);
+        syncCellRaster(game);
+      }
+      cal.phase = createProbePhase(scale, nowMs);
+    }
+
+    // The probe must see conversions: standing frames self-heal at ~1 Hz,
+    // so ask for a real one this frame. The scene does not change - the
+    // converter re-reads the same pixels, which is exactly the cost under
+    // measurement.
+    game.altView.invalidate();
+
+    const result = stepProbePhase(cal.phase, totals, nowMs);
+    if (result.status === 'done') {
+      cal.readings.push(result.reading);
+      cal.phase = null;
+    } else if (result.status === 'abandoned') {
+      // A wedged phase (hidden tab) is an interruption, not a result:
+      // nothing is stored, nothing announced, yesterday's floor stands.
+      abortCalibration(game, { restore: true });
+    }
+  }
+
+  function finishCalibration(game) {
+    const cal = game.calibration;
+    cal.done = true;
+    cal.phase = null;
+    if (!isConclusive(cal.readings)) {
+      // Nothing decisive was measured (a comfortable manual size holding
+      // says nothing about the range): keep yesterday's floor, store
+      // nothing, announce nothing.
+      restoreEntryScale(game);
+      return;
+    }
+    const result = chooseCalibratedSize(cal.readings);
+    cal.result = result;
+    game.calibratedFloor = result.floorScale;
+    safeSetItem(
+      STORAGE_KEY_CITY_WALK_CALIBRATED_FLOOR,
+      encodeCalibration(result)
+    );
+    if (cal.manual) {
+      restoreEntryScale(game);
+    } else if (!sameScale(game.altView.getFontScale(), result.defaultScale)) {
+      // The calibrated default lands through the renderer only - writing
+      // the manual key here would freeze the calibration as a choice.
+      game.altView.setFontScale(result.defaultScale);
+      syncCellRaster(game);
+      game.altView.invalidate();
+    }
+    syncCharSizeControls();
+    if (result.fallback) {
+      const pct = Math.round(game.altView.getFontScale() * 100);
+      announceInLayer(
+        'Small character sizes cannot hold 30 frames per second on this ' +
+          `machine. Character size stays at ${pct} percent.`
+      );
+    }
+  }
+
+  function abortCalibration(game, { restore }) {
+    const cal = game.calibration;
+    if (!cal || cal.done) return;
+    cal.done = true;
+    cal.phase = null;
+    cal.aborted = true;
+    if (restore) restoreEntryScale(game);
+    syncCharSizeControls();
+  }
+
+  function restoreEntryScale(game) {
+    const cal = game.calibration;
+    if (!cal || !Number.isFinite(cal.entryScale)) return;
+    if (!sameScale(game.altView.getFontScale(), cal.entryScale)) {
+      game.altView.setFontScale(cal.entryScale);
+      syncCellRaster(game);
+      game.altView.invalidate();
+    }
+  }
+
+  /**
+   * The Smaller controls at the calibrated floor are disabled-with-reason,
+   * not hidden (the house pattern): aria-disabled keeps them focusable, and
+   * pressing one speaks the reason via adjustCharacterSize's floor stop.
+   * The Camera panel's zoom-out is only a character control in the street -
+   * over the map it is the map's own zoom and is never floor-bound.
+   */
+  function syncCharSizeControls() {
+    const game = state.game;
+    const floor = game?.calibratedFloor;
+    const atFloor =
+      Boolean(game) &&
+      Number.isFinite(floor) &&
+      floor > CHAR_SCALE_MIN + 1e-9 &&
+      game.altView.getFontScale() <= floor + 1e-9;
+    const setDisabled = (btn, disabled) => {
+      if (!btn) return;
+      if (disabled) btn.setAttribute('aria-disabled', 'true');
+      else btn.removeAttribute('aria-disabled');
+    };
+    setDisabled(
+      state.refs.toolbarButtons?.find(
+        (b) => b.spec.id === 'cityWalkCharDownBtn'
+      )?.btn,
+      atFloor
+    );
+    setDisabled(
+      document.getElementById('cityWalkCamZoomOut'),
+      atFloor && !game?.mapView
+    );
   }
 
   // -------------------------------------------------------------------
@@ -2577,6 +2828,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
 
     const dtS = Math.max(0, (nowMs - game.lastFrameMs) / 1000);
     game.lastFrameMs = nowMs;
+
+    // CW-42: the entry calibration pass rides the first seconds of real
+    // frames, in either view; it goes quiet the moment it is done.
+    stepCalibration(game, nowMs);
 
     if (game.mapView) {
       // Map mode (CW-9): the movement keys drive the camera, not the

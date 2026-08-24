@@ -534,6 +534,19 @@ export const STORAGE_KEY_CITY_WALK_FONT_SCALE = getAppPrefKey(
 );
 
 /**
+ * localStorage key for the City Walk game's calibrated character-size floor
+ * (CW-42, CW-Q39). The LAST entry calibration on this machine: a candidate
+ * scale ('0.1' or '0.3', floor and landing default alike) or 'fallback'
+ * (nothing in range held 30 fps — floor 0.3, default stays 0.5). Written by
+ * calibration only, never by the player; the player's own choice lives in
+ * STORAGE_KEY_CITY_WALK_FONT_SCALE, whose presence means a manual choice
+ * that calibration must never override.
+ */
+export const STORAGE_KEY_CITY_WALK_CALIBRATED_FLOOR = getAppPrefKey(
+  'city-walk-calibrated-floor'
+);
+
+/**
  * localStorage key for the City Walk game's colour/monochrome choice
  * (CW-Q16). 'on' or 'off'. ABSENT is meaningful and is the shipped state:
  * with no stored value colour follows high contrast, exactly as it did when

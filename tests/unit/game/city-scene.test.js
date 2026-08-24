@@ -167,6 +167,33 @@ describe('buildCityGroup — CW-8 distinctness', () => {
 
     dispose()
   })
+
+  it('setCellRaster biases every textured facade material for the cell grid (CW-41)', () => {
+    // The shimmer fix: facade textures are filtered for the CELL raster,
+    // so the bias is log2 of the cell height and follows the character
+    // size. At a cell height of 1 the filtering is exactly stock (bias 0)
+    // - which is also what the bench's no-cellraster variant relies on.
+    const { group, setCellRaster, dispose } = buildCityGroup(model())
+    const biased = []
+    group.traverse((o) => {
+      if (o.isMesh && o.material?.userData?.cellLodBias) {
+        biased.push(o.material)
+      }
+    })
+    // Buildings and storefronts carry the filter; this model builds both.
+    expect(biased.length).toBeGreaterThanOrEqual(2)
+
+    setCellRaster(4)
+    for (const m of biased) expect(m.userData.cellLodBias.value).toBe(2)
+    setCellRaster(10)
+    for (const m of biased) {
+      expect(m.userData.cellLodBias.value).toBeCloseTo(Math.log2(10), 6)
+    }
+    setCellRaster(1)
+    for (const m of biased) expect(m.userData.cellLodBias.value).toBe(0)
+
+    dispose()
+  })
 })
 
 describe('buildingTint', () => {
