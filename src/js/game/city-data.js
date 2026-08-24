@@ -181,6 +181,39 @@ export const STOREFRONT_AMENITY_VALUES = [
   'marketplace',
 ];
 
+/**
+ * CW-43 (CW-Q43): street furniture, from real node positions only.
+ *
+ * One list, not two — the bake queries exactly these values and the parser
+ * types by them, so an extract can never carry what the game will not read,
+ * and the game can never expect what the bake does not fetch. The owner's
+ * mission sentence governs: this is wayfinding data for a blind traveler,
+ * so placement fidelity IS the accessibility point — true positions, never
+ * decorative scatter.
+ *
+ * Rendered prop classes (drawn, solid, dressed in the class pass):
+ * bus_stop (highway), bench / waste_basket / bicycle_parking (amenity),
+ * fire_hydrant (emergency). Data-only wayfinding classes (ride the extract
+ * and the model for future features; nothing drawn): crossing (highway,
+ * with its kerb / tactile_paving / crossing:* / traffic_signals:*
+ * companions), plus bare kerb=* and tactile_paving=* nodes.
+ */
+export const FURNITURE_AMENITY_VALUES = [
+  'bench',
+  'waste_basket',
+  'bicycle_parking',
+];
+export const FURNITURE_HIGHWAY_VALUES = ['bus_stop', 'crossing'];
+export const FURNITURE_EMERGENCY_VALUES = ['fire_hydrant'];
+
+/**
+ * CW-44 (CW-Q44): named attraction nodes join the bake and the landmark
+ * legend at true positions — generic and data-driven, no 3D special-casing.
+ * tourism=attraction is the umbrella; attraction=* carries the specific
+ * kind (the Great Wheel is attraction=big_wheel).
+ */
+export const ATTRACTION_TOURISM_VALUES = ['attraction'];
+
 /** Whether a way's tags make it greenspace the game draws. */
 export function isGreenTags(tags) {
   if (!tags) return false;
@@ -470,6 +503,9 @@ export function parseCityExtract(extract, options = {}) {
   const greens = [];
   const trees = [];
   const pois = [];
+  const furniture = [];
+  const wayfinding = [];
+  const attractions = [];
   const partWays = [];
   let droppedRings = 0;
   let droppedElements = 0;
@@ -502,6 +538,70 @@ export function parseCityExtract(extract, options = {}) {
       }
       if (tags.natural === 'tree') {
         trees.push(projectLatLon(el.lat, el.lon, center));
+        continue;
+      }
+      // CW-43 (CW-Q43): rendered street furniture, typed, at the node's true
+      // position. Routed BEFORE the poi branch on purpose: a bench is an
+      // amenity node, and letting it fall through would hand the storefront
+      // chooser a bench to dress a ground floor by.
+      if (tags.highway === 'bus_stop') {
+        const [x, y] = projectLatLon(el.lat, el.lon, center);
+        furniture.push({
+          x,
+          y,
+          kind: 'bus_stop',
+          shelter: tags.shelter === 'yes',
+        });
+        continue;
+      }
+      if (FURNITURE_AMENITY_VALUES.includes(tags.amenity)) {
+        const [x, y] = projectLatLon(el.lat, el.lon, center);
+        const item = { x, y, kind: tags.amenity };
+        if (tags.amenity === 'bench') item.backrest = tags.backrest === 'yes';
+        furniture.push(item);
+        continue;
+      }
+      if (tags.emergency === 'fire_hydrant') {
+        const [x, y] = projectLatLon(el.lat, el.lon, center);
+        furniture.push({ x, y, kind: 'fire_hydrant' });
+        continue;
+      }
+      // CW-43 data-only wayfinding: crossings with their companions, and
+      // bare kerb / tactile nodes. Nothing is drawn; the typed points ride
+      // the model for the future wayfinding features the owner named.
+      if (tags.highway === 'crossing' || tags.kerb || tags.tactile_paving) {
+        const [x, y] = projectLatLon(el.lat, el.lon, center);
+        wayfinding.push({
+          x,
+          y,
+          kind:
+            tags.highway === 'crossing'
+              ? 'crossing'
+              : tags.kerb
+                ? 'kerb'
+                : 'tactile_paving',
+          tags,
+        });
+        continue;
+      }
+      // CW-44 (CW-Q44): a NAMED attraction node joins the landmark
+      // candidates — generic and data-driven, no special-casing by name.
+      if (
+        typeof tags.name === 'string' &&
+        tags.name.trim() !== '' &&
+        (tags.tourism === 'attraction' || typeof tags.attraction === 'string')
+      ) {
+        const [x, y] = projectLatLon(el.lat, el.lon, center);
+        attractions.push({
+          name: tags.name,
+          x,
+          y,
+          kind:
+            typeof tags.attraction === 'string'
+              ? tags.attraction
+              : 'attraction',
+          heightM: parseLengthMeters(tags.height) ?? 0,
+        });
         continue;
       }
       // CW-33/CW-34: a shop or a place to eat, kept as a point with its kind.
@@ -739,6 +839,9 @@ export function parseCityExtract(extract, options = {}) {
     greens,
     trees,
     pois,
+    furniture,
+    wayfinding,
+    attractions,
     boundsM,
     stats: {
       buildingCount: buildings.length,
@@ -752,6 +855,15 @@ export function parseCityExtract(extract, options = {}) {
       orphanParts,
       droppedRings,
       droppedElements,
+      // CW-43/CW-44: per-class counts — the record's table and the e2e
+      // count oracles read these.
+      furnitureCount: furniture.length,
+      furnitureByKind: furniture.reduce((acc, f) => {
+        acc[f.kind] = (acc[f.kind] ?? 0) + 1;
+        return acc;
+      }, {}),
+      wayfindingCount: wayfinding.length,
+      attractionCount: attractions.length,
     },
   };
 }
@@ -810,6 +922,26 @@ export function trimOverpassElement(el) {
     // CW-34's facades ride this rebake rather than asking Overpass twice.
     'building:material',
     'building:colour',
+    // CW-43 (CW-Q43): street furniture and its wayfinding companions. The
+    // owner's mission sentence: vital wayfinding information to a blind
+    // traveler — the companions (does the stop have a shelter, does the
+    // bench have a back, is the kerb lowered, does the signal sound) are
+    // the data, not decoration.
+    'emergency',
+    'shelter',
+    'bench',
+    'bin',
+    'backrest',
+    'seats',
+    'kerb',
+    'tactile_paving',
+    'crossing',
+    'crossing:island',
+    'crossing:markings',
+    'traffic_signals:sound',
+    'traffic_signals:vibration',
+    // CW-44 (CW-Q44): the specific attraction kind (big_wheel, viewpoint…).
+    'attraction',
   ];
 
   const trimTags = (tags) => {
@@ -871,7 +1003,24 @@ export function trimOverpassElement(el) {
     // CW-34 uses them to choose a building's ground-floor storefront from
     // what is actually there — but they ride this rebake so that release
     // does not have to ask Overpass for the four cities all over again.
-    if (!tags || (!tags.natural && !tags.shop && !tags.amenity)) return null;
+    // CW-43/CW-44 repeat the gate lesson a third time: keeping a tag is not
+    // enough — a bus stop (highway), a hydrant (emergency), a bare kerb or
+    // tactile node, and an attraction (tourism/attraction) all die here
+    // unless the gate admits them too.
+    if (
+      !tags ||
+      (!tags.natural &&
+        !tags.shop &&
+        !tags.amenity &&
+        !tags.highway &&
+        !tags.emergency &&
+        !tags.kerb &&
+        !tags.tactile_paving &&
+        !tags.tourism &&
+        !tags.attraction)
+    ) {
+      return null;
+    }
     const { lat, lon } = roundPt(el);
     return { type: 'node', id: el.id, tags, lat, lon };
   }
@@ -939,6 +1088,31 @@ export function extractLandmarks(model, options = {}) {
       x: cx / building.outer.length,
       y: cy / building.outer.length,
       heightM: building.heightM,
+      score,
+    });
+  }
+
+  // CW-44 (CW-Q44): named attraction NODES join the building ways, and an
+  // attraction outranks a plain tourism=hotel building: the Seattle legend
+  // was 11/12 hotels because hotels are the named tall things downtown. The
+  // base of 6 is chosen against the building arithmetic above — a plain
+  // tall hotel reaches 5 (tourism 3 + height 2) and 6 only with a
+  // city-block footprint, so a thing people travel to see beats plain
+  // built mass and only another tagged site can tie it. Buildings run
+  // first, so a name mapped as both a way and a node keeps the way's
+  // geometry-backed entry.
+  for (const node of model.attractions ?? []) {
+    if (typeof node.name !== 'string' || node.name.trim() === '') continue;
+    if (seen.has(node.name)) continue;
+    seen.add(node.name);
+    let score = 6;
+    if (node.heightM >= 60) score += 2;
+    else if (node.heightM >= 25) score += 1;
+    scored.push({
+      name: node.name,
+      x: node.x,
+      y: node.y,
+      heightM: node.heightM || 0,
       score,
     });
   }

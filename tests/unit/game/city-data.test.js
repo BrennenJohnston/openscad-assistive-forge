@@ -1381,3 +1381,287 @@ describe('CW-33 — pavements, surfaces and greens reach the model', () => {
     expect(model.stats.greenCount).toBe(0)
   })
 })
+
+describe('street furniture and wayfinding nodes (CW-43, CW-Q43)', () => {
+  const nodeEl = (id, xM, yM, tags) => ({
+    type: 'node',
+    id,
+    ...pt(xM, yM),
+    tags,
+  })
+
+  it('pins the one-list-not-two vocabularies the bake and parser share', async () => {
+    const {
+      FURNITURE_AMENITY_VALUES,
+      FURNITURE_HIGHWAY_VALUES,
+      FURNITURE_EMERGENCY_VALUES,
+      ATTRACTION_TOURISM_VALUES,
+    } = await import('../../../src/js/game/city-data.js')
+    expect(FURNITURE_AMENITY_VALUES).toEqual([
+      'bench',
+      'waste_basket',
+      'bicycle_parking',
+    ])
+    expect(FURNITURE_HIGHWAY_VALUES).toEqual(['bus_stop', 'crossing'])
+    expect(FURNITURE_EMERGENCY_VALUES).toEqual(['fire_hydrant'])
+    expect(ATTRACTION_TOURISM_VALUES).toEqual(['attraction'])
+  })
+
+  it('trim admits every furniture node type and keeps its companions', () => {
+    // The gate lesson, third time: keeping a tag is not enough - the gate
+    // has to admit the element carrying it.
+    const busStop = trimOverpassElement(
+      nodeEl(1, 0, 0, {
+        highway: 'bus_stop',
+        shelter: 'yes',
+        bench: 'yes',
+        bin: 'yes',
+        tactile_paving: 'yes',
+        name: 'Pine St and 3rd Ave',
+        route_ref: '10;11', // not kept
+      })
+    )
+    expect(busStop.tags).toEqual({
+      highway: 'bus_stop',
+      shelter: 'yes',
+      bench: 'yes',
+      bin: 'yes',
+      tactile_paving: 'yes',
+      name: 'Pine St and 3rd Ave',
+    })
+
+    const crossing = trimOverpassElement(
+      nodeEl(2, 0, 0, {
+        highway: 'crossing',
+        crossing: 'traffic_signals',
+        'crossing:island': 'no',
+        'crossing:markings': 'zebra',
+        'traffic_signals:sound': 'yes',
+        'traffic_signals:vibration': 'yes',
+        kerb: 'lowered',
+        tactile_paving: 'yes',
+        button_operated: 'yes', // not kept
+      })
+    )
+    expect(crossing.tags).toEqual({
+      highway: 'crossing',
+      crossing: 'traffic_signals',
+      'crossing:island': 'no',
+      'crossing:markings': 'zebra',
+      'traffic_signals:sound': 'yes',
+      'traffic_signals:vibration': 'yes',
+      kerb: 'lowered',
+      tactile_paving: 'yes',
+    })
+
+    const hydrant = trimOverpassElement(
+      nodeEl(3, 0, 0, { emergency: 'fire_hydrant', colour: 'red' })
+    )
+    expect(hydrant.tags).toEqual({ emergency: 'fire_hydrant' })
+
+    // Bare kerb and tactile nodes are wayfinding data on their own.
+    expect(
+      trimOverpassElement(nodeEl(4, 0, 0, { kerb: 'flush' }))
+    ).not.toBeNull()
+    expect(
+      trimOverpassElement(nodeEl(5, 0, 0, { tactile_paving: 'contrasted' }))
+    ).not.toBeNull()
+
+    // The gate still drops what the game cannot use.
+    expect(
+      trimOverpassElement(nodeEl(6, 0, 0, { barrier: 'bollard' }))
+    ).toBeNull()
+  })
+
+  it('parses each rendered class typed, at its true position', () => {
+    const model = parseCityExtract(
+      extractOf(
+        nodeEl(1, 10, 0, { highway: 'bus_stop', shelter: 'yes' }),
+        nodeEl(2, 20, 0, { highway: 'bus_stop' }),
+        nodeEl(3, 30, 0, { amenity: 'bench', backrest: 'yes' }),
+        nodeEl(4, 40, 0, { amenity: 'bench' }),
+        nodeEl(5, 50, 0, { amenity: 'waste_basket' }),
+        nodeEl(6, 60, 0, { amenity: 'bicycle_parking' }),
+        nodeEl(7, 70, 0, { emergency: 'fire_hydrant' })
+      ),
+      { center: CENTER }
+    )
+
+    expect(model.stats.furnitureCount).toBe(7)
+    expect(model.stats.furnitureByKind).toEqual({
+      bus_stop: 2,
+      bench: 2,
+      waste_basket: 1,
+      bicycle_parking: 1,
+      fire_hydrant: 1,
+    })
+    const sheltered = model.furniture.find((f) => f.x > 5 && f.x < 15)
+    expect(sheltered.kind).toBe('bus_stop')
+    expect(sheltered.shelter).toBe(true)
+    const bareStop = model.furniture.find((f) => f.x > 15 && f.x < 25)
+    expect(bareStop.shelter).toBe(false)
+    const backedBench = model.furniture.find((f) => f.x > 25 && f.x < 35)
+    expect(backedBench.kind).toBe('bench')
+    expect(backedBench.backrest).toBe(true)
+    const plainBench = model.furniture.find((f) => f.x > 35 && f.x < 45)
+    expect(plainBench.backrest).toBe(false)
+  })
+
+  it('never lets a bench reach the storefront poi list', () => {
+    // The poi grid is what CW-34 dresses ground floors from; before CW-43 a
+    // bench node in an extract would have joined it as an "amenity".
+    const model = parseCityExtract(
+      extractOf(
+        nodeEl(1, 0, 0, { amenity: 'bench' }),
+        nodeEl(2, 10, 0, { amenity: 'waste_basket' }),
+        nodeEl(3, 20, 0, { amenity: 'cafe' })
+      ),
+      { center: CENTER }
+    )
+    expect(model.pois).toHaveLength(1)
+    expect(model.pois[0].kind).toBe('cafe')
+    expect(model.stats.furnitureCount).toBe(2)
+  })
+
+  it('parses the data-only wayfinding classes with their companions riding', () => {
+    const model = parseCityExtract(
+      extractOf(
+        nodeEl(1, 0, 0, {
+          highway: 'crossing',
+          crossing: 'traffic_signals',
+          'traffic_signals:sound': 'yes',
+          kerb: 'lowered',
+          tactile_paving: 'yes',
+        }),
+        nodeEl(2, 10, 0, { kerb: 'flush' }),
+        nodeEl(3, 20, 0, { tactile_paving: 'yes' })
+      ),
+      { center: CENTER }
+    )
+
+    expect(model.stats.wayfindingCount).toBe(3)
+    const kinds = model.wayfinding.map((w) => w.kind).sort()
+    expect(kinds).toEqual(['crossing', 'kerb', 'tactile_paving'])
+    // A crossing that carries kerb+tactile companions is ONE crossing, and
+    // the companions ride its tags rather than splitting into three points.
+    const crossing = model.wayfinding.find((w) => w.kind === 'crossing')
+    expect(crossing.tags['traffic_signals:sound']).toBe('yes')
+    expect(crossing.tags.kerb).toBe('lowered')
+    expect(crossing.tags.tactile_paving).toBe('yes')
+  })
+
+  it('keeps old extracts parsing exactly as before (no furniture)', () => {
+    const model = parseCityExtract(
+      extractOf({
+        type: 'way',
+        id: 1,
+        tags: { building: 'yes', height: '20' },
+        geometry: squareRing(0, 0, 5),
+      }),
+      { center: CENTER }
+    )
+    expect(model.furniture).toEqual([])
+    expect(model.wayfinding).toEqual([])
+    expect(model.attractions).toEqual([])
+    expect(model.stats.furnitureCount).toBe(0)
+  })
+})
+
+describe('attraction nodes join the landmarks (CW-43/CW-44, CW-Q44)', () => {
+  const nodeEl = (id, xM, yM, tags) => ({
+    type: 'node',
+    id,
+    ...pt(xM, yM),
+    tags,
+  })
+  const buildingEl = (id, cx, tags, half = 10) => ({
+    type: 'way',
+    id,
+    tags: { building: 'yes', ...tags },
+    geometry: squareRing(cx, 0, half),
+  })
+
+  it('parses only NAMED attraction nodes, with height when tagged', () => {
+    const model = parseCityExtract(
+      extractOf(
+        nodeEl(1, 0, 0, {
+          tourism: 'attraction',
+          attraction: 'big_wheel',
+          name: 'Seattle Great Wheel',
+          height: '53',
+        }),
+        nodeEl(2, 10, 0, { tourism: 'attraction' }), // unnamed: no legend row
+        nodeEl(3, 20, 0, { attraction: 'carousel', name: 'Old Carousel' })
+      ),
+      { center: CENTER }
+    )
+
+    expect(model.stats.attractionCount).toBe(2)
+    const wheel = model.attractions.find(
+      (a) => a.name === 'Seattle Great Wheel'
+    )
+    expect(wheel.kind).toBe('big_wheel')
+    expect(wheel.heightM).toBeCloseTo(53, 5)
+    const carousel = model.attractions.find((a) => a.name === 'Old Carousel')
+    expect(carousel.kind).toBe('carousel')
+    expect(carousel.heightM).toBe(0)
+  })
+
+  it('an attraction outranks a plain hotel in the legend', async () => {
+    const { extractLandmarks } = await import(
+      '../../../src/js/game/city-data.js'
+    )
+    const many = []
+    for (let i = 0; i < 12; i++) {
+      many.push(
+        buildingEl(100 + i, i * 40, {
+          name: 'Hotel ' + i,
+          tourism: 'hotel',
+          height: '80',
+        })
+      )
+    }
+    many.push(
+      nodeEl(1, 600, 0, {
+        tourism: 'attraction',
+        attraction: 'big_wheel',
+        name: 'Seattle Great Wheel',
+        height: '53',
+      })
+    )
+    const model = parseCityExtract(extractOf(...many), { center: CENTER })
+    const landmarks = extractLandmarks(model, { max: 12 })
+
+    expect(landmarks).toHaveLength(12)
+    // Hotels: tourism string 3 + height>=60 gives 5. The Wheel: base 6 + 1
+    // for its 53 m = 7 - it OUTRANKS every plain hotel. (This exact case
+    // first failed with a base of 4: 4+1 tied the hotels' 5 and lost the
+    // height tiebreak, sliding off the capped list.)
+    expect(landmarks[0].name).toBe('Seattle Great Wheel')
+    expect(landmarks.filter((l) => l.name.startsWith('Hotel'))).toHaveLength(
+      11
+    )
+  })
+
+  it('a name mapped as both a way and a node keeps the way entry', async () => {
+    const { extractLandmarks } = await import(
+      '../../../src/js/game/city-data.js'
+    )
+    const model = parseCityExtract(
+      extractOf(
+        buildingEl(1, 0, {
+          name: 'Pier Museum',
+          tourism: 'museum',
+          height: '30',
+        }),
+        nodeEl(2, 200, 0, { tourism: 'attraction', name: 'Pier Museum' })
+      ),
+      { center: CENTER }
+    )
+    const landmarks = extractLandmarks(model)
+    const entries = landmarks.filter((l) => l.name === 'Pier Museum')
+    expect(entries).toHaveLength(1)
+    // The way's centroid, not the node's offset position.
+    expect(entries[0].x).toBeCloseTo(0, 0)
+  })
+})
