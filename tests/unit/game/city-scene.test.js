@@ -431,7 +431,10 @@ describe('buildStreetProps (CW-16)', () => {
     // A car turned across the road, or parked on the sidewalk, breaks this.
     expect(maxAbsY).toBeLessThanOrEqual(2.5)
     expect(minAbsY).toBeGreaterThan(0.4)
-    expect(maxZ).toBeCloseTo(1.35, 2)
+    // CW-46: parked cars are CLASSES now - the tallest (pickup/SUV) tops
+    // out at 1.9 m and nothing exceeds the class table.
+    expect(maxZ).toBeGreaterThan(1.3)
+    expect(maxZ).toBeLessThanOrEqual(1.9 + 1e-3)
 
     props.dispose()
   })
@@ -1236,6 +1239,68 @@ describe('street furniture props (CW-43)', () => {
     const props = buildStreetProps(m, buildCollisionGrid(m))
     expect(props.stats.furnitureCount).toBe(0)
     expect(props.group.children.some((c) => c.name === 'benches')).toBe(false)
+    props.dispose()
+  })
+})
+
+describe('cars are cars (CW-46, CW-Q46)', () => {
+  it('ships the signed class table exactly, weights summing to 100', async () => {
+    const { CAR_CLASSES } = await import('../../../src/js/game/city-scene.js')
+    expect(CAR_CLASSES.map((c) => [c.kind, c.lenM, c.widM, c.hM])).toEqual([
+      ['pickup', 5.8, 2.0, 1.9],
+      ['suv', 5.0, 1.98, 1.9],
+      ['crossover', 4.6, 1.85, 1.65],
+      ['sedan', 4.9, 1.85, 1.45],
+      ['hatch', 4.4, 1.8, 1.5],
+      ['minivan', 5.2, 2.0, 1.75],
+    ])
+    expect(CAR_CLASSES.reduce((s, c) => s + c.weight, 0)).toBe(100)
+  })
+
+  it('picks classes deterministically across the whole draw range', async () => {
+    const { pickCarClass, CAR_CLASSES } = await import(
+      '../../../src/js/game/city-scene.js'
+    )
+    expect(pickCarClass(0).kind).toBe('pickup')
+    expect(pickCarClass(0.9999).kind).toBe('minivan')
+    // Every class is reachable, and the same draw always answers the same.
+    const seen = new Set()
+    for (let i = 0; i < 1000; i++) {
+      const cls = pickCarClass(i / 1000)
+      expect(pickCarClass(i / 1000)).toBe(cls)
+      seen.add(cls.kind)
+    }
+    expect(seen.size).toBe(CAR_CLASSES.length)
+  })
+
+  it('stamps each parked car with its own class footprint, and no two overlap along the curb', () => {
+    const m = propsModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    const legalHalves = new Set([2.9, 2.5, 2.3, 2.45, 2.2, 2.6])
+    const cars = props.obstacles.filter((o) => o.halfLengthM > 1.5)
+    expect(cars.length).toBeGreaterThan(0)
+    for (const car of cars) {
+      expect(legalHalves.has(Math.round(car.halfLengthM * 100) / 100)).toBe(
+        true
+      )
+    }
+    // Along the (x-axis) road, successive parked footprints keep clear of
+    // one another - a 5.8 m pickup in the old 6 m slots would not have.
+    const sameSide = (side) =>
+      cars
+        .filter((o) => Math.sign(o.y) === side && Math.abs(o.rotationRad) < 0.1)
+        .sort((a, b) => a.x - b.x)
+    for (const side of [-1, 1]) {
+      const row = sameSide(side)
+      for (let i = 1; i < row.length; i++) {
+        const gap =
+          row[i].x -
+          row[i - 1].x -
+          row[i].halfLengthM -
+          row[i - 1].halfLengthM
+        expect(gap).toBeGreaterThanOrEqual(0)
+      }
+    }
     props.dispose()
   })
 })

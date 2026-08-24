@@ -1906,15 +1906,113 @@ export function buildCityGroup(model) {
 // Sizes are ordinary real-world meters; the ASCII sampler turns them into
 // glyph clusters, so what matters is that a canopy clears the player's eyes
 // and a car reads as a bright block at the curb.
-const CAR_LENGTH_M = 4.4;
-const CAR_WIDTH_M = 1.8;
-const CAR_HEIGHT_M = 1.35;
-const CAR_BODY_HEIGHT_M = 0.75;
-const CAR_CABIN_INSET_M = 0.55;
-const CAR_SLOT_M = 6;
+//
+// CW-46 (CW-Q46): six vehicle CLASSES, never likenesses - the owner asked
+// for the average size and shape of what Americans actually drive, and we
+// ship segment-typical exterior dimensions (length x width x height,
+// metres) rounded from manufacturers' published spec sheets for each US
+// segment's common models (full-size crew-cab pickup, three-row SUV,
+// two-row crossover, mid-size sedan, compact hatch, minivan). The table is
+// the owner-signed CW-Q46 data (plan section 2, 2026-08-23). `bodyM` is
+// the beltline the greenhouse sits on; `weight` is the hash mix,
+// US-street-plausible (pickups and SUVs common) - one line each to
+// reverse.
+export const CAR_CLASSES = [
+  { kind: 'pickup', lenM: 5.8, widM: 2.0, hM: 1.9, bodyM: 1.05, weight: 22 },
+  { kind: 'suv', lenM: 5.0, widM: 1.98, hM: 1.9, bodyM: 0.95, weight: 22 },
+  {
+    kind: 'crossover',
+    lenM: 4.6,
+    widM: 1.85,
+    hM: 1.65,
+    bodyM: 0.85,
+    weight: 20,
+  },
+  { kind: 'sedan', lenM: 4.9, widM: 1.85, hM: 1.45, bodyM: 0.8, weight: 18 },
+  { kind: 'hatch', lenM: 4.4, widM: 1.8, hM: 1.5, bodyM: 0.8, weight: 10 },
+  { kind: 'minivan', lenM: 5.2, widM: 2.0, hM: 1.75, bodyM: 0.85, weight: 8 },
+];
+const CAR_CLASS_WEIGHT_TOTAL = CAR_CLASSES.reduce((s, c) => s + c.weight, 0);
+
+/** Deterministic weighted class pick from a [0,1) draw (CW-46). */
+export function pickCarClass(r) {
+  let t = r * CAR_CLASS_WEIGHT_TOTAL;
+  for (const cls of CAR_CLASSES) {
+    t -= cls.weight;
+    if (t < 0) return cls;
+  }
+  return CAR_CLASSES[CAR_CLASSES.length - 1];
+}
+
+// The longest class must fit a slot with air at both ends, and the spot
+// grid must keep crossing-street neighbours' stamped footprints apart -
+// 5.8 m pickups at the old 5 m centers would have overlapped by 0.8 m.
+const CAR_SLOT_M = 6.5;
 const CAR_OCCUPANCY_MIN = 0.4;
 const CAR_OCCUPANCY_MAX = 0.6;
-const CAR_MIN_GAP_M = 5;
+const CAR_MIN_GAP_M = 6;
+
+/**
+ * One vehicle of its class, as boxes pushed onto `list` (CW-46). Every
+ * class shares the chassis box up to its beltline; the greenhouse differs,
+ * and that IS the silhouette: a pickup is a tall cab over an OPEN bed
+ * (rails and tailgate, no roof), an SUV/crossover a long tall cabin, a
+ * minivan one box nearly end to end, a sedan the classic inset cabin, a
+ * hatch a cabin reaching the tail. Boxes overlap by a hair - never
+ * exactly-touching faces.
+ */
+function pushCarClassGeoms(list, cls, x, y, angle, bodyTint, cabinTint) {
+  const ux = Math.cos(angle);
+  const uy = Math.sin(angle);
+  const nx = -uy;
+  const ny = ux;
+  const box = (len, wid, h, dAlong, dAcross, z, tint) =>
+    list.push(
+      makeBox(
+        len,
+        wid,
+        h,
+        x + ux * dAlong + nx * dAcross,
+        y + uy * dAlong + ny * dAcross,
+        z,
+        angle,
+        tint
+      )
+    );
+  box(cls.lenM, cls.widM, cls.bodyM, 0, 0, cls.bodyM / 2, bodyTint);
+  const ghH = cls.hM - cls.bodyM + 0.05;
+  const ghZ = cls.bodyM - 0.05 + ghH / 2;
+  const w = cls.widM - 0.2;
+  if (cls.kind === 'pickup') {
+    const cabL = cls.lenM * 0.4;
+    box(cabL, w, ghH, cls.lenM / 2 - cabL / 2 - 0.12, 0, ghZ, cabinTint);
+    const bedL = cls.lenM * 0.52;
+    const bedAlong = -(cls.lenM / 2) + bedL / 2 + 0.06;
+    const railH = 0.45;
+    const railZ = cls.bodyM - 0.03 + railH / 2;
+    for (const s of [-1, 1]) {
+      box(
+        bedL,
+        0.1,
+        railH,
+        bedAlong,
+        (cls.widM / 2 - 0.07) * s,
+        railZ,
+        bodyTint
+      );
+    }
+    box(0.1, cls.widM - 0.1, railH, -(cls.lenM / 2) + 0.07, 0, railZ, bodyTint);
+  } else if (cls.kind === 'suv' || cls.kind === 'crossover') {
+    box(cls.lenM * 0.78, w, ghH, -cls.lenM * 0.04, 0, ghZ, cabinTint);
+  } else if (cls.kind === 'minivan') {
+    box(cls.lenM * 0.86, w, ghH, -cls.lenM * 0.02, 0, ghZ, cabinTint);
+  } else if (cls.kind === 'hatch') {
+    box(cls.lenM * 0.6, w, ghH, -cls.lenM * 0.17, 0, ghZ, cabinTint);
+  } else {
+    // Sedan: the classic inset cabin amidships.
+    box(cls.lenM * 0.55, w, ghH, -cls.lenM * 0.04, 0, ghZ, cabinTint);
+  }
+}
 // Cars park along ordinary streets. Motorways, trunks and primaries get none:
 // nobody leaves a car on an arterial, and their ribbons carry the through
 // traffic CW-19 will animate.
@@ -2901,32 +2999,17 @@ export function buildStreetProps(model, collision = null) {
               hue,
               CAR_CHROMA
             );
-            trafficGeoms.push(
-              makeBox(
-                CAR_LENGTH_M,
-                CAR_WIDTH_M,
-                CAR_BODY_HEIGHT_M,
-                x,
-                y,
-                CAR_BODY_HEIGHT_M / 2,
-                heading,
-                bodyTint
-              )
-            );
-            const cabinLen = CAR_LENGTH_M - CAR_CABIN_INSET_M * 2;
-            const cabinBottom = CAR_BODY_HEIGHT_M - 0.05;
-            const cabinH = CAR_HEIGHT_M - cabinBottom;
-            trafficGeoms.push(
-              makeBox(
-                cabinLen,
-                CAR_WIDTH_M - 0.2,
-                cabinH,
-                x - ux * (CAR_CABIN_INSET_M / 2) * dir,
-                y - uy * (CAR_CABIN_INSET_M / 2) * dir,
-                cabinBottom + cabinH / 2,
-                heading,
-                cabinTint
-              )
+            // CW-46: the class comes from the SAME seed, so adding classes
+            // reshuffled nothing else on the street.
+            const cls = pickCarClass(((seed >>> 3) % 1000) / 1000);
+            pushCarClassGeoms(
+              trafficGeoms,
+              cls,
+              x,
+              y,
+              heading,
+              bodyTint,
+              cabinTint
             );
             trafficCount++;
           }
@@ -3026,9 +3109,10 @@ export function buildStreetProps(model, collision = null) {
         if (carRng && carOffset >= 0.8) {
           const ox = nx * carOffset * side;
           const oy = ny * carOffset * side;
+          const maxHalfLen = CAR_CLASSES[0].lenM / 2;
           for (
-            let s = JUNCTION_MARGIN_M + CAR_LENGTH_M / 2;
-            s + CAR_LENGTH_M / 2 <= len - JUNCTION_MARGIN_M;
+            let s = JUNCTION_MARGIN_M + maxHalfLen;
+            s + maxHalfLen <= len - JUNCTION_MARGIN_M;
             s += CAR_SLOT_M
           ) {
             const seed = hashBuilding(
@@ -3041,9 +3125,13 @@ export function buildStreetProps(model, collision = null) {
             if (!inCore(x, y)) continue;
             if (carSpots.occupied(x, y, CAR_MIN_GAP_M)) continue;
             if (furnitureSpots.occupied(x, y, FURNITURE_CLEAR_M)) continue;
-            // The whole footprint has to be clear, not just the middle.
-            const hl = CAR_LENGTH_M / 2;
-            const hw = CAR_WIDTH_M / 2;
+            // CW-46: the class comes from the same seed that always picked
+            // tier and hue, so classes reshuffled nothing else.
+            const cls = pickCarClass(((seed >>> 3) % 1000) / 1000);
+            // The whole CLASS footprint has to be clear, not just the
+            // middle - a pickup asks for more curb than a hatch.
+            const hl = cls.lenM / 2;
+            const hw = cls.widM / 2;
             let clear = !isBlocked(x, y);
             for (const corner of [
               [hl, hw],
@@ -3067,36 +3155,7 @@ export function buildStreetProps(model, collision = null) {
               hue,
               CAR_CHROMA
             );
-            carGeoms.push(
-              makeBox(
-                CAR_LENGTH_M,
-                CAR_WIDTH_M,
-                CAR_BODY_HEIGHT_M,
-                x,
-                y,
-                CAR_BODY_HEIGHT_M / 2,
-                angle,
-                bodyTint
-              )
-            );
-            // Cabin: shorter, narrower, set back, and overlapping the body by
-            // a hair so the two boxes never share an exact face.
-            const cabinLen = CAR_LENGTH_M - CAR_CABIN_INSET_M * 2;
-            const cabinBottom = CAR_BODY_HEIGHT_M - 0.05;
-            const cabinH = CAR_HEIGHT_M - cabinBottom;
-            const back = -CAR_CABIN_INSET_M / 2;
-            carGeoms.push(
-              makeBox(
-                cabinLen,
-                CAR_WIDTH_M - 0.2,
-                cabinH,
-                x + ux * back,
-                y + uy * back,
-                cabinBottom + cabinH / 2,
-                angle,
-                cabinTint
-              )
-            );
+            pushCarClassGeoms(carGeoms, cls, x, y, angle, bodyTint, cabinTint);
 
             carSpots.add(x, y);
             obstacles.push({
