@@ -55,6 +55,7 @@ import {
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { pointInRing } from './walk-controls.js';
+import { makeFigureSpec, makeFigureGeoms } from './city-figures.js';
 import {
   buildRoadGraph,
   ringCentroid,
@@ -1941,16 +1942,16 @@ const CAR_MIN_GAP_M = 5;
 // They are static, like the traffic. Placement is stamped into collision the
 // way trees are, because a person standing on the pavement is furniture the
 // player should walk around rather than through.
-const PERSON_HEIGHT_M = 1.72;
-const PERSON_HEAD_M = 0.2;
+// CW-45 (CW-Q45): the figure GEOMETRY lives in city-figures.js now, with
+// per-figure height/build from documented human ranges and jointed poses.
+// These two stay as the obstacle footprint every figure stamps - a walker's
+// personal space does not change with a few centimetres of stature.
 const PERSON_SHOULDER_W_M = 0.46;
-const PERSON_TORSO_W_M = 0.34;
 const PERSON_DEPTH_M = 0.24;
-const PERSON_LEG_W_M = 0.13;
-const PERSON_ARM_W_M = 0.1;
-// Skin and clothing are irrelevant here; what matters is that a person is
-// BRIGHTER than the pavement and dimmer than a lit sign, so they read as a
-// figure in front of things rather than as part of them.
+// The neutral FIGURE tone (head and shoulders): a person is BRIGHTER than
+// the pavement and dimmer than a lit sign, so they read as a figure in
+// front of things rather than as part of them. Clothing zones get palette
+// hues; this tone never varies - the owner's palette-not-race rule.
 const PERSON_TINT = [0.82, 0.82, 0.82];
 const PERSON_DARK_TINT = [0.5, 0.5, 0.5];
 // One figure every so many metres of shopfront-facing pavement.
@@ -1960,111 +1961,6 @@ const PERSON_CURB_OFFSET_M = 1.1;
 const DOG_HEIGHT_M = 0.45;
 const DOG_LENGTH_M = 0.6;
 const DOG_WIDTH_M = 0.2;
-
-/**
- * One standing figure, as a list of boxes in world space.
- *
- * The stride swings the legs and the opposite arms, which is what makes a
- * frozen figure read as caught mid-step rather than as a mannequin. At 0 the
- * figure stands still.
- *
- * @param {number} x
- * @param {number} y
- * @param {number} facingRad
- * @param {number} stride - -1..1, how far through a step the figure is frozen
- * @returns {import('three').BufferGeometry[]}
- */
-function makePersonGeoms(x, y, facingRad, stride) {
-  const out = [];
-  const cos = Math.cos(facingRad);
-  const sin = Math.sin(facingRad);
-  // Along the facing direction (a step goes forward), and across it (limbs
-  // sit left and right).
-  const fwd = (d) => [x + cos * d, y + sin * d];
-  const side = (d) => [-sin * d, cos * d];
-
-  const legH = PERSON_HEIGHT_M * 0.47;
-  const torsoH = PERSON_HEIGHT_M * 0.3;
-  const torsoZ = legH + torsoH / 2;
-  const headZ = PERSON_HEIGHT_M - PERSON_HEAD_M / 2;
-
-  // Legs: one forward, one back, by the stride.
-  for (const lr of [-1, 1]) {
-    const swing = stride * 0.28 * lr;
-    const [lx, ly] = fwd(swing);
-    const [ox, oy] = side(PERSON_LEG_W_M * 0.85 * lr);
-    out.push(
-      makeBox(
-        PERSON_LEG_W_M + Math.abs(swing) * 0.5,
-        PERSON_LEG_W_M,
-        legH,
-        lx + ox,
-        ly + oy,
-        legH / 2,
-        facingRad,
-        PERSON_DARK_TINT
-      )
-    );
-  }
-
-  out.push(
-    makeBox(
-      PERSON_DEPTH_M,
-      PERSON_TORSO_W_M,
-      torsoH,
-      x,
-      y,
-      torsoZ,
-      facingRad,
-      PERSON_TINT
-    )
-  );
-  // Shoulders: a little wider than the torso, at the top of it — the line
-  // that separates a person from a post.
-  out.push(
-    makeBox(
-      PERSON_DEPTH_M * 0.9,
-      PERSON_SHOULDER_W_M,
-      PERSON_HEIGHT_M * 0.08,
-      x,
-      y,
-      legH + torsoH - PERSON_HEIGHT_M * 0.02,
-      facingRad,
-      PERSON_TINT
-    )
-  );
-  // Arms swing opposite the legs.
-  for (const lr of [-1, 1]) {
-    const swing = -stride * 0.22 * lr;
-    const [ax, ay] = fwd(swing);
-    const [ox, oy] = side((PERSON_SHOULDER_W_M / 2) * lr);
-    out.push(
-      makeBox(
-        PERSON_ARM_W_M + Math.abs(swing) * 0.4,
-        PERSON_ARM_W_M,
-        torsoH * 0.92,
-        ax + ox,
-        ay + oy,
-        torsoZ,
-        facingRad,
-        PERSON_DARK_TINT
-      )
-    );
-  }
-  out.push(
-    makeBox(
-      PERSON_HEAD_M,
-      PERSON_HEAD_M,
-      PERSON_HEAD_M,
-      x,
-      y,
-      headZ,
-      facingRad,
-      PERSON_TINT
-    )
-  );
-  return out;
-}
 
 /**
  * A dog on a lead beside its walker: a low body, four short legs and a head.
@@ -2520,7 +2416,47 @@ export function buildStreetProps(model, collision = null) {
   let trafficCount = 0;
   const personGeoms = [];
   let personCount = 0;
+  let sitterCount = 0;
   const personSpots = makePointGrid(PROP_SPATIAL_CELL_M);
+  const figureSpots = [];
+  const figuresByPose = {};
+  // CW-45 (CW-Q45): plant one whole person - their own height and build
+  // drawn from the documented ranges, jointed pose, clothing tones from the
+  // SAME palette machinery the cars wear. The owner's words govern the
+  // colours: identity comes from "our current color schemes, not by race" -
+  // the hues dress the CLOTHING zones (torso, legs); head and shoulders
+  // keep the one neutral figure tone, and no skin surface is modelled.
+  const FIGURE_CHROMA = 0.5;
+  const plantFigure = (x, y, facing, spec, rng) => {
+    const torsoHue =
+      TINT_HUES_DEG[
+        Math.floor(rng() * TINT_HUES_DEG.length) % TINT_HUES_DEG.length
+      ];
+    const legHue =
+      TINT_HUES_DEG[
+        Math.floor(rng() * TINT_HUES_DEG.length) % TINT_HUES_DEG.length
+      ];
+    // The proof gate caught the first tier draw: a 0.35 torso over 0.3
+    // legs vanished against black pavement - a floating half-person.
+    // Figures are thin, so their clothing stays in the upper luminance
+    // band (the R4 figure wore 0.82/0.5 greys and read).
+    const FIGURE_TIERS = [0.5, 0.65, 0.8];
+    const torsoTier =
+      FIGURE_TIERS[
+        Math.floor(rng() * FIGURE_TIERS.length) % FIGURE_TIERS.length
+      ];
+    const legTier = Math.max(0.45, torsoTier - 0.15);
+    const zones = makeFigureGeoms(x, y, facing, spec);
+    const torsoTint = tintOf(torsoTier, torsoHue, FIGURE_CHROMA);
+    const legTint = tintOf(legTier, legHue, FIGURE_CHROMA);
+    for (const g of zones.torso) paintGeometry(g, torsoTint);
+    for (const g of zones.legs) paintGeometry(g, legTint);
+    for (const g of zones.figure) paintGeometry(g, PERSON_TINT);
+    personGeoms.push(...zones.legs, ...zones.torso, ...zones.figure);
+    personCount++;
+    figuresByPose[spec.pose] = (figuresByPose[spec.pose] ?? 0) + 1;
+    figureSpots.push({ x, y, pose: spec.pose, facing });
+  };
   const poleGeoms = [];
   const lampHeadGeoms = [];
   // CW-43 street furniture, one merged mesh per class.
@@ -2596,6 +2532,10 @@ export function buildStreetProps(model, collision = null) {
     FURNITURE_ROAD_CELL_M
   );
   const furniturePlaced = {};
+  // CW-45: where the benches actually STAND, for the sitters - position,
+  // seat axis, which way a seated person faces (toward the road), and
+  // whether there is a back.
+  const placedBenches = [];
   (model.furniture ?? []).forEach((item, index) => {
     const { x, y } = item;
     if (!inCore(x, y) || isBlocked(x, y)) return;
@@ -2681,6 +2621,13 @@ export function buildStreetProps(model, collision = null) {
         }
       }
     } else if (item.kind === 'bench') {
+      placedBenches.push({
+        x,
+        y,
+        angle,
+        facing: Math.atan2(-awayY, -awayX),
+        backrest: Boolean(item.backrest),
+      });
       benchGeoms.push(
         makeBox(
           BENCH_SEAT_L_M,
@@ -2787,6 +2734,27 @@ export function buildStreetProps(model, collision = null) {
     furniturePlaced[item.kind] = (furniturePlaced[item.kind] ?? 0) + 1;
   });
 
+  // 1c. CW-45 sitting figures, ONLY where a real bench stands - never a
+  //     scattered seat: a city with two mapped benches gets at most two
+  //     sitters, which is the data's own answer. At most one seated figure
+  //     per bench, hash-decided; the sitter faces the way the bench does
+  //     (toward the road) and takes a seat position along it. The chance is
+  //     one line to reverse.
+  const BENCH_SITTER_CHANCE = 0.4;
+  placedBenches.forEach((bench, index) => {
+    const rng = makeLcg(hashBuilding(index, 'bench-sitter'));
+    if (rng() >= BENCH_SITTER_CHANCE) return;
+    const along = (rng() * 2 - 1) * (BENCH_SEAT_L_M / 2 - 0.35);
+    const sx = bench.x + Math.cos(bench.angle) * along;
+    const sy = bench.y + Math.sin(bench.angle) * along;
+    const spec = makeFigureSpec(rng, 'sitting', { seatZ: BENCH_SEAT_H_M });
+    plantFigure(sx, sy, bench.facing, spec, rng);
+    sitterCount++;
+    // The bench already stamps collision; the sitter just keeps standing
+    // figures from crowding the seat.
+    personSpots.add(sx, sy);
+  });
+
   // 2. Procedural infill along ordinary curbs, and the parked cars. Both
   //    walk the road segments; each road carries its own deterministic
   //    number stream so a city lays out identically on every machine.
@@ -2877,12 +2845,19 @@ export function buildStreetProps(model, collision = null) {
             angle +
             (roll < 0.25 ? Math.PI / 2 : 0) +
             (walkSide < 0 ? Math.PI : 0);
-          // Most are frozen mid-stride; a quarter simply stand.
-          const stride = roll < 0.25 ? 0 : (peopleRng() * 2 - 1) * 0.9;
-          personGeoms.push(...makePersonGeoms(px, py, facing, stride));
-          personCount++;
-          // Roughly one walker in six has a dog a pace ahead.
-          if (peopleRng() < 0.17) {
+          // CW-45 pose mix (one line each to reverse): the standers keep
+          // the R4 quarter; about three movers in twenty jog.
+          const pose =
+            roll < 0.25
+              ? 'standing'
+              : peopleRng() < 0.15
+                ? 'jogging'
+                : 'walking';
+          const spec = makeFigureSpec(peopleRng, pose);
+          plantFigure(px, py, facing, spec, peopleRng);
+          // Roughly one WALKER in six has a dog a pace ahead - paces, not
+          // joggers.
+          if (pose === 'walking' && peopleRng() < 0.17) {
             const dx2 = px + Math.cos(facing) * 0.85;
             const dy2 = py + Math.sin(facing) * 0.85;
             if (inCore(dx2, dy2) && !isBlocked(dx2, dy2)) {
@@ -3326,8 +3301,11 @@ export function buildStreetProps(model, collision = null) {
     trafficLights,
     /** Frozen cars standing on the travel lanes (CW-19). */
     frozenTrafficCount: trafficCount,
-    /** Static silhouette figures on the pavements (CW-19). */
+    /** Static silhouette figures on the pavements (CW-19, varied CW-45). */
     peopleCount: personCount,
+    /** CW-45: where each figure stands and its pose - deterministic per
+     * city; the proof-gate driver and the e2e counts read this. */
+    figureSpots,
     obstacles,
     /**
      * The map view is a clean street network seen from a kilometer up:
@@ -3351,6 +3329,9 @@ export function buildStreetProps(model, collision = null) {
       // own counts minus anything out of core or inside a building.
       furnitureCount: furnitureSpots.size,
       furnitureByKind: furniturePlaced,
+      // CW-45: pose census and how many benches hold a sitter.
+      figuresByPose,
+      sitterCount,
       triangles,
     },
   };
