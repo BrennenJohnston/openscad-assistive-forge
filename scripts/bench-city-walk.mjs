@@ -448,6 +448,14 @@ async function main() {
   await context.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true')
     localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
+    // CW-42: benches measure the size THEY set. The inert forced-probe map
+    // stops the entry calibration on its first frame, and clearing the
+    // stored floor keeps a previous real calibration from seeding the
+    // landing or blocking the keypress ladder below 30% (the scale
+    // verification would catch it loudly, but a bench that cannot reach
+    // its config is still a dead bench).
+    window.__cityWalkCalibrationForce = {}
+    localStorage.removeItem('openscad-forge-city-walk-calibrated-floor')
   })
   const page = await context.newPage()
 

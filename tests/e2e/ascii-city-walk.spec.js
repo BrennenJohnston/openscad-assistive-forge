@@ -730,8 +730,10 @@ test.describe('ASCII City Walk — character size (CW-12)', () => {
     await enterCity(page)
     await page.keyboard.press('KeyH')
     await expect(page.locator('#cityWalkHelpPanel')).toBeVisible()
+    // CW-42: the bottom of the range is per machine, and the help says so.
     await expect(page.locator('#cityWalkHelpPanel')).toContainText(
-      'smaller or larger characters (10% to 100%)'
+      'smaller or larger characters, up to 100% ' +
+        "(the smallest size is set by this machine's own speed)"
     )
   })
 })
