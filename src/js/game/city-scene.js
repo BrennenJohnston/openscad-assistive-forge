@@ -55,6 +55,7 @@ import {
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { pointInRing } from './walk-controls.js';
+import { makeFigureSpec, makeFigureGeoms } from './city-figures.js';
 import {
   buildRoadGraph,
   ringCentroid,
@@ -172,7 +173,6 @@ const GROUND_LOOSE_STREAKS = 800;
 const TINT_TIERS = [0.5, 0.65, 0.8, 0.95];
 const TINT_HUES_DEG = [0, 30, 60, 120, 180, 270, 300, 330];
 const TINT_CHROMA = 0.45;
-const STOREFRONT_TINT = [0.95, 0.95, 0.95];
 
 // Sign panels and rooftop masts (CW-18). A sign is two boxes: a bright
 // near-neutral PLATE that owns the top of the street-level luminance band
@@ -210,7 +210,6 @@ const SIGN_ROAD_CELL_M = 40;
 // Storefront band: a shop sign above the glass, on a hashed subset of the
 // buildings that carry a storefront strip at all.
 const SIGN_BAND_SHARE = 0.45;
-const SIGN_BAND_BASE_M = STOREFRONT_HEIGHT_M + 0.4;
 const SIGN_BAND_HEIGHT_M = 1.1;
 const SIGN_BAND_MAX_W_M = 7;
 const SIGN_BAND_EDGE_SHARE = 0.55;
@@ -408,11 +407,22 @@ function makeRepeatingTexture(canvas, repeatX, repeatY, offsetY = 0) {
  *   2. **No shape that reads as a character.** That is the fault this whole
  *      release exists to remove. Bars, slots and bands only.
  */
+// CW-46 facade rider (the directive's third uniformity: "the buildings
+// surfaces all being the same size windows"): every archetype now carries
+// its OWN bay metre size (bayWM x bayHM), so window rhythm differs between
+// families - a 'narrow' punched wall runs 2.8 m bays where a 'band'
+// curtain wall runs 5 m. The texture tile stays 8x12 bays; only the metre
+// repeat changes, and the per-building phase shift moves in the
+// archetype's own bay units, which is what keeps CW-34's whole-bay law
+// intact (a fractional shift would put half-height window rows at every
+// ground line). The values are a taste table, one line each to reverse.
 const WINDOW_ARCHETYPES = [
   // A plain pane split by a centre mullion - the window the city has always
   // had, kept as one family so a share of the buildings look unchanged.
   {
     name: 'plain',
+    bayWM: 4,
+    bayHM: 3,
     bars: (ctx, x, y, w, h) => {
       ctx.fillRect(x + w * 0.48, y, w * 0.04, h);
     },
@@ -420,12 +430,16 @@ const WINDOW_ARCHETYPES = [
   // One tall slot: a narrow vertical opening in a mostly solid bay.
   {
     name: 'slot',
+    bayWM: 3.2,
+    bayHM: 2.8,
     inset: [0.36, 0.14, 0.28, 0.72],
     bars: () => {},
   },
   // Two panes side by side, a wide mullion between them.
   {
     name: 'pair',
+    bayWM: 4.4,
+    bayHM: 3.1,
     bars: (ctx, x, y, w, h) => {
       ctx.fillRect(x + w * 0.44, y, w * 0.12, h);
     },
@@ -433,6 +447,8 @@ const WINDOW_ARCHETYPES = [
   // A pane with the blinds part way down, at a height that varies per bay.
   {
     name: 'blinds',
+    bayWM: 3.6,
+    bayHM: 2.9,
     bars: (ctx, x, y, w, h, rand) => {
       const drop = 0.15 + rand() * 0.55;
       ctx.fillRect(x, y, w, h * drop);
@@ -442,6 +458,8 @@ const WINDOW_ARCHETYPES = [
   // Vertical stripes: a curtain-walled bay read as glazing bars.
   {
     name: 'stripes',
+    bayWM: 4,
+    bayHM: 3.4,
     bars: (ctx, x, y, w, h) => {
       for (let i = 1; i < 4; i++)
         ctx.fillRect(x + w * (i / 4) - w * 0.02, y, w * 0.04, h);
@@ -450,12 +468,16 @@ const WINDOW_ARCHETYPES = [
   // One wide horizontal light, short and letterbox-shaped.
   {
     name: 'wide',
+    bayWM: 4.8,
+    bayHM: 2.7,
     inset: [0.08, 0.3, 0.84, 0.34],
     bars: () => {},
   },
   // Four panes, both mullions crossing.
   {
     name: 'cross',
+    bayWM: 3.4,
+    bayHM: 3,
     bars: (ctx, x, y, w, h) => {
       ctx.fillRect(x + w * 0.48, y, w * 0.04, h);
       ctx.fillRect(x, y + h * 0.46, w, h * 0.06);
@@ -464,6 +486,8 @@ const WINDOW_ARCHETYPES = [
   // A single narrow punched window in a solid wall - brick, not curtain.
   {
     name: 'narrow',
+    bayWM: 2.8,
+    bayHM: 2.9,
     inset: [0.3, 0.2, 0.4, 0.56],
     bars: (ctx, x, y, w, h) => {
       ctx.fillRect(x + w * 0.46, y, w * 0.08, h);
@@ -472,6 +496,8 @@ const WINDOW_ARCHETYPES = [
   // A continuous horizontal band, the pane running the full bay width.
   {
     name: 'band',
+    bayWM: 5,
+    bayHM: 3.2,
     inset: [0.02, 0.26, 0.96, 0.44],
     bars: (ctx, x, y, w, h) => {
       ctx.fillRect(x + w * 0.5, y, w * 0.03, h);
@@ -611,8 +637,8 @@ function createWindowTexture(archetypeIndex = 0) {
     }
   }
 
-  const tileWM = WINDOW_BAY_W_M * WINDOW_TILE_BAYS_X;
-  const tileHM = WINDOW_BAY_H_M * WINDOW_TILE_BAYS_Y;
+  const tileWM = (archetype.bayWM ?? WINDOW_BAY_W_M) * WINDOW_TILE_BAYS_X;
+  const tileHM = (archetype.bayHM ?? WINDOW_BAY_H_M) * WINDOW_TILE_BAYS_Y;
   // Side-wall v = 1 - z: the -1/tile offset puts a bay boundary at z = 0 so
   // window rows count up from each building's base.
   return makeRepeatingTexture(canvas, 1 / tileWM, 1 / tileHM, -1 / tileHM);
@@ -717,6 +743,41 @@ const STOREFRONT_BY_POI = new Map([
   ['post_office', 4],
   ['marketplace', 1],
 ]);
+
+// CW-46 rider (c): "white shop lights is repetitive" - each storefront's
+// glass now leans warm, cool or neutral. Places that serve food glow warm,
+// retail stays neutral, services lean cool; buildings with no nearby POI
+// hash across the set. Taste table, one line each to reverse; every tint's
+// luminance stays in the ~0.93-0.95 storefront band the CAR_TIERS ladder
+// reserves above the props.
+const STOREFRONT_TEMPERATURES = {
+  warm: [1.0, 0.94, 0.78],
+  neutral: [0.95, 0.95, 0.95],
+  cool: [0.85, 0.95, 1.0],
+};
+const STOREFRONT_TEMP_BY_POI = new Map([
+  ['restaurant', 'warm'],
+  ['cafe', 'warm'],
+  ['fast_food', 'warm'],
+  ['bar', 'warm'],
+  ['pub', 'warm'],
+  ['marketplace', 'warm'],
+  ['shop', 'neutral'],
+  ['pharmacy', 'neutral'],
+  ['bank', 'cool'],
+  ['cinema', 'cool'],
+  ['theatre', 'cool'],
+  ['library', 'cool'],
+  ['post_office', 'cool'],
+]);
+const STOREFRONT_TEMP_KEYS = ['warm', 'neutral', 'cool'];
+
+function storefrontTemperatureTint(h, poiKind) {
+  const biased =
+    poiKind !== null ? STOREFRONT_TEMP_BY_POI.get(poiKind) : undefined;
+  const key = biased ?? STOREFRONT_TEMP_KEYS[(h >>> 17) % 3];
+  return STOREFRONT_TEMPERATURES[key];
+}
 
 /**
  * Every storefront band in one texture, stacked vertically.
@@ -832,6 +893,15 @@ function createGroundTexture() {
  * bay's width moves the pattern one window along on this geometry and nothing
  * else. Eight by twelve gives ninety-six distinct walls per archetype.
  */
+function scaleGeometryUv(geometry, su, sv) {
+  const uv = geometry.getAttribute('uv');
+  if (!uv) return;
+  for (let i = 0; i < uv.count; i++) {
+    uv.setXY(i, uv.getX(i) * su, uv.getY(i) * sv);
+  }
+  uv.needsUpdate = true;
+}
+
 function offsetGeometryUv(geometry, du, dv) {
   const uv = geometry.getAttribute('uv');
   if (!uv) return;
@@ -1349,6 +1419,49 @@ function applyFarSilhouetteFog(material, keep = FAR_SILHOUETTE_KEEP) {
   material.customProgramCacheKey = () => `farSilhouette:${maxFactor}`;
 }
 
+/**
+ * CW-41: filter a texture for the CELL raster, not the pixel raster.
+ *
+ * The shimmer the owner reported is the window-bay pattern beating against
+ * the character grid: the scene renders full-res, is box-halved once, and
+ * the converter then reads one or two sample pixels per cell - so any
+ * texture feature near cell frequency re-rolls its cells under sub-cell
+ * view changes. MEASURED (P0): with the bay pattern blurred away, a 0.05
+ * degree turn re-rolls 4.5% of Denver's lit cells instead of 12.4%; with
+ * only sub-bay detail blurred, nothing changes; anisotropy changes
+ * nothing; the exact-CPU path reads the same. The fix follows the numbers:
+ * add a mip bias so the texture's effective texel is the CELL, which
+ * dissolves bays exactly where they fall under about two cells and leaves
+ * near facades sharp - the hardware LOD still carries the distance term.
+ *
+ * Composes with the material's existing onBeforeCompile (the fog floor).
+ * The bias uniform lives in userData so the game can set it before or
+ * after first compile, and per size change, without a rebuild.
+ */
+function applyCellRasterFiltering(material) {
+  material.userData.cellLodBias = { value: 0 };
+  const prev = material.onBeforeCompile;
+  const prevKey = material.customProgramCacheKey;
+  material.onBeforeCompile = (shader, renderer) => {
+    prev?.call(material, shader, renderer);
+    shader.uniforms.uCellLodBias = material.userData.cellLodBias;
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <map_pars_fragment>',
+        '#include <map_pars_fragment>\nuniform float uCellLodBias;'
+      )
+      .replace(
+        '#include <map_fragment>',
+        `#ifdef USE_MAP
+          vec4 sampledDiffuseColor = texture2D( map, vMapUv, uCellLodBias );
+          diffuseColor *= sampledDiffuseColor;
+        #endif`
+      );
+  };
+  material.customProgramCacheKey = () =>
+    `${prevKey ? prevKey.call(material) : ''}|cellRaster`;
+}
+
 export function buildCityGroup(model) {
   const group = new Group();
   group.name = 'ascii-city';
@@ -1436,11 +1549,15 @@ export function buildCityGroup(model) {
         // WHOLE BAYS, not a continuous slide. The texture's own v offset
         // exists so that window rows count up from a building's base
         // (`-1 / tileHM` in makeRepeatingTexture); a fractional shift would
-        // put a half-height row of windows at every ground line.
+        // put a half-height row of windows at every ground line. CW-46: the
+        // bays are the ARCHETYPE'S OWN metre size now, so the phase moves
+        // in those units - same law, per family.
+        const bayW = WINDOW_ARCHETYPES[archetypeIndex]?.bayWM ?? WINDOW_BAY_W_M;
+        const bayH = WINDOW_ARCHETYPES[archetypeIndex]?.bayHM ?? WINDOW_BAY_H_M;
         offsetGeometryUv(
           geom,
-          ((h >>> 3) % WINDOW_TILE_BAYS_X) * WINDOW_BAY_W_M,
-          ((h >>> 13) % WINDOW_TILE_BAYS_Y) * WINDOW_BAY_H_M
+          ((h >>> 3) % WINDOW_TILE_BAYS_X) * bayW,
+          ((h >>> 13) % WINDOW_TILE_BAYS_Y) * bayH
         );
         bucket.push(geom);
       }
@@ -1450,24 +1567,35 @@ export function buildCityGroup(model) {
     if (!anyGeom) return;
 
     // Grounded buildings tall enough to have an upstairs get the lit
-    // storefront strip; elevated parts (skybridges) do not.
+    // storefront strip; elevated parts (skybridges) do not. CW-46 rider:
+    // the ground floor's HEIGHT is per building now (hash within the
+    // documented 3.2-5.0 m range) - the directive's "same size first
+    // floor" complaint. The texture band still spans one
+    // STOREFRONT_HEIGHT_M in v, so the strip's v is scaled to fill its
+    // band exactly before the whole-band offset picks which look it wears.
+    const storefrontHM = 3.2 + (((h >>> 9) % 10) / 9) * 1.8;
     const grounded =
-      building.minHeightM === 0 &&
-      building.heightM >= STOREFRONT_HEIGHT_M + 1.5;
+      building.minHeightM === 0 && building.heightM >= storefrontHM + 1.5;
     if (grounded) {
-      const strip = extrudeBuilding(building, STOREFRONT_TINT, {
-        depthOverride: STOREFRONT_HEIGHT_M,
-      });
+      // CW-34: which ground floor this building wears. The nearest shop or
+      // eating place in the map data decides where there is one; the
+      // building's own hash decides where there is not, so a city with no
+      // POIs at all still has a varied street. CW-46: the same POI answer
+      // now also warms or cools the glass.
+      const [cx, cy] = ringCentroid(building.outer);
+      const poiKind = poiIndex.nearestKind(cx, cy, STOREFRONT_POI_RANGE_M);
+      const strip = extrudeBuilding(
+        building,
+        storefrontTemperatureTint(h, poiKind),
+        {
+          depthOverride: storefrontHM,
+        }
+      );
       if (strip) {
-        // CW-34: which ground floor this building wears. The nearest shop or
-        // eating place in the map data decides where there is one; the
-        // building's own hash decides where there is not, so a city with no
-        // POIs at all still has a varied street.
-        const [cx, cy] = ringCentroid(building.outer);
-        const poiKind = poiIndex.nearestKind(cx, cy, STOREFRONT_POI_RANGE_M);
         const band =
           (poiKind !== null ? STOREFRONT_BY_POI.get(poiKind) : undefined) ??
           (h >>> 23) % STOREFRONT_VARIANTS.length;
+        scaleGeometryUv(strip, 1, STOREFRONT_HEIGHT_M / storefrontHM);
         offsetGeometryUv(strip, 0, band * STOREFRONT_HEIGHT_M);
         storefrontGeoms.push(strip);
       }
@@ -1478,10 +1606,11 @@ export function buildCityGroup(model) {
 
     // Shop signs over the glass: a row along the frontage, each one hashed in
     // or out so a street reads as some shops lit and some dark.
+    const signBaseM = storefrontHM + 0.4;
     if (
       wall &&
       grounded &&
-      building.heightM >= SIGN_BAND_BASE_M + SIGN_BAND_HEIGHT_M + 0.5
+      building.heightM >= signBaseM + SIGN_BAND_HEIGHT_M + 0.5
     ) {
       const slots = Math.max(
         1,
@@ -1500,7 +1629,7 @@ export function buildCityGroup(model) {
         appendSign(signOut, wall, {
           widthM,
           heightM: SIGN_BAND_HEIGHT_M,
-          baseZ: SIGN_BAND_BASE_M,
+          baseZ: signBaseM,
           hueDeg: hueOf(bits >>> 7),
           // Slot centers, measured from the middle of the wall.
           alongM: (wall.lengthM / slots) * (slot + 0.5 - slots / 2),
@@ -1557,6 +1686,9 @@ export function buildCityGroup(model) {
   // name 'buildings', which is what the surface-class pass (CW-23) and the
   // map-view swap below both key on.
   const buildingMats = [];
+  // CW-41: every material filtered for the cell raster, so one setter can
+  // follow the character size.
+  const cellRasterMats = [];
   buildingGeoms.forEach((geoms, familyIndex) => {
     if (geoms.length === 0) return;
     const merged = mergeGeometries(geoms, false);
@@ -1567,6 +1699,8 @@ export function buildCityGroup(model) {
       vertexColors: true,
     });
     applyFarSilhouetteFog(material);
+    applyCellRasterFiltering(material);
+    cellRasterMats.push(material);
     const mesh = new Mesh(merged, material);
     mesh.name = 'buildings';
     group.add(mesh);
@@ -1588,6 +1722,8 @@ export function buildCityGroup(model) {
       polygonOffsetFactor: -2,
       polygonOffsetUnits: -2,
     });
+    applyCellRasterFiltering(material);
+    cellRasterMats.push(material);
     const mesh = new Mesh(merged, material);
     mesh.name = 'storefronts';
     group.add(mesh);
@@ -1821,6 +1957,18 @@ export function buildCityGroup(model) {
       else groundMat.color.setHex(0xffffff);
       groundMat.needsUpdate = true;
     },
+    /**
+     * CW-41: follow the character size. The bias makes the facade texture's
+     * effective texel one CELL (log2 of the cell height, the axis the
+     * window rows beat against); at 0 the filtering is exactly stock.
+     * @param {number} cellHPx - cell height in canvas pixels
+     */
+    setCellRaster(cellHPx) {
+      const bias = Math.max(0, Math.log2(Math.max(1, cellHPx)));
+      for (const m of cellRasterMats) {
+        if (m.userData.cellLodBias) m.userData.cellLodBias.value = bias;
+      }
+    },
     dispose() {
       for (const d of disposables) d.dispose();
       group.clear();
@@ -1843,15 +1991,113 @@ export function buildCityGroup(model) {
 // Sizes are ordinary real-world meters; the ASCII sampler turns them into
 // glyph clusters, so what matters is that a canopy clears the player's eyes
 // and a car reads as a bright block at the curb.
-const CAR_LENGTH_M = 4.4;
-const CAR_WIDTH_M = 1.8;
-const CAR_HEIGHT_M = 1.35;
-const CAR_BODY_HEIGHT_M = 0.75;
-const CAR_CABIN_INSET_M = 0.55;
-const CAR_SLOT_M = 6;
+//
+// CW-46 (CW-Q46): six vehicle CLASSES, never likenesses - the owner asked
+// for the average size and shape of what Americans actually drive, and we
+// ship segment-typical exterior dimensions (length x width x height,
+// metres) rounded from manufacturers' published spec sheets for each US
+// segment's common models (full-size crew-cab pickup, three-row SUV,
+// two-row crossover, mid-size sedan, compact hatch, minivan). The table is
+// the owner-signed CW-Q46 data (plan section 2, 2026-08-23). `bodyM` is
+// the beltline the greenhouse sits on; `weight` is the hash mix,
+// US-street-plausible (pickups and SUVs common) - one line each to
+// reverse.
+export const CAR_CLASSES = [
+  { kind: 'pickup', lenM: 5.8, widM: 2.0, hM: 1.9, bodyM: 1.05, weight: 22 },
+  { kind: 'suv', lenM: 5.0, widM: 1.98, hM: 1.9, bodyM: 0.95, weight: 22 },
+  {
+    kind: 'crossover',
+    lenM: 4.6,
+    widM: 1.85,
+    hM: 1.65,
+    bodyM: 0.85,
+    weight: 20,
+  },
+  { kind: 'sedan', lenM: 4.9, widM: 1.85, hM: 1.45, bodyM: 0.8, weight: 18 },
+  { kind: 'hatch', lenM: 4.4, widM: 1.8, hM: 1.5, bodyM: 0.8, weight: 10 },
+  { kind: 'minivan', lenM: 5.2, widM: 2.0, hM: 1.75, bodyM: 0.85, weight: 8 },
+];
+const CAR_CLASS_WEIGHT_TOTAL = CAR_CLASSES.reduce((s, c) => s + c.weight, 0);
+
+/** Deterministic weighted class pick from a [0,1) draw (CW-46). */
+export function pickCarClass(r) {
+  let t = r * CAR_CLASS_WEIGHT_TOTAL;
+  for (const cls of CAR_CLASSES) {
+    t -= cls.weight;
+    if (t < 0) return cls;
+  }
+  return CAR_CLASSES[CAR_CLASSES.length - 1];
+}
+
+// The longest class must fit a slot with air at both ends, and the spot
+// grid must keep crossing-street neighbours' stamped footprints apart -
+// 5.8 m pickups at the old 5 m centers would have overlapped by 0.8 m.
+const CAR_SLOT_M = 6.5;
 const CAR_OCCUPANCY_MIN = 0.4;
 const CAR_OCCUPANCY_MAX = 0.6;
-const CAR_MIN_GAP_M = 5;
+const CAR_MIN_GAP_M = 6;
+
+/**
+ * One vehicle of its class, as boxes pushed onto `list` (CW-46). Every
+ * class shares the chassis box up to its beltline; the greenhouse differs,
+ * and that IS the silhouette: a pickup is a tall cab over an OPEN bed
+ * (rails and tailgate, no roof), an SUV/crossover a long tall cabin, a
+ * minivan one box nearly end to end, a sedan the classic inset cabin, a
+ * hatch a cabin reaching the tail. Boxes overlap by a hair - never
+ * exactly-touching faces.
+ */
+function pushCarClassGeoms(list, cls, x, y, angle, bodyTint, cabinTint) {
+  const ux = Math.cos(angle);
+  const uy = Math.sin(angle);
+  const nx = -uy;
+  const ny = ux;
+  const box = (len, wid, h, dAlong, dAcross, z, tint) =>
+    list.push(
+      makeBox(
+        len,
+        wid,
+        h,
+        x + ux * dAlong + nx * dAcross,
+        y + uy * dAlong + ny * dAcross,
+        z,
+        angle,
+        tint
+      )
+    );
+  box(cls.lenM, cls.widM, cls.bodyM, 0, 0, cls.bodyM / 2, bodyTint);
+  const ghH = cls.hM - cls.bodyM + 0.05;
+  const ghZ = cls.bodyM - 0.05 + ghH / 2;
+  const w = cls.widM - 0.2;
+  if (cls.kind === 'pickup') {
+    const cabL = cls.lenM * 0.4;
+    box(cabL, w, ghH, cls.lenM / 2 - cabL / 2 - 0.12, 0, ghZ, cabinTint);
+    const bedL = cls.lenM * 0.52;
+    const bedAlong = -(cls.lenM / 2) + bedL / 2 + 0.06;
+    const railH = 0.45;
+    const railZ = cls.bodyM - 0.03 + railH / 2;
+    for (const s of [-1, 1]) {
+      box(
+        bedL,
+        0.1,
+        railH,
+        bedAlong,
+        (cls.widM / 2 - 0.07) * s,
+        railZ,
+        bodyTint
+      );
+    }
+    box(0.1, cls.widM - 0.1, railH, -(cls.lenM / 2) + 0.07, 0, railZ, bodyTint);
+  } else if (cls.kind === 'suv' || cls.kind === 'crossover') {
+    box(cls.lenM * 0.78, w, ghH, -cls.lenM * 0.04, 0, ghZ, cabinTint);
+  } else if (cls.kind === 'minivan') {
+    box(cls.lenM * 0.86, w, ghH, -cls.lenM * 0.02, 0, ghZ, cabinTint);
+  } else if (cls.kind === 'hatch') {
+    box(cls.lenM * 0.6, w, ghH, -cls.lenM * 0.17, 0, ghZ, cabinTint);
+  } else {
+    // Sedan: the classic inset cabin amidships.
+    box(cls.lenM * 0.55, w, ghH, -cls.lenM * 0.04, 0, ghZ, cabinTint);
+  }
+}
 // Cars park along ordinary streets. Motorways, trunks and primaries get none:
 // nobody leaves a car on an arterial, and their ribbons carry the through
 // traffic CW-19 will animate.
@@ -1879,16 +2125,16 @@ const CAR_MIN_GAP_M = 5;
 // They are static, like the traffic. Placement is stamped into collision the
 // way trees are, because a person standing on the pavement is furniture the
 // player should walk around rather than through.
-const PERSON_HEIGHT_M = 1.72;
-const PERSON_HEAD_M = 0.2;
+// CW-45 (CW-Q45): the figure GEOMETRY lives in city-figures.js now, with
+// per-figure height/build from documented human ranges and jointed poses.
+// These two stay as the obstacle footprint every figure stamps - a walker's
+// personal space does not change with a few centimetres of stature.
 const PERSON_SHOULDER_W_M = 0.46;
-const PERSON_TORSO_W_M = 0.34;
 const PERSON_DEPTH_M = 0.24;
-const PERSON_LEG_W_M = 0.13;
-const PERSON_ARM_W_M = 0.1;
-// Skin and clothing are irrelevant here; what matters is that a person is
-// BRIGHTER than the pavement and dimmer than a lit sign, so they read as a
-// figure in front of things rather than as part of them.
+// The neutral FIGURE tone (head and shoulders): a person is BRIGHTER than
+// the pavement and dimmer than a lit sign, so they read as a figure in
+// front of things rather than as part of them. Clothing zones get palette
+// hues; this tone never varies - the owner's palette-not-race rule.
 const PERSON_TINT = [0.82, 0.82, 0.82];
 const PERSON_DARK_TINT = [0.5, 0.5, 0.5];
 // One figure every so many metres of shopfront-facing pavement.
@@ -1898,111 +2144,6 @@ const PERSON_CURB_OFFSET_M = 1.1;
 const DOG_HEIGHT_M = 0.45;
 const DOG_LENGTH_M = 0.6;
 const DOG_WIDTH_M = 0.2;
-
-/**
- * One standing figure, as a list of boxes in world space.
- *
- * The stride swings the legs and the opposite arms, which is what makes a
- * frozen figure read as caught mid-step rather than as a mannequin. At 0 the
- * figure stands still.
- *
- * @param {number} x
- * @param {number} y
- * @param {number} facingRad
- * @param {number} stride - -1..1, how far through a step the figure is frozen
- * @returns {import('three').BufferGeometry[]}
- */
-function makePersonGeoms(x, y, facingRad, stride) {
-  const out = [];
-  const cos = Math.cos(facingRad);
-  const sin = Math.sin(facingRad);
-  // Along the facing direction (a step goes forward), and across it (limbs
-  // sit left and right).
-  const fwd = (d) => [x + cos * d, y + sin * d];
-  const side = (d) => [-sin * d, cos * d];
-
-  const legH = PERSON_HEIGHT_M * 0.47;
-  const torsoH = PERSON_HEIGHT_M * 0.3;
-  const torsoZ = legH + torsoH / 2;
-  const headZ = PERSON_HEIGHT_M - PERSON_HEAD_M / 2;
-
-  // Legs: one forward, one back, by the stride.
-  for (const lr of [-1, 1]) {
-    const swing = stride * 0.28 * lr;
-    const [lx, ly] = fwd(swing);
-    const [ox, oy] = side(PERSON_LEG_W_M * 0.85 * lr);
-    out.push(
-      makeBox(
-        PERSON_LEG_W_M + Math.abs(swing) * 0.5,
-        PERSON_LEG_W_M,
-        legH,
-        lx + ox,
-        ly + oy,
-        legH / 2,
-        facingRad,
-        PERSON_DARK_TINT
-      )
-    );
-  }
-
-  out.push(
-    makeBox(
-      PERSON_DEPTH_M,
-      PERSON_TORSO_W_M,
-      torsoH,
-      x,
-      y,
-      torsoZ,
-      facingRad,
-      PERSON_TINT
-    )
-  );
-  // Shoulders: a little wider than the torso, at the top of it — the line
-  // that separates a person from a post.
-  out.push(
-    makeBox(
-      PERSON_DEPTH_M * 0.9,
-      PERSON_SHOULDER_W_M,
-      PERSON_HEIGHT_M * 0.08,
-      x,
-      y,
-      legH + torsoH - PERSON_HEIGHT_M * 0.02,
-      facingRad,
-      PERSON_TINT
-    )
-  );
-  // Arms swing opposite the legs.
-  for (const lr of [-1, 1]) {
-    const swing = -stride * 0.22 * lr;
-    const [ax, ay] = fwd(swing);
-    const [ox, oy] = side((PERSON_SHOULDER_W_M / 2) * lr);
-    out.push(
-      makeBox(
-        PERSON_ARM_W_M + Math.abs(swing) * 0.4,
-        PERSON_ARM_W_M,
-        torsoH * 0.92,
-        ax + ox,
-        ay + oy,
-        torsoZ,
-        facingRad,
-        PERSON_DARK_TINT
-      )
-    );
-  }
-  out.push(
-    makeBox(
-      PERSON_HEAD_M,
-      PERSON_HEAD_M,
-      PERSON_HEAD_M,
-      x,
-      y,
-      headZ,
-      facingRad,
-      PERSON_TINT
-    )
-  );
-  return out;
-}
 
 /**
  * A dog on a lead beside its walker: a low body, four short legs and a head.
@@ -2107,6 +2248,42 @@ const CANOPY_CHROMA = 0.7;
 const CAR_TIERS = [0.35, 0.5, 0.65, 0.8];
 const CAR_CHROMA = 0.5;
 const CAR_CABIN_LIFT = 0.12;
+
+// Street furniture (CW-43, CW-Q43). True node positions only: the owner's
+// mission sentence makes this wayfinding data for a blind traveler, and a
+// prop moved for looks is a lie a cane cannot check. Sizes in metres.
+const STOP_POLE_SIDE_M = 0.12;
+const STOP_POLE_HEIGHT_M = 3.2;
+const STOP_FLAG_W_M = 0.6;
+const STOP_FLAG_H_M = 0.4;
+const STOP_SHELTER_L_M = 2.4;
+const STOP_SHELTER_D_M = 1.2;
+const STOP_SHELTER_H_M = 2.2;
+const BENCH_SEAT_L_M = 1.8;
+const BENCH_SEAT_D_M = 0.5;
+const BENCH_SEAT_H_M = 0.45;
+const BENCH_BACK_H_M = 0.45;
+const BENCH_BACK_THICK_M = 0.08;
+const BASKET_SIDE_M = 0.45;
+const BASKET_HEIGHT_M = 0.6;
+const RACK_L_M = 0.9;
+const RACK_THICK_M = 0.08;
+const RACK_HEIGHT_M = 0.8;
+const HYDRANT_SIDE_M = 0.3;
+const HYDRANT_HEIGHT_M = 0.6;
+// Two OSM nodes for the same object (it happens) collapse to one prop.
+const FURNITURE_MIN_GAP_M = 0.4;
+// A mapped tree standing on the node wins - both are real data, the tree
+// planted first.
+const FURNITURE_TREE_GAP_M = 0.6;
+// Procedural infill (trees, lamps, parked cars) must not intersect a real
+// object: real data wins every argument with infill.
+const FURNITURE_CLEAR_M = 1.4;
+// Muted municipal paint next to the cars' 0.5.
+const FURNITURE_CHROMA = 0.4;
+// The segment-angle grid's cell: coarse is fine, furniture stands within a
+// pavement's width of its street.
+const FURNITURE_ROAD_CELL_M = 24;
 
 // Streetlights (CW-18). Ordinary streets and the arterials both get them -
 // the arterials carry no parked cars and no trees today, so lamps are the
@@ -2316,6 +2493,67 @@ function makePointGrid(cellM) {
  * A tinted box placed in the world: built in its own frame, rotated about Z,
  * then moved into place, so it merges with its neighbors into one mesh.
  */
+/**
+ * CW-43: street furniture faces the street it serves. A coarse bucket grid
+ * of sampled road points answers "which way does the nearest road run, and
+ * where is it" without scanning every segment per item. Hash jitter is only
+ * for the rare node with no road in reach — OSM gives bus stops and benches
+ * no orientation of their own.
+ */
+function makeSegmentAngleGrid(roads, cellM) {
+  const buckets = new Map();
+  const key = (cx, cy) => cx + ',' + cy;
+  for (const road of roads) {
+    const pts = road.points;
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const [x1, y1] = pts[i];
+      const [x2, y2] = pts[i + 1];
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const len = Math.hypot(dx, dy);
+      if (len < 1e-6) continue;
+      const angle = Math.atan2(dy, dx);
+      // Long segments register at intervals so no cell between the
+      // endpoints goes blind.
+      const steps = Math.max(1, Math.ceil(len / cellM));
+      for (let s = 0; s <= steps; s++) {
+        const t = s / steps;
+        const px = x1 + dx * t;
+        const py = y1 + dy * t;
+        const k = key(Math.floor(px / cellM), Math.floor(py / cellM));
+        const list = buckets.get(k);
+        if (list) list.push(px, py, angle);
+        else buckets.set(k, [px, py, angle]);
+      }
+    }
+  }
+  return {
+    /** @returns {{angle:number, px:number, py:number}|null} nearest sampled road point within ~2 cells */
+    nearest(x, y) {
+      const cx = Math.floor(x / cellM);
+      const cy = Math.floor(y / cellM);
+      let best = null;
+      let bestD2 = Infinity;
+      for (let gy = cy - 2; gy <= cy + 2; gy++) {
+        for (let gx = cx - 2; gx <= cx + 2; gx++) {
+          const list = buckets.get(key(gx, gy));
+          if (!list) continue;
+          for (let i = 0; i < list.length; i += 3) {
+            const dx = list[i] - x;
+            const dy = list[i + 1] - y;
+            const d2 = dx * dx + dy * dy;
+            if (d2 < bestD2) {
+              bestD2 = d2;
+              best = { angle: list[i + 2], px: list[i], py: list[i + 1] };
+            }
+          }
+        }
+      }
+      return best;
+    },
+  };
+}
+
 function makeBox(sizeX, sizeY, sizeZ, x, y, z, rotationRad, tint) {
   const geom = new BoxGeometry(sizeX, sizeY, sizeZ);
   if (rotationRad) geom.rotateZ(rotationRad);
@@ -2361,9 +2599,56 @@ export function buildStreetProps(model, collision = null) {
   let trafficCount = 0;
   const personGeoms = [];
   let personCount = 0;
+  let sitterCount = 0;
   const personSpots = makePointGrid(PROP_SPATIAL_CELL_M);
+  const figureSpots = [];
+  const figuresByPose = {};
+  // CW-45 (CW-Q45): plant one whole person - their own height and build
+  // drawn from the documented ranges, jointed pose, clothing tones from the
+  // SAME palette machinery the cars wear. The owner's words govern the
+  // colours: identity comes from "our current color schemes, not by race" -
+  // the hues dress the CLOTHING zones (torso, legs); head and shoulders
+  // keep the one neutral figure tone, and no skin surface is modelled.
+  const FIGURE_CHROMA = 0.5;
+  const plantFigure = (x, y, facing, spec, rng) => {
+    const torsoHue =
+      TINT_HUES_DEG[
+        Math.floor(rng() * TINT_HUES_DEG.length) % TINT_HUES_DEG.length
+      ];
+    const legHue =
+      TINT_HUES_DEG[
+        Math.floor(rng() * TINT_HUES_DEG.length) % TINT_HUES_DEG.length
+      ];
+    // The proof gate caught the first tier draw: a 0.35 torso over 0.3
+    // legs vanished against black pavement - a floating half-person.
+    // Figures are thin, so their clothing stays in the upper luminance
+    // band (the R4 figure wore 0.82/0.5 greys and read).
+    const FIGURE_TIERS = [0.5, 0.65, 0.8];
+    const torsoTier =
+      FIGURE_TIERS[
+        Math.floor(rng() * FIGURE_TIERS.length) % FIGURE_TIERS.length
+      ];
+    const legTier = Math.max(0.45, torsoTier - 0.15);
+    const zones = makeFigureGeoms(x, y, facing, spec);
+    const torsoTint = tintOf(torsoTier, torsoHue, FIGURE_CHROMA);
+    const legTint = tintOf(legTier, legHue, FIGURE_CHROMA);
+    for (const g of zones.torso) paintGeometry(g, torsoTint);
+    for (const g of zones.legs) paintGeometry(g, legTint);
+    for (const g of zones.figure) paintGeometry(g, PERSON_TINT);
+    personGeoms.push(...zones.legs, ...zones.torso, ...zones.figure);
+    personCount++;
+    figuresByPose[spec.pose] = (figuresByPose[spec.pose] ?? 0) + 1;
+    figureSpots.push({ x, y, pose: spec.pose, facing });
+  };
   const poleGeoms = [];
   const lampHeadGeoms = [];
+  // CW-43 street furniture, one merged mesh per class.
+  const stopPoleGeoms = [];
+  const shelterGeoms = [];
+  const benchGeoms = [];
+  const basketGeoms = [];
+  const rackGeoms = [];
+  const hydrantGeoms = [];
 
   const b = model.boundsM;
   const inCore = (x, y) =>
@@ -2417,6 +2702,240 @@ export function buildStreetProps(model, collision = null) {
     if (treeSpots.occupied(x, y, MAPPED_TREE_MIN_GAP_M)) return;
     plantTree(x, y, hashBuilding(index, 'osm-tree'));
     mappedTreeCount++;
+  });
+
+  // 1b. CW-43 street furniture, at the extract's own node positions — the
+  //     accessibility point IS the fidelity, so nothing here invents a
+  //     placement. Each prop faces its street; each is solid (a cane's
+  //     logic must hold against a real pole). Placed before the infill so
+  //     procedural trees, lamps and parked cars keep clear of real objects.
+  const furnitureSpots = makePointGrid(PROP_SPATIAL_CELL_M);
+  const segmentAngles = makeSegmentAngleGrid(
+    model.roads,
+    FURNITURE_ROAD_CELL_M
+  );
+  const furniturePlaced = {};
+  // CW-45: where the benches actually STAND, for the sitters - position,
+  // seat axis, which way a seated person faces (toward the road), and
+  // whether there is a back.
+  const placedBenches = [];
+  (model.furniture ?? []).forEach((item, index) => {
+    const { x, y } = item;
+    if (!inCore(x, y) || isBlocked(x, y)) return;
+    if (furnitureSpots.occupied(x, y, FURNITURE_MIN_GAP_M)) return;
+    if (treeSpots.occupied(x, y, FURNITURE_TREE_GAP_M)) return;
+    const seed = hashBuilding(index, 'furniture:' + item.kind);
+    const near = segmentAngles.nearest(x, y);
+    const angle = near ? near.angle : ((seed % 360) * Math.PI) / 180;
+    // Away from the road: where a shelter stands relative to its flag, and
+    // which side a bench's back is on. Falls back to the angle's normal
+    // when the node sits exactly on the road line.
+    let awayX = near ? x - near.px : 0;
+    let awayY = near ? y - near.py : 0;
+    const awayLen = Math.hypot(awayX, awayY);
+    if (awayLen > 0.3) {
+      awayX /= awayLen;
+      awayY /= awayLen;
+    } else {
+      const side = seed % 2 === 0 ? 1 : -1;
+      awayX = -Math.sin(angle) * side;
+      awayY = Math.cos(angle) * side;
+    }
+    const tier = CAR_TIERS[seed % CAR_TIERS.length];
+    const hue = TINT_HUES_DEG[(seed >>> 5) % TINT_HUES_DEG.length];
+    const tint = tintOf(tier, hue, FURNITURE_CHROMA);
+
+    if (item.kind === 'bus_stop') {
+      stopPoleGeoms.push(
+        makeBox(
+          STOP_POLE_SIDE_M,
+          STOP_POLE_SIDE_M,
+          STOP_POLE_HEIGHT_M,
+          x,
+          y,
+          STOP_POLE_HEIGHT_M / 2,
+          angle,
+          POLE_TINT
+        )
+      );
+      // The flag plate at the top, its face toward the roadway.
+      stopPoleGeoms.push(
+        makeBox(
+          STOP_FLAG_W_M,
+          0.06,
+          STOP_FLAG_H_M,
+          x,
+          y,
+          STOP_POLE_HEIGHT_M - STOP_FLAG_H_M / 2,
+          angle,
+          tintOf(0.8, hue, FURNITURE_CHROMA)
+        )
+      );
+      obstacles.push({
+        x,
+        y,
+        halfLengthM: STOP_POLE_SIDE_M / 2,
+        halfWidthM: STOP_POLE_SIDE_M / 2,
+        rotationRad: angle,
+      });
+      if (item.shelter) {
+        const sx = x + awayX * (STOP_SHELTER_D_M / 2 + 0.4);
+        const sy = y + awayY * (STOP_SHELTER_D_M / 2 + 0.4);
+        if (!isBlocked(sx, sy)) {
+          shelterGeoms.push(
+            makeBox(
+              STOP_SHELTER_L_M,
+              STOP_SHELTER_D_M,
+              STOP_SHELTER_H_M,
+              sx,
+              sy,
+              STOP_SHELTER_H_M / 2,
+              angle,
+              tintOf(0.45, hue, FURNITURE_CHROMA)
+            )
+          );
+          obstacles.push({
+            x: sx,
+            y: sy,
+            halfLengthM: STOP_SHELTER_L_M / 2,
+            halfWidthM: STOP_SHELTER_D_M / 2,
+            rotationRad: angle,
+          });
+        }
+      }
+    } else if (item.kind === 'bench') {
+      placedBenches.push({
+        x,
+        y,
+        angle,
+        facing: Math.atan2(-awayY, -awayX),
+        backrest: Boolean(item.backrest),
+      });
+      benchGeoms.push(
+        makeBox(
+          BENCH_SEAT_L_M,
+          BENCH_SEAT_D_M,
+          BENCH_SEAT_H_M,
+          x,
+          y,
+          BENCH_SEAT_H_M / 2,
+          angle,
+          tint
+        )
+      );
+      if (item.backrest) {
+        // The back stands on the seat's away-from-road edge, overlapping
+        // the seat by a hair so the boxes never share an exact face.
+        const bx = x + awayX * (BENCH_SEAT_D_M / 2 - BENCH_BACK_THICK_M / 2);
+        const by = y + awayY * (BENCH_SEAT_D_M / 2 - BENCH_BACK_THICK_M / 2);
+        benchGeoms.push(
+          makeBox(
+            BENCH_SEAT_L_M,
+            BENCH_BACK_THICK_M,
+            BENCH_BACK_H_M + 0.01,
+            bx,
+            by,
+            BENCH_SEAT_H_M + BENCH_BACK_H_M / 2 - 0.01,
+            angle,
+            tint
+          )
+        );
+      }
+      obstacles.push({
+        x,
+        y,
+        halfLengthM: BENCH_SEAT_L_M / 2,
+        halfWidthM: BENCH_SEAT_D_M / 2,
+        rotationRad: angle,
+      });
+    } else if (item.kind === 'waste_basket') {
+      basketGeoms.push(
+        makeBox(
+          BASKET_SIDE_M,
+          BASKET_SIDE_M,
+          BASKET_HEIGHT_M,
+          x,
+          y,
+          BASKET_HEIGHT_M / 2,
+          angle,
+          tint
+        )
+      );
+      obstacles.push({
+        x,
+        y,
+        halfLengthM: BASKET_SIDE_M / 2,
+        halfWidthM: BASKET_SIDE_M / 2,
+        rotationRad: angle,
+      });
+    } else if (item.kind === 'bicycle_parking') {
+      // A staple rack stands with its hoop across the kerb line.
+      rackGeoms.push(
+        makeBox(
+          RACK_L_M,
+          RACK_THICK_M,
+          RACK_HEIGHT_M,
+          x,
+          y,
+          RACK_HEIGHT_M / 2,
+          angle + Math.PI / 2,
+          tint
+        )
+      );
+      obstacles.push({
+        x,
+        y,
+        halfLengthM: RACK_L_M / 2,
+        halfWidthM: RACK_THICK_M / 2,
+        rotationRad: angle + Math.PI / 2,
+      });
+    } else if (item.kind === 'fire_hydrant') {
+      hydrantGeoms.push(
+        makeBox(
+          HYDRANT_SIDE_M,
+          HYDRANT_SIDE_M,
+          HYDRANT_HEIGHT_M,
+          x,
+          y,
+          HYDRANT_HEIGHT_M / 2,
+          0,
+          tint
+        )
+      );
+      obstacles.push({
+        x,
+        y,
+        halfLengthM: HYDRANT_SIDE_M / 2,
+        halfWidthM: HYDRANT_SIDE_M / 2,
+        rotationRad: 0,
+      });
+    } else {
+      return;
+    }
+
+    furnitureSpots.add(x, y);
+    furniturePlaced[item.kind] = (furniturePlaced[item.kind] ?? 0) + 1;
+  });
+
+  // 1c. CW-45 sitting figures, ONLY where a real bench stands - never a
+  //     scattered seat: a city with two mapped benches gets at most two
+  //     sitters, which is the data's own answer. At most one seated figure
+  //     per bench, hash-decided; the sitter faces the way the bench does
+  //     (toward the road) and takes a seat position along it. The chance is
+  //     one line to reverse.
+  const BENCH_SITTER_CHANCE = 0.4;
+  placedBenches.forEach((bench, index) => {
+    const rng = makeLcg(hashBuilding(index, 'bench-sitter'));
+    if (rng() >= BENCH_SITTER_CHANCE) return;
+    const along = (rng() * 2 - 1) * (BENCH_SEAT_L_M / 2 - 0.35);
+    const sx = bench.x + Math.cos(bench.angle) * along;
+    const sy = bench.y + Math.sin(bench.angle) * along;
+    const spec = makeFigureSpec(rng, 'sitting', { seatZ: BENCH_SEAT_H_M });
+    plantFigure(sx, sy, bench.facing, spec, rng);
+    sitterCount++;
+    // The bench already stamps collision; the sitter just keeps standing
+    // figures from crowding the seat.
+    personSpots.add(sx, sy);
   });
 
   // 2. Procedural infill along ordinary curbs, and the parked cars. Both
@@ -2509,12 +3028,19 @@ export function buildStreetProps(model, collision = null) {
             angle +
             (roll < 0.25 ? Math.PI / 2 : 0) +
             (walkSide < 0 ? Math.PI : 0);
-          // Most are frozen mid-stride; a quarter simply stand.
-          const stride = roll < 0.25 ? 0 : (peopleRng() * 2 - 1) * 0.9;
-          personGeoms.push(...makePersonGeoms(px, py, facing, stride));
-          personCount++;
-          // Roughly one walker in six has a dog a pace ahead.
-          if (peopleRng() < 0.17) {
+          // CW-45 pose mix (one line each to reverse): the standers keep
+          // the R4 quarter; about three movers in twenty jog.
+          const pose =
+            roll < 0.25
+              ? 'standing'
+              : peopleRng() < 0.15
+                ? 'jogging'
+                : 'walking';
+          const spec = makeFigureSpec(peopleRng, pose);
+          plantFigure(px, py, facing, spec, peopleRng);
+          // Roughly one WALKER in six has a dog a pace ahead - paces, not
+          // joggers.
+          if (pose === 'walking' && peopleRng() < 0.17) {
             const dx2 = px + Math.cos(facing) * 0.85;
             const dy2 = py + Math.sin(facing) * 0.85;
             if (inCore(dx2, dy2) && !isBlocked(dx2, dy2)) {
@@ -2558,32 +3084,17 @@ export function buildStreetProps(model, collision = null) {
               hue,
               CAR_CHROMA
             );
-            trafficGeoms.push(
-              makeBox(
-                CAR_LENGTH_M,
-                CAR_WIDTH_M,
-                CAR_BODY_HEIGHT_M,
-                x,
-                y,
-                CAR_BODY_HEIGHT_M / 2,
-                heading,
-                bodyTint
-              )
-            );
-            const cabinLen = CAR_LENGTH_M - CAR_CABIN_INSET_M * 2;
-            const cabinBottom = CAR_BODY_HEIGHT_M - 0.05;
-            const cabinH = CAR_HEIGHT_M - cabinBottom;
-            trafficGeoms.push(
-              makeBox(
-                cabinLen,
-                CAR_WIDTH_M - 0.2,
-                cabinH,
-                x - ux * (CAR_CABIN_INSET_M / 2) * dir,
-                y - uy * (CAR_CABIN_INSET_M / 2) * dir,
-                cabinBottom + cabinH / 2,
-                heading,
-                cabinTint
-              )
+            // CW-46: the class comes from the SAME seed, so adding classes
+            // reshuffled nothing else on the street.
+            const cls = pickCarClass(((seed >>> 3) % 1000) / 1000);
+            pushCarClassGeoms(
+              trafficGeoms,
+              cls,
+              x,
+              y,
+              heading,
+              bodyTint,
+              cabinTint
             );
             trafficCount++;
           }
@@ -2603,6 +3114,7 @@ export function buildStreetProps(model, collision = null) {
           if (isBlocked(x, y)) continue;
           if (treeSpots.occupied(x, y, LAMP_MIN_TREE_GAP_M)) continue;
           if (lampSpots.occupied(x, y, LAMP_MIN_LAMP_GAP_M)) continue;
+          if (furnitureSpots.occupied(x, y, FURNITURE_CLEAR_M)) continue;
 
           poleGeoms.push(
             makeBox(
@@ -2660,6 +3172,7 @@ export function buildStreetProps(model, collision = null) {
             const y = y1 + uy * along + oy;
             if (!inCore(x, y)) continue;
             if (treeSpots.occupied(x, y, INFILL_TREE_MIN_GAP_M)) continue;
+            if (furnitureSpots.occupied(x, y, FURNITURE_CLEAR_M)) continue;
             const h = TRUNK_SIDE_M / 2;
             if (
               isBlocked(x, y) ||
@@ -2681,9 +3194,10 @@ export function buildStreetProps(model, collision = null) {
         if (carRng && carOffset >= 0.8) {
           const ox = nx * carOffset * side;
           const oy = ny * carOffset * side;
+          const maxHalfLen = CAR_CLASSES[0].lenM / 2;
           for (
-            let s = JUNCTION_MARGIN_M + CAR_LENGTH_M / 2;
-            s + CAR_LENGTH_M / 2 <= len - JUNCTION_MARGIN_M;
+            let s = JUNCTION_MARGIN_M + maxHalfLen;
+            s + maxHalfLen <= len - JUNCTION_MARGIN_M;
             s += CAR_SLOT_M
           ) {
             const seed = hashBuilding(
@@ -2695,9 +3209,14 @@ export function buildStreetProps(model, collision = null) {
             const y = y1 + uy * s + oy;
             if (!inCore(x, y)) continue;
             if (carSpots.occupied(x, y, CAR_MIN_GAP_M)) continue;
-            // The whole footprint has to be clear, not just the middle.
-            const hl = CAR_LENGTH_M / 2;
-            const hw = CAR_WIDTH_M / 2;
+            if (furnitureSpots.occupied(x, y, FURNITURE_CLEAR_M)) continue;
+            // CW-46: the class comes from the same seed that always picked
+            // tier and hue, so classes reshuffled nothing else.
+            const cls = pickCarClass(((seed >>> 3) % 1000) / 1000);
+            // The whole CLASS footprint has to be clear, not just the
+            // middle - a pickup asks for more curb than a hatch.
+            const hl = cls.lenM / 2;
+            const hw = cls.widM / 2;
             let clear = !isBlocked(x, y);
             for (const corner of [
               [hl, hw],
@@ -2721,36 +3240,7 @@ export function buildStreetProps(model, collision = null) {
               hue,
               CAR_CHROMA
             );
-            carGeoms.push(
-              makeBox(
-                CAR_LENGTH_M,
-                CAR_WIDTH_M,
-                CAR_BODY_HEIGHT_M,
-                x,
-                y,
-                CAR_BODY_HEIGHT_M / 2,
-                angle,
-                bodyTint
-              )
-            );
-            // Cabin: shorter, narrower, set back, and overlapping the body by
-            // a hair so the two boxes never share an exact face.
-            const cabinLen = CAR_LENGTH_M - CAR_CABIN_INSET_M * 2;
-            const cabinBottom = CAR_BODY_HEIGHT_M - 0.05;
-            const cabinH = CAR_HEIGHT_M - cabinBottom;
-            const back = -CAR_CABIN_INSET_M / 2;
-            carGeoms.push(
-              makeBox(
-                cabinLen,
-                CAR_WIDTH_M - 0.2,
-                cabinH,
-                x + ux * back,
-                y + uy * back,
-                cabinBottom + cabinH / 2,
-                angle,
-                cabinTint
-              )
-            );
+            pushCarClassGeoms(carGeoms, cls, x, y, angle, bodyTint, cabinTint);
 
             carSpots.add(x, y);
             obstacles.push({
@@ -2792,6 +3282,14 @@ export function buildStreetProps(model, collision = null) {
   addMerged(personGeoms, 'people', propMaterial());
   addMerged(poleGeoms, 'lamp-poles', propMaterial());
   addMerged(lampHeadGeoms, 'lamp-heads', propMaterial());
+  // CW-43 street furniture, one mesh per class so the class pass can dress
+  // each in its own voice.
+  addMerged(stopPoleGeoms, 'bus-stop-poles', propMaterial());
+  addMerged(shelterGeoms, 'bus-stop-shelters', propMaterial());
+  addMerged(benchGeoms, 'benches', propMaterial());
+  addMerged(basketGeoms, 'waste-baskets', propMaterial());
+  addMerged(rackGeoms, 'bike-racks', propMaterial());
+  addMerged(hydrantGeoms, 'hydrants', propMaterial());
 
   // Traffic lights (CW-19). Placed on the road GRAPH rather than on the road
   // list: a signal belongs where streets actually meet, and OSM splits ways at
@@ -2947,8 +3445,11 @@ export function buildStreetProps(model, collision = null) {
     trafficLights,
     /** Frozen cars standing on the travel lanes (CW-19). */
     frozenTrafficCount: trafficCount,
-    /** Static silhouette figures on the pavements (CW-19). */
+    /** Static silhouette figures on the pavements (CW-19, varied CW-45). */
     peopleCount: personCount,
+    /** CW-45: where each figure stands and its pose - deterministic per
+     * city; the proof-gate driver and the e2e counts read this. */
+    figureSpots,
     obstacles,
     /**
      * The map view is a clean street network seen from a kilometer up:
@@ -2968,6 +3469,13 @@ export function buildStreetProps(model, collision = null) {
       mappedTreeCount,
       carCount: carSpots.size,
       lampCount: lampSpots.size,
+      // CW-43: what actually stands in the city, per class — the model's
+      // own counts minus anything out of core or inside a building.
+      furnitureCount: furnitureSpots.size,
+      furnitureByKind: furniturePlaced,
+      // CW-45: pose census and how many benches hold a sitter.
+      figuresByPose,
+      sitterCount,
       triangles,
     },
   };

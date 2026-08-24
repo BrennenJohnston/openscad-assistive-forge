@@ -9,6 +9,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The smallest character size now knows your machine** (CW-42) - the game used to open at 50%
+  characters on every machine and let you go down to 10% everywhere, even where 10% turned walking
+  into a slideshow. Now, in the first moments after you enter a city, the game quietly measures how
+  fast your machine actually draws and picks the smallest size in the 10-30% range that can hold
+  30 frames per second: that size becomes both where a fresh session opens and how far down the
+  Smaller control will go, with a spoken reason at the stop. A size you chose yourself is never
+  touched - choose once and the game keeps your choice, today and every day after. On a machine
+  where even 30% cannot keep up, the game says so plainly in one line and keeps the 50% default
+  rather than pretending. Every city entry measures again, so one slow afternoon never brands a
+  fast machine - and the measurement rides the frames the entry was already drawing, so there is
+  nothing extra to see or wait for
+
+- **Cars are cars now** (CW-46) - the streets used to park one identical car shape everywhere.
+  Six vehicle classes now share the curbs and lanes: full-size pickups with open beds, SUVs,
+  crossovers, minivans, sedans and compact hatches, sized from published segment dimensions and
+  mixed the way American streets actually look (pickups and SUVs common). Each one is solid at its
+  own true size - a pickup blocks more sidewalk than a hatch. And the buildings joined in: window
+  sizes now differ between facade families, ground floors vary in height instead of all being one
+  size, and shop lights lean warm where food is served, cool at banks and theatres, neutral at
+  shops - no more identical white glow on every street
+
+- **People are people now** (CW-45) - the city's pedestrians used to be one identical 1.72 m
+  figure stamped everywhere. Every figure is now its own person: height drawn from the documented
+  adult range (1.50-1.95 m, the span of published anthropometric reference tables), broader or
+  slighter builds, and jointed poses - walkers caught mid-step, joggers leaning with bent elbows,
+  people standing about, and figures sitting on real benches (only where OpenStreetMap actually
+  records a bench - a city with two benches seats at most two people). Clothing colors come from
+  the game's own color schemes - torso and legs each take a scheme hue while heads and shoulders
+  keep one neutral figure tone, deliberately: color identity is palette-based, not race-based, and
+  no skin is modelled at all. The same spot always holds the same person on every visit
+
+- **Seattle reaches the Space Needle** (CW-44) - the Seattle map grew from a downtown patch to a
+  1.3 km circle centered toward the waterfront: Pike Place, the Great Wheel piers, Pioneer Square
+  and the Seattle Center are all in one walkable city now. The Space Needle stands at its true spot
+  - and because OpenStreetMap itself records its legs, shaft and saucer as building parts, the
+  ordinary building renderer draws a recognizable Needle with no special treatment; walk up and
+  look straight up. The map legend fills with real places: Space Needle, Smith Tower Observatory,
+  Underground Tour, the Great Wheel and more, each with a compass direction. The bigger download
+  (about 4.9 MB) shows and speaks its progress while it loads - on a slow connection the picker
+  says "Loading Seattle, Washington… 40%" instead of sitting silent for most of a minute
+
+- **The street furniture is real** (CW-43) - bus stops, benches, waste baskets, bicycle racks and
+  fire hydrants now stand in every city, each at the exact spot OpenStreetMap records it - never
+  scattered for looks, because for a blind traveler the placement is the information. A bus stop is
+  a pole with its flag, and a shelter where the data says there is one; a bench has a back where
+  the mapper said so. Everything is solid: walk into a shelter and you press against it and slide,
+  the same as a wall. The extracts also now carry the accessibility layer around crossings - kerb
+  heights, tactile paving, whether a signal speaks or vibrates - as data for wayfinding features to
+  come. Albuquerque, with almost no furniture mapped, stays exactly as sparse as it really is
+
+- **Real attractions join the map legend** (CW-44 groundwork) - named attraction points from
+  OpenStreetMap now count as landmarks, so Seattle's legend stops being a list of hotels: the
+  Seattle Great Wheel, Pike Place's Public Market Clock, Wings over Washington and more appear by
+  name with compass directions. The Wheel is a point in the map data, so it is findable by name
+  rather than drawn as a wheel - the honest shape of what open data holds
+
 - **Drop yourself onto any street** (CW-36) - the map was somewhere to look at the city; it is now
   somewhere to travel from. Click a street on the overhead map and the game tells you which street
   you picked, marks it with a ring, and waits. Press J and you are standing there, looking along the
@@ -20,6 +76,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nowhere to stand near where you picked, it says so instead of putting you somewhere wrong
 
 ### Changed
+
+- **The shimmering facades hold still** (CW-41) - at small character sizes, building fronts used to
+  carry sliding interference bands - "a fractured polygon" look - because the window pattern sat at
+  the same scale as the characters themselves, and every tiny movement of the view re-rolled which
+  characters lit up. Measured first, then fixed: the facade textures are now filtered for the
+  character grid rather than the pixel grid, so window patterns dissolve smoothly exactly where
+  they become too small to draw honestly, and stay sharp everywhere they fit. Up close nothing
+  changes; the interference is gone at the small sizes, and drawing got no slower - on the densest
+  city it measured slightly faster
+
+- **Teleporting is drop-a-pin now** (CW-40) - press **Teleport** on the map toolbar and the cursor
+  becomes a ring; click anywhere on the map and you are there, in one step - the "I'm here" marker
+  moves to the spot, the game says which street you landed on, and you stay on the map so you can
+  keep hopping without re-arming. Enter the street whenever you choose; it opens exactly where you
+  landed. Pressing the button again turns the mode off, and leaving the map turns it off by itself.
+  From the keyboard nothing got harder: the arrows still steer the map and **J** still drops you at
+  the middle of the screen, with no mode to arm. The old two-step flow - click to pick, then press J
+  to go - is gone, along with its "Press J to go" prompt. The marker itself was redrawn as a bright
+  square frame around a dark centre that stays the same size at every zoom level: the old solid
+  block shrank to a dot zoomed out, and in color mode it vanished entirely among white buildings
+
+- **The phosphor trail is retired** (CW-39) - moving through the city used to leave a fading
+  double-exposure behind every tree, pole and sign, the way a slow CRT smeared when it scrolled. The
+  owner found it distracting, and it was expensive: measured side by side in one session, drawing
+  without it is 19 to 32 percent faster per frame on a throttled machine, which on this hardware is
+  the difference between about 26 and about 40 frames a second standing in heavy rain at the
+  smallest character size. The night city itself is untouched - the lit windows, the bright
+  storefronts and the dark ground all read exactly as before; only the smear is gone. The main
+  app's Alt View keeps its own afterglow slider exactly as it was
+
+- **The Camera panel speaks the game's language** (CW-38) - its two direction pads were titled
+  "Rotate View" and "Pan View", the 3D preview's camera words. In the street they now say
+  **Look Around** and **Walk Around**, and over the map both say **Pan Map**, because over the map
+  both pads pan. In high contrast the panel also fits the screen again: every control grows in that
+  mode and the panel had quietly become taller than a 1600x900 display, leaving Reset View stranded
+  below the edge of the screen behind a scrollbar
+
+- **One key, one meaning** (CW-38) - Minus and Equals used to change character size in the street
+  but zoom the map overhead, so the same key did different things depending on where you were
+  standing. They now change character size everywhere, and the map zooms with **Page Up** and
+  **Page Down** instead - held down, exactly the way the old keys worked. The help panel, the spoken
+  map-view announcement and the toolbar tooltips all teach the new keys
+
+- **The Colour button now says Color** (CW-38) - the game speaks US English everywhere a player can
+  see, and this was the one hold-out. Only the words changed: your saved choice is kept, and
+  everything under the hood keeps its old name so nothing you stored is lost
 
 - **A phone toolbar that earns its rows** (UF-42) - with a project open on a phone, the app used to
   spend four stacked rows before you saw anything you came for: the header, a row holding four
@@ -83,6 +185,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   data where there is one, and from the building itself where there is not
 
 ### Fixed
+
+- **You spawn facing down the street, not into a wall** (CW-44) - every city entry used to face
+  due north no matter what stood there, and the bigger Seattle put a storefront two and a half
+  meters that way: the first thing a new player did was walk into a wall. The spawn now faces the
+  direction with the longest clear, walkable run - in Seattle that is an open street with a proper
+  vanishing point. CI caught this before a person did
+
+- **Collapsing the game's Camera panel no longer traps you** (CW-38) - the collapse arrow hid the
+  panel and then hid itself, so there was no way to bring the panel back - and worse, the vanishing
+  button silently dropped your keyboard: after collapsing, M, the arrows, every game key went dead
+  until you happened to press Tab. The reopen arrow now stays put when the panel is collapsed, keeps
+  your focus, and the keyboard keeps working the whole time
 
 - **The preview status line can actually be read on a phone** (UF-42) - the line that tells you the
   preview is ready, how big the file is and how many triangles it has was written into a corner

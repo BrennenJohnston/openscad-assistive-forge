@@ -94,15 +94,19 @@ export const MONO_REVERSE_THRESHOLD = 0.8;
  *
  * A slow phosphor kept emitting after the beam had passed, which is why an
  * old terminal smeared when it scrolled. Each frame the leftover is multiplied
- * by this, so it is a decay rate rather than a length: 0.45 is gone inside
- * about three frames, which reads as a soft persistence behind movement and
- * not as a smear you have to wait out.
+ * by this, so it is a decay rate rather than a length.
  *
- * Motion, so it follows prefers-reduced-motion and stops entirely when that is
- * set — the renderer refuses a fade in that state and the game re-applies this
- * when the preference changes mid-walk.
+ * CW-39 (CW-Q37): RETIRED at 0. The trail cost 22.3% of every throttled
+ * frame — the afterglow pass costs the same at any fade above zero, so
+ * retuning recovers nothing; only zero does, because the paint guard skips
+ * the pass entirely. The owner played Round 5, called the double-exposure
+ * ghosts distracting, and signed the retirement. The machinery all stays:
+ * the converter keeps the capability for the main app's Alt View slider,
+ * the game still applies this constant (so one number here brings the
+ * trail back), and the bench re-enables it per run for A/B through the
+ * DEV handle. Reduced-motion handling is unchanged and now vacuous here.
  */
-export const MONO_GLOW_FADE = 0.45;
+export const MONO_GLOW_FADE = 0;
 
 /**
  * Bloom radius in device pixels, haloed into each glyph when the atlas is

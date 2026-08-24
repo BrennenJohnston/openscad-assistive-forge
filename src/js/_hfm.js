@@ -1582,6 +1582,28 @@ export async function initAltView(previewManager, options = {}) {
     getFontScale() {
       return st.fontScale;
     },
+    /**
+     * CW-41: the painted cell's size in canvas pixels at the CURRENT font
+     * scale. Read-only, so a caller can filter its scene for the cell
+     * raster (the City Walk's facade textures do); previously this lived
+     * only behind the DEV-gated stats.
+     */
+    getCellPx() {
+      return { w: metrics.charW, h: metrics.charH };
+    },
+    /**
+     * CW-42: the convert counters the frame loop already keeps, exposed
+     * cumulatively so a caller can time a span by diffing two snapshots.
+     * Read-only and allocation-light; the City Walk's entry calibration is
+     * the customer. The richer getConvertStats readout stays DEV-only.
+     */
+    getConvertTotals() {
+      return {
+        sumMs: st.convertStats.sum,
+        samples: st.convertStats.samples,
+        cells: st.lastCellCount ?? 0,
+      };
+    },
     dispose() {
       st.enabled = false;
       previewManager.controls?.removeEventListener?.(

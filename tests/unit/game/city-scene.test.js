@@ -130,10 +130,14 @@ describe('buildCityGroup — CW-8 distinctness', () => {
     expect(storefronts).toBeDefined()
     expect(stats.storefrontTriangles).toBeGreaterThan(0)
 
-    // The strip stops at 3.5 m and starts at the ground.
+    // The strip starts at the ground and stops at the building's OWN
+    // ground-floor height - per building since CW-46, hash-drawn within
+    // the documented 3.2-5.0 m range (the directive's "same size first
+    // floor" complaint).
     storefronts.geometry.computeBoundingBox()
     expect(storefronts.geometry.boundingBox.min.z).toBe(0)
-    expect(storefronts.geometry.boundingBox.max.z).toBeCloseTo(3.5, 5)
+    expect(storefronts.geometry.boundingBox.max.z).toBeGreaterThanOrEqual(3.2)
+    expect(storefronts.geometry.boundingBox.max.z).toBeLessThanOrEqual(5.0)
 
     // Exactly one of the two buildings qualifies (the skybridge is skipped),
     // so the strip has the same triangle count as one extruded square.
@@ -164,6 +168,33 @@ describe('buildCityGroup — CW-8 distinctness', () => {
     setMapView(false)
     expect(roads.material.color.getHex()).toBe(ROAD_TONES.street)
     expect(curbs.visible).toBe(true)
+
+    dispose()
+  })
+
+  it('setCellRaster biases every textured facade material for the cell grid (CW-41)', () => {
+    // The shimmer fix: facade textures are filtered for the CELL raster,
+    // so the bias is log2 of the cell height and follows the character
+    // size. At a cell height of 1 the filtering is exactly stock (bias 0)
+    // - which is also what the bench's no-cellraster variant relies on.
+    const { group, setCellRaster, dispose } = buildCityGroup(model())
+    const biased = []
+    group.traverse((o) => {
+      if (o.isMesh && o.material?.userData?.cellLodBias) {
+        biased.push(o.material)
+      }
+    })
+    // Buildings and storefronts carry the filter; this model builds both.
+    expect(biased.length).toBeGreaterThanOrEqual(2)
+
+    setCellRaster(4)
+    for (const m of biased) expect(m.userData.cellLodBias.value).toBe(2)
+    setCellRaster(10)
+    for (const m of biased) {
+      expect(m.userData.cellLodBias.value).toBeCloseTo(Math.log2(10), 6)
+    }
+    setCellRaster(1)
+    for (const m of biased) expect(m.userData.cellLodBias.value).toBe(0)
 
     dispose()
   })
@@ -404,7 +435,10 @@ describe('buildStreetProps (CW-16)', () => {
     // A car turned across the road, or parked on the sidewalk, breaks this.
     expect(maxAbsY).toBeLessThanOrEqual(2.5)
     expect(minAbsY).toBeGreaterThan(0.4)
-    expect(maxZ).toBeCloseTo(1.35, 2)
+    // CW-46: parked cars are CLASSES now - the tallest (pickup/SUV) tops
+    // out at 1.9 m and nothing exceeds the class table.
+    expect(maxZ).toBeGreaterThan(1.3)
+    expect(maxZ).toBeLessThanOrEqual(1.9 + 1e-3)
 
     props.dispose()
   })
@@ -1058,5 +1092,219 @@ describe('buildRain (CW-20)', () => {
     rain.update(1, 10, 10)
     expect(rain.group.children.map((m) => m.position.z)).toEqual(before)
     rain.dispose()
+  })
+})
+
+describe('street furniture props (CW-43)', () => {
+  // Nodes stand a pavement's width off the E-W residential road at y=0.
+  const furnitureModel = (extra = []) =>
+    propsModel([
+      {
+        type: 'node',
+        id: 100,
+        tags: { highway: 'bus_stop', shelter: 'yes' },
+        ...pt(15, 6),
+      },
+      {
+        type: 'node',
+        id: 101,
+        tags: { amenity: 'bench', backrest: 'yes' },
+        ...pt(-15, 6),
+      },
+      { type: 'node', id: 102, tags: { amenity: 'waste_basket' }, ...pt(0, 7) },
+      {
+        type: 'node',
+        id: 103,
+        tags: { amenity: 'bicycle_parking' },
+        ...pt(25, 6),
+      },
+      {
+        type: 'node',
+        id: 104,
+        tags: { emergency: 'fire_hydrant' },
+        ...pt(-25, 6),
+      },
+      ...extra,
+    ])
+
+  it('stands every class at its true node position, typed and counted', () => {
+    const m = furnitureModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+
+    expect(props.stats.furnitureByKind).toEqual({
+      bus_stop: 1,
+      bench: 1,
+      waste_basket: 1,
+      bicycle_parking: 1,
+      fire_hydrant: 1,
+    })
+    expect(hasVertexNear(props.group, 'bus-stop-poles', 15, 6, 0.8)).toBe(true)
+    expect(hasVertexNear(props.group, 'benches', -15, 6, 1.2)).toBe(true)
+    expect(hasVertexNear(props.group, 'waste-baskets', 0, 7, 0.5)).toBe(true)
+    expect(hasVertexNear(props.group, 'bike-racks', 25, 6, 0.8)).toBe(true)
+    expect(hasVertexNear(props.group, 'hydrants', -25, 6, 0.4)).toBe(true)
+
+    props.dispose()
+  })
+
+  it('gives the sheltered stop its shelter, and only then', () => {
+    const withShelter = furnitureModel()
+    const p1 = buildStreetProps(withShelter, buildCollisionGrid(withShelter))
+    expect(p1.group.children.some((c) => c.name === 'bus-stop-shelters')).toBe(
+      true
+    )
+    p1.dispose()
+
+    const bare = propsModel([
+      { type: 'node', id: 100, tags: { highway: 'bus_stop' }, ...pt(15, 6) },
+    ])
+    const p2 = buildStreetProps(bare, buildCollisionGrid(bare))
+    expect(p2.group.children.some((c) => c.name === 'bus-stop-poles')).toBe(
+      true
+    )
+    expect(p2.group.children.some((c) => c.name === 'bus-stop-shelters')).toBe(
+      false
+    )
+    p2.dispose()
+  })
+
+  it('faces the street: the bench lies along the road, the rack across it', () => {
+    const m = furnitureModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+
+    // The road runs E-W. A bench's long side follows it; a staple rack's
+    // hoop stands across it.
+    const bench = positionsOf(props.group, 'benches')
+    let minX = Infinity
+    let maxX = -Infinity
+    let minY = Infinity
+    let maxY = -Infinity
+    for (let i = 0; i < bench.length; i += 3) {
+      minX = Math.min(minX, bench[i])
+      maxX = Math.max(maxX, bench[i])
+      minY = Math.min(minY, bench[i + 1])
+      maxY = Math.max(maxY, bench[i + 1])
+    }
+    expect(maxX - minX).toBeGreaterThan(1.5)
+    expect(maxY - minY).toBeLessThan(0.8)
+
+    const rack = positionsOf(props.group, 'bike-racks')
+    let rMinX = Infinity
+    let rMaxX = -Infinity
+    let rMinY = Infinity
+    let rMaxY = -Infinity
+    for (let i = 0; i < rack.length; i += 3) {
+      rMinX = Math.min(rMinX, rack[i])
+      rMaxX = Math.max(rMaxX, rack[i])
+      rMinY = Math.min(rMinY, rack[i + 1])
+      rMaxY = Math.max(rMaxY, rack[i + 1])
+    }
+    expect(rMaxY - rMinY).toBeGreaterThan(0.7)
+    expect(rMaxX - rMinX).toBeLessThan(0.3)
+
+    props.dispose()
+  })
+
+  it('every prop is solid: the obstacles carry each footprint', () => {
+    const m = furnitureModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+
+    const near = (x, y) =>
+      props.obstacles.filter((o) => Math.hypot(o.x - x, o.y - y) < 1.6)
+    // The stop contributes its pole AND its shelter.
+    expect(near(15, 6).length).toBeGreaterThanOrEqual(2)
+    expect(near(-15, 6).length).toBeGreaterThanOrEqual(1) // bench
+    expect(near(0, 7).length).toBeGreaterThanOrEqual(1) // basket
+    expect(near(-25, 6).length).toBeGreaterThanOrEqual(1) // hydrant
+    // The bench's footprint is the seat, rotated with the street.
+    const benchOb = near(-15, 6)[0]
+    expect(benchOb.halfLengthM).toBeCloseTo(0.9, 5)
+    expect(benchOb.halfWidthM).toBeCloseTo(0.25, 5)
+
+    props.dispose()
+  })
+
+  it('collapses duplicate nodes and yields to a mapped tree', () => {
+    const m = propsModel([
+      { type: 'node', id: 100, tags: { amenity: 'bench' }, ...pt(15, 6) },
+      { type: 'node', id: 101, tags: { amenity: 'bench' }, ...pt(15.2, 6) },
+      { type: 'node', id: 102, tags: { natural: 'tree' }, ...pt(-15, 6) },
+      { type: 'node', id: 103, tags: { amenity: 'bench' }, ...pt(-15.1, 6) },
+    ])
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    // Two nodes for one bench are one bench; a bench under a mapped tree is
+    // no bench at all - both are real data, and the tree planted first.
+    expect(props.stats.furnitureByKind).toEqual({ bench: 1 })
+    props.dispose()
+  })
+
+  it('a model with no furniture builds exactly as before', () => {
+    const m = propsModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    expect(props.stats.furnitureCount).toBe(0)
+    expect(props.group.children.some((c) => c.name === 'benches')).toBe(false)
+    props.dispose()
+  })
+})
+
+describe('cars are cars (CW-46, CW-Q46)', () => {
+  it('ships the signed class table exactly, weights summing to 100', async () => {
+    const { CAR_CLASSES } = await import('../../../src/js/game/city-scene.js')
+    expect(CAR_CLASSES.map((c) => [c.kind, c.lenM, c.widM, c.hM])).toEqual([
+      ['pickup', 5.8, 2.0, 1.9],
+      ['suv', 5.0, 1.98, 1.9],
+      ['crossover', 4.6, 1.85, 1.65],
+      ['sedan', 4.9, 1.85, 1.45],
+      ['hatch', 4.4, 1.8, 1.5],
+      ['minivan', 5.2, 2.0, 1.75],
+    ])
+    expect(CAR_CLASSES.reduce((s, c) => s + c.weight, 0)).toBe(100)
+  })
+
+  it('picks classes deterministically across the whole draw range', async () => {
+    const { pickCarClass, CAR_CLASSES } = await import(
+      '../../../src/js/game/city-scene.js'
+    )
+    expect(pickCarClass(0).kind).toBe('pickup')
+    expect(pickCarClass(0.9999).kind).toBe('minivan')
+    // Every class is reachable, and the same draw always answers the same.
+    const seen = new Set()
+    for (let i = 0; i < 1000; i++) {
+      const cls = pickCarClass(i / 1000)
+      expect(pickCarClass(i / 1000)).toBe(cls)
+      seen.add(cls.kind)
+    }
+    expect(seen.size).toBe(CAR_CLASSES.length)
+  })
+
+  it('stamps each parked car with its own class footprint, and no two overlap along the curb', () => {
+    const m = propsModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    const legalHalves = new Set([2.9, 2.5, 2.3, 2.45, 2.2, 2.6])
+    const cars = props.obstacles.filter((o) => o.halfLengthM > 1.5)
+    expect(cars.length).toBeGreaterThan(0)
+    for (const car of cars) {
+      expect(legalHalves.has(Math.round(car.halfLengthM * 100) / 100)).toBe(
+        true
+      )
+    }
+    // Along the (x-axis) road, successive parked footprints keep clear of
+    // one another - a 5.8 m pickup in the old 6 m slots would not have.
+    const sameSide = (side) =>
+      cars
+        .filter((o) => Math.sign(o.y) === side && Math.abs(o.rotationRad) < 0.1)
+        .sort((a, b) => a.x - b.x)
+    for (const side of [-1, 1]) {
+      const row = sameSide(side)
+      for (let i = 1; i < row.length; i++) {
+        const gap =
+          row[i].x -
+          row[i - 1].x -
+          row[i].halfLengthM -
+          row[i - 1].halfLengthM
+        expect(gap).toBeGreaterThanOrEqual(0)
+      }
+    }
+    props.dispose()
   })
 })

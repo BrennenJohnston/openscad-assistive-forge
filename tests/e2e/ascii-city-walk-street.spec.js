@@ -209,7 +209,7 @@ test.describe('ASCII City Walk — the colour toggle (CW-Q16)', () => {
     await expect(colourBtn(page)).toHaveAttribute('aria-pressed', 'false')
     await expect(colourBtn(page)).toHaveAttribute(
       'aria-label',
-      'Colour off. Press to show the city in colour.'
+      'Color off. Press to show the city in color.'
     )
     expect(await paletteSize(page)).toBeNull()
 
@@ -230,7 +230,7 @@ test.describe('ASCII City Walk — the colour toggle (CW-Q16)', () => {
     await colourBtn(page).click()
     await expect(colourBtn(page)).toHaveAttribute('aria-pressed', 'true')
     await expect(announcer(page)).toHaveText(
-      'Colour on. The city is drawn in the retro palette.'
+      'Color on. The city is drawn in the retro palette.'
     )
     await expect.poll(() => paletteSize(page)).toBeGreaterThanOrEqual(4)
     // The point of CW-Q16: colour without high contrast.
@@ -243,7 +243,7 @@ test.describe('ASCII City Walk — the colour toggle (CW-Q16)', () => {
     await colourBtn(page).click()
     await expect(colourBtn(page)).toHaveAttribute('aria-pressed', 'false')
     await expect(announcer(page)).toHaveText(
-      'Colour off. The city is drawn in a single phosphor.'
+      'Color off. The city is drawn in a single phosphor.'
     )
     await expect.poll(() => paletteSize(page)).toBeNull()
     expect(await storedChoice(page)).toBe('off')
@@ -312,7 +312,7 @@ test.describe('ASCII City Walk — the colour toggle (CW-Q16)', () => {
     await expect(colourBtn(page)).toHaveAttribute('aria-pressed', 'true')
     await expect(colourBtn(page)).toHaveAttribute(
       'aria-label',
-      'Colour on. Press for a single-colour screen.'
+      'Color on. Press for a single-color screen.'
     )
     await enterCity(page)
     // Colour from the stored choice alone - high contrast never touched.
@@ -332,10 +332,10 @@ test.describe('ASCII City Walk — the colour toggle (CW-Q16)', () => {
     const help = page.locator('#cityWalkHelpPanel')
     await expect(help).toBeVisible()
     await expect(help).toContainText(
-      'O: colour on or off (off is a single-colour retro screen)'
+      'O: color on or off (off is a single-color retro screen)'
     )
     await expect(help).toContainText(
-      'High contrast, theme and colour: the three buttons at the top of the screen'
+      'High contrast, theme and color: the three buttons at the top of the screen'
     )
 
     // The header really does carry all three, in the order the help names.
@@ -1342,5 +1342,183 @@ test.describe('ASCII City Walk — where you are (CW-27)', () => {
       }
     })
     expect(box.lines, `HUD wrapped: ${box.text}`).toBe(1)
+  })
+})
+
+test.describe('ASCII City Walk — people are people (CW-45)', () => {
+  test('the Seattle census is exact, varied, and deterministic', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // Hash-seeded placement against a versioned extract: these numbers are
+    // facts until the next rebake, never noise. The mix ratios are the
+    // CW-45 record's one-line-reversible choices.
+    const stats = await page.evaluate(
+      () => window.__cityWalkGame.props.stats
+    )
+    expect(stats.figuresByPose).toEqual({
+      sitting: 105,
+      standing: 722,
+      walking: 1890,
+      jogging: 343,
+    })
+    expect(await page.evaluate(() => window.__cityWalkGame.props.peopleCount)).toBe(
+      3060
+    )
+  })
+
+  test('sitting happens only where a real bench stands', async ({ page }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const check = await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const benches = g.model.furniture.filter((f) => f.kind === 'bench')
+      const sitters = g.props.figureSpots.filter((f) => f.pose === 'sitting')
+      let orphans = 0
+      for (const s of sitters) {
+        const seated = benches.some(
+          (b) => Math.hypot(b.x - s.x, b.y - s.y) < 1.5
+        )
+        if (!seated) orphans++
+      }
+      return { sitters: sitters.length, benches: benches.length, orphans }
+    })
+    // Never a scattered seat: every sitter is on a mapped bench, and there
+    // are fewer sitters than benches (at most one each, hash-decided).
+    expect(check.orphans).toBe(0)
+    expect(check.sitters).toBeGreaterThan(0)
+    expect(check.sitters).toBeLessThanOrEqual(check.benches)
+  })
+})
+
+test.describe('ASCII City Walk — cars are cars (CW-46)', () => {
+  test('the parked classes stamp their own true footprints', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const check = await page.evaluate(() => {
+      const cars = window.__cityWalkGame.props.obstacles.filter(
+        (o) => o.halfLengthM > 1.5
+      )
+      const halves = {}
+      for (const c of cars) {
+        const key = (Math.round(c.halfLengthM * 100) / 100).toFixed(2)
+        halves[key] = (halves[key] ?? 0) + 1
+      }
+      return { total: cars.length, halves }
+    })
+    // The six signed classes and nothing else: 5.8/5.0/4.6/4.9/4.4/5.2 m.
+    expect(Object.keys(check.halves).sort()).toEqual([
+      '2.20',
+      '2.30',
+      '2.45',
+      '2.50',
+      '2.60',
+      '2.90',
+    ])
+    // Pickups are COMMON (the US mix), not a garnish.
+    expect(check.halves['2.90']).toBeGreaterThan(check.total * 0.1)
+  })
+
+  test('a pickup is solid at its full bed length', async ({ page }) => {
+    test.setTimeout(150_000)
+    await launchGame(page)
+    await enterCity(page)
+
+    // Stand off the pickup's TAIL - the part the old 4.4 m footprint did
+    // not cover - facing it, and watch the approach in the pickup's OWN
+    // frame per frame, exactly the parked-car pattern above: an end-state
+    // distance check is not slide-proof (CI's dt-clamped frames cover ~6x
+    // the ground of a live GPU's, slid around the corner and away, and
+    // went red on two browsers - this watcher replaced it).
+    const setup = await page.evaluate(() => {
+      const game = window.__cityWalkGame
+      const pickups = game.props.obstacles.filter(
+        (o) => Math.abs(o.halfLengthM - 2.9) < 1e-6
+      )
+      for (const car of pickups) {
+        const ux = Math.cos(car.rotationRad)
+        const uy = Math.sin(car.rotationRad)
+        for (const dir of [-1, 1]) {
+          const sx = car.x + ux * (car.halfLengthM + 2.5) * dir
+          const sy = car.y + uy * (car.halfLengthM + 2.5) * dir
+          if (game.collision.isBlocked(sx, sy)) continue
+          const w = game.walkState
+          w.x = sx
+          w.y = sy
+          w.headingRad = Math.atan2(car.x - sx, car.y - sy)
+          w.pitchRad = 0
+
+          // lx runs along the pickup (the axis we approach on), ly across.
+          const startEnd = Math.sign(
+            (sx - car.x) * ux + (sy - car.y) * uy
+          )
+          window.__cwPickup = { frames: 0, walked: 0, closest: 99, crossings: 0 }
+          let px = sx
+          let py = sy
+          const tick = () => {
+            const p = game.walkState
+            const watch = window.__cwPickup
+            watch.frames++
+            watch.walked += Math.hypot(p.x - px, p.y - py)
+            px = p.x
+            py = p.y
+            const dx = p.x - car.x
+            const dy = p.y - car.y
+            const lx = dx * ux + dy * uy
+            const ly = -dx * uy + dy * ux
+            if (Math.abs(ly) <= car.halfWidthM) {
+              watch.closest = Math.min(watch.closest, Math.abs(lx))
+              if (Math.sign(lx) !== startEnd) watch.crossings++
+            }
+            window.__cwPickupTick = requestAnimationFrame(tick)
+          }
+          window.__cwPickupTick = requestAnimationFrame(tick)
+          return { halfLengthM: car.halfLengthM }
+        }
+      }
+      return null
+    })
+    expect(setup).not.toBeNull()
+
+    await page.keyboard.down('ArrowUp')
+    try {
+      // Arrival is a CONDITION, not a frame quota. A dt-clamped software
+      // runner covers the 2.5 m in ~17 frames where a 60 fps GPU needs
+      // ~100, and the slowest Edge runner painted 130 frames in 90 s - a
+      // fixed frames-versus-clock gate starves there while proving nothing
+      // the arrival itself does not.
+      await expect
+        .poll(() => page.evaluate(() => window.__cwPickup.closest), {
+          timeout: 60_000,
+        })
+        .toBeLessThan(setup.halfLengthM + 1.0)
+      // Then keep pushing on the tail for 40 more OBSERVED frames - the
+      // old 4.4 m footprint lets the walker into the bed within a handful,
+      // which the watcher records as closest dipping under the tail plane.
+      const arrived = await page.evaluate(() => window.__cwPickup.frames)
+      await expect
+        .poll(() => page.evaluate(() => window.__cwPickup.frames), {
+          timeout: 60_000,
+        })
+        .toBeGreaterThan(arrived + 40)
+    } finally {
+      await page.keyboard.up('ArrowUp')
+      await page.evaluate(() => cancelAnimationFrame(window.__cwPickupTick))
+    }
+
+    const watch = await page.evaluate(() => window.__cwPickup)
+    // The walk genuinely moved, came close to the tail while aligned with
+    // the bed, and NEVER crossed the tail plane - through-the-bed is the
+    // only way to flip ends while inside the pickup's width.
+    expect(watch.walked).toBeGreaterThan(1)
+    expect(watch.closest).toBeLessThan(setup.halfLengthM + 1.2)
+    expect(watch.closest).toBeGreaterThan(setup.halfLengthM - 0.05)
+    expect(watch.crossings).toBe(0)
   })
 })

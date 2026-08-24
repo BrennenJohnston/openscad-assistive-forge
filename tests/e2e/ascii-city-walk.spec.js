@@ -288,14 +288,18 @@ test.describe('ASCII City Walk — playing', () => {
     ).toBeFocused()
 
     await enterCity(page)
-    await expect.poll(() => hudHeading(page)).toBe('north')
+    // CW-44: the spawn faces the clearest street, so the compass reference
+    // is captured, never assumed to be north.
+    const spawnHeading = await hudHeading(page)
+    expect(spawnHeading).not.toBeNull()
 
-    // Turning right for >1s moves the compass off north - to ANY other
-    // sector. Exact label, not substring (see hudHeading).
+    // Turning right for >1s moves the compass off the spawn sector - a
+    // ~117 degree turn always leaves a 45 degree sector. Exact label, not
+    // substring (see hudHeading).
     await page.keyboard.down('ArrowRight')
     await page.waitForTimeout(1300)
     await page.keyboard.up('ArrowRight')
-    await expect.poll(() => hudHeading(page)).not.toBe('north')
+    await expect.poll(() => hudHeading(page)).not.toBe(spawnHeading)
 
     // Map view toggle and back
     await page.keyboard.press('KeyM')
@@ -388,10 +392,10 @@ test.describe('ASCII City Walk — map navigation and walking speed (CW-9)', () 
       'zoom 1.0x'
     )
 
-    // Held Equal zooms in exponentially.
-    await page.keyboard.down('Equal')
+    // Held PageUp zooms in exponentially (CW-Q41 moved map zoom here).
+    await page.keyboard.down('PageUp')
     await page.waitForTimeout(700)
-    await page.keyboard.up('Equal')
+    await page.keyboard.up('PageUp')
     const hud = await page.textContent('#cityWalkHudStatus')
     const zoom = parseFloat(/zoom (\d+\.\d)x/.exec(hud)?.[1] ?? '0')
     expect(zoom).toBeGreaterThan(1.2)
@@ -421,6 +425,84 @@ test.describe('ASCII City Walk — map navigation and walking speed (CW-9)', () 
     await expect(page.locator('#cityWalkHudStatus')).toContainText(
       'street view'
     )
+  })
+
+  test('Minus sizes characters in BOTH views; PageUp and PageDown zoom the map (CW-38, CW-Q41)', async ({
+    page,
+  }) => {
+    // The owner pressed Minus over the map to shrink the characters and got
+    // a zoomed-out map instead - the same key meant two things depending on
+    // a mode not shown anywhere near the key. CW-Q41 separates them.
+    await launchGame(page)
+    await enterCity(page)
+
+    const scaleOf = () =>
+      page.evaluate(() => window.__cityWalkGame.altView.getFontScale())
+    const zoomOf = () =>
+      page.evaluate(() => window.__cityWalkGame.mapCam.zoom)
+
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
+
+    // Minus over the map changes SIZE now, and leaves the zoom alone.
+    const zoomBefore = await zoomOf()
+    await page.keyboard.press('Minus')
+    await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
+      /Character size 40 percent/
+    )
+    expect(await scaleOf()).toBeCloseTo(0.4, 5)
+    expect(await zoomOf()).toBeCloseTo(zoomBefore, 5)
+
+    // Equals brings it back, still without touching the zoom.
+    await page.keyboard.press('Equal')
+    await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
+      /Character size 50 percent/
+    )
+    expect(await zoomOf()).toBeCloseTo(zoomBefore, 5)
+
+    // PageDown is a HELD zoom-out key, and the keyup releases the hold:
+    // after release the zoom stays where the key left it.
+    await page.keyboard.down('PageDown')
+    await expect.poll(zoomOf).toBeLessThan(zoomBefore - 0.05)
+    await page.keyboard.up('PageDown')
+    const zoomReleased = await zoomOf()
+    // Let real animation frames pass, not wall-clock: a loaded machine can
+    // render nothing in a fixed wait and vacuously "hold" the zoom.
+    await page.evaluate(
+      () =>
+        new Promise((resolve) => {
+          let n = 0
+          const tick = () => (++n >= 10 ? resolve() : requestAnimationFrame(tick))
+          requestAnimationFrame(tick)
+        })
+    )
+    expect(await zoomOf()).toBeCloseTo(zoomReleased, 5)
+
+    // PageUp zooms back in.
+    await page.keyboard.down('PageUp')
+    await expect.poll(zoomOf).toBeGreaterThan(zoomReleased + 0.05)
+    await page.keyboard.up('PageUp')
+
+    // The toolbar teaches the new keys.
+    await expect(page.locator('#cityWalkZoomInBtn')).toHaveAttribute(
+      'title',
+      'Keyboard: Page Up'
+    )
+    await expect(page.locator('#cityWalkZoomOutBtn')).toHaveAttribute(
+      'title',
+      'Keyboard: Page Down'
+    )
+
+    // And the street keeps the behaviour it always had.
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'street view'
+    )
+    await page.keyboard.press('Minus')
+    await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
+      /Character size 40 percent/
+    )
+    expect(await scaleOf()).toBeCloseTo(0.4, 5)
   })
 
   test('walking speed adjusts, announces, and persists across sessions', async ({
@@ -532,6 +614,29 @@ test.describe('ASCII City Walk — the view cuts, it does not cross-fade (D-81)'
 
     for (const into of ['map', 'street']) {
       await page.keyboard.press('m')
+      // Wait for the converter to PAINT the new view before the 'immediate'
+      // capture. Under session load the screenshot repeatedly landed before
+      // the first new-view frame existed, and the diff then measured
+      // map-vs-street (18.27 levels, three false reds in one day) instead
+      // of any ghost. The ghost this test guards against lives IN the
+      // painted frames - the persistence canvas blends over several, so the
+      // first painted frames still carry it: re-proven by reinstating the
+      // trap (fade 0.45, clearPersistence commented out), which reads a
+      // MEASURED 0.87 carried levels against the 0.5 bar with this wait in
+      // place.
+      await page.evaluate(
+        () =>
+          new Promise((resolve) => {
+            const g = window.__cityWalkGame
+            const from = g.altView.getConvertStats?.()?.samples ?? 0
+            const tick = () => {
+              const now = g.altView.getConvertStats?.()?.samples ?? 0
+              if (now >= from + 2) resolve()
+              else requestAnimationFrame(tick)
+            }
+            requestAnimationFrame(tick)
+          })
+      )
       const immediate = await shot()
       await page.waitForTimeout(1400)
       const settled = await shot()
@@ -629,8 +734,10 @@ test.describe('ASCII City Walk — character size (CW-12)', () => {
     await enterCity(page)
     await page.keyboard.press('KeyH')
     await expect(page.locator('#cityWalkHelpPanel')).toBeVisible()
+    // CW-42: the bottom of the range is per machine, and the help says so.
     await expect(page.locator('#cityWalkHelpPanel')).toContainText(
-      'smaller or larger characters (10% to 100%)'
+      'smaller or larger characters, up to 100% ' +
+        "(the smallest size is set by this machine's own speed)"
     )
   })
 })
@@ -678,6 +785,9 @@ test.describe('ASCII City Walk — looking around (CW-13)', () => {
     await enterCity(page)
 
     expect((await gaze(page)).pitch).toBe(0)
+    // CW-44: the spawn faces the clearest street, so the bearing reference
+    // is captured, never assumed to be zero.
+    const spawnBearing = (await gaze(page)).heading
     await expect(page.locator('#cityWalkHudStatus')).not.toContainText(
       'looking'
     )
@@ -693,7 +803,7 @@ test.describe('ASCII City Walk — looking around (CW-13)', () => {
     await expect(page.locator('#cityWalkHudStatus')).toContainText('looking up')
 
     // The bearing is untouched by looking up - pitch and yaw are separate.
-    expect((await gaze(page)).heading).toBe(0)
+    expect((await gaze(page)).heading).toBe(spawnBearing)
 
     // Held to the stop: the clamp is exactly 60 degrees, never beyond.
     //
@@ -751,10 +861,17 @@ test.describe('ASCII City Walk — looking around (CW-13)', () => {
     await page.mouse.up()
     expect(await gaze(page)).toEqual(before)
 
-    // 200 px right and 100 px up at 0.25 deg/px: +50 deg of yaw, +25 of pitch.
+    // 200 px right and 100 px up at 0.25 deg/px: +50 deg of yaw, +25 of
+    // pitch - RELATIVE to the CW-44 spawn bearing, which faces the
+    // clearest street rather than a fixed north.
+    const TAU_DEG = 360
+    const startDeg = Math.round(before.heading / DEG)
     await dragViewport(page, 200, -100)
     await expect
-      .poll(async () => Math.round((await gaze(page)).heading / DEG))
+      .poll(async () =>
+        (Math.round((await gaze(page)).heading / DEG) - startDeg + TAU_DEG) %
+        TAU_DEG
+      )
       .toBe(50)
     expect(Math.round((await gaze(page)).pitch / DEG)).toBe(25)
     await expect(page.locator('#cityWalkHudStatus')).toContainText('looking up')
@@ -927,11 +1044,14 @@ test.describe('ASCII City Walk — high contrast (CW-6)', () => {
       /Character size 60 percent/
     )
 
-    // …and walking still walks. Exact label, not substring (see hudHeading).
+    // …and walking still walks. Exact label, not substring (see
+    // hudHeading); the reference heading is captured, never assumed north
+    // (CW-44 spawns facing the clearest street).
+    const sizeKeysHeading = await hudHeading(page)
     await page.keyboard.down('ArrowRight')
     await page.waitForTimeout(1300)
     await page.keyboard.up('ArrowRight')
-    await expect.poll(() => hudHeading(page)).not.toBe('north')
+    await expect.poll(() => hudHeading(page)).not.toBe(sizeKeysHeading)
 
     await page.keyboard.press('Escape')
     await expect(page.locator('#cityWalkLayer')).toBeHidden()
@@ -1086,11 +1206,13 @@ test.describe('ASCII City Walk — accessibility toggles (CW-14)', () => {
     expect(focus.inLayer).toBe(true)
 
     // The keys still reach the game: focus staying put is only worth
-    // asserting if the city still answers to it (CW-13's lesson).
+    // asserting if the city still answers to it (CW-13's lesson). The
+    // reference heading is captured, never assumed north (CW-44).
+    const themeFocusHeading = await hudHeading(page)
     await page.keyboard.down('ArrowRight')
     await page.waitForTimeout(1300)
     await page.keyboard.up('ArrowRight')
-    await expect.poll(() => hudHeading(page)).not.toBe('north')
+    await expect.poll(() => hudHeading(page)).not.toBe(themeFocusHeading)
 
     // And Tab does not escape the modal.
     await page.keyboard.press('Tab')
@@ -1209,5 +1331,57 @@ test.describe('ASCII City Walk — accessibility toggles (CW-14)', () => {
       .include('#cityWalkLayer')
       .analyze()
     expectOnlyAllowedViolations(results)
+  })
+})
+
+test.describe('ASCII City Walk — the loading line (CW-44)', () => {
+  test('a held-up city download shows its progress line, then clears it', async ({
+    page,
+  }) => {
+    await launchGame(page)
+
+    // Hold the extract at the door: while the fetch waits, the player must
+    // see (and a screen reader hear - role=status) that loading is under
+    // way. The 1,300 m Seattle measured 47 s on Slow 4G; a silent
+    // aria-busy alone is a dead screen for that long.
+    let release
+    const gate = new Promise((resolve) => {
+      release = resolve
+    })
+    await page.route('**/examples/ascii-city/seattle.json', async (route) => {
+      await gate
+      await route.continue()
+    })
+
+    await page.getByRole('button', { name: 'Seattle, Washington' }).click()
+    const status = page.locator('#cityWalkLoadStatus')
+    await expect(status).toBeVisible()
+    await expect(status).toHaveText('Loading Seattle, Washington…')
+    await expect(status).toHaveAttribute('role', 'status')
+
+    release()
+    // With WebGL the city starts and the line clears; without it the
+    // fallback screen appears instead - either way the line must not
+    // linger.
+    await expect(status).toBeHidden({ timeout: 60000 })
+  })
+
+  test('a failed city load clears the progress line and speaks the error', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await page.route('**/examples/ascii-city/seattle.json', (route) =>
+      route.fulfill({ status: 503, body: 'busy' })
+    )
+    await page.getByRole('button', { name: 'Seattle, Washington' }).click()
+    await expect(page.locator('#cityWalkStartError')).toBeVisible()
+    await expect(page.locator('#cityWalkStartError')).toContainText(
+      'could not be loaded'
+    )
+    await expect(page.locator('#cityWalkLoadStatus')).toBeHidden()
+    // The picker recovers for another try.
+    await expect(
+      page.getByRole('button', { name: 'Seattle, Washington' })
+    ).toBeEnabled()
   })
 })

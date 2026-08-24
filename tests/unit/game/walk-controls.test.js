@@ -9,6 +9,7 @@ import {
   buildCollisionGrid,
   stampObstacles,
   findSpawn,
+  findClearHeading,
   fitOrthoToBounds,
   createMapCamera,
   stepMapCamera,
@@ -353,6 +354,29 @@ describe('fitOrthoToBounds', () => {
   })
 })
 
+describe('findClearHeading (CW-44)', () => {
+  it('faces down the open corridor, not into the near wall', () => {
+    // Everything is wall except a strip running east. North is blocked half
+    // a metre out - exactly the CW-44 Seattle spawn shape that walked the
+    // player into a storefront.
+    const corridor = {
+      isBlocked: (x, y) => !(Math.abs(y) <= 1 && x >= -1),
+    }
+    expect(findClearHeading(corridor, 0, 0)).toBeCloseTo(Math.PI / 2, 9)
+  })
+
+  it('is deterministic and prefers north on a fully open square', () => {
+    const open = { isBlocked: () => false }
+    expect(findClearHeading(open, 0, 0)).toBe(0)
+    expect(findClearHeading(open, 12.5, -40)).toBe(0)
+  })
+
+  it('answers north when every direction is walled in', () => {
+    const solid = { isBlocked: () => true }
+    expect(findClearHeading(solid, 0, 0)).toBe(0)
+  })
+})
+
 describe('integration — the bundled Seattle extract', () => {
   it('parses, rasterizes, and spawns on a street', () => {
     const raw = JSON.parse(
@@ -386,6 +410,29 @@ describe('integration — the bundled Seattle extract', () => {
       }
     }
     expect(moved).toBe(true)
+  })
+
+  it('spawns FACING somewhere worth walking (the CW-44 CI catch, pinned)', () => {
+    // The fixed north heading stood the 1,300 m Seattle player 2.5 m from
+    // a storefront; CI's software frames (dt-clamped, more ground per
+    // frame) hit it and the Fast-toggle spec went red on two browsers.
+    // The spawn heading must now buy a real run: five simulated seconds
+    // of walking must cover several times that wall distance.
+    const raw = JSON.parse(
+      readFileSync(
+        join(process.cwd(), 'public', 'examples', 'ascii-city', 'seattle.json'),
+        'utf8'
+      )
+    )
+    const model = parseCityExtract(raw)
+    const grid = buildCollisionGrid(model)
+    const spawn = findSpawn(model, grid)
+    const heading = findClearHeading(grid, spawn.x, spawn.y)
+    const state = createWalkState({ ...spawn, headingRad: heading })
+    for (let i = 0; i < 50; i++) stepWalk(state, { forward: 1 }, 0.1, grid)
+    expect(
+      Math.hypot(state.x - spawn.x, state.y - spawn.y)
+    ).toBeGreaterThan(6)
   })
 })
 
@@ -435,6 +482,38 @@ describe('character size (CW-12)', () => {
     )
   })
 
+  describe('calibrated floor (CW-42, CW-Q39)', () => {
+    it('raises the bottom of the range to the calibrated floor', () => {
+      expect(clampCharScale(0.1, 0.3)).toBe(0.3)
+      expect(clampCharScale(0.2, 0.3)).toBe(0.3)
+      expect(clampCharScale(0, 0.3)).toBe(0.3)
+    })
+
+    it('stepping down from the calibrated floor stays on it', () => {
+      expect(clampCharScale(0.3 - CHAR_SCALE_STEP, 0.3)).toBe(0.3)
+      expect(clampCharScale(0.1 - CHAR_SCALE_STEP, 0.1)).toBe(0.1)
+    })
+
+    it('leaves everything above the floor alone', () => {
+      expect(clampCharScale(0.5, 0.3)).toBe(0.5)
+      expect(clampCharScale(2.5, 0.3)).toBe(CHAR_SCALE_MAX)
+    })
+
+    it('a floor of 10% is the uncalibrated range', () => {
+      expect(clampCharScale(0.1, 0.1)).toBe(0.1)
+    })
+
+    it('ignores a junk floor', () => {
+      expect(clampCharScale(0.1, NaN)).toBe(0.1)
+      expect(clampCharScale(0.1, null)).toBe(0.1)
+    })
+
+    it('a floor outside the range is bounded, never widening the range', () => {
+      expect(clampCharScale(0.1, 0.05)).toBe(CHAR_SCALE_MIN)
+      expect(clampCharScale(0.5, 5)).toBe(CHAR_SCALE_MAX)
+    })
+  })
+
   describe('seed order', () => {
     it("prefers the game's own saved value", () => {
       expect(seedCharScale('0.3', '0.9')).toBe(0.3)
@@ -455,6 +534,28 @@ describe('character size (CW-12)', () => {
 
     it('survives a junk game value by falling through, not by throwing', () => {
       expect(seedCharScale('NaN', '0.4')).toBe(0.4)
+    })
+
+    describe('with a stored calibration (CW-42, CW-Q39)', () => {
+      it('the manual choice still wins, even below the calibrated default', () => {
+        expect(seedCharScale('0.1', null, 0.3)).toBe(0.1)
+      })
+
+      it('the calibrated default replaces the landing default', () => {
+        expect(seedCharScale(null, null, 0.1)).toBe(0.1)
+        expect(seedCharScale(null, null, 0.3)).toBe(0.3)
+      })
+
+      it('the calibrated default outranks the Alt View courtesy seed', () => {
+        // Fresh calibration would re-apply over the seed moments after
+        // entry; landing there spares the player the visible jump.
+        expect(seedCharScale(null, '0.9', 0.3)).toBe(0.3)
+      })
+
+      it('a junk calibration falls through to the old order', () => {
+        expect(seedCharScale(null, '0.9', NaN)).toBe(0.9)
+        expect(seedCharScale(null, null, null)).toBe(CHAR_SCALE_DEFAULT)
+      })
     })
   })
 })

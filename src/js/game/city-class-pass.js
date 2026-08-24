@@ -85,6 +85,18 @@ const CLASS_BY_MESH_NAME = new Map([
   // CW-33: the ground you walk on, and the ground you walk past.
   ['sidewalks', SURFACE_CLASS.SIDEWALK],
   ['greens', SURFACE_CLASS.GREEN],
+  // CW-43 street furniture: dressed in the EXISTING voices of the things
+  // they physically resemble — the span table (_gpuVocabLists,
+  // MAX_CLASS_SPANS = 16) is exactly full, and at the sizes this game is
+  // played a hydrant is a few cells tall: a distinct vocabulary could not
+  // show. Zero new ids; the choice is checked by photograph in the CW-43
+  // record, and its reversal is the converter-shared span surgery.
+  ['bus-stop-poles', SURFACE_CLASS.MAST],
+  ['bus-stop-shelters', SURFACE_CLASS.BUILDING_WALL],
+  ['benches', SURFACE_CLASS.CAR],
+  ['waste-baskets', SURFACE_CLASS.CAR],
+  ['bike-racks', SURFACE_CLASS.CAR],
+  ['hydrants', SURFACE_CLASS.LAMP],
 ]);
 
 /**

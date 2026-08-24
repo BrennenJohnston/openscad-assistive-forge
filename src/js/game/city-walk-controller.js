@@ -31,7 +31,6 @@ import {
   OrthographicCamera,
   WebGLRenderer,
   BoxGeometry,
-  RingGeometry,
   Mesh,
   MeshBasicMaterial,
 } from 'three';
@@ -60,6 +59,7 @@ import {
   buildCollisionGrid,
   stampObstacles,
   findSpawn,
+  findClearHeading,
   findLandingNear,
   createMapCamera,
   stepMapCamera,
@@ -71,6 +71,17 @@ import {
   CHAR_SCALE_STEP,
 } from './walk-controls.js';
 import { initAltView } from '../_hfm.js';
+import {
+  CALIBRATION_CANDIDATES,
+  CALIBRATION_SAMPLES_PER_SCALE,
+  chooseCalibratedSize,
+  createProbePhase,
+  decodeCalibration,
+  encodeCalibration,
+  isConclusive,
+  nextProbeScale,
+  stepProbePhase,
+} from './size-calibration.js';
 import { createDocumentFocusTrap } from '../focus-trap.js';
 import { announce } from '../announcer.js';
 import { themeManager } from '../theme-manager.js';
@@ -92,6 +103,7 @@ import {
   STORAGE_KEY_HFM_FONT_SCALE,
   STORAGE_KEY_CITY_WALK_SPEED,
   STORAGE_KEY_CITY_WALK_FONT_SCALE,
+  STORAGE_KEY_CITY_WALK_CALIBRATED_FLOOR,
   STORAGE_KEY_CITY_WALK_COLOUR,
   STORAGE_KEY_CITY_WALK_CAMERA_PANEL,
 } from '../storage-keys.js';
@@ -139,10 +151,11 @@ const THUNDER_GAP_MS = 30000;
 // the HUD draws (CW-27): inside the street, or beside it. Using the same two
 // words here means the sentence a screen-reader user hears and the line a
 // sighted user reads say the same thing about the same spot.
-const TELEPORT_PICK_MESSAGE = (street, on) =>
-  `Teleport target set ${on ? 'on' : 'near'} ${street}. Press J to go.`;
-const TELEPORT_PICK_OPEN_MESSAGE =
-  'Teleport target set on open ground. Press J to go.';
+// CW-40 (CW-Q40): the two-step pick-then-J flow retired, and the pick
+// announcements with it. The button arms PIN MODE instead; a click commits.
+const TELEPORT_MODE_ON_MESSAGE =
+  'Teleport mode on. Click the map to travel there.';
+const TELEPORT_MODE_OFF_MESSAGE = 'Teleport mode off.';
 const TELEPORT_LANDED_MESSAGE = (street, on, compass) =>
   `Teleported ${on ? 'to' : 'near'} ${street}, facing ${compass}.`;
 const TELEPORT_LANDED_OPEN_MESSAGE = (compass) =>
@@ -213,6 +226,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     shiftHeld: false,
     fastWalk: false,
     drag: null,
+    // CW-40 (CW-Q40): pin mode. Armed by the Teleport button; a map click
+    // commits while armed. Never persisted - a mode you cannot see the
+    // arming of should never outlive the map it was armed on.
+    teleportArmed: false,
     themeUnsub: null,
     refs: {},
   };
@@ -341,7 +358,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     colourBtn.type = 'button';
     colourBtn.className = 'btn btn-secondary city-walk-btn';
     colourBtn.id = 'cityWalkColourBtn';
-    colourBtn.textContent = 'Colour';
+    // CW-Q38: US English on every player-visible surface ('Color'), while
+    // identifiers and the persisted key keep their spelling - renaming a
+    // stored key strands every saved choice (the UF-14 lesson).
+    colourBtn.textContent = 'Color';
     colourBtn.addEventListener('click', flipColour);
     headerActions.appendChild(colourBtn);
 
@@ -397,6 +417,19 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       if (!firstCityBtn) firstCityBtn = btn;
     }
     startPanel.appendChild(cityList);
+
+    // CW-44: the big Seattle is ~4.9 MB and measured 47 s on Slow 4G - a
+    // wait that long with only a silent aria-busy is a dead screen. This
+    // line shows and speaks download progress. role=status (a polite live
+    // region) rather than aria-label: a visible text line works here, and
+    // percent updates land at ~10% steps so a screen reader hears progress
+    // without chatter.
+    const loadStatus = document.createElement('p');
+    loadStatus.className = 'city-walk-start-loading';
+    loadStatus.id = 'cityWalkLoadStatus';
+    loadStatus.setAttribute('role', 'status');
+    loadStatus.hidden = true;
+    startPanel.appendChild(loadStatus);
 
     // role=alert announces assertively when text lands in it (the element
     // itself lives inside the modal, per the first-visit precedent).
@@ -497,19 +530,20 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       'Shift (hold): move faster',
       'Left and Right Bracket: walking speed down or up',
       'M: switch between street view and map view',
-      'On the map: arrow keys pan, Minus and Equals zoom, Home returns to you',
-      'On the map: click a street, then J to drop yourself there (J alone drops you at the middle of the map)',
+      'On the map: arrow keys pan, Page Up and Page Down zoom, Home returns to you',
+      'On the map: press Teleport, then click where you want to go; J drops you at the middle of the map',
       'L and Shift+L: cycle landmarks on the map',
       'X: say where you are',
-      `Minus and Equals in street view: smaller or larger characters (${Math.round(
-        CHAR_SCALE_MIN * 100
-      )}% to 100%)`,
+      // CW-42 (CW-Q39): the bottom of the range is per machine now, so the
+      // help says how it is set instead of naming a number.
+      'Minus and Equals: smaller or larger characters, up to 100% ' +
+        "(the smallest size is set by this machine's own speed)",
       'C: high contrast on or off',
       'T: change the theme',
-      'O: colour on or off (off is a single-colour retro screen)',
+      'O: color on or off (off is a single-color retro screen)',
       'G: rain off, light, heavy (stays off if you use reduced motion)',
       'P: save a picture of what you can see',
-      'High contrast, theme and colour: the three buttons at the top of the screen',
+      'High contrast, theme and color: the three buttons at the top of the screen',
       // CW-35: the toolbar no longer holds all of them. Walking, turning,
       // looking and the standard views moved into the Camera panel, and a
       // help panel that still said "the toolbar" would send a mouse user
@@ -564,6 +598,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       exitBtn,
       startPanel,
       startError,
+      loadStatus,
       cityButtons: Array.from(cityList.children),
       firstCityBtn,
       viewport,
@@ -603,8 +638,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       colourBtn.setAttribute(
         'aria-label',
         on
-          ? 'Colour on. Press for a single-colour screen.'
-          : 'Colour off. Press to show the city in colour.'
+          ? 'Color on. Press for a single-color screen.'
+          : 'Color off. Press to show the city in color.'
       );
     }
 
@@ -668,8 +703,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     }
     announceInLayer(
       next
-        ? 'Colour on. The city is drawn in the retro palette.'
-        : 'Colour off. The city is drawn in a single phosphor.'
+        ? 'Color on. The city is drawn in the retro palette.'
+        : 'Color off. The city is drawn in a single phosphor.'
     );
   }
 
@@ -678,10 +713,9 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
    * already reads out of state.keys, so a held button reaches street mode
    * and map mode exactly the way its key does; `press` is the same discrete
    * handler the key calls. `views` hides a button in the mode where its key
-   * does nothing. The character-size pair is the one deliberate superset —
-   * in map view its keys are taken by zoom, but the map is drawn in the
-   * same characters and their size is a comfort setting, so it keeps both
-   * buttons.
+   * does nothing. Since CW-Q41 the character-size keys mean character size
+   * in BOTH views (map zoom moved to PageUp/PageDown), so the size pair is
+   * an ordinary `both` group like Speed.
    */
   // CW-35/CW-Q32: the Camera and Move groups have RETIRED from this toolbar.
   // Their jobs moved to the Camera panel, which is the panel Forge users
@@ -781,25 +815,27 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
         {
           id: 'cityWalkZoomOutBtn',
           label: 'Zoom out',
-          keys: 'Minus',
+          keys: 'Page Down',
           hold: 'zoomOut',
           views: 'map',
         },
         {
           id: 'cityWalkZoomInBtn',
           label: 'Zoom in',
-          keys: 'Equals',
+          keys: 'Page Up',
           hold: 'zoomIn',
           views: 'map',
         },
-        // CW-36. "Teleport here" and not "Teleport": with nothing picked it
-        // goes to the middle of the map, which is what "here" names on a
-        // screen whose centre you steer with the arrow keys.
+        // CW-40 (CW-Q40): an ARMING TOGGLE now, not a commit button. Press
+        // it, the cursor becomes the ring, and a click on the map travels
+        // there. J stays the keyboard commit at the centre crosshair, which
+        // is why it is still the key this button teaches.
         {
           id: 'cityWalkTeleportBtn',
-          label: 'Teleport here',
+          label: 'Teleport',
           keys: 'J',
-          press: teleportToTarget,
+          press: toggleTeleportMode,
+          toggle: true,
           views: 'map',
         },
       ],
@@ -968,6 +1004,14 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       );
     }
 
+    const teleportBtn = toolbarButtons.find(
+      (b) => b.spec.id === 'cityWalkTeleportBtn'
+    )?.btn;
+    teleportBtn?.setAttribute(
+      'aria-pressed',
+      state.teleportArmed ? 'true' : 'false'
+    );
+
     for (const { spec, btn } of toolbarButtons) {
       if (spec.views === 'both') continue;
       // Rain is motion: with reduced motion on there is nothing for this
@@ -982,6 +1026,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       btn.hidden = !show;
     }
 
+    syncCharSizeControls();
     measureToolbar();
   }
 
@@ -1089,21 +1134,66 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     refs.cityButtons.forEach((b) => (b.disabled = true));
     refs.startError.hidden = true;
     pickedBtn.setAttribute('aria-busy', 'true');
+    refs.loadStatus.textContent = `Loading ${city.label}…`;
+    refs.loadStatus.hidden = false;
 
     let model;
     try {
       const response = await fetch(`/examples/ascii-city/${city.slug}.json`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      model = parseCityExtract(await response.json());
+      // CW-44: Seattle is ~4.9 MB and measured 47 s on Slow 4G. Stream the
+      // body so the status line can carry real percent. content-length is
+      // the size ON THE WIRE; when a compressing server makes the received
+      // (decompressed) bytes overtake it, the numbers would lie, so the
+      // line falls back to the plain "Loading…" instead.
+      let text;
+      const total = Number(response.headers.get('content-length')) || 0;
+      if (response.body && total > 0) {
+        const reader = response.body.getReader();
+        const chunks = [];
+        let received = 0;
+        let shownPct = 0;
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          received += value.byteLength;
+          if (received <= total) {
+            const pct = Math.min(99, Math.floor((received / total) * 100));
+            if (pct >= shownPct + 10) {
+              shownPct = pct;
+              refs.loadStatus.textContent = `Loading ${city.label}… ${pct}%`;
+            }
+          } else if (shownPct !== 0) {
+            shownPct = 0;
+            refs.loadStatus.textContent = `Loading ${city.label}…`;
+          }
+        }
+        const joined = new Uint8Array(received);
+        let offset = 0;
+        for (const c of chunks) {
+          joined.set(c, offset);
+          offset += c.byteLength;
+        }
+        text = new TextDecoder().decode(joined);
+      } else {
+        text = await response.text();
+      }
+      refs.loadStatus.textContent = `Building ${city.label}…`;
+      model = parseCityExtract(JSON.parse(text));
     } catch (error) {
       console.error(`[CityWalk] Could not load ${city.slug}:`, error);
       pickedBtn.removeAttribute('aria-busy');
       refs.cityButtons.forEach((b) => (b.disabled = false));
+      refs.loadStatus.hidden = true;
+      refs.loadStatus.textContent = '';
       refs.startError.textContent =
         'That city could not be loaded. Check your connection and try again.';
       refs.startError.hidden = false;
       return;
     }
+    refs.loadStatus.hidden = true;
+    refs.loadStatus.textContent = '';
 
     refs.startPanel.hidden = true;
     refs.viewport.hidden = false;
@@ -1171,28 +1261,45 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     );
     const markerSize = Math.max(14, spanM * 0.025);
     const markerGeom = new BoxGeometry(markerSize, markerSize, 120);
-    const markerMat = new MeshBasicMaterial({ color: 0xffffff });
+    // CW-40: never occluded. Once the marker scales with zoom (see
+    // applyMapCamera) it can reach over a neighbouring building's
+    // footprint, and a taller building would clip it exactly the way the
+    // CW-36 ring was clipped at z=40. The marker is the one thing on the
+    // map that must always win.
+    const markerMat = new MeshBasicMaterial({
+      color: 0xffffff,
+      depthTest: false,
+    });
     const marker = new Mesh(markerGeom, markerMat);
+    marker.renderOrder = 999;
     marker.visible = false;
     scene.add(marker);
 
-    // CW-36: where a teleport would put you. A RING, not a second block —
-    // and the difference has to be in the FOOTPRINT, because from straight
-    // overhead a plan view is all there is; a marker distinguished by being
-    // shorter or darker would either be invisible or read as a second
-    // player. Dimming it was tried first and photographed: at 55% grey the
-    // converter picked glyphs light enough to vanish into the map.
-    // Thick band, not a hairline: the ring is drawn at roughly one metre per
-    // pixel and then read through a character grid, so an arc thinner than a
-    // glyph cell simply is not there. Photographed at 0.55/0.85 first, where
-    // the top and bottom of the ring disappeared and left two vertical bars.
-    const targetGeom = new RingGeometry(markerSize * 0.5, markerSize * 1.1, 24);
-    const targetMat = new MeshBasicMaterial({ color: 0xffffff });
-    const targetMarker = new Mesh(targetGeom, targetMat);
-    // Clear of the ground so it cannot z-fight with the roadway it sits on.
-    targetMarker.position.z = 40;
-    targetMarker.visible = false;
-    scene.add(targetMarker);
+    // CW-40: a two-tone square-in-square, because a solid white block is
+    // camouflage in colour mode - the CW-Q45 palettes fill the map with
+    // white and grey buildings, and the six-teleport eyes-on tour could
+    // not find the marker among them. The inner square is EXACT black,
+    // which is the one value the converter reads as empty (CW-5), so the
+    // marker renders as a bright frame around a hole - a footprint no
+    // building has in any palette. A child of the marker, so the 1/zoom
+    // scale applies to both and the frame stays ~a glyph thick.
+    const markerInnerGeom = new BoxGeometry(
+      markerSize * 0.5,
+      markerSize * 0.5,
+      1
+    );
+    const markerInnerMat = new MeshBasicMaterial({
+      color: 0x000000,
+      depthTest: false,
+    });
+    const markerInner = new Mesh(markerInnerGeom, markerInnerMat);
+    markerInner.renderOrder = 1000;
+    markerInner.position.z = 61;
+    marker.add(markerInner);
+
+    // CW-36's pick-preview ring retired with the pick flow (CW-40): while
+    // pin mode is armed the ring is the CURSOR, and the committed landing
+    // is marked by the player marker itself - the walker is really there.
 
     // Order matters here. The collision grid is built from the buildings
     // first so the props can refuse to stand inside one; the props then hand
@@ -1208,7 +1315,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     scene.add(props.group);
     stampObstacles(collision, props.obstacles);
     const spawn = findSpawn(model, collision);
-    const walkState = createWalkState({ ...spawn, headingRad: 0 });
+    // CW-44: face down the open street, never into whatever happens to
+    // stand north - the bigger Seattle's spawn had a storefront 2.5 m that
+    // way, and a first frame nose-to-wall walks the player straight into it.
+    const walkState = createWalkState({
+      ...spawn,
+      headingRad: findClearHeading(collision, spawn.x, spawn.y),
+    });
     const mapCam = createMapCamera(model.boundsM);
 
     // CW-Q8: persisted walking-speed multiplier (comfort preference).
@@ -1233,11 +1346,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       marker,
       markerGeom,
       markerMat,
-      targetMarker,
-      targetGeom,
-      targetMat,
-      // CW-36: the picked landing, in world meters, or null for none.
-      teleportTarget: null,
+      markerInnerGeom,
+      markerInnerMat,
       collision,
       walkState,
       mapCam,
@@ -1304,16 +1414,31 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       glyphVocabularies: GLYPH_VOCABULARIES,
     });
 
-    // Character size (CW-Q10): the game's own saved value wins, then the
-    // shared Alt View preference clamped into the game's range, then 50%.
-    // The game persists to its OWN key and never writes the shared pref back,
-    // because the game's range reaches far below the preview slider's floor.
+    // Character size (CW-Q10, amended CW-Q39): the game's own saved value
+    // wins (the manual choice - it sticks, even below today's floor), then
+    // the machine's last calibrated default, then the shared Alt View
+    // preference clamped into the game's range, then 50%. The game persists
+    // to its OWN key and never writes the shared pref back, because the
+    // game's range reaches far below the preview slider's floor.
+    const savedManualScale = safeGetItem(STORAGE_KEY_CITY_WALK_FONT_SCALE);
+    const storedCalibration = decodeCalibration(
+      safeGetItem(STORAGE_KEY_CITY_WALK_CALIBRATED_FLOOR)
+    );
+    game.calibratedFloor = storedCalibration?.floorScale ?? null;
     game.altView.setFontScale(
       seedCharScale(
-        safeGetItem(STORAGE_KEY_CITY_WALK_FONT_SCALE),
-        safeGetItem(STORAGE_KEY_HFM_FONT_SCALE)
+        savedManualScale,
+        safeGetItem(STORAGE_KEY_HFM_FONT_SCALE),
+        storedCalibration?.defaultScale ?? null
       )
     );
+    syncCellRaster(game);
+
+    // CW-42 (CW-Q39): every entry re-measures this machine - a busy
+    // yesterday must not brand it forever. The pass is stepped from frame();
+    // a stored manual choice is measured where it stands but never applied
+    // over.
+    startCalibration(game, Number.isFinite(parseFloat(savedManualScale ?? '')));
 
     // CW-21: with colour off the city used to be one flat green or amber —
     // pavement, walls and lit windows all at the same drive. A monochrome
@@ -1495,8 +1620,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     game.props?.dispose();
     game.markerGeom?.dispose();
     game.markerMat?.dispose();
-    game.targetGeom?.dispose();
-    game.targetMat?.dispose();
+    game.markerInnerGeom?.dispose();
+    game.markerInnerMat?.dispose();
     game.renderer?.dispose();
     game.renderer?.domElement?.remove();
     state.game = null;
@@ -1610,13 +1735,12 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       return;
     }
 
-    // CW-36. J was the only free letter left that says anything about
-    // jumping; G, P, X, L, V, M, O, C, T and H are all spoken for, and
-    // Escape already means "close the help, or leave the game".
+    // CW-36 chose J (the only free letter that says anything about jumping);
+    // CW-40 keeps it as the one-step keyboard commit at the map's crosshair.
     if (event.code === 'KeyJ') {
       event.preventDefault();
       event.stopPropagation();
-      teleportToTarget();
+      teleportAtCrosshair();
       return;
     }
 
@@ -1628,13 +1752,23 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     ) {
       event.preventDefault();
       event.stopPropagation();
+      // CW-Q41: one key, one meaning. The owner pressed Minus over the map
+      // to shrink the characters and got a zoomed-out map instead; the
+      // overload lost. Size lives here in BOTH views, and map zoom moved
+      // to PageUp/PageDown below.
       const minus = event.code === 'Minus' || event.code === 'NumpadSubtract';
-      if (state.game.mapView) {
-        // Map mode: -/= are HELD zoom keys (see frame()).
-        holdAction(state.keyHeld, minus ? 'zoomOut' : 'zoomIn');
-      } else {
-        adjustCharacterSize(minus ? -CHAR_SCALE_STEP : CHAR_SCALE_STEP);
-      }
+      adjustCharacterSize(minus ? -CHAR_SCALE_STEP : CHAR_SCALE_STEP);
+      return;
+    }
+
+    if (
+      state.game.mapView &&
+      (event.code === 'PageUp' || event.code === 'PageDown')
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      // HELD zoom keys, exactly as -/= used to be over the map (see frame()).
+      holdAction(state.keyHeld, event.code === 'PageUp' ? 'zoomIn' : 'zoomOut');
       return;
     }
 
@@ -1670,10 +1804,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       state.shiftHeld = false;
       return;
     }
-    if (event.code === 'Minus' || event.code === 'NumpadSubtract') {
+    if (event.code === 'PageDown') {
       releaseAction(state.keyHeld, 'zoomOut');
     }
-    if (event.code === 'Equal' || event.code === 'NumpadAdd') {
+    if (event.code === 'PageUp') {
       releaseAction(state.keyHeld, 'zoomIn');
     }
     const action = KEY_ACTIONS.get(event.code);
@@ -1852,11 +1986,16 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     event.preventDefault();
 
     if (game.mapView) {
-      // CW-36: on the map a press picks a teleport target rather than
-      // starting a look-drag — there is nothing to look around at from
-      // overhead, which is why this branch used to just return.
-      const world = mapPointToWorld(event.clientX, event.clientY);
-      if (world) setTeleportTarget(world.x, world.y);
+      // CW-40 (CW-Q40): while pin mode is armed, a click on the map IS the
+      // teleport - one step, no confirmation press. Unarmed, a click does
+      // nothing here again (the pre-CW-36 behaviour): the two-step
+      // pick-then-J flow this branch used to start is retired, and a ring
+      // that no longer led anywhere would be a promise the game cannot
+      // keep.
+      if (state.teleportArmed) {
+        const world = mapPointToWorld(event.clientX, event.clientY);
+        if (world) commitTeleport(world.x, world.y);
+      }
       return;
     }
     if (state.drag) return;
@@ -2120,14 +2259,236 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   function adjustCharacterSize(delta) {
     const game = state.game;
     if (!game) return;
+    // A size gesture mid-calibration takes over: the pass stops where the
+    // player can see it (no restore - they are reacting to what is on
+    // screen) and its floor arrives at the next entry instead.
+    if (game.calibration && !game.calibration.done) {
+      abortCalibration(game, { restore: false });
+    }
+    const current = game.altView.getFontScale();
+    const floor = game.calibratedFloor;
+    const floorRaised = Number.isFinite(floor) && floor > CHAR_SCALE_MIN + 1e-9;
+    if (delta < 0 && floorRaised && current <= floor + 1e-9) {
+      // The stop is the calibrated floor, and it says why (CW-Q39). Also
+      // true below the floor (a grandfathered manual choice): calibration
+      // found smaller sizes cannot hold the bar on this machine.
+      announceInLayer(
+        `Character size ${Math.round(current * 100)} percent. Smaller ` +
+          'sizes cannot hold 30 frames per second on this machine.'
+      );
+      return;
+    }
     // Clamp to the GAME's range before the renderer sees it: the renderer
     // instance itself accepts down to 0.05, which is below the smallest size
-    // that changes anything on screen.
-    const next = clampCharScale(game.altView.getFontScale() + delta);
+    // that changes anything on screen. The calibrated floor bounds gestures
+    // only - a stored below-floor manual choice was seeded as-is.
+    const next = clampCharScale(current + delta, floor);
     game.altView.setFontScale(next);
+    syncCellRaster(game);
     game.altView.invalidate();
     safeSetItem(STORAGE_KEY_CITY_WALK_FONT_SCALE, String(next));
+    syncCharSizeControls();
     announceInLayer(`Character size ${Math.round(next * 100)} percent.`);
+  }
+
+  /**
+   * CW-41: the facade textures are filtered for the CELL raster (the
+   * shimmer fix), so the scene has to hear about every cell-size change.
+   */
+  function syncCellRaster(game) {
+    const cell = game.altView.getCellPx?.();
+    if (cell) game.city3d.setCellRaster?.(cell.h);
+  }
+
+  // -------------------------------------------------------------------
+  // Entry size calibration (CW-42, CW-Q39): the floor knows this machine
+  // -------------------------------------------------------------------
+
+  const sameScale = (a, b) => Math.abs(a - b) < 1e-9;
+
+  function startCalibration(game, manual) {
+    game.calibration = {
+      readings: [],
+      phase: null,
+      done: false,
+      manual,
+      entryScale: game.altView.getFontScale(),
+      result: null,
+      aborted: false,
+    };
+  }
+
+  /**
+   * The size the pass should measure next, or null when it is finished.
+   * A manual entry is measured where it stands and never flipped: the pass
+   * may only conclude from what the player's own size reveals. An auto
+   * entry at a non-candidate size measures it first as a free gate - no
+   * flip, and a failure there condemns the whole range below it.
+   */
+  function nextCalibrationScale(game) {
+    const cal = game.calibration;
+    const current = game.altView.getFontScale();
+    const measured = cal.readings.some((r) => sameScale(r.scale, current));
+    if (cal.manual) return measured ? null : current;
+    if (
+      !measured &&
+      cal.readings.length === 0 &&
+      !CALIBRATION_CANDIDATES.some((s) => sameScale(s, current))
+    ) {
+      return current;
+    }
+    return nextProbeScale(cal.readings, undefined, current);
+  }
+
+  function stepCalibration(game, nowMs) {
+    const cal = game.calibration;
+    if (!cal || cal.done) return;
+
+    if (import.meta.env.DEV && window.__cityWalkCalibrationForce) {
+      // E2E determinism hook: forced probe readings resolve the pass
+      // instantly - CI renders in software and must never time real frames.
+      const forced = window.__cityWalkCalibrationForce;
+      for (;;) {
+        const scale = nextCalibrationScale(game);
+        if (scale === null) break;
+        const avgMs = Number(forced[String(scale)]);
+        if (!Number.isFinite(avgMs)) {
+          abortCalibration(game, { restore: true });
+          return;
+        }
+        cal.readings.push({
+          scale,
+          avgMs,
+          samples: CALIBRATION_SAMPLES_PER_SCALE,
+        });
+      }
+      finishCalibration(game);
+      return;
+    }
+
+    const totals = game.altView.getConvertTotals?.();
+    if (!totals) {
+      cal.done = true;
+      return;
+    }
+
+    if (!cal.phase) {
+      const scale = nextCalibrationScale(game);
+      if (scale === null) {
+        finishCalibration(game);
+        return;
+      }
+      if (!sameScale(game.altView.getFontScale(), scale)) {
+        game.altView.setFontScale(scale);
+        syncCellRaster(game);
+      }
+      cal.phase = createProbePhase(scale, nowMs);
+    }
+
+    // The probe must see conversions: standing frames self-heal at ~1 Hz,
+    // so ask for a real one this frame. The scene does not change - the
+    // converter re-reads the same pixels, which is exactly the cost under
+    // measurement.
+    game.altView.invalidate();
+
+    const result = stepProbePhase(cal.phase, totals, nowMs);
+    if (result.status === 'done') {
+      cal.readings.push(result.reading);
+      cal.phase = null;
+    } else if (result.status === 'abandoned') {
+      // A wedged phase (hidden tab) is an interruption, not a result:
+      // nothing is stored, nothing announced, yesterday's floor stands.
+      abortCalibration(game, { restore: true });
+    }
+  }
+
+  function finishCalibration(game) {
+    const cal = game.calibration;
+    cal.done = true;
+    cal.phase = null;
+    if (!isConclusive(cal.readings)) {
+      // Nothing decisive was measured (a comfortable manual size holding
+      // says nothing about the range): keep yesterday's floor, store
+      // nothing, announce nothing.
+      restoreEntryScale(game);
+      return;
+    }
+    const result = chooseCalibratedSize(cal.readings);
+    cal.result = result;
+    game.calibratedFloor = result.floorScale;
+    safeSetItem(
+      STORAGE_KEY_CITY_WALK_CALIBRATED_FLOOR,
+      encodeCalibration(result)
+    );
+    if (cal.manual) {
+      restoreEntryScale(game);
+    } else if (!sameScale(game.altView.getFontScale(), result.defaultScale)) {
+      // The calibrated default lands through the renderer only - writing
+      // the manual key here would freeze the calibration as a choice.
+      game.altView.setFontScale(result.defaultScale);
+      syncCellRaster(game);
+      game.altView.invalidate();
+    }
+    syncCharSizeControls();
+    if (result.fallback) {
+      const pct = Math.round(game.altView.getFontScale() * 100);
+      announceInLayer(
+        'Small character sizes cannot hold 30 frames per second on this ' +
+          `machine. Character size stays at ${pct} percent.`
+      );
+    }
+  }
+
+  function abortCalibration(game, { restore }) {
+    const cal = game.calibration;
+    if (!cal || cal.done) return;
+    cal.done = true;
+    cal.phase = null;
+    cal.aborted = true;
+    if (restore) restoreEntryScale(game);
+    syncCharSizeControls();
+  }
+
+  function restoreEntryScale(game) {
+    const cal = game.calibration;
+    if (!cal || !Number.isFinite(cal.entryScale)) return;
+    if (!sameScale(game.altView.getFontScale(), cal.entryScale)) {
+      game.altView.setFontScale(cal.entryScale);
+      syncCellRaster(game);
+      game.altView.invalidate();
+    }
+  }
+
+  /**
+   * The Smaller controls at the calibrated floor are disabled-with-reason,
+   * not hidden (the house pattern): aria-disabled keeps them focusable, and
+   * pressing one speaks the reason via adjustCharacterSize's floor stop.
+   * The Camera panel's zoom-out is only a character control in the street -
+   * over the map it is the map's own zoom and is never floor-bound.
+   */
+  function syncCharSizeControls() {
+    const game = state.game;
+    const floor = game?.calibratedFloor;
+    const atFloor =
+      Boolean(game) &&
+      Number.isFinite(floor) &&
+      floor > CHAR_SCALE_MIN + 1e-9 &&
+      game.altView.getFontScale() <= floor + 1e-9;
+    const setDisabled = (btn, disabled) => {
+      if (!btn) return;
+      if (disabled) btn.setAttribute('aria-disabled', 'true');
+      else btn.removeAttribute('aria-disabled');
+    };
+    setDisabled(
+      state.refs.toolbarButtons?.find(
+        (b) => b.spec.id === 'cityWalkCharDownBtn'
+      )?.btn,
+      atFloor
+    );
+    setDisabled(
+      document.getElementById('cityWalkCamZoomOut'),
+      atFloor && !game?.mapView
+    );
   }
 
   // -------------------------------------------------------------------
@@ -2155,6 +2516,16 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     cam.position.set(fit.centerX, fit.centerY, ORTHO_CAMERA_HEIGHT_M);
     cam.lookAt(fit.centerX, fit.centerY, 0);
     cam.updateProjectionMatrix();
+
+    // CW-40: the "I'm here" marker keeps a constant GLYPH footprint across
+    // zooms. Metre-sized, it was a two-cell pip at 0.8x - findable only if
+    // you already knew where to look - and it would swallow a block at high
+    // zoom. 2.2 rather than 1.4 because the marker is a hollow frame now,
+    // and a frame's border has to stay comfortably over a glyph cell thick
+    // or the grid eats it (the CW-36 ring's death). Photographed at
+    // 0.8x/1x/2x, in colour mode too, before the factors were chosen.
+    const markerScale = Math.min(3.5, Math.max(0.6, 2.2 / game.mapCam.zoom));
+    game.marker.scale.set(markerScale, markerScale, 1);
   }
 
   function toggleMapView() {
@@ -2162,10 +2533,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     endDrag();
     game.mapView = !game.mapView;
     game.marker.visible = game.mapView;
-    // CW-36: a pick belongs to the map it was made on. Leaving the map
-    // discards it, so re-opening never offers a stale target from minutes
-    // ago as though it were still chosen.
-    if (!game.mapView) clearTeleportTarget();
+    // CW-40: pin mode belongs to the map it was armed on. Leaving the map
+    // disarms it - silently, because this function's own announcement is
+    // the sentence this turn speaks.
+    if (!game.mapView) setTeleportArmed(false, false);
     game.city3d.setMapView(game.mapView);
     game.props.setMapView(game.mapView);
     // CW-20: the weather belongs to the street. Seen from overhead the drops
@@ -2209,7 +2580,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     updateHud();
     announceInLayer(
       game.mapView
-        ? 'Map view, seen from above. Arrow keys pan, minus and equals zoom, Home returns to you. The toolbar now shows the map buttons.'
+        ? 'Map view, seen from above. Arrow keys pan, Page Up and Page Down zoom, Home returns to you. The toolbar now shows the map buttons.'
         : 'Street view. The toolbar now shows the walking buttons.'
     );
   }
@@ -2245,88 +2616,55 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   }
 
   /**
-   * What the HUD would say about a world point: the nearest named street and
-   * whether you are standing in it or beside it. Same thresholds updateStreet
-   * uses, minus its hysteresis - which exists to stop the HUD flapping at a
-   * junction as you walk, and has nothing to say about a point on a map.
+   * CW-40 (CW-Q40): the Teleport button arms PIN MODE. This supersedes
+   * CW-36's pick-then-J: while armed, a left click on the map IS the
+   * teleport, in one step, and the game stays on the map - entering the
+   * street is the player's separate choice. A second press disarms, and
+   * leaving the map disarms silently (the view change's own sentence is
+   * the one announcement that turn makes).
    */
-  function streetAt(x, y) {
-    const hit = state.game?.streetIndex?.query(x, y, STREET_NEAR_M)[0];
-    return hit ? { name: hit.name, on: hit.distM <= STREET_ON_M } : null;
-  }
-
-  /**
-   * Mark where a teleport would put you.
-   *
-   * The marker goes on the LANDING, not on the pixel that was clicked, and
-   * the announcement names the landing too - so what you are told before you
-   * commit is what you actually get. Naming the raw click instead was tried
-   * and photographed: it said "open ground" and then landed the player on
-   * University Street, because the click was 25 m from a road the snap could
-   * still reach.
-   *
-   * Picking is separate from going so a screen-reader user hears the choice
-   * before taking it, and a mis-click costs nothing but another click.
-   */
-  function setTeleportTarget(x, y) {
+  function toggleTeleportMode() {
     const game = state.game;
     if (!game?.mapView) return;
-
-    const landing = findLandingNear(game.model, game.collision, x, y);
-    if (!landing) {
-      clearTeleportTarget();
-      game.altView.invalidate();
-      announceInLayer(TELEPORT_REFUSED_MESSAGE);
-      return;
-    }
-
-    game.teleportTarget = landing;
-    game.targetMarker.position.set(
-      landing.x,
-      landing.y,
-      game.targetMarker.position.z
-    );
-    game.targetMarker.visible = true;
-    game.altView.invalidate();
-
-    const street = landing.onRoad ? streetAt(landing.x, landing.y) : null;
-    announceInLayer(
-      street
-        ? TELEPORT_PICK_MESSAGE(street.name, street.on)
-        : TELEPORT_PICK_OPEN_MESSAGE
-    );
+    setTeleportArmed(!state.teleportArmed, true);
   }
 
-  /** Forget the pick — on leaving the map, and on landing. */
-  function clearTeleportTarget() {
-    const game = state.game;
-    if (!game) return;
-    game.teleportTarget = null;
-    if (game.targetMarker) game.targetMarker.visible = false;
+  function setTeleportArmed(armed, announce) {
+    if (state.teleportArmed === armed) return;
+    state.teleportArmed = armed;
+    // The ring the pick flow used to draw in the world is the CURSOR now.
+    state.refs.viewport?.classList.toggle('city-walk-teleport-armed', armed);
+    syncToolbarView();
+    if (announce) {
+      announceInLayer(
+        armed ? TELEPORT_MODE_ON_MESSAGE : TELEPORT_MODE_OFF_MESSAGE
+      );
+    }
   }
 
   /**
-   * Go. Uses the picked spot, or the middle of the map when nothing has been
-   * picked — which is the whole keyboard route: the arrows already pan the
-   * map and minus/equals already zoom it, so steering the middle of the
-   * screen onto a street needs no new keys at all.
+   * J: commit at the map's centre crosshair, armed or not. The keyboard
+   * route needs no arming, because the arrows already steer the middle of
+   * the screen onto a street and PageUp/PageDown already zoom it (CW-Q41),
+   * so travelling from the keyboard was always one step.
    */
-  function teleportToTarget() {
+  function teleportAtCrosshair() {
+    const game = state.game;
+    if (!game || !game.mapView) return;
+    commitTeleport(game.mapCam.centerX, game.mapCam.centerY);
+  }
+
+  /**
+   * Travel. The landing comes from the same snap-to-a-segment search the
+   * pick flow proved (never a vertex - OSM draws a straight street as two
+   * endpoints), so what the announcement names is where you stand. The
+   * game STAYS in map view (CW-Q40).
+   */
+  function commitTeleport(x, y) {
     const game = state.game;
     if (!game || !game.mapView) return;
 
-    // A pick has already been resolved to a landing, so it is used as it is:
-    // searching again would be a second chance to disagree with what the
-    // player was told they had chosen. Only the keyboard route, which picks
-    // nothing and means "the middle of the map", searches here.
-    const landing =
-      game.teleportTarget ??
-      findLandingNear(
-        game.model,
-        game.collision,
-        game.mapCam.centerX,
-        game.mapCam.centerY
-      );
+    const landing = findLandingNear(game.model, game.collision, x, y);
     if (!landing) {
       announceInLayer(TELEPORT_REFUSED_MESSAGE);
       return;
@@ -2337,7 +2675,6 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     if (landing.headingRad !== null) {
       game.walkState.headingRad = normalizeHeading(landing.headingRad);
     }
-    clearTeleportTarget();
 
     // The street name is sticky on purpose (updateStreet keeps the street you
     // are already on when two are near-equidistant, so the HUD does not flap
@@ -2356,13 +2693,14 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // is only re-posed inside a movement step, so a teleport that only moved
     // walkState would leave the first-person camera standing where the player
     // used to be — and the street view would photograph the spawn. Re-pose it
-    // here, explicitly, before the view changes.
+    // here, explicitly, even though the view is not changing now: M can come
+    // at any moment after, and the street it opens must show the landing.
     applyFirstPersonCamera();
 
-    // toggleMapView announces the view change itself, so this has to be the
-    // one announcement the action makes; ordering it after the toggle means
-    // the teleport's sentence is the one left in the live region.
-    toggleMapView();
+    // The aerial "I'm here" marker is only re-posed on map entry, so the
+    // move has to place it - and the map camera deliberately stays where
+    // the player steered it: the click was made on a visible spot.
+    game.marker.position.set(game.walkState.x, game.walkState.y, 0);
     game.altView.invalidate();
     updateHud();
 
@@ -2556,6 +2894,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
 
     const dtS = Math.max(0, (nowMs - game.lastFrameMs) / 1000);
     game.lastFrameMs = nowMs;
+
+    // CW-42: the entry calibration pass rides the first seconds of real
+    // frames, in either view; it goes quiet the moment it is done.
+    stepCalibration(game, nowMs);
 
     if (game.mapView) {
       // Map mode (CW-9): the movement keys drive the camera, not the

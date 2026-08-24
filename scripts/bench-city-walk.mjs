@@ -91,7 +91,18 @@ const VARIANTS = {
   // against it inside one session.
   'legacy-cpu-sample': { cpuSample: true },
   'legacy-all': { taps: true, contrast: true, cpuSample: true },
+  // CW-39 (CW-Q37): the game retired the phosphor trail, so 'new' now runs
+  // at persistFade 0. This variant re-enables the retired fade through the
+  // converter's own public API (not a setBenchLegacy switch) so trail-on
+  // can be A/B'd against trail-off inside one session.
+  trail: {},
+  // CW-41: the cell-raster facade filtering OFF (bias forced to zero), so
+  // its cost can be A/B'd against the shipped filtering in one session.
+  'no-cellraster': {},
 }
+
+/** What persistFade each variant runs at. */
+const VARIANT_FADE = { trail: 0.45 }
 
 const CITY_BUTTONS = {
   seattle: 'Seattle, Washington',
@@ -274,6 +285,36 @@ async function benchCity(page, cdp, city, variant, opts, runIndex) {
     }
   }
 
+  // CW-39: set the variant's persistFade explicitly every time - never
+  // inherit the previous variant's fade - and read it back the same way the
+  // legacy flags are read back. setPersistFade refuses under reduced motion,
+  // which would silently turn a 'trail' run into a trail-off run reported
+  // under the trail's name.
+  const wantFade = VARIANT_FADE[variant] ?? 0
+  const gotFade = await page.evaluate((fade) => {
+    const api = window.__cityWalkGame.altView
+    api.setPersistFade(fade)
+    api.invalidate()
+    return api.getPersistFade()
+  }, wantFade)
+  if (gotFade !== wantFade) {
+    throw new Error(
+      `variant "${variant}" asked for persistFade ${wantFade} but the ` +
+        `renderer reports ${gotFade}`
+    )
+  }
+
+  // CW-41: set the facade filtering per variant, never inherited. Passing a
+  // cell height of 1 gives log2(1) = 0 - stock filtering; anything else
+  // re-syncs the game's own bias from the converter's real cell size.
+  await page.evaluate((off) => {
+    const g = window.__cityWalkGame
+    if (!g.city3d?.setCellRaster) return
+    if (off) g.city3d.setCellRaster(1)
+    else g.city3d.setCellRaster(g.altView.getCellPx().h)
+    g.altView.invalidate()
+  }, variant === 'no-cellraster')
+
   // Let the first few conversions at the new size settle before the clock
   // starts - the atlas rebuild lands in the first frame after a size change
   // and is not part of what a walk costs.
@@ -407,6 +448,14 @@ async function main() {
   await context.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true')
     localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
+    // CW-42: benches measure the size THEY set. The inert forced-probe map
+    // stops the entry calibration on its first frame, and clearing the
+    // stored floor keeps a previous real calibration from seeding the
+    // landing or blocking the keypress ladder below 30% (the scale
+    // verification would catch it loudly, but a bench that cannot reach
+    // its config is still a dead bench).
+    window.__cityWalkCalibrationForce = {}
+    localStorage.removeItem('openscad-forge-city-walk-calibrated-floor')
   })
   const page = await context.newPage()
 
