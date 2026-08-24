@@ -337,6 +337,18 @@
   gap: var(--space-2xs);
 }
 
+/* CW-40 (CW-Q40): while pin mode is armed, the pick flow's ring becomes the
+ * CURSOR. Drawn twice - a dark stroke under a light one - so it reads over
+ * bright streets and dark blocks alike, in every phosphor. A data: URI is
+ * same-document (no CSP host involved); `crosshair` is the fallback if the
+ * platform refuses SVG cursors. The hotspot is the ring's centre. */
+.city-walk-viewport.city-walk-teleport-armed {
+  cursor:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Ccircle cx='12' cy='12' r='8' fill='none' stroke='%23000' stroke-width='5'/%3E%3Ccircle cx='12' cy='12' r='8' fill='none' stroke='%23fff' stroke-width='2.5'/%3E%3C/svg%3E")
+      12 12,
+    crosshair;
+}
+
 /* Landmark legend (map view): real text over the map's left edge. */
 .city-walk-legend {
   position: absolute;
