@@ -1393,3 +1393,96 @@ test.describe('ASCII City Walk — people are people (CW-45)', () => {
     expect(check.sitters).toBeLessThanOrEqual(check.benches)
   })
 })
+
+test.describe('ASCII City Walk — cars are cars (CW-46)', () => {
+  test('the parked classes stamp their own true footprints', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const check = await page.evaluate(() => {
+      const cars = window.__cityWalkGame.props.obstacles.filter(
+        (o) => o.halfLengthM > 1.5
+      )
+      const halves = {}
+      for (const c of cars) {
+        const key = (Math.round(c.halfLengthM * 100) / 100).toFixed(2)
+        halves[key] = (halves[key] ?? 0) + 1
+      }
+      return { total: cars.length, halves }
+    })
+    // The six signed classes and nothing else: 5.8/5.0/4.6/4.9/4.4/5.2 m.
+    expect(Object.keys(check.halves).sort()).toEqual([
+      '2.20',
+      '2.30',
+      '2.45',
+      '2.50',
+      '2.60',
+      '2.90',
+    ])
+    // Pickups are COMMON (the US mix), not a garnish.
+    expect(check.halves['2.90']).toBeGreaterThan(check.total * 0.1)
+  })
+
+  test('a pickup is solid at its full bed length', async ({ page }) => {
+    test.setTimeout(150_000)
+    await launchGame(page)
+    await enterCity(page)
+
+    // Stand off the pickup's TAIL - the part the old 4.4 m footprint did
+    // not cover - facing it, and walk. Same patience arithmetic as the
+    // parked-car case (D-79).
+    const setup = await page.evaluate(() => {
+      const game = window.__cityWalkGame
+      const pickups = game.props.obstacles.filter(
+        (o) => Math.abs(o.halfLengthM - 2.9) < 1e-6
+      )
+      for (const p of pickups) {
+        const ux = Math.cos(p.rotationRad)
+        const uy = Math.sin(p.rotationRad)
+        for (const dir of [-1, 1]) {
+          const sx = p.x + ux * (p.halfLengthM + 2.5) * dir
+          const sy = p.y + uy * (p.halfLengthM + 2.5) * dir
+          if (game.collision.isBlocked(sx, sy)) continue
+          game.walkState.x = sx
+          game.walkState.y = sy
+          game.walkState.headingRad = Math.atan2(p.x - sx, p.y - sy)
+          return { pickup: { x: p.x, y: p.y }, start: { x: sx, y: sy } }
+        }
+      }
+      return null
+    })
+    expect(setup).not.toBeNull()
+
+    await page.evaluate(() => {
+      window.__walkFrames = 0
+      const count = () => {
+        window.__walkFrames++
+        if (window.__walkFrames < 150) requestAnimationFrame(count)
+      }
+      requestAnimationFrame(count)
+      window.__cityWalkGame.altView.invalidate()
+    })
+    await page.keyboard.down('ArrowUp')
+    await page.waitForFunction(() => window.__walkFrames >= 150, null, {
+      timeout: 90_000,
+    })
+    await page.keyboard.up('ArrowUp')
+
+    const after = await page.evaluate(() => ({
+      x: window.__cityWalkGame.walkState.x,
+      y: window.__cityWalkGame.walkState.y,
+    }))
+    const toPickup = Math.hypot(
+      after.x - setup.pickup.x,
+      after.y - setup.pickup.y
+    )
+    const walked = Math.hypot(after.x - setup.start.x, after.y - setup.start.y)
+    // Pressed against the tail, never inside the bed: the nose-on stop
+    // distance is the half length plus the walker's radius.
+    expect(walked).toBeGreaterThan(0.3)
+    expect(toPickup).toBeGreaterThan(2.4)
+    expect(toPickup).toBeLessThan(5.4)
+  })
+})
