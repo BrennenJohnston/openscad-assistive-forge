@@ -417,6 +417,19 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     }
     startPanel.appendChild(cityList);
 
+    // CW-44: the big Seattle is ~4.9 MB and measured 47 s on Slow 4G - a
+    // wait that long with only a silent aria-busy is a dead screen. This
+    // line shows and speaks download progress. role=status (a polite live
+    // region) rather than aria-label: a visible text line works here, and
+    // percent updates land at ~10% steps so a screen reader hears progress
+    // without chatter.
+    const loadStatus = document.createElement('p');
+    loadStatus.className = 'city-walk-start-loading';
+    loadStatus.id = 'cityWalkLoadStatus';
+    loadStatus.setAttribute('role', 'status');
+    loadStatus.hidden = true;
+    startPanel.appendChild(loadStatus);
+
     // role=alert announces assertively when text lands in it (the element
     // itself lives inside the modal, per the first-visit precedent).
     const startError = document.createElement('p');
@@ -584,6 +597,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       exitBtn,
       startPanel,
       startError,
+      loadStatus,
       cityButtons: Array.from(cityList.children),
       firstCityBtn,
       viewport,
@@ -1119,21 +1133,66 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     refs.cityButtons.forEach((b) => (b.disabled = true));
     refs.startError.hidden = true;
     pickedBtn.setAttribute('aria-busy', 'true');
+    refs.loadStatus.textContent = `Loading ${city.label}…`;
+    refs.loadStatus.hidden = false;
 
     let model;
     try {
       const response = await fetch(`/examples/ascii-city/${city.slug}.json`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      model = parseCityExtract(await response.json());
+      // CW-44: Seattle is ~4.9 MB and measured 47 s on Slow 4G. Stream the
+      // body so the status line can carry real percent. content-length is
+      // the size ON THE WIRE; when a compressing server makes the received
+      // (decompressed) bytes overtake it, the numbers would lie, so the
+      // line falls back to the plain "Loading…" instead.
+      let text;
+      const total = Number(response.headers.get('content-length')) || 0;
+      if (response.body && total > 0) {
+        const reader = response.body.getReader();
+        const chunks = [];
+        let received = 0;
+        let shownPct = 0;
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          received += value.byteLength;
+          if (received <= total) {
+            const pct = Math.min(99, Math.floor((received / total) * 100));
+            if (pct >= shownPct + 10) {
+              shownPct = pct;
+              refs.loadStatus.textContent = `Loading ${city.label}… ${pct}%`;
+            }
+          } else if (shownPct !== 0) {
+            shownPct = 0;
+            refs.loadStatus.textContent = `Loading ${city.label}…`;
+          }
+        }
+        const joined = new Uint8Array(received);
+        let offset = 0;
+        for (const c of chunks) {
+          joined.set(c, offset);
+          offset += c.byteLength;
+        }
+        text = new TextDecoder().decode(joined);
+      } else {
+        text = await response.text();
+      }
+      refs.loadStatus.textContent = `Building ${city.label}…`;
+      model = parseCityExtract(JSON.parse(text));
     } catch (error) {
       console.error(`[CityWalk] Could not load ${city.slug}:`, error);
       pickedBtn.removeAttribute('aria-busy');
       refs.cityButtons.forEach((b) => (b.disabled = false));
+      refs.loadStatus.hidden = true;
+      refs.loadStatus.textContent = '';
       refs.startError.textContent =
         'That city could not be loaded. Check your connection and try again.';
       refs.startError.hidden = false;
       return;
     }
+    refs.loadStatus.hidden = true;
+    refs.loadStatus.textContent = '';
 
     refs.startPanel.hidden = true;
     refs.viewport.hidden = false;

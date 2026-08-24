@@ -111,7 +111,15 @@ with the role `inner` become holes; everything else is treated as an outer ring.
 }
 ```
 
-Standalone nodes are point props. Today only `natural=tree` is used.
+Standalone nodes are point props and point data. The parser routes them, in
+this order: street trees (`natural=tree`); rendered street furniture
+(`highway=bus_stop`, `amenity` in bench / waste_basket / bicycle_parking,
+`emergency=fire_hydrant` — CW-43); data-only wayfinding points
+(`highway=crossing`, bare `kerb=*`, bare `tactile_paving=*` — CW-43); named
+attractions (`tourism=attraction` or `attraction=*` with a `name` — CW-44);
+then storefront pois (`shop` or any remaining `amenity`). The order matters:
+a bench is an `amenity` node, and without the furniture branch it would
+reach the storefront chooser.
 
 ## The kept tags
 
@@ -137,6 +145,14 @@ the size of the raw Overpass response.
 | `lanes`, `width` | Kept for a future release. Too sparse to design on today: at most fourteen `width` tags in any of the four bundled cities. |
 | `landuse`, `leisure` | Greenspace, for the named values below. |
 | `building:material`, `building:colour` | Facade variety, where a mapper has said. |
+| `emergency` | Fire hydrants (CW-43). |
+| `shelter`, `bench`, `bin` | A bus stop's companions: does the stop offer a roof, a seat, a basket. |
+| `backrest`, `seats` | A bench's own shape. |
+| `kerb` | Kerb form at crossings and on bare kerb nodes: raised, lowered, flush, rolled. |
+| `tactile_paving` | Tactile paving presence: yes, no, partial, contrasted. |
+| `crossing`, `crossing:island`, `crossing:markings` | What kind of crossing, whether an island splits it, how it is marked. |
+| `traffic_signals:sound`, `traffic_signals:vibration` | Whether the signal speaks or buzzes — wayfinding data for the mission the owner named. |
+| `attraction` | The specific attraction kind on a named node (CW-44): `big_wheel`, `carousel`… |
 
 ### Greenspace
 
@@ -213,15 +229,29 @@ draws it.
   trees: [[x, y], ...],
   greens: [{ outer: [[x, y], ...], kind }],
   pois: [{ x, y, kind }],
+  furniture: [{ x, y, kind, shelter?, backrest? }],
+  wayfinding: [{ x, y, kind, tags }],
+  attractions: [{ name, x, y, kind, heightM }],
   boundsM: { minX, minY, maxX, maxY },
   stats: {
     buildingCount, roadCount, treeCount,
     partCount, orphanParts,
     greenCount, sidewalkCount, surfacedRoadCount, poiCount,
+    furnitureCount, furnitureByKind, wayfindingCount, attractionCount,
     droppedRings, droppedElements
   }
 }
 ```
+
+`furniture` (CW-43) is the rendered street furniture at true node positions;
+`kind` is one of `bus_stop`, `bench`, `waste_basket`, `bicycle_parking`,
+`fire_hydrant`; a bus stop carries `shelter` and a bench `backrest`, both
+booleans. `wayfinding` is the data-only accessibility layer — `kind` is
+`crossing`, `kerb` or `tactile_paving`, and `tags` carries the kept
+companions (a crossing with kerb and tactile companions is one point, not
+three). Nothing is drawn from it yet. `attractions` (CW-44) are the named
+attraction nodes that join the landmark legend; `heightM` is parsed from the
+`height` tag, `0` where untagged.
 
 `greens` are the parks, gardens, pitches and playgrounds listed under
 [Greenspace](#greenspace); `kind` is the `leisure` or `landuse` value they came

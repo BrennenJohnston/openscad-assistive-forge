@@ -31,6 +31,10 @@ import {
   MIN_PART_AREA_M2,
   ringAreaM2,
   STOREFRONT_AMENITY_VALUES,
+  FURNITURE_AMENITY_VALUES,
+  FURNITURE_HIGHWAY_VALUES,
+  FURNITURE_EMERGENCY_VALUES,
+  ATTRACTION_TOURISM_VALUES,
 } from '../src/js/game/city-data.js';
 
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
@@ -93,6 +97,14 @@ const outDir =
 const GREEN_LEISURE = GREEN_LEISURE_VALUES.join('|');
 const GREEN_LANDUSE = GREEN_LANDUSE_VALUES.join('|');
 const STOREFRONT_AMENITY = STOREFRONT_AMENITY_VALUES.join('|');
+// CW-43/CW-44: filtered unions ONLY, the CW-33 lesson — bare node["amenity"]
+// timed the public instance out (HTTP 504, measured). kerb and
+// tactile_paving are key-presence queries by design: the keys exist only on
+// pedestrian nodes, and the plan §1f coverage table was measured exactly so.
+const FURNITURE_AMENITY = FURNITURE_AMENITY_VALUES.join('|');
+const FURNITURE_HIGHWAY = FURNITURE_HIGHWAY_VALUES.join('|');
+const FURNITURE_EMERGENCY = FURNITURE_EMERGENCY_VALUES.join('|');
+const ATTRACTION_TOURISM = ATTRACTION_TOURISM_VALUES.join('|');
 
 const query = `[out:json][timeout:90];
 (
@@ -105,6 +117,13 @@ const query = `[out:json][timeout:90];
   node["natural"="tree"](around:${radiusM},${center.lat},${center.lon});
   node["shop"](around:${radiusM},${center.lat},${center.lon});
   node["amenity"~"^(${STOREFRONT_AMENITY})$"](around:${radiusM},${center.lat},${center.lon});
+  node["amenity"~"^(${FURNITURE_AMENITY})$"](around:${radiusM},${center.lat},${center.lon});
+  node["highway"~"^(${FURNITURE_HIGHWAY})$"](around:${radiusM},${center.lat},${center.lon});
+  node["emergency"~"^(${FURNITURE_EMERGENCY})$"](around:${radiusM},${center.lat},${center.lon});
+  node["kerb"](around:${radiusM},${center.lat},${center.lon});
+  node["tactile_paving"](around:${radiusM},${center.lat},${center.lon});
+  node["tourism"~"^(${ATTRACTION_TOURISM})$"](around:${radiusM},${center.lat},${center.lon});
+  node["attraction"](around:${radiusM},${center.lat},${center.lon});
 );
 out tags geom;`;
 
@@ -188,6 +207,9 @@ writeFileSync(outPath, json);
 const sizeKb = Math.round(json.length / 1024);
 // The per-city table CW-33's record is built from: everything a reviewer
 // would otherwise have to re-derive by reading the JSON.
+const furnitureLine = Object.entries(model.stats.furnitureByKind)
+  .map(([kind, count]) => `${kind} ${count}`)
+  .join(', ');
 console.log(
   `Wrote ${outPath}\n` +
     `  ${sizeKb} KB · ${rawElements.length} raw elements → ${elements.length} kept` +
@@ -197,6 +219,9 @@ console.log(
     ` (${model.stats.orphanParts} orphaned)\n` +
     `  CW-33: ${model.stats.greenCount} greens, ${model.stats.sidewalkCount} sidewalks,` +
     ` ${model.stats.surfacedRoadCount}/${model.stats.roadCount} roads with a surface tag\n` +
+    `  CW-43: ${furnitureLine || 'no furniture'};` +
+    ` ${model.stats.wayfindingCount} wayfinding nodes;` +
+    ` ${model.stats.attractionCount} named attractions\n` +
     `  dropped ${model.stats.droppedRings} rings, ${model.stats.droppedElements} elements`
 );
 if (json.length > SIZE_WARN_BYTES) {

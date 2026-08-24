@@ -21,6 +21,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fast machine - and the measurement rides the frames the entry was already drawing, so there is
   nothing extra to see or wait for
 
+- **Seattle reaches the Space Needle** (CW-44) - the Seattle map grew from a downtown patch to a
+  1.3 km circle centered toward the waterfront: Pike Place, the Great Wheel piers, Pioneer Square
+  and the Seattle Center are all in one walkable city now. The Space Needle stands at its true spot
+  - and because OpenStreetMap itself records its legs, shaft and saucer as building parts, the
+  ordinary building renderer draws a recognizable Needle with no special treatment; walk up and
+  look straight up. The map legend fills with real places: Space Needle, Smith Tower Observatory,
+  Underground Tour, the Great Wheel and more, each with a compass direction. The bigger download
+  (about 4.9 MB) shows and speaks its progress while it loads - on a slow connection the picker
+  says "Loading Seattle, Washington… 40%" instead of sitting silent for most of a minute
+
+- **The street furniture is real** (CW-43) - bus stops, benches, waste baskets, bicycle racks and
+  fire hydrants now stand in every city, each at the exact spot OpenStreetMap records it - never
+  scattered for looks, because for a blind traveler the placement is the information. A bus stop is
+  a pole with its flag, and a shelter where the data says there is one; a bench has a back where
+  the mapper said so. Everything is solid: walk into a shelter and you press against it and slide,
+  the same as a wall. The extracts also now carry the accessibility layer around crossings - kerb
+  heights, tactile paving, whether a signal speaks or vibrates - as data for wayfinding features to
+  come. Albuquerque, with almost no furniture mapped, stays exactly as sparse as it really is
+
+- **Real attractions join the map legend** (CW-44 groundwork) - named attraction points from
+  OpenStreetMap now count as landmarks, so Seattle's legend stops being a list of hotels: the
+  Seattle Great Wheel, Pike Place's Public Market Clock, Wings over Washington and more appear by
+  name with compass directions. The Wheel is a point in the map data, so it is findable by name
+  rather than drawn as a wheel - the honest shape of what open data holds
+
 - **Drop yourself onto any street** (CW-36) - the map was somewhere to look at the city; it is now
   somewhere to travel from. Click a street on the overhead map and the game tells you which street
   you picked, marks it with a ring, and waits. Press J and you are standing there, looking along the

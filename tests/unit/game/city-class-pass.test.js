@@ -92,6 +92,36 @@ describe('city-class-pass', () => {
     expect(seen.get('confetti').uniforms.uId.value).toBe(SURFACE_CLASS.SKY)
   })
 
+  it('dresses the CW-43 street furniture in the voices of what it resembles', () => {
+    // Zero new class ids on purpose: the span table is exactly full, and at
+    // playable sizes a hydrant is a few cells - a distinct vocabulary could
+    // not show (the CW-43 record's photographs check this call).
+    const seen = materialsDuringPass(
+      sceneWith([
+        'bus-stop-poles',
+        'bus-stop-shelters',
+        'benches',
+        'waste-baskets',
+        'bike-racks',
+        'hydrants',
+      ])
+    )
+    expect(seen.get('bus-stop-poles').uniforms.uId.value).toBe(
+      SURFACE_CLASS.MAST
+    )
+    expect(seen.get('bus-stop-shelters').uniforms.uId.value).toBe(
+      SURFACE_CLASS.BUILDING_WALL
+    )
+    // A shelter is a box, not a tower: no roof split.
+    expect(seen.get('bus-stop-shelters').uniforms.uRoofId.value).toBe(0)
+    expect(seen.get('benches').uniforms.uId.value).toBe(SURFACE_CLASS.CAR)
+    expect(seen.get('waste-baskets').uniforms.uId.value).toBe(
+      SURFACE_CLASS.CAR
+    )
+    expect(seen.get('bike-racks').uniforms.uId.value).toBe(SURFACE_CLASS.CAR)
+    expect(seen.get('hydrants').uniforms.uId.value).toBe(SURFACE_CLASS.LAMP)
+  })
+
   it('puts every material back after the pass', () => {
     const scene = sceneWith(['buildings', 'roads'])
     const pass = createClassPass(fakeRenderer(() => 0), scene)
