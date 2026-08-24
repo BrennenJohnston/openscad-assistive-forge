@@ -610,6 +610,29 @@ test.describe('ASCII City Walk — the view cuts, it does not cross-fade (D-81)'
 
     for (const into of ['map', 'street']) {
       await page.keyboard.press('m')
+      // Wait for the converter to PAINT the new view before the 'immediate'
+      // capture. Under session load the screenshot repeatedly landed before
+      // the first new-view frame existed, and the diff then measured
+      // map-vs-street (18.27 levels, three false reds in one day) instead
+      // of any ghost. The ghost this test guards against lives IN the
+      // painted frames - the persistence canvas blends over several, so the
+      // first painted frames still carry it: re-proven by reinstating the
+      // trap (fade 0.45, clearPersistence commented out), which reads a
+      // MEASURED 0.87 carried levels against the 0.5 bar with this wait in
+      // place.
+      await page.evaluate(
+        () =>
+          new Promise((resolve) => {
+            const g = window.__cityWalkGame
+            const from = g.altView.getConvertStats?.()?.samples ?? 0
+            const tick = () => {
+              const now = g.altView.getConvertStats?.()?.samples ?? 0
+              if (now >= from + 2) resolve()
+              else requestAnimationFrame(tick)
+            }
+            requestAnimationFrame(tick)
+          })
+      )
       const immediate = await shot()
       await page.waitForTimeout(1400)
       const settled = await shot()
