@@ -132,6 +132,16 @@ roads, landmarks, names, all in metres, with no drawing code in the way. That
 is the rule at the top of this document, and the schema document is what makes
 it real — a written contract another program can consume.
 
+Round 6 moved this from principle to inventory. The model now carries the
+street-level classes a wayfinding map is actually made of, each at its true
+surveyed position: benches, waste baskets and bicycle parking; bus stops, with
+their shelters noted; fire hydrants; crossings, kerbs and tactile paving as a
+dedicated wayfinding list with their accessibility tags riding along; and
+named attractions as landmarks. Placement fidelity is the accessibility
+feature — a bench on a tactile map is a promise about where a bench is — so
+every one of these comes from the extract's own surveyed nodes, never
+invented, and the schema document defines them all.
+
 It does **not** mean the game should grow an embosser export next.
 
 ### The safety rule, stated once and without exception
