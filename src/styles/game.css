@@ -301,6 +301,38 @@
   min-width: 0;
 }
 
+/* CW-38 (CW-Q47): in high contrast everything grows - 44px targets, wider
+ * gaps, thicker borders - and the panel stopped fitting: MEASURED at
+ * 1600x900, the body held 754px of content in a 576px box and Reset View
+ * sat off the bottom of the screen behind a scrollbar. The buttons never
+ * shrink (a target is a target), so the room comes back from everywhere
+ * else: the header puts the title beside the toggle instead of above it,
+ * and the margins, paddings and gaps drop to the smallest spacing token.
+ * On smaller windows the body still scrolls - that is what overflow-y is
+ * for - but at the directive's 1600x900 the whole panel is on screen. */
+:root[data-high-contrast='true'] .city-walk-camera-panel {
+  top: var(--space-2xs);
+  max-height: calc(100% - 2 * var(--space-2xs));
+}
+
+:root[data-high-contrast='true'] .city-walk-camera-panel .camera-panel-header {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2xs) var(--space-sm);
+}
+
+:root[data-high-contrast='true'] .city-walk-camera-panel .camera-panel-body {
+  gap: var(--space-2xs);
+  padding: var(--space-2xs);
+}
+
+:root[data-high-contrast='true'] .city-walk-camera-panel .camera-control-section,
+:root[data-high-contrast='true'] .city-walk-camera-panel .camera-control-dpad,
+:root[data-high-contrast='true'] .city-walk-camera-panel .camera-standard-views {
+  gap: var(--space-2xs);
+}
+
 /* Landmark legend (map view): real text over the map's left edge. */
 .city-walk-legend {
   position: absolute;

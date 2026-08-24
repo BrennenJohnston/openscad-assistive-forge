@@ -688,6 +688,32 @@ test.describe('ASCII City Walk — the Camera panel (CW-35)', () => {
     await expect(btn(page, 'cityWalkCamReset')).toBeVisible()
   })
 
+  test('high contrast keeps the whole panel on screen at 1600x900 (CW-38, CW-Q47)', async ({
+    page,
+  }) => {
+    // High contrast grows every control - 44px targets, thicker borders,
+    // wider gaps - and before CW-38 the panel's content outgrew its box by
+    // 178px at the directive's screen size: Reset View sat below the fold
+    // behind a scrollbar the owner never found. Smaller windows may still
+    // scroll the body (Firefox tab-stops it by design, and that is its
+    // scroll route); at 1600x900 the whole panel must be on screen.
+    await page.setViewportSize({ width: 1600, height: 900 })
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-high-contrast', 'true')
+    })
+    await launchGame(page)
+    await enterCity(page)
+
+    const overflow = await page.evaluate(() => {
+      const body = document.getElementById('cityWalkCameraBody')
+      return body.scrollHeight - body.clientHeight
+    })
+    expect(overflow).toBeLessThanOrEqual(1)
+
+    const reset = await btn(page, 'cityWalkCamReset').boundingBox()
+    expect(reset.y + reset.height).toBeLessThanOrEqual(900)
+  })
+
   test('no panel control is smaller than the touch target', async ({
     page,
   }) => {
