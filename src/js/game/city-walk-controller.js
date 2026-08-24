@@ -1201,6 +1201,28 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     marker.visible = false;
     scene.add(marker);
 
+    // CW-40: a two-tone square-in-square, because a solid white block is
+    // camouflage in colour mode - the CW-Q45 palettes fill the map with
+    // white and grey buildings, and the six-teleport eyes-on tour could
+    // not find the marker among them. The inner square is EXACT black,
+    // which is the one value the converter reads as empty (CW-5), so the
+    // marker renders as a bright frame around a hole - a footprint no
+    // building has in any palette. A child of the marker, so the 1/zoom
+    // scale applies to both and the frame stays ~a glyph thick.
+    const markerInnerGeom = new BoxGeometry(
+      markerSize * 0.5,
+      markerSize * 0.5,
+      1
+    );
+    const markerInnerMat = new MeshBasicMaterial({
+      color: 0x000000,
+      depthTest: false,
+    });
+    const markerInner = new Mesh(markerInnerGeom, markerInnerMat);
+    markerInner.renderOrder = 1000;
+    markerInner.position.z = 61;
+    marker.add(markerInner);
+
     // CW-36's pick-preview ring retired with the pick flow (CW-40): while
     // pin mode is armed the ring is the CURSOR, and the committed landing
     // is marked by the player marker itself - the walker is really there.
@@ -1244,6 +1266,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       marker,
       markerGeom,
       markerMat,
+      markerInnerGeom,
+      markerInnerMat,
       collision,
       walkState,
       mapCam,
@@ -1501,6 +1525,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     game.props?.dispose();
     game.markerGeom?.dispose();
     game.markerMat?.dispose();
+    game.markerInnerGeom?.dispose();
+    game.markerInnerMat?.dispose();
     game.renderer?.dispose();
     game.renderer?.domElement?.remove();
     state.game = null;
@@ -2177,8 +2203,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // CW-40: the "I'm here" marker keeps a constant GLYPH footprint across
     // zooms. Metre-sized, it was a two-cell pip at 0.8x - findable only if
     // you already knew where to look - and it would swallow a block at high
-    // zoom. Photographed at 0.8x/1x/2x before the factor was chosen.
-    const markerScale = Math.min(2.5, Math.max(0.6, 1.4 / game.mapCam.zoom));
+    // zoom. 2.2 rather than 1.4 because the marker is a hollow frame now,
+    // and a frame's border has to stay comfortably over a glyph cell thick
+    // or the grid eats it (the CW-36 ring's death). Photographed at
+    // 0.8x/1x/2x, in colour mode too, before the factors were chosen.
+    const markerScale = Math.min(3.5, Math.max(0.6, 2.2 / game.mapCam.zoom));
     game.marker.scale.set(markerScale, markerScale, 1);
   }
 
