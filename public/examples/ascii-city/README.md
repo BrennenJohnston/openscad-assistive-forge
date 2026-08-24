@@ -48,8 +48,11 @@ The script trims tags to what the game reads (`building`, `height`,
 `building:height`, `building:levels`, `min_height`, `building:min_level`,
 `name`, `highway`, `tourism`, `historic`, `amenity`, `natural`,
 since CW-26 `building:part`, `roof:shape`, `roof:height`, `roof:levels`,
-`roof:orientation` and `shop`, and since CW-33 `surface`, `footway`, `lanes`,
-`width`, `landuse`, `leisure`, `building:material` and `building:colour`),
+`roof:orientation` and `shop`, since CW-33 `surface`, `footway`, `lanes`,
+`width`, `landuse`, `leisure`, `building:material` and `building:colour`,
+and since CW-43 `emergency`, `shelter`, `bench`, `bin`, `backrest`, `seats`,
+`kerb`, `tactile_paving`, `crossing`, `crossing:island`, `crossing:markings`,
+`traffic_signals:sound`, `traffic_signals:vibration` and `attraction`),
 rounds coordinates to ~0.1 m, and self-checks that the game parser accepts the
 result. `KEPT_TAGS` in `src/js/game/city-data.js` is the authoritative list.
 
@@ -59,10 +62,30 @@ Measured from the files as they ship, not from the bake logs:
 
 | city | size | buildings | parts | outlines with parts | greens | sidewalks | roads with a surface | shop/cafe nodes | trees |
 |---|---|---|---|---|---|---|---|---|---|
-| seattle | 1474 KB | 485 | 418 | 122 | 17 | 1539 | 3150/3564 | 674 | 265 |
-| denver | 1478 KB | 363 | 895 | 152 | 249 | 493 | 690/1941 | 255 | 2325 |
-| albuquerque | 670 KB | 639 | 35 | 15 | 24 | 260 | 130/1383 | 137 | 142 |
-| burnaby | 862 KB | 537 | 182 | 24 | 80 | 256 | 1209/1717 | 534 | 244 |
+| seattle | 1848 KB | 485 | 418 | 122 | 17 | 1539 | 3150/3564 | 674 | 265 |
+| denver | 1664 KB | 363 | 895 | 152 | 249 | 493 | 690/1941 | 255 | 2325 |
+| albuquerque | 726 KB | 639 | 35 | 15 | 24 | 260 | 130/1383 | 136 | 142 |
+| burnaby | 1011 KB | 537 | 182 | 24 | 80 | 256 | 1209/1717 | 534 | 244 |
+
+Street furniture and wayfinding data (CW-43, rebaked 2026-08-24 — true node
+positions from OSM, never decorative scatter), and named attraction nodes
+(CW-44):
+
+| city | bus stops | benches | waste baskets | bicycle parking | hydrants | wayfinding points | named attractions |
+|---|---|---|---|---|---|---|---|
+| seattle | 71 | 31 | 155 | 309 | 43 | 1907 | 6 |
+| denver | 80 | 20 | 4 | 147 | 171 | 886 | 0 |
+| albuquerque | 24 | 2 | 8 | 7 | 54 | 250 | 2 |
+| burnaby | 45 | 142 | 51 | 58 | 89 | 610 | 0 |
+
+Wayfinding points are the data-only accessibility layer: `highway=crossing`
+nodes with their kerb / tactile-paving / signal-sound companions riding as
+tags, plus bare `kerb=*` and `tactile_paving=*` nodes (Seattle's richness is
+OpenSidewalks-style mapping living in OSM itself). Nothing is drawn from
+them yet. Albuquerque is the deliberate near-zero control city. Seattle's
+named attractions at this radius include the Seattle Great Wheel — a point
+in OSM, so it appears in the landmark legend by name rather than as 3D
+geometry.
 
 ## Building parts, and how Denver got its shape (CW-26, CW-33)
 
