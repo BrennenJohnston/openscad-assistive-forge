@@ -21,6 +21,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fast machine - and the measurement rides the frames the entry was already drawing, so there is
   nothing extra to see or wait for
 
+- **Cars are cars now** (CW-46) - the streets used to park one identical car shape everywhere.
+  Six vehicle classes now share the curbs and lanes: full-size pickups with open beds, SUVs,
+  crossovers, minivans, sedans and compact hatches, sized from published segment dimensions and
+  mixed the way American streets actually look (pickups and SUVs common). Each one is solid at its
+  own true size - a pickup blocks more sidewalk than a hatch. And the buildings joined in: window
+  sizes now differ between facade families, ground floors vary in height instead of all being one
+  size, and shop lights lean warm where food is served, cool at banks and theatres, neutral at
+  shops - no more identical white glow on every street
+
 - **People are people now** (CW-45) - the city's pedestrians used to be one identical 1.72 m
   figure stamped everywhere. Every figure is now its own person: height drawn from the documented
   adult range (1.50-1.95 m, the span of published anthropometric reference tables), broader or
