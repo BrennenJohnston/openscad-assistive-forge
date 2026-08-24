@@ -288,14 +288,18 @@ test.describe('ASCII City Walk — playing', () => {
     ).toBeFocused()
 
     await enterCity(page)
-    await expect.poll(() => hudHeading(page)).toBe('north')
+    // CW-44: the spawn faces the clearest street, so the compass reference
+    // is captured, never assumed to be north.
+    const spawnHeading = await hudHeading(page)
+    expect(spawnHeading).not.toBeNull()
 
-    // Turning right for >1s moves the compass off north - to ANY other
-    // sector. Exact label, not substring (see hudHeading).
+    // Turning right for >1s moves the compass off the spawn sector - a
+    // ~117 degree turn always leaves a 45 degree sector. Exact label, not
+    // substring (see hudHeading).
     await page.keyboard.down('ArrowRight')
     await page.waitForTimeout(1300)
     await page.keyboard.up('ArrowRight')
-    await expect.poll(() => hudHeading(page)).not.toBe('north')
+    await expect.poll(() => hudHeading(page)).not.toBe(spawnHeading)
 
     // Map view toggle and back
     await page.keyboard.press('KeyM')
@@ -781,6 +785,9 @@ test.describe('ASCII City Walk — looking around (CW-13)', () => {
     await enterCity(page)
 
     expect((await gaze(page)).pitch).toBe(0)
+    // CW-44: the spawn faces the clearest street, so the bearing reference
+    // is captured, never assumed to be zero.
+    const spawnBearing = (await gaze(page)).heading
     await expect(page.locator('#cityWalkHudStatus')).not.toContainText(
       'looking'
     )
@@ -796,7 +803,7 @@ test.describe('ASCII City Walk — looking around (CW-13)', () => {
     await expect(page.locator('#cityWalkHudStatus')).toContainText('looking up')
 
     // The bearing is untouched by looking up - pitch and yaw are separate.
-    expect((await gaze(page)).heading).toBe(0)
+    expect((await gaze(page)).heading).toBe(spawnBearing)
 
     // Held to the stop: the clamp is exactly 60 degrees, never beyond.
     //
@@ -854,10 +861,17 @@ test.describe('ASCII City Walk — looking around (CW-13)', () => {
     await page.mouse.up()
     expect(await gaze(page)).toEqual(before)
 
-    // 200 px right and 100 px up at 0.25 deg/px: +50 deg of yaw, +25 of pitch.
+    // 200 px right and 100 px up at 0.25 deg/px: +50 deg of yaw, +25 of
+    // pitch - RELATIVE to the CW-44 spawn bearing, which faces the
+    // clearest street rather than a fixed north.
+    const TAU_DEG = 360
+    const startDeg = Math.round(before.heading / DEG)
     await dragViewport(page, 200, -100)
     await expect
-      .poll(async () => Math.round((await gaze(page)).heading / DEG))
+      .poll(async () =>
+        (Math.round((await gaze(page)).heading / DEG) - startDeg + TAU_DEG) %
+        TAU_DEG
+      )
       .toBe(50)
     expect(Math.round((await gaze(page)).pitch / DEG)).toBe(25)
     await expect(page.locator('#cityWalkHudStatus')).toContainText('looking up')
@@ -1030,11 +1044,14 @@ test.describe('ASCII City Walk — high contrast (CW-6)', () => {
       /Character size 60 percent/
     )
 
-    // …and walking still walks. Exact label, not substring (see hudHeading).
+    // …and walking still walks. Exact label, not substring (see
+    // hudHeading); the reference heading is captured, never assumed north
+    // (CW-44 spawns facing the clearest street).
+    const sizeKeysHeading = await hudHeading(page)
     await page.keyboard.down('ArrowRight')
     await page.waitForTimeout(1300)
     await page.keyboard.up('ArrowRight')
-    await expect.poll(() => hudHeading(page)).not.toBe('north')
+    await expect.poll(() => hudHeading(page)).not.toBe(sizeKeysHeading)
 
     await page.keyboard.press('Escape')
     await expect(page.locator('#cityWalkLayer')).toBeHidden()
@@ -1189,11 +1206,13 @@ test.describe('ASCII City Walk — accessibility toggles (CW-14)', () => {
     expect(focus.inLayer).toBe(true)
 
     // The keys still reach the game: focus staying put is only worth
-    // asserting if the city still answers to it (CW-13's lesson).
+    // asserting if the city still answers to it (CW-13's lesson). The
+    // reference heading is captured, never assumed north (CW-44).
+    const themeFocusHeading = await hudHeading(page)
     await page.keyboard.down('ArrowRight')
     await page.waitForTimeout(1300)
     await page.keyboard.up('ArrowRight')
-    await expect.poll(() => hudHeading(page)).not.toBe('north')
+    await expect.poll(() => hudHeading(page)).not.toBe(themeFocusHeading)
 
     // And Tab does not escape the modal.
     await page.keyboard.press('Tab')

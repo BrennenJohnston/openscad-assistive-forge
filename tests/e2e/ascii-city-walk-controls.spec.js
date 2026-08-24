@@ -92,11 +92,15 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
         .toBeGreaterThan(0.5)
     )
 
-    // Holding Turn right moves the compass off north - to ANY other sector.
-    // Exact label, not substring (see hudHeading).
-    await expect.poll(() => hudHeading(page)).toBe('north')
+    // Holding Turn right moves the compass off the spawn heading - to ANY
+    // other sector. Exact label, not substring (see hudHeading). CW-44:
+    // the spawn faces the clearest street, so the reference is captured,
+    // never assumed to be north.
+    const restHeading = await hudHeading(page)
     await holdButton(page, 'cityWalkCamRotateRight', () =>
-      expect.poll(() => hudHeading(page), { timeout: 15000 }).not.toBe('north')
+      expect
+        .poll(() => hudHeading(page), { timeout: 15000 })
+        .not.toBe(restHeading)
     )
 
     await btn(page, 'cityWalkMapBtn').click()
@@ -318,10 +322,13 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     expect(focus.id).toBe('cityWalkCamReset')
     expect(focus.inLayer).toBe(true)
 
+    const clickHeading = await hudHeading(page)
     await page.keyboard.down('ArrowRight')
     await page.waitForTimeout(1300)
     await page.keyboard.up('ArrowRight')
-    await expect.poll(() => hudHeading(page)).not.toBe('north')
+    // A ~117 degree turn always leaves a 45 degree compass sector, whatever
+    // the CW-44 spawn heading is.
+    await expect.poll(() => hudHeading(page)).not.toBe(clickHeading)
   })
 
   test('a hidden button hands its focus back instead of dropping it', async ({

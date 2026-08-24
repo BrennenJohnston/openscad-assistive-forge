@@ -59,6 +59,7 @@ import {
   buildCollisionGrid,
   stampObstacles,
   findSpawn,
+  findClearHeading,
   findLandingNear,
   createMapCamera,
   stepMapCamera,
@@ -1314,7 +1315,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     scene.add(props.group);
     stampObstacles(collision, props.obstacles);
     const spawn = findSpawn(model, collision);
-    const walkState = createWalkState({ ...spawn, headingRad: 0 });
+    // CW-44: face down the open street, never into whatever happens to
+    // stand north - the bigger Seattle's spawn had a storefront 2.5 m that
+    // way, and a first frame nose-to-wall walks the player straight into it.
+    const walkState = createWalkState({
+      ...spawn,
+      headingRad: findClearHeading(collision, spawn.x, spawn.y),
+    });
     const mapCam = createMapCamera(model.boundsM);
 
     // CW-Q8: persisted walking-speed multiplier (comfort preference).

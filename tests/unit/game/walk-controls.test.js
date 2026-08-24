@@ -9,6 +9,7 @@ import {
   buildCollisionGrid,
   stampObstacles,
   findSpawn,
+  findClearHeading,
   fitOrthoToBounds,
   createMapCamera,
   stepMapCamera,
@@ -353,6 +354,29 @@ describe('fitOrthoToBounds', () => {
   })
 })
 
+describe('findClearHeading (CW-44)', () => {
+  it('faces down the open corridor, not into the near wall', () => {
+    // Everything is wall except a strip running east. North is blocked half
+    // a metre out - exactly the CW-44 Seattle spawn shape that walked the
+    // player into a storefront.
+    const corridor = {
+      isBlocked: (x, y) => !(Math.abs(y) <= 1 && x >= -1),
+    }
+    expect(findClearHeading(corridor, 0, 0)).toBeCloseTo(Math.PI / 2, 9)
+  })
+
+  it('is deterministic and prefers north on a fully open square', () => {
+    const open = { isBlocked: () => false }
+    expect(findClearHeading(open, 0, 0)).toBe(0)
+    expect(findClearHeading(open, 12.5, -40)).toBe(0)
+  })
+
+  it('answers north when every direction is walled in', () => {
+    const solid = { isBlocked: () => true }
+    expect(findClearHeading(solid, 0, 0)).toBe(0)
+  })
+})
+
 describe('integration — the bundled Seattle extract', () => {
   it('parses, rasterizes, and spawns on a street', () => {
     const raw = JSON.parse(
@@ -386,6 +410,29 @@ describe('integration — the bundled Seattle extract', () => {
       }
     }
     expect(moved).toBe(true)
+  })
+
+  it('spawns FACING somewhere worth walking (the CW-44 CI catch, pinned)', () => {
+    // The fixed north heading stood the 1,300 m Seattle player 2.5 m from
+    // a storefront; CI's software frames (dt-clamped, more ground per
+    // frame) hit it and the Fast-toggle spec went red on two browsers.
+    // The spawn heading must now buy a real run: five simulated seconds
+    // of walking must cover several times that wall distance.
+    const raw = JSON.parse(
+      readFileSync(
+        join(process.cwd(), 'public', 'examples', 'ascii-city', 'seattle.json'),
+        'utf8'
+      )
+    )
+    const model = parseCityExtract(raw)
+    const grid = buildCollisionGrid(model)
+    const spawn = findSpawn(model, grid)
+    const heading = findClearHeading(grid, spawn.x, spawn.y)
+    const state = createWalkState({ ...spawn, headingRad: heading })
+    for (let i = 0; i < 50; i++) stepWalk(state, { forward: 1 }, 0.1, grid)
+    expect(
+      Math.hypot(state.x - spawn.x, state.y - spawn.y)
+    ).toBeGreaterThan(6)
   })
 })
 
