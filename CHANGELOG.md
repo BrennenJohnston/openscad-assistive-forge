@@ -21,6 +21,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fast machine - and the measurement rides the frames the entry was already drawing, so there is
   nothing extra to see or wait for
 
+- **Cars are cars now** (CW-46) - the streets used to park one identical car shape everywhere.
+  Six vehicle classes now share the curbs and lanes: full-size pickups with open beds, SUVs,
+  crossovers, minivans, sedans and compact hatches, sized from published segment dimensions and
+  mixed the way American streets actually look (pickups and SUVs common). Each one is solid at its
+  own true size - a pickup blocks more sidewalk than a hatch. And the buildings joined in: window
+  sizes now differ between facade families, ground floors vary in height instead of all being one
+  size, and shop lights lean warm where food is served, cool at banks and theatres, neutral at
+  shops - no more identical white glow on every street
+
+- **People are people now** (CW-45) - the city's pedestrians used to be one identical 1.72 m
+  figure stamped everywhere. Every figure is now its own person: height drawn from the documented
+  adult range (1.50-1.95 m, the span of published anthropometric reference tables), broader or
+  slighter builds, and jointed poses - walkers caught mid-step, joggers leaning with bent elbows,
+  people standing about, and figures sitting on real benches (only where OpenStreetMap actually
+  records a bench - a city with two benches seats at most two people). Clothing colors come from
+  the game's own color schemes - torso and legs each take a scheme hue while heads and shoulders
+  keep one neutral figure tone, deliberately: color identity is palette-based, not race-based, and
+  no skin is modelled at all. The same spot always holds the same person on every visit
+
 - **Seattle reaches the Space Needle** (CW-44) - the Seattle map grew from a downtown patch to a
   1.3 km circle centered toward the waterfront: Pike Place, the Great Wheel piers, Pioneer Square
   and the Seattle Center are all in one walkable city now. The Space Needle stands at its true spot
