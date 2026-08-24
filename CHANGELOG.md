@@ -167,6 +167,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **You spawn facing down the street, not into a wall** (CW-44) - every city entry used to face
+  due north no matter what stood there, and the bigger Seattle put a storefront two and a half
+  meters that way: the first thing a new player did was walk into a wall. The spawn now faces the
+  direction with the longest clear, walkable run - in Seattle that is an open street with a proper
+  vanishing point. CI caught this before a person did
+
 - **Collapsing the game's Camera panel no longer traps you** (CW-38) - the collapse arrow hid the
   panel and then hid itself, so there was no way to bring the panel back - and worse, the vanishing
   button silently dropped your keyboard: after collapsing, M, the arrows, every game key went dead
