@@ -138,6 +138,56 @@ Once your link works, you can share it anywhere:
 
 ---
 
+## Sharing your exact settings, and getting them back
+
+A plain link opens your design at its own defaults. Often what you want is
+"open this, at these numbers" - and, coming the other way, "here is what I
+changed, please make me this one".
+
+Forge puts the values you changed at the end of the link, after the `#`:
+
+```text
+https://…/?manifest=…%2Fforge-manifest.json#v=1&params=%7B%22width%22%3A77%7D
+```
+
+Only the values that differ from the design's defaults travel, so the link
+stays short. Three ways to make one:
+
+1. **Copy the address bar.** It updates about a second after you change a
+   value.
+2. **Actions drawer > Copy Link.** Copies the current design plus your
+   settings in one press.
+3. **The Publish dialog**, ticking **Include my current settings in the link**
+   before you fill in the base URL. The link it builds then carries both the
+   manifest and your values.
+
+**For the person receiving it**, opening the link loads the design and applies
+the values. If a number is outside what the design allows, Forge pulls it to
+the nearest allowed value and says so rather than silently using something you
+did not ask for. A parameter the design does not have is dropped the same way.
+
+**Sending changes back** works the same in reverse: open the link you were
+sent, adjust, and use **Copy Link**. The reply carries your numbers, not a
+description of them.
+
+> **Privacy note**: browsers never send the part of a URL after the `#` to any
+> server. Values in a settings link do not reach Forge's host or your file
+> host. They are in the link itself, so treat the link the way you would treat
+> the values.
+
+### Handing over the whole project as one file
+
+The Publish dialog also has **Download Project ZIP**: one archive holding your
+project's files, the `forge-manifest.json` that describes them, and a small
+`forge-provenance.json` recording where the design came from, which preset was
+selected, and the values that differed from the defaults. Unzip it into your
+repository and everything is already in the right place.
+
+`forge-provenance.json` is new and nothing reads it back yet. It is there so a
+file that comes home can say where it has been.
+
+---
+
 ## Updating Your Project Later
 
 When you have a new version of your design:
@@ -227,6 +277,31 @@ Bundle your `.scad`, companion files, and preset `.json` into a single ZIP. Forg
 | Updating | Edit individual files | Re-create the ZIP | Re-create the ZIP |
 | Preset selection | `?preset=` + manifest defaults | `?preset=` + manifest defaults | Auto-imports all |
 | Best for | Small projects (1-5 files) | Large projects / many files | Quick one-off share |
+
+### Option C: no hosting at all (`?manifest=data:`)
+
+A whole manifest can ride inside the link, with nothing hosted anywhere:
+
+```text
+https://…/?manifest=data:application/json;base64,eyJmb3JnZU1hbmlmZXN0IjoiMS4wIiw…
+```
+
+This is genuinely useful for a one-off: no repository, no account, nothing to
+maintain. Two limits decide whether it fits.
+
+- **Keep the whole link under about 8 KB.** Measured: 8 KB links load, 16 KB
+  drew an HTTP 431 from a plain server, and Firefox hung rather than reporting
+  the error. Hosts and CDNs set their own caps below that.
+- **Relative file paths cannot work.** There is no directory for them to be
+  relative to. Every file the manifest names has to be an absolute URL on the
+  allowlist in **Hosting Requirements**, or a `data:` URL itself, and a
+  `data:` file URL needs its name on the end so the suffix rules still pass -
+  `data:text/plain;base64,…#design.scad`.
+
+So this lane suits a small manifest pointing at files that are already hosted,
+not a project packed whole into a link. `MANIFEST_STABILITY_CONTRACT.md` has
+the full rules.
+
 ---
 
 ## Writing the manifest
