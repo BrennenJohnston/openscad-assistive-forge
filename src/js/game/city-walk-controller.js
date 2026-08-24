@@ -497,11 +497,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       'Shift (hold): move faster',
       'Left and Right Bracket: walking speed down or up',
       'M: switch between street view and map view',
-      'On the map: arrow keys pan, Minus and Equals zoom, Home returns to you',
+      'On the map: arrow keys pan, Page Up and Page Down zoom, Home returns to you',
       'On the map: click a street, then J to drop yourself there (J alone drops you at the middle of the map)',
       'L and Shift+L: cycle landmarks on the map',
       'X: say where you are',
-      `Minus and Equals in street view: smaller or larger characters (${Math.round(
+      `Minus and Equals: smaller or larger characters (${Math.round(
         CHAR_SCALE_MIN * 100
       )}% to 100%)`,
       'C: high contrast on or off',
@@ -678,10 +678,9 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
    * already reads out of state.keys, so a held button reaches street mode
    * and map mode exactly the way its key does; `press` is the same discrete
    * handler the key calls. `views` hides a button in the mode where its key
-   * does nothing. The character-size pair is the one deliberate superset —
-   * in map view its keys are taken by zoom, but the map is drawn in the
-   * same characters and their size is a comfort setting, so it keeps both
-   * buttons.
+   * does nothing. Since CW-Q41 the character-size keys mean character size
+   * in BOTH views (map zoom moved to PageUp/PageDown), so the size pair is
+   * an ordinary `both` group like Speed.
    */
   // CW-35/CW-Q32: the Camera and Move groups have RETIRED from this toolbar.
   // Their jobs moved to the Camera panel, which is the panel Forge users
@@ -781,14 +780,14 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
         {
           id: 'cityWalkZoomOutBtn',
           label: 'Zoom out',
-          keys: 'Minus',
+          keys: 'Page Down',
           hold: 'zoomOut',
           views: 'map',
         },
         {
           id: 'cityWalkZoomInBtn',
           label: 'Zoom in',
-          keys: 'Equals',
+          keys: 'Page Up',
           hold: 'zoomIn',
           views: 'map',
         },
@@ -1628,13 +1627,26 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     ) {
       event.preventDefault();
       event.stopPropagation();
+      // CW-Q41: one key, one meaning. The owner pressed Minus over the map
+      // to shrink the characters and got a zoomed-out map instead; the
+      // overload lost. Size lives here in BOTH views, and map zoom moved
+      // to PageUp/PageDown below.
       const minus = event.code === 'Minus' || event.code === 'NumpadSubtract';
-      if (state.game.mapView) {
-        // Map mode: -/= are HELD zoom keys (see frame()).
-        holdAction(state.keyHeld, minus ? 'zoomOut' : 'zoomIn');
-      } else {
-        adjustCharacterSize(minus ? -CHAR_SCALE_STEP : CHAR_SCALE_STEP);
-      }
+      adjustCharacterSize(minus ? -CHAR_SCALE_STEP : CHAR_SCALE_STEP);
+      return;
+    }
+
+    if (
+      state.game.mapView &&
+      (event.code === 'PageUp' || event.code === 'PageDown')
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      // HELD zoom keys, exactly as -/= used to be over the map (see frame()).
+      holdAction(
+        state.keyHeld,
+        event.code === 'PageUp' ? 'zoomIn' : 'zoomOut'
+      );
       return;
     }
 
@@ -1670,10 +1682,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       state.shiftHeld = false;
       return;
     }
-    if (event.code === 'Minus' || event.code === 'NumpadSubtract') {
+    if (event.code === 'PageDown') {
       releaseAction(state.keyHeld, 'zoomOut');
     }
-    if (event.code === 'Equal' || event.code === 'NumpadAdd') {
+    if (event.code === 'PageUp') {
       releaseAction(state.keyHeld, 'zoomIn');
     }
     const action = KEY_ACTIONS.get(event.code);
@@ -2209,7 +2221,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     updateHud();
     announceInLayer(
       game.mapView
-        ? 'Map view, seen from above. Arrow keys pan, minus and equals zoom, Home returns to you. The toolbar now shows the map buttons.'
+        ? 'Map view, seen from above. Arrow keys pan, Page Up and Page Down zoom, Home returns to you. The toolbar now shows the map buttons.'
         : 'Street view. The toolbar now shows the walking buttons.'
     );
   }
@@ -2308,8 +2320,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   /**
    * Go. Uses the picked spot, or the middle of the map when nothing has been
    * picked — which is the whole keyboard route: the arrows already pan the
-   * map and minus/equals already zoom it, so steering the middle of the
-   * screen onto a street needs no new keys at all.
+   * map and PageUp/PageDown already zoom it (CW-Q41), so steering the middle
+   * of the screen onto a street needs no new keys at all.
    */
   function teleportToTarget() {
     const game = state.game;
