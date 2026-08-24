@@ -47,7 +47,7 @@ test.describe('ASCII City Walk — the acceptance path runs (CW-37)', () => {
   async function waitForConversions(page, n) {
     const from = (await stats(page))?.samples ?? 0
     await expect
-      .poll(async () => (await stats(page))?.samples ?? 0, { timeout: 60000 })
+      .poll(async () => (await stats(page))?.samples ?? 0, { timeout: 90000 })
       .toBeGreaterThanOrEqual(from + n)
   }
 
@@ -62,6 +62,10 @@ test.describe('ASCII City Walk — the acceptance path runs (CW-37)', () => {
   test('the smallest characters with heavy rain keep converting', async ({
     page,
   }) => {
+    // The wall clock here is an OUTER bound only, wide enough that the frame
+    // gates decide - the default 60 s killed a green test mid-poll on a
+    // loaded runner that had passed it in 30 s the run before.
+    test.setTimeout(150_000)
     await launchGame(page)
     await enterCity(page)
 
@@ -106,6 +110,7 @@ test.describe('ASCII City Walk — the acceptance path runs (CW-37)', () => {
   test('the GPU glyph path is the one that ran, where there is a GPU', async ({
     page,
   }) => {
+    test.setTimeout(150_000)
     await launchGame(page)
     await enterCity(page)
     // Enough frames that a pass which initialises lazily has certainly had
