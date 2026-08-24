@@ -21,6 +21,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Teleporting is drop-a-pin now** (CW-40) - press **Teleport** on the map toolbar and the cursor
+  becomes a ring; click anywhere on the map and you are there, in one step - the "I'm here" marker
+  moves to the spot, the game says which street you landed on, and you stay on the map so you can
+  keep hopping without re-arming. Enter the street whenever you choose; it opens exactly where you
+  landed. Pressing the button again turns the mode off, and leaving the map turns it off by itself.
+  From the keyboard nothing got harder: the arrows still steer the map and **J** still drops you at
+  the middle of the screen, with no mode to arm. The old two-step flow - click to pick, then press J
+  to go - is gone, along with its "Press J to go" prompt. The marker itself was redrawn as a bright
+  square frame around a dark centre that stays the same size at every zoom level: the old solid
+  block shrank to a dot zoomed out, and in color mode it vanished entirely among white buildings
+
 - **The phosphor trail is retired** (CW-39) - moving through the city used to leave a fading
   double-exposure behind every tree, pole and sign, the way a slow CRT smeared when it scrolled. The
   owner found it distracting, and it was expensive: measured side by side in one session, drawing
