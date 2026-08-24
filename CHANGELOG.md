@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Send a link that opens with your settings, and get one back** (IR-3) - a plain link opened a
+  design at its own defaults, so "make me this one, but 72 mm wide" meant writing the numbers out
+  and hoping. Forge now puts the values you changed at the end of the link. Three ways to make
+  one: copy the address bar, press Copy Link in the Actions drawer, or tick "Include my current
+  settings in the link" in the Publish dialog before you fill in your hosting address. Only the
+  values that differ travel, so the link stays short, and the person who opens it gets your
+  numbers checked against what the design allows rather than applied blindly. A design you opened
+  from your own computer still gets a link - it carries your settings and says plainly that
+  whoever opens it needs to load the design first, because nothing on the web can fetch a file
+  from your machine
+
+- **Hand over the whole project as one file** (IR-3) - the Publish dialog can now download an
+  archive holding your project's files, the manifest that describes them, and a small record of
+  where the design came from, which preset was chosen, and the values that differed. Unzip it into
+  your repository and everything is already in the right place
+
 - **The smallest character size now knows your machine** (CW-42) - the game used to open at 50%
   characters on every machine and let you go down to 10% everywhere, even where 10% turned walking
   into a slideshow. Now, in the first moments after you enter a city, the game quietly measures how
@@ -193,6 +209,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   data where there is one, and from the building itself where there is not
 
 ### Fixed
+
+- **The Publish dialog is readable in the light theme again** (IR-3) - it painted a dark box under
+  dark text, so the manifest it generated and the address you typed were both invisible unless you
+  used the dark theme. The dialog's colors came from names the app does not define, each with a
+  dark value written in beside it as a fallback, so the dialog never followed your theme at all.
+  Measured before: about 1.03 to 1 against a 4.5 to 1 minimum. Measured after: about 14 to 1
 
 - **Publish no longer hands you a manifest Forge would refuse** (IR-2) - for a project you loaded
   from a ZIP, the Publish dialog put the archive's own filename where the main design file belongs.

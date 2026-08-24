@@ -14560,19 +14560,26 @@ body.tutorial-body-locked {
    Publish / Share Project Modal
    ============================================================ */
 
+/* D-99: this block was written against token names this project does not
+   define (--color-surface-raised, --spacing-*, --radius-*), each with a
+   Catppuccin dark value as its fallback. In the light theme that painted a
+   dark box under dark text: the generated manifest and the URL field both
+   measured about 1.03:1 against WCAG's 4.5:1. Every value here now comes from
+   the project's own tokens, so the dialog follows the theme. */
+
 .publish-manifest-container {
   position: relative;
-  margin-bottom: var(--spacing-md, 1rem);
+  margin-bottom: var(--space-md);
 }
 
 .publish-manifest-code {
-  background: var(--color-surface-raised, #1e1e2e);
-  color: var(--color-text-primary, #cdd6f4);
-  border: 1px solid var(--color-border, #45475a);
-  border-radius: var(--radius-md, 8px);
-  padding: var(--spacing-md, 1rem);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  padding: var(--space-md);
   font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
-  font-size: var(--font-size-sm, 0.875rem);
+  font-size: var(--font-size-sm);
   line-height: 1.5;
   overflow-x: auto;
   white-space: pre;
@@ -14582,80 +14589,104 @@ body.tutorial-body-locked {
 
 .publish-copy-btn {
   position: absolute;
-  top: var(--spacing-sm, 0.5rem);
-  right: var(--spacing-sm, 0.5rem);
+  top: var(--space-sm);
+  right: var(--space-sm);
 }
 
 .publish-instructions {
   padding-left: 1.5em;
-  margin-bottom: var(--spacing-md, 1rem);
+  margin-bottom: var(--space-md);
   line-height: 1.7;
 }
 
 .publish-instructions li {
-  margin-bottom: var(--spacing-xs, 0.25rem);
+  margin-bottom: var(--space-xs);
 }
 
 .publish-instructions code {
-  background: var(--color-surface-raised, #1e1e2e);
+  background: var(--color-bg-tertiary);
   padding: 0.1em 0.4em;
-  border-radius: var(--radius-sm, 4px);
-  font-size: var(--font-size-sm, 0.875rem);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-sm);
 }
 
 .publish-label {
   display: block;
   font-weight: 600;
-  margin-bottom: var(--spacing-xs, 0.25rem);
+  margin-bottom: var(--space-xs);
 }
 
 .publish-input {
   width: 100%;
-  padding: var(--spacing-sm, 0.5rem);
-  border: 1px solid var(--color-border, #45475a);
-  border-radius: var(--radius-md, 8px);
-  background: var(--color-surface, #181825);
-  color: var(--color-text-primary, #cdd6f4);
+  padding: var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
   font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
-  font-size: var(--font-size-sm, 0.875rem);
+  font-size: var(--font-size-sm);
   box-sizing: border-box;
 }
 
 .publish-input:focus {
-  outline: 2px solid var(--color-accent, #89b4fa);
+  outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
 
 .publish-help-text {
-  font-size: var(--font-size-xs, 0.75rem);
-  color: var(--color-text-secondary, #a6adc8);
-  margin-top: var(--spacing-xs, 0.25rem);
-  margin-bottom: var(--spacing-md, 1rem);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  margin-top: var(--space-xs);
+  margin-bottom: var(--space-md);
 }
 
 .publish-help-text code {
-  background: var(--color-surface-raised, #1e1e2e);
+  background: var(--color-bg-tertiary);
   padding: 0.1em 0.3em;
-  border-radius: var(--radius-sm, 4px);
+  border-radius: var(--border-radius-sm);
   font-size: inherit;
 }
 
 .publish-share-link-container {
-  margin-top: var(--spacing-md, 1rem);
-  padding: var(--spacing-md, 1rem);
-  background: var(--color-surface-raised, #1e1e2e);
-  border: 1px solid var(--color-border, #45475a);
-  border-radius: var(--radius-md, 8px);
+  margin-top: var(--space-md);
+  padding: var(--space-md);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
 }
 
 .publish-share-link-row {
   display: flex;
-  gap: var(--spacing-sm, 0.5rem);
+  gap: var(--space-sm);
   align-items: center;
 }
 
 .publish-share-link-row .publish-input {
   flex: 1;
+}
+
+.publish-setting-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: var(--size-touch-target);
+}
+
+.publish-setting-row input[type='checkbox'] {
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  flex: none;
+}
+
+/* The label carries the rest of the touch target: a 24px box alone is under
+   the 44px minimum, and `for=` makes the text part of the same hit area. */
+.publish-checkbox-label {
+  display: flex;
+  align-items: center;
+  min-height: var(--size-touch-target);
+  cursor: pointer;
+  font-weight: 600;
 }
 
 /* Reduced Motion */

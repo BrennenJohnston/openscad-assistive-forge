@@ -5287,6 +5287,31 @@
                     </svg>
                     <span class="btn-text">Publish</span>
                   </button>
+                  <button
+                    type="button"
+                    id="copySettingsLinkBtn"
+                    class="btn btn-sm btn-secondary actions-drawer-btn"
+                    aria-label="Copy a link to this design with my current settings"
+                  >
+                    <svg
+                      class="btn-icon-svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"
+                      ></path>
+                      <path
+                        d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"
+                      ></path>
+                    </svg>
+                    <span class="btn-text">Copy Link</span>
+                  </button>
                   <span
                     class="actions-drawer-divider"
                     aria-hidden="true"
@@ -8932,7 +8957,34 @@ No console output yet. Generate a model to see output.</pre
               <code>forge-manifest.json</code> in the same directory.
             </li>
           </ol>
+          <button
+            type="button"
+            id="downloadProjectZipBtn"
+            class="btn btn-sm btn-secondary"
+            aria-describedby="downloadProjectZipHelp"
+          >
+            Download Project ZIP
+          </button>
+          <p id="downloadProjectZipHelp" class="publish-help-text">
+            One archive holding this project's files, the manifest above, and a
+            record of where the design came from. Unzip it into your repository
+            and everything is in place.
+          </p>
           <h3>3. Get Your Shareable Link</h3>
+          <div class="publish-setting-row">
+            <input
+              type="checkbox"
+              id="publishIncludeSettings"
+              class="publish-checkbox"
+            />
+            <label for="publishIncludeSettings" class="publish-checkbox-label">
+              Include my current settings in the link
+            </label>
+          </div>
+          <p id="publishIncludeSettingsHelp" class="publish-help-text">
+            Whoever opens the link sees the values you have on screen right now,
+            not the design's own defaults.
+          </p>
           <label for="publishRepoUrl" class="publish-label">
             Your GitHub raw base URL:
           </label>

@@ -27,6 +27,9 @@
  * @param {{defaultMode: string, hiddenPanelsInBasic: string[]}|null} [input.uiModePrefs]
  * @param {string[]} [input.registryHiddenDefaults] - Panel ids hidden by
  *   default in basic mode, so an unchanged set is not emitted.
+ * @param {boolean|null} [input.asBundle] - Override the bundle decision. The
+ *   downloadable archive ships the project UNPACKED beside its manifest, so it
+ *   needs the loose-file shape even though the project arrived as a ZIP.
  * @returns {Object} A forge-manifest object
  */
 export function buildProjectManifest({
@@ -36,12 +39,14 @@ export function buildProjectManifest({
   presetName = null,
   uiModePrefs = null,
   registryHiddenDefaults = [],
+  asBundle = null,
 } = {}) {
   const name = uploadName || 'design.scad';
   // D-47's rule (see presetModelKey in main.js): a project's identity is the
   // main .scad path INSIDE it, never the archive that delivered it.
   const mainPath = mainFilePath || name;
-  const isBundle = name.toLowerCase().endsWith('.zip');
+  const isBundle =
+    asBundle === null ? name.toLowerCase().endsWith('.zip') : asBundle;
 
   const manifest = {
     forgeManifest: '1.0',

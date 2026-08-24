@@ -75,6 +75,7 @@ import {
   validateManifest,
 } from './js/manifest-loader.js';
 import { buildProjectManifest } from './js/publish-manifest.js';
+import { buildProvenance, buildProjectZipEntries } from './js/project-zip.js';
 import { getConsolePanel } from './js/console-panel.js';
 import {
   getErrorLogPanel,
@@ -11859,6 +11860,76 @@ if (rounded) {
     });
   }
 
+  const publishIncludeSettings = document.getElementById(
+    'publishIncludeSettings'
+  );
+  const downloadProjectZipBtn = document.getElementById(
+    'downloadProjectZipBtn'
+  );
+  const copySettingsLinkBtn = document.getElementById('copySettingsLinkBtn');
+
+  /**
+   * The address that reopens the loaded project, without any settings.
+   * A design opened from a local file has no such address: nothing on the web
+   * can fetch it, and saying so is better than composing a link that 404s.
+   * @returns {string|null}
+   */
+  function projectReopenUrl() {
+    const state = stateManager.getState();
+    const forgeBase = window.location.origin + window.location.pathname;
+    const manifestUrl = state.manifestOrigin?.url;
+    if (manifestUrl) {
+      return `${forgeBase}?manifest=${encodeURIComponent(manifestUrl)}`;
+    }
+    const exampleKey = fileHandler.getCurrentExampleKey?.();
+    if (exampleKey) {
+      return `${forgeBase}?example=${encodeURIComponent(exampleKey)}`;
+    }
+    return null;
+  }
+
+  async function copyTextWithFallback(text, promptLabel) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (_err) {
+      prompt(promptLabel, text);
+      return false;
+    }
+  }
+
+  if (copySettingsLinkBtn) {
+    copySettingsLinkBtn.addEventListener('click', async () => {
+      const state = stateManager.getState();
+      if (!state.uploadedFile) {
+        showErrorToast({
+          title: 'No File Loaded',
+          message: 'Upload a .scad or .zip file first.',
+        });
+        return;
+      }
+
+      const fragment = stateManager.getShareFragment();
+      const base = projectReopenUrl();
+      const link = `${base || window.location.origin + window.location.pathname}${fragment}`;
+      await copyTextWithFallback(link, 'Copy this link:');
+
+      if (!base) {
+        updateStatus(
+          'Link copied. It carries your settings only, so whoever opens it ' +
+            'needs to load this design first.'
+        );
+      } else if (!fragment) {
+        updateStatus(
+          'Link copied. Everything is at its default value, so it opens the ' +
+            'design as its author left it.'
+        );
+      } else {
+        updateStatus('Link copied. It opens this design with your settings.');
+      }
+    });
+  }
+
   if (publishProjectBtn && publishProjectModal) {
     publishProjectBtn.addEventListener('click', () => {
       const state = stateManager.getState();
@@ -11900,6 +11971,9 @@ if (rounded) {
       if (publishRepoUrl) {
         publishRepoUrl.value = '';
       }
+      if (publishIncludeSettings) {
+        publishIncludeSettings.checked = false;
+      }
 
       openModal(publishProjectModal);
     });
@@ -11939,7 +12013,7 @@ if (rounded) {
 
     // Generate shareable link when repo URL changes
     if (publishRepoUrl && publishShareLink && publishShareLinkContainer) {
-      publishRepoUrl.addEventListener('input', () => {
+      const composeShareLink = () => {
         let baseUrl = publishRepoUrl.value.trim();
         if (!baseUrl) {
           publishShareLinkContainer.classList.add('hidden');
@@ -11953,10 +12027,93 @@ if (rounded) {
 
         const manifestUrl = `${baseUrl}forge-manifest.json`;
         const forgeBase = window.location.origin + window.location.pathname;
-        const shareUrl = `${forgeBase}?manifest=${encodeURIComponent(manifestUrl)}`;
+        // The same serializer the address bar uses, so a copied link and the
+        // address bar can never mean different things.
+        const fragment = publishIncludeSettings?.checked
+          ? stateManager.getShareFragment()
+          : '';
+        const shareUrl = `${forgeBase}?manifest=${encodeURIComponent(manifestUrl)}${fragment}`;
 
         publishShareLink.value = shareUrl;
         publishShareLinkContainer.classList.remove('hidden');
+      };
+
+      publishRepoUrl.addEventListener('input', composeShareLink);
+      if (publishIncludeSettings) {
+        publishIncludeSettings.addEventListener('change', composeShareLink);
+      }
+    }
+
+    // Download the whole project as one archive
+    if (downloadProjectZipBtn) {
+      downloadProjectZipBtn.addEventListener('click', async () => {
+        const state = stateManager.getState();
+        if (!state.uploadedFile) {
+          showErrorToast({
+            title: 'No File Loaded',
+            message: 'Upload a .scad or .zip file first.',
+          });
+          return;
+        }
+
+        try {
+          const uiModeController = getUIModeController();
+          // asBundle: false - the archive ships the project UNPACKED beside
+          // its manifest, so the manifest has to name loose files even when
+          // the project itself arrived as a ZIP.
+          const manifest = buildProjectManifest({
+            uploadName: state.uploadedFile?.name || 'design.scad',
+            mainFilePath: state.mainFilePath,
+            projectFiles: state.projectFiles,
+            presetName: state.currentPresetName,
+            uiModePrefs: uiModeController.getPreferencesForExport(),
+            registryHiddenDefaults: uiModeController
+              .getRegistry()
+              .filter((panel) => panel.defaultHiddenInBasic)
+              .map((panel) => panel.id),
+            asBundle: false,
+          });
+
+          const provenance = buildProvenance({
+            manifestUrl: state.manifestOrigin?.url || null,
+            projectName: manifest.name,
+            author: state.manifestOrigin?.author || null,
+            appVersion: __APP_VERSION__,
+            presetName: state.currentPresetName,
+            parameters: stateManager.collectNonDefaultParameters() || {},
+            generatedAt: new Date().toISOString(),
+          });
+
+          const entries = buildProjectZipEntries({
+            projectFiles: state.projectFiles,
+            mainFilePath: manifest.files.main,
+            mainContent: state.uploadedFile?.content ?? state.scadContent,
+            manifest,
+            provenance,
+          });
+
+          const { default: JSZip } = await import('jszip');
+          const zip = new JSZip();
+          for (const entry of entries) {
+            zip.file(entry.path, entry.content, { base64: entry.base64 });
+          }
+          const blob = await zip.generateAsync({ type: 'blob' });
+
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `${manifest.name || 'project'}.zip`;
+          link.click();
+          URL.revokeObjectURL(url);
+
+          updateStatus(`Project archive downloaded, ${entries.length} files.`);
+        } catch (error) {
+          console.error('[Publish] Project ZIP failed:', error);
+          showErrorToast({
+            title: 'Download Failed',
+            message: `Could not build the project archive: ${error.message}`,
+          });
+        }
       });
     }
 

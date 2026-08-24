@@ -171,22 +171,45 @@ export class StateManager {
     return true;
   }
 
-  performURLSync() {
-    // Only sync if we have parameters to save
+  /**
+   * The parameters that differ from the loaded model's defaults. Short URLs
+   * are the point: a link carries what the sender changed, nothing else.
+   * @returns {Object|null} Non-default values, or null with nothing loaded
+   */
+  collectNonDefaultParameters() {
     if (!this.state.parameters || !this.state.defaults) {
-      return;
+      return null;
     }
-
-    if (this.isURLRestorePending()) {
-      return;
-    }
-
-    // Only include non-default parameters to keep URLs short
     const nonDefaultParams = {};
     for (const [key, value] of Object.entries(this.state.parameters)) {
       if (this.state.defaults[key] !== value) {
         nonDefaultParams[key] = value;
       }
+    }
+    return nonDefaultParams;
+  }
+
+  /**
+   * The fragment a shared link should carry so it opens with the values on
+   * screen. Built by the same serializer the address bar uses, so a copied
+   * link and the address bar can never mean different things.
+   * @returns {string} `#v=1&params=...`, or '' when nothing differs
+   */
+  getShareFragment() {
+    const nonDefaultParams = this.collectNonDefaultParameters();
+    if (!nonDefaultParams) return '';
+    return serializeURLParams(nonDefaultParams);
+  }
+
+  performURLSync() {
+    // Only sync if we have parameters to save
+    const nonDefaultParams = this.collectNonDefaultParameters();
+    if (!nonDefaultParams) {
+      return;
+    }
+
+    if (this.isURLRestorePending()) {
+      return;
     }
 
     // Build URL hash, carrying any fragment keys that are not ours
