@@ -192,11 +192,16 @@ test.describe('ASCII City Walk — teleport (CW-36)', () => {
     const before = await camera(page)
 
     // The control, measured in this run rather than assumed: two captures of
-    // the SAME place, a second apart, with nothing moved. It is never zero -
-    // the phosphor trail carries the previous frame and the traffic lights
-    // tick - and CW-30 nearly filed a false parity alarm for want of exactly
-    // this comparison. Measured here at ~0.024 against a teleport's ~0.10 to
-    // ~0.14, so the picture has to change by several times the noise floor.
+    // the SAME place, a second apart, with nothing moved. In the trail era it
+    // measured ~0.024 (the composite fed each frame a fading copy of the
+    // last, so same-code frames never quite settled) and CW-30 nearly filed
+    // a false parity alarm for want of exactly this comparison. Since CW-39
+    // retired the trail, standing-still frames are deterministic - re-derived
+    // 2026-08-24: 0.0000 across five 1s samples, trail off AND on (standing
+    // still there is no motion to smear) - so the 0.05 epsilon below carries
+    // the whole threshold against a teleport's ~0.10 to ~0.14. The control
+    // stays measured anyway: if the picture ever starts moving on its own
+    // again, the 3x multiplier re-engages without anyone editing this test.
     const control = signatureDistance(
       await inkSignature(page),
       await settledSignature(page)
@@ -302,10 +307,12 @@ test.describe('ASCII City Walk — teleport (CW-36)', () => {
  * A coarse brightness fingerprint of the ASCII picture: mean luminance over
  * an 8x8 grid of the rendered canvas.
  *
- * Deliberately not a pixel diff. The ASCII surface is a phosphor buffer that
- * carries the previous frame, so exact comparison is noisy by construction;
- * an 8x8 average of a whole cityscape is not, and "is this a different place"
- * is all this needs to answer.
+ * Deliberately not a pixel diff. When this guard was written the ASCII
+ * surface was a phosphor buffer that carried the previous frame, so exact
+ * comparison was noisy by construction. CW-39 retired the trail and the
+ * surface is deterministic now, but the coarse signature stays: "is this a
+ * different place" is all this needs to answer, and an 8x8 average keeps
+ * answering it whether or not some future effect makes pixels restless.
  */
 async function inkSignature(page) {
   return page.evaluate(() => {
