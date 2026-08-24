@@ -1314,3 +1314,55 @@ test.describe('ASCII City Walk — accessibility toggles (CW-14)', () => {
     expectOnlyAllowedViolations(results)
   })
 })
+
+test.describe('ASCII City Walk — the loading line (CW-44)', () => {
+  test('a held-up city download shows its progress line, then clears it', async ({
+    page,
+  }) => {
+    await launchGame(page)
+
+    // Hold the extract at the door: while the fetch waits, the player must
+    // see (and a screen reader hear - role=status) that loading is under
+    // way. The 1,300 m Seattle measured 47 s on Slow 4G; a silent
+    // aria-busy alone is a dead screen for that long.
+    let release
+    const gate = new Promise((resolve) => {
+      release = resolve
+    })
+    await page.route('**/examples/ascii-city/seattle.json', async (route) => {
+      await gate
+      await route.continue()
+    })
+
+    await page.getByRole('button', { name: 'Seattle, Washington' }).click()
+    const status = page.locator('#cityWalkLoadStatus')
+    await expect(status).toBeVisible()
+    await expect(status).toHaveText('Loading Seattle, Washington…')
+    await expect(status).toHaveAttribute('role', 'status')
+
+    release()
+    // With WebGL the city starts and the line clears; without it the
+    // fallback screen appears instead - either way the line must not
+    // linger.
+    await expect(status).toBeHidden({ timeout: 60000 })
+  })
+
+  test('a failed city load clears the progress line and speaks the error', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await page.route('**/examples/ascii-city/seattle.json', (route) =>
+      route.fulfill({ status: 503, body: 'busy' })
+    )
+    await page.getByRole('button', { name: 'Seattle, Washington' }).click()
+    await expect(page.locator('#cityWalkStartError')).toBeVisible()
+    await expect(page.locator('#cityWalkStartError')).toContainText(
+      'could not be loaded'
+    )
+    await expect(page.locator('#cityWalkLoadStatus')).toBeHidden()
+    // The picker recovers for another try.
+    await expect(
+      page.getByRole('button', { name: 'Seattle, Washington' })
+    ).toBeEnabled()
+  })
+})

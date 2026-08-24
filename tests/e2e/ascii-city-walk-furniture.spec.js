@@ -31,28 +31,30 @@ test.describe('ASCII City Walk — street furniture (CW-43)', () => {
     await launchGame(page)
     await enterCity(page)
 
-    // The extract's own counts (the plan section 1f coverage table).
+    // The extract's own counts. CW-44's fallback bake (shifted center
+    // 47.612,-122.340, r=1300 - the signed rule) re-measured these from
+    // the shipped blob; the CW-43-era 707 m numbers were 71/31/155/309/43.
     const model = await modelStats(page)
     expect(model.furnitureByKind).toEqual({
-      bus_stop: 71,
-      bench: 31,
-      waste_basket: 155,
-      bicycle_parking: 309,
-      fire_hydrant: 43,
+      bus_stop: 156,
+      bench: 280,
+      waste_basket: 306,
+      bicycle_parking: 853,
+      fire_hydrant: 112,
     })
     // The data-only wayfinding layer rides the model untouched.
-    expect(model.wayfindingCount).toBe(1907)
+    expect(model.wayfindingCount).toBe(5354)
 
     // What actually stands in the city: the same numbers minus nodes that
     // fall inside a building footprint or duplicate one another - measured
     // once, deterministic forever (hash-seeded placement, versioned data).
     const props = await propStats(page)
     expect(props.furnitureByKind).toEqual({
-      bus_stop: 69,
-      bench: 31,
-      waste_basket: 148,
-      bicycle_parking: 297,
-      fire_hydrant: 41,
+      bus_stop: 154,
+      bench: 268,
+      waste_basket: 285,
+      bicycle_parking: 811,
+      fire_hydrant: 109,
     })
   })
 
