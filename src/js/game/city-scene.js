@@ -173,7 +173,6 @@ const GROUND_LOOSE_STREAKS = 800;
 const TINT_TIERS = [0.5, 0.65, 0.8, 0.95];
 const TINT_HUES_DEG = [0, 30, 60, 120, 180, 270, 300, 330];
 const TINT_CHROMA = 0.45;
-const STOREFRONT_TINT = [0.95, 0.95, 0.95];
 
 // Sign panels and rooftop masts (CW-18). A sign is two boxes: a bright
 // near-neutral PLATE that owns the top of the street-level luminance band
@@ -211,7 +210,6 @@ const SIGN_ROAD_CELL_M = 40;
 // Storefront band: a shop sign above the glass, on a hashed subset of the
 // buildings that carry a storefront strip at all.
 const SIGN_BAND_SHARE = 0.45;
-const SIGN_BAND_BASE_M = STOREFRONT_HEIGHT_M + 0.4;
 const SIGN_BAND_HEIGHT_M = 1.1;
 const SIGN_BAND_MAX_W_M = 7;
 const SIGN_BAND_EDGE_SHARE = 0.55;
