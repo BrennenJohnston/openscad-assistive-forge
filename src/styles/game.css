@@ -108,6 +108,14 @@
   width: 100%;
 }
 
+/* CW-44: the download-progress line for the big Seattle (47 s on Slow 4G
+   measured); shown while a city loads, spoken by its role=status. */
+.city-walk-start-loading {
+  margin: 0;
+  max-width: 60ch;
+  color: var(--color-text-secondary);
+}
+
 .city-walk-start-error {
   margin: 0;
   max-width: 60ch;
