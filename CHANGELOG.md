@@ -77,6 +77,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The sharing guide stops recommending hosting that does not work** (IR-2) - it told authors to
+  put a GitHub release URL, or a Cloudflare R2 / S3 bucket URL, into their manifest. Forge's
+  security policy names the hosts it may fetch from, and none of those are on it: the browser
+  blocks the request before it is sent, so those projects simply never loaded. The guide now says
+  so plainly, shows what was measured, and points at the hosts that do work - the repository
+  itself, GitHub Pages, GitLab Pages, Cloudflare Pages. It also stops claiming no tool writes the
+  manifest for you, because the Publish dialog has been doing exactly that
+
 - **The shimmering facades hold still** (CW-41) - at small character sizes, building fronts used to
   carry sliding interference bands - "a fractured polygon" look - because the window pattern sat at
   the same scale as the characters themselves, and every tiny movement of the view re-rolled which
@@ -185,6 +193,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   data where there is one, and from the building itself where there is not
 
 ### Fixed
+
+- **Publish no longer hands you a manifest Forge would refuse** (IR-2) - for a project you loaded
+  from a ZIP, the Publish dialog put the archive's own filename where the main design file belongs.
+  Forge rejects that on the way back in, so the link built from it could not open the project, and
+  nothing said so until someone tried it. A ZIP project is now described as what it is: the archive
+  as the bundle, the real main .scad inside it named beside it, and the files it contains not
+  listed twice. The dialog also checks its own output against the same rules the loader uses, and
+  refuses to open with a plain explanation rather than handing over something broken
+
+- **A link with your settings in it now actually opens with your settings** (IR-1) - the app has
+  always written the values you changed into the end of the address bar, so a link you copied
+  carried them with it. Opening that link never applied them: the person you sent it to saw the
+  model's plain defaults while the address still promised your numbers. Now the values arrive in
+  the controls, out-of-range numbers are pulled to the nearest allowed value with a spoken note
+  saying so, and a value the model does not have is dropped with the same note rather than
+  silently ignored. Anything else already in the address after the # sign - a marker some other
+  tool put there - is now left alone instead of being wiped when a project loads
 
 - **You spawn facing down the street, not into a wall** (CW-44) - every city entry used to face
   due north no matter what stood there, and the bigger Seattle put a storefront two and a half

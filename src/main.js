@@ -69,7 +69,12 @@ import {
   applyCompanionAliases,
   getOverlaySvgTarget,
 } from './js/zip-handler.js';
-import { loadManifest, ManifestError } from './js/manifest-loader.js';
+import {
+  loadManifest,
+  ManifestError,
+  validateManifest,
+} from './js/manifest-loader.js';
+import { buildProjectManifest } from './js/publish-manifest.js';
 import { getConsolePanel } from './js/console-panel.js';
 import {
   getErrorLogPanel,
@@ -8145,6 +8150,17 @@ if (rounded) {
   // Note: ?load= is an alias for ?example= (for website embedding convenience)
   // =========================================
   const initUrlParams = new URLSearchParams(window.location.search);
+  /**
+   * Compose the post-load URL from the surviving query parameters. The
+   * fragment is carried over untouched: it holds the shared parameter payload
+   * (`#v=1&params=`, state.js) and anything else the sender put there, and a
+   * cleanup that drops it destroys the link it just opened.
+   * @returns {string}
+   */
+  const cleanUrlKeepingFragment = () =>
+    initUrlParams.toString()
+      ? `${window.location.pathname}?${initUrlParams}${window.location.hash}`
+      : `${window.location.pathname}${window.location.hash}`;
   // Support both ?example= and ?load= (alias for website embedding)
   const exampleParam =
     initUrlParams.get('example') || initUrlParams.get('load');
@@ -8162,9 +8178,7 @@ if (rounded) {
           // Clean up URL to avoid reloading on refresh
           initUrlParams.delete('example');
           initUrlParams.delete('load'); // Also remove ?load= alias
-          const cleanUrl = initUrlParams.toString()
-            ? `${window.location.pathname}?${initUrlParams}`
-            : window.location.pathname;
+          const cleanUrl = cleanUrlKeepingFragment();
           history.replaceState(null, '', cleanUrl);
 
           console.log(`[DeepLink] Successfully loaded: ${exampleParam}`);
@@ -8711,9 +8725,7 @@ if (rounded) {
         initUrlParams.delete('preset');
         initUrlParams.delete('skipWelcome');
         initUrlParams.delete('skipwelcome');
-        const cleanUrl = initUrlParams.toString()
-          ? `${window.location.pathname}?${initUrlParams}`
-          : window.location.pathname;
+        const cleanUrl = cleanUrlKeepingFragment();
         history.replaceState(null, '', cleanUrl);
 
         console.log(`[DeepLink] Manifest load complete: ${projectName}`);
@@ -8772,9 +8784,7 @@ if (rounded) {
         initUrlParams.delete('preset');
         initUrlParams.delete('skipWelcome');
         initUrlParams.delete('skipwelcome');
-        const failCleanUrl = initUrlParams.toString()
-          ? `${window.location.pathname}?${initUrlParams}`
-          : window.location.pathname;
+        const failCleanUrl = cleanUrlKeepingFragment();
         history.replaceState(null, '', failCleanUrl);
 
         // Show welcome screen again on failure so the user isn't stuck
@@ -8838,9 +8848,7 @@ if (rounded) {
         // Clean up URL after loading
         initUrlParams.delete('project');
         initUrlParams.delete('scad');
-        const cleanUrl = initUrlParams.toString()
-          ? `${window.location.pathname}?${initUrlParams}`
-          : window.location.pathname;
+        const cleanUrl = cleanUrlKeepingFragment();
         history.replaceState(null, '', cleanUrl);
 
         console.log(`[DeepLink] Successfully loaded project: ${urlFileName}`);
@@ -11837,73 +11845,18 @@ if (rounded) {
    */
   function generateManifestFromProject() {
     const state = stateManager.getState();
-    const fileName = state.uploadedFile?.name || 'design.scad';
-
-    const manifest = {
-      forgeManifest: '1.0',
-      name: fileName.replace(/\.scad$/i, ''),
-      files: {
-        main: fileName,
-      },
-    };
-
-    // Add companion files from the project
-    if (state.projectFiles && state.projectFiles.size > 0) {
-      const companions = [];
-      const presets = [];
-
-      for (const filePath of state.projectFiles.keys()) {
-        // Skip the main .scad file
-        if (filePath === fileName) continue;
-
-        if (filePath.toLowerCase().endsWith('.json')) {
-          presets.push(filePath);
-        } else if (!filePath.toLowerCase().endsWith('.scad')) {
-          companions.push(filePath);
-        } else {
-          // Secondary .scad files are companions (included via use/include)
-          companions.push(filePath);
-        }
-      }
-
-      if (companions.length > 0) {
-        manifest.files.companions = companions;
-      }
-      if (presets.length > 0) {
-        manifest.files.presets = presets.length === 1 ? presets[0] : presets;
-      }
-    }
-
-    // Add defaults
-    manifest.defaults = {
-      autoPreview: true,
-    };
-
-    // If a preset is currently selected, include it as the default
-    if (
-      state.currentPresetName &&
-      state.currentPresetName !== 'design default values'
-    ) {
-      manifest.defaults.preset = state.currentPresetName;
-    }
-
-    // Include UI mode preferences so shared links apply the same panel visibility
-    const uiModePrefs = getUIModeController().getPreferencesForExport();
-    if (uiModePrefs.defaultMode !== 'standard') {
-      manifest.defaults.uiMode = uiModePrefs.defaultMode;
-    }
-    const registryDefaults = getUIModeController()
-      .getRegistry()
-      .filter((p) => p.defaultHiddenInBasic)
-      .map((p) => p.id);
-    const prefsChanged =
-      JSON.stringify(uiModePrefs.hiddenPanelsInBasic.sort()) !==
-      JSON.stringify(registryDefaults.sort());
-    if (prefsChanged) {
-      manifest.defaults.hiddenPanels = uiModePrefs.hiddenPanelsInBasic;
-    }
-
-    return manifest;
+    const uiModeController = getUIModeController();
+    return buildProjectManifest({
+      uploadName: state.uploadedFile?.name || 'design.scad',
+      mainFilePath: state.mainFilePath,
+      projectFiles: state.projectFiles,
+      presetName: state.currentPresetName,
+      uiModePrefs: uiModeController.getPreferencesForExport(),
+      registryHiddenDefaults: uiModeController
+        .getRegistry()
+        .filter((p) => p.defaultHiddenInBasic)
+        .map((p) => p.id),
+    });
   }
 
   if (publishProjectBtn && publishProjectModal) {
@@ -11918,6 +11871,22 @@ if (rounded) {
       }
 
       const manifest = generateManifestFromProject();
+
+      // The dialog used to hand out manifests its own loader refuses (D-95).
+      // Checking the emission against the same validator the loader runs makes
+      // that class of defect impossible to ship again.
+      const validation = validateManifest(manifest);
+      if (!validation.valid) {
+        showErrorToast({
+          title: 'Manifest Not Generated',
+          message:
+            `This project produced a manifest the loader would refuse: ` +
+            `${validation.errors.join(' ')} Nothing was copied. Please report ` +
+            `this so it can be fixed.`,
+        });
+        return;
+      }
+
       const manifestJson = JSON.stringify(manifest, null, 2);
 
       if (publishManifestOutput) {

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { StateManager, ParameterHistory } from '../../src/js/state.js'
+import { StateManager, ParameterHistory, URL_RESTORE_GRACE_MS } from '../../src/js/state.js'
 
 describe('State Management', () => {
   let state
@@ -1039,6 +1039,154 @@ describe('ParameterHistory (undo-stack model)', () => {
       expect(stats.redoDepth).toBe(0)
       expect(stats.canUndo).toBe(true)
       expect(stats.canRedo).toBe(false)
+    })
+  })
+})
+
+describe('URL fragment discipline (IR-1)', () => {
+  const PAYLOAD = (obj) => `#v=1&params=${encodeURIComponent(JSON.stringify(obj))}`
+  let state
+
+  const makeState = () =>
+    new StateManager({
+      uploadedFile: null,
+      scadContent: null,
+      extractedParams: null,
+      parameters: {},
+      defaults: {},
+      stlData: null,
+      renderInProgress: false
+    })
+
+  beforeEach(() => {
+    window.history.replaceState(null, '', '/')
+    state = makeState()
+  })
+
+  describe('the writer preserves what is not ours', () => {
+    it('writes the parameter payload when values are non-default', () => {
+      state.state.parameters = { width: 77 }
+      state.state.defaults = { width: 50 }
+
+      state.performURLSync()
+
+      expect(window.location.hash).toBe(PAYLOAD({ width: 77 }))
+    })
+
+    it('keeps a foreign fragment key alongside the payload it writes', () => {
+      window.location.hash = '#big=zzz'
+      state = makeState()
+      state.state.parameters = { width: 77 }
+      state.state.defaults = { width: 50 }
+
+      state.performURLSync()
+
+      expect(window.location.hash).toBe(`${PAYLOAD({ width: 77 })}&big=zzz`)
+    })
+
+    it('leaves a foreign fragment untouched when it has nothing of its own to write', () => {
+      window.location.hash = '#big=zzz'
+      state = makeState()
+      state.state.parameters = { width: 50 }
+      state.state.defaults = { width: 50 }
+
+      state.performURLSync()
+
+      expect(window.location.hash).toBe('#big=zzz')
+    })
+
+    it('removes only its own keys when the payload empties', () => {
+      window.location.hash = `${PAYLOAD({ width: 77 })}&big=zzz`
+      state = makeState()
+      state.state.parameters = { width: 50 }
+      state.state.defaults = { width: 50 }
+      state._urlRestoreConsumed = true
+
+      state.performURLSync()
+
+      expect(window.location.hash).toBe('#big=zzz')
+    })
+
+    it('preserves a valueless fragment key', () => {
+      window.location.hash = '#offline'
+      state = makeState()
+      state.state.parameters = { width: 77 }
+      state.state.defaults = { width: 50 }
+
+      state.performURLSync()
+
+      expect(window.location.hash).toBe(`${PAYLOAD({ width: 77 })}&offline`)
+    })
+
+    it('keeps the query string when it clears its own fragment', () => {
+      window.history.replaceState(null, '', `/?example=simple-box${PAYLOAD({ width: 77 })}`)
+      state = makeState()
+      state.state.parameters = { width: 50 }
+      state.state.defaults = { width: 50 }
+      state._urlRestoreConsumed = true
+
+      state.performURLSync()
+
+      expect(window.location.hash).toBe('')
+      expect(window.location.search).toBe('?example=simple-box')
+    })
+  })
+
+  describe('read before first write', () => {
+    it('does not write over an incoming payload nobody has read yet', () => {
+      window.location.hash = PAYLOAD({ width: 77 })
+      state = makeState()
+      // A localStorage restore can put non-default values in state before the
+      // link's own payload has been read.
+      state.state.parameters = { width: 12 }
+      state.state.defaults = { width: 50 }
+
+      state.performURLSync()
+
+      expect(window.location.hash).toBe(PAYLOAD({ width: 77 }))
+    })
+
+    it('releases the writer once loadFromURL has read the payload', async () => {
+      window.location.hash = PAYLOAD({ width: 77 })
+      state = makeState()
+
+      await state.loadFromURL()
+      state.state.parameters = { width: 12 }
+      state.state.defaults = { width: 50 }
+      state.performURLSync()
+
+      expect(window.location.hash).toBe(PAYLOAD({ width: 12 }))
+    })
+
+    it('releases the writer once the boot grace window closes', () => {
+      vi.useFakeTimers()
+      try {
+        window.location.hash = PAYLOAD({ width: 77 })
+        state = makeState()
+        state.state.parameters = { width: 12 }
+        state.state.defaults = { width: 50 }
+
+        state.performURLSync()
+        expect(window.location.hash).toBe(PAYLOAD({ width: 77 }))
+
+        vi.advanceTimersByTime(URL_RESTORE_GRACE_MS + 1)
+        state.performURLSync()
+
+        expect(window.location.hash).toBe(PAYLOAD({ width: 12 }))
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('does not hold the writer back when the URL carries no payload', () => {
+      window.location.hash = '#big=zzz'
+      state = makeState()
+      state.state.parameters = { width: 12 }
+      state.state.defaults = { width: 50 }
+
+      state.performURLSync()
+
+      expect(window.location.hash).toBe(`${PAYLOAD({ width: 12 })}&big=zzz`)
     })
   })
 })
