@@ -67,8 +67,11 @@ import {
   mapCameraFrustum,
   clampCharScale,
   seedCharScale,
+  clampSpeedLabel,
+  speedLabelFromStored,
   CHAR_SCALE_MIN,
   CHAR_SCALE_STEP,
+  SPEED_LABEL_STEP,
 } from './walk-controls.js';
 import { initAltView } from '../_hfm.js';
 import {
@@ -731,14 +734,14 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
           id: 'cityWalkSpeedDownBtn',
           label: 'Slower',
           keys: 'Left Bracket',
-          press: () => adjustWalkSpeed(-0.25),
+          press: () => adjustWalkSpeed(-SPEED_LABEL_STEP),
           views: 'both',
         },
         {
           id: 'cityWalkSpeedUpBtn',
           label: 'Faster',
           keys: 'Right Bracket',
-          press: () => adjustWalkSpeed(0.25),
+          press: () => adjustWalkSpeed(SPEED_LABEL_STEP),
           views: 'both',
         },
         // CW-35: Fast moved here when the Move group retired. The Camera
@@ -1324,13 +1327,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     });
     const mapCam = createMapCamera(model.boundsM);
 
-    // CW-Q8: persisted walking-speed multiplier (comfort preference).
-    const savedSpeed = parseFloat(
-      safeGetItem(STORAGE_KEY_CITY_WALK_SPEED) ?? ''
+    // CW-Q8: persisted walking-speed preference (comfort). CW-48 rebased the
+    // scale, and speedLabelFromStored migrates anything the old one wrote.
+    const speedLabel = speedLabelFromStored(
+      safeGetItem(STORAGE_KEY_CITY_WALK_SPEED)
     );
-    const speedScale = Number.isFinite(savedSpeed)
-      ? Math.max(0.5, Math.min(3, savedSpeed))
-      : 1;
 
     const game = {
       city,
@@ -1351,7 +1352,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       collision,
       walkState,
       mapCam,
-      speedScale,
+      speedLabel,
       landmarks,
       // CW-27: named road segments, indexed once at city build.
       streetIndex: buildStreetIndex(model.roads),
@@ -1775,7 +1776,9 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     if (event.code === 'BracketLeft' || event.code === 'BracketRight') {
       event.preventDefault();
       event.stopPropagation();
-      adjustWalkSpeed(event.code === 'BracketLeft' ? -0.25 : 0.25);
+      adjustWalkSpeed(
+        event.code === 'BracketLeft' ? -SPEED_LABEL_STEP : SPEED_LABEL_STEP
+      );
       return;
     }
 
@@ -2745,15 +2748,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   function adjustWalkSpeed(delta) {
     const game = state.game;
     if (!game) return;
-    game.speedScale = Math.max(
-      0.5,
-      Math.min(3, Math.round((game.speedScale + delta) * 100) / 100)
-    );
-    safeSetItem(STORAGE_KEY_CITY_WALK_SPEED, String(game.speedScale));
+    game.speedLabel = clampSpeedLabel(game.speedLabel + delta);
+    safeSetItem(STORAGE_KEY_CITY_WALK_SPEED, String(game.speedLabel));
     updateHud();
-    announceInLayer(
-      `Walking speed ${Math.round(game.speedScale * 100)} percent.`
-    );
+    announceInLayer(`Walking speed ${game.speedLabel} percent.`);
   }
 
   // CW-27 wayfinding. A walker on the pavement of a 6 m residential street
@@ -2845,7 +2843,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     if (!game) return;
     const view = game.mapView
       ? `map view · zoom ${game.mapCam.zoom.toFixed(1)}x`
-      : `street view · speed ${Math.round(game.speedScale * 100)}%`;
+      : `street view · speed ${game.speedLabel}%`;
     const near =
       !game.mapView && game.nearLandmark
         ? ` · near ${hudShortName(game.nearLandmark)}`
@@ -2952,7 +2950,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
         (state.keys.has('lookUp') ? 1 : 0) -
         (state.keys.has('lookDown') ? 1 : 0),
       fast: state.shiftHeld || state.fastWalk,
-      speedScale: game.speedScale,
+      speedLabel: game.speedLabel,
     };
 
     const { moved, turned, pitched } = stepWalk(

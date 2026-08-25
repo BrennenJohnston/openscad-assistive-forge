@@ -18,7 +18,16 @@ import {
   MAP_ZOOM_MIN,
   MAP_ZOOM_MAX,
   WALK_SPEED_MPS,
-  FAST_SPEED_MPS,
+  SPRINT_MULTIPLIER,
+  SPRINT_MAX_MPS,
+  SPEED_LABEL_MIN,
+  SPEED_LABEL_MAX,
+  SPEED_LABEL_STEP,
+  SPEED_LABEL_DEFAULT,
+  speedForLabel,
+  clampSpeedLabel,
+  speedLabelFromStored,
+  PLAYER_RADIUS_M,
   TURN_SPEED_RADPS,
   EYE_HEIGHT_M,
   applyLookDelta,
@@ -108,7 +117,7 @@ describe('stepWalk — movement math', () => {
     const state = createWalkState({ x: 0, y: 0, headingRad: 0 })
     stepWalk(state, { forward: 1, strafe: 1, fast: true }, 0.1)
     const dist = Math.hypot(state.x, state.y)
-    expect(dist).toBeCloseTo(FAST_SPEED_MPS * 0.1, 5)
+    expect(dist).toBeCloseTo(WALK_SPEED_MPS * SPRINT_MULTIPLIER * 0.1, 5)
   })
 
   it('clamps runaway dt (background tab protection)', () => {
@@ -247,28 +256,332 @@ describe('findSpawn', () => {
   })
 })
 
-describe('stepWalk — speed multiplier (CW-Q8)', () => {
-  it('scales the walking speed and clamps to 0.5–3.0', () => {
-    const state = createWalkState({ x: 0, y: 0, headingRad: 0 })
-    stepWalk(state, { forward: 1, speedScale: 2 }, 0.1)
-    expect(state.y).toBeCloseTo(WALK_SPEED_MPS * 2 * 0.1, 5)
+describe('walking speed labels (CW-48, rebasing CW-Q8)', () => {
+  // The whole announced range, written out rather than re-derived: a table
+  // that recomputes the curve it is checking would agree with any curve.
+  const CURVE = [
+    [50, 2.4],
+    [75, 3.6],
+    [100, 4.8],
+    [125, 5.2],
+    [150, 5.6],
+    [175, 6.0],
+    [200, 6.4],
+    [225, 6.8],
+    [250, 7.2],
+    [275, 7.6],
+    [300, 8.0],
+  ]
 
-    const slow = createWalkState({ x: 0, y: 0, headingRad: 0 })
-    stepWalk(slow, { forward: 1, speedScale: 0.1 }, 0.1)
-    expect(slow.y).toBeCloseTo(WALK_SPEED_MPS * 0.5 * 0.1, 5)
+  it('turns every announced label into its signed speed', () => {
+    for (const [label, mps] of CURVE) {
+      expect(speedForLabel(label), `label ${label}`).toBeCloseTo(mps, 10)
+    }
   })
 
-  it('Shift sprint keeps its floor and scales past it', () => {
-    // At 1x, sprint = the 4 m/s floor.
-    const a = createWalkState({ x: 0, y: 0, headingRad: 0 })
-    stepWalk(a, { forward: 1, fast: true, speedScale: 1 }, 0.1)
-    expect(a.y).toBeCloseTo(FAST_SPEED_MPS * 0.1, 5)
+  it('anchors the curve where the rebase put it', () => {
+    // The old game walked 1.6 m/s at its own 100%, so its 300% was 4.8 and
+    // its 500% would have been 8.0. Those two are this scale's 100 and 300.
+    expect(speedForLabel(SPEED_LABEL_DEFAULT)).toBeCloseTo(4.8, 10)
+    expect(speedForLabel(SPEED_LABEL_MAX)).toBeCloseTo(8.0, 10)
+    expect(WALK_SPEED_MPS).toBe(4.8)
+  })
 
-    // At 3x, walking (4.8) exceeds the floor — sprint never goes SLOWER
-    // than walking.
-    const b = createWalkState({ x: 0, y: 0, headingRad: 0 })
-    stepWalk(b, { forward: 1, fast: true, speedScale: 3 }, 0.1)
-    expect(b.y).toBeCloseTo(WALK_SPEED_MPS * 3 * 0.1, 5)
+  it('snaps to the step grid and holds the range', () => {
+    expect(clampSpeedLabel(120)).toBe(100 + SPEED_LABEL_STEP)
+    expect(clampSpeedLabel(105)).toBe(100)
+    expect(clampSpeedLabel(1000)).toBe(SPEED_LABEL_MAX)
+    expect(clampSpeedLabel(-40)).toBe(SPEED_LABEL_MIN)
+    expect(clampSpeedLabel(NaN)).toBe(SPEED_LABEL_DEFAULT)
+    expect(clampSpeedLabel(undefined)).toBe(SPEED_LABEL_DEFAULT)
+    // Out-of-range labels resolve to the speed of the label they clamp to,
+    // never to an extrapolation off the end of either slope.
+    expect(speedForLabel(9000)).toBeCloseTo(8.0, 10)
+    expect(speedForLabel(-9000)).toBeCloseTo(2.4, 10)
+  })
+
+  it('walks the labelled speed, and an absent label is the default', () => {
+    const at = (input) => {
+      const s = createWalkState({ x: 0, y: 0, headingRad: 0 })
+      stepWalk(s, { forward: 1, ...input }, 0.1)
+      return s.y
+    }
+    expect(at({ speedLabel: 300 })).toBeCloseTo(0.8, 10)
+    expect(at({ speedLabel: 50 })).toBeCloseTo(0.24, 10)
+    expect(at({})).toBeCloseTo(at({ speedLabel: SPEED_LABEL_DEFAULT }), 10)
+  })
+
+  it('sprints faster than the walk at EVERY label, and caps', () => {
+    for (const [label] of CURVE) {
+      const walked = createWalkState({ x: 0, y: 0, headingRad: 0 })
+      stepWalk(walked, { forward: 1, speedLabel: label }, 0.1)
+      const sprinted = createWalkState({ x: 0, y: 0, headingRad: 0 })
+      stepWalk(sprinted, { forward: 1, fast: true, speedLabel: label }, 0.1)
+      expect(sprinted.y, `label ${label} sprint`).toBeGreaterThan(walked.y)
+    }
+
+    // The cap sits above the fastest walk, so it never inverts the rule it
+    // is bounding: 8.0 x 1.6 would be 12.8, and the cap holds it to 9.6.
+    const top = createWalkState({ x: 0, y: 0, headingRad: 0 })
+    stepWalk(top, { forward: 1, fast: true, speedLabel: SPEED_LABEL_MAX }, 0.1)
+    expect(top.y).toBeCloseTo(SPRINT_MAX_MPS * 0.1, 10)
+    expect(SPRINT_MAX_MPS).toBeGreaterThan(speedForLabel(SPEED_LABEL_MAX))
+  })
+
+  it('migrates a preference the pre-CW-48 game stored (UF-14)', () => {
+    // Old values were multipliers of a 1.6 m/s walk. old% - 200 is the new
+    // label, so the old top of the range lands on the new default and
+    // everything at or below the old 250% lands on the new floor.
+    expect(speedLabelFromStored('3')).toBe(100)
+    expect(speedLabelFromStored('2.75')).toBe(75)
+    expect(speedLabelFromStored('2.5')).toBe(50)
+    expect(speedLabelFromStored('2')).toBe(SPEED_LABEL_MIN)
+    expect(speedLabelFromStored('1')).toBe(SPEED_LABEL_MIN)
+    expect(speedLabelFromStored('0.5')).toBe(SPEED_LABEL_MIN)
+
+    // A label this scale wrote reads back unchanged...
+    for (const [label] of CURVE) {
+      expect(speedLabelFromStored(String(label)), `label ${label}`).toBe(label)
+    }
+    // ...and nothing at all reads as the default.
+    expect(speedLabelFromStored(null)).toBe(SPEED_LABEL_DEFAULT)
+    expect(speedLabelFromStored('')).toBe(SPEED_LABEL_DEFAULT)
+    expect(speedLabelFromStored('banana')).toBe(SPEED_LABEL_DEFAULT)
+  })
+
+  it('leaves nobody stranded slower than they already walked', () => {
+    // The floor is the one place the migration cannot be faithful: an old
+    // 100% player walked 1.6 m/s and the slowest this scale offers is 2.4.
+    // It must round UP to that, never down into a slower walk than before.
+    expect(speedForLabel(speedLabelFromStored('1'))).toBeCloseTo(2.4, 10)
+    expect(speedForLabel(speedLabelFromStored('1'))).toBeGreaterThan(1.6)
+  })
+})
+
+describe('collision integrity at the CW-48 top speed', () => {
+  // The hunt the speed rebase owes: three times the old speed means three
+  // times the ground per frame, and a frame that covers more ground than an
+  // obstacle is wide can step straight over it. stepWalk tests the ENDS of a
+  // step, so this watches the whole swept segment instead.
+  //
+  // Worst case on purpose: dt is passed as 5 s so the integration clamp
+  // supplies the longest frame the game will ever integrate, and the walker
+  // sprints at the top label. A tree trunk is the thinnest thing the city
+  // stamps, and it is the one aimed at here.
+  const TRUNK = {
+    x: 60,
+    y: 60,
+    halfLengthM: 0.15,
+    halfWidthM: 0.15,
+    rotationRad: 0,
+  }
+  const RUNAWAY_DT_S = 5
+
+  // The grid only covers the building core plus a margin, and everything
+  // outside it reads as blocked. A trunk dropped past that edge is never
+  // stamped and every approach to it starts out of bounds, which is a sweep
+  // that runs zero iterations and passes. Hence the second far building: it
+  // carries the bounds out past the trunk and its whole approach ring.
+  function trunkModel() {
+    return parseCityExtract(
+      {
+        elements: [
+          {
+            type: 'way',
+            id: 1,
+            tags: { building: 'yes', height: '12' },
+            geometry: squareRing(0, 0, 5),
+          },
+          {
+            type: 'way',
+            id: 2,
+            tags: { building: 'yes', height: '12' },
+            geometry: squareRing(120, 120, 5),
+          },
+        ],
+      },
+      { center: CENTER }
+    )
+  }
+
+  function gridWithTrunk() {
+    const collision = buildCollisionGrid(trunkModel())
+    expect(stampObstacles(collision, [TRUNK])).toBe(1)
+    expect(collision.isBlocked(TRUNK.x, TRUNK.y)).toBe(true)
+    expect(collision.isBlocked(TRUNK.x + 3, TRUNK.y)).toBe(false)
+    return collision
+  }
+
+  /** Mirrors stepWalk's own body probe: the centre and four rim points. */
+  const bodyOverlaps = (collision, x, y) =>
+    collision.isBlocked(x, y) ||
+    collision.isBlocked(x + PLAYER_RADIUS_M, y) ||
+    collision.isBlocked(x - PLAYER_RADIUS_M, y) ||
+    collision.isBlocked(x, y + PLAYER_RADIUS_M) ||
+    collision.isBlocked(x, y - PLAYER_RADIUS_M)
+
+  /**
+   * Walk `steps` frames and report every step that carried the walker's
+   * CENTRE through solid ground, which is what passing through a wall means:
+   * nothing the grid can hold is thinner than its 1 m cells, so a centre that
+   * never enters one has never come out the far side. Sampling is 2 cm.
+   *
+   * The rim is watched separately. A body circle whose edge clips the corner
+   * of a blocked cell mid-step has cut a corner, not walked through a wall,
+   * and the game has always allowed it — measured at the pre-CW-48 frame
+   * length too, so this is not the speed rebase's to fix.
+   */
+  function sweepViolations(collision, start, input, steps) {
+    const state = createWalkState(start)
+    const hits = []
+    let deepestRim = 0
+    for (let i = 0; i < steps; i++) {
+      const fromX = state.x
+      const fromY = state.y
+      stepWalk(state, input, RUNAWAY_DT_S, collision)
+      const dx = state.x - fromX
+      const dy = state.y - fromY
+      const travelled = Math.hypot(dx, dy)
+      if (travelled === 0) continue
+      if (bodyOverlaps(collision, state.x, state.y)) {
+        hits.push(
+          `step ${i} ENDED overlapping at (${state.x.toFixed(2)}, ${state.y.toFixed(2)})`
+        )
+      }
+      const samples = Math.ceil(travelled / 0.02)
+      for (let s = 1; s < samples; s++) {
+        const t = s / samples
+        const x = fromX + dx * t
+        const y = fromY + dy * t
+        if (collision.isBlocked(x, y)) {
+          hits.push(
+            `step ${i} from (${fromX.toFixed(2)}, ${fromY.toFixed(2)}) ` +
+              `to (${state.x.toFixed(2)}, ${state.y.toFixed(2)}) ` +
+              `swept its CENTRE through (${x.toFixed(2)}, ${y.toFixed(2)})`
+          )
+          break
+        }
+        if (bodyOverlaps(collision, x, y)) deepestRim = Math.max(deepestRim, t)
+      }
+    }
+    return { hits, deepestRim }
+  }
+
+  it('never carries the walker through a tree trunk, from any approach', () => {
+    const collision = gridWithTrunk()
+    const hits = []
+    let approaches = 0
+    // Every 5 degrees around the trunk, at lateral offsets across the whole
+    // blocked cell, AND at a range of starting distances. The distance sweep
+    // is the part that matters: a fixed start makes every approach share one
+    // along-track phase, and a walker whose stride happens to land inside the
+    // cell stops there and proves nothing about the strides that skip it.
+    for (let deg = 0; deg < 360; deg += 5) {
+      const rad = (deg * Math.PI) / 180
+      for (let offset = -0.9; offset <= 0.9001; offset += 0.15) {
+        for (let away = 12; away < 13.001; away += 0.08) {
+          const startX = TRUNK.x - Math.sin(rad) * away + Math.cos(rad) * offset
+          const startY = TRUNK.y - Math.cos(rad) * away - Math.sin(rad) * offset
+          if (bodyOverlaps(collision, startX, startY)) continue
+          approaches++
+          hits.push(
+            ...sweepViolations(
+              collision,
+              { x: startX, y: startY, headingRad: rad },
+              { forward: 1, fast: true, speedLabel: SPEED_LABEL_MAX },
+              30
+            ).hits
+          )
+        }
+      }
+    }
+    // A sweep that skipped every start would report no violations too.
+    expect(approaches).toBeGreaterThan(7000)
+    expect(hits.slice(0, 5).join('\n')).toBe('')
+  })
+
+  it('never carries the walker through a building wall, diagonals included', () => {
+    // The building in testModel is 10 m square at (20, 0). Walk into each of
+    // its faces and corners, straight and strafing, at the top sprint.
+    const collision = buildCollisionGrid(testModel())
+    const hits = []
+    let approaches = 0
+    for (let deg = 0; deg < 360; deg += 5) {
+      const rad = (deg * Math.PI) / 180
+      for (let away = 25; away < 26.001; away += 0.08) {
+        const startX = 20 - Math.sin(rad) * away
+        const startY = 0 - Math.cos(rad) * away
+        if (bodyOverlaps(collision, startX, startY)) continue
+        for (const strafe of [0, 1, -1]) {
+          approaches++
+          hits.push(
+            ...sweepViolations(
+              collision,
+              { x: startX, y: startY, headingRad: rad },
+              { forward: 1, strafe, fast: true, speedLabel: SPEED_LABEL_MAX },
+              40
+            ).hits
+          )
+        }
+      }
+    }
+    expect(approaches).toBeGreaterThan(2000)
+    expect(hits.slice(0, 5).join('\n')).toBe('')
+  })
+
+  it('splits a long frame without changing how far it travels', () => {
+    // Splitting the move is a collision measure only. Over open ground the
+    // same frame has to cover exactly the same distance with the grid present
+    // as without it, or the rebase would have quietly retuned walking speed.
+    const collision = gridWithTrunk()
+    for (const input of [
+      { forward: 1, speedLabel: SPEED_LABEL_MAX },
+      { forward: 1, fast: true, speedLabel: SPEED_LABEL_MAX },
+      { forward: 1, strafe: 1, fast: true, speedLabel: SPEED_LABEL_MAX },
+    ]) {
+      // Far from the trunk, and far from the grid's own edges.
+      const free = createWalkState({ x: 20, y: 40, headingRad: 0 })
+      const gridded = createWalkState({ x: 20, y: 40, headingRad: 0 })
+      stepWalk(free, input, RUNAWAY_DT_S)
+      stepWalk(gridded, input, RUNAWAY_DT_S, collision)
+      expect(gridded.x, JSON.stringify(input)).toBeCloseTo(free.x, 10)
+      expect(gridded.y, JSON.stringify(input)).toBeCloseTo(free.y, 10)
+    }
+  })
+
+  it('holds the walker no further out than one frame of travel', () => {
+    // The rebase's real cost: collision is tested at the ends of a frame, so
+    // a longer frame can stop the walker further from what blocked it. That
+    // is bounded by one frame of travel and nothing worse, and this pins the
+    // bound rather than trusting it. Approaches are swept across the whole
+    // cell so the result is not one lucky phase.
+    const closestOver = (input) => {
+      let worst = 0
+      for (let offset = -0.4; offset <= 0.4001; offset += 0.05) {
+        const collision = gridWithTrunk()
+        const state = createWalkState({
+          x: TRUNK.x + offset,
+          y: TRUNK.y - 12,
+          headingRad: 0,
+        })
+        let best = Infinity
+        for (let i = 0; i < 200; i++) {
+          stepWalk(state, input, RUNAWAY_DT_S, collision)
+          best = Math.min(best, Math.abs(state.y - TRUNK.y))
+        }
+        worst = Math.max(worst, best)
+      }
+      return worst
+    }
+    const strolled = closestOver({ forward: 1, speedLabel: SPEED_LABEL_MIN })
+    const walked = closestOver({ forward: 1, speedLabel: SPEED_LABEL_DEFAULT })
+    // One default frame is 0.48 m; the walker may be held that much further
+    // back than the slowest stroll is, and no more.
+    const oneFrame = speedForLabel(SPEED_LABEL_DEFAULT) * 0.1
+    expect(
+      walked,
+      `stroll held at ${strolled.toFixed(2)} m, default walk at ${walked.toFixed(2)} m`
+    ).toBeLessThanOrEqual(strolled + oneFrame)
   })
 })
 

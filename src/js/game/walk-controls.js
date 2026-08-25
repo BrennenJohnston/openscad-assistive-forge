@@ -12,8 +12,25 @@
  */
 
 export const EYE_HEIGHT_M = 1.7;
-export const WALK_SPEED_MPS = 1.6;
-export const FAST_SPEED_MPS = 4.0;
+
+// CW-48: the announced percent is a LABEL on a two-slope curve, not a
+// multiplier of anything. Two anchors fix the curve: label 100 is the
+// default brisk city walk and label 300 is the top of the range. Below the
+// default the slope is three times as steep, so the 50-point span down to
+// label 50 still reaches a slow stroll instead of crawling toward zero.
+export const SPEED_LABEL_MIN = 50;
+export const SPEED_LABEL_DEFAULT = 100;
+export const SPEED_LABEL_MAX = 300;
+export const SPEED_LABEL_STEP = 25;
+export const WALK_SPEED_MPS = 4.8;
+const SPEED_AT_MAX_LABEL_MPS = 8.0;
+const SPEED_AT_MIN_LABEL_MPS = 2.4;
+
+// Shift outruns the CURRENT walk at every label rather than racing a fixed
+// floor, which is what let a fast walk overtake sprinting before CW-48.
+export const SPRINT_MULTIPLIER = 1.6;
+export const SPRINT_MAX_MPS = 9.6;
+
 export const TURN_SPEED_RADPS = (90 * Math.PI) / 180;
 export const PITCH_SPEED_RADPS = (45 * Math.PI) / 180;
 // Gaze limit (CW-13). lookAt() with a fixed world up degenerates when the
@@ -25,6 +42,23 @@ export const PLAYER_RADIUS_M = 0.3;
 
 // Integration clamp: a background tab must not teleport the player.
 const MAX_STEP_DT_S = 0.1;
+
+// Collision is tested at the ENDS of a move, so a move longer than the thing
+// it crosses can step over it. Before CW-48 that resolution silently depended
+// on how fast you walked - 0.16 m per clamped frame at the default, 0.48 m
+// for anyone who had turned the speed up - and tripling the default would
+// have made the loose case the normal one. Measured on a lone street prop
+// (one blocked cell): clean at 0.80 m of travel, thirty pass-throughs at
+// 0.96 m, which the top of the new range reaches.
+//
+// So each move is split into hops of a fixed length instead, and collision
+// resolution stops depending on speed at all. Half the player's own radius is
+// short enough that no hop can skip a cell the body probe would have caught,
+// and it happens to match the resolution the game shipped at its old default.
+// Measured cost of the split on the real Seattle grid: stepWalk runs once per
+// frame at 0.10-0.14 us, and each extra hop adds about 0.03 us, against a
+// 33 ms frame budget.
+const MAX_SUBSTEP_M = PLAYER_RADIUS_M / 2;
 
 /**
  * @param {{x: number, y: number, headingRad?: number, pitchRad?: number}} spawn
@@ -55,15 +89,64 @@ export function clampPitch(p) {
 }
 
 /**
+ * Snap an arbitrary number onto the speed-label grid the controls step by,
+ * and hold it inside the range. A label that is not a number at all reads as
+ * the default, which is what an absent preference means.
+ *
+ * @param {number} label
+ * @returns {number}
+ */
+export function clampSpeedLabel(label) {
+  if (!Number.isFinite(label)) return SPEED_LABEL_DEFAULT;
+  const snapped = Math.round(label / SPEED_LABEL_STEP) * SPEED_LABEL_STEP;
+  return Math.max(SPEED_LABEL_MIN, Math.min(SPEED_LABEL_MAX, snapped));
+}
+
+/**
+ * Metres per second for an announced speed label (CW-48).
+ *
+ * @param {number} label
+ * @returns {number}
+ */
+export function speedForLabel(label) {
+  const l = clampSpeedLabel(label);
+  if (l >= SPEED_LABEL_DEFAULT) {
+    const t =
+      (l - SPEED_LABEL_DEFAULT) / (SPEED_LABEL_MAX - SPEED_LABEL_DEFAULT);
+    return WALK_SPEED_MPS + t * (SPEED_AT_MAX_LABEL_MPS - WALK_SPEED_MPS);
+  }
+  const t = (SPEED_LABEL_DEFAULT - l) / (SPEED_LABEL_DEFAULT - SPEED_LABEL_MIN);
+  return WALK_SPEED_MPS - t * (WALK_SPEED_MPS - SPEED_AT_MIN_LABEL_MPS);
+}
+
+/**
+ * Read a stored walking-speed preference as a label, migrating the value the
+ * pre-CW-48 game wrote under the same key (UF-14: the key NAME never moves,
+ * the values do). That key held a 0.5–3.0 multiplier of a slower walk; it now
+ * holds a 50–300 label. The two ranges do not overlap, so the stored number
+ * itself says which vocabulary wrote it. An old multiplier m announced itself
+ * as m*100 percent, and the old 300 percent is this scale's 100.
+ *
+ * @param {string|number|null|undefined} raw
+ * @returns {number}
+ */
+export function speedLabelFromStored(raw) {
+  const value = typeof raw === 'string' ? parseFloat(raw) : raw;
+  if (!Number.isFinite(value)) return SPEED_LABEL_DEFAULT;
+  if (value < SPEED_LABEL_MIN) return clampSpeedLabel(value * 100 - 200);
+  return clampSpeedLabel(value);
+}
+
+/**
  * Advance the walk state by one frame.
  *
  * @param {{x:number,y:number,headingRad:number,pitchRad?:number}} state - mutated in place
- * @param {{forward?: number, strafe?: number, turn?: number, pitch?: number, fast?: boolean, speedScale?: number}} input
+ * @param {{forward?: number, strafe?: number, turn?: number, pitch?: number, fast?: boolean, speedLabel?: number}} input
  *   forward: +1 forward / -1 back; strafe: +1 right / -1 left;
  *   turn: +1 clockwise (right) / -1 counter-clockwise;
- *   pitch: +1 look up / -1 look down (CW-13); speedScale: the
- *   CW-Q8 walking-speed multiplier (0.5–3.0, default 1) — Shift sprint
- *   never drops below its 4 m/s floor but scales up past it
+ *   pitch: +1 look up / -1 look down (CW-13); speedLabel: the announced
+ *   CW-48 speed label (50–300, default 100) — Shift sprint multiplies
+ *   whatever that label is currently worth
  * @param {number} dtS - seconds since last frame
  * @param {{isBlocked: (x: number, y: number) => boolean}} [collision]
  * @returns {{moved: boolean, turned: boolean, pitched: boolean}}
@@ -98,11 +181,10 @@ export function stepWalk(state, input, dtS, collision) {
 
   if (forward === 0 && strafe === 0) return { moved: false, turned, pitched };
 
-  const userScale = Number.isFinite(input.speedScale)
-    ? Math.max(0.5, Math.min(3, input.speedScale))
-    : 1;
-  const walkSpeed = WALK_SPEED_MPS * userScale;
-  const speed = input.fast ? Math.max(FAST_SPEED_MPS, walkSpeed) : walkSpeed;
+  const walkSpeed = speedForLabel(input.speedLabel);
+  const speed = input.fast
+    ? Math.min(SPRINT_MAX_MPS, walkSpeed * SPRINT_MULTIPLIER)
+    : walkSpeed;
   const sin = Math.sin(state.headingRad);
   const cos = Math.cos(state.headingRad);
   // Forward along the bearing; strafe 90° clockwise from it.
@@ -114,17 +196,27 @@ export function stepWalk(state, input, dtS, collision) {
 
   const blocked = (x, y) => isCircleBlocked(collision, x, y);
 
+  const hops = collision
+    ? Math.max(1, Math.ceil(Math.hypot(dx, dy) / MAX_SUBSTEP_M))
+    : 1;
+  const hopX = dx / hops;
+  const hopY = dy / hops;
+
   let moved = false;
-  if (!blocked(state.x + dx, state.y + dy)) {
-    state.x += dx;
-    state.y += dy;
-    moved = true;
-  } else if (dx !== 0 && !blocked(state.x + dx, state.y)) {
-    state.x += dx; // slide along Y-facing wall
-    moved = true;
-  } else if (dy !== 0 && !blocked(state.x, state.y + dy)) {
-    state.y += dy; // slide along X-facing wall
-    moved = true;
+  for (let i = 0; i < hops; i++) {
+    if (!blocked(state.x + hopX, state.y + hopY)) {
+      state.x += hopX;
+      state.y += hopY;
+      moved = true;
+    } else if (hopX !== 0 && !blocked(state.x + hopX, state.y)) {
+      state.x += hopX; // slide along Y-facing wall
+      moved = true;
+    } else if (hopY !== 0 && !blocked(state.x, state.y + hopY)) {
+      state.y += hopY; // slide along X-facing wall
+      moved = true;
+    } else {
+      break; // nose to the wall: the remaining hops go nowhere either
+    }
   }
   return { moved, turned, pitched };
 }
