@@ -261,6 +261,27 @@ function hashBuilding(index, name) {
   return h >>> 0;
 }
 
+/**
+ * Deterministic 32-bit hash for a point on the ground, for choices that must
+ * be stable per spot WITHOUT drawing from a shared random stream. The prop
+ * streams run the length of a road, so a draw taken for one prop shifts every
+ * prop planted after it; a spot hash adds variety without moving anything.
+ *
+ * @param {number} x
+ * @param {number} y
+ * @returns {number} unsigned 32-bit
+ */
+export function hashSpot(x, y) {
+  // Millimetres: fine enough that two props never collide, coarse enough that
+  // a coordinate which round-trips through a float differently still agrees.
+  let h = (Math.round(x * 1000) * 2654435761) >>> 0;
+  h = ((h ^ Math.round(y * 1000)) * 16777619) >>> 0;
+  h ^= h >>> 16;
+  h = (h * 2246822519) >>> 0;
+  h ^= h >>> 13;
+  return h >>> 0;
+}
+
 /** Pure hue → RGB (HSL with S=1, L=0.5). */
 function hueToRgb(hueDeg) {
   const h = ((hueDeg % 360) + 360) % 360;
@@ -301,7 +322,7 @@ export function buildingTint(index, name) {
  * @param {number} chroma - how far toward the hue, 0 = neutral gray
  * @returns {[number, number, number]}
  */
-function tintOf(tier, hueDeg, chroma) {
+export function tintOf(tier, hueDeg, chroma) {
   const [hr, hg, hb] = hueToRgb(hueDeg);
   const hueLum = hr * LUM_R + hg * LUM_G + hb * LUM_B;
   const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
@@ -310,6 +331,35 @@ function tintOf(tier, hueDeg, chroma) {
     clamp01(tier + (hg - hueLum) * chroma),
     clamp01(tier + (hb - hueLum) * chroma),
   ];
+}
+
+/**
+ * The strongest chroma tintOf can apply at this tier without a channel
+ * running past the ends of the range.
+ *
+ * tintOf keeps luminance AT the tier by moving the channels in opposite
+ * directions, but it clamps, and a clamped channel breaks that promise: a
+ * pure red at tier 0.82 and chroma 0.5 wants 1.21 in its red channel, gets
+ * 1.0, and lands at luminance 0.775 instead of 0.82. That matters wherever
+ * the monochrome schemes must stay put, since luminance is all they read.
+ * Near the top of the range the honest maximum is small - a saturated red
+ * simply is not 82% bright - so this trades saturation for the promise.
+ *
+ * @param {number} tier
+ * @param {number} hueDeg
+ * @param {number} chroma - the chroma asked for; the return never exceeds it
+ * @returns {number}
+ */
+export function inGamutChroma(tier, hueDeg, chroma) {
+  const [hr, hg, hb] = hueToRgb(hueDeg);
+  const hueLum = hr * LUM_R + hg * LUM_G + hb * LUM_B;
+  let limit = chroma;
+  for (const channel of [hr, hg, hb]) {
+    const delta = channel - hueLum;
+    if (delta > 0) limit = Math.min(limit, (1 - tier) / delta);
+    else if (delta < 0) limit = Math.min(limit, tier / -delta);
+  }
+  return limit > 0 ? limit : 0;
 }
 
 /**
@@ -2131,10 +2181,10 @@ function pushCarClassGeoms(list, cls, x, y, angle, bodyTint, cabinTint) {
 // personal space does not change with a few centimetres of stature.
 const PERSON_SHOULDER_W_M = 0.46;
 const PERSON_DEPTH_M = 0.24;
-// The neutral FIGURE tone (head and shoulders): a person is BRIGHTER than
-// the pavement and dimmer than a lit sign, so they read as a figure in
-// front of things rather than as part of them. Clothing zones get palette
-// hues; this tone never varies - the owner's palette-not-race rule.
+// The bright and dim tones the small companion geometry wears (the dog).
+// Anything at a walker's side is BRIGHTER than the pavement and dimmer than a
+// lit sign, so it reads in front of things rather than as part of them.
+// Figure zones take scheme hues of their own; see plantFigure.
 const PERSON_TINT = [0.82, 0.82, 0.82];
 const PERSON_DARK_TINT = [0.5, 0.5, 0.5];
 // One figure every so many metres of shopfront-facing pavement.
@@ -2604,12 +2654,24 @@ export function buildStreetProps(model, collision = null) {
   const figureSpots = [];
   const figuresByPose = {};
   // CW-45 (CW-Q45): plant one whole person - their own height and build
-  // drawn from the documented ranges, jointed pose, clothing tones from the
-  // SAME palette machinery the cars wear. The owner's words govern the
-  // colours: identity comes from "our current color schemes, not by race" -
-  // the hues dress the CLOTHING zones (torso, legs); head and shoulders
-  // keep the one neutral figure tone, and no skin surface is modelled.
+  // drawn from the documented ranges, jointed pose, and tones from the SAME
+  // palette machinery the cars wear. Every zone of a figure takes a hue from
+  // the city's colour scheme (CW-49): torso, legs, and head and shoulders
+  // each pick their own, so a street of people carries the scheme's whole
+  // range rather than one repeated tone.
   const FIGURE_CHROMA = 0.5;
+  // A head is the thinnest part of a figure - thinner than the legs, whose
+  // floor is 0.45 - so its tone sits at the top of the luminance band, where
+  // the filter still resolves it at the smallest character sizes.
+  //
+  // The value is the tone heads already wore, exactly. tintOf holds luminance
+  // AT the tier and moves only chroma, so matching it means the monochrome
+  // schemes - which have only luminance to read - render bit-identically to
+  // before, while the colour schemes gain the hue. Measured both ways: at
+  // 0.80 the mono frames moved by up to 0.74% of their pixels, because a two
+  // percent luminance shift is enough to flip a cell's glyph; at 0.82 they do
+  // not move at all.
+  const HEAD_TIER = 0.82;
   const plantFigure = (x, y, facing, spec, rng) => {
     const torsoHue =
       TINT_HUES_DEG[
@@ -2629,12 +2691,27 @@ export function buildStreetProps(model, collision = null) {
         Math.floor(rng() * FIGURE_TIERS.length) % FIGURE_TIERS.length
       ];
     const legTier = Math.max(0.45, torsoTier - 0.15);
+    // The head hue comes from the figure's own spot, NOT from another draw on
+    // rng: that stream runs the length of a road and is shared by every
+    // figure on it, so one extra draw here would shift the pose and build of
+    // every figure planted after this one. The spot hash adds the variety
+    // without touching the order (the CW-45/46 seed law).
+    const headHue = TINT_HUES_DEG[hashSpot(x, y) % TINT_HUES_DEG.length];
     const zones = makeFigureGeoms(x, y, facing, spec);
     const torsoTint = tintOf(torsoTier, torsoHue, FIGURE_CHROMA);
     const legTint = tintOf(legTier, legHue, FIGURE_CHROMA);
+    // Gamut-limited so the tone's luminance really is HEAD_TIER for every
+    // hue, not just the ones that happen not to clip. Torso and legs sit
+    // lower in the band where clipping is rare and are left exactly as they
+    // were; it is the head, at the top of the band, that needs it.
+    const headTint = tintOf(
+      HEAD_TIER,
+      headHue,
+      inGamutChroma(HEAD_TIER, headHue, FIGURE_CHROMA)
+    );
     for (const g of zones.torso) paintGeometry(g, torsoTint);
     for (const g of zones.legs) paintGeometry(g, legTint);
-    for (const g of zones.figure) paintGeometry(g, PERSON_TINT);
+    for (const g of zones.figure) paintGeometry(g, headTint);
     personGeoms.push(...zones.legs, ...zones.torso, ...zones.figure);
     personCount++;
     figuresByPose[spec.pose] = (figuresByPose[spec.pose] ?? 0) + 1;

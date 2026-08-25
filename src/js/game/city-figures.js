@@ -159,12 +159,9 @@ function jointEnd(f0, z0, len, swingRad) {
 
 /**
  * Build one figure as unpainted geometries grouped by the tint zone the
- * palette applies to. city-scene paints and merges them: `torso` wears the
- * clothing hue, `legs` the second clothing tone, and `figure` (head +
- * shoulders) keeps the neutral figure tone - the palette varies CLOTHING,
- * never skin, which is the owner's palette-not-race rule made geometric:
- * colour identity comes from the city's colour scheme, and no body surface
- * is modelled at all.
+ * palette applies to. city-scene paints and merges them: `torso`, `legs` and
+ * `figure` (head + shoulders) each take their own tone from the city's
+ * colour scheme, so a street of people carries the scheme's whole range.
  *
  * @param {number} x
  * @param {number} y

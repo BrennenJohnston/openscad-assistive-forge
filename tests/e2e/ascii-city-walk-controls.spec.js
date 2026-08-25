@@ -29,6 +29,81 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
 
   const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y)
 
+  /**
+   * Watch the walk from INSIDE the page, accumulating ground covered and
+   * counting only the frames that actually moved the walker.
+   *
+   * Reading a position before and after a hold cannot measure a speed: the
+   * window also contains the frames between the button coming up and the
+   * measurement being taken, and those move nobody. At six-frame legs that
+   * dead tail is a third of the sample.
+   */
+  const watchLeg = (page) =>
+    page.evaluate(() => {
+      const w = window.__cityWalkGame.walkState
+      const s = { frames: 0, dist: 0, px: w.x, py: w.y, stop: false }
+      window.__cwLeg = s
+      const tick = () => {
+        if (s.stop) return
+        const d = Math.hypot(w.x - s.px, w.y - s.py)
+        if (d > 0) {
+          s.dist += d
+          s.frames++
+        }
+        s.px = w.x
+        s.py = w.y
+        window.__cwLegTick = requestAnimationFrame(tick)
+      }
+      window.__cwLegTick = requestAnimationFrame(tick)
+    })
+
+  const readLeg = (page) =>
+    page.evaluate(() => {
+      window.__cwLeg.stop = true
+      cancelAnimationFrame(window.__cwLegTick)
+      const { frames, dist } = window.__cwLeg
+      return { frames, perFrame: frames ? dist / frames : 0 }
+    })
+
+  /**
+   * Point the walker down a corridor the game's OWN collision grid says is
+   * clear, and report how far it runs. Any test that compares how far two
+   * holds travelled needs this: a leg that runs into a wall reads as slow, and
+   * at the CW-48 speeds a leg covers enough ground to find one. Returns 0 when
+   * the spawn has no clear run at all, which is a reason to skip rather than
+   * to measure noise.
+   */
+  const faceClearRun = (page, metres) =>
+    page.evaluate((wanted) => {
+      const g = window.__cityWalkGame
+      if (!g?.collision) return 0
+      const w = g.walkState
+      const r = 0.3 // PLAYER_RADIUS_M: the body, not just the centre
+      const blocked = (x, y) =>
+        g.collision.isBlocked(x, y) ||
+        g.collision.isBlocked(x + r, y) ||
+        g.collision.isBlocked(x - r, y) ||
+        g.collision.isBlocked(x, y + r) ||
+        g.collision.isBlocked(x, y - r)
+      let best = 0
+      let bestHeading = w.headingRad
+      for (let deg = 0; deg < 360; deg += 5) {
+        const h = (deg * Math.PI) / 180
+        const s = Math.sin(h)
+        const c = Math.cos(h)
+        let run = 0
+        while (run < wanted && !blocked(w.x + s * (run + 0.25), w.y + c * (run + 0.25)))
+          run += 0.25
+        if (run > best) {
+          best = run
+          bestHeading = h
+        }
+        if (best >= wanted) break
+      }
+      w.headingRad = bestHeading
+      return best
+    }, metres)
+
   /** A counter that ticks with the game's own render loop. */
   const startFrameCounter = (page) =>
     page.evaluate(() => {
@@ -263,6 +338,41 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     await expect(announcer(page)).toHaveText(/Landmark \d+ of \d+: /)
   })
 
+  /**
+   * CW-48 rebased the walking-speed scale. The storage key NAME never moved
+   * (UF-14); the values under it did, from a 0.5-3.0 multiplier of a 1.6 m/s
+   * walk to a 50-300 label. Seeded through addInitScript rather than written
+   * by the game and read back: a round trip only ever proves the new format
+   * can read its own output, which is not what migration means.
+   */
+  const withStoredSpeed = async (page, raw) => {
+    await page.addInitScript((value) => {
+      localStorage.setItem('openscad-forge-city-walk-speed', value)
+    }, raw)
+    await launchGame(page)
+    await enterCity(page)
+  }
+
+  test('a speed saved by the old scale comes back rebased', async ({
+    page,
+  }) => {
+    // The old top of the range was 300 percent of 1.6 m/s. That IS the new
+    // default: same 4.8 m/s, now announced as 100.
+    await withStoredSpeed(page, '3')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('speed 100%')
+  })
+
+  test('a speed saved below the rebased range lands on its floor', async ({
+    page,
+  }) => {
+    // An old 100 percent was 1.6 m/s, which is slower than anything this
+    // scale offers. It clamps to the floor, and that player comes back
+    // walking 2.4 m/s - faster than they left, which is the signed
+    // consequence of the rebase rather than a rounding accident.
+    await withStoredSpeed(page, '1')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('speed 50%')
+  })
+
   test('Fast is a sticky toggle, because a mouse cannot hold Shift', async ({
     page,
   }) => {
@@ -278,25 +388,49 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     // The two legs are matched by FRAME COUNT, not by wall clock: distance
     // is a function of frames rendered, so comparing two fixed-duration
     // holds on a runner whose frame rate wanders compares nothing.
-    const a = await walkPos(page)
-    await holdButton(page, 'cityWalkCamPanUp', forFrames(page, 12))
-    const b = await walkPos(page)
-    const strolled = distance(a, b)
-    expect(strolled).toBeGreaterThan(0.1)
+    //
+    // Matching them is not enough on its own, though. waitForFrames POLLS, so
+    // a leg runs until the poll happens to observe its twelfth frame, and on a
+    // loaded runner one leg can overshoot further than the other. That
+    // asymmetry used to hide inside a wide margin: sprint was a flat 4 m/s
+    // floor, 2.5x the old default walk, against a 1.5x bar. CW-48 makes
+    // sprint 1.6x the CURRENT walk, and at that ratio the overshoot alone
+    // flakes the comparison (measured: 2 of 4 repeats failed on a loaded
+    // machine). So each leg reports the frames it actually got, and the
+    // comparison is metres PER FRAME - which is the quantity the toggle
+    // changes, and is immune to how long either hold really ran.
+    // Six frames, not twelve, down a corridor the collision grid says is
+    // clear. At the CW-48 speeds a twelve-frame leg (which overshoots: 17 and
+    // 28 frames were measured for a nominal 12) covers enough ground to find
+    // a wall in this fixture, and a leg that hits one reads as slow. That was
+    // measured both ways: it made a real sprint look slower than the stroll,
+    // and it made a DISABLED sprint pass the comparison.
+    const clearRun = await faceClearRun(page, 24)
+    test.skip(clearRun < 12, `spawn has only ${clearRun} m of clear run`)
+
+    const leg = async () => {
+      await watchLeg(page)
+      await holdButton(page, 'cityWalkCamPanUp', forFrames(page, 6))
+      return readLeg(page)
+    }
+
+    const strolled = await leg()
+    expect(strolled.frames).toBeGreaterThanOrEqual(6)
+    expect(strolled.perFrame).toBeGreaterThan(0)
 
     await fast.click()
     await page.mouse.move(2, 2)
     await expect(fast).toHaveAttribute('aria-pressed', 'true')
     await expect(announcer(page)).toHaveText('Fast walking on.')
 
-    // FAST_SPEED_MPS is 2.5x WALK_SPEED_MPS; 1.5x is the margin that still
-    // fails loudly if the toggle never reaches stepWalk.
-    await holdButton(page, 'cityWalkCamPanUp', forFrames(page, 12))
-    const hurried = distance(b, await walkPos(page))
+    // 1.25x of a real 1.6x still fails loudly at the thing this guards: a
+    // toggle that never reaches stepWalk leaves the ratio at exactly 1.0.
+    const hurried = await leg()
     expect(
-      hurried,
-      `strolled ${strolled.toFixed(2)} m, hurried ${hurried.toFixed(2)} m`
-    ).toBeGreaterThan(strolled * 1.5)
+      hurried.perFrame,
+      `strolled ${strolled.perFrame.toFixed(3)} m/frame over ${strolled.frames} frames, ` +
+        `hurried ${hurried.perFrame.toFixed(3)} m/frame over ${hurried.frames} frames`
+    ).toBeGreaterThan(strolled.perFrame * 1.25)
 
     await fast.click()
     await page.mouse.move(2, 2)
