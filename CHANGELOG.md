@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The provenance record inside a downloaded project is now a promise, not a proposal** (IR-6) -
+  `forge-provenance.json` shipped in an earlier release marked "PROPOSED, not yet a guarantee".
+  Its shape is countersigned and it now carries the same additive-only promise and six-month notice
+  period as every URL parameter, so a tool at the other end can depend on it
+
+- **One page a pipeline tool can build against without talking to anybody** (IR-6) -
+  `docs/specs/FORGE_HANDOFF_CONTRACT.md` writes down how another program hands work to Forge and
+  gets it back: the link parameters, the settings fragment, the zero-hosting `data:` lane with its
+  measured budget, which hosts a file may live on, what comes back and what it is called, the error
+  codes, the sizes, and the four things the browser's security policy will not allow (no iframe, no
+  opener messaging, no arbitrary hosts, no server-side state). Every claim on it is backed by a
+  shipped release or a file in this repository; where something does not work, it says so. A short
+  machine-readable summary is served at `/forge-capabilities.txt`, and a test in the
+  production-parity lane composes a link from the page alone and loads it, so the page cannot drift
+  away from what the app does
+
 - **A shared link can decide which settings you meet first** (IR-9) - some designs have well over a
   hundred parameters, and every one of them is there for a reason, but that is not a first screen
   anybody can use. Whoever writes a project's manifest can now list the handful that matter

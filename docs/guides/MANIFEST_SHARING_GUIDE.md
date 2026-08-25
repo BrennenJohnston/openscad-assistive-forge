@@ -188,6 +188,15 @@ file that comes home can say where it has been.
 
 ---
 
+## If you are writing a program rather than a link
+
+Everything on this page is meant for a person composing one link at a time. If
+you are building a tool that generates them, there is a page written for you:
+[FORGE_HANDOFF_CONTRACT.md](../specs/FORGE_HANDOFF_CONTRACT.md). It covers the
+same lanes with the sizes, the naming, the error codes, and the parts of the
+browser's security policy that will get in your way. Every Forge deployment also
+serves a short machine-readable summary at `/forge-capabilities.txt`.
+
 ## Choosing which settings people meet first
 
 Some designs have a lot of parameters. A keyguard model can have well over a

@@ -1,0 +1,89 @@
+# OpenSCAD Assistive Forge - capability index
+#
+# A machine-readable summary of the stable surface, for tools that hand work to
+# Forge or take work back from it. Plain text on purpose: no schema to version,
+# no parser to write.
+#
+# Full contract: /docs/specs/FORGE_HANDOFF_CONTRACT.md in the repository
+#   https://github.com/BrennenJohnston/openscad-assistive-forge
+# Parameter stability policy: /docs/specs/MANIFEST_STABILITY_CONTRACT.md
+#
+# Everything listed here is shipped and tested. Nothing here is planned work.
+# Additive only: entries may be added; existing entries keep their meaning.
+
+version: 1
+updated: 2026-08-25
+
+## OPEN A PROJECT (query parameters, all stable)
+
+?manifest=<url>      load a project described by a forge-manifest.json
+?project=<url>       load a .zip bundle, or a single .scad
+?scad=<url>          alias for ?project=
+?example=<key>       load a design that ships with Forge
+?load=<key>          alias for ?example=
+?preset=<name>       select a named preset after the project loads
+?uiMode=<mode>       open in a named interface mode
+?skipWelcome=true    skip the welcome screen
+
+## CARRY SETTINGS (URL fragment)
+
+#v=1&params=<json>   parameter values, percent-encoded JSON object
+                     never sent to any server; 64 KB is safe on both engines
+                     out-of-range values are clamped and reported, not refused
+
+## HOST THE FILES (CSP connect-src allowlist)
+
+allowed: self, data:, raw.githubusercontent.com, media.githubusercontent.com,
+         *.github.io, *.gitlab.io, *.pages.dev
+refused: everything else, including GitHub Release assets and object storage
+inline:  ?manifest=data:application/json;base64,... works; keep the whole URL
+         under 8 KB
+
+## MANIFEST FIELDS (schema "1.0")
+
+required: forgeManifest, files.main (optional when files.bundle is set)
+optional: name, id, author, description, homepage
+          files.bundle, files.companions, files.presets, files.assets
+          defaults.preset, defaults.autoPreview, defaults.skipWelcome
+          defaults.uiMode, defaults.hiddenPanels
+          defaults.starterParameters   which controls to show first
+
+## FILES IN
+
+drawings: .svg .dxf
+pictures: .png .jpg .jpeg .bmp .gif   traced to a drawing in the browser
+designs:  .scad .zip
+
+## FILES OUT
+
+<design>-<hash>.stl        and the other export formats
+<source>-edited.svg        from the drawing editor
+<source>-edited.dxf        converted through Forge's own OpenSCAD engine
+forge-provenance.json      inside a downloaded project: source manifest,
+                           preset and the exact parameter values used
+
+## LIMITS
+
+fetch timeout: 30s per file
+max file size: 50MB
+max files per manifest: 50
+query budget: under 8KB
+fragment budget: 64KB safe on both engines
+
+## WHAT DOES NOT EXIST
+
+no API, no accounts, no server-side project storage
+no iframe embedding        CSP frame-ancestors 'none'
+no window.opener messaging COOP same-origin severs the reference
+no callback to your tool   the person carries the file back
+
+## PARTIAL
+
+shared folder watching: Chromium-family only (File System Access API)
+folder write-back: built, ships switched off pending a human test
+
+## ERROR CODES (manifest loading)
+
+INVALID_URL INVALID_PATH CORS_ERROR HTTP_ERROR NETWORK_ERROR TIMEOUT
+PARSE_ERROR VALIDATION_ERROR FILE_TOO_LARGE PROJECT_TOO_LARGE LFS_POINTER
+BUNDLE_EXTRACT_ERROR
