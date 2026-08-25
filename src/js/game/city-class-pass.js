@@ -64,6 +64,10 @@ const CLASS_BY_MESH_NAME = new Map([
   ['ground', SURFACE_CLASS.GROUND],
   ['roads', SURFACE_CLASS.ROAD],
   ['curbs', SURFACE_CLASS.CURB],
+  // CW-51: painted lines borrow the curb's voice rather than minting an id -
+  // the span table is exactly full, and a curb is already the thin ribbon
+  // that reads as dashes near and sub-samples away, which is what paint wants.
+  ['road-lines', SURFACE_CLASS.CURB],
   // buildings splits into wall and roof by normal; see ROOF_SPLIT below.
   ['buildings', SURFACE_CLASS.BUILDING_WALL],
   ['storefronts', SURFACE_CLASS.STOREFRONT],

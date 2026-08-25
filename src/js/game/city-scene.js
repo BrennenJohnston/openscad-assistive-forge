@@ -151,7 +151,38 @@ const ROAD_LIFT_M = 0.08;
 // difference between a pavement ribbon and a roadway ribbon is exactly the
 // curb height.
 const ROADWAY_LIFT_M = ROAD_LIFT_M - CURB_HEIGHT_M;
+
+// CW-51 centre lines. The rhythm is the US skip line, 3 m of paint to 9 m of
+// gap. The WIDTH is a model rather than a measurement, and the number came
+// from measuring rather than from argument.
+//
+// Real highway paint is 0.10-0.15 m. Built at 0.12 it painted 213 pixels of a
+// 1.44-million-pixel frame - 0.015%, invisible, and confined to a band in the
+// middle distance. Widening moved that steadily (0.25 -> 367 px, 0.35 -> 477,
+// 0.50 -> 643) and only at 0.50 did the photographs show a line reading as
+// dashes rather than as speckle. This is the same licence CURB_WIDTH_M already
+// takes for the same reason: a converter that turns brightness into characters
+// cannot resolve a sub-cell feature, however true to life its width is.
+//
+// The carpet law bounds the other end and is not strained. Banded against the
+// same pose with no lines at all, the change lands entirely in ONE mid-frame
+// band (+0.6 to +1.0 points); the sky band moves by EXACTLY zero and so do the
+// near-ground bands.
+//
+// LINE_TONE sits at the curb's own luminance (0x30 grey reads 48/255) but
+// carries warmth, so a colour scheme quantizes it toward yellow while a
+// monochrome scheme - which reads luminance alone - sees what it saw from a
+// curb. Only arterials are painted: a residential street often carries no
+// centre line in life, and painting every street is the fastest way to break
+// the carpet law.
+const LINE_PAINT_M = 3;
+const LINE_GAP_M = 9;
+const LINE_WIDTH_M = 0.5;
+const LINE_TONE = 0x3a3310;
+const ARTERIAL_LINE_KINDS = new Set(['secondary', 'primary', 'trunk']);
 const PAVEMENT_LIFT_M = ROAD_LIFT_M + 0.04;
+// Paint lies ON the roadway, a depth epsilon above it.
+const LINE_LIFT_M = ROADWAY_LIFT_M + 0.01;
 // The ground plane has to sit under the deepest thing drawn on it, or it
 // would hide the roadway it is meant to be beneath.
 const GROUND_PLANE_Z = ROADWAY_LIFT_M - 0.02;
@@ -1225,6 +1256,96 @@ function appendCurbFace(road, positions, cullBounds, shape) {
   }
 }
 
+/**
+ * A dashed centre line down a two-way arterial (CW-51).
+ *
+ * OpenStreetMap carries NO road_marking tags at all in any of the four baked
+ * circles, so this is derived from the road CLASS rather than from data, and
+ * the record says so. Only arterials get one: a residential street often has
+ * no centre line in life, and painting every street is the fastest way to
+ * break the CW-8 carpet law.
+ *
+ * The rhythm is the US skip line, 3 m of paint to 9 m of gap, and the paint is
+ * 0.12 m wide - real paint width, which is sub-cell at any distance BY DESIGN.
+ * That is what keeps it reading as dashes near the walker and sub-sampling
+ * away down the street rather than laying a stripe to the horizon.
+ *
+ * The cursor carries ACROSS segments: OSM splits a street into many short
+ * ways, and restarting the rhythm at each vertex would bunch paint at bends.
+ *
+ * @param {{points: Array<[number,number]>}} road
+ * @param {number[]} positions - flat xyz output array (appended to)
+ * @param {{minX:number,minY:number,maxX:number,maxY:number}} [cullBounds]
+ * @param {number} startCursorM - where in the paint/gap cycle this road begins
+ * @returns {number} the cursor to carry into the next road
+ */
+function appendCenterLineDashes(road, positions, cullBounds, startCursorM = 0) {
+  const period = LINE_PAINT_M + LINE_GAP_M;
+  let cursor = ((startCursorM % period) + period) % period;
+  const half = LINE_WIDTH_M / 2;
+  const inBounds = (x, y) =>
+    !cullBounds ||
+    (x >= cullBounds.minX &&
+      x <= cullBounds.maxX &&
+      y >= cullBounds.minY &&
+      y <= cullBounds.maxY);
+
+  for (let i = 0; i < road.points.length - 1; i++) {
+    const [x1, y1] = road.points[i];
+    const [x2, y2] = road.points[i + 1];
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-6) continue;
+    const ux = dx / len;
+    const uy = dy / len;
+    const nx = -uy * half;
+    const ny = ux * half;
+    const skip = !inBounds(x1, y1) && !inBounds(x2, y2);
+
+    let t = 0;
+    while (t < len) {
+      const intoCycle = cursor % period;
+      if (intoCycle < LINE_PAINT_M) {
+        const run = Math.min(LINE_PAINT_M - intoCycle, len - t);
+        if (!skip && run > 0.01) {
+          const ax = x1 + ux * t;
+          const ay = y1 + uy * t;
+          const bx = x1 + ux * (t + run);
+          const by = y1 + uy * (t + run);
+          positions.push(
+            ax + nx,
+            ay + ny,
+            LINE_LIFT_M,
+            ax - nx,
+            ay - ny,
+            LINE_LIFT_M,
+            bx - nx,
+            by - ny,
+            LINE_LIFT_M,
+            ax + nx,
+            ay + ny,
+            LINE_LIFT_M,
+            bx - nx,
+            by - ny,
+            LINE_LIFT_M,
+            bx + nx,
+            by + ny,
+            LINE_LIFT_M
+          );
+        }
+        t += run;
+        cursor += run;
+      } else {
+        const run = Math.min(period - intoCycle, len - t);
+        t += run;
+        cursor += run;
+      }
+    }
+  }
+  return cursor;
+}
+
 function appendRoadRibbon(road, positions, cullBounds, shape = {}) {
   const half = (shape.widthM ?? road.widthM) / 2;
   const offset = shape.offsetM ?? 0;
@@ -1914,6 +2035,8 @@ export function buildCityGroup(model) {
   const roadPositions = [];
   const roadColors = [];
   const curbPositions = [];
+  const linePositions = [];
+  let lineCursorM = 0;
   const sidewalkPositions = [];
   const sidewalkColors = [];
   for (const road of model.roads) {
@@ -1958,6 +2081,18 @@ export function buildCityGroup(model) {
         liftM: PAVEMENT_LIFT_M,
       });
     }
+    // CW-51: only the arterials are painted, and lanes= refines nothing here
+    // because it is tagged on 18% of Seattle's ways and less elsewhere - the
+    // class is the honest signal, and the record says the lines are derived
+    // rather than mapped.
+    if (ARTERIAL_LINE_KINDS.has(road.kind)) {
+      lineCursorM = appendCenterLineDashes(
+        road,
+        linePositions,
+        cullBounds,
+        lineCursorM
+      );
+    }
     const edgeOffset = (road.widthM - CURB_WIDTH_M) / 2;
     for (const side of [edgeOffset, -edgeOffset]) {
       // The curb's own top, level with the pavement it edges.
@@ -2001,6 +2136,7 @@ export function buildCityGroup(model) {
   let roadTriangles = 0;
   let roadMat = null;
   let curbMesh = null;
+  let lineMesh = null;
   if (roadPositions.length > 0) {
     roadMat = new MeshLambertMaterial({
       color: ROAD_TONES.street,
@@ -2019,6 +2155,20 @@ export function buildCityGroup(model) {
       polygonOffsetUnits: -2,
     });
     curbMesh = makeFlatMesh(curbPositions, curbMat, 'curbs');
+
+    // CW-51: paint gets its own mesh so it can carry its own tone, but it
+    // borrows the CURB voice in the class pass rather than minting an id -
+    // the span table is exactly full (CW-43), and a curb is already the
+    // thin-ribbon-that-dashes-and-sub-samples treatment paint wants.
+    if (linePositions.length > 0) {
+      const lineMat = new MeshLambertMaterial({
+        color: LINE_TONE,
+        polygonOffset: true,
+        polygonOffsetFactor: -4,
+        polygonOffsetUnits: -4,
+      });
+      lineMesh = makeFlatMesh(linePositions, lineMat, 'road-lines');
+    }
   }
 
   // CW-33: pavements, as their own surface.
@@ -2099,6 +2249,9 @@ export function buildCityGroup(model) {
         );
       }
       if (curbMesh) curbMesh.visible = !isMap;
+      // CW-51: paint is street-level detail; overhead the map wants the
+      // network, not its markings.
+      if (lineMesh) lineMesh.visible = !isMap;
       for (const mesh of dressingMeshes) mesh.visible = !isMap;
       for (const { material, texture } of buildingMats) {
         material.map = isMap ? null : (texture ?? null);

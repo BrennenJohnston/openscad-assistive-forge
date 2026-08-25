@@ -1378,3 +1378,91 @@ describe('figure tones follow the colour scheme (CW-49)', () => {
     }
   })
 })
+
+describe('road lines (CW-51)', () => {
+  /** A long arterial and a long residential, on one model. */
+  function linesModel() {
+    return parseCityExtract(
+      {
+        elements: [
+          {
+            type: 'way',
+            id: 1,
+            tags: { building: 'yes', height: '12' },
+            geometry: squareRing(-90, -90, 5),
+          },
+          {
+            type: 'way',
+            id: 2,
+            tags: { highway: 'primary' },
+            geometry: [pt(-60, 0), pt(60, 0)],
+          },
+          {
+            type: 'way',
+            id: 3,
+            tags: { highway: 'residential' },
+            geometry: [pt(-60, 40), pt(60, 40)],
+          },
+        ],
+      },
+      { center: CENTER }
+    )
+  }
+
+  const lineMesh = (group) =>
+    group.children.find((c) => c.name === 'road-lines')
+
+  it('paints arterials and leaves residential streets bare', () => {
+    const { group, dispose } = buildCityGroup(linesModel())
+    const lines = lineMesh(group)
+    expect(lines, 'the arterial got no paint at all').toBeDefined()
+
+    // Every painted vertex sits on the arterial at y=0, never on the
+    // residential street at y=40. OpenStreetMap carries no road_marking tags
+    // in any baked circle, so the CLASS is the only signal there is, and this
+    // is what pins that it is being read.
+    const a = lines.geometry.getAttribute('position').array
+    let maxAbsY = 0
+    for (let i = 0; i < a.length; i += 3) {
+      maxAbsY = Math.max(maxAbsY, Math.abs(a[i + 1]))
+    }
+    expect(maxAbsY).toBeLessThan(1)
+
+    dispose()
+  })
+
+  it('dashes rather than running an unbroken stripe', () => {
+    const { group, dispose } = buildCityGroup(linesModel())
+    const a = lineMesh(group).geometry.getAttribute('position').array
+    // Total painted length along the road, from the triangles themselves.
+    // Two triangles per dash, six vertices; the run is the x-spread.
+    let painted = 0
+    for (let i = 0; i + 17 < a.length; i += 18) {
+      let lo = Infinity
+      let hi = -Infinity
+      for (let v = 0; v < 6; v++) {
+        const x = a[i + v * 3]
+        lo = Math.min(lo, x)
+        hi = Math.max(hi, x)
+      }
+      painted += hi - lo
+    }
+    // The arterial is 120 m long and the skip line is 3 m painted in every
+    // 12 m, so about a quarter of it carries paint. A builder that forgot to
+    // leave gaps would report the whole 120.
+    expect(painted).toBeGreaterThan(20)
+    expect(painted).toBeLessThan(45)
+
+    dispose()
+  })
+
+  it('lies flat on the roadway, below the pavement it runs between', () => {
+    const { group, dispose } = buildCityGroup(linesModel())
+    const a = lineMesh(group).geometry.getAttribute('position').array
+    for (let i = 2; i < a.length; i += 3) {
+      // Paint is on the road, which CW-50 cut a curb's depth below pavement.
+      expect(a[i]).toBeLessThan(0)
+    }
+    dispose()
+  })
+})
