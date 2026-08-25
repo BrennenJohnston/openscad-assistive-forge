@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A shared link can decide which settings you meet first** (IR-9) - some designs have well over a
+  hundred parameters, and every one of them is there for a reason, but that is not a first screen
+  anybody can use. Whoever writes a project's manifest can now list the handful that matter
+  (`defaults.starterParameters`), and Forge shows those and puts the rest behind one Show all
+  parameters button. Nothing is removed: the button is a toggle, everything comes back in the order
+  the design wrote it, and searching for a parameter drops the wall on its own and says so. A
+  control you cannot see is not reachable by keyboard or screen reader either, so there is nothing
+  lurking invisibly in the Tab order. A manifest that does not use the field opens exactly as it
+  always did
+
 - **Adding a design of your own is now a documented job, not a favour** (IR-8) - there is a
   template to copy in `public/examples/_template/`, a walkthrough in
   `docs/guides/TILE_AUTHOR_GUIDE.md` that assumes no knowledge of this app's code, and a checker,

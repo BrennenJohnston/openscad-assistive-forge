@@ -292,13 +292,17 @@ details.param-group.forge-disclosure[open] > summary::before {
    uses: Classic relocates whole panels between docks with appendChild, which
    moves the <details> and leaves the row behind; Simplified adds
    .ui-mode-hidden; C12 hides a group with [hidden]; the parameter search adds
-   .search-empty; and .hidden is the shared utility. A sixth idiom would need
-   a line here, so add one with any new way of hiding a disclosure. */
+   .search-empty; the starter subset adds .starter-empty (IR-9); and .hidden is
+   the shared utility. A seventh idiom would need a line here, so add one with
+   any new way of hiding a disclosure. */
 .forge-disclosure-row:not(:has(> .forge-disclosure)),
 .forge-disclosure-row:has(> .forge-disclosure[hidden]),
 .forge-disclosure-row:has(> .forge-disclosure.hidden),
 .forge-disclosure-row:has(> .forge-disclosure.ui-mode-hidden),
-.forge-disclosure-row:has(> .forge-disclosure.search-empty) {
+.forge-disclosure-row:has(> .forge-disclosure.search-empty),
+.forge-disclosure-row:has(
+  > .forge-disclosure.starter-empty:not(.starter-wall-open)
+) {
   display: none;
 }
 
@@ -12644,6 +12648,60 @@ body.tutorial-body-locked {
 
 .param-group.search-empty {
   display: none !important;
+}
+
+/* IR-9 — the starter subset. A manifest can say which handful of parameters a
+   beginner should meet first; everything else waits behind one button. The
+   wall is display:none, which hides a control from EVERYBODY: a screen reader
+   never reaches a control a sighted person cannot see either, which is the
+   only honest form of progressive disclosure. .starter-wall-open is what the
+   reveal adds, and it puts everything back.
+   Every token below is one this project DEFINES - checked, not assumed. */
+.param-control.starter-hidden:not(.starter-wall-open) {
+  display: none !important;
+}
+
+.param-group.starter-empty:not(.starter-wall-open) {
+  display: none !important;
+}
+
+.starter-reveal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-sm);
+  margin-bottom: var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-secondary);
+}
+
+.starter-reveal-btn {
+  align-self: flex-start;
+  min-height: var(--size-touch-target);
+  padding: var(--space-xs) var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.starter-reveal-btn:hover {
+  background: var(--color-hover-bg);
+}
+
+.starter-reveal-btn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.starter-reveal-hint {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
 }
 
 /* Default value display */

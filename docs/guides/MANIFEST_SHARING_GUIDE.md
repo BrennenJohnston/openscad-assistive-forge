@@ -188,6 +188,56 @@ file that comes home can say where it has been.
 
 ---
 
+## Choosing which settings people meet first
+
+Some designs have a lot of parameters. A keyguard model can have well over a
+hundred, in more than thirty groups, and every one of them is there for a
+reason -- but that is not a first screen anybody can use.
+
+Your manifest can say which handful somebody should meet first:
+
+```json
+{
+  "forgeManifest": "1.0",
+  "files": { "main": "keyguard.scad" },
+  "defaults": {
+    "starterParameters": [
+      "tablet_model",
+      "grid_rows",
+      "grid_columns",
+      "cell_width_px",
+      "cell_height_px",
+      "rail_height_mm"
+    ]
+  }
+}
+```
+
+Forge then shows those controls, opens the groups they live in, and puts
+everything else behind one button labelled **Show all parameters**.
+
+Things worth knowing before you use it:
+
+- **Nothing is removed.** The button is a toggle, so the way back to the short
+  screen is the same button. Everything is one press away, in the order your
+  design wrote it.
+- **Hidden means hidden for everybody.** A control somebody cannot see is not
+  reachable by keyboard or screen reader either -- there are no controls
+  lurking invisibly in the Tab order.
+- **Searching brings everything back.** If somebody types in the parameter
+  search, or jumps to a group that is behind the wall, Forge drops the wall and
+  says so. A search that could not find a parameter your design has would be
+  worse than no search.
+- **A name that does not exist is not an error.** If your list names a
+  parameter the design does not have, Forge says so in a notice above the
+  controls and carries on with the rest. Renaming a parameter cannot break
+  somebody's link.
+- **Pick the ones the job needs, not the ones you find interesting.** The best
+  test is your own instructions: if your written steps say "set this", it
+  belongs in the list.
+
+Use the names exactly as they appear in your `.scad` file.
+
 ## Updating Your Project Later
 
 When you have a new version of your design:

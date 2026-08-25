@@ -16,7 +16,14 @@ import {
   focusParameter,
   locateParameterKey,
   setParameterValue as _setParameterValue,
+  setStarterParameters,
 } from './js/ui-generator.js';
+import {
+  normalizeStarterList,
+  resolveStarterParameters,
+  unknownStarterMessage,
+  describeUnknownStarter,
+} from './js/starter-parameters.js';
 import { stateManager } from './js/state.js';
 import {
   downloadSTL,
@@ -8665,6 +8672,12 @@ if (rounded) {
         );
         announceImmediate(`Loading project: ${projectName}`);
 
+        // IR-9: a manifest can name the handful of parameters a beginner should
+        // meet first. Set BEFORE handleFile, because handleFile is what
+        // renders - setting it afterwards would show every control once and
+        // then take most of them away again, which is worse than either state.
+        setStarterParameters(defaults?.starterParameters);
+
         // Step 4 — PROCESS: parse and load the project into the editor
         await fileHandler.handleFile(
           null,
@@ -8674,6 +8687,30 @@ if (rounded) {
           'manifest',
           projectName
         );
+
+        // A name in that list this design does not have is worth saying out
+        // loud - to the person, once, and to the console for the author. It is
+        // never fatal: the rest of the list still works.
+        const starterNames = normalizeStarterList(defaults?.starterParameters);
+        if (starterNames.length > 0) {
+          const { unknown } = resolveStarterParameters(
+            stateManager.getState().schema,
+            starterNames
+          );
+          const message = unknownStarterMessage(unknown);
+          if (message) {
+            console.warn(`[DeepLink] ${message}`);
+            // The notice, not the status line. IR-13 measured a status
+            // message standing for about 660 ms before the render replaced
+            // it - long enough to exist, not long enough to read.
+            const { createParameterNotices } =
+              await import('./js/parameter-notices.js');
+            createParameterNotices(
+              document.getElementById('parameterNotices'),
+              { announce: (text) => announceImmediate(text) }
+            ).show(describeUnknownStarter(unknown));
+          }
+        }
 
         // Step 5 — DISMISS OVERLAY before showing the save-copy modal
         if (dismissOverlay) dismissOverlay();
@@ -8808,6 +8845,9 @@ if (rounded) {
         // ERROR PATH: dismiss overlay if it was shown (it's null if the
         // error occurred before step 2, e.g. during first-visit wait)
         if (dismissOverlay) dismissOverlay();
+        // A starter list armed for a load that never happened must not be
+        // waiting for whatever project this person opens next (IR-9).
+        setStarterParameters(null);
         console.error('[DeepLink] Manifest load failed:', error);
 
         let friendlyMsg;

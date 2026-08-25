@@ -53,6 +53,33 @@ Upload the keyguard `.scad` file. If the design uses companion files (like an op
 
 You can also use a direct-launch link if the project author provides one. These links load the model automatically.
 
+### 1a. If the model opens with a hundred controls
+
+A keyguard design is a big model, and the first screen can be daunting: well
+over a hundred parameters in more than thirty groups. Most of them you will
+never touch for a given tablet.
+
+If the link you were given came from a manifest, whoever wrote it can decide
+which handful you meet first. Forge shows those, opens their groups, and puts
+the rest behind one **Show all parameters** button. Press it any time; press it
+again to go back to the short list. Nothing is ever removed, and searching for
+a parameter brings everything back on its own.
+
+If you are the one publishing the link, the list to declare is the one your own
+instructions walk. Reading steps 2 to 6 below, that is about a dozen:
+
+- the tablet model you picked in step 4
+- the grid's rows and columns, and the cell width and height in pixels
+- the pixel coordinates you measured in step 2: the status bar's bottom edge,
+  and the message and command bar boundaries
+- the opening width, height and corner radius from step 4
+- the rail height from step 4
+- the base thickness
+
+Put them in your manifest under `defaults.starterParameters`, using whatever
+your design actually calls them -- the names above describe the values, not the
+variables. `docs/guides/MANIFEST_SHARING_GUIDE.md` has the full recipe.
+
 ### 2. Measure pixel coordinates
 
 Many keyguard designs need pixel coordinates from your tablet screenshot -- they tell the model where status bars, message bars, and command bars sit on your specific device.
