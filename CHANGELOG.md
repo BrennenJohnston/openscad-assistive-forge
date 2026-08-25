@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Open a DXF, tidy it up, and save a DXF back** (IR-12) - laser and cutting software speaks DXF,
+  and so does the tool chain some of this work arrives from. The drawing editor now takes a .dxf
+  the same way it takes an SVG or a photo: Forge's own engine converts it, the editor opens on the
+  drawing with every shape listed, and Save as DXF sits beside Save edited SVG. Measured on a
+  40 by 25 mm drawing, converting takes about a third of a second each way. Forge states the size
+  of what it saved out loud, because rebuilding a drawing from its shapes is not perfectly exact
+  and a millimetre matters when you are cutting to a fit. A DXF holding only text or dimensions
+  arrives empty - OpenSCAD reads drawing entities, not annotations - and Forge says exactly that
+  rather than handing back a blank page
+
 - **A symbol keeps its picture instead of turning into a coloured blob** (IR-11) - communication
   symbols are black line work over a strong colour, and the colour means something. Forge decided
   what to trace by brightness alone, which puts a blue background and the black drawing on top of

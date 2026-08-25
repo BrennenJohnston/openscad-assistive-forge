@@ -11887,6 +11887,13 @@ if (rounded) {
       announce: (message) => announceImmediate(message),
       onError: (message) =>
         showErrorToast({ title: 'Cannot Edit That File', message }),
+      // The DXF lane uses the app's own engine as its converter. Calls
+      // serialize behind the controller's queue, so a conversion cannot
+      // collide with a model render already in flight.
+      render: renderController
+        ? (scad, params, options) =>
+            renderController.render(scad, params, options)
+        : null,
     });
     return svgEditEntry;
   }

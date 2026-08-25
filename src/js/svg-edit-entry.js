@@ -26,6 +26,7 @@ import {
 /** Extensions the standalone door accepts. */
 export const SVG_EDIT_ACCEPTED_EXTENSIONS = [
   'svg',
+  'dxf',
   'png',
   'jpg',
   'jpeg',
@@ -95,11 +96,15 @@ export const RETRACE_DEBOUNCE_MS = 180;
  * @param {Object} [ink] - Ink settings for a raster file
  * @returns {Promise<{svg: string, traced: boolean, imageData: ImageData|null, summary: Object|null}>}
  */
-export async function svgTextForFile(file, ink = { mode: 'lineart' }) {
+export async function svgTextForFile(
+  file,
+  ink = { mode: 'lineart' },
+  render = null
+) {
   if (!file || !acceptsForEditing(file.name)) {
     throw new Error(
       `${file?.name || 'That file'} is not a drawing Forge can edit. ` +
-        `Choose an SVG, or a photo saved as PNG or JPG.`
+        `Choose an SVG or DXF, or a photo saved as PNG or JPG.`
     );
   }
   if (file.size > MAX_FILE_BYTES) {
@@ -107,6 +112,32 @@ export async function svgTextForFile(file, ink = { mode: 'lineart' }) {
       `${file.name} is larger than ${Math.round(MAX_FILE_BYTES / 1024 / 1024)} MB. ` +
         `Save a smaller copy and try again.`
     );
+  }
+
+  if (fileExtension(file.name) === 'dxf') {
+    if (typeof render !== 'function') {
+      throw new Error(
+        `Forge cannot open ${file.name} right now: the drawing engine is not ` +
+          `available. Reload the page and try again.`
+      );
+    }
+    const { dxfToSvg, dxfSize } = await import('./dxf-convert.js');
+    const dxfText = await readAsText(file);
+    const { svg, ms } = await dxfToSvg({
+      dxfText,
+      fileName: file.name,
+      render,
+    });
+    return {
+      svg,
+      traced: false,
+      converted: true,
+      ms,
+      // Kept so a saved file can be measured against what was opened.
+      sourceSize: dxfSize(dxfText),
+      imageData: null,
+      summary: null,
+    };
   }
 
   if (RASTER_EXTENSIONS.includes(fileExtension(file.name))) {
@@ -132,7 +163,7 @@ export async function svgTextForFile(file, ink = { mode: 'lineart' }) {
  * @param {Function} [deps.onError] - Show an error the person cannot miss
  * @returns {{ openFile: Function, isOpen: Function, destroy: Function }}
  */
-export function createSvgEditEntry({ announce, onError } = {}) {
+export function createSvgEditEntry({ announce, onError, render } = {}) {
   let container = null;
   let workspace = null;
   let open = false;
@@ -142,6 +173,9 @@ export function createSvgEditEntry({ announce, onError } = {}) {
   let currentFileName = null;
   let inkControls = null;
   let retraceTimer = null;
+  // The size the chosen DXF declared, kept so the saved file can be compared
+  // against it rather than leaving the difference to be found at the machine.
+  let sourceDxfSize = null;
 
   const say = (message) => {
     if (typeof announce === 'function') announce(message);
@@ -166,11 +200,6 @@ export function createSvgEditEntry({ announce, onError } = {}) {
     return workspace;
   }
 
-  /**
-   * Open the editor on a file the person chose.
-   * @param {File} file
-   * @returns {Promise<boolean>} true when the editor is showing the file
-   */
   /**
    * Show an SVG in the editor. Used for the first open and for every re-trace
    * after an ink setting changes.
@@ -207,6 +236,7 @@ export function createSvgEditEntry({ announce, onError } = {}) {
       onKeepOriginal: () => {
         open = false;
       },
+      onSaveDxf: typeof render === 'function' ? saveAsDxf : undefined,
     });
     if (!open) {
       // With no model behind it this is the whole screen's task, so it opens
@@ -218,6 +248,54 @@ export function createSvgEditEntry({ announce, onError } = {}) {
     if (inkControls) inkControls.setSummary(summary, shapeCount);
     if (announceOpen) say(announceOpen);
     return true;
+  }
+
+  /**
+   * Convert the edited drawing to DXF and hand it over as a file.
+   * @param {string} editedSvg - The prepared SVG the editor is showing
+   */
+  async function saveAsDxf(editedSvg) {
+    if (typeof render !== 'function') return;
+    const name = `${dxfBaseName(currentFileName)}-edited.dxf`;
+    say(`Converting to DXF. This takes a moment.`);
+    try {
+      const { svgToDxf, dxfSize } = await import('./dxf-convert.js');
+      const { dxf } = await svgToDxf({
+        svgText: editedSvg,
+        fileName: currentFileName,
+        render,
+      });
+      const blob = new Blob([dxf], { type: 'image/vnd.dxf' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = name;
+      link.click();
+      URL.revokeObjectURL(url);
+
+      // Say the size out loud. This is a file someone will cut, and a round
+      // trip through the editor's flatten is not exact: MEASURED on a 40 by
+      // 25 mm drawing, the saved file came back 40.3 by 25.4. Small, and far
+      // too important to leave for them to discover at the machine.
+      const saved = dxfSize(dxf);
+      const mm = (n) => Number(n.toFixed(2));
+      let sentence = `${name} saved. Your original file is untouched.`;
+      if (saved) {
+        sentence += ` It measures ${mm(saved.width)} by ${mm(saved.height)} millimetres.`;
+        if (sourceDxfSize) {
+          const dw = Math.abs(saved.width - sourceDxfSize.width);
+          const dh = Math.abs(saved.height - sourceDxfSize.height);
+          if (dw > 0.05 || dh > 0.05) {
+            sentence +=
+              ` The file you opened measured ${mm(sourceDxfSize.width)} by ` +
+              `${mm(sourceDxfSize.height)}. Check the size before cutting.`;
+          }
+        }
+      }
+      say(sentence);
+    } catch (error) {
+      fail(error.message);
+    }
   }
 
   async function retrace(settings) {
@@ -243,7 +321,10 @@ export function createSvgEditEntry({ announce, onError } = {}) {
   async function openFile(file) {
     let prepared;
     try {
-      prepared = await svgTextForFile(file);
+      if (fileExtension(file.name) === 'dxf') {
+        say(`Converting ${file.name} to a drawing Forge can edit.`);
+      }
+      prepared = await svgTextForFile(file, { mode: 'lineart' }, render);
     } catch (error) {
       fail(error.message);
       return false;
@@ -251,6 +332,7 @@ export function createSvgEditEntry({ announce, onError } = {}) {
 
     currentFileName = file.name;
     currentImageData = prepared.imageData;
+    sourceDxfSize = prepared.sourceSize || null;
     open = false;
 
     if (prepared.traced) {
@@ -284,7 +366,9 @@ export function createSvgEditEntry({ announce, onError } = {}) {
       summary: prepared.summary,
       announceOpen: prepared.traced
         ? `${file.name} traced into ${shapes()} shapes. Editor opened.`
-        : `${file.name} opened for editing, ${shapes()} shapes.`,
+        : prepared.converted
+          ? `${file.name} converted in ${(prepared.ms / 1000).toFixed(1)} seconds, ${shapes()} shapes. Editor opened.`
+          : `${file.name} opened for editing, ${shapes()} shapes.`,
     });
   }
 
@@ -302,6 +386,21 @@ export function createSvgEditEntry({ announce, onError } = {}) {
       open = false;
     },
   };
+}
+
+/**
+ * The stem a saved file is named after, without its extension or any path.
+ * @param {string|null} name
+ * @returns {string}
+ */
+export function dxfBaseName(name) {
+  const base = String(name || 'drawing')
+    .split(/[\\/]/)
+    .pop()
+    .replace(/\.[^.]+$/, '')
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return base || 'drawing';
 }
 
 export { IMAGE_IMPORT_LIMITS };

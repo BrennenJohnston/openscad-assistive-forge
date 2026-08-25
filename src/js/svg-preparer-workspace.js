@@ -280,6 +280,16 @@ function buildWorkspaceDom() {
     'Save the edited SVG to a file on this computer'
   );
 
+  const saveDxfBtn = document.createElement('button');
+  saveDxfBtn.className = 'btn btn-secondary';
+  saveDxfBtn.dataset.action = 'save-dxf';
+  saveDxfBtn.textContent = 'Save as DXF';
+  saveDxfBtn.setAttribute(
+    'aria-label',
+    'Save the edited drawing as a DXF file on this computer'
+  );
+  saveDxfBtn.hidden = true;
+
   const keepBtn = document.createElement('button');
   keepBtn.className = 'btn btn-secondary';
   keepBtn.dataset.action = 'keep';
@@ -290,7 +300,7 @@ function buildWorkspaceDom() {
   resetBtn.dataset.action = 'reset';
   resetBtn.textContent = 'Reset';
 
-  footer.append(applyBtn, applyHint, saveBtn, keepBtn, resetBtn);
+  footer.append(applyBtn, applyHint, saveBtn, saveDxfBtn, keepBtn, resetBtn);
 
   // Fullscreen backdrop (hidden by default)
   const backdrop = document.createElement('div');
@@ -339,6 +349,7 @@ function buildWorkspaceDom() {
       applyBtn,
       applyHint,
       saveBtn,
+      saveDxfBtn,
       keepBtn,
       resetBtn,
       backdrop,
@@ -681,6 +692,8 @@ export function createSvgPrepWorkspace(containerEl) {
     // Nothing to save either: an empty result is an empty file.
     refs.saveBtn.disabled = !enabled;
     refs.saveBtn.setAttribute('aria-disabled', String(!enabled));
+    refs.saveDxfBtn.disabled = !enabled;
+    refs.saveDxfBtn.setAttribute('aria-disabled', String(!enabled));
   }
 
   function clearResultError() {
@@ -994,6 +1007,10 @@ export function createSvgPrepWorkspace(containerEl) {
       liveRegion.textContent = `Saved ${fileName}`;
       announce(`Saved ${fileName}`);
       if (currentCallbacks.onSave) currentCallbacks.onSave(fileName);
+    } else if (btn.dataset.action === 'save-dxf') {
+      if (!currentResult || !currentCallbacks.onSaveDxf) return;
+      // The host owns the conversion: it is the only layer with an engine.
+      currentCallbacks.onSaveDxf(currentResult, currentSourceName);
     } else if (btn.dataset.action === 'keep') {
       currentResult = null;
       resolved = true;
@@ -1107,6 +1124,8 @@ export function createSvgPrepWorkspace(containerEl) {
     // A file-mode host has no page behind the editor worth returning to, so
     // there is no inline size to shrink back into.
     refs.fullscreenBtn.hidden = hostMode === 'file';
+    // Only offered where a host can actually convert: the engine lives there.
+    refs.saveDxfBtn.hidden = typeof callbacks.onSaveDxf !== 'function';
 
     if (callbacks.tools) {
       // Re-inserting the SAME element would move it in the DOM, and moving a

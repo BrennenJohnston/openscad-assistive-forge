@@ -337,6 +337,37 @@ them fills the outline in and swallows the detail. That is not a bug, it is what
 "print this as one shape" means. Set the interior shapes to **Ignore**, or to
 **Hole** if you want them cut out, and the result comes back.
 
+### Opening and saving a DXF
+
+The drawing editor takes `.dxf` as well as SVG and photos, and can give one
+back. Forge's own OpenSCAD engine does the converting, so nothing is uploaded
+and no extra software is needed. MEASURED on a 40 x 25 mm drawing: DXF in took
+about 0.3 seconds, DXF out about the same.
+
+Open a DXF the way you would open anything else, from the welcome screen's
+**Edit a drawing or photo** line or **Edit Drawing** in the Actions drawer.
+Forge says it is converting, then the editor opens on the drawing with each
+shape listed. When you are done, **Save as DXF** sits beside **Save edited
+SVG**; you can take either, or both.
+
+**Forge tells you the size it saved.** A drawing that has been through the
+editor is rebuilt from its shapes, and rebuilding is not perfectly exact:
+MEASURED on that same 40 x 25 mm file, the saved DXF came back 40.3 by 25.35.
+Small, and it matters if you are cutting to a fit, so the app says the
+measurement out loud rather than leaving you to find it at the machine. If the
+number has moved and that is a problem, take the SVG instead and convert it
+with your own tool.
+
+**What Forge cannot read from a DXF.** OpenSCAD's DXF import reads drawing
+entities. Text, dimensions and other annotation entities are outside that, so a
+file made only of those arrives empty. Forge says so plainly instead of handing
+you a blank drawing. Export the drawing again with its outlines as geometry, or
+send an SVG.
+
+This is separate from **9a. Export for laser cutting** in the keyguard guide,
+which is about exporting a MODEL you are customising. This section is about a
+drawing you already have.
+
 ### Choosing what to keep from a photo
 
 A photo is traced before it becomes a shape, and tracing has to decide what
