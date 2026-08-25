@@ -73,6 +73,7 @@ import { sanitizeUrlParams } from './file-param-resolver.js';
 import { applyToolbarModeVisibility } from './toolbar-menu-controller.js';
 import { setAppSurface } from './app-surface.js';
 import { isEnabled } from './feature-flags.js';
+import { exampleDefinitions, programDefinitions } from './tile-registry.js';
 import { prepareSvg, needsPreparation } from './svg-preparer.js';
 import { svgToDataUrl, dataUrlToText } from './svg-text-encoding.js';
 import { STORAGE_KEY_MODEL_COLOR } from './storage-keys.js';
@@ -162,121 +163,9 @@ async function restoreGalleryFromManifest(exampleKey) {
 // Example definitions
 // ---------------------------------------------------------------------------
 
-export const EXAMPLE_DEFINITIONS = {
-  'simple-box': {
-    path: '/examples/simple-box/simple_box.scad',
-    name: 'simple_box.scad',
-  },
-  cylinder: {
-    path: '/examples/parametric-cylinder/parametric_cylinder.scad',
-    name: 'parametric_cylinder.scad',
-  },
-  'library-test': {
-    path: '/examples/library-test/library_test.scad',
-    name: 'library_test.scad',
-  },
-  'colored-box': {
-    path: '/examples/colored-box/colored_box.scad',
-    name: 'colored_box.scad',
-  },
-  'multi-file-box': {
-    path: '/examples/multi-file-box.zip',
-    name: 'multi-file-box.zip',
-  },
-  'cable-organizer': {
-    path: '/examples/cable-organizer/cable_organizer.scad',
-    name: 'cable_organizer.scad',
-  },
-  'honeycomb-grid': {
-    path: '/examples/honeycomb-grid/honeycomb_grid.scad',
-    name: 'honeycomb_grid.scad',
-  },
-  'logo-plate': {
-    path: '/examples/logo-plate/logo_plate.scad',
-    name: 'logo_plate.scad',
-    description: 'Logo Plate (SVG Import)',
-  },
-  'nasif-charm-maker': {
-    path: '/examples/nasif-charm-maker/nasif_charm_maker.scad',
-    name: 'nasif_charm_maker.scad',
-    description: 'Charm Customizer',
-    manifest: '/examples/nasif-charm-maker/manifest.json',
-    additionalFiles: [
-      '/examples/nasif-charm-maker/svg-library/heart.svg',
-      '/examples/nasif-charm-maker/svg-library/star.svg',
-      '/examples/nasif-charm-maker/svg-library/paw.svg',
-      '/examples/nasif-charm-maker/svg-library/lightning.svg',
-      '/examples/nasif-charm-maker/svg-library/music-note.svg',
-      '/examples/nasif-charm-maker/svg-library/smiley.svg',
-      '/examples/nasif-charm-maker/svg-library/moon.svg',
-      '/examples/nasif-charm-maker/svg-library/flower.svg',
-      '/examples/nasif-charm-maker/svg-library/diamond.svg',
-      '/examples/nasif-charm-maker/svg-library/crown.svg',
-      '/examples/nasif-charm-maker/svg-library/leaf.svg',
-      '/examples/nasif-charm-maker/svg-library/sun.svg',
-    ],
-  },
-  'braille-wedge-card': {
-    path: '/examples/braille-wedge-card/braille_wedge_card.scad',
-    name: 'braille_wedge_card.scad',
-    description: 'Braille Card Customizer',
-    manifest: '/examples/braille-wedge-card/manifest.json',
-  },
-  'braille-charm': {
-    path: '/examples/braille-charm/braille_charm.scad',
-    name: 'braille_charm.scad',
-    description: 'Braille Charm',
-    manifest: '/examples/braille-charm/manifest.json',
-    additionalFiles: [
-      '/examples/braille-charm/presets/large-charm.json',
-      '/examples/braille-charm/presets/small-charm.json',
-    ],
-  },
-  'braille-sign': {
-    path: '/examples/braille-sign/braille_sign.scad',
-    name: 'braille_sign.scad',
-    description: 'Braille Sign',
-    manifest: '/examples/braille-sign/manifest.json',
-  },
-  'q-charm': {
-    path: '/examples/q-charm/q_charm.scad',
-    name: 'q_charm.scad',
-    description: 'Bracelet Clip Charm',
-    manifest: '/examples/q-charm/manifest.json',
-    additionalFiles: [
-      '/examples/q-charm/q_Charm_L.dxf',
-      '/examples/q-charm/presets/large-charm.json',
-      '/examples/q-charm/presets/small-charm.json',
-      '/examples/nasif-charm-maker/svg-library/smiley.svg',
-      '/examples/nasif-charm-maker/svg-library/heart.svg',
-      '/examples/nasif-charm-maker/svg-library/star.svg',
-      '/examples/nasif-charm-maker/svg-library/paw.svg',
-      '/examples/nasif-charm-maker/svg-library/lightning.svg',
-      '/examples/nasif-charm-maker/svg-library/music-note.svg',
-      '/examples/nasif-charm-maker/svg-library/moon.svg',
-      '/examples/nasif-charm-maker/svg-library/flower.svg',
-      '/examples/nasif-charm-maker/svg-library/diamond.svg',
-      '/examples/nasif-charm-maker/svg-library/crown.svg',
-      '/examples/nasif-charm-maker/svg-library/leaf.svg',
-      '/examples/nasif-charm-maker/svg-library/sun.svg',
-    ],
-  },
-};
+export const EXAMPLE_DEFINITIONS = exampleDefinitions();
 
-// ---------------------------------------------------------------------------
-// Program definitions — group related examples under a single umbrella
-// ---------------------------------------------------------------------------
-
-export const PROGRAM_DEFINITIONS = {
-  'charm-customizer': {
-    label: 'Charm Customizer',
-    examples: ['nasif-charm-maker', 'q-charm', 'logo-plate'],
-  },
-  'braille-card-customizer': {
-    label: 'Braille Card Customizer',
-    examples: ['braille-wedge-card', 'braille-charm', 'braille-sign'],
-  },
-};
+export const PROGRAM_DEFINITIONS = programDefinitions();
 
 // ---------------------------------------------------------------------------
 // Standalone utility: processing overlay

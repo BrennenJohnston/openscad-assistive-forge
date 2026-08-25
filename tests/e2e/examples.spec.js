@@ -84,6 +84,53 @@ test.describe('Example Deep-Links', () => {
   })
 })
 
+test.describe('An example brings every file it needs (D-97)', () => {
+  test('logo-plate previews without the engine complaining', async ({
+    page,
+  }) => {
+    test.setTimeout(180000)
+    // Its own manifest.json has always declared sample-logo.svg and the file
+    // has always been on disk, but the loader read a different list that
+    // omitted it: the first preview errored with "Can't open file
+    // '/tmp/sample-logo.svg'" while the status said "Preview ready".
+    const engineErrors = []
+    page.on('console', (message) => {
+      const text = message.text()
+      if (/\[OpenSCAD ERR\].*ERROR:/i.test(text)) engineErrors.push(text)
+      if (/Failed to load overlay/i.test(text)) engineErrors.push(text)
+    })
+
+    await page.goto('/?example=logo-plate')
+    await page
+      .locator('.param-control')
+      .first()
+      .waitFor({ state: 'attached', timeout: 60000 })
+    const notNow = page.locator('#saveProjectNotNow')
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 3000 })
+      await notNow.click()
+    } catch {
+      // no save prompt for this example
+    }
+
+    // "Preview ready", not /ready/i: the status area already says "Ready"
+    // before anything has rendered, and a poll that matches it passes before
+    // the engine has had a chance to complain about anything.
+    await expect
+      .poll(async () => page.locator('#previewStatusText').textContent(), {
+        timeout: 120000,
+      })
+      .toMatch(/Preview ready/i)
+    // The mount and the import happen around the render; give them the moment
+    // they need to have failed, if they are going to.
+    await page.waitForTimeout(2000)
+
+    // A green status while the engine is failing underneath is the worst of
+    // both: this asserts the console, not the reassurance.
+    expect(engineErrors, engineErrors.join(' | ')).toEqual([])
+  })
+})
+
 test.describe('Example Files Exist', () => {
   test('simple-box example file exists', async ({ page }) => {
     const response = await page.request.get('/examples/simple-box/simple_box.scad')

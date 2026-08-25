@@ -254,6 +254,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The Logo Plate example works out of the box** (IR-7) - opening it always failed underneath:
+  the engine could not find the sample logo it imports, so the engraving was missing, while the
+  status line cheerfully said "Preview ready". The file had been sitting in the repository the
+  whole time and the example's own description listed it; the part of the app that fetches files
+  read a different list that did not. Both now come from one place
+
+- **A shipped sample drawing a browser could not read** (IR-7) - `sample-logo.svg` contained a
+  stray control character in a comment, left over from an em dash. OpenSCAD ignored it, but a
+  browser refuses such a file outright, so the moment the file finally reached the project the
+  reference-image overlay failed to load it. Fixed, and every SVG the app ships is now checked for
+  characters XML does not allow
+
 - **When a link's numbers get changed, the message now waits for you** (IR-13) - opening a shared
   link whose value is outside what the design allows adjusts it, and Forge said so in the status
   line for about two thirds of a second before the render replaced it. Anyone who looked up a
