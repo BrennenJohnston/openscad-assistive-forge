@@ -969,6 +969,132 @@ function createGroundTexture() {
   return makeRepeatingTexture(canvas, 1 / GROUND_TILE_M, 1 / GROUND_TILE_M);
 }
 
+/**
+ * Which paving finish a city's pavements wear (CW-51, CW-Q51).
+ *
+ * TWO of these are the owner's own words and ship as given. The other two are
+ * what the cities' own specifications say, fetched and cited at execution -
+ * and one of them REFUTES what the plan expected:
+ *
+ * - seattle   'aggregate': pebbly river-stone aggregate. The owner's words.
+ * - albuquerque 'cracked': flat, with cracks and intentional grip-scoring
+ *               lines. The owner's words.
+ * - denver    'broom': Denver Parks and Recreation's construction standards
+ *               require that all concrete walkways have a BROOM FINISH - a
+ *               soft-bristle broom drawn across float-finished concrete,
+ *               perpendicular to the line of travel, for slip resistance.
+ * - burnaby   'broom': Burnaby's Supplementary Specifications adopt MMCD
+ *               2019, whose Section 03 30 20 (Concrete Walks, Curbs and
+ *               Gutters) specifies a broom finish for sidewalks. The plan
+ *               EXPECTED exposed aggregate here; the specification does not
+ *               support it, and exposed aggregate in BC is a decorative or
+ *               private finish rather than the municipal sidewalk standard.
+ *
+ * So Denver and Burnaby share a finish because they genuinely specify the
+ * same one. That is a finding, not a gap: inventing a difference to make four
+ * cities look four ways would be the dishonest option. Denver's real
+ * distinguishing feature is a DETACHED sidewalk with a tree-lawn amenity zone
+ * between kerb and walk, which is ground character rather than paving texture
+ * and belongs to CW-57.
+ *
+ * Every row here is design data the owner can veto.
+ */
+export const CITY_PAVING = {
+  seattle: 'aggregate',
+  albuquerque: 'cracked',
+  denver: 'broom',
+  burnaby: 'broom',
+};
+const DEFAULT_PAVING = 'broom';
+
+// Municipal sidewalk standards put control joints at roughly the width of the
+// walk - 4 to 6 ft on a standard walk - so the seams land about every 1.5 m.
+const PAVING_SCORE_M = 1.5;
+// One tile covers this many metres, and the UVs are in metres, so the repeat
+// is just distance / tile.
+const PAVING_TILE_M = 6;
+const PAVING_TILE_PX = 256;
+
+/**
+ * A pavement's paving texture: scoring seams everywhere, plus the city's own
+ * finish on top.
+ *
+ * Brightness only - the tone stays SIDEWALK_TONES' own dark neighbourhood and
+ * the texture multiplies it. A paving that brightened the pavement would
+ * carpet the lower half of the street view, which is the CW-8 law this whole
+ * cluster is written around.
+ *
+ * @param {'aggregate'|'cracked'|'broom'} style
+ * @returns {CanvasTexture|null}
+ */
+function createPavingTexture(style) {
+  const size = PAVING_TILE_PX;
+  const c = make2dContext(size, size);
+  if (!c) return null;
+  const { canvas, ctx } = c;
+  const pxPerM = size / PAVING_TILE_M;
+
+  // Mid grey is "unchanged": the texture multiplies the material tone, so
+  // everything here is a small step either side of it.
+  ctx.fillStyle = 'rgb(160,160,160)';
+  ctx.fillRect(0, 0, size, size);
+  const rand = makeLcg(0x5caff01d);
+  const grey = (v) => `rgb(${v},${v},${v})`;
+
+  if (style === 'aggregate') {
+    // Pebbly river-stone: dense small round speckle, low contrast, so it
+    // reads as a gritty surface rather than as dots.
+    for (let i = 0; i < 2600; i++) {
+      const r = 0.7 + rand() * 1.6;
+      ctx.beginPath();
+      ctx.arc(rand() * size, rand() * size, r, 0, Math.PI * 2);
+      ctx.fillStyle = grey(140 + Math.floor(rand() * 46));
+      ctx.fill();
+    }
+  } else if (style === 'broom') {
+    // Broom finish: fine parallel lines drawn PERPENDICULAR to the line of
+    // travel, which is across the walk - so they run along the u axis.
+    for (let y = 0; y < size; y += 2) {
+      ctx.fillStyle = grey(150 + Math.floor(rand() * 22));
+      ctx.fillRect(0, y, size, 1);
+    }
+  } else {
+    // Cracked and grip-scored: a flat slab, a few wandering cracks, and
+    // deliberate scoring lines cut across it for grip.
+    for (let i = 0; i < 5; i++) {
+      let x = rand() * size;
+      let y = rand() * size;
+      ctx.strokeStyle = grey(126 + Math.floor(rand() * 16));
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      for (let s = 0; s < 26; s++) {
+        x += (rand() - 0.5) * 18;
+        y += (rand() - 0.35) * 14;
+        ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    for (let g = 0; g < 6; g++) {
+      const y = ((g + 0.5) * size) / 6;
+      ctx.fillStyle = grey(150);
+      ctx.fillRect(0, Math.round(y), size, 1);
+    }
+  }
+
+  // The scoring seams last, so nothing paints over them: control joints at
+  // PAVING_SCORE_M, darker than the slab because a joint is a groove.
+  const seam = Math.max(1, Math.round(0.03 * pxPerM));
+  for (let m = 0; m < PAVING_TILE_M; m += PAVING_SCORE_M) {
+    ctx.fillStyle = grey(118);
+    ctx.fillRect(0, Math.round(m * pxPerM), size, seam);
+  }
+
+  // The UVs are in METRES, so the repeat is one tile per PAVING_TILE_M and a
+  // pavement keeps one real-world paving scale whatever its width.
+  return makeRepeatingTexture(canvas, 1 / PAVING_TILE_M, 1 / PAVING_TILE_M);
+}
+
 // ---------------------------------------------------------------------------
 // Geometry
 // ---------------------------------------------------------------------------
@@ -1387,6 +1513,18 @@ function appendRoadRibbon(road, positions, cullBounds, shape = {}) {
       const t = shape.tint ?? 1;
       for (let v = 0; v < 6; v++) shape.colors.push(t, t, t);
     }
+    // CW-51: UVs in METRES, so a paving texture keeps one real-world scale
+    // whatever width the ribbon is and however the way is split. v runs
+    // ALONG the ribbon and carries across segments on `shape.uvCursor`,
+    // otherwise the scoring seams would restart at every OSM vertex and
+    // bunch at bends the way the centre-line dashes would have.
+    if (shape.uvs) {
+      const v0 = shape.uvCursor ?? 0;
+      const v1 = v0 + len;
+      const u = half;
+      shape.uvs.push(u, v0, -u, v0, -u, v1, u, v0, -u, v1, u, v1);
+      shape.uvCursor = v1;
+    }
   }
 }
 
@@ -1715,8 +1853,17 @@ export function buildCityGroup(model) {
     createWindowTexture(i)
   );
   const storefrontTexture = createStorefrontTexture();
+  // CW-51: which paving finish this city's own municipality specifies.
+  const pavingTexture = createPavingTexture(
+    CITY_PAVING[model.name] ?? DEFAULT_PAVING
+  );
   const groundTexture = createGroundTexture();
-  for (const t of [...windowTextures, storefrontTexture, groundTexture]) {
+  for (const t of [
+    ...windowTextures,
+    storefrontTexture,
+    groundTexture,
+    pavingTexture,
+  ]) {
     if (t) disposables.push(t);
   }
 
@@ -2038,6 +2185,7 @@ export function buildCityGroup(model) {
   const linePositions = [];
   let lineCursorM = 0;
   const sidewalkPositions = [];
+  const sidewalkUvs = [];
   const sidewalkColors = [];
   for (const road of model.roads) {
     // CW-33: a separately-mapped pavement is drawn even though `footway` is
@@ -2055,6 +2203,7 @@ export function buildCityGroup(model) {
     if (isPavementWay(road)) {
       appendRoadRibbon(road, sidewalkPositions, cullBounds, {
         colors: sidewalkColors,
+        uvs: sidewalkUvs,
         tint: surfaceTint(road.surface, DEFAULT_SIDEWALK_SURFACE),
         liftM: PAVEMENT_LIFT_M,
       });
@@ -2077,6 +2226,7 @@ export function buildCityGroup(model) {
         widthM: PAVEMENT_WIDTH_M,
         offsetM: side,
         colors: sidewalkColors,
+        uvs: sidewalkUvs,
         tint: surfaceTint(road.surface, DEFAULT_SIDEWALK_SURFACE),
         liftM: PAVEMENT_LIFT_M,
       });
@@ -2111,7 +2261,7 @@ export function buildCityGroup(model) {
     }
   }
 
-  const makeFlatMesh = (positions, material, name, colors) => {
+  const makeFlatMesh = (positions, material, name, colors, uvs) => {
     const geom = new BufferGeometry();
     geom.setAttribute(
       'position',
@@ -2125,6 +2275,9 @@ export function buildCityGroup(model) {
         'color',
         new BufferAttribute(new Float32Array(colors), 3)
       );
+    }
+    if (uvs && uvs.length === (positions.length / 3) * 2) {
+      geom.setAttribute('uv', new BufferAttribute(new Float32Array(uvs), 2));
     }
     const mesh = new Mesh(geom, material);
     mesh.name = name;
@@ -2177,11 +2330,22 @@ export function buildCityGroup(model) {
     sidewalkMat = new MeshLambertMaterial({
       color: SIDEWALK_TONES.street,
       vertexColors: true,
+      map: pavingTexture ?? null,
       polygonOffset: true,
       polygonOffsetFactor: -3,
       polygonOffsetUnits: -3,
     });
-    makeFlatMesh(sidewalkPositions, sidewalkMat, 'sidewalks', sidewalkColors);
+    // CW-51: the paving rides the CW-41 cell-raster filter like every other
+    // texture in the city. An unfiltered paving is exactly the beat pattern
+    // against the cell grid that release was written to kill.
+    if (pavingTexture) applyCellRasterFiltering(sidewalkMat);
+    makeFlatMesh(
+      sidewalkPositions,
+      sidewalkMat,
+      'sidewalks',
+      sidewalkColors,
+      sidewalkUvs
+    );
     roadTriangles += sidewalkPositions.length / 9;
   }
 

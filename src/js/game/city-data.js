@@ -846,6 +846,10 @@ export function parseCityExtract(extract, options = {}) {
 
   return {
     center: { lat: center.lat, lon: center.lon },
+    // CW-51: the extract has always carried which city it is, and the model
+    // was dropping it on the floor. The scene needs it to give each city the
+    // pavement finish its own municipality actually specifies.
+    name: typeof extract?.name === 'string' ? extract.name : null,
     attribution:
       typeof extract?.attribution === 'string'
         ? extract.attribution

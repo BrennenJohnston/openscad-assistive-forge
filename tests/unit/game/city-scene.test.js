@@ -11,6 +11,7 @@ import {
   tintOf,
   inGamutChroma,
   hashSpot,
+  CITY_PAVING,
 } from '../../../src/js/game/city-scene.js'
 import {
   parseCityExtract,
@@ -1463,6 +1464,53 @@ describe('road lines (CW-51)', () => {
       // Paint is on the road, which CW-50 cut a curb's depth below pavement.
       expect(a[i]).toBeLessThan(0)
     }
+    dispose()
+  })
+})
+
+describe('per-city paving (CW-51, CW-Q51)', () => {
+  it('gives each city the finish its own municipality specifies', () => {
+    // Two of these are the owner's words and two were fetched from the
+    // cities' own standards. Denver and Burnaby SHARE a finish because they
+    // genuinely specify the same one - Denver Parks and Recreation requires a
+    // broom finish on all concrete walkways, and Burnaby's Supplementary
+    // Specifications adopt MMCD 03 30 20, which specifies broom finish too.
+    // Inventing a difference so four cities looked four ways would have been
+    // the dishonest option, so this pins the sharing on purpose.
+    expect(CITY_PAVING.seattle).toBe('aggregate')
+    expect(CITY_PAVING.albuquerque).toBe('cracked')
+    expect(CITY_PAVING.denver).toBe('broom')
+    expect(CITY_PAVING.burnaby).toBe('broom')
+    expect(CITY_PAVING.denver).toBe(CITY_PAVING.burnaby)
+  })
+
+  it('carries the city name out of the extract so the scene can read it', () => {
+    // The extract has always had it; the model was dropping it on the floor.
+    const named = parseCityExtract(
+      { name: 'denver', elements: [] },
+      { center: CENTER }
+    )
+    expect(named.name).toBe('denver')
+    // An extract without one still parses, and the scene falls back.
+    expect(parseCityExtract({ elements: [] }, { center: CENTER }).name).toBeNull()
+  })
+
+  it('gives pavements real-world UVs so paving keeps one scale', () => {
+    const { group, dispose } = buildCityGroup(model())
+    const walks = group.children.find((c) => c.name === 'sidewalks')
+    expect(walks, 'the model grew no pavement').toBeDefined()
+
+    const uv = walks.geometry.getAttribute('uv')
+    expect(uv, 'pavements have no UVs, so no paving can land on them').toBeDefined()
+    expect(uv.count).toBe(walks.geometry.getAttribute('position').count)
+
+    // UVs are in METRES along the ribbon, not normalized 0..1: the road in
+    // this fixture is 100 m long, so v has to run far past 1. Normalized UVs
+    // would stretch one paving tile over a whole street.
+    let maxV = 0
+    for (let i = 0; i < uv.count; i++) maxV = Math.max(maxV, uv.getY(i))
+    expect(maxV).toBeGreaterThan(50)
+
     dispose()
   })
 })
