@@ -179,6 +179,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The streets are the width real streets are, and they have curbs** (CW-50) - the road widths
+  described the driving lanes only, so a street read as narrower than the one you would stand on,
+  and the roadway itself was an indistinct dark gap between two thin lines. Widths are now measured
+  curb to curb, the way a pavement meets a road: a two-lane residential street with parking on both
+  sides is about eight metres across, not six, and each step up from there adds a lane. Every
+  street now has a raised pavement beside it and a real curb you can step down off and back up
+  onto, instead of only the few streets whose pavements the map happens to record separately. Your
+  eye follows the ground: it drops as you step into the road and climbs as you step back up, over a
+  short distance rather than in a jump, and it never changes with how fast you are walking. The
+  curb is never a wall - you can always walk across it. Pedestrianised streets have no curb at all,
+  because they are pavement from one side to the other
+
 - **Every part of a figure takes a color from the scheme** (CW-49) - a person's torso and legs
   already wore colors from the city's own color scheme, but their head and shoulders kept a single
   fixed tone, so a street of people repeated one note at the top of every figure. All three zones
