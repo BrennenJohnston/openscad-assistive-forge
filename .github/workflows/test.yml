@@ -1034,3 +1034,65 @@ jobs:
         uses: DavidAnson/markdownlint-cli2-action@v16
         with:
           globs: '**/*.md'
+
+  # Tile validator - ADDITIVE and NOT a required check. It runs
+  # scripts/validate-example.mjs over the example folders a PR actually
+  # touched, so a contributed tile is checked before a human reads it.
+  #
+  # Deliberately not required: promoting it is the owner's call, and a check
+  # that starts out required is a check nobody can ever adjust. It also has a
+  # known pre-existing finding (q-charm's manifest lists six SVGs that live in
+  # a sibling tile's folder), so a PR touching that tile would go red for
+  # something it did not cause.
+  validate-examples:
+    name: Validate Examples (changed)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # Need enough history to diff against the base branch.
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Validate the example folders this change touches
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "${BASE_REF:-}" ]; then
+            git fetch --no-tags --depth=50 origin "$BASE_REF"
+            RANGE="origin/$BASE_REF...HEAD"
+          elif [ -n "${BEFORE_SHA:-}" ] && [ "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]; then
+            RANGE="$BEFORE_SHA...HEAD"
+          else
+            RANGE=""
+          fi
+
+          CHANGED=""
+          if [ -n "$RANGE" ]; then
+            CHANGED=$(git diff --name-only "$RANGE" -- 'public/examples/**' || true)
+          fi
+
+          # The template is checked on every run whatever changed: it is the
+          # file every new tile is copied from, and a broken template teaches
+          # the break to everyone who copies it.
+          FOLDERS="public/examples/_template"
+          for file in $CHANGED; do
+            dir=$(echo "$file" | cut -d/ -f1-3)
+            if [ -f "$dir/manifest.json" ]; then
+              FOLDERS="$FOLDERS $dir"
+            fi
+          done
+          FOLDERS=$(echo "$FOLDERS" | tr ' ' '\n' | sort -u | tr '\n' ' ')
+
+          echo "Checking: $FOLDERS"
+          node scripts/validate-example.mjs $FOLDERS

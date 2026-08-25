@@ -23,6 +23,16 @@ describe('the registry is the one source the loader reads', () => {
     expect(PROGRAM_DEFINITIONS).toBe(programDefinitions())
   })
 
+  it('offers nothing from a folder whose name starts with an underscore', () => {
+    // public/examples/_template is starter material for a contributor, not a
+    // tile anyone should be offered, and the underscore is the whole
+    // convention. docs/guides/TILE_AUTHOR_GUIDE.md tells authors to rely on it.
+    const underscored = Object.values(EXAMPLES)
+      .map((entry) => entry.path)
+      .filter((webPath) => /\/_/.test(webPath))
+    expect(underscored).toEqual([])
+  })
+
   it('still describes every example the app shipped with', () => {
     // A refactor that quietly lost a tile would be the worst outcome here.
     expect(Object.keys(EXAMPLES)).toEqual([

@@ -102,7 +102,12 @@ export const MEASURED_SECONDS = {
   'welcome-spotlight.spec.js': 31.5,
   'editor-fold-markers.spec.js': 28.5,
   'classic-tutorial.spec.js': 26.8,
-  'wasm-smoke.spec.js': 25.0,
+  // 25.0 was measured in CI for four cases. IR-8 added a fifth (the tile
+  // template's render), measured locally at 4.1 s against a warm dev server,
+  // where the other four came to about 24 s - close enough to the CI number
+  // to add 5 and be slightly conservative. Re-measure from a CI shard log
+  // next time this file is touched.
+  'wasm-smoke.spec.js': 30.0,
   'auto-preview.spec.js': 22.3,
   'library-panel.spec.js': 22.1,
   'terminology.spec.js': 20.3,

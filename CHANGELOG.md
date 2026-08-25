@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Adding a design of your own is now a documented job, not a favour** (IR-8) - there is a
+  template to copy in `public/examples/_template/`, a walkthrough in
+  `docs/guides/TILE_AUTHOR_GUIDE.md` that assumes no knowledge of this app's code, and a checker,
+  `node scripts/validate-example.mjs`, that reads a contribution and says in plain sentences what is
+  missing: no license, a control with nothing to explain it, a picture the design reads but the
+  manifest never declares. It also checks that anything meant to be read by touch has a written-down
+  range and an `assert()` enforcing it - it cannot tell whether the numbers are right, and says so;
+  those come from the standard governing the design and are signed off by a person. CI runs the
+  checker on the example folders a pull request actually touches
+
 - **Your edits can land in the folder the other program is watching** (IR-5, off by default) - Forge
   could already watch a linked folder and re-render when a desktop editor changed a file in it, but
   the loop only ran one way: nothing of Forge's could get back into the folder except a preset

@@ -47,6 +47,7 @@
     "check-bundle": "node scripts/check-bundle-budget.js dist",
     "validate:html": "vnu --also-check-css --also-check-svg index.html",
     "validate:html:built": "vnu --also-check-css --also-check-svg dist/index.html",
+    "validate:example": "node scripts/validate-example.mjs",
     "import-check": "node scripts/import-check.js src/",
     "css-variable-audit": "node scripts/css-variable-audit.js"
   },
