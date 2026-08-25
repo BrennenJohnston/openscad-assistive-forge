@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Groundwork for opening a file straight into Forge from your desktop** (IR-10, not switched on) -
+  an installed app can be registered with the operating system so double-clicking a `.scad`, `.zip`,
+  `.svg` or `.dxf` opens it in Forge. The routing is built and tested: a file handed over by the
+  system takes exactly the path an uploaded one takes, waits for the engine to be ready first, and
+  sends drawings to the drawing editor. The registration itself is deliberately NOT shipped. It is a
+  claim on your operating system's file associations, and nobody has yet installed Forge on a real
+  machine and watched an Open with actually work. That test is a person's to run
+
 - **The provenance record inside a downloaded project is now a promise, not a proposal** (IR-6) -
   `forge-provenance.json` shipped in an earlier release marked "PROPOSED, not yet a guarantee".
   Its shape is countersigned and it now carries the same additive-only promise and six-month notice

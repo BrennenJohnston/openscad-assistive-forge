@@ -12005,6 +12005,57 @@ if (rounded) {
     return svgEditEntry;
   }
 
+  // "Open with Forge" (IR-10). An installed app can be registered with the
+  // operating system for a set of file types, and the files then arrive here.
+  //
+  // WIRED BUT INERT ON PURPOSE. The registration lives in the web app
+  // manifest's `file_handlers` member, and that member is NOT in
+  // public/manifest.json - it stays out until somebody has installed Forge on
+  // a real machine and watched an "Open with" actually work. Registering file
+  // types with an operating system is not something to ship on a code read.
+  // The exact block to add is in the release record, and this consumer is
+  // ready for it: one JSON edit and the path below runs.
+  //
+  // Feature-detected, so this does nothing at all in Firefox or Safari, and
+  // nothing in Chrome or Edge until the app is installed.
+  (async () => {
+    const { initLaunchFiles } = await import('./js/launch-files.js');
+    initLaunchFiles({
+      // A launched file takes exactly the path an uploaded one takes.
+      openDesign: (file) => fileHandler.handleFile(file),
+      openDrawing: async (file) => {
+        announceImmediate(`Opening ${file.name} in the drawing editor.`);
+        const entry = await getSvgEditEntry();
+        await entry.openFile(file);
+      },
+      // A launched file arrives earlier than any upload can - the launch IS
+      // the page load - so wait for the engine the same way the deep-link
+      // lifecycle does.
+      waitUntilReady: () =>
+        new Promise((resolve) => {
+          if (document.body.getAttribute('data-wasm-ready') === 'true') {
+            resolve();
+            return;
+          }
+          const observer = new MutationObserver(() => {
+            if (document.body.getAttribute('data-wasm-ready') === 'true') {
+              observer.disconnect();
+              resolve();
+            }
+          });
+          observer.observe(document.body, {
+            attributes: true,
+            attributeFilter: ['data-wasm-ready'],
+          });
+        }),
+      onUnsupported: (name) =>
+        showErrorToast({
+          title: 'Cannot Open That File',
+          message: `Forge cannot open ${name}. It works with .scad, .zip, .svg and .dxf files.`,
+        }),
+    });
+  })();
+
   if (svgEditFileInput) {
     svgEditFileInput.addEventListener('change', async (event) => {
       const file = event.target.files?.[0];
