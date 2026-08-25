@@ -86,13 +86,25 @@ export function resolveRoof(tags = {}, heightM = 0, minHeightM = 0) {
 
 // Visual approximation of paved width per highway class, in meters. These
 // are game-world ribbons, not survey data.
+//
+// CW-50 widened the four classes a walker actually stands beside. The old
+// numbers were the carriageway alone; these are curb to curb, which is what
+// the pavement runs against and therefore what the view has to be true to.
+// A US travel lane is 3.0-3.7 m and a parking lane about 2.4 m, so a
+// two-lane residential street with parking on both sides is nearer 8 m than
+// 6, and each step up the class ladder adds a lane's worth.
+//
+// unclassified and living_street deliberately did NOT move with residential:
+// a living street is narrow by design, and both are left for the owner to
+// call rather than widened by association. That leaves primary and trunk at
+// the same 14 m, which is stated here rather than hidden.
 export const ROAD_WIDTHS_M = {
   motorway: 16,
   trunk: 14,
-  primary: 12,
-  secondary: 10,
-  tertiary: 8,
-  residential: 6,
+  primary: 14,
+  secondary: 12,
+  tertiary: 10,
+  residential: 8,
   unclassified: 6,
   living_street: 6,
   pedestrian: 8,

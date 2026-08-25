@@ -54,7 +54,11 @@ import {
   Vector2,
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { pointInRing } from './walk-controls.js';
+import {
+  pointInRing,
+  CURB_HEIGHT_M,
+  PAVEMENT_WIDTH_M,
+} from './walk-controls.js';
 import { makeFigureSpec, makeFigureGeoms } from './city-figures.js';
 import {
   buildRoadGraph,
@@ -139,6 +143,17 @@ const UNDRAWN_ROAD_KINDS = new Set([
 
 // Roads float just above the ground plane so they win the depth test.
 const ROAD_LIFT_M = 0.08;
+// CW-50: the roadway is CUT DOWN a curb's height rather than the pavement
+// being built up, which is what keeps every prop standing where it already
+// stood. ROAD_LIFT_M keeps its own separate job - a depth epsilon on whatever
+// plane a ribbon lies in - and the two never add on the same surface: the
+// difference between a pavement ribbon and a roadway ribbon is exactly the
+// curb height.
+const ROADWAY_LIFT_M = ROAD_LIFT_M - CURB_HEIGHT_M;
+const PAVEMENT_LIFT_M = ROAD_LIFT_M + 0.04;
+// The ground plane has to sit under the deepest thing drawn on it, or it
+// would hide the roadway it is meant to be beneath.
+const GROUND_PLANE_Z = ROADWAY_LIFT_M - 0.02;
 const GROUND_MARGIN_M = 200;
 
 // Window grid: 4 m bays, 3 m storeys; the texture tile spans 4×3 bays so a
@@ -1154,6 +1169,61 @@ function roofGeometry(volume, tint) {
  * @param {{widthM?: number, offsetM?: number, liftM?: number}} [shape]
  *   ribbon width / sideways offset / z lift overrides
  */
+/**
+ * The vertical face of a curb: a wall standing along one edge of a road, from
+ * the roadway up to the pavement (CW-50). Without it the raised pavement is a
+ * lid with nothing under it, and a low camera sees straight through the step.
+ *
+ * @param {{points: Array<[number,number]>, widthM: number}} road
+ * @param {number[]} positions - flat xyz output array (appended to)
+ * @param {{minX:number,minY:number,maxX:number,maxY:number}} [cullBounds]
+ * @param {{offsetM: number, loZ: number, hiZ: number}} shape
+ */
+function appendCurbFace(road, positions, cullBounds, shape) {
+  const { offsetM, loZ, hiZ } = shape;
+  const inBounds = (x, y) =>
+    !cullBounds ||
+    (x >= cullBounds.minX &&
+      x <= cullBounds.maxX &&
+      y >= cullBounds.minY &&
+      y <= cullBounds.maxY);
+  for (let i = 0; i < road.points.length - 1; i++) {
+    const [x1, y1] = road.points[i];
+    const [x2, y2] = road.points[i + 1];
+    if (!inBounds(x1, y1) && !inBounds(x2, y2)) continue;
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-6) continue;
+    const nx = (-dy / len) * offsetM;
+    const ny = (dx / len) * offsetM;
+    const ax = x1 + nx;
+    const ay = y1 + ny;
+    const bx = x2 + nx;
+    const by = y2 + ny;
+    positions.push(
+      ax,
+      ay,
+      loZ,
+      bx,
+      by,
+      loZ,
+      bx,
+      by,
+      hiZ,
+      ax,
+      ay,
+      loZ,
+      bx,
+      by,
+      hiZ,
+      ax,
+      ay,
+      hiZ
+    );
+  }
+}
+
 function appendRoadRibbon(road, positions, cullBounds, shape = {}) {
   const half = (shape.widthM ?? road.widthM) / 2;
   const offset = shape.offsetM ?? 0;
@@ -1819,7 +1889,11 @@ export function buildCityGroup(model) {
   if (!groundTexture) groundMat.color.setHex(0x000000);
   const ground = new Mesh(groundGeom, groundMat);
   ground.name = 'ground';
-  ground.position.set((b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2, 0);
+  ground.position.set(
+    (b.minX + b.maxX) / 2,
+    (b.minY + b.maxY) / 2,
+    GROUND_PLANE_Z
+  );
   // Texture repeat is per-meter; the plane's UVs span 0..1, so scale them.
   if (groundTexture) {
     groundTexture.repeat.set(width / GROUND_TILE_M, height / GROUND_TILE_M);
@@ -1854,22 +1928,45 @@ export function buildCityGroup(model) {
       appendRoadRibbon(road, sidewalkPositions, cullBounds, {
         colors: sidewalkColors,
         tint: surfaceTint(road.surface, DEFAULT_SIDEWALK_SURFACE),
-        // Above the roadway, so a pavement crossing one reads as on top.
-        liftM: ROAD_LIFT_M + 0.04,
+        liftM: PAVEMENT_LIFT_M,
       });
       continue;
     }
     if (UNDRAWN_ROAD_KINDS.has(road.kind)) continue;
+    // CW-50: the roadway drops a curb's height below the pavement.
     appendRoadRibbon(road, roadPositions, cullBounds, {
       colors: roadColors,
       tint: surfaceTint(road.surface, DEFAULT_ROAD_SURFACE),
+      liftM: ROADWAY_LIFT_M,
     });
+    // Every street gets a pavement, not only the few whose pavements
+    // OpenStreetMap maps separately - that patchiness is what left the
+    // roadway reading as a gap between two lines rather than as a road with
+    // kerbs. This is the apron the walker's surface grid agrees with.
+    const apronOffset = (road.widthM + PAVEMENT_WIDTH_M) / 2;
+    for (const side of [apronOffset, -apronOffset]) {
+      appendRoadRibbon(road, sidewalkPositions, cullBounds, {
+        widthM: PAVEMENT_WIDTH_M,
+        offsetM: side,
+        colors: sidewalkColors,
+        tint: surfaceTint(road.surface, DEFAULT_SIDEWALK_SURFACE),
+        liftM: PAVEMENT_LIFT_M,
+      });
+    }
     const edgeOffset = (road.widthM - CURB_WIDTH_M) / 2;
     for (const side of [edgeOffset, -edgeOffset]) {
+      // The curb's own top, level with the pavement it edges.
       appendRoadRibbon(road, curbPositions, cullBounds, {
         widthM: CURB_WIDTH_M,
         offsetM: side,
-        liftM: ROAD_LIFT_M + 0.02,
+        liftM: PAVEMENT_LIFT_M + 0.01,
+      });
+      // ...and its face, so the step down is a surface and not a gap to see
+      // under from a low camera.
+      appendCurbFace(road, curbPositions, cullBounds, {
+        offsetM: side < 0 ? side - CURB_WIDTH_M / 2 : side + CURB_WIDTH_M / 2,
+        loZ: ROADWAY_LIFT_M,
+        hiZ: PAVEMENT_LIFT_M + 0.01,
       });
     }
   }

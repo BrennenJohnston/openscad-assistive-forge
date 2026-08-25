@@ -12,7 +12,10 @@ import {
   inGamutChroma,
   hashSpot,
 } from '../../../src/js/game/city-scene.js'
-import { parseCityExtract } from '../../../src/js/game/city-data.js'
+import {
+  parseCityExtract,
+  ROAD_WIDTHS_M,
+} from '../../../src/js/game/city-data.js'
 import {
   buildCollisionGrid,
   pointInRing,
@@ -75,7 +78,10 @@ describe('buildCityGroup', () => {
     expect(names).toContain('ground')
     expect(names).toContain('roads')
     expect(stats.buildingTriangles).toBeGreaterThan(0)
-    expect(stats.roadTriangles).toBe(2) // one segment = two triangles
+    // One segment is two triangles of roadway plus two more for each of its
+    // pavement aprons (CW-50): every street carries a pavement now, not only
+    // the ones OpenStreetMap maps a pavement for.
+    expect(stats.roadTriangles).toBe(6)
 
     dispose()
   })
@@ -159,9 +165,10 @@ describe('buildCityGroup — CW-8 distinctness', () => {
     expect(roads.material.color.getHex()).toBe(ROAD_TONES.street)
     expect(curbs).toBeDefined()
     expect(curbs.visible).toBe(true)
-    // Two curb ribbons per surface ribbon → 2× the triangle count.
+    // Each side of a roadway carries a curb TOP and a curb FACE (CW-50), so
+    // four ribbons' worth against the one roadway ribbon.
     expect(curbs.geometry.getAttribute('position').count).toBe(
-      roads.geometry.getAttribute('position').count * 2
+      roads.geometry.getAttribute('position').count * 4
     )
 
     setMapView(true)
@@ -434,9 +441,13 @@ describe('buildStreetProps (CW-16)', () => {
       minAbsY = Math.min(minAbsY, Math.abs(a[i + 1]))
       maxZ = Math.max(maxZ, a[i + 2])
     }
-    // The residential road is 6 m wide, so its curb line runs at 2.5-3.0 m.
-    // A car turned across the road, or parked on the sidewalk, breaks this.
-    expect(maxAbsY).toBeLessThanOrEqual(2.5)
+    // Parked cars sit inside the curb ribbon, whose inner edge runs half a
+    // road width in, less the 0.5 m ribbon. Derived from the width rather
+    // than written out, because CW-50 moved it and will not be the last to.
+    // What this catches - a car turned across the road, or parked on the
+    // pavement - stays the same whatever the class is worth.
+    const curbInnerM = ROAD_WIDTHS_M.residential / 2 - 0.5
+    expect(maxAbsY).toBeLessThanOrEqual(curbInnerM + 1e-3)
     expect(minAbsY).toBeGreaterThan(0.4)
     // CW-46: parked cars are CLASSES now - the tallest (pickup/SUV) tops
     // out at 1.9 m and nothing exceeds the class table.
@@ -583,12 +594,15 @@ describe('buildStreetProps — streetlights (CW-18)', () => {
     const poles = verticesOf(props.group, 'lamp-poles')
     expect(poles.length).toBeGreaterThan(0)
 
-    // The road runs along y = 0 at width 6, so every pole stands on the
-    // 3.45 m sidewalk line of one side or the other and nowhere in between
-    // (a vertex sits half the 0.15 m post off that line).
+    // The road runs along y = 0, so every pole stands 0.45 m beyond its edge
+    // on one side or the other and nowhere in between (a vertex sits half the
+    // 0.15 m post off that line). Derived from the class width, which CW-50
+    // moved: the invariant is that poles line up on the pavement, not the
+    // particular metre they line up on.
+    const poleLineM = ROAD_WIDTHS_M.residential / 2 + 0.45
     const sides = new Set()
     for (const [, y] of poles) {
-      expect(Math.abs(Math.abs(y) - 3.45)).toBeLessThanOrEqual(0.076)
+      expect(Math.abs(Math.abs(y) - poleLineM)).toBeLessThanOrEqual(0.076)
       sides.add(Math.sign(y))
     }
     expect(sides.size).toBe(2)
@@ -607,8 +621,8 @@ describe('buildStreetProps — streetlights (CW-18)', () => {
       // line by more than three metres.
       expect(z).toBeGreaterThan(5.7)
       expect(z).toBeLessThan(5.9)
-      // Reaching back toward the centerline from the 3.45 m pole line.
-      expect(Math.abs(y)).toBeLessThan(3.45)
+      // Reaching back toward the centerline from the pole line.
+      expect(Math.abs(y)).toBeLessThan(ROAD_WIDTHS_M.residential / 2 + 0.45)
     }
 
     for (const [, , z] of verticesOf(props.group, 'lamp-poles')) {
