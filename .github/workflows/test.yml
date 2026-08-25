@@ -1019,6 +1019,7 @@ jobs:
             'README.md'
             'docs/*.md'
             'docs/guides/**/*.md'
+            'docs/specs/FORGE_HANDOFF_CONTRACT.md'
           fail: true
 
   lint-markdown:

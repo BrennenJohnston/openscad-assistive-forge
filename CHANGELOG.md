@@ -9,6 +9,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Groundwork for opening a file straight into Forge from your desktop** (IR-10, not switched on) -
+  an installed app can be registered with the operating system so double-clicking a `.scad`, `.zip`,
+  `.svg` or `.dxf` opens it in Forge. The routing is built and tested: a file handed over by the
+  system takes exactly the path an uploaded one takes, waits for the engine to be ready first, and
+  sends drawings to the drawing editor. The registration itself is deliberately NOT shipped. It is a
+  claim on your operating system's file associations, and nobody has yet installed Forge on a real
+  machine and watched an Open with actually work. That test is a person's to run
+
+- **The provenance record inside a downloaded project is now a promise, not a proposal** (IR-6) -
+  `forge-provenance.json` shipped in an earlier release marked "PROPOSED, not yet a guarantee".
+  Its shape is countersigned and it now carries the same additive-only promise and six-month notice
+  period as every URL parameter, so a tool at the other end can depend on it
+
+- **One page a pipeline tool can build against without talking to anybody** (IR-6) -
+  `docs/specs/FORGE_HANDOFF_CONTRACT.md` writes down how another program hands work to Forge and
+  gets it back: the link parameters, the settings fragment, the zero-hosting `data:` lane with its
+  measured budget, which hosts a file may live on, what comes back and what it is called, the error
+  codes, the sizes, and the four things the browser's security policy will not allow (no iframe, no
+  opener messaging, no arbitrary hosts, no server-side state). Every claim on it is backed by a
+  shipped release or a file in this repository; where something does not work, it says so. A short
+  machine-readable summary is served at `/forge-capabilities.txt`, and a test in the
+  production-parity lane composes a link from the page alone and loads it, so the page cannot drift
+  away from what the app does
+
+- **A shared link can decide which settings you meet first** (IR-9) - some designs have well over a
+  hundred parameters, and every one of them is there for a reason, but that is not a first screen
+  anybody can use. Whoever writes a project's manifest can now list the handful that matter
+  (`defaults.starterParameters`), and Forge shows those and puts the rest behind one Show all
+  parameters button. Nothing is removed: the button is a toggle, everything comes back in the order
+  the design wrote it, and searching for a parameter drops the wall on its own and says so. A
+  control you cannot see is not reachable by keyboard or screen reader either, so there is nothing
+  lurking invisibly in the Tab order. A manifest that does not use the field opens exactly as it
+  always did
+
 - **Adding a design of your own is now a documented job, not a favour** (IR-8) - there is a
   template to copy in `public/examples/_template/`, a walkthrough in
   `docs/guides/TILE_AUTHOR_GUIDE.md` that assumes no knowledge of this app's code, and a checker,

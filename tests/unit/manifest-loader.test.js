@@ -233,6 +233,53 @@ describe('validateManifest', () => {
     expect(validateManifest(data).valid).toBe(false)
   })
 
+  // -- defaults.starterParameters (IR-9) -----------------------------------
+
+  it('accepts a manifest with no starterParameters at all', () => {
+    // The field is additive. Every manifest written before it existed has to
+    // keep validating exactly as it did.
+    const data = { ...validManifest, defaults: { preset: 'Default' } }
+    expect(validateManifest(data).valid).toBe(true)
+  })
+
+  it('accepts a list of parameter names', () => {
+    const data = {
+      ...validManifest,
+      defaults: { starterParameters: ['width', 'height'] },
+    }
+    expect(validateManifest(data).valid).toBe(true)
+  })
+
+  it('accepts an empty list', () => {
+    const data = { ...validManifest, defaults: { starterParameters: [] } }
+    expect(validateManifest(data).valid).toBe(true)
+  })
+
+  it('rejects starterParameters that is not an array', () => {
+    const data = { ...validManifest, defaults: { starterParameters: 'width' } }
+    const result = validateManifest(data)
+    expect(result.valid).toBe(false)
+    expect(result.errors.join(' ')).toMatch(/starterParameters/)
+  })
+
+  it('rejects entries that are not names', () => {
+    const data = {
+      ...validManifest,
+      defaults: { starterParameters: ['width', 42] },
+    }
+    expect(validateManifest(data).valid).toBe(false)
+  })
+
+  it('rejects a blank name, which would match nothing', () => {
+    const data = { ...validManifest, defaults: { starterParameters: ['  '] } }
+    expect(validateManifest(data).valid).toBe(false)
+  })
+
+  it('does not choke on defaults: null', () => {
+    const data = { ...validManifest, defaults: null }
+    expect(() => validateManifest(data)).not.toThrow()
+  })
+
   // -- optional metadata type checks --------------------------------------
 
   it('should reject non-string name', () => {

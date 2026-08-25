@@ -92,6 +92,48 @@ The `forgeManifest` field in your JSON declares which schema version you're usin
 - `defaults.preset`, `defaults.autoPreview`, `defaults.skipWelcome`
 - `defaults.uiMode`: the interface mode a project opens in, the same values `?uiMode=` takes
 - `defaults.hiddenPanels`: an array of panel ids to keep out of the way in the simplified mode. Panels are hidden, never removed; the person opening your project can show any of them
+- `defaults.starterParameters`: an array of parameter names to show first. The Customizer surfaces those controls and puts the rest behind one "Show all parameters" button. Like `hiddenPanels`, nothing is removed: everything is one button away, the button is a toggle, and a name your design does not have is reported rather than treated as an error
+
+> **Building a tool that hands work to Forge?**
+> [FORGE_HANDOFF_CONTRACT.md](FORGE_HANDOFF_CONTRACT.md) is this material
+> written for you rather than for a person: the lanes in, what comes back and
+> what it is called, the sizes, the error codes, and the four things the
+> browser will not let you do. A machine-readable summary is served at
+> `/forge-capabilities.txt`.
+
+### `defaults.starterParameters` (additive field)
+
+`defaults.starterParameters` was added as an additive optional field in schema
+version `"1.0"`. A manifest without it renders exactly as it always did.
+
+```json
+{
+  "forgeManifest": "1.0",
+  "files": { "main": "keyguard.scad" },
+  "defaults": {
+    "starterParameters": ["tablet_model", "grid_rows", "grid_columns"]
+  }
+}
+```
+
+When present:
+
+- the Customizer shows those controls, opens the groups they live in, and hides
+  every other control and any group left with nothing in it
+- one control appears above the parameters: **Show all parameters**. It is a
+  toggle, so the way back to the shorter screen is the same button
+- hidden means hidden for everybody. The wall is `display: none`, so a control
+  a sighted person cannot see is not reachable by keyboard or screen reader
+  either. Nothing is removed from the page and everything comes back
+- searching the parameters, or jumping to a group, drops the wall on its own
+  and says so. A search that cannot find a parameter the design has would be a
+  lie
+- a name the design does not have is reported in a notice above the parameters
+  and in the console, and the rest of the list still works. It is never an
+  error, because a manifest is somebody else's file and a stale name in it is
+  not a reason to refuse the whole project
+- the list belongs to the project it came with. Opening a different file does
+  not inherit it
 
 ### `files.bundle` (additive field)
 
@@ -170,7 +212,7 @@ If a widely-used hosting platform needs to be added to the CSP `connect-src`, th
 
 ## Files Forge writes
 
-### `forge-provenance.json` (PROPOSED, not yet a guarantee)
+### `forge-provenance.json` (**Stable**)
 
 The Publish dialog's **Download Project ZIP** puts a small record beside the
 project so a file that comes back can say where it came from:
@@ -192,9 +234,15 @@ link, `preset` the selected preset if any, and `parameters` only the values
 that differ from the design's defaults - the same set the settings fragment
 carries.
 
-**This shape is a proposal, not yet part of the stability contract.** Nothing
-in Forge reads it back today, and the field names may change before it is
-promised. Do not build a tool that depends on it yet.
+**This shape is part of the stability contract**, countersigned by the project
+owner on 2026-08-25 as it shipped. The field names above will not change in a
+backward-incompatible way, and the same additive-only promise and six-month
+notice period that cover the URL parameters cover this file.
+
+Nothing in Forge reads it back today; it exists for the tool at the other end.
+If your tool receives one, `manifest` tells you where the design came from and
+`parameters` tells you exactly what the person set, which is enough to
+reproduce their result without asking them anything.
 
 ---
 
