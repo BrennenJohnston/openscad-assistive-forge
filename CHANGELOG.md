@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Your edits can land in the folder the other program is watching** (IR-5, off by default) - Forge
+  could already watch a linked folder and re-render when a desktop editor changed a file in it, but
+  the loop only ran one way: nothing of Forge's could get back into the folder except a preset
+  sidecar. Two explicit actions now close it - Save to folder puts a generated file beside your
+  design, and Save companions to folder writes the companion files you edited. Every write is one
+  you asked for, every write is announced, and your main design is never overwritten: Forge is not
+  the editor of record for it in this loop. This ships switched OFF and stays off until the folder
+  write-back has been tried on a real Chrome or Edge with the watcher running, which is a test only
+  a person can do
+
 - **Open a DXF, tidy it up, and save a DXF back** (IR-12) - laser and cutting software speaks DXF,
   and so does the tool chain some of this work arrives from. The drawing editor now takes a .dxf
   the same way it takes an SVG or a photo: Forge's own engine converts it, the editor opens on the
@@ -243,6 +253,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   data where there is one, and from the building itself where there is not
 
 ### Fixed
+
+- **When a link's numbers get changed, the message now waits for you** (IR-13) - opening a shared
+  link whose value is outside what the design allows adjusts it, and Forge said so in the status
+  line for about two thirds of a second before the render replaced it. Anyone who looked up a
+  moment later never found out their number had moved. It is now a notice that sits above the
+  controls until you dismiss it, and it names each one: which parameter, what the link asked for,
+  and what it is now
 
 - **Changing how a photo is read no longer throws you out of the control you are using** (IR-11) -
   re-reading a picture rebuilds the editor underneath, and that was moving the settings panel in a

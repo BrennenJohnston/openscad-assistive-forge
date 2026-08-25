@@ -3749,6 +3749,14 @@
                         >
                           Save as Project
                         </button>
+                        <button
+                          type="button"
+                          id="companionSaveToFolderBtn"
+                          class="btn btn-sm btn-outline hidden"
+                          aria-label="Save the companion files into the connected folder"
+                        >
+                          Save companions to folder
+                        </button>
                       </div>
                     </div>
                   </details>
@@ -4175,6 +4183,18 @@
                   </button>
                 </div>
               </div>
+              <!-- Notices about the values on screen. Polite rather than an
+                   alert: this reports something that already happened, and it
+                   stays until dismissed rather than being overwritten by the
+                   next status line. -->
+              <div
+                id="parameterNotices"
+                class="parameter-notices"
+                role="status"
+                aria-live="polite"
+                aria-label="Notices about the parameter values"
+                hidden
+              ></div>
               <div
                 id="parametersContainer"
                 class="parameters-container"
@@ -5444,6 +5464,30 @@
                   </svg>
                   <span>Download last file</span>
                 </a>
+                <button
+                  type="button"
+                  id="saveToFolderBtn"
+                  class="btn btn-sm btn-outline hidden"
+                  aria-label="Save the generated file into the connected folder"
+                >
+                  <svg
+                    class="btn-icon-svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"
+                    ></path>
+                    <polyline points="9 13 12 16 15 13"></polyline>
+                    <line x1="12" y1="16" x2="12" y2="10"></line>
+                  </svg>
+                  <span>Save to folder</span>
+                </button>
               </div>
               <!-- Mobile Camera Controls Drawer (visible only on mobile) -->
               <div
