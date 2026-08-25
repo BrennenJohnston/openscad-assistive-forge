@@ -238,6 +238,58 @@ describe('offsetPath', () => {
 });
 
 // ---------------------------------------------------------------------------
+// offsetPath — MAGNITUDE (D-107)
+//
+// The original suite only asserted direction (bbox grew or shrank), which a
+// defective engine passed while delivering 92–95% of requested outsets and
+// 9–15% of requested insets (measured against clipper2-js@1.2.4's
+// ClipperOffset on this exact square). These tests pin the amount and the
+// symmetry so a regression cannot ship green again.
+// ---------------------------------------------------------------------------
+
+describe('offsetPath magnitude (D-107)', () => {
+  // SQUARE_PATH is 80×80 with corners at 10 and 90.
+  const measure = (delta) => {
+    const out = offsetPath(SQUARE_PATH, delta, { smooth: false });
+    const pts = pathToPolygon(out, 512);
+    return pointsBBox(pts);
+  };
+
+  it('outset +5 lands within 0.15 units per side, symmetrically', () => {
+    const b = measure(5);
+    expect(Math.abs(b.minX - 5)).toBeLessThan(0.15);
+    expect(Math.abs(b.maxX - 95)).toBeLessThan(0.15);
+    expect(Math.abs(b.minY - 5)).toBeLessThan(0.15);
+    expect(Math.abs(b.maxY - 95)).toBeLessThan(0.15);
+    // Symmetry: both sides moved the same amount
+    expect(Math.abs(b.minX + b.maxX - 100)).toBeLessThan(0.2);
+  });
+
+  it('inset -5 lands within 0.15 units per side, symmetrically', () => {
+    const b = measure(-5);
+    expect(Math.abs(b.minX - 15)).toBeLessThan(0.15);
+    expect(Math.abs(b.maxX - 85)).toBeLessThan(0.15);
+    expect(Math.abs(b.minY - 15)).toBeLessThan(0.15);
+    expect(Math.abs(b.maxY - 85)).toBeLessThan(0.15);
+    expect(Math.abs(b.minX + b.maxX - 100)).toBeLessThan(0.2);
+  });
+
+  it('inset -10 delivers the full amount (the old engine gave 15%)', () => {
+    const b = measure(-10);
+    expect(b.maxX - b.minX).toBeGreaterThan(59.5);
+    expect(b.maxX - b.minX).toBeLessThan(60.5);
+  });
+
+  it('outset +10 delivers the full amount on both axes', () => {
+    const b = measure(10);
+    expect(b.maxX - b.minX).toBeGreaterThan(99.5);
+    expect(b.maxX - b.minX).toBeLessThan(100.5);
+    expect(b.maxY - b.minY).toBeGreaterThan(99.5);
+    expect(b.maxY - b.minY).toBeLessThan(100.5);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // mmToSvgUnits
 // ---------------------------------------------------------------------------
 
@@ -339,7 +391,10 @@ describe('chaikinSmooth', () => {
   });
 
   it('returns input unchanged for fewer than 3 points', () => {
-    const two = [{ x: 0, y: 0 }, { x: 1, y: 1 }];
+    const two = [
+      { x: 0, y: 0 },
+      { x: 1, y: 1 },
+    ];
     expect(chaikinSmooth(two, 2)).toBe(two);
   });
 
@@ -359,16 +414,30 @@ describe('chaikinSmooth', () => {
 
 describe('offsetPath smoothing', () => {
   it('smooth=false produces output with fewer points than smooth=true', () => {
-    const unsmoothed = offsetPath(SQUARE_PATH, 5, { smooth: false, sampleCount: 64 });
-    const smoothed = offsetPath(SQUARE_PATH, 5, { smooth: true, sampleCount: 64 });
+    const unsmoothed = offsetPath(SQUARE_PATH, 5, {
+      smooth: false,
+      sampleCount: 64,
+    });
+    const smoothed = offsetPath(SQUARE_PATH, 5, {
+      smooth: true,
+      sampleCount: 64,
+    });
 
     const countLs = (d) => (d.match(/L/g) || []).length;
     expect(countLs(smoothed)).toBeGreaterThan(countLs(unsmoothed));
   });
 
   it('accepts custom smoothIterations', () => {
-    const s1 = offsetPath(SQUARE_PATH, 5, { smooth: true, smoothIterations: 1, sampleCount: 64 });
-    const s3 = offsetPath(SQUARE_PATH, 5, { smooth: true, smoothIterations: 3, sampleCount: 64 });
+    const s1 = offsetPath(SQUARE_PATH, 5, {
+      smooth: true,
+      smoothIterations: 1,
+      sampleCount: 64,
+    });
+    const s3 = offsetPath(SQUARE_PATH, 5, {
+      smooth: true,
+      smoothIterations: 3,
+      sampleCount: 64,
+    });
 
     const countLs = (d) => (d.match(/L/g) || []).length;
     expect(countLs(s3)).toBeGreaterThan(countLs(s1));
@@ -376,7 +445,10 @@ describe('offsetPath smoothing', () => {
 
   it('smooth=true is the default behavior', () => {
     const defaultResult = offsetPath(SQUARE_PATH, 5, { sampleCount: 64 });
-    const explicitSmooth = offsetPath(SQUARE_PATH, 5, { smooth: true, sampleCount: 64 });
+    const explicitSmooth = offsetPath(SQUARE_PATH, 5, {
+      smooth: true,
+      sampleCount: 64,
+    });
 
     const countLs = (d) => (d.match(/L/g) || []).length;
     expect(countLs(defaultResult)).toBe(countLs(explicitSmooth));
