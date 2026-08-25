@@ -7,7 +7,11 @@ import { formatFileSize } from './download.js';
 import { announceChange } from './announcer.js';
 import { reapplyDetailLevel } from './param-detail-controller.js';
 import { isRasterImageFile } from './file-param-resolver.js';
-import { convertPngToSvg, validateImageDimensions } from './image-import.js';
+import {
+  convertImageDataToSvg,
+  loadImageData,
+  validateImageDimensions,
+} from './image-import.js';
 import { isEnabled } from './feature-flags.js';
 import { prepareSvg, needsPreparation, analyzeSvg } from './svg-preparer.js';
 import { createSvgPrepWorkspace } from './svg-preparer-workspace.js';
@@ -1932,6 +1936,17 @@ function createFileControl(param, onChange) {
   statusCard.setAttribute('role', 'status');
   statusCard.setAttribute('aria-live', 'polite');
 
+  // ── Ink controls, for a picture that had to be traced ──────────────────
+  // Built only when a raster file arrives, and kept with its pixels so a mode
+  // change re-reads the same picture instead of the file.
+  const inkControlsContainer = document.createElement('div');
+  inkControlsContainer.className = 'ink-controls-container';
+  inkControlsContainer.hidden = true;
+  let inkControls = null;
+  let inkSourceImageData = null;
+  let inkSourceFileName = null;
+  let inkRetraceTimer = null;
+
   // ── Inline workspace for SVG preparation ───────────────────────────────
   const workspaceContainer = document.createElement('div');
   workspaceContainer.className = 'svg-prep-workspace-container';
@@ -2081,6 +2096,76 @@ function createFileControl(param, onChange) {
    * @param {string} rawSvgText
    * @returns {string} SVG text to use (prepared or original)
    */
+  /**
+   * Build the ink-mode panel, once, on the first picture that needs it.
+   * Lazily imported: a project with no image parameter never loads it.
+   */
+  async function ensureInkControls() {
+    if (inkControls) {
+      inkControlsContainer.hidden = false;
+      return inkControls;
+    }
+    const { createInkControls } = await import('./ink-controls.js');
+    inkControls = createInkControls({
+      idPrefix: `ink-${param.name}`,
+      announce: announceChange,
+      onChange: (settings) => {
+        clearTimeout(inkRetraceTimer);
+        inkRetraceTimer = setTimeout(() => {
+          applyTracedImage(settings, { announceResult: false });
+        }, 180);
+      },
+    });
+    inkControlsContainer.appendChild(inkControls.element);
+    inkControlsContainer.hidden = false;
+    return inkControls;
+  }
+
+  /**
+   * Trace the held pixels with the given ink settings and mount the result as
+   * this parameter's value.
+   *
+   * @param {Object} settings - From the ink panel
+   * @param {Object} [options]
+   * @param {boolean} [options.announceResult]
+   */
+  async function applyTracedImage(settings, { announceResult = false } = {}) {
+    if (!inkSourceImageData) return;
+    if (inkControls) inkControls.setBusy(true);
+    try {
+      const { svg, summary } = await convertImageDataToSvg(inkSourceImageData, {
+        ink: settings,
+      });
+      currentFileName = inkSourceFileName;
+      const processedSvg = processSvgForOpenScad(svg);
+      const svgDataUrl = svgToDataUrl(processedSvg);
+
+      const pathCount = (svg.match(/<path/g) || []).length;
+      if (inkControls) inkControls.setSummary(summary, pathCount);
+
+      const convertedFile = {
+        name: inkSourceFileName,
+        size: processedSvg.length,
+        type: 'image/svg+xml',
+        data: svgDataUrl,
+      };
+      onChange(param.name, convertedFile);
+      if (fileUploadListener) {
+        fileUploadListener(param.name, convertedFile);
+      }
+      if (announceResult) {
+        announceChange(
+          `Image converted to vector format: ${inkSourceFileName}`
+        );
+      }
+    } catch (err) {
+      fileInfo.textContent = `Conversion failed: ${err.message}`;
+      fileInfo.className = 'file-info file-info--error';
+      announceChange(`Image conversion failed: ${err.message}`);
+      console.error('[ImageImport] Conversion error:', err);
+    }
+  }
+
   function processSvgForOpenScad(rawSvgText) {
     currentRawSvg = rawSvgText;
 
@@ -2215,30 +2300,20 @@ function createFileControl(param, onChange) {
             announceChange(dimCheck.warning);
           }
 
-          const svgString = await convertPngToSvg(dataUrl);
           const svgName = file.name.replace(/\.[^.]+$/, '.svg');
-          currentFileName = svgName;
-          const processedSvg = processSvgForOpenScad(svgString);
-          const svgDataUrl = svgToDataUrl(processedSvg);
+          inkSourceImageData = await loadImageData(dataUrl);
+          inkSourceFileName = svgName;
+          await ensureInkControls();
+
+          await applyTracedImage(inkControls.getSettings(), {
+            announceResult: true,
+          });
 
           fileInfo.textContent = `${svgName} (converted from ${file.name})`;
           fileInfo.title = svgName;
           fileInfo.removeAttribute('aria-busy');
           fileButton.disabled = false;
           clearButton.style.display = 'inline-block';
-
-          announceChange(`Image converted to vector format: ${svgName}`);
-
-          const convertedFile = {
-            name: svgName,
-            size: processedSvg.length,
-            type: 'image/svg+xml',
-            data: svgDataUrl,
-          };
-          onChange(param.name, convertedFile);
-          if (fileUploadListener) {
-            fileUploadListener(param.name, convertedFile);
-          }
         } catch (err) {
           fileInfo.textContent = `Conversion failed: ${err.message}`;
           fileInfo.className = 'file-info file-info--error';
@@ -2345,7 +2420,10 @@ function createFileControl(param, onChange) {
   fileContainer.appendChild(fileInput);
 
   container.appendChild(fileContainer);
-  if (acceptsSvg) container.appendChild(workspaceContainer);
+  if (acceptsSvg) {
+    container.appendChild(inkControlsContainer);
+    container.appendChild(workspaceContainer);
+  }
 
   return container;
 }

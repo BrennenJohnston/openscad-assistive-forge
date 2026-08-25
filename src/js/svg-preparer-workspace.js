@@ -297,12 +297,28 @@ function buildWorkspaceDom() {
   backdrop.className = 'svg-prep-fullscreen-backdrop hidden';
   backdrop.setAttribute('aria-hidden', 'true');
 
-  root.append(header, previews, legendRow, objects, warnings, footer);
+  // A slot a host can put its own controls in - the ink-mode panel, when the
+  // drawing came from a photograph. Empty and hidden otherwise, so the editor
+  // looks exactly as it did when nothing fills it.
+  const toolsSlot = document.createElement('div');
+  toolsSlot.className = 'svg-prep-tools-slot';
+  toolsSlot.hidden = true;
+
+  root.append(
+    header,
+    toolsSlot,
+    previews,
+    legendRow,
+    objects,
+    warnings,
+    footer
+  );
 
   return {
     root,
     refs: {
       header,
+      toolsSlot,
       title,
       designWidthGroup,
       designWidthInput,
@@ -1061,6 +1077,11 @@ export function createSvgPrepWorkspace(containerEl) {
   }
 
   function open(svgString, analysis, callbacks = {}) {
+    // A re-trace calls open() on an editor that is already up. Closing drops
+    // it out of fullscreen and hands focus back to whatever opened it, which
+    // is not what "the picture changed" should do to someone mid-adjustment.
+    const wasFullscreen = isFullscreen;
+    const focusedBefore = wasFullscreen ? document.activeElement : null;
     if (isOpen) dismiss();
 
     isOpen = true;
@@ -1086,6 +1107,20 @@ export function createSvgPrepWorkspace(containerEl) {
     // A file-mode host has no page behind the editor worth returning to, so
     // there is no inline size to shrink back into.
     refs.fullscreenBtn.hidden = hostMode === 'file';
+
+    if (callbacks.tools) {
+      // Re-inserting the SAME element would move it in the DOM, and moving a
+      // node blurs whatever inside it had focus. A re-trace happens every time
+      // a slider moves, so re-parenting here would throw a keyboard user out
+      // of the control they are using, on every change.
+      if (refs.toolsSlot.firstChild !== callbacks.tools) {
+        refs.toolsSlot.replaceChildren(callbacks.tools);
+      }
+      refs.toolsSlot.hidden = false;
+    } else {
+      refs.toolsSlot.replaceChildren();
+      refs.toolsSlot.hidden = true;
+    }
 
     const populated = populateObjectList(
       refs.objects,
@@ -1128,8 +1163,19 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.footer.addEventListener('click', handleFooterClick);
     refs.rolesToggleBtn.addEventListener('click', handleRolesToggle);
     refs.closeBtn.addEventListener('click', close);
-    refs.fullscreenBtn.addEventListener('click', toggleFullscreen);
+    refs.fullscreenBtn.addEventListener('click', handleFullscreenButton);
     refs.backdrop.addEventListener('click', closeFullscreen);
+
+    if (wasFullscreen) {
+      // Put it back the way it was, with focus where the person left it.
+      openFullscreen({
+        initialFocus:
+          focusedBefore && root.contains(focusedBefore)
+            ? focusedBefore
+            : refs.closeBtn,
+      });
+      return;
+    }
 
     announce('SVG Preparation Editor opened');
 
@@ -1185,13 +1231,13 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.footer.removeEventListener('click', handleFooterClick);
     refs.rolesToggleBtn.removeEventListener('click', handleRolesToggle);
     refs.closeBtn.removeEventListener('click', close);
-    refs.fullscreenBtn.removeEventListener('click', toggleFullscreen);
+    refs.fullscreenBtn.removeEventListener('click', handleFullscreenButton);
     refs.backdrop.removeEventListener('click', closeFullscreen);
 
     announce('SVG Preparation Editor closed');
   }
 
-  function openFullscreen() {
+  function openFullscreen({ initialFocus } = {}) {
     if (isFullscreen || !isOpen) return;
 
     isFullscreen = true;
@@ -1213,7 +1259,7 @@ export function createSvgPrepWorkspace(containerEl) {
       onEscape: hostMode === 'file' ? close : closeFullscreen,
     });
     fullscreenTrap.activate({
-      initialFocus: refs.closeBtn,
+      initialFocus: initialFocus || refs.closeBtn,
       initialFocusDelay: 50,
     });
 
@@ -1251,6 +1297,12 @@ export function createSvgPrepWorkspace(containerEl) {
     } else {
       openFullscreen();
     }
+  }
+
+  // The fullscreen button is wired to this rather than openFullscreen so a
+  // click event can never arrive where an options object is expected.
+  function handleFullscreenButton() {
+    toggleFullscreen();
   }
 
   function getResult() {

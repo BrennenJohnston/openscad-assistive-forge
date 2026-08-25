@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A symbol keeps its picture instead of turning into a coloured blob** (IR-11) - communication
+  symbols are black line work over a strong colour, and the colour means something. Forge decided
+  what to trace by brightness alone, which puts a blue background and the black drawing on top of
+  it in the same bucket: a person symbol inside a blue square came out as a plain blue square, the
+  person gone, with nothing said about it. Photos now come in through a choice - Line art, which
+  keeps the drawn lines and drops the colour behind them, Solid shape for very small pieces, or
+  Light and dark, which is what Forge did before and is one press away. Line art is the starting
+  point for photos. Two sliders, each with a number box, tune it, and after every change Forge
+  says how many shapes it found, how much of the picture became ink, and whether the result looks
+  almost empty or almost solid. If one colour sat behind the lines, it tells you which, so you can
+  choose a filament that keeps the symbol recognisable. Everything happens in your browser and
+  nothing is uploaded
+
 - **Open a drawing, clean it up, and save it back - no design needed** (IR-4) - Forge already had an
   editor that lists every shape in an SVG and lets you choose, by keyboard, which ones become the
   printed shape, which become holes, and which are dropped. You could only reach it through a
@@ -220,6 +233,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   data where there is one, and from the building itself where there is not
 
 ### Fixed
+
+- **Changing how a photo is read no longer throws you out of the control you are using** (IR-11) -
+  re-reading a picture rebuilds the editor underneath, and that was moving the settings panel in a
+  way that dropped your keyboard focus and shrank the editor back behind the page. Both were found
+  by a test that runs the same walk four times. The editor now stays as you left it: expanded if it
+  was expanded, with the keyboard still on the control you were adjusting
 
 - **The drawing editor reads correctly to a screen reader** (IR-4) - two long-standing faults, both
   found the first time the editor was checked with an accessibility scanner. The list of shapes had

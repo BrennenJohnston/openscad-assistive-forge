@@ -17,7 +17,11 @@
 
 import { createSvgPrepWorkspace } from './svg-preparer-workspace.js';
 import { analyzeSvg } from './svg-preparer.js';
-import { convertPngToSvg, IMAGE_IMPORT_LIMITS } from './image-import.js';
+import {
+  convertImageDataToSvg,
+  loadImageData,
+  IMAGE_IMPORT_LIMITS,
+} from './image-import.js';
 
 /** Extensions the standalone door accepts. */
 export const SVG_EDIT_ACCEPTED_EXTENSIONS = [
@@ -75,12 +79,23 @@ function readAsDataUrl(file) {
 }
 
 /**
+ * How long to wait after a slider moves before re-reading the picture.
+ * Re-tracing takes about a tenth of a second; doing it per pixel of travel
+ * would make the slider feel stuck.
+ */
+export const RETRACE_DEBOUNCE_MS = 180;
+
+/**
  * Turn a chosen file into the SVG text the editor works on.
  *
+ * For a photograph the pixels come back too, so a change of ink mode can
+ * re-trace the same picture without reading the file again.
+ *
  * @param {File} file
- * @returns {Promise<{svg: string, traced: boolean}>}
+ * @param {Object} [ink] - Ink settings for a raster file
+ * @returns {Promise<{svg: string, traced: boolean, imageData: ImageData|null, summary: Object|null}>}
  */
-export async function svgTextForFile(file) {
+export async function svgTextForFile(file, ink = { mode: 'lineart' }) {
   if (!file || !acceptsForEditing(file.name)) {
     throw new Error(
       `${file?.name || 'That file'} is not a drawing Forge can edit. ` +
@@ -96,14 +111,15 @@ export async function svgTextForFile(file) {
 
   if (RASTER_EXTENSIONS.includes(fileExtension(file.name))) {
     const dataUrl = await readAsDataUrl(file);
-    // convertPngToSvg refuses anything past IMAGE_IMPORT_LIMITS.maxPixels with
-    // its own message, which names the actual pixel count.
-    const svg = await convertPngToSvg(dataUrl);
-    return { svg, traced: true };
+    const imageData = await loadImageData(dataUrl);
+    // convertImageDataToSvg refuses anything past IMAGE_IMPORT_LIMITS.maxPixels
+    // with its own message, which names the actual pixel count.
+    const { svg, summary } = await convertImageDataToSvg(imageData, { ink });
+    return { svg, traced: true, imageData, summary };
   }
 
   const svg = await readAsText(file);
-  return { svg, traced: false };
+  return { svg, traced: false, imageData: null, summary: null };
 }
 
 /**
@@ -120,6 +136,12 @@ export function createSvgEditEntry({ announce, onError } = {}) {
   let container = null;
   let workspace = null;
   let open = false;
+  // Kept between re-traces: a mode change re-reads these pixels rather than
+  // the file, so the slider answers in about a tenth of a second.
+  let currentImageData = null;
+  let currentFileName = null;
+  let inkControls = null;
+  let retraceTimer = null;
 
   const say = (message) => {
     if (typeof announce === 'function') announce(message);
@@ -149,6 +171,75 @@ export function createSvgEditEntry({ announce, onError } = {}) {
    * @param {File} file
    * @returns {Promise<boolean>} true when the editor is showing the file
    */
+  /**
+   * Show an SVG in the editor. Used for the first open and for every re-trace
+   * after an ink setting changes.
+   * @returns {boolean} false when the SVG has nothing the editor can work on
+   */
+  function showSvg(svg, { announceOpen, summary } = {}) {
+    let analysis;
+    try {
+      analysis = analyzeSvg(svg);
+    } catch (error) {
+      fail(
+        `Forge could not read the shapes in ${currentFileName}: ${error.message}`
+      );
+      return false;
+    }
+
+    const shapeCount = analysis.elements ? analysis.elements.length : 0;
+    if (shapeCount === 0) {
+      fail(
+        `${currentFileName} has no shapes Forge can work with. ` +
+          `A photo needs dark lines on a light background to trace.`
+      );
+      return false;
+    }
+
+    const ws = ensureWorkspace();
+    ws.open(svg, analysis, {
+      mode: 'file',
+      sourceName: currentFileName,
+      tools: inkControls ? inkControls.element : null,
+      onSave: (savedName) => {
+        say(`${savedName} saved. Your original file is untouched.`);
+      },
+      onKeepOriginal: () => {
+        open = false;
+      },
+    });
+    if (!open) {
+      // With no model behind it this is the whole screen's task, so it opens
+      // expanded: that is also where the editor's own focus trap lives.
+      ws.openFullscreen();
+    }
+    open = true;
+
+    if (inkControls) inkControls.setSummary(summary, shapeCount);
+    if (announceOpen) say(announceOpen);
+    return true;
+  }
+
+  async function retrace(settings) {
+    if (!currentImageData) return;
+    if (inkControls) inkControls.setBusy(true);
+    try {
+      const { svg, summary } = await convertImageDataToSvg(currentImageData, {
+        ink: settings,
+      });
+      showSvg(svg, { summary });
+    } catch (error) {
+      fail(`Forge could not re-read ${currentFileName}: ${error.message}`);
+    } finally {
+      if (inkControls) inkControls.setBusy(false);
+    }
+  }
+
+  /**
+   * Open the editor on a file the person chose.
+   * @param {File} file
+   * @returns {Promise<boolean>} true when the editor is showing the file
+   */
   async function openFile(file) {
     let prepared;
     try {
@@ -158,54 +249,56 @@ export function createSvgEditEntry({ announce, onError } = {}) {
       return false;
     }
 
-    let analysis;
-    try {
-      analysis = analyzeSvg(prepared.svg);
-    } catch (error) {
-      fail(`Forge could not read the shapes in ${file.name}: ${error.message}`);
-      return false;
+    currentFileName = file.name;
+    currentImageData = prepared.imageData;
+    open = false;
+
+    if (prepared.traced) {
+      // The controls only exist for a photograph: an SVG already knows which
+      // of its shapes are which, so there is nothing to decide about ink.
+      const { createInkControls } = await import('./ink-controls.js');
+      inkControls = createInkControls({
+        idPrefix: 'svg-edit-ink',
+        announce: say,
+        onChange: (settings) => {
+          clearTimeout(retraceTimer);
+          retraceTimer = setTimeout(
+            () => retrace(settings),
+            RETRACE_DEBOUNCE_MS
+          );
+        },
+      });
+    } else {
+      inkControls = null;
     }
 
-    if (!analysis.elements || analysis.elements.length === 0) {
-      fail(
-        `${file.name} has no shapes Forge can work with. ` +
-          `A photo needs dark lines on a light background to trace.`
-      );
-      return false;
-    }
+    const shapes = () => {
+      try {
+        return (analyzeSvg(prepared.svg).elements || []).length;
+      } catch {
+        return 0;
+      }
+    };
 
-    const ws = ensureWorkspace();
-    ws.open(prepared.svg, analysis, {
-      mode: 'file',
-      sourceName: file.name,
-      onSave: (savedName) => {
-        say(`${savedName} saved. Your original file is untouched.`);
-      },
-      onKeepOriginal: () => {
-        open = false;
-      },
+    return showSvg(prepared.svg, {
+      summary: prepared.summary,
+      announceOpen: prepared.traced
+        ? `${file.name} traced into ${shapes()} shapes. Editor opened.`
+        : `${file.name} opened for editing, ${shapes()} shapes.`,
     });
-    // With no model behind it this is the whole screen's task, so it opens
-    // expanded: that is also where the editor's own focus trap lives.
-    ws.openFullscreen();
-    open = true;
-
-    say(
-      prepared.traced
-        ? `${file.name} traced into ${analysis.elements.length} shapes. Editor opened.`
-        : `${file.name} opened for editing, ${analysis.elements.length} shapes.`
-    );
-    return true;
   }
 
   return {
     openFile,
     isOpen: () => open,
     destroy() {
+      clearTimeout(retraceTimer);
       if (workspace) workspace.destroy();
       if (container?.parentNode) container.parentNode.removeChild(container);
       workspace = null;
       container = null;
+      inkControls = null;
+      currentImageData = null;
       open = false;
     },
   };

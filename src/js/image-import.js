@@ -71,11 +71,28 @@ export function validateImageDimensions(width, height) {
  *
  * @param {string} dataUrl - Image as a data URL
  * @param {Object} [options] - Override tracer options (merged with defaults)
+ * @param {Object} [options.ink] - Ink-extraction settings; see convertImageDataToSvg
  * @returns {Promise<string>} Clean SVG string with foreground paths only
  */
 export async function convertPngToSvg(dataUrl, options = {}) {
   const imageData = await loadImageData(dataUrl);
+  const { svg } = await convertImageDataToSvg(imageData, options);
+  return svg;
+}
 
+/**
+ * Trace already-loaded pixels, optionally deciding what counts as ink first.
+ *
+ * Split out from convertPngToSvg so a mode change can re-trace the SAME pixels
+ * without re-decoding the file, and so the ink summary can reach the UI.
+ *
+ * @param {ImageData} imageData
+ * @param {Object} [options] - Tracer overrides
+ * @param {Object|null} [options.ink] - Passed to extractInk; omit or set
+ *   `{ mode: 'standard' }` for the original behaviour
+ * @returns {Promise<{svg: string, summary: Object|null}>}
+ */
+export async function convertImageDataToSvg(imageData, options = {}) {
   const validation = validateImageDimensions(imageData.width, imageData.height);
   if (!validation.ok) {
     throw new Error(
@@ -84,10 +101,22 @@ export async function convertPngToSvg(dataUrl, options = {}) {
     );
   }
 
-  const tracerOptions = { ...TRACER_OPTIONS, ...options };
-  const svgString = ImageTracer.imagedataToSVG(imageData, tracerOptions);
+  const { ink, ...tracerOverrides } = options;
+  let pixels = imageData;
+  let summary = null;
 
-  return filterForegroundPaths(svgString);
+  if (ink && ink.mode && ink.mode !== 'standard') {
+    // Lazy: nobody pays for the extractor until a picture actually needs it.
+    const { extractInk } = await import('./ink-extraction.js');
+    const extracted = extractInk(imageData, ink);
+    pixels = extracted.imageData;
+    summary = extracted.summary;
+  }
+
+  const tracerOptions = { ...TRACER_OPTIONS, ...tracerOverrides };
+  const svgString = ImageTracer.imagedataToSVG(pixels, tracerOptions);
+
+  return { svg: filterForegroundPaths(svgString), summary };
 }
 
 /**

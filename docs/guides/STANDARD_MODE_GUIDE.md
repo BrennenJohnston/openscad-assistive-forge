@@ -337,6 +337,51 @@ them fills the outline in and swallows the detail. That is not a bug, it is what
 "print this as one shape" means. Set the interior shapes to **Ignore**, or to
 **Hole** if you want them cut out, and the result comes back.
 
+### Choosing what to keep from a photo
+
+A photo is traced before it becomes a shape, and tracing has to decide what
+counts as a line. Three answers, offered as **What to keep from the picture**
+wherever a picture enters Forge:
+
+| Choice | What it keeps | Best for |
+|--------|---------------|----------|
+| **Line art** (the default) | The drawn lines. The colour behind them is dropped. | Communication symbols, and any drawing on a coloured background |
+| **Solid shape** | The outline of the whole picture, filled in. | Very small pieces, where detail could not be felt anyway |
+| **Light and dark** | Whatever is darker than the background. What Forge did before. | A plain pencil drawing on white paper |
+
+**Why Line art is the default.** Professional communication symbols are black
+line work over a saturated fill, and the fill colour carries meaning. Judging by
+brightness alone puts a blue field and the black drawing on top of it in the
+same bucket, and they merge into one shape: MEASURED on a black person symbol
+inside a blue square, the old tracing returned a plain blue square with the
+person gone, and said nothing. Line art asks two questions instead of one - is
+it dark, and is it close to grey - so black strokes survive and coloured fills
+do not.
+
+Both sliders can be moved, each with a number box beside it for setting an
+exact value:
+
+- **How dark counts as a line** - higher keeps more of the picture, lower keeps
+  only the darkest strokes.
+- **How colourful is still a line** - lower rejects coloured fills more firmly.
+  Raise it if a coloured line is being dropped. It only applies to Line art.
+
+After every change Forge says what happened: how many shapes it found, how much
+of the picture became ink, and whether anything looked wrong - almost nothing
+kept, or so much kept that the result will print as one block.
+
+If the picture had a single colour behind its lines, Forge also names it, so you
+can pick a filament near that colour and keep the symbol recognisable. It stays
+quiet when the picture has several different fills, because an average of four
+colours is a colour that is in none of them.
+
+**Nothing is uploaded.** The tracing and every choice above happen in your
+browser. You are responsible for having the right to use any image you bring.
+If you need symbols you can share freely, [ARASAAC](https://arasaac.org/),
+[Mulberry Symbols](https://mulberrysymbols.org/) and
+[Blissymbolics](https://blissymbolics.org/) publish openly licensed sets; check
+each set's own licence before you share what you make.
+
 ### Editing a drawing with no design open
 
 You do not need an OpenSCAD project to use the editor. Two doors open it on a
