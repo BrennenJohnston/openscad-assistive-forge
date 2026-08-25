@@ -4,10 +4,14 @@
  */
 
 import { formatFileSize } from './download.js';
-import { announceChange } from './announcer.js';
+import { announceChange, announceImmediate } from './announcer.js';
 import { reapplyDetailLevel } from './param-detail-controller.js';
 import { isRasterImageFile } from './file-param-resolver.js';
-import { convertPngToSvg, validateImageDimensions } from './image-import.js';
+import {
+  convertImageDataToSvg,
+  loadImageData,
+  validateImageDimensions,
+} from './image-import.js';
 import { isEnabled } from './feature-flags.js';
 import { prepareSvg, needsPreparation, analyzeSvg } from './svg-preparer.js';
 import { createSvgPrepWorkspace } from './svg-preparer-workspace.js';
@@ -16,6 +20,15 @@ import {
   loadOpenGroupIds,
   saveOpenGroupIds,
 } from './customizer-group-state.js';
+import {
+  normalizeStarterList,
+  resolveStarterParameters,
+  starterViewApplies,
+  starterAnnouncement,
+  starterHint,
+  SHOW_ALL_LABEL,
+  SHOW_STARTER_LABEL,
+} from './starter-parameters.js';
 
 // Active fileId for the Customizer pane. Set when a project is loaded
 // so subsequent group toggles (including programmatic Expand/Collapse
@@ -39,6 +52,36 @@ export function setCustomizerFileId(fileId) {
  */
 export function getCustomizerFileId() {
   return _activeCustomizerFileId;
+}
+
+// The starter subset a manifest declared, and the project it declared it for.
+// Keyed by file so it cannot survive into the next project somebody opens:
+// a starter list belongs to the design it came with. IR-9.
+let _starterDeclaration = { names: [], fileKey: null };
+
+/**
+ * Tell the Customizer which parameters this project says to show first.
+ *
+ * @param {unknown} names    `defaults.starterParameters` from a manifest
+ * @param {string|null} fileKey  The main file this list belongs to
+ */
+export function setStarterParameters(names, fileKey = null) {
+  _starterDeclaration = {
+    names: normalizeStarterList(names),
+    fileKey: typeof fileKey === 'string' && fileKey ? fileKey : null,
+  };
+}
+
+/**
+ * @returns {{names: string[], fileKey: string|null}}
+ */
+export function getStarterParameters() {
+  return { ..._starterDeclaration, names: [..._starterDeclaration.names] };
+}
+
+/** Forget any declared starter subset. */
+export function clearStarterParameters() {
+  _starterDeclaration = { names: [], fileKey: null };
 }
 
 /**
@@ -901,6 +944,16 @@ export function initParameterSearch() {
         `.param-group[data-group-id="${groupId}"]`
       );
       if (groupElement) {
+        // IR-9: the jump list offers every group, including ones the starter
+        // wall is hiding. Jumping to one has to bring it back, or the jump
+        // lands on nothing.
+        if (groupElement.classList.contains('starter-empty')) {
+          setStarterViewExpanded(
+            document.getElementById('parametersContainer'),
+            true,
+            { announce: false }
+          );
+        }
         // Expand the group if collapsed
         groupElement.open = true;
         // Scroll into view
@@ -934,6 +987,17 @@ export function initParameterSearch() {
  * @param {string} query - Search query (lowercase)
  */
 function filterParameters(query) {
+  // IR-9: a search that cannot find a parameter the design HAS is a lie, and
+  // the starter wall would make it one. Searching drops the wall and says so.
+  // It stays down afterwards: raising it again under someone who just went
+  // looking for something would be worse than leaving it open.
+  if (query) {
+    const container = document.getElementById('parametersContainer');
+    if (isStarterViewActive(container)) {
+      setStarterViewExpanded(container, true, { announce: true });
+    }
+  }
+
   const paramControls = document.querySelectorAll(
     '.param-control[data-param-name]'
   );
@@ -1932,6 +1996,17 @@ function createFileControl(param, onChange) {
   statusCard.setAttribute('role', 'status');
   statusCard.setAttribute('aria-live', 'polite');
 
+  // ── Ink controls, for a picture that had to be traced ──────────────────
+  // Built only when a raster file arrives, and kept with its pixels so a mode
+  // change re-reads the same picture instead of the file.
+  const inkControlsContainer = document.createElement('div');
+  inkControlsContainer.className = 'ink-controls-container';
+  inkControlsContainer.hidden = true;
+  let inkControls = null;
+  let inkSourceImageData = null;
+  let inkSourceFileName = null;
+  let inkRetraceTimer = null;
+
   // ── Inline workspace for SVG preparation ───────────────────────────────
   const workspaceContainer = document.createElement('div');
   workspaceContainer.className = 'svg-prep-workspace-container';
@@ -1954,6 +2029,7 @@ function createFileControl(param, onChange) {
       workspace.open(currentRawSvg, currentSvgAnalysis, {
         onApply: handleEditorApply,
         onKeepOriginal: handleEditorKeep,
+        sourceName: currentFileName,
         initialOverrides: storedMeta?.prepOverrides || null,
         initialOffsets: storedMeta?.prepOffsets || null,
       });
@@ -2080,6 +2156,76 @@ function createFileControl(param, onChange) {
    * @param {string} rawSvgText
    * @returns {string} SVG text to use (prepared or original)
    */
+  /**
+   * Build the ink-mode panel, once, on the first picture that needs it.
+   * Lazily imported: a project with no image parameter never loads it.
+   */
+  async function ensureInkControls() {
+    if (inkControls) {
+      inkControlsContainer.hidden = false;
+      return inkControls;
+    }
+    const { createInkControls } = await import('./ink-controls.js');
+    inkControls = createInkControls({
+      idPrefix: `ink-${param.name}`,
+      announce: announceChange,
+      onChange: (settings) => {
+        clearTimeout(inkRetraceTimer);
+        inkRetraceTimer = setTimeout(() => {
+          applyTracedImage(settings, { announceResult: false });
+        }, 180);
+      },
+    });
+    inkControlsContainer.appendChild(inkControls.element);
+    inkControlsContainer.hidden = false;
+    return inkControls;
+  }
+
+  /**
+   * Trace the held pixels with the given ink settings and mount the result as
+   * this parameter's value.
+   *
+   * @param {Object} settings - From the ink panel
+   * @param {Object} [options]
+   * @param {boolean} [options.announceResult]
+   */
+  async function applyTracedImage(settings, { announceResult = false } = {}) {
+    if (!inkSourceImageData) return;
+    if (inkControls) inkControls.setBusy(true);
+    try {
+      const { svg, summary } = await convertImageDataToSvg(inkSourceImageData, {
+        ink: settings,
+      });
+      currentFileName = inkSourceFileName;
+      const processedSvg = processSvgForOpenScad(svg);
+      const svgDataUrl = svgToDataUrl(processedSvg);
+
+      const pathCount = (svg.match(/<path/g) || []).length;
+      if (inkControls) inkControls.setSummary(summary, pathCount);
+
+      const convertedFile = {
+        name: inkSourceFileName,
+        size: processedSvg.length,
+        type: 'image/svg+xml',
+        data: svgDataUrl,
+      };
+      onChange(param.name, convertedFile);
+      if (fileUploadListener) {
+        fileUploadListener(param.name, convertedFile);
+      }
+      if (announceResult) {
+        announceChange(
+          `Image converted to vector format: ${inkSourceFileName}`
+        );
+      }
+    } catch (err) {
+      fileInfo.textContent = `Conversion failed: ${err.message}`;
+      fileInfo.className = 'file-info file-info--error';
+      announceChange(`Image conversion failed: ${err.message}`);
+      console.error('[ImageImport] Conversion error:', err);
+    }
+  }
+
   function processSvgForOpenScad(rawSvgText) {
     currentRawSvg = rawSvgText;
 
@@ -2131,6 +2277,7 @@ function createFileControl(param, onChange) {
           workspace.open(rawSvgText, analysis, {
             onApply: handleEditorApply,
             onKeepOriginal: handleEditorKeep,
+            sourceName: currentFileName,
           });
           announceChange('SVG needs review \u2014 editor opened');
         }
@@ -2213,30 +2360,20 @@ function createFileControl(param, onChange) {
             announceChange(dimCheck.warning);
           }
 
-          const svgString = await convertPngToSvg(dataUrl);
           const svgName = file.name.replace(/\.[^.]+$/, '.svg');
-          currentFileName = svgName;
-          const processedSvg = processSvgForOpenScad(svgString);
-          const svgDataUrl = svgToDataUrl(processedSvg);
+          inkSourceImageData = await loadImageData(dataUrl);
+          inkSourceFileName = svgName;
+          await ensureInkControls();
+
+          await applyTracedImage(inkControls.getSettings(), {
+            announceResult: true,
+          });
 
           fileInfo.textContent = `${svgName} (converted from ${file.name})`;
           fileInfo.title = svgName;
           fileInfo.removeAttribute('aria-busy');
           fileButton.disabled = false;
           clearButton.style.display = 'inline-block';
-
-          announceChange(`Image converted to vector format: ${svgName}`);
-
-          const convertedFile = {
-            name: svgName,
-            size: processedSvg.length,
-            type: 'image/svg+xml',
-            data: svgDataUrl,
-          };
-          onChange(param.name, convertedFile);
-          if (fileUploadListener) {
-            fileUploadListener(param.name, convertedFile);
-          }
         } catch (err) {
           fileInfo.textContent = `Conversion failed: ${err.message}`;
           fileInfo.className = 'file-info file-info--error';
@@ -2343,7 +2480,10 @@ function createFileControl(param, onChange) {
   fileContainer.appendChild(fileInput);
 
   container.appendChild(fileContainer);
-  if (acceptsSvg) container.appendChild(workspaceContainer);
+  if (acceptsSvg) {
+    container.appendChild(inkControlsContainer);
+    container.appendChild(workspaceContainer);
+  }
 
   return container;
 }
@@ -2890,6 +3030,11 @@ export function renderParameterUI(
     container.appendChild(row);
   });
 
+  // IR-9: if this project declared a starter subset, show it and put the rest
+  // one button away. Applied AFTER the groups exist, because it is a decision
+  // about what is on screen, not about what is built.
+  applyStarterView(container, extractedParams);
+
   // Initialize parameter search after rendering
   initParameterSearch();
 
@@ -2897,4 +3042,157 @@ export function renderParameterUI(
   reapplyDetailLevel();
 
   return { ...currentValues };
+}
+
+/**
+ * Put the starter subset on screen with one control that reveals the rest.
+ *
+ * Nothing is removed. Every control stays in the DOM and comes back on the
+ * reveal; the wall is a class, the same idiom the parameter search already
+ * uses, and it hides things from everybody equally rather than from assistive
+ * technology only.
+ *
+ * @param {HTMLElement} container
+ * @param {Object} extractedParams
+ * @returns {{applied: boolean, shown: number, total: number, unknown: string[]}}
+ */
+function applyStarterView(container, extractedParams) {
+  const declaration = _starterDeclaration;
+  const { known, unknown, groupIds, total } = resolveStarterParameters(
+    extractedParams,
+    declaration.names
+  );
+
+  if (!starterViewApplies(declaration, _activeCustomizerFileId, known.length)) {
+    return { applied: false, shown: 0, total, unknown };
+  }
+
+  if (unknown.length > 0) {
+    console.warn(
+      `[Starter] This project lists ${unknown.length} starting parameter(s) it does not have:`,
+      unknown
+    );
+  }
+
+  const starterSet = new Set(known);
+  const controls = container.querySelectorAll(
+    '.param-control[data-param-name]'
+  );
+  controls.forEach((control) => {
+    const isStarter = starterSet.has(control.dataset.paramName);
+    control.classList.toggle('is-starter', isStarter);
+    control.classList.toggle('starter-hidden', !isStarter);
+  });
+
+  container.querySelectorAll('.param-group').forEach((group) => {
+    const hasStarter = groupIds.has(group.dataset.groupId);
+    group.classList.toggle('starter-empty', !hasStarter);
+    // A starter group collapsed is a starter group nobody can see.
+    if (hasStarter) group.open = true;
+  });
+
+  container.insertBefore(
+    createStarterReveal(container, known.length, total),
+    container.firstChild
+  );
+
+  return { applied: true, shown: known.length, total, unknown };
+}
+
+/**
+ * The reveal control.
+ *
+ * It is a TOGGLE, not a button that vanishes when used. A control that removes
+ * itself takes the keyboard focus with it, and the way back to a shorter
+ * screen should not be "reload the page".
+ *
+ * @param {HTMLElement} container
+ * @param {number} shown
+ * @param {number} total
+ * @returns {HTMLElement}
+ */
+function createStarterReveal(container, shown, total) {
+  const wrap = document.createElement('div');
+  wrap.className = 'starter-reveal';
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'starter-reveal-btn';
+  button.id = 'starterRevealBtn';
+  button.textContent = SHOW_ALL_LABEL;
+  button.setAttribute('aria-expanded', 'false');
+  if (container.id) button.setAttribute('aria-controls', container.id);
+
+  const hint = document.createElement('p');
+  hint.className = 'starter-reveal-hint';
+  hint.id = 'starterRevealHint';
+  hint.textContent = starterHint(shown, total);
+  button.setAttribute('aria-describedby', hint.id);
+
+  button.addEventListener('click', () => {
+    const expanded = button.getAttribute('aria-expanded') === 'true';
+    setStarterViewExpanded(container, !expanded, { announce: true });
+  });
+
+  wrap.appendChild(button);
+  wrap.appendChild(hint);
+  return wrap;
+}
+
+/**
+ * Show every parameter, or go back to the starter subset.
+ *
+ * @param {HTMLElement|null} container
+ * @param {boolean} expanded
+ * @param {{announce?: boolean}} [options]
+ */
+export function setStarterViewExpanded(container, expanded, options = {}) {
+  const root = container || document.getElementById('parametersContainer');
+  if (!root) return;
+  const button = root.querySelector('.starter-reveal-btn');
+  if (!button) return;
+
+  root.classList.toggle('starter-revealed', expanded);
+  root.querySelectorAll('.param-control.starter-hidden').forEach((control) => {
+    control.classList.toggle('starter-wall-open', expanded);
+  });
+  root.querySelectorAll('.param-group.starter-empty').forEach((group) => {
+    group.classList.toggle('starter-wall-open', expanded);
+  });
+
+  button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+  button.textContent = expanded ? SHOW_STARTER_LABEL : SHOW_ALL_LABEL;
+
+  const hint = root.querySelector('.starter-reveal-hint');
+  const shown = root.querySelectorAll('.param-control.is-starter').length;
+  const total = root.querySelectorAll('.param-control[data-param-name]').length;
+  if (hint) {
+    hint.textContent = expanded
+      ? starterHint(total, total)
+      : starterHint(shown, total);
+  }
+
+  if (options.announce) {
+    // announceImmediate, not announceChange. MEASURED: a polite announcement
+    // is debounced 350 ms, and any other polite announcement inside that
+    // window CANCELS it - watching the live region through a reveal showed
+    // "Rendering preview..." arriving at 204 ms and this sentence never
+    // reaching the region at all. Pressing this button is a discrete action
+    // somebody took on purpose, which is exactly what announceImmediate is
+    // for.
+    announceImmediate(starterAnnouncement(expanded, shown, total));
+  }
+}
+
+/**
+ * Is a starter wall currently standing in this container?
+ *
+ * @param {HTMLElement|null} container
+ * @returns {boolean}
+ */
+export function isStarterViewActive(container) {
+  const root = container || document.getElementById('parametersContainer');
+  if (!root) return false;
+  const button = root.querySelector('.starter-reveal-btn');
+  return Boolean(button) && button.getAttribute('aria-expanded') !== 'true';
 }

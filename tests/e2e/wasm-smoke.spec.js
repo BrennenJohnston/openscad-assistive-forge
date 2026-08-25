@@ -14,6 +14,17 @@ import path from 'path'
 // unreliable in headless mode and caused the original CI skips.
 
 const FIXTURE = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
+// The tile template every new contribution is copied from. It is starter
+// material, not a tile anyone is offered, so nothing else in the suite would
+// ever render it - and a template that does not render is worse than no
+// template at all.
+const TEMPLATE = path.join(
+  process.cwd(),
+  'public',
+  'examples',
+  '_template',
+  'template_tile.scad'
+)
 
 const WASM_READY_TIMEOUT = 180_000
 const PREVIEW_TIMEOUT = 120_000
@@ -25,14 +36,14 @@ test.beforeEach(async ({ page }) => {
   })
 })
 
-async function loadSampleProject(page) {
+async function loadSampleProject(page, fixture = FIXTURE) {
   await page.goto('/')
   await page.waitForSelector('body[data-wasm-ready="true"]', {
     state: 'attached',
     timeout: WASM_READY_TIMEOUT,
   })
 
-  await page.locator('#fileInput').setInputFiles(FIXTURE)
+  await page.locator('#fileInput').setInputFiles(fixture)
   await expect(page.locator('#welcomeScreen')).toBeHidden({ timeout: 30_000 })
   await expect(page.locator('#mainInterface')).toBeVisible({ timeout: 10_000 })
 
@@ -173,5 +184,29 @@ test.describe('WASM smoke (never skipped)', () => {
     )
 
     await waitForPreviewReady(page)
+  })
+
+  test('the tile template renders, and the engine says nothing', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+
+    // A green status over a failed import is worse than a red one: that is
+    // exactly how the Logo Plate example shipped broken. So this asserts the
+    // console as well as the preview.
+    const engineErrors = []
+    page.on('console', (msg) => {
+      const text = msg.text()
+      if (/\[OpenSCAD ERR\].*ERROR:/i.test(text)) engineErrors.push(text)
+    })
+
+    await loadSampleProject(page, TEMPLATE)
+    const stats = await waitForPreviewReady(page)
+
+    expect(engineErrors, engineErrors.join(' | ')).toEqual([])
+    // The template's asserts run at render time. If one of them fires, the
+    // preview never reaches state-current, so arriving here with geometry is
+    // also proof that its documented ranges hold at the shipped defaults.
+    expect(stats).toMatch(/triangles/)
   })
 })

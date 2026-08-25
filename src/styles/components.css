@@ -292,13 +292,17 @@ details.param-group.forge-disclosure[open] > summary::before {
    uses: Classic relocates whole panels between docks with appendChild, which
    moves the <details> and leaves the row behind; Simplified adds
    .ui-mode-hidden; C12 hides a group with [hidden]; the parameter search adds
-   .search-empty; and .hidden is the shared utility. A sixth idiom would need
-   a line here, so add one with any new way of hiding a disclosure. */
+   .search-empty; the starter subset adds .starter-empty (IR-9); and .hidden is
+   the shared utility. A seventh idiom would need a line here, so add one with
+   any new way of hiding a disclosure. */
 .forge-disclosure-row:not(:has(> .forge-disclosure)),
 .forge-disclosure-row:has(> .forge-disclosure[hidden]),
 .forge-disclosure-row:has(> .forge-disclosure.hidden),
 .forge-disclosure-row:has(> .forge-disclosure.ui-mode-hidden),
-.forge-disclosure-row:has(> .forge-disclosure.search-empty) {
+.forge-disclosure-row:has(> .forge-disclosure.search-empty),
+.forge-disclosure-row:has(
+  > .forge-disclosure.starter-empty:not(.starter-wall-open)
+) {
   display: none;
 }
 
@@ -11251,7 +11255,11 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   margin: 0;
 }
 
-.spotlight-link {
+/* The four documentation links and the one action share this look. They do
+   NOT share a class: `.spotlight-link` means "a link to a document, with an
+   href", and an accessibility test asserts exactly that about all four. */
+.spotlight-link,
+.spotlight-action {
   display: block;
   padding: var(--space-sm) var(--space-md);
   background: var(--color-bg-primary);
@@ -11272,6 +11280,15 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
     border-color var(--motion-base);
 }
 
+/* A real button among links: the shared rule above supplies the look, these
+   four lines undo the user-agent button defaults so it reads identically. */
+.spotlight-action {
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+}
+
 .spotlight-title {
   font-weight: 600;
 }
@@ -11282,18 +11299,21 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   line-height: 1.5;
 }
 
-.spotlight-link:hover {
+.spotlight-link:hover,
+.spotlight-action:hover {
   background: var(--color-bg-secondary);
   border-color: var(--color-accent);
 }
 
-.spotlight-link:focus-visible {
+.spotlight-link:focus-visible,
+.spotlight-action:focus-visible {
   outline: 3px solid var(--color-focus);
   outline-offset: 2px;
 }
 
 @supports not selector(:focus-visible) {
-  .spotlight-link:focus {
+  .spotlight-link:focus,
+  .spotlight-action:focus {
     outline: 3px solid var(--color-focus);
     outline-offset: 2px;
   }
@@ -12628,6 +12648,60 @@ body.tutorial-body-locked {
 
 .param-group.search-empty {
   display: none !important;
+}
+
+/* IR-9 — the starter subset. A manifest can say which handful of parameters a
+   beginner should meet first; everything else waits behind one button. The
+   wall is display:none, which hides a control from EVERYBODY: a screen reader
+   never reaches a control a sighted person cannot see either, which is the
+   only honest form of progressive disclosure. .starter-wall-open is what the
+   reveal adds, and it puts everything back.
+   Every token below is one this project DEFINES - checked, not assumed. */
+.param-control.starter-hidden:not(.starter-wall-open) {
+  display: none !important;
+}
+
+.param-group.starter-empty:not(.starter-wall-open) {
+  display: none !important;
+}
+
+.starter-reveal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-sm);
+  margin-bottom: var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-secondary);
+}
+
+.starter-reveal-btn {
+  align-self: flex-start;
+  min-height: var(--size-touch-target);
+  padding: var(--space-xs) var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.starter-reveal-btn:hover {
+  background: var(--color-hover-bg);
+}
+
+.starter-reveal-btn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.starter-reveal-hint {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
 }
 
 /* Default value display */
@@ -14557,22 +14631,219 @@ body.tutorial-body-locked {
 }
 
 /* ============================================================
+   Parameter notices (things that happened to your values)
+   ============================================================ */
+
+.parameter-notices {
+  margin-bottom: var(--space-sm);
+}
+
+.parameter-notice {
+  padding: var(--space-md);
+  border: 2px solid var(--color-warning, var(--color-border));
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+}
+
+.parameter-notice-title {
+  margin: 0 0 var(--space-xs);
+  font-weight: 600;
+}
+
+.parameter-notice-list {
+  margin: 0 0 var(--space-sm);
+  padding-left: 1.2em;
+  line-height: 1.5;
+}
+
+.parameter-notice-list li {
+  margin-bottom: var(--space-xs);
+}
+
+.parameter-notice-dismiss {
+  min-height: var(--size-touch-target);
+}
+
+/* ============================================================
+   Ink controls (what to keep from a picture)
+   ============================================================ */
+
+.svg-prep-tools-slot {
+  margin-bottom: var(--space-md);
+}
+
+.ink-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+}
+
+.ink-controls-modes {
+  border: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.ink-controls-modes legend {
+  font-weight: 600;
+  padding: 0;
+  margin-bottom: var(--space-xs);
+}
+
+.ink-mode-row {
+  display: grid;
+  grid-template-columns: auto minmax(7rem, auto) 1fr;
+  align-items: center;
+  gap: var(--space-sm);
+  /* The label carries the row: a 24px radio alone is under the target size,
+     and `for=` makes the whole label part of the same hit area. */
+  min-height: var(--size-touch-target);
+}
+
+.ink-mode-row input[type='radio'] {
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+}
+
+.ink-mode-label {
+  display: flex;
+  align-items: center;
+  min-height: var(--size-touch-target);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ink-mode-description {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+}
+
+.ink-controls-sliders {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.ink-slider-row {
+  display: grid;
+  grid-template-columns: minmax(10rem, auto) minmax(6rem, 1fr) 5rem;
+  grid-template-areas:
+    'label slider number'
+    'help help help';
+  align-items: center;
+  gap: var(--space-xs) var(--space-sm);
+  min-height: var(--size-touch-target);
+}
+
+.ink-slider-label {
+  grid-area: label;
+  font-weight: 600;
+}
+
+.ink-slider {
+  grid-area: slider;
+  min-height: var(--size-touch-target);
+}
+
+.ink-slider-number {
+  grid-area: number;
+  min-height: var(--size-touch-target);
+  padding: var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+
+.ink-slider-help {
+  grid-area: help;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1.4;
+}
+
+.ink-slider:disabled,
+.ink-slider-number:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+}
+
+.ink-controls-summary {
+  margin: 0;
+  font-weight: 600;
+  min-height: 1.4em;
+}
+
+.ink-controls-warnings {
+  margin: 0;
+  padding-left: 1.2em;
+  color: var(--color-text-primary);
+}
+
+.ink-controls-warnings li {
+  margin-bottom: var(--space-xs);
+}
+
+.ink-controls-notice,
+.ink-controls-signpost {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+}
+
+@media (max-width: 720px) {
+  .ink-mode-row {
+    grid-template-columns: auto 1fr;
+  }
+
+  .ink-mode-description {
+    grid-column: 1 / -1;
+  }
+
+  .ink-slider-row {
+    grid-template-columns: 1fr 5rem;
+    grid-template-areas:
+      'label label'
+      'slider number'
+      'help help';
+  }
+}
+
+/* ============================================================
    Publish / Share Project Modal
    ============================================================ */
 
+/* D-99: this block was written against token names this project does not
+   define (--color-surface-raised, --spacing-*, --radius-*), each with a
+   Catppuccin dark value as its fallback. In the light theme that painted a
+   dark box under dark text: the generated manifest and the URL field both
+   measured about 1.03:1 against WCAG's 4.5:1. Every value here now comes from
+   the project's own tokens, so the dialog follows the theme. */
+
 .publish-manifest-container {
   position: relative;
-  margin-bottom: var(--spacing-md, 1rem);
+  margin-bottom: var(--space-md);
 }
 
 .publish-manifest-code {
-  background: var(--color-surface-raised, #1e1e2e);
-  color: var(--color-text-primary, #cdd6f4);
-  border: 1px solid var(--color-border, #45475a);
-  border-radius: var(--radius-md, 8px);
-  padding: var(--spacing-md, 1rem);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  padding: var(--space-md);
   font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
-  font-size: var(--font-size-sm, 0.875rem);
+  font-size: var(--font-size-sm);
   line-height: 1.5;
   overflow-x: auto;
   white-space: pre;
@@ -14582,80 +14853,104 @@ body.tutorial-body-locked {
 
 .publish-copy-btn {
   position: absolute;
-  top: var(--spacing-sm, 0.5rem);
-  right: var(--spacing-sm, 0.5rem);
+  top: var(--space-sm);
+  right: var(--space-sm);
 }
 
 .publish-instructions {
   padding-left: 1.5em;
-  margin-bottom: var(--spacing-md, 1rem);
+  margin-bottom: var(--space-md);
   line-height: 1.7;
 }
 
 .publish-instructions li {
-  margin-bottom: var(--spacing-xs, 0.25rem);
+  margin-bottom: var(--space-xs);
 }
 
 .publish-instructions code {
-  background: var(--color-surface-raised, #1e1e2e);
+  background: var(--color-bg-tertiary);
   padding: 0.1em 0.4em;
-  border-radius: var(--radius-sm, 4px);
-  font-size: var(--font-size-sm, 0.875rem);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-sm);
 }
 
 .publish-label {
   display: block;
   font-weight: 600;
-  margin-bottom: var(--spacing-xs, 0.25rem);
+  margin-bottom: var(--space-xs);
 }
 
 .publish-input {
   width: 100%;
-  padding: var(--spacing-sm, 0.5rem);
-  border: 1px solid var(--color-border, #45475a);
-  border-radius: var(--radius-md, 8px);
-  background: var(--color-surface, #181825);
-  color: var(--color-text-primary, #cdd6f4);
+  padding: var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
   font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
-  font-size: var(--font-size-sm, 0.875rem);
+  font-size: var(--font-size-sm);
   box-sizing: border-box;
 }
 
 .publish-input:focus {
-  outline: 2px solid var(--color-accent, #89b4fa);
+  outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
 
 .publish-help-text {
-  font-size: var(--font-size-xs, 0.75rem);
-  color: var(--color-text-secondary, #a6adc8);
-  margin-top: var(--spacing-xs, 0.25rem);
-  margin-bottom: var(--spacing-md, 1rem);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  margin-top: var(--space-xs);
+  margin-bottom: var(--space-md);
 }
 
 .publish-help-text code {
-  background: var(--color-surface-raised, #1e1e2e);
+  background: var(--color-bg-tertiary);
   padding: 0.1em 0.3em;
-  border-radius: var(--radius-sm, 4px);
+  border-radius: var(--border-radius-sm);
   font-size: inherit;
 }
 
 .publish-share-link-container {
-  margin-top: var(--spacing-md, 1rem);
-  padding: var(--spacing-md, 1rem);
-  background: var(--color-surface-raised, #1e1e2e);
-  border: 1px solid var(--color-border, #45475a);
-  border-radius: var(--radius-md, 8px);
+  margin-top: var(--space-md);
+  padding: var(--space-md);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
 }
 
 .publish-share-link-row {
   display: flex;
-  gap: var(--spacing-sm, 0.5rem);
+  gap: var(--space-sm);
   align-items: center;
 }
 
 .publish-share-link-row .publish-input {
   flex: 1;
+}
+
+.publish-setting-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: var(--size-touch-target);
+}
+
+.publish-setting-row input[type='checkbox'] {
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  flex: none;
+}
+
+/* The label carries the rest of the touch target: a 24px box alone is under
+   the 44px minimum, and `for=` makes the text part of the same hit area. */
+.publish-checkbox-label {
+  display: flex;
+  align-items: center;
+  min-height: var(--size-touch-target);
+  cursor: pointer;
+  font-weight: 600;
 }
 
 /* Reduced Motion */

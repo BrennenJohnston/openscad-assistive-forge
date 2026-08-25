@@ -138,6 +138,115 @@ Once your link works, you can share it anywhere:
 
 ---
 
+## Sharing your exact settings, and getting them back
+
+A plain link opens your design at its own defaults. Often what you want is
+"open this, at these numbers" - and, coming the other way, "here is what I
+changed, please make me this one".
+
+Forge puts the values you changed at the end of the link, after the `#`:
+
+```text
+https://…/?manifest=…%2Fforge-manifest.json#v=1&params=%7B%22width%22%3A77%7D
+```
+
+Only the values that differ from the design's defaults travel, so the link
+stays short. Three ways to make one:
+
+1. **Copy the address bar.** It updates about a second after you change a
+   value.
+2. **Actions drawer > Copy Link.** Copies the current design plus your
+   settings in one press.
+3. **The Publish dialog**, ticking **Include my current settings in the link**
+   before you fill in the base URL. The link it builds then carries both the
+   manifest and your values.
+
+**For the person receiving it**, opening the link loads the design and applies
+the values. If a number is outside what the design allows, Forge pulls it to
+the nearest allowed value and says so rather than silently using something you
+did not ask for. A parameter the design does not have is dropped the same way.
+
+**Sending changes back** works the same in reverse: open the link you were
+sent, adjust, and use **Copy Link**. The reply carries your numbers, not a
+description of them.
+
+> **Privacy note**: browsers never send the part of a URL after the `#` to any
+> server. Values in a settings link do not reach Forge's host or your file
+> host. They are in the link itself, so treat the link the way you would treat
+> the values.
+
+### Handing over the whole project as one file
+
+The Publish dialog also has **Download Project ZIP**: one archive holding your
+project's files, the `forge-manifest.json` that describes them, and a small
+`forge-provenance.json` recording where the design came from, which preset was
+selected, and the values that differed from the defaults. Unzip it into your
+repository and everything is already in the right place.
+
+`forge-provenance.json` is new and nothing reads it back yet. It is there so a
+file that comes home can say where it has been.
+
+---
+
+## If you are writing a program rather than a link
+
+Everything on this page is meant for a person composing one link at a time. If
+you are building a tool that generates them, there is a page written for you:
+[FORGE_HANDOFF_CONTRACT.md](../specs/FORGE_HANDOFF_CONTRACT.md). It covers the
+same lanes with the sizes, the naming, the error codes, and the parts of the
+browser's security policy that will get in your way. Every Forge deployment also
+serves a short machine-readable summary at `/forge-capabilities.txt`.
+
+## Choosing which settings people meet first
+
+Some designs have a lot of parameters. A keyguard model can have well over a
+hundred, in more than thirty groups, and every one of them is there for a
+reason -- but that is not a first screen anybody can use.
+
+Your manifest can say which handful somebody should meet first:
+
+```json
+{
+  "forgeManifest": "1.0",
+  "files": { "main": "keyguard.scad" },
+  "defaults": {
+    "starterParameters": [
+      "tablet_model",
+      "grid_rows",
+      "grid_columns",
+      "cell_width_px",
+      "cell_height_px",
+      "rail_height_mm"
+    ]
+  }
+}
+```
+
+Forge then shows those controls, opens the groups they live in, and puts
+everything else behind one button labelled **Show all parameters**.
+
+Things worth knowing before you use it:
+
+- **Nothing is removed.** The button is a toggle, so the way back to the short
+  screen is the same button. Everything is one press away, in the order your
+  design wrote it.
+- **Hidden means hidden for everybody.** A control somebody cannot see is not
+  reachable by keyboard or screen reader either -- there are no controls
+  lurking invisibly in the Tab order.
+- **Searching brings everything back.** If somebody types in the parameter
+  search, or jumps to a group that is behind the wall, Forge drops the wall and
+  says so. A search that could not find a parameter your design has would be
+  worse than no search.
+- **A name that does not exist is not an error.** If your list names a
+  parameter the design does not have, Forge says so in a notice above the
+  controls and carries on with the rest. Renaming a parameter cannot break
+  somebody's link.
+- **Pick the ones the job needs, not the ones you find interesting.** The best
+  test is your own instructions: if your written steps say "set this", it
+  belongs in the list.
+
+Use the names exactly as they appear in your `.scad` file.
+
 ## Updating Your Project Later
 
 When you have a new version of your design:
@@ -227,17 +336,52 @@ Bundle your `.scad`, companion files, and preset `.json` into a single ZIP. Forg
 | Updating | Edit individual files | Re-create the ZIP | Re-create the ZIP |
 | Preset selection | `?preset=` + manifest defaults | `?preset=` + manifest defaults | Auto-imports all |
 | Best for | Small projects (1-5 files) | Large projects / many files | Quick one-off share |
+
+### Option C: no hosting at all (`?manifest=data:`)
+
+A whole manifest can ride inside the link, with nothing hosted anywhere:
+
+```text
+https://…/?manifest=data:application/json;base64,eyJmb3JnZU1hbmlmZXN0IjoiMS4wIiw…
+```
+
+This is genuinely useful for a one-off: no repository, no account, nothing to
+maintain. Two limits decide whether it fits.
+
+- **Keep the whole link under about 8 KB.** Measured: 8 KB links load, 16 KB
+  drew an HTTP 431 from a plain server, and Firefox hung rather than reporting
+  the error. Hosts and CDNs set their own caps below that.
+- **Relative file paths cannot work.** There is no directory for them to be
+  relative to. Every file the manifest names has to be an absolute URL on the
+  allowlist in **Hosting Requirements**, or a `data:` URL itself, and a
+  `data:` file URL needs its name on the end so the suffix rules still pass -
+  `data:text/plain;base64,…#design.scad`.
+
+So this lane suits a small manifest pointing at files that are already hosted,
+not a project packed whole into a link. `MANIFEST_STABILITY_CONTRACT.md` has
+the full rules.
+
 ---
 
 ## Writing the manifest
 
-There is no tool that writes the manifest for you. A command-line generator
-existed until 2026-08-04 and was removed with the rest of the developer CLI.
+**Forge can write it for you.** Load your project, open the Actions drawer, and
+press **Publish**. The dialog shows a finished `forge-manifest.json` for
+whatever is currently loaded, with a **Copy Manifest** button. Fill in
+**Your GitHub raw base URL** further down the same dialog and it builds the
+shareable link for you as well.
 
-Write the file by hand -- it is short. Copy whichever example below is closest
-to your project, change the file names, and you are done. If you get a name
-wrong, Forge tells you which file it could not find rather than failing
-silently.
+Forge checks its own output against the same rules the loader uses before it
+shows you anything, so a manifest the dialog hands you is one Forge will
+accept.
+
+You can still write the file by hand -- it is short. Copy whichever example
+below is closest to your project, change the file names, and you are done. If
+you get a name wrong, Forge tells you which file it could not find rather than
+failing silently.
+
+(A command-line generator existed until 2026-08-04 and was removed with the
+rest of the developer CLI. The Publish dialog is its replacement.)
 
 ---
 
@@ -391,6 +535,15 @@ Forge runs with `Cross-Origin-Embedder-Policy: require-corp`, which means extern
 
 **WordPress, Squarespace, and most CMS platforms do NOT include CORS headers.** Host your project files on GitHub even if your website is elsewhere.
 
+**This table is not a suggestion, it is the policy.** Forge's Content Security
+Policy names the hosts it is allowed to fetch from, and a URL pointing anywhere
+else is refused inside the browser before any request is sent. Measured on the
+built site: a `https://raw.githubusercontent.com/...` URL is fetched normally,
+while `https://github.com/USER/REPO/releases/download/...` and an object-store
+URL such as `https://BUCKET.r2.cloudflarestorage.com/...` are both blocked with
+a `connect-src` violation. Whatever the manifest names, including an absolute
+URL in `files.bundle`, has to be on the list above.
+
 ---
 
 ## Large File Hosting
@@ -439,33 +592,42 @@ Then add and commit your ZIP as normal — Git LFS handles the rest.
 
 **Recommendation:** Best for projects under ~200 MB with moderate traffic (fewer than 50 loads/month). For higher traffic, use GitHub Releases.
 
-### GitHub Releases (recommended for high-traffic projects)
+### GitHub Releases (a manifest cannot point at one)
 
-Release assets are served from GitHub's CDN with **no bandwidth quota**. This is the single biggest advantage for shared projects.
+Release assets are served from GitHub's CDN with no bandwidth quota, which
+makes them attractive for a busy project. **Forge cannot load them.** Release
+assets live on `github.com`, which is not on the allowlist above, so a manifest
+naming `https://github.com/USER/REPO/releases/download/v1.0/my_project.zip` is
+refused inside the browser and never reaches GitHub. Earlier versions of this
+guide recommended exactly that URL. It did not work, and this section is the
+correction.
 
-**How to use:**
+**If you have a release asset and want people to open it in Forge**, put a copy
+somewhere on the allowlist and point the manifest there:
 
-1. Create a release on GitHub (Releases > Draft a new release)
-2. Upload your ZIP as a release asset
-3. Copy the asset URL (e.g., `https://github.com/USER/REPO/releases/download/v1.0/my_project.zip`)
-4. Use the absolute URL in your manifest:
+- **GitHub Pages** in the same repository (a `docs/` folder or a `gh-pages`
+  branch). The published URL is `https://USER.github.io/REPO/my_project.zip`,
+  which is allowed. Check the size and bandwidth limits your Pages plan
+  actually gives you before relying on it for a large file.
+- **The repository itself**, via a relative path in the manifest, using Git LFS
+  above 100 MB (see the section above). Forge follows LFS pointers.
+- **GitLab Pages** (`*.gitlab.io`) or **Cloudflare Pages** (`*.pages.dev`) if
+  you would rather not use GitHub.
 
-```json
-{
-  "forgeManifest": "1.0",
-  "files": {
-    "bundle": "https://github.com/USER/REPO/releases/download/v1.0/my_project.zip"
-  }
-}
-```
+The release itself stays a perfectly good way to publish a versioned download
+for people who are not using Forge.
 
-**Limits:** 2 GB per asset. No bandwidth quota. No Git LFS installation required for users cloning your repo.
+### External Object Storage (Forge cannot load these either)
 
-**Trade-off:** Updates require creating a new release and updating the manifest URL to point to the new version tag.
+Object stores are the usual answer for very large files, and for the same
+reason as GitHub Releases, **Forge refuses them**: an
+`https://BUCKET.r2.cloudflarestorage.com/...`, S3 or B2 URL is not on the
+allowlist, so the fetch is blocked in the browser. Earlier versions of this
+guide told you to use an absolute URL here. That was wrong.
 
-### External Object Storage (for bundles over 2 GB)
-
-For projects exceeding 2 GB or needing guaranteed unlimited access:
+The costs are kept below because they are worth knowing if you serve the file
+to people outside Forge, or if you put a copy behind a `*.pages.dev` address,
+which is on the allowlist:
 
 | Provider | Storage cost | Egress (download) cost | Per-file limit |
 |----------|-------------|----------------------|---------------|
@@ -473,22 +635,28 @@ For projects exceeding 2 GB or needing guaranteed unlimited access:
 | Backblaze B2 | ~$0.006/GB/month | Free via Cloudflare | 5 GB |
 | AWS S3 | ~$0.023/GB/month | ~$0.09/GB | 5 TB |
 
-Use an absolute URL in the manifest's `"bundle"` field, the same as with GitHub Releases.
+If your project genuinely needs a host that is not on the list, that is a
+change to Forge's security policy, not to your manifest. Open an issue and say
+which host and why.
 
 ### Decision guide
 
 ```
 Bundle under 100 MB?
-  → Commit directly — no LFS needed
+  -> Commit directly, relative path in the manifest, no LFS needed
 
-Bundle 100 MB – 2 GB, fewer than 50 loads/month?
-  → Git LFS works well
+Bundle 100 MB - 2 GB?
+  -> Git LFS in the same repository, still a relative path
+     (Forge follows LFS pointers)
 
-Bundle 100 MB – 2 GB, more than 50 loads/month?
-  → GitHub Releases (unlimited bandwidth, no LFS setup for users)
+Too big or too busy for LFS?
+  -> Publish a copy on GitHub Pages, GitLab Pages or Cloudflare Pages
+     and name that URL
 
-Bundle over 2 GB?
-  → External storage (Cloudflare R2 recommended)
+Need a host that is none of the above?
+  -> Forge will refuse it. Open an issue rather than editing the manifest
 ```
 
-All three approaches work with Forge manifests. Use a relative path for repo-hosted files, or an absolute `https://` URL for Releases or external storage.
+Use a relative path for repo-hosted files, or an absolute `https://` URL that
+is on the allowlist in **Hosting Requirements** above. An absolute URL anywhere
+else is blocked in the browser and never reaches the network.

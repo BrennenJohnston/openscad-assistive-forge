@@ -9,6 +9,110 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Groundwork for opening a file straight into Forge from your desktop** (IR-10, not switched on) -
+  an installed app can be registered with the operating system so double-clicking a `.scad`, `.zip`,
+  `.svg` or `.dxf` opens it in Forge. The routing is built and tested: a file handed over by the
+  system takes exactly the path an uploaded one takes, waits for the engine to be ready first, and
+  sends drawings to the drawing editor. The registration itself is deliberately NOT shipped. It is a
+  claim on your operating system's file associations, and nobody has yet installed Forge on a real
+  machine and watched an Open with actually work. That test is a person's to run
+
+- **The provenance record inside a downloaded project is now a promise, not a proposal** (IR-6) -
+  `forge-provenance.json` shipped in an earlier release marked "PROPOSED, not yet a guarantee".
+  Its shape is countersigned and it now carries the same additive-only promise and six-month notice
+  period as every URL parameter, so a tool at the other end can depend on it
+
+- **One page a pipeline tool can build against without talking to anybody** (IR-6) -
+  `docs/specs/FORGE_HANDOFF_CONTRACT.md` writes down how another program hands work to Forge and
+  gets it back: the link parameters, the settings fragment, the zero-hosting `data:` lane with its
+  measured budget, which hosts a file may live on, what comes back and what it is called, the error
+  codes, the sizes, and the four things the browser's security policy will not allow (no iframe, no
+  opener messaging, no arbitrary hosts, no server-side state). Every claim on it is backed by a
+  shipped release or a file in this repository; where something does not work, it says so. A short
+  machine-readable summary is served at `/forge-capabilities.txt`, and a test in the
+  production-parity lane composes a link from the page alone and loads it, so the page cannot drift
+  away from what the app does
+
+- **A shared link can decide which settings you meet first** (IR-9) - some designs have well over a
+  hundred parameters, and every one of them is there for a reason, but that is not a first screen
+  anybody can use. Whoever writes a project's manifest can now list the handful that matter
+  (`defaults.starterParameters`), and Forge shows those and puts the rest behind one Show all
+  parameters button. Nothing is removed: the button is a toggle, everything comes back in the order
+  the design wrote it, and searching for a parameter drops the wall on its own and says so. A
+  control you cannot see is not reachable by keyboard or screen reader either, so there is nothing
+  lurking invisibly in the Tab order. A manifest that does not use the field opens exactly as it
+  always did
+
+- **Adding a design of your own is now a documented job, not a favour** (IR-8) - there is a
+  template to copy in `public/examples/_template/`, a walkthrough in
+  `docs/guides/TILE_AUTHOR_GUIDE.md` that assumes no knowledge of this app's code, and a checker,
+  `node scripts/validate-example.mjs`, that reads a contribution and says in plain sentences what is
+  missing: no license, a control with nothing to explain it, a picture the design reads but the
+  manifest never declares. It also checks that anything meant to be read by touch has a written-down
+  range and an `assert()` enforcing it - it cannot tell whether the numbers are right, and says so;
+  those come from the standard governing the design and are signed off by a person. CI runs the
+  checker on the example folders a pull request actually touches
+
+- **Your edits can land in the folder the other program is watching** (IR-5, off by default) - Forge
+  could already watch a linked folder and re-render when a desktop editor changed a file in it, but
+  the loop only ran one way: nothing of Forge's could get back into the folder except a preset
+  sidecar. Two explicit actions now close it - Save to folder puts a generated file beside your
+  design, and Save companions to folder writes the companion files you edited. Every write is one
+  you asked for, every write is announced, and your main design is never overwritten: Forge is not
+  the editor of record for it in this loop. This ships switched OFF and stays off until the folder
+  write-back has been tried on a real Chrome or Edge with the watcher running, which is a test only
+  a person can do
+
+- **Open a DXF, tidy it up, and save a DXF back** (IR-12) - laser and cutting software speaks DXF,
+  and so does the tool chain some of this work arrives from. The drawing editor now takes a .dxf
+  the same way it takes an SVG or a photo: Forge's own engine converts it, the editor opens on the
+  drawing with every shape listed, and Save as DXF sits beside Save edited SVG. Measured on a
+  40 by 25 mm drawing, converting takes about a third of a second each way. Forge states the size
+  of what it saved out loud, because rebuilding a drawing from its shapes is not perfectly exact
+  and a millimetre matters when you are cutting to a fit. A DXF holding only text or dimensions
+  arrives empty - OpenSCAD reads drawing entities, not annotations - and Forge says exactly that
+  rather than handing back a blank page
+
+- **A symbol keeps its picture instead of turning into a coloured blob** (IR-11) - communication
+  symbols are black line work over a strong colour, and the colour means something. Forge decided
+  what to trace by brightness alone, which puts a blue background and the black drawing on top of
+  it in the same bucket: a person symbol inside a blue square came out as a plain blue square, the
+  person gone, with nothing said about it. Photos now come in through a choice - Line art, which
+  keeps the drawn lines and drops the colour behind them, Solid shape for very small pieces, or
+  Light and dark, which is what Forge did before and is one press away. Line art is the starting
+  point for photos. Two sliders, each with a number box, tune it, and after every change Forge
+  says how many shapes it found, how much of the picture became ink, and whether the result looks
+  almost empty or almost solid. If one colour sat behind the lines, it tells you which, so you can
+  choose a filament that keeps the symbol recognisable. Everything happens in your browser and
+  nothing is uploaded
+
+- **Open a drawing, clean it up, and save it back - no design needed** (IR-4) - Forge already had an
+  editor that lists every shape in an SVG and lets you choose, by keyboard, which ones become the
+  printed shape, which become holes, and which are dropped. You could only reach it through a
+  design's file parameter, and there was no way to get the cleaned drawing back out. Now there are
+  two doors - a line inside Explore Features & Accessibility on the welcome screen, and Edit
+  Drawing in the Actions drawer - and a Save edited SVG button that hands you the result as a file
+  named after the one you opened. Photos are traced first, the same as before. A photographed bird
+  drawing goes in with its eye and feather strokes, and comes back as one clean outline the way a
+  tactile printer can actually show it. Nothing is uploaded anywhere: the tracing, the editing and
+  the saving all happen in your browser, and your original file is never changed
+
+- **Send a link that opens with your settings, and get one back** (IR-3) - a plain link opened a
+  design at its own defaults, so "make me this one, but 72 mm wide" meant writing the numbers out
+  and hoping. Forge now puts the values you changed at the end of the link. Three ways to make
+  one: copy the address bar, press Copy Link in the Actions drawer, or tick "Include my current
+  settings in the link" in the Publish dialog before you fill in your hosting address. Only the
+  values that differ travel, so the link stays short, and the person who opens it gets your
+  numbers checked against what the design allows rather than applied blindly. A design you opened
+  from your own computer still gets a link - it carries your settings and says plainly that
+  whoever opens it needs to load the design first, because nothing on the web can fetch a file
+  from your machine
+
+- **Hand over the whole project as one file** (IR-3) - the Publish dialog can now download an
+  archive holding your project's files, the manifest that describes them, and a small record of
+  where the design came from, which preset was chosen, and the values that differed. Unzip it into
+  your repository and everything is already in the right place
+
 - **The smallest character size now knows your machine** (CW-42) - the game used to open at 50%
   characters on every machine and let you go down to 10% everywhere, even where 10% turned walking
   into a slideshow. Now, in the first moments after you enter a city, the game quietly measures how
@@ -76,6 +180,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nowhere to stand near where you picked, it says so instead of putting you somewhere wrong
 
 ### Changed
+
+- **The sharing guide stops recommending hosting that does not work** (IR-2) - it told authors to
+  put a GitHub release URL, or a Cloudflare R2 / S3 bucket URL, into their manifest. Forge's
+  security policy names the hosts it may fetch from, and none of those are on it: the browser
+  blocks the request before it is sent, so those projects simply never loaded. The guide now says
+  so plainly, shows what was measured, and points at the hosts that do work - the repository
+  itself, GitHub Pages, GitLab Pages, Cloudflare Pages. It also stops claiming no tool writes the
+  manifest for you, because the Publish dialog has been doing exactly that
 
 - **The shimmering facades hold still** (CW-41) - at small character sizes, building fronts used to
   carry sliding interference bands - "a fractured polygon" look - because the window pattern sat at
@@ -185,6 +297,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   data where there is one, and from the building itself where there is not
 
 ### Fixed
+
+- **The Logo Plate example works out of the box** (IR-7) - opening it always failed underneath:
+  the engine could not find the sample logo it imports, so the engraving was missing, while the
+  status line cheerfully said "Preview ready". The file had been sitting in the repository the
+  whole time and the example's own description listed it; the part of the app that fetches files
+  read a different list that did not. Both now come from one place
+
+- **A shipped sample drawing a browser could not read** (IR-7) - `sample-logo.svg` contained a
+  stray control character in a comment, left over from an em dash. OpenSCAD ignored it, but a
+  browser refuses such a file outright, so the moment the file finally reached the project the
+  reference-image overlay failed to load it. Fixed, and every SVG the app ships is now checked for
+  characters XML does not allow
+
+- **When a link's numbers get changed, the message now waits for you** (IR-13) - opening a shared
+  link whose value is outside what the design allows adjusts it, and Forge said so in the status
+  line for about two thirds of a second before the render replaced it. Anyone who looked up a
+  moment later never found out their number had moved. It is now a notice that sits above the
+  controls until you dismiss it, and it names each one: which parameter, what the link asked for,
+  and what it is now
+
+- **Changing how a photo is read no longer throws you out of the control you are using** (IR-11) -
+  re-reading a picture rebuilds the editor underneath, and that was moving the settings panel in a
+  way that dropped your keyboard focus and shrank the editor back behind the page. Both were found
+  by a test that runs the same walk four times. The editor now stays as you left it: expanded if it
+  was expanded, with the keyboard still on the control you were adjusting
+
+- **The drawing editor reads correctly to a screen reader** (IR-4) - two long-standing faults, both
+  found the first time the editor was checked with an accessibility scanner. The list of shapes had
+  a hidden announcement area parked among the list items, which made the whole list invalid - a
+  screen reader could not rely on "shape 3 of 7" meaning anything. And both preview panes claimed
+  to be pictures while holding zoom buttons inside them, which is a combination assistive
+  technology refuses. The announcement area moved out of the list, and the panes are now named
+  groups holding a picture. The scanner reports nothing on the editor at all now
+
+- **The Publish dialog is readable in the light theme again** (IR-3) - it painted a dark box under
+  dark text, so the manifest it generated and the address you typed were both invisible unless you
+  used the dark theme. The dialog's colors came from names the app does not define, each with a
+  dark value written in beside it as a fallback, so the dialog never followed your theme at all.
+  Measured before: about 1.03 to 1 against a 4.5 to 1 minimum. Measured after: about 14 to 1
+
+- **Publish no longer hands you a manifest Forge would refuse** (IR-2) - for a project you loaded
+  from a ZIP, the Publish dialog put the archive's own filename where the main design file belongs.
+  Forge rejects that on the way back in, so the link built from it could not open the project, and
+  nothing said so until someone tried it. A ZIP project is now described as what it is: the archive
+  as the bundle, the real main .scad inside it named beside it, and the files it contains not
+  listed twice. The dialog also checks its own output against the same rules the loader uses, and
+  refuses to open with a plain explanation rather than handing over something broken
+
+- **A link with your settings in it now actually opens with your settings** (IR-1) - the app has
+  always written the values you changed into the end of the address bar, so a link you copied
+  carried them with it. Opening that link never applied them: the person you sent it to saw the
+  model's plain defaults while the address still promised your numbers. Now the values arrive in
+  the controls, out-of-range numbers are pulled to the nearest allowed value with a spoken note
+  saying so, and a value the model does not have is dropped with the same note rather than
+  silently ignored. Anything else already in the address after the # sign - a marker some other
+  tool put there - is now left alone instead of being wiped when a project loads
 
 - **You spawn facing down the street, not into a wall** (CW-44) - every city entry used to face
   due north no matter what stood there, and the bigger Seattle put a storefront two and a half

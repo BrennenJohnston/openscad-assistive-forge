@@ -16,7 +16,14 @@ import {
   focusParameter,
   locateParameterKey,
   setParameterValue as _setParameterValue,
+  setStarterParameters,
 } from './js/ui-generator.js';
+import {
+  normalizeStarterList,
+  resolveStarterParameters,
+  unknownStarterMessage,
+  describeUnknownStarter,
+} from './js/starter-parameters.js';
 import { stateManager } from './js/state.js';
 import {
   downloadSTL,
@@ -69,7 +76,13 @@ import {
   applyCompanionAliases,
   getOverlaySvgTarget,
 } from './js/zip-handler.js';
-import { loadManifest, ManifestError } from './js/manifest-loader.js';
+import {
+  loadManifest,
+  ManifestError,
+  validateManifest,
+} from './js/manifest-loader.js';
+import { buildProjectManifest } from './js/publish-manifest.js';
+import { buildProvenance, buildProjectZipEntries } from './js/project-zip.js';
 import { getConsolePanel } from './js/console-panel.js';
 import {
   getErrorLogPanel,
@@ -239,6 +252,7 @@ import {
 } from './js/classic-editor-toolbar.js';
 import { FolderChangeWatcher } from './js/folder-change-watcher.js';
 import { FolderWriteBack } from './js/folder-write-back.js';
+import { createFolderSaveActions } from './js/folder-save-actions.js';
 // Toolbar Menu Controller - File|Edit|Design|View|Window|Help menu bar
 import {
   getToolbarMenuController,
@@ -1230,6 +1244,44 @@ async function initApp() {
   // File handler controller -- declared early so wrappers can reference it;
   // assigned after all const deps are available (see initFileHandler call below).
   let fileHandler; // eslint-disable-line prefer-const
+  // Built when folder sync initialises; null until then and on browsers with
+  // no File System Access API at all.
+  let folderWriteBack = null;
+
+  // IR-5: explicit saves into the connected folder. Every write is asked for,
+  // goes through FolderWriteBack's self-trigger contract, and is announced.
+  const folderSaveActions = createFolderSaveActions({
+    getWriteBack: () => folderWriteBack,
+    isEnabled: () => isFlagEnabled('folder_sync_writeback'),
+    announce: (message) => announceImmediate(message),
+    onStatus: (message, level) => updateStatus(message, level),
+  });
+
+  /**
+   * Show or hide the folder-saving affordances. Called wherever the answer
+   * could have changed: a folder connects or disconnects, a render finishes,
+   * a project loads.
+   *
+   * The button does not exist unless all three conditions hold, rather than
+   * existing and failing when pressed.
+   */
+  function refreshFolderSaveAffordances() {
+    const state = stateManager.getState();
+    const possible = folderSaveActions.canSave();
+
+    const saveBtn = document.getElementById('saveToFolderBtn');
+    if (saveBtn) {
+      saveBtn.classList.toggle('hidden', !(possible && Boolean(state.stl)));
+    }
+
+    const companionBtn = document.getElementById('companionSaveToFolderBtn');
+    if (companionBtn) {
+      const hasCompanions = Boolean(
+        state.projectFiles && state.projectFiles.size > 1
+      );
+      companionBtn.classList.toggle('hidden', !(possible && hasCompanions));
+    }
+  }
 
   function cloneProjectFiles(files) {
     return files ? new Map(files) : null;
@@ -2663,16 +2715,24 @@ async function initApp() {
         if (syncState !== 'connected') {
           folderWatcher.stop();
         }
+        // Connecting or disconnecting a folder changes whether saving into one
+        // is possible at all.
+        refreshFolderSaveAffordances();
       });
     }
 
-    // ── C5.3 (Phase C, default OFF): write preset sidecars back to disk ──
-    if (_isEnabled('folder_sync_writeback')) {
-      const folderWriteBack = new FolderWriteBack({
-        getHandle: () => folderSyncCtrl.getHandle(),
-        getWatcher: () => folderWatcher,
-      });
+    // ── C5.3 (Phase C, default OFF): writing back into the folder ────────
+    //
+    // The instance is built regardless and the FLAG is checked at every use.
+    // IR-5 gave the export and companion paths a way in here, and they live
+    // far from this block; hoisting the object is what lets them share the one
+    // self-trigger contract instead of writing bytes of their own.
+    folderWriteBack = new FolderWriteBack({
+      getHandle: () => folderSyncCtrl.getHandle(),
+      getWatcher: () => folderWatcher,
+    });
 
+    if (_isEnabled('folder_sync_writeback')) {
       // OpenSCAD desktop convention: presets live in <design>.json next to
       // the .scad. Case- and space-preserving (raw path, no slugging).
       presetManager.subscribe((event, _preset, modelName) => {
@@ -7778,6 +7838,24 @@ async function initApp() {
     });
   }
 
+  const companionSaveToFolderBtn = document.getElementById(
+    'companionSaveToFolderBtn'
+  );
+  if (companionSaveToFolderBtn) {
+    companionSaveToFolderBtn.addEventListener('click', async () => {
+      const state = stateManager.getState();
+      companionSaveToFolderBtn.disabled = true;
+      try {
+        await folderSaveActions.saveCompanions({
+          projectFiles: state.projectFiles,
+          mainFilePath: state.mainFilePath,
+        });
+      } finally {
+        companionSaveToFolderBtn.disabled = false;
+      }
+    });
+  }
+
   // Text File Editor Modal handlers
   const textFileEditorModal = document.getElementById('textFileEditorModal');
   const textFileEditorApply = document.getElementById('textFileEditorApply');
@@ -8145,6 +8223,17 @@ if (rounded) {
   // Note: ?load= is an alias for ?example= (for website embedding convenience)
   // =========================================
   const initUrlParams = new URLSearchParams(window.location.search);
+  /**
+   * Compose the post-load URL from the surviving query parameters. The
+   * fragment is carried over untouched: it holds the shared parameter payload
+   * (`#v=1&params=`, state.js) and anything else the sender put there, and a
+   * cleanup that drops it destroys the link it just opened.
+   * @returns {string}
+   */
+  const cleanUrlKeepingFragment = () =>
+    initUrlParams.toString()
+      ? `${window.location.pathname}?${initUrlParams}${window.location.hash}`
+      : `${window.location.pathname}${window.location.hash}`;
   // Support both ?example= and ?load= (alias for website embedding)
   const exampleParam =
     initUrlParams.get('example') || initUrlParams.get('load');
@@ -8162,9 +8251,7 @@ if (rounded) {
           // Clean up URL to avoid reloading on refresh
           initUrlParams.delete('example');
           initUrlParams.delete('load'); // Also remove ?load= alias
-          const cleanUrl = initUrlParams.toString()
-            ? `${window.location.pathname}?${initUrlParams}`
-            : window.location.pathname;
+          const cleanUrl = cleanUrlKeepingFragment();
           history.replaceState(null, '', cleanUrl);
 
           console.log(`[DeepLink] Successfully loaded: ${exampleParam}`);
@@ -8585,6 +8672,12 @@ if (rounded) {
         );
         announceImmediate(`Loading project: ${projectName}`);
 
+        // IR-9: a manifest can name the handful of parameters a beginner should
+        // meet first. Set BEFORE handleFile, because handleFile is what
+        // renders - setting it afterwards would show every control once and
+        // then take most of them away again, which is worse than either state.
+        setStarterParameters(defaults?.starterParameters);
+
         // Step 4 — PROCESS: parse and load the project into the editor
         await fileHandler.handleFile(
           null,
@@ -8594,6 +8687,30 @@ if (rounded) {
           'manifest',
           projectName
         );
+
+        // A name in that list this design does not have is worth saying out
+        // loud - to the person, once, and to the console for the author. It is
+        // never fatal: the rest of the list still works.
+        const starterNames = normalizeStarterList(defaults?.starterParameters);
+        if (starterNames.length > 0) {
+          const { unknown } = resolveStarterParameters(
+            stateManager.getState().schema,
+            starterNames
+          );
+          const message = unknownStarterMessage(unknown);
+          if (message) {
+            console.warn(`[DeepLink] ${message}`);
+            // The notice, not the status line. IR-13 measured a status
+            // message standing for about 660 ms before the render replaced
+            // it - long enough to exist, not long enough to read.
+            const { createParameterNotices } =
+              await import('./js/parameter-notices.js');
+            createParameterNotices(
+              document.getElementById('parameterNotices'),
+              { announce: (text) => announceImmediate(text) }
+            ).show(describeUnknownStarter(unknown));
+          }
+        }
 
         // Step 5 — DISMISS OVERLAY before showing the save-copy modal
         if (dismissOverlay) dismissOverlay();
@@ -8711,9 +8828,7 @@ if (rounded) {
         initUrlParams.delete('preset');
         initUrlParams.delete('skipWelcome');
         initUrlParams.delete('skipwelcome');
-        const cleanUrl = initUrlParams.toString()
-          ? `${window.location.pathname}?${initUrlParams}`
-          : window.location.pathname;
+        const cleanUrl = cleanUrlKeepingFragment();
         history.replaceState(null, '', cleanUrl);
 
         console.log(`[DeepLink] Manifest load complete: ${projectName}`);
@@ -8730,6 +8845,9 @@ if (rounded) {
         // ERROR PATH: dismiss overlay if it was shown (it's null if the
         // error occurred before step 2, e.g. during first-visit wait)
         if (dismissOverlay) dismissOverlay();
+        // A starter list armed for a load that never happened must not be
+        // waiting for whatever project this person opens next (IR-9).
+        setStarterParameters(null);
         console.error('[DeepLink] Manifest load failed:', error);
 
         let friendlyMsg;
@@ -8772,9 +8890,7 @@ if (rounded) {
         initUrlParams.delete('preset');
         initUrlParams.delete('skipWelcome');
         initUrlParams.delete('skipwelcome');
-        const failCleanUrl = initUrlParams.toString()
-          ? `${window.location.pathname}?${initUrlParams}`
-          : window.location.pathname;
+        const failCleanUrl = cleanUrlKeepingFragment();
         history.replaceState(null, '', failCleanUrl);
 
         // Show welcome screen again on failure so the user isn't stuck
@@ -8838,9 +8954,7 @@ if (rounded) {
         // Clean up URL after loading
         initUrlParams.delete('project');
         initUrlParams.delete('scad');
-        const cleanUrl = initUrlParams.toString()
-          ? `${window.location.pathname}?${initUrlParams}`
-          : window.location.pathname;
+        const cleanUrl = cleanUrlKeepingFragment();
         history.replaceState(null, '', cleanUrl);
 
         console.log(`[DeepLink] Successfully loaded project: ${urlFileName}`);
@@ -11326,10 +11440,12 @@ if (rounded) {
 
       downloadFile(state.stl, filename, outputFormat);
       updateStatus(`Downloaded: ${filename}`);
+      refreshFolderSaveAffordances();
       return;
     }
 
     await runFullRender();
+    refreshFolderSaveAffordances();
   });
 
   /**
@@ -11837,73 +11953,226 @@ if (rounded) {
    */
   function generateManifestFromProject() {
     const state = stateManager.getState();
-    const fileName = state.uploadedFile?.name || 'design.scad';
+    const uiModeController = getUIModeController();
+    return buildProjectManifest({
+      uploadName: state.uploadedFile?.name || 'design.scad',
+      mainFilePath: state.mainFilePath,
+      projectFiles: state.projectFiles,
+      presetName: state.currentPresetName,
+      uiModePrefs: uiModeController.getPreferencesForExport(),
+      registryHiddenDefaults: uiModeController
+        .getRegistry()
+        .filter((p) => p.defaultHiddenInBasic)
+        .map((p) => p.id),
+    });
+  }
 
-    const manifest = {
-      forgeManifest: '1.0',
-      name: fileName.replace(/\.scad$/i, ''),
-      files: {
-        main: fileName,
+  const publishIncludeSettings = document.getElementById(
+    'publishIncludeSettings'
+  );
+  const downloadProjectZipBtn = document.getElementById(
+    'downloadProjectZipBtn'
+  );
+  const copySettingsLinkBtn = document.getElementById('copySettingsLinkBtn');
+
+  // ── The drawing editor's own door (IR-4) ────────────────────────────────
+  //
+  // Two triggers, one picker, one lazily-built editor. The module is imported
+  // on first use: nobody pays for it until they open it, and the core bundle
+  // has about 20 KB of gzip headroom left.
+  const svgEditFileInput = document.getElementById('svgEditFileInput');
+  const editDrawingSpotlightBtn = document.getElementById(
+    'editDrawingSpotlightBtn'
+  );
+  const editDrawingActionBtn = document.getElementById('editDrawingActionBtn');
+  let svgEditEntry = null;
+
+  async function getSvgEditEntry() {
+    if (svgEditEntry) return svgEditEntry;
+    const { createSvgEditEntry } = await import('./js/svg-edit-entry.js');
+    svgEditEntry = createSvgEditEntry({
+      announce: (message) => announceImmediate(message),
+      onError: (message) =>
+        showErrorToast({ title: 'Cannot Edit That File', message }),
+      // The DXF lane uses the app's own engine as its converter. Calls
+      // serialize behind the controller's queue, so a conversion cannot
+      // collide with a model render already in flight.
+      render: renderController
+        ? (scad, params, options) =>
+            renderController.render(scad, params, options)
+        : null,
+    });
+    return svgEditEntry;
+  }
+
+  // "Open with Forge" (IR-10). An installed app can be registered with the
+  // operating system for a set of file types, and the files then arrive here.
+  //
+  // WIRED BUT INERT ON PURPOSE. The registration lives in the web app
+  // manifest's `file_handlers` member, and that member is NOT in
+  // public/manifest.json - it stays out until somebody has installed Forge on
+  // a real machine and watched an "Open with" actually work. Registering file
+  // types with an operating system is not something to ship on a code read.
+  // The exact block to add is in the release record, and this consumer is
+  // ready for it: one JSON edit and the path below runs.
+  //
+  // Feature-detected, so this does nothing at all in Firefox or Safari, and
+  // nothing in Chrome or Edge until the app is installed.
+  (async () => {
+    const { initLaunchFiles } = await import('./js/launch-files.js');
+    initLaunchFiles({
+      // A launched file takes exactly the path an uploaded one takes.
+      openDesign: (file) => fileHandler.handleFile(file),
+      openDrawing: async (file) => {
+        announceImmediate(`Opening ${file.name} in the drawing editor.`);
+        const entry = await getSvgEditEntry();
+        await entry.openFile(file);
       },
-    };
+      // A launched file arrives earlier than any upload can - the launch IS
+      // the page load - so wait for the engine the same way the deep-link
+      // lifecycle does.
+      waitUntilReady: () =>
+        new Promise((resolve) => {
+          if (document.body.getAttribute('data-wasm-ready') === 'true') {
+            resolve();
+            return;
+          }
+          const observer = new MutationObserver(() => {
+            if (document.body.getAttribute('data-wasm-ready') === 'true') {
+              observer.disconnect();
+              resolve();
+            }
+          });
+          observer.observe(document.body, {
+            attributes: true,
+            attributeFilter: ['data-wasm-ready'],
+          });
+        }),
+      onUnsupported: (name) =>
+        showErrorToast({
+          title: 'Cannot Open That File',
+          message: `Forge cannot open ${name}. It works with .scad, .zip, .svg and .dxf files.`,
+        }),
+    });
+  })();
 
-    // Add companion files from the project
-    if (state.projectFiles && state.projectFiles.size > 0) {
-      const companions = [];
-      const presets = [];
+  if (svgEditFileInput) {
+    svgEditFileInput.addEventListener('change', async (event) => {
+      const file = event.target.files?.[0];
+      // Chosen and then chosen again: the input must not remember the last
+      // file, or picking the same one twice is silently ignored.
+      event.target.value = '';
+      if (!file) return;
+      announceImmediate(`Opening ${file.name} in the drawing editor.`);
+      const entry = await getSvgEditEntry();
+      await entry.openFile(file);
+    });
 
-      for (const filePath of state.projectFiles.keys()) {
-        // Skip the main .scad file
-        if (filePath === fileName) continue;
+    const openPicker = () => svgEditFileInput.click();
+    if (editDrawingSpotlightBtn) {
+      editDrawingSpotlightBtn.addEventListener('click', openPicker);
+    }
+    if (editDrawingActionBtn) {
+      editDrawingActionBtn.addEventListener('click', openPicker);
+    }
+  }
 
-        if (filePath.toLowerCase().endsWith('.json')) {
-          presets.push(filePath);
-        } else if (!filePath.toLowerCase().endsWith('.scad')) {
-          companions.push(filePath);
-        } else {
-          // Secondary .scad files are companions (included via use/include)
-          companions.push(filePath);
-        }
+  /**
+   * The address that reopens the loaded project, without any settings.
+   * A design opened from a local file has no such address: nothing on the web
+   * can fetch it, and saying so is better than composing a link that 404s.
+   * @returns {string|null}
+   */
+  function projectReopenUrl() {
+    const state = stateManager.getState();
+    const forgeBase = window.location.origin + window.location.pathname;
+    const manifestUrl = state.manifestOrigin?.url;
+    if (manifestUrl) {
+      return `${forgeBase}?manifest=${encodeURIComponent(manifestUrl)}`;
+    }
+    const exampleKey = fileHandler.getCurrentExampleKey?.();
+    if (exampleKey) {
+      return `${forgeBase}?example=${encodeURIComponent(exampleKey)}`;
+    }
+    return null;
+  }
+
+  async function copyTextWithFallback(text, promptLabel) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (_err) {
+      prompt(promptLabel, text);
+      return false;
+    }
+  }
+
+  const saveToFolderBtn = document.getElementById('saveToFolderBtn');
+  if (saveToFolderBtn) {
+    saveToFolderBtn.addEventListener('click', async () => {
+      const state = stateManager.getState();
+      if (!state.stl || !state.uploadedFile) {
+        showErrorToast({
+          title: 'Nothing to Save',
+          message: 'No file has been generated yet. Click Generate first.',
+        });
+        return;
+      }
+      const outputFormat =
+        document.getElementById('outputFormat')?.value ||
+        state.outputFormat ||
+        'stl';
+      // The same bytes the Download button would hand over. Saving to the
+      // folder must never mean rendering the model a second time.
+      const fileName = resolveDownloadFilename(
+        state.uploadedFile.name,
+        state.parameters,
+        outputFormat,
+        getBrailleDownloadName()
+      );
+      saveToFolderBtn.disabled = true;
+      try {
+        await folderSaveActions.saveExport({
+          fileName,
+          data: state.stl,
+          mainFilePath: state.mainFilePath,
+        });
+      } finally {
+        saveToFolderBtn.disabled = false;
+      }
+    });
+  }
+
+  if (copySettingsLinkBtn) {
+    copySettingsLinkBtn.addEventListener('click', async () => {
+      const state = stateManager.getState();
+      if (!state.uploadedFile) {
+        showErrorToast({
+          title: 'No File Loaded',
+          message: 'Upload a .scad or .zip file first.',
+        });
+        return;
       }
 
-      if (companions.length > 0) {
-        manifest.files.companions = companions;
+      const fragment = stateManager.getShareFragment();
+      const base = projectReopenUrl();
+      const link = `${base || window.location.origin + window.location.pathname}${fragment}`;
+      await copyTextWithFallback(link, 'Copy this link:');
+
+      if (!base) {
+        updateStatus(
+          'Link copied. It carries your settings only, so whoever opens it ' +
+            'needs to load this design first.'
+        );
+      } else if (!fragment) {
+        updateStatus(
+          'Link copied. Everything is at its default value, so it opens the ' +
+            'design as its author left it.'
+        );
+      } else {
+        updateStatus('Link copied. It opens this design with your settings.');
       }
-      if (presets.length > 0) {
-        manifest.files.presets = presets.length === 1 ? presets[0] : presets;
-      }
-    }
-
-    // Add defaults
-    manifest.defaults = {
-      autoPreview: true,
-    };
-
-    // If a preset is currently selected, include it as the default
-    if (
-      state.currentPresetName &&
-      state.currentPresetName !== 'design default values'
-    ) {
-      manifest.defaults.preset = state.currentPresetName;
-    }
-
-    // Include UI mode preferences so shared links apply the same panel visibility
-    const uiModePrefs = getUIModeController().getPreferencesForExport();
-    if (uiModePrefs.defaultMode !== 'standard') {
-      manifest.defaults.uiMode = uiModePrefs.defaultMode;
-    }
-    const registryDefaults = getUIModeController()
-      .getRegistry()
-      .filter((p) => p.defaultHiddenInBasic)
-      .map((p) => p.id);
-    const prefsChanged =
-      JSON.stringify(uiModePrefs.hiddenPanelsInBasic.sort()) !==
-      JSON.stringify(registryDefaults.sort());
-    if (prefsChanged) {
-      manifest.defaults.hiddenPanels = uiModePrefs.hiddenPanelsInBasic;
-    }
-
-    return manifest;
+    });
   }
 
   if (publishProjectBtn && publishProjectModal) {
@@ -11918,6 +12187,22 @@ if (rounded) {
       }
 
       const manifest = generateManifestFromProject();
+
+      // The dialog used to hand out manifests its own loader refuses (D-95).
+      // Checking the emission against the same validator the loader runs makes
+      // that class of defect impossible to ship again.
+      const validation = validateManifest(manifest);
+      if (!validation.valid) {
+        showErrorToast({
+          title: 'Manifest Not Generated',
+          message:
+            `This project produced a manifest the loader would refuse: ` +
+            `${validation.errors.join(' ')} Nothing was copied. Please report ` +
+            `this so it can be fixed.`,
+        });
+        return;
+      }
+
       const manifestJson = JSON.stringify(manifest, null, 2);
 
       if (publishManifestOutput) {
@@ -11930,6 +12215,9 @@ if (rounded) {
       }
       if (publishRepoUrl) {
         publishRepoUrl.value = '';
+      }
+      if (publishIncludeSettings) {
+        publishIncludeSettings.checked = false;
       }
 
       openModal(publishProjectModal);
@@ -11970,7 +12258,7 @@ if (rounded) {
 
     // Generate shareable link when repo URL changes
     if (publishRepoUrl && publishShareLink && publishShareLinkContainer) {
-      publishRepoUrl.addEventListener('input', () => {
+      const composeShareLink = () => {
         let baseUrl = publishRepoUrl.value.trim();
         if (!baseUrl) {
           publishShareLinkContainer.classList.add('hidden');
@@ -11984,10 +12272,93 @@ if (rounded) {
 
         const manifestUrl = `${baseUrl}forge-manifest.json`;
         const forgeBase = window.location.origin + window.location.pathname;
-        const shareUrl = `${forgeBase}?manifest=${encodeURIComponent(manifestUrl)}`;
+        // The same serializer the address bar uses, so a copied link and the
+        // address bar can never mean different things.
+        const fragment = publishIncludeSettings?.checked
+          ? stateManager.getShareFragment()
+          : '';
+        const shareUrl = `${forgeBase}?manifest=${encodeURIComponent(manifestUrl)}${fragment}`;
 
         publishShareLink.value = shareUrl;
         publishShareLinkContainer.classList.remove('hidden');
+      };
+
+      publishRepoUrl.addEventListener('input', composeShareLink);
+      if (publishIncludeSettings) {
+        publishIncludeSettings.addEventListener('change', composeShareLink);
+      }
+    }
+
+    // Download the whole project as one archive
+    if (downloadProjectZipBtn) {
+      downloadProjectZipBtn.addEventListener('click', async () => {
+        const state = stateManager.getState();
+        if (!state.uploadedFile) {
+          showErrorToast({
+            title: 'No File Loaded',
+            message: 'Upload a .scad or .zip file first.',
+          });
+          return;
+        }
+
+        try {
+          const uiModeController = getUIModeController();
+          // asBundle: false - the archive ships the project UNPACKED beside
+          // its manifest, so the manifest has to name loose files even when
+          // the project itself arrived as a ZIP.
+          const manifest = buildProjectManifest({
+            uploadName: state.uploadedFile?.name || 'design.scad',
+            mainFilePath: state.mainFilePath,
+            projectFiles: state.projectFiles,
+            presetName: state.currentPresetName,
+            uiModePrefs: uiModeController.getPreferencesForExport(),
+            registryHiddenDefaults: uiModeController
+              .getRegistry()
+              .filter((panel) => panel.defaultHiddenInBasic)
+              .map((panel) => panel.id),
+            asBundle: false,
+          });
+
+          const provenance = buildProvenance({
+            manifestUrl: state.manifestOrigin?.url || null,
+            projectName: manifest.name,
+            author: state.manifestOrigin?.author || null,
+            appVersion: __APP_VERSION__,
+            presetName: state.currentPresetName,
+            parameters: stateManager.collectNonDefaultParameters() || {},
+            generatedAt: new Date().toISOString(),
+          });
+
+          const entries = buildProjectZipEntries({
+            projectFiles: state.projectFiles,
+            mainFilePath: manifest.files.main,
+            mainContent: state.uploadedFile?.content ?? state.scadContent,
+            manifest,
+            provenance,
+          });
+
+          const { default: JSZip } = await import('jszip');
+          const zip = new JSZip();
+          for (const entry of entries) {
+            zip.file(entry.path, entry.content, { base64: entry.base64 });
+          }
+          const blob = await zip.generateAsync({ type: 'blob' });
+
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `${manifest.name || 'project'}.zip`;
+          link.click();
+          URL.revokeObjectURL(url);
+
+          updateStatus(`Project archive downloaded, ${entries.length} files.`);
+        } catch (error) {
+          console.error('[Publish] Project ZIP failed:', error);
+          showErrorToast({
+            title: 'Download Failed',
+            message: `Could not build the project archive: ${error.message}`,
+          });
+        }
       });
     }
 

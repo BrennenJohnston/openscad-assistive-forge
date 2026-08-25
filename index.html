@@ -1732,6 +1732,22 @@
                     aria-label="Accessibility highlights"
                   >
                     <li>
+                      <button
+                        type="button"
+                        class="spotlight-action"
+                        id="editDrawingSpotlightBtn"
+                      >
+                        <span class="spotlight-title"
+                          >Edit a drawing or photo, with no design open</span
+                        >
+                        <span class="spotlight-detail">
+                          Open an SVG or a photo of a drawing, choose which
+                          shapes to keep by keyboard, and save the cleaned
+                          result as a file. Nothing is uploaded anywhere.
+                        </span>
+                      </button>
+                    </li>
+                    <li>
                       <a
                         href="#"
                         class="spotlight-link"
@@ -3733,6 +3749,14 @@
                         >
                           Save as Project
                         </button>
+                        <button
+                          type="button"
+                          id="companionSaveToFolderBtn"
+                          class="btn btn-sm btn-outline hidden"
+                          aria-label="Save the companion files into the connected folder"
+                        >
+                          Save companions to folder
+                        </button>
                       </div>
                     </div>
                   </details>
@@ -4159,6 +4183,18 @@
                   </button>
                 </div>
               </div>
+              <!-- Notices about the values on screen. Polite rather than an
+                   alert: this reports something that already happened, and it
+                   stays until dismissed rather than being overwritten by the
+                   next status line. -->
+              <div
+                id="parameterNotices"
+                class="parameter-notices"
+                role="status"
+                aria-live="polite"
+                aria-label="Notices about the parameter values"
+                hidden
+              ></div>
               <div
                 id="parametersContainer"
                 class="parameters-container"
@@ -5287,6 +5323,54 @@
                     </svg>
                     <span class="btn-text">Publish</span>
                   </button>
+                  <button
+                    type="button"
+                    id="copySettingsLinkBtn"
+                    class="btn btn-sm btn-secondary actions-drawer-btn"
+                    aria-label="Copy a link to this design with my current settings"
+                  >
+                    <svg
+                      class="btn-icon-svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"
+                      ></path>
+                      <path
+                        d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"
+                      ></path>
+                    </svg>
+                    <span class="btn-text">Copy Link</span>
+                  </button>
+                  <button
+                    type="button"
+                    id="editDrawingActionBtn"
+                    class="btn btn-sm btn-secondary actions-drawer-btn"
+                    aria-label="Open an SVG or photo in the drawing editor"
+                  >
+                    <svg
+                      class="btn-icon-svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 20h9"></path>
+                      <path
+                        d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"
+                      ></path>
+                    </svg>
+                    <span class="btn-text">Edit Drawing</span>
+                  </button>
                   <span
                     class="actions-drawer-divider"
                     aria-hidden="true"
@@ -5380,6 +5464,30 @@
                   </svg>
                   <span>Download last file</span>
                 </a>
+                <button
+                  type="button"
+                  id="saveToFolderBtn"
+                  class="btn btn-sm btn-outline hidden"
+                  aria-label="Save the generated file into the connected folder"
+                >
+                  <svg
+                    class="btn-icon-svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"
+                    ></path>
+                    <polyline points="9 13 12 16 15 13"></polyline>
+                    <line x1="12" y1="16" x2="12" y2="10"></line>
+                  </svg>
+                  <span>Save to folder</span>
+                </button>
               </div>
               <!-- Mobile Camera Controls Drawer (visible only on mobile) -->
               <div
@@ -8932,7 +9040,34 @@ No console output yet. Generate a model to see output.</pre
               <code>forge-manifest.json</code> in the same directory.
             </li>
           </ol>
+          <button
+            type="button"
+            id="downloadProjectZipBtn"
+            class="btn btn-sm btn-secondary"
+            aria-describedby="downloadProjectZipHelp"
+          >
+            Download Project ZIP
+          </button>
+          <p id="downloadProjectZipHelp" class="publish-help-text">
+            One archive holding this project's files, the manifest above, and a
+            record of where the design came from. Unzip it into your repository
+            and everything is in place.
+          </p>
           <h3>3. Get Your Shareable Link</h3>
+          <div class="publish-setting-row">
+            <input
+              type="checkbox"
+              id="publishIncludeSettings"
+              class="publish-checkbox"
+            />
+            <label for="publishIncludeSettings" class="publish-checkbox-label">
+              Include my current settings in the link
+            </label>
+          </div>
+          <p id="publishIncludeSettingsHelp" class="publish-help-text">
+            Whoever opens the link sees the values you have on screen right now,
+            not the design's own defaults.
+          </p>
           <label for="publishRepoUrl" class="publish-label">
             Your GitHub raw base URL:
           </label>
@@ -8975,6 +9110,15 @@ No console output yet. Generate a model to see output.</pre
         </div>
       </div>
     </div>
+    <!-- Both drawing-editor doors open this picker; it is never a tab stop -->
+    <input
+      type="file"
+      id="svgEditFileInput"
+      class="sr-only"
+      accept=".svg,.dxf,.png,.jpg,.jpeg,.bmp,.gif"
+      tabindex="-1"
+      aria-hidden="true"
+    />
     <!-- Drawer backdrop (for mobile off-canvas) -->
     <div class="drawer-backdrop" id="drawerBackdrop" aria-hidden="true"></div>
     <!-- Toolbar Menu Modals (Phase 1) -->

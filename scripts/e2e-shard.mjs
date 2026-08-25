@@ -102,7 +102,12 @@ export const MEASURED_SECONDS = {
   'welcome-spotlight.spec.js': 31.5,
   'editor-fold-markers.spec.js': 28.5,
   'classic-tutorial.spec.js': 26.8,
-  'wasm-smoke.spec.js': 25.0,
+  // 25.0 was measured in CI for four cases. IR-8 added a fifth (the tile
+  // template's render), measured locally at 4.1 s against a warm dev server,
+  // where the other four came to about 24 s - close enough to the CI number
+  // to add 5 and be slightly conservative. Re-measure from a CI shard log
+  // next time this file is touched.
+  'wasm-smoke.spec.js': 30.0,
   'auto-preview.spec.js': 22.3,
   'library-panel.spec.js': 22.1,
   'terminology.spec.js': 20.3,
@@ -143,6 +148,20 @@ export const MEASURED_SECONDS = {
   'stakeholder-bugfix-verification.spec.js': 0,
   'stakeholder-zip-acceptance.spec.js': 0,
   'zip-workflow.spec.js': 0,
+
+  // Forge Interop Round 1's own specs, summed from the Chromium shard logs of
+  // run 32799325283 (2026-08-25) by the method this file's header describes.
+  // Before these numbers went in, all seven were booked at DEFAULT_WEIGHT_S
+  // (60s each, 420s of imaginary work) and the planner's own 25-minute guard
+  // went red at 25.1 projected minutes - which is exactly what that guard is
+  // for. `folder-write-back.spec.js` is deliberately absent: it is newer than
+  // this run and has no CI measurement yet, so it keeps the default.
+  'param-links.spec.js': 58.3,
+  'publish-dialog.spec.js': 23.7,
+  'share-settings.spec.js': 54.2,
+  'svg-edit-door.spec.js': 35.6,
+  'ink-modes.spec.js': 42.6,
+  'dxf-roundtrip.spec.js': 19.0,
 }
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */
