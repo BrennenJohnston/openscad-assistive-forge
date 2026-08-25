@@ -8,6 +8,9 @@ import {
   ROAD_TONES,
   trafficLightState,
   buildRain,
+  tintOf,
+  inGamutChroma,
+  hashSpot,
 } from '../../../src/js/game/city-scene.js'
 import { parseCityExtract } from '../../../src/js/game/city-data.js'
 import {
@@ -1306,5 +1309,58 @@ describe('cars are cars (CW-46, CW-Q46)', () => {
       }
     }
     props.dispose()
+  })
+})
+
+describe('figure tones follow the colour scheme (CW-49)', () => {
+  // sRGB luma, the same weights tintOf balances against.
+  const lum = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b
+  const HUES = [0, 30, 60, 120, 180, 270, 300, 330]
+
+  it('keeps a tone at its tier for EVERY hue, which is what mono reads', () => {
+    // tintOf holds luminance at the tier by moving channels apart, but it
+    // clamps, and a clamped channel silently breaks that. The monochrome
+    // schemes have only luminance to go on, so a tone that drifts off its
+    // tier moves them - which the head tone must never do.
+    for (const tier of [0.45, 0.65, 0.82, 0.9]) {
+      for (const hue of HUES) {
+        const c = inGamutChroma(tier, hue, 0.5)
+        expect(c, `tier ${tier} hue ${hue}`).toBeLessThanOrEqual(0.5)
+        expect(lum(tintOf(tier, hue, c)), `tier ${tier} hue ${hue}`).toBeCloseTo(
+          tier,
+          12
+        )
+      }
+    }
+  })
+
+  it('shows that the unlimited chroma really would have drifted', () => {
+    // The control for the test above: without the limit, a warm hue at the
+    // head tier lands measurably off its tier. A guard nobody has watched
+    // fail is a guard nobody should trust.
+    const drifted = lum(tintOf(0.82, 0, 0.5))
+    expect(drifted).toBeLessThan(0.8)
+    expect(lum(tintOf(0.82, 0, inGamutChroma(0.82, 0, 0.5)))).toBeCloseTo(
+      0.82,
+      12
+    )
+  })
+
+  it('gives a spot the same hue every time, and spreads hues over spots', () => {
+    // The head hue comes from the spot, not from a draw on the shared prop
+    // stream, so it must be stable per spot and varied across them.
+    expect(hashSpot(12.5, -8.25)).toBe(hashSpot(12.5, -8.25))
+    expect(hashSpot(12.5, -8.25)).not.toBe(hashSpot(-8.25, 12.5))
+
+    const seen = new Map()
+    for (let i = 0; i < 4000; i++) {
+      const h = HUES[hashSpot(i * 0.37, i * -0.61) % HUES.length]
+      seen.set(h, (seen.get(h) ?? 0) + 1)
+    }
+    expect(seen.size).toBe(HUES.length)
+    for (const [hue, n] of seen) {
+      // Even coverage would be 500; this only rejects a hash that collapses.
+      expect(n, `hue ${hue} drawn ${n} times`).toBeGreaterThan(200)
+    }
   })
 })

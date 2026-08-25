@@ -139,10 +139,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   adult range (1.50-1.95 m, the span of published anthropometric reference tables), broader or
   slighter builds, and jointed poses - walkers caught mid-step, joggers leaning with bent elbows,
   people standing about, and figures sitting on real benches (only where OpenStreetMap actually
-  records a bench - a city with two benches seats at most two people). Clothing colors come from
-  the game's own color schemes - torso and legs each take a scheme hue while heads and shoulders
-  keep one neutral figure tone, deliberately: color identity is palette-based, not race-based, and
-  no skin is modelled at all. The same spot always holds the same person on every visit
+  records a bench - a city with two benches seats at most two people). Their colors come from the
+  game's own color schemes. The same spot always holds the same person on every visit
 
 - **Seattle reaches the Space Needle** (CW-44) - the Seattle map grew from a downtown patch to a
   1.3 km circle centered toward the waterfront: Pike Place, the Great Wheel piers, Pioneer Square
@@ -180,6 +178,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nowhere to stand near where you picked, it says so instead of putting you somewhere wrong
 
 ### Changed
+
+- **Every part of a figure takes a color from the scheme** (CW-49) - a person's torso and legs
+  already wore colors from the city's own color scheme, but their head and shoulders kept a single
+  fixed tone, so a street of people repeated one note at the top of every figure. All three zones
+  now take their own hue, picked from the figure's own position so the same spot always holds the
+  same person. The monochrome screens are unchanged by design: there is no color scheme to show
+  there, so a head is simply a bright head
 
 - **The city walks at city speed** (CW-48) - walking used to start at a stroll, and the way to a
   brisk pace was to turn the speed up every time you arrived. What the slider called 300 percent is

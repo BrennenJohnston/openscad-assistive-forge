@@ -1392,6 +1392,64 @@ test.describe('ASCII City Walk — people are people (CW-45)', () => {
     expect(check.sitters).toBeGreaterThan(0)
     expect(check.sitters).toBeLessThanOrEqual(check.benches)
   })
+
+  test('every zone of a figure carries a scheme colour (CW-49)', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // Read the tints the scene actually painted, not the pixels they end up
+    // as. A pixel test was tried first and could not tell a scheme hue from a
+    // monochrome phosphor - both are far from grey - and a sample box wide
+    // enough to cover a head also caught its coloured neighbours, so it
+    // passed on the release base. The vertex colours have no such ambiguity.
+    const tints = await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      let mesh = null
+      g.props.group.traverse((o) => {
+        if (o.isMesh && o.name === 'people') mesh = o
+      })
+      if (!mesh) return null
+      const col = mesh.geometry.getAttribute('color')
+      let neutral = 0
+      const distinct = new Set()
+      for (let i = 0; i < col.count; i++) {
+        const r = col.getX(i)
+        const gg = col.getY(i)
+        const b = col.getZ(i)
+        // The one flat tone heads used to wear, to six decimals.
+        if (
+          Math.abs(r - gg) < 1e-6 &&
+          Math.abs(gg - b) < 1e-6 &&
+          Math.abs(r - 0.82) < 1e-6
+        )
+          neutral++
+        distinct.add(`${r.toFixed(3)},${gg.toFixed(3)},${b.toFixed(3)}`)
+      }
+      return {
+        vertices: col.count,
+        neutral,
+        pctNeutral: (100 * neutral) / col.count,
+        distinct: distinct.size,
+      }
+    })
+    expect(tints, 'the merged people mesh was not found').not.toBeNull()
+
+    // Head and shoulders were 18.1% of this mesh when they were one flat
+    // tone; with every zone hued, the only neutral geometry left in it is the
+    // dogs, at 0.95%. Measured both ways on this extract.
+    expect(
+      tints.pctNeutral,
+      `${tints.neutral} of ${tints.vertices} vertices are the flat tone`
+    ).toBeLessThan(3)
+
+    // The control, in the same reading: some neutral geometry SURVIVES. If
+    // this ever reaches zero the colour attribute is not being read at all,
+    // and the assertion above would pass for the wrong reason.
+    expect(tints.neutral, 'no neutral geometry at all').toBeGreaterThan(0)
+    expect(tints.distinct).toBeGreaterThan(34)
+  })
 })
 
 test.describe('ASCII City Walk — cars are cars (CW-46)', () => {
