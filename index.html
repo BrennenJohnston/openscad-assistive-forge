@@ -4183,6 +4183,18 @@
                   </button>
                 </div>
               </div>
+              <!-- Notices about the values on screen. Polite rather than an
+                   alert: this reports something that already happened, and it
+                   stays until dismissed rather than being overwritten by the
+                   next status line. -->
+              <div
+                id="parameterNotices"
+                class="parameter-notices"
+                role="status"
+                aria-live="polite"
+                aria-label="Notices about the parameter values"
+                hidden
+              ></div>
               <div
                 id="parametersContainer"
                 class="parameters-container"

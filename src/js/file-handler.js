@@ -1420,13 +1420,18 @@ export function initFileHandler({
           `Ready - ${paramCount} parameters loaded (${Object.keys(urlParams).length} from URL)`
         );
 
-        // Last, so it is the status that survives and the announcement that
-        // gets read: the count line above used to overwrite it in the same
-        // tick, which made the adjustment notice unreachable (D-98).
+        // A NOTICE, not a status (IR-Q16). D-98 made this sentence reachable;
+        // measured, it then stood for about 660 ms before the render replaced
+        // it, so someone who looked up late never learned their number had
+        // changed. The notice stays until dismissed.
         if (Object.keys(adjustments).length > 0) {
-          updateStatus(
-            'Some URL parameters were adjusted to fit allowed ranges.'
+          const { createParameterNotices, describeAdjustments } =
+            await import('./parameter-notices.js');
+          const notices = createParameterNotices(
+            document.getElementById('parameterNotices'),
+            { announce: (message) => announceImmediate(message) }
           );
+          notices.show(describeAdjustments(adjustments, updatedValues));
         }
       } else {
         updateStatus(`Ready - ${paramCount} parameters loaded`);

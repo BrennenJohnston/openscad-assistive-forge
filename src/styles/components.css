@@ -14573,6 +14573,41 @@ body.tutorial-body-locked {
 }
 
 /* ============================================================
+   Parameter notices (things that happened to your values)
+   ============================================================ */
+
+.parameter-notices {
+  margin-bottom: var(--space-sm);
+}
+
+.parameter-notice {
+  padding: var(--space-md);
+  border: 2px solid var(--color-warning, var(--color-border));
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+}
+
+.parameter-notice-title {
+  margin: 0 0 var(--space-xs);
+  font-weight: 600;
+}
+
+.parameter-notice-list {
+  margin: 0 0 var(--space-sm);
+  padding-left: 1.2em;
+  line-height: 1.5;
+}
+
+.parameter-notice-list li {
+  margin-bottom: var(--space-xs);
+}
+
+.parameter-notice-dismiss {
+  min-height: var(--size-touch-target);
+}
+
+/* ============================================================
    Ink controls (what to keep from a picture)
    ============================================================ */
 

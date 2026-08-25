@@ -254,6 +254,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **When a link's numbers get changed, the message now waits for you** (IR-13) - opening a shared
+  link whose value is outside what the design allows adjusts it, and Forge said so in the status
+  line for about two thirds of a second before the render replaced it. Anyone who looked up a
+  moment later never found out their number had moved. It is now a notice that sits above the
+  controls until you dismiss it, and it names each one: which parameter, what the link asked for,
+  and what it is now
+
 - **Changing how a photo is read no longer throws you out of the control you are using** (IR-11) -
   re-reading a picture rebuilds the editor underneath, and that was moving the settings panel in a
   way that dropped your keyboard focus and shrank the editor back behind the page. Both were found

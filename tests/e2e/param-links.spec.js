@@ -57,8 +57,6 @@ async function openSimpleBox(page, fragment = '') {
   }
 }
 
-const ADJUSTED = 'Some URL parameters were adjusted to fit allowed ranges.'
-
 async function announcements(page) {
   return page.evaluate(() => window.__announcements || [])
 }
@@ -86,10 +84,17 @@ test.describe('Shared parameter links', () => {
     await openSimpleBox(page, payload({ width: 999 }))
 
     await expect(page.locator('#param-width')).toHaveValue('100')
+    // IR-13 replaced the one-line status this used to assert with a notice
+    // that stays until dismissed (IR-Q16). The old sentence said only that
+    // SOMETHING had been adjusted; this names the parameter and the number.
     await expect
-      .poll(async () => (await announcements(page)).includes(ADJUSTED), {
-        timeout: 15000,
-      })
+      .poll(
+        async () =>
+          (await announcements(page)).some((line) =>
+            line.includes('width was set to 999')
+          ),
+        { timeout: 15000 }
+      )
       .toBe(true)
   })
 
@@ -99,9 +104,13 @@ test.describe('Shared parameter links', () => {
     await openSimpleBox(page, payload({ not_a_real_parameter: 5 }))
 
     await expect
-      .poll(async () => (await announcements(page)).includes(ADJUSTED), {
-        timeout: 15000,
-      })
+      .poll(
+        async () =>
+          (await announcements(page)).some((line) =>
+            line.includes('not_a_real_parameter is not a parameter')
+          ),
+        { timeout: 15000 }
+      )
       .toBe(true)
     await expect
       .poll(async () => page.evaluate(() => window.location.hash), {
@@ -145,6 +154,57 @@ test.describe('Shared parameter links', () => {
     expect(await page.evaluate(() => window.location.hash)).toContain(
       'big=keep-me-please'
     )
+  })
+
+  test('the notice about changed values stays until it is dismissed', async ({
+    page,
+  }) => {
+    // IR-Q16. D-98 made this sentence reachable at all; measured, it then
+    // stood for about 660 ms before the render replaced it, so someone who
+    // looked up late never learned their number had changed.
+    await openSimpleBox(
+      page,
+      payload({ width: 999, hole_count: 0, not_a_real_parameter: 5 })
+    )
+
+    const notice = page.locator('.parameter-notice')
+    await expect(notice).toBeVisible({ timeout: 20000 })
+
+    // Each line names the parameter, what the link asked for, and what it is
+    // now - not a general apology.
+    await expect(notice).toContainText(
+      'width was set to 999, above the highest allowed value. It is now 100.'
+    )
+    await expect(notice).toContainText(
+      'hole_count was set to 0, below the lowest allowed value. It is now 1.'
+    )
+    await expect(notice).toContainText(
+      'not_a_real_parameter is not a parameter of this design'
+    )
+
+    // The controls agree with what the notice says.
+    await expect(page.locator('#param-width')).toHaveValue('100')
+    await expect(page.locator('#param-hole_count')).toHaveValue('1')
+
+    // Long after the status line has moved on to the render, it is still here.
+    await expect
+      .poll(async () => page.locator('#statusArea').textContent(), {
+        timeout: 30000,
+      })
+      .not.toContain('adjusted')
+    await expect(notice).toBeVisible()
+
+    // And it goes when asked, by keyboard.
+    await page.locator('.parameter-notice-dismiss').focus()
+    await page.keyboard.press('Enter')
+    await expect(notice).toHaveCount(0)
+  })
+
+  test('a link that fits raises no notice at all', async ({ page }) => {
+    await openSimpleBox(page, payload({ width: 77 }))
+    await expect(page.locator('#param-width')).toHaveValue('77')
+    // Nothing was changed, so there is nothing to say.
+    await expect(page.locator('.parameter-notice')).toHaveCount(0)
   })
 
   test('a link written by the app reloads into the same values', async ({
