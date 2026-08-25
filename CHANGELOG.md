@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Open a drawing, clean it up, and save it back - no design needed** (IR-4) - Forge already had an
+  editor that lists every shape in an SVG and lets you choose, by keyboard, which ones become the
+  printed shape, which become holes, and which are dropped. You could only reach it through a
+  design's file parameter, and there was no way to get the cleaned drawing back out. Now there are
+  two doors - a line inside Explore Features & Accessibility on the welcome screen, and Edit
+  Drawing in the Actions drawer - and a Save edited SVG button that hands you the result as a file
+  named after the one you opened. Photos are traced first, the same as before. A photographed bird
+  drawing goes in with its eye and feather strokes, and comes back as one clean outline the way a
+  tactile printer can actually show it. Nothing is uploaded anywhere: the tracing, the editing and
+  the saving all happen in your browser, and your original file is never changed
+
 - **Send a link that opens with your settings, and get one back** (IR-3) - a plain link opened a
   design at its own defaults, so "make me this one, but 72 mm wide" meant writing the numbers out
   and hoping. Forge now puts the values you changed at the end of the link. Three ways to make
@@ -209,6 +220,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   data where there is one, and from the building itself where there is not
 
 ### Fixed
+
+- **The drawing editor reads correctly to a screen reader** (IR-4) - two long-standing faults, both
+  found the first time the editor was checked with an accessibility scanner. The list of shapes had
+  a hidden announcement area parked among the list items, which made the whole list invalid - a
+  screen reader could not rely on "shape 3 of 7" meaning anything. And both preview panes claimed
+  to be pictures while holding zoom buttons inside them, which is a combination assistive
+  technology refuses. The announcement area moved out of the list, and the panes are now named
+  groups holding a picture. The scanner reports nothing on the editor at all now
 
 - **The Publish dialog is readable in the light theme again** (IR-3) - it painted a dark box under
   dark text, so the manifest it generated and the address you typed were both invisible unless you

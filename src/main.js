@@ -11868,6 +11868,50 @@ if (rounded) {
   );
   const copySettingsLinkBtn = document.getElementById('copySettingsLinkBtn');
 
+  // ── The drawing editor's own door (IR-4) ────────────────────────────────
+  //
+  // Two triggers, one picker, one lazily-built editor. The module is imported
+  // on first use: nobody pays for it until they open it, and the core bundle
+  // has about 20 KB of gzip headroom left.
+  const svgEditFileInput = document.getElementById('svgEditFileInput');
+  const editDrawingSpotlightBtn = document.getElementById(
+    'editDrawingSpotlightBtn'
+  );
+  const editDrawingActionBtn = document.getElementById('editDrawingActionBtn');
+  let svgEditEntry = null;
+
+  async function getSvgEditEntry() {
+    if (svgEditEntry) return svgEditEntry;
+    const { createSvgEditEntry } = await import('./js/svg-edit-entry.js');
+    svgEditEntry = createSvgEditEntry({
+      announce: (message) => announceImmediate(message),
+      onError: (message) =>
+        showErrorToast({ title: 'Cannot Edit That File', message }),
+    });
+    return svgEditEntry;
+  }
+
+  if (svgEditFileInput) {
+    svgEditFileInput.addEventListener('change', async (event) => {
+      const file = event.target.files?.[0];
+      // Chosen and then chosen again: the input must not remember the last
+      // file, or picking the same one twice is silently ignored.
+      event.target.value = '';
+      if (!file) return;
+      announceImmediate(`Opening ${file.name} in the drawing editor.`);
+      const entry = await getSvgEditEntry();
+      await entry.openFile(file);
+    });
+
+    const openPicker = () => svgEditFileInput.click();
+    if (editDrawingSpotlightBtn) {
+      editDrawingSpotlightBtn.addEventListener('click', openPicker);
+    }
+    if (editDrawingActionBtn) {
+      editDrawingActionBtn.addEventListener('click', openPicker);
+    }
+  }
+
   /**
    * The address that reopens the loaded project, without any settings.
    * A design opened from a local file has no such address: nothing on the web

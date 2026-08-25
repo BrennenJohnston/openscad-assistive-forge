@@ -1732,6 +1732,22 @@
                     aria-label="Accessibility highlights"
                   >
                     <li>
+                      <button
+                        type="button"
+                        class="spotlight-action"
+                        id="editDrawingSpotlightBtn"
+                      >
+                        <span class="spotlight-title"
+                          >Edit a drawing or photo, with no design open</span
+                        >
+                        <span class="spotlight-detail">
+                          Open an SVG or a photo of a drawing, choose which
+                          shapes to keep by keyboard, and save the cleaned
+                          result as a file. Nothing is uploaded anywhere.
+                        </span>
+                      </button>
+                    </li>
+                    <li>
                       <a
                         href="#"
                         class="spotlight-link"
@@ -5311,6 +5327,29 @@
                       ></path>
                     </svg>
                     <span class="btn-text">Copy Link</span>
+                  </button>
+                  <button
+                    type="button"
+                    id="editDrawingActionBtn"
+                    class="btn btn-sm btn-secondary actions-drawer-btn"
+                    aria-label="Open an SVG or photo in the drawing editor"
+                  >
+                    <svg
+                      class="btn-icon-svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 20h9"></path>
+                      <path
+                        d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"
+                      ></path>
+                    </svg>
+                    <span class="btn-text">Edit Drawing</span>
                   </button>
                   <span
                     class="actions-drawer-divider"
@@ -9027,6 +9066,15 @@ No console output yet. Generate a model to see output.</pre
         </div>
       </div>
     </div>
+    <!-- Both drawing-editor doors open this picker; it is never a tab stop -->
+    <input
+      type="file"
+      id="svgEditFileInput"
+      class="sr-only"
+      accept=".svg,.png,.jpg,.jpeg,.bmp,.gif"
+      tabindex="-1"
+      aria-hidden="true"
+    />
     <!-- Drawer backdrop (for mobile off-canvas) -->
     <div class="drawer-backdrop" id="drawerBackdrop" aria-hidden="true"></div>
     <!-- Toolbar Menu Modals (Phase 1) -->

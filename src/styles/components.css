@@ -11251,7 +11251,11 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   margin: 0;
 }
 
-.spotlight-link {
+/* The four documentation links and the one action share this look. They do
+   NOT share a class: `.spotlight-link` means "a link to a document, with an
+   href", and an accessibility test asserts exactly that about all four. */
+.spotlight-link,
+.spotlight-action {
   display: block;
   padding: var(--space-sm) var(--space-md);
   background: var(--color-bg-primary);
@@ -11272,6 +11276,15 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
     border-color var(--motion-base);
 }
 
+/* A real button among links: the shared rule above supplies the look, these
+   four lines undo the user-agent button defaults so it reads identically. */
+.spotlight-action {
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+}
+
 .spotlight-title {
   font-weight: 600;
 }
@@ -11282,18 +11295,21 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   line-height: 1.5;
 }
 
-.spotlight-link:hover {
+.spotlight-link:hover,
+.spotlight-action:hover {
   background: var(--color-bg-secondary);
   border-color: var(--color-accent);
 }
 
-.spotlight-link:focus-visible {
+.spotlight-link:focus-visible,
+.spotlight-action:focus-visible {
   outline: 3px solid var(--color-focus);
   outline-offset: 2px;
 }
 
 @supports not selector(:focus-visible) {
-  .spotlight-link:focus {
+  .spotlight-link:focus,
+  .spotlight-action:focus {
     outline: 3px solid var(--color-focus);
     outline-offset: 2px;
   }

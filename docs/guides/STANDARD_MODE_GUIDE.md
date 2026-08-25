@@ -324,10 +324,36 @@ Every role change updates the prepared result preview in real time, so you can s
 | Change a role | Click a radio button or use arrow keys in the radio group |
 | See the effect | The prepared result updates instantly |
 | Apply changes | Click "Apply prepared SVG" |
+| Save it as a file | Click "Save edited SVG" |
 | Keep the original | Click "Keep original" (bypasses preparation) |
 | Reset roles | Click "Reset" to return to auto-classification |
 | Expand to fullscreen | Click the fullscreen button (top-right) |
 | Exit fullscreen | Press `Escape` or click the fullscreen button again |
+
+**If the result looks like a solid blob:** the preparer merges everything set to
+Foreground into one shape. When a drawing has an outline around its detail --
+the outline of a bird with an eye and feather strokes inside it, say -- merging
+them fills the outline in and swallows the detail. That is not a bug, it is what
+"print this as one shape" means. Set the interior shapes to **Ignore**, or to
+**Hole** if you want them cut out, and the result comes back.
+
+### Editing a drawing with no design open
+
+You do not need an OpenSCAD project to use the editor. Two doors open it on a
+file of its own:
+
+- the **Edit a drawing or photo** line inside **Explore Features &
+  Accessibility** on the welcome screen, and
+- **Edit Drawing** in the Actions drawer, once a design is open.
+
+Both accept an SVG or a photo saved as PNG or JPG. A photo is traced first, the
+same way a photo dropped into a file parameter is. The editor then opens on it
+with **Save edited SVG** as its main action, and the file you save is named
+after the one you opened -- `bird-drawing.png` comes back as
+`bird-drawing-edited.svg`.
+
+Nothing is uploaded anywhere. The tracing, the editing and the saving all happen
+in your browser, and your original file is never changed.
 | Close the editor | Press `Escape` or click the close button |
 
 **Warnings:**

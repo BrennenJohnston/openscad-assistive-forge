@@ -200,7 +200,10 @@ function buildWorkspaceDom() {
 
   const sourcePane = document.createElement('div');
   sourcePane.className = 'svg-prep-source-pane';
-  sourcePane.setAttribute('role', 'img');
+  // A group, not an image: these panes hold zoom buttons, and role="img" with
+  // focusable descendants is refused by assistive technology (D-102). The
+  // picture itself carries role="img" when it is rendered in.
+  sourcePane.setAttribute('role', 'group');
   sourcePane.setAttribute('aria-label', 'Source SVG');
 
   const sourceZoom = buildZoomControls('source');
@@ -216,7 +219,7 @@ function buildWorkspaceDom() {
 
   const resultPane = document.createElement('div');
   resultPane.className = 'svg-prep-result-pane';
-  resultPane.setAttribute('role', 'img');
+  resultPane.setAttribute('role', 'group');
   resultPane.setAttribute('aria-label', 'Prepared result');
 
   const resultZoom = buildZoomControls('result');
@@ -268,6 +271,15 @@ function buildWorkspaceDom() {
   applyHint.textContent = 'No shapes included';
   applyHint.hidden = true;
 
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'btn btn-secondary';
+  saveBtn.dataset.action = 'save';
+  saveBtn.textContent = 'Save edited SVG';
+  saveBtn.setAttribute(
+    'aria-label',
+    'Save the edited SVG to a file on this computer'
+  );
+
   const keepBtn = document.createElement('button');
   keepBtn.className = 'btn btn-secondary';
   keepBtn.dataset.action = 'keep';
@@ -278,7 +290,7 @@ function buildWorkspaceDom() {
   resetBtn.dataset.action = 'reset';
   resetBtn.textContent = 'Reset';
 
-  footer.append(applyBtn, applyHint, keepBtn, resetBtn);
+  footer.append(applyBtn, applyHint, saveBtn, keepBtn, resetBtn);
 
   // Fullscreen backdrop (hidden by default)
   const backdrop = document.createElement('div');
@@ -310,6 +322,7 @@ function buildWorkspaceDom() {
       footer,
       applyBtn,
       applyHint,
+      saveBtn,
       keepBtn,
       resetBtn,
       backdrop,
@@ -351,7 +364,10 @@ function buildZoomControls(pane) {
  * Populate the object list from analysis data.
  * @param {HTMLElement} listEl - The .svg-prep-objects container
  * @param {Array} elements - Elements from analyzeSvg().elements
- * @param {HTMLElement} liveRegion - ARIA live region for announcements
+ * @param {HTMLElement} liveRegion - ARIA live region for announcements. It
+ *   lives on the workspace root, NOT in this list: role="list" accepts only
+ *   listitem children, and a live region among them made the whole list
+ *   invalid to assistive technology (D-101).
  * @param {boolean} [isCompound=false] - Compound-path mode (Include/Exclude)
  * @returns {{roles: string[], offsets: number[]}} Initial assignments
  */
@@ -438,7 +454,6 @@ function populateObjectList(listEl, elements, liveRegion, isCompound = false) {
     listEl.appendChild(item);
   });
 
-  listEl.appendChild(liveRegion);
   return { roles, offsets };
 }
 
@@ -483,6 +498,46 @@ function renderWarnings(warningsEl, warnings) {
  *   _refs: Object,
  * }}
  */
+/**
+ * The name an edited SVG is saved under. Provenance-aware: the file it came
+ * from is still recognisable in what goes back, which is the whole point when
+ * the file is travelling between two tools and a person.
+ *
+ * @param {string|null} sourceName - The file the editor was opened on
+ * @returns {string}
+ */
+export function editedSvgFileName(sourceName) {
+  const base = String(sourceName || 'drawing')
+    .split(/[\\/]/)
+    .pop()
+    .replace(/\.[^.]+$/, '')
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return `${base || 'drawing'}-edited.svg`;
+}
+
+function downloadSvgString(svgString, fileName) {
+  const blob = new Blob([svgString], { type: 'image/svg+xml' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Mark a rendered SVG as the picture in its pane. The pane around it is a
+ * group, because it holds zoom controls; the drawing itself is the image.
+ *
+ * @param {SVGElement} svgEl
+ * @param {string} label
+ */
+function markAsPicture(svgEl, label) {
+  svgEl.setAttribute('role', 'img');
+  svgEl.setAttribute('aria-label', label);
+}
+
 export function createSvgPrepWorkspace(containerEl) {
   const { root, refs } = buildWorkspaceDom();
   containerEl.appendChild(refs.backdrop);
@@ -500,6 +555,11 @@ export function createSvgPrepWorkspace(containerEl) {
   let currentAnalysis = null;
   let currentSvgMeta = null;
   let currentCallbacks = {};
+  let currentSourceName = null;
+  // 'parameter' - the editor is preparing a value for a model's file parameter
+  // (Apply writes it back). 'file' - the editor was opened on a file with no
+  // model behind it, so saving is the only thing Apply could have meant.
+  let hostMode = 'parameter';
   let sourceZoomCleanup = null;
   let resultZoomCleanup = null;
   let highlightCleanup = null;
@@ -515,6 +575,8 @@ export function createSvgPrepWorkspace(containerEl) {
   liveRegion.className = 'sr-only';
   liveRegion.setAttribute('aria-live', 'polite');
   liveRegion.setAttribute('aria-atomic', 'true');
+  // On the root, never inside the object list: see populateObjectList (D-101).
+  root.appendChild(liveRegion);
 
   // ── Internal rendering ────────────────────────────────────────────────
 
@@ -547,6 +609,7 @@ export function createSvgPrepWorkspace(containerEl) {
     overlay.setAttribute('aria-hidden', 'true');
     imported.appendChild(overlay);
 
+    markAsPicture(imported, 'Source SVG');
     refs.sourcePane.insertBefore(imported, refs.sourceZoom);
     return imported;
   }
@@ -599,6 +662,9 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.applyBtn.disabled = !enabled;
     refs.applyBtn.setAttribute('aria-disabled', String(!enabled));
     refs.applyHint.hidden = enabled;
+    // Nothing to save either: an empty result is an empty file.
+    refs.saveBtn.disabled = !enabled;
+    refs.saveBtn.setAttribute('aria-disabled', String(!enabled));
   }
 
   function clearResultError() {
@@ -665,6 +731,7 @@ export function createSvgPrepWorkspace(containerEl) {
 
       const imported = document.importNode(svg, true);
       if (previousViewBox) imported.setAttribute('viewBox', previousViewBox);
+      markAsPicture(imported, 'Prepared result');
       refs.resultPane.insertBefore(imported, refs.resultZoom);
 
       const fgCount = withOffsets.filter(
@@ -904,6 +971,13 @@ export function createSvgPrepWorkspace(containerEl) {
       resolved = true;
       if (currentCallbacks.onApply) currentCallbacks.onApply(currentResult);
       close();
+    } else if (btn.dataset.action === 'save') {
+      if (!currentResult) return;
+      const fileName = editedSvgFileName(currentSourceName);
+      downloadSvgString(currentResult, fileName);
+      liveRegion.textContent = `Saved ${fileName}`;
+      announce(`Saved ${fileName}`);
+      if (currentCallbacks.onSave) currentCallbacks.onSave(fileName);
     } else if (btn.dataset.action === 'keep') {
       currentResult = null;
       resolved = true;
@@ -997,9 +1071,21 @@ export function createSvgPrepWorkspace(containerEl) {
     root.hidden = false;
 
     currentCallbacks = callbacks;
+    currentSourceName = callbacks.sourceName || null;
+    hostMode = callbacks.mode === 'file' ? 'file' : 'parameter';
     currentSvgString = svgString;
     currentAnalysis = analysis;
     currentSvgMeta = extractSvgMeta(svgString);
+
+    // With no model behind the editor there is nothing for Apply to apply to,
+    // and "Keep original" would keep it where? Saving is the whole task.
+    refs.applyBtn.hidden = hostMode === 'file';
+    refs.keepBtn.hidden = hostMode === 'file';
+    refs.saveBtn.classList.toggle('btn-primary', hostMode === 'file');
+    refs.saveBtn.classList.toggle('btn-secondary', hostMode !== 'file');
+    // A file-mode host has no page behind the editor worth returning to, so
+    // there is no inline size to shrink back into.
+    refs.fullscreenBtn.hidden = hostMode === 'file';
 
     const populated = populateObjectList(
       refs.objects,
@@ -1122,7 +1208,9 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.fullscreenBtn.setAttribute('aria-label', 'Exit fullscreen');
 
     fullscreenTrap = createDocumentFocusTrap(root, {
-      onEscape: closeFullscreen,
+      // In file mode there is nothing behind the editor: Escape must close it
+      // outright rather than strand it inline at the foot of the page.
+      onEscape: hostMode === 'file' ? close : closeFullscreen,
     });
     fullscreenTrap.activate({
       initialFocus: refs.closeBtn,

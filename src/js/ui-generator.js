@@ -1954,6 +1954,7 @@ function createFileControl(param, onChange) {
       workspace.open(currentRawSvg, currentSvgAnalysis, {
         onApply: handleEditorApply,
         onKeepOriginal: handleEditorKeep,
+        sourceName: currentFileName,
         initialOverrides: storedMeta?.prepOverrides || null,
         initialOffsets: storedMeta?.prepOffsets || null,
       });
@@ -2131,6 +2132,7 @@ function createFileControl(param, onChange) {
           workspace.open(rawSvgText, analysis, {
             onApply: handleEditorApply,
             onKeepOriginal: handleEditorKeep,
+            sourceName: currentFileName,
           });
           announceChange('SVG needs review \u2014 editor opened');
         }
