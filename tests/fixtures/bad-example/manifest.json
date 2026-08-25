@@ -1,0 +1,10 @@
+{
+  "name": "Deliberately Broken Tile",
+  "description": "A tile with four faults in it, one for each check the validator makes. Nothing loads this; it exists so the validator can be watched failing before anyone trusts it to pass.",
+  "version": "1.0.0",
+  "author": "OpenSCAD Assistive Forge contributors",
+  "main": "broken_tile.scad",
+  "files": ["broken_tile.scad"],
+  "tactile": ["dot_height"],
+  "tags": ["fixture", "not-a-real-tile"]
+}
