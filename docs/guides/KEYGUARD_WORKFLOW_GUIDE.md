@@ -141,6 +141,12 @@ Typical print time: 2-6 hours depending on size.
 
 ### 9a. Export for laser cutting (SVG or DXF)
 
+> This section is about exporting the keyguard you are customising. If instead
+> you have a drawing FILE already - an SVG or DXF from another tool - and want
+> to tidy it up, that is the drawing editor, described under "Opening and
+> saving a DXF" in the Standard Mode Guide.
+
+
 Some keyguard projects support a **flat laser-cut version** as an alternative or
 complement to 3D printing. Laser-cut keyguards are typically cut from 3 mm acrylic
 or plywood using a CNC laser cutter.

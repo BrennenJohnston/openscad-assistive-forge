@@ -9,6 +9,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Open a DXF, tidy it up, and save a DXF back** (IR-12) - laser and cutting software speaks DXF,
+  and so does the tool chain some of this work arrives from. The drawing editor now takes a .dxf
+  the same way it takes an SVG or a photo: Forge's own engine converts it, the editor opens on the
+  drawing with every shape listed, and Save as DXF sits beside Save edited SVG. Measured on a
+  40 by 25 mm drawing, converting takes about a third of a second each way. Forge states the size
+  of what it saved out loud, because rebuilding a drawing from its shapes is not perfectly exact
+  and a millimetre matters when you are cutting to a fit. A DXF holding only text or dimensions
+  arrives empty - OpenSCAD reads drawing entities, not annotations - and Forge says exactly that
+  rather than handing back a blank page
+
+- **A symbol keeps its picture instead of turning into a coloured blob** (IR-11) - communication
+  symbols are black line work over a strong colour, and the colour means something. Forge decided
+  what to trace by brightness alone, which puts a blue background and the black drawing on top of
+  it in the same bucket: a person symbol inside a blue square came out as a plain blue square, the
+  person gone, with nothing said about it. Photos now come in through a choice - Line art, which
+  keeps the drawn lines and drops the colour behind them, Solid shape for very small pieces, or
+  Light and dark, which is what Forge did before and is one press away. Line art is the starting
+  point for photos. Two sliders, each with a number box, tune it, and after every change Forge
+  says how many shapes it found, how much of the picture became ink, and whether the result looks
+  almost empty or almost solid. If one colour sat behind the lines, it tells you which, so you can
+  choose a filament that keeps the symbol recognisable. Everything happens in your browser and
+  nothing is uploaded
+
+- **Open a drawing, clean it up, and save it back - no design needed** (IR-4) - Forge already had an
+  editor that lists every shape in an SVG and lets you choose, by keyboard, which ones become the
+  printed shape, which become holes, and which are dropped. You could only reach it through a
+  design's file parameter, and there was no way to get the cleaned drawing back out. Now there are
+  two doors - a line inside Explore Features & Accessibility on the welcome screen, and Edit
+  Drawing in the Actions drawer - and a Save edited SVG button that hands you the result as a file
+  named after the one you opened. Photos are traced first, the same as before. A photographed bird
+  drawing goes in with its eye and feather strokes, and comes back as one clean outline the way a
+  tactile printer can actually show it. Nothing is uploaded anywhere: the tracing, the editing and
+  the saving all happen in your browser, and your original file is never changed
+
 - **Send a link that opens with your settings, and get one back** (IR-3) - a plain link opened a
   design at its own defaults, so "make me this one, but 72 mm wide" meant writing the numbers out
   and hoping. Forge now puts the values you changed at the end of the link. Three ways to make
@@ -209,6 +243,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   data where there is one, and from the building itself where there is not
 
 ### Fixed
+
+- **Changing how a photo is read no longer throws you out of the control you are using** (IR-11) -
+  re-reading a picture rebuilds the editor underneath, and that was moving the settings panel in a
+  way that dropped your keyboard focus and shrank the editor back behind the page. Both were found
+  by a test that runs the same walk four times. The editor now stays as you left it: expanded if it
+  was expanded, with the keyboard still on the control you were adjusting
+
+- **The drawing editor reads correctly to a screen reader** (IR-4) - two long-standing faults, both
+  found the first time the editor was checked with an accessibility scanner. The list of shapes had
+  a hidden announcement area parked among the list items, which made the whole list invalid - a
+  screen reader could not rely on "shape 3 of 7" meaning anything. And both preview panes claimed
+  to be pictures while holding zoom buttons inside them, which is a combination assistive
+  technology refuses. The announcement area moved out of the list, and the panes are now named
+  groups holding a picture. The scanner reports nothing on the editor at all now
 
 - **The Publish dialog is readable in the light theme again** (IR-3) - it painted a dark box under
   dark text, so the manifest it generated and the address you typed were both invisible unless you

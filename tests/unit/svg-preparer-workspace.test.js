@@ -137,18 +137,24 @@ describe('createSvgPrepWorkspace', () => {
       ws.destroy();
     });
 
+    // D-102: these two assertions used to require role="img" on the panes, and
+    // that is what they were pinning: a pane holds three zoom buttons, and an
+    // element with role="img" may not contain focusable descendants. Measured
+    // with axe on the shipped editor: "nested-interactive", serious, on both
+    // panes. The pane is now the GROUP that holds the picture and its
+    // controls; the picture inside carries role="img".
     it('creates dual preview panes with correct ARIA', () => {
       const ws = createSvgPrepWorkspace(container);
       const root = ws._root;
 
       const sourcePane = root.querySelector('.svg-prep-source-pane');
       expect(sourcePane).toBeTruthy();
-      expect(sourcePane.getAttribute('role')).toBe('img');
+      expect(sourcePane.getAttribute('role')).toBe('group');
       expect(sourcePane.getAttribute('aria-label')).toBe('Source SVG');
 
       const resultPane = root.querySelector('.svg-prep-result-pane');
       expect(resultPane).toBeTruthy();
-      expect(resultPane.getAttribute('role')).toBe('img');
+      expect(resultPane.getAttribute('role')).toBe('group');
       expect(resultPane.getAttribute('aria-label')).toBe('Prepared result');
 
       ws.destroy();
@@ -1977,16 +1983,37 @@ describe('Phase 6b: accessibility — screen reader landmarks', () => {
     ws.destroy();
   });
 
-  it('preview panes have img role with descriptive labels', () => {
+  it('preview panes are named groups, and the picture inside is the image', () => {
     const ws = createSvgPrepWorkspace(container);
 
     const src = ws._root.querySelector('.svg-prep-source-pane');
-    expect(src.getAttribute('role')).toBe('img');
+    expect(src.getAttribute('role')).toBe('group');
     expect(src.getAttribute('aria-label')).toBe('Source SVG');
 
     const res = ws._root.querySelector('.svg-prep-result-pane');
-    expect(res.getAttribute('role')).toBe('img');
+    expect(res.getAttribute('role')).toBe('group');
     expect(res.getAttribute('aria-label')).toBe('Prepared result');
+
+    // The zoom buttons are why: role="img" cannot hold focusable children
+    // (D-102).
+    expect(src.querySelectorAll('button').length).toBeGreaterThan(0);
+    expect(res.querySelectorAll('button').length).toBeGreaterThan(0);
+
+    ws.destroy();
+  });
+
+  it('the live region is not a child of the object list (D-101)', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const list = ws._root.querySelector('.svg-prep-objects');
+    // role="list" accepts listitem children and nothing else. A live region
+    // parked among them made the whole list invalid to assistive technology.
+    const strays = [...list.children].filter(
+      (child) => child.getAttribute('role') !== 'listitem'
+    );
+    expect(strays.map((el) => el.className)).toEqual([]);
+    expect(ws._root.querySelector('[aria-live="polite"]')).toBeTruthy();
 
     ws.destroy();
   });

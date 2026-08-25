@@ -324,10 +324,112 @@ Every role change updates the prepared result preview in real time, so you can s
 | Change a role | Click a radio button or use arrow keys in the radio group |
 | See the effect | The prepared result updates instantly |
 | Apply changes | Click "Apply prepared SVG" |
+| Save it as a file | Click "Save edited SVG" |
 | Keep the original | Click "Keep original" (bypasses preparation) |
 | Reset roles | Click "Reset" to return to auto-classification |
 | Expand to fullscreen | Click the fullscreen button (top-right) |
 | Exit fullscreen | Press `Escape` or click the fullscreen button again |
+
+**If the result looks like a solid blob:** the preparer merges everything set to
+Foreground into one shape. When a drawing has an outline around its detail --
+the outline of a bird with an eye and feather strokes inside it, say -- merging
+them fills the outline in and swallows the detail. That is not a bug, it is what
+"print this as one shape" means. Set the interior shapes to **Ignore**, or to
+**Hole** if you want them cut out, and the result comes back.
+
+### Opening and saving a DXF
+
+The drawing editor takes `.dxf` as well as SVG and photos, and can give one
+back. Forge's own OpenSCAD engine does the converting, so nothing is uploaded
+and no extra software is needed. MEASURED on a 40 x 25 mm drawing: DXF in took
+about 0.3 seconds, DXF out about the same.
+
+Open a DXF the way you would open anything else, from the welcome screen's
+**Edit a drawing or photo** line or **Edit Drawing** in the Actions drawer.
+Forge says it is converting, then the editor opens on the drawing with each
+shape listed. When you are done, **Save as DXF** sits beside **Save edited
+SVG**; you can take either, or both.
+
+**Forge tells you the size it saved.** A drawing that has been through the
+editor is rebuilt from its shapes, and rebuilding is not perfectly exact:
+MEASURED on that same 40 x 25 mm file, the saved DXF came back 40.3 by 25.35.
+Small, and it matters if you are cutting to a fit, so the app says the
+measurement out loud rather than leaving you to find it at the machine. If the
+number has moved and that is a problem, take the SVG instead and convert it
+with your own tool.
+
+**What Forge cannot read from a DXF.** OpenSCAD's DXF import reads drawing
+entities. Text, dimensions and other annotation entities are outside that, so a
+file made only of those arrives empty. Forge says so plainly instead of handing
+you a blank drawing. Export the drawing again with its outlines as geometry, or
+send an SVG.
+
+This is separate from **9a. Export for laser cutting** in the keyguard guide,
+which is about exporting a MODEL you are customising. This section is about a
+drawing you already have.
+
+### Choosing what to keep from a photo
+
+A photo is traced before it becomes a shape, and tracing has to decide what
+counts as a line. Three answers, offered as **What to keep from the picture**
+wherever a picture enters Forge:
+
+| Choice | What it keeps | Best for |
+|--------|---------------|----------|
+| **Line art** (the default) | The drawn lines. The colour behind them is dropped. | Communication symbols, and any drawing on a coloured background |
+| **Solid shape** | The outline of the whole picture, filled in. | Very small pieces, where detail could not be felt anyway |
+| **Light and dark** | Whatever is darker than the background. What Forge did before. | A plain pencil drawing on white paper |
+
+**Why Line art is the default.** Professional communication symbols are black
+line work over a saturated fill, and the fill colour carries meaning. Judging by
+brightness alone puts a blue field and the black drawing on top of it in the
+same bucket, and they merge into one shape: MEASURED on a black person symbol
+inside a blue square, the old tracing returned a plain blue square with the
+person gone, and said nothing. Line art asks two questions instead of one - is
+it dark, and is it close to grey - so black strokes survive and coloured fills
+do not.
+
+Both sliders can be moved, each with a number box beside it for setting an
+exact value:
+
+- **How dark counts as a line** - higher keeps more of the picture, lower keeps
+  only the darkest strokes.
+- **How colourful is still a line** - lower rejects coloured fills more firmly.
+  Raise it if a coloured line is being dropped. It only applies to Line art.
+
+After every change Forge says what happened: how many shapes it found, how much
+of the picture became ink, and whether anything looked wrong - almost nothing
+kept, or so much kept that the result will print as one block.
+
+If the picture had a single colour behind its lines, Forge also names it, so you
+can pick a filament near that colour and keep the symbol recognisable. It stays
+quiet when the picture has several different fills, because an average of four
+colours is a colour that is in none of them.
+
+**Nothing is uploaded.** The tracing and every choice above happen in your
+browser. You are responsible for having the right to use any image you bring.
+If you need symbols you can share freely, [ARASAAC](https://arasaac.org/),
+[Mulberry Symbols](https://mulberrysymbols.org/) and
+[Blissymbolics](https://blissymbolics.org/) publish openly licensed sets; check
+each set's own licence before you share what you make.
+
+### Editing a drawing with no design open
+
+You do not need an OpenSCAD project to use the editor. Two doors open it on a
+file of its own:
+
+- the **Edit a drawing or photo** line inside **Explore Features &
+  Accessibility** on the welcome screen, and
+- **Edit Drawing** in the Actions drawer, once a design is open.
+
+Both accept an SVG or a photo saved as PNG or JPG. A photo is traced first, the
+same way a photo dropped into a file parameter is. The editor then opens on it
+with **Save edited SVG** as its main action, and the file you save is named
+after the one you opened -- `bird-drawing.png` comes back as
+`bird-drawing-edited.svg`.
+
+Nothing is uploaded anywhere. The tracing, the editing and the saving all happen
+in your browser, and your original file is never changed.
 | Close the editor | Press `Escape` or click the close button |
 
 **Warnings:**

@@ -11251,7 +11251,11 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   margin: 0;
 }
 
-.spotlight-link {
+/* The four documentation links and the one action share this look. They do
+   NOT share a class: `.spotlight-link` means "a link to a document, with an
+   href", and an accessibility test asserts exactly that about all four. */
+.spotlight-link,
+.spotlight-action {
   display: block;
   padding: var(--space-sm) var(--space-md);
   background: var(--color-bg-primary);
@@ -11272,6 +11276,15 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
     border-color var(--motion-base);
 }
 
+/* A real button among links: the shared rule above supplies the look, these
+   four lines undo the user-agent button defaults so it reads identically. */
+.spotlight-action {
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+}
+
 .spotlight-title {
   font-weight: 600;
 }
@@ -11282,18 +11295,21 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   line-height: 1.5;
 }
 
-.spotlight-link:hover {
+.spotlight-link:hover,
+.spotlight-action:hover {
   background: var(--color-bg-secondary);
   border-color: var(--color-accent);
 }
 
-.spotlight-link:focus-visible {
+.spotlight-link:focus-visible,
+.spotlight-action:focus-visible {
   outline: 3px solid var(--color-focus);
   outline-offset: 2px;
 }
 
 @supports not selector(:focus-visible) {
-  .spotlight-link:focus {
+  .spotlight-link:focus,
+  .spotlight-action:focus {
     outline: 3px solid var(--color-focus);
     outline-offset: 2px;
   }
@@ -14553,6 +14569,161 @@ body.tutorial-body-locked {
 
   .vector-component {
     min-width: 100%;
+  }
+}
+
+/* ============================================================
+   Ink controls (what to keep from a picture)
+   ============================================================ */
+
+.svg-prep-tools-slot {
+  margin-bottom: var(--space-md);
+}
+
+.ink-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+}
+
+.ink-controls-modes {
+  border: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.ink-controls-modes legend {
+  font-weight: 600;
+  padding: 0;
+  margin-bottom: var(--space-xs);
+}
+
+.ink-mode-row {
+  display: grid;
+  grid-template-columns: auto minmax(7rem, auto) 1fr;
+  align-items: center;
+  gap: var(--space-sm);
+  /* The label carries the row: a 24px radio alone is under the target size,
+     and `for=` makes the whole label part of the same hit area. */
+  min-height: var(--size-touch-target);
+}
+
+.ink-mode-row input[type='radio'] {
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+}
+
+.ink-mode-label {
+  display: flex;
+  align-items: center;
+  min-height: var(--size-touch-target);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ink-mode-description {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+}
+
+.ink-controls-sliders {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.ink-slider-row {
+  display: grid;
+  grid-template-columns: minmax(10rem, auto) minmax(6rem, 1fr) 5rem;
+  grid-template-areas:
+    'label slider number'
+    'help help help';
+  align-items: center;
+  gap: var(--space-xs) var(--space-sm);
+  min-height: var(--size-touch-target);
+}
+
+.ink-slider-label {
+  grid-area: label;
+  font-weight: 600;
+}
+
+.ink-slider {
+  grid-area: slider;
+  min-height: var(--size-touch-target);
+}
+
+.ink-slider-number {
+  grid-area: number;
+  min-height: var(--size-touch-target);
+  padding: var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+
+.ink-slider-help {
+  grid-area: help;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1.4;
+}
+
+.ink-slider:disabled,
+.ink-slider-number:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+}
+
+.ink-controls-summary {
+  margin: 0;
+  font-weight: 600;
+  min-height: 1.4em;
+}
+
+.ink-controls-warnings {
+  margin: 0;
+  padding-left: 1.2em;
+  color: var(--color-text-primary);
+}
+
+.ink-controls-warnings li {
+  margin-bottom: var(--space-xs);
+}
+
+.ink-controls-notice,
+.ink-controls-signpost {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+}
+
+@media (max-width: 720px) {
+  .ink-mode-row {
+    grid-template-columns: auto 1fr;
+  }
+
+  .ink-mode-description {
+    grid-column: 1 / -1;
+  }
+
+  .ink-slider-row {
+    grid-template-columns: 1fr 5rem;
+    grid-template-areas:
+      'label label'
+      'slider number'
+      'help help';
   }
 }
 
