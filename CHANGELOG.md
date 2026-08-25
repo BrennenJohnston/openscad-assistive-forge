@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Your edits can land in the folder the other program is watching** (IR-5, off by default) - Forge
+  could already watch a linked folder and re-render when a desktop editor changed a file in it, but
+  the loop only ran one way: nothing of Forge's could get back into the folder except a preset
+  sidecar. Two explicit actions now close it - Save to folder puts a generated file beside your
+  design, and Save companions to folder writes the companion files you edited. Every write is one
+  you asked for, every write is announced, and your main design is never overwritten: Forge is not
+  the editor of record for it in this loop. This ships switched OFF and stays off until the folder
+  write-back has been tried on a real Chrome or Edge with the watcher running, which is a test only
+  a person can do
+
 - **Open a DXF, tidy it up, and save a DXF back** (IR-12) - laser and cutting software speaks DXF,
   and so does the tool chain some of this work arrives from. The drawing editor now takes a .dxf
   the same way it takes an SVG or a photo: Forge's own engine converts it, the editor opens on the

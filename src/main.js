@@ -245,6 +245,7 @@ import {
 } from './js/classic-editor-toolbar.js';
 import { FolderChangeWatcher } from './js/folder-change-watcher.js';
 import { FolderWriteBack } from './js/folder-write-back.js';
+import { createFolderSaveActions } from './js/folder-save-actions.js';
 // Toolbar Menu Controller - File|Edit|Design|View|Window|Help menu bar
 import {
   getToolbarMenuController,
@@ -1236,6 +1237,44 @@ async function initApp() {
   // File handler controller -- declared early so wrappers can reference it;
   // assigned after all const deps are available (see initFileHandler call below).
   let fileHandler; // eslint-disable-line prefer-const
+  // Built when folder sync initialises; null until then and on browsers with
+  // no File System Access API at all.
+  let folderWriteBack = null;
+
+  // IR-5: explicit saves into the connected folder. Every write is asked for,
+  // goes through FolderWriteBack's self-trigger contract, and is announced.
+  const folderSaveActions = createFolderSaveActions({
+    getWriteBack: () => folderWriteBack,
+    isEnabled: () => isFlagEnabled('folder_sync_writeback'),
+    announce: (message) => announceImmediate(message),
+    onStatus: (message, level) => updateStatus(message, level),
+  });
+
+  /**
+   * Show or hide the folder-saving affordances. Called wherever the answer
+   * could have changed: a folder connects or disconnects, a render finishes,
+   * a project loads.
+   *
+   * The button does not exist unless all three conditions hold, rather than
+   * existing and failing when pressed.
+   */
+  function refreshFolderSaveAffordances() {
+    const state = stateManager.getState();
+    const possible = folderSaveActions.canSave();
+
+    const saveBtn = document.getElementById('saveToFolderBtn');
+    if (saveBtn) {
+      saveBtn.classList.toggle('hidden', !(possible && Boolean(state.stl)));
+    }
+
+    const companionBtn = document.getElementById('companionSaveToFolderBtn');
+    if (companionBtn) {
+      const hasCompanions = Boolean(
+        state.projectFiles && state.projectFiles.size > 1
+      );
+      companionBtn.classList.toggle('hidden', !(possible && hasCompanions));
+    }
+  }
 
   function cloneProjectFiles(files) {
     return files ? new Map(files) : null;
@@ -2669,16 +2708,24 @@ async function initApp() {
         if (syncState !== 'connected') {
           folderWatcher.stop();
         }
+        // Connecting or disconnecting a folder changes whether saving into one
+        // is possible at all.
+        refreshFolderSaveAffordances();
       });
     }
 
-    // ── C5.3 (Phase C, default OFF): write preset sidecars back to disk ──
-    if (_isEnabled('folder_sync_writeback')) {
-      const folderWriteBack = new FolderWriteBack({
-        getHandle: () => folderSyncCtrl.getHandle(),
-        getWatcher: () => folderWatcher,
-      });
+    // ── C5.3 (Phase C, default OFF): writing back into the folder ────────
+    //
+    // The instance is built regardless and the FLAG is checked at every use.
+    // IR-5 gave the export and companion paths a way in here, and they live
+    // far from this block; hoisting the object is what lets them share the one
+    // self-trigger contract instead of writing bytes of their own.
+    folderWriteBack = new FolderWriteBack({
+      getHandle: () => folderSyncCtrl.getHandle(),
+      getWatcher: () => folderWatcher,
+    });
 
+    if (_isEnabled('folder_sync_writeback')) {
       // OpenSCAD desktop convention: presets live in <design>.json next to
       // the .scad. Case- and space-preserving (raw path, no slugging).
       presetManager.subscribe((event, _preset, modelName) => {
@@ -7784,6 +7831,24 @@ async function initApp() {
     });
   }
 
+  const companionSaveToFolderBtn = document.getElementById(
+    'companionSaveToFolderBtn'
+  );
+  if (companionSaveToFolderBtn) {
+    companionSaveToFolderBtn.addEventListener('click', async () => {
+      const state = stateManager.getState();
+      companionSaveToFolderBtn.disabled = true;
+      try {
+        await folderSaveActions.saveCompanions({
+          projectFiles: state.projectFiles,
+          mainFilePath: state.mainFilePath,
+        });
+      } finally {
+        companionSaveToFolderBtn.disabled = false;
+      }
+    });
+  }
+
   // Text File Editor Modal handlers
   const textFileEditorModal = document.getElementById('textFileEditorModal');
   const textFileEditorApply = document.getElementById('textFileEditorApply');
@@ -11335,10 +11400,12 @@ if (rounded) {
 
       downloadFile(state.stl, filename, outputFormat);
       updateStatus(`Downloaded: ${filename}`);
+      refreshFolderSaveAffordances();
       return;
     }
 
     await runFullRender();
+    refreshFolderSaveAffordances();
   });
 
   /**
@@ -11947,6 +12014,42 @@ if (rounded) {
       prompt(promptLabel, text);
       return false;
     }
+  }
+
+  const saveToFolderBtn = document.getElementById('saveToFolderBtn');
+  if (saveToFolderBtn) {
+    saveToFolderBtn.addEventListener('click', async () => {
+      const state = stateManager.getState();
+      if (!state.stl || !state.uploadedFile) {
+        showErrorToast({
+          title: 'Nothing to Save',
+          message: 'No file has been generated yet. Click Generate first.',
+        });
+        return;
+      }
+      const outputFormat =
+        document.getElementById('outputFormat')?.value ||
+        state.outputFormat ||
+        'stl';
+      // The same bytes the Download button would hand over. Saving to the
+      // folder must never mean rendering the model a second time.
+      const fileName = resolveDownloadFilename(
+        state.uploadedFile.name,
+        state.parameters,
+        outputFormat,
+        getBrailleDownloadName()
+      );
+      saveToFolderBtn.disabled = true;
+      try {
+        await folderSaveActions.saveExport({
+          fileName,
+          data: state.stl,
+          mainFilePath: state.mainFilePath,
+        });
+      } finally {
+        saveToFolderBtn.disabled = false;
+      }
+    });
   }
 
   if (copySettingsLinkBtn) {

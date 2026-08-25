@@ -243,14 +243,19 @@ export const FLAGS = {
     killSwitch: false,
     requires: ['local_folder_sync'],
   },
-  // C5.3 (Phase C): write exports and preset sidecars back to the folder.
-  // Dark until tested on real Chrome/Edge with the watcher active.
+  // C5.3 (Phase C): write back into the connected folder.
+  //
+  // Dark until tested on real Chrome/Edge with the watcher active - and that
+  // test is the OWNER's to run, because a native folder picker cannot be
+  // driven by a machine. IR-5 built the paths this describes; before it, the
+  // description promised exports that had no write path at all.
   folder_sync_writeback: {
     id: 'folder_sync_writeback',
     name: 'Folder Write-Back (Chromium only)',
     description:
-      'Allow the Forge to write files (exports, preset sidecars) back into ' +
-      'the connected local folder. Requires Persistent Local Folder Sync.',
+      'Let Forge save files back into the connected local folder: exports and ' +
+      'companion files when you ask for them, and preset sidecars as you save ' +
+      'presets. Requires Persistent Local Folder Sync.',
     default: false,
     rollout: 0,
     userConfigurable: true,
