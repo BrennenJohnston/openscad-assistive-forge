@@ -58,6 +58,7 @@ import {
   pointInRing,
   CURB_HEIGHT_M,
   PAVEMENT_WIDTH_M,
+  isPavementWay,
 } from './walk-controls.js';
 import { makeFigureSpec, makeFigureGeoms } from './city-figures.js';
 import {
@@ -1924,7 +1925,11 @@ export function buildCityGroup(model) {
     // narrower ribbon, its own tone and its own glyph voice rather than
     // joining the roads - which is what keeps it from being that carpet.
     // Paths through parks stay undrawn.
-    if (road.sidewalk) {
+    //
+    // CW-Q64: a PEDESTRIANISED street joins the mapped pavements here. It is
+    // pavement end to end, so it gets no roadway, no apron and no kerb - a
+    // curb down the middle of one would be a road that is not there.
+    if (isPavementWay(road)) {
       appendRoadRibbon(road, sidewalkPositions, cullBounds, {
         colors: sidewalkColors,
         tint: surfaceTint(road.surface, DEFAULT_SIDEWALK_SURFACE),

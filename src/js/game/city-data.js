@@ -94,10 +94,14 @@ export function resolveRoof(tags = {}, heightM = 0, minHeightM = 0) {
 // two-lane residential street with parking on both sides is nearer 8 m than
 // 6, and each step up the class ladder adds a lane's worth.
 //
-// unclassified and living_street deliberately did NOT move with residential:
-// a living street is narrow by design, and both are left for the owner to
-// call rather than widened by association. That leaves primary and trunk at
-// the same 14 m, which is stated here rather than hidden.
+// unclassified moves with residential (CW-Q62): it is the same kind of street
+// and reading two metres narrower than an identical neighbour was an accident
+// of the class list, not a design. living_street stays at 6 because a shared
+// street is narrow ON PURPOSE - that narrowness is the traffic calming.
+//
+// primary and trunk therefore both sit at 14 m (CW-Q63, left deliberately):
+// both are major arterials, 14 m is honest for each, and widening trunk to
+// keep them distinct would only put more black surface in the frame.
 export const ROAD_WIDTHS_M = {
   motorway: 16,
   trunk: 14,
@@ -105,7 +109,7 @@ export const ROAD_WIDTHS_M = {
   secondary: 12,
   tertiary: 10,
   residential: 8,
-  unclassified: 6,
+  unclassified: 8,
   living_street: 6,
   pedestrian: 8,
   service: 4,

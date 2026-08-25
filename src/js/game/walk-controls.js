@@ -325,12 +325,12 @@ export function buildSurfaceGrid(model, options = {}) {
   // Aprons first...
   for (const road of drawn) {
     const pts = road.points ?? [];
-    if (road.sidewalk) stampAlong(pts, road.widthM / 2, 1);
+    if (isPavementWay(road)) stampAlong(pts, road.widthM / 2, 1);
     else stampAlong(pts, road.widthM / 2 + pavementM, 1);
   }
   // ...then the roadways, which cut back through them.
   for (const road of drawn) {
-    if (road.sidewalk) continue;
+    if (isPavementWay(road)) continue;
     stampAlong(road.points ?? [], road.widthM / 2, 0);
   }
 
@@ -362,6 +362,23 @@ const UNPAVED_FOR_SURFACE = new Set([
   'steps',
   'track',
 ]);
+
+/**
+ * Whether a way IS pavement rather than a roadway with pavement beside it
+ * (CW-50, CW-Q64). A separately-mapped pavement obviously is one; so is a
+ * pedestrianised street, which is pavement end to end - cutting a roadway
+ * down the middle of one would invent a road that is not there.
+ *
+ * The scene and this grid both read it, so the two cannot drift apart about
+ * where the ground is: cross-file disagreement about a shared value is this
+ * project's most expensive recurring bug.
+ *
+ * @param {{sidewalk?: boolean, kind?: string}} road
+ * @returns {boolean}
+ */
+export function isPavementWay(road) {
+  return Boolean(road?.sidewalk) || road?.kind === 'pedestrian';
+}
 
 /**
  * Move the walker's ground height toward what is underfoot, at a rate fixed

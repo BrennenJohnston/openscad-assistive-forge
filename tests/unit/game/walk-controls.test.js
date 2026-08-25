@@ -32,6 +32,7 @@ import {
   CURB_HEIGHT_M,
   CURB_EASE_M,
   PAVEMENT_WIDTH_M,
+  isPavementWay,
   PLAYER_RADIUS_M,
   TURN_SPEED_RADPS,
   EYE_HEIGHT_M,
@@ -1200,6 +1201,54 @@ describe('the ground underfoot (CW-50)', () => {
     expect(surface.heightAt(20, -5)).toBe(0)
     // Far from any street there is no pavement, which is stated design.
     expect(surface.heightAt(20, 40)).toBe(-CURB_HEIGHT_M)
+  })
+
+  it('treats a pedestrianised street as pavement, not as a roadway', () => {
+    // CW-Q64. Pike Place is pavement end to end; cutting a roadway down the
+    // middle of it would invent a road that is not there.
+    const model = parseCityExtract(
+      {
+        elements: [
+          {
+            type: 'way',
+            id: 1,
+            tags: { building: 'yes', height: '12' },
+            geometry: squareRing(-90, -90, 5),
+          },
+          {
+            type: 'way',
+            id: 2,
+            tags: { building: 'yes', height: '12' },
+            geometry: squareRing(90, 90, 5),
+          },
+          {
+            type: 'way',
+            id: 3,
+            tags: { highway: 'pedestrian' },
+            geometry: [pt(-40, 0), pt(40, 0)],
+          },
+        ],
+      },
+      { center: CENTER }
+    )
+    const surface = buildSurfaceGrid(model)
+    // Dead centre of the pedestrian way is pavement, not a curb below it.
+    expect(surface.heightAt(0, 0)).toBe(0)
+    expect(surface.heightAt(20, 0)).toBe(0)
+    // And the scene agrees with the grid about what counts, which is the
+    // point of sharing the predicate rather than repeating the rule.
+    expect(isPavementWay({ kind: 'pedestrian' })).toBe(true)
+    expect(isPavementWay({ sidewalk: true, kind: 'footway' })).toBe(true)
+    expect(isPavementWay({ kind: 'residential' })).toBe(false)
+    expect(isPavementWay({ kind: 'service' })).toBe(false)
+  })
+
+  it('gives unclassified the same width as residential (CW-Q62)', () => {
+    // The two are the same kind of street; reading two metres narrower than
+    // an identical neighbour was an accident of the signed class list. A
+    // living street stays narrow ON PURPOSE - that is its traffic calming.
+    expect(ROAD_WIDTHS_M.unclassified).toBe(ROAD_WIDTHS_M.residential)
+    expect(ROAD_WIDTHS_M.living_street).toBeLessThan(ROAD_WIDTHS_M.residential)
   })
 
   it('puts the curb where the road edge is, wherever that has moved to', () => {

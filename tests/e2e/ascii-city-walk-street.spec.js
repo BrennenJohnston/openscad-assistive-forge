@@ -1357,21 +1357,23 @@ test.describe('ASCII City Walk — people are people (CW-45)', () => {
     // CW-45 record's one-line-reversible choices.
     //
     // CW-50 re-pinned them. Widening the roads moved every pavement position
-    // outward, and twenty-five of the old spots landed against a building and
-    // were refused: 3,060 became 3,035. The seed did not change and nothing
+    // outward, and thirty-one of the old spots landed against a building and
+    // were refused: 3,060 became 3,029. The seed did not change and nothing
     // reshuffled - sitters are still exactly 105, because a sitter is placed
     // on a mapped bench at its true position rather than at an offset from a
-    // road centreline, so the width could not reach them.
+    // road centreline, so no width could reach them. Standing is unmoved
+    // between the two width passes for the same reason it moved at all: it
+    // is the offsets, not the seed, that decide.
     const stats = await page.evaluate(() => window.__cityWalkGame.props.stats)
     expect(stats.figuresByPose).toEqual({
       sitting: 105,
       standing: 705,
-      walking: 1884,
-      jogging: 341,
+      walking: 1879,
+      jogging: 340,
     })
     expect(
       await page.evaluate(() => window.__cityWalkGame.props.peopleCount)
-    ).toBe(3035)
+    ).toBe(3029)
   })
 
   test('sitting happens only where a real bench stands', async ({ page }) => {
