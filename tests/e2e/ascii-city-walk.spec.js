@@ -293,13 +293,20 @@ test.describe('ASCII City Walk — playing', () => {
     const spawnHeading = await hudHeading(page)
     expect(spawnHeading).not.toBeNull()
 
-    // Turning right for >1s moves the compass off the spawn sector - a
-    // ~117 degree turn always leaves a 45 degree sector. Exact label, not
-    // substring (see hudHeading).
+    // Held until the compass moves OFF the spawn sector, never for a fixed
+    // 1300 ms: turning integrates per FRAME, and a wall-clock hold on a
+    // loaded runner can deliver too few frames to cross a 45 degree sector.
+    // Measured - that is exactly how the sibling case below went red on a
+    // Chromium CI shard, still reading its start sector after the hold.
+    // Exact label, not substring (see hudHeading).
     await page.keyboard.down('ArrowRight')
-    await page.waitForTimeout(1300)
-    await page.keyboard.up('ArrowRight')
-    await expect.poll(() => hudHeading(page)).not.toBe(spawnHeading)
+    try {
+      await expect
+        .poll(() => hudHeading(page), { timeout: 30000, intervals: [150] })
+        .not.toBe(spawnHeading)
+    } finally {
+      await page.keyboard.up('ArrowRight')
+    }
 
     // Map view toggle and back
     await page.keyboard.press('KeyM')
@@ -1094,9 +1101,13 @@ test.describe('ASCII City Walk — high contrast (CW-6)', () => {
     // (CW-44 spawns facing the clearest street).
     const sizeKeysHeading = await hudHeading(page)
     await page.keyboard.down('ArrowRight')
-    await page.waitForTimeout(1300)
-    await page.keyboard.up('ArrowRight')
-    await expect.poll(() => hudHeading(page)).not.toBe(sizeKeysHeading)
+    try {
+      await expect
+        .poll(() => hudHeading(page), { timeout: 30000, intervals: [150] })
+        .not.toBe(sizeKeysHeading)
+    } finally {
+      await page.keyboard.up('ArrowRight')
+    }
 
     await page.keyboard.press('Escape')
     await expect(page.locator('#cityWalkLayer')).toBeHidden()
@@ -1253,11 +1264,24 @@ test.describe('ASCII City Walk — accessibility toggles (CW-14)', () => {
     // The keys still reach the game: focus staying put is only worth
     // asserting if the city still answers to it (CW-13's lesson). The
     // reference heading is captured, never assumed north (CW-44).
+    //
+    // The key is held until the heading MOVES, never for a fixed 1300 ms.
+    // Turning integrates per FRAME, so a wall-clock hold on a loaded runner
+    // can deliver too few frames to cross a compass sector - measured, this
+    // is exactly how it went red on a Chromium shard, still reading
+    // "southeast" after the hold. Holding until it moves asserts the same
+    // thing (the keys still reach the game) and cannot be starved into a
+    // false negative; if the keys are dead it times out, which is the
+    // failure this exists to catch.
     const themeFocusHeading = await hudHeading(page)
     await page.keyboard.down('ArrowRight')
-    await page.waitForTimeout(1300)
-    await page.keyboard.up('ArrowRight')
-    await expect.poll(() => hudHeading(page)).not.toBe(themeFocusHeading)
+    try {
+      await expect
+        .poll(() => hudHeading(page), { timeout: 30000, intervals: [150] })
+        .not.toBe(themeFocusHeading)
+    } finally {
+      await page.keyboard.up('ArrowRight')
+    }
 
     // And Tab does not escape the modal.
     await page.keyboard.press('Tab')
