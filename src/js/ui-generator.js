@@ -2033,7 +2033,7 @@ function createFileControl(param, onChange, aspectParam = null) {
       }
       // Cleared or unmeasurable: back to the declared default so the
       // model's fallback stays deterministic.
-      extra = { [aspectParam.name]: aspect ?? (aspectParam.default ?? 1) };
+      extra = { [aspectParam.name]: aspect ?? aspectParam.default ?? 1 };
     }
     onChange(param.name, value, extra);
   }
