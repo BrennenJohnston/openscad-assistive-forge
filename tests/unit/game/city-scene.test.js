@@ -12,6 +12,8 @@ import {
   inGamutChroma,
   hashSpot,
   CITY_PAVING,
+  STOREFRONT_BAND_NAMES,
+  storefrontBandFor,
 } from '../../../src/js/game/city-scene.js'
 import {
   parseCityExtract,
@@ -1542,5 +1544,168 @@ describe('per-city paving (CW-51, CW-Q51)', () => {
     expect(maxV).toBeGreaterThan(50)
 
     dispose()
+  })
+})
+
+
+/**
+ * CW-53: twenty ground floors instead of five, and the map data decides which
+ * one a corner wears wherever the map knows.
+ *
+ * The band index is baked into every storefront's UVs, so it can be read back
+ * out of the built geometry - which is what these cases do rather than
+ * trusting the table they are meant to be guarding.
+ */
+describe('buildCityGroup — twenty storefront bands (CW-53)', () => {
+  const STOREFRONT_HEIGHT_M = 3.5
+
+  /** One building, optionally with a POI node beside it and its own tags. */
+  function oneBuilding({ buildingTags = { building: 'yes', height: '25' }, poi } = {}) {
+    const elements = [
+      { type: 'way', id: 1, tags: buildingTags, geometry: squareRing(0, 0, 5) },
+      {
+        type: 'way',
+        id: 3,
+        tags: { highway: 'residential' },
+        geometry: [pt(-50, 20), pt(50, 20)],
+      },
+    ]
+    if (poi) {
+      const [x, y] = poi.at ?? [8, 0]
+      elements.push({ type: 'node', id: 900, tags: poi.tags, ...pt(x, y) })
+    }
+    return parseCityExtract({ elements }, { center: CENTER })
+  }
+
+  /**
+   * The band a built city put its one storefront on.
+   *
+   * The band is applied as a UV OFFSET of band x STOREFRONT_HEIGHT_M, and the
+   * strip's own v is centred on zero for a building at the origin - so it is
+   * the CENTRE of the v range that names the band, not its minimum. Measured:
+   * a bakery node beside this fixture puts the range at 57.53..68.47, whose
+   * centre is exactly 18 x 3.5.
+   */
+  function bandOf(m) {
+    const { group, dispose } = buildCityGroup(m)
+    const mesh = group.children.find((c) => c.name === 'storefronts')
+    expect(mesh, 'this fixture grew no storefront at all').toBeDefined()
+    const uv = mesh.geometry.getAttribute('uv')
+    expect(uv, 'the storefront strip carries no UVs').toBeTruthy()
+    let minV = Infinity
+    let maxV = -Infinity
+    for (let i = 0; i < uv.count; i++) {
+      minV = Math.min(minV, uv.getY(i))
+      maxV = Math.max(maxV, uv.getY(i))
+    }
+    dispose()
+    const band = (minV + maxV) / 2 / STOREFRONT_HEIGHT_M
+    // If the UV scheme ever changes shape, this readout stops meaning a band
+    // and every case below would quietly agree with itself instead.
+    expect(
+      Math.abs(band - Math.round(band)),
+      `the storefront v range ${minV}..${maxV} is not centred on a band`
+    ).toBeLessThan(0.01)
+    return Math.round(band)
+  }
+
+  it('names its twenty bands, in the order their indices mean', () => {
+    // Design data the owner can veto row by row. The index is baked into
+    // shipped UVs, so a reordering is not a cosmetic change.
+    expect(STOREFRONT_BAND_NAMES).toEqual([
+      'glass',
+      'awning',
+      'shutter',
+      'arcade',
+      'service',
+      'cafe-tables',
+      'barfront',
+      'market',
+      'lobby',
+      'roller',
+      'restaurant',
+      'fastfood',
+      'clothes',
+      'salon',
+      'grocer',
+      'hotel',
+      'bank',
+      'vacant',
+      'bakery',
+      'marquee',
+    ])
+  })
+
+  it('sends each kind the map knows to the band that was measured for it', () => {
+    const bandNamed = (name) => STOREFRONT_BAND_NAMES.indexOf(name)
+    expect(storefrontBandFor('restaurant')).toBe(bandNamed('restaurant'))
+    expect(storefrontBandFor('fast_food')).toBe(bandNamed('fastfood'))
+    expect(storefrontBandFor('cafe')).toBe(bandNamed('cafe-tables'))
+    expect(storefrontBandFor('bar')).toBe(bandNamed('barfront'))
+    expect(storefrontBandFor('pub')).toBe(bandNamed('barfront'))
+    expect(storefrontBandFor('bank')).toBe(bandNamed('bank'))
+    expect(storefrontBandFor('theatre')).toBe(bandNamed('marquee'))
+    expect(storefrontBandFor('cinema')).toBe(bandNamed('marquee'))
+    expect(storefrontBandFor('marketplace')).toBe(bandNamed('market'))
+    expect(storefrontBandFor('library')).toBe(bandNamed('lobby'))
+    expect(storefrontBandFor('hotel')).toBe(bandNamed('hotel'))
+    expect(storefrontBandFor('shop:clothes')).toBe(bandNamed('clothes'))
+    expect(storefrontBandFor('shop:hairdresser')).toBe(bandNamed('salon'))
+    expect(storefrontBandFor('shop:convenience')).toBe(bandNamed('grocer'))
+    expect(storefrontBandFor('shop:bakery')).toBe(bandNamed('bakery'))
+    expect(storefrontBandFor('shop:vacant')).toBe(bandNamed('vacant'))
+  })
+
+  it('keeps an unlisted shop as a shop instead of dropping it to the hash', () => {
+    // shop=gift is 57 nodes across the four extracts and has no band of its
+    // own. Letting it fall through would throw away the one thing the map
+    // recorded about that corner, which is the opposite of what keeping the
+    // shop value was for.
+    expect(storefrontBandFor('shop:gift')).toBe(
+      STOREFRONT_BAND_NAMES.indexOf('glass')
+    )
+    expect(storefrontBandFor('shop:jewelry')).toBe(
+      STOREFRONT_BAND_NAMES.indexOf('glass')
+    )
+    // A kind nobody mapped falls to the hash, and says so with null.
+    expect(storefrontBandFor('townhall')).toBeNull()
+    expect(storefrontBandFor(null)).toBeNull()
+  })
+
+  it('dresses a corner as what the map says stands on it', () => {
+    expect(bandOf(oneBuilding({ poi: { tags: { shop: 'bakery' } } }))).toBe(
+      STOREFRONT_BAND_NAMES.indexOf('bakery')
+    )
+    expect(bandOf(oneBuilding({ poi: { tags: { amenity: 'restaurant' } } }))).toBe(
+      STOREFRONT_BAND_NAMES.indexOf('restaurant')
+    )
+    expect(bandOf(oneBuilding({ poi: { tags: { shop: 'vacant' } } }))).toBe(
+      STOREFRONT_BAND_NAMES.indexOf('vacant')
+    )
+    // And an unlisted shop still reads as a shop rather than as a dice roll.
+    expect(bandOf(oneBuilding({ poi: { tags: { shop: 'gift' } } }))).toBe(
+      STOREFRONT_BAND_NAMES.indexOf('glass')
+    )
+  })
+
+  it("lets a hotel's own tag beat the shop next door", () => {
+    // Every one of the 75 hotels in the four extracts is a WAY, never a node,
+    // so the POI index can never see one - a hotel has to be read off the
+    // building itself.
+    const m = oneBuilding({
+      buildingTags: { building: 'yes', height: '25', tourism: 'hotel' },
+      poi: { tags: { shop: 'bakery' } },
+    })
+    expect(bandOf(m)).toBe(STOREFRONT_BAND_NAMES.indexOf('hotel'))
+  })
+
+  it('is deterministic, and a building with no POI still varies', () => {
+    // THE SEED LAW: the hash draw is the same draw it has always been, so the
+    // same city dresses the same way twice.
+    const plain = () => bandOf(oneBuilding())
+    const first = plain()
+    expect(plain()).toBe(first)
+    expect(first).toBeGreaterThanOrEqual(0)
+    expect(first).toBeLessThan(STOREFRONT_BAND_NAMES.length)
   })
 })

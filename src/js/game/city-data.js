@@ -623,9 +623,21 @@ export function parseCityExtract(extract, options = {}) {
       // CW-33/CW-34: a shop or a place to eat, kept as a point with its kind.
       // Nothing is drawn AT the point - it says what sort of ground floor the
       // building nearest to it should wear.
+      //
+      // CW-53: a shop keeps its OWN VALUE, prefixed so the two tag families
+      // can never collide. This used to collapse all 1,042 shop nodes in the
+      // four extracts to one kind, which sent every one of them to the same
+      // ground floor - and the value was already in the extract, so nothing
+      // had to be rebaked to start reading it. The game decides which values
+      // are worth their own shopfront; the parser only stops throwing the
+      // answer away.
       if (tags.shop || tags.amenity) {
         const [x, y] = projectLatLon(el.lat, el.lon, center);
-        pois.push({ x, y, kind: tags.shop ? 'shop' : tags.amenity });
+        pois.push({
+          x,
+          y,
+          kind: tags.shop ? `shop:${tags.shop}` : tags.amenity,
+        });
         continue;
       }
       continue;

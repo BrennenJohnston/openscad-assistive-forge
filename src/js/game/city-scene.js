@@ -841,24 +841,309 @@ const STOREFRONT_VARIANTS = [
       ctx.fillRect(w * 0.4, h * 0.42, w * 0.2, h * 0.5);
     },
   },
+  // CW-53, the five the owner signed. From here on every band is drawn with
+  // features at least three texture pixels across: CW-52 measured that the
+  // storefront texture is this city's largest single source of character
+  // fracture, and a one-pixel feature is exactly what beats against the cell
+  // grid.
+  {
+    name: 'cafe-tables',
+    paint: (ctx, w, h) => {
+      // A cafe that spills onto the pavement: lit inside, tables against it.
+      ctx.fillStyle = '#e4e4e4';
+      ctx.fillRect(w * 0.1, h * 0.44, w * 0.8, h * 0.4);
+      ctx.fillStyle = '#a4a4a4';
+      ctx.fillRect(w * 0.04, h * 0.24, w * 0.92, h * 0.16);
+      ctx.fillStyle = '#101010';
+      ctx.fillRect(w * 0.1, h * 0.4, w * 0.8, h * 0.05);
+      ctx.fillStyle = '#1c1c1c';
+      for (let i = 0; i < 3; i++) {
+        ctx.fillRect(w * (0.16 + i * 0.26), h * 0.66, w * 0.14, h * 0.26);
+      }
+    },
+  },
+  {
+    name: 'barfront',
+    paint: (ctx, w, h) => {
+      // Dark front, one long lit bar inside, one lit door.
+      ctx.fillStyle = '#242424';
+      ctx.fillRect(w * 0.06, h * 0.22, w * 0.88, h * 0.7);
+      ctx.fillStyle = '#d8d8d8';
+      ctx.fillRect(w * 0.12, h * 0.5, w * 0.5, h * 0.14);
+      ctx.fillStyle = '#8a8a8a';
+      ctx.fillRect(w * 0.7, h * 0.36, w * 0.18, h * 0.56);
+    },
+  },
+  {
+    name: 'market',
+    paint: (ctx, w, h) => {
+      // A stall: striped canopy, goods on a trestle, shadow beneath.
+      ctx.fillStyle = '#cfcfcf';
+      ctx.fillRect(w * 0.06, h * 0.52, w * 0.88, h * 0.3);
+      ctx.fillStyle = '#9c9c9c';
+      ctx.fillRect(w * 0.02, h * 0.26, w * 0.96, h * 0.18);
+      ctx.fillStyle = '#4a4a4a';
+      for (let i = 0; i < 6; i++) {
+        ctx.fillRect(w * (0.04 + i * 0.16), h * 0.26, w * 0.05, h * 0.18);
+      }
+      ctx.fillStyle = '#141414';
+      ctx.fillRect(w * 0.06, h * 0.82, w * 0.88, h * 0.1);
+    },
+  },
+  {
+    name: 'lobby',
+    paint: (ctx, w, h) => {
+      // Taller and brighter than a shop, with a door block in the middle.
+      ctx.fillStyle = '#ededed';
+      ctx.fillRect(w * 0.06, h * 0.16, w * 0.88, h * 0.76);
+      ctx.fillStyle = '#161616';
+      ctx.fillRect(w * 0.44, h * 0.16, w * 0.03, h * 0.76);
+      ctx.fillRect(w * 0.06, h * 0.16, w * 0.88, h * 0.04);
+      ctx.fillStyle = '#5c5c5c';
+      ctx.fillRect(w * 0.36, h * 0.52, w * 0.28, h * 0.4);
+    },
+  },
+  {
+    name: 'roller',
+    paint: (ctx, w, h) => {
+      // A roller door, ribbed the OTHER way from the shutter above, so the
+      // two never read as the same closed front.
+      ctx.fillStyle = '#333333';
+      ctx.fillRect(w * 0.04, h * 0.2, w * 0.92, h * 0.72);
+      ctx.fillStyle = '#1e1e1e';
+      for (let i = 0; i < 11; i++) {
+        ctx.fillRect(w * (0.06 + i * 0.085), h * 0.24, w * 0.03, h * 0.64);
+      }
+      ctx.fillStyle = '#6e6e6e';
+      ctx.fillRect(w * 0.04, h * 0.2, w * 0.92, h * 0.05);
+    },
+  },
+  // CW-53, the ten the DATA asked for. Each is chosen for a light pattern a
+  // sampler can still tell apart at a two-by-four pixel cell, and each is
+  // earned by a count measured in the four extracts - the record carries the
+  // table.
+  {
+    name: 'restaurant',
+    paint: (ctx, w, h) => {
+      ctx.fillStyle = '#e8e8e8';
+      ctx.fillRect(w * 0.08, h * 0.28, w * 0.84, h * 0.64);
+      ctx.fillStyle = '#1a1a1a';
+      for (let i = 0; i < 4; i++) {
+        ctx.fillRect(w * (0.12 + i * 0.2), h * 0.7, w * 0.12, h * 0.22);
+      }
+      ctx.fillStyle = '#8e8e8e';
+      ctx.fillRect(w * 0.08, h * 0.2, w * 0.84, h * 0.06);
+    },
+  },
+  {
+    name: 'fastfood',
+    paint: (ctx, w, h) => {
+      // The menu board is the whole identity: a bright band ABOVE the counter.
+      ctx.fillStyle = '#c4c4c4';
+      ctx.fillRect(w * 0.06, h * 0.5, w * 0.88, h * 0.42);
+      ctx.fillStyle = '#ededed';
+      ctx.fillRect(w * 0.1, h * 0.24, w * 0.8, h * 0.2);
+      ctx.fillStyle = '#202020';
+      for (let i = 0; i < 3; i++) {
+        ctx.fillRect(w * (0.16 + i * 0.24), h * 0.28, w * 0.04, h * 0.12);
+      }
+      ctx.fillRect(w * 0.06, h * 0.44, w * 0.88, h * 0.05);
+    },
+  },
+  {
+    name: 'clothes',
+    paint: (ctx, w, h) => {
+      // Two tall display windows split by one dark pier.
+      ctx.fillStyle = '#eaeaea';
+      ctx.fillRect(w * 0.06, h * 0.24, w * 0.4, h * 0.68);
+      ctx.fillRect(w * 0.54, h * 0.24, w * 0.4, h * 0.68);
+      ctx.fillStyle = '#141414';
+      ctx.fillRect(w * 0.46, h * 0.2, w * 0.08, h * 0.72);
+      ctx.fillStyle = '#3a3a3a';
+      ctx.fillRect(w * 0.14, h * 0.46, w * 0.08, h * 0.46);
+      ctx.fillRect(w * 0.3, h * 0.5, w * 0.08, h * 0.42);
+      ctx.fillRect(w * 0.68, h * 0.46, w * 0.08, h * 0.46);
+    },
+  },
+  {
+    name: 'salon',
+    paint: (ctx, w, h) => {
+      // A long lit mirror strip with chairs under it.
+      ctx.fillStyle = '#d0d0d0';
+      ctx.fillRect(w * 0.08, h * 0.26, w * 0.84, h * 0.66);
+      ctx.fillStyle = '#efefef';
+      ctx.fillRect(w * 0.12, h * 0.34, w * 0.76, h * 0.16);
+      ctx.fillStyle = '#242424';
+      for (let i = 0; i < 4; i++) {
+        ctx.fillRect(w * (0.14 + i * 0.2), h * 0.6, w * 0.1, h * 0.32);
+      }
+    },
+  },
+  {
+    name: 'grocer',
+    paint: (ctx, w, h) => {
+      // Shelves, evenly stacked top to bottom - the one band that is all
+      // horizontals at a regular pitch.
+      ctx.fillStyle = '#dedede';
+      ctx.fillRect(w * 0.06, h * 0.22, w * 0.88, h * 0.7);
+      ctx.fillStyle = '#2a2a2a';
+      for (let i = 0; i < 5; i++) {
+        ctx.fillRect(w * 0.06, h * (0.3 + i * 0.13), w * 0.88, h * 0.045);
+      }
+    },
+  },
+  {
+    name: 'hotel',
+    paint: (ctx, w, h) => {
+      // A canopy lit from above, over a dark recessed entrance.
+      ctx.fillStyle = '#232323';
+      ctx.fillRect(w * 0.06, h * 0.24, w * 0.88, h * 0.68);
+      ctx.fillStyle = '#e0e0e0';
+      ctx.fillRect(w * 0.24, h * 0.18, w * 0.52, h * 0.12);
+      ctx.fillStyle = '#0e0e0e';
+      ctx.fillRect(w * 0.24, h * 0.3, w * 0.52, h * 0.06);
+      ctx.fillStyle = '#9a9a9a';
+      ctx.fillRect(w * 0.36, h * 0.54, w * 0.28, h * 0.38);
+    },
+  },
+  {
+    name: 'bank',
+    paint: (ctx, w, h) => {
+      // Mostly dark stone with ONE lit alcove, which is what a bank is at
+      // night.
+      ctx.fillStyle = '#1e1e1e';
+      ctx.fillRect(w * 0.04, h * 0.18, w * 0.92, h * 0.74);
+      ctx.fillStyle = '#6a6a6a';
+      ctx.fillRect(w * 0.04, h * 0.18, w * 0.92, h * 0.06);
+      ctx.fillStyle = '#e6e6e6';
+      ctx.fillRect(w * 0.62, h * 0.44, w * 0.2, h * 0.34);
+    },
+  },
+  {
+    name: 'vacant',
+    paint: (ctx, w, h) => {
+      // Papered over, and unlit. Fifty-seven of these are mapped across the
+      // four downtowns; a band with no light in it is the strongest contrast
+      // the set has against the nineteen that have some.
+      ctx.fillStyle = '#3c3c3c';
+      ctx.fillRect(w * 0.08, h * 0.26, w * 0.84, h * 0.66);
+      ctx.fillStyle = '#2e2e2e';
+      ctx.fillRect(w * 0.08, h * 0.26, w * 0.84, h * 0.05);
+    },
+  },
+  {
+    name: 'bakery',
+    paint: (ctx, w, h) => {
+      // A lit counter with a dark canopy over it, and the tray line across it.
+      ctx.fillStyle = '#3a3a3a';
+      ctx.fillRect(w * 0.04, h * 0.26, w * 0.92, h * 0.2);
+      ctx.fillStyle = '#e2e2e2';
+      ctx.fillRect(w * 0.1, h * 0.52, w * 0.8, h * 0.34);
+      ctx.fillStyle = '#8c8c8c';
+      ctx.fillRect(w * 0.16, h * 0.58, w * 0.68, h * 0.06);
+      ctx.fillStyle = '#101010';
+      ctx.fillRect(w * 0.1, h * 0.86, w * 0.8, h * 0.06);
+    },
+  },
+  {
+    name: 'marquee',
+    paint: (ctx, w, h) => {
+      // The one band whose light is ABOVE everything else in it.
+      ctx.fillStyle = '#1c1c1c';
+      ctx.fillRect(w * 0.06, h * 0.42, w * 0.88, h * 0.5);
+      ctx.fillStyle = '#ededed';
+      ctx.fillRect(w * 0.02, h * 0.2, w * 0.96, h * 0.16);
+      ctx.fillStyle = '#2a2a2a';
+      for (let i = 0; i < 8; i++) {
+        ctx.fillRect(w * (0.06 + i * 0.115), h * 0.24, w * 0.04, h * 0.08);
+      }
+      ctx.fillStyle = '#7a7a7a';
+      ctx.fillRect(w * 0.3, h * 0.6, w * 0.4, h * 0.32);
+    },
+  },
 ];
 
-/** Which storefront band a POI kind asks for; anything else falls to the hash. */
+/**
+ * Which storefront band a POI kind asks for; anything else falls to the hash.
+ *
+ * CW-53: shop kinds arrive as `shop:<value>` now that the parser keeps the
+ * value. Only the values with a band of their own are listed - every other
+ * shop is normalised back to the generic `shop` kind below, so a jeweller and
+ * a phone shop read exactly as they did before rather than falling through to
+ * the hash and losing the one thing the map data knew about them.
+ */
 const STOREFRONT_BY_POI = new Map([
   ['shop', 0],
-  ['restaurant', 1],
-  ['cafe', 1],
-  ['fast_food', 1],
-  ['bar', 1],
-  ['pub', 1],
-  ['bank', 3],
   ['pharmacy', 0],
-  ['cinema', 3],
-  ['theatre', 3],
-  ['library', 3],
+  ['cafe', 5],
+  ['bar', 6],
+  ['pub', 6],
+  ['marketplace', 7],
+  ['library', 8],
   ['post_office', 4],
-  ['marketplace', 1],
+  ['restaurant', 10],
+  ['fast_food', 11],
+  ['bank', 16],
+  ['cinema', 19],
+  ['theatre', 19],
+  ['hotel', 15],
+  // The ten the shop tag earns, by measured count across the four extracts.
+  ['shop:clothes', 12],
+  ['shop:shoes', 12],
+  ['shop:fashion_accessories', 12],
+  ['shop:boutique', 12],
+  ['shop:hairdresser', 13],
+  ['shop:beauty', 13],
+  ['shop:barber', 13],
+  ['shop:cosmetics', 13],
+  ['shop:convenience', 14],
+  ['shop:supermarket', 14],
+  ['shop:greengrocer', 14],
+  ['shop:deli', 14],
+  ['shop:vacant', 17],
+  ['shop:bakery', 18],
+  ['shop:pastry', 18],
+  ['shop:confectionery', 18],
 ]);
+
+/**
+ * CW-53: a shop value with no band of its own reads as the generic shop.
+ *
+ * The alternative - letting it fall through to the hash - would throw away the
+ * one fact the map actually recorded about that corner, which is the opposite
+ * of what keeping the value was for.
+ *
+ * @param {string|null} kind
+ * @returns {string|null}
+ */
+function normalizeStorefrontKind(kind) {
+  if (kind === null || !kind.startsWith('shop:')) return kind;
+  return STOREFRONT_BY_POI.has(kind) ? kind : 'shop';
+}
+
+/**
+ * CW-53: the twenty ground floors, in band order.
+ *
+ * Exported because it is DESIGN DATA the owner can veto row by row, and a
+ * table nothing names in a test is a table that can be reordered by accident -
+ * the band index is baked into every storefront's UVs.
+ */
+export const STOREFRONT_BAND_NAMES = STOREFRONT_VARIANTS.map((v) => v.name);
+
+/**
+ * CW-53: which band a POI kind lands on, or null when it falls to the hash.
+ *
+ * The scene calls this rather than reading the map directly, so a test that
+ * pins the mapping is pinning the code the city actually runs.
+ *
+ * @param {string|null} kind
+ * @returns {number|null}
+ */
+export function storefrontBandFor(kind) {
+  const normalized = normalizeStorefrontKind(kind ?? null);
+  if (normalized === null) return null;
+  return STOREFRONT_BY_POI.get(normalized) ?? null;
+}
 
 // CW-46 rider (c): "white shop lights is repetitive" - each storefront's
 // glass now leans warm, cool or neutral. Places that serve food glow warm,
@@ -878,8 +1163,26 @@ const STOREFRONT_TEMP_BY_POI = new Map([
   ['bar', 'warm'],
   ['pub', 'warm'],
   ['marketplace', 'warm'],
+  ['shop:bakery', 'warm'],
+  ['shop:pastry', 'warm'],
+  ['shop:confectionery', 'warm'],
+  ['shop:convenience', 'warm'],
+  ['shop:supermarket', 'warm'],
+  ['shop:greengrocer', 'warm'],
+  ['shop:deli', 'warm'],
   ['shop', 'neutral'],
   ['pharmacy', 'neutral'],
+  ['hotel', 'neutral'],
+  ['shop:clothes', 'neutral'],
+  ['shop:shoes', 'neutral'],
+  ['shop:fashion_accessories', 'neutral'],
+  ['shop:boutique', 'neutral'],
+  ['shop:hairdresser', 'neutral'],
+  ['shop:beauty', 'neutral'],
+  ['shop:barber', 'neutral'],
+  ['shop:cosmetics', 'neutral'],
+  // Papered over and unlit: it takes the street's own light, not its own.
+  ['shop:vacant', 'neutral'],
   ['bank', 'cool'],
   ['cinema', 'cool'],
   ['theatre', 'cool'],
@@ -1997,7 +2300,16 @@ export function buildCityGroup(model) {
       // POIs at all still has a varied street. CW-46: the same POI answer
       // now also warms or cools the glass.
       const [cx, cy] = ringCentroid(building.outer);
-      const poiKind = poiIndex.nearestKind(cx, cy, STOREFRONT_POI_RANGE_M);
+      // CW-53: a hotel is a WAY in every one of the four extracts, never a
+      // node, so it can only be read off the building's own tags - the POI
+      // index would never see one. Its own tag beats a neighbour's point.
+      const poiKind =
+        building.tags?.tourism === 'hotel'
+          ? 'hotel'
+          : normalizeStorefrontKind(
+              poiIndex.nearestKind(cx, cy, STOREFRONT_POI_RANGE_M)
+            );
+      const poiBand = storefrontBandFor(poiKind);
       const strip = extrudeBuilding(
         building,
         storefrontTemperatureTint(h, poiKind),
@@ -2006,9 +2318,9 @@ export function buildCityGroup(model) {
         }
       );
       if (strip) {
-        const band =
-          (poiKind !== null ? STOREFRONT_BY_POI.get(poiKind) : undefined) ??
-          (h >>> 23) % STOREFRONT_VARIANTS.length;
+        // THE SEED LAW (CW-34, held through CW-53): this is the SAME hash
+        // draw it has always been; only the modulus widened with the set.
+        const band = poiBand ?? (h >>> 23) % STOREFRONT_VARIANTS.length;
         scaleGeometryUv(strip, 1, STOREFRONT_HEIGHT_M / storefrontHM);
         offsetGeometryUv(strip, 0, band * STOREFRONT_HEIGHT_M);
         storefrontGeoms.push(strip);
