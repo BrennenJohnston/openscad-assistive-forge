@@ -179,6 +179,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The city stops flickering while you move** (CW-52) - lit surfaces used to fizz and flash as you
+  walked or turned, in a way a screenshot could never show. The cause was not the lighting. A
+  second, hidden pass tells the drawing which surface each character is looking at, so a shopfront
+  and the wall behind it can be drawn with different characters, and that pass could not reliably
+  tell the two apart where they touch: it changed its mind again and again as you moved, and better
+  than a quarter of the screen kept swapping character sets frame after frame. It now keeps them
+  apart the same way the picture itself does. Measured over twenty consecutive frames of a very
+  slow turn, the flicker drops by more than nine tenths at every character size, in both screen
+  colors, while the brightness of the picture is unchanged to the last digit - the glow stays, the
+  fracture goes. Two ground textures that were never actually being filtered for the character grid
+  are now filtered, and the ground far ahead of you, which you see almost edge on, is filtered for
+  that angle as well
+
+- **Lines on the road, and a pavement with the finish its own city specifies** (CW-51) - the
+  arterial streets now carry a dashed centre line, so a main road reads as a main road rather than
+  as a wider gap. The lines are derived from what kind of street it is, because the map data does
+  not record road markings anywhere in the four cities. Pavements had no surface at all and now
+  carry control joints about every metre and a half, plus the finish the city itself specifies:
+  pebbly river stone in Seattle, flat with cracks and grip scoring in Albuquerque, and a broom
+  finish in Denver and Burnaby, which is what both of those cities' construction standards call
+  for
+
 - **The streets are the width real streets are, and they have curbs** (CW-50) - the road widths
   described the driving lanes only, so a street read as narrower than the one you would stand on,
   and the roadway itself was an indistinct dark gap between two thin lines. Widths are now measured
