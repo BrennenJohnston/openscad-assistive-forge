@@ -30,39 +30,91 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
   const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y)
 
   /**
-   * Watch the walk from INSIDE the page, accumulating ground covered and
-   * counting only the frames that actually moved the walker.
+   * Watch the walk from INSIDE the page and report METRES PER SECOND over a
+   * leg that is gated by the game's own frames.
    *
-   * Reading a position before and after a hold cannot measure a speed: the
-   * window also contains the frames between the button coming up and the
-   * measurement being taken, and those move nobody. At six-frame legs that
-   * dead tail is a third of the sample.
+   * Two things had to be true at once, and getting either alone is what made
+   * earlier versions of this lie.
+   *
+   * IT CANNOT BE A WALL-CLOCK HOLD. The game only moves inside animation
+   * frames, and a loaded runner can render NONE inside a 700 ms window - which
+   * is exactly how the first version went red on Edge in CI while passing
+   * three times over locally. So the leg is gated on frames: it closes itself
+   * at `sampleFrames` frames that actually moved the walker, inside the same
+   * callback that counts them. Closing it from the test side cannot work,
+   * because the decision would arrive through a poll and a poll observes the
+   * counter whenever it happens to run - measured at CW-54's frame rate, two
+   * legs asked for six frames each came back with 33 and 18.
+   *
+   * ★ BUT THE QUANTITY CANNOT BE METRES PER FRAME. This watcher is a SEPARATE
+   * requestAnimationFrame from the one the game steps the walker in, and two
+   * rAF callbacks interleave in an order nobody controls (CW-53 paid for that
+   * lesson from the other direction). A frame this watcher misses still has
+   * its ground counted, on the next tick, as if it were one frame's worth - so
+   * per-frame reads high exactly when the watcher is being starved. MEASURED:
+   * with legs matched to the frame, a real 2.2x sprint read 0.068 m/frame
+   * against a stroll's 0.091, four runs out of four, the comparison upside
+   * down and perfectly stable.
+   *
+   * Distance and elapsed time are taken from the SAME callback, so a missed
+   * tick contributes both its metres and its milliseconds to the next sample
+   * and the ratio survives. Metres per second is also the quantity a player
+   * experiences, which is the thing the toggle claims to change.
+   *
+   * The first moving frame is thrown away: its dt spans the mouse-down round
+   * trip rather than a frame of play.
    */
-  const watchLeg = (page) =>
-    page.evaluate(() => {
+  const watchLeg = (page, sampleFrames) =>
+    page.evaluate((target) => {
       const w = window.__cityWalkGame.walkState
-      const s = { frames: 0, dist: 0, px: w.x, py: w.y, stop: false }
+      const s = {
+        frames: 0,
+        dist: 0,
+        px: w.x,
+        py: w.y,
+        stop: false,
+        target,
+        t0: 0,
+        t1: 0,
+        done: false,
+      }
       window.__cwLeg = s
-      const tick = () => {
+      const tick = (now) => {
         if (s.stop) return
         const d = Math.hypot(w.x - s.px, w.y - s.py)
         if (d > 0) {
-          s.dist += d
-          s.frames++
+          if (!s.t0) {
+            s.t0 = now
+          } else if (s.frames < s.target) {
+            s.dist += d
+            s.frames++
+            s.t1 = now
+          }
         }
+        if (s.frames >= s.target) s.done = true
         s.px = w.x
         s.py = w.y
         window.__cwLegTick = requestAnimationFrame(tick)
       }
       window.__cwLegTick = requestAnimationFrame(tick)
-    })
+    }, sampleFrames)
+
+  /** Settle function: hold until the leg has the sample it asked for. */
+  const untilLegFull = (page) => async () => {
+    await expect
+      .poll(() => page.evaluate(() => window.__cwLeg?.done === true), {
+        timeout: 20000,
+      })
+      .toBe(true)
+  }
 
   const readLeg = (page) =>
     page.evaluate(() => {
       window.__cwLeg.stop = true
       cancelAnimationFrame(window.__cwLegTick)
-      const { frames, dist } = window.__cwLeg
-      return { frames, perFrame: frames ? dist / frames : 0 }
+      const { frames, dist, t0, t1 } = window.__cwLeg
+      const secs = (t1 - t0) / 1000
+      return { frames, secs, perSecond: secs > 0 ? dist / secs : 0 }
     })
 
   /**
@@ -124,9 +176,6 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
       .poll(() => frameCount(page), { timeout: 20000 })
       .toBeGreaterThanOrEqual(from + n)
   }
-
-  /** Settle function: hold for a fixed number of the game's own frames. */
-  const forFrames = (page, n) => () => waitForFrames(page, n)
 
   /**
    * Press and hold a toolbar button with the real mouse until `settle`
@@ -385,38 +434,31 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     const fast = btn(page, 'cityWalkFastBtn')
     await expect(fast).toHaveAttribute('aria-pressed', 'false')
 
-    // The two legs are matched by FRAME COUNT, not by wall clock: distance
-    // is a function of frames rendered, so comparing two fixed-duration
-    // holds on a runner whose frame rate wanders compares nothing.
+    // Both legs are gated on the game's own frames and compared in METRES PER
+    // SECOND - see watchLeg for why it has to be both, and why metres per
+    // FRAME read a real 2.2x sprint as slower than the stroll.
     //
-    // Matching them is not enough on its own, though. waitForFrames POLLS, so
-    // a leg runs until the poll happens to observe its twelfth frame, and on a
-    // loaded runner one leg can overshoot further than the other. That
-    // asymmetry used to hide inside a wide margin: sprint was a flat 4 m/s
-    // floor, 2.5x the old default walk, against a 1.5x bar. CW-48 makes
-    // sprint 1.6x the CURRENT walk, and at that ratio the overshoot alone
-    // flakes the comparison (measured: 2 of 4 repeats failed on a loaded
-    // machine). So each leg reports the frames it actually got, and the
-    // comparison is metres PER FRAME - which is the quantity the toggle
-    // changes, and is immune to how long either hold really ran.
-    // Six frames, not twelve, down a corridor the collision grid says is
-    // clear. At the CW-48 speeds a twelve-frame leg (which overshoots: 17 and
-    // 28 frames were measured for a nominal 12) covers enough ground to find
-    // a wall in this fixture, and a leg that hits one reads as slow. That was
-    // measured both ways: it made a real sprint look slower than the stroll,
-    // and it made a DISABLED sprint pass the comparison.
+    // Down a corridor the collision grid says is clear: a leg that runs into a
+    // wall reads as slow, and at the CW-48 speeds a leg covers enough ground
+    // to find one. That was measured both ways - it made a real sprint look
+    // slower than the stroll, and it made a DISABLED sprint pass.
+    // Ten sampled frames. Overshoot costs nothing now the leg closes itself,
+    // so the sample can be wide enough that no single frame decides the
+    // answer, and ten frames of sprint is well under the twelve metres of
+    // clear run this skips without.
+    const SAMPLE_FRAMES = 10
     const clearRun = await faceClearRun(page, 24)
     test.skip(clearRun < 12, `spawn has only ${clearRun} m of clear run`)
 
     const leg = async () => {
-      await watchLeg(page)
-      await holdButton(page, 'cityWalkCamPanUp', forFrames(page, 6))
+      await watchLeg(page, SAMPLE_FRAMES)
+      await holdButton(page, 'cityWalkCamPanUp', untilLegFull(page))
       return readLeg(page)
     }
 
     const strolled = await leg()
-    expect(strolled.frames).toBeGreaterThanOrEqual(6)
-    expect(strolled.perFrame).toBeGreaterThan(0)
+    expect(strolled.frames).toBe(SAMPLE_FRAMES)
+    expect(strolled.perSecond).toBeGreaterThan(0)
 
     await fast.click()
     await page.mouse.move(2, 2)
@@ -426,11 +468,12 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     // 1.25x of a real 1.6x still fails loudly at the thing this guards: a
     // toggle that never reaches stepWalk leaves the ratio at exactly 1.0.
     const hurried = await leg()
+    expect(hurried.frames).toBe(SAMPLE_FRAMES)
     expect(
-      hurried.perFrame,
-      `strolled ${strolled.perFrame.toFixed(3)} m/frame over ${strolled.frames} frames, ` +
-        `hurried ${hurried.perFrame.toFixed(3)} m/frame over ${hurried.frames} frames`
-    ).toBeGreaterThan(strolled.perFrame * 1.25)
+      hurried.perSecond,
+      `strolled ${strolled.perSecond.toFixed(2)} m/s over ${strolled.secs.toFixed(2)} s, ` +
+        `hurried ${hurried.perSecond.toFixed(2)} m/s over ${hurried.secs.toFixed(2)} s`
+    ).toBeGreaterThan(strolled.perSecond * 1.25)
 
     await fast.click()
     await page.mouse.move(2, 2)
