@@ -2215,6 +2215,10 @@ export function buildCityGroup(model) {
   const antennaCutoffM = antennaHeightCutoff(model.buildings);
   let signCount = 0;
   let antennaCount = 0;
+  // CW-53: how many ground floors landed on each band. The distribution is the
+  // only way to see whether the map data is biasing anything - a band nobody
+  // uses and a band everybody uses look identical in a texture.
+  const storefrontBands = new Array(STOREFRONT_VARIANTS.length).fill(0);
 
   model.buildings.forEach((building, index) => {
     const h = hashBuilding(index, building.name);
@@ -2321,6 +2325,7 @@ export function buildCityGroup(model) {
         // THE SEED LAW (CW-34, held through CW-53): this is the SAME hash
         // draw it has always been; only the modulus widened with the set.
         const band = poiBand ?? (h >>> 23) % STOREFRONT_VARIANTS.length;
+        storefrontBands[band]++;
         scaleGeometryUv(strip, 1, STOREFRONT_HEIGHT_M / storefrontHM);
         offsetGeometryUv(strip, 0, band * STOREFRONT_HEIGHT_M);
         storefrontGeoms.push(strip);
@@ -2797,6 +2802,7 @@ export function buildCityGroup(model) {
     stats: {
       buildingTriangles,
       storefrontTriangles,
+      storefrontBands,
       roadTriangles,
       signCount,
       antennaCount,

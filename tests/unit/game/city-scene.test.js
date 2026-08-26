@@ -1699,6 +1699,32 @@ describe('buildCityGroup — twenty storefront bands (CW-53)', () => {
     expect(bandOf(m)).toBe(STOREFRONT_BAND_NAMES.indexOf('hotel'))
   })
 
+  it('counts what landed on each band, so a dead band can be seen', () => {
+    // A band nobody uses and a band everybody uses look identical in a
+    // texture. Measured on the real extracts with this counter: all twenty
+    // bands are used in all four cities, and each city's shape is its own -
+    // Seattle restaurant 12.7% against Albuquerque's much flatter spread,
+    // which is what a city with fewer mapped POIs should look like.
+    const { stats, dispose } = buildCityGroup(model())
+    expect(stats.storefrontBands).toHaveLength(STOREFRONT_BAND_NAMES.length)
+    // This model has two buildings and only one of them is grounded, so the
+    // counter must total exactly one - a count that merely exceeded zero
+    // would pass just as happily if it were counting something else.
+    expect(stats.storefrontBands.reduce((a, b) => a + b, 0)).toBe(1)
+    dispose()
+
+    // And a POI moves the count onto its own band rather than anywhere else.
+    const withBakery = buildCityGroup(
+      oneBuilding({ poi: { tags: { shop: 'bakery' } } })
+    )
+    const bakery = STOREFRONT_BAND_NAMES.indexOf('bakery')
+    expect(withBakery.stats.storefrontBands[bakery]).toBe(1)
+    expect(
+      withBakery.stats.storefrontBands.reduce((a, b) => a + b, 0)
+    ).toBe(1)
+    withBakery.dispose()
+  })
+
   it('is deterministic, and a building with no POI still varies', () => {
     // THE SEED LAW: the hash draw is the same draw it has always been, so the
     // same city dresses the same way twice.
