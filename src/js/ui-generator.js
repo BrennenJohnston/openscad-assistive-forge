@@ -13,7 +13,12 @@ import {
   validateImageDimensions,
 } from './image-import.js';
 import { isEnabled } from './feature-flags.js';
-import { prepareSvg, needsPreparation, analyzeSvg } from './svg-preparer.js';
+import {
+  prepareSvg,
+  needsPreparation,
+  analyzeSvg,
+  measureSvgAspect,
+} from './svg-preparer.js';
 import { createSvgPrepWorkspace } from './svg-preparer-workspace.js';
 import { svgToDataUrl, dataUrlToText } from './svg-text-encoding.js';
 import {
@@ -1923,7 +1928,24 @@ function createSvgGallery(options, param, onSelect) {
  * @param {Function} onChange - Change handler
  * @returns {HTMLElement} Control element
  */
-function createFileControl(param, onChange) {
+/**
+ * True when a parameter is the auto-measured aspect companion of a file
+ * parameter: named "<file_param>_aspect" where <file_param> exists and is a
+ * file control. Companions carry the uploaded design's width/height ratio
+ * so the model can contain-fit it; they are set by the file control, never
+ * by hand, and are hidden from the generated UI.
+ *
+ * @param {string} name - Parameter name to test
+ * @param {Object} parameters - All extracted parameters, keyed by name
+ * @returns {boolean}
+ */
+export function isAspectCompanionParam(name, parameters) {
+  if (!name.endsWith('_aspect')) return false;
+  const base = parameters[name.slice(0, -'_aspect'.length)];
+  return !!base && base.uiType === 'file';
+}
+
+function createFileControl(param, onChange, aspectParam = null) {
   const container = document.createElement('div');
   container.className = 'param-control param-control--file';
 
@@ -1988,6 +2010,33 @@ function createFileControl(param, onChange) {
   let currentSvgAnalysis = null;
 
   const acceptsSvg = param.acceptedExtensions?.includes('svg');
+
+  /**
+   * Every change to this parameter's file value goes through here so the
+   * aspect companion (when the model declares one) always travels in the
+   * SAME state update: the design and its measured width/height ratio can
+   * never be seen apart by the renderer or by undo.
+   * @param {Object|null} value - File object {name, data, ...} or null
+   */
+  function emitFileValue(value) {
+    let extra = null;
+    if (aspectParam) {
+      let aspect = null;
+      const isSvgValue =
+        value &&
+        typeof value === 'object' &&
+        value.data &&
+        (value.type === 'image/svg+xml' ||
+          (value.name || '').toLowerCase().endsWith('.svg'));
+      if (isSvgValue) {
+        aspect = measureSvgAspect(dataUrlToText(value.data));
+      }
+      // Cleared or unmeasurable: back to the declared default so the
+      // model's fallback stays deterministic.
+      extra = { [aspectParam.name]: aspect ?? aspectParam.default ?? 1 };
+    }
+    onChange(param.name, value, extra);
+  }
 
   // ── SVG analysis status card ───────────────────────────────────────────
   const statusCard = document.createElement('div');
@@ -2122,7 +2171,7 @@ function createFileControl(param, onChange) {
       type: 'image/svg+xml',
       data: svgDataUrl,
     };
-    onChange(param.name, fileObj);
+    emitFileValue(fileObj);
     if (fileUploadListener) fileUploadListener(param.name, fileObj);
     announceChange('SVG prepared for OpenSCAD');
   }
@@ -2144,7 +2193,7 @@ function createFileControl(param, onChange) {
       type: 'image/svg+xml',
       data: svgDataUrl,
     };
-    onChange(param.name, fileObj);
+    emitFileValue(fileObj);
     if (fileUploadListener) fileUploadListener(param.name, fileObj);
     announceChange('Keeping original SVG');
   }
@@ -2209,7 +2258,7 @@ function createFileControl(param, onChange) {
         type: 'image/svg+xml',
         data: svgDataUrl,
       };
-      onChange(param.name, convertedFile);
+      emitFileValue(convertedFile);
       if (fileUploadListener) {
         fileUploadListener(param.name, convertedFile);
       }
@@ -2414,7 +2463,7 @@ function createFileControl(param, onChange) {
         currentSvgAnalysis = null;
         statusCard.style.display = 'none';
       }
-      onChange(param.name, uploadedFileObj);
+      emitFileValue(uploadedFileObj);
       if (fileUploadListener && isSvgFile) {
         fileUploadListener(param.name, uploadedFileObj);
       }
@@ -2440,7 +2489,7 @@ function createFileControl(param, onChange) {
     currentSvgAnalysis = null;
     preview.style.display = 'none';
     preview.alt = '';
-    onChange(param.name, null);
+    emitFileValue(null);
   });
 
   // SVG gallery picker (rendered when bundled options are registered)
@@ -2467,7 +2516,7 @@ function createFileControl(param, onChange) {
       clearButton.style.display = 'inline-block';
       preview.style.display = 'none';
       preview.alt = '';
-      onChange(name, fileObj);
+      emitFileValue(fileObj);
     });
     fileContainer.appendChild(gallery);
   }
@@ -2834,6 +2883,17 @@ export function renderParameterUI(
       initialValues && initialValues[param.name] !== undefined
         ? initialValues[param.name]
         : param.default;
+
+    currentValues[param.name] = effectiveDefault;
+
+    // Store the original default value (from schema, not initialValues)
+    defaultParameterValues[param.name] = param.default;
+
+    // A "<file_param>_aspect" companion is set automatically by its file
+    // control (measured from the uploaded design), so it gets a value but
+    // no control and no search entry.
+    if (isAspectCompanionParam(param.name, parameters)) return;
+
     // Create a copy of param with the effective default
     const paramWithValue = { ...param, default: effectiveDefault };
 
@@ -2843,11 +2903,6 @@ export function renderParameterUI(
     } else {
       paramsByGroup[param.group].push(paramWithValue);
     }
-
-    currentValues[param.name] = effectiveDefault;
-
-    // Store the original default value (from schema, not initialValues)
-    defaultParameterValues[param.name] = param.default;
 
     // Store metadata for search functionality
     parameterMetadata[param.name] = {
@@ -2957,10 +3012,18 @@ export function renderParameterUI(
     allGroupParams.forEach((param) => {
       let control;
 
-      // Create onChange handler that also updates dependent parameters
-      const handleChange = (name, value) => {
+      // Create onChange handler that also updates dependent parameters.
+      // extraValues lets a control commit companion values (e.g. a design's
+      // measured aspect) in the SAME state snapshot as its own change.
+      const handleChange = (name, value, extraValues) => {
         currentValues[name] = value;
         currentParameterValues[name] = value;
+        if (extraValues) {
+          for (const [extraName, extraValue] of Object.entries(extraValues)) {
+            currentValues[extraName] = extraValue;
+            currentParameterValues[extraName] = extraValue;
+          }
+        }
         // Update dependent parameters visibility
         updateDependentParameters(name, value);
         // Pass a shallow copy so callers (e.g. stateManager.setState) never
@@ -2988,7 +3051,11 @@ export function renderParameterUI(
           break;
 
         case 'file':
-          control = createFileControl(param, handleChange);
+          control = createFileControl(
+            param,
+            handleChange,
+            parameters[`${param.name}_aspect`] || null
+          );
           break;
 
         case 'vector':

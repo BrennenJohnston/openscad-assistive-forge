@@ -27,6 +27,12 @@ import {
   speedForLabel,
   clampSpeedLabel,
   speedLabelFromStored,
+  buildSurfaceGrid,
+  easeGroundZ,
+  CURB_HEIGHT_M,
+  CURB_EASE_M,
+  PAVEMENT_WIDTH_M,
+  isPavementWay,
   PLAYER_RADIUS_M,
   TURN_SPEED_RADPS,
   EYE_HEIGHT_M,
@@ -42,7 +48,10 @@ import {
   CHAR_SCALE_STEP,
   CHAR_SCALE_DEFAULT,
 } from '../../../src/js/game/walk-controls.js'
-import { parseCityExtract } from '../../../src/js/game/city-data.js'
+import {
+  parseCityExtract,
+  ROAD_WIDTHS_M,
+} from '../../../src/js/game/city-data.js'
 
 const CENTER = { lat: 40, lon: -100 }
 const COS_LAT = Math.cos((CENTER.lat * Math.PI) / 180)
@@ -1138,5 +1147,202 @@ describe('stampObstacles (CW-16)', () => {
         { x: 9000, y: 9000, halfLengthM: 2.2, halfWidthM: 0.9, rotationRad: 0 },
       ])
     ).not.toThrow()
+  })
+})
+
+describe('the ground underfoot (CW-50)', () => {
+  // A cross: an 8 m residential road along y=0 and another along x=0, in a
+  // model whose bounds reach well past both.
+  function crossModel() {
+    return parseCityExtract(
+      {
+        elements: [
+          // These two only carry the model's bounds out past the test area.
+          // A building AT the test area would fill the collision grid, and
+          // the walking case below would prove nothing while looking green.
+          {
+            type: 'way',
+            id: 1,
+            tags: { building: 'yes', height: '12' },
+            geometry: squareRing(-90, -90, 5),
+          },
+          {
+            type: 'way',
+            id: 4,
+            tags: { building: 'yes', height: '12' },
+            geometry: squareRing(90, 90, 5),
+          },
+          {
+            type: 'way',
+            id: 2,
+            tags: { highway: 'residential' },
+            geometry: [pt(-50, 0), pt(50, 0)],
+          },
+          {
+            type: 'way',
+            id: 3,
+            tags: { highway: 'footway', footway: 'sidewalk' },
+            geometry: [pt(-50, 6), pt(50, 6)],
+          },
+        ],
+      },
+      { center: CENTER }
+    )
+  }
+
+  it('cuts the roadway below the pavement, and only the roadway', () => {
+    const surface = buildSurfaceGrid(crossModel())
+    // Pavement is zero and the roadway is a curb below it, so that every prop
+    // in the city keeps standing exactly where it was placed.
+    expect(surface.heightAt(0, 0)).toBe(-CURB_HEIGHT_M)
+    expect(surface.heightAt(20, 0)).toBe(-CURB_HEIGHT_M)
+    // Just beyond its 4 m edge: up on the pavement, both sides.
+    expect(surface.heightAt(20, 5)).toBe(0)
+    expect(surface.heightAt(20, -5)).toBe(0)
+    // Far from any street there is no pavement, which is stated design.
+    expect(surface.heightAt(20, 40)).toBe(-CURB_HEIGHT_M)
+  })
+
+  it('treats a pedestrianised street as pavement, not as a roadway', () => {
+    // CW-Q64. Pike Place is pavement end to end; cutting a roadway down the
+    // middle of it would invent a road that is not there.
+    const model = parseCityExtract(
+      {
+        elements: [
+          {
+            type: 'way',
+            id: 1,
+            tags: { building: 'yes', height: '12' },
+            geometry: squareRing(-90, -90, 5),
+          },
+          {
+            type: 'way',
+            id: 2,
+            tags: { building: 'yes', height: '12' },
+            geometry: squareRing(90, 90, 5),
+          },
+          {
+            type: 'way',
+            id: 3,
+            tags: { highway: 'pedestrian' },
+            geometry: [pt(-40, 0), pt(40, 0)],
+          },
+        ],
+      },
+      { center: CENTER }
+    )
+    const surface = buildSurfaceGrid(model)
+    // Dead centre of the pedestrian way is pavement, not a curb below it.
+    expect(surface.heightAt(0, 0)).toBe(0)
+    expect(surface.heightAt(20, 0)).toBe(0)
+    // And the scene agrees with the grid about what counts, which is the
+    // point of sharing the predicate rather than repeating the rule.
+    expect(isPavementWay({ kind: 'pedestrian' })).toBe(true)
+    expect(isPavementWay({ sidewalk: true, kind: 'footway' })).toBe(true)
+    expect(isPavementWay({ kind: 'residential' })).toBe(false)
+    expect(isPavementWay({ kind: 'service' })).toBe(false)
+  })
+
+  it('gives unclassified the same width as residential (CW-Q62)', () => {
+    // The two are the same kind of street; reading two metres narrower than
+    // an identical neighbour was an accident of the signed class list. A
+    // living street stays narrow ON PURPOSE - that is its traffic calming.
+    expect(ROAD_WIDTHS_M.unclassified).toBe(ROAD_WIDTHS_M.residential)
+    expect(ROAD_WIDTHS_M.living_street).toBeLessThan(ROAD_WIDTHS_M.residential)
+  })
+
+  it('puts the curb where the road edge is, wherever that has moved to', () => {
+    const surface = buildSurfaceGrid(crossModel())
+    const half = ROAD_WIDTHS_M.residential / 2
+    // Just inside the edge is roadway; just outside is pavement. The metre of
+    // slack either way is the grid's own cell, not a claim about the curb.
+    expect(surface.heightAt(10, half - 0.6)).toBe(-CURB_HEIGHT_M)
+    expect(surface.heightAt(10, half + 1.1)).toBe(0)
+    // The apron is a strip, not an unbounded field: past its far edge the
+    // pavement ends.
+    expect(surface.heightAt(10, half + PAVEMENT_WIDTH_M + 2)).toBe(
+      -CURB_HEIGHT_M
+    )
+  })
+
+  it('climbs the curb over ground covered, not over time', () => {
+    const surface = buildSurfaceGrid(crossModel())
+    // Start in the roadway, then step up onto the pavement.
+    const state = { x: 20, y: 0 }
+    expect(easeGroundZ(state, surface, 0)).toBe(-CURB_HEIGHT_M)
+
+    state.y = 6
+    // A tenth of the ease distance climbs a tenth of the curb, whatever the
+    // frame rate: the rate is per metre travelled.
+    const afterOneTenth = easeGroundZ(state, surface, CURB_EASE_M / 10)
+    expect(afterOneTenth).toBeCloseTo(-CURB_HEIGHT_M + CURB_HEIGHT_M / 10, 10)
+
+    // The rest of the ease distance finishes it, and it never overshoots.
+    let z = afterOneTenth
+    for (let i = 0; i < 9; i++)
+      z = easeGroundZ(state, surface, CURB_EASE_M / 10)
+    expect(z).toBeCloseTo(0, 10)
+    expect(easeGroundZ(state, surface, 5)).toBe(0)
+  })
+
+  it('snaps when the walker did not walk there (teleport, spawn)', () => {
+    const surface = buildSurfaceGrid(crossModel())
+    const state = { x: 20, y: 0, groundZ: -CURB_HEIGHT_M }
+    // Arriving without travelling has no step to smooth out.
+    state.y = 6
+    expect(easeGroundZ(state, surface, 0)).toBe(0)
+  })
+
+  it('drops the eye into the roadway, and the pavement is unchanged', () => {
+    // Standing on a pavement is the ordinary case and it has to be EXACTLY
+    // the eye height the game always had; only stepping into the road moves.
+    const onKerb = createWalkState({ x: 0, y: 0, headingRad: 0 })
+    onKerb.groundZ = 0
+    expect(firstPersonPose(onKerb).eye[2]).toBe(EYE_HEIGHT_M)
+
+    const inRoad = createWalkState({ x: 0, y: 0, headingRad: 0 })
+    inRoad.groundZ = -CURB_HEIGHT_M
+    expect(firstPersonPose(inRoad).eye[2]).toBeCloseTo(
+      EYE_HEIGHT_M - CURB_HEIGHT_M,
+      10
+    )
+    // A state built before the curb existed still stands on level ground.
+    const legacy = createWalkState({ x: 0, y: 0, headingRad: 0 })
+    expect(firstPersonPose(legacy).eye[2]).toBe(EYE_HEIGHT_M)
+  })
+
+  it('never walls the curb: crossing it is a walk, not a collision', () => {
+    // The directive's non-negotiable half. The curb is drawn and felt, but it
+    // is not an obstacle - nothing about it reaches the collision grid.
+    const model = crossModel()
+    const collision = buildCollisionGrid(model)
+    const surface = buildSurfaceGrid(model)
+    const state = createWalkState({ x: 20, y: 0, headingRad: 0 })
+    state.groundZ = -CURB_HEIGHT_M
+    // The starting point really is in the roadway, or crossing out of it
+    // proves nothing.
+    expect(surface.heightAt(state.x, state.y)).toBe(-CURB_HEIGHT_M)
+    expect(collision.isBlocked(state.x, state.y)).toBe(false)
+    let highest = -CURB_HEIGHT_M
+    let stalled = 0
+    for (let i = 0; i < 40; i++) {
+      const before = { x: state.x, y: state.y }
+      stepWalk(state, { forward: 1, speedLabel: 100 }, 0.1, collision)
+      const travelled = Math.hypot(state.x - before.x, state.y - before.y)
+      if (travelled < 1e-9) stalled++
+      easeGroundZ(state, surface, travelled)
+      highest = Math.max(highest, state.groundZ)
+    }
+    // It climbed onto the pavement...
+    expect(highest).toBe(0)
+    // ...and never once stopped, which is what a walled curb would look like.
+    expect(stalled).toBe(0)
+    // The apron is a strip, so walking on past it drops back off the far
+    // side. Asserting the trip rather than the endpoint keeps this about the
+    // curb rather than about where forty frames happen to end.
+    expect(state.y).toBeGreaterThan(
+      ROAD_WIDTHS_M.residential / 2 + PAVEMENT_WIDTH_M
+    )
+    expect(state.groundZ).toBe(-CURB_HEIGHT_M)
   })
 })

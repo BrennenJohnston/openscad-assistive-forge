@@ -154,6 +154,20 @@ function _createInstanceState() {
     benchLegacyContrast: false,
     benchLegacyCpuSample: false,
 
+    // CW-52 sequence instrument, DEV-only and OFF unless a bench asks. The
+    // fractured flashes the owner reported are a TEMPORAL defect, so the
+    // measurement has to be what each cell decided on frame after frame -
+    // its glyph, its drive level, and the luminance those were decided from.
+    // Reading that out of the painted pixels cannot separate a dense glyph
+    // from a reverse-video cell, so the decisions are retained here instead.
+    // Off, nothing is written and no array is allocated.
+    devCellProbe: false,
+    lastCols: 0,
+    lastRows: 0,
+    lastGlyphIndices: null,
+    lastProbeIntensity: null,
+    lastCellLum: null,
+
     // CW-32 GPU glyph pick: caller opt-in, built lazily on the first frame
     // and disabled permanently for the session the moment anything fails.
     gpuSample: false,
@@ -937,6 +951,7 @@ function _renderFrame(
   // per-cell atlas selection, which stays on the CPU because it is what the
   // painter consumes — the shader hands back the pre-contrast brightness it
   // needs in the blue channel, so nothing is re-sampled to get it.
+  const cellLumOut = st.devCellProbe ? _probeLumArray(st, rows * cols) : null;
   if (gpu) {
     const cellCount = rows * cols;
     for (let i = 0; i < cellCount; i++) {
@@ -944,6 +959,7 @@ function _renderFrame(
       if (usePalette) st.colorIndices[i] = gpu.colors[i];
       if (useIntensity) {
         const cellLum = gpu.lum[i] / 255;
+        if (cellLumOut) cellLumOut[i] = cellLum;
         if (cellLum >= reverseAt) {
           st.intensityIndices[i] = reverseIdx;
           reverseCells++;
@@ -973,6 +989,7 @@ function _renderFrame(
       reverseAt,
       reverseIdx,
       intensityCount,
+      cellLumOut,
       onReverseCell: () => reverseCells++,
     });
   }
@@ -995,8 +1012,31 @@ function _renderFrame(
   // A rising share is the "carpeting" failure showing up as a number before
   // it shows up as a wall of solid cells.
   st.lastCellCount = rows * cols;
+  st.lastCols = cols;
+  st.lastRows = rows;
   st.lastReverseCells = reverseCells;
   st.lastUsedGpu = Boolean(gpu);
+  if (st.devCellProbe) {
+    // glyphIndices is freshly allocated per conversion, so holding the
+    // reference costs nothing. The intensity array is the instance's own and
+    // is reused, which is why readCellProbe copies on the way OUT - a caller
+    // holding a snapshot must not watch it change under the next frame.
+    st.lastGlyphIndices = glyphIndices;
+    st.lastProbeIntensity = useIntensity ? st.intensityIndices : null;
+  }
+}
+
+/**
+ * CW-52: the probe's per-cell luminance buffer, grown only when the grid does.
+ * @param {Object} st
+ * @param {number} cellCount
+ * @returns {Float32Array}
+ */
+function _probeLumArray(st, cellCount) {
+  if (st.lastCellLum?.length !== cellCount) {
+    st.lastCellLum = new Float32Array(cellCount);
+  }
+  return st.lastCellLum;
 }
 
 /**
@@ -1027,6 +1067,7 @@ function _convertOnCpu(
     reverseAt,
     reverseIdx,
     intensityCount,
+    cellLumOut,
     onReverseCell,
   }
 ) {
@@ -1121,6 +1162,7 @@ function _convertOnCpu(
       // answers "what shape is it", and the two must not be the same signal
       // twice over.
       const cellLum = useIntensity ? sumLum / 6 : 0;
+      if (cellLumOut) cellLumOut[idx] = cellLum;
       const cellReversed = cellLum >= reverseAt;
       if (useIntensity) {
         st.intensityIndices[idx] = cellReversed
@@ -1715,6 +1757,11 @@ export async function initAltView(previewManager, options = {}) {
         // CW-21: cells in the last converted frame, and how many of them
         // reverse video claimed.
         cells: st.lastCellCount ?? 0,
+        // CW-52: the grid the cells were laid out on. A sequence instrument
+        // that derives these from the cell count and the glyph aspect can be
+        // one column out and silently measure a sheared grid.
+        cols: st.lastCols ?? 0,
+        rows: st.lastRows ?? 0,
         reverseCells: st.lastReverseCells ?? 0,
         // CW-32: which path actually converted the last frame, so a bench
         // cannot report a GPU number that the CPU produced.
@@ -1755,6 +1802,49 @@ export async function initAltView(previewManager, options = {}) {
       contrast: st.benchLegacyContrast,
       cpuSample: st.benchLegacyCpuSample,
     });
+    /**
+     * CW-52: retain what every cell DECIDED, so temporal stability can be
+     * measured over a sequence of converted frames rather than inferred from
+     * the painted picture. Off by default and never touched in production:
+     * the extra per-cell luminance write would land inside the numbers the
+     * performance bench reports, so it has to be asked for.
+     *
+     * @param {boolean} on
+     * @returns {boolean} whether the probe is now recording
+     */
+    api.setCellProbe = (on) => {
+      st.devCellProbe = Boolean(on);
+      if (!st.devCellProbe) {
+        st.lastGlyphIndices = null;
+        st.lastProbeIntensity = null;
+        st.lastCellLum = null;
+      }
+      st.dirty = true;
+      return st.devCellProbe;
+    };
+    /**
+     * CW-52: the last converted frame's per-cell decisions.
+     *
+     * `intensity` is an index into the drive levels, with the reverse-video
+     * atlas riding at the end - so a cell that flips between the last drive
+     * level and that index is the whole-cell flash the owner reported, told
+     * apart from a cell that merely changed character.
+     *
+     * @returns {{cols: number, rows: number, glyphs: Int16Array,
+     *   intensity: Int8Array|null, lum: Float32Array|null}|null}
+     */
+    api.readCellProbe = () => {
+      if (!st.devCellProbe || !st.lastGlyphIndices) return null;
+      return {
+        cols: st.lastCols,
+        rows: st.lastRows,
+        glyphs: Int16Array.from(st.lastGlyphIndices),
+        intensity: st.lastProbeIntensity
+          ? Int8Array.from(st.lastProbeIntensity)
+          : null,
+        lum: st.lastCellLum ? Float32Array.from(st.lastCellLum) : null,
+      };
+    };
   }
 
   return api;

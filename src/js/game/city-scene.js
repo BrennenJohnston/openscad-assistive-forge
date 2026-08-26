@@ -54,7 +54,12 @@ import {
   Vector2,
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { pointInRing } from './walk-controls.js';
+import {
+  pointInRing,
+  CURB_HEIGHT_M,
+  PAVEMENT_WIDTH_M,
+  isPavementWay,
+} from './walk-controls.js';
 import { makeFigureSpec, makeFigureGeoms } from './city-figures.js';
 import {
   buildRoadGraph,
@@ -139,6 +144,48 @@ const UNDRAWN_ROAD_KINDS = new Set([
 
 // Roads float just above the ground plane so they win the depth test.
 const ROAD_LIFT_M = 0.08;
+// CW-50: the roadway is CUT DOWN a curb's height rather than the pavement
+// being built up, which is what keeps every prop standing where it already
+// stood. ROAD_LIFT_M keeps its own separate job - a depth epsilon on whatever
+// plane a ribbon lies in - and the two never add on the same surface: the
+// difference between a pavement ribbon and a roadway ribbon is exactly the
+// curb height.
+const ROADWAY_LIFT_M = ROAD_LIFT_M - CURB_HEIGHT_M;
+
+// CW-51 centre lines. The rhythm is the US skip line, 3 m of paint to 9 m of
+// gap. The WIDTH is a model rather than a measurement, and the number came
+// from measuring rather than from argument.
+//
+// Real highway paint is 0.10-0.15 m. Built at 0.12 it painted 213 pixels of a
+// 1.44-million-pixel frame - 0.015%, invisible, and confined to a band in the
+// middle distance. Widening moved that steadily (0.25 -> 367 px, 0.35 -> 477,
+// 0.50 -> 643) and only at 0.50 did the photographs show a line reading as
+// dashes rather than as speckle. This is the same licence CURB_WIDTH_M already
+// takes for the same reason: a converter that turns brightness into characters
+// cannot resolve a sub-cell feature, however true to life its width is.
+//
+// The carpet law bounds the other end and is not strained. Banded against the
+// same pose with no lines at all, the change lands entirely in ONE mid-frame
+// band (+0.6 to +1.0 points); the sky band moves by EXACTLY zero and so do the
+// near-ground bands.
+//
+// LINE_TONE sits at the curb's own luminance (0x30 grey reads 48/255) but
+// carries warmth, so a colour scheme quantizes it toward yellow while a
+// monochrome scheme - which reads luminance alone - sees what it saw from a
+// curb. Only arterials are painted: a residential street often carries no
+// centre line in life, and painting every street is the fastest way to break
+// the carpet law.
+const LINE_PAINT_M = 3;
+const LINE_GAP_M = 9;
+const LINE_WIDTH_M = 0.5;
+const LINE_TONE = 0x3a3310;
+const ARTERIAL_LINE_KINDS = new Set(['secondary', 'primary', 'trunk']);
+const PAVEMENT_LIFT_M = ROAD_LIFT_M + 0.04;
+// Paint lies ON the roadway, a depth epsilon above it.
+const LINE_LIFT_M = ROADWAY_LIFT_M + 0.01;
+// The ground plane has to sit under the deepest thing drawn on it, or it
+// would hide the roadway it is meant to be beneath.
+const GROUND_PLANE_Z = ROADWAY_LIFT_M - 0.02;
 const GROUND_MARGIN_M = 200;
 
 // Window grid: 4 m bays, 3 m storeys; the texture tile spans 4×3 bays so a
@@ -164,6 +211,25 @@ const GROUND_PATCHES = 40;
 const GROUND_PATCH_STREAKS = 40;
 const GROUND_PATCH_RADIUS_PX = 26;
 const GROUND_LOOSE_STREAKS = 800;
+/**
+ * CW-52: anisotropic filtering, for the one surface in this city that is seen
+ * almost edge-on.
+ *
+ * CW-41 measured anisotropy on the FACADES and found it worth nothing, which
+ * is what an isotropic mip chain should give on a surface facing the camera.
+ * The ground plane is the opposite case: at eye height it stretches away to
+ * the fog, so the isotropic level of detail is forced by the derivative ACROSS
+ * the view and throws away everything along it. MEASURED over a 20-frame
+ * sub-cell turn at the Seattle spawn, glyph flips on ground cells: 1.33% with
+ * neither knob, 1.38% with the cell-raster filter alone, 1.38% with anisotropy
+ * alone, and 0.26% with BOTH - four fifths of the way to the floor that
+ * deleting the texture outright sets (0.01%). Neither is worth anything
+ * without the other, which is why they ship together.
+ *
+ * three.js clamps this to whatever the device actually supports, so a machine
+ * with less simply gets less.
+ */
+const GROUND_ANISOTROPY = 16;
 
 // Building tint model. TIERS drive luminance (what monochrome sees);
 // HUES are the CW-Q5/Q6 palette families (what HC quantization sees).
@@ -919,7 +985,139 @@ function createGroundTexture() {
     streak(Math.floor(rand() * size), Math.floor(rand() * size));
   }
 
-  return makeRepeatingTexture(canvas, 1 / GROUND_TILE_M, 1 / GROUND_TILE_M);
+  const texture = makeRepeatingTexture(
+    canvas,
+    1 / GROUND_TILE_M,
+    1 / GROUND_TILE_M
+  );
+  texture.anisotropy = GROUND_ANISOTROPY;
+  return texture;
+}
+
+/**
+ * Which paving finish a city's pavements wear (CW-51, CW-Q51).
+ *
+ * TWO of these are the owner's own words and ship as given. The other two are
+ * what the cities' own specifications say, fetched and cited at execution -
+ * and one of them REFUTES what the plan expected:
+ *
+ * - seattle   'aggregate': pebbly river-stone aggregate. The owner's words.
+ * - albuquerque 'cracked': flat, with cracks and intentional grip-scoring
+ *               lines. The owner's words.
+ * - denver    'broom': Denver Parks and Recreation's construction standards
+ *               require that all concrete walkways have a BROOM FINISH - a
+ *               soft-bristle broom drawn across float-finished concrete,
+ *               perpendicular to the line of travel, for slip resistance.
+ * - burnaby   'broom': Burnaby's Supplementary Specifications adopt MMCD
+ *               2019, whose Section 03 30 20 (Concrete Walks, Curbs and
+ *               Gutters) specifies a broom finish for sidewalks. The plan
+ *               EXPECTED exposed aggregate here; the specification does not
+ *               support it, and exposed aggregate in BC is a decorative or
+ *               private finish rather than the municipal sidewalk standard.
+ *
+ * So Denver and Burnaby share a finish because they genuinely specify the
+ * same one. That is a finding, not a gap: inventing a difference to make four
+ * cities look four ways would be the dishonest option. Denver's real
+ * distinguishing feature is a DETACHED sidewalk with a tree-lawn amenity zone
+ * between kerb and walk, which is ground character rather than paving texture
+ * and belongs to CW-57.
+ *
+ * Every row here is design data the owner can veto.
+ */
+export const CITY_PAVING = {
+  seattle: 'aggregate',
+  albuquerque: 'cracked',
+  denver: 'broom',
+  burnaby: 'broom',
+};
+const DEFAULT_PAVING = 'broom';
+
+// Municipal sidewalk standards put control joints at roughly the width of the
+// walk - 4 to 6 ft on a standard walk - so the seams land about every 1.5 m.
+const PAVING_SCORE_M = 1.5;
+// One tile covers this many metres, and the UVs are in metres, so the repeat
+// is just distance / tile.
+const PAVING_TILE_M = 6;
+const PAVING_TILE_PX = 256;
+
+/**
+ * A pavement's paving texture: scoring seams everywhere, plus the city's own
+ * finish on top.
+ *
+ * Brightness only - the tone stays SIDEWALK_TONES' own dark neighbourhood and
+ * the texture multiplies it. A paving that brightened the pavement would
+ * carpet the lower half of the street view, which is the CW-8 law this whole
+ * cluster is written around.
+ *
+ * @param {'aggregate'|'cracked'|'broom'} style
+ * @returns {CanvasTexture|null}
+ */
+function createPavingTexture(style) {
+  const size = PAVING_TILE_PX;
+  const c = make2dContext(size, size);
+  if (!c) return null;
+  const { canvas, ctx } = c;
+  const pxPerM = size / PAVING_TILE_M;
+
+  // Mid grey is "unchanged": the texture multiplies the material tone, so
+  // everything here is a small step either side of it.
+  ctx.fillStyle = 'rgb(160,160,160)';
+  ctx.fillRect(0, 0, size, size);
+  const rand = makeLcg(0x5caff01d);
+  const grey = (v) => `rgb(${v},${v},${v})`;
+
+  if (style === 'aggregate') {
+    // Pebbly river-stone: dense small round speckle, low contrast, so it
+    // reads as a gritty surface rather than as dots.
+    for (let i = 0; i < 2600; i++) {
+      const r = 0.7 + rand() * 1.6;
+      ctx.beginPath();
+      ctx.arc(rand() * size, rand() * size, r, 0, Math.PI * 2);
+      ctx.fillStyle = grey(140 + Math.floor(rand() * 46));
+      ctx.fill();
+    }
+  } else if (style === 'broom') {
+    // Broom finish: fine parallel lines drawn PERPENDICULAR to the line of
+    // travel, which is across the walk - so they run along the u axis.
+    for (let y = 0; y < size; y += 2) {
+      ctx.fillStyle = grey(150 + Math.floor(rand() * 22));
+      ctx.fillRect(0, y, size, 1);
+    }
+  } else {
+    // Cracked and grip-scored: a flat slab, a few wandering cracks, and
+    // deliberate scoring lines cut across it for grip.
+    for (let i = 0; i < 5; i++) {
+      let x = rand() * size;
+      let y = rand() * size;
+      ctx.strokeStyle = grey(126 + Math.floor(rand() * 16));
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      for (let s = 0; s < 26; s++) {
+        x += (rand() - 0.5) * 18;
+        y += (rand() - 0.35) * 14;
+        ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    for (let g = 0; g < 6; g++) {
+      const y = ((g + 0.5) * size) / 6;
+      ctx.fillStyle = grey(150);
+      ctx.fillRect(0, Math.round(y), size, 1);
+    }
+  }
+
+  // The scoring seams last, so nothing paints over them: control joints at
+  // PAVING_SCORE_M, darker than the slab because a joint is a groove.
+  const seam = Math.max(1, Math.round(0.03 * pxPerM));
+  for (let m = 0; m < PAVING_TILE_M; m += PAVING_SCORE_M) {
+    ctx.fillStyle = grey(118);
+    ctx.fillRect(0, Math.round(m * pxPerM), size, seam);
+  }
+
+  // The UVs are in METRES, so the repeat is one tile per PAVING_TILE_M and a
+  // pavement keeps one real-world paving scale whatever its width.
+  return makeRepeatingTexture(canvas, 1 / PAVING_TILE_M, 1 / PAVING_TILE_M);
 }
 
 // ---------------------------------------------------------------------------
@@ -1154,6 +1352,151 @@ function roofGeometry(volume, tint) {
  * @param {{widthM?: number, offsetM?: number, liftM?: number}} [shape]
  *   ribbon width / sideways offset / z lift overrides
  */
+/**
+ * The vertical face of a curb: a wall standing along one edge of a road, from
+ * the roadway up to the pavement (CW-50). Without it the raised pavement is a
+ * lid with nothing under it, and a low camera sees straight through the step.
+ *
+ * @param {{points: Array<[number,number]>, widthM: number}} road
+ * @param {number[]} positions - flat xyz output array (appended to)
+ * @param {{minX:number,minY:number,maxX:number,maxY:number}} [cullBounds]
+ * @param {{offsetM: number, loZ: number, hiZ: number}} shape
+ */
+function appendCurbFace(road, positions, cullBounds, shape) {
+  const { offsetM, loZ, hiZ } = shape;
+  const inBounds = (x, y) =>
+    !cullBounds ||
+    (x >= cullBounds.minX &&
+      x <= cullBounds.maxX &&
+      y >= cullBounds.minY &&
+      y <= cullBounds.maxY);
+  for (let i = 0; i < road.points.length - 1; i++) {
+    const [x1, y1] = road.points[i];
+    const [x2, y2] = road.points[i + 1];
+    if (!inBounds(x1, y1) && !inBounds(x2, y2)) continue;
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-6) continue;
+    const nx = (-dy / len) * offsetM;
+    const ny = (dx / len) * offsetM;
+    const ax = x1 + nx;
+    const ay = y1 + ny;
+    const bx = x2 + nx;
+    const by = y2 + ny;
+    positions.push(
+      ax,
+      ay,
+      loZ,
+      bx,
+      by,
+      loZ,
+      bx,
+      by,
+      hiZ,
+      ax,
+      ay,
+      loZ,
+      bx,
+      by,
+      hiZ,
+      ax,
+      ay,
+      hiZ
+    );
+  }
+}
+
+/**
+ * A dashed centre line down a two-way arterial (CW-51).
+ *
+ * OpenStreetMap carries NO road_marking tags at all in any of the four baked
+ * circles, so this is derived from the road CLASS rather than from data, and
+ * the record says so. Only arterials get one: a residential street often has
+ * no centre line in life, and painting every street is the fastest way to
+ * break the CW-8 carpet law.
+ *
+ * The rhythm is the US skip line, 3 m of paint to 9 m of gap, and the paint is
+ * 0.12 m wide - real paint width, which is sub-cell at any distance BY DESIGN.
+ * That is what keeps it reading as dashes near the walker and sub-sampling
+ * away down the street rather than laying a stripe to the horizon.
+ *
+ * The cursor carries ACROSS segments: OSM splits a street into many short
+ * ways, and restarting the rhythm at each vertex would bunch paint at bends.
+ *
+ * @param {{points: Array<[number,number]>}} road
+ * @param {number[]} positions - flat xyz output array (appended to)
+ * @param {{minX:number,minY:number,maxX:number,maxY:number}} [cullBounds]
+ * @param {number} startCursorM - where in the paint/gap cycle this road begins
+ * @returns {number} the cursor to carry into the next road
+ */
+function appendCenterLineDashes(road, positions, cullBounds, startCursorM = 0) {
+  const period = LINE_PAINT_M + LINE_GAP_M;
+  let cursor = ((startCursorM % period) + period) % period;
+  const half = LINE_WIDTH_M / 2;
+  const inBounds = (x, y) =>
+    !cullBounds ||
+    (x >= cullBounds.minX &&
+      x <= cullBounds.maxX &&
+      y >= cullBounds.minY &&
+      y <= cullBounds.maxY);
+
+  for (let i = 0; i < road.points.length - 1; i++) {
+    const [x1, y1] = road.points[i];
+    const [x2, y2] = road.points[i + 1];
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-6) continue;
+    const ux = dx / len;
+    const uy = dy / len;
+    const nx = -uy * half;
+    const ny = ux * half;
+    const skip = !inBounds(x1, y1) && !inBounds(x2, y2);
+
+    let t = 0;
+    while (t < len) {
+      const intoCycle = cursor % period;
+      if (intoCycle < LINE_PAINT_M) {
+        const run = Math.min(LINE_PAINT_M - intoCycle, len - t);
+        if (!skip && run > 0.01) {
+          const ax = x1 + ux * t;
+          const ay = y1 + uy * t;
+          const bx = x1 + ux * (t + run);
+          const by = y1 + uy * (t + run);
+          positions.push(
+            ax + nx,
+            ay + ny,
+            LINE_LIFT_M,
+            ax - nx,
+            ay - ny,
+            LINE_LIFT_M,
+            bx - nx,
+            by - ny,
+            LINE_LIFT_M,
+            ax + nx,
+            ay + ny,
+            LINE_LIFT_M,
+            bx - nx,
+            by - ny,
+            LINE_LIFT_M,
+            bx + nx,
+            by + ny,
+            LINE_LIFT_M
+          );
+        }
+        t += run;
+        cursor += run;
+      } else {
+        const run = Math.min(period - intoCycle, len - t);
+        t += run;
+        cursor += run;
+      }
+    }
+  }
+  return cursor;
+}
+
 function appendRoadRibbon(road, positions, cullBounds, shape = {}) {
   const half = (shape.widthM ?? road.widthM) / 2;
   const offset = shape.offsetM ?? 0;
@@ -1194,6 +1537,18 @@ function appendRoadRibbon(road, positions, cullBounds, shape = {}) {
     if (shape.colors) {
       const t = shape.tint ?? 1;
       for (let v = 0; v < 6; v++) shape.colors.push(t, t, t);
+    }
+    // CW-51: UVs in METRES, so a paving texture keeps one real-world scale
+    // whatever width the ribbon is and however the way is split. v runs
+    // ALONG the ribbon and carries across segments on `shape.uvCursor`,
+    // otherwise the scoring seams would restart at every OSM vertex and
+    // bunch at bends the way the centre-line dashes would have.
+    if (shape.uvs) {
+      const v0 = shape.uvCursor ?? 0;
+      const v1 = v0 + len;
+      const u = half;
+      shape.uvs.push(u, v0, -u, v0, -u, v1, u, v0, -u, v1, u, v1);
+      shape.uvCursor = v1;
     }
   }
 }
@@ -1523,8 +1878,17 @@ export function buildCityGroup(model) {
     createWindowTexture(i)
   );
   const storefrontTexture = createStorefrontTexture();
+  // CW-51: which paving finish this city's own municipality specifies.
+  const pavingTexture = createPavingTexture(
+    CITY_PAVING[model.name] ?? DEFAULT_PAVING
+  );
   const groundTexture = createGroundTexture();
-  for (const t of [...windowTextures, storefrontTexture, groundTexture]) {
+  for (const t of [
+    ...windowTextures,
+    storefrontTexture,
+    groundTexture,
+    pavingTexture,
+  ]) {
     if (t) disposables.push(t);
   }
 
@@ -1817,9 +2181,20 @@ export function buildCityGroup(model) {
     map: groundTexture ?? null,
   });
   if (!groundTexture) groundMat.color.setHex(0x000000);
+  // The ground dither is a texture like any other and beats against the cell
+  // grid like any other; it had simply never been given the CW-41 filter.
+  // Opted in UNCONDITIONALLY, the way the facades already are: the shader edit
+  // does nothing without a map, and gating it on the texture would hide the
+  // wiring from every test, which is exactly how D-111 shipped.
+  applyCellRasterFiltering(groundMat);
+  cellRasterMats.push(groundMat);
   const ground = new Mesh(groundGeom, groundMat);
   ground.name = 'ground';
-  ground.position.set((b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2, 0);
+  ground.position.set(
+    (b.minX + b.maxX) / 2,
+    (b.minY + b.maxY) / 2,
+    GROUND_PLANE_Z
+  );
   // Texture repeat is per-meter; the plane's UVs span 0..1, so scale them.
   if (groundTexture) {
     groundTexture.repeat.set(width / GROUND_TILE_M, height / GROUND_TILE_M);
@@ -1839,7 +2214,10 @@ export function buildCityGroup(model) {
   const roadPositions = [];
   const roadColors = [];
   const curbPositions = [];
+  const linePositions = [];
+  let lineCursorM = 0;
   const sidewalkPositions = [];
+  const sidewalkUvs = [];
   const sidewalkColors = [];
   for (const road of model.roads) {
     // CW-33: a separately-mapped pavement is drawn even though `footway` is
@@ -1850,31 +2228,72 @@ export function buildCityGroup(model) {
     // narrower ribbon, its own tone and its own glyph voice rather than
     // joining the roads - which is what keeps it from being that carpet.
     // Paths through parks stay undrawn.
-    if (road.sidewalk) {
+    //
+    // CW-Q64: a PEDESTRIANISED street joins the mapped pavements here. It is
+    // pavement end to end, so it gets no roadway, no apron and no kerb - a
+    // curb down the middle of one would be a road that is not there.
+    if (isPavementWay(road)) {
       appendRoadRibbon(road, sidewalkPositions, cullBounds, {
         colors: sidewalkColors,
+        uvs: sidewalkUvs,
         tint: surfaceTint(road.surface, DEFAULT_SIDEWALK_SURFACE),
-        // Above the roadway, so a pavement crossing one reads as on top.
-        liftM: ROAD_LIFT_M + 0.04,
+        liftM: PAVEMENT_LIFT_M,
       });
       continue;
     }
     if (UNDRAWN_ROAD_KINDS.has(road.kind)) continue;
+    // CW-50: the roadway drops a curb's height below the pavement.
     appendRoadRibbon(road, roadPositions, cullBounds, {
       colors: roadColors,
       tint: surfaceTint(road.surface, DEFAULT_ROAD_SURFACE),
+      liftM: ROADWAY_LIFT_M,
     });
+    // Every street gets a pavement, not only the few whose pavements
+    // OpenStreetMap maps separately - that patchiness is what left the
+    // roadway reading as a gap between two lines rather than as a road with
+    // kerbs. This is the apron the walker's surface grid agrees with.
+    const apronOffset = (road.widthM + PAVEMENT_WIDTH_M) / 2;
+    for (const side of [apronOffset, -apronOffset]) {
+      appendRoadRibbon(road, sidewalkPositions, cullBounds, {
+        widthM: PAVEMENT_WIDTH_M,
+        offsetM: side,
+        colors: sidewalkColors,
+        uvs: sidewalkUvs,
+        tint: surfaceTint(road.surface, DEFAULT_SIDEWALK_SURFACE),
+        liftM: PAVEMENT_LIFT_M,
+      });
+    }
+    // CW-51: only the arterials are painted, and lanes= refines nothing here
+    // because it is tagged on 18% of Seattle's ways and less elsewhere - the
+    // class is the honest signal, and the record says the lines are derived
+    // rather than mapped.
+    if (ARTERIAL_LINE_KINDS.has(road.kind)) {
+      lineCursorM = appendCenterLineDashes(
+        road,
+        linePositions,
+        cullBounds,
+        lineCursorM
+      );
+    }
     const edgeOffset = (road.widthM - CURB_WIDTH_M) / 2;
     for (const side of [edgeOffset, -edgeOffset]) {
+      // The curb's own top, level with the pavement it edges.
       appendRoadRibbon(road, curbPositions, cullBounds, {
         widthM: CURB_WIDTH_M,
         offsetM: side,
-        liftM: ROAD_LIFT_M + 0.02,
+        liftM: PAVEMENT_LIFT_M + 0.01,
+      });
+      // ...and its face, so the step down is a surface and not a gap to see
+      // under from a low camera.
+      appendCurbFace(road, curbPositions, cullBounds, {
+        offsetM: side < 0 ? side - CURB_WIDTH_M / 2 : side + CURB_WIDTH_M / 2,
+        loZ: ROADWAY_LIFT_M,
+        hiZ: PAVEMENT_LIFT_M + 0.01,
       });
     }
   }
 
-  const makeFlatMesh = (positions, material, name, colors) => {
+  const makeFlatMesh = (positions, material, name, colors, uvs) => {
     const geom = new BufferGeometry();
     geom.setAttribute(
       'position',
@@ -1889,6 +2308,9 @@ export function buildCityGroup(model) {
         new BufferAttribute(new Float32Array(colors), 3)
       );
     }
+    if (uvs && uvs.length === (positions.length / 3) * 2) {
+      geom.setAttribute('uv', new BufferAttribute(new Float32Array(uvs), 2));
+    }
     const mesh = new Mesh(geom, material);
     mesh.name = name;
     group.add(mesh);
@@ -1899,6 +2321,7 @@ export function buildCityGroup(model) {
   let roadTriangles = 0;
   let roadMat = null;
   let curbMesh = null;
+  let lineMesh = null;
   if (roadPositions.length > 0) {
     roadMat = new MeshLambertMaterial({
       color: ROAD_TONES.street,
@@ -1917,6 +2340,20 @@ export function buildCityGroup(model) {
       polygonOffsetUnits: -2,
     });
     curbMesh = makeFlatMesh(curbPositions, curbMat, 'curbs');
+
+    // CW-51: paint gets its own mesh so it can carry its own tone, but it
+    // borrows the CURB voice in the class pass rather than minting an id -
+    // the span table is exactly full (CW-43), and a curb is already the
+    // thin-ribbon-that-dashes-and-sub-samples treatment paint wants.
+    if (linePositions.length > 0) {
+      const lineMat = new MeshLambertMaterial({
+        color: LINE_TONE,
+        polygonOffset: true,
+        polygonOffsetFactor: -4,
+        polygonOffsetUnits: -4,
+      });
+      lineMesh = makeFlatMesh(linePositions, lineMat, 'road-lines');
+    }
   }
 
   // CW-33: pavements, as their own surface.
@@ -1925,11 +2362,30 @@ export function buildCityGroup(model) {
     sidewalkMat = new MeshLambertMaterial({
       color: SIDEWALK_TONES.street,
       vertexColors: true,
+      map: pavingTexture ?? null,
       polygonOffset: true,
       polygonOffsetFactor: -3,
       polygonOffsetUnits: -3,
     });
-    makeFlatMesh(sidewalkPositions, sidewalkMat, 'sidewalks', sidewalkColors);
+    // CW-51: the paving rides the CW-41 cell-raster filter like every other
+    // texture in the city. An unfiltered paving is exactly the beat pattern
+    // against the cell grid that release was written to kill.
+    //
+    // D-111: and it has to JOIN THE LIST, or the shader carries a bias uniform
+    // that nothing ever writes and the filtering is stock at every character
+    // size. Measured at the Seattle spawn, glyph flips on pavement cells:
+    // 0.28% undriven, 0.01% driven - and with the bias driven, deleting the
+    // paving texture outright changes not one cell of the converted frame, so
+    // the filter takes the whole of what the beat pattern had to give.
+    applyCellRasterFiltering(sidewalkMat);
+    cellRasterMats.push(sidewalkMat);
+    makeFlatMesh(
+      sidewalkPositions,
+      sidewalkMat,
+      'sidewalks',
+      sidewalkColors,
+      sidewalkUvs
+    );
     roadTriangles += sidewalkPositions.length / 9;
   }
 
@@ -1997,6 +2453,9 @@ export function buildCityGroup(model) {
         );
       }
       if (curbMesh) curbMesh.visible = !isMap;
+      // CW-51: paint is street-level detail; overhead the map wants the
+      // network, not its markings.
+      if (lineMesh) lineMesh.visible = !isMap;
       for (const mesh of dressingMeshes) mesh.visible = !isMap;
       for (const { material, texture } of buildingMats) {
         material.map = isMap ? null : (texture ?? null);

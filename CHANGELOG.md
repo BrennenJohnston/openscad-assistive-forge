@@ -179,6 +179,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The city stops flickering while you move** (CW-52) - lit surfaces used to fizz and flash as you
+  walked or turned, in a way a screenshot could never show. The cause was not the lighting. A
+  second, hidden pass tells the drawing which surface each character is looking at, so a shopfront
+  and the wall behind it can be drawn with different characters, and that pass could not reliably
+  tell the two apart where they touch: it changed its mind again and again as you moved, and better
+  than a quarter of the screen kept swapping character sets frame after frame. It now keeps them
+  apart the same way the picture itself does. Measured over twenty consecutive frames of a very
+  slow turn, the flicker drops by more than nine tenths at every character size, in both screen
+  colors, while the brightness of the picture is unchanged to the last digit - the glow stays, the
+  fracture goes. Two ground textures that were never actually being filtered for the character grid
+  are now filtered, and the ground far ahead of you, which you see almost edge on, is filtered for
+  that angle as well
+
+- **Lines on the road, and a pavement with the finish its own city specifies** (CW-51) - the
+  arterial streets now carry a dashed centre line, so a main road reads as a main road rather than
+  as a wider gap. The lines are derived from what kind of street it is, because the map data does
+  not record road markings anywhere in the four cities. Pavements had no surface at all and now
+  carry control joints about every metre and a half, plus the finish the city itself specifies:
+  pebbly river stone in Seattle, flat with cracks and grip scoring in Albuquerque, and a broom
+  finish in Denver and Burnaby, which is what both of those cities' construction standards call
+  for
+
+- **The streets are the width real streets are, and they have curbs** (CW-50) - the road widths
+  described the driving lanes only, so a street read as narrower than the one you would stand on,
+  and the roadway itself was an indistinct dark gap between two thin lines. Widths are now measured
+  curb to curb, the way a pavement meets a road: a two-lane residential street with parking on both
+  sides is about eight metres across, not six, and each step up from there adds a lane. Every
+  street now has a raised pavement beside it and a real curb you can step down off and back up
+  onto, instead of only the few streets whose pavements the map happens to record separately. Your
+  eye follows the ground: it drops as you step into the road and climbs as you step back up, over a
+  short distance rather than in a jump, and it never changes with how fast you are walking. The
+  curb is never a wall - you can always walk across it. Pedestrianised streets have no curb at all,
+  because they are pavement from one side to the other
+
 - **Every part of a figure takes a color from the scheme** (CW-49) - a person's torso and legs
   already wore colors from the city's own color scheme, but their head and shoulders kept a single
   fixed tone, so a street of people repeated one note at the top of every figure. All three zones

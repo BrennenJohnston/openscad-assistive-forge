@@ -15,8 +15,11 @@ engrave_depth = 0.8; // [0.2:0.1:3.0]
 // Design style on the charm surface
 design_style = "raised"; // [raised, engraved]
 
-// Scale the design relative to the charm face (percentage)
-design_scale = 60; // [20:5:150]
+// Design size as a percentage of the charm's flat top face; 100 fills it
+design_scale = 60; // [10:5:110]
+
+// Design width divided by height. The Assistive Forge app measures and sets this when you choose a file; in desktop OpenSCAD set it to your file's width/height so 100 truly fills the face (1 assumes a square design)
+design_file_aspect = 1; // [0.05:0.01:20]
 
 // Offset to thicken SVG lines for FDM printability (0 = off; 0.6 = recommended for 0.4mm nozzle)
 design_offset = 0; // [0:0.2:1.5]
@@ -37,8 +40,11 @@ design_file_2 = ""; // [file:svg,png,jpg]
 // Design style for second design
 design_style_2 = "raised"; // [raised, engraved]
 
-// Scale the second design relative to the charm face (percentage)
-design_scale_2 = 40; // [20:5:150]
+// Second design size as a percentage of the charm's flat top face; 100 fills it
+design_scale_2 = 40; // [10:5:110]
+
+// Second design width divided by height (set automatically by the app, like design_file_aspect)
+design_file_2_aspect = 1; // [0.05:0.01:20]
 
 // Left (−) / right (+) position offset for second design
 design_2_left_right = 0; // [-10:0.5:10]
@@ -172,9 +178,19 @@ z_offset = outer_height / 2;
 profile_center_x = 0;
 profile_max_y = outer_height / 2;
 charm_top_z = outer_height;
-design_ref_dim = 14;
-design_size = design_ref_dim * design_scale / 100;
-design_size_2 = design_ref_dim * design_scale_2 / 100;
+// The flat part of the top face: corner and side-edge rounding curve away
+// below charm_top_z outside this rectangle, so this is what a design may
+// fill without floating over a curved edge.
+face_x = outer_width - 2 * profile_corner_radius;
+face_y = charm_width - 2 * safe_side_edge;
+// design_2d is drawn rotated 90 degrees, so its local X lands on the
+// face's Y (across the bracelet) and its local Y on the face's X.
+design_fit_w = face_y * design_scale / 100;
+design_fit_h = face_x * design_scale / 100;
+design_fit_w_2 = face_y * design_scale_2 / 100;
+design_fit_h_2 = face_x * design_scale_2 / 100;
+assert(design_file_aspect > 0, "design_file_aspect must be positive (width divided by height)");
+assert(design_file_2_aspect > 0, "design_file_2_aspect must be positive (width divided by height)");
 total_top_z = charm_top_z
     + max(
         (design_style == "raised") ? engrave_depth : 0,
@@ -265,10 +281,17 @@ module charm_body() {
 // the SVG preparer tool (F-11, planned) for compound designs.
 module design_2d() {
     if (design_file != "") {
+        // Contain-fit to the flat top face: anchor the resize to whichever
+        // axis the design hits first (design_file_aspect carries the ratio
+        // OpenSCAD cannot measure). Rotation and offsets can still push a
+        // design past the face; raised designs are clipped at the flat top.
         translate([-design_up_down, design_left_right])
             rotate([0, 0, design_rotation + 90])
                 offset(r = design_offset)
-                    resize([design_size, 0], auto = true)
+                    resize(design_file_aspect >= design_fit_w / design_fit_h
+                               ? [design_fit_w, 0]
+                               : [0, design_fit_h],
+                           auto = true)
                         import(design_file, center = true);
     }
 }
@@ -278,9 +301,18 @@ module design_2d_layer2() {
         translate([-design_2_up_down, design_2_left_right])
             rotate([0, 0, design_rotation_2 + 90])
                 offset(r = design_offset)
-                    resize([design_size_2, 0], auto = true)
+                    resize(design_file_2_aspect >= design_fit_w_2 / design_fit_h_2
+                               ? [design_fit_w_2, 0]
+                               : [0, design_fit_h_2],
+                           auto = true)
                         import(design_file_2, center = true);
     }
+}
+
+// The region of the top surface that is truly flat at charm_top_z; raised
+// material outside it would float over the rounded edges.
+module top_face_2d() {
+    square([face_x, face_y], center = true);
 }
 
 module text_2d() {
@@ -345,12 +377,18 @@ module q_charm() {
             if (design_style == "raised") {
                 translate([profile_center_x, 0, charm_top_z])
                     linear_extrude(height = engrave_depth)
-                        design_2d();
+                        intersection() {
+                            design_2d();
+                            top_face_2d();
+                        }
             }
             if (design_file_2 != "" && design_style_2 == "raised") {
                 translate([profile_center_x, 0, charm_top_z + design_2_thickness])
                     linear_extrude(height = engrave_depth)
-                        design_2d_layer2();
+                        intersection() {
+                            design_2d_layer2();
+                            top_face_2d();
+                        }
             }
             if (text_content != "" && text_style == "raised") {
                 translate([profile_center_x, 0, charm_top_z])

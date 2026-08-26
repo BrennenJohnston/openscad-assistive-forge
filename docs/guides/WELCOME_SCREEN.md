@@ -4,13 +4,13 @@ The welcome screen is what you land on with no project open. It offers a few
 things to start with, and a collapsed section explaining who the app is built
 for.
 
-*Verified against `index.html` on 2026-08-16.*
+*Verified against `index.html` on 2026-08-26.*
 
 ## What is on it
 
 ### Cards you see straight away
 
-Four, in this order:
+Five, in this order:
 
 | Card | Its button does |
 |---|---|
@@ -18,8 +18,9 @@ Four, in this order:
 | **Beginners Start Here** | Loads the `simple-box` example and starts the introductory tour. Also has an "Open Help" link to the Workflow page. |
 | **Charm Customizer** | Opens the `q-charm` example -- design a charm, pendant or zipper pull. |
 | **Braille Card Customizer** | Opens the `braille-sign` example -- type text, get printable braille. |
+| **Stencil Maker** | Opens the `stencil-maker` example -- turn a picture into a spray-paint stencil for 3D printing or laser cutting. |
 
-Only the first two start a tutorial. The other two open a ready-made tool.
+Only the first two start a tutorial. The others open a ready-made tool.
 
 ### "Explore Features & Accessibility"
 

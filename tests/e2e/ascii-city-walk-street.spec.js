@@ -7,6 +7,7 @@ import {
   webglAvailable,
   enterCity,
 } from './helpers/city-walk.js'
+import { SURFACE_CLASS } from '../../src/js/game/city-class-pass.js'
 
 useCityWalkFixtures()
 
@@ -1355,18 +1356,25 @@ test.describe('ASCII City Walk — people are people (CW-45)', () => {
     // Hash-seeded placement against a versioned extract: these numbers are
     // facts until the next rebake, never noise. The mix ratios are the
     // CW-45 record's one-line-reversible choices.
-    const stats = await page.evaluate(
-      () => window.__cityWalkGame.props.stats
-    )
+    //
+    // CW-50 re-pinned them. Widening the roads moved every pavement position
+    // outward, and thirty-one of the old spots landed against a building and
+    // were refused: 3,060 became 3,029. The seed did not change and nothing
+    // reshuffled - sitters are still exactly 105, because a sitter is placed
+    // on a mapped bench at its true position rather than at an offset from a
+    // road centreline, so no width could reach them. Standing is unmoved
+    // between the two width passes for the same reason it moved at all: it
+    // is the offsets, not the seed, that decide.
+    const stats = await page.evaluate(() => window.__cityWalkGame.props.stats)
     expect(stats.figuresByPose).toEqual({
       sitting: 105,
-      standing: 722,
-      walking: 1890,
-      jogging: 343,
+      standing: 705,
+      walking: 1879,
+      jogging: 340,
     })
-    expect(await page.evaluate(() => window.__cityWalkGame.props.peopleCount)).toBe(
-      3060
-    )
+    expect(
+      await page.evaluate(() => window.__cityWalkGame.props.peopleCount)
+    ).toBe(3029)
   })
 
   test('sitting happens only where a real bench stands', async ({ page }) => {
@@ -1578,5 +1586,274 @@ test.describe('ASCII City Walk — cars are cars (CW-46)', () => {
     expect(watch.closest).toBeLessThan(setup.halfLengthM + 1.2)
     expect(watch.closest).toBeGreaterThan(setup.halfLengthM - 0.05)
     expect(watch.crossings).toBe(0)
+  })
+})
+
+/**
+ * CW-50: the streets are true to scale and the kerb is a real step. The eye
+ * has to follow the ground under it, and the kerb must never be an obstacle.
+ */
+test.describe('ASCII City Walk — the kerb (CW-50)', () => {
+  test('the eye follows the ground across a kerb, and the kerb never blocks', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // Stand in the middle of a real roadway, square on to its kerb, with a
+    // clear run at it. Anything else measures a wall rather than a kerb.
+    const setup = await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      for (const road of g.model.roads) {
+        if (road.sidewalk || road.kind !== 'residential') continue
+        for (let i = 0; i < road.points.length - 1; i++) {
+          const [x1, y1] = road.points[i]
+          const [x2, y2] = road.points[i + 1]
+          const mx = (x1 + x2) / 2
+          const my = (y1 + y2) / 2
+          // Face square across the roadway.
+          const across = Math.atan2(x2 - x1, y2 - y1) + Math.PI / 2
+          const sin = Math.sin(across)
+          const cos = Math.cos(across)
+          // Everything here is decided from the ROAD's own geometry, never
+          // from the surface grid, so this setup runs identically on the
+          // release base where no such grid exists. That is what lets the
+          // case fail on base for the right reason - a camera that never
+          // moved - instead of on a missing property.
+          //
+          // The midpoint of a segment is roadway by definition; pavement
+          // begins past half its width. The run across has to be open, or
+          // this measures a wall rather than a kerb.
+          const needM = road.widthM / 2 + 2.5
+          let blocked = false
+          for (let d = 0; d <= needM + 2; d += 0.25) {
+            if (g.collision.isBlocked(mx + sin * d, my + cos * d))
+              blocked = true
+          }
+          if (blocked) continue
+          const s = g.walkState
+          s.x = mx
+          s.y = my
+          s.headingRad = ((across % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)
+          s.pitchRad = 0
+          // The surface grid is the thing under test, so it is READ here for
+          // the record but never used to choose the spot.
+          if (g.surface) s.groundZ = g.surface.heightAt(mx, my)
+          g.altView.invalidate()
+          return { x: mx, y: my, needM, startGroundZ: s.groundZ ?? null }
+        }
+      }
+      return null
+    })
+    // A skip here would be a pass that measured nothing, so it says loudly
+    // what it could not find rather than going quietly green.
+    expect(
+      setup,
+      'no residential roadway in Seattle had an open run to a kerb'
+    ).not.toBeNull()
+
+
+    // Watch from inside the page: the eye height every frame, and whether the
+    // walker ever stopped moving. A kerb that blocks looks exactly like a
+    // stall, and only a per-frame watcher can tell them apart.
+    await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const s = { camZ: [], stalls: 0, px: g.walkState.x, py: g.walkState.y }
+      window.__cwKerb = s
+      const tick = () => {
+        if (s.stop) return
+        const moved = Math.hypot(g.walkState.x - s.px, g.walkState.y - s.py)
+        if (moved === 0) s.stalls++
+        s.px = g.walkState.x
+        s.py = g.walkState.y
+        s.camZ.push(g.fpCamera.position.z)
+        window.__cwKerbTick = requestAnimationFrame(tick)
+      }
+      window.__cwKerbTick = requestAnimationFrame(tick)
+    })
+
+    await page.keyboard.down('ArrowUp')
+    try {
+      // Arrival is a CONDITION, not a frame quota: the walker is done when
+      // they have crossed clear of the roadway, however many frames that took
+      // on this runner. Measured as DISTANCE from the start, which is a fact
+      // about the walk rather than about the surface grid - so this waits the
+      // same way on the release base, and the case reaches its assertions
+      // there instead of dying early on a property that does not exist.
+      await expect
+        .poll(
+          () =>
+            page.evaluate(
+              (start) => {
+                const w = window.__cityWalkGame.walkState
+                return Math.hypot(w.x - start.x, w.y - start.y)
+              },
+              { x: setup.x, y: setup.y }
+            ),
+          { timeout: 60_000 }
+        )
+        .toBeGreaterThan(setup.needM)
+      // Then a few more observed frames, so the climb finishes on screen.
+      const from = await page.evaluate(() => window.__cwKerb.camZ.length)
+      await expect
+        .poll(() => page.evaluate(() => window.__cwKerb.camZ.length), {
+          timeout: 30_000,
+        })
+        .toBeGreaterThan(from + 12)
+    } finally {
+      await page.keyboard.up('ArrowUp')
+      await page.evaluate(() => {
+        window.__cwKerb.stop = true
+        cancelAnimationFrame(window.__cwKerbTick)
+      })
+    }
+
+    const watch = await page.evaluate(() => window.__cwKerb)
+    const lo = Math.min(...watch.camZ)
+    const hi = Math.max(...watch.camZ)
+
+    // It climbed a whole kerb, and the climb showed on the camera. This is
+    // the assertion the release base fails: there the eye is a constant
+    // 1.7 m whatever it is standing on, so lo and hi are the same number.
+    expect(hi - lo, `camera rose from ${lo} to ${hi}`).toBeGreaterThan(0.1)
+    // It never stopped: a kerb is drawn and felt, but it is not an obstacle.
+    // This is the directive's non-negotiable half.
+    expect(watch.stalls).toBe(0)
+    // And it EASED rather than jumping. A single frame carrying the whole
+    // kerb is the step-jolt this release exists to avoid.
+    let worstJump = 0
+    for (let i = 1; i < watch.camZ.length; i++) {
+      worstJump = Math.max(worstJump, Math.abs(watch.camZ[i] - watch.camZ[i - 1]))
+    }
+    expect(worstJump, `biggest single-frame rise ${worstJump}`).toBeLessThan(
+      hi - lo
+    )
+    // And the walk really did start down in the roadway rather than already
+    // up on a pavement, which is what makes the climb above a kerb.
+    expect(setup.startGroundZ).toBeLessThan(0)
+  })
+})
+
+/**
+ * CW-52: the owner's report is that lit surfaces flash while you move -
+ * "distracting, unintended sloppy... fractured flashes" that a screenshot
+ * cannot show. The cause was not brightness. A second, tiny render tells the
+ * converter what each character cell is LOOKING AT, and that answer picks the
+ * cell's glyph vocabulary; it dressed every mesh in a flat id material that
+ * dropped the mesh's polygon offset, so surfaces that are deliberately
+ * coplanar - a storefront strip on its wall - were coplanar again in the id
+ * buffer and their winner was re-rolled by any view change at all.
+ *
+ * A cell that changes class ONCE has swept across an edge. A cell that changes
+ * again and again over a series of sub-cell turns is watching two surfaces
+ * fight, and only the second is a defect - which is why this counts repeats
+ * rather than changes.
+ */
+test.describe('ASCII City Walk — the surface map holds still (CW-52, D-110)', () => {
+  test('the storefront strip and the wall behind it stop trading places', async ({
+    page,
+  }) => {
+    test.skip(!(await webglAvailable(page)), 'no WebGL on this machine')
+    await launchGame(page)
+    await enterCity(page)
+
+    const result = await page.evaluate((ids) => {
+      const g = window.__cityWalkGame
+      const stats = g.altView.getConvertStats()
+      const cols = stats.cols
+      const rows = stats.rows
+      if (!(cols > 0 && rows > 0)) return { cells: 0 }
+      const s = g.walkState
+      const eyeZ = 1.7 + (Number.isFinite(s.groundZ) ? s.groundZ : 0)
+      const aim = (heading) => {
+        g.fpCamera.position.set(s.x, s.y, eyeZ)
+        g.fpCamera.lookAt(
+          s.x + Math.sin(heading),
+          s.y + Math.cos(heading),
+          eyeZ
+        )
+      }
+      const cells = cols * rows
+      const pairs = new Map()
+      let prev = null
+      let transitions = 0
+      const STEPS = 8
+      for (let i = 0; i < STEPS; i++) {
+        // A twentieth of a degree: about one screen pixel, well inside a
+        // single character cell at any size the game offers.
+        aim(s.headingRad + (i * 0.05 * Math.PI) / 180)
+        const map = g.classPass.read(g.fpCamera, cols, rows)
+        if (!map || map.length !== cells) return { cells: 0 }
+        if (prev) {
+          for (let c = 0; c < cells; c++) {
+            if (map[c] === prev[c]) continue
+            transitions++
+            const lo = Math.min(map[c], prev[c])
+            const hi = Math.max(map[c], prev[c])
+            const key = `${lo}>${hi}`
+            pairs.set(key, (pairs.get(key) ?? 0) + 1)
+          }
+        }
+        prev = Uint8Array.from(map)
+      }
+      aim(s.headingRad)
+      const ranked = [...pairs.entries()].sort((a, b) => b[1] - a[1])
+      const lo = Math.min(ids.wall, ids.storefront)
+      const hi = Math.max(ids.wall, ids.storefront)
+      const wallFront = pairs.get(`${lo}>${hi}`) ?? 0
+      return { cells, transitions, wallFront, top: ranked.slice(0, 3) }
+    }, { wall: SURFACE_CLASS.BUILDING_WALL, storefront: SURFACE_CLASS.STOREFRONT })
+
+    // Non-vacuity, both directions: a grid that never formed would pass every
+    // ratio below, and so would a turn that never reached the camera.
+    expect(
+      result.cells,
+      'the converter reported no character grid'
+    ).toBeGreaterThan(1000)
+    expect(
+      result.transitions,
+      'not one cell changed surface over the whole series - the view never moved'
+    ).toBeGreaterThan(0)
+
+    // The signature, rather than a magnitude. How BADLY two coplanar surfaces
+    // fight depends on the rasteriser's depth precision - measured over these
+    // eight steps at the Seattle spawn, this pair is 57% of every transition
+    // on the release base under CI's software renderer and 97% on a real GPU.
+    // Either way it is the pair that must not be fighting, and after the fix
+    // it is 9% and 0.3% of a much smaller total. A share is the assertion that
+    // holds on both.
+    const share = result.wallFront / result.transitions
+    expect(
+      share,
+      `storefront/wall was ${result.wallFront} of ${result.transitions} ` +
+        `surface changes; the three biggest were ` +
+        `${result.top.map(([k, v]) => `${k}=${v}`).join(' ')}`
+    ).toBeLessThan(0.25)
+  })
+
+  test('the ground plane is filtered for the angle it is seen at (CW-52)', async ({
+    page,
+  }) => {
+    test.skip(!(await webglAvailable(page)), 'no WebGL on this machine')
+    await launchGame(page)
+    await enterCity(page)
+
+    const ground = await page.evaluate(() => {
+      const mesh = window.__cityWalkGame.scene.getObjectByName('ground')
+      if (!mesh) return null
+      return {
+        anisotropy: mesh.material.map?.anisotropy ?? null,
+        cellLodBias: mesh.material.userData?.cellLodBias?.value ?? null,
+      }
+    })
+    expect(ground, 'no ground plane in the scene').not.toBeNull()
+    // The ground is the one surface here seen almost edge-on, and it needs
+    // BOTH knobs: the cell-raster bias alone measured no better than nothing,
+    // and so did anisotropy alone.
+    expect(ground.anisotropy, 'the ground reads isotropically').toBeGreaterThan(1)
+    expect(
+      ground.cellLodBias,
+      'the ground carries no cell-raster bias, or none is being driven'
+    ).toBeGreaterThan(0)
   })
 })

@@ -393,17 +393,41 @@ test.describe('ASCII City Walk — map navigation and walking speed (CW-9)', () 
     )
 
     // Held PageUp zooms in exponentially (CW-Q41 moved map zoom here).
+    //
+    // The hold ends on a CONDITION, not on the clock. Zoom accrues per
+    // rendered frame, so a fixed 700 ms buys however many frames the runner
+    // happens to manage - and CW-50's kerbs added 22% more city geometry,
+    // which was enough to make a loaded Firefox miss the bar once in a
+    // seventeen-minute suite. The wall clock is the outer bound now, and the
+    // zoom itself is the quota (the #148 shape).
     await page.keyboard.down('PageUp')
-    await page.waitForTimeout(700)
-    await page.keyboard.up('PageUp')
+    try {
+      await expect
+        .poll(
+          () => page.evaluate(() => window.__cityWalkGame.mapCam.zoom),
+          { timeout: 20_000 }
+        )
+        .toBeGreaterThan(1.3)
+    } finally {
+      await page.keyboard.up('PageUp')
+    }
     const hud = await page.textContent('#cityWalkHudStatus')
     const zoom = parseFloat(/zoom (\d+\.\d)x/.exec(hud)?.[1] ?? '0')
     expect(zoom).toBeGreaterThan(1.2)
 
-    // Panning breaks player-follow (asserted via the DEV handle).
+    // Panning breaks player-follow (asserted via the DEV handle). Same shape:
+    // held until follow actually breaks, rather than for a fixed 400 ms.
     await page.keyboard.down('ArrowRight')
-    await page.waitForTimeout(400)
-    await page.keyboard.up('ArrowRight')
+    try {
+      await expect
+        .poll(
+          () => page.evaluate(() => window.__cityWalkGame.mapCam.follow),
+          { timeout: 20_000 }
+        )
+        .toBe(false)
+    } finally {
+      await page.keyboard.up('ArrowRight')
+    }
     const afterPan = await page.evaluate(() => ({
       follow: window.__cityWalkGame.mapCam.follow,
       centerX: window.__cityWalkGame.mapCam.centerX,

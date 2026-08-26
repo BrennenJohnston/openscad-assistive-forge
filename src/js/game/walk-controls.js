@@ -227,6 +227,185 @@ function currentPitch(state) {
 }
 
 /**
+ * Curb height (CW-50). The common US barrier curb is 6 inches; municipal
+ * standard details put it at 0.15 m, which is the number used here.
+ *
+ * The city is modelled the way it is built: the PAVEMENT is the ground, and
+ * the ROADWAY is cut down into it. Cutting down rather than building up is
+ * what keeps every prop where it already stood - a tree, a bench and a person
+ * are all placed at ground zero, and raising the pavement under them would
+ * have buried them to the knee. It also means the eye height on a pavement,
+ * which is where most walking happens, is exactly what it always was.
+ */
+export const CURB_HEIGHT_M = 0.15;
+
+/**
+ * How much ground the walker covers while the eye climbs a curb. Short enough
+ * to feel like a step up rather than a ramp, long enough that it is not a
+ * jolt. Distance rather than time, so the feel does not change with walking
+ * speed - the same reasoning that fixed the collision hop in CW-48.
+ */
+export const CURB_EASE_M = 0.5;
+
+/**
+ * Rasterize the PAVEMENT into a grid, so the walker's eye knows what is
+ * underfoot. Mirrors buildCollisionGrid deliberately: same origin, same cell
+ * size, same out-of-bounds convention, so the two can be reasoned about
+ * together.
+ *
+ * Pavement reads as zero and the roadway as a curb below it, rather than the
+ * other way round. That is not arbitrary: every prop in the city is placed at
+ * ground zero, so building the pavement UP would have buried trees, benches
+ * and people to the knee, while cutting the roadway DOWN leaves all of them
+ * exactly where they stand and only moves the surface nobody stands on.
+ *
+ * What counts as pavement:
+ *
+ *   - a strip one pavement wide beyond each roadway edge, both sides
+ *   - separately-mapped pavement ways, over their own width
+ *   - minus every roadway, stamped last, so a crossing street cuts the apron
+ *     rather than being paved over by it
+ *
+ * Open ground away from any street is left at roadway level. In a downtown
+ * almost everything walkable is apron, and this is stated rather than hidden.
+ *
+ * @param {ReturnType<import('./city-data.js').parseCityExtract>} model
+ * @param {{cellM?: number, marginM?: number, pavementM?: number}} [options]
+ * @returns {{heightAt: (x:number, y:number) => number, cols:number, rows:number, cellM:number}}
+ */
+export function buildSurfaceGrid(model, options = {}) {
+  const cellM = options.cellM ?? 1;
+  const marginM = options.marginM ?? 30;
+  const pavementM = options.pavementM ?? PAVEMENT_WIDTH_M;
+  const b = model.boundsM;
+  const originX = b.minX - marginM;
+  const originY = b.minY - marginM;
+  const cols = Math.max(1, Math.ceil((b.maxX - b.minX + marginM * 2) / cellM));
+  const rows = Math.max(1, Math.ceil((b.maxY - b.minY + marginM * 2) / cellM));
+  const cells = new Uint8Array(cols * rows);
+
+  /** Stamp every cell whose centre is within `reachM` of the polyline. */
+  const stampAlong = (pts, reachM, value) => {
+    const reach = Math.ceil(reachM / cellM);
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [x1, y1] = pts[i];
+      const [x2, y2] = pts[i + 1];
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const len = Math.hypot(dx, dy);
+      if (len < 1e-6) continue;
+      // Half-cell steps along the segment, stamping a disc at each: cheaper
+      // than a true quad rasterizer and, at a metre cell against a strip
+      // metres wide, indistinguishable from one.
+      const steps = Math.ceil(len / (cellM * 0.5));
+      for (let s = 0; s <= steps; s++) {
+        const t = s / steps;
+        const px = x1 + dx * t;
+        const py = y1 + dy * t;
+        const c0 = Math.floor((px - originX) / cellM);
+        const r0 = Math.floor((py - originY) / cellM);
+        for (let r = r0 - reach; r <= r0 + reach; r++) {
+          if (r < 0 || r >= rows) continue;
+          for (let c = c0 - reach; c <= c0 + reach; c++) {
+            if (c < 0 || c >= cols) continue;
+            const gx = originX + (c + 0.5) * cellM;
+            const gy = originY + (r + 0.5) * cellM;
+            if (Math.hypot(gx - px, gy - py) <= reachM) {
+              cells[r * cols + c] = value;
+            }
+          }
+        }
+      }
+    }
+  };
+
+  const drawn = (model.roads ?? []).filter(
+    (r) => r.sidewalk || !UNPAVED_FOR_SURFACE.has(r.kind)
+  );
+  // Aprons first...
+  for (const road of drawn) {
+    const pts = road.points ?? [];
+    if (isPavementWay(road)) stampAlong(pts, road.widthM / 2, 1);
+    else stampAlong(pts, road.widthM / 2 + pavementM, 1);
+  }
+  // ...then the roadways, which cut back through them.
+  for (const road of drawn) {
+    if (isPavementWay(road)) continue;
+    stampAlong(road.points ?? [], road.widthM / 2, 0);
+  }
+
+  return {
+    cols,
+    rows,
+    cellM,
+    heightAt(x, y) {
+      const cx = Math.floor((x - originX) / cellM);
+      const cy = Math.floor((y - originY) / cellM);
+      if (cx < 0 || cy < 0 || cx >= cols || cy >= rows) return 0;
+      return cells[cy * cols + cx] === 1 ? 0 : -CURB_HEIGHT_M;
+    },
+  };
+}
+
+/**
+ * How wide the pavement apron beside a roadway is drawn (CW-50). The same
+ * number a separately-mapped pavement uses, so a street with a mapped
+ * pavement and one without read alike.
+ */
+export const PAVEMENT_WIDTH_M = 1.8;
+
+/** Classes the scene never draws, so they never cut a roadway either. */
+const UNPAVED_FOR_SURFACE = new Set([
+  'footway',
+  'path',
+  'cycleway',
+  'steps',
+  'track',
+]);
+
+/**
+ * Whether a way IS pavement rather than a roadway with pavement beside it
+ * (CW-50, CW-Q64). A separately-mapped pavement obviously is one; so is a
+ * pedestrianised street, which is pavement end to end - cutting a roadway
+ * down the middle of one would invent a road that is not there.
+ *
+ * The scene and this grid both read it, so the two cannot drift apart about
+ * where the ground is: cross-file disagreement about a shared value is this
+ * project's most expensive recurring bug.
+ *
+ * @param {{sidewalk?: boolean, kind?: string}} road
+ * @returns {boolean}
+ */
+export function isPavementWay(road) {
+  return Boolean(road?.sidewalk) || road?.kind === 'pedestrian';
+}
+
+/**
+ * Move the walker's ground height toward what is underfoot, at a rate fixed
+ * per METRE travelled rather than per second (CW-50). Standing still on a
+ * changed surface - a teleport, a spawn - snaps, because there is no step to
+ * smooth out.
+ *
+ * @param {{x:number, y:number, groundZ?:number}} state - mutated in place
+ * @param {{heightAt: (x:number, y:number) => number}} surface
+ * @param {number} travelledM - ground covered since the last call
+ * @returns {number} the ground height now in effect
+ */
+export function easeGroundZ(state, surface, travelledM) {
+  const target = surface ? surface.heightAt(state.x, state.y) : 0;
+  const current = Number.isFinite(state.groundZ) ? state.groundZ : target;
+  if (!(travelledM > 0)) {
+    state.groundZ = target;
+    return target;
+  }
+  const step = (CURB_HEIGHT_M / CURB_EASE_M) * travelledM;
+  const delta = target - current;
+  state.groundZ =
+    Math.abs(delta) <= step ? target : current + Math.sign(delta) * step;
+  return state.groundZ;
+}
+
+/**
  * Rotate the gaze by absolute angles rather than by a held-key rate: the
  * drag-look path (CW-13) converts pointer travel straight into radians.
  * Clamping lives here so the controller never re-implements the limit.
@@ -302,12 +481,17 @@ export function firstPersonPose(state) {
   const cosP = Math.cos(pitch);
   const sin = Math.sin(state.headingRad);
   const cos = Math.cos(state.headingRad);
+  // CW-50: the eye rides whatever is underfoot. A state that carries no
+  // ground height - a fixture, anything built before the curb existed - reads
+  // as level ground, which is what it was.
+  const eyeZ =
+    EYE_HEIGHT_M + (Number.isFinite(state.groundZ) ? state.groundZ : 0);
   return {
-    eye: [state.x, state.y, EYE_HEIGHT_M],
+    eye: [state.x, state.y, eyeZ],
     target: [
       state.x + sin * cosP,
       state.y + cos * cosP,
-      EYE_HEIGHT_M + Math.sin(pitch),
+      eyeZ + Math.sin(pitch),
     ],
   };
 }

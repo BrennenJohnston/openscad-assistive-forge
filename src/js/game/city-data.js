@@ -86,14 +86,30 @@ export function resolveRoof(tags = {}, heightM = 0, minHeightM = 0) {
 
 // Visual approximation of paved width per highway class, in meters. These
 // are game-world ribbons, not survey data.
+//
+// CW-50 widened the four classes a walker actually stands beside. The old
+// numbers were the carriageway alone; these are curb to curb, which is what
+// the pavement runs against and therefore what the view has to be true to.
+// A US travel lane is 3.0-3.7 m and a parking lane about 2.4 m, so a
+// two-lane residential street with parking on both sides is nearer 8 m than
+// 6, and each step up the class ladder adds a lane's worth.
+//
+// unclassified moves with residential (CW-Q62): it is the same kind of street
+// and reading two metres narrower than an identical neighbour was an accident
+// of the class list, not a design. living_street stays at 6 because a shared
+// street is narrow ON PURPOSE - that narrowness is the traffic calming.
+//
+// primary and trunk therefore both sit at 14 m (CW-Q63, left deliberately):
+// both are major arterials, 14 m is honest for each, and widening trunk to
+// keep them distinct would only put more black surface in the frame.
 export const ROAD_WIDTHS_M = {
   motorway: 16,
   trunk: 14,
-  primary: 12,
-  secondary: 10,
-  tertiary: 8,
-  residential: 6,
-  unclassified: 6,
+  primary: 14,
+  secondary: 12,
+  tertiary: 10,
+  residential: 8,
+  unclassified: 8,
   living_street: 6,
   pedestrian: 8,
   service: 4,
@@ -830,6 +846,10 @@ export function parseCityExtract(extract, options = {}) {
 
   return {
     center: { lat: center.lat, lon: center.lon },
+    // CW-51: the extract has always carried which city it is, and the model
+    // was dropping it on the floor. The scene needs it to give each city the
+    // pavement finish its own municipality actually specifies.
+    name: typeof extract?.name === 'string' ? extract.name : null,
     attribution:
       typeof extract?.attribution === 'string'
         ? extract.attribution

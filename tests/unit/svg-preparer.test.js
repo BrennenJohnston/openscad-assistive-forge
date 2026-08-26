@@ -30,6 +30,7 @@ import {
   strokeToFill,
   applyPerPathOffsets,
   getEffectivePaint,
+  measureSvgAspect,
 } from '../../src/js/svg-preparer.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -2160,5 +2161,57 @@ describe('flattenToCompoundPath hardening', () => {
     const dMatch = result.match(/d="([^"]+)"/);
     const mCount = (dMatch[1].match(/M/g) || []).length;
     expect(mCount).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('measureSvgAspect', () => {
+  it('measures a single rect (width / height)', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300">' +
+      '<rect x="10" y="20" width="200" height="100" fill="black"/></svg>';
+    expect(measureSvgAspect(svg)).toBeCloseTo(2, 4);
+  });
+
+  it('measures a tall path as below 1', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300">' +
+      '<path d="M0,0 L50,0 L50,200 L0,200 Z" fill="black"/></svg>';
+    expect(measureSvgAspect(svg)).toBeCloseTo(0.25, 4);
+  });
+
+  it('unites the boxes of separate shapes', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+      '<rect x="0" y="0" width="10" height="10" fill="black"/>' +
+      '<rect x="40" y="0" width="10" height="10" fill="black"/></svg>';
+    expect(measureSvgAspect(svg)).toBeCloseTo(5, 4);
+  });
+
+  it('bakes transforms before measuring', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300">' +
+      '<rect x="0" y="0" width="100" height="100" transform="scale(2,1)" fill="black"/></svg>';
+    expect(measureSvgAspect(svg)).toBeCloseTo(2, 4);
+  });
+
+  it('ignores shapes inside defs', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+      '<defs><rect x="0" y="0" width="100" height="1" fill="black"/></defs>' +
+      '<rect x="0" y="0" width="10" height="20" fill="black"/></svg>';
+    expect(measureSvgAspect(svg)).toBeCloseTo(0.5, 4);
+  });
+
+  it('returns null when there is nothing to measure', () => {
+    expect(
+      measureSvgAspect('<svg xmlns="http://www.w3.org/2000/svg"/>')
+    ).toBeNull();
+    expect(measureSvgAspect('not svg at all')).toBeNull();
+  });
+
+  it('measures a real library file to a finite positive ratio', () => {
+    const aspect = measureSvgAspect(HEART_SVG);
+    expect(aspect).toBeGreaterThan(0.2);
+    expect(aspect).toBeLessThan(5);
   });
 });

@@ -57,6 +57,8 @@ import {
   headingLabel,
   pitchLabel,
   buildCollisionGrid,
+  buildSurfaceGrid,
+  easeGroundZ,
   stampObstacles,
   findSpawn,
   findClearHeading,
@@ -1309,6 +1311,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // back their own footprints, which are stamped in BEFORE the spawn probe
     // runs — otherwise the player can start the game inside a parked car.
     const collision = buildCollisionGrid(model);
+    // CW-50: what is underfoot, which is a different question from what is in
+    // the way. Nothing here blocks anybody - the curb is navigable by
+    // construction, because it never reaches the collision grid at all.
+    const surface = buildSurfaceGrid(model);
     const props = buildStreetProps(model, collision);
     // CW-20: weather. The drops are scene geometry going through the same
     // pipeline as the city, so the converter turns them into streak
@@ -1325,6 +1331,9 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       ...spawn,
       headingRad: findClearHeading(collision, spawn.x, spawn.y),
     });
+    // CW-50: arriving is not walking, so the ground under a spawn is taken
+    // whole rather than climbed up to.
+    easeGroundZ(walkState, surface, 0);
     const mapCam = createMapCamera(model.boundsM);
 
     // CW-Q8: persisted walking-speed preference (comfort). CW-48 rebased the
@@ -1350,6 +1359,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       markerInnerGeom,
       markerInnerMat,
       collision,
+      surface,
       walkState,
       mapCam,
       speedLabel,
@@ -2678,6 +2688,9 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     if (landing.headingRad !== null) {
       game.walkState.headingRad = normalizeHeading(landing.headingRad);
     }
+    // CW-50: a teleport puts the walker on whatever is under the landing at
+    // once. Easing here would ride the eye up from wherever they left.
+    easeGroundZ(game.walkState, game.surface, 0);
 
     // The street name is sticky on purpose (updateStreet keeps the street you
     // are already on when two are near-equidistant, so the HUD does not flap
@@ -2953,6 +2966,9 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       speedLabel: game.speedLabel,
     };
 
+    const wasX = game.walkState.x;
+    const wasY = game.walkState.y;
+    const wasGroundZ = game.walkState.groundZ;
     const { moved, turned, pitched } = stepWalk(
       game.walkState,
       input,
@@ -2960,7 +2976,21 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       game.collision
     );
 
-    if (moved || turned || pitched) {
+    // CW-50: the eye climbs a curb over GROUND COVERED, not over time, so
+    // this is fed the distance actually walked. It keeps re-posing the camera
+    // while the climb finishes, which is why it is its own reason to redraw:
+    // a walker crossing a kerb diagonally is still rising after the frame
+    // that carried them over it.
+    if (moved) {
+      easeGroundZ(
+        game.walkState,
+        game.surface,
+        Math.hypot(game.walkState.x - wasX, game.walkState.y - wasY)
+      );
+    }
+    const climbed = game.walkState.groundZ !== wasGroundZ;
+
+    if (moved || turned || pitched || climbed) {
       applyFirstPersonCamera();
       if (moved) {
         updateStreet(game);

@@ -46,6 +46,25 @@ function sceneWith(names) {
   return scene
 }
 
+/** A scene whose meshes wear the depth bias their real materials wear. */
+function sceneWithOffsets(spec) {
+  const scene = new Scene()
+  for (const [name, offset] of Object.entries(spec)) {
+    const mesh = new Mesh()
+    mesh.name = name
+    mesh.material = offset
+      ? {
+          tag: `original:${name}`,
+          polygonOffset: true,
+          polygonOffsetFactor: offset[0],
+          polygonOffsetUnits: offset[1],
+        }
+      : { tag: `original:${name}` }
+    scene.add(mesh)
+  }
+  return scene
+}
+
 /**
  * The class material each named mesh wears WHILE the pass is rendering - the
  * only moment it can be caught, since the pass puts the originals back.
@@ -120,6 +139,57 @@ describe('city-class-pass', () => {
     )
     expect(seen.get('bike-racks').uniforms.uId.value).toBe(SURFACE_CLASS.CAR)
     expect(seen.get('hydrants').uniforms.uId.value).toBe(SURFACE_CLASS.LAMP)
+  })
+
+  it('carries each mesh own depth bias into the class material (D-110)', () => {
+    // Several of this city surfaces are deliberately coplanar with the one
+    // behind them and are pulled forward by a polygon offset rather than by a
+    // gap. Dressing them in a material that DROPS that offset makes them
+    // coplanar again here, in the id buffer, where the winner is then decided
+    // by floating-point luck and re-rolled by any view change - and the class
+    // id is what picks the cell glyph vocabulary. MEASURED before the fix,
+    // over a 20-frame sub-cell turn at the Seattle spawn: 104,180 class
+    // transitions, 101,263 of them the storefront/wall pair.
+    const seen = materialsDuringPass(
+      sceneWithOffsets({
+        buildings: null,
+        storefronts: [-2, -2],
+        roads: [-1, -1],
+        'road-lines': [-4, -4],
+      })
+    )
+    const wall = seen.get('buildings')
+    expect(wall.polygonOffset).toBe(false)
+    expect(wall.polygonOffsetFactor).toBe(0)
+
+    const front = seen.get('storefronts')
+    expect(front.polygonOffset).toBe(true)
+    expect(front.polygonOffsetFactor).toBe(-2)
+    expect(front.polygonOffsetUnits).toBe(-2)
+
+    // Not one shared offset for everything: paint sits in front of its
+    // roadway by a different amount than a storefront sits off its wall.
+    expect(seen.get('roads').polygonOffsetFactor).toBe(-1)
+    expect(seen.get('road-lines').polygonOffsetFactor).toBe(-4)
+
+    // And the storefront must actually WIN against the wall it covers - a
+    // matching pair of numbers proves nothing if both are zero.
+    expect(front.polygonOffsetFactor).toBeLessThan(wall.polygonOffsetFactor)
+  })
+
+  it('gives two meshes of one class different materials when their bias differs', () => {
+    // The material cache is keyed on the offset as well as the class, or the
+    // first mesh of a class would lend its depth bias to every later one.
+    // Curbs and painted lines share the CURB voice (CW-51) but sit at
+    // different depths above the roadway.
+    const seen = materialsDuringPass(
+      sceneWithOffsets({ curbs: [-2, -2], 'road-lines': [-4, -4] })
+    )
+    expect(seen.get('curbs').uniforms.uId.value).toBe(SURFACE_CLASS.CURB)
+    expect(seen.get('road-lines').uniforms.uId.value).toBe(SURFACE_CLASS.CURB)
+    expect(seen.get('curbs')).not.toBe(seen.get('road-lines'))
+    expect(seen.get('curbs').polygonOffsetFactor).toBe(-2)
+    expect(seen.get('road-lines').polygonOffsetFactor).toBe(-4)
   })
 
   it('puts every material back after the pass', () => {

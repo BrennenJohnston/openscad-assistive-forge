@@ -11,8 +11,12 @@ import {
   tintOf,
   inGamutChroma,
   hashSpot,
+  CITY_PAVING,
 } from '../../../src/js/game/city-scene.js'
-import { parseCityExtract } from '../../../src/js/game/city-data.js'
+import {
+  parseCityExtract,
+  ROAD_WIDTHS_M,
+} from '../../../src/js/game/city-data.js'
 import {
   buildCollisionGrid,
   pointInRing,
@@ -75,7 +79,10 @@ describe('buildCityGroup', () => {
     expect(names).toContain('ground')
     expect(names).toContain('roads')
     expect(stats.buildingTriangles).toBeGreaterThan(0)
-    expect(stats.roadTriangles).toBe(2) // one segment = two triangles
+    // One segment is two triangles of roadway plus two more for each of its
+    // pavement aprons (CW-50): every street carries a pavement now, not only
+    // the ones OpenStreetMap maps a pavement for.
+    expect(stats.roadTriangles).toBe(6)
 
     dispose()
   })
@@ -159,9 +166,10 @@ describe('buildCityGroup — CW-8 distinctness', () => {
     expect(roads.material.color.getHex()).toBe(ROAD_TONES.street)
     expect(curbs).toBeDefined()
     expect(curbs.visible).toBe(true)
-    // Two curb ribbons per surface ribbon → 2× the triangle count.
+    // Each side of a roadway carries a curb TOP and a curb FACE (CW-50), so
+    // four ribbons' worth against the one roadway ribbon.
     expect(curbs.geometry.getAttribute('position').count).toBe(
-      roads.geometry.getAttribute('position').count * 2
+      roads.geometry.getAttribute('position').count * 4
     )
 
     setMapView(true)
@@ -198,6 +206,36 @@ describe('buildCityGroup — CW-8 distinctness', () => {
     }
     setCellRaster(1)
     for (const m of biased) expect(m.userData.cellLodBias.value).toBe(0)
+
+    dispose()
+  })
+
+  it('drives the cell raster on every surface that opts into it (D-111)', () => {
+    // The test above can only see materials that already carry the uniform,
+    // and it never asks WHICH ones do. A material that opts into the filter
+    // and is then left out of the driven list carries a bias uniform nothing
+    // ever writes: its shader says it is filtered for the cell grid while it
+    // renders at stock filtering at every character size. That is how the
+    // pavement shipped in CW-51, and only a check by NAME can see it.
+    const { group, setCellRaster, dispose } = buildCityGroup(model())
+    const opted = []
+    group.traverse((o) => {
+      if (o.isMesh && o.material?.userData?.cellLodBias) opted.push(o.name)
+    })
+    expect([...new Set(opted)].sort()).toEqual([
+      'buildings',
+      'ground',
+      'sidewalks',
+      'storefronts',
+    ])
+
+    setCellRaster(8)
+    const undriven = []
+    group.traverse((o) => {
+      const bias = o.isMesh ? o.material?.userData?.cellLodBias : null
+      if (bias && bias.value !== 3) undriven.push(o.name)
+    })
+    expect(undriven).toEqual([])
 
     dispose()
   })
@@ -434,9 +472,13 @@ describe('buildStreetProps (CW-16)', () => {
       minAbsY = Math.min(minAbsY, Math.abs(a[i + 1]))
       maxZ = Math.max(maxZ, a[i + 2])
     }
-    // The residential road is 6 m wide, so its curb line runs at 2.5-3.0 m.
-    // A car turned across the road, or parked on the sidewalk, breaks this.
-    expect(maxAbsY).toBeLessThanOrEqual(2.5)
+    // Parked cars sit inside the curb ribbon, whose inner edge runs half a
+    // road width in, less the 0.5 m ribbon. Derived from the width rather
+    // than written out, because CW-50 moved it and will not be the last to.
+    // What this catches - a car turned across the road, or parked on the
+    // pavement - stays the same whatever the class is worth.
+    const curbInnerM = ROAD_WIDTHS_M.residential / 2 - 0.5
+    expect(maxAbsY).toBeLessThanOrEqual(curbInnerM + 1e-3)
     expect(minAbsY).toBeGreaterThan(0.4)
     // CW-46: parked cars are CLASSES now - the tallest (pickup/SUV) tops
     // out at 1.9 m and nothing exceeds the class table.
@@ -583,12 +625,15 @@ describe('buildStreetProps — streetlights (CW-18)', () => {
     const poles = verticesOf(props.group, 'lamp-poles')
     expect(poles.length).toBeGreaterThan(0)
 
-    // The road runs along y = 0 at width 6, so every pole stands on the
-    // 3.45 m sidewalk line of one side or the other and nowhere in between
-    // (a vertex sits half the 0.15 m post off that line).
+    // The road runs along y = 0, so every pole stands 0.45 m beyond its edge
+    // on one side or the other and nowhere in between (a vertex sits half the
+    // 0.15 m post off that line). Derived from the class width, which CW-50
+    // moved: the invariant is that poles line up on the pavement, not the
+    // particular metre they line up on.
+    const poleLineM = ROAD_WIDTHS_M.residential / 2 + 0.45
     const sides = new Set()
     for (const [, y] of poles) {
-      expect(Math.abs(Math.abs(y) - 3.45)).toBeLessThanOrEqual(0.076)
+      expect(Math.abs(Math.abs(y) - poleLineM)).toBeLessThanOrEqual(0.076)
       sides.add(Math.sign(y))
     }
     expect(sides.size).toBe(2)
@@ -607,8 +652,8 @@ describe('buildStreetProps — streetlights (CW-18)', () => {
       // line by more than three metres.
       expect(z).toBeGreaterThan(5.7)
       expect(z).toBeLessThan(5.9)
-      // Reaching back toward the centerline from the 3.45 m pole line.
-      expect(Math.abs(y)).toBeLessThan(3.45)
+      // Reaching back toward the centerline from the pole line.
+      expect(Math.abs(y)).toBeLessThan(ROAD_WIDTHS_M.residential / 2 + 0.45)
     }
 
     for (const [, , z] of verticesOf(props.group, 'lamp-poles')) {
@@ -1362,5 +1407,140 @@ describe('figure tones follow the colour scheme (CW-49)', () => {
       // Even coverage would be 500; this only rejects a hash that collapses.
       expect(n, `hue ${hue} drawn ${n} times`).toBeGreaterThan(200)
     }
+  })
+})
+
+describe('road lines (CW-51)', () => {
+  /** A long arterial and a long residential, on one model. */
+  function linesModel() {
+    return parseCityExtract(
+      {
+        elements: [
+          {
+            type: 'way',
+            id: 1,
+            tags: { building: 'yes', height: '12' },
+            geometry: squareRing(-90, -90, 5),
+          },
+          {
+            type: 'way',
+            id: 2,
+            tags: { highway: 'primary' },
+            geometry: [pt(-60, 0), pt(60, 0)],
+          },
+          {
+            type: 'way',
+            id: 3,
+            tags: { highway: 'residential' },
+            geometry: [pt(-60, 40), pt(60, 40)],
+          },
+        ],
+      },
+      { center: CENTER }
+    )
+  }
+
+  const lineMesh = (group) =>
+    group.children.find((c) => c.name === 'road-lines')
+
+  it('paints arterials and leaves residential streets bare', () => {
+    const { group, dispose } = buildCityGroup(linesModel())
+    const lines = lineMesh(group)
+    expect(lines, 'the arterial got no paint at all').toBeDefined()
+
+    // Every painted vertex sits on the arterial at y=0, never on the
+    // residential street at y=40. OpenStreetMap carries no road_marking tags
+    // in any baked circle, so the CLASS is the only signal there is, and this
+    // is what pins that it is being read.
+    const a = lines.geometry.getAttribute('position').array
+    let maxAbsY = 0
+    for (let i = 0; i < a.length; i += 3) {
+      maxAbsY = Math.max(maxAbsY, Math.abs(a[i + 1]))
+    }
+    expect(maxAbsY).toBeLessThan(1)
+
+    dispose()
+  })
+
+  it('dashes rather than running an unbroken stripe', () => {
+    const { group, dispose } = buildCityGroup(linesModel())
+    const a = lineMesh(group).geometry.getAttribute('position').array
+    // Total painted length along the road, from the triangles themselves.
+    // Two triangles per dash, six vertices; the run is the x-spread.
+    let painted = 0
+    for (let i = 0; i + 17 < a.length; i += 18) {
+      let lo = Infinity
+      let hi = -Infinity
+      for (let v = 0; v < 6; v++) {
+        const x = a[i + v * 3]
+        lo = Math.min(lo, x)
+        hi = Math.max(hi, x)
+      }
+      painted += hi - lo
+    }
+    // The arterial is 120 m long and the skip line is 3 m painted in every
+    // 12 m, so about a quarter of it carries paint. A builder that forgot to
+    // leave gaps would report the whole 120.
+    expect(painted).toBeGreaterThan(20)
+    expect(painted).toBeLessThan(45)
+
+    dispose()
+  })
+
+  it('lies flat on the roadway, below the pavement it runs between', () => {
+    const { group, dispose } = buildCityGroup(linesModel())
+    const a = lineMesh(group).geometry.getAttribute('position').array
+    for (let i = 2; i < a.length; i += 3) {
+      // Paint is on the road, which CW-50 cut a curb's depth below pavement.
+      expect(a[i]).toBeLessThan(0)
+    }
+    dispose()
+  })
+})
+
+describe('per-city paving (CW-51, CW-Q51)', () => {
+  it('gives each city the finish its own municipality specifies', () => {
+    // Two of these are the owner's words and two were fetched from the
+    // cities' own standards. Denver and Burnaby SHARE a finish because they
+    // genuinely specify the same one - Denver Parks and Recreation requires a
+    // broom finish on all concrete walkways, and Burnaby's Supplementary
+    // Specifications adopt MMCD 03 30 20, which specifies broom finish too.
+    // Inventing a difference so four cities looked four ways would have been
+    // the dishonest option, so this pins the sharing on purpose.
+    expect(CITY_PAVING.seattle).toBe('aggregate')
+    expect(CITY_PAVING.albuquerque).toBe('cracked')
+    expect(CITY_PAVING.denver).toBe('broom')
+    expect(CITY_PAVING.burnaby).toBe('broom')
+    expect(CITY_PAVING.denver).toBe(CITY_PAVING.burnaby)
+  })
+
+  it('carries the city name out of the extract so the scene can read it', () => {
+    // The extract has always had it; the model was dropping it on the floor.
+    const named = parseCityExtract(
+      { name: 'denver', elements: [] },
+      { center: CENTER }
+    )
+    expect(named.name).toBe('denver')
+    // An extract without one still parses, and the scene falls back.
+    expect(parseCityExtract({ elements: [] }, { center: CENTER }).name).toBeNull()
+  })
+
+  it('gives pavements real-world UVs so paving keeps one scale', () => {
+    const { group, dispose } = buildCityGroup(model())
+    const walks = group.children.find((c) => c.name === 'sidewalks')
+    expect(walks, 'the model grew no pavement').toBeDefined()
+
+    const uv = walks.geometry.getAttribute('uv')
+    expect(uv, 'pavements have no UVs, so no paving can land on them').toBeDefined()
+    expect(uv.count).toBe(walks.geometry.getAttribute('position').count)
+
+    // UVs are in METRES along the ribbon, not normalized 0..1: the road in
+    // this fixture is 100 m long, so v has to run far past 1. Normalized UVs
+    // would stretch one paving tile over a whole street.
+    let maxV = 0
+    for (let i = 0; i < uv.count; i++) maxV = Math.max(maxV, uv.getY(i))
+    expect(maxV).toBeGreaterThan(50)
+
+    dispose()
   })
 })
