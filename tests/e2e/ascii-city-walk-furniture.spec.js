@@ -192,3 +192,59 @@ test.describe('ASCII City Walk — attractions in the legend (CW-44, CW-Q44)', (
     if (firstHotelAt >= 0) expect(wheelAt).toBeLessThan(firstHotelAt)
   })
 })
+
+/**
+ * CW-57 (CW-Q55): plantings and picnic tables, from the same real data.
+ *
+ * Exact counts for the same reason the furniture's are exact: versioned
+ * extracts and hash-seeded deterministic placement, so any drift here is a
+ * change someone must own. And the split between data and fallback is pinned
+ * separately, because the whole law is that REAL DATA WINS - a city with
+ * mapped planters must never grow invented ones beside them.
+ */
+test.describe('ASCII City Walk — plantings (CW-57)', () => {
+  test('Seattle plants only what its map records', async ({ page }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const model = await modelStats(page)
+    // What CW-55's rebake actually holds. The plan's section 1f said 20
+    // planters and 69 flowerbeds; the extract says otherwise, and this is
+    // the extract.
+    expect(model.plantingByKind).toEqual({ planter: 11, flowerbed: 56 })
+    expect(model.picnicTableCount).toBe(26)
+
+    const props = await propStats(page)
+    // What survives a building footprint, a neighbour's spacing, or a tree
+    // too close - measured once, deterministic forever.
+    expect(props.plantingPlaced).toEqual({
+      planter: 8,
+      flowerbed: 36,
+      picnic_table: 22,
+    })
+    // ★ REAL DATA WINS: a city with mapped planters invents none.
+    expect(props.fallbackPlanters).toBe(0)
+  })
+
+  test('Denver has no plantings at all, and says so rather than pretending', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page, 'Denver, Colorado')
+
+    const model = await modelStats(page)
+    // Zero planters, zero flowerbeds, zero picnic tables in the data. The
+    // empty rows are a result, not a gap: Denver simply is not mapped for
+    // these, and inventing tables would be decorative scatter.
+    expect(model.plantingCount).toBe(0)
+    expect(model.picnicTableCount).toBe(0)
+
+    const props = await propStats(page)
+    expect(props.plantingPlaced.picnic_table).toBe(0)
+    expect(props.plantingPlaced.flowerbed).toBe(0)
+    // The directive's fallback fires HERE, and only here, and is counted
+    // apart from the data so a reader can always tell design from map.
+    expect(props.fallbackPlanters).toBe(40)
+    expect(props.plantingPlaced.planter).toBe(props.fallbackPlanters)
+  })
+})
