@@ -2846,6 +2846,47 @@ export const CAR_CLASSES = [
 ];
 const CAR_CLASS_WEIGHT_TOTAL = CAR_CLASSES.reduce((s, c) => s + c.weight, 0);
 
+/**
+ * CW-54: a car has wheels, and they are the only thing touching the ground.
+ *
+ * Until now the body box sat flush on z=0, which is why a parked row read as a
+ * low dotted mass rather than as cars (the directive's item 7). The body lifts
+ * onto a clearance and four wheels carry it, so there is a gap under every car
+ * for the light to fail to reach - at character scale that shadow line is what
+ * says "vehicle" long before any wheel is resolvable.
+ *
+ * Clearances and radii are segment-typical: a crew-cab pickup and a three-row
+ * SUV ride higher than a sedan, which is why they get their own numbers rather
+ * than one figure for everything.
+ *
+ * THE WHEEL IS A BOX, and that is a measured choice rather than a lazy one.
+ * MEASURED: this city carries 7,900-odd cars between the parked rows and the
+ * frozen traffic, so every triangle on a wheel costs about 31,600 of them. A
+ * six-sided capped cylinder is 24 triangles and would add 758,000 to a scene
+ * that stands at 1,245,615; a box is 12 and adds 379,000. At the sizes this
+ * game is played at a wheel is about a pixel, and the proof gate photographs
+ * decide whether that pixel needs to be round. One line to change the
+ * primitive if they ever say it does.
+ */
+const CAR_CLEARANCE_M = { pickup: 0.28, suv: 0.28, default: 0.2 };
+const CAR_WHEEL_RADIUS_M = { pickup: 0.38, suv: 0.36, default: 0.32 };
+const CAR_WHEEL_WIDTH_M = 0.22;
+// Wheels sit at the corners, about where a real wheelbase puts them, and
+// INBOARD OF THE FLANKS BY MORE THAN HALF THEIR OWN WIDTH. The first form of
+// this used a 0.1 m inset with a 0.22 m wheel, which stands 1 cm proud of the
+// bodywork - and the parked-car guard caught it immediately, because a car
+// that is wider than its class table is a car that can cross the curb line.
+const CAR_WHEELBASE_SHARE = 0.36;
+const CAR_WHEEL_INSET_M = 0.13;
+
+/** The ride height and wheel size a class was measured for. */
+function carAnatomy(kind) {
+  return {
+    clearanceM: CAR_CLEARANCE_M[kind] ?? CAR_CLEARANCE_M.default,
+    wheelRadiusM: CAR_WHEEL_RADIUS_M[kind] ?? CAR_WHEEL_RADIUS_M.default,
+  };
+}
+
 /** Deterministic weighted class pick from a [0,1) draw (CW-46). */
 export function pickCarClass(r) {
   let t = r * CAR_CLASS_WEIGHT_TOTAL;
@@ -2873,7 +2914,16 @@ const CAR_MIN_GAP_M = 6;
  * hatch a cabin reaching the tail. Boxes overlap by a hair - never
  * exactly-touching faces.
  */
-function pushCarClassGeoms(list, cls, x, y, angle, bodyTint, cabinTint) {
+function pushCarClassGeoms(
+  list,
+  cls,
+  x,
+  y,
+  angle,
+  bodyTint,
+  cabinTint,
+  wheelTint
+) {
   const ux = Math.cos(angle);
   const uy = Math.sin(angle);
   const nx = -uy;
@@ -2891,7 +2941,24 @@ function pushCarClassGeoms(list, cls, x, y, angle, bodyTint, cabinTint) {
         tint
       )
     );
-  box(cls.lenM, cls.widM, cls.bodyM, 0, 0, cls.bodyM / 2, bodyTint);
+  // CW-54: the body starts at the clearance, not at the ground, and the four
+  // wheels below it are the only things that touch z=0.
+  const { clearanceM, wheelRadiusM } = carAnatomy(cls.kind);
+  const bodyH = cls.bodyM - clearanceM;
+  box(cls.lenM, cls.widM, bodyH, 0, 0, clearanceM + bodyH / 2, bodyTint);
+  for (const along of [1, -1]) {
+    for (const across of [1, -1]) {
+      box(
+        wheelRadiusM * 2,
+        CAR_WHEEL_WIDTH_M,
+        wheelRadiusM * 2,
+        along * cls.lenM * CAR_WHEELBASE_SHARE,
+        across * (cls.widM / 2 - CAR_WHEEL_INSET_M),
+        wheelRadiusM,
+        wheelTint
+      );
+    }
+  }
   const ghH = cls.hM - cls.bodyM + 0.05;
   const ghZ = cls.bodyM - 0.05 + ghH / 2;
   const w = cls.widM - 0.2;
@@ -3075,6 +3142,17 @@ const CANOPY_CHROMA = 0.7;
 const CAR_TIERS = [0.35, 0.5, 0.65, 0.8];
 const CAR_CHROMA = 0.5;
 const CAR_CABIN_LIFT = 0.12;
+/**
+ * CW-54: tyres are SLIGHTLY dimmer than the body they carry (the owner's
+ * word), and floored so the darkest cars keep wheels that read.
+ *
+ * The floor is the lesson CW-45 paid for: a dark tier on black pavement
+ * vanishes, and a wheel that vanishes takes the shadow line with it - which is
+ * the whole point of lifting the body. The proof gate's photographs decide
+ * whether 0.3 is high enough; one line to move it.
+ */
+const CAR_TYRE_DROP = 0.15;
+const CAR_TYRE_FLOOR = 0.3;
 
 // Street furniture (CW-43, CW-Q43). True node positions only: the owner's
 // mission sentence makes this wayfinding data for a blind traveler, and a
@@ -3940,6 +4018,11 @@ export function buildStreetProps(model, collision = null) {
             );
             // CW-46: the class comes from the SAME seed, so adding classes
             // reshuffled nothing else on the street.
+            const wheelTint = tintOf(
+              Math.max(CAR_TYRE_FLOOR, tier - CAR_TYRE_DROP),
+              hue,
+              CAR_CHROMA
+            );
             const cls = pickCarClass(((seed >>> 3) % 1000) / 1000);
             pushCarClassGeoms(
               trafficGeoms,
@@ -3948,7 +4031,8 @@ export function buildStreetProps(model, collision = null) {
               y,
               heading,
               bodyTint,
-              cabinTint
+              cabinTint,
+              wheelTint
             );
             trafficCount++;
           }
@@ -4094,7 +4178,21 @@ export function buildStreetProps(model, collision = null) {
               hue,
               CAR_CHROMA
             );
-            pushCarClassGeoms(carGeoms, cls, x, y, angle, bodyTint, cabinTint);
+            const wheelTint = tintOf(
+              Math.max(CAR_TYRE_FLOOR, tier - CAR_TYRE_DROP),
+              hue,
+              CAR_CHROMA
+            );
+            pushCarClassGeoms(
+              carGeoms,
+              cls,
+              x,
+              y,
+              angle,
+              bodyTint,
+              cabinTint,
+              wheelTint
+            );
 
             carSpots.add(x, y);
             obstacles.push({
