@@ -221,6 +221,12 @@ writeFileSync(outPath, json);
 const sizeKb = Math.round(json.length / 1024);
 // The per-city table CW-33's record is built from: everything a reviewer
 // would otherwise have to re-derive by reading the JSON.
+// CW-55: the same courtesy for the planting seeds - a reviewer should not
+// have to read the JSON to learn what a rebake actually brought back.
+const plantingLine = Object.entries(model.stats.plantingByKind)
+  .sort((a, b) => b[1] - a[1])
+  .map(([kind, n]) => `${kind} ${n}`)
+  .join(', ');
 const furnitureLine = Object.entries(model.stats.furnitureByKind)
   .map(([kind, count]) => `${kind} ${count}`)
   .join(', ');
@@ -236,6 +242,9 @@ console.log(
     `  CW-43: ${furnitureLine || 'no furniture'};` +
     ` ${model.stats.wayfindingCount} wayfinding nodes;` +
     ` ${model.stats.attractionCount} named attractions\n` +
+    `  CW-55: ${plantingLine || 'no plantings'};` +
+    ` ${model.stats.picnicTableCount} picnic tables;` +
+    ` ${model.stats.leafTypedTreeCount} of ${model.stats.treeCount} trees have a leaf_type\n` +
     `  dropped ${model.stats.droppedRings} rings, ${model.stats.droppedElements} elements`
 );
 if (json.length > SIZE_WARN_BYTES) {

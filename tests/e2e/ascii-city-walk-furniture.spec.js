@@ -43,7 +43,14 @@ test.describe('ASCII City Walk — street furniture (CW-43)', () => {
       fire_hydrant: 112,
     })
     // The data-only wayfinding layer rides the model untouched.
-    expect(model.wayfindingCount).toBe(5354)
+    //
+    // CW-55 rebaked all four cities and this is the ONLY count that moved:
+    // 5354 -> 5355, one crossing or kerb node added to Seattle's OSM between
+    // 2026-08-24 and 2026-08-26. Every furniture count above, and every placed
+    // count below, came back identical - which is the reassuring half of a
+    // rebake and worth writing down, because a rebake that moved everything
+    // would mean the bake had changed rather than the map.
+    expect(model.wayfindingCount).toBe(5355)
 
     // What actually stands in the city: the same numbers minus nodes that
     // fall inside a building footprint or duplicate one another - measured
