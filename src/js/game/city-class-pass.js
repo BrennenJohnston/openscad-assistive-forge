@@ -165,8 +165,30 @@ export function createClassPass(renderer, root) {
   let classMap = null;
   let disposed = false;
 
-  const materialFor = (id, roofId) => {
-    const key = `${id}:${roofId}`;
+  /**
+   * D-110: the class material must carry the mesh's own POLYGON OFFSET.
+   *
+   * Several of this city's surfaces are deliberately coplanar with the one
+   * behind them - a storefront strip on its wall, paint on its roadway, a
+   * pavement on the ground - and each is pulled forward by a polygon offset
+   * rather than by a gap, because a gap would show. Dressing a mesh in a
+   * material that drops that offset makes it coplanar again HERE, in the id
+   * buffer, where which surface wins is then decided by floating-point luck
+   * per pixel and re-rolled by any view change.
+   *
+   * MEASURED before the fix, over a 20-frame 0.05 degree turn at the Seattle
+   * spawn: 104,180 class transitions, 101,263 of them the storefront/wall
+   * pair, with 18,131 cells of 67,158 changing class MORE THAN ONCE. The
+   * class id chooses the cell's glyph vocabulary, so better than a quarter of
+   * the frame was re-rolling its character set frame after frame - which is
+   * the fractured flashing the owner reported.
+   *
+   * The offset is part of the cache key: two meshes of the same class with
+   * different offsets are different materials, and only the combinations that
+   * actually occur are ever built.
+   */
+  const materialFor = (id, roofId, offsetFactor, offsetUnits) => {
+    const key = `${id}:${roofId}:${offsetFactor}:${offsetUnits}`;
     let mat = materials.get(key);
     if (!mat) {
       mat = new ShaderMaterial({
@@ -180,10 +202,20 @@ export function createClassPass(renderer, root) {
         // No fog and no lighting: this pass encodes identity, and anything
         // that shades or blends it corrupts the number.
         fog: false,
+        polygonOffset: offsetFactor !== 0 || offsetUnits !== 0,
+        polygonOffsetFactor: offsetFactor,
+        polygonOffsetUnits: offsetUnits,
       });
       materials.set(key, mat);
     }
     return mat;
+  };
+
+  /** The depth bias a mesh's own material is drawn with, or none. */
+  const offsetOf = (material) => {
+    const own = Array.isArray(material) ? material[0] : material;
+    if (!own?.polygonOffset) return [0, 0];
+    return [own.polygonOffsetFactor ?? 0, own.polygonOffsetUnits ?? 0];
   };
 
   const ensureTarget = (cols, rows) => {
@@ -215,8 +247,14 @@ export function createClassPass(renderer, root) {
     root.traverse((obj) => {
       if (!obj.isMesh) return;
       const id = CLASS_BY_MESH_NAME.get(obj.name) ?? SURFACE_CLASS.SKY;
+      const [factor, units] = offsetOf(obj.material);
       originals.set(obj, obj.material);
-      obj.material = materialFor(id, ROOF_SPLIT.get(obj.name) ?? 0);
+      obj.material = materialFor(
+        id,
+        ROOF_SPLIT.get(obj.name) ?? 0,
+        factor,
+        units
+      );
     });
 
     const prevTarget = renderer.getRenderTarget();
