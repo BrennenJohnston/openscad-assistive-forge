@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { 
-  renderParameterUI, 
-  setLimitsUnlocked, 
-  areLimitsUnlocked, 
-  getAllDefaults, 
+import {
+  renderParameterUI,
+  setLimitsUnlocked,
+  areLimitsUnlocked,
+  getAllDefaults,
   getDefaultValue,
   resetParameter,
   updateDependentParameters,
@@ -12,10 +12,11 @@ import {
   appendUserSvgToGallery,
   getSvgPrepMetadata,
   setSvgPrepMetadata,
-  clearSvgPrepMetadata
+  clearSvgPrepMetadata,
+  isAspectCompanionParam
 } from '../../src/js/ui-generator.js'
 import { isEnabled } from '../../src/js/feature-flags.js'
-import { analyzeSvg, prepareSvg } from '../../src/js/svg-preparer.js'
+import { analyzeSvg, prepareSvg, measureSvgAspect } from '../../src/js/svg-preparer.js'
 
 vi.mock('../../src/js/feature-flags.js', () => ({
   isEnabled: vi.fn(() => false)
@@ -24,6 +25,7 @@ vi.mock('../../src/js/feature-flags.js', () => ({
 vi.mock('../../src/js/svg-preparer.js', () => ({
   prepareSvg: vi.fn((svg) => svg),
   needsPreparation: vi.fn(() => false),
+  measureSvgAspect: vi.fn(() => 1),
   analyzeSvg: vi.fn(() => ({
     status: 'ready',
     recommendation: 'pass_through',
@@ -1675,5 +1677,121 @@ describe('UI Generator — F5 group collapse defaults', () => {
 
   it('getOpenGroupIdsFromDOM returns an empty set on a null container', () => {
     expect(getOpenGroupIdsFromDOM(null).size).toBe(0)
+  })
+})
+
+describe('Aspect companion parameters', () => {
+  let container
+
+  beforeEach(() => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+  })
+
+  afterEach(() => {
+    if (container?.parentNode) document.body.removeChild(container)
+    vi.mocked(measureSvgAspect).mockReset()
+  })
+
+  const schema = () => buildParams({
+    params: [
+      {
+        name: 'design_file',
+        type: 'file',
+        default: '',
+        uiType: 'file',
+        acceptedExtensions: ['svg', 'png', 'jpg']
+      },
+      { name: 'design_file_aspect', type: 'number', default: 1, uiType: 'input' },
+      { name: 'design_scale', type: 'number', default: 100, uiType: 'input' }
+    ]
+  })
+
+  async function uploadFile(fileInput, name, content, type) {
+    const file = new File([content], name, { type })
+    Object.defineProperty(fileInput, 'files', { value: [file], configurable: true })
+    fileInput.dispatchEvent(new Event('change'))
+    await new Promise(resolve => setTimeout(resolve, 100))
+  }
+
+  it('isAspectCompanionParam recognizes only real companions', () => {
+    const { parameters } = schema()
+    expect(isAspectCompanionParam('design_file_aspect', parameters)).toBe(true)
+    expect(isAspectCompanionParam('design_scale', parameters)).toBe(false)
+    expect(isAspectCompanionParam('orphan_aspect', parameters)).toBe(false)
+  })
+
+  it('renders no control for the companion but keeps its value', () => {
+    const onChange = vi.fn()
+    const values = renderParameterUI(schema(), container, onChange, {})
+    expect(values.design_file_aspect).toBe(1)
+    expect(container.querySelector('#param-design_file_aspect')).toBeFalsy()
+    expect(container.querySelector('#param-design_scale')).toBeTruthy()
+  })
+
+  it('uploading an SVG commits the file and its measured aspect in ONE snapshot', async () => {
+    vi.mocked(measureSvgAspect).mockReturnValue(2.5)
+    const onChange = vi.fn()
+    renderParameterUI(schema(), container, onChange, {})
+
+    const fileInput = container.querySelector('input[type="file"]')
+    await uploadFile(fileInput, 'wide.svg', '<svg><rect width="10" height="4"/></svg>', 'image/svg+xml')
+
+    const last = onChange.mock.calls.at(-1)[0]
+    expect(last.design_file).toMatchObject({ name: 'wide.svg' })
+    expect(last.design_file_aspect).toBe(2.5)
+    // No snapshot may pair the new file with a stale aspect
+    for (const call of onChange.mock.calls) {
+      const v = call[0]
+      if (v.design_file && typeof v.design_file === 'object') {
+        expect(v.design_file_aspect).toBe(2.5)
+      }
+    }
+  })
+
+  it('clearing the file resets the companion to its declared default', async () => {
+    vi.mocked(measureSvgAspect).mockReturnValue(3)
+    const onChange = vi.fn()
+    renderParameterUI(schema(), container, onChange, {})
+
+    const fileInput = container.querySelector('input[type="file"]')
+    await uploadFile(fileInput, 'tall.svg', '<svg><rect width="4" height="12"/></svg>', 'image/svg+xml')
+    expect(onChange.mock.calls.at(-1)[0].design_file_aspect).toBe(3)
+
+    container.querySelector('.file-clear-button').click()
+    const cleared = onChange.mock.calls.at(-1)[0]
+    expect(cleared.design_file).toBeNull()
+    expect(cleared.design_file_aspect).toBe(1)
+  })
+
+  it('an unmeasurable design falls back to the declared default', async () => {
+    vi.mocked(measureSvgAspect).mockReturnValue(null)
+    const onChange = vi.fn()
+    renderParameterUI(schema(), container, onChange, {})
+
+    const fileInput = container.querySelector('input[type="file"]')
+    await uploadFile(fileInput, 'odd.svg', '<svg></svg>', 'image/svg+xml')
+    expect(onChange.mock.calls.at(-1)[0].design_file_aspect).toBe(1)
+  })
+
+  it('a file param without a companion never calls the measurer', async () => {
+    const bare = buildParams({
+      params: [
+        {
+          name: 'logo_file',
+          type: 'file',
+          default: '',
+          uiType: 'file',
+          acceptedExtensions: ['svg']
+        }
+      ]
+    })
+    const onChange = vi.fn()
+    renderParameterUI(bare, container, onChange, {})
+
+    const fileInput = container.querySelector('input[type="file"]')
+    await uploadFile(fileInput, 'plain.svg', '<svg><circle r="5"/></svg>', 'image/svg+xml')
+    expect(vi.mocked(measureSvgAspect)).not.toHaveBeenCalled()
+    expect(onChange.mock.calls.at(-1)[0].logo_file).toMatchObject({ name: 'plain.svg' })
   })
 })
