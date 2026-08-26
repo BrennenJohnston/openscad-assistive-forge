@@ -83,6 +83,8 @@ const DEFAULTS = {
   // --shots=<dir> writes every captured frame of every sequence as a PNG of
   // the ASCII canvas, which is what the eyes-on gate reads.
   shots: '',
+  // --flipmap=<dir> writes one picture per sequence of WHERE it fractured.
+  flipmap: '',
   json: '',
 }
 
@@ -582,6 +584,38 @@ function installProbe() {
       a.frames++
       return a.frames
     },
+    /**
+     * A picture of WHERE the frame is fracturing: one pixel per cell, green
+     * for glyph flips and red for drive flips, upscaled so it can be looked
+     * at. A table says how much; this says where, which is what decides
+     * whether a number is the defect the owner reported or a different one.
+     */
+    flipImage(scale) {
+      const a = window.__cw52
+      const src = document.createElement('canvas')
+      src.width = a.cols
+      src.height = a.rows
+      const sctx = src.getContext('2d')
+      const img = sctx.createImageData(a.cols, a.rows)
+      let peak = 1
+      for (let i = 0; i < a.cols * a.rows; i++) {
+        peak = Math.max(peak, a.gOsc[i], a.iOsc[i])
+      }
+      for (let i = 0; i < a.cols * a.rows; i++) {
+        img.data[i * 4] = Math.min(255, (a.iOsc[i] / peak) * 255 * 3)
+        img.data[i * 4 + 1] = Math.min(255, (a.gOsc[i] / peak) * 255 * 3)
+        img.data[i * 4 + 2] = a.classChanged[i] ? 70 : 0
+        img.data[i * 4 + 3] = 255
+      }
+      sctx.putImageData(img, 0, 0)
+      const out = document.createElement('canvas')
+      out.width = a.cols * scale
+      out.height = a.rows * scale
+      const octx = out.getContext('2d')
+      octx.imageSmoothingEnabled = false
+      octx.drawImage(src, 0, 0, out.width, out.height)
+      return { url: out.toDataURL('image/png'), peak }
+    },
     /** Collapse the per-cell counters into per-class rows. */
     finish() {
       const a = window.__cw52
@@ -810,7 +844,7 @@ async function convertOnce(page) {
   })
 }
 
-async function runSequence(page, poses, opts, shotDir, tag) {
+async function runSequence(page, poses, opts, shotDir, tag, flipDir) {
   // The probe only holds a frame once one has been CONVERTED with it on, and
   // begin() refuses an empty read rather than starting an accumulator that
   // would quietly score nothing.
@@ -836,6 +870,17 @@ async function runSequence(page, poses, opts, shotDir, tag) {
         path: join(shotDir, `${tag}-${String(f).padStart(3, '0')}.png`),
       })
     }
+  }
+  if (flipDir) {
+    const { url, peak } = await page.evaluate(
+      (sc) => window.__cw52api.flipImage(sc),
+      3
+    )
+    writeFileSync(
+      join(flipDir, `${tag}-flipmap.png`),
+      Buffer.from(url.split(',')[1], 'base64')
+    )
+    console.log(`  flip map written (peak ${peak} flips in one cell)`)
   }
   const out = await page.evaluate(() => window.__cw52api.finish())
   // Non-vacuity. Every one of these has been a silent zero in this project
@@ -912,6 +957,7 @@ async function main() {
     }
   }
   if (opts.shots) mkdirSync(opts.shots, { recursive: true })
+  if (opts.flipmap) mkdirSync(opts.flipmap, { recursive: true })
 
   const browser = await chromium.launch({
     headless: false,
@@ -1080,7 +1126,8 @@ async function main() {
               poses,
               opts,
               opts.shots,
-              tag
+              tag,
+              opts.flipmap
             )
             const sum = totals(res)
             results.push({
