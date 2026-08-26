@@ -1,0 +1,175 @@
+// Stencil Maker — one-sheet spray stencil from an uploaded picture
+// Upload a PNG, JPG, or SVG; the app traces pictures to vector shapes.
+// The design is cut out of a flat plate with corner alignment crosses,
+// ready to 3D print (STL) or laser cut (SVG/DXF export).
+//
+// Support bars are material left across the cuts so enclosed centers
+// (the middle of an O, the inside of a ring) stay attached to the sheet.
+// This model cannot detect which shapes need them, so place the bars
+// yourself and check the preview: every enclosed piece must be crossed
+// by at least one bar.
+//
+// Physical defaults (plate 200x200x0.6 mm, 15 mm margin, 10 mm crosses)
+// are the owner-approved Stencil Forge values, 2026-08-25.
+// License: CC0 (Public Domain)
+
+/* [Output] */
+// 3D print (extruded plate) or laser cut (flat 2D for SVG/DXF export)
+output_type = "3d_print"; // [3d_print, laser_cut]
+
+/* [Design] */
+// Image file for the stencil (SVG, PNG, or JPG — raster images auto-convert to SVG)
+design_file = "sample-design.svg"; // [file:svg,png,jpg]
+
+// Design width divided by height. The Assistive Forge app measures and sets this when you choose a file; in desktop OpenSCAD set it to your file's width/height so 100 truly fills the design area (1 assumes a square design)
+design_file_aspect = 1; // [0.05:0.01:20]
+
+// Design size as a percentage of the design area (the plate inside the margins); 100 fills it
+design_scale = 80; // [10:5:110]
+
+// Left (-) / right (+) position offset for the design (mm)
+design_left_right = 0; // [-50:1:50]
+
+// Down (-) / up (+) position offset for the design (mm)
+design_up_down = 0; // [-50:1:50]
+
+/* [Plate] */
+// Plate width (mm)
+plate_width = 200; // [60:1:600]
+
+// Plate height (mm)
+plate_height = 200; // [60:1:600]
+
+// Thickness of the printed plate (mm). 0.6 prints in about 3 flat layers
+plate_thickness = 0.6; // [0.4:0.05:3]
+
+// Solid border around the design area (mm)
+margin = 15; // [6:1:40]
+
+/* [Support bars] */
+// Bars of material across the cuts that hold enclosed centers in place
+bar_direction = "horizontal"; // [none, horizontal, vertical, both]
+
+// Number of bars in each direction
+bar_count = 1; // [1:1:6]
+
+// Bar width (mm). 1.2 is the minimum sturdy web
+bar_width = 3; // [1.2:0.1:8]
+
+/* [Marks] */
+// Corner alignment crosses, cut through the margin for repeat spraying
+marks = "yes"; // [yes, no]
+
+/* [Laser] */
+// Laser beam width (mm). In laser mode every cut shrinks by half of this so the burned line lands on size
+kerf = 0.1; // [0:0.01:0.5]
+
+/* [Quality] */
+$fn = 64; // [24:8:128]
+
+/* [Hidden] */
+assert(plate_width >= 60 && plate_width <= 600,
+       "plate_width outside the supported 60-600 mm range");
+assert(plate_height >= 60 && plate_height <= 600,
+       "plate_height outside the supported 60-600 mm range");
+assert(plate_thickness >= 0.4 && plate_thickness <= 3,
+       "plate_thickness outside the supported 0.4-3 mm range");
+assert(margin >= 6 && margin <= 40,
+       "margin outside the supported 6-40 mm range");
+assert(2 * margin < min(plate_width, plate_height),
+       "margins leave no design area; reduce margin or enlarge the plate");
+assert(design_file_aspect > 0,
+       "design_file_aspect must be positive (width divided by height)");
+assert(bar_width >= 1.2,
+       "bar_width below the 1.2 mm minimum sturdy web");
+assert(output_type == "3d_print" || output_type == "laser_cut",
+       "output_type must be 3d_print or laser_cut");
+
+design_area_w = plate_width - 2 * margin;
+design_area_h = plate_height - 2 * margin;
+fit_w = design_area_w * design_scale / 100;
+fit_h = design_area_h * design_scale / 100;
+// Crosses shrink to fit a narrow margin, the same clamp the Stencil
+// Forge app applies
+mark_size = min(10, margin - 2);
+mark_stroke = 1.2;
+mark_c = margin / 2;
+kerf_shrink = output_type == "laser_cut" ? kerf / 2 : 0;
+
+echo(str("Design area: ", design_area_w, " x ", design_area_h,
+         " mm; design box: ", fit_w, " x ", fit_h, " mm"));
+
+module design_2d() {
+    // Contain-fit: anchor the resize to whichever axis the design hits
+    // first (OpenSCAD cannot measure an import; design_file_aspect
+    // carries the ratio). In laser mode the cuts shrink by kerf/2 per
+    // side so the burned line lands on size.
+    translate([plate_width / 2 + design_left_right,
+               plate_height / 2 + design_up_down])
+        offset(delta = -kerf_shrink)
+            resize(design_file_aspect >= fit_w / fit_h
+                       ? [fit_w, 0]
+                       : [0, fit_h],
+                   auto = true)
+                import(design_file, center = true);
+}
+
+// One + cross centered at (cx, cy)
+module cross_2d(cx, cy) {
+    translate([cx, cy]) {
+        square([mark_size, mark_stroke], center = true);
+        square([mark_stroke, mark_size], center = true);
+    }
+}
+
+module marks_2d() {
+    cross_2d(mark_c, mark_c);
+    cross_2d(plate_width - mark_c, mark_c);
+    cross_2d(mark_c, plate_height - mark_c);
+    cross_2d(plate_width - mark_c, plate_height - mark_c);
+}
+
+// Bars span the whole plate; they only matter where they cross a cut,
+// and their ends always land in the solid margin
+module bars_2d() {
+    if (bar_direction == "horizontal" || bar_direction == "both") {
+        for (i = [1 : bar_count])
+            translate([0, margin + design_area_h * i / (bar_count + 1)
+                          - bar_width / 2])
+                square([plate_width, bar_width]);
+    }
+    if (bar_direction == "vertical" || bar_direction == "both") {
+        for (i = [1 : bar_count])
+            translate([margin + design_area_w * i / (bar_count + 1)
+                          - bar_width / 2, 0])
+                square([bar_width, plate_height]);
+    }
+}
+
+module cuts_2d() {
+    difference() {
+        // The design never cuts into the margin band: a cut reaching the
+        // plate edge would sever the frame
+        intersection() {
+            design_2d();
+            translate([margin, margin])
+                square([design_area_w, design_area_h]);
+        }
+        if (bar_direction != "none") bars_2d();
+    }
+    if (marks == "yes") marks_2d();
+}
+
+module stencil_2d() {
+    difference() {
+        square([plate_width, plate_height]);
+        cuts_2d();
+    }
+}
+
+if (output_type == "3d_print") {
+    linear_extrude(height = plate_thickness)
+        stencil_2d();
+} else {
+    stencil_2d();
+}
