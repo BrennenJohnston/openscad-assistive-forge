@@ -67,6 +67,17 @@ import {
   makeCanopyGeoms,
 } from './city-trees.js';
 import {
+  flowerTableFor,
+  pickFlower,
+  planterBoxes,
+  picnicTableBoxes,
+  flowerbedPositions,
+  PLANTER_L_M,
+  PLANTER_W_M,
+  TABLE_L_M,
+  TABLE_W_M,
+} from './city-planting.js';
+import {
   buildRoadGraph,
   ringCentroid,
   trafficDensityFor,
@@ -3313,6 +3324,45 @@ const FURNITURE_TREE_GAP_M = 0.6;
 const FURNITURE_CLEAR_M = 1.4;
 // Muted municipal paint next to the cars' 0.5.
 const FURNITURE_CHROMA = 0.4;
+
+/**
+ * CW-57 (CW-Q55): what a planting is made of.
+ *
+ * The box and the table are dim, near-neutral objects - stone and timber -
+ * because their identity is SHAPE and POSITION (the hydrant lesson). The
+ * flowers are the only bright thing, and they ride on a separate lid so the
+ * box's own brightness never changes with them: a monochrome screen sees one
+ * knee-high block whatever is growing in it.
+ */
+const PLANTER_BODY_TINT = tintOf(0.3, 40, 0.08);
+const TABLE_TINT = tintOf(0.38, 30, 0.25);
+const FLOWER_TIER = 0.55;
+const FLOWER_CHROMA = 0.6;
+/**
+ * CW-57's flowerbed tone. BRIGHTER than the ground band on purpose, and the
+ * release record measures whether that carpets: the carpet law is about a
+ * SURFACE, and a bed at 56 mapped places in Seattle is not one. CW-56's
+ * fallen leaves, which sat under 4,593 trees, were.
+ */
+const BED_TIER = 0.45;
+const BED_CHROMA = 0.5;
+
+/**
+ * ★ THE FALLBACK, AND IT IS STATED AS ONE. Denver and Albuquerque have ZERO
+ * mapped planters and zero flowerbeds - measured, not assumed, in CW-55's
+ * rebake. The directive licenses filling that gap; this is where, and the code
+ * says out loud that it is design rather than data.
+ *
+ * Planters go INSIDE mapped green polygons, at roughly one per this many
+ * square metres, which is ordinary parks-department planting-bed spacing for a
+ * civic bed. Real data always wins: a city with mapped planters never reaches
+ * this branch, so Seattle's eleven and Burnaby's four are its own.
+ *
+ * One line to reverse - set it to 0 and those two cities have no planters,
+ * which is what their maps actually say.
+ */
+const FALLBACK_PLANTER_PER_M2 = 900;
+const FALLBACK_PLANTER_MAX = 40;
 // The segment-angle grid's cell: coarse is fine, furniture stands within a
 // pavement's width of its street.
 const FURNITURE_ROAD_CELL_M = 24;
@@ -3712,6 +3762,14 @@ export function buildStreetProps(model, collision = null) {
   const basketGeoms = [];
   const rackGeoms = [];
   const hydrantGeoms = [];
+  // CW-57: plantings and tables, each its own merged mesh so the class pass
+  // can dress them in their own voices.
+  const planterGeoms = [];
+  const flowerGeoms = [];
+  const tableGeoms = [];
+  const bedPositions = [];
+  const plantingPlaced = { planter: 0, flowerbed: 0, picnic_table: 0 };
+  let fallbackPlanters = 0;
 
   const b = model.boundsM;
   const inCore = (x, y) =>
@@ -3991,6 +4049,114 @@ export function buildStreetProps(model, collision = null) {
     furnitureSpots.add(x, y);
     furniturePlaced[item.kind] = (furniturePlaced[item.kind] ?? 0) + 1;
   });
+
+  // 1b-ii. CW-57 (CW-Q55): planters, flowerbeds and picnic tables, at the
+  //        extract's own positions where the data is real. Same law as the
+  //        CW-43 furniture: placement fidelity IS the accessibility point, so
+  //        nothing here invents a position that the map already answers.
+  const flowerTable = flowerTableFor(model.name);
+  const flowerTintFor = (seed) =>
+    tintOf(FLOWER_TIER, pickFlower(flowerTable, seed).hueDeg, FLOWER_CHROMA);
+
+  const addPlanter = (x, y, angle, seed) => {
+    for (const b of planterBoxes(
+      x,
+      y,
+      angle,
+      PLANTER_BODY_TINT,
+      flowerTintFor(seed)
+    )) {
+      const geom = makeBox(b.l, b.w, b.h, b.x, b.y, b.z, b.angle, b.tint);
+      // The lid is the flowers; it is a different mesh so the class pass can
+      // give it its own voice without the box changing.
+      (b.tint === PLANTER_BODY_TINT ? planterGeoms : flowerGeoms).push(geom);
+    }
+    obstacles.push({
+      x,
+      y,
+      halfLengthM: PLANTER_L_M / 2,
+      halfWidthM: PLANTER_W_M / 2,
+      rotationRad: angle,
+    });
+    furnitureSpots.add(x, y);
+    plantingPlaced.planter++;
+  };
+
+  (model.plantings ?? []).forEach((item, index) => {
+    const { x, y } = item;
+    if (!inCore(x, y) || isBlocked(x, y)) return;
+    if (furnitureSpots.occupied(x, y, FURNITURE_MIN_GAP_M)) return;
+    if (treeSpots.occupied(x, y, FURNITURE_TREE_GAP_M)) return;
+    const seed = hashBuilding(index, 'planting:' + item.kind);
+    if (item.kind === 'planter') {
+      const near = segmentAngles.nearest(x, y);
+      addPlanter(x, y, near ? near.angle : 0, seed);
+      return;
+    }
+    // A flowerbed is flat, has no collision, and takes no spatial slot: you
+    // walk across a bed of flowers in this city, which is what the data
+    // describes and not a thing to stop a cane on.
+    for (const v of flowerbedPositions(x, y, item.areaM2, seed)) {
+      bedPositions.push(v);
+    }
+    plantingPlaced.flowerbed++;
+  });
+
+  (model.picnicTables ?? []).forEach((item, index) => {
+    const { x, y } = item;
+    if (!inCore(x, y) || isBlocked(x, y)) return;
+    if (furnitureSpots.occupied(x, y, FURNITURE_MIN_GAP_M)) return;
+    if (treeSpots.occupied(x, y, FURNITURE_TREE_GAP_M)) return;
+    const seed = hashBuilding(index, 'picnic');
+    const near = segmentAngles.nearest(x, y);
+    const angle = near ? near.angle : ((seed % 360) * Math.PI) / 180;
+    for (const b of picnicTableBoxes(x, y, angle, TABLE_TINT)) {
+      tableGeoms.push(makeBox(b.l, b.w, b.h, b.x, b.y, b.z, b.angle, b.tint));
+    }
+    obstacles.push({
+      x,
+      y,
+      halfLengthM: TABLE_L_M / 2,
+      halfWidthM: TABLE_W_M / 2,
+      rotationRad: angle,
+    });
+    furnitureSpots.add(x, y);
+    plantingPlaced.picnic_table++;
+    // Picnic tables ship UNOCCUPIED. Sitters are bench-only, which is settled
+    // law from CW-45 and no signed question has extended it.
+  });
+
+  // ★ THE FALLBACK. Only a city whose map has NO planters at all reaches this,
+  // so real data always wins - and the count it produces is reported
+  // separately, because a reader should be able to tell design from data.
+  if (plantingPlaced.planter === 0 && FALLBACK_PLANTER_PER_M2 > 0) {
+    for (const [gi, green] of (model.greens ?? []).entries()) {
+      const areaM2 = ringAreaM2(green.outer);
+      const want = Math.floor(areaM2 / FALLBACK_PLANTER_PER_M2);
+      if (want < 1) continue;
+      const [cx, cy] = ringCentroid(green.outer);
+      const rng = makeLcg(hashBuilding(gi, 'fallback-planter'));
+      const reach = Math.sqrt(areaM2 / Math.PI) * 0.7;
+      for (let i = 0; i < want; i++) {
+        if (fallbackPlanters >= FALLBACK_PLANTER_MAX) break;
+        const a = rng() * Math.PI * 2;
+        const r = Math.sqrt(rng()) * reach;
+        const px = cx + Math.cos(a) * r;
+        const py = cy + Math.sin(a) * r;
+        if (!inCore(px, py) || isBlocked(px, py)) continue;
+        if (furnitureSpots.occupied(px, py, FURNITURE_MIN_GAP_M)) continue;
+        if (treeSpots.occupied(px, py, FURNITURE_TREE_GAP_M)) continue;
+        addPlanter(
+          px,
+          py,
+          rng() * Math.PI * 2,
+          hashBuilding(gi * 31 + i, 'fp')
+        );
+        fallbackPlanters++;
+      }
+      if (fallbackPlanters >= FALLBACK_PLANTER_MAX) break;
+    }
+  }
 
   // 1c. CW-45 sitting figures, ONLY where a real bench stands - never a
   //     scattered seat: a city with two mapped benches gets at most two
@@ -4378,6 +4544,38 @@ export function buildStreetProps(model, collision = null) {
   addMerged(basketGeoms, 'waste-baskets', propMaterial());
   addMerged(rackGeoms, 'bike-racks', propMaterial());
   addMerged(hydrantGeoms, 'hydrants', propMaterial());
+  // CW-57: the planting props. The flowers are their own mesh so the class
+  // pass can give colour its own voice without the box changing.
+  addMerged(planterGeoms, 'planters', propMaterial());
+  addMerged(flowerGeoms, 'planter-flowers', propMaterial());
+  addMerged(tableGeoms, 'picnic-tables', propMaterial());
+  // Flowerbeds are FLAT, so they get the same treatment the road lines get:
+  // their own polygonOffset, because two coplanar surfaces without one fight
+  // in the surface-id buffer and re-roll a quarter of the frame's glyph
+  // vocabulary (D-110).
+  if (bedPositions.length > 0) {
+    const bedGeom = new BufferGeometry();
+    bedGeom.setAttribute(
+      'position',
+      new BufferAttribute(new Float32Array(bedPositions), 3)
+    );
+    const bedNormals = new Float32Array(bedPositions.length);
+    for (let i = 0; i < bedNormals.length; i += 3) bedNormals[i + 2] = 1;
+    bedGeom.setAttribute('normal', new BufferAttribute(bedNormals, 3));
+    paintGeometry(bedGeom, tintOf(BED_TIER, flowerTable[0].hueDeg, BED_CHROMA));
+    const bedMat = new MeshLambertMaterial({
+      color: 0xffffff,
+      vertexColors: true,
+      polygonOffset: true,
+      polygonOffsetFactor: -5,
+      polygonOffsetUnits: -5,
+    });
+    const bedMesh = new Mesh(bedGeom, bedMat);
+    bedMesh.name = 'flowerbeds';
+    group.add(bedMesh);
+    disposables.push(bedGeom, bedMat);
+    triangles += bedPositions.length / 9;
+  }
 
   // Traffic lights (CW-19). Placed on the road GRAPH rather than on the road
   // list: a signal belongs where streets actually meet, and OSM splits ways at
@@ -4556,6 +4754,10 @@ export function buildStreetProps(model, collision = null) {
       treeCount: treeSpots.size,
       mappedTreeCount,
       speciesPlanted,
+      // CW-57: what stands, split so a reader can tell DATA from the
+      // fallback - fallbackPlanters is design, everything else is the map.
+      plantingPlaced,
+      fallbackPlanters,
       carCount: carSpots.size,
       lampCount: lampSpots.size,
       // CW-43: what actually stands in the city, per class — the model's

@@ -99,6 +99,16 @@ export const CLASS_BY_MESH_NAME = new Map([
   ['light-heads', SURFACE_CLASS.SIGN],
   // CW-33: the ground you walk on, and the ground you walk past.
   ['sidewalks', SURFACE_CLASS.SIDEWALK],
+  // CW-57 plantings, borrowed rather than minted - the span table is full.
+  // A planter is a knee-high box on the kerb, which is what a bench is, so it
+  // takes the same voice CW-43 gave the benches. Its FLOWERS are small and
+  // bright, which is what a sign face is. A picnic table is a low frame with a
+  // flat top, again a bench. A flowerbed is a patch of ground and takes the
+  // ground it lies on.
+  ['planters', SURFACE_CLASS.CAR],
+  ['planter-flowers', SURFACE_CLASS.SIGN],
+  ['picnic-tables', SURFACE_CLASS.CAR],
+  ['flowerbeds', SURFACE_CLASS.GREEN],
   ['greens', SURFACE_CLASS.GREEN],
   // CW-43 street furniture: dressed in the EXISTING voices of the things
   // they physically resemble — the span table (_gpuVocabLists,

@@ -2031,3 +2031,85 @@ describe('buildStreetProps — species trees (CW-56)', () => {
     again.dispose()
   })
 })
+
+/**
+ * CW-57 (CW-Q55): plantings and picnic tables in the city.
+ *
+ * The shapes are guarded in city-planting.test.js. What has to be guarded HERE
+ * is the law the CW-43 record set and this release could most easily break:
+ * REAL DATA WINS. A fallback that fires where the map already answered would
+ * be decorative scatter standing on top of a real position, which is exactly
+ * what the owner's mission sentence forbids.
+ */
+describe('buildStreetProps — plantings (CW-57)', () => {
+  const plantingModel = (extra = []) =>
+    propsModel([
+      { type: 'way', id: 80, tags: { leisure: 'park' }, geometry: squareRing(35, 0, 25) },
+      ...extra,
+    ])
+
+  it('stands a mapped planter at its own position, and calls it data', () => {
+    const m = plantingModel([
+      { type: 'node', id: 81, tags: { man_made: 'planter' }, ...pt(-30, 5) },
+    ])
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    expect(props.stats.plantingPlaced.planter).toBeGreaterThan(0)
+    // ★ REAL DATA WINS: a city with a mapped planter never reaches the
+    // fallback, so nothing invented stands beside something real.
+    expect(
+      props.stats.fallbackPlanters,
+      'the fallback fired in a city that had real planters'
+    ).toBe(0)
+    expect(hasVertexNear(props.group, 'planters', -30, 5, 1.2)).toBe(true)
+    props.dispose()
+  })
+
+  it('fills a city that has NO planters, and says that it did', () => {
+    // Denver and Albuquerque have zero mapped planters and zero flowerbeds -
+    // measured in CW-55's rebake, not assumed. The directive licenses filling
+    // that gap; what this pins is that the count is reported SEPARATELY, so a
+    // reader can always tell design from data.
+    const m = plantingModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    expect(props.stats.fallbackPlanters).toBeGreaterThan(0)
+    expect(props.stats.plantingPlaced.planter).toBe(
+      props.stats.fallbackPlanters
+    )
+    props.dispose()
+  })
+
+  it('gives a picnic table a footprint, and no one sitting at it', () => {
+    const m = plantingModel([
+      { type: 'node', id: 82, tags: { leisure: 'picnic_table' }, ...pt(-25, 5) },
+    ])
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    expect(props.stats.plantingPlaced.picnic_table).toBe(1)
+    const stamped = props.obstacles.filter(
+      (o) => Math.hypot(o.x + 25, o.y - 5) < 0.5 && o.halfLengthM > 0.8
+    )
+    expect(stamped, 'a picnic table nobody can walk into').toHaveLength(1)
+    // Sitters are bench-only. That is CW-45's settled law and no signed
+    // question has extended it, so picnic tables ship unoccupied.
+    expect(props.stats.sitterCount).toBe(0)
+    props.dispose()
+  })
+
+  it('lays a flowerbed flat and lets you walk over it', () => {
+    const m = plantingModel([
+      {
+        type: 'way',
+        id: 83,
+        tags: { leisure: 'flowerbed' },
+        geometry: squareRing(-35, 8, 3),
+      },
+    ])
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    expect(props.stats.plantingPlaced.flowerbed).toBe(1)
+    // A bed of flowers is not an obstacle: nothing here should stop a cane.
+    const nearBed = props.obstacles.filter(
+      (o) => Math.hypot(o.x + 35, o.y - 8) < 3
+    )
+    expect(nearBed, 'a flowerbed became something to walk into').toEqual([])
+    props.dispose()
+  })
+})
