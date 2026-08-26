@@ -1769,7 +1769,12 @@ describe('buildStreetProps — car anatomy and lamps (CW-54)', () => {
     // POINT and clear of the 0.93-0.95 storefront reserve so it does not
     // invade it; a tail lamp is dimmer because a tail light is.
     expect(luminance(CAR_HEADLAMP_TINT)).toBeCloseTo(0.92, 4)
-    expect(luminance(CAR_TAILLAMP_TINT)).toBeCloseTo(0.85, 4)
+    expect(luminance(CAR_TAILLAMP_TINT)).toBeCloseTo(0.82, 4)
+    // The tail lamp also has a CEILING, which is the whole of D-112: past
+    // about 0.837 its in-gamut red is so pale that the encoded canvas reads it
+    // as white. 0.82 is the middle of the window between that and the 0.80
+    // floor below.
+    expect(luminance(CAR_TAILLAMP_TINT)).toBeLessThan(0.835)
     // Both cross the reverse-video threshold, so both read as lit POINTS
     // rather than as bright grey.
     expect(luminance(CAR_HEADLAMP_TINT)).toBeGreaterThan(0.8)
@@ -1785,23 +1790,34 @@ describe('buildStreetProps — car anatomy and lamps (CW-54)', () => {
     expect(luminance(CAR_HEADLAMP_TINT)).toBeLessThan(0.93)
   })
 
-  it('still lands the colour each lamp is meant to be', () => {
-    // The tail lamp's chroma had to fall from the 0.75 asked for to 0.191 to
-    // keep its luminance at 0.85 - a saturated red simply is not that bright.
-    // The tint that survives is a pale pink, and the thing worth pinning is
-    // that the converter still reads RED out of it: normalizing by the max
-    // channel and then boosting recovers a hue from a tint that has almost no
-    // chroma left. A guard here because the numbers above are one line each to
-    // change and the colour is not obvious from them.
+  it('still lands the colour each lamp is meant to be, ENCODED (D-112)', () => {
+    // The tail lamp's chroma had to fall from the 0.75 asked for to about 0.18
+    // to keep its luminance where the ladder wants it - a saturated red simply
+    // is not that bright - and what survives is a pale pink. Whether a
+    // converter can still read RED out of that depends entirely on WHICH
+    // NUMBERS IT IS HANDED.
+    //
+    // This is D-112. The tint is linear light; the canvas the converter samples
+    // has been through the renderer's output encoding, and sRGB's toe lifts the
+    // green and blue channels much closer to the red one. Handed the linear
+    // tint, pickPaletteIndex says red at every tier this lamp could plausibly
+    // take, which is why the first version of this guard was green while a
+    // photograph of the same lamp came back white. Encode first, and the guard
+    // has an opinion: at 0.85 it says #ffffff, at 0.82 it says #ff3333.
+    const encode = (c) =>
+      c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055
     const normalized = (p) => p.map((c) => normalizeChroma(parsePaletteColor(c)))
-    const entry = (tint, palette) =>
-      palette[
-        pickPaletteIndex(tint[0], tint[1], tint[2], normalized(palette), 5)
-      ]
+    const entry = (tint, palette) => {
+      const e = tint.map(encode)
+      return palette[pickPaletteIndex(e[0], e[1], e[2], normalized(palette), 5)]
+    }
     expect(entry(CAR_TAILLAMP_TINT, HC_PALETTE_GREEN)).toBe('#ff3333')
-    expect(entry(CAR_HEADLAMP_TINT, HC_PALETTE_GREEN)).toBe('#ffff00')
     expect(entry(CAR_TAILLAMP_TINT, HC_PALETTE_AMBER)).toBe('#ff2d95')
-    expect(entry(CAR_HEADLAMP_TINT, HC_PALETTE_AMBER)).toBe('#ff9f00')
+    // A head lamp is white, and lands white. The linear-space reading called
+    // it yellow; the encoded one, which is the one the frame agrees with, does
+    // not.
+    expect(entry(CAR_HEADLAMP_TINT, HC_PALETTE_GREEN)).toBe('#ffffff')
+    expect(entry(CAR_HEADLAMP_TINT, HC_PALETTE_AMBER)).toBe('#ffffff')
   })
 
   it('lights the traffic and leaves the parked cars dark', () => {

@@ -3194,14 +3194,27 @@ const CAR_TYRE_FLOOR = 0.3;
  * DIMMER than the brightest bodywork in the street. It sits at 0.92 instead -
  * the top of the band cars are allowed - and it cannot go higher without
  * invading the storefront reserve, which is a reserved-band question and not
- * this release's to answer. A tail lamp is at 0.85, dimmer because a tail
- * light is.
+ * this release's to answer. A tail lamp is dimmer because a tail light is.
  *
  * Both go through inGamutChroma. tintOf CLAMPS, and a clamped channel silently
  * voids the luminance it promised (CW-49's lesson: heads use it, torso and legs
- * do not). A saturated red at 0.85 is exactly the case that breaks - it wants
- * 1.26 in the red channel - so the chroma asked for is the chroma the tier can
- * actually carry.
+ * do not). A saturated red at this brightness is exactly the case that breaks -
+ * it wants 1.26 in the red channel - so the chroma asked for is the chroma the
+ * tier can actually carry.
+ *
+ * AND THAT CHROMA IS MEASURED IN LINEAR LIGHT, WHILE THE PALETTE MATCH HAPPENS
+ * AFTER THE OUTPUT ENCODING (D-112). The tail tier was 0.85, whose in-gamut
+ * tint is a linear 1 / 0.8095 / 0.8095 - decisively red through
+ * pickPaletteIndex. But the converter reads the ENCODED canvas, where sRGB's
+ * toe lifts 0.8095 to 0.910; raised to the scheme's chromaBoost of 5 that is
+ * 0.624, past the 0.6 at which WHITE beats RED. Photographed at nine metres,
+ * 233 of the 390 pixels a tail lamp owns came back #ffffff - a second pair of
+ * head lamps. Read off the frame, the flip sits between 0.835 and 0.839; the
+ * reverse-video floor is 0.80; so a red brake light lives in a window about
+ * three and a half hundredths wide and 0.82 is the middle of it.
+ *
+ * The head lamp lands WHITE by the same arithmetic, and that is left alone: a
+ * head lamp is white.
  *
  * ONLY THE FROZEN TRAFFIC IS LIT. Parked cars are parked: their lamps are off,
  * which is also what stops a kerbside row from becoming a string of bright
@@ -3211,7 +3224,7 @@ const CAR_LAMP_SIZE_M = 0.16;
 const CAR_HEADLAMP_TIER = 0.92;
 const CAR_HEADLAMP_HUE_DEG = 50;
 const CAR_HEADLAMP_CHROMA = 0.18;
-const CAR_TAILLAMP_TIER = 0.85;
+const CAR_TAILLAMP_TIER = 0.82;
 const CAR_TAILLAMP_HUE_DEG = 0;
 const CAR_TAILLAMP_CHROMA = 0.75;
 
