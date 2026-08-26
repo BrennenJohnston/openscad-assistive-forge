@@ -2922,7 +2922,8 @@ function pushCarClassGeoms(
   angle,
   bodyTint,
   cabinTint,
-  wheelTint
+  wheelTint,
+  lamps = false
 ) {
   const ux = Math.cos(angle);
   const uy = Math.sin(angle);
@@ -2956,6 +2957,31 @@ function pushCarClassGeoms(
         across * (cls.widM / 2 - CAR_WHEEL_INSET_M),
         wheelRadiusM,
         wheelTint
+      );
+    }
+  }
+  if (lamps) {
+    // A pair at each end, set in from the flanks, at about bumper height.
+    const lampZ = clearanceM + bodyH * 0.55;
+    const lampAcross = cls.widM / 2 - CAR_LAMP_SIZE_M;
+    for (const across of [1, -1]) {
+      box(
+        CAR_LAMP_SIZE_M,
+        CAR_LAMP_SIZE_M,
+        CAR_LAMP_SIZE_M,
+        cls.lenM / 2,
+        across * lampAcross,
+        lampZ,
+        CAR_HEADLAMP_TINT
+      );
+      box(
+        CAR_LAMP_SIZE_M,
+        CAR_LAMP_SIZE_M,
+        CAR_LAMP_SIZE_M,
+        -cls.lenM / 2,
+        across * lampAcross,
+        lampZ,
+        CAR_TAILLAMP_TINT
       );
     }
   }
@@ -3139,9 +3165,9 @@ const CANOPY_CHROMA = 0.7;
 // strip and CW-18's sign panels own the top of the street-level band; cars
 // read as accents underneath them rather than competing for the same
 // brightness. Still four tiers, so a parked row stays varied.
-const CAR_TIERS = [0.35, 0.5, 0.65, 0.8];
+export const CAR_TIERS = [0.35, 0.5, 0.65, 0.8];
 const CAR_CHROMA = 0.5;
-const CAR_CABIN_LIFT = 0.12;
+export const CAR_CABIN_LIFT = 0.12;
 /**
  * CW-54: tyres are SLIGHTLY dimmer than the body they carry (the owner's
  * word), and floored so the darkest cars keep wheels that read.
@@ -3153,6 +3179,53 @@ const CAR_CABIN_LIFT = 0.12;
  */
 const CAR_TYRE_DROP = 0.15;
 const CAR_TYRE_FLOOR = 0.3;
+
+/**
+ * CW-54: head and tail lamps, on the cars that are supposed to be driving.
+ *
+ * The luminance ladder decides these numbers, not taste. A lit shopfront is
+ * reserved the 0.93-0.95 band and a sign plate sits at 0.97; the monochrome
+ * reverse-video threshold is 0.80, and a cell has to cross it to read as a
+ * LIT POINT rather than as a bright grey.
+ *
+ * MEASURED, and it moved the number: the brightest paint already on a car is
+ * a top-tier cabin at 0.92 (CAR_TIERS tops out at 0.8 and CAR_CABIN_LIFT adds
+ * 0.12), so a head lamp at the 0.90 this was first written at would have been
+ * DIMMER than the brightest bodywork in the street. It sits at 0.92 instead -
+ * the top of the band cars are allowed - and it cannot go higher without
+ * invading the storefront reserve, which is a reserved-band question and not
+ * this release's to answer. A tail lamp is at 0.85, dimmer because a tail
+ * light is.
+ *
+ * Both go through inGamutChroma. tintOf CLAMPS, and a clamped channel silently
+ * voids the luminance it promised (CW-49's lesson: heads use it, torso and legs
+ * do not). A saturated red at 0.85 is exactly the case that breaks - it wants
+ * 1.26 in the red channel - so the chroma asked for is the chroma the tier can
+ * actually carry.
+ *
+ * ONLY THE FROZEN TRAFFIC IS LIT. Parked cars are parked: their lamps are off,
+ * which is also what stops a kerbside row from becoming a string of bright
+ * points along every street. One line to light them too.
+ */
+const CAR_LAMP_SIZE_M = 0.16;
+const CAR_HEADLAMP_TIER = 0.92;
+const CAR_HEADLAMP_HUE_DEG = 50;
+const CAR_HEADLAMP_CHROMA = 0.18;
+const CAR_TAILLAMP_TIER = 0.85;
+const CAR_TAILLAMP_HUE_DEG = 0;
+const CAR_TAILLAMP_CHROMA = 0.75;
+
+/** The two lamp tints, computed once - they never vary by car. */
+export const CAR_HEADLAMP_TINT = tintOf(
+  CAR_HEADLAMP_TIER,
+  CAR_HEADLAMP_HUE_DEG,
+  inGamutChroma(CAR_HEADLAMP_TIER, CAR_HEADLAMP_HUE_DEG, CAR_HEADLAMP_CHROMA)
+);
+export const CAR_TAILLAMP_TINT = tintOf(
+  CAR_TAILLAMP_TIER,
+  CAR_TAILLAMP_HUE_DEG,
+  inGamutChroma(CAR_TAILLAMP_TIER, CAR_TAILLAMP_HUE_DEG, CAR_TAILLAMP_CHROMA)
+);
 
 // Street furniture (CW-43, CW-Q43). True node positions only: the owner's
 // mission sentence makes this wayfinding data for a blind traveler, and a
@@ -4032,7 +4105,8 @@ export function buildStreetProps(model, collision = null) {
               heading,
               bodyTint,
               cabinTint,
-              wheelTint
+              wheelTint,
+              true
             );
             trafficCount++;
           }

@@ -14,7 +14,20 @@ import {
   CITY_PAVING,
   STOREFRONT_BAND_NAMES,
   storefrontBandFor,
+  CAR_HEADLAMP_TINT,
+  CAR_TAILLAMP_TINT,
+  CAR_TIERS,
+  CAR_CABIN_LIFT,
 } from '../../../src/js/game/city-scene.js'
+import {
+  pickPaletteIndex,
+  parsePaletteColor,
+  normalizeChroma,
+} from '../../../src/js/_hfm-paint.js'
+import {
+  HC_PALETTE_GREEN,
+  HC_PALETTE_AMBER,
+} from '../../../src/js/game/hc-palettes.js'
 import {
   parseCityExtract,
   ROAD_WIDTHS_M,
@@ -1733,5 +1746,150 @@ describe('buildCityGroup — twenty storefront bands (CW-53)', () => {
     expect(plain()).toBe(first)
     expect(first).toBeGreaterThanOrEqual(0)
     expect(first).toBeLessThan(STOREFRONT_BAND_NAMES.length)
+  })
+})
+
+
+/**
+ * CW-54: cars have wheels and the driving ones have their lights on.
+ *
+ * The lamp numbers are decided by the luminance ladder, not by taste, so what
+ * has to be guarded is that they still SIT on it after tintOf has had its way
+ * with them - and that a converter in colour mode still reads the hue out of a
+ * tint whose chroma had to be cut to almost nothing to stay in gamut.
+ */
+describe('buildStreetProps — car anatomy and lamps (CW-54)', () => {
+  const LUM = [0.2126, 0.7152, 0.0722]
+  const luminance = (t) => t[0] * LUM[0] + t[1] * LUM[1] + t[2] * LUM[2]
+
+  it('keeps the lamp luminances the ladder was told they would be', () => {
+    // tintOf CLAMPS, and a clamped channel silently voids the luminance it
+    // promised - which is the whole reason inGamutChroma exists. A head lamp
+    // has to stay clear of the 0.80 reverse-video threshold to read as a lit
+    // POINT and clear of the 0.93-0.95 storefront reserve so it does not
+    // invade it; a tail lamp is dimmer because a tail light is.
+    expect(luminance(CAR_HEADLAMP_TINT)).toBeCloseTo(0.92, 4)
+    expect(luminance(CAR_TAILLAMP_TINT)).toBeCloseTo(0.85, 4)
+    // Both cross the reverse-video threshold, so both read as lit POINTS
+    // rather than as bright grey.
+    expect(luminance(CAR_HEADLAMP_TINT)).toBeGreaterThan(0.8)
+    expect(luminance(CAR_TAILLAMP_TINT)).toBeGreaterThan(0.8)
+    // And the head lamp is at least as bright as the brightest paint a car
+    // can wear - a top-tier cabin, 0.8 + 0.12 - without reaching the 0.93
+    // floor of the storefront reserve. That window is one hundredth wide,
+    // which is why the number is measured rather than chosen.
+    const brightestCabin = Math.max(...CAR_TIERS) + CAR_CABIN_LIFT
+    expect(luminance(CAR_HEADLAMP_TINT)).toBeGreaterThanOrEqual(
+      brightestCabin - 1e-6
+    )
+    expect(luminance(CAR_HEADLAMP_TINT)).toBeLessThan(0.93)
+  })
+
+  it('still lands the colour each lamp is meant to be', () => {
+    // The tail lamp's chroma had to fall from the 0.75 asked for to 0.191 to
+    // keep its luminance at 0.85 - a saturated red simply is not that bright.
+    // The tint that survives is a pale pink, and the thing worth pinning is
+    // that the converter still reads RED out of it: normalizing by the max
+    // channel and then boosting recovers a hue from a tint that has almost no
+    // chroma left. A guard here because the numbers above are one line each to
+    // change and the colour is not obvious from them.
+    const normalized = (p) => p.map((c) => normalizeChroma(parsePaletteColor(c)))
+    const entry = (tint, palette) =>
+      palette[
+        pickPaletteIndex(tint[0], tint[1], tint[2], normalized(palette), 5)
+      ]
+    expect(entry(CAR_TAILLAMP_TINT, HC_PALETTE_GREEN)).toBe('#ff3333')
+    expect(entry(CAR_HEADLAMP_TINT, HC_PALETTE_GREEN)).toBe('#ffff00')
+    expect(entry(CAR_TAILLAMP_TINT, HC_PALETTE_AMBER)).toBe('#ff2d95')
+    expect(entry(CAR_HEADLAMP_TINT, HC_PALETTE_AMBER)).toBe('#ff9f00')
+  })
+
+  it('lights the traffic and leaves the parked cars dark', () => {
+    // A parked car is parked. Lighting the kerbside rows would also string
+    // bright points down every street, which is the carpet law's territory.
+    //
+    // Asked as "does this mesh CONTAIN a lamp tint", not "which mesh is
+    // brighter" - the first form of this compared brightest luminances and
+    // failed, because a top-tier parked cabin is already 0.92 and the lamps
+    // sit in the same neighbourhood on purpose. Presence is the fact; the
+    // brightness ordering never was one.
+    // The plain fixture's road is 100 m of residential, which is 0.8 traffic
+    // cars and therefore none - and the first form of this case guarded the
+    // traffic half with `if (traffic)`, so it passed happily with the lamps
+    // removed entirely.
+    //
+    // The road added here is 120 m of secondary and it is INSIDE THE MODEL
+    // BOUNDS, which the buildings set at plus or minus 66 m. Props are placed
+    // only within those bounds, so a longer road laid across them grows no
+    // traffic at all - measured: 400 m at y=40 gives zero, 120 m at y=25
+    // gives five.
+    const m = propsModel([
+      {
+        type: 'way',
+        id: 99,
+        tags: { highway: 'secondary' },
+        geometry: [pt(-60, 25), pt(60, 25)],
+      },
+    ])
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    const parked = props.group.children.find((c) => c.name === 'cars')
+    const traffic = props.group.children.find((c) => c.name === 'traffic-cars')
+    expect(parked, 'this fixture parked no cars').toBeDefined()
+    expect(
+      traffic,
+      'this fixture grew no frozen traffic, so the lamp half would measure nothing'
+    ).toBeDefined()
+
+    const hasTint = (mesh, tint) => {
+      const c = mesh.geometry.getAttribute('color')
+      for (let i = 0; i < c.count; i++) {
+        if (
+          Math.abs(c.getX(i) - tint[0]) < 1e-4 &&
+          Math.abs(c.getY(i) - tint[1]) < 1e-4 &&
+          Math.abs(c.getZ(i) - tint[2]) < 1e-4
+        ) {
+          return true
+        }
+      }
+      return false
+    }
+    expect(hasTint(parked, CAR_HEADLAMP_TINT)).toBe(false)
+    expect(hasTint(parked, CAR_TAILLAMP_TINT)).toBe(false)
+    expect(hasTint(traffic, CAR_HEADLAMP_TINT)).toBe(true)
+    expect(hasTint(traffic, CAR_TAILLAMP_TINT)).toBe(true)
+    props.dispose()
+  })
+
+  it('stands every car on its wheels, with the body lifted clear', () => {
+    // The body used to sit flush on the ground, which is why a parked row read
+    // as a low dotted mass.
+    //
+    // The tell is not how MANY vertices reach the ground - four wheel boxes
+    // put more there than one flush body did, measured 0.30 against 0.19, so
+    // that ratio moves the wrong way. It is that a box has vertices only at
+    // its two ends in z, so a car whose body starts at a ride height has
+    // vertices AT that ride height and a flush one has none. Both clearances
+    // in the table are checked because both classes park here.
+    const m = propsModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    const cars = props.group.children.find((c) => c.name === 'cars')
+    const a = cars.geometry.getAttribute('position').array
+    let minZ = Infinity
+    let atClearance = 0
+    for (let i = 2; i < a.length; i += 3) {
+      minZ = Math.min(minZ, a[i])
+      if (Math.abs(a[i] - 0.2) < 1e-3 || Math.abs(a[i] - 0.28) < 1e-3) {
+        atClearance++
+      }
+    }
+    // Something still touches the ground, and it is the wheels.
+    expect(minZ).toBeCloseTo(0, 5)
+    // And a body starts at a ride height, which is what a flush car has none
+    // of.
+    expect(
+      atClearance,
+      'no car body starts at a ride height - they are still sitting on the ground'
+    ).toBeGreaterThan(0)
+    props.dispose()
   })
 })
