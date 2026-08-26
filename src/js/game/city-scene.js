@@ -211,6 +211,25 @@ const GROUND_PATCHES = 40;
 const GROUND_PATCH_STREAKS = 40;
 const GROUND_PATCH_RADIUS_PX = 26;
 const GROUND_LOOSE_STREAKS = 800;
+/**
+ * CW-52: anisotropic filtering, for the one surface in this city that is seen
+ * almost edge-on.
+ *
+ * CW-41 measured anisotropy on the FACADES and found it worth nothing, which
+ * is what an isotropic mip chain should give on a surface facing the camera.
+ * The ground plane is the opposite case: at eye height it stretches away to
+ * the fog, so the isotropic level of detail is forced by the derivative ACROSS
+ * the view and throws away everything along it. MEASURED over a 20-frame
+ * sub-cell turn at the Seattle spawn, glyph flips on ground cells: 1.33% with
+ * neither knob, 1.38% with the cell-raster filter alone, 1.38% with anisotropy
+ * alone, and 0.26% with BOTH - four fifths of the way to the floor that
+ * deleting the texture outright sets (0.01%). Neither is worth anything
+ * without the other, which is why they ship together.
+ *
+ * three.js clamps this to whatever the device actually supports, so a machine
+ * with less simply gets less.
+ */
+const GROUND_ANISOTROPY = 16;
 
 // Building tint model. TIERS drive luminance (what monochrome sees);
 // HUES are the CW-Q5/Q6 palette families (what HC quantization sees).
@@ -966,7 +985,13 @@ function createGroundTexture() {
     streak(Math.floor(rand() * size), Math.floor(rand() * size));
   }
 
-  return makeRepeatingTexture(canvas, 1 / GROUND_TILE_M, 1 / GROUND_TILE_M);
+  const texture = makeRepeatingTexture(
+    canvas,
+    1 / GROUND_TILE_M,
+    1 / GROUND_TILE_M
+  );
+  texture.anisotropy = GROUND_ANISOTROPY;
+  return texture;
 }
 
 /**
@@ -2156,6 +2181,13 @@ export function buildCityGroup(model) {
     map: groundTexture ?? null,
   });
   if (!groundTexture) groundMat.color.setHex(0x000000);
+  // The ground dither is a texture like any other and beats against the cell
+  // grid like any other; it had simply never been given the CW-41 filter.
+  // Opted in UNCONDITIONALLY, the way the facades already are: the shader edit
+  // does nothing without a map, and gating it on the texture would hide the
+  // wiring from every test, which is exactly how D-111 shipped.
+  applyCellRasterFiltering(groundMat);
+  cellRasterMats.push(groundMat);
   const ground = new Mesh(groundGeom, groundMat);
   ground.name = 'ground';
   ground.position.set(
@@ -2338,7 +2370,15 @@ export function buildCityGroup(model) {
     // CW-51: the paving rides the CW-41 cell-raster filter like every other
     // texture in the city. An unfiltered paving is exactly the beat pattern
     // against the cell grid that release was written to kill.
-    if (pavingTexture) applyCellRasterFiltering(sidewalkMat);
+    //
+    // D-111: and it has to JOIN THE LIST, or the shader carries a bias uniform
+    // that nothing ever writes and the filtering is stock at every character
+    // size. Measured at the Seattle spawn, glyph flips on pavement cells:
+    // 0.28% undriven, 0.01% driven - and with the bias driven, deleting the
+    // paving texture outright changes not one cell of the converted frame, so
+    // the filter takes the whole of what the beat pattern had to give.
+    applyCellRasterFiltering(sidewalkMat);
+    cellRasterMats.push(sidewalkMat);
     makeFlatMesh(
       sidewalkPositions,
       sidewalkMat,

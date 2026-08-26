@@ -209,6 +209,36 @@ describe('buildCityGroup — CW-8 distinctness', () => {
 
     dispose()
   })
+
+  it('drives the cell raster on every surface that opts into it (D-111)', () => {
+    // The test above can only see materials that already carry the uniform,
+    // and it never asks WHICH ones do. A material that opts into the filter
+    // and is then left out of the driven list carries a bias uniform nothing
+    // ever writes: its shader says it is filtered for the cell grid while it
+    // renders at stock filtering at every character size. That is how the
+    // pavement shipped in CW-51, and only a check by NAME can see it.
+    const { group, setCellRaster, dispose } = buildCityGroup(model())
+    const opted = []
+    group.traverse((o) => {
+      if (o.isMesh && o.material?.userData?.cellLodBias) opted.push(o.name)
+    })
+    expect([...new Set(opted)].sort()).toEqual([
+      'buildings',
+      'ground',
+      'sidewalks',
+      'storefronts',
+    ])
+
+    setCellRaster(8)
+    const undriven = []
+    group.traverse((o) => {
+      const bias = o.isMesh ? o.material?.userData?.cellLodBias : null
+      if (bias && bias.value !== 3) undriven.push(o.name)
+    })
+    expect(undriven).toEqual([])
+
+    dispose()
+  })
 })
 
 describe('buildingTint', () => {
