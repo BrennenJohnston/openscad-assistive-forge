@@ -3168,6 +3168,43 @@ const CANOPY_CHROMA = 0.7;
 export const CAR_TIERS = [0.35, 0.5, 0.65, 0.8];
 const CAR_CHROMA = 0.5;
 export const CAR_CABIN_LIFT = 0.12;
+
+/**
+ * CW-54: the greenhouse is GLASS, and glass is the same colour on every car.
+ *
+ * The cabin already sat a ladder step above the body (CAR_CABIN_LIFT), but it
+ * took the car's own paint hue, so a red car had red windows. It takes one
+ * fixed cool tint now, which is what separates a windscreen from the wing
+ * beside it.
+ *
+ * MONO IS UNTOUCHED BY DESIGN, and that is why this goes through
+ * inGamutChroma rather than CAR_CHROMA: tintOf's luminance promise holds only
+ * while nothing clamps, so an in-gamut chroma keeps the cabin at exactly
+ * 0.47 / 0.62 / 0.77 / 0.92 - the same four numbers a monochrome screen read
+ * before. Only the colour schemes can tell the difference.
+ *
+ * MEASURED at hue 195, encoded the way D-112 says to measure: the tint lands a
+ * cool entry from chroma 0.140 at the darkest cabin, 0.190 at the next and
+ * 0.235 at the third, so 0.30 clears all three with room and is about as grey
+ * as this can be and still be glass. THE BRIGHTEST CABIN CANNOT READ COOL AT
+ * ALL: at 0.92 the gamut caps chroma at 0.204, below the 0.235 it would need,
+ * so a top-tier windscreen lands white. That is a fact about where the ladder
+ * puts it rather than a number to tune - and a bright windscreen reading white
+ * is what a bright windscreen does.
+ */
+const CAR_GLASS_HUE_DEG = 195;
+const CAR_GLASS_CHROMA = 0.3;
+
+/** One cabin tint, from the cabin's own tier - never from the paint. */
+export function glassTint(tier) {
+  const cabin = Math.min(1, tier + CAR_CABIN_LIFT);
+  return tintOf(
+    cabin,
+    CAR_GLASS_HUE_DEG,
+    inGamutChroma(cabin, CAR_GLASS_HUE_DEG, CAR_GLASS_CHROMA)
+  );
+}
+
 /**
  * CW-54: tyres are SLIGHTLY dimmer than the body they carry (the owner's
  * word), and floored so the darkest cars keep wheels that read.
@@ -4097,11 +4134,7 @@ export function buildStreetProps(model, collision = null) {
             const hue = TINT_HUES_DEG[(seed >>> 5) % TINT_HUES_DEG.length];
             const heading = dir > 0 ? angle : angle + Math.PI;
             const bodyTint = tintOf(tier, hue, CAR_CHROMA);
-            const cabinTint = tintOf(
-              Math.min(1, tier + CAR_CABIN_LIFT),
-              hue,
-              CAR_CHROMA
-            );
+            const cabinTint = glassTint(tier);
             // CW-46: the class comes from the SAME seed, so adding classes
             // reshuffled nothing else on the street.
             const wheelTint = tintOf(
@@ -4260,11 +4293,7 @@ export function buildStreetProps(model, collision = null) {
             const tier = CAR_TIERS[seed % CAR_TIERS.length];
             const hue = TINT_HUES_DEG[(seed >>> 5) % TINT_HUES_DEG.length];
             const bodyTint = tintOf(tier, hue, CAR_CHROMA);
-            const cabinTint = tintOf(
-              Math.min(1, tier + CAR_CABIN_LIFT),
-              hue,
-              CAR_CHROMA
-            );
+            const cabinTint = glassTint(tier);
             const wheelTint = tintOf(
               Math.max(CAR_TYRE_FLOOR, tier - CAR_TYRE_DROP),
               hue,

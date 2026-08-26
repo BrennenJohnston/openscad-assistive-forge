@@ -16,6 +16,7 @@ import {
   storefrontBandFor,
   CAR_HEADLAMP_TINT,
   CAR_TAILLAMP_TINT,
+  glassTint,
   CAR_TIERS,
   CAR_CABIN_LIFT,
 } from '../../../src/js/game/city-scene.js'
@@ -1818,6 +1819,58 @@ describe('buildStreetProps — car anatomy and lamps (CW-54)', () => {
     // not.
     expect(entry(CAR_HEADLAMP_TINT, HC_PALETTE_GREEN)).toBe('#ffffff')
     expect(entry(CAR_HEADLAMP_TINT, HC_PALETTE_AMBER)).toBe('#ffffff')
+  })
+
+  it('glazes every car the same cool colour without moving mono (CW-54)', () => {
+    // The cabin used to take the car's own paint hue, so a red car had red
+    // windows. It takes one fixed cool tint now - and the whole point of the
+    // exercise is that a MONOCHROME screen cannot tell, because luminance
+    // alone is what it reads. That promise only holds while nothing clamps,
+    // which is why glassTint goes through inGamutChroma: pin the four cabin
+    // luminances exactly, and the promise is a fact rather than an intention.
+    const cabins = CAR_TIERS.map((t) => Math.min(1, t + CAR_CABIN_LIFT))
+    const tints = CAR_TIERS.map((t) => glassTint(t))
+    tints.forEach((tint, i) => {
+      expect(luminance(tint)).toBeCloseTo(cabins[i], 6)
+      // Cool: blue above green above red, on every tier.
+      expect(tint[2]).toBeGreaterThan(tint[1])
+      expect(tint[1]).toBeGreaterThan(tint[0])
+    })
+    // ENCODED (D-112), the three lower cabins read cool and the brightest one
+    // cannot: at 0.92 the gamut caps the chroma at 0.204, under the 0.235 it
+    // would need. That is the ladder's arithmetic, not a tuning choice, and it
+    // is pinned so a later change to the tiers cannot quietly whiten the rest.
+    const encode = (c) =>
+      c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055
+    const normalized = (p) => p.map((c) => normalizeChroma(parsePaletteColor(c)))
+    const landed = tints.map((tint) => {
+      const e = tint.map(encode)
+      return HC_PALETTE_GREEN[
+        pickPaletteIndex(e[0], e[1], e[2], normalized(HC_PALETTE_GREEN), 5)
+      ]
+    })
+    expect(landed).toEqual(['#00ffff', '#00ffff', '#00ffff', '#ffffff'])
+
+    // And it is WIRED IN, not merely available. Without this the whole case
+    // passes with both call sites still handing the cabin the paint hue.
+    const m = propsModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    const cars = props.group.children.find((c) => c.name === 'cars')
+    const col = cars.geometry.getAttribute('color')
+    const wears = (tint) => {
+      for (let i = 0; i < col.count; i++) {
+        if (
+          Math.abs(col.getX(i) - tint[0]) < 1e-4 &&
+          Math.abs(col.getY(i) - tint[1]) < 1e-4 &&
+          Math.abs(col.getZ(i) - tint[2]) < 1e-4
+        ) {
+          return true
+        }
+      }
+      return false
+    }
+    expect(tints.some(wears), 'no parked cabin wears a glass tint').toBe(true)
+    props.dispose()
   })
 
   it('lights the traffic and leaves the parked cars dark', () => {
