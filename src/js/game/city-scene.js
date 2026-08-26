@@ -1351,6 +1351,138 @@ export const CITY_PAVING = {
 };
 const DEFAULT_PAVING = 'broom';
 
+/**
+ * What a city's GREENSPACE is made of (CW-57, CW-Q51's extension).
+ *
+ * Two rows are the owner's own words and ship as given; two were researched at
+ * execution, the way CW-51's paving rows were - and unlike the paving, where
+ * Denver and Burnaby genuinely specified the SAME broom finish, their ground
+ * genuinely differs.
+ *
+ * - seattle   'lush': greens lush, with plant tufts at the edges. The owner's
+ *             words.
+ * - albuquerque 'dirt': dirt and rough stone, no lush green. The owner's
+ *             words, and the honest one for a high-desert city.
+ * - denver    'turf': irrigated Kentucky bluegrass. Denver Parks' own
+ *             irrigation inventory describes its park sites as composed of
+ *             irrigated bluegrass turf alongside non-irrigated native and
+ *             natural areas, and bluegrass was the default landscape cover
+ *             across city property for decades - so an even, managed,
+ *             mown surface with native patches is what a Denver park is.
+ *             (Denver Parks Irrigation System Inventory, Aqua Engineering,
+ *             denvergov.org; Denver Water on the 2023 policy shift toward
+ *             native grasses.)
+ * - burnaby   'moss': the City of Burnaby's Boulevard Treatment and
+ *             Maintenance Policy requires NATURAL turf on boulevards -
+ *             artificial turf is expressly not acceptable - and Burnaby's
+ *             clay-heavy soil, high rainfall and mature tree canopy are the
+ *             conditions moss thrives in. So a Burnaby verge is soft, uneven
+ *             and mottled rather than mown flat. (The policy is the city's
+ *             own; the moss-conditions claim is local horticultural practice
+ *             rather than a municipal specification, and is marked as the
+ *             weaker of the two citations.)
+ *
+ * ★ THE LUMINANCE NEVER MOVES. This is texture and vocabulary, never
+ * brightness: a green bright enough to be obvious in the 3D frame carpets the
+ * lower half of the street view, which is the law every one of these clusters
+ * is written around. The texture MULTIPLIES the one GREEN_TONES tone.
+ *
+ * Every row is design data the owner can veto.
+ */
+export const CITY_GROUND = {
+  seattle: 'lush',
+  albuquerque: 'dirt',
+  denver: 'turf',
+  burnaby: 'moss',
+};
+const DEFAULT_GROUND = 'turf';
+const GREEN_TILE_M = 8;
+const GREEN_TILE_PX = 256;
+
+/**
+ * A greenspace's own surface, as a texture that multiplies GREEN_TONES.
+ *
+ * Mid grey is "unchanged", exactly as in the paving texture, so every mark
+ * here is a small step either side of the tone the green already had.
+ *
+ * @param {'lush'|'dirt'|'turf'|'moss'} style
+ * @returns {CanvasTexture|null}
+ */
+function createGreenTexture(style) {
+  const size = GREEN_TILE_PX;
+  const c = make2dContext(size, size);
+  if (!c) return null;
+  const { canvas, ctx } = c;
+  const pxPerM = size / GREEN_TILE_M;
+  ctx.fillStyle = 'rgb(160,160,160)';
+  ctx.fillRect(0, 0, size, size);
+  const rand = makeLcg(0x9eed5a11);
+  const grey = (v) => `rgb(${v},${v},${v})`;
+
+  // ★ THE CONTRAST IS WIDE ON PURPOSE, AND THAT IS NOT THE SAME AS BRIGHT.
+  // GREEN_TONES.street is 0x101410 - a luminance under a tenth - and a texture
+  // that only steps a few percent either side of mid grey multiplies almost
+  // nothing: measured, the first version of this was invisible in every city.
+  // The MEAN stays at mid grey, so the tone the carpet law governs does not
+  // move; the VARIANCE is what grows, which is exactly what "texture and
+  // vocabulary, never brightness" asks for.
+  if (style === 'lush') {
+    // Tufts: short upright strokes in dense clumps, so a Seattle green reads
+    // as growth rather than as a lawn.
+    for (let clump = 0; clump < 120; clump++) {
+      const cx = rand() * size;
+      const cy = rand() * size;
+      for (let i = 0; i < 16; i++) {
+        const x = cx + (rand() - 0.5) * pxPerM * 1.1;
+        const y = cy + (rand() - 0.5) * pxPerM * 1.1;
+        ctx.fillStyle = grey(70 + Math.floor(rand() * 185));
+        ctx.fillRect(x, y, 1, 2 + Math.floor(rand() * 5));
+      }
+    }
+  } else if (style === 'dirt') {
+    // Dirt and rough stone: a sparse speckle with the odd bright fleck and
+    // long bare stretches between - the opposite of a lawn.
+    for (let i = 0; i < 900; i++) {
+      ctx.fillStyle = grey(75 + Math.floor(rand() * 60));
+      ctx.fillRect(rand() * size, rand() * size, 1, 1);
+    }
+    for (let i = 0; i < 160; i++) {
+      const r = 1 + rand() * 2.6;
+      ctx.beginPath();
+      ctx.arc(rand() * size, rand() * size, r, 0, Math.PI * 2);
+      ctx.fillStyle = grey(200 + Math.floor(rand() * 55));
+      ctx.fill();
+    }
+  } else if (style === 'moss') {
+    // Moss: soft uneven blotches, large and overlapping, so the surface reads
+    // as mottled rather than mown.
+    for (let i = 0; i < 260; i++) {
+      const r = pxPerM * (0.15 + rand() * 0.5);
+      ctx.beginPath();
+      ctx.arc(rand() * size, rand() * size, r, 0, Math.PI * 2);
+      ctx.fillStyle = grey(85 + Math.floor(rand() * 155));
+      ctx.fill();
+    }
+  } else {
+    // Irrigated turf: mown stripes, even and managed, with a fine grain -
+    // the bluegrass Denver's parks actually are.
+    const stripe = Math.max(2, Math.round(pxPerM * 0.9));
+    for (let y = 0; y < size; y += stripe) {
+      ctx.fillStyle = grey((y / stripe) % 2 === 0 ? 105 : 215);
+      ctx.fillRect(0, y, size, stripe);
+    }
+    for (let i = 0; i < 1800; i++) {
+      ctx.fillStyle = grey(120 + Math.floor(rand() * 80));
+      ctx.fillRect(rand() * size, rand() * size, 1, 1);
+    }
+  }
+
+  // ShapeGeometry's UVs are the vertex x/y, which this project keeps in
+  // METRES - so the repeat is distance over tile, never a normalized guess,
+  // and a park keeps one real-world scale whatever its size.
+  return makeRepeatingTexture(canvas, 1 / GREEN_TILE_M, 1 / GREEN_TILE_M);
+}
+
 // Municipal sidewalk standards put control joints at roughly the width of the
 // walk - 4 to 6 ft on a standard walk - so the seams land about every 1.5 m.
 const PAVING_SCORE_M = 1.5;
@@ -2202,11 +2334,15 @@ export function buildCityGroup(model) {
     CITY_PAVING[model.name] ?? DEFAULT_PAVING
   );
   const groundTexture = createGroundTexture();
+  const greenTexture = createGreenTexture(
+    CITY_GROUND[model.name] ?? DEFAULT_GROUND
+  );
   for (const t of [
     ...windowTextures,
     storefrontTexture,
     groundTexture,
     pavingTexture,
+    greenTexture,
   ]) {
     if (t) disposables.push(t);
   }
@@ -2743,10 +2879,16 @@ export function buildCityGroup(model) {
     for (const g of greenGeoms) g.dispose();
     greenMat = new MeshLambertMaterial({
       color: GREEN_TONES.street,
+      map: greenTexture ?? null,
       polygonOffset: true,
       polygonOffsetFactor: -1,
       polygonOffsetUnits: -1,
     });
+    // CW-41/CW-51: any texture the converter samples rides the cell-raster
+    // filter, and D-111 is what happens when it is filtered but never pushed
+    // to the list - the shader carries a bias uniform nothing writes.
+    applyCellRasterFiltering(greenMat);
+    cellRasterMats.push(greenMat);
     const greenMesh = new Mesh(merged, greenMat);
     greenMesh.name = 'greens';
     group.add(greenMesh);
