@@ -1,0 +1,36 @@
+{
+  "name": "Stencil Maker",
+  "description": "Turn a picture into a spray-paint stencil. Upload a PNG, JPG, or SVG and get a ready-to-make plate with corner crosses for lining up repeat sprays. Support bars keep enclosed centers attached to the sheet.",
+  "version": "1.0.0",
+  "author": "OpenSCAD Assistive Forge contributors",
+  "license": "CC0-1.0",
+  "main": "stencil_maker.scad",
+  "files": [
+    "stencil_maker.scad",
+    "sample-design.svg",
+    "smiley.svg",
+    "heart.svg",
+    "star.svg",
+    "lightning.svg",
+    "crown.svg",
+    "sun.svg"
+  ],
+  "svgLibrary": {
+    "paramName": "design_file",
+    "options": [
+      { "file": "sample-design.svg", "label": "Ring (sample)" },
+      { "file": "smiley.svg", "label": "Smiley face" },
+      { "file": "heart.svg", "label": "Heart" },
+      { "file": "star.svg", "label": "Star" },
+      { "file": "lightning.svg", "label": "Lightning bolt" },
+      { "file": "crown.svg", "label": "Crown" },
+      { "file": "sun.svg", "label": "Sun" }
+    ]
+  },
+  "program": "stencil-maker",
+  "tags": ["stencil", "spray", "paint", "svg", "import", "laser", "plate"],
+  "inspired_by": {
+    "name": "Stencil Forge",
+    "reference": "https://github.com/BrennenJohnston/stencil-forge"
+  }
+}

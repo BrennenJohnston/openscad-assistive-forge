@@ -107,6 +107,21 @@ const EXAMPLES = {
     description: 'Braille Sign',
     manifest: '/examples/braille-sign/manifest.json',
   },
+  'stencil-maker': {
+    path: '/examples/stencil-maker/stencil_maker.scad',
+    name: 'stencil_maker.scad',
+    description: 'Stencil Maker',
+    manifest: '/examples/stencil-maker/manifest.json',
+    additionalFiles: [
+      '/examples/stencil-maker/sample-design.svg',
+      '/examples/stencil-maker/smiley.svg',
+      '/examples/stencil-maker/heart.svg',
+      '/examples/stencil-maker/star.svg',
+      '/examples/stencil-maker/lightning.svg',
+      '/examples/stencil-maker/crown.svg',
+      '/examples/stencil-maker/sun.svg',
+    ],
+  },
   'q-charm': {
     path: '/examples/q-charm/q_charm.scad',
     name: 'q_charm.scad',
@@ -144,6 +159,10 @@ const PROGRAMS = {
   'braille-card-customizer': {
     label: 'Braille Card Customizer',
     examples: ['braille-wedge-card', 'braille-charm', 'braille-sign'],
+  },
+  'stencil-maker': {
+    label: 'Stencil Maker',
+    examples: ['stencil-maker'],
   },
 };
 

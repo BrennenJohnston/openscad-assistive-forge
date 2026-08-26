@@ -99,6 +99,25 @@ The bit in square brackets after the value decides what kind of control it is:
 
 A two-way `yes`/`no` becomes a checkbox; any other list becomes a menu.
 
+A file picker for a design can also fit it properly. OpenSCAD cannot
+measure an imported picture, so `resize([w, 0], auto = true)` alone lets a
+tall design overflow whatever it is drawn on. Declare a companion
+parameter named exactly `<your_file_param>_aspect` (for `design_file`,
+that is `design_file_aspect`) with a default of 1, and the app fills it
+with the chosen picture's width divided by height; the control itself is
+hidden. Use it to anchor the resize to whichever axis the design hits
+first:
+
+```openscad
+resize(design_file_aspect >= fit_w / fit_h ? [fit_w, 0] : [0, fit_h],
+       auto = true)
+    import(design_file, center = true);
+```
+
+`nasif_charm_maker.scad` shows the full pattern, including clipping raised
+designs at the charm edge for people who open the file in desktop OpenSCAD
+with the aspect left at 1.
+
 Everything after `/* [Hidden] */` is yours: computed values, modules, the actual
 geometry. The app does not show any of it as a control.
 

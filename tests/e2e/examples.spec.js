@@ -129,6 +129,56 @@ test.describe('An example brings every file it needs (D-97)', () => {
     // both: this asserts the console, not the reassurance.
     expect(engineErrors, engineErrors.join(' | ')).toEqual([])
   })
+
+  test('stencil-maker previews without the engine complaining', async ({
+    page,
+  }) => {
+    test.setTimeout(180000)
+    // Same trap as logo-plate: the tile's default design (sample-design.svg)
+    // must be fetched by the loader and mounted for import(), or the first
+    // preview errors while the status reads ready.
+    const engineErrors = []
+    page.on('console', (message) => {
+      const text = message.text()
+      if (/\[OpenSCAD ERR\].*ERROR:/i.test(text)) engineErrors.push(text)
+    })
+
+    await page.goto('/?example=stencil-maker')
+    await page
+      .locator('.param-control')
+      .first()
+      .waitFor({ state: 'attached', timeout: 60000 })
+    const notNow = page.locator('#saveProjectNotNow')
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 3000 })
+      await notNow.click()
+    } catch {
+      // no save prompt for this example
+    }
+
+    await expect
+      .poll(async () => page.locator('#previewStatusText').textContent(), {
+        timeout: 120000,
+      })
+      .toMatch(/Preview ready/i)
+    await page.waitForTimeout(2000)
+
+    expect(engineErrors, engineErrors.join(' | ')).toEqual([])
+  })
+})
+
+test.describe('Stencil Maker welcome card', () => {
+  test('the card is on the welcome screen and wired to its example', async ({
+    page,
+  }) => {
+    await page.goto('/')
+    const button = page.locator('#openStencilMakerBtn')
+    await expect(button).toBeVisible({ timeout: 20000 })
+    await expect(button).toHaveAttribute('data-example', 'stencil-maker')
+    await expect(
+      page.locator('.role-path-title', { hasText: 'Stencil Maker' })
+    ).toBeVisible()
+  })
 })
 
 test.describe('Example Files Exist', () => {
@@ -148,6 +198,17 @@ test.describe('Example Files Exist', () => {
 
     const manifestResponse = await page.request.get('/examples/q-charm/manifest.json')
     expect(manifestResponse.ok()).toBe(true)
+  })
+
+  test('stencil-maker scad, manifest, and default design exist', async ({ page }) => {
+    const scadResponse = await page.request.get('/examples/stencil-maker/stencil_maker.scad')
+    expect(scadResponse.ok()).toBe(true)
+
+    const manifestResponse = await page.request.get('/examples/stencil-maker/manifest.json')
+    expect(manifestResponse.ok()).toBe(true)
+
+    const sampleResponse = await page.request.get('/examples/stencil-maker/sample-design.svg')
+    expect(sampleResponse.ok()).toBe(true)
   })
 })
 

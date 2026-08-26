@@ -29,8 +29,11 @@ engrave_depth = 0.8; // [0.2:0.1:3.0]
 // Raised design instead of engraved
 design_raised = "no"; // [yes, no]
 
-// Scale the design relative to charm size (percentage)
-design_scale = 70; // [20:5:95]
+// Design size as a percentage of the charm face; 100 fills the face (the face excludes the border ring when the border is on)
+design_scale = 70; // [10:5:110]
+
+// Design width divided by height. The Assistive Forge app measures and sets this when you choose a file; in desktop OpenSCAD set it to your file's width/height so 100 truly fills the face (1 assumes a square design)
+design_aspect = 1; // [0.05:0.01:20]
 
 /* [Border] */
 // Add a raised border ring
@@ -61,8 +64,12 @@ $fn = 64; // [24:8:128]
 /* [Hidden] */
 effective_width = charm_width;
 effective_height = charm_shape == "circle" ? charm_width : charm_height;
-design_w = effective_width * design_scale / 100;
-design_h = effective_height * design_scale / 100;
+// The face the design may fill: inside the border ring when there is one
+face_w = effective_width - (add_border == "yes" ? 2 * border_width : 0);
+face_h = effective_height - (add_border == "yes" ? 2 * border_width : 0);
+fit_w = face_w * design_scale / 100;
+fit_h = face_h * design_scale / 100;
+assert(design_aspect > 0, "design_aspect must be positive (width divided by height)");
 
 module charm_base_2d() {
     if (charm_shape == "circle") {
@@ -115,7 +122,11 @@ module charm_body() {
 
 module design_2d() {
     if (design_file != "") {
-        resize([design_w, 0], auto = true)
+        // Contain-fit: anchor the resize to whichever axis the design hits
+        // first (OpenSCAD cannot measure an import; design_aspect carries
+        // the ratio), so a tall design no longer overflows the charm.
+        resize(design_aspect >= fit_w / fit_h ? [fit_w, 0] : [0, fit_h],
+               auto = true)
             import(design_file, center = true);
     }
 }
@@ -156,10 +167,15 @@ module raised_charm() {
         union() {
             charm_body();
             // Raised design on top surface, embedded a hair so the union
-            // genuinely fuses instead of exporting a separate touching shell
+            // genuinely fuses instead of exporting a separate touching shell.
+            // Clipped at the charm outline: past 100% the bleed stops at the
+            // edge instead of leaving material hanging off the face.
             translate([0, 0, charm_thickness - 0.02])
                 linear_extrude(height = engrave_depth + 0.02)
-                    design_2d();
+                    intersection() {
+                        design_2d();
+                        charm_base_2d();
+                    }
         }
         attachment();
     }

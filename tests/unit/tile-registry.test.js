@@ -48,11 +48,13 @@ describe('the registry is the one source the loader reads', () => {
       'braille-wedge-card',
       'braille-charm',
       'braille-sign',
+      'stencil-maker',
       'q-charm',
     ])
     expect(Object.keys(PROGRAMS)).toEqual([
       'charm-customizer',
       'braille-card-customizer',
+      'stencil-maker',
     ])
   })
 })
@@ -175,6 +177,7 @@ describe('adding a tile is a one-place edit', () => {
   it('reports which program a shipped example belongs to', () => {
     expect(programForExample('q-charm')).toBe('charm-customizer')
     expect(programForExample('braille-sign')).toBe('braille-card-customizer')
+    expect(programForExample('stencil-maker')).toBe('stencil-maker')
     expect(programForExample('simple-box')).toBeNull()
   })
 
