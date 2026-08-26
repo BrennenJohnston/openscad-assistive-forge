@@ -1658,12 +1658,27 @@ test.describe('ASCII City Walk — the kerb (CW-50)', () => {
     // stall, and only a per-frame watcher can tell them apart.
     await page.evaluate(() => {
       const g = window.__cityWalkGame
-      const s = { camZ: [], stalls: 0, px: g.walkState.x, py: g.walkState.y }
+      const s = {
+        camZ: [],
+        stalls: 0,
+        started: false,
+        px: g.walkState.x,
+        py: g.walkState.y,
+      }
       window.__cwKerb = s
       const tick = () => {
         if (s.stop) return
         const moved = Math.hypot(g.walkState.x - s.px, g.walkState.y - s.py)
-        if (moved === 0) s.stalls++
+        if (moved > 0) s.started = true
+        // A frame BEFORE the walk begins is not a stall. This watcher is
+        // installed a full round trip before the keypress, and on a slow
+        // runner that gap is one or more frames - which is what made this
+        // case red in CI on Chromium and Edge while it stayed green on a
+        // fast machine and on Firefox. MEASURED: inserting a 300 ms wait
+        // between the two here counts five of them. What the case is
+        // actually about is a walker who was MOVING and then stopped, which
+        // is the only thing a kerb that blocks could look like.
+        else if (s.started) s.stalls++
         s.px = g.walkState.x
         s.py = g.walkState.y
         s.camZ.push(g.fpCamera.position.z)
@@ -1718,6 +1733,11 @@ test.describe('ASCII City Walk — the kerb (CW-50)', () => {
     expect(hi - lo, `camera rose from ${lo} to ${hi}`).toBeGreaterThan(0.1)
     // It never stopped: a kerb is drawn and felt, but it is not an obstacle.
     // This is the directive's non-negotiable half.
+    //
+    // The stall count only means anything once the walk has begun, so the
+    // fact that it began is asserted first - a walker who never moved would
+    // otherwise report zero stalls and pass while measuring nothing.
+    expect(watch.started, 'the walker never moved at all').toBe(true)
     expect(watch.stalls).toBe(0)
     // And it EASED rather than jumping. A single frame carrying the whole
     // kerb is the step-jolt this release exists to avoid.
