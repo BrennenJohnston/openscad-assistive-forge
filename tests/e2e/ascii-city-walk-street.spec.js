@@ -7,6 +7,7 @@ import {
   webglAvailable,
   enterCity,
 } from './helpers/city-walk.js'
+import { SURFACE_CLASS } from '../../src/js/game/city-class-pass.js'
 
 useCityWalkFixtures()
 
@@ -1730,5 +1731,129 @@ test.describe('ASCII City Walk — the kerb (CW-50)', () => {
     // And the walk really did start down in the roadway rather than already
     // up on a pavement, which is what makes the climb above a kerb.
     expect(setup.startGroundZ).toBeLessThan(0)
+  })
+})
+
+/**
+ * CW-52: the owner's report is that lit surfaces flash while you move -
+ * "distracting, unintended sloppy... fractured flashes" that a screenshot
+ * cannot show. The cause was not brightness. A second, tiny render tells the
+ * converter what each character cell is LOOKING AT, and that answer picks the
+ * cell's glyph vocabulary; it dressed every mesh in a flat id material that
+ * dropped the mesh's polygon offset, so surfaces that are deliberately
+ * coplanar - a storefront strip on its wall - were coplanar again in the id
+ * buffer and their winner was re-rolled by any view change at all.
+ *
+ * A cell that changes class ONCE has swept across an edge. A cell that changes
+ * again and again over a series of sub-cell turns is watching two surfaces
+ * fight, and only the second is a defect - which is why this counts repeats
+ * rather than changes.
+ */
+test.describe('ASCII City Walk — the surface map holds still (CW-52, D-110)', () => {
+  test('the storefront strip and the wall behind it stop trading places', async ({
+    page,
+  }) => {
+    test.skip(!(await webglAvailable(page)), 'no WebGL on this machine')
+    await launchGame(page)
+    await enterCity(page)
+
+    const result = await page.evaluate((ids) => {
+      const g = window.__cityWalkGame
+      const stats = g.altView.getConvertStats()
+      const cols = stats.cols
+      const rows = stats.rows
+      if (!(cols > 0 && rows > 0)) return { cells: 0 }
+      const s = g.walkState
+      const eyeZ = 1.7 + (Number.isFinite(s.groundZ) ? s.groundZ : 0)
+      const aim = (heading) => {
+        g.fpCamera.position.set(s.x, s.y, eyeZ)
+        g.fpCamera.lookAt(
+          s.x + Math.sin(heading),
+          s.y + Math.cos(heading),
+          eyeZ
+        )
+      }
+      const cells = cols * rows
+      const pairs = new Map()
+      let prev = null
+      let transitions = 0
+      const STEPS = 8
+      for (let i = 0; i < STEPS; i++) {
+        // A twentieth of a degree: about one screen pixel, well inside a
+        // single character cell at any size the game offers.
+        aim(s.headingRad + (i * 0.05 * Math.PI) / 180)
+        const map = g.classPass.read(g.fpCamera, cols, rows)
+        if (!map || map.length !== cells) return { cells: 0 }
+        if (prev) {
+          for (let c = 0; c < cells; c++) {
+            if (map[c] === prev[c]) continue
+            transitions++
+            const lo = Math.min(map[c], prev[c])
+            const hi = Math.max(map[c], prev[c])
+            const key = `${lo}>${hi}`
+            pairs.set(key, (pairs.get(key) ?? 0) + 1)
+          }
+        }
+        prev = Uint8Array.from(map)
+      }
+      aim(s.headingRad)
+      const ranked = [...pairs.entries()].sort((a, b) => b[1] - a[1])
+      const lo = Math.min(ids.wall, ids.storefront)
+      const hi = Math.max(ids.wall, ids.storefront)
+      const wallFront = pairs.get(`${lo}>${hi}`) ?? 0
+      return { cells, transitions, wallFront, top: ranked.slice(0, 3) }
+    }, { wall: SURFACE_CLASS.BUILDING_WALL, storefront: SURFACE_CLASS.STOREFRONT })
+
+    // Non-vacuity, both directions: a grid that never formed would pass every
+    // ratio below, and so would a turn that never reached the camera.
+    expect(
+      result.cells,
+      'the converter reported no character grid'
+    ).toBeGreaterThan(1000)
+    expect(
+      result.transitions,
+      'not one cell changed surface over the whole series - the view never moved'
+    ).toBeGreaterThan(0)
+
+    // The signature, rather than a magnitude. How BADLY two coplanar surfaces
+    // fight depends on the rasteriser's depth precision - measured over these
+    // eight steps at the Seattle spawn, this pair is 57% of every transition
+    // on the release base under CI's software renderer and 97% on a real GPU.
+    // Either way it is the pair that must not be fighting, and after the fix
+    // it is 9% and 0.3% of a much smaller total. A share is the assertion that
+    // holds on both.
+    const share = result.wallFront / result.transitions
+    expect(
+      share,
+      `storefront/wall was ${result.wallFront} of ${result.transitions} ` +
+        `surface changes; the three biggest were ` +
+        `${result.top.map(([k, v]) => `${k}=${v}`).join(' ')}`
+    ).toBeLessThan(0.25)
+  })
+
+  test('the ground plane is filtered for the angle it is seen at (CW-52)', async ({
+    page,
+  }) => {
+    test.skip(!(await webglAvailable(page)), 'no WebGL on this machine')
+    await launchGame(page)
+    await enterCity(page)
+
+    const ground = await page.evaluate(() => {
+      const mesh = window.__cityWalkGame.scene.getObjectByName('ground')
+      if (!mesh) return null
+      return {
+        anisotropy: mesh.material.map?.anisotropy ?? null,
+        cellLodBias: mesh.material.userData?.cellLodBias?.value ?? null,
+      }
+    })
+    expect(ground, 'no ground plane in the scene').not.toBeNull()
+    // The ground is the one surface here seen almost edge-on, and it needs
+    // BOTH knobs: the cell-raster bias alone measured no better than nothing,
+    // and so did anisotropy alone.
+    expect(ground.anisotropy, 'the ground reads isotropically').toBeGreaterThan(1)
+    expect(
+      ground.cellLodBias,
+      'the ground carries no cell-raster bias, or none is being driven'
+    ).toBeGreaterThan(0)
   })
 })
