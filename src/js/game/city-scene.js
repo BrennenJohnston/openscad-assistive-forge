@@ -42,7 +42,6 @@ import {
   ExtrudeGeometry,
   Fog,
   Group,
-  IcosahedronGeometry,
   Mesh,
   MeshBasicMaterial,
   MeshLambertMaterial,
@@ -61,6 +60,12 @@ import {
   isPavementWay,
 } from './walk-controls.js';
 import { makeFigureSpec, makeFigureGeoms } from './city-figures.js';
+import {
+  treeTableFor,
+  pickSpecies,
+  treeSpec,
+  makeCanopyGeoms,
+} from './city-trees.js';
 import {
   buildRoadGraph,
   ringCentroid,
@@ -3141,11 +3146,10 @@ const TREE_SPACING_M = 18;
 const TREE_END_MARGIN_M = 3;
 // Outside the curb line, on the sidewalk side.
 const TREE_SIDEWALK_OFFSET_M = 1.2;
+// CW-56 moved the tree's own dimensions into city-trees.js, where a species
+// decides them. This one stays because the infill clearance check still asks
+// how wide a trunk is before it plants one.
 const TRUNK_SIDE_M = 0.3;
-const TRUNK_HEIGHT_M = 2.5;
-const CANOPY_RADIUS_M = 1.25;
-// The crown starts above eye height (1.7 m) so the player walks under it.
-const CANOPY_BASE_M = 2;
 const MAPPED_TREE_MIN_GAP_M = 2.5;
 const INFILL_TREE_MIN_GAP_M = 6;
 const PROP_SPATIAL_CELL_M = 8;
@@ -3622,6 +3626,10 @@ export function buildStreetProps(model, collision = null) {
 
   const trunkGeoms = [];
   const canopyGeoms = [];
+  // CW-56: what actually got planted, per species. A table nobody uses and a
+  // table everybody uses look identical in a merged mesh (CW-53's lesson),
+  // so the build counts its own.
+  const speciesPlanted = {};
   const carGeoms = [];
   const trafficGeoms = [];
   let trafficCount = 0;
@@ -3718,33 +3726,45 @@ export function buildStreetProps(model, collision = null) {
   const lampSpots = makePointGrid(PROP_SPATIAL_CELL_M);
   let mappedTreeCount = 0;
 
-  const plantTree = (x, y, seed) => {
+  // CW-56: which species, and therefore how tall and what shape. The draw
+  // takes DIFFERENT BITS of the seed the tier already uses rather than a new
+  // random stream - CW-46's lesson, and the reason adding five species to
+  // every city moves no census pin: nothing is inserted into an existing draw
+  // order, so every other consumer of that stream sees the number it saw
+  // before.
+  const treeTable = treeTableFor(model.name);
+  const plantTree = (x, y, seed, leafType) => {
     const tier = CANOPY_TIERS[seed % CANOPY_TIERS.length];
+    const species = pickSpecies(treeTable, (seed >>> 5) % 997, leafType);
+    const spec = treeSpec(species, (((seed >>> 11) % 1000) + 0.5) / 1000);
+    speciesPlanted[spec.name] = (speciesPlanted[spec.name] ?? 0) + 1;
     trunkGeoms.push(
       makeBox(
-        TRUNK_SIDE_M,
-        TRUNK_SIDE_M,
-        TRUNK_HEIGHT_M,
+        spec.trunkSideM,
+        spec.trunkSideM,
+        spec.trunkHeightM,
         x,
         y,
-        TRUNK_HEIGHT_M / 2,
+        spec.trunkHeightM / 2,
         0,
         TRUNK_TINT
       )
     );
     // A faceted crown, not a smooth ball: the flat facets give the sampler
-    // the luminance steps it needs to read as leaves rather than a blob.
-    const canopy = new IcosahedronGeometry(CANOPY_RADIUS_M, 0);
-    canopy.translate(x, y, CANOPY_BASE_M + CANOPY_RADIUS_M);
-    paintGeometry(canopy, tintOf(tier, CANOPY_HUE_DEG, CANOPY_CHROMA));
-    canopyGeoms.push(canopy);
+    // the luminance steps it needs to read as leaves rather than a blob. The
+    // cone stacks three of them for the same reason.
+    const canopyTint = tintOf(tier, CANOPY_HUE_DEG, CANOPY_CHROMA);
+    for (const canopy of makeCanopyGeoms(x, y, spec)) {
+      paintGeometry(canopy, canopyTint);
+      canopyGeoms.push(canopy);
+    }
 
     treeSpots.add(x, y);
     obstacles.push({
       x,
       y,
-      halfLengthM: TRUNK_SIDE_M / 2,
-      halfWidthM: TRUNK_SIDE_M / 2,
+      halfLengthM: spec.trunkSideM / 2,
+      halfWidthM: spec.trunkSideM / 2,
       rotationRad: 0,
     });
   };
@@ -3752,10 +3772,10 @@ export function buildStreetProps(model, collision = null) {
   // 1. The trees the map records. Real data wins every argument with the
   //    infill below, so these are placed first and only skipped where a
   //    building stands on them (or a duplicate node repeats one).
-  model.trees.forEach(({ x, y }, index) => {
+  model.trees.forEach(({ x, y, leafType }, index) => {
     if (!inCore(x, y) || isBlocked(x, y)) return;
     if (treeSpots.occupied(x, y, MAPPED_TREE_MIN_GAP_M)) return;
-    plantTree(x, y, hashBuilding(index, 'osm-tree'));
+    plantTree(x, y, hashBuilding(index, 'osm-tree'), leafType);
     mappedTreeCount++;
   });
 
@@ -4535,6 +4555,7 @@ export function buildStreetProps(model, collision = null) {
     stats: {
       treeCount: treeSpots.size,
       mappedTreeCount,
+      speciesPlanted,
       carCount: carSpots.size,
       lampCount: lampSpots.size,
       // CW-43: what actually stands in the city, per class — the model's

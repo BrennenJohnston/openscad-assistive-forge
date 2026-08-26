@@ -1962,3 +1962,72 @@ describe('buildStreetProps — car anatomy and lamps (CW-54)', () => {
     props.dispose()
   })
 })
+
+/**
+ * CW-56 (CW-Q55): the species reach the city, and the map's own leaf gets a
+ * say.
+ *
+ * The table guards live in city-trees.test.js, where they belong. What has to
+ * be guarded HERE is the wiring - because a perfect species table that nothing
+ * calls looks exactly like a perfect species table that everything calls, and
+ * the seed law is the alarm that would otherwise go unheard.
+ */
+describe('buildStreetProps — species trees (CW-56)', () => {
+  it('plants more than one kind of tree, and counts what it planted', () => {
+    const m = propsModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    const planted = props.stats.speciesPlanted
+    expect(planted, 'nothing recorded a species').toBeDefined()
+    const total = Object.values(planted).reduce((a, b) => a + b, 0)
+    expect(total).toBe(props.stats.treeCount)
+    // A table nobody uses and a table everybody uses look identical inside a
+    // merged mesh (CW-53's lesson), so the build counts its own.
+    expect(Object.keys(planted).length).toBeGreaterThan(1)
+    props.dispose()
+  })
+
+  it('lets a needleleaved tree in the DATA become a conifer', () => {
+    // The wiring guard. Two models identical but for one tag, so what is
+    // being measured is the tag and nothing else: a mapped needleleaved tree
+    // must come out as a cone, which is three stacked crowns rather than one
+    // and therefore 40 more triangles on that tree.
+    const plain = propsModel([
+      { type: 'node', id: 900, tags: { natural: 'tree' }, ...pt(-20, 6) },
+    ])
+    const needled = propsModel([
+      {
+        type: 'node',
+        id: 900,
+        tags: { natural: 'tree', leaf_type: 'needleleaved' },
+        ...pt(-20, 6),
+      },
+    ])
+    const a = buildStreetProps(plain, buildCollisionGrid(plain))
+    const b = buildStreetProps(needled, buildCollisionGrid(needled))
+    expect(a.stats.treeCount).toBe(b.stats.treeCount)
+    const conifersOf = (s) => s.conifer ?? 0
+    expect(
+      conifersOf(b.stats.speciesPlanted),
+      'the leaf_type never reached the planter'
+    ).toBeGreaterThan(conifersOf(a.stats.speciesPlanted))
+    a.dispose()
+    b.dispose()
+  })
+
+  it('adds five species without moving one other count (the seed law)', () => {
+    // The species draw takes DIFFERENT BITS of the seed the canopy tier
+    // already uses, rather than a new random stream, so nothing is inserted
+    // into an existing draw order. If that ever stops being true, these
+    // counts are what says so first.
+    const m = propsModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    expect(props.stats.treeCount).toBeGreaterThan(0)
+    expect(props.stats.carCount).toBeGreaterThan(0)
+    expect(props.stats.lampCount).toBeGreaterThan(0)
+    const again = buildStreetProps(m, buildCollisionGrid(m))
+    expect(again.stats.speciesPlanted).toEqual(props.stats.speciesPlanted)
+    expect(again.stats.carCount).toBe(props.stats.carCount)
+    props.dispose()
+    again.dispose()
+  })
+})
