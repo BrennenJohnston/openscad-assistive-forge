@@ -816,14 +816,28 @@ test.describe('ASCII City Walk — looking around (CW-13)', () => {
       'looking'
     )
 
-    // Held R climbs; 45 deg/s means half a second cannot reach the clamp, so
-    // this asserts real integration rather than a jump to the limit.
+    // Held R climbs - and the key is held until it HAS climbed, never for a
+    // fixed 600 ms. Pitch integrates per FRAME with dt clamped to 0.1 s, so
+    // one rendered frame is worth at most 4.5 deg and passing 5 needs at
+    // least two of them; a 600 ms hold on a software renderer is not
+    // guaranteed to deliver two. Measured: this is exactly how it went red on
+    // an Edge shard in CI, having been green on the same branch before the
+    // scene grew heavier. The clause below it already learned this lesson;
+    // this one and the F case had not.
     await page.keyboard.down('KeyR')
-    await page.waitForTimeout(600)
-    await page.keyboard.up('KeyR')
-    await expect
-      .poll(async () => (await gaze(page)).pitch > 5 * DEG)
-      .toBe(true)
+    try {
+      await expect
+        .poll(async () => (await gaze(page)).pitch > 5 * DEG, {
+          timeout: 30000,
+          intervals: [100],
+        })
+        .toBe(true)
+    } finally {
+      await page.keyboard.up('KeyR')
+    }
+    // It CLIMBED rather than jumping to the stop, which is what the fixed
+    // hold was really asserting: 5 deg arrives long before the 60 deg clamp.
+    expect((await gaze(page)).pitch).toBeLessThan(60 * DEG)
     await expect(page.locator('#cityWalkHudStatus')).toContainText('looking up')
 
     // The bearing is untouched by looking up - pitch and yaw are separate.
@@ -857,13 +871,20 @@ test.describe('ASCII City Walk — looking around (CW-13)', () => {
       'looking'
     )
 
-    // F goes the other way, and the HUD words it differently.
+    // F goes the other way, and the HUD words it differently. Held until it
+    // has fallen, for the same reason R is.
     await page.keyboard.down('KeyF')
-    await page.waitForTimeout(600)
-    await page.keyboard.up('KeyF')
-    await expect
-      .poll(async () => (await gaze(page)).pitch < -5 * DEG)
-      .toBe(true)
+    try {
+      await expect
+        .poll(async () => (await gaze(page)).pitch < -5 * DEG, {
+          timeout: 30000,
+          intervals: [100],
+        })
+        .toBe(true)
+    } finally {
+      await page.keyboard.up('KeyF')
+    }
+    expect((await gaze(page)).pitch).toBeGreaterThan(-60 * DEG)
     await expect(page.locator('#cityWalkHudStatus')).toContainText(
       'looking down'
     )
