@@ -60,7 +60,18 @@ export const SURFACE_CLASS = {
  * and reads as sky, which is the safe direction: an unclassified cell falls
  * back to the full glyph vocabulary it has always used.
  */
-const CLASS_BY_MESH_NAME = new Map([
+/**
+ * Exported so a test can ask the QUESTION THIS MAP KEEPS FAILING: does every
+ * mesh the city actually builds have a class here?
+ *
+ * A name missing from this map is not an error anywhere - the pass simply
+ * leaves that mesh out and it reads as SKY. That is a safe default for a mesh
+ * nobody added, and a silent, invisible defect for one somebody just did.
+ * CW-56 added a ground mesh that would have been dressed as sky and nothing
+ * would have said so; the guard in city-class-pass.test.js asks the builders
+ * themselves now.
+ */
+export const CLASS_BY_MESH_NAME = new Map([
   ['ground', SURFACE_CLASS.GROUND],
   ['roads', SURFACE_CLASS.ROAD],
   ['curbs', SURFACE_CLASS.CURB],
