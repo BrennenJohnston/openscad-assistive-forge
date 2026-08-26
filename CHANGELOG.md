@@ -179,6 +179,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The cars have wheels, and the ones that are driving have their lights on** (CW-54) - a parked
+  row used to read as a low dotted mass, because every car body sat flat on the road with nothing
+  under it. Each car now rides on four wheels at a height typical of its own kind, so there is a gap
+  under it, and at this size that shadow line is what says vehicle long before a wheel is big enough
+  to see. Tyres are a little darker than the body they carry, but not so dark that they vanish
+  against black tarmac. The cars standing in the traffic lanes have white head lamps at the front
+  and red brake lights at the back; the parked ones are dark, because a parked car is parked and
+  because a string of bright points down every kerb is not what a street looks like at night
+
+- **Twenty kinds of shop front instead of five** (CW-53) - the ground floor of a building used to
+  come from one of five window patterns picked at random. There are now twenty, and which one a
+  building gets is decided by what the map actually records there: a restaurant gets warm glass with
+  dark tables along the bottom, a bakery a lit counter under a canopy, a bank one lit alcove in a
+  dark front, a theatre a bright bulb band, an empty unit papered windows with no light in them at
+  all. Buildings with nothing recorded near them still fall back to a pattern chosen from the
+  building itself, so a street is never uniform. All twenty appear in all four cities
+
 - **The city stops flickering while you move** (CW-52) - lit surfaces used to fizz and flash as you
   walked or turned, in a way a screenshot could never show. The cause was not the lighting. A
   second, hidden pass tells the drawing which surface each character is looking at, so a shopfront

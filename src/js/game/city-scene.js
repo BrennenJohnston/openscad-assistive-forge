@@ -841,24 +841,309 @@ const STOREFRONT_VARIANTS = [
       ctx.fillRect(w * 0.4, h * 0.42, w * 0.2, h * 0.5);
     },
   },
+  // CW-53, the five the owner signed. From here on every band is drawn with
+  // features at least three texture pixels across: CW-52 measured that the
+  // storefront texture is this city's largest single source of character
+  // fracture, and a one-pixel feature is exactly what beats against the cell
+  // grid.
+  {
+    name: 'cafe-tables',
+    paint: (ctx, w, h) => {
+      // A cafe that spills onto the pavement: lit inside, tables against it.
+      ctx.fillStyle = '#e4e4e4';
+      ctx.fillRect(w * 0.1, h * 0.44, w * 0.8, h * 0.4);
+      ctx.fillStyle = '#a4a4a4';
+      ctx.fillRect(w * 0.04, h * 0.24, w * 0.92, h * 0.16);
+      ctx.fillStyle = '#101010';
+      ctx.fillRect(w * 0.1, h * 0.4, w * 0.8, h * 0.05);
+      ctx.fillStyle = '#1c1c1c';
+      for (let i = 0; i < 3; i++) {
+        ctx.fillRect(w * (0.16 + i * 0.26), h * 0.66, w * 0.14, h * 0.26);
+      }
+    },
+  },
+  {
+    name: 'barfront',
+    paint: (ctx, w, h) => {
+      // Dark front, one long lit bar inside, one lit door.
+      ctx.fillStyle = '#242424';
+      ctx.fillRect(w * 0.06, h * 0.22, w * 0.88, h * 0.7);
+      ctx.fillStyle = '#d8d8d8';
+      ctx.fillRect(w * 0.12, h * 0.5, w * 0.5, h * 0.14);
+      ctx.fillStyle = '#8a8a8a';
+      ctx.fillRect(w * 0.7, h * 0.36, w * 0.18, h * 0.56);
+    },
+  },
+  {
+    name: 'market',
+    paint: (ctx, w, h) => {
+      // A stall: striped canopy, goods on a trestle, shadow beneath.
+      ctx.fillStyle = '#cfcfcf';
+      ctx.fillRect(w * 0.06, h * 0.52, w * 0.88, h * 0.3);
+      ctx.fillStyle = '#9c9c9c';
+      ctx.fillRect(w * 0.02, h * 0.26, w * 0.96, h * 0.18);
+      ctx.fillStyle = '#4a4a4a';
+      for (let i = 0; i < 6; i++) {
+        ctx.fillRect(w * (0.04 + i * 0.16), h * 0.26, w * 0.05, h * 0.18);
+      }
+      ctx.fillStyle = '#141414';
+      ctx.fillRect(w * 0.06, h * 0.82, w * 0.88, h * 0.1);
+    },
+  },
+  {
+    name: 'lobby',
+    paint: (ctx, w, h) => {
+      // Taller and brighter than a shop, with a door block in the middle.
+      ctx.fillStyle = '#ededed';
+      ctx.fillRect(w * 0.06, h * 0.16, w * 0.88, h * 0.76);
+      ctx.fillStyle = '#161616';
+      ctx.fillRect(w * 0.44, h * 0.16, w * 0.03, h * 0.76);
+      ctx.fillRect(w * 0.06, h * 0.16, w * 0.88, h * 0.04);
+      ctx.fillStyle = '#5c5c5c';
+      ctx.fillRect(w * 0.36, h * 0.52, w * 0.28, h * 0.4);
+    },
+  },
+  {
+    name: 'roller',
+    paint: (ctx, w, h) => {
+      // A roller door, ribbed the OTHER way from the shutter above, so the
+      // two never read as the same closed front.
+      ctx.fillStyle = '#333333';
+      ctx.fillRect(w * 0.04, h * 0.2, w * 0.92, h * 0.72);
+      ctx.fillStyle = '#1e1e1e';
+      for (let i = 0; i < 11; i++) {
+        ctx.fillRect(w * (0.06 + i * 0.085), h * 0.24, w * 0.03, h * 0.64);
+      }
+      ctx.fillStyle = '#6e6e6e';
+      ctx.fillRect(w * 0.04, h * 0.2, w * 0.92, h * 0.05);
+    },
+  },
+  // CW-53, the ten the DATA asked for. Each is chosen for a light pattern a
+  // sampler can still tell apart at a two-by-four pixel cell, and each is
+  // earned by a count measured in the four extracts - the record carries the
+  // table.
+  {
+    name: 'restaurant',
+    paint: (ctx, w, h) => {
+      ctx.fillStyle = '#e8e8e8';
+      ctx.fillRect(w * 0.08, h * 0.28, w * 0.84, h * 0.64);
+      ctx.fillStyle = '#1a1a1a';
+      for (let i = 0; i < 4; i++) {
+        ctx.fillRect(w * (0.12 + i * 0.2), h * 0.7, w * 0.12, h * 0.22);
+      }
+      ctx.fillStyle = '#8e8e8e';
+      ctx.fillRect(w * 0.08, h * 0.2, w * 0.84, h * 0.06);
+    },
+  },
+  {
+    name: 'fastfood',
+    paint: (ctx, w, h) => {
+      // The menu board is the whole identity: a bright band ABOVE the counter.
+      ctx.fillStyle = '#c4c4c4';
+      ctx.fillRect(w * 0.06, h * 0.5, w * 0.88, h * 0.42);
+      ctx.fillStyle = '#ededed';
+      ctx.fillRect(w * 0.1, h * 0.24, w * 0.8, h * 0.2);
+      ctx.fillStyle = '#202020';
+      for (let i = 0; i < 3; i++) {
+        ctx.fillRect(w * (0.16 + i * 0.24), h * 0.28, w * 0.04, h * 0.12);
+      }
+      ctx.fillRect(w * 0.06, h * 0.44, w * 0.88, h * 0.05);
+    },
+  },
+  {
+    name: 'clothes',
+    paint: (ctx, w, h) => {
+      // Two tall display windows split by one dark pier.
+      ctx.fillStyle = '#eaeaea';
+      ctx.fillRect(w * 0.06, h * 0.24, w * 0.4, h * 0.68);
+      ctx.fillRect(w * 0.54, h * 0.24, w * 0.4, h * 0.68);
+      ctx.fillStyle = '#141414';
+      ctx.fillRect(w * 0.46, h * 0.2, w * 0.08, h * 0.72);
+      ctx.fillStyle = '#3a3a3a';
+      ctx.fillRect(w * 0.14, h * 0.46, w * 0.08, h * 0.46);
+      ctx.fillRect(w * 0.3, h * 0.5, w * 0.08, h * 0.42);
+      ctx.fillRect(w * 0.68, h * 0.46, w * 0.08, h * 0.46);
+    },
+  },
+  {
+    name: 'salon',
+    paint: (ctx, w, h) => {
+      // A long lit mirror strip with chairs under it.
+      ctx.fillStyle = '#d0d0d0';
+      ctx.fillRect(w * 0.08, h * 0.26, w * 0.84, h * 0.66);
+      ctx.fillStyle = '#efefef';
+      ctx.fillRect(w * 0.12, h * 0.34, w * 0.76, h * 0.16);
+      ctx.fillStyle = '#242424';
+      for (let i = 0; i < 4; i++) {
+        ctx.fillRect(w * (0.14 + i * 0.2), h * 0.6, w * 0.1, h * 0.32);
+      }
+    },
+  },
+  {
+    name: 'grocer',
+    paint: (ctx, w, h) => {
+      // Shelves, evenly stacked top to bottom - the one band that is all
+      // horizontals at a regular pitch.
+      ctx.fillStyle = '#dedede';
+      ctx.fillRect(w * 0.06, h * 0.22, w * 0.88, h * 0.7);
+      ctx.fillStyle = '#2a2a2a';
+      for (let i = 0; i < 5; i++) {
+        ctx.fillRect(w * 0.06, h * (0.3 + i * 0.13), w * 0.88, h * 0.045);
+      }
+    },
+  },
+  {
+    name: 'hotel',
+    paint: (ctx, w, h) => {
+      // A canopy lit from above, over a dark recessed entrance.
+      ctx.fillStyle = '#232323';
+      ctx.fillRect(w * 0.06, h * 0.24, w * 0.88, h * 0.68);
+      ctx.fillStyle = '#e0e0e0';
+      ctx.fillRect(w * 0.24, h * 0.18, w * 0.52, h * 0.12);
+      ctx.fillStyle = '#0e0e0e';
+      ctx.fillRect(w * 0.24, h * 0.3, w * 0.52, h * 0.06);
+      ctx.fillStyle = '#9a9a9a';
+      ctx.fillRect(w * 0.36, h * 0.54, w * 0.28, h * 0.38);
+    },
+  },
+  {
+    name: 'bank',
+    paint: (ctx, w, h) => {
+      // Mostly dark stone with ONE lit alcove, which is what a bank is at
+      // night.
+      ctx.fillStyle = '#1e1e1e';
+      ctx.fillRect(w * 0.04, h * 0.18, w * 0.92, h * 0.74);
+      ctx.fillStyle = '#6a6a6a';
+      ctx.fillRect(w * 0.04, h * 0.18, w * 0.92, h * 0.06);
+      ctx.fillStyle = '#e6e6e6';
+      ctx.fillRect(w * 0.62, h * 0.44, w * 0.2, h * 0.34);
+    },
+  },
+  {
+    name: 'vacant',
+    paint: (ctx, w, h) => {
+      // Papered over, and unlit. Fifty-seven of these are mapped across the
+      // four downtowns; a band with no light in it is the strongest contrast
+      // the set has against the nineteen that have some.
+      ctx.fillStyle = '#3c3c3c';
+      ctx.fillRect(w * 0.08, h * 0.26, w * 0.84, h * 0.66);
+      ctx.fillStyle = '#2e2e2e';
+      ctx.fillRect(w * 0.08, h * 0.26, w * 0.84, h * 0.05);
+    },
+  },
+  {
+    name: 'bakery',
+    paint: (ctx, w, h) => {
+      // A lit counter with a dark canopy over it, and the tray line across it.
+      ctx.fillStyle = '#3a3a3a';
+      ctx.fillRect(w * 0.04, h * 0.26, w * 0.92, h * 0.2);
+      ctx.fillStyle = '#e2e2e2';
+      ctx.fillRect(w * 0.1, h * 0.52, w * 0.8, h * 0.34);
+      ctx.fillStyle = '#8c8c8c';
+      ctx.fillRect(w * 0.16, h * 0.58, w * 0.68, h * 0.06);
+      ctx.fillStyle = '#101010';
+      ctx.fillRect(w * 0.1, h * 0.86, w * 0.8, h * 0.06);
+    },
+  },
+  {
+    name: 'marquee',
+    paint: (ctx, w, h) => {
+      // The one band whose light is ABOVE everything else in it.
+      ctx.fillStyle = '#1c1c1c';
+      ctx.fillRect(w * 0.06, h * 0.42, w * 0.88, h * 0.5);
+      ctx.fillStyle = '#ededed';
+      ctx.fillRect(w * 0.02, h * 0.2, w * 0.96, h * 0.16);
+      ctx.fillStyle = '#2a2a2a';
+      for (let i = 0; i < 8; i++) {
+        ctx.fillRect(w * (0.06 + i * 0.115), h * 0.24, w * 0.04, h * 0.08);
+      }
+      ctx.fillStyle = '#7a7a7a';
+      ctx.fillRect(w * 0.3, h * 0.6, w * 0.4, h * 0.32);
+    },
+  },
 ];
 
-/** Which storefront band a POI kind asks for; anything else falls to the hash. */
+/**
+ * Which storefront band a POI kind asks for; anything else falls to the hash.
+ *
+ * CW-53: shop kinds arrive as `shop:<value>` now that the parser keeps the
+ * value. Only the values with a band of their own are listed - every other
+ * shop is normalised back to the generic `shop` kind below, so a jeweller and
+ * a phone shop read exactly as they did before rather than falling through to
+ * the hash and losing the one thing the map data knew about them.
+ */
 const STOREFRONT_BY_POI = new Map([
   ['shop', 0],
-  ['restaurant', 1],
-  ['cafe', 1],
-  ['fast_food', 1],
-  ['bar', 1],
-  ['pub', 1],
-  ['bank', 3],
   ['pharmacy', 0],
-  ['cinema', 3],
-  ['theatre', 3],
-  ['library', 3],
+  ['cafe', 5],
+  ['bar', 6],
+  ['pub', 6],
+  ['marketplace', 7],
+  ['library', 8],
   ['post_office', 4],
-  ['marketplace', 1],
+  ['restaurant', 10],
+  ['fast_food', 11],
+  ['bank', 16],
+  ['cinema', 19],
+  ['theatre', 19],
+  ['hotel', 15],
+  // The ten the shop tag earns, by measured count across the four extracts.
+  ['shop:clothes', 12],
+  ['shop:shoes', 12],
+  ['shop:fashion_accessories', 12],
+  ['shop:boutique', 12],
+  ['shop:hairdresser', 13],
+  ['shop:beauty', 13],
+  ['shop:barber', 13],
+  ['shop:cosmetics', 13],
+  ['shop:convenience', 14],
+  ['shop:supermarket', 14],
+  ['shop:greengrocer', 14],
+  ['shop:deli', 14],
+  ['shop:vacant', 17],
+  ['shop:bakery', 18],
+  ['shop:pastry', 18],
+  ['shop:confectionery', 18],
 ]);
+
+/**
+ * CW-53: a shop value with no band of its own reads as the generic shop.
+ *
+ * The alternative - letting it fall through to the hash - would throw away the
+ * one fact the map actually recorded about that corner, which is the opposite
+ * of what keeping the value was for.
+ *
+ * @param {string|null} kind
+ * @returns {string|null}
+ */
+function normalizeStorefrontKind(kind) {
+  if (kind === null || !kind.startsWith('shop:')) return kind;
+  return STOREFRONT_BY_POI.has(kind) ? kind : 'shop';
+}
+
+/**
+ * CW-53: the twenty ground floors, in band order.
+ *
+ * Exported because it is DESIGN DATA the owner can veto row by row, and a
+ * table nothing names in a test is a table that can be reordered by accident -
+ * the band index is baked into every storefront's UVs.
+ */
+export const STOREFRONT_BAND_NAMES = STOREFRONT_VARIANTS.map((v) => v.name);
+
+/**
+ * CW-53: which band a POI kind lands on, or null when it falls to the hash.
+ *
+ * The scene calls this rather than reading the map directly, so a test that
+ * pins the mapping is pinning the code the city actually runs.
+ *
+ * @param {string|null} kind
+ * @returns {number|null}
+ */
+export function storefrontBandFor(kind) {
+  const normalized = normalizeStorefrontKind(kind ?? null);
+  if (normalized === null) return null;
+  return STOREFRONT_BY_POI.get(normalized) ?? null;
+}
 
 // CW-46 rider (c): "white shop lights is repetitive" - each storefront's
 // glass now leans warm, cool or neutral. Places that serve food glow warm,
@@ -878,8 +1163,26 @@ const STOREFRONT_TEMP_BY_POI = new Map([
   ['bar', 'warm'],
   ['pub', 'warm'],
   ['marketplace', 'warm'],
+  ['shop:bakery', 'warm'],
+  ['shop:pastry', 'warm'],
+  ['shop:confectionery', 'warm'],
+  ['shop:convenience', 'warm'],
+  ['shop:supermarket', 'warm'],
+  ['shop:greengrocer', 'warm'],
+  ['shop:deli', 'warm'],
   ['shop', 'neutral'],
   ['pharmacy', 'neutral'],
+  ['hotel', 'neutral'],
+  ['shop:clothes', 'neutral'],
+  ['shop:shoes', 'neutral'],
+  ['shop:fashion_accessories', 'neutral'],
+  ['shop:boutique', 'neutral'],
+  ['shop:hairdresser', 'neutral'],
+  ['shop:beauty', 'neutral'],
+  ['shop:barber', 'neutral'],
+  ['shop:cosmetics', 'neutral'],
+  // Papered over and unlit: it takes the street's own light, not its own.
+  ['shop:vacant', 'neutral'],
   ['bank', 'cool'],
   ['cinema', 'cool'],
   ['theatre', 'cool'],
@@ -1912,6 +2215,10 @@ export function buildCityGroup(model) {
   const antennaCutoffM = antennaHeightCutoff(model.buildings);
   let signCount = 0;
   let antennaCount = 0;
+  // CW-53: how many ground floors landed on each band. The distribution is the
+  // only way to see whether the map data is biasing anything - a band nobody
+  // uses and a band everybody uses look identical in a texture.
+  const storefrontBands = new Array(STOREFRONT_VARIANTS.length).fill(0);
 
   model.buildings.forEach((building, index) => {
     const h = hashBuilding(index, building.name);
@@ -1997,7 +2304,16 @@ export function buildCityGroup(model) {
       // POIs at all still has a varied street. CW-46: the same POI answer
       // now also warms or cools the glass.
       const [cx, cy] = ringCentroid(building.outer);
-      const poiKind = poiIndex.nearestKind(cx, cy, STOREFRONT_POI_RANGE_M);
+      // CW-53: a hotel is a WAY in every one of the four extracts, never a
+      // node, so it can only be read off the building's own tags - the POI
+      // index would never see one. Its own tag beats a neighbour's point.
+      const poiKind =
+        building.tags?.tourism === 'hotel'
+          ? 'hotel'
+          : normalizeStorefrontKind(
+              poiIndex.nearestKind(cx, cy, STOREFRONT_POI_RANGE_M)
+            );
+      const poiBand = storefrontBandFor(poiKind);
       const strip = extrudeBuilding(
         building,
         storefrontTemperatureTint(h, poiKind),
@@ -2006,9 +2322,10 @@ export function buildCityGroup(model) {
         }
       );
       if (strip) {
-        const band =
-          (poiKind !== null ? STOREFRONT_BY_POI.get(poiKind) : undefined) ??
-          (h >>> 23) % STOREFRONT_VARIANTS.length;
+        // THE SEED LAW (CW-34, held through CW-53): this is the SAME hash
+        // draw it has always been; only the modulus widened with the set.
+        const band = poiBand ?? (h >>> 23) % STOREFRONT_VARIANTS.length;
+        storefrontBands[band]++;
         scaleGeometryUv(strip, 1, STOREFRONT_HEIGHT_M / storefrontHM);
         offsetGeometryUv(strip, 0, band * STOREFRONT_HEIGHT_M);
         storefrontGeoms.push(strip);
@@ -2485,6 +2802,7 @@ export function buildCityGroup(model) {
     stats: {
       buildingTriangles,
       storefrontTriangles,
+      storefrontBands,
       roadTriangles,
       signCount,
       antennaCount,
@@ -2528,6 +2846,47 @@ export const CAR_CLASSES = [
 ];
 const CAR_CLASS_WEIGHT_TOTAL = CAR_CLASSES.reduce((s, c) => s + c.weight, 0);
 
+/**
+ * CW-54: a car has wheels, and they are the only thing touching the ground.
+ *
+ * Until now the body box sat flush on z=0, which is why a parked row read as a
+ * low dotted mass rather than as cars (the directive's item 7). The body lifts
+ * onto a clearance and four wheels carry it, so there is a gap under every car
+ * for the light to fail to reach - at character scale that shadow line is what
+ * says "vehicle" long before any wheel is resolvable.
+ *
+ * Clearances and radii are segment-typical: a crew-cab pickup and a three-row
+ * SUV ride higher than a sedan, which is why they get their own numbers rather
+ * than one figure for everything.
+ *
+ * THE WHEEL IS A BOX, and that is a measured choice rather than a lazy one.
+ * MEASURED: this city carries 7,900-odd cars between the parked rows and the
+ * frozen traffic, so every triangle on a wheel costs about 31,600 of them. A
+ * six-sided capped cylinder is 24 triangles and would add 758,000 to a scene
+ * that stands at 1,245,615; a box is 12 and adds 379,000. At the sizes this
+ * game is played at a wheel is about a pixel, and the proof gate photographs
+ * decide whether that pixel needs to be round. One line to change the
+ * primitive if they ever say it does.
+ */
+const CAR_CLEARANCE_M = { pickup: 0.28, suv: 0.28, default: 0.2 };
+const CAR_WHEEL_RADIUS_M = { pickup: 0.38, suv: 0.36, default: 0.32 };
+const CAR_WHEEL_WIDTH_M = 0.22;
+// Wheels sit at the corners, about where a real wheelbase puts them, and
+// INBOARD OF THE FLANKS BY MORE THAN HALF THEIR OWN WIDTH. The first form of
+// this used a 0.1 m inset with a 0.22 m wheel, which stands 1 cm proud of the
+// bodywork - and the parked-car guard caught it immediately, because a car
+// that is wider than its class table is a car that can cross the curb line.
+const CAR_WHEELBASE_SHARE = 0.36;
+const CAR_WHEEL_INSET_M = 0.13;
+
+/** The ride height and wheel size a class was measured for. */
+function carAnatomy(kind) {
+  return {
+    clearanceM: CAR_CLEARANCE_M[kind] ?? CAR_CLEARANCE_M.default,
+    wheelRadiusM: CAR_WHEEL_RADIUS_M[kind] ?? CAR_WHEEL_RADIUS_M.default,
+  };
+}
+
 /** Deterministic weighted class pick from a [0,1) draw (CW-46). */
 export function pickCarClass(r) {
   let t = r * CAR_CLASS_WEIGHT_TOTAL;
@@ -2555,7 +2914,17 @@ const CAR_MIN_GAP_M = 6;
  * hatch a cabin reaching the tail. Boxes overlap by a hair - never
  * exactly-touching faces.
  */
-function pushCarClassGeoms(list, cls, x, y, angle, bodyTint, cabinTint) {
+function pushCarClassGeoms(
+  list,
+  cls,
+  x,
+  y,
+  angle,
+  bodyTint,
+  cabinTint,
+  wheelTint,
+  lamps = false
+) {
   const ux = Math.cos(angle);
   const uy = Math.sin(angle);
   const nx = -uy;
@@ -2573,7 +2942,49 @@ function pushCarClassGeoms(list, cls, x, y, angle, bodyTint, cabinTint) {
         tint
       )
     );
-  box(cls.lenM, cls.widM, cls.bodyM, 0, 0, cls.bodyM / 2, bodyTint);
+  // CW-54: the body starts at the clearance, not at the ground, and the four
+  // wheels below it are the only things that touch z=0.
+  const { clearanceM, wheelRadiusM } = carAnatomy(cls.kind);
+  const bodyH = cls.bodyM - clearanceM;
+  box(cls.lenM, cls.widM, bodyH, 0, 0, clearanceM + bodyH / 2, bodyTint);
+  for (const along of [1, -1]) {
+    for (const across of [1, -1]) {
+      box(
+        wheelRadiusM * 2,
+        CAR_WHEEL_WIDTH_M,
+        wheelRadiusM * 2,
+        along * cls.lenM * CAR_WHEELBASE_SHARE,
+        across * (cls.widM / 2 - CAR_WHEEL_INSET_M),
+        wheelRadiusM,
+        wheelTint
+      );
+    }
+  }
+  if (lamps) {
+    // A pair at each end, set in from the flanks, at about bumper height.
+    const lampZ = clearanceM + bodyH * 0.55;
+    const lampAcross = cls.widM / 2 - CAR_LAMP_SIZE_M;
+    for (const across of [1, -1]) {
+      box(
+        CAR_LAMP_SIZE_M,
+        CAR_LAMP_SIZE_M,
+        CAR_LAMP_SIZE_M,
+        cls.lenM / 2,
+        across * lampAcross,
+        lampZ,
+        CAR_HEADLAMP_TINT
+      );
+      box(
+        CAR_LAMP_SIZE_M,
+        CAR_LAMP_SIZE_M,
+        CAR_LAMP_SIZE_M,
+        -cls.lenM / 2,
+        across * lampAcross,
+        lampZ,
+        CAR_TAILLAMP_TINT
+      );
+    }
+  }
   const ghH = cls.hM - cls.bodyM + 0.05;
   const ghZ = cls.bodyM - 0.05 + ghH / 2;
   const w = cls.widM - 0.2;
@@ -2754,9 +3165,117 @@ const CANOPY_CHROMA = 0.7;
 // strip and CW-18's sign panels own the top of the street-level band; cars
 // read as accents underneath them rather than competing for the same
 // brightness. Still four tiers, so a parked row stays varied.
-const CAR_TIERS = [0.35, 0.5, 0.65, 0.8];
+export const CAR_TIERS = [0.35, 0.5, 0.65, 0.8];
 const CAR_CHROMA = 0.5;
-const CAR_CABIN_LIFT = 0.12;
+export const CAR_CABIN_LIFT = 0.12;
+
+/**
+ * CW-54: the greenhouse is GLASS, and glass is the same colour on every car.
+ *
+ * The cabin already sat a ladder step above the body (CAR_CABIN_LIFT), but it
+ * took the car's own paint hue, so a red car had red windows. It takes one
+ * fixed cool tint now, which is what separates a windscreen from the wing
+ * beside it.
+ *
+ * MONO IS UNTOUCHED BY DESIGN, and that is why this goes through
+ * inGamutChroma rather than CAR_CHROMA: tintOf's luminance promise holds only
+ * while nothing clamps, so an in-gamut chroma keeps the cabin at exactly
+ * 0.47 / 0.62 / 0.77 / 0.92 - the same four numbers a monochrome screen read
+ * before. Only the colour schemes can tell the difference.
+ *
+ * MEASURED at hue 195, encoded the way D-112 says to measure: the tint lands a
+ * cool entry from chroma 0.140 at the darkest cabin, 0.190 at the next and
+ * 0.235 at the third, so 0.30 clears all three with room and is about as grey
+ * as this can be and still be glass. THE BRIGHTEST CABIN CANNOT READ COOL AT
+ * ALL: at 0.92 the gamut caps chroma at 0.204, below the 0.235 it would need,
+ * so a top-tier windscreen lands white. That is a fact about where the ladder
+ * puts it rather than a number to tune - and a bright windscreen reading white
+ * is what a bright windscreen does.
+ */
+const CAR_GLASS_HUE_DEG = 195;
+const CAR_GLASS_CHROMA = 0.3;
+
+/** One cabin tint, from the cabin's own tier - never from the paint. */
+export function glassTint(tier) {
+  const cabin = Math.min(1, tier + CAR_CABIN_LIFT);
+  return tintOf(
+    cabin,
+    CAR_GLASS_HUE_DEG,
+    inGamutChroma(cabin, CAR_GLASS_HUE_DEG, CAR_GLASS_CHROMA)
+  );
+}
+
+/**
+ * CW-54: tyres are SLIGHTLY dimmer than the body they carry (the owner's
+ * word), and floored so the darkest cars keep wheels that read.
+ *
+ * The floor is the lesson CW-45 paid for: a dark tier on black pavement
+ * vanishes, and a wheel that vanishes takes the shadow line with it - which is
+ * the whole point of lifting the body. The proof gate's photographs decide
+ * whether 0.3 is high enough; one line to move it.
+ */
+const CAR_TYRE_DROP = 0.15;
+const CAR_TYRE_FLOOR = 0.3;
+
+/**
+ * CW-54: head and tail lamps, on the cars that are supposed to be driving.
+ *
+ * The luminance ladder decides these numbers, not taste. A lit shopfront is
+ * reserved the 0.93-0.95 band and a sign plate sits at 0.97; the monochrome
+ * reverse-video threshold is 0.80, and a cell has to cross it to read as a
+ * LIT POINT rather than as a bright grey.
+ *
+ * MEASURED, and it moved the number: the brightest paint already on a car is
+ * a top-tier cabin at 0.92 (CAR_TIERS tops out at 0.8 and CAR_CABIN_LIFT adds
+ * 0.12), so a head lamp at the 0.90 this was first written at would have been
+ * DIMMER than the brightest bodywork in the street. It sits at 0.92 instead -
+ * the top of the band cars are allowed - and it cannot go higher without
+ * invading the storefront reserve, which is a reserved-band question and not
+ * this release's to answer. A tail lamp is dimmer because a tail light is.
+ *
+ * Both go through inGamutChroma. tintOf CLAMPS, and a clamped channel silently
+ * voids the luminance it promised (CW-49's lesson: heads use it, torso and legs
+ * do not). A saturated red at this brightness is exactly the case that breaks -
+ * it wants 1.26 in the red channel - so the chroma asked for is the chroma the
+ * tier can actually carry.
+ *
+ * AND THAT CHROMA IS MEASURED IN LINEAR LIGHT, WHILE THE PALETTE MATCH HAPPENS
+ * AFTER THE OUTPUT ENCODING (D-112). The tail tier was 0.85, whose in-gamut
+ * tint is a linear 1 / 0.8095 / 0.8095 - decisively red through
+ * pickPaletteIndex. But the converter reads the ENCODED canvas, where sRGB's
+ * toe lifts 0.8095 to 0.910; raised to the scheme's chromaBoost of 5 that is
+ * 0.624, past the 0.6 at which WHITE beats RED. Photographed at nine metres,
+ * 233 of the 390 pixels a tail lamp owns came back #ffffff - a second pair of
+ * head lamps. Read off the frame, the flip sits between 0.835 and 0.839; the
+ * reverse-video floor is 0.80; so a red brake light lives in a window about
+ * three and a half hundredths wide and 0.82 is the middle of it.
+ *
+ * The head lamp lands WHITE by the same arithmetic, and that is left alone: a
+ * head lamp is white.
+ *
+ * ONLY THE FROZEN TRAFFIC IS LIT. Parked cars are parked: their lamps are off,
+ * which is also what stops a kerbside row from becoming a string of bright
+ * points along every street. One line to light them too.
+ */
+const CAR_LAMP_SIZE_M = 0.16;
+const CAR_HEADLAMP_TIER = 0.92;
+const CAR_HEADLAMP_HUE_DEG = 50;
+const CAR_HEADLAMP_CHROMA = 0.18;
+const CAR_TAILLAMP_TIER = 0.82;
+const CAR_TAILLAMP_HUE_DEG = 0;
+const CAR_TAILLAMP_CHROMA = 0.75;
+
+/** The two lamp tints, computed once - they never vary by car. */
+export const CAR_HEADLAMP_TINT = tintOf(
+  CAR_HEADLAMP_TIER,
+  CAR_HEADLAMP_HUE_DEG,
+  inGamutChroma(CAR_HEADLAMP_TIER, CAR_HEADLAMP_HUE_DEG, CAR_HEADLAMP_CHROMA)
+);
+export const CAR_TAILLAMP_TINT = tintOf(
+  CAR_TAILLAMP_TIER,
+  CAR_TAILLAMP_HUE_DEG,
+  inGamutChroma(CAR_TAILLAMP_TIER, CAR_TAILLAMP_HUE_DEG, CAR_TAILLAMP_CHROMA)
+);
 
 // Street furniture (CW-43, CW-Q43). True node positions only: the owner's
 // mission sentence makes this wayfinding data for a blind traveler, and a
@@ -3615,13 +4134,14 @@ export function buildStreetProps(model, collision = null) {
             const hue = TINT_HUES_DEG[(seed >>> 5) % TINT_HUES_DEG.length];
             const heading = dir > 0 ? angle : angle + Math.PI;
             const bodyTint = tintOf(tier, hue, CAR_CHROMA);
-            const cabinTint = tintOf(
-              Math.min(1, tier + CAR_CABIN_LIFT),
+            const cabinTint = glassTint(tier);
+            // CW-46: the class comes from the SAME seed, so adding classes
+            // reshuffled nothing else on the street.
+            const wheelTint = tintOf(
+              Math.max(CAR_TYRE_FLOOR, tier - CAR_TYRE_DROP),
               hue,
               CAR_CHROMA
             );
-            // CW-46: the class comes from the SAME seed, so adding classes
-            // reshuffled nothing else on the street.
             const cls = pickCarClass(((seed >>> 3) % 1000) / 1000);
             pushCarClassGeoms(
               trafficGeoms,
@@ -3630,7 +4150,9 @@ export function buildStreetProps(model, collision = null) {
               y,
               heading,
               bodyTint,
-              cabinTint
+              cabinTint,
+              wheelTint,
+              true
             );
             trafficCount++;
           }
@@ -3771,12 +4293,22 @@ export function buildStreetProps(model, collision = null) {
             const tier = CAR_TIERS[seed % CAR_TIERS.length];
             const hue = TINT_HUES_DEG[(seed >>> 5) % TINT_HUES_DEG.length];
             const bodyTint = tintOf(tier, hue, CAR_CHROMA);
-            const cabinTint = tintOf(
-              Math.min(1, tier + CAR_CABIN_LIFT),
+            const cabinTint = glassTint(tier);
+            const wheelTint = tintOf(
+              Math.max(CAR_TYRE_FLOOR, tier - CAR_TYRE_DROP),
               hue,
               CAR_CHROMA
             );
-            pushCarClassGeoms(carGeoms, cls, x, y, angle, bodyTint, cabinTint);
+            pushCarClassGeoms(
+              carGeoms,
+              cls,
+              x,
+              y,
+              angle,
+              bodyTint,
+              cabinTint,
+              wheelTint
+            );
 
             carSpots.add(x, y);
             obstacles.push({

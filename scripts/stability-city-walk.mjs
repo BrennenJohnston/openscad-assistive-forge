@@ -73,6 +73,11 @@ const DEFAULTS = {
   label: '',
   width: 1600,
   height: 900,
+  // --pose=x,y,headingDeg starts the sequences somewhere other than the
+  // spawn. CW-54 needs it: the frozen traffic that carries the head and tail
+  // lamps stands on the arterials, and Seattle's spawn is on a residential
+  // street where there is none of it to measure.
+  pose: '',
   marker: 'CITY_PAVING',
   markerPath: '/src/js/game/city-scene.js',
   // How close to a quantizer boundary counts as sitting ON it.
@@ -1035,7 +1040,28 @@ async function main() {
       // leave the walker somewhere else, and a start pose read after them
       // would put the next size in a different part of the city - which makes
       // two runs of this script look like a result when they are two places.
-      const spawnPose = await page.evaluate(() => window.__cw52api.pose())
+      let spawnPose = await page.evaluate(() => window.__cw52api.pose())
+      if (opts.pose) {
+        const [px, py, pdeg] = String(opts.pose).split(',').map(Number)
+        if (![px, py, pdeg].every(Number.isFinite)) {
+          throw new Error(`--pose wants x,y,headingDeg, got "${opts.pose}"`)
+        }
+        await page.evaluate(
+          (p) => {
+            const g = window.__cityWalkGame
+            const s = g.walkState
+            s.x = p.x
+            s.y = p.y
+            if (g.surface) s.groundZ = g.surface.heightAt(p.x, p.y)
+          },
+          { x: px, y: py }
+        )
+        spawnPose = await page.evaluate(() => window.__cw52api.pose())
+        spawnPose.x = px
+        spawnPose.y = py
+        spawnPose.headingRad = (pdeg * Math.PI) / 180
+        await page.evaluate((p) => window.__cw52api.setPose(p), spawnPose)
+      }
       console.log(
         `spawn: x ${spawnPose.x.toFixed(2)} y ${spawnPose.y.toFixed(2)} ` +
           `heading ${((spawnPose.headingRad * 180) / Math.PI).toFixed(2)} deg ` +

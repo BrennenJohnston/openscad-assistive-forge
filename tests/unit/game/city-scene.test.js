@@ -12,7 +12,23 @@ import {
   inGamutChroma,
   hashSpot,
   CITY_PAVING,
+  STOREFRONT_BAND_NAMES,
+  storefrontBandFor,
+  CAR_HEADLAMP_TINT,
+  CAR_TAILLAMP_TINT,
+  glassTint,
+  CAR_TIERS,
+  CAR_CABIN_LIFT,
 } from '../../../src/js/game/city-scene.js'
+import {
+  pickPaletteIndex,
+  parsePaletteColor,
+  normalizeChroma,
+} from '../../../src/js/_hfm-paint.js'
+import {
+  HC_PALETTE_GREEN,
+  HC_PALETTE_AMBER,
+} from '../../../src/js/game/hc-palettes.js'
 import {
   parseCityExtract,
   ROAD_WIDTHS_M,
@@ -1542,5 +1558,407 @@ describe('per-city paving (CW-51, CW-Q51)', () => {
     expect(maxV).toBeGreaterThan(50)
 
     dispose()
+  })
+})
+
+
+/**
+ * CW-53: twenty ground floors instead of five, and the map data decides which
+ * one a corner wears wherever the map knows.
+ *
+ * The band index is baked into every storefront's UVs, so it can be read back
+ * out of the built geometry - which is what these cases do rather than
+ * trusting the table they are meant to be guarding.
+ */
+describe('buildCityGroup — twenty storefront bands (CW-53)', () => {
+  const STOREFRONT_HEIGHT_M = 3.5
+
+  /** One building, optionally with a POI node beside it and its own tags. */
+  function oneBuilding({ buildingTags = { building: 'yes', height: '25' }, poi } = {}) {
+    const elements = [
+      { type: 'way', id: 1, tags: buildingTags, geometry: squareRing(0, 0, 5) },
+      {
+        type: 'way',
+        id: 3,
+        tags: { highway: 'residential' },
+        geometry: [pt(-50, 20), pt(50, 20)],
+      },
+    ]
+    if (poi) {
+      const [x, y] = poi.at ?? [8, 0]
+      elements.push({ type: 'node', id: 900, tags: poi.tags, ...pt(x, y) })
+    }
+    return parseCityExtract({ elements }, { center: CENTER })
+  }
+
+  /**
+   * The band a built city put its one storefront on.
+   *
+   * The band is applied as a UV OFFSET of band x STOREFRONT_HEIGHT_M, and the
+   * strip's own v is centred on zero for a building at the origin - so it is
+   * the CENTRE of the v range that names the band, not its minimum. Measured:
+   * a bakery node beside this fixture puts the range at 57.53..68.47, whose
+   * centre is exactly 18 x 3.5.
+   */
+  function bandOf(m) {
+    const { group, dispose } = buildCityGroup(m)
+    const mesh = group.children.find((c) => c.name === 'storefronts')
+    expect(mesh, 'this fixture grew no storefront at all').toBeDefined()
+    const uv = mesh.geometry.getAttribute('uv')
+    expect(uv, 'the storefront strip carries no UVs').toBeTruthy()
+    let minV = Infinity
+    let maxV = -Infinity
+    for (let i = 0; i < uv.count; i++) {
+      minV = Math.min(minV, uv.getY(i))
+      maxV = Math.max(maxV, uv.getY(i))
+    }
+    dispose()
+    const band = (minV + maxV) / 2 / STOREFRONT_HEIGHT_M
+    // If the UV scheme ever changes shape, this readout stops meaning a band
+    // and every case below would quietly agree with itself instead.
+    expect(
+      Math.abs(band - Math.round(band)),
+      `the storefront v range ${minV}..${maxV} is not centred on a band`
+    ).toBeLessThan(0.01)
+    return Math.round(band)
+  }
+
+  it('names its twenty bands, in the order their indices mean', () => {
+    // Design data the owner can veto row by row. The index is baked into
+    // shipped UVs, so a reordering is not a cosmetic change.
+    expect(STOREFRONT_BAND_NAMES).toEqual([
+      'glass',
+      'awning',
+      'shutter',
+      'arcade',
+      'service',
+      'cafe-tables',
+      'barfront',
+      'market',
+      'lobby',
+      'roller',
+      'restaurant',
+      'fastfood',
+      'clothes',
+      'salon',
+      'grocer',
+      'hotel',
+      'bank',
+      'vacant',
+      'bakery',
+      'marquee',
+    ])
+  })
+
+  it('sends each kind the map knows to the band that was measured for it', () => {
+    const bandNamed = (name) => STOREFRONT_BAND_NAMES.indexOf(name)
+    expect(storefrontBandFor('restaurant')).toBe(bandNamed('restaurant'))
+    expect(storefrontBandFor('fast_food')).toBe(bandNamed('fastfood'))
+    expect(storefrontBandFor('cafe')).toBe(bandNamed('cafe-tables'))
+    expect(storefrontBandFor('bar')).toBe(bandNamed('barfront'))
+    expect(storefrontBandFor('pub')).toBe(bandNamed('barfront'))
+    expect(storefrontBandFor('bank')).toBe(bandNamed('bank'))
+    expect(storefrontBandFor('theatre')).toBe(bandNamed('marquee'))
+    expect(storefrontBandFor('cinema')).toBe(bandNamed('marquee'))
+    expect(storefrontBandFor('marketplace')).toBe(bandNamed('market'))
+    expect(storefrontBandFor('library')).toBe(bandNamed('lobby'))
+    expect(storefrontBandFor('hotel')).toBe(bandNamed('hotel'))
+    expect(storefrontBandFor('shop:clothes')).toBe(bandNamed('clothes'))
+    expect(storefrontBandFor('shop:hairdresser')).toBe(bandNamed('salon'))
+    expect(storefrontBandFor('shop:convenience')).toBe(bandNamed('grocer'))
+    expect(storefrontBandFor('shop:bakery')).toBe(bandNamed('bakery'))
+    expect(storefrontBandFor('shop:vacant')).toBe(bandNamed('vacant'))
+  })
+
+  it('keeps an unlisted shop as a shop instead of dropping it to the hash', () => {
+    // shop=gift is 57 nodes across the four extracts and has no band of its
+    // own. Letting it fall through would throw away the one thing the map
+    // recorded about that corner, which is the opposite of what keeping the
+    // shop value was for.
+    expect(storefrontBandFor('shop:gift')).toBe(
+      STOREFRONT_BAND_NAMES.indexOf('glass')
+    )
+    expect(storefrontBandFor('shop:jewelry')).toBe(
+      STOREFRONT_BAND_NAMES.indexOf('glass')
+    )
+    // A kind nobody mapped falls to the hash, and says so with null.
+    expect(storefrontBandFor('townhall')).toBeNull()
+    expect(storefrontBandFor(null)).toBeNull()
+  })
+
+  it('dresses a corner as what the map says stands on it', () => {
+    expect(bandOf(oneBuilding({ poi: { tags: { shop: 'bakery' } } }))).toBe(
+      STOREFRONT_BAND_NAMES.indexOf('bakery')
+    )
+    expect(bandOf(oneBuilding({ poi: { tags: { amenity: 'restaurant' } } }))).toBe(
+      STOREFRONT_BAND_NAMES.indexOf('restaurant')
+    )
+    expect(bandOf(oneBuilding({ poi: { tags: { shop: 'vacant' } } }))).toBe(
+      STOREFRONT_BAND_NAMES.indexOf('vacant')
+    )
+    // And an unlisted shop still reads as a shop rather than as a dice roll.
+    expect(bandOf(oneBuilding({ poi: { tags: { shop: 'gift' } } }))).toBe(
+      STOREFRONT_BAND_NAMES.indexOf('glass')
+    )
+  })
+
+  it("lets a hotel's own tag beat the shop next door", () => {
+    // Every one of the 75 hotels in the four extracts is a WAY, never a node,
+    // so the POI index can never see one - a hotel has to be read off the
+    // building itself.
+    const m = oneBuilding({
+      buildingTags: { building: 'yes', height: '25', tourism: 'hotel' },
+      poi: { tags: { shop: 'bakery' } },
+    })
+    expect(bandOf(m)).toBe(STOREFRONT_BAND_NAMES.indexOf('hotel'))
+  })
+
+  it('counts what landed on each band, so a dead band can be seen', () => {
+    // A band nobody uses and a band everybody uses look identical in a
+    // texture. Measured on the real extracts with this counter: all twenty
+    // bands are used in all four cities, and each city's shape is its own -
+    // Seattle restaurant 12.7% against Albuquerque's much flatter spread,
+    // which is what a city with fewer mapped POIs should look like.
+    const { stats, dispose } = buildCityGroup(model())
+    expect(stats.storefrontBands).toHaveLength(STOREFRONT_BAND_NAMES.length)
+    // This model has two buildings and only one of them is grounded, so the
+    // counter must total exactly one - a count that merely exceeded zero
+    // would pass just as happily if it were counting something else.
+    expect(stats.storefrontBands.reduce((a, b) => a + b, 0)).toBe(1)
+    dispose()
+
+    // And a POI moves the count onto its own band rather than anywhere else.
+    const withBakery = buildCityGroup(
+      oneBuilding({ poi: { tags: { shop: 'bakery' } } })
+    )
+    const bakery = STOREFRONT_BAND_NAMES.indexOf('bakery')
+    expect(withBakery.stats.storefrontBands[bakery]).toBe(1)
+    expect(
+      withBakery.stats.storefrontBands.reduce((a, b) => a + b, 0)
+    ).toBe(1)
+    withBakery.dispose()
+  })
+
+  it('is deterministic, and a building with no POI still varies', () => {
+    // THE SEED LAW: the hash draw is the same draw it has always been, so the
+    // same city dresses the same way twice.
+    const plain = () => bandOf(oneBuilding())
+    const first = plain()
+    expect(plain()).toBe(first)
+    expect(first).toBeGreaterThanOrEqual(0)
+    expect(first).toBeLessThan(STOREFRONT_BAND_NAMES.length)
+  })
+})
+
+
+/**
+ * CW-54: cars have wheels and the driving ones have their lights on.
+ *
+ * The lamp numbers are decided by the luminance ladder, not by taste, so what
+ * has to be guarded is that they still SIT on it after tintOf has had its way
+ * with them - and that a converter in colour mode still reads the hue out of a
+ * tint whose chroma had to be cut to almost nothing to stay in gamut.
+ */
+describe('buildStreetProps — car anatomy and lamps (CW-54)', () => {
+  const LUM = [0.2126, 0.7152, 0.0722]
+  const luminance = (t) => t[0] * LUM[0] + t[1] * LUM[1] + t[2] * LUM[2]
+
+  it('keeps the lamp luminances the ladder was told they would be', () => {
+    // tintOf CLAMPS, and a clamped channel silently voids the luminance it
+    // promised - which is the whole reason inGamutChroma exists. A head lamp
+    // has to stay clear of the 0.80 reverse-video threshold to read as a lit
+    // POINT and clear of the 0.93-0.95 storefront reserve so it does not
+    // invade it; a tail lamp is dimmer because a tail light is.
+    expect(luminance(CAR_HEADLAMP_TINT)).toBeCloseTo(0.92, 4)
+    expect(luminance(CAR_TAILLAMP_TINT)).toBeCloseTo(0.82, 4)
+    // The tail lamp also has a CEILING, which is the whole of D-112: past
+    // about 0.837 its in-gamut red is so pale that the encoded canvas reads it
+    // as white. 0.82 is the middle of the window between that and the 0.80
+    // floor below.
+    expect(luminance(CAR_TAILLAMP_TINT)).toBeLessThan(0.835)
+    // Both cross the reverse-video threshold, so both read as lit POINTS
+    // rather than as bright grey.
+    expect(luminance(CAR_HEADLAMP_TINT)).toBeGreaterThan(0.8)
+    expect(luminance(CAR_TAILLAMP_TINT)).toBeGreaterThan(0.8)
+    // And the head lamp is at least as bright as the brightest paint a car
+    // can wear - a top-tier cabin, 0.8 + 0.12 - without reaching the 0.93
+    // floor of the storefront reserve. That window is one hundredth wide,
+    // which is why the number is measured rather than chosen.
+    const brightestCabin = Math.max(...CAR_TIERS) + CAR_CABIN_LIFT
+    expect(luminance(CAR_HEADLAMP_TINT)).toBeGreaterThanOrEqual(
+      brightestCabin - 1e-6
+    )
+    expect(luminance(CAR_HEADLAMP_TINT)).toBeLessThan(0.93)
+  })
+
+  it('still lands the colour each lamp is meant to be, ENCODED (D-112)', () => {
+    // The tail lamp's chroma had to fall from the 0.75 asked for to about 0.18
+    // to keep its luminance where the ladder wants it - a saturated red simply
+    // is not that bright - and what survives is a pale pink. Whether a
+    // converter can still read RED out of that depends entirely on WHICH
+    // NUMBERS IT IS HANDED.
+    //
+    // This is D-112. The tint is linear light; the canvas the converter samples
+    // has been through the renderer's output encoding, and sRGB's toe lifts the
+    // green and blue channels much closer to the red one. Handed the linear
+    // tint, pickPaletteIndex says red at every tier this lamp could plausibly
+    // take, which is why the first version of this guard was green while a
+    // photograph of the same lamp came back white. Encode first, and the guard
+    // has an opinion: at 0.85 it says #ffffff, at 0.82 it says #ff3333.
+    const encode = (c) =>
+      c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055
+    const normalized = (p) => p.map((c) => normalizeChroma(parsePaletteColor(c)))
+    const entry = (tint, palette) => {
+      const e = tint.map(encode)
+      return palette[pickPaletteIndex(e[0], e[1], e[2], normalized(palette), 5)]
+    }
+    expect(entry(CAR_TAILLAMP_TINT, HC_PALETTE_GREEN)).toBe('#ff3333')
+    expect(entry(CAR_TAILLAMP_TINT, HC_PALETTE_AMBER)).toBe('#ff2d95')
+    // A head lamp is white, and lands white. The linear-space reading called
+    // it yellow; the encoded one, which is the one the frame agrees with, does
+    // not.
+    expect(entry(CAR_HEADLAMP_TINT, HC_PALETTE_GREEN)).toBe('#ffffff')
+    expect(entry(CAR_HEADLAMP_TINT, HC_PALETTE_AMBER)).toBe('#ffffff')
+  })
+
+  it('glazes every car the same cool colour without moving mono (CW-54)', () => {
+    // The cabin used to take the car's own paint hue, so a red car had red
+    // windows. It takes one fixed cool tint now - and the whole point of the
+    // exercise is that a MONOCHROME screen cannot tell, because luminance
+    // alone is what it reads. That promise only holds while nothing clamps,
+    // which is why glassTint goes through inGamutChroma: pin the four cabin
+    // luminances exactly, and the promise is a fact rather than an intention.
+    const cabins = CAR_TIERS.map((t) => Math.min(1, t + CAR_CABIN_LIFT))
+    const tints = CAR_TIERS.map((t) => glassTint(t))
+    tints.forEach((tint, i) => {
+      expect(luminance(tint)).toBeCloseTo(cabins[i], 6)
+      // Cool: blue above green above red, on every tier.
+      expect(tint[2]).toBeGreaterThan(tint[1])
+      expect(tint[1]).toBeGreaterThan(tint[0])
+    })
+    // ENCODED (D-112), the three lower cabins read cool and the brightest one
+    // cannot: at 0.92 the gamut caps the chroma at 0.204, under the 0.235 it
+    // would need. That is the ladder's arithmetic, not a tuning choice, and it
+    // is pinned so a later change to the tiers cannot quietly whiten the rest.
+    const encode = (c) =>
+      c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055
+    const normalized = (p) => p.map((c) => normalizeChroma(parsePaletteColor(c)))
+    const landed = tints.map((tint) => {
+      const e = tint.map(encode)
+      return HC_PALETTE_GREEN[
+        pickPaletteIndex(e[0], e[1], e[2], normalized(HC_PALETTE_GREEN), 5)
+      ]
+    })
+    expect(landed).toEqual(['#00ffff', '#00ffff', '#00ffff', '#ffffff'])
+
+    // And it is WIRED IN, not merely available. Without this the whole case
+    // passes with both call sites still handing the cabin the paint hue.
+    const m = propsModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    const cars = props.group.children.find((c) => c.name === 'cars')
+    const col = cars.geometry.getAttribute('color')
+    const wears = (tint) => {
+      for (let i = 0; i < col.count; i++) {
+        if (
+          Math.abs(col.getX(i) - tint[0]) < 1e-4 &&
+          Math.abs(col.getY(i) - tint[1]) < 1e-4 &&
+          Math.abs(col.getZ(i) - tint[2]) < 1e-4
+        ) {
+          return true
+        }
+      }
+      return false
+    }
+    expect(tints.some(wears), 'no parked cabin wears a glass tint').toBe(true)
+    props.dispose()
+  })
+
+  it('lights the traffic and leaves the parked cars dark', () => {
+    // A parked car is parked. Lighting the kerbside rows would also string
+    // bright points down every street, which is the carpet law's territory.
+    //
+    // Asked as "does this mesh CONTAIN a lamp tint", not "which mesh is
+    // brighter" - the first form of this compared brightest luminances and
+    // failed, because a top-tier parked cabin is already 0.92 and the lamps
+    // sit in the same neighbourhood on purpose. Presence is the fact; the
+    // brightness ordering never was one.
+    // The plain fixture's road is 100 m of residential, which is 0.8 traffic
+    // cars and therefore none - and the first form of this case guarded the
+    // traffic half with `if (traffic)`, so it passed happily with the lamps
+    // removed entirely.
+    //
+    // The road added here is 120 m of secondary and it is INSIDE THE MODEL
+    // BOUNDS, which the buildings set at plus or minus 66 m. Props are placed
+    // only within those bounds, so a longer road laid across them grows no
+    // traffic at all - measured: 400 m at y=40 gives zero, 120 m at y=25
+    // gives five.
+    const m = propsModel([
+      {
+        type: 'way',
+        id: 99,
+        tags: { highway: 'secondary' },
+        geometry: [pt(-60, 25), pt(60, 25)],
+      },
+    ])
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    const parked = props.group.children.find((c) => c.name === 'cars')
+    const traffic = props.group.children.find((c) => c.name === 'traffic-cars')
+    expect(parked, 'this fixture parked no cars').toBeDefined()
+    expect(
+      traffic,
+      'this fixture grew no frozen traffic, so the lamp half would measure nothing'
+    ).toBeDefined()
+
+    const hasTint = (mesh, tint) => {
+      const c = mesh.geometry.getAttribute('color')
+      for (let i = 0; i < c.count; i++) {
+        if (
+          Math.abs(c.getX(i) - tint[0]) < 1e-4 &&
+          Math.abs(c.getY(i) - tint[1]) < 1e-4 &&
+          Math.abs(c.getZ(i) - tint[2]) < 1e-4
+        ) {
+          return true
+        }
+      }
+      return false
+    }
+    expect(hasTint(parked, CAR_HEADLAMP_TINT)).toBe(false)
+    expect(hasTint(parked, CAR_TAILLAMP_TINT)).toBe(false)
+    expect(hasTint(traffic, CAR_HEADLAMP_TINT)).toBe(true)
+    expect(hasTint(traffic, CAR_TAILLAMP_TINT)).toBe(true)
+    props.dispose()
+  })
+
+  it('stands every car on its wheels, with the body lifted clear', () => {
+    // The body used to sit flush on the ground, which is why a parked row read
+    // as a low dotted mass.
+    //
+    // The tell is not how MANY vertices reach the ground - four wheel boxes
+    // put more there than one flush body did, measured 0.30 against 0.19, so
+    // that ratio moves the wrong way. It is that a box has vertices only at
+    // its two ends in z, so a car whose body starts at a ride height has
+    // vertices AT that ride height and a flush one has none. Both clearances
+    // in the table are checked because both classes park here.
+    const m = propsModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    const cars = props.group.children.find((c) => c.name === 'cars')
+    const a = cars.geometry.getAttribute('position').array
+    let minZ = Infinity
+    let atClearance = 0
+    for (let i = 2; i < a.length; i += 3) {
+      minZ = Math.min(minZ, a[i])
+      if (Math.abs(a[i] - 0.2) < 1e-3 || Math.abs(a[i] - 0.28) < 1e-3) {
+        atClearance++
+      }
+    }
+    // Something still touches the ground, and it is the wheels.
+    expect(minZ).toBeCloseTo(0, 5)
+    // And a body starts at a ride height, which is what a flush car has none
+    // of.
+    expect(
+      atClearance,
+      'no car body starts at a ride height - they are still sitting on the ground'
+    ).toBeGreaterThan(0)
+    props.dispose()
   })
 })
