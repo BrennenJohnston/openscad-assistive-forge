@@ -23,6 +23,7 @@ import {
   splitPath,
   getPointAtLength,
   getTotalLength,
+  getPathBBox,
 } from 'svg-path-commander';
 import {
   fromTransformAttribute,
@@ -723,6 +724,55 @@ function isInsideNonRenderingScope(element) {
     parent = parent.parentElement;
   }
   return false;
+}
+
+/**
+ * Measure the width-to-height ratio of an SVG's renderable geometry.
+ *
+ * OpenSCAD's resize([w, 0], auto) rescales the imported GEOMETRY bounding
+ * box, so the ratio that matters for fit is the united bbox of every shape
+ * OpenSCAD will render (it fills all shapes regardless of paint, so
+ * stroke-only elements count too), excluding non-rendering scopes (defs,
+ * clipPath, ...). Transforms are already baked by parseSvgElements.
+ *
+ * @param {string} svgString - Complete SVG markup
+ * @returns {number|null} width/height (rounded to 4 decimals), or null when
+ *   there is nothing measurable (no shapes, or degenerate zero extent)
+ */
+export function measureSvgAspect(svgString) {
+  try {
+    const elements = parseSvgElements(svgString);
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const el of elements) {
+      if (isInsideNonRenderingScope(el.element)) continue;
+      if (!el.pathData) continue;
+      const box = getPathBBox(el.pathData);
+      if (
+        !box ||
+        !Number.isFinite(box.x) ||
+        !Number.isFinite(box.y) ||
+        !Number.isFinite(box.width) ||
+        !Number.isFinite(box.height)
+      ) {
+        continue;
+      }
+      minX = Math.min(minX, box.x);
+      minY = Math.min(minY, box.y);
+      maxX = Math.max(maxX, box.x + box.width);
+      maxY = Math.max(maxY, box.y + box.height);
+    }
+    if (!Number.isFinite(minX) || !Number.isFinite(minY)) return null;
+    const width = maxX - minX;
+    const height = maxY - minY;
+    if (width <= 0 || height <= 0) return null;
+    return Math.round((width / height) * 10000) / 10000;
+  } catch (err) {
+    console.warn('[SVG Preparer] Aspect measurement failed:', err);
+    return null;
+  }
 }
 
 /**
