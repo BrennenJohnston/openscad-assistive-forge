@@ -1716,11 +1716,19 @@ test.describe('ASCII City Walk — the kerb (CW-50)', () => {
         })
         .toBeGreaterThan(from + 12)
     } finally {
-      await page.keyboard.up('ArrowUp')
+      // The watcher stops BEFORE the key is let go, never after. Releasing
+      // first leaves a full round trip in which the walker is standing still
+      // because nothing is asking it to move, and every frame of that gap was
+      // being counted as a stall. MEASURED under a 6x CPU throttle: twelve of
+      // them with the release first, none with the stop first, and the same
+      // at 10x. On a fast machine the gap is under one frame, which is why
+      // this was green locally and on Firefox and red on CI's Chromium and
+      // Edge.
       await page.evaluate(() => {
         window.__cwKerb.stop = true
         cancelAnimationFrame(window.__cwKerbTick)
       })
+      await page.keyboard.up('ArrowUp')
     }
 
     const watch = await page.evaluate(() => window.__cwKerb)
