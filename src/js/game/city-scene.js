@@ -3752,7 +3752,7 @@ export function buildStreetProps(model, collision = null) {
   // 1. The trees the map records. Real data wins every argument with the
   //    infill below, so these are placed first and only skipped where a
   //    building stands on them (or a duplicate node repeats one).
-  model.trees.forEach(([x, y], index) => {
+  model.trees.forEach(({ x, y }, index) => {
     if (!inCore(x, y) || isBlocked(x, y)) return;
     if (treeSpots.occupied(x, y, MAPPED_TREE_MIN_GAP_M)) return;
     plantTree(x, y, hashBuilding(index, 'osm-tree'));

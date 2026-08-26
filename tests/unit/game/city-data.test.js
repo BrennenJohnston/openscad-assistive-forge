@@ -577,10 +577,18 @@ describe('trimOverpassElement — tree nodes (CW-16)', () => {
       },
     })
 
+    // CW-55 keeps the species: it is what the tree IS, and until this rebake
+    // it was thrown away at trim time even where a mapper had recorded it.
+    // addr:street is still dropped, which is the half of this case that has
+    // not changed - the gate keeps what the game reads and nothing else.
     expect(trimmed).toEqual({
       type: 'node',
       id: 77,
-      tags: { natural: 'tree', name: 'Big Leaf Maple' },
+      tags: {
+        natural: 'tree',
+        name: 'Big Leaf Maple',
+        species: 'Acer macrophyllum',
+      },
       lat: 47.612346,
       lon: -122.345679,
     })
@@ -646,8 +654,8 @@ describe('parseCityExtract — trees (CW-16)', () => {
 
     expect(model.stats.treeCount).toBe(1)
     expect(model.trees).toHaveLength(1)
-    expect(model.trees[0][0]).toBeCloseTo(30, 2)
-    expect(model.trees[0][1]).toBeCloseTo(-40, 2)
+    expect(model.trees[0].x).toBeCloseTo(30, 2)
+    expect(model.trees[0].y).toBeCloseTo(-40, 2)
   })
 
   it('leaves the building-derived bounds alone', () => {
@@ -1663,5 +1671,194 @@ describe('attraction nodes join the landmarks (CW-43/CW-44, CW-Q44)', () => {
     expect(entries).toHaveLength(1)
     // The way's centroid, not the node's offset position.
     expect(entries[0].x).toBeCloseTo(0, 0)
+  })
+})
+
+/**
+ * CW-55 (CW-Q55): one rebake carries the seeds CW-56/57 render.
+ *
+ * Everything here is the gate lesson in its fourth costume. Keeping a tag is
+ * not enough, and neither is querying for it: the node and way routing gates
+ * each have to ADMIT the new class, or it arrives from Overpass, survives the
+ * trim's tag filter, and dies two lines later with its tags intact.
+ */
+describe('planting and resting seeds (CW-55, CW-Q55)', () => {
+  const nodeEl = (id, xM, yM, tags) => ({
+    type: 'node',
+    id,
+    ...pt(xM, yM),
+    tags,
+  })
+
+  it('pins the one-list-not-two vocabularies the bake and parser share', async () => {
+    const { PLANTER_MAN_MADE_VALUES, FLOWERBED_VALUES, PICNIC_LEISURE_VALUES } =
+      await import('../../../src/js/game/city-data.js')
+    expect(PLANTER_MAN_MADE_VALUES).toEqual(['planter'])
+    expect(FLOWERBED_VALUES).toEqual(['flowerbed'])
+    expect(PICNIC_LEISURE_VALUES).toEqual(['picnic_table'])
+  })
+
+  it('keeps what a tree IS, which the trim used to throw away', () => {
+    const trimmed = trimOverpassElement(
+      nodeEl(400, 0, 0, {
+        natural: 'tree',
+        leaf_type: 'broadleaved',
+        genus: 'Acer',
+        species: 'Acer rubrum',
+        denotation: 'avenue',
+        circumference: '1.2', // not kept
+      })
+    )
+    expect(trimmed.tags).toEqual({
+      natural: 'tree',
+      leaf_type: 'broadleaved',
+      genus: 'Acer',
+      species: 'Acer rubrum',
+      denotation: 'avenue',
+    })
+  })
+
+  it('admits a planter node and a picnic table through the NODE gate', () => {
+    // Both would have died here before: man_made and leisure were not on the
+    // list of keys the gate accepts, whatever their tags said.
+    const planter = trimOverpassElement(
+      nodeEl(401, 0, 0, { man_made: 'planter' })
+    )
+    expect(planter, 'the node gate dropped a planter').not.toBeNull()
+    expect(planter.tags).toEqual({ man_made: 'planter' })
+
+    const table = trimOverpassElement(
+      nodeEl(402, 0, 0, { leisure: 'picnic_table' })
+    )
+    expect(table, 'the node gate dropped a picnic table').not.toBeNull()
+    expect(table.tags).toEqual({ leisure: 'picnic_table' })
+  })
+
+  it('admits planter and flowerbed WAYS through the way gate', () => {
+    for (const tags of [
+      { man_made: 'planter' },
+      { leisure: 'flowerbed' },
+      { landuse: 'flowerbed' },
+    ]) {
+      const way = trimOverpassElement({
+        type: 'way',
+        id: 403,
+        tags,
+        geometry: squareRing(0, 0, 3),
+      })
+      expect(way, `the way gate dropped ${JSON.stringify(tags)}`).not.toBeNull()
+    }
+  })
+
+  it('types trees, plantings and picnic tables out of one extract', () => {
+    const model = parseCityExtract(
+      extractOf(
+        {
+          type: 'way',
+          id: 500,
+          tags: { building: 'yes' },
+          geometry: squareRing(0, 0, 20),
+        },
+        nodeEl(501, 30, -40, { natural: 'tree', leaf_type: 'needleleaved' }),
+        nodeEl(502, 35, -40, { natural: 'tree' }),
+        nodeEl(503, 10, 10, { man_made: 'planter' }),
+        nodeEl(504, 12, 12, { leisure: 'picnic_table' }),
+        {
+          type: 'way',
+          id: 505,
+          tags: { leisure: 'flowerbed' },
+          geometry: squareRing(50, 50, 4),
+        },
+        {
+          type: 'way',
+          id: 506,
+          tags: { man_made: 'planter' },
+          geometry: squareRing(-50, -50, 2),
+        }
+      ),
+      { center: CENTER }
+    )
+
+    // A tree is a typed object now, and an untagged one still parses - the
+    // fields are optional, so a city with no leaf_type at all (Albuquerque
+    // has none) is not a city with no trees.
+    expect(model.trees).toHaveLength(2)
+    expect(model.trees[0].x).toBeCloseTo(30, 2)
+    expect(model.trees[0].leafType).toBe('needleleaved')
+    expect(model.trees[1].leafType).toBeUndefined()
+    expect(model.stats.leafTypedTreeCount).toBe(1)
+
+    // A polygon planting is a CENTROID and an AREA. The ring itself is not
+    // kept: a two-by-four pixel cell cannot show the shape of a flowerbed,
+    // and keeping it would put real bytes in every extract for nothing.
+    const beds = model.plantings.filter((p) => p.kind === 'flowerbed')
+    expect(beds).toHaveLength(1)
+    expect(beds[0].x).toBeCloseTo(50, 0)
+    expect(beds[0].areaM2).toBeCloseTo(64, 0)
+
+    const planters = model.plantings.filter((p) => p.kind === 'planter')
+    expect(planters).toHaveLength(2)
+    // The node planter has no footprint, and says so rather than guessing.
+    expect(planters.find((p) => p.areaM2 === 0)).toBeDefined()
+    expect(planters.find((p) => p.areaM2 > 0).areaM2).toBeCloseTo(16, 0)
+
+    expect(model.picnicTables).toHaveLength(1)
+    expect(model.picnicTables[0].x).toBeCloseTo(12, 1)
+
+    expect(model.stats.plantingCount).toBe(3)
+    expect(model.stats.plantingByKind).toEqual({ planter: 2, flowerbed: 1 })
+    expect(model.stats.picnicTableCount).toBe(1)
+  })
+
+  it('keeps a flowerbed OUT of the greens, because it is dressed not drawn', () => {
+    const model = parseCityExtract(
+      extractOf(
+        {
+          type: 'way',
+          id: 600,
+          tags: { building: 'yes' },
+          geometry: squareRing(0, 0, 20),
+        },
+        {
+          type: 'way',
+          id: 601,
+          tags: { leisure: 'flowerbed' },
+          geometry: squareRing(40, 0, 5),
+        },
+        {
+          type: 'way',
+          id: 602,
+          tags: { leisure: 'park' },
+          geometry: squareRing(-40, 0, 5),
+        }
+      ),
+      { center: CENTER }
+    )
+    // A park is a lawn to colour; a flowerbed is a planting to dress. Adding
+    // flowerbed to the GREEN_* lists would have been one word and would have
+    // painted every bed as grass.
+    expect(model.greens).toHaveLength(1)
+    expect(model.greens[0].kind).toBe('park')
+    expect(model.plantings.map((p) => p.kind)).toEqual(['flowerbed'])
+  })
+
+  it('does not admit a picnic table to the storefront chooser', () => {
+    // A picnic table is a leisure node, and the poi branch takes anything
+    // with shop or amenity - so the ordering is what keeps a picnic table
+    // from choosing a building's ground floor.
+    const model = parseCityExtract(
+      extractOf(
+        {
+          type: 'way',
+          id: 700,
+          tags: { building: 'yes' },
+          geometry: squareRing(0, 0, 20),
+        },
+        nodeEl(701, 12, 12, { leisure: 'picnic_table' })
+      ),
+      { center: CENTER }
+    )
+    expect(model.pois).toHaveLength(0)
+    expect(model.picnicTables).toHaveLength(1)
   })
 })

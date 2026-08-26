@@ -35,6 +35,9 @@ import {
   FURNITURE_HIGHWAY_VALUES,
   FURNITURE_EMERGENCY_VALUES,
   ATTRACTION_TOURISM_VALUES,
+  PLANTER_MAN_MADE_VALUES,
+  FLOWERBED_VALUES,
+  PICNIC_LEISURE_VALUES,
 } from '../src/js/game/city-data.js';
 
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
@@ -105,6 +108,12 @@ const FURNITURE_AMENITY = FURNITURE_AMENITY_VALUES.join('|');
 const FURNITURE_HIGHWAY = FURNITURE_HIGHWAY_VALUES.join('|');
 const FURNITURE_EMERGENCY = FURNITURE_EMERGENCY_VALUES.join('|');
 const ATTRACTION_TOURISM = ATTRACTION_TOURISM_VALUES.join('|');
+// CW-55 (CW-Q55): the planting and resting seeds. Filtered unions, like
+// everything else here - a planter is a node OR a way, a flowerbed is a way
+// under either leisure or landuse, a picnic table is a node.
+const PLANTER_MAN_MADE = PLANTER_MAN_MADE_VALUES.join('|');
+const FLOWERBED = FLOWERBED_VALUES.join('|');
+const PICNIC_LEISURE = PICNIC_LEISURE_VALUES.join('|');
 
 const query = `[out:json][timeout:90];
 (
@@ -124,6 +133,11 @@ const query = `[out:json][timeout:90];
   node["tactile_paving"](around:${radiusM},${center.lat},${center.lon});
   node["tourism"~"^(${ATTRACTION_TOURISM})$"](around:${radiusM},${center.lat},${center.lon});
   node["attraction"](around:${radiusM},${center.lat},${center.lon});
+  node["man_made"~"^(${PLANTER_MAN_MADE})$"](around:${radiusM},${center.lat},${center.lon});
+  way["man_made"~"^(${PLANTER_MAN_MADE})$"](around:${radiusM},${center.lat},${center.lon});
+  way["leisure"~"^(${FLOWERBED})$"](around:${radiusM},${center.lat},${center.lon});
+  way["landuse"~"^(${FLOWERBED})$"](around:${radiusM},${center.lat},${center.lon});
+  node["leisure"~"^(${PICNIC_LEISURE})$"](around:${radiusM},${center.lat},${center.lon});
 );
 out tags geom;`;
 
