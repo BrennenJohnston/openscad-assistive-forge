@@ -77,6 +77,9 @@ const DEFAULTS = {
   markerPath: '/src/js/game/city-scene.js',
   // How close to a quantizer boundary counts as sitting ON it.
   band: 0.03,
+  // Candidate hysteresis band widths to SIMULATE. A lever is measured before
+  // it is built, and dropped with its table if it measures badly.
+  hyst: '0.02,0.04,0.06',
   // --shots=<dir> writes every captured frame of every sequence as a PNG of
   // the ASCII canvas, which is what the eyes-on gate reads.
   shots: '',
@@ -94,10 +97,10 @@ const CITY_BUTTONS = {
  * Runtime variants, each applied by name inside the page so that one browser
  * session measures all of them against the same scenery.
  *
- * 'shipped'       - exactly what the tree does today.
- * 'paving-bias'   - drive the pavement material's cell-raster bias, which the
- *                   shipped wiring leaves sitting at zero.
- * 'all-bias'      - pavement and ground driven as well as facades.
+ * 'shipped'       - every material that carries the cell-raster uniform is
+ *                   driven, which is what the game's own size sync does.
+ * 'no-<mesh>-bias'- that ONE layer's bias forced to zero, so each layer's
+ *                   share of the filter's worth is separable.
  * 'no-cellraster' - every bias forced to zero (CW-41 undone): the upper bound
  *                   on what that filter is worth over a sequence.
  * 'flat-<mesh>'   - the CW-41 blur split, taken to its limit: one layer's
@@ -108,14 +111,19 @@ const CITY_BUTTONS = {
  */
 const VARIANTS = [
   'shipped',
-  'paving-bias',
-  'all-bias',
   'no-cellraster',
+  'no-sidewalks-bias',
+  'no-ground-bias',
+  'no-buildings-bias',
+  'no-storefronts-bias',
   'flat-buildings',
   'flat-storefronts',
   'flat-sidewalks',
   'flat-ground',
   'flat-all',
+  'aniso-ground',
+  'aniso-sidewalks',
+  'aniso-buildings',
 ]
 
 function parseArgs(argv) {
@@ -180,6 +188,7 @@ function installProbe() {
     return out
   }
   const savedMaps = new Map()
+  const savedAniso = new Map()
 
   /** A 1x1 texture holding the average colour of an existing one. */
   const flattenTexture = (texture) => {
@@ -313,6 +322,13 @@ function installProbe() {
         })
       }
       savedMaps.clear()
+      for (const [m, a] of savedAniso) {
+        if (m.map) {
+          m.map.anisotropy = a
+          m.map.needsUpdate = true
+        }
+      }
+      savedAniso.clear()
 
       const setBias = (meshName, value) => {
         let hits = 0
@@ -337,33 +353,59 @@ function installProbe() {
         return hits
       }
 
-      // The shipped baseline, re-asserted every time.
-      const applied = {
-        buildings: setBias('buildings', bias),
-        storefronts: setBias('storefronts', bias),
-        sidewalks: setBias('sidewalks', 0),
-      }
+      // The shipped baseline: every material that carries the uniform is
+      // driven, which is exactly what the game's own setCellRaster does. The
+      // variants then turn ONE of them off, so each name says what it removes.
+      const biased = []
+      g.scene.traverse((o) => {
+        if (!o.isMesh || !o.name) return
+        const mats = Array.isArray(o.material) ? o.material : [o.material]
+        for (const m of mats) {
+          if (m?.userData?.cellLodBias && !biased.includes(o.name)) {
+            biased.push(o.name)
+          }
+        }
+      })
+      const applied = {}
+      for (const n of biased) applied[n] = setBias(n, bias)
+      // A variant may be several knobs joined with '+', applied in order after
+      // ONE reset - so "no-sidewalks-bias+aniso-sidewalks" is a real third
+      // option rather than two runs that cannot be compared.
+      for (const part of String(name).split('+')) applyOne(part)
+      return finishVariant()
+
+      function applyOne(name) {
       if (name === 'shipped') {
         // nothing more
-      } else if (name === 'paving-bias') {
-        applied.sidewalks = setBias('sidewalks', bias)
-        if (!applied.sidewalks) {
-          throw new Error('no pavement material carries a cell-raster uniform')
-        }
-      } else if (name === 'all-bias') {
-        applied.sidewalks = setBias('sidewalks', bias)
-        applied.ground = setBias('ground', bias)
-        if (!applied.ground) {
+      } else if (name === 'no-cellraster') {
+        for (const n of biased) applied[n] = setBias(n, 0)
+      } else if (name.startsWith('no-') && name.endsWith('-bias')) {
+        const layer = name.slice(3, -5)
+        applied[layer] = setBias(layer, 0)
+        if (!applied[layer]) {
           throw new Error(
-            'the ground material carries no cell-raster uniform at all, so ' +
-              '"all-bias" is "paving-bias" under a bigger name - measure the ' +
-              'ground with flat-ground instead, or wire the filter first'
+            `variant ${name} changed nothing: no mesh called "${layer}" ` +
+              `carries a cell-raster uniform, so the run would have measured ` +
+              `the baseline under another name`
           )
         }
-      } else if (name === 'no-cellraster') {
-        applied.buildings = setBias('buildings', 0)
-        applied.storefronts = setBias('storefronts', 0)
-        applied.sidewalks = setBias('sidewalks', 0)
+      } else if (name.startsWith('aniso-')) {
+        // The physically right tool for a GRAZING surface, which a uniform mip
+        // bias is not: the ground plane is the one texture in this city seen
+        // almost edge-on, where the isotropic LOD picks the larger derivative
+        // and throws the along-view detail away.
+        const layer = name.slice(6)
+        let hits = 0
+        for (const m of materialsNamed(layer)) {
+          if (m.map) {
+            savedAniso.set(m, m.map.anisotropy)
+            m.map.anisotropy = 16
+            m.map.needsUpdate = true
+            hits++
+          }
+        }
+        applied[layer] = hits
+        if (!hits) throw new Error(`variant ${name} found no textured mesh`)
       } else if (name === 'flat-all') {
         for (const n of ['buildings', 'storefronts', 'sidewalks', 'ground']) {
           applied[n] = flatten(n)
@@ -381,8 +423,12 @@ function installProbe() {
       } else {
         throw new Error('unknown variant ' + name)
       }
-      g.altView.invalidate()
-      return { bias, applied }
+      }
+
+      function finishVariant() {
+        g.altView.invalidate()
+        return { bias, applied }
+      }
     },
     fingerprint,
     begin(opts) {
@@ -429,6 +475,19 @@ function installProbe() {
         gOsc: new Int32Array(n),
         iOsc: new Int32Array(n),
         lumAbs: new Float64Array(n),
+        // A hysteresis lever, simulated before it is built (CW-30). For each
+        // candidate band width, run a sticky quantizer over the same cell
+        // luminances and count what it would have BOUGHT (drive changes it
+        // prevents) and what it would have COST (frames a cell spends held at
+        // a level its own luminance is no longer anywhere near - the
+        // screen-space smear a moving camera would produce).
+        hyst: opts.hystBands.map((h) => ({
+          h,
+          level: new Int8Array(n).fill(-1),
+          changes: 0,
+          revToggles: 0,
+          heldWrong: 0,
+        })),
       }
       return { cols: probe.cols, rows: probe.rows, cells: n }
     },
@@ -472,6 +531,30 @@ function installProbe() {
         if (l > a.maxLum[i]) a.maxLum[i] = l
         if (Math.abs(l - 0.8) <= band) a.nearRev[i] = 1
         if (Math.abs(l - 0.5) <= band) a.nearMid[i] = 1
+      }
+      // The sticky-quantizer simulation, run on the SAME luminances the
+      // converter just decided from.
+      for (const sim of a.hyst) {
+        const h = sim.h
+        for (let i = 0; i < n; i++) {
+          const l = lum[i]
+          const plain = l >= 0.8 ? 2 : l >= 0.5 ? 1 : 0
+          const was = sim.level[i]
+          let now = plain
+          if (was >= 0 && plain !== was) {
+            // Only cross a boundary once the luminance is CLEAR of it.
+            const edge = plain > was ? (was === 0 ? 0.5 : 0.8) : was === 2 ? 0.8 : 0.5
+            if (Math.abs(l - edge) < h) now = was
+          }
+          if (was >= 0) {
+            if (now !== was) {
+              sim.changes++
+              if ((was === 2) !== (now === 2)) sim.revToggles++
+            }
+            if (now !== plain) sim.heldWrong++
+          }
+          sim.level[i] = now
+        }
       }
       const p = a.prev
       const p2 = a.prev2
@@ -587,6 +670,12 @@ function installProbe() {
           for (let i = 0; i < n; i++) c += a.classToggles[i]
           return c
         })(),
+        hyst: a.hyst.map((sim) => ({
+          h: sim.h,
+          changes: sim.changes,
+          revToggles: sim.revToggles,
+          heldWrong: sim.heldWrong,
+        })),
         classPairs: [...a.pairs.entries()]
           .sort((x, y) => y[1] - x[1])
           .slice(0, 8),
@@ -726,7 +815,10 @@ async function runSequence(page, poses, opts, shotDir, tag) {
   // begin() refuses an empty read rather than starting an accumulator that
   // would quietly score nothing.
   await convertOnce(page)
-  await page.evaluate((band) => window.__cw52api.begin({ band }), opts.band)
+  await page.evaluate(
+    (o) => window.__cw52api.begin(o),
+    { band: opts.band, hystBands: list(opts.hyst).map(Number) }
+  )
   for (let f = 0; f < poses.length; f++) {
     const before = await page.evaluate(() => window.__cw52api.conversions())
     await page.evaluate((p) => window.__cw52api.setPose(p), poses[f])
@@ -815,7 +907,9 @@ async function main() {
   const phosphors = list(opts.phosphors)
   const variants = list(opts.variants)
   for (const v of variants) {
-    if (!VARIANTS.includes(v)) throw new Error(`unknown variant: ${v}`)
+    for (const part of v.split('+')) {
+      if (!VARIANTS.includes(part)) throw new Error(`unknown variant: ${part}`)
+    }
   }
   if (opts.shots) mkdirSync(opts.shots, { recursive: true })
 
@@ -891,6 +985,17 @@ async function main() {
         window.__cityWalkGame.altView.setCellProbe(true)
       )
 
+      // THE spawn, captured once. Every sequence starts here: creep and walk
+      // leave the walker somewhere else, and a start pose read after them
+      // would put the next size in a different part of the city - which makes
+      // two runs of this script look like a result when they are two places.
+      const spawnPose = await page.evaluate(() => window.__cw52api.pose())
+      console.log(
+        `spawn: x ${spawnPose.x.toFixed(2)} y ${spawnPose.y.toFixed(2)} ` +
+          `heading ${((spawnPose.headingRad * 180) / Math.PI).toFixed(2)} deg ` +
+          `groundZ ${spawnPose.groundZ.toFixed(3)}`
+      )
+
       const mats = await page.evaluate(() => window.__cw52api.materials())
       console.log('mesh | textured | cell-raster bias')
       for (const [name, m] of Object.entries(mats).sort()) {
@@ -920,13 +1025,14 @@ async function main() {
             )
           }
         }
-        const startPose = await page.evaluate(() => window.__cw52api.pose())
+        const startPose = spawnPose
         let walkPoses = null
         for (const mode of modes) {
           let poses
           if (mode === 'walk') {
             if (!walkPoses) {
               await page.evaluate((p) => window.__cw52api.setPose(p), startPose)
+              await convertOnce(page)
               walkPoses = await recordWalkPoses(page, opts.frames, opts)
             }
             poses = walkPoses
@@ -935,6 +1041,7 @@ async function main() {
           }
           let baseFingerprint = null
           for (const variant of variants) {
+            let saturated = false
             const applied = await page.evaluate(
               (v) => window.__cw52api.applyVariant(v),
               variant
@@ -946,12 +1053,25 @@ async function main() {
               baseFingerprint = fp
             } else if (baseFingerprint !== null && fp === baseFingerprint) {
               // A variant that decides every cell exactly as the baseline did
-              // has not been applied, whatever its name says. Reporting it
-              // would be four-for-four with this round's other dead guards.
-              throw new Error(
-                `variant "${variant}" produced a converted frame identical ` +
-                  `to "shipped" (fingerprint ${fp}) - it changed nothing, so ` +
-                  `its numbers would be the baseline under another name`
+              // has not been applied, whatever its name says. For a knob that
+              // turns something OFF that is a dead knob and a hard stop. For a
+              // flat-* upper bound it is a RESULT - the layer already reads as
+              // its own average at cell scale, so there is nothing left for a
+              // bigger hammer to take - and it is printed as one.
+              if (!variant.split('+').some((p) => p.startsWith('flat-'))) {
+                throw new Error(
+                  `variant "${variant}" produced a converted frame identical ` +
+                    `to "shipped" (fingerprint ${fp}) - it changed nothing, ` +
+                    `so its numbers would be the baseline under another name`
+                )
+              }
+              saturated = true
+              console.log(
+                `
+[${phosphor}-${size}-${mode}-${variant}] SATURATED: ` +
+                  `flattening this layer changes not one cell of the ` +
+                  `converted frame, so the shipped filtering already takes ` +
+                  `everything flattening would take`
               )
             }
             const tag = `${phosphor}-${size}-${mode}-${variant}`
@@ -972,6 +1092,7 @@ async function main() {
               accent,
               bias: applied.bias,
               applied: applied.applied,
+              saturated,
               startPose,
               endPose: poses[poses.length - 1],
               totals: sum,
@@ -1002,6 +1123,19 @@ async function main() {
                 `glyph FLIP ${sum.glyphFlipPct.toFixed(3)}% · ` +
                 `reverse toggles ${sum.rToggle}`
             )
+            if (res.hyst?.length) {
+              console.log(
+                '  HYSTERESIS (simulated): ' +
+                  res.hyst
+                    .map(
+                      (x) =>
+                        `+/-${x.h}: ${x.revToggles} rev toggles (was ` +
+                        `${sum.rToggle}), ${x.changes} drive changes, ` +
+                        `${x.heldWrong} cell-frames held off-level`
+                    )
+                    .join(' · ')
+              )
+            }
             console.log(
               '| class | cells | lit | near 0.8 | drive chg% | drive FLIP% | glyph chg% | glyph FLIP% | rev tog% | lum jitter |'
             )
@@ -1048,7 +1182,8 @@ async function main() {
       `| ${r.phosphor} | ${r.size} | ${r.mode} | ${r.variant} | ` +
         `${r.totals.driveFlipPct.toFixed(3)} | ` +
         `${r.totals.driveChangePct.toFixed(3)} | ` +
-        `${r.totals.glyphFlipPct.toFixed(3)} | ${r.totals.rToggle} |`
+        `${r.totals.glyphFlipPct.toFixed(3)} | ${r.totals.rToggle} |` +
+        (r.saturated ? ' SATURATED' : '')
     )
   }
   if (opts.json) {
