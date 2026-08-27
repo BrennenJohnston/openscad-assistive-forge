@@ -581,3 +581,30 @@ export const STORAGE_KEY_CITY_WALK_CAMERA_PANEL =
 export const STORAGE_KEY_CITY_WALK_MAP_STYLE = getAppPrefKey(
   'city-walk-map-style'
 );
+
+/**
+ * What a player has found in ONE city (CW-62, CW-Q56).
+ *
+ * ★ A KEY PER CITY, because progress is per city: Seattle's landmarks say
+ * nothing about Denver's, and a single key would either mix them or need a
+ * shape that is a per-city map wearing one name.
+ *
+ * ★★ AND THE VALUE IS A JSON OBJECT ON PURPOSE, not a bare list. CW-64 wants
+ * to remember that the fireworks have been unlocked and CW-65 wants to
+ * remember a traveler; both should EXTEND this object rather than mint sibling
+ * keys beside it, because three keys per city is three chances for them to
+ * disagree about the same visit. Unknown fields are preserved on write for the
+ * same reason: an older build must not eat a newer one's progress.
+ *
+ * ★ THE STORE'S KNOWN LIMIT, said here rather than buried in a record:
+ * landmark NAMES are the identity. A rebake that renames a landmark orphans
+ * its tick, and the player is silently un-visited there. CW-55 was this
+ * round's rebake and there will be others. Names were chosen anyway because
+ * the alternative - an index into the landmark list - breaks on any rebake
+ * that adds or drops one, which is far more common.
+ *
+ * @param {string} citySlug the city's own slug, e.g. 'seattle'
+ */
+export function getCityWalkProgressKey(citySlug) {
+  return getAppPrefKey(`city-walk-progress-${citySlug}`);
+}

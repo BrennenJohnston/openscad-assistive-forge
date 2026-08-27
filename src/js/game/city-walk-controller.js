@@ -84,6 +84,7 @@ import {
   mapStyleAnnouncement,
 } from './city-map-styles.js';
 import { describeJunction } from './city-junction.js';
+import { readCityProgress, writeCityProgress } from './city-progress.js';
 import { initAltView } from '../_hfm.js';
 import {
   CALIBRATION_CANDIDATES,
@@ -1745,10 +1746,21 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       game.altView.invalidate();
     };
     game.startedAtMs = performance.now();
-    // CW-20: which landmarks this session has walked past. Per-session on
-    // purpose — a fresh city is a fresh walk, and nothing is stored.
-    game.visited = new Set();
-    game.announcedAllFound = false;
+    /**
+     * CW-20 kept this per session and said so: "a fresh city is a fresh walk,
+     * and nothing is stored". CW-62 (CW-Q56) reverses that. Eleven of twelve
+     * landmarks found, the game closed, and twelve unfound on return is a
+     * poor reward - and this store is the ground CW-64's fireworks and
+     * CW-65's traveler are both meant to stand on.
+     */
+    const saved = readCityProgress(game.city.slug);
+    game.visited = saved.visited;
+    game.progressRaw = saved.raw;
+    // ★ A COMPLETED CITY RE-ENTERED DOES NOT RE-ANNOUNCE. The all-found line
+    // is a reward, and a reward that fires every time you walk back in stops
+    // being one. CW-64's trigger wants the TRANSITION, so this seam stays
+    // clean: the flag is seeded from the store, not recomputed from counts.
+    game.announcedAllFound = saved.allFound;
     // CW-62: start the marks from whatever the set says, so there is one
     // place the map's state comes from rather than two that can drift.
     game.beacons.setVisited(game.visited);
@@ -1787,6 +1799,19 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     if (import.meta.env.DEV) {
       // Dev-lane debug handle (mirrors hfm-controller's DEV-only logging).
       window.__cityWalkGame = game;
+      /**
+       * CW-62: reaching a landmark, through the real path.
+       *
+       * A landmark is marked when a MOVING frame finds a new nearest one, and
+       * an e2e cannot walk a player to twelve of them in a reasonable time.
+       * This calls the same `markVisited` the walk calls - the legend, the
+       * HUD, the map marks, the announcement and the store write all happen
+       * exactly as they would - rather than letting a test poke
+       * `game.visited` and prove nothing about any of them.
+       *
+       * DEV-only, beside the handle above, so it never ships.
+       */
+      window.__cwMark = (name) => markVisited(game, name);
     }
 
     applyFirstPersonCamera();
@@ -2475,15 +2500,23 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     game.altView.invalidate();
     refreshLegend(game);
     updateHud();
-    if (
+    const justFinished =
       !game.announcedAllFound &&
       game.landmarks.length > 0 &&
-      game.visited.size >= game.landmarks.length
-    ) {
+      game.visited.size >= game.landmarks.length;
+    if (justFinished) {
       game.announcedAllFound = true;
       // ACCESSIBILITY-CRITICAL STRING (D-35) — flagged for owner review.
       announceInLayer(ALL_LANDMARKS_MESSAGE);
     }
+    // CW-62: written through on every new find rather than at exit, because
+    // there is no reliable exit - a tab closes, a laptop sleeps, a browser
+    // is killed. The write is small and happens once per landmark, ever.
+    writeCityProgress(game.city.slug, {
+      visited: game.visited,
+      allFound: game.announcedAllFound,
+      raw: game.progressRaw,
+    });
   }
   /**
    * Save what the player is looking at as a PNG (CW-20).

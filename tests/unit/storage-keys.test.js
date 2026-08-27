@@ -218,6 +218,22 @@ describe('storage-keys helpers', () => {
     expect(storageKeys.getAppPrefKey('theme')).toBe('openscad-forge-theme');
   });
 
+  it('getCityWalkProgressKey is one key per city, under the app prefix', () => {
+    // CW-62. A key per city, because progress is per city - and the shape is
+    // pinned here because CW-64 and CW-65 are going to EXTEND its value
+    // rather than mint sibling keys beside it.
+    expect(storageKeys.getCityWalkProgressKey('seattle')).toBe(
+      'openscad-forge-city-walk-progress-seattle'
+    );
+    expect(storageKeys.getCityWalkProgressKey('denver')).toBe(
+      'openscad-forge-city-walk-progress-denver'
+    );
+    // Two cities never share a key, which is the whole point of the shape.
+    expect(storageKeys.getCityWalkProgressKey('seattle')).not.toBe(
+      storageKeys.getCityWalkProgressKey('burnaby')
+    );
+  });
+
   it('getDrawerStateKey generates openscad-drawer-*-state keys', () => {
     expect(storageKeys.getDrawerStateKey('camera')).toBe(
       'openscad-drawer-camera-state'

@@ -1463,3 +1463,223 @@ test.describe('ASCII City Walk — the loading line (CW-44)', () => {
     ).toBeEnabled()
   })
 })
+
+test.describe('ASCII City Walk — landmarks you can find, and progress that lasts (CW-62)', () => {
+  const hud = (page) => page.locator('#cityWalkHudStatus')
+  const announcer = (page) => page.locator('#cityWalkAnnouncer')
+  const KEY = 'openscad-forge-city-walk-progress-seattle'
+
+  const stats = (page) =>
+    page.evaluate(
+      () => window.__cityWalkGame?.altView?.getConvertStats?.()?.samples ?? 0
+    )
+  async function waitForConversions(page, n) {
+    const from = await stats(page)
+    await expect
+      .poll(() => stats(page), { timeout: 60000 })
+      .toBeGreaterThanOrEqual(from + n)
+  }
+
+  /** What the map's landmark marks actually are, asked of the scene. */
+  const marks = (page) =>
+    page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const group = g.beacons.group
+      const out = []
+      for (const root of group.children) {
+        const [halo, frame, core] = root.children
+        out.push({
+          scale: root.scale.x,
+          selected: halo.visible,
+          frameR: frame.geometry.parameters.radius,
+          coreR: core.geometry.parameters.radius,
+          coreHex: core.material.color.getHexString(),
+          frameHex: frame.material.color.getHexString(),
+          depthTest: frame.material.depthTest,
+        })
+      }
+      return { count: out.length, marks: out, visible: group.visible }
+    })
+
+  test('★★ a landmark mark is a mark: bright, holed, and a constant footprint (CW-62)', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+    await page.keyboard.press('KeyM')
+    await expect(hud(page)).toContainText('map view')
+
+    const m = await marks(page)
+    expect(m.visible).toBe(true)
+    expect(m.count, 'no landmark marks were built').toBeGreaterThan(4)
+
+    for (const one of m.marks) {
+      // ★★ THE LAW CW-61 PAID FOR. A bright outline only reads when it is
+      // wrapped around EXACT BLACK: exact black is the one value the
+      // converter renders as an empty cell, and an empty patch inside a mark
+      // is a footprint no building in any palette has. A bare bright ring
+      // was invisible in three palettes of five while owning up to 1% of the
+      // frame.
+      expect(one.coreHex, 'a landmark mark lost its exact-black core').toBe(
+        '000000'
+      )
+      expect(one.frameHex).not.toBe('000000')
+      // Never occluded by a tall building, like every other map mark.
+      expect(one.depthTest).toBe(false)
+      // The hole is really a hole: the core is inside the frame, not over it.
+      expect(one.coreR).toBeLessThan(one.frameR)
+      expect(one.coreR).toBeGreaterThan(0)
+    }
+
+    // ★ ONE SCALE FOR EVERY MAP MARK. The player's square, CW-61's circle and
+    // these diamonds all take applyMapCamera's number, so a mark holds its
+    // footprint in glyphs rather than in ground - which is the whole reason
+    // the old 7 m beacons were 0.85 cells wide and unfindable.
+    const playerScale = await page.evaluate(
+      () => window.__cityWalkGame.marker.scale.x
+    )
+    for (const one of m.marks) expect(one.scale).toBeCloseTo(playerScale, 6)
+
+    // And zooming keeps them in step rather than letting them drift.
+    await page.keyboard.down('PageUp')
+    await page.waitForTimeout(500)
+    await page.keyboard.up('PageUp')
+    await waitForConversions(page, 2)
+    const zoomed = await marks(page)
+    const after = await page.evaluate(
+      () => window.__cityWalkGame.marker.scale.x
+    )
+    expect(after).not.toBeCloseTo(playerScale, 3)
+    for (const one of zoomed.marks) expect(one.scale).toBeCloseTo(after, 6)
+  })
+
+  test('★★ selected and visited are FOOTPRINTS, not tones (CW-62)', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+    await page.keyboard.press('KeyM')
+    await expect(hud(page)).toContainText('map view')
+
+    // Nothing selected to begin with.
+    expect((await marks(page)).marks.filter((m) => m.selected)).toHaveLength(0)
+
+    await page.keyboard.press('KeyL')
+    await expect(announcer(page)).toContainText(/Landmark 1 of/)
+    const afterSelect = await marks(page)
+    // Exactly one, and selection is a HALO - an outline change - rather than
+    // a colour change. CW-36 died of a mark that differed only in tone.
+    expect(afterSelect.marks.filter((m) => m.selected)).toHaveLength(1)
+
+    // ★★ VISITED WAS A TONE FIRST AND IT VANISHED. A dimmer frame changed
+    // 0.46% of the frame against a 0.000% control - a real, repeatable,
+    // three-palette change - and photographed as the marks DISAPPEARING into
+    // the map's own glyph noise. Changed is not readable. So visited is a
+    // smaller mark that keeps its brightness and its hole.
+    const before = (await marks(page)).marks
+    const name = await page.evaluate(() => window.__cityWalkGame.landmarks[0].name)
+    await page.evaluate((n) => {
+      const g = window.__cityWalkGame
+      g.beacons.setVisited(new Set([n]))
+      g.altView.invalidate()
+    }, name)
+    const after = (await marks(page)).marks
+
+    const shrank = after.filter((m, i) => m.frameR < before[i].frameR)
+    expect(shrank, 'visited changed nothing about the footprint').toHaveLength(1)
+    const i = after.findIndex((m, k) => m.frameR < before[k].frameR)
+    // Still bright, and still holed: a visited landmark is a lesser mark, not
+    // an absent one.
+    expect(after[i].frameHex).toBe(before[i].frameHex)
+    expect(after[i].coreHex).toBe('000000')
+    expect(after[i].coreR).toBeLessThan(after[i].frameR)
+    expect(after[i].coreR).toBeGreaterThan(0)
+  })
+
+  test('★★ what you found is still found when you come back (CW-62)', async ({
+    page,
+  }) => {
+    // SEEDED: the store decides what the game opens with.
+    await page.addInitScript(
+      ([key, value]) => localStorage.setItem(key, value),
+      [
+        KEY,
+        JSON.stringify({
+          visited: ['Space Needle'],
+          allFound: false,
+          fireworksUnlocked: true,
+        }),
+      ]
+    )
+    await launchGame(page)
+    await enterCity(page)
+
+    await expect(hud(page)).toContainText('landmarks 1/')
+    await page.keyboard.press('KeyM')
+    await expect(hud(page)).toContainText('map view')
+    const seeded = await marks(page)
+    const smaller = seeded.marks.filter(
+      (m) => m.frameR < Math.max(...seeded.marks.map((x) => x.frameR))
+    )
+    expect(smaller, 'the seeded visit did not reach the map').toHaveLength(1)
+
+    // And the legend agrees, which is the sighted half of the same fact.
+    await expect(page.locator('#cityWalkLegend')).toContainText('Space Needle')
+  })
+
+  test('★★ a REAL re-entry keeps what a real walk found (CW-62)', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    // ★ SEEDED STORAGE PROVES THE READ. Only a real round trip proves the
+    // WRITE, and the write is the half a seeded test can never reach.
+    await launchGame(page)
+    await enterCity(page)
+
+    const name = await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      // Mark one through the game's own path, not by writing storage.
+      const lm = g.landmarks[0]
+      window.__cwMark(lm.name)
+      return lm.name
+    })
+    await expect(hud(page)).toContainText('landmarks 1/')
+
+    const stored = await page.evaluate((k) => localStorage.getItem(k), KEY)
+    expect(stored, 'nothing was written').toBeTruthy()
+    expect(JSON.parse(stored).visited).toContain(name)
+
+    // Leave the city and come back in, the way a player would.
+    await page.keyboard.press('Escape')
+    await expect(page.locator('#cityWalkCard')).toBeVisible({ timeout: 20000 })
+    await launchGame(page)
+    await enterCity(page)
+    await expect(hud(page)).toContainText('landmarks 1/')
+    expect(
+      await page.evaluate(() => [...window.__cityWalkGame.visited]),
+      'the walk was forgotten across a real re-entry'
+    ).toContain(name)
+  })
+
+  test('★★ a completed city does not re-announce itself (CW-62)', async ({
+    page,
+  }) => {
+    await page.addInitScript(
+      ([key, value]) => localStorage.setItem(key, value),
+      [KEY, JSON.stringify({ visited: [], allFound: true })]
+    )
+    await launchGame(page)
+    await enterCity(page)
+
+    // Walk into every landmark. The all-found line is a REWARD, and a reward
+    // that fires every time you walk back in stops being one - so a city the
+    // store already calls complete stays quiet. CW-64's trigger wants the
+    // TRANSITION, which is why the flag is seeded rather than recomputed.
+    await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      for (const lm of g.landmarks) window.__cwMark(lm.name)
+    })
+    await page.waitForTimeout(600)
+    await expect(announcer(page)).not.toContainText('All landmarks found')
+  })
+})
