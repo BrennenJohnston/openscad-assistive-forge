@@ -210,6 +210,20 @@ jobs:
   # so the never-started guard still works per shard rather than seeing the
   # other half as missing.
   #
+  # CW-62 (2026-08-27): CHROMIUM RUNS THREE SHARDS, not two, and the reason is
+  # a measurement rather than a preference. Re-weighted from run 33063099176's
+  # GREEN shards, two shards project to 32.9 minutes against Playwright's
+  # 35-minute ceiling - and the attempt before it, on a starved runner, hit
+  # that ceiling and was cut off at 2100s. Three shards project to 22.9.
+  # CW-59, CW-60 and CW-61 added fourteen cases to the most expensive files in
+  # this lane, and CW-63 through CW-66 will add more.
+  #
+  # Renaming the shard contexts is safe HERE AND ONLY HERE: ruleset 12059827
+  # requires "E2E Tests (Chromium)", the aggregator below, not the individual
+  # shards. The Edge lane's shards ARE each required contexts, so its split
+  # cannot change without the owner editing the ruleset first - and it
+  # projects to the same 32.9 minutes. That is on the owner ledger.
+  #
   # D-72 (CW-29, 2026-08-22): --shard is no longer what divides these lanes.
   # It balances the COUNT of tests, and the count was never the problem - the
   # halves were 476 and 475 tests and 50.3 against 20.9 test-minutes, because
@@ -219,7 +233,7 @@ jobs:
   # tests, so the guard below is unaffected. The job names are untouched, so
   # no ruleset context moves.
   e2e-tests-chromium-shard:
-    name: E2E Tests (Chromium ${{ matrix.shard }}/2)
+    name: E2E Tests (Chromium ${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -228,7 +242,7 @@ jobs:
       # in one half or both is most of the diagnosis.
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3]
     
     steps:
       - name: Checkout code
@@ -279,8 +293,8 @@ jobs:
         # script reads tests/e2e itself, so a new spec cannot fall between the
         # shards; its header says how to re-measure the weights.
         run: |
-          FILES=$(node scripts/e2e-shard.mjs ${{ matrix.shard }} 2)
-          echo "shard ${{ matrix.shard }}/2 runs: $FILES"
+          FILES=$(node scripts/e2e-shard.mjs ${{ matrix.shard }} 3)
+          echo "shard ${{ matrix.shard }}/3 runs: $FILES"
           npx playwright test --project=chromium $FILES
         env:
           # R2a added 17 Classic e2e cases, each booting WASM and loading a
@@ -355,7 +369,7 @@ jobs:
           result='${{ needs.e2e-tests-chromium-shard.result }}'
           echo "Chromium shards reported: $result"
           if [ "$result" != "success" ]; then
-            echo "::error::Chromium did not pass ($result). The half that failed is in E2E Tests (Chromium 1/2) or (2/2)."
+            echo "::error::Chromium did not pass ($result). The third that failed is in E2E Tests (Chromium 1/3), (2/3) or (3/3)."
             exit 1
           fi
 
