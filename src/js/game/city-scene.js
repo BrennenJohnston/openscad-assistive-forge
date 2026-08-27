@@ -6263,6 +6263,8 @@ export function buildFireworks(spanM) {
   // established by the first update instead, on whatever clock the caller is
   // actually stepping with.
   let armed = false;
+  /** A held still frame is not running, but it IS on screen. */
+  let still = false;
   let showStartMs = -1;
   let nextBurstMs = -1;
   let burstIndex = 0;
@@ -6321,6 +6323,7 @@ export function buildFireworks(spanM) {
 
     start() {
       armed = true;
+      still = false;
       showStartMs = -1;
       burstIndex = 0;
       group.visible = true;
@@ -6342,6 +6345,7 @@ export function buildFireworks(spanM) {
      */
     showStill(x, y, headingRad = 0) {
       armed = false;
+      still = true;
       showStartMs = -1;
       group.visible = true;
       mapGroup.visible = true;
@@ -6393,6 +6397,7 @@ export function buildFireworks(spanM) {
     /** Take the still frame down. */
     clear() {
       armed = false;
+      still = false;
       showStartMs = -1;
       group.visible = false;
       mapGroup.visible = false;
@@ -6405,6 +6410,20 @@ export function buildFireworks(spanM) {
 
     isRunning() {
       return armed;
+    },
+
+    /**
+     * Is there anything on screen from this show - moving OR held still?
+     *
+     * ★ THE MAP SYNC NEEDS THIS AND `isRunning()` WOULD HAVE LIED TO IT. The
+     * reduced-motion celebration is deliberately NOT "running": nothing
+     * animates and the step loop never touches it. But it is very much
+     * VISIBLE, and a view toggle that asks `isRunning()` would hide it and
+     * never bring it back - a player who opened the map during their three
+     * seconds of celebration would lose the celebration.
+     */
+    isShowing() {
+      return armed || still;
     },
 
     /**
@@ -6421,6 +6440,7 @@ export function buildFireworks(spanM) {
         const anyLive = slots.some((s) => s.startMs >= 0);
         if (!anyLive) {
           armed = false;
+          still = false;
           showStartMs = -1;
           group.visible = false;
           mapGroup.visible = false;

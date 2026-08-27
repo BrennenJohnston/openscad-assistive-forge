@@ -3155,12 +3155,12 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // representation (P2) rather than a bird's eye view of the same stars.
     if (game.fireworks) {
       game.fireworks.group.visible =
-        !game.mapView && game.fireworks.isRunning();
+        !game.mapView && game.fireworks.isShowing();
       // CW-Q59 asks for a 2D representation at true ring scale and location,
       // so the map shows the same bursts from above rather than the street
       // show tipped on its side.
       game.fireworks.mapGroup.visible =
-        game.mapView && game.fireworks.isRunning();
+        game.mapView && game.fireworks.isShowing();
     }
     game.lighting.setMapBoost(game.mapView);
     game.beacons.group.visible = game.mapView;
