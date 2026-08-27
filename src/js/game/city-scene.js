@@ -81,6 +81,12 @@ import {
   PLANTER_H_M,
 } from './city-planting.js';
 import {
+  dressingFor,
+  needleLegPoint,
+  NEEDLE_LEG,
+  NEEDLE_LEG_BEARINGS_RAD,
+} from './landmark-dressings.js';
+import {
   DEFAULT_MAP_STYLE,
   mapStyleById,
   wayfindMarkSizeM,
@@ -1636,6 +1642,65 @@ function offsetGeometryUv(geometry, du, dv) {
   uv.needsUpdate = true;
 }
 
+/**
+ * ★★ CW-63 (CW-Q56): AUTHORED TRIPOD ARCS FOR THE SPACE NEEDLE.
+ *
+ * The data has thirteen straight `building:part` prisms and no curve, so the
+ * hourglass - the one thing that makes the silhouette the Space Needle rather
+ * than a mast - is authored here from published dimensions (see
+ * landmark-dressings.js for the numbers and their sources).
+ *
+ * ★ THE ARCS ARE BOXES, and that is a decision the converter makes for us.
+ * A swept tube would carry vertices this city cannot see: read through a
+ * grid whose cell is 4 px wide and 9 px tall, nine stacked boxes and a smooth
+ * curve are the same picture, and boxes merge into the same buffer every
+ * other building already uses. So the legs cost geometry and nothing else -
+ * no new material, no new draw call, no new class id.
+ *
+ * @param {[number, number]} centre the tower's own centre, in world metres
+ * @param {number} groundZ what the tower stands on
+ */
+function needleTripodGeometries(centre, groundZ, tint) {
+  const geoms = [];
+  const { segments, thicknessM } = NEEDLE_LEG;
+  const half = thicknessM / 2;
+  for (const bearing of NEEDLE_LEG_BEARINGS_RAD) {
+    for (let i = 0; i < segments; i++) {
+      const a = needleLegPoint(bearing, i / segments);
+      const b = needleLegPoint(bearing, (i + 1) / segments);
+      const dx = b[0] - a[0];
+      const dy = b[1] - a[1];
+      const dz = b[2] - a[2];
+      const len = Math.hypot(dx, dy, dz);
+      if (!(len > 0)) continue;
+      // ★ NON-INDEXED, AND THE CITY WOULD NOT LOAD WITHOUT IT. Every building
+      // in the merge comes from ExtrudeGeometry, which has no index;
+      // BoxGeometry has one, and mergeGeometries refuses a mix outright
+      // ("index attribute exists among all geometries, or in none of them").
+      // The whole city failed to build on the first run of this - the CW-25
+      // merged-mesh invariant, arriving from a new direction.
+      const box = new BoxGeometry(
+        thicknessM,
+        thicknessM,
+        len + half
+      ).toNonIndexed();
+      // Stand the box along the segment: pitch it away from vertical by the
+      // segment's own slope, then swing it round to the leg's bearing.
+      const pitch = Math.acos(Math.min(1, Math.max(-1, dz / len)));
+      box.rotateX(pitch);
+      box.rotateZ(-Math.atan2(dx, dy));
+      box.translate(
+        centre[0] + (a[0] + b[0]) / 2,
+        centre[1] + (a[1] + b[1]) / 2,
+        groundZ + (a[2] + b[2]) / 2
+      );
+      paintGeometry(box, tint);
+      geoms.push(box);
+    }
+  }
+  return geoms;
+}
+
 function extrudeBuilding(building, tint, options = {}) {
   const shape = new Shape(building.outer.map(([x, y]) => new Vector2(x, y)));
   for (const hole of building.holes) {
@@ -2463,6 +2528,32 @@ export function buildCityGroup(model) {
       if (roof) bucket.push(roof);
       anyGeom = true;
     }
+
+    /**
+     * ★★ THE ONE HOOK (CW-63, CW-Q56). Everything above ran the generic path,
+     * untouched, for every building in every city. A landmark with a dressing
+     * row gets its authored geometry added HERE, into the same archetype
+     * bucket, so it merges into the same buffer, wears the same material and
+     * takes the same class id - and a city with no dressed landmark in it
+     * (Denver, the control) never reaches this line at all.
+     *
+     * Additive on purpose: the Needle's thirteen parts are correct and are
+     * left exactly as the data has them. Delete the row and the building goes
+     * back to being ordinary, with nothing else to unpick.
+     */
+    const dressing = dressingFor(building.id);
+    if (dressing?.legs === 'needle-tripod') {
+      const centre = ringCentroid(building.outer);
+      for (const geom of needleTripodGeometries(
+        centre,
+        building.minHeightM,
+        tint
+      )) {
+        buildingGeoms[archetypeIndex].push(geom);
+        anyGeom = true;
+      }
+    }
+
     if (!anyGeom) return;
 
     // Grounded buildings tall enough to have an upstairs get the lit
