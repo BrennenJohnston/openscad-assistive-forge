@@ -173,6 +173,14 @@ const UNDRAWN_ROAD_KINDS = new Set([
   'track',
 ]);
 
+/**
+ * A building's own colour comes from its vertex colours, so the material tint
+ * is a plain multiplier and white is the identity. CW-60's styles move it
+ * over the map; naming it means the street's value and the restore cannot
+ * drift apart (D-114).
+ */
+const BUILDING_STREET_TINT = 0xffffff;
+
 // Roads float just above the ground plane so they win the depth test.
 const ROAD_LIFT_M = 0.08;
 /** CW-60: wayfinding marks ride above every flat surface on the map. */
@@ -2597,7 +2605,7 @@ export function buildCityGroup(model) {
     const merged = mergeGeometries(geoms, false);
     for (const geom of geoms) geom.dispose();
     const material = new MeshLambertMaterial({
-      color: 0xffffff,
+      color: BUILDING_STREET_TINT,
       map: windowTextures[familyIndex] ?? null,
       vertexColors: true,
     });
@@ -3042,7 +3050,7 @@ export function buildCityGroup(model) {
       mesh.visible = style.buildings.show;
       // A building's tone is per-family vertex colour, so a style tints the
       // material rather than replacing a single colour.
-      material.color = new Color(style.buildings.tone ?? 0xffffff);
+      material.color = new Color(style.buildings.tone ?? BUILDING_STREET_TINT);
     }
     for (const mesh of wayfindMeshes) mesh.visible = style.wayfinding.show;
   };
@@ -3093,11 +3101,24 @@ export function buildCityGroup(model) {
         // Leaving the map puts every layer back the way the street expects,
         // whatever style was showing. A style is a MAP state and nothing
         // else, which is why street view never has to know about it.
+        //
+        // ★★ D-114: THAT SENTENCE WAS FALSE FOR ONE LAYER, AND IT WAS THE
+        // ONE THIS FUNCTION DOES NOT OWN A LINE FOR. The three ribbon
+        // materials above are re-toned every call, and the buildings are
+        // not: this branch restored their TEXTURE and their VISIBILITY and
+        // left `material.color` wherever `applyMapStyle` put it. Measured
+        // street ink, Seattle at the spawn: 22.28 before any map, 18.65
+        // after a look at Buildings only, and 13.54 - THIRTY-NINE PER CENT
+        // DIMMER, for the rest of the session - after a look at Wayfinding.
+        // A style is a map state, so the map has to hand it back.
         for (const mesh of wayfindMeshes) mesh.visible = false;
         if (roadMeshRef) roadMeshRef.visible = true;
         if (sidewalkMeshRef) sidewalkMeshRef.visible = true;
         if (greenMeshRef) greenMeshRef.visible = true;
-        for (const { mesh } of buildingMeshRefs) mesh.visible = true;
+        for (const { mesh, material } of buildingMeshRefs) {
+          mesh.visible = true;
+          material.color = new Color(BUILDING_STREET_TINT);
+        }
       } else {
         applyMapStyle(currentStyleId);
       }

@@ -1405,6 +1405,22 @@ test.describe('ASCII City Walk — four map styles (CW-60)', () => {
     await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
   }
 
+  /**
+   * Wait for the CONVERTER, not the clock. The picture a pixel test reads is
+   * whatever the converter last produced, and on a loaded runner that can be
+   * several frames behind the state change that prompted it.
+   */
+  const convertSamples = (page) =>
+    page.evaluate(
+      () => window.__cityWalkGame?.altView?.getConvertStats?.()?.samples ?? 0
+    )
+  async function waitForConversions(page, n) {
+    const from = await convertSamples(page)
+    await expect
+      .poll(() => convertSamples(page), { timeout: 60000 })
+      .toBeGreaterThanOrEqual(from + n)
+  }
+
   test('★★ the Walk pad cycles the styles over the map (CW-60)', async ({
     page,
   }) => {
@@ -1557,6 +1573,147 @@ test.describe('ASCII City Walk — four map styles (CW-60)', () => {
     // Every parsed point gets a quad. A layer that drew a tenth of them
     // would still photograph as "marks on the map".
     expect(way.quads).toBe(way.points)
+  })
+
+  test('axe: no violations with the styles reachable, wrapped strip and not (CW-60)', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // Both widths, because CW-60 made them structurally different layouts:
+    // at 1280 the view zone takes a line of its own above the shared row and
+    // at 1600 the whole strip is one line. A scan of one says nothing about
+    // the other.
+    for (const width of [1600, 1280]) {
+      await page.setViewportSize({ width, height: 900 })
+      await openMap(page)
+      // Wayfinding is the busiest style and the one with a layer nothing
+      // else draws, so it is the state worth scanning.
+      for (let i = 0; i < 5; i++) {
+        if ((await styleName(page)) === 'Wayfinding') break
+        await page.keyboard.press('KeyK')
+      }
+      expect(await styleName(page), `${width}px`).toBe('Wayfinding')
+
+      // A hover state is invisible to a scan unless something is hovering
+      // (D-55), and both new controls repaint on hover.
+      await btn(page, 'cityWalkMapStyleBtn').hover()
+      const results = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+        .include('#cityWalkLayer')
+        .analyze()
+      expectOnlyAllowedViolations(results)
+
+      await btn(page, 'cityWalkCamPanRight').hover()
+      const padResults = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+        .include('#cityWalkCameraPanel')
+        .analyze()
+      expectOnlyAllowedViolations(padResults)
+      await page.mouse.move(2, 2)
+
+      // 44px, the same floor every other control in this strip holds.
+      const box = await btn(page, 'cityWalkMapStyleBtn').boundingBox()
+      expect(box.height, `${width}px`).toBeGreaterThanOrEqual(43.5)
+      expect(box.width, `${width}px`).toBeGreaterThanOrEqual(43.5)
+
+      // ★ AND THE STRIP STAYS INSIDE THE WINDOW. Wrapping is the answer to a
+      // strip too wide for its window; a button hanging off the end is not.
+      const right = await page.evaluate(() =>
+        Math.max(
+          ...[...document.querySelectorAll('#cityWalkToolbar button')]
+            .filter((b) => !b.hidden)
+            .map((b) => b.getBoundingClientRect().right)
+        )
+      )
+      expect(right, `${width}px overflowed`).toBeLessThanOrEqual(width)
+
+      await page.keyboard.press('KeyM')
+      await expect(page.locator('#cityWalkHudStatus')).toContainText(
+        'street view'
+      )
+    }
+  })
+
+  test('★★ a map style does not follow you back into the street (D-114)', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await launchGame(page)
+    await enterCity(page)
+
+    // The whole converted frame's mean luminance. The street has people and
+    // cars in it, so this is banded rather than compared exactly - but the
+    // band is narrow enough that the defect it guards (a THIRTY-NINE PER
+    // CENT drop) sails through it by a factor of eight.
+    const ink = () =>
+      page.evaluate(() => {
+        const c = document.querySelector(
+          '#cityWalkViewport canvas.hfm-overlay-canvas'
+        )
+        const d = c
+          .getContext('2d', { willReadFrequently: true })
+          .getImageData(0, 0, c.width, c.height).data
+        let sum = 0
+        for (let i = 0; i < d.length; i += 4) {
+          sum += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]
+        }
+        return sum / (d.length / 4)
+      })
+
+    /** Every building material's tint, which is the mechanism underneath. */
+    const tints = () =>
+      page.evaluate(() => {
+        const seen = new Set()
+        window.__cityWalkGame.city3d.group.traverse((o) => {
+          if (o.name === 'buildings' && o.material)
+            seen.add(o.material.color.getHexString())
+        })
+        return [...seen]
+      })
+
+    await waitForConversions(page, 4)
+    const before = await ink()
+    expect(before, 'the street is not drawing anything').toBeGreaterThan(2)
+    expect(await tints()).toEqual(['ffffff'])
+
+    // Wayfinding is the darkest style and therefore the worst leak: it tints
+    // the buildings to 0x181818, and before the fix the street stayed that
+    // way for the rest of the session.
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
+    for (let i = 0; i < 5; i++) {
+      if ((await styleName(page)) === 'Wayfinding') break
+      await page.keyboard.press('KeyK')
+    }
+    expect(await styleName(page)).toBe('Wayfinding')
+    // Non-vacuity: the style really did tint them, so the check below is
+    // asking a question that had a wrong answer available.
+    expect(await tints(), 'the style never tinted the buildings').not.toEqual([
+      'ffffff',
+    ])
+
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'street view'
+    )
+    await waitForConversions(page, 4)
+
+    // ★ THE EFFECT FIRST, THE MECHANISM SECOND, and the order is deliberate:
+    // whichever assertion fires first is the one the red proof exercises, so
+    // the one that must fire is the one a player would notice. Measured with
+    // the fix reverted, this comes back 39.2% against a 5% band.
+    const after = await ink()
+    const drift = Math.abs(after - before) / before
+    expect(
+      drift,
+      `street ink moved ${(drift * 100).toFixed(1)}% across a map visit ` +
+        `(${before.toFixed(2)} -> ${after.toFixed(2)})`
+    ).toBeLessThan(0.05)
+    expect(await tints(), 'a map tint stayed on the buildings').toEqual([
+      'ffffff',
+    ])
   })
 
   test('the chosen map style outlives the session (CW-60)', async ({
