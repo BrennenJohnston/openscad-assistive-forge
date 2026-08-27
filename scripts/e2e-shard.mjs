@@ -83,7 +83,18 @@ export const MEASURED_SECONDS = {
   // replaces it. The 2.3.1 case is the one that could beat this estimate: it
   // watches a whole ~20 s show rather than driving a control, so it is dearer
   // than the file's 17.6 s average. Worth watching on the first green board.
-  'ascii-city-walk.spec.js': 775,
+  //
+  // CW-65 adds FIVE traveler cases, 44 -> 49, so 775 * 49 / 44 = 863. Still an
+  // ESTIMATE and still scaled by count, because the only CI timing available
+  // is from a RED run whose Edge shards hit the ceiling - and CW-62 paid for
+  // the rule that re-weighting from a starved runner bakes the starvation in.
+  // Re-measure from the next green board.
+  //
+  // ★ Two of the five HOLD A WALK KEY until something happens rather than for
+  // a fixed time (the find, and axe over the open bubble), which is correct -
+  // a wall-clock hold is a bet on the frame rate - but it does mean their cost
+  // scales with how slow the runner is. They are the ones to watch.
+  'ascii-city-walk.spec.js': 863,
   // 289.0 measured, plus ~40 for the two weather describes CW-29 added, which
   // no CI run has timed yet. The next board replaces this with a measurement.
   'ascii-city-walk-street.spec.js': 901.7,

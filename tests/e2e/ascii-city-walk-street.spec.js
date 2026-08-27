@@ -1396,6 +1396,28 @@ test.describe('ASCII City Walk — people are people (CW-45)', () => {
     expect(
       await page.evaluate(() => window.__cityWalkGame.props.peopleCount)
     ).toBe(3029)
+
+    /**
+     * ★★ CW-65 ADDS A PERSON TO THE WORLD AND NOT TO THIS CENSUS, AND THAT IS
+     * A DECISION RATHER THAN AN OVERSIGHT.
+     *
+     * The traveler is built STANDALONE, beside the fireworks, because the city
+     * group is built before the saved progress is read and because finding
+     * them MOVES them. So they never pass through buildStreetProps and
+     * peopleCount - which counts what the CITY BUILD planted - is unchanged at
+     * 3,029. The pin above therefore stays exactly where CW-50 left it.
+     *
+     * Asserted rather than assumed, both halves: the crowd did not gain
+     * anybody, and the traveler exists all the same. A silent +1 here would
+     * mean the traveler had been planted into a road's rng stream, which would
+     * shift the pose and build of every figure planted after them (the
+     * CW-45/46 seed law) - so this pin is also how that mistake would surface.
+     */
+    expect(
+      await page.evaluate(() =>
+        Boolean(window.__cityWalkGame.traveler?.isPlaced())
+      )
+    ).toBe(true)
   })
 
   test('sitting happens only where a real bench stands', async ({ page }) => {
