@@ -2097,7 +2097,27 @@ test.describe('ASCII City Walk — find the traveler (CW-65, CW-Q60)', () => {
     await launchGame(page)
     await enterCity(page)
 
-    // Start OUTSIDE the 6 m radius: the promise is that WALKING UP does it.
+    /**
+     * ★★ THE RADIUS HAS TO MEAN SOMETHING, AND THE FIRST VERSION OF THIS CASE
+     * COULD NOT TELL. It stood at 9 m, asserted the bubble hidden, then walked
+     * in - so deleting the radius check outright (the find firing at ANY
+     * distance) left all five cases GREEN. Red-proven and caught: a guard that
+     * cannot fail is not a guard.
+     *
+     * So walk a while from far away FIRST and assert nothing happens. This is
+     * the half that tests the radius; the approach below tests the find.
+     */
+    await standOff(page, 30)
+    await page.locator('#cityWalkViewport').click({ position: { x: 400, y: 300 } })
+    await page.keyboard.down('ArrowUp')
+    await page.waitForTimeout(600)
+    await page.keyboard.up('ArrowUp')
+    await expect(bubble(page)).toBeHidden()
+    expect(
+      await page.evaluate(() => Boolean(window.__cityWalkGame.travelerFound))
+    ).toBe(false)
+
+    // Now start OUTSIDE the 6 m radius: the promise is that WALKING UP does it.
     await standOff(page, 9)
     await expect(bubble(page)).toBeHidden()
 
