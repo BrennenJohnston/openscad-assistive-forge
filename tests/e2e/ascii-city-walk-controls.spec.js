@@ -339,22 +339,33 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     await btn(page, 'cityWalkCamPanUp').focus()
     await expect(btn(page, 'cityWalkCamPanUp')).toBeFocused()
 
+    // ★ THE DISTANCE IS A FRAME-RATE READING, NOT A PROMISE. The app
+    // stretches a keyboard activation to a fixed TOOLBAR_STEP_MS window (250
+    // ms), so how far the walker gets inside it depends entirely on how many
+    // frames render there: about fifteen at 60 fps, but ONE on a loaded
+    // machine, and one frame is 4.8 m/s / 60 = 0.08 m. Asserting 0.15 m went
+    // red on Firefox at CW-55 and again on Chromium at CW-57 - two engines,
+    // so it is the assertion that is wrong and not the browser. What the app
+    // actually promises is the two halves in this test's name: it takes a
+    // step, and the step ENDS. Both are asserted; the metres are not.
     await page.keyboard.press('Enter')
     await expect
       .poll(async () => distance(before, await walkPos(page)), {
         timeout: 15000,
       })
-      .toBeGreaterThan(0.15)
+      .toBeGreaterThan(0.02)
 
     // A key press has no release, so the step has to end by itself. If it
     // did not, the player would still be walking here. Measured in frames,
     // not milliseconds - a stalled runner would otherwise "prove" it
-    // stopped simply by rendering nothing.
+    // stopped simply by rendering nothing. This is the half that carries the
+    // guard, so it is the half that is tight: ten frames of real walking
+    // covers about 0.8 m, forty times the tolerance below.
     await page.waitForTimeout(1000)
     await waitForFrames(page, 2)
     const settled = await walkPos(page)
     await waitForFrames(page, 10)
-    expect(distance(settled, await walkPos(page))).toBeLessThan(0.05)
+    expect(distance(settled, await walkPos(page))).toBeLessThan(0.02)
   })
 
   test('the speed, size, level and landmark buttons announce what they did', async ({

@@ -42,7 +42,6 @@ import {
   ExtrudeGeometry,
   Fog,
   Group,
-  IcosahedronGeometry,
   Mesh,
   MeshBasicMaterial,
   MeshLambertMaterial,
@@ -61,6 +60,32 @@ import {
   isPavementWay,
 } from './walk-controls.js';
 import { makeFigureSpec, makeFigureGeoms } from './city-figures.js';
+import {
+  treeTableFor,
+  pickSpecies,
+  treeSpec,
+  makeCanopyGeoms,
+} from './city-trees.js';
+import {
+  flowerTableFor,
+  pickFlower,
+  planterBoxes,
+  picnicTableBoxes,
+  flowerbedPositions,
+  PLANTER_L_M,
+  PLANTER_W_M,
+  TABLE_L_M,
+  TABLE_W_M,
+  TABLE_TOP_H_M,
+  PLANTER_H_M,
+} from './city-planting.js';
+import {
+  birdTableFor,
+  pickBird,
+  birdSpec,
+  birdBoxes,
+  PERCH_SINK_M,
+} from './city-birds.js';
 import {
   buildRoadGraph,
   ringCentroid,
@@ -1335,6 +1360,138 @@ export const CITY_PAVING = {
 };
 const DEFAULT_PAVING = 'broom';
 
+/**
+ * What a city's GREENSPACE is made of (CW-57, CW-Q51's extension).
+ *
+ * Two rows are the owner's own words and ship as given; two were researched at
+ * execution, the way CW-51's paving rows were - and unlike the paving, where
+ * Denver and Burnaby genuinely specified the SAME broom finish, their ground
+ * genuinely differs.
+ *
+ * - seattle   'lush': greens lush, with plant tufts at the edges. The owner's
+ *             words.
+ * - albuquerque 'dirt': dirt and rough stone, no lush green. The owner's
+ *             words, and the honest one for a high-desert city.
+ * - denver    'turf': irrigated Kentucky bluegrass. Denver Parks' own
+ *             irrigation inventory describes its park sites as composed of
+ *             irrigated bluegrass turf alongside non-irrigated native and
+ *             natural areas, and bluegrass was the default landscape cover
+ *             across city property for decades - so an even, managed,
+ *             mown surface with native patches is what a Denver park is.
+ *             (Denver Parks Irrigation System Inventory, Aqua Engineering,
+ *             denvergov.org; Denver Water on the 2023 policy shift toward
+ *             native grasses.)
+ * - burnaby   'moss': the City of Burnaby's Boulevard Treatment and
+ *             Maintenance Policy requires NATURAL turf on boulevards -
+ *             artificial turf is expressly not acceptable - and Burnaby's
+ *             clay-heavy soil, high rainfall and mature tree canopy are the
+ *             conditions moss thrives in. So a Burnaby verge is soft, uneven
+ *             and mottled rather than mown flat. (The policy is the city's
+ *             own; the moss-conditions claim is local horticultural practice
+ *             rather than a municipal specification, and is marked as the
+ *             weaker of the two citations.)
+ *
+ * ★ THE LUMINANCE NEVER MOVES. This is texture and vocabulary, never
+ * brightness: a green bright enough to be obvious in the 3D frame carpets the
+ * lower half of the street view, which is the law every one of these clusters
+ * is written around. The texture MULTIPLIES the one GREEN_TONES tone.
+ *
+ * Every row is design data the owner can veto.
+ */
+export const CITY_GROUND = {
+  seattle: 'lush',
+  albuquerque: 'dirt',
+  denver: 'turf',
+  burnaby: 'moss',
+};
+const DEFAULT_GROUND = 'turf';
+const GREEN_TILE_M = 8;
+const GREEN_TILE_PX = 256;
+
+/**
+ * A greenspace's own surface, as a texture that multiplies GREEN_TONES.
+ *
+ * Mid grey is "unchanged", exactly as in the paving texture, so every mark
+ * here is a small step either side of the tone the green already had.
+ *
+ * @param {'lush'|'dirt'|'turf'|'moss'} style
+ * @returns {CanvasTexture|null}
+ */
+function createGreenTexture(style) {
+  const size = GREEN_TILE_PX;
+  const c = make2dContext(size, size);
+  if (!c) return null;
+  const { canvas, ctx } = c;
+  const pxPerM = size / GREEN_TILE_M;
+  ctx.fillStyle = 'rgb(160,160,160)';
+  ctx.fillRect(0, 0, size, size);
+  const rand = makeLcg(0x9eed5a11);
+  const grey = (v) => `rgb(${v},${v},${v})`;
+
+  // ★ THE CONTRAST IS WIDE ON PURPOSE, AND THAT IS NOT THE SAME AS BRIGHT.
+  // GREEN_TONES.street is 0x101410 - a luminance under a tenth - and a texture
+  // that only steps a few percent either side of mid grey multiplies almost
+  // nothing: measured, the first version of this was invisible in every city.
+  // The MEAN stays at mid grey, so the tone the carpet law governs does not
+  // move; the VARIANCE is what grows, which is exactly what "texture and
+  // vocabulary, never brightness" asks for.
+  if (style === 'lush') {
+    // Tufts: short upright strokes in dense clumps, so a Seattle green reads
+    // as growth rather than as a lawn.
+    for (let clump = 0; clump < 120; clump++) {
+      const cx = rand() * size;
+      const cy = rand() * size;
+      for (let i = 0; i < 16; i++) {
+        const x = cx + (rand() - 0.5) * pxPerM * 1.1;
+        const y = cy + (rand() - 0.5) * pxPerM * 1.1;
+        ctx.fillStyle = grey(70 + Math.floor(rand() * 185));
+        ctx.fillRect(x, y, 1, 2 + Math.floor(rand() * 5));
+      }
+    }
+  } else if (style === 'dirt') {
+    // Dirt and rough stone: a sparse speckle with the odd bright fleck and
+    // long bare stretches between - the opposite of a lawn.
+    for (let i = 0; i < 900; i++) {
+      ctx.fillStyle = grey(75 + Math.floor(rand() * 60));
+      ctx.fillRect(rand() * size, rand() * size, 1, 1);
+    }
+    for (let i = 0; i < 160; i++) {
+      const r = 1 + rand() * 2.6;
+      ctx.beginPath();
+      ctx.arc(rand() * size, rand() * size, r, 0, Math.PI * 2);
+      ctx.fillStyle = grey(200 + Math.floor(rand() * 55));
+      ctx.fill();
+    }
+  } else if (style === 'moss') {
+    // Moss: soft uneven blotches, large and overlapping, so the surface reads
+    // as mottled rather than mown.
+    for (let i = 0; i < 260; i++) {
+      const r = pxPerM * (0.15 + rand() * 0.5);
+      ctx.beginPath();
+      ctx.arc(rand() * size, rand() * size, r, 0, Math.PI * 2);
+      ctx.fillStyle = grey(85 + Math.floor(rand() * 155));
+      ctx.fill();
+    }
+  } else {
+    // Irrigated turf: mown stripes, even and managed, with a fine grain -
+    // the bluegrass Denver's parks actually are.
+    const stripe = Math.max(2, Math.round(pxPerM * 0.9));
+    for (let y = 0; y < size; y += stripe) {
+      ctx.fillStyle = grey((y / stripe) % 2 === 0 ? 105 : 215);
+      ctx.fillRect(0, y, size, stripe);
+    }
+    for (let i = 0; i < 1800; i++) {
+      ctx.fillStyle = grey(120 + Math.floor(rand() * 80));
+      ctx.fillRect(rand() * size, rand() * size, 1, 1);
+    }
+  }
+
+  // ShapeGeometry's UVs are the vertex x/y, which this project keeps in
+  // METRES - so the repeat is distance over tile, never a normalized guess,
+  // and a park keeps one real-world scale whatever its size.
+  return makeRepeatingTexture(canvas, 1 / GREEN_TILE_M, 1 / GREEN_TILE_M);
+}
+
 // Municipal sidewalk standards put control joints at roughly the width of the
 // walk - 4 to 6 ft on a standard walk - so the seams land about every 1.5 m.
 const PAVING_SCORE_M = 1.5;
@@ -2186,11 +2343,15 @@ export function buildCityGroup(model) {
     CITY_PAVING[model.name] ?? DEFAULT_PAVING
   );
   const groundTexture = createGroundTexture();
+  const greenTexture = createGreenTexture(
+    CITY_GROUND[model.name] ?? DEFAULT_GROUND
+  );
   for (const t of [
     ...windowTextures,
     storefrontTexture,
     groundTexture,
     pavingTexture,
+    greenTexture,
   ]) {
     if (t) disposables.push(t);
   }
@@ -2727,10 +2888,16 @@ export function buildCityGroup(model) {
     for (const g of greenGeoms) g.dispose();
     greenMat = new MeshLambertMaterial({
       color: GREEN_TONES.street,
+      map: greenTexture ?? null,
       polygonOffset: true,
       polygonOffsetFactor: -1,
       polygonOffsetUnits: -1,
     });
+    // CW-41/CW-51: any texture the converter samples rides the cell-raster
+    // filter, and D-111 is what happens when it is filtered but never pushed
+    // to the list - the shader carries a bias uniform nothing writes.
+    applyCellRasterFiltering(greenMat);
+    cellRasterMats.push(greenMat);
     const greenMesh = new Mesh(merged, greenMat);
     greenMesh.name = 'greens';
     group.add(greenMesh);
@@ -3141,11 +3308,10 @@ const TREE_SPACING_M = 18;
 const TREE_END_MARGIN_M = 3;
 // Outside the curb line, on the sidewalk side.
 const TREE_SIDEWALK_OFFSET_M = 1.2;
+// CW-56 moved the tree's own dimensions into city-trees.js, where a species
+// decides them. This one stays because the infill clearance check still asks
+// how wide a trunk is before it plants one.
 const TRUNK_SIDE_M = 0.3;
-const TRUNK_HEIGHT_M = 2.5;
-const CANOPY_RADIUS_M = 1.25;
-// The crown starts above eye height (1.7 m) so the player walks under it.
-const CANOPY_BASE_M = 2;
 const MAPPED_TREE_MIN_GAP_M = 2.5;
 const INFILL_TREE_MIN_GAP_M = 6;
 const PROP_SPATIAL_CELL_M = 8;
@@ -3309,6 +3475,79 @@ const FURNITURE_TREE_GAP_M = 0.6;
 const FURNITURE_CLEAR_M = 1.4;
 // Muted municipal paint next to the cars' 0.5.
 const FURNITURE_CHROMA = 0.4;
+
+/**
+ * CW-57 (CW-Q55): what a planting is made of.
+ *
+ * The box and the table are dim, near-neutral objects - stone and timber -
+ * because their identity is SHAPE and POSITION (the hydrant lesson). The
+ * flowers are the only bright thing, and they ride on a separate lid so the
+ * box's own brightness never changes with them: a monochrome screen sees one
+ * knee-high block whatever is growing in it.
+ */
+const PLANTER_BODY_TINT = tintOf(0.3, 40, 0.08);
+const TABLE_TINT = tintOf(0.38, 30, 0.25);
+const FLOWER_TIER = 0.55;
+const FLOWER_CHROMA = 0.6;
+/**
+ * CW-57's flowerbed tone. BRIGHTER than the ground band on purpose, and the
+ * release record measures whether that carpets: the carpet law is about a
+ * SURFACE, and a bed at 56 mapped places in Seattle is not one. CW-56's
+ * fallen leaves, which sat under 4,593 trees, were.
+ */
+const BED_TIER = 0.45;
+const BED_CHROMA = 0.5;
+
+/**
+ * CW-58's birds.
+ *
+ * A bird is TINY - a sparrow is 0.15 m against a planter's 1.2 - so it was
+ * natural to reach for brightness as the lever. THE PROOF GATE SAYS THERE IS
+ * NO SUCH LEVER: a per-species brightness bias moved the frame by nothing in
+ * mono across its whole range, and in colour every species landed #ffffff
+ * because these palettes have no dark neutral. See city-birds.js for both
+ * measurements. Every bird therefore takes ONE tier, and what distinguishes
+ * them is size, shape and where they rest.
+ *
+ * ★ THE CROW'S DARKNESS IS WHY IT IS PLACED HIGH, and CW-57 is what makes
+ * that a measurement rather than a preference: this city's greenspace sits at
+ * luminance under a tenth and a texture cannot lift it, so a dark bird on a
+ * lawn is a dark shape on a near-black field. `SPECIES_PERCHES` keeps the crow
+ * on parapets and lamp heads, where the sky is behind it.
+ */
+const BIRD_TIER = 0.68;
+const BIRD_HUE_DEG = 45;
+const BIRD_CHROMA = 0.14;
+/** How many perches of a kind carry a bird. Punctuation, not a flock. */
+const BIRD_PER_PERCH = {
+  'bench-back': 0.09,
+  'picnic-top': 0.14,
+  'planter-rim': 0.1,
+  'lamp-head': 0.06,
+  parapet: 0.05,
+  ground: 0.12,
+  'open-ground': 0.035,
+};
+/** A gathering of geese, not a lone one: 2 to 5 on the same patch of grass. */
+const GOOSE_FLOCK_MAX = 4;
+const GOOSE_SPACING_M = 1.9;
+
+/**
+ * ★ THE FALLBACK, AND IT IS STATED AS ONE. Denver and Albuquerque have ZERO
+ * mapped planters and zero flowerbeds - measured, not assumed, in CW-55's
+ * rebake. The directive licenses filling that gap; this is where, and the code
+ * says out loud that it is design rather than data.
+ *
+ * Planters go INSIDE mapped green polygons, at roughly one per this many
+ * square metres, which is ordinary parks-department planting-bed spacing for a
+ * civic bed. Real data always wins: a city with mapped planters never reaches
+ * this branch, so Seattle's eleven and Burnaby's four are its own.
+ *
+ * One line to reverse - set it to 0 and those two cities have no planters,
+ * which is what their maps actually say.
+ */
+const FALLBACK_PLANTER_PER_M2 = 900;
+const FALLBACK_PLANTER_MAX = 40;
 // The segment-angle grid's cell: coarse is fine, furniture stands within a
 // pavement's width of its street.
 const FURNITURE_ROAD_CELL_M = 24;
@@ -3622,6 +3861,10 @@ export function buildStreetProps(model, collision = null) {
 
   const trunkGeoms = [];
   const canopyGeoms = [];
+  // CW-56: what actually got planted, per species. A table nobody uses and a
+  // table everybody uses look identical in a merged mesh (CW-53's lesson),
+  // so the build counts its own.
+  const speciesPlanted = {};
   const carGeoms = [];
   const trafficGeoms = [];
   let trafficCount = 0;
@@ -3704,6 +3947,14 @@ export function buildStreetProps(model, collision = null) {
   const basketGeoms = [];
   const rackGeoms = [];
   const hydrantGeoms = [];
+  // CW-57: plantings and tables, each its own merged mesh so the class pass
+  // can dress them in their own voices.
+  const planterGeoms = [];
+  const flowerGeoms = [];
+  const tableGeoms = [];
+  const bedPositions = [];
+  const plantingPlaced = { planter: 0, flowerbed: 0, picnic_table: 0 };
+  let fallbackPlanters = 0;
 
   const b = model.boundsM;
   const inCore = (x, y) =>
@@ -3718,33 +3969,45 @@ export function buildStreetProps(model, collision = null) {
   const lampSpots = makePointGrid(PROP_SPATIAL_CELL_M);
   let mappedTreeCount = 0;
 
-  const plantTree = (x, y, seed) => {
+  // CW-56: which species, and therefore how tall and what shape. The draw
+  // takes DIFFERENT BITS of the seed the tier already uses rather than a new
+  // random stream - CW-46's lesson, and the reason adding five species to
+  // every city moves no census pin: nothing is inserted into an existing draw
+  // order, so every other consumer of that stream sees the number it saw
+  // before.
+  const treeTable = treeTableFor(model.name);
+  const plantTree = (x, y, seed, leafType) => {
     const tier = CANOPY_TIERS[seed % CANOPY_TIERS.length];
+    const species = pickSpecies(treeTable, (seed >>> 5) % 997, leafType);
+    const spec = treeSpec(species, (((seed >>> 11) % 1000) + 0.5) / 1000);
+    speciesPlanted[spec.name] = (speciesPlanted[spec.name] ?? 0) + 1;
     trunkGeoms.push(
       makeBox(
-        TRUNK_SIDE_M,
-        TRUNK_SIDE_M,
-        TRUNK_HEIGHT_M,
+        spec.trunkSideM,
+        spec.trunkSideM,
+        spec.trunkHeightM,
         x,
         y,
-        TRUNK_HEIGHT_M / 2,
+        spec.trunkHeightM / 2,
         0,
         TRUNK_TINT
       )
     );
     // A faceted crown, not a smooth ball: the flat facets give the sampler
-    // the luminance steps it needs to read as leaves rather than a blob.
-    const canopy = new IcosahedronGeometry(CANOPY_RADIUS_M, 0);
-    canopy.translate(x, y, CANOPY_BASE_M + CANOPY_RADIUS_M);
-    paintGeometry(canopy, tintOf(tier, CANOPY_HUE_DEG, CANOPY_CHROMA));
-    canopyGeoms.push(canopy);
+    // the luminance steps it needs to read as leaves rather than a blob. The
+    // cone stacks three of them for the same reason.
+    const canopyTint = tintOf(tier, CANOPY_HUE_DEG, CANOPY_CHROMA);
+    for (const canopy of makeCanopyGeoms(x, y, spec)) {
+      paintGeometry(canopy, canopyTint);
+      canopyGeoms.push(canopy);
+    }
 
     treeSpots.add(x, y);
     obstacles.push({
       x,
       y,
-      halfLengthM: TRUNK_SIDE_M / 2,
-      halfWidthM: TRUNK_SIDE_M / 2,
+      halfLengthM: spec.trunkSideM / 2,
+      halfWidthM: spec.trunkSideM / 2,
       rotationRad: 0,
     });
   };
@@ -3752,10 +4015,10 @@ export function buildStreetProps(model, collision = null) {
   // 1. The trees the map records. Real data wins every argument with the
   //    infill below, so these are placed first and only skipped where a
   //    building stands on them (or a duplicate node repeats one).
-  model.trees.forEach(([x, y], index) => {
+  model.trees.forEach(({ x, y, leafType }, index) => {
     if (!inCore(x, y) || isBlocked(x, y)) return;
     if (treeSpots.occupied(x, y, MAPPED_TREE_MIN_GAP_M)) return;
-    plantTree(x, y, hashBuilding(index, 'osm-tree'));
+    plantTree(x, y, hashBuilding(index, 'osm-tree'), leafType);
     mappedTreeCount++;
   });
 
@@ -3774,6 +4037,12 @@ export function buildStreetProps(model, collision = null) {
   // seat axis, which way a seated person faces (toward the road), and
   // whether there is a back.
   const placedBenches = [];
+  // CW-58 perch records. A bird rests on things the city already has, so the
+  // builders that make them write down where they went rather than the bird
+  // code guessing a second time.
+  const placedPlanters = [];
+  const placedTables = [];
+  const placedLampHeads = [];
   (model.furniture ?? []).forEach((item, index) => {
     const { x, y } = item;
     if (!inCore(x, y) || isBlocked(x, y)) return;
@@ -3971,6 +4240,116 @@ export function buildStreetProps(model, collision = null) {
     furnitureSpots.add(x, y);
     furniturePlaced[item.kind] = (furniturePlaced[item.kind] ?? 0) + 1;
   });
+
+  // 1b-ii. CW-57 (CW-Q55): planters, flowerbeds and picnic tables, at the
+  //        extract's own positions where the data is real. Same law as the
+  //        CW-43 furniture: placement fidelity IS the accessibility point, so
+  //        nothing here invents a position that the map already answers.
+  const flowerTable = flowerTableFor(model.name);
+  const flowerTintFor = (seed) =>
+    tintOf(FLOWER_TIER, pickFlower(flowerTable, seed).hueDeg, FLOWER_CHROMA);
+
+  const addPlanter = (x, y, angle, seed) => {
+    for (const b of planterBoxes(
+      x,
+      y,
+      angle,
+      PLANTER_BODY_TINT,
+      flowerTintFor(seed)
+    )) {
+      const geom = makeBox(b.l, b.w, b.h, b.x, b.y, b.z, b.angle, b.tint);
+      // The lid is the flowers; it is a different mesh so the class pass can
+      // give it its own voice without the box changing.
+      (b.tint === PLANTER_BODY_TINT ? planterGeoms : flowerGeoms).push(geom);
+    }
+    obstacles.push({
+      x,
+      y,
+      halfLengthM: PLANTER_L_M / 2,
+      halfWidthM: PLANTER_W_M / 2,
+      rotationRad: angle,
+    });
+    furnitureSpots.add(x, y);
+    placedPlanters.push({ x, y, angle });
+    plantingPlaced.planter++;
+  };
+
+  (model.plantings ?? []).forEach((item, index) => {
+    const { x, y } = item;
+    if (!inCore(x, y) || isBlocked(x, y)) return;
+    if (furnitureSpots.occupied(x, y, FURNITURE_MIN_GAP_M)) return;
+    if (treeSpots.occupied(x, y, FURNITURE_TREE_GAP_M)) return;
+    const seed = hashBuilding(index, 'planting:' + item.kind);
+    if (item.kind === 'planter') {
+      const near = segmentAngles.nearest(x, y);
+      addPlanter(x, y, near ? near.angle : 0, seed);
+      return;
+    }
+    // A flowerbed is flat, has no collision, and takes no spatial slot: you
+    // walk across a bed of flowers in this city, which is what the data
+    // describes and not a thing to stop a cane on.
+    for (const v of flowerbedPositions(x, y, item.areaM2, seed)) {
+      bedPositions.push(v);
+    }
+    plantingPlaced.flowerbed++;
+  });
+
+  (model.picnicTables ?? []).forEach((item, index) => {
+    const { x, y } = item;
+    if (!inCore(x, y) || isBlocked(x, y)) return;
+    if (furnitureSpots.occupied(x, y, FURNITURE_MIN_GAP_M)) return;
+    if (treeSpots.occupied(x, y, FURNITURE_TREE_GAP_M)) return;
+    const seed = hashBuilding(index, 'picnic');
+    const near = segmentAngles.nearest(x, y);
+    const angle = near ? near.angle : ((seed % 360) * Math.PI) / 180;
+    for (const b of picnicTableBoxes(x, y, angle, TABLE_TINT)) {
+      tableGeoms.push(makeBox(b.l, b.w, b.h, b.x, b.y, b.z, b.angle, b.tint));
+    }
+    obstacles.push({
+      x,
+      y,
+      halfLengthM: TABLE_L_M / 2,
+      halfWidthM: TABLE_W_M / 2,
+      rotationRad: angle,
+    });
+    furnitureSpots.add(x, y);
+    placedTables.push({ x, y, angle });
+    plantingPlaced.picnic_table++;
+    // Picnic tables ship UNOCCUPIED. Sitters are bench-only, which is settled
+    // law from CW-45 and no signed question has extended it.
+  });
+
+  // ★ THE FALLBACK. Only a city whose map has NO planters at all reaches this,
+  // so real data always wins - and the count it produces is reported
+  // separately, because a reader should be able to tell design from data.
+  if (plantingPlaced.planter === 0 && FALLBACK_PLANTER_PER_M2 > 0) {
+    for (const [gi, green] of (model.greens ?? []).entries()) {
+      const areaM2 = ringAreaM2(green.outer);
+      const want = Math.floor(areaM2 / FALLBACK_PLANTER_PER_M2);
+      if (want < 1) continue;
+      const [cx, cy] = ringCentroid(green.outer);
+      const rng = makeLcg(hashBuilding(gi, 'fallback-planter'));
+      const reach = Math.sqrt(areaM2 / Math.PI) * 0.7;
+      for (let i = 0; i < want; i++) {
+        if (fallbackPlanters >= FALLBACK_PLANTER_MAX) break;
+        const a = rng() * Math.PI * 2;
+        const r = Math.sqrt(rng()) * reach;
+        const px = cx + Math.cos(a) * r;
+        const py = cy + Math.sin(a) * r;
+        if (!inCore(px, py) || isBlocked(px, py)) continue;
+        if (furnitureSpots.occupied(px, py, FURNITURE_MIN_GAP_M)) continue;
+        if (treeSpots.occupied(px, py, FURNITURE_TREE_GAP_M)) continue;
+        addPlanter(
+          px,
+          py,
+          rng() * Math.PI * 2,
+          hashBuilding(gi * 31 + i, 'fp')
+        );
+        fallbackPlanters++;
+      }
+      if (fallbackPlanters >= FALLBACK_PLANTER_MAX) break;
+    }
+  }
 
   // 1c. CW-45 sitting figures, ONLY where a real bench stands - never a
   //     scattered seat: a city with two mapped benches gets at most two
@@ -4200,6 +4579,11 @@ export function buildStreetProps(model, collision = null) {
             )
           );
           lampSpots.add(x, y);
+          placedLampHeads.push({
+            x: x - nx * LAMP_HEAD_REACH_M * side,
+            y: y - ny * LAMP_HEAD_REACH_M * side,
+            angle,
+          });
           obstacles.push({
             x,
             y,
@@ -4324,6 +4708,203 @@ export function buildStreetProps(model, collision = null) {
     }
   });
 
+  /**
+   * CW-58: birds where birds rest.
+   *
+   * Every bird sits on something the city already built, and the builders
+   * wrote down where those things went. Nothing here invents a perch: if a
+   * city has no picnic tables, it has no birds on picnic tables, and that is
+   * a result rather than a gap.
+   *
+   * Deterministic from the same hash every other prop uses, keyed by perch
+   * kind and index, so no existing draw order moves - the seed law that
+   * CW-49 nearly paid for.
+   */
+  const birdGeoms = [];
+  const birdsPlaced = {};
+  const birdRoster = birdTableFor(model.name);
+
+  const addBird = (px, py, pz, facing, name, sizeDraw) => {
+    const spec = birdSpec(name, ((sizeDraw % 1000) + 0.5) / 1000);
+    if (!spec) return;
+    const tint = tintOf(
+      BIRD_TIER,
+      BIRD_HUE_DEG,
+      inGamutChroma(BIRD_TIER, BIRD_HUE_DEG, BIRD_CHROMA)
+    );
+    const c = Math.cos(facing);
+    const sn = Math.sin(facing);
+    for (const b of birdBoxes(spec, facing)) {
+      birdGeoms.push(
+        makeBox(
+          b.l,
+          b.w,
+          b.h,
+          px + b.along * c - b.across * sn,
+          py + b.along * sn + b.across * c,
+          pz + b.z,
+          facing,
+          tint
+        )
+      );
+    }
+    birdsPlaced[name] = (birdsPlaced[name] ?? 0) + 1;
+  };
+
+  /**
+   * One pass per perch kind. `sites` is whatever the builder recorded; the
+   * hash decides which of them carry a bird and which species takes it.
+   */
+  const perchPass = (perch, sites, zOf, facingOf) => {
+    const rate = BIRD_PER_PERCH[perch] ?? 0;
+    if (rate <= 0) return;
+    sites.forEach((site, index) => {
+      const seed = hashBuilding(index, 'bird:' + perch);
+      if ((seed % 1000) / 1000 >= rate) return;
+      const name = pickBird(birdRoster, perch, seed >>> 7);
+      if (!name) return;
+      // ★ GEESE COME IN GROUPS, and that is a fix as well as a fact. Letting
+      // the crow and the gull onto lawns - which the proof gate said was
+      // right - gave them two thirds of every ground site and dropped
+      // BURNABY FROM NINE GEESE TO ONE. A goose is the most legible bird on
+      // the roster by a factor of three, so one of it in a city is a waste of
+      // the only bird that really reads. Geese are gregarious and gather on
+      // open grass; a small flock is what a park actually looks like.
+      const flock =
+        name === 'canada goose' ? 2 + ((seed >>> 19) % GOOSE_FLOCK_MAX) : 1;
+      for (let k = 0; k < flock; k++) {
+        const spread = k === 0 ? 0 : GOOSE_SPACING_M;
+        const a = (((seed >>> 21) + k * 97) % 360) * (Math.PI / 180);
+        const gx = site.x + Math.cos(a) * spread * k;
+        const gy = site.y + Math.sin(a) * spread * k;
+        if (k > 0 && isBlocked(gx, gy)) continue;
+        addBird(
+          gx,
+          gy,
+          zOf(site) - PERCH_SINK_M,
+          facingOf(site, seed + k * 31),
+          name,
+          (seed >>> 13) + k * 271
+        );
+      }
+    });
+  };
+
+  const hashFacing = (seed) => ((seed >>> 17) % 360) * (Math.PI / 180);
+
+  perchPass(
+    'bench-back',
+    placedBenches.filter((b) => b.backrest),
+    () => BENCH_SEAT_H_M + BENCH_BACK_H_M,
+    (site) => site.facing
+  );
+  perchPass(
+    'picnic-top',
+    placedTables,
+    () => TABLE_TOP_H_M,
+    (site, seed) => hashFacing(seed)
+  );
+  perchPass(
+    'planter-rim',
+    placedPlanters,
+    () => PLANTER_H_M,
+    (site, seed) => hashFacing(seed)
+  );
+  perchPass(
+    'lamp-head',
+    placedLampHeads,
+    () => LAMP_HEAD_Z_M + LAMP_HEAD_THICK_M / 2,
+    (site, seed) => hashFacing(seed)
+  );
+
+  // A parapet perch is a building outline vertex at the building's own roof
+  // height. Only mid-rise roofs: a bird on a fifty-storey parapet is a bird
+  // nobody will ever be looking at, and one on a single-storey shed is at
+  // eye level where the roof edge already reads as a line.
+  const PARAPET_MIN_M = 6;
+  const PARAPET_MAX_M = 32;
+  const parapetSites = [];
+  model.buildings.forEach((building, index) => {
+    const h = building.heightM;
+    if (!(h >= PARAPET_MIN_M && h <= PARAPET_MAX_M)) return;
+    const ring = building.outer;
+    if (!ring || ring.length < 3) return;
+    const seed = hashBuilding(index, 'bird:parapet-site');
+    const v = ring[seed % ring.length];
+    if (!inCore(v[0], v[1])) return;
+    const next = ring[(seed % ring.length) + 1] ?? ring[0];
+    parapetSites.push({
+      x: v[0],
+      y: v[1],
+      z: h,
+      angle: Math.atan2(next[1] - v[1], next[0] - v[0]),
+    });
+  });
+  perchPass(
+    'parapet',
+    parapetSites,
+    (site) => site.z,
+    (site) => site.angle
+  );
+
+  // Ground birds stand on mapped green, not on pavement - a goose on a road
+  // is not a goose anybody has seen. The centroid is where the green is
+  // widest, so that is where they go.
+  // ★ SITES SCALE WITH THE PARK'S AREA, and the first draft did not - it gave
+  // every green exactly one, which left ALBUQUERQUE WITH A SINGLE ROADRUNNER
+  // in the whole city. The roadrunner is that city's own bird and the entire
+  // argument for per-city rosters, so one of it is the same as none. A lawn
+  // also genuinely holds several geese rather than one.
+  const GROUND_M2_PER_SITE = 400;
+  const GROUND_MAX_PER_GREEN = 6;
+  const groundSites = [];
+  (model.greens ?? []).forEach((green, index) => {
+    if (!green.outer || green.outer.length < 3) return;
+    const areaM2 = ringAreaM2(green.outer);
+    if (areaM2 < 60) return;
+    const [cx, cy] = ringCentroid(green.outer);
+    if (!inCore(cx, cy)) return;
+    const want = Math.max(
+      1,
+      Math.min(GROUND_MAX_PER_GREEN, Math.round(areaM2 / GROUND_M2_PER_SITE))
+    );
+    const spread = Math.min(14, Math.sqrt(areaM2 / Math.PI));
+    for (let i = 0; i < want; i++) {
+      const seed = hashBuilding(index * 8 + i, 'bird:ground-site');
+      const gx = cx + (((seed >>> 3) % 200) / 200 - 0.5) * spread * 2;
+      const gy = cy + (((seed >>> 11) % 200) / 200 - 0.5) * spread * 2;
+      if (isBlocked(gx, gy)) continue;
+      groundSites.push({ x: gx, y: gy });
+    }
+  });
+  perchPass(
+    'ground',
+    groundSites,
+    () => ROAD_LIFT_M,
+    (site, seed) => hashFacing(seed)
+  );
+
+  // Open ground is PAVEMENT, not parkland, and a lamp post is the cheapest
+  // honest way to find some: a lamp stands on the footway beside the
+  // carriageway, so a spot a couple of metres off one is footway too. The
+  // blocked check does the rest.
+  const openSites = [];
+  placedLampHeads.forEach((lamp, index) => {
+    const seed = hashBuilding(index, 'bird:open-site');
+    const a = ((seed >>> 5) % 360) * (Math.PI / 180);
+    const r = 1.6 + ((seed >>> 15) % 100) / 100;
+    const ox = lamp.x + Math.cos(a) * r;
+    const oy = lamp.y + Math.sin(a) * r;
+    if (!inCore(ox, oy) || isBlocked(ox, oy)) return;
+    openSites.push({ x: ox, y: oy });
+  });
+  perchPass(
+    'open-ground',
+    openSites,
+    () => ROAD_LIFT_M,
+    (site, seed) => hashFacing(seed)
+  );
+
   let triangles = 0;
   const addMerged = (geoms, name, material) => {
     if (geoms.length === 0) {
@@ -4358,6 +4939,42 @@ export function buildStreetProps(model, collision = null) {
   addMerged(basketGeoms, 'waste-baskets', propMaterial());
   addMerged(rackGeoms, 'bike-racks', propMaterial());
   addMerged(hydrantGeoms, 'hydrants', propMaterial());
+  // CW-57: the planting props. The flowers are their own mesh so the class
+  // pass can give colour its own voice without the box changing.
+  addMerged(planterGeoms, 'planters', propMaterial());
+  addMerged(flowerGeoms, 'planter-flowers', propMaterial());
+  addMerged(tableGeoms, 'picnic-tables', propMaterial());
+  // CW-58: one mesh for every bird in the city. Birds are tiny, so the cost
+  // exposure here is geometry count and draw calls rather than the FILL that
+  // CW-56's crowns paid - hence one merge, not one per species.
+  addMerged(birdGeoms, 'birds', propMaterial());
+  // Flowerbeds are FLAT, so they get the same treatment the road lines get:
+  // their own polygonOffset, because two coplanar surfaces without one fight
+  // in the surface-id buffer and re-roll a quarter of the frame's glyph
+  // vocabulary (D-110).
+  if (bedPositions.length > 0) {
+    const bedGeom = new BufferGeometry();
+    bedGeom.setAttribute(
+      'position',
+      new BufferAttribute(new Float32Array(bedPositions), 3)
+    );
+    const bedNormals = new Float32Array(bedPositions.length);
+    for (let i = 0; i < bedNormals.length; i += 3) bedNormals[i + 2] = 1;
+    bedGeom.setAttribute('normal', new BufferAttribute(bedNormals, 3));
+    paintGeometry(bedGeom, tintOf(BED_TIER, flowerTable[0].hueDeg, BED_CHROMA));
+    const bedMat = new MeshLambertMaterial({
+      color: 0xffffff,
+      vertexColors: true,
+      polygonOffset: true,
+      polygonOffsetFactor: -5,
+      polygonOffsetUnits: -5,
+    });
+    const bedMesh = new Mesh(bedGeom, bedMat);
+    bedMesh.name = 'flowerbeds';
+    group.add(bedMesh);
+    disposables.push(bedGeom, bedMat);
+    triangles += bedPositions.length / 9;
+  }
 
   // Traffic lights (CW-19). Placed on the road GRAPH rather than on the road
   // list: a signal belongs where streets actually meet, and OSM splits ways at
@@ -4535,6 +5152,12 @@ export function buildStreetProps(model, collision = null) {
     stats: {
       treeCount: treeSpots.size,
       mappedTreeCount,
+      speciesPlanted,
+      // CW-57: what stands, split so a reader can tell DATA from the
+      // fallback - fallbackPlanters is design, everything else is the map.
+      plantingPlaced,
+      birdsPlaced,
+      fallbackPlanters,
       carCount: carSpots.size,
       lampCount: lampSpots.size,
       // CW-43: what actually stands in the city, per class — the model's

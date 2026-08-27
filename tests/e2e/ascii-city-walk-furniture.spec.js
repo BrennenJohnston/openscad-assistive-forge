@@ -43,7 +43,14 @@ test.describe('ASCII City Walk — street furniture (CW-43)', () => {
       fire_hydrant: 112,
     })
     // The data-only wayfinding layer rides the model untouched.
-    expect(model.wayfindingCount).toBe(5354)
+    //
+    // CW-55 rebaked all four cities and this is the ONLY count that moved:
+    // 5354 -> 5355, one crossing or kerb node added to Seattle's OSM between
+    // 2026-08-24 and 2026-08-26. Every furniture count above, and every placed
+    // count below, came back identical - which is the reassuring half of a
+    // rebake and worth writing down, because a rebake that moved everything
+    // would mean the bake had changed rather than the map.
+    expect(model.wayfindingCount).toBe(5355)
 
     // What actually stands in the city: the same numbers minus nodes that
     // fall inside a building footprint or duplicate one another - measured
@@ -183,5 +190,119 @@ test.describe('ASCII City Walk — attractions in the legend (CW-44, CW-Q44)', (
     const firstHotelAt = rows.findIndex((r) => /hotel|inn\b/i.test(r))
     expect(wheelAt).toBeGreaterThanOrEqual(0)
     if (firstHotelAt >= 0) expect(wheelAt).toBeLessThan(firstHotelAt)
+  })
+})
+
+/**
+ * CW-57 (CW-Q55): plantings and picnic tables, from the same real data.
+ *
+ * Exact counts for the same reason the furniture's are exact: versioned
+ * extracts and hash-seeded deterministic placement, so any drift here is a
+ * change someone must own. And the split between data and fallback is pinned
+ * separately, because the whole law is that REAL DATA WINS - a city with
+ * mapped planters must never grow invented ones beside them.
+ */
+test.describe('ASCII City Walk — plantings (CW-57)', () => {
+  test('Seattle plants only what its map records', async ({ page }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const model = await modelStats(page)
+    // What CW-55's rebake actually holds. The plan's section 1f said 20
+    // planters and 69 flowerbeds; the extract says otherwise, and this is
+    // the extract.
+    expect(model.plantingByKind).toEqual({ planter: 11, flowerbed: 56 })
+    expect(model.picnicTableCount).toBe(26)
+
+    const props = await propStats(page)
+    // What survives a building footprint, a neighbour's spacing, or a tree
+    // too close - measured once, deterministic forever.
+    expect(props.plantingPlaced).toEqual({
+      planter: 8,
+      flowerbed: 36,
+      picnic_table: 22,
+    })
+    // ★ REAL DATA WINS: a city with mapped planters invents none.
+    expect(props.fallbackPlanters).toBe(0)
+  })
+
+  test('Denver has no plantings at all, and says so rather than pretending', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page, 'Denver, Colorado')
+
+    const model = await modelStats(page)
+    // Zero planters, zero flowerbeds, zero picnic tables in the data. The
+    // empty rows are a result, not a gap: Denver simply is not mapped for
+    // these, and inventing tables would be decorative scatter.
+    expect(model.plantingCount).toBe(0)
+    expect(model.picnicTableCount).toBe(0)
+
+    const props = await propStats(page)
+    expect(props.plantingPlaced.picnic_table).toBe(0)
+    expect(props.plantingPlaced.flowerbed).toBe(0)
+    // The directive's fallback fires HERE, and only here, and is counted
+    // apart from the data so a reader can always tell design from map.
+    expect(props.fallbackPlanters).toBe(40)
+    expect(props.plantingPlaced.planter).toBe(props.fallbackPlanters)
+  })
+
+  test('★ every city gets its own birds, on perches it actually has', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const props = await propStats(page)
+    expect(props.birdsPlaced).toEqual({
+      'house sparrow': 47,
+      gull: 76,
+      'rock pigeon': 104,
+      'american crow': 122,
+    })
+    // Seattle's roster has no goose and no roadrunner, so it has none placed.
+    // A roster is a claim about a city and this is where it is checked.
+    expect(props.birdsPlaced['canada goose']).toBeUndefined()
+    expect(props.birdsPlaced['greater roadrunner']).toBeUndefined()
+  })
+
+  test('★★ Albuquerque keeps its roadrunner, which needed the ROADSIDE', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page, 'Albuquerque, New Mexico')
+
+    const props = await propStats(page)
+    // ★ THIS PIN EXISTS BECAUSE THE NUMBER WAS ONCE 1. The roadrunner is
+    // Albuquerque's own bird and the whole argument for per-city rosters, and
+    // one of it in a city is the same as none. The cause was not the rate:
+    // the desert city has 24 mapped greens and only five over 400 m2, so
+    // parkland is structurally scarce. Separating pavement from parkland -
+    // which is where a roadrunner actually runs - took it to 15. If a later
+    // change quietly starves it again, this fails.
+    expect(props.birdsPlaced['greater roadrunner']).toBe(15)
+    expect(props.birdsPlaced['rock pigeon']).toBe(81)
+    // No crow and no gull on this roster, so none anywhere in the city.
+    expect(props.birdsPlaced['american crow']).toBeUndefined()
+    expect(props.birdsPlaced.gull).toBeUndefined()
+  })
+
+  test('★ geese come in flocks, so a city with few lawns still has a gathering', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page, 'Denver, Colorado')
+
+    const props = await propStats(page)
+    // ★ AND THIS PIN EXISTS BECAUSE A FIX BROKE SOMETHING ELSE. Letting the
+    // crow onto lawns - which the proof gate said was right - handed it and
+    // the gull two thirds of every ground site and dropped Burnaby from nine
+    // geese to one. Geese gather on open grass, so they are placed as small
+    // flocks, which is both the fix and the fact.
+    expect(props.birdsPlaced['canada goose']).toBe(51)
+    expect(props.birdsPlaced['canada goose']).toBeGreaterThan(
+      props.birdsPlaced['american crow']
+    )
   })
 })

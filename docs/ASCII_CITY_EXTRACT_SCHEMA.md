@@ -112,14 +112,22 @@ with the role `inner` become holes; everything else is treated as an outer ring.
 ```
 
 Standalone nodes are point props and point data. The parser routes them, in
-this order: street trees (`natural=tree`); rendered street furniture
+this order: street trees (`natural=tree`); planters (`man_made=planter`) and
+picnic tables (`leisure=picnic_table` — CW-55); rendered street furniture
 (`highway=bus_stop`, `amenity` in bench / waste_basket / bicycle_parking,
 `emergency=fire_hydrant` — CW-43); data-only wayfinding points
 (`highway=crossing`, bare `kerb=*`, bare `tactile_paving=*` — CW-43); named
 attractions (`tourism=attraction` or `attraction=*` with a `name` — CW-44);
 then storefront pois (`shop` or any remaining `amenity`). The order matters:
-a bench is an `amenity` node, and without the furniture branch it would
-reach the storefront chooser.
+a bench is an `amenity` node and a picnic table is a `leisure` node, and
+without their own branches both would reach the storefront chooser.
+
+**A tag has to be admitted twice.** Keeping it in `KEPT_TAGS` only decides
+what survives the trim; the node and way gates decide whether the element
+survives at all. Four releases have now paid for that distinction — a
+`building:part` way, a `leisure=park` way, a bus stop, and a planter each
+arrived from Overpass with their tags intact and were dropped a few lines
+later because the gate did not list their key.
 
 ## The kept tags
 
@@ -153,6 +161,10 @@ the size of the raw Overpass response.
 | `crossing`, `crossing:island`, `crossing:markings` | What kind of crossing, whether an island splits it, how it is marked. |
 | `traffic_signals:sound`, `traffic_signals:vibration` | Whether the signal speaks or buzzes — wayfinding data for the mission the owner named. |
 | `attraction` | The specific attraction kind on a named node (CW-44): `big_wheel`, `carousel`… |
+| `genus`, `species` | What a tree is, where a mapper has said. Near-absent in all four bundled cities and kept anyway, at no measurable size cost, so a later release never has to rebake to read them (CW-55). |
+| `leaf_type` | `broadleaved` or `needleleaved`. The one tree tag that is actually there: Seattle 990 of 1,759 trees, Burnaby 170 of 244, Denver 66 of 2,325, Albuquerque none (CW-55). |
+| `denotation` | Whether a tree is an avenue tree, a landmark, a natural monument (CW-55). |
+| `man_made` | Carries `man_made=planter` (CW-55). |
 
 ### Greenspace
 
@@ -226,10 +238,12 @@ draws it.
     }
   ],
   roads: [{ points: [[x, y], ...], widthM, kind, name, sidewalk, surface }],
-  trees: [[x, y], ...],
+  trees: [{ x, y, leafType?, genus?, species?, denotation? }, ...],
   greens: [{ outer: [[x, y], ...], kind }],
   pois: [{ x, y, kind }],
   furniture: [{ x, y, kind, shelter?, backrest? }],
+  plantings: [{ x, y, kind, areaM2 }],
+  picnicTables: [{ x, y }],
   wayfinding: [{ x, y, kind, tags }],
   attractions: [{ name, x, y, kind, heightM }],
   boundsM: { minX, minY, maxX, maxY },
@@ -238,10 +252,17 @@ draws it.
     partCount, orphanParts,
     greenCount, sidewalkCount, surfacedRoadCount, poiCount,
     furnitureCount, furnitureByKind, wayfindingCount, attractionCount,
+    plantingCount, plantingByKind, picnicTableCount, leafTypedTreeCount,
     droppedRings, droppedElements
   }
 }
 ```
+
+**`trees` changed shape in CW-55**, from `[x, y]` pairs to objects. What a tree
+IS has to travel with where it is; a parallel array keyed by index is how two
+lists drift apart. Every field but `x` and `y` is optional, because most trees
+in most cities carry nothing — Albuquerque has 142 trees and not one
+`leaf_type` among them.
 
 `furniture` (CW-43) is the rendered street furniture at true node positions;
 `kind` is one of `bus_stop`, `bench`, `waste_basket`, `bicycle_parking`,
@@ -252,6 +273,18 @@ companions (a crossing with kerb and tactile companions is one point, not
 three). Nothing is drawn from it yet. `attractions` (CW-44) are the named
 attraction nodes that join the landmark legend; `heightM` is parsed from the
 `height` tag, `0` where untagged.
+
+`plantings` (CW-55) are planters and flowerbeds — `kind` is `planter` or
+`flowerbed`. A planting mapped as a polygon is carried as its **centroid and
+its area**, never as a ring: a two-by-four pixel character cell cannot show the
+shape of a flowerbed, and keeping the ring would put real bytes in every
+extract for a detail nobody can see. A planter mapped as a bare node reports
+`areaM2: 0` rather than guessing a footprint. `picnicTables` are
+`leisure=picnic_table` nodes at their true positions. Neither is drawn yet.
+
+A flowerbed is deliberately **not** greenspace. A park is a lawn to colour; a
+flowerbed is a planting to dress, and adding `flowerbed` to the greenspace
+value lists would have been one word and would have painted every bed as grass.
 
 `greens` are the parks, gardens, pitches and playgrounds listed under
 [Greenspace](#greenspace); `kind` is the `leisure` or `landuse` value they came

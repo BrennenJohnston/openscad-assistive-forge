@@ -179,6 +179,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Birds where birds rest** (CW-58) - gulls and crows on parapets and lamp heads, pigeons and
+  sparrows on bench backs, picnic tables and planter rims, Canada geese gathered on park grass, and
+  in Albuquerque the greater roadrunner along the roadside its name comes from. Each city has its
+  own roster and each bird sits only on a perch that bird actually uses. Everything is built at its
+  real field-guide size, and nothing was made bigger in order to be seen: the goose reads
+  unmistakably, neck and all, while a house sparrow at true scale is a small mark on a bench back
+  rather than a recognisable bird. That is the honest trade, and it is written down rather than
+  papered over
+
+- **Planters, flowerbeds and picnic tables** (CW-57) - where a city's map records them, and only
+  there. Seattle and Burnaby have real ones and use them; Denver and Albuquerque have none recorded,
+  so they get hash-placed planters inside their own real parks, counted separately so design can
+  always be told from data. Denver's map has no picnic tables at all and none were invented. Each
+  city's flowers come from a cited list of what its parks actually plant, which is why Albuquerque's
+  come out yellow where Seattle's come out pink
+
+- **Trees with names** (CW-56) - a street tree used to be one shape repeated. Each city now plants
+  the species its own street-tree inventory records, in the crown form that species has, and where
+  the map says a tree is needle-leaved it is drawn as a conifer even when the city's common list
+  names none. Heights are compressed against the cited ranges, because at full size this city's
+  infill spacing closes the sky into a ceiling
+
 - **The cars have wheels, and the ones that are driving have their lights on** (CW-54) - a parked
   row used to read as a low dotted mass, because every car body sat flat on the road with nothing
   under it. Each car now rides on four wheels at a height typical of its own kind, so there is a gap

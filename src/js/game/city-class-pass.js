@@ -60,7 +60,18 @@ export const SURFACE_CLASS = {
  * and reads as sky, which is the safe direction: an unclassified cell falls
  * back to the full glyph vocabulary it has always used.
  */
-const CLASS_BY_MESH_NAME = new Map([
+/**
+ * Exported so a test can ask the QUESTION THIS MAP KEEPS FAILING: does every
+ * mesh the city actually builds have a class here?
+ *
+ * A name missing from this map is not an error anywhere - the pass simply
+ * leaves that mesh out and it reads as SKY. That is a safe default for a mesh
+ * nobody added, and a silent, invisible defect for one somebody just did.
+ * CW-56 added a ground mesh that would have been dressed as sky and nothing
+ * would have said so; the guard in city-class-pass.test.js asks the builders
+ * themselves now.
+ */
+export const CLASS_BY_MESH_NAME = new Map([
   ['ground', SURFACE_CLASS.GROUND],
   ['roads', SURFACE_CLASS.ROAD],
   ['curbs', SURFACE_CLASS.CURB],
@@ -88,6 +99,28 @@ const CLASS_BY_MESH_NAME = new Map([
   ['light-heads', SURFACE_CLASS.SIGN],
   // CW-33: the ground you walk on, and the ground you walk past.
   ['sidewalks', SURFACE_CLASS.SIDEWALK],
+  // CW-57 plantings, borrowed rather than minted - the span table is full.
+  // A planter is a knee-high box on the kerb, which is what a bench is, so it
+  // takes the same voice CW-43 gave the benches. Its FLOWERS are small and
+  // bright, which is what a sign face is. A picnic table is a low frame with a
+  // flat top, again a bench. A flowerbed is a patch of ground and takes the
+  // ground it lies on.
+  ['planters', SURFACE_CLASS.CAR],
+  ['planter-flowers', SURFACE_CLASS.SIGN],
+  ['picnic-tables', SURFACE_CLASS.CAR],
+  ['flowerbeds', SURFACE_CLASS.GREEN],
+  // CW-58: birds, PHOTOGRAPH-DECIDED against the three other candidates at one
+  // pose, one goose, 30%. The span table is FULL at 16, so this is a borrow
+  // and not a new id - CW-43's law.
+  //
+  // SIGN turned the bird into a solid slab: most mass, least shape. CAR banded
+  // it horizontally so the body read as a block with a neck stuck on. LAMP and
+  // PERSON both kept the head, neck and body separate; PERSON's striations run
+  // with the bird's own form, and it is also what the vocabulary is FOR - a
+  // small living thing standing on a surface, which is what CW-45 built it to
+  // draw. For a bird the silhouette is the whole picture, so the voice that
+  // preserves silhouette wins.
+  ['birds', SURFACE_CLASS.PERSON],
   ['greens', SURFACE_CLASS.GREEN],
   // CW-43 street furniture: dressed in the EXISTING voices of the things
   // they physically resemble — the span table (_gpuVocabLists,

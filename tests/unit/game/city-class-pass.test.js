@@ -221,3 +221,98 @@ describe('city-class-pass', () => {
     expect(pass.read({}, 4, 3)).toBeNull()
   })
 })
+
+/**
+ * ★ CW-56: the question this map keeps failing.
+ *
+ * A mesh name missing from CLASS_BY_MESH_NAME is not an error anywhere. The
+ * pass simply leaves that mesh out, and it reads as SKY - a safe default for
+ * a mesh nobody added, and a silent, invisible defect for one somebody just
+ * did. CW-56 built a ground mesh that would have been dressed in the sky's
+ * voice, and nothing anywhere would have said so.
+ *
+ * So this does not copy the list. It BUILDS a city, enumerates the meshes the
+ * builders actually made, and asks the map about each one. A future release
+ * that adds a mesh and forgets this map fails here rather than in a
+ * photograph nobody takes.
+ */
+describe('every mesh the city builds has a class (CW-56)', () => {
+  it('asks the builders, not a copy of the list', async () => {
+    const [{ CLASS_BY_MESH_NAME }, { buildStreetProps }, data, walk] =
+      await Promise.all([
+        import('../../../src/js/game/city-class-pass.js'),
+        import('../../../src/js/game/city-scene.js'),
+        import('../../../src/js/game/city-data.js'),
+        import('../../../src/js/game/walk-controls.js'),
+      ])
+    const { buildCollisionGrid } = walk
+    const CENTER = { lat: 40, lon: -100 }
+    const COS = Math.cos((CENTER.lat * Math.PI) / 180)
+    const pt = (xM, yM) => ({
+      lat: CENTER.lat + yM / 110540,
+      lon: CENTER.lon + xM / (111320 * COS),
+    })
+    const ring = (cx, cy, h) => [
+      pt(cx - h, cy - h),
+      pt(cx + h, cy - h),
+      pt(cx + h, cy + h),
+      pt(cx - h, cy + h),
+      pt(cx - h, cy - h),
+    ]
+    const model = data.parseCityExtract(
+      {
+        elements: [
+          {
+            type: 'way',
+            id: 1,
+            tags: { building: 'yes', height: '20' },
+            geometry: ring(-60, -60, 6),
+          },
+          {
+            type: 'way',
+            id: 2,
+            tags: { building: 'yes', height: '20' },
+            geometry: ring(60, 60, 6),
+          },
+          {
+            type: 'way',
+            id: 3,
+            tags: { highway: 'residential' },
+            geometry: [pt(-50, 0), pt(50, 0)],
+          },
+          { type: 'node', id: 4, tags: { natural: 'tree' }, ...pt(10, 6) },
+          {
+            type: 'node',
+            id: 5,
+            tags: { highway: 'bus_stop', shelter: 'yes' },
+            ...pt(-14, 3),
+          },
+          { type: 'node', id: 6, tags: { amenity: 'bench' }, ...pt(-8, 3) },
+          {
+            type: 'node',
+            id: 7,
+            tags: { emergency: 'fire_hydrant' },
+            ...pt(-4, 3),
+          },
+        ],
+      },
+      { center: CENTER }
+    )
+    const props = buildStreetProps(model, buildCollisionGrid(model))
+    const built = props.group.children.filter((c) => c.isMesh).map((c) => c.name)
+    expect(built.length).toBeGreaterThan(4)
+    const orphans = built.filter((n) => !CLASS_BY_MESH_NAME.has(n))
+    expect(
+      orphans,
+      `these meshes would be dressed as SKY: ${orphans.join(', ')}`
+    ).toEqual([])
+    // The fixture is built so the props include a spread of classes, not one:
+    // a guard that only ever sees tree trunks would pass with every other
+    // mesh unclassified.
+    expect(built).toContain('tree-trunks')
+    expect(built).toContain('cars')
+    expect(built).toContain('people')
+    expect(CLASS_BY_MESH_NAME.get('tree-trunks')).toBe(SURFACE_CLASS.TREE)
+    props.dispose()
+  })
+})
