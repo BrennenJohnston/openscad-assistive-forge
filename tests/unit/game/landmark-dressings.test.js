@@ -259,4 +259,25 @@ describe('the one hook in the building path', () => {
     // The same outline, the same tags, one digit different in the id.
     expect(buildingTriangles(cityWith(37056443))).toBe(44)
   })
+
+  it('gives the whole of Seattle exactly one diagrid', () => {
+    // ★ THE FACADE FAMILY IS RESERVED, AND THIS IS WHAT SAYS SO. The diagrid
+    // sits after the nine archetypes in every array the buildings loop
+    // indexes, and the generic hash divides by the nine, so no ordinary
+    // building can land on it. Appending it to WINDOW_ARCHETYPES instead
+    // would give roughly one building in ten a diamond skin, in every city,
+    // and nothing else in the suite would notice - so this asks a real
+    // 4,000-building city rather than a fixture.
+    const { group, dispose } = buildCityGroup(seattle())
+    const meshes = group.children.filter((c) => c.name === 'buildings')
+    const tris = meshes.map(
+      (m) => m.geometry.getAttribute('position').count / 3
+    )
+    // The dressing buckets come last, so the diagrid is the final mesh, and
+    // it holds the Library's platforms and planes and nothing else.
+    expect(tris.at(-1)).toBe(316)
+    // Every other family is a real share of the city, not a stray landmark.
+    for (const n of tris.slice(0, -1)) expect(n).toBeGreaterThan(1000)
+    dispose()
+  })
 })
