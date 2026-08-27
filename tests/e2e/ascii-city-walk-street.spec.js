@@ -1307,7 +1307,23 @@ test.describe('ASCII City Walk — where you are (CW-27)', () => {
     })
 
     await page.keyboard.press('x')
-    await expect(announcer).toHaveText(/^You are .*, facing [a-z]+\.$/)
+    /**
+     * ★★ CW-65 CHANGED THE SHAPE OF THIS SENTENCE AND THIS PIN CAUGHT IT - on
+     * BOTH engines, which is the tell that a red is the code and not the
+     * runner. The where-sentence now carries an appended warmer/colder clause
+     * while the traveler is unfound, so an anchored `$` after "facing north."
+     * could no longer match.
+     *
+     * The fix is NOT to drop the anchor. What this case guards is that the
+     * where-sentence is WHOLE and well formed, so it still requires exactly
+     * that, and allows AT MOST one further sentence after it - which is the
+     * composition CW-65 promises ("appended to whichever clause is true, never
+     * substituted for it"). A player must never lose the street name to the
+     * hint, and this is where that is enforced.
+     */
+    await expect(announcer).toHaveText(
+      /^You are .*, facing [a-z]+\.(?: [A-Z][^.]*\.)?$/
+    )
     const said = await announcer.textContent()
     await page.waitForTimeout(400)
     expect(await page.evaluate(() => window.__cw27Writes)).toBe(1)
@@ -1332,8 +1348,9 @@ test.describe('ASCII City Walk — where you are (CW-27)', () => {
     // which key it is.
     await expect(btn).toHaveAttribute('title', /X/)
     await btn.click()
+    // Same shape as the X case above, and the same reason (CW-65's clause).
     await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
-      /^You are .*, facing [a-z]+\.$/
+      /^You are .*, facing [a-z]+\.(?: [A-Z][^.]*\.)?$/
     )
   })
 
