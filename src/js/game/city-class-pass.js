@@ -139,11 +139,19 @@ export const CLASS_BY_MESH_NAME = new Map([
   // builders guard cannot see this mesh at all, because it enumerates
   // buildStreetProps and a firework is built beside the rain.
   //
-  // ★ AND LEAVING IT OUT IS NOT A SAFE DEFAULT HERE. An unmapped mesh reads as
-  // SKY, which for something 200 m up sounds right and is in fact the reason
-  // the first show photographed as EMPTY BLACK SKY with 28 bright stars in the
-  // frustum: the sky's voice draws nothing, so the bursts rendered and the
-  // converter dressed them as background.
+  // ★★ AND THE FIRST VERSION OF THIS COMMENT WAS WRONG, WHICH IS WHY IT SAYS
+  // SO. It claimed an unmapped mesh "draws nothing" and blamed the sky's voice
+  // for a show that photographed empty. `_hfm.js` settles it in one line -
+  // `classMap ? (st.classLookups.get(classMap[idx]) ?? st.lookup) : st.lookup`
+  // - so an unclassed cell falls through to the DEFAULT vocabulary and still
+  // gets a glyph from its own luminance. A class decides WHICH glyph, never
+  // WHETHER. The empty frames were a clock mismatch in the builder, and the
+  // measurement that seemed to blame the class was an instrument drawing its
+  // stars a fifth of the size it thought.
+  //
+  // What the mapping is actually for: without it a burst would wear the same
+  // voice as the sky behind it. SIGN is small and bright, which is what a star
+  // is, and that is a LOOK decision - the right one, but not a visibility one.
   ['fireworks', SURFACE_CLASS.SIGN],
 ]);
 

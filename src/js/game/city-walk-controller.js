@@ -649,7 +649,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       // rather than naming the key alone, because a key that does nothing is
       // worse than a key nobody has been told about yet.
       'Y: fireworks again, once you have found every landmark in this city',
-      'High contrast, theme and color: the three buttons at the top of the screen',
+      // CW-64: the count moved when Fireworks joined this row, and it is
+      // CONDITIONAL - it does not exist until a city is finished - so the line
+      // names the joiner rather than counting buttons.
+      'High contrast, theme and color: buttons at the top of the screen, with ' +
+        'Fireworks joining them once you have found every landmark',
       // CW-35: the toolbar no longer holds all of them. Walking, turning,
       // looking and the standard views moved into the Camera panel, and a
       // help panel that still said "the toolbar" would send a mouse user
