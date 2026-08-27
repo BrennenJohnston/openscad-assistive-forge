@@ -305,4 +305,64 @@ test.describe('ASCII City Walk — plantings (CW-57)', () => {
       props.birdsPlaced['american crow']
     )
   })
+
+  /**
+   * CW-63 (CW-Q56): the landmark dressings, in a browser.
+   *
+   * The unit guards can count triangles but they run in jsdom, where
+   * `getContext('2d')` is not implemented and every facade texture comes back
+   * null. Whether the diagrid CANVAS is actually painted - and painted at the
+   * size its metre repeat assumes - is a fact only a real browser holds.
+   */
+  const facadeMeshes = (page) =>
+    page.evaluate(() => {
+      const found = []
+      window.__cityWalkGame.scene.traverse((o) => {
+        if (!o.isMesh || o.name !== 'buildings') return
+        const image = o.material.map?.image ?? null
+        found.push({
+          triangles: o.geometry.getAttribute('position').count / 3,
+          texture: image ? [image.width, image.height] : null,
+        })
+      })
+      return found
+    })
+
+  test('★ Seattle wears exactly one diagrid, and it is a real canvas', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const meshes = await facadeMeshes(page)
+    // Nine generic facade families plus the one reserved for dressings.
+    expect(meshes).toHaveLength(10)
+    const diagrid = meshes.at(-1)
+    // Five platforms and four flowing planes off a 12-point outline: five
+    // extrusions of 44 triangles, four lofts of one quad per edge.
+    expect(diagrid.triangles).toBe(316)
+    // ★ THE SIZE IS NOT DECORATION. The repeat is set as one over the tile's
+    // METRE span, so a canvas of a different size would run the lattice at a
+    // different scale than the member width was photographed at.
+    expect(diagrid.texture).toEqual([256, 512])
+    // Every generic family is a real share of the city and wears the 8x12
+    // bay window tile, so a landmark cannot have leaked into one.
+    for (const m of meshes.slice(0, -1)) {
+      expect(m.triangles).toBeGreaterThan(1000)
+      expect(m.texture).toEqual([512, 576])
+    }
+  })
+
+  test('★ Denver has no dressed landmark, so it has no diagrid at all', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page, 'Denver, Colorado')
+
+    const meshes = await facadeMeshes(page)
+    // The bucket exists in every city and stays EMPTY here, so no tenth mesh
+    // is ever made. This is the control photograph as an assertion.
+    expect(meshes).toHaveLength(9)
+    for (const m of meshes) expect(m.texture).toEqual([512, 576])
+  })
 })
