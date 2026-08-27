@@ -379,6 +379,107 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     }
   })
 
+  test('★★ a drag pans the map, and the threshold keeps click and drag apart (CW-59)', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
+
+    const cam = () =>
+      page.evaluate(() => {
+        const c = window.__cityWalkGame.mapCam
+        return { x: c.centerX, y: c.centerY, follow: c.follow }
+      })
+    const box = await page.locator('#cityWalkViewport').boundingBox()
+    const cx = box.x + box.width / 2
+    const cy = box.y + box.height / 2
+    const drag = async (dx, dy, steps) => {
+      await page.mouse.move(cx, cy)
+      await page.mouse.down()
+      for (let i = 1; i <= steps; i++) {
+        await page.mouse.move(cx + (dx * i) / steps, cy + (dy * i) / steps)
+      }
+      await page.mouse.up()
+    }
+
+    // Grab and drag: the world point under the cursor stays under it, so
+    // dragging RIGHT walks the camera centre WEST. The sign is the whole
+    // difference between moving a map and nudging a camera, and getting it
+    // backwards would still have "panned".
+    const before = await cam()
+    expect(before.follow).toBe(true)
+    await drag(200, 0, 10)
+    const afterX = await cam()
+    expect(afterX.x).toBeLessThan(before.x - 100)
+    // Dragging DOWN pulls northern ground into view: screen y grows down and
+    // world y grows north, so this one flips.
+    await drag(0, 150, 10)
+    const afterY = await cam()
+    expect(afterY.y).toBeGreaterThan(afterX.y + 100)
+    // Any manual pan breaks player-follow, exactly as the keys and buttons
+    // do. Without this the next frame snaps the map back and the drag looks
+    // broken rather than ignored.
+    expect(afterY.follow).toBe(false)
+
+    // ★ THE BOUNDARY, WRITTEN NOW BECAUSE CW-61's MODAL WILL HANG ON IT.
+    // Under DRAG_THRESHOLD_PX the press was a click and the map must not
+    // move at all; over it the press was a drag and it must.
+    const wobbleFrom = await cam()
+    await drag(2, 0, 2)
+    const wobbleTo = await cam()
+    expect(wobbleTo.x).toBe(wobbleFrom.x)
+    expect(wobbleTo.y).toBe(wobbleFrom.y)
+
+    const dragFrom = await cam()
+    await drag(6, 0, 3)
+    const dragTo = await cam()
+    expect(dragTo.x).not.toBe(dragFrom.x)
+  })
+
+  test('★ an over-threshold drag on an ARMED map pans and never teleports (CW-59)', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
+    await btn(page, 'cityWalkTeleportBtn').click()
+    await expect(btn(page, 'cityWalkTeleportBtn')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    )
+
+    const walkerAt = () =>
+      page.evaluate(() => {
+        const w = window.__cityWalkGame.walkState
+        return { x: w.x, y: w.y }
+      })
+    const box = await page.locator('#cityWalkViewport').boundingBox()
+    const cx = box.x + box.width / 2
+    const cy = box.y + box.height / 2
+
+    // ★ THIS IS WHY THE TELEPORT MOVED TO THE POINTER-UP. It used to fire on
+    // the way DOWN, and the press that begins a pan is the same press - so
+    // the map would have jumped away the instant anyone tried to drag it.
+    const before = await walkerAt()
+    await page.mouse.move(cx, cy)
+    await page.mouse.down()
+    for (let i = 1; i <= 10; i++) await page.mouse.move(cx + i * 20, cy)
+    await page.mouse.up()
+    expect(await walkerAt()).toEqual(before)
+
+    // And a real click still travels, so the drag did not cost the feature.
+    await page.mouse.move(cx + 40, cy + 30)
+    await page.mouse.down()
+    await page.mouse.up()
+    await expect.poll(async () => {
+      const now = await walkerAt()
+      return Math.hypot(now.x - before.x, now.y - before.y)
+    }).toBeGreaterThan(1)
+  })
+
   test('Enter on a hold button takes one step and then stops', async ({
     page,
   }) => {

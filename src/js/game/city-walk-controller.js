@@ -2043,15 +2043,32 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     event.preventDefault();
 
     if (game.mapView) {
-      // CW-40 (CW-Q40): while pin mode is armed, a click on the map IS the
-      // teleport - one step, no confirmation press. Unarmed, a click does
-      // nothing here again (the pre-CW-36 behaviour): the two-step
-      // pick-then-J flow this branch used to start is retired, and a ring
-      // that no longer led anywhere would be a promise the game cannot
-      // keep.
-      if (state.teleportArmed) {
-        const world = mapPointToWorld(event.clientX, event.clientY);
-        if (world) commitTeleport(world.x, world.y);
+      // CW-59: a press on the map now STARTS A DRAG rather than acting.
+      //
+      // ★ AND THAT IS WHY THE TELEPORT MOVED TO THE POINTER-UP. It used to
+      // fire here, on the way down, which cannot coexist with dragging: the
+      // press that begins a pan is the same press that would have teleported,
+      // so the map would jump away the instant you tried to move it. The
+      // DRAG_THRESHOLD_PX boundary is what separates them - under it the
+      // press was a click and still teleports; over it the press was a drag,
+      // it pans, and it never clicks. CW-61's modal hangs on this same
+      // boundary.
+      if (state.drag) return;
+      state.drag = {
+        pointerId: event.pointerId,
+        lastX: event.clientX,
+        lastY: event.clientY,
+        downX: event.clientX,
+        downY: event.clientY,
+        travelPx: 0,
+        panning: false,
+        map: true,
+      };
+      try {
+        state.refs.viewport.setPointerCapture(event.pointerId);
+      } catch {
+        // Capture is an optimization; a drag without it simply ends at the
+        // viewport edge. Never worth failing the press over.
       }
       return;
     }
@@ -2076,8 +2093,18 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     const drag = state.drag;
     const game = state.game;
     if (!drag || drag.pointerId !== event.pointerId) return;
-    if (!game || game.mapView) {
+    if (!game) {
       endDrag();
+      return;
+    }
+    if (drag.map !== Boolean(game.mapView)) {
+      // The view changed under a live drag. Whatever it was doing no longer
+      // applies to what is on screen.
+      endDrag();
+      return;
+    }
+    if (drag.map) {
+      panMapByDrag(drag, event);
       return;
     }
 
@@ -2108,7 +2135,62 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
 
   function handleViewportPointerUp(event) {
     if (state.drag && state.drag.pointerId !== event.pointerId) return;
+    const drag = state.drag;
+    // A press that never crossed the threshold was a CLICK, and on an armed
+    // map a click is the teleport. Measured from where the press went DOWN,
+    // not from where it came up: a two-pixel wobble should send you where you
+    // aimed, not two pixels off it.
+    if (drag?.map && !drag.panning && state.teleportArmed) {
+      const world = mapPointToWorld(drag.downX, drag.downY);
+      if (world) commitTeleport(world.x, world.y);
+    }
     endDrag();
+  }
+
+  /**
+   * Drag the map under the pointer. The world point you grabbed stays under
+   * the cursor, which is the only behaviour that feels like moving a map
+   * rather than nudging a camera.
+   *
+   * The arithmetic is `mapPointToWorld` inverted: that turns a screen point
+   * into a world point through the same frustum, so one screen pixel is
+   * `(right - left) / width` metres across and `(top - bottom) / height`
+   * metres up. Screen y grows downward and world y grows north, so the y
+   * term flips.
+   */
+  function panMapByDrag(drag, event) {
+    const game = state.game;
+    const { viewport } = state.refs;
+    const dx = event.clientX - drag.lastX;
+    const dy = event.clientY - drag.lastY;
+    drag.lastX = event.clientX;
+    drag.lastY = event.clientY;
+
+    if (!drag.panning) {
+      drag.travelPx += Math.abs(dx) + Math.abs(dy);
+      if (drag.travelPx < DRAG_THRESHOLD_PX) return;
+      drag.panning = true;
+    }
+
+    const rect = viewport.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const aspect = Math.max(1, rect.width) / Math.max(1, rect.height);
+    const fit = mapCameraFrustum(game.mapCam, game.model.boundsM, aspect);
+    const perPxX = (fit.right - fit.left) / rect.width;
+    const perPxY = (fit.top - fit.bottom) / rect.height;
+
+    const bounds = game.model.boundsM;
+    const nextX = game.mapCam.centerX - dx * perPxX;
+    const nextY = game.mapCam.centerY + dy * perPxY;
+    game.mapCam.centerX = Math.min(bounds.maxX, Math.max(bounds.minX, nextX));
+    game.mapCam.centerY = Math.min(bounds.maxY, Math.max(bounds.minY, nextY));
+    // Any manual pan breaks player-follow, exactly as the keys and the
+    // buttons do - otherwise the next frame snaps the map back and the drag
+    // looks broken.
+    game.mapCam.follow = false;
+
+    game.altView.invalidate();
+    updateHud();
   }
 
   function endDrag() {
