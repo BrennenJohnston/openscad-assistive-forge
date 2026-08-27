@@ -179,6 +179,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Someone to find in every city** (CW-65) - a traveler is standing somewhere in each city, with a
+  white cane and a high-visibility jacket, and walking up to them is worth doing: they say hello,
+  the map legend records that you found them, and from then on they are waiting near where you start
+  whenever you come back. Where they stand is fixed per city and remembered between sessions, so the
+  search is the same one each time until you finish it. **The X key is how you actually find them**,
+  and that is not a fallback for anyone - it is the search itself. Pressing X adds a line saying
+  roughly how far away they are, from "a long way from here" down to "you can hear a cane tapping
+  close by", and it goes quiet once you have found them. The reason is measured rather than assumed:
+  a whole person is about two and a half characters wide and four tall at thirty metres, and the
+  jacket stops standing out from the crowd at about twenty, in a city two and a half kilometres
+  across. Nobody finds one figure in that by looking, so nobody is asked to. **The cane you see is
+  drawn thicker than a real one** - a real cane is two-thirds of a screen pixel at that distance and
+  could not mark a single character - and the record says so plainly rather than pretending
+  otherwise
+
+- **Links that unlock the City Walk no longer throw away what they were carrying** (CW-66) - opening
+  a link with `?hfm=unlock` on it removes that part of the address afterwards, so the link is not
+  passed on by accident. It was also removing everything after the `#`, which is where a shared set
+  of parameters lives - so a link that both unlocked the game and carried a shared model destroyed
+  the model on arrival. The part after the `#` is kept now, and the unlock is still stripped
+
 - **Fireworks when you finish a city** (CW-64) - find all twelve landmarks and the sky over the
   city lights up for about twenty seconds: bursts on a ring around you, well above the rooftops,
   drawn as characters like everything else here. Afterwards a Fireworks button appears and the Y key
