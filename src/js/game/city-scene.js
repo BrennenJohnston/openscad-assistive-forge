@@ -857,9 +857,15 @@ function createWindowTexture(archetypeIndex = 0) {
  *
  * ★ THE RESOLUTION IS SET BY THE MEMBER, NOT BY TASTE. CW-52 found a facade
  * pattern finer than the character grid beats against it and shimmers, and the
- * release prompt's floor is a line at least 3 px wide in texture space. At
- * 14.2 px per metre a 0.4 m member is 5.7 px, comfortably over it, and the
- * whole tile is a quarter of a megabyte.
+ * release prompt's floor is a line at least 3 px wide in TEXTURE space. At
+ * 14.2 px per metre the shipped 1.2 m member is 17 px there, far over it, and
+ * the whole tile is a quarter of a megabyte.
+ *
+ * That floor is not the binding one, though. On SCREEN at the 90 m photograph
+ * gate one metre is 8.66 px, so the member is 10.4 px against a character cell
+ * 4 px wide - and it is the SCREEN number that decided the width, because a
+ * member under one cell across cannot make a cell dark whatever the texture
+ * holds.
  *
  * @returns {CanvasTexture|null}
  */
