@@ -247,4 +247,62 @@ test.describe('ASCII City Walk — plantings (CW-57)', () => {
     expect(props.fallbackPlanters).toBe(40)
     expect(props.plantingPlaced.planter).toBe(props.fallbackPlanters)
   })
+
+  test('★ every city gets its own birds, on perches it actually has', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const props = await propStats(page)
+    expect(props.birdsPlaced).toEqual({
+      'house sparrow': 47,
+      gull: 76,
+      'rock pigeon': 104,
+      'american crow': 122,
+    })
+    // Seattle's roster has no goose and no roadrunner, so it has none placed.
+    // A roster is a claim about a city and this is where it is checked.
+    expect(props.birdsPlaced['canada goose']).toBeUndefined()
+    expect(props.birdsPlaced['greater roadrunner']).toBeUndefined()
+  })
+
+  test('★★ Albuquerque keeps its roadrunner, which needed the ROADSIDE', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page, 'Albuquerque, New Mexico')
+
+    const props = await propStats(page)
+    // ★ THIS PIN EXISTS BECAUSE THE NUMBER WAS ONCE 1. The roadrunner is
+    // Albuquerque's own bird and the whole argument for per-city rosters, and
+    // one of it in a city is the same as none. The cause was not the rate:
+    // the desert city has 24 mapped greens and only five over 400 m2, so
+    // parkland is structurally scarce. Separating pavement from parkland -
+    // which is where a roadrunner actually runs - took it to 15. If a later
+    // change quietly starves it again, this fails.
+    expect(props.birdsPlaced['greater roadrunner']).toBe(15)
+    expect(props.birdsPlaced['rock pigeon']).toBe(81)
+    // No crow and no gull on this roster, so none anywhere in the city.
+    expect(props.birdsPlaced['american crow']).toBeUndefined()
+    expect(props.birdsPlaced.gull).toBeUndefined()
+  })
+
+  test('★ geese come in flocks, so a city with few lawns still has a gathering', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page, 'Denver, Colorado')
+
+    const props = await propStats(page)
+    // ★ AND THIS PIN EXISTS BECAUSE A FIX BROKE SOMETHING ELSE. Letting the
+    // crow onto lawns - which the proof gate said was right - handed it and
+    // the gull two thirds of every ground site and dropped Burnaby from nine
+    // geese to one. Geese gather on open grass, so they are placed as small
+    // flocks, which is both the fix and the fact.
+    expect(props.birdsPlaced['canada goose']).toBe(51)
+    expect(props.birdsPlaced['canada goose']).toBeGreaterThan(
+      props.birdsPlaced['american crow']
+    )
+  })
 })
