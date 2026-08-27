@@ -335,17 +335,25 @@ test.describe('ASCII City Walk — the colour toggle (CW-Q16)', () => {
     await expect(help).toContainText(
       'O: color on or off (off is a single-color retro screen)'
     )
+    // CW-64 moved this line: the row's count stopped being fixed when
+    // Fireworks joined it, so the sentence names the joiner and its
+    // condition instead of counting.
     await expect(help).toContainText(
-      'High contrast, theme and color: the three buttons at the top of the screen'
+      'High contrast, theme and color: buttons at the top of the screen, ' +
+        'with Fireworks joining them once you have found every landmark'
     )
 
-    // The header really does carry all three, in the order the help names.
+    // And the header really is what that sentence says it is. This city has
+    // not been finished, so the promise under test is the WHOLE row - exactly
+    // these three and nothing else. Asserting the first three would pass
+    // whether or not Fireworks had leaked in early, which is the half of the
+    // claim the wording actually rests on.
     const ids = await page.evaluate(() =>
       Array.from(
         document.querySelectorAll('.city-walk-header-actions button')
       ).map((b) => b.id)
     )
-    expect(ids.slice(0, 3)).toEqual([
+    expect(ids).toEqual([
       'cityWalkContrastBtn',
       'cityWalkThemeBtn',
       'cityWalkColourBtn',
