@@ -137,9 +137,19 @@ describe('the Library platforms', () => {
     // ★ A MEMBER THINNER THAN A CHARACTER CELL CANNOT MAKE A CELL DARK. The
     // published members are ~0.3 m and photographed as nothing at all from
     // 4th Avenue; the shipped width is a diagram at the resolution this
-    // medium has. The cell is 4 px wide, so at the 90 m gate distance a
-    // member must clear one cell across with room to spare.
-    const PX_PER_M_AT_90M = 900 / (2 * 90 * Math.tan(Math.PI / 6))
+    // medium has.
+    //
+    // ★ THE HEIGHT HERE IS THE GAME VIEWPORT'S, NOT THE BROWSER'S, and the
+    // difference is not cosmetic. The camera is sized from
+    // `viewport.clientHeight`, and in the 1600 x 900 window the photograph
+    // gate used, the game viewport is 756 px - the header takes the rest, and
+    // the captured ASCII canvas measures 1600 x 756. Working from 900 makes
+    // every member look 19% wider than it is: the published 0.4 m member
+    // reads 3.46 px on that arithmetic and 2.91 px on the real one, which is
+    // 0.73 of a 4 px cell rather than 0.87.
+    const GAME_VIEWPORT_H = 756
+    const PX_PER_M_AT_90M = GAME_VIEWPORT_H / (2 * 90 * Math.tan(Math.PI / 6))
+    // Over two cells across, which is where the photographs put the floor.
     expect(LIBRARY_DIAGRID.memberM * PX_PER_M_AT_90M).toBeGreaterThan(8)
     // ★ AND THE DIAMOND IS TALLER THAN IT IS WIDE, because the cell is 9 px
     // tall against 4 px wide and the vertical axis is the starved one.
