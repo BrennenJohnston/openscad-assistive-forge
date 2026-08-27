@@ -161,6 +161,15 @@ const RAIN_OFF_MESSAGE = 'Rain off.';
 const PHOTO_SAVED_MESSAGE = 'Photo saved.';
 const ALL_LANDMARKS_MESSAGE = 'All landmarks found.';
 const RAIN_BLOCKED_MESSAGE = 'Rain is off because reduced motion is on.';
+// ACCESSIBILITY-CRITICAL STRINGS (D-35) - flagged for owner review. The first
+// two are the reward itself for a player who cannot see it; the third has to
+// say why the sky is still rather than leaving a promise unkept.
+const FIREWORKS_MESSAGE = 'Fireworks over the city.';
+const FIREWORKS_REPLAY_MESSAGE = 'Fireworks again.';
+const FIREWORKS_CALM_MESSAGE =
+  'Fireworks over the city, held still because reduced motion is on.';
+/** How long the calm celebration stays up. The plan's ~3 s. */
+const FIREWORKS_STILL_MS = 3200;
 // Thunder no closer together than this, so it stays an event.
 const THUNDER_GAP_MS = 30000;
 
@@ -423,6 +432,33 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     colourBtn.addEventListener('click', flipColour);
     headerActions.appendChild(colourBtn);
 
+    /**
+     * ★★ CW-Q59 SAYS "LEFT OF HIGH CONTRAST" AND THIS IS NOT THERE, ON
+     * PURPOSE - IT IS THE OWNER'S CALL AND THE LEDGER CARRIES IT.
+     *
+     * `cityWalkContrastBtn` is the FIRST child of this row, and the comment
+     * above it says why: the layer is aria-modal, so the app header's
+     * accessibility controls are unreachable while playing, and these two sit
+     * "in the header's owner-signed order (U-16): high contrast, theme, then
+     * the rest". Putting a celebration control to their left moves a game
+     * feature ahead of the accessibility controls in a modal's tab order,
+     * which is the one thing U-16 signed.
+     *
+     * So it sits with the game's own controls, beside Color, exactly as the
+     * Color button itself does "because it changes only this game". It is
+     * equally reachable, and Y reaches it without tabbing at all. If the owner
+     * wants CW-Q59's literal placement it is one `insertBefore`.
+     */
+    const fireworksBtn = document.createElement('button');
+    fireworksBtn.type = 'button';
+    fireworksBtn.className = 'btn btn-secondary city-walk-btn';
+    fireworksBtn.id = 'cityWalkFireworksBtn';
+    // FLAGGED STRING (D-35).
+    fireworksBtn.textContent = 'Fireworks';
+    fireworksBtn.hidden = true;
+    fireworksBtn.addEventListener('click', playFireworks);
+    headerActions.appendChild(fireworksBtn);
+
     const helpBtn = document.createElement('button');
     helpBtn.type = 'button';
     helpBtn.className = 'btn btn-secondary city-walk-btn';
@@ -609,6 +645,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       'O: color on or off (off is a single-color retro screen)',
       'G: rain off, light, heavy (stays off if you use reduced motion)',
       'P: save a picture of what you can see',
+      // FLAGGED STRING (D-35). It says "once you have found every landmark"
+      // rather than naming the key alone, because a key that does nothing is
+      // worse than a key nobody has been told about yet.
+      'Y: fireworks again, once you have found every landmark in this city',
       'High contrast, theme and color: the three buttons at the top of the screen',
       // CW-35: the toolbar no longer holds all of them. Walking, turning,
       // looking and the standard views moved into the Camera panel, and a
@@ -710,6 +750,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       contrastBtn,
       themeBtn,
       colourBtn,
+      fireworksBtn,
       helpBtn,
       exitBtn,
       startPanel,
@@ -1773,6 +1814,9 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // being one. CW-64's trigger wants the TRANSITION, so this seam stays
     // clean: the flag is seeded from the store, not recomputed from counts.
     game.announcedAllFound = saved.allFound;
+    // CW-64: an unlocked city keeps its button. Read from the same object
+    // CW-62 writes, so an older build's progress opens without losing it.
+    game.fireworksUnlocked = saved.raw?.fireworksUnlocked === true;
     // CW-62: start the marks from whatever the set says, so there is one
     // place the map's state comes from rather than two that can drift.
     game.beacons.setVisited(game.visited);
@@ -1830,6 +1874,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     applyMapCamera();
     updateHud();
     syncToolbarView();
+    // CW-64: a city finished in an earlier session opens with its button.
+    syncFireworksButton();
 
     game.resizeObserver = new ResizeObserver(() => handleViewportResize());
     game.resizeObserver.observe(viewport);
@@ -1912,6 +1958,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     if (game.motionQuery && game.onMotionChange) {
       game.motionQuery.removeEventListener?.('change', game.onMotionChange);
     }
+    window.clearTimeout(game.fireworksStillTimer);
     game.rain?.dispose();
     game.fireworks?.dispose();
     game.classPass?.dispose();
@@ -2008,6 +2055,17 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       event.preventDefault();
       event.stopPropagation();
       flipColour();
+      return;
+    }
+
+    // CW-64: replay the show. Y was free - measured across this file and
+    // walk-controls.js, the letters in use are A C D E F G H J K L M O P Q R
+    // S T U V W X, leaving B, I, N, Y and Z. Only once the city has been
+    // finished, so the key cannot conjure a reward nobody earned.
+    if (event.code === 'KeyY') {
+      event.preventDefault();
+      event.stopPropagation();
+      if (state.game?.fireworksUnlocked) playFireworks({ replay: true });
       return;
     }
 
@@ -2521,6 +2579,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       game.announcedAllFound = true;
       // ACCESSIBILITY-CRITICAL STRING (D-35) — flagged for owner review.
       announceInLayer(ALL_LANDMARKS_MESSAGE);
+      // CW-64: the reward, once, on the transition - and the button from here
+      // on. The unlock is written with the visit that earned it, in the same
+      // object, so a tab closed a second later does not lose it.
+      game.fireworksUnlocked = true;
+      game.progressRaw = { ...game.progressRaw, fireworksUnlocked: true };
+      syncFireworksButton();
+      playFireworks();
     }
     // CW-62: written through on every new find rather than at exit, because
     // there is no reliable exit - a tab closes, a laptop sleeps, a browser
@@ -2627,6 +2692,62 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     } else if (!wasRaining) {
       game.lighting.beginFogDrift(sessionNowMs(game));
     }
+  }
+
+  /**
+   * Play the show, or say why it is not moving (CW-64, CW-Q59).
+   *
+   * ★ REDUCED MOTION GETS A REAL ALTERNATIVE, NOT A REFUSAL. The Rain button
+   * disables itself under reduced motion and `cycleRain` answers with a
+   * sentence; that is right for weather nobody promised. This is a REWARD, and
+   * a reward that answers "no" is worse than one that answers quietly. So the
+   * calm path holds the bursts still for a moment and says what they are - the
+   * plan's words are "a static celebratory frame plus the announcement, never
+   * nothing".
+   */
+  function playFireworks(options = {}) {
+    const game = state.game;
+    if (!game?.fireworks) return;
+    const message = options.replay
+      ? FIREWORKS_REPLAY_MESSAGE
+      : FIREWORKS_MESSAGE;
+    if (game.motionReduced) {
+      window.clearTimeout(game.fireworksStillTimer);
+      game.fireworks.showStill(
+        game.walkState.x,
+        game.walkState.y,
+        game.walkState.headingRad
+      );
+      game.altView.invalidate();
+      // ★ A TIMEOUT, NOT A FRAME COUNT, AND THAT IS RIGHT HERE. This round
+      // forbids wall-clock holds where a quantity the GAME decides is being
+      // measured - metres walked, frames converted. Nothing is being measured
+      // here: a still picture is shown for a few seconds the way a message is,
+      // and under reduced motion the step loop deliberately never runs, so
+      // there are no frames to count in the first place.
+      game.fireworksStillTimer = window.setTimeout(() => {
+        game.fireworks?.clear();
+        game.altView.invalidate();
+      }, FIREWORKS_STILL_MS);
+      // ACCESSIBILITY-CRITICAL STRING (D-35) - flagged for owner review.
+      announceInLayer(FIREWORKS_CALM_MESSAGE);
+      return;
+    }
+    game.fireworks.start();
+    game.altView.invalidate();
+    // ACCESSIBILITY-CRITICAL STRING (D-35) - flagged for owner review.
+    announceInLayer(message);
+  }
+
+  /**
+   * The button exists once a city has been finished, and keeps existing
+   * (CW-64 P3). CW-62's store is EXTENDED rather than siblinged: one key per
+   * city, a JSON object, unknown fields preserved on write.
+   */
+  function syncFireworksButton() {
+    const btn = state.refs?.fireworksBtn;
+    if (!btn) return;
+    btn.hidden = !state.game?.fireworksUnlocked;
   }
 
   function cycleRain() {

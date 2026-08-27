@@ -6117,6 +6117,15 @@ export const FIREWORK_SHOW = {
   starM: 7,
   spreadM: 35,
 };
+
+/**
+ * How far out the reduced-motion celebration sits, and how far apart its two
+ * bursts are. Closer than the ring so the look up is steep enough to clear the
+ * buildings beside the player - at 120 m and 230 m up that is 62 degrees,
+ * against the ring's 43.
+ */
+const FIREWORK_STILL_RANGE_M = 120;
+const FIREWORK_STILL_SPAN_RAD = 0.7;
 const FIREWORK_STARS = 28;
 /** Concurrent bursts. One material per SLOT, so two bursts can share a hue. */
 const FIREWORK_SLOTS = 2;
@@ -6306,6 +6315,83 @@ export function buildFireworks(spanM) {
       showStartMs = -1;
       burstIndex = 0;
       group.visible = true;
+    },
+
+    /**
+     * ★★ THE REDUCED-MOTION PATH DRAWS SOMETHING, AND THAT IS THE WHOLE POINT.
+     *
+     * The plan's words are "a static celebratory frame plus the announcement -
+     * never nothing". So this composes both slots at their fullest bloom, on
+     * opposite sides of the ring, and leaves them there: a player who has
+     * asked the machine to stop moving things still gets to SEE that they
+     * finished the city. Nothing animates, `isRunning()` stays false, and the
+     * step loop never touches it - the frozen world is not bent for this at
+     * all, because a still picture is not motion.
+     *
+     * The caller clears it; there is no timer here, because a timer is the one
+     * thing this path is not allowed to have.
+     */
+    showStill(x, y, headingRad = 0) {
+      armed = false;
+      showStartMs = -1;
+      group.visible = true;
+      mapGroup.visible = true;
+      for (let si = 0; si < slots.length; si++) {
+        const slot = slots[si];
+        // ★★ THE CALM FRAME IS PUT WHERE THE PLAYER IS LOOKING, AND CLOSER AND
+        // HIGHER THAN THE RING, BECAUSE "NEVER NOTHING" IS A PROMISE.
+        //
+        // Placed on the show's own ring at fixed compass bearings, it
+        // photographed from the Seattle spawn as a wall: 200 m out at 190 m up
+        // is 43 degrees of elevation, and a tower thirty metres away covers
+        // that easily. The moving show can afford a blocked burst because
+        // fourteen more follow from other bearings; a single still frame
+        // cannot. So it sits either side of the player's own heading, at
+        // FIREWORK_STILL_RANGE_M, high enough that the look up clears what is
+        // next to them.
+        const spread = FIREWORK_STILL_SPAN_RAD;
+        const angle = headingRad + (si - (slots.length - 1) / 2) * spread;
+        const z = FIREWORK_SHOW.zMaxM;
+        slot.centre = [
+          x + Math.sin(angle) * FIREWORK_STILL_RANGE_M,
+          y + Math.cos(angle) * FIREWORK_STILL_RANGE_M,
+          z,
+        ];
+        const hue = SIGN_HUES_DEG[si % SIGN_HUES_DEG.length];
+        slot.tint = tintOf(
+          FIREWORK_TIER,
+          hue,
+          inGamutChroma(FIREWORK_TIER, hue, 0.9)
+        );
+        slot.material.color.setRGB(...slot.tint);
+        for (let i = 0; i < slot.stars.length; i++) {
+          const d = dirs[i];
+          slot.stars[i].position.set(
+            slot.centre[0] + d[0] * FIREWORK_SHOW.spreadM,
+            slot.centre[1] + d[1] * FIREWORK_SHOW.spreadM,
+            slot.centre[2] + d[2] * FIREWORK_SHOW.spreadM
+          );
+          slot.stars[i].scale.setScalar(FIREWORK_SHOW.starM);
+          slot.stars[i].visible = true;
+        }
+        slot.mapRoot.position.set(slot.centre[0], slot.centre[1], 0);
+        const markScale = markBaseM * mapMarkScale;
+        slot.mapRoot.scale.set(markScale, markScale, 1);
+        slot.mapRoot.visible = true;
+      }
+    },
+
+    /** Take the still frame down. */
+    clear() {
+      armed = false;
+      showStartMs = -1;
+      group.visible = false;
+      mapGroup.visible = false;
+      for (const slot of slots) {
+        slot.startMs = -1;
+        for (const mesh of slot.stars) mesh.visible = false;
+        slot.mapRoot.visible = false;
+      }
     },
 
     isRunning() {
