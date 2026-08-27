@@ -60,7 +60,11 @@ import {
   PAVEMENT_WIDTH_M,
   isPavementWay,
 } from './walk-controls.js';
-import { makeFigureSpec, makeFigureGeoms } from './city-figures.js';
+import {
+  makeFigureSpec,
+  makeFigureGeoms,
+  makeTravelerSpec,
+} from './city-figures.js';
 import {
   treeTableFor,
   pickSpecies,
@@ -6211,16 +6215,28 @@ export function buildFireworks(spanM) {
     const stars = [];
     for (let i = 0; i < FIREWORK_STARS; i++) {
       const mesh = new Mesh(geom, material);
+      // D-115: THE NAME HAS TO BE ON THE MESH. The class pass traverses with
+      // `if (!obj.isMesh) return` and then reads `obj.name`, so naming only the
+      // GROUP left every star resolving to SKY and CW-64's
+      // ['fireworks', SIGN] mapping applying to nothing at all. Found when
+      // CW-65 widened CW-56's builders guard to ask the standalone builders -
+      // the gap CW-64's own record named and did not close.
+      mesh.name = 'fireworks';
       mesh.visible = false;
       group.add(mesh);
       stars.push(mesh);
     }
     const mapRoot = new Group();
     const mapFrame = new Mesh(mapFrameGeom, mapFrameMat);
+    // D-115, and see the note on the stars above. The map marks are drawn over
+    // an ortho camera with their own materials, so what this buys them is the
+    // same voice the street bursts get rather than the sky's.
+    mapFrame.name = 'fireworks';
     mapFrame.position.z = 61;
     mapFrame.renderOrder = 995;
     mapRoot.add(mapFrame);
     const mapCore = new Mesh(mapCoreGeom, mapCoreMat);
+    mapCore.name = 'fireworks';
     mapCore.position.z = 62;
     mapCore.renderOrder = 996;
     mapRoot.add(mapCore);
@@ -6665,6 +6681,160 @@ export function attachCityLighting(scene, camera) {
       scene.fog = prevFog ?? null;
       ambient.dispose();
       headlight.dispose();
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// CW-65 (CW-Q60): the traveler
+// ---------------------------------------------------------------------------
+
+/**
+ * The tones the traveler wears, and why each is where it is.
+ *
+ * Ordinary figures wear FIGURE_TIERS [0.5, 0.65, 0.8] on the torso with legs a
+ * step below, and a head at HEAD_TIER 0.82 - so 0.8 is the brightest clothing
+ * anybody in the city has. A high-visibility jacket has to beat that to be a
+ * jacket rather than another bright shirt.
+ *
+ * ★ THE HEAD STAYS AT 0.82, EXACTLY LIKE EVERYONE ELSE'S. It is the ground the
+ * glasses are drawn against, and CW-49 measured that at 0.80 the mono frames
+ * moved by up to 0.74% of their pixels while at 0.82 they do not move at all.
+ */
+const TRAVELER_JACKET_TIER = 0.92;
+/** Yellow: the hue high-visibility clothing actually is, and one the sign set
+ *  already lands (SIGN_HUES_DEG). Verified ENCODED, never in linear (D-112). */
+const TRAVELER_JACKET_HUE_DEG = 60;
+const TRAVELER_JACKET_CHROMA = 0.5;
+/** A white cane is white: neutral, and brighter than any clothing in the city
+ *  so the diagonal is the brightest thing in its own neighbourhood. */
+const TRAVELER_CANE_TIER = 0.95;
+/** Trousers, low in the band so the jacket has something to be brighter than -
+ *  but never below the 0.45 floor the proof gate set when a 0.3 leg vanished
+ *  against black pavement. */
+const TRAVELER_LEG_TIER = 0.5;
+
+/**
+ * One blind traveler, built STANDALONE and added to the scene beside the
+ * fireworks rather than inside the city group.
+ *
+ * ★★ IT CANNOT LIVE IN THE CITY GROUP, AND THE CONTROLLER'S OWN ORDER SAYS SO.
+ * `buildStreetProps(model, collision)` runs while the city is being built, and
+ * the saved progress is not read until much later - so at build time nothing
+ * knows whether this city's traveler has been found, or where they were put.
+ * Finding them also MOVES them (to the spawn, as the companion), and rebuilding
+ * a city's props to move one person is absurd. `buildFireworks` is the
+ * precedent and this follows it exactly.
+ *
+ * ★ THE MESH BORROWS SURFACE_CLASS.PERSON, WHICH IS NOT A BORROW SO MUCH AS
+ * THE RIGHT VOICE. The span table is full at 16 (CW-43's law), and PERSON is
+ * literally what this is: the vocabulary CW-45 built to draw a small standing
+ * person. Zero new class ids.
+ *
+ * ★ AND CW-56'S BUILDERS GUARD CANNOT SEE THIS MESH. That guard enumerates
+ * `buildStreetProps` only, so a standalone builder is outside it - the same gap
+ * CW-64 found for `fireworks`. The guard is widened to ask the standalone
+ * builders too.
+ *
+ * @param {string} citySlug - seeds the body, so a city's traveler is stable
+ * @returns {{group: Group, place: Function, isPlaced: () => boolean,
+ *            position: () => [number, number]|null,
+ *            setMapView: Function, dispose: Function}}
+ */
+export function buildTraveler(citySlug) {
+  const group = new Group();
+  group.name = 'traveler-group';
+  group.visible = false;
+
+  // ★ The body comes from a stream of the traveler's OWN, seeded from the city
+  // name. A draw taken from a road's stream would shift the pose and build of
+  // every figure planted after it (the CW-45/46 seed law) - and this is built
+  // outside every road's stream anyway, which is the belt to that braces.
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < String(citySlug).length; i++) {
+    h = (h ^ String(citySlug).charCodeAt(i)) >>> 0;
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  const spec = makeTravelerSpec(makeLcg(h), {
+    caneSide: h & 1 ? 1 : -1,
+  });
+
+  const material = new MeshLambertMaterial({
+    color: 0xffffff,
+    vertexColors: true,
+  });
+  let mesh = null;
+  let at = null;
+
+  const jacketTint = tintOf(
+    TRAVELER_JACKET_TIER,
+    TRAVELER_JACKET_HUE_DEG,
+    inGamutChroma(
+      TRAVELER_JACKET_TIER,
+      TRAVELER_JACKET_HUE_DEG,
+      TRAVELER_JACKET_CHROMA
+    )
+  );
+  const legTint = tintOf(TRAVELER_LEG_TIER, 240, 0);
+  const headTint = tintOf(0.82, 30, inGamutChroma(0.82, 30, 0.5));
+  const caneTint = tintOf(TRAVELER_CANE_TIER, 0, 0);
+  // ★★ EXACT BLACK, not a dark colour. The converter renders exact black as an
+  // EMPTY CELL (CW-5), which is the only true dark this medium has - these
+  // palettes carry no dark neutral at all (CW-58 measured every bird landing
+  // white). A hole across the eyes of a bright head is CW-40's law used on
+  // purpose rather than worked around.
+  const glassesTint = [0, 0, 0];
+
+  const clear = () => {
+    if (!mesh) return;
+    group.remove(mesh);
+    mesh.geometry.dispose();
+    mesh = null;
+  };
+
+  /**
+   * Stand the traveler at a spot, facing a direction. Cheap enough to call on
+   * a find (it is ONE figure), which is what lets the same object be both the
+   * hidden traveler and the companion who turns up by the spawn afterwards.
+   */
+  const place = (x, y, facingRad) => {
+    clear();
+    const zones = makeFigureGeoms(x, y, facingRad, spec);
+    for (const g of zones.torso) paintGeometry(g, jacketTint);
+    for (const g of zones.legs) paintGeometry(g, legTint);
+    for (const g of zones.figure) paintGeometry(g, headTint);
+    for (const g of zones.cane) paintGeometry(g, caneTint);
+    for (const g of zones.glasses) paintGeometry(g, glassesTint);
+    const all = [
+      ...zones.legs,
+      ...zones.torso,
+      ...zones.figure,
+      ...zones.cane,
+      ...zones.glasses,
+    ];
+    const merged = mergeGeometries(all, false);
+    for (const g of all) g.dispose();
+    mesh = new Mesh(merged, material);
+    // The name is what the class pass reads; see CLASS_BY_MESH_NAME.
+    mesh.name = 'traveler';
+    group.add(mesh);
+    group.visible = true;
+    at = [x, y];
+  };
+
+  return {
+    group,
+    spec,
+    place,
+    isPlaced: () => mesh !== null,
+    position: () => (at ? [at[0], at[1]] : null),
+    /** Street furniture hides on the map; so does a person. */
+    setMapView(isMap) {
+      group.visible = !isMap && mesh !== null;
+    },
+    dispose() {
+      clear();
+      material.dispose();
     },
   };
 }
