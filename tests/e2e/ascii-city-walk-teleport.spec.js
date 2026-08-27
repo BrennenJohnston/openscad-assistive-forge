@@ -361,6 +361,87 @@ test.describe('ASCII City Walk — teleport (CW-36, CW-40)', () => {
     expect(spoken.at(-1)).toBe(teleportLines[0])
   })
 
+  test('★★ the circle marks the asked spot, and retires either way (CW-61)', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const circle = () =>
+      page.evaluate(() => {
+        const p = window.__cityWalkGame.pickMark
+        const core = p.children[0]
+        return {
+          visible: p.visible,
+          x: p.position.x,
+          y: p.position.y,
+          scale: p.scale.x,
+          markerScale: window.__cityWalkGame.marker.scale.x,
+          coreHex: core ? core.material.color.getHexString() : null,
+          coreDepthTest: core ? core.material.depthTest : null,
+        }
+      })
+
+    await openMap(page)
+    expect((await circle()).visible, 'the circle showed with nothing asked').toBe(
+      false
+    )
+
+    await clickMap(page, 0.42, 0.34)
+    await expect(dialog(page)).toBeVisible()
+    const open = await circle()
+    expect(open.visible).toBe(true)
+
+    // ★ IT STANDS ON THE LANDING, NOT ON THE CLICK. The sentence beside it
+    // describes where you would arrive - findLandingNear snaps to a street -
+    // so a mark at the raw pointer position would contradict the words.
+    const landing = await page.evaluate(() => {
+      const t = window.__cityWalkGame
+      return { x: t.pickMark.position.x, y: t.pickMark.position.y }
+    })
+    await goBtn(page).click()
+    await expect(dialog(page)).toBeHidden()
+    const arrived = await walk(page)
+    expect(Math.hypot(arrived.x - landing.x, arrived.y - landing.y)).toBeLessThan(
+      0.01
+    )
+
+    // ★★ THE HOLE IS THE MARK, and this pins it. The circle shipped first as
+    // a bare bright outline and was INVISIBLE in colour, HC-dark and
+    // HC-light - those palettes fill the map with white and grey glyphs, so
+    // a white ring is a white thing among white things. Exact black is the
+    // one value the converter renders as an empty cell (CW-5), and an empty
+    // patch inside a mark is a footprint no building in any palette has.
+    expect(open.coreHex, 'the circle lost its exact-black core').toBe('000000')
+    expect(open.coreDepthTest, 'the core can be occluded by a building').toBe(
+      false
+    )
+
+    // One shared scale with the player's mark: two marks that mean one thing
+    // between them cannot drift apart in size.
+    expect(open.scale).toBeCloseTo(open.markerScale, 6)
+
+    // Travel retired it, because the walker is standing there now.
+    expect((await circle()).visible).toBe(false)
+
+    // Cancel retires it too, and so does leaving the map.
+    await clickMap(page, 0.5, 0.5)
+    await expect(dialog(page)).toBeVisible()
+    expect((await circle()).visible).toBe(true)
+    await cancelBtn(page).click()
+    expect((await circle()).visible).toBe(false)
+
+    await clickMap(page, 0.45, 0.45)
+    await expect(dialog(page)).toBeVisible()
+    expect((await circle()).visible).toBe(true)
+    await page.keyboard.press('KeyM')
+    await expect(hud(page)).toContainText('street view')
+    expect(
+      (await circle()).visible,
+      'a map mark followed the player into the street'
+    ).toBe(false)
+  })
+
   test('★★ the dialog names a REAL corner, at real corners (CW-61)', async ({
     page,
   }) => {

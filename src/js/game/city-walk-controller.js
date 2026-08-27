@@ -31,6 +31,8 @@ import {
   OrthographicCamera,
   WebGLRenderer,
   BoxGeometry,
+  RingGeometry,
+  CircleGeometry,
   Mesh,
   MeshBasicMaterial,
 } from 'three';
@@ -1452,9 +1454,92 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     markerInner.position.z = 61;
     marker.add(markerInner);
 
-    // CW-36's pick-preview ring retired with the pick flow (CW-40): while
-    // pin mode is armed the ring is the CURSOR, and the committed landing
-    // is marked by the player marker itself - the walker is really there.
+    /**
+     * ★★ CW-61: THE MAN IS REFUSED, AND THE REASON IS THE SHAPE OF A
+     * CHARACTER CELL.
+     *
+     * The plan asked for the logo's accessibility figure to become the player
+     * marker, with the pick spot as the logo's circle, reunited on travel. It
+     * was built, photographed at five palettes and five zooms, and dropped.
+     *
+     * MEASURED at this head: the converter's cell is **4 px wide and 9 px
+     * tall**, and the marker's black core is 35 px across at every zoom
+     * inside the 2.2/zoom clamp (0.8 through 2), 22 px at the map's minimum
+     * and 77 px at its maximum. In cells that is
+     *
+     *   zoom 0.4   5.6 wide x 2.4 tall
+     *   zoom 0.8-2 8.8 wide x 3.9 tall
+     *   zoom 8    19.2 wide x 8.6 tall
+     *
+     * A standing figure is head, arms, body and legs: five ROWS at the very
+     * least. It gets 3.9 at every zoom a player spends time at. The mark is
+     * not too small - it is too SHORT, because the cell is two and a quarter
+     * times taller than it is wide, and a human figure needs its height most.
+     *
+     * Growing the marker to fit was the other way out and CW-40 already
+     * refused it for a reason that still holds: a marker big enough to draw a
+     * person in swallows a city block. And the first attempt at the figure
+     * proved the cost of getting it wrong - arms 0.51 of the marker wide
+     * against a core reaching 0.25 either side spilled onto the frame, and
+     * the marker photographed as a solid white block, which is exactly the
+     * camouflage the frame-around-a-hole exists to escape.
+     *
+     * So the player keeps the mark CW-40 photographed and chose. What ships
+     * from the icon language is the CIRCLE below, which is a shape this grid
+     * can carry.
+     */
+
+    /**
+     * ★ CW-61: THE CIRCLE, which is where the dialog is asking about.
+     *
+     * The same laws as the marker - a bright ring around an exact-black core,
+     * never occluded, one shared scale - so the two marks are the same family
+     * and the eye reads them as one language. It shows only while the
+     * question is open, and travelling retires it because the man is standing
+     * there now.
+     */
+    const pickMat = new MeshBasicMaterial({
+      color: 0xffffff,
+      depthTest: false,
+    });
+    // ★ BIGGER THAN THE PLAYER'S MARK, ON PURPOSE. Both are bright outlines
+    // around an empty middle, and at nine cells across the difference between
+    // a ring and a square is not something this grid can carry (CW-60 found
+    // the same thing about its wayfinding kinds, and CW-36's ring died of
+    // it). What the grid CAN carry is size, so the circle is drawn wide
+    // enough to read as a ring around a spot rather than as a second marker.
+    const pickGeom = new RingGeometry(markerSize * 0.72, markerSize * 1.0, 28);
+    const pickMark = new Mesh(pickGeom, pickMat);
+    pickMark.position.z = 60;
+    pickMark.renderOrder = 998;
+    pickMark.visible = false;
+    scene.add(pickMark);
+
+    /**
+     * ★★ AND THE HOLE, WITHOUT WHICH THE RING DOES NOT READ AT ALL.
+     *
+     * The ring shipped first as a bare outline and was photographed in five
+     * palettes: clear in both monochromes, and INVISIBLE in colour, HC-dark
+     * and HC-light. Those palettes fill the map with white and grey glyphs,
+     * so a white ring is a white thing among white things - which is CW-40's
+     * finding arriving a second time from a new direction.
+     *
+     * CW-40's law is not "a bright outline reads". It is "a bright outline
+     * around EXACT BLACK reads", because exact black is the one value the
+     * converter renders as an empty cell (CW-5), and an empty patch in the
+     * middle of a mark is a footprint no building in any palette has. The
+     * player's marker has had that hole since CW-40; the circle needed its
+     * own.
+     */
+    const pickCoreGeom = new CircleGeometry(markerSize * 0.72, 28);
+    const pickCoreMat = new MeshBasicMaterial({
+      color: 0x000000,
+      depthTest: false,
+    });
+    const pickCore = new Mesh(pickCoreGeom, pickCoreMat);
+    pickCore.position.z = -1;
+    pickCore.renderOrder = 997;
+    pickMark.add(pickCore);
 
     // Order matters here. The collision grid is built from the buildings
     // first so the props can refuse to stand inside one; the props then hand
@@ -1508,6 +1593,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       markerMat,
       markerInnerGeom,
       markerInnerMat,
+      // CW-61: the circle, disposed with the marker it belongs to rather
+      // than left for the garbage collector to not collect.
+      pickMark,
+      pickGeom,
+      pickMat,
+      pickCoreGeom,
+      pickCoreMat,
       collision,
       surface,
       walkState,
@@ -1783,6 +1875,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     game.markerMat?.dispose();
     game.markerInnerGeom?.dispose();
     game.markerInnerMat?.dispose();
+    game.pickGeom?.dispose();
+    game.pickMat?.dispose();
+    game.pickCoreGeom?.dispose();
+    game.pickCoreMat?.dispose();
     game.renderer?.dispose();
     game.renderer?.domElement?.remove();
     state.game = null;
@@ -2809,6 +2905,9 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // 0.8x/1x/2x, in colour mode too, before the factors were chosen.
     const markerScale = Math.min(3.5, Math.max(0.6, 2.2 / game.mapCam.zoom));
     game.marker.scale.set(markerScale, markerScale, 1);
+    // CW-61: the circle is the same family and shares the same number. Two
+    // marks that mean one thing between them cannot drift apart in size.
+    game.pickMark.scale.set(markerScale, markerScale, 1);
 
     // CW-60: the wayfinding marks are sized on SCREEN, so they belong to the
     // same seam the marker's own scale does - every zoom, every frame of a
@@ -2821,6 +2920,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     endDrag();
     game.mapView = !game.mapView;
     game.marker.visible = game.mapView;
+    if (!game.mapView) game.pickMark.visible = false;
     // CW-61: a question about a spot on the map cannot outlive the map.
     // Closed silently, because this function's own announcement is the
     // sentence this turn speaks - and closing it as a CANCEL would be a lie,
@@ -2828,6 +2928,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     if (!game.mapView && state.travel) {
       state.travel = null;
       state.refs.travel.hidden = true;
+      game.pickMark.visible = false;
     }
     game.city3d.setMapView(game.mapView);
     game.props.setMapView(game.mapView);
@@ -2954,7 +3055,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
         : TRAVEL_WHERE_ONE(where.primary, where.on)
       : TRAVEL_WHERE_OPEN;
 
-    state.travel = { x: landing.x, y: landing.y, returnTo: null };
+    state.travel = { x: landing.x, y: landing.y };
+    // ★ THE CIRCLE MARKS THE SPOT WHILE THE QUESTION IS OPEN. It stands on
+    // the LANDING, not on the click: the sentence describes where you would
+    // arrive, and a mark somewhere else would contradict it.
+    game.pickMark.position.set(landing.x, landing.y, 0);
+    game.pickMark.visible = true;
+    game.altView.invalidate();
     state.refs.travelWhere.textContent = sentence;
     state.refs.travel.hidden = false;
     state.refs.travelGo.focus();
@@ -2967,6 +3074,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     const pick = state.travel;
     state.travel = null;
     state.refs.travel.hidden = true;
+    // Either answer retires the circle. On Travel the man arrives and stands
+    // where it was, which is the logo completing itself; on Cancel there is
+    // no longer a spot in question.
+    if (state.game) {
+      state.game.pickMark.visible = false;
+      state.game.altView.invalidate();
+    }
     if (!pick) return;
     if (commit) {
       // commitTeleport speaks the landing, which is the sentence this turn

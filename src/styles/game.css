@@ -392,9 +392,15 @@
 .city-walk-travel {
   position: absolute;
   z-index: var(--z-index-dropdown);
-  top: 50%;
+  /* ★ NOT CENTRED, AND THAT IS THE WHOLE POSITIONING DECISION. Centred, it
+   * sat exactly on top of the spot it was describing: J asks about the middle
+   * of the map, and the circle marking that spot was underneath the panel
+   * every time. High and centred clears the crosshair, clears the landmark
+   * legend at the left and the Camera panel at the right, and keeps one
+   * position whichever route opened it. */
+  top: calc(var(--space-lg) + 44px + var(--space-md));
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translateX(-50%);
   max-width: min(420px, calc(100vw - 2 * var(--space-md)));
   padding: var(--space-md);
   background: var(--color-bg-secondary);
