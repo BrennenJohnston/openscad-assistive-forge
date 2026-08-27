@@ -76,7 +76,16 @@ import {
   PLANTER_W_M,
   TABLE_L_M,
   TABLE_W_M,
+  TABLE_TOP_H_M,
+  PLANTER_H_M,
 } from './city-planting.js';
+import {
+  birdTableFor,
+  pickBird,
+  birdSpec,
+  birdBoxes,
+  PERCH_SINK_M,
+} from './city-birds.js';
 import {
   buildRoadGraph,
   ringCentroid,
@@ -3490,6 +3499,40 @@ const BED_TIER = 0.45;
 const BED_CHROMA = 0.5;
 
 /**
+ * CW-58's birds.
+ *
+ * A bird is TINY - a sparrow is 0.15 m against a planter's 1.2 - so it was
+ * natural to reach for brightness as the lever. THE PROOF GATE SAYS THERE IS
+ * NO SUCH LEVER: a per-species brightness bias moved the frame by nothing in
+ * mono across its whole range, and in colour every species landed #ffffff
+ * because these palettes have no dark neutral. See city-birds.js for both
+ * measurements. Every bird therefore takes ONE tier, and what distinguishes
+ * them is size, shape and where they rest.
+ *
+ * ★ THE CROW'S DARKNESS IS WHY IT IS PLACED HIGH, and CW-57 is what makes
+ * that a measurement rather than a preference: this city's greenspace sits at
+ * luminance under a tenth and a texture cannot lift it, so a dark bird on a
+ * lawn is a dark shape on a near-black field. `SPECIES_PERCHES` keeps the crow
+ * on parapets and lamp heads, where the sky is behind it.
+ */
+const BIRD_TIER = 0.68;
+const BIRD_HUE_DEG = 45;
+const BIRD_CHROMA = 0.14;
+/** How many perches of a kind carry a bird. Punctuation, not a flock. */
+const BIRD_PER_PERCH = {
+  'bench-back': 0.09,
+  'picnic-top': 0.14,
+  'planter-rim': 0.1,
+  'lamp-head': 0.06,
+  parapet: 0.05,
+  ground: 0.12,
+  'open-ground': 0.035,
+};
+/** A gathering of geese, not a lone one: 2 to 5 on the same patch of grass. */
+const GOOSE_FLOCK_MAX = 4;
+const GOOSE_SPACING_M = 1.9;
+
+/**
  * ★ THE FALLBACK, AND IT IS STATED AS ONE. Denver and Albuquerque have ZERO
  * mapped planters and zero flowerbeds - measured, not assumed, in CW-55's
  * rebake. The directive licenses filling that gap; this is where, and the code
@@ -3994,6 +4037,12 @@ export function buildStreetProps(model, collision = null) {
   // seat axis, which way a seated person faces (toward the road), and
   // whether there is a back.
   const placedBenches = [];
+  // CW-58 perch records. A bird rests on things the city already has, so the
+  // builders that make them write down where they went rather than the bird
+  // code guessing a second time.
+  const placedPlanters = [];
+  const placedTables = [];
+  const placedLampHeads = [];
   (model.furniture ?? []).forEach((item, index) => {
     const { x, y } = item;
     if (!inCore(x, y) || isBlocked(x, y)) return;
@@ -4221,6 +4270,7 @@ export function buildStreetProps(model, collision = null) {
       rotationRad: angle,
     });
     furnitureSpots.add(x, y);
+    placedPlanters.push({ x, y, angle });
     plantingPlaced.planter++;
   };
 
@@ -4263,6 +4313,7 @@ export function buildStreetProps(model, collision = null) {
       rotationRad: angle,
     });
     furnitureSpots.add(x, y);
+    placedTables.push({ x, y, angle });
     plantingPlaced.picnic_table++;
     // Picnic tables ship UNOCCUPIED. Sitters are bench-only, which is settled
     // law from CW-45 and no signed question has extended it.
@@ -4528,6 +4579,11 @@ export function buildStreetProps(model, collision = null) {
             )
           );
           lampSpots.add(x, y);
+          placedLampHeads.push({
+            x: x - nx * LAMP_HEAD_REACH_M * side,
+            y: y - ny * LAMP_HEAD_REACH_M * side,
+            angle,
+          });
           obstacles.push({
             x,
             y,
@@ -4652,6 +4708,203 @@ export function buildStreetProps(model, collision = null) {
     }
   });
 
+  /**
+   * CW-58: birds where birds rest.
+   *
+   * Every bird sits on something the city already built, and the builders
+   * wrote down where those things went. Nothing here invents a perch: if a
+   * city has no picnic tables, it has no birds on picnic tables, and that is
+   * a result rather than a gap.
+   *
+   * Deterministic from the same hash every other prop uses, keyed by perch
+   * kind and index, so no existing draw order moves - the seed law that
+   * CW-49 nearly paid for.
+   */
+  const birdGeoms = [];
+  const birdsPlaced = {};
+  const birdRoster = birdTableFor(model.name);
+
+  const addBird = (px, py, pz, facing, name, sizeDraw) => {
+    const spec = birdSpec(name, ((sizeDraw % 1000) + 0.5) / 1000);
+    if (!spec) return;
+    const tint = tintOf(
+      BIRD_TIER,
+      BIRD_HUE_DEG,
+      inGamutChroma(BIRD_TIER, BIRD_HUE_DEG, BIRD_CHROMA)
+    );
+    const c = Math.cos(facing);
+    const sn = Math.sin(facing);
+    for (const b of birdBoxes(spec, facing)) {
+      birdGeoms.push(
+        makeBox(
+          b.l,
+          b.w,
+          b.h,
+          px + b.along * c - b.across * sn,
+          py + b.along * sn + b.across * c,
+          pz + b.z,
+          facing,
+          tint
+        )
+      );
+    }
+    birdsPlaced[name] = (birdsPlaced[name] ?? 0) + 1;
+  };
+
+  /**
+   * One pass per perch kind. `sites` is whatever the builder recorded; the
+   * hash decides which of them carry a bird and which species takes it.
+   */
+  const perchPass = (perch, sites, zOf, facingOf) => {
+    const rate = BIRD_PER_PERCH[perch] ?? 0;
+    if (rate <= 0) return;
+    sites.forEach((site, index) => {
+      const seed = hashBuilding(index, 'bird:' + perch);
+      if ((seed % 1000) / 1000 >= rate) return;
+      const name = pickBird(birdRoster, perch, seed >>> 7);
+      if (!name) return;
+      // ★ GEESE COME IN GROUPS, and that is a fix as well as a fact. Letting
+      // the crow and the gull onto lawns - which the proof gate said was
+      // right - gave them two thirds of every ground site and dropped
+      // BURNABY FROM NINE GEESE TO ONE. A goose is the most legible bird on
+      // the roster by a factor of three, so one of it in a city is a waste of
+      // the only bird that really reads. Geese are gregarious and gather on
+      // open grass; a small flock is what a park actually looks like.
+      const flock =
+        name === 'canada goose' ? 2 + ((seed >>> 19) % GOOSE_FLOCK_MAX) : 1;
+      for (let k = 0; k < flock; k++) {
+        const spread = k === 0 ? 0 : GOOSE_SPACING_M;
+        const a = (((seed >>> 21) + k * 97) % 360) * (Math.PI / 180);
+        const gx = site.x + Math.cos(a) * spread * k;
+        const gy = site.y + Math.sin(a) * spread * k;
+        if (k > 0 && isBlocked(gx, gy)) continue;
+        addBird(
+          gx,
+          gy,
+          zOf(site) - PERCH_SINK_M,
+          facingOf(site, seed + k * 31),
+          name,
+          (seed >>> 13) + k * 271
+        );
+      }
+    });
+  };
+
+  const hashFacing = (seed) => ((seed >>> 17) % 360) * (Math.PI / 180);
+
+  perchPass(
+    'bench-back',
+    placedBenches.filter((b) => b.backrest),
+    () => BENCH_SEAT_H_M + BENCH_BACK_H_M,
+    (site) => site.facing
+  );
+  perchPass(
+    'picnic-top',
+    placedTables,
+    () => TABLE_TOP_H_M,
+    (site, seed) => hashFacing(seed)
+  );
+  perchPass(
+    'planter-rim',
+    placedPlanters,
+    () => PLANTER_H_M,
+    (site, seed) => hashFacing(seed)
+  );
+  perchPass(
+    'lamp-head',
+    placedLampHeads,
+    () => LAMP_HEAD_Z_M + LAMP_HEAD_THICK_M / 2,
+    (site, seed) => hashFacing(seed)
+  );
+
+  // A parapet perch is a building outline vertex at the building's own roof
+  // height. Only mid-rise roofs: a bird on a fifty-storey parapet is a bird
+  // nobody will ever be looking at, and one on a single-storey shed is at
+  // eye level where the roof edge already reads as a line.
+  const PARAPET_MIN_M = 6;
+  const PARAPET_MAX_M = 32;
+  const parapetSites = [];
+  model.buildings.forEach((building, index) => {
+    const h = building.heightM;
+    if (!(h >= PARAPET_MIN_M && h <= PARAPET_MAX_M)) return;
+    const ring = building.outer;
+    if (!ring || ring.length < 3) return;
+    const seed = hashBuilding(index, 'bird:parapet-site');
+    const v = ring[seed % ring.length];
+    if (!inCore(v[0], v[1])) return;
+    const next = ring[(seed % ring.length) + 1] ?? ring[0];
+    parapetSites.push({
+      x: v[0],
+      y: v[1],
+      z: h,
+      angle: Math.atan2(next[1] - v[1], next[0] - v[0]),
+    });
+  });
+  perchPass(
+    'parapet',
+    parapetSites,
+    (site) => site.z,
+    (site) => site.angle
+  );
+
+  // Ground birds stand on mapped green, not on pavement - a goose on a road
+  // is not a goose anybody has seen. The centroid is where the green is
+  // widest, so that is where they go.
+  // ★ SITES SCALE WITH THE PARK'S AREA, and the first draft did not - it gave
+  // every green exactly one, which left ALBUQUERQUE WITH A SINGLE ROADRUNNER
+  // in the whole city. The roadrunner is that city's own bird and the entire
+  // argument for per-city rosters, so one of it is the same as none. A lawn
+  // also genuinely holds several geese rather than one.
+  const GROUND_M2_PER_SITE = 400;
+  const GROUND_MAX_PER_GREEN = 6;
+  const groundSites = [];
+  (model.greens ?? []).forEach((green, index) => {
+    if (!green.outer || green.outer.length < 3) return;
+    const areaM2 = ringAreaM2(green.outer);
+    if (areaM2 < 60) return;
+    const [cx, cy] = ringCentroid(green.outer);
+    if (!inCore(cx, cy)) return;
+    const want = Math.max(
+      1,
+      Math.min(GROUND_MAX_PER_GREEN, Math.round(areaM2 / GROUND_M2_PER_SITE))
+    );
+    const spread = Math.min(14, Math.sqrt(areaM2 / Math.PI));
+    for (let i = 0; i < want; i++) {
+      const seed = hashBuilding(index * 8 + i, 'bird:ground-site');
+      const gx = cx + (((seed >>> 3) % 200) / 200 - 0.5) * spread * 2;
+      const gy = cy + (((seed >>> 11) % 200) / 200 - 0.5) * spread * 2;
+      if (isBlocked(gx, gy)) continue;
+      groundSites.push({ x: gx, y: gy });
+    }
+  });
+  perchPass(
+    'ground',
+    groundSites,
+    () => ROAD_LIFT_M,
+    (site, seed) => hashFacing(seed)
+  );
+
+  // Open ground is PAVEMENT, not parkland, and a lamp post is the cheapest
+  // honest way to find some: a lamp stands on the footway beside the
+  // carriageway, so a spot a couple of metres off one is footway too. The
+  // blocked check does the rest.
+  const openSites = [];
+  placedLampHeads.forEach((lamp, index) => {
+    const seed = hashBuilding(index, 'bird:open-site');
+    const a = ((seed >>> 5) % 360) * (Math.PI / 180);
+    const r = 1.6 + ((seed >>> 15) % 100) / 100;
+    const ox = lamp.x + Math.cos(a) * r;
+    const oy = lamp.y + Math.sin(a) * r;
+    if (!inCore(ox, oy) || isBlocked(ox, oy)) return;
+    openSites.push({ x: ox, y: oy });
+  });
+  perchPass(
+    'open-ground',
+    openSites,
+    () => ROAD_LIFT_M,
+    (site, seed) => hashFacing(seed)
+  );
+
   let triangles = 0;
   const addMerged = (geoms, name, material) => {
     if (geoms.length === 0) {
@@ -4691,6 +4944,10 @@ export function buildStreetProps(model, collision = null) {
   addMerged(planterGeoms, 'planters', propMaterial());
   addMerged(flowerGeoms, 'planter-flowers', propMaterial());
   addMerged(tableGeoms, 'picnic-tables', propMaterial());
+  // CW-58: one mesh for every bird in the city. Birds are tiny, so the cost
+  // exposure here is geometry count and draw calls rather than the FILL that
+  // CW-56's crowns paid - hence one merge, not one per species.
+  addMerged(birdGeoms, 'birds', propMaterial());
   // Flowerbeds are FLAT, so they get the same treatment the road lines get:
   // their own polygonOffset, because two coplanar surfaces without one fight
   // in the surface-id buffer and re-roll a quarter of the frame's glyph
@@ -4899,6 +5156,7 @@ export function buildStreetProps(model, collision = null) {
       // CW-57: what stands, split so a reader can tell DATA from the
       // fallback - fallbackPlanters is design, everything else is the map.
       plantingPlaced,
+      birdsPlaced,
       fallbackPlanters,
       carCount: carSpots.size,
       lampCount: lampSpots.size,

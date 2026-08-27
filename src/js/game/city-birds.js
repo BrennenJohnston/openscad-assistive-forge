@@ -32,22 +32,42 @@
 /**
  * Body length range in metres, plus the build that carries the silhouette.
  *
- * `form` picks which boxes get made; `tierBias` nudges the body's brightness
- * within the scheme band, because a crow is dark BY NATURE and a gull is
- * pale, and pretending otherwise would make every bird the same bird.
+ * ★★ THERE WAS A `tierBias` HERE - a per-species brightness nudge, dark for
+ * the crow and pale for the gull - AND IT WAS MEASURABLY INERT IN BOTH MODES.
+ * It is gone; the two measurements that removed it are worth keeping.
+ *
+ * In MONO, swinging one bird across the whole range that field could reach,
+ * crow (-0.16) to gull (+0.14), moved the frame by nothing: 0.02% either way
+ * on a lamp head, 0.03 against 0.04 on the ground. Nothing in this game is
+ * actually dark - a "dark" bird still sits far above ground at under 0.1 - so
+ * the real-world contrast the field was imitating does not exist here.
+ *
+ * In COLOUR, checked ENCODED because that is where the converter reads
+ * (D-112), the palette match at this hue is a CLIFF: #ffffff everywhere above
+ * tier 0.50 and #ffff00 below it. All seven species sat between 0.52 and
+ * 0.82, so ALL SEVEN LANDED WHITE in both palettes, and the crow sat 0.02
+ * from an edge whose far side is yellow.
+ *
+ * ★ AND WHITE IS THE RIGHT ANSWER, not a failure. These palettes have no dark
+ * neutral - the same shape of gap CW-57 found when the ANSI set turned out to
+ * have no blue - so a grey or black bird cannot be rendered dark here. The
+ * alternatives are yellow and red, and a yellow crow would be a lie where a
+ * white one is merely a monochrome. Identity is SHAPE: the hydrant lesson.
+ *
+ * `form` picks which boxes get made. Nothing else varies per species but its
+ * cited size, and that is the honest position.
  */
 export const BIRD_SPECIES = {
-  'house sparrow': { m: [0.13, 0.17], form: 'perching', tierBias: 0.0 },
+  'house sparrow': { m: [0.13, 0.17], form: 'perching' },
   'black-capped chickadee': {
     m: [0.12, 0.15],
     form: 'perching',
-    tierBias: 0.08,
   },
-  'rock pigeon': { m: [0.29, 0.36], form: 'standing', tierBias: 0.0 },
-  'american crow': { m: [0.43, 0.53], form: 'standing', tierBias: -0.16 },
-  gull: { m: [0.43, 0.68], form: 'standing', tierBias: 0.14 },
-  'greater roadrunner': { m: [0.52, 0.62], form: 'roadrunner', tierBias: 0.0 },
-  'canada goose': { m: [0.75, 1.1], form: 'goose', tierBias: -0.04 },
+  'rock pigeon': { m: [0.29, 0.36], form: 'standing' },
+  'american crow': { m: [0.43, 0.53], form: 'standing' },
+  gull: { m: [0.43, 0.68], form: 'standing' },
+  'greater roadrunner': { m: [0.52, 0.62], form: 'roadrunner' },
+  'canada goose': { m: [0.75, 1.1], form: 'goose' },
 };
 
 /**
@@ -78,11 +98,32 @@ export function birdTableFor(cityName) {
  * enough - the perch has to be one the bird uses. Small birds take small high
  * things, big birds take the ground or a broad edge.
  *
- * ★★ AND THE CROW IS PLACED HIGH FOR A MEASURED REASON, not an aesthetic one.
- * CW-57 measured this game's greenspace at luminance under a tenth and proved
- * a texture cannot lift it. A crow is the darkest bird on the roster, so a
- * crow on green ground is a dark shape on a near-black field: invisible. High
- * perches put it against sky or a lit parapet, where it reads.
+ * ★★ THIS FILE ONCE CLAIMED THE CROW WAS KEPT HIGH FOR A MEASURED REASON, AND
+ * THE MEASUREMENT REFUTED IT. The claim was that a crow, being the darkest
+ * bird here, would vanish on greenspace that CW-57 had measured at luminance
+ * under a tenth. CW-57's measurement was real; the inference from it was not,
+ * and it was never tested until the proof gate tested it:
+ *
+ *   crow on a lamp head, tierBias -0.16   0.02% of frame
+ *   crow on a lamp head, tierBias +0.14   0.02%   <- the WHOLE tier range
+ *   crow on the ground,  tierBias -0.16   0.03%
+ *   crow on the ground,  tierBias +0.14   0.04%
+ *
+ * Swinging a bird across the entire tier band, from crow to gull, moves the
+ * frame by nothing. And the GROUND IS THE BETTER PERCH, not the worse one: a
+ * crow there reads as a distinct shape where the same bird on a lamp head
+ * merges into the lamp.
+ *
+ * The reason is that in this game NOTHING IS ACTUALLY DARK. A crow at tier
+ * 0.52 is still far brighter than ground at under 0.1, so real-world colour
+ * intuition - black bird, dark lawn - describes two things that are not close
+ * together here at all. What decides legibility is having an uncluttered
+ * backdrop and a silhouette, and near-black ground is the best backdrop in
+ * the city.
+ *
+ * The numbers that retired `tierBias` are in the header above; the
+ * placement rules below rest on shape and backdrop, which is all that
+ * measurably works.
  */
 export const PERCH_KINDS = [
   'bench-back',
@@ -91,15 +132,40 @@ export const PERCH_KINDS = [
   'lamp-head',
   'parapet',
   'ground',
+  'open-ground',
 ];
 
+/**
+ * ★★ 'ground' IS PARKLAND AND 'open-ground' IS PAVEMENT, and separating them
+ * is the fix for a real defect rather than a refinement. Written with one
+ * ground kind, ALBUQUERQUE GOT A SINGLE ROADRUNNER IN THE WHOLE CITY - the
+ * bird that is its own, and the entire argument for per-city rosters. The
+ * cause was not the rate: the desert city has 24 mapped greens, only five of
+ * them over 400 m², so parkland is structurally scarce there.
+ *
+ * And the fix is what the bird actually does. A greater roadrunner is a bird
+ * of open desert scrub and ROADSIDES - it is famous for running along roads,
+ * which is where its name comes from. Restricting it to lawns was the design
+ * error; the count was only the symptom. A Canada goose stays lawn-only,
+ * because a goose on a pavement is not a thing anybody has seen, and a gull
+ * takes parkland but not pavement for the same reason at one remove: a gull
+ * on a playing field is ordinary, a gull picking along a footway less so.
+ */
 export const SPECIES_PERCHES = {
   'house sparrow': ['bench-back', 'planter-rim', 'picnic-top', 'lamp-head'],
   'black-capped chickadee': ['bench-back', 'planter-rim'],
-  'rock pigeon': ['picnic-top', 'lamp-head', 'parapet', 'ground'],
-  'american crow': ['parapet', 'lamp-head'],
-  gull: ['parapet', 'lamp-head'],
-  'greater roadrunner': ['ground'],
+  'rock pigeon': [
+    'picnic-top',
+    'lamp-head',
+    'parapet',
+    'ground',
+    'open-ground',
+  ],
+  // The crow forages on lawns constantly, and the proof gate says the ground
+  // is where it reads best. Both reasons point the same way.
+  'american crow': ['parapet', 'lamp-head', 'ground', 'open-ground'],
+  gull: ['parapet', 'lamp-head', 'ground'],
+  'greater roadrunner': ['ground', 'open-ground'],
   'canada goose': ['ground'],
 };
 
@@ -143,7 +209,6 @@ export function birdSpec(name, t) {
     name,
     lengthM,
     form: species.form,
-    tierBias: species.tierBias,
   };
 }
 

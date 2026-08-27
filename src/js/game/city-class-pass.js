@@ -109,6 +109,18 @@ export const CLASS_BY_MESH_NAME = new Map([
   ['planter-flowers', SURFACE_CLASS.SIGN],
   ['picnic-tables', SURFACE_CLASS.CAR],
   ['flowerbeds', SURFACE_CLASS.GREEN],
+  // CW-58: birds, PHOTOGRAPH-DECIDED against the three other candidates at one
+  // pose, one goose, 30%. The span table is FULL at 16, so this is a borrow
+  // and not a new id - CW-43's law.
+  //
+  // SIGN turned the bird into a solid slab: most mass, least shape. CAR banded
+  // it horizontally so the body read as a block with a neck stuck on. LAMP and
+  // PERSON both kept the head, neck and body separate; PERSON's striations run
+  // with the bird's own form, and it is also what the vocabulary is FOR - a
+  // small living thing standing on a surface, which is what CW-45 built it to
+  // draw. For a bird the silhouette is the whole picture, so the voice that
+  // preserves silhouette wins.
+  ['birds', SURFACE_CLASS.PERSON],
   ['greens', SURFACE_CLASS.GREEN],
   // CW-43 street furniture: dressed in the EXISTING voices of the things
   // they physically resemble — the span table (_gpuVocabLists,
