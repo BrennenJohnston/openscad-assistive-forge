@@ -1573,8 +1573,9 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // CW-64 (CW-Q59): the second mover, and the only other one. Built with the
     // city and idle until something starts it, so a city nobody celebrates in
     // costs 56 hidden meshes and nothing else.
-    const fireworks = buildFireworks();
+    const fireworks = buildFireworks(spanM);
     scene.add(fireworks.group);
+    scene.add(fireworks.mapGroup);
     scene.add(props.group);
     stampObstacles(collision, props.obstacles);
     const spawn = findSpawn(model, collision);
@@ -2692,15 +2693,29 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       game.lighting.stepFogDrift(nowMs);
     }
 
-    // CW-64: the show is the frozen world's one bounded exception. It marks
-    // frames dirty ONLY while it runs, which is what keeps the exception
-    // bounded rather than a second permanent mover.
-    if (game.fireworks?.isRunning()) {
-      game.fireworks.update(dtS, game.walkState.x, game.walkState.y, nowMs);
-      dirty = true;
-    }
-
     return dirty;
+  }
+
+  /**
+   * ★★ THE SHOW STEPS IN BOTH VIEWS, AND IT IS THE ONLY THING THAT DOES.
+   *
+   * `stepWeather` sits behind `!game.mapView`, because rain, thunder and the
+   * fog drift are street weather and the map has no sky to put them in. The
+   * fireworks are not weather: CW-Q59 asks for a 2D representation of the SAME
+   * bursts at their true ring positions, so a player who opens the map
+   * mid-show must see it carry on rather than freeze. Photographed as a dead
+   * map first - the marks never appeared, because nothing was stepping them.
+   *
+   * It still marks frames dirty ONLY while it runs, which is what keeps the
+   * frozen-world exception bounded rather than making a second permanent
+   * mover, and reduced motion never reaches here at all.
+   */
+  function stepFireworks(game, dtS, nowMs) {
+    if (!game.fireworks?.isRunning()) return false;
+    game.fireworks.update(dtS, game.walkState.x, game.walkState.y, nowMs);
+    game.fireworks.group.visible = !game.mapView;
+    game.fireworks.mapGroup.visible = game.mapView;
+    return true;
   }
   function adjustCharacterSize(delta) {
     const game = state.game;
@@ -2978,6 +2993,9 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // CW-62: and so do the landmark diamonds. Three marks on one map, one
     // number deciding how big a mark is.
     game.beacons.setScale(markerScale);
+    // CW-64: FOUR marks now, and still one number. The burst triangles take
+    // the same clamp, so the map's marks cannot drift apart in size.
+    game.fireworks?.setMapScale(markerScale);
 
     // CW-60: the wayfinding marks are sized on SCREEN, so they belong to the
     // same seam the marker's own scale does - every zoom, every frame of a
@@ -3014,9 +3032,15 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       game.rain.group.visible = !game.mapView && game.rainLevel !== null;
     // CW-64: the street show is street geometry. The map gets its own 2D
     // representation (P2) rather than a bird's eye view of the same stars.
-    if (game.fireworks)
+    if (game.fireworks) {
       game.fireworks.group.visible =
         !game.mapView && game.fireworks.isRunning();
+      // CW-Q59 asks for a 2D representation at true ring scale and location,
+      // so the map shows the same bursts from above rather than the street
+      // show tipped on its side.
+      game.fireworks.mapGroup.visible =
+        game.mapView && game.fireworks.isRunning();
+    }
     game.lighting.setMapBoost(game.mapView);
     game.beacons.group.visible = game.mapView;
     state.refs.legend.hidden = !game.mapView;
@@ -3443,6 +3467,14 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // frames, in either view; it goes quiet the moment it is done.
     stepCalibration(game, nowMs);
 
+    // CW-64: and so does the show. This sits ABOVE the view split on purpose -
+    // the map branch below ends in `render(); return;`, so anything after it
+    // never runs overhead, and a player who opens the map mid-show would watch
+    // a dead map. Photographed exactly that way first.
+    if (!game.motionReduced && stepFireworks(game, dtS, nowMs)) {
+      game.altView.invalidate();
+    }
+
     if (game.mapView) {
       // Map mode (CW-9): the movement keys drive the camera, not the
       // player — walking is suspended while the overhead view is open.
@@ -3556,7 +3588,6 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       const weatherMoved = stepWeather(game, dtS, elapsed);
       if (changed || weatherMoved) game.altView.invalidate();
     }
-
     game.altView.render();
   }
 

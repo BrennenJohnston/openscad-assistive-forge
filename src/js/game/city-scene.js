@@ -6129,7 +6129,7 @@ const FIREWORK_FALL_MSS = 3.5;
 /** See the note in fireBurst: 0.9 lands four of six hues on white. */
 const FIREWORK_TIER = 0.75;
 
-export function buildFireworks() {
+export function buildFireworks(spanM) {
   const group = new Group();
   group.name = 'fireworks';
   group.visible = false;
@@ -6152,6 +6152,41 @@ export function buildFireworks() {
     dirs.push([Math.cos(a) * r, Math.sin(a) * r, z * 0.6]);
   }
 
+  /**
+   * ★★ THE MAP GETS ITS OWN MARK, AND IT IS A TRIANGLE FOR A MEASURED REASON.
+   *
+   * The map already carries three marks and they stay apart by SHAPE: the
+   * player is a square, CW-61's travel pick is a 28-segment circle, CW-62's
+   * landmarks are diamonds. A fourth mark cannot be another rounded blob at a
+   * scale where a mark is a few character cells across - CW-61's man died of
+   * exactly that. A triangle is three straight edges and an unmistakable
+   * silhouette, and it is the only shape of that description left.
+   *
+   * ★ AND IT GROWS, WHICH NOTHING ELSE ON THIS MAP CAN DO. The world is
+   * frozen; the show is its one bounded exception. So the mark swells with its
+   * burst's own bloom, which is both the truest picture of a firework and a
+   * distinction no static mark can imitate.
+   *
+   * The bright frame wraps an EXACT-BLACK core because that is CW-40's law as
+   * CW-61 restated it and CW-62 paid for it: a bright outline reads only when
+   * it is wrapped around exact black, since exact black is the one value the
+   * converter renders as an empty cell.
+   */
+  const mapGroup = new Group();
+  mapGroup.name = 'fireworks-map';
+  mapGroup.visible = false;
+  const mapFrameMat = new MeshBasicMaterial({
+    color: 0xffffff,
+    depthTest: false,
+  });
+  const mapCoreMat = new MeshBasicMaterial({
+    color: 0x000000,
+    depthTest: false,
+  });
+  // One metre, scaled at update time, so the map's own zoom law owns the size.
+  const mapFrameGeom = new CircleGeometry(1, 3);
+  const mapCoreGeom = new CircleGeometry(0.52, 3);
+
   const slots = [];
   for (let s = 0; s < FIREWORK_SLOTS; s++) {
     const material = new MeshBasicMaterial({ color: 0x000000, fog: false });
@@ -6162,8 +6197,44 @@ export function buildFireworks() {
       group.add(mesh);
       stars.push(mesh);
     }
-    slots.push({ material, stars, startMs: -1, centre: [0, 0, 0], tint: null });
+    const mapRoot = new Group();
+    const mapFrame = new Mesh(mapFrameGeom, mapFrameMat);
+    mapFrame.position.z = 61;
+    mapFrame.renderOrder = 995;
+    mapRoot.add(mapFrame);
+    const mapCore = new Mesh(mapCoreGeom, mapCoreMat);
+    mapCore.position.z = 62;
+    mapCore.renderOrder = 996;
+    mapRoot.add(mapCore);
+    mapRoot.visible = false;
+    mapGroup.add(mapRoot);
+    slots.push({
+      material,
+      stars,
+      mapRoot,
+      startMs: -1,
+      centre: [0, 0, 0],
+      tint: null,
+    });
   }
+
+  /**
+   * The map mark's base size, from the CITY'S OWN SPAN - the same law the
+   * player marker and CW-62's landmark diamonds ride on.
+   *
+   * ★ 0.034 IS TWICE A LANDMARK'S 0.016 AND IT IS NOT GREED. Two things push
+   * it up. A triangle of a given circumradius has 1.30 R2 of area against a
+   * diamond's 2 R2 - 65% - so matching a landmark's presence already costs
+   * 1.24x the radius. And measured on the map, one burst mark at 0.02 changed
+   * **0.068%** of the frame where the twelve landmark diamonds change 1.125%
+   * together, about 0.094% each: photographed, it did not stand out among
+   * them, which is CW-62's own finding arriving again. There are only ever one
+   * or two of these, they last a second and a half, and they are the thing the
+   * show exists to point at.
+   */
+  const markBaseM = Math.max(12, Math.max(100, spanM || 0) * 0.034);
+  /** The zoom clamp, handed in by the controller. */
+  let mapMarkScale = 1;
 
   // ★★ start() TAKES NO CLOCK, AND THAT IS THE POINT. The first version had it
   // take `nowMs`, and the very first attempt to photograph the show handed it
@@ -6219,6 +6290,16 @@ export function buildFireworks() {
 
   return {
     group,
+    /** The map's own representation, at the bursts' true ring positions. */
+    mapGroup,
+
+    /**
+     * The map's zoom clamp, exactly as `beacons.setScale` takes it. Four marks
+     * on one map now, and still one number deciding how big a mark is.
+     */
+    setMapScale(scale) {
+      mapMarkScale = Math.max(0.05, scale);
+    },
 
     start() {
       armed = true;
@@ -6247,8 +6328,10 @@ export function buildFireworks() {
           armed = false;
           showStartMs = -1;
           group.visible = false;
+          mapGroup.visible = false;
           for (const slot of slots) {
             for (const mesh of slot.stars) mesh.visible = false;
+            slot.mapRoot.visible = false;
           }
           return;
         }
@@ -6263,6 +6346,7 @@ export function buildFireworks() {
         if (since > FIREWORK_BLOOM_MS) {
           slot.startMs = -1;
           for (const mesh of slot.stars) mesh.visible = false;
+          slot.mapRoot.visible = false;
           continue;
         }
         const k = since / FIREWORK_BLOOM_MS;
@@ -6287,12 +6371,30 @@ export function buildFireworks() {
           slot.stars[i].scale.setScalar(FIREWORK_SHOW.starM);
           slot.stars[i].visible = true;
         }
+
+        // The map mark sits at the burst's TRUE position - the same ring the
+        // stars are on - and swells with the same bloom, so what the map shows
+        // is where the show actually is rather than a decoration of it.
+        slot.mapRoot.position.set(slot.centre[0], slot.centre[1], 0);
+        // ★ x AND y ONLY. `setScalar` scales the children's z offsets with
+        // everything else, and those offsets are what keep the frame under the
+        // core: at a ~107x mark scale the pair flew to z 6,500 and straight
+        // out of the overhead camera's frustum. Photographed as a map with
+        // marks in the scene graph and nothing in the picture.
+        const markScale = markBaseM * mapMarkScale * (0.45 + 0.55 * bloom);
+        slot.mapRoot.scale.set(markScale, markScale, 1);
+        slot.mapRoot.visible = true;
       }
     },
 
     dispose() {
       group.clear();
+      mapGroup.clear();
       geom.dispose();
+      mapFrameGeom.dispose();
+      mapCoreGeom.dispose();
+      mapFrameMat.dispose();
+      mapCoreMat.dispose();
       for (const slot of slots) slot.material.dispose();
     },
   };
