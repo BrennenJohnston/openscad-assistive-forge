@@ -183,7 +183,13 @@ const TRAVEL_WHERE_CORNER = (a, b, on) =>
   `${on ? 'On' : 'Near'} ${a} and ${b}.`;
 const TRAVEL_WHERE_ONE = (a, on) => `${on ? 'On' : 'Near'} ${a}.`;
 const TRAVEL_WHERE_OPEN = 'Open ground, away from any named street.';
-const TRAVEL_CONFIRM_LABEL = 'Travel';
+// ★ 'Travel here', not 'Travel', and the toolbar button beside it is the
+// reason. That button opens this question; this one answers it. Two controls
+// on screen at once, both called Travel, doing different jobs is precisely
+// what WCAG's Consistent Identification is about, read from the wrong end.
+// Answering the heading word for word is also the plainest thing the button
+// could say.
+const TRAVEL_CONFIRM_LABEL = 'Travel here';
 const TRAVEL_CANCEL_LABEL = 'Cancel';
 const TRAVEL_CANCELLED_MESSAGE = 'Travel cancelled. You have not moved.';
 const TELEPORT_LANDED_MESSAGE = (street, on, compass) =>

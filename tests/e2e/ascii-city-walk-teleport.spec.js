@@ -226,6 +226,17 @@ test.describe('ASCII City Walk — teleport (CW-36, CW-40)', () => {
 
     await openMap(page)
     await expect(teleportBtn(page)).toBeVisible()
+    // ★ THE TWO BUTTONS HAVE DIFFERENT NAMES, and the reason is not
+    // cosmetic: the toolbar's opens the question and the dialog's answers
+    // it, so one name across both would be two controls doing different
+    // jobs under the same label.
+    await expect(teleportBtn(page)).toHaveText('Travel')
+    await clickMap(page, 0.42, 0.34)
+    await expect(dialog(page)).toBeVisible()
+    await expect(goBtn(page)).toHaveText('Travel here')
+    await expect(goBtn(page)).not.toHaveText(await teleportBtn(page).innerText())
+    await page.keyboard.press('Escape')
+    await expect(dialog(page)).toBeHidden()
     // ★ NOT A TOGGLE ANY MORE. The arming it announced has retired, so a
     // pressed state would be describing a mode that no longer exists.
     await expect(teleportBtn(page)).not.toHaveAttribute('aria-pressed', 'true')
