@@ -80,7 +80,6 @@ import {
   PLANTER_H_M,
 } from './city-planting.js';
 import {
-  MAP_STYLES,
   DEFAULT_MAP_STYLE,
   mapStyleById,
   wayfindMarkSizeM,
@@ -3016,6 +3015,15 @@ export function buildCityGroup(model) {
   }
 
   let currentStyleId = DEFAULT_MAP_STYLE;
+  /**
+   * The zoom the marks were last BUILT for. Rewriting five thousand quads is
+   * cheap once and not cheap sixty times a second, and a held zoom key calls
+   * the map camera every frame, so the work is skipped when the number has
+   * not moved. null forces a rebuild, which is what a style change wants:
+   * the marks may have been invisible, and therefore skipped, at this very
+   * zoom a moment ago.
+   */
+  let wayfindBuiltZoom = null;
 
   /**
    * Put one style's visibility and tones onto the layers. Only ever called
@@ -3105,6 +3113,9 @@ export function buildCityGroup(model) {
     setMapStyle(styleId) {
       currentStyleId = mapStyleById(styleId).id;
       applyMapStyle(currentStyleId);
+      // A layer that was hidden was also being skipped by setMapZoom, so the
+      // marks it is about to show may be built for some older zoom entirely.
+      wayfindBuiltZoom = null;
     },
 
     /**
@@ -3113,6 +3124,9 @@ export function buildCityGroup(model) {
      * @param {number} zoom
      */
     setMapZoom(zoom) {
+      if (wayfindMeshes.length === 0) return;
+      if (wayfindBuiltZoom === zoom) return;
+      wayfindBuiltZoom = zoom;
       const b = model.boundsM;
       const spanM = Math.max(b.maxX - b.minX, b.maxY - b.minY, 100);
       const size = wayfindMarkSizeM(zoom, spanM);

@@ -34,6 +34,7 @@ export const MAP_STYLES = [
     name: 'Standard',
     /** What a reader loses by choosing this one, for the record and the help. */
     hides: 'nothing',
+    detail: 'The whole map, with streets, buildings and parks.',
     roads: { show: true, tone: null },
     sidewalks: { show: true, tone: null },
     buildings: { show: true, tone: null },
@@ -44,6 +45,8 @@ export const MAP_STYLES = [
     id: 'roads',
     name: 'Roads only',
     hides: 'buildings and parks',
+    detail:
+      'Buildings and parks are hidden, so the street network stands alone.',
     // The network, and nothing to read it against. This is the tactile
     // "network map": one layer, at the top of its own contrast range.
     roads: { show: true, tone: 0x8a8a8a },
@@ -56,6 +59,8 @@ export const MAP_STYLES = [
     id: 'buildings',
     name: 'Buildings only',
     hides: 'the street network, down to a hairline',
+    detail:
+      'The streets fade to a hairline, so the building shapes carry the place.',
     // The district map: footprints carry the shape of the place and the
     // roads survive only as the gaps between them.
     roads: { show: true, tone: 0x1e1e1e },
@@ -68,6 +73,10 @@ export const MAP_STYLES = [
     id: 'wayfinding',
     name: 'Wayfinding',
     hides: 'building detail, and dims the network',
+    // 'curbs', not 'kerbs': the OSM tag and this file's own data are British
+    // and the game's UI text is US English (the toolbar's 'Center on you'
+    // settled that already). Flagged in the text pack all the same.
+    detail: 'Crossings, tactile paving and curbs are marked over a dimmed map.',
     // ★ THE MISSION STYLE. CW-43's crossings, kerbs and tactile paving have
     // been in the model since it was parsed and have never been drawn. Here
     // they are the subject, and everything else is dimmed to be the ground
@@ -82,6 +91,19 @@ export const MAP_STYLES = [
 
 /** The default, and what an unknown stored value falls back to. */
 export const DEFAULT_MAP_STYLE = 'standard';
+
+/**
+ * ACCESSIBILITY-CRITICAL STRING (D-35), flagged DOUBLY in CW-R7-TEXT-PACK.md.
+ *
+ * A style change is a change to the whole picture, and the picture is the one
+ * thing a screen-reader user cannot check for themselves. So the sentence
+ * names the style AND says what it did, which is the same pair the style
+ * table already carries for the record.
+ */
+export function mapStyleAnnouncement(styleId) {
+  const style = mapStyleById(styleId);
+  return `Map style: ${style.name}. ${style.detail}`;
+}
 
 export function mapStyleById(id) {
   return MAP_STYLES.find((s) => s.id === id) ?? MAP_STYLES[0];

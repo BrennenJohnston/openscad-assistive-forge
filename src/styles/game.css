@@ -140,7 +140,20 @@
  * phosphor and contrast mode the player has chosen. */
 .city-walk-toolbar {
   display: flex;
-  flex-wrap: wrap;
+  /* ★★ CW-60: wrap-REVERSE, and the reason is the same promise CW-59 made.
+   *
+   * The strip is anchored to the bottom of the layer, so a second line makes
+   * it grow UPWARD and every button on the first line rises with it. With
+   * CW-60's fifth map-only button the zone no longer fits on one row between
+   * about 1280px and 1365px, and MEASURED at 1280 the nine shared buttons
+   * moved from y=820 to y=770 on a view switch - CW-59's defect exactly,
+   * arriving on the axis its guard was not watching.
+   *
+   * Reversed, the FIRST line sits at the bottom of the strip: the shared
+   * groups keep the y they had with one row and the view zone takes the new
+   * line above them. Nothing changes on a window wide enough not to wrap,
+   * which is every case that works today. */
+  flex-wrap: wrap-reverse;
   align-items: center;
   /* Start-aligned, not centred: see the view-zone rule below. */
   justify-content: flex-start;

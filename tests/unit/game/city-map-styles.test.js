@@ -5,6 +5,7 @@ import {
   mapStyleById,
   mapStyleIndex,
   cycleMapStyle,
+  mapStyleAnnouncement,
   wayfindMarkSizeM,
   wayfindTierOf,
   WAYFIND_KINDS,
@@ -126,6 +127,33 @@ describe('map styles (CW-60)', () => {
     // A missing or absurd span falls back rather than producing zero.
     expect(wayfindMarkSizeM(1, 0)).toBeGreaterThan(0);
     expect(wayfindMarkSizeM(1, undefined)).toBeGreaterThan(0);
+  });
+
+  it('★★ says out loud what the picture just did (CW-60 P2)', () => {
+    // ACCESSIBILITY-CRITICAL. A style change is a change to the whole
+    // picture, and the picture is the one thing a screen-reader user cannot
+    // check for themselves - so the sentence has to name the style AND say
+    // what it did, not just announce that something happened.
+    for (const s of MAP_STYLES) {
+      const said = mapStyleAnnouncement(s.id);
+      expect(said, s.id).toContain(s.name);
+      expect(said, s.id).toContain(s.detail);
+      // Two sentences, both finished. A truncated one reads as a glitch.
+      expect(said.endsWith('.'), s.id).toBe(true);
+      expect(s.detail.length, s.id).toBeGreaterThan(20);
+      // UI text carries no em dashes in this project (UF-3).
+      expect(said, s.id).not.toContain('—');
+    }
+    // Four distinct sentences: a style that borrowed another's words would
+    // tell a listener the map changed to something it did not change to.
+    expect(new Set(MAP_STYLES.map((s) => mapStyleAnnouncement(s.id))).size).toBe(
+      MAP_STYLES.length
+    );
+    // An unrecognised id falls back to Standard here too, rather than saying
+    // 'Map style: undefined'.
+    expect(mapStyleAnnouncement('nonsense')).toBe(
+      mapStyleAnnouncement(DEFAULT_MAP_STYLE)
+    );
   });
 
   it('★ tells the three kinds apart by BRIGHTNESS, and orders them honestly', () => {

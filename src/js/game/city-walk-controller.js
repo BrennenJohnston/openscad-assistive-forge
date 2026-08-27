@@ -76,10 +76,10 @@ import {
   SPEED_LABEL_STEP,
 } from './walk-controls.js';
 import {
-  MAP_STYLES,
   DEFAULT_MAP_STYLE,
   mapStyleById,
   cycleMapStyle,
+  mapStyleAnnouncement,
 } from './city-map-styles.js';
 import { initAltView } from '../_hfm.js';
 import {
@@ -489,6 +489,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       recenterMap: () => recenterMap(),
       adjustCharacterSize: (steps) =>
         adjustCharacterSize(steps * CHAR_SCALE_STEP),
+      cycleMapStyle: (delta) => stepMapStyle(delta),
       setHeading: (rad) => faceHeading(rad),
       setPitch: (rad) => setGazePitch(rad),
       announce: (text) => announceInLayer(text),
@@ -554,6 +555,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       // rather than a key binding. Measured: W moves the map 302 m where
       // ArrowUp moves it 302 m, and A, S and D match their arrows too.
       'On the map: arrow keys or W A S D pan, Page Up and Page Down zoom, Home returns to you',
+      'On the map: K and Shift+K change the map style, between Standard, Roads only, Buildings only and Wayfinding',
       'On the map: press Teleport, then click where you want to go; J drops you at the middle of the map',
       'L and Shift+L: cycle landmarks on the map',
       'X: say where you are',
@@ -918,6 +920,19 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
           keys: 'J',
           press: toggleTeleportMode,
           toggle: true,
+          views: 'map',
+        },
+        // CW-60: the toolbar promise - every key has a button. It goes LAST
+        // in the zone, where its own width is behind everything else in it,
+        // and the zone is behind every shared button (CW-59). The label does
+        // not name the current style: a label that changed width would move
+        // its neighbours, and the style is already said out loud, written in
+        // the HUD, and visible on the map.
+        {
+          id: 'cityWalkMapStyleBtn',
+          label: 'Map style',
+          keys: 'K',
+          press: () => stepMapStyle(1),
           views: 'map',
         },
       ],
@@ -1854,6 +1869,17 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       return;
     }
 
+    // CW-60 (CW-Q57): K steps forward through the map styles and Shift+K
+    // steps back, the same pair L and Shift+L already spend on landmarks.
+    // K was free at this head - the letters still unspoken are B I K N U Y Z,
+    // re-derived here rather than taken from the plan.
+    if (state.game.mapView && event.code === 'KeyK') {
+      event.preventDefault();
+      event.stopPropagation();
+      stepMapStyle(event.shiftKey ? -1 : 1);
+      return;
+    }
+
     if (
       state.game.mapView &&
       (event.code === 'Home' ||
@@ -1974,6 +2000,28 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     state.fastWalk = !state.fastWalk;
     syncToolbarView();
     announceInLayer(state.fastWalk ? 'Fast walking on.' : 'Fast walking off.');
+  }
+
+  /**
+   * CW-60 (CW-Q57): step through the four map styles.
+   *
+   * A style is a MAP state, so this does nothing in the street - the same
+   * shape as Home and the zoom keys, which are also map-only and also say
+   * nothing when there is no map to act on. The choice is stored either way,
+   * so the pad, the key and the button all leave the same trace.
+   *
+   * @param {number} delta +1 forward through the list, -1 back
+   */
+  function stepMapStyle(delta) {
+    const game = state.game;
+    if (!game?.mapView) return;
+    state.mapStyle = cycleMapStyle(state.mapStyle, delta);
+    safeSetItem(STORAGE_KEY_CITY_WALK_MAP_STYLE, state.mapStyle);
+    game.city3d.setMapStyle(state.mapStyle);
+    game.city3d.setMapZoom(game.mapCam.zoom);
+    game.altView.invalidate();
+    updateHud();
+    announceInLayer(mapStyleAnnouncement(state.mapStyle));
   }
 
   /** Home, and the map view's Center on you button. */
@@ -2688,6 +2736,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // 0.8x/1x/2x, in colour mode too, before the factors were chosen.
     const markerScale = Math.min(3.5, Math.max(0.6, 2.2 / game.mapCam.zoom));
     game.marker.scale.set(markerScale, markerScale, 1);
+
+    // CW-60: the wayfinding marks are sized on SCREEN, so they belong to the
+    // same seam the marker's own scale does - every zoom, every frame of a
+    // held zoom, not only the moment the map opened.
+    game.city3d.setMapZoom(game.mapCam.zoom);
   }
 
   function toggleMapView() {
@@ -2703,10 +2756,9 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     game.props.setMapView(game.mapView);
     // CW-60: the style is a map state, so it is applied on the way IN and
     // never has to be undone on the way out - setMapView restores the street.
-    if (game.mapView) {
-      game.city3d.setMapStyle(state.mapStyle);
-      game.city3d.setMapZoom(game.mapCam.zoom);
-    }
+    // The zoom follows from applyMapCamera below, which is the one place
+    // anything screen-sized on the map is sized.
+    if (game.mapView) game.city3d.setMapStyle(state.mapStyle);
     // CW-20: the weather belongs to the street. Seen from overhead the drops
     // streak diagonally across the whole map and read as scratches on the
     // picture rather than as rain — caught by eye in the four-city tour.
@@ -3009,8 +3061,12 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   function updateHud() {
     const game = state.game;
     if (!game) return;
+    // CW-60: which map you are looking at, written down. The pad and the
+    // button both cycle without naming a destination, so a sighted player
+    // needs somewhere to read the answer that is not the announcement.
     const view = game.mapView
-      ? `map view · zoom ${game.mapCam.zoom.toFixed(1)}x`
+      ? `map view · ${mapStyleById(state.mapStyle).name} · ` +
+        `zoom ${game.mapCam.zoom.toFixed(1)}x`
       : `street view · speed ${game.speedLabel}%`;
     const near =
       !game.mapView && game.nearLandmark

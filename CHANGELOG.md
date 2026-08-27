@@ -179,6 +179,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Four maps in one** (CW-60) - the City Walk's overhead map can be drawn four ways now, and each
+  one is a simplification rather than a repaint. Standard is the map as it has always been.
+  Roads only hides the buildings and parks so the street network stands alone. Buildings only takes
+  the streets down to a hairline so the shapes of the buildings carry the place. Wayfinding is the
+  reason the other three exist: it marks every crossing, every stretch of tactile paving and every
+  kerb the map records, over everything else dimmed to be the ground they sit on. That information
+  has been read out of OpenStreetMap and carried around in the game for eight releases without
+  anything ever drawing it. The idea comes from how tactile maps are made, where one map carries one
+  kind of thing because a finger cannot read a page as an eye can. Over the map the second control
+  pad in the Camera panel changes the style, K and Shift+K step through it, there is a Map style
+  button in the map toolbar, and the choice is remembered. Street view is untouched by all of it
+
 - **Birds where birds rest** (CW-58) - gulls and crows on parapets and lamp heads, pigeons and
   sparrows on bench backs, picnic tables and planter rims, Canada geese gathered on park grass, and
   in Albuquerque the greater roadrunner along the roadside its name comes from. Each city has its
