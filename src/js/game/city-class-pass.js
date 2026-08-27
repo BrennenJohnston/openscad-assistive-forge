@@ -134,6 +134,25 @@ export const CLASS_BY_MESH_NAME = new Map([
   ['waste-baskets', SURFACE_CLASS.CAR],
   ['bike-racks', SURFACE_CLASS.CAR],
   ['hydrants', SURFACE_CLASS.LAMP],
+  // CW-64: a firework star. The span table is FULL at 16, so this is a borrow
+  // and not a new id (CW-43's law), and it is a DELIBERATE one - CW-56's
+  // builders guard cannot see this mesh at all, because it enumerates
+  // buildStreetProps and a firework is built beside the rain.
+  //
+  // ★★ AND THE FIRST VERSION OF THIS COMMENT WAS WRONG, WHICH IS WHY IT SAYS
+  // SO. It claimed an unmapped mesh "draws nothing" and blamed the sky's voice
+  // for a show that photographed empty. `_hfm.js` settles it in one line -
+  // `classMap ? (st.classLookups.get(classMap[idx]) ?? st.lookup) : st.lookup`
+  // - so an unclassed cell falls through to the DEFAULT vocabulary and still
+  // gets a glyph from its own luminance. A class decides WHICH glyph, never
+  // WHETHER. The empty frames were a clock mismatch in the builder, and the
+  // measurement that seemed to blame the class was an instrument drawing its
+  // stars a fifth of the size it thought.
+  //
+  // What the mapping is actually for: without it a burst would wear the same
+  // voice as the sky behind it. SIGN is small and bright, which is what a star
+  // is, and that is a LOOK decision - the right one, but not a visibility one.
+  ['fireworks', SURFACE_CLASS.SIGN],
 ]);
 
 /**

@@ -335,11 +335,32 @@ test.describe('ASCII City Walk — the colour toggle (CW-Q16)', () => {
     await expect(help).toContainText(
       'O: color on or off (off is a single-color retro screen)'
     )
+    // CW-64 moved this line: the row's count stopped being fixed when
+    // Fireworks joined it, so the sentence names the joiner and its
+    // condition instead of counting.
     await expect(help).toContainText(
-      'High contrast, theme and color: the three buttons at the top of the screen'
+      'High contrast, theme and color: buttons at the top of the screen, ' +
+        'with Fireworks joining them once you have found every landmark'
     )
 
-    // The header really does carry all three, in the order the help names.
+    // And the header really is what that sentence says it is: the three
+    // toggles LEAD the row, in the order the help names them.
+    //
+    // ★★ THE PREVIOUS VERSION OF THIS ASSERTION TIGHTENED THE SLICE TO THE
+    // WHOLE ROW AND WAS WRONG ON A FACT ANYBODY COULD HAVE READ. Its reasoning
+    // was sound - a sliced check cannot notice a Fireworks button that leaked
+    // in early - but it was written without opening the row, which has SIX
+    // children: Fireworks, Help and Exit follow the three toggles and always
+    // have. It failed on both engines, which is the tell that a red is the
+    // code and not the runner.
+    //
+    // The leak it wanted to catch is guarded where it can actually be
+    // exercised: 'finishing a city plays the show, once, and leaves a button'
+    // in ascii-city-walk.spec.js drives a REAL city from unfound to found and
+    // asserts the button hidden before and visible after. Repeating a
+    // toBeHidden() here would be vacuous - this case never enters a city, and
+    // the button is created hidden, so it would pass with syncFireworksButton
+    // deleted entirely.
     const ids = await page.evaluate(() =>
       Array.from(
         document.querySelectorAll('.city-walk-header-actions button')

@@ -744,6 +744,11 @@ export function parseCityExtract(extract, options = {}) {
       }
       const { heightM, minHeightM } = resolveBuildingHeight(tags);
       buildings.push({
+        // CW-63: the OSM way id, carried so a landmark dressing can be keyed
+        // by it. A NAME would have been easier and is the wrong key: names
+        // are edited, translated and disambiguated upstream, and CW-62 has
+        // just recorded what names-as-identity costs when a rebake moves one.
+        id: el.id,
         outer,
         holes: [],
         heightM,
@@ -787,6 +792,7 @@ export function parseCityExtract(extract, options = {}) {
         // Round 1 simplification: every hole rides every outer ring of its
         // relation. Extra holes outside an outer are harmless to triangulate.
         buildings.push({
+          id: el.id,
           outer,
           holes,
           heightM,

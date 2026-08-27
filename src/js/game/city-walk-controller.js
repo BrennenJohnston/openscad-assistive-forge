@@ -84,6 +84,7 @@ import {
   mapStyleAnnouncement,
 } from './city-map-styles.js';
 import { describeJunction } from './city-junction.js';
+import { readCityProgress, writeCityProgress } from './city-progress.js';
 import { initAltView } from '../_hfm.js';
 import {
   CALIBRATION_CANDIDATES,
@@ -107,7 +108,12 @@ import {
   MONO_BLOOM_PX,
   MONO_GLOW_FADE,
 } from './hc-palettes.js';
-import { buildRain, RAIN_LEVEL_COUNT, RAIN_LEVEL_NAMES } from './city-scene.js';
+import {
+  buildFireworks,
+  buildRain,
+  RAIN_LEVEL_COUNT,
+  RAIN_LEVEL_NAMES,
+} from './city-scene.js';
 import { buildCityCameraPanel } from './city-camera-panel.js';
 import { createClassPass } from './city-class-pass.js';
 import { GLYPH_VOCABULARIES } from './glyph-vocabularies.js';
@@ -155,6 +161,15 @@ const RAIN_OFF_MESSAGE = 'Rain off.';
 const PHOTO_SAVED_MESSAGE = 'Photo saved.';
 const ALL_LANDMARKS_MESSAGE = 'All landmarks found.';
 const RAIN_BLOCKED_MESSAGE = 'Rain is off because reduced motion is on.';
+// ACCESSIBILITY-CRITICAL STRINGS (D-35) - flagged for owner review. The first
+// two are the reward itself for a player who cannot see it; the third has to
+// say why the sky is still rather than leaving a promise unkept.
+const FIREWORKS_MESSAGE = 'Fireworks over the city.';
+const FIREWORKS_REPLAY_MESSAGE = 'Fireworks again.';
+const FIREWORKS_CALM_MESSAGE =
+  'Fireworks over the city, held still because reduced motion is on.';
+/** How long the calm celebration stays up. The plan's ~3 s. */
+const FIREWORKS_STILL_MS = 3200;
 // Thunder no closer together than this, so it stays an event.
 const THUNDER_GAP_MS = 30000;
 
@@ -417,6 +432,33 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     colourBtn.addEventListener('click', flipColour);
     headerActions.appendChild(colourBtn);
 
+    /**
+     * ★★ CW-Q59 SAYS "LEFT OF HIGH CONTRAST" AND THIS IS NOT THERE, ON
+     * PURPOSE - IT IS THE OWNER'S CALL AND THE LEDGER CARRIES IT.
+     *
+     * `cityWalkContrastBtn` is the FIRST child of this row, and the comment
+     * above it says why: the layer is aria-modal, so the app header's
+     * accessibility controls are unreachable while playing, and these two sit
+     * "in the header's owner-signed order (U-16): high contrast, theme, then
+     * the rest". Putting a celebration control to their left moves a game
+     * feature ahead of the accessibility controls in a modal's tab order,
+     * which is the one thing U-16 signed.
+     *
+     * So it sits with the game's own controls, beside Color, exactly as the
+     * Color button itself does "because it changes only this game". It is
+     * equally reachable, and Y reaches it without tabbing at all. If the owner
+     * wants CW-Q59's literal placement it is one `insertBefore`.
+     */
+    const fireworksBtn = document.createElement('button');
+    fireworksBtn.type = 'button';
+    fireworksBtn.className = 'btn btn-secondary city-walk-btn';
+    fireworksBtn.id = 'cityWalkFireworksBtn';
+    // FLAGGED STRING (D-35).
+    fireworksBtn.textContent = 'Fireworks';
+    fireworksBtn.hidden = true;
+    fireworksBtn.addEventListener('click', playFireworks);
+    headerActions.appendChild(fireworksBtn);
+
     const helpBtn = document.createElement('button');
     helpBtn.type = 'button';
     helpBtn.className = 'btn btn-secondary city-walk-btn';
@@ -603,7 +645,15 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       'O: color on or off (off is a single-color retro screen)',
       'G: rain off, light, heavy (stays off if you use reduced motion)',
       'P: save a picture of what you can see',
-      'High contrast, theme and color: the three buttons at the top of the screen',
+      // FLAGGED STRING (D-35). It says "once you have found every landmark"
+      // rather than naming the key alone, because a key that does nothing is
+      // worse than a key nobody has been told about yet.
+      'Y: fireworks again, once you have found every landmark in this city',
+      // CW-64: the count moved when Fireworks joined this row, and it is
+      // CONDITIONAL - it does not exist until a city is finished - so the line
+      // names the joiner rather than counting buttons.
+      'High contrast, theme and color: buttons at the top of the screen, with ' +
+        'Fireworks joining them once you have found every landmark',
       // CW-35: the toolbar no longer holds all of them. Walking, turning,
       // looking and the standard views moved into the Camera panel, and a
       // help panel that still said "the toolbar" would send a mouse user
@@ -704,6 +754,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       contrastBtn,
       themeBtn,
       colourBtn,
+      fireworksBtn,
       helpBtn,
       exitBtn,
       startPanel,
@@ -1410,11 +1461,6 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
 
     // Landmarks (CW-10): beacons on the map, a legend, proximity text.
     const landmarks = extractLandmarks(model);
-    const beacons = buildLandmarkBeacons(landmarks);
-    beacons.group.visible = false;
-    scene.add(beacons.group);
-    buildLegend(landmarks);
-
     // Bright beacon marking the player in the top-down map view, sized
     // relative to the city so it stays visible at map scale.
     const spanM = Math.max(
@@ -1422,6 +1468,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       model.boundsM.maxY - model.boundsM.minY,
       100
     );
+
+    // CW-62: the landmark marks need the city's span for the same reason the
+    // player's marker does - a mark is a screen size, not a number of metres.
+    const beacons = buildLandmarkBeacons(landmarks, spanM);
+    beacons.group.visible = false;
+    scene.add(beacons.group);
+    buildLegend(landmarks);
     const markerSize = Math.max(14, spanM * 0.025);
     const markerGeom = new BoxGeometry(markerSize, markerSize, 120);
     // CW-40: never occluded. Once the marker scales with zoom (see
@@ -1562,6 +1615,12 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // characters for free — no DOM rain, no converter changes.
     const rain = buildRain();
     scene.add(rain.group);
+    // CW-64 (CW-Q59): the second mover, and the only other one. Built with the
+    // city and idle until something starts it, so a city nobody celebrates in
+    // costs 56 hidden meshes and nothing else.
+    const fireworks = buildFireworks(spanM);
+    scene.add(fireworks.group);
+    scene.add(fireworks.mapGroup);
     scene.add(props.group);
     stampObstacles(collision, props.obstacles);
     const spawn = findSpawn(model, collision);
@@ -1593,6 +1652,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       city3d,
       props,
       rain,
+      fireworks,
       lighting,
       marker,
       markerGeom,
@@ -1743,10 +1803,27 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       game.altView.invalidate();
     };
     game.startedAtMs = performance.now();
-    // CW-20: which landmarks this session has walked past. Per-session on
-    // purpose — a fresh city is a fresh walk, and nothing is stored.
-    game.visited = new Set();
-    game.announcedAllFound = false;
+    /**
+     * CW-20 kept this per session and said so: "a fresh city is a fresh walk,
+     * and nothing is stored". CW-62 (CW-Q56) reverses that. Eleven of twelve
+     * landmarks found, the game closed, and twelve unfound on return is a
+     * poor reward - and this store is the ground CW-64's fireworks and
+     * CW-65's traveler are both meant to stand on.
+     */
+    const saved = readCityProgress(game.city.slug);
+    game.visited = saved.visited;
+    game.progressRaw = saved.raw;
+    // ★ A COMPLETED CITY RE-ENTERED DOES NOT RE-ANNOUNCE. The all-found line
+    // is a reward, and a reward that fires every time you walk back in stops
+    // being one. CW-64's trigger wants the TRANSITION, so this seam stays
+    // clean: the flag is seeded from the store, not recomputed from counts.
+    game.announcedAllFound = saved.allFound;
+    // CW-64: an unlocked city keeps its button. Read from the same object
+    // CW-62 writes, so an older build's progress opens without losing it.
+    game.fireworksUnlocked = saved.raw?.fireworksUnlocked === true;
+    // CW-62: start the marks from whatever the set says, so there is one
+    // place the map's state comes from rather than two that can drift.
+    game.beacons.setVisited(game.visited);
     game.rainLevel = null;
     game.thunderStartMs = 0;
     game.nextThunderMs = THUNDER_GAP_MS;
@@ -1782,12 +1859,27 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     if (import.meta.env.DEV) {
       // Dev-lane debug handle (mirrors hfm-controller's DEV-only logging).
       window.__cityWalkGame = game;
+      /**
+       * CW-62: reaching a landmark, through the real path.
+       *
+       * A landmark is marked when a MOVING frame finds a new nearest one, and
+       * an e2e cannot walk a player to twelve of them in a reasonable time.
+       * This calls the same `markVisited` the walk calls - the legend, the
+       * HUD, the map marks, the announcement and the store write all happen
+       * exactly as they would - rather than letting a test poke
+       * `game.visited` and prove nothing about any of them.
+       *
+       * DEV-only, beside the handle above, so it never ships.
+       */
+      window.__cwMark = (name) => markVisited(game, name);
     }
 
     applyFirstPersonCamera();
     applyMapCamera();
     updateHud();
     syncToolbarView();
+    // CW-64: a city finished in an earlier session opens with its button.
+    syncFireworksButton();
 
     game.resizeObserver = new ResizeObserver(() => handleViewportResize());
     game.resizeObserver.observe(viewport);
@@ -1870,7 +1962,9 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     if (game.motionQuery && game.onMotionChange) {
       game.motionQuery.removeEventListener?.('change', game.onMotionChange);
     }
+    window.clearTimeout(game.fireworksStillTimer);
     game.rain?.dispose();
+    game.fireworks?.dispose();
     game.classPass?.dispose();
     game.altView?.dispose();
     game.lighting?.detach();
@@ -1965,6 +2059,17 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       event.preventDefault();
       event.stopPropagation();
       flipColour();
+      return;
+    }
+
+    // CW-64: replay the show. Y was free - measured across this file and
+    // walk-controls.js, the letters in use are A C D E F G H J K L M O P Q R
+    // S T U V W X, leaving B, I, N, Y and Z. Only once the city has been
+    // finished, so the key cannot conjure a reward nobody earned.
+    if (event.code === 'KeyY') {
+      event.preventDefault();
+      event.stopPropagation();
+      if (state.game?.fireworksUnlocked) playFireworks({ replay: true });
       return;
     }
 
@@ -2465,17 +2570,35 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   function markVisited(game, name) {
     if (game.visited.has(name)) return;
     game.visited.add(name);
+    // CW-62: the map's marks carry the same state the legend's ticks do.
+    game.beacons.setVisited(game.visited);
+    game.altView.invalidate();
     refreshLegend(game);
     updateHud();
-    if (
+    const justFinished =
       !game.announcedAllFound &&
       game.landmarks.length > 0 &&
-      game.visited.size >= game.landmarks.length
-    ) {
+      game.visited.size >= game.landmarks.length;
+    if (justFinished) {
       game.announcedAllFound = true;
       // ACCESSIBILITY-CRITICAL STRING (D-35) — flagged for owner review.
       announceInLayer(ALL_LANDMARKS_MESSAGE);
+      // CW-64: the reward, once, on the transition - and the button from here
+      // on. The unlock is written with the visit that earned it, in the same
+      // object, so a tab closed a second later does not lose it.
+      game.fireworksUnlocked = true;
+      game.progressRaw = { ...game.progressRaw, fireworksUnlocked: true };
+      syncFireworksButton();
+      playFireworks();
     }
+    // CW-62: written through on every new find rather than at exit, because
+    // there is no reliable exit - a tab closes, a laptop sleeps, a browser
+    // is killed. The write is small and happens once per landmark, ever.
+    writeCityProgress(game.city.slug, {
+      visited: game.visited,
+      allFound: game.announcedAllFound,
+      raw: game.progressRaw,
+    });
   }
   /**
    * Save what the player is looking at as a PNG (CW-20).
@@ -2575,6 +2698,62 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     }
   }
 
+  /**
+   * Play the show, or say why it is not moving (CW-64, CW-Q59).
+   *
+   * ★ REDUCED MOTION GETS A REAL ALTERNATIVE, NOT A REFUSAL. The Rain button
+   * disables itself under reduced motion and `cycleRain` answers with a
+   * sentence; that is right for weather nobody promised. This is a REWARD, and
+   * a reward that answers "no" is worse than one that answers quietly. So the
+   * calm path holds the bursts still for a moment and says what they are - the
+   * plan's words are "a static celebratory frame plus the announcement, never
+   * nothing".
+   */
+  function playFireworks(options = {}) {
+    const game = state.game;
+    if (!game?.fireworks) return;
+    const message = options.replay
+      ? FIREWORKS_REPLAY_MESSAGE
+      : FIREWORKS_MESSAGE;
+    if (game.motionReduced) {
+      window.clearTimeout(game.fireworksStillTimer);
+      game.fireworks.showStill(
+        game.walkState.x,
+        game.walkState.y,
+        game.walkState.headingRad
+      );
+      game.altView.invalidate();
+      // ★ A TIMEOUT, NOT A FRAME COUNT, AND THAT IS RIGHT HERE. This round
+      // forbids wall-clock holds where a quantity the GAME decides is being
+      // measured - metres walked, frames converted. Nothing is being measured
+      // here: a still picture is shown for a few seconds the way a message is,
+      // and under reduced motion the step loop deliberately never runs, so
+      // there are no frames to count in the first place.
+      game.fireworksStillTimer = window.setTimeout(() => {
+        game.fireworks?.clear();
+        game.altView.invalidate();
+      }, FIREWORKS_STILL_MS);
+      // ACCESSIBILITY-CRITICAL STRING (D-35) - flagged for owner review.
+      announceInLayer(FIREWORKS_CALM_MESSAGE);
+      return;
+    }
+    game.fireworks.start();
+    game.altView.invalidate();
+    // ACCESSIBILITY-CRITICAL STRING (D-35) - flagged for owner review.
+    announceInLayer(message);
+  }
+
+  /**
+   * The button exists once a city has been finished, and keeps existing
+   * (CW-64 P3). CW-62's store is EXTENDED rather than siblinged: one key per
+   * city, a JSON object, unknown fields preserved on write.
+   */
+  function syncFireworksButton() {
+    const btn = state.refs?.fireworksBtn;
+    if (!btn) return;
+    btn.hidden = !state.game?.fireworksUnlocked;
+  }
+
   function cycleRain() {
     const game = state.game;
     if (!game) return;
@@ -2640,6 +2819,28 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     }
 
     return dirty;
+  }
+
+  /**
+   * ★★ THE SHOW STEPS IN BOTH VIEWS, AND IT IS THE ONLY THING THAT DOES.
+   *
+   * `stepWeather` sits behind `!game.mapView`, because rain, thunder and the
+   * fog drift are street weather and the map has no sky to put them in. The
+   * fireworks are not weather: CW-Q59 asks for a 2D representation of the SAME
+   * bursts at their true ring positions, so a player who opens the map
+   * mid-show must see it carry on rather than freeze. Photographed as a dead
+   * map first - the marks never appeared, because nothing was stepping them.
+   *
+   * It still marks frames dirty ONLY while it runs, which is what keeps the
+   * frozen-world exception bounded rather than making a second permanent
+   * mover, and reduced motion never reaches here at all.
+   */
+  function stepFireworks(game, dtS, nowMs) {
+    if (!game.fireworks?.isRunning()) return false;
+    game.fireworks.update(dtS, game.walkState.x, game.walkState.y, nowMs);
+    game.fireworks.group.visible = !game.mapView;
+    game.fireworks.mapGroup.visible = game.mapView;
+    return true;
   }
   function adjustCharacterSize(delta) {
     const game = state.game;
@@ -2914,6 +3115,12 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // CW-61: the circle is the same family and shares the same number. Two
     // marks that mean one thing between them cannot drift apart in size.
     game.pickMark.scale.set(markerScale, markerScale, 1);
+    // CW-62: and so do the landmark diamonds. Three marks on one map, one
+    // number deciding how big a mark is.
+    game.beacons.setScale(markerScale);
+    // CW-64: FOUR marks now, and still one number. The burst triangles take
+    // the same clamp, so the map's marks cannot drift apart in size.
+    game.fireworks?.setMapScale(markerScale);
 
     // CW-60: the wayfinding marks are sized on SCREEN, so they belong to the
     // same seam the marker's own scale does - every zoom, every frame of a
@@ -2948,6 +3155,17 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // picture rather than as rain — caught by eye in the four-city tour.
     if (game.rain)
       game.rain.group.visible = !game.mapView && game.rainLevel !== null;
+    // CW-64: the street show is street geometry. The map gets its own 2D
+    // representation (P2) rather than a bird's eye view of the same stars.
+    if (game.fireworks) {
+      game.fireworks.group.visible =
+        !game.mapView && game.fireworks.isShowing();
+      // CW-Q59 asks for a 2D representation at true ring scale and location,
+      // so the map shows the same bursts from above rather than the street
+      // show tipped on its side.
+      game.fireworks.mapGroup.visible =
+        game.mapView && game.fireworks.isShowing();
+    }
     game.lighting.setMapBoost(game.mapView);
     game.beacons.group.visible = game.mapView;
     state.refs.legend.hidden = !game.mapView;
@@ -3374,6 +3592,14 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // frames, in either view; it goes quiet the moment it is done.
     stepCalibration(game, nowMs);
 
+    // CW-64: and so does the show. This sits ABOVE the view split on purpose -
+    // the map branch below ends in `render(); return;`, so anything after it
+    // never runs overhead, and a player who opens the map mid-show would watch
+    // a dead map. Photographed exactly that way first.
+    if (!game.motionReduced && stepFireworks(game, dtS, nowMs)) {
+      game.altView.invalidate();
+    }
+
     if (game.mapView) {
       // Map mode (CW-9): the movement keys drive the camera, not the
       // player — walking is suspended while the overhead view is open.
@@ -3487,7 +3713,6 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       const weatherMoved = stepWeather(game, dtS, elapsed);
       if (changed || weatherMoved) game.altView.invalidate();
     }
-
     game.altView.render();
   }
 
