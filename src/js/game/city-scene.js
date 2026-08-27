@@ -862,10 +862,17 @@ function createWindowTexture(archetypeIndex = 0) {
  * the whole tile is a quarter of a megabyte.
  *
  * That floor is not the binding one, though. On SCREEN at the 90 m photograph
- * gate one metre is 8.66 px, so the member is 10.4 px against a character cell
+ * gate one metre is 7.28 px, so the member is 8.7 px against a character cell
  * 4 px wide - and it is the SCREEN number that decided the width, because a
  * member under one cell across cannot make a cell dark whatever the texture
  * holds.
+ *
+ * ★ THAT 7.28 IS OVER THE GAME VIEWPORT'S HEIGHT, NOT THE WINDOW'S, and the
+ * difference is 19%. The camera is sized from `viewport.clientHeight`, which
+ * in the 1600 x 900 window the gate used is 756 px - the header takes the
+ * rest, and the captured ASCII canvas measures 1600 x 756. Working from 900
+ * puts the published 0.4 m member at 3.46 px instead of 2.91, which is 0.87 of
+ * a cell instead of 0.73.
  *
  * @returns {CanvasTexture|null}
  */
@@ -1877,6 +1884,11 @@ function libraryPlatformGeometries(building, tint) {
   for (const { ring, fromM, toM } of rings) {
     if (!(toM > fromM)) continue;
     const geom = extrudeBuilding(
+      // No holes: the outline this dresses has none (measured - the Library's
+      // way is a single 12-point ring), and a platform is a transform of that
+      // ring. A dressed building with a courtyard would need them threaded
+      // through the same transform, which is a change this table has no row
+      // to justify yet.
       { outer: ring, holes: [], heightM: toM, minHeightM: fromM },
       tint
     );
