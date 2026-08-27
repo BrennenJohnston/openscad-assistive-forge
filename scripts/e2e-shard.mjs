@@ -94,7 +94,18 @@ export const MEASURED_SECONDS = {
   // DEFAULT_WEIGHT_S, 60, against a real 147 and 131. An unmeasured city
   // spec is not a cheap newcomer - every one of its cases builds a 3D city.
   'ascii-city-walk-calibration.spec.js': 146.9,
-  'ascii-city-walk-furniture.spec.js': 130.8,
+  // CW-63 added two cases to this file (the diagrid present in Seattle, absent
+  // in Denver), taking it from 9 to 11. This 160 is the 130.8 measured on run
+  // 33063099176's green shards SCALED BY TEST COUNT, not a fresh measurement -
+  // both new cases launch the game and enter a city, which is the dominant
+  // cost here, so they are typical rather than cheap. Marked so the next
+  // re-measure from a green run replaces it rather than inheriting it.
+  //
+  // ★ The alternative was to leave 130.8, and that is exactly the mistake
+  // CW-62 fixed: a weight that is 22% low on the one file a release grew is
+  // how a lane projects 25 minutes and takes 32. Edge has about two minutes of
+  // margin, and 29 unbooked seconds is a sixth of it.
+  'ascii-city-walk-furniture.spec.js': 160,
   'classic-panels.spec.js': 442.5,
   'classic-mode.spec.js': 400.8,
   'menu-parity.spec.js': 224.8,
