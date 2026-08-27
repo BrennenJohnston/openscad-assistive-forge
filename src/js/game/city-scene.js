@@ -85,6 +85,9 @@ import {
   needleLegPoint,
   NEEDLE_LEG,
   NEEDLE_LEG_BEARINGS_RAD,
+  libraryPlatformRing,
+  LIBRARY_DIAGRID,
+  LIBRARY_PLATFORMS,
 } from './landmark-dressings.js';
 import {
   DEFAULT_MAP_STYLE,
@@ -670,6 +673,33 @@ const WINDOW_ARCHETYPES = [
 ];
 
 /**
+ * ★★ CW-63: FACADE FAMILIES A DRESSING CAN ASK FOR, AND THE GENERIC HASH
+ * CANNOT.
+ *
+ * These sit AFTER the nine archetypes in every array the buildings loop
+ * indexes, and the hash that picks a facade for an ordinary building still
+ * divides by `WINDOW_ARCHETYPES.length`. So a dressing row is the only way any
+ * building in any city ever wears one of these, which is what keeps CW-Q56's
+ * exception named rather than leaked: adding the diagrid to WINDOW_ARCHETYPES
+ * would have given one building in ten a diamond skin it has no business
+ * wearing.
+ *
+ * They cost no new MESH and no new class id - every bucket becomes a mesh
+ * called `buildings` like the other nine, so the CW-56 builders guard and
+ * CW-43's full MAX_CLASS_SPANS are both satisfied by construction.
+ */
+const DRESSING_FACADES = ['diagrid'];
+
+/** Buckets, textures and meshes are indexed over both lists together. */
+const FACADE_COUNT = WINDOW_ARCHETYPES.length + DRESSING_FACADES.length;
+
+/** @param {string|undefined} name @returns {number} -1 when there is none */
+function dressingFacadeIndex(name) {
+  const i = DRESSING_FACADES.indexOf(name ?? '');
+  return i < 0 ? -1 : WINDOW_ARCHETYPES.length + i;
+}
+
+/**
  * What a mapped material biases a building's glazing towards (CW-34 P3).
  *
  * A BIAS, never an override: the listed archetypes are the ones that material
@@ -805,6 +835,110 @@ function createWindowTexture(archetypeIndex = 0) {
   const tileHM = (archetype.bayHM ?? WINDOW_BAY_H_M) * WINDOW_TILE_BAYS_Y;
   // Side-wall v = 1 - z: the -1/tile offset puts a bay boundary at z = 0 so
   // window rows count up from each building's base.
+  return makeRepeatingTexture(canvas, 1 / tileWM, 1 / tileHM, -1 / tileHM);
+}
+
+/**
+ * ★★ CW-63: THE SEATTLE CENTRAL LIBRARY'S DIAGRID, painted at runtime like
+ * every other facade in this city, so it costs the bundle nothing.
+ *
+ * The published skin is a steel-and-glass DIAMOND grid wrapping the whole
+ * envelope. Drawn here as a lattice of two diagonal families, with the glass
+ * between them and the steel members CUT OUT of it - the archetype table's
+ * first rule, learned at CW-25: draw a dark shape ON a wall and the wall stops
+ * reading as lit at all.
+ *
+ * ★ THE TILE IS ONE DIAMOND PERIOD IN EACH AXIS, TIMES FOUR. The lattice is
+ * the pair of line families x/w + z/h = k and x/w - z/h = k, whose period is
+ * exactly one diamond width across and one diamond height up, so any whole
+ * number of diamonds wraps seamlessly; four by four gives the per-pane
+ * brightness room to look unplanned before it repeats, and the levels are
+ * indexed modulo the tile so the wrap stays exact.
+ *
+ * ★ THE RESOLUTION IS SET BY THE MEMBER, NOT BY TASTE. CW-52 found a facade
+ * pattern finer than the character grid beats against it and shimmers, and the
+ * release prompt's floor is a line at least 3 px wide in texture space. At
+ * 14.2 px per metre a 0.4 m member is 5.7 px, comfortably over it, and the
+ * whole tile is a quarter of a megabyte.
+ *
+ * @returns {CanvasTexture|null}
+ */
+function createDiagridTexture() {
+  const { widthM, heightM, memberM, paneLevel, memberLevel } = LIBRARY_DIAGRID;
+  const pxPerM = 14.22;
+  const tileD = 4;
+  const cellW = Math.round(widthM * pxPerM);
+  const cellH = Math.round(heightM * pxPerM);
+  const c = make2dContext(cellW * tileD, cellH * tileD);
+  if (!c) return null;
+  const { canvas, ctx } = c;
+
+  // The glass behind everything, so a member that misses a pixel leaves glass
+  // rather than a hole in it.
+  const [paneLo, paneHi] = paneLevel;
+  ctx.fillStyle = `rgb(${paneLo},${paneLo},${paneLo})`;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const rand = makeLcg(0x5ea11b63);
+  // One brightness per pane, indexed modulo the tile: that is what makes the
+  // wrap exact rather than merely unlikely to be noticed.
+  const levels = [];
+  for (let i = 0; i < tileD * 2; i++) {
+    levels.push([]);
+    for (let j = 0; j < tileD * 2; j++) {
+      // A mirror curtain wall is not a grid of office windows: the panes
+      // vary a little so the wall is not a flat plate, and no further. As
+      // shipped both ends are exact black, so the variation is what a
+      // different pane level would use rather than something it does today.
+      levels[i].push(paneLo + Math.floor(rand() * (paneHi - paneLo + 1)));
+    }
+  }
+
+  const wrap = (n) => ((n % (tileD * 2)) + tileD * 2) % (tileD * 2);
+  // Pane centres sit where both diagonal families cross at half-integers -
+  // every (k, l) with k + l odd, in half-diamond steps.
+  for (let k = -1; k <= tileD * 2 + 1; k++) {
+    for (let l = -1; l <= tileD * 2 + 1; l++) {
+      if ((k + l) % 2 === 0) continue;
+      const cx = (k * cellW) / 2;
+      const cy = (l * cellH) / 2;
+      const level = levels[wrap(k)][wrap(l)];
+      ctx.fillStyle = `rgb(${level},${level},${level})`;
+      ctx.beginPath();
+      ctx.moveTo(cx - cellW / 2, cy);
+      ctx.lineTo(cx, cy - cellH / 2);
+      ctx.lineTo(cx + cellW / 2, cy);
+      ctx.lineTo(cx, cy + cellH / 2);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  // The steel. Cut OUT of the glass when it is meant to land as exact black -
+  // the archetype table's own first rule, and the one value that reads as an
+  // empty cell - or painted over it when the members are the bright thing.
+  if (memberLevel <= 0) ctx.globalCompositeOperation = 'destination-out';
+  ctx.strokeStyle =
+    memberLevel <= 0
+      ? '#000'
+      : `rgb(${memberLevel},${memberLevel},${memberLevel})`;
+  ctx.lineWidth = memberM * pxPerM;
+  ctx.beginPath();
+  for (let k = -tileD; k <= tileD * 2; k++) {
+    // Rising, then falling: one line of each family through every lattice
+    // column, run the full height of the tile.
+    ctx.moveTo(k * cellW, 0);
+    ctx.lineTo((k + tileD) * cellW, tileD * cellH);
+    ctx.moveTo(k * cellW, 0);
+    ctx.lineTo((k - tileD) * cellW, tileD * cellH);
+  }
+  ctx.stroke();
+  ctx.globalCompositeOperation = 'source-over';
+
+  // Same v convention as every other facade: a lattice boundary at z = 0, so
+  // the diamonds count up from the platform each one stands on.
+  const tileWM = widthM * tileD;
+  const tileHM = heightM * tileD;
   return makeRepeatingTexture(canvas, 1 / tileWM, 1 / tileHM, -1 / tileHM);
 }
 
@@ -1701,6 +1835,116 @@ function needleTripodGeometries(centre, groundZ, tint) {
   return geoms;
 }
 
+/**
+ * ★★ CW-63 (CW-Q56): THE SEATTLE CENTRAL LIBRARY'S AUTHORED MASSING.
+ *
+ * This is the one dressing that REPLACES rather than adds, and the reason is
+ * in the data. The Library's way carries `building=yes height=60` and four
+ * `building:part=roof` ways with no height on any of them, so the generic
+ * pipeline draws a plain 60 m box with four default-height slabs standing
+ * inside it. Nothing in that says anything about the five offset platforms the
+ * building is known for, so there is nothing to wrap - the box goes and the
+ * platforms stand in its place.
+ *
+ * ★ THE FOOTPRINTS ARE THE DATA'S, SHRUNK AND SLID. Each platform is the
+ * building's own outline scaled about its centroid along the block's own axes
+ * and offset in metres, so every platform keeps the block's cut-corner plan
+ * and the whole stack stays where the map put it. The numbers are in
+ * landmark-dressings.js with their sources.
+ *
+ * ★ COLLISION IS UNTOUCHED, by construction: collision reads `building.outer`
+ * and never looks at geometry, and this function does not modify the outline.
+ * A platform that overhangs the sidewalk is a cantilever you can walk under,
+ * which is what the published building does over 4th Avenue.
+ *
+ * @param {Object} building
+ * @param {[number, number, number]} tint
+ */
+function libraryPlatformGeometries(building, tint) {
+  const geoms = [];
+  const centre = ringCentroid(building.outer);
+  const rings = LIBRARY_PLATFORMS.map((platform) => ({
+    ring: libraryPlatformRing(building.outer, centre, platform),
+    fromM: building.heightM * platform.fromH,
+    toM: building.heightM * platform.toH,
+  }));
+  for (const { ring, fromM, toM } of rings) {
+    if (!(toM > fromM)) continue;
+    const geom = extrudeBuilding(
+      { outer: ring, holes: [], heightM: toM, minHeightM: fromM },
+      tint
+    );
+    if (geom) geoms.push(geom);
+  }
+  // ★ THE FOUR FLOWING PLANES. Every platform is a transform of the SAME
+  // outline, so consecutive rings have the same vertex count and the skin
+  // between them is one quad per edge - no triangulation, no seams to chase.
+  for (let i = 0; i + 1 < rings.length; i++) {
+    const plane = loftRings(
+      rings[i].ring,
+      rings[i].toM,
+      rings[i + 1].ring,
+      rings[i + 1].fromM,
+      tint
+    );
+    if (plane) geoms.push(plane);
+  }
+  return geoms;
+}
+
+/**
+ * A sloping skin between two rings of equal length, as a merge-ready
+ * non-indexed geometry.
+ *
+ * ★ THE UVs COPY ExtrudeGeometry'S SIDE-WALL RULE ON PURPOSE. Three.js lays a
+ * side wall out as u = whichever of world x or y the wall runs along and
+ * v = 1 - z, and every facade texture in this city is built with a metre
+ * repeat that assumes it. Inventing a UV here would have run the diagrid at a
+ * different scale on the leaning parts than on the upright ones, which is
+ * exactly the seam a diamond lattice shows.
+ *
+ * @param {Array<[number, number]>} lower
+ * @param {number} lowerZ
+ * @param {Array<[number, number]>} upper
+ * @param {number} upperZ
+ * @param {[number, number, number]} tint
+ * @returns {BufferGeometry|null}
+ */
+function loftRings(lower, lowerZ, upper, upperZ, tint) {
+  const n = lower.length;
+  if (n < 3 || upper.length !== n) return null;
+  const pos = new Float32Array(n * 18);
+  const uv = new Float32Array(n * 12);
+  let p = 0;
+  let t = 0;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    // Wound so the outward face is the front one, the same way round as the
+    // extruded walls above and below it.
+    const quad = [
+      [lower[i][0], lower[i][1], lowerZ],
+      [lower[j][0], lower[j][1], lowerZ],
+      [upper[j][0], upper[j][1], upperZ],
+      [upper[i][0], upper[i][1], upperZ],
+    ];
+    const alongY =
+      Math.abs(quad[1][1] - quad[0][1]) >= Math.abs(quad[1][0] - quad[0][0]);
+    for (const k of [0, 1, 2, 0, 2, 3]) {
+      pos[p++] = quad[k][0];
+      pos[p++] = quad[k][1];
+      pos[p++] = quad[k][2];
+      uv[t++] = alongY ? quad[k][1] : quad[k][0];
+      uv[t++] = 1 - quad[k][2];
+    }
+  }
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new BufferAttribute(pos, 3));
+  geometry.setAttribute('uv', new BufferAttribute(uv, 2));
+  geometry.computeVertexNormals();
+  paintGeometry(geometry, tint);
+  return geometry;
+}
+
 function extrudeBuilding(building, tint, options = {}) {
   const shape = new Shape(building.outer.map(([x, y]) => new Vector2(x, y)));
   for (const hole of building.holes) {
@@ -2416,9 +2660,13 @@ export function buildCityGroup(model) {
 
   // CW-25/CW-34: one window texture per archetype. Painted at runtime, so the
   // whole set of facade looks costs nothing in the bundle.
-  const windowTextures = WINDOW_ARCHETYPES.map((_, i) =>
-    createWindowTexture(i)
-  );
+  const windowTextures = [
+    ...WINDOW_ARCHETYPES.map((_, i) => createWindowTexture(i)),
+    // CW-63: the dressing-only families, in DRESSING_FACADES order. Painted
+    // for every city, and in a city with no dressed landmark in it the bucket
+    // stays empty and no mesh is ever made from it.
+    createDiagridTexture(),
+  ];
   const storefrontTexture = createStorefrontTexture();
   // CW-51: which paving finish this city's own municipality specifies.
   const pavingTexture = createPavingTexture(
@@ -2441,7 +2689,7 @@ export function buildCityGroup(model) {
   // Buildings — merged, vertex-tinted, window-textured meshes, dressed with
   // the CW-18 signs and rooftop masts. One mesh per archetype (CW-25/CW-34):
   // the texture is per-material, so a facade look means a mesh to carry it.
-  const buildingGeoms = WINDOW_ARCHETYPES.map(() => []);
+  const buildingGeoms = Array.from({ length: FACADE_COUNT }, () => []);
   const storefrontGeoms = [];
   const signOut = { plates: [], faces: [] };
   const roadIndex = makePointGrid(SIGN_ROAD_CELL_M);
@@ -2473,18 +2721,31 @@ export function buildCityGroup(model) {
     const materialBias = ARCHETYPES_BY_MATERIAL.get(
       building.tags?.['building:material']
     );
-    const archetypeIndex = materialBias
-      ? materialBias[h % materialBias.length]
-      : h % WINDOW_ARCHETYPES.length;
+    // CW-63: a dressed landmark can ask for a facade family reserved for
+    // dressings. The hash below still divides by WINDOW_ARCHETYPES.length, so
+    // no ordinary building can ever land on one.
+    const dressing = dressingFor(building.id);
+    const dressedFacade = dressingFacadeIndex(dressing?.facade);
+    const archetypeIndex =
+      dressedFacade >= 0
+        ? dressedFacade
+        : materialBias
+          ? materialBias[h % materialBias.length]
+          : h % WINDOW_ARCHETYPES.length;
     // CW-26: where the parts really are the mass (they cover the outline)
     // they REPLACE it - extruding the outline as well would bury them inside
     // a plain box, the very thing Simple 3D Buildings exists to avoid. Where
     // they merely sit on it, BOTH are drawn, or a turret mapped onto a plain
     // hall would delete the hall and leave the turret hanging. Collision is
     // untouched either way: it reads outlines and never parts.
-    const volumes = building.partsAreMass
-      ? building.parts
-      : [building, ...(building.parts ?? [])];
+    // CW-63: an authored MASSING replaces the data's volumes outright - see
+    // libraryPlatformGeometries for why that is the honest move for the one
+    // building that has one.
+    const volumes = dressing?.massing
+      ? []
+      : building.partsAreMass
+        ? building.parts
+        : [building, ...(building.parts ?? [])];
     let anyGeom = false;
     for (const volume of volumes) {
       // A pitched roof CAPS its volume rather than sitting on top of it: the
@@ -2541,7 +2802,6 @@ export function buildCityGroup(model) {
      * left exactly as the data has them. Delete the row and the building goes
      * back to being ordinary, with nothing else to unpick.
      */
-    const dressing = dressingFor(building.id);
     if (dressing?.legs === 'needle-tripod') {
       const centre = ringCentroid(building.outer);
       for (const geom of needleTripodGeometries(
@@ -2549,6 +2809,12 @@ export function buildCityGroup(model) {
         building.minHeightM,
         tint
       )) {
+        buildingGeoms[archetypeIndex].push(geom);
+        anyGeom = true;
+      }
+    }
+    if (dressing?.massing === 'library-platforms') {
+      for (const geom of libraryPlatformGeometries(building, tint)) {
         buildingGeoms[archetypeIndex].push(geom);
         anyGeom = true;
       }
