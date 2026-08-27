@@ -179,6 +179,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Two Seattle landmarks now look like themselves** (CW-63) - every building in the City Walk is
+  drawn by one pipeline from its own OpenStreetMap data, on purpose, because a city where the code
+  knows about particular buildings stops working when the data moves. Two named landmarks are now a
+  deliberate exception, and only two. The Space Needle has its arched tripod: the map data holds
+  thirteen straight volumes and no curve at all, so the hourglass - the one thing that makes the
+  silhouette the Space Needle rather than a mast - is drawn from the published dimensions. The
+  Seattle Central Library has its five offset platforms with the flowing planes between them and the
+  diamond steel grid over the whole envelope, where before it was a plain box: its map data is a
+  60 metre outline and four roof planes, with no massing in it at all. Both are authored from
+  published heights, storey counts and section drawings, cited in the code beside the numbers they
+  produced; there is no imagery involved and nothing traced from anybody's photographs. Every other
+  building in every city takes exactly the path it always did, and each landmark is one line to
+  reverse
+
 - **The map asks before it moves you** (CW-61) - clicking the City Walk's map used to do nothing
   unless you had first pressed Teleport to arm it, and then any click sent you there instantly with
   no way back to where you were. Now a click anywhere on the map asks, in a small dialog that names
