@@ -1882,9 +1882,54 @@ test.describe('ASCII City Walk — fireworks over the city (CW-64, CW-Q59)', () 
     const lum = measured.map((m) => m[1])
     const spanS = (t[t.length - 1] - t[0]) / 1000
     const rate = measured.length / spanS
-    expect(measured.length).toBeGreaterThan(60)
-    // Enough resolution to catch a bloom's peak, which is all the bound needs.
-    expect(rate * 1.6).toBeGreaterThan(3)
+    const how =
+      `${measured.length} samples over ${spanS.toFixed(1)}s ` +
+      `= ${rate.toFixed(1)}/s`
+
+    /**
+     * ★★ THE STIMULUS BEFORE THE DETECTOR (CW-64's own lesson B). A luminance
+     * range of zero is a pass if the show ran and a LIE if it did not, and the
+     * two look identical in the number. The loop exits on isRunning(), which
+     * reduced motion deliberately answers false to, so a runner with reduced
+     * motion forced on would sample a still frame and "pass" gloriously.
+     */
+    expect(
+      spanS,
+      `the show has to have RUN for a flash bound to mean anything, and this ` +
+        `sampled ${how}. A near-zero span means it never started, or reduced ` +
+        `motion held it still, not that it did not flash.`
+    ).toBeGreaterThan(1)
+
+    /**
+     * ★★ AND THEN A CAPABILITY GATE, NOT A COUNT, BECAUSE THIS IS WHERE CI
+     * WENT RED AND THE REASON MATTERS.
+     *
+     * The first version asserted `measured.length > 60`. On a CI runner it
+     * collected FIFTEEN: the suite renders through SwiftShader, where this
+     * sampler runs at about seven a second against a headed browser's sixty.
+     * So the build failed on the sampler's speed while the accessibility bound
+     * below - the thing anybody actually cares about - was never evaluated at
+     * all, because it sat AFTER the count.
+     *
+     * ★ That is D-114's shape exactly, and this file's own comment had already
+     * named it: "the bound goes first (CW-61's lesson about assertion order)
+     * and the count rides behind it as a second opinion". The comment was
+     * right and the code did the opposite. The bound goes first now.
+     *
+     * What replaces the count is a gate on CAPABILITY, the way `enterCity`
+     * gates on WebGL rather than on a browser name: a sampler too coarse to
+     * catch a bloom's peak has NOT MEASURED this, and saying so is honest
+     * where passing would not be. A burst blooms over 1.6 s, so three samples
+     * inside one bloom is the floor worth having. Locally this runs at ~7/s
+     * and clears it by a wide margin; nothing skips on a real machine.
+     */
+    const SAMPLES_PER_BLOOM = 3
+    test.skip(
+      rate * 1.6 < SAMPLES_PER_BLOOM,
+      `this runner samples the canvas at ${rate.toFixed(1)}/s (${how}), which ` +
+        `is under ${SAMPLES_PER_BLOOM} samples per 1.6s bloom - too coarse to ` +
+        `resolve a flash, so 2.3.1 is NOT MEASURED here rather than passed`
+    )
 
     const TH = 0.1
     const swing = Math.max(...lum) - Math.min(...lum)

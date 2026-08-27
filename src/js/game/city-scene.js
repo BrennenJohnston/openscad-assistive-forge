@@ -6735,6 +6735,92 @@ export const TRAVELER_LOOK = {
 };
 
 /**
+ * How far from a spot other figures are counted when looking for a busy
+ * stretch of pavement.
+ *
+ * ★★ AND "BUSY" IS A SMALLER WORD HERE THAN IT SOUNDS. Measured at this head,
+ * PERSON_SPACING_M is 26 m and the DENSEST 25 m neighbourhood in the whole of
+ * Seattle holds SEVEN figures - six other people over a 50 m circle, in a city
+ * 2,627 x 2,644 m across. So this bias does NOT hide the traveler in a crowd;
+ * there is no crowd. What it buys is that the traveler is found among people
+ * rather than alone on an empty street, which is the character of the thing.
+ */
+export const TRAVELER_BUSY_RADIUS_M = 25;
+/** How far the traveler is kept from the spawn, so the reward is walked to. */
+export const TRAVELER_MIN_FROM_SPAWN_M = 150;
+
+/**
+ * Choose where a city's traveler stands: deterministic per city, biased toward
+ * the busiest pavement, and never within sight of the spawn.
+ *
+ * ★ O(n), not O(n²). Scoring 3,029 spots against each other is nine million
+ * distance tests; bucketing them into cells the size of the search radius
+ * answers the same question in one pass, and the answer is a BIAS rather than
+ * an exact maximum, so the approximation costs nothing real.
+ *
+ * @param {{x: number, y: number, pose: string, facing: number}[]} spots
+ * @param {string} citySlug
+ * @param {{spawnX?: number, spawnY?: number}} [options]
+ * @returns {{x: number, y: number, facing: number, neighbours: number}|null}
+ */
+export function pickTravelerSpot(spots, citySlug, options = {}) {
+  if (!Array.isArray(spots) || spots.length === 0) return null;
+  const { spawnX = null, spawnY = null } = options;
+  const R = TRAVELER_BUSY_RADIUS_M;
+
+  const key = (x, y) => Math.floor(x / R) + ',' + Math.floor(y / R);
+  const counts = new Map();
+  for (const s of spots)
+    counts.set(key(s.x, s.y), (counts.get(key(s.x, s.y)) ?? 0) + 1);
+
+  // A spot's neighbourhood is its own cell plus the eight around it.
+  const scoreOf = (s) => {
+    const cx = Math.floor(s.x / R);
+    const cy = Math.floor(s.y / R);
+    let n = 0;
+    for (let dx = -1; dx <= 1; dx++)
+      for (let dy = -1; dy <= 1; dy++)
+        n += counts.get(cx + dx + ',' + (cy + dy)) ?? 0;
+    return n;
+  };
+
+  const far =
+    spawnX === null || spawnY === null
+      ? () => true
+      : (s) =>
+          Math.hypot(s.x - spawnX, s.y - spawnY) >= TRAVELER_MIN_FROM_SPAWN_M;
+
+  // A standing figure's spot, so the traveler is not planted mid-stride
+  // through a bench; the pose itself is always 'standing'.
+  let pool = spots.filter((s) => s.pose !== 'sitting' && far(s));
+  // ★ NEVER RETURN NULL FOR A CITY THAT HAS PEOPLE. If nothing is far enough
+  // from the spawn - a small extract, or a spawn in the middle of everything -
+  // the distance is what gives way, not the traveler.
+  if (pool.length === 0) pool = spots.filter((s) => s.pose !== 'sitting');
+  if (pool.length === 0) pool = spots;
+
+  const scored = pool.map((s) => ({ s, n: scoreOf(s) }));
+  scored.sort((a, b) => b.n - a.n || a.s.x - b.s.x || a.s.y - b.s.y);
+  // The busiest tenth, then one of those by the city's own hash - so the spot
+  // is stable per city but not always the single densest, which would put
+  // every city's traveler in the same kind of place.
+  const top = scored.slice(0, Math.max(1, Math.floor(scored.length * 0.1)));
+  let h = 2166136261 >>> 0;
+  const slug = String(citySlug);
+  for (let i = 0; i < slug.length; i++) {
+    h = (h ^ slug.charCodeAt(i)) >>> 0;
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  const pick = top[h % top.length];
+  return {
+    x: pick.s.x,
+    y: pick.s.y,
+    facing: pick.s.facing,
+    neighbours: pick.n,
+  };
+}
+
+/**
  * One blind traveler, built STANDALONE and added to the scene beside the
  * fireworks rather than inside the city group.
  *

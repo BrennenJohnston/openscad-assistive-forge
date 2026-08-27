@@ -112,6 +112,7 @@ import {
   buildFireworks,
   buildRain,
   buildTraveler,
+  pickTravelerSpot,
   RAIN_LEVEL_COUNT,
   RAIN_LEVEL_NAMES,
 } from './city-scene.js';
@@ -194,6 +195,31 @@ const THUNDER_GAP_MS = 30000;
 // blind traveler this sentence IS the map, and the rules behind which names
 // it may use were MEASURED against the real road graph - see city-junction.js
 // and the CW-61 record.
+/**
+ * CW-65 (CW-Q60): the traveler's words.
+ *
+ * ACCESSIBILITY-CRITICAL (D-35), flagged DOUBLY in the round text pack. The
+ * warmer/colder clause below is not decoration and not only the non-visual
+ * path: MEASURED, a whole person is 2.5 x 4.2 character cells at 30 m and the
+ * high-visibility jacket stops separating them from the crowd by about 20 m,
+ * so this sentence is the PRIMARY search instrument for every player.
+ *
+ * US English, no em dashes (UF-3). The traveler speaks for themselves in the
+ * dialog because a found character who is described in the third person is a
+ * specimen rather than a person.
+ */
+const TRAVELER_FOUND_TITLE = 'You found me!';
+const TRAVELER_FOUND_BODY =
+  'Thank you for stopping. I will walk with you from now on. ' +
+  'Look for me near the spot where you start.';
+const TRAVELER_FOUND_DISMISS = 'Close';
+const TRAVELER_FOUND_ANNOUNCE =
+  'You found the traveler. They will be waiting near where you start.';
+/** The legend badge. A real text row with an sr-only word, never an icon -
+ *  the same discipline CW-62 used for the visited tick. */
+const TRAVELER_BADGE_FOUND = 'Traveler found in this city.';
+const TRAVELER_BADGE_UNFOUND = 'Traveler: somewhere in this city.';
+
 const TRAVEL_TITLE = 'Travel here?';
 const TRAVEL_WHERE_CORNER = (a, b, on) =>
   `${on ? 'On' : 'Near'} ${a} and ${b}.`;
@@ -364,6 +390,14 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   }
 
   function handleEscape() {
+    // CW-65: the traveler's bubble is now the innermost thing on screen, and
+    // it opens by WALKING rather than by a keypress - so a player who reaches
+    // for Escape is reaching for it, not for the map or the exit. One Escape,
+    // one dismissal, innermost first (CW-61's rule, one layer deeper).
+    if (!state.refs.found?.hidden) {
+      closeFoundDialog();
+      return;
+    }
     // CW-61: the travel dialog is the innermost thing Escape can close, so it
     // goes first. Cancelling it must not also close the help or leave the
     // game - one Escape, one dismissal.
@@ -736,6 +770,44 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     travelGo.addEventListener('click', () => closeTravelDialog(true));
     travelCancel.addEventListener('click', () => closeTravelDialog(false));
 
+    /**
+     * CW-65 (CW-Q60): the traveler's speech bubble.
+     *
+     * ★ NOT a second `aria-modal`, for exactly CW-61's reason: the layer is
+     * already `role="dialog" aria-modal="true"` and owns the focus trap, and
+     * nesting a second modal inside it tells a screen reader the outer one has
+     * gone away. A focus-managed `role="group"` with its own labelled heading,
+     * like the help panel and the travel dialog before it.
+     */
+    const found = document.createElement('div');
+    found.className = 'city-walk-found';
+    found.id = 'cityWalkFoundDialog';
+    found.setAttribute('role', 'group');
+    found.setAttribute('aria-labelledby', 'cityWalkFoundTitle');
+    found.setAttribute('aria-describedby', 'cityWalkFoundBody');
+    found.hidden = true;
+
+    const foundTitle = document.createElement('h3');
+    foundTitle.id = 'cityWalkFoundTitle';
+    foundTitle.textContent = TRAVELER_FOUND_TITLE;
+    found.appendChild(foundTitle);
+
+    const foundBody = document.createElement('p');
+    foundBody.className = 'city-walk-found-body';
+    foundBody.id = 'cityWalkFoundBody';
+    foundBody.textContent = TRAVELER_FOUND_BODY;
+    found.appendChild(foundBody);
+
+    const foundClose = document.createElement('button');
+    foundClose.type = 'button';
+    foundClose.id = 'cityWalkFoundCloseBtn';
+    foundClose.className = 'btn btn-primary city-walk-btn';
+    foundClose.textContent = TRAVELER_FOUND_DISMISS;
+    found.appendChild(foundClose);
+    layer.appendChild(found);
+
+    foundClose.addEventListener('click', () => closeFoundDialog());
+
     // Landmark legend (CW-10): real text beside the map view.
     const legend = document.createElement('aside');
     legend.className = 'city-walk-legend';
@@ -752,6 +824,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     layer.appendChild(announcer);
 
     state.refs = {
+      found,
+      foundClose,
       contrastBtn,
       themeBtn,
       colourBtn,
@@ -1272,6 +1346,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     }
     legend.appendChild(list);
 
+    // CW-65: the traveler's badge, a sibling of the list rather than a row in
+    // it - refreshLegend indexes that list by game.landmarks[i], so an extra
+    // <li> would shift every landmark's compass direction by one.
+    const badge = document.createElement('p');
+    badge.className = 'city-walk-legend-badge';
+    legend.appendChild(badge);
+
     const hint = document.createElement('p');
     hint.className = 'city-walk-legend-hint';
     hint.textContent = 'L cycles landmarks on the map.';
@@ -1284,6 +1365,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
    * frame — the player cannot move while the map is up.
    */
   function refreshLegend(game) {
+    refreshTravelerBadge(game);
     const items = state.refs.legend.querySelectorAll('li');
     items.forEach((li, i) => {
       const lm = game.landmarks[i];
@@ -1662,6 +1744,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       rain,
       fireworks,
       traveler,
+      spawn,
       lighting,
       marker,
       markerGeom,
@@ -1830,6 +1913,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // CW-64: an unlocked city keeps its button. Read from the same object
     // CW-62 writes, so an older build's progress opens without losing it.
     game.fireworksUnlocked = saved.raw?.fireworksUnlocked === true;
+    // CW-65: the traveler's spot and found-state ride in the SAME object
+    // CW-62 writes, so an older build opens this city without losing either.
+    // This must come after progressRaw is seeded and after the props exist.
+    placeTraveler(game);
     // CW-62: start the marks from whatever the set says, so there is one
     // place the map's state comes from rather than two that can drift.
     game.beacons.setVisited(game.visited);
@@ -2565,6 +2652,140 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     } catch {
       // The pointer is already gone; there is nothing left to release.
     }
+  }
+
+  /**
+   * CW-65 (CW-Q60): how close you have to be for the traveler to speak.
+   *
+   * ★ NOT the landmark radius, and the difference is the whole point. A
+   * landmark enters at 60 m because a landmark is a BUILDING you can see from
+   * across a district. A person is 2.5 x 4.2 character cells at 30 m and stops
+   * being distinguishable from the crowd by about 20 m (measured, CW-65 P1).
+   * 6 m is arm's length in this city - the distance at which you have plainly
+   * walked UP TO someone rather than past them.
+   */
+  const TRAVELER_FIND_RADIUS_M = 6;
+
+  /** Where the companion stands once found: beside the spawn, not on it. */
+  const COMPANION_OFFSET_M = 3;
+
+  /**
+   * Put the traveler where this city's saved state says, or choose a spot and
+   * save it. Once found they are the COMPANION and stand by the spawn instead.
+   */
+  function placeTraveler(game) {
+    const saved = game.progressRaw?.traveler;
+    if (saved?.found) {
+      // ★ The reward is that they are THERE, every time, without being
+      // underfoot: a companion standing on the spawn would be the first thing
+      // a player collides with.
+      const facing = game.walkState.headingRad ?? 0;
+      game.traveler.place(
+        game.spawn.x + Math.cos(facing) * COMPANION_OFFSET_M,
+        game.spawn.y + Math.sin(facing) * COMPANION_OFFSET_M,
+        facing + Math.PI
+      );
+      game.travelerFound = true;
+      game.travelerSpot = null;
+      return;
+    }
+    // A spot saved before it was found is REUSED, so a city does not move its
+    // traveler between visits. Only a city with no saved spot picks one.
+    const spot =
+      saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)
+        ? saved
+        : pickTravelerSpot(game.props.figureSpots, game.city.slug, {
+            spawnX: game.spawn.x,
+            spawnY: game.spawn.y,
+          });
+    if (!spot) return;
+    game.travelerFound = false;
+    game.travelerSpot = { x: spot.x, y: spot.y, facing: spot.facing ?? 0 };
+    game.traveler.place(spot.x, spot.y, spot.facing ?? 0);
+    // Written on first entry so the spot survives a reload even unfound - the
+    // traveler is not re-rolled by closing the tab.
+    game.progressRaw = {
+      ...game.progressRaw,
+      traveler: {
+        x: spot.x,
+        y: spot.y,
+        facing: spot.facing ?? 0,
+        found: false,
+      },
+    };
+    writeCityProgress(game.city.slug, {
+      visited: game.visited,
+      allFound: game.announcedAllFound,
+      raw: game.progressRaw,
+    });
+  }
+
+  /**
+   * How far the player is from an unfound traveler, or null when there is
+   * nothing to say - before one is placed, and after they are found. The
+   * "empty clause is never spoken" rule whereAmIMessage already sets.
+   */
+  function travelerDistanceM(game) {
+    if (!game?.travelerSpot || game.travelerFound) return null;
+    return Math.hypot(
+      game.travelerSpot.x - game.walkState.x,
+      game.travelerSpot.y - game.walkState.y
+    );
+  }
+
+  /** Walked close enough? Then they speak, once, and the city remembers. */
+  function checkTravelerFind(game) {
+    const d = travelerDistanceM(game);
+    if (d === null || d > TRAVELER_FIND_RADIUS_M) return;
+    game.travelerFound = true;
+    game.progressRaw = {
+      ...game.progressRaw,
+      traveler: { ...(game.progressRaw?.traveler ?? {}), found: true },
+    };
+    writeCityProgress(game.city.slug, {
+      visited: game.visited,
+      allFound: game.announcedAllFound,
+      raw: game.progressRaw,
+    });
+    refreshTravelerBadge(game);
+    // ACCESSIBILITY-CRITICAL STRING (D-35) - flagged for owner review.
+    announceInLayer(TRAVELER_FOUND_ANNOUNCE);
+    openFoundDialog();
+  }
+
+  function openFoundDialog() {
+    state.refs.found.hidden = false;
+    state.refs.foundClose.focus();
+  }
+
+  function closeFoundDialog() {
+    if (state.refs.found.hidden) return;
+    state.refs.found.hidden = true;
+    // Focus goes to a real control rather than <body>, which is D-59 and kills
+    // every key for the rest of the session.
+    state.refs.helpBtn?.focus();
+  }
+
+  /**
+   * The badge row. A REAL TEXT row with an sr-only word, never an icon and
+   * never a colour - CW-62's legend tick pattern, for its reasons.
+   *
+   * ★ It sits OUTSIDE the numbered landmark list on purpose: that list is
+   * indexed by game.landmarks[i] in refreshLegend, so an extra <li> would
+   * silently shift every landmark's direction by one.
+   */
+  function refreshTravelerBadge(game) {
+    const row = state.refs.legend?.querySelector('.city-walk-legend-badge');
+    if (!row) return;
+    // ★ NO sr-only COMPANION WORD HERE, AND THAT IS A DELIBERATE DEPARTURE
+    // FROM CW-62's TICK. That row needs one because its mark is a GLYPH ('✓')
+    // and a glyph reads badly; this row is a whole sentence in words, so an
+    // added ' Found.' just makes a screen reader say "Traveler found in this
+    // city. Found." Visible text that already says the thing does not want a
+    // second copy for assistive tech.
+    row.textContent = game.travelerFound
+      ? TRAVELER_BADGE_FOUND
+      : TRAVELER_BADGE_UNFOUND;
   }
 
   /**
@@ -3709,6 +3930,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
             markVisited(game, near);
           }
         }
+        // CW-65: and whether you have walked up to the traveler. Checked on
+        // the same movement frames a landmark is, so standing still never
+        // triggers it and a single step can never step PAST the radius - the
+        // walk is stepped in hops of PLAYER_RADIUS_M / 2 (CW-48).
+        checkTravelerFind(game);
       }
       game.altView.invalidate();
       updateHud();
