@@ -75,6 +75,12 @@ import {
   CHAR_SCALE_STEP,
   SPEED_LABEL_STEP,
 } from './walk-controls.js';
+import {
+  MAP_STYLES,
+  DEFAULT_MAP_STYLE,
+  mapStyleById,
+  cycleMapStyle,
+} from './city-map-styles.js';
 import { initAltView } from '../_hfm.js';
 import {
   CALIBRATION_CANDIDATES,
@@ -110,6 +116,7 @@ import {
   STORAGE_KEY_CITY_WALK_FONT_SCALE,
   STORAGE_KEY_CITY_WALK_CALIBRATED_FLOOR,
   STORAGE_KEY_CITY_WALK_COLOUR,
+  STORAGE_KEY_CITY_WALK_MAP_STYLE,
   STORAGE_KEY_CITY_WALK_CAMERA_PANEL,
 } from '../storage-keys.js';
 
@@ -221,6 +228,12 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     rafId: null,
     game: null, // per-city resources, see loadCity()
     helpOpen: false,
+    // CW-60: which of the four map styles is showing. Absent storage means
+    // Standard, so a player who never touches this sees the map they always
+    // have.
+    mapStyle: mapStyleById(
+      safeGetItem(STORAGE_KEY_CITY_WALK_MAP_STYLE) ?? DEFAULT_MAP_STYLE
+    ).id,
     // keys is the union frame() reads; keyHeld and btnHeld are its two
     // sources, so a click on Forward can never cancel a held Arrow Up.
     keys: new Set(),
@@ -2688,6 +2701,12 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     if (!game.mapView) setTeleportArmed(false, false);
     game.city3d.setMapView(game.mapView);
     game.props.setMapView(game.mapView);
+    // CW-60: the style is a map state, so it is applied on the way IN and
+    // never has to be undone on the way out - setMapView restores the street.
+    if (game.mapView) {
+      game.city3d.setMapStyle(state.mapStyle);
+      game.city3d.setMapZoom(game.mapCam.zoom);
+    }
     // CW-20: the weather belongs to the street. Seen from overhead the drops
     // streak diagonally across the whole map and read as scratches on the
     // picture rather than as rain — caught by eye in the four-city tour.
