@@ -179,6 +179,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Fireworks when you finish a city** (CW-64) - find all twelve landmarks and the sky over the
+  city lights up for about twenty seconds: bursts on a ring around you, well above the rooftops,
+  drawn as characters like everything else here. Afterwards a Fireworks button appears and the Y key
+  replays it whenever you like, and the city remembers that you earned it. The overhead map shows
+  the bursts where they really are, so you can watch it from up there instead. **If you use reduced
+  motion you still get a celebration**: the same bursts, composed and held still for a few seconds
+  in front of you, with a spoken line saying what it is and why it is not moving - because a reward
+  that answers "no" is worse than one that answers quietly. The show was measured against WCAG
+  2.3.1, the standard that protects people who can have seizures from flashing: it produces no
+  flashes at all, and the whole picture's brightness moves about a ninth of what a single flash
+  would need. The instrument that says so was first proven able to catch seventeen flashes in a
+  deliberately strobing version
+
 - **Two Seattle landmarks now look like themselves** (CW-63) - every building in the City Walk is
   drawn by one pipeline from its own OpenStreetMap data, on purpose, because a city where the code
   knows about particular buildings stops working when the data moves. Two named landmarks are now a

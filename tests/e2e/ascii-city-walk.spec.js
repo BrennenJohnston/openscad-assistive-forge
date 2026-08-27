@@ -1854,15 +1854,50 @@ test.describe('ASCII City Walk — fireworks over the city (CW-64, CW-Q59)', () 
       })
     })
 
-    expect(measured.length).toBeGreaterThan(60)
-
-    // A general flash is a PAIR of opposing relative-luminance changes of at
-    // least 10% where the darker is below 0.80 (the threshold quoted in the
-    // plan). Found with a hysteresis zig-zag: pairing adjacent local extrema
-    // instead splits every real swing into micro-steps and reports nothing.
-    const lum = measured.map((m) => m[1])
+    /**
+     * ★★ THE BOUND IS THE ASSERTION AND THE COUNT IS THE CORROBORATION,
+     * BECAUSE AT THIS FRAME RATE THE COUNT CANNOT FAIL.
+     *
+     * 2.3.1's general flash is a PAIR of opposing relative-luminance changes
+     * of at least 10% where the darker is below 0.80. So if the WHOLE show's
+     * luminance range never reaches 10%, no such pair can exist and the count
+     * is provably zero rather than merely measured zero. The bound is a
+     * SUFFICIENT CONDITION, and it survives a slow sampler: a burst blooms
+     * over 1.6 s, so a handful of samples still catches its peak.
+     *
+     * The count does not survive it. Measured here, this sampler runs at about
+     * SEVEN samples a second - the e2e renders through SwiftShader where a
+     * headed browser gives sixty - and a flash lasting 90 ms is aliased away.
+     * Red-proven twice: with the show turned into a deliberate strobe the
+     * range went to 0.123 and then 0.517, and the count assertion passed BOTH
+     * times while the bound failed both times. A guard that cannot fail is not
+     * a guard, so the bound goes first (CW-61's lesson about assertion order)
+     * and the count rides behind it as a second opinion.
+     *
+     * The headed measurement, which CAN count, is in the release record: zero
+     * general flashes over 1,436 samples at 59.8/s, and the same instrument
+     * reads 17 flashes with a worst second of 6 on the strobe.
+     */
     const t = measured.map((m) => m[0])
+    const lum = measured.map((m) => m[1])
+    const spanS = (t[t.length - 1] - t[0]) / 1000
+    const rate = measured.length / spanS
+    expect(measured.length).toBeGreaterThan(60)
+    // Enough resolution to catch a bloom's peak, which is all the bound needs.
+    expect(rate * 1.6).toBeGreaterThan(3)
+
     const TH = 0.1
+    const swing = Math.max(...lum) - Math.min(...lum)
+    expect(
+      swing,
+      `the show swung ${swing.toFixed(4)} of relative luminance over ` +
+        `${spanS.toFixed(1)}s at ${rate.toFixed(1)} samples/s; a general flash ` +
+        `needs a PAIR of opposing changes of at least ${TH}, so a range under ` +
+        `that is zero flashes by construction`
+    ).toBeLessThan(TH)
+
+    // The literal count, found with a hysteresis zig-zag. Pairing adjacent
+    // local extrema instead splits every real swing into micro-steps.
     const turns = []
     let dir = 0
     let ext = lum[0]
@@ -1926,14 +1961,9 @@ test.describe('ASCII City Walk — fireworks over the city (CW-64, CW-Q59)', () 
         flashes.filter((x) => x >= f && x < f + 1000).length
       )
     }
-    const swing = Math.max(...lum) - Math.min(...lum)
     expect(
       worst,
-      `worst one-second window held ${worst} general flashes; the whole show ` +
-        `swung ${swing.toFixed(4)} of relative luminance`
+      `worst one-second window held ${worst} general flashes`
     ).toBeLessThanOrEqual(3)
-    // And the margin, stated rather than implied: the whole show's swing is
-    // well under what ONE flash needs, let alone three in a second.
-    expect(swing).toBeLessThan(TH)
   })
 })
