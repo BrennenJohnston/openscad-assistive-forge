@@ -217,6 +217,25 @@ const TRAVELER_FOUND_ANNOUNCE =
   'You found the traveler. They will be waiting near where you start.';
 /** The legend badge. A real text row with an sr-only word, never an icon -
  *  the same discipline CW-62 used for the visited tick. */
+/**
+ * ★★ THE WARMER/COLDER CLAUSE, AND IT IS NOT AN ACCESSIBILITY AFTERTHOUGHT.
+ *
+ * MEASURED (CW-65 P1): a whole person is 2.5 x 4.2 character cells at 30 m,
+ * the jacket stops separating the traveler from the crowd by about 20 m, and
+ * the city is 2,627 x 2,644 m. Nobody finds one figure in that by looking.
+ * This sentence is the PRIMARY search instrument for every player; the jacket
+ * and the cane are what make the traveler worth walking toward once near.
+ *
+ * The bands are distances a player can act on, not adjectives: each one says
+ * roughly how far, so "warmer" is a direction to walk rather than a mood.
+ */
+const TRAVELER_BANDS = [
+  [15, 'You can hear a cane tapping close by.'],
+  [40, 'You are very near the traveler.'],
+  [120, 'You are getting close to the traveler.'],
+  [350, 'The traveler is somewhere in this part of the city.'],
+  [Infinity, 'The traveler is a long way from here.'],
+];
 const TRAVELER_BADGE_FOUND = 'Traveler found in this city.';
 const TRAVELER_BADGE_UNFOUND = 'Traveler: somewhere in this city.';
 
@@ -3738,18 +3757,29 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     const facing = headingLabel(game.walkState.headingRad);
     const street = game.streetName;
     const landmark = game.nearLandmark;
+    let where;
     if (street && game.streetOn) {
-      return landmark
+      where = landmark
         ? `You are on ${street}, near ${landmark}, facing ${facing}.`
         : `You are on ${street}, facing ${facing}.`;
-    }
-    if (street) {
-      return landmark
+    } else if (street) {
+      where = landmark
         ? `You are near ${street} and ${landmark}, facing ${facing}.`
         : `You are near ${street}, facing ${facing}.`;
+    } else if (landmark) {
+      where = `You are near ${landmark}, facing ${facing}.`;
+    } else {
+      where = `You are not near a named street, facing ${facing}.`;
     }
-    if (landmark) return `You are near ${landmark}, facing ${facing}.`;
-    return `You are not near a named street, facing ${facing}.`;
+    // CW-65: the fifth clause, appended to whichever of the four is true.
+    // ★ SILENT WHEN THERE IS NOTHING TO SAY - before a traveler is placed and
+    // after they are found - which is this function's own standing rule: "an
+    // empty clause is never spoken, and a street the player is not on is never
+    // claimed."
+    const d = travelerDistanceM(game);
+    if (d === null) return where;
+    const band = TRAVELER_BANDS.find(([limit]) => d < limit);
+    return `${where} ${band[1]}`;
   }
 
   function sayWhereYouAre() {

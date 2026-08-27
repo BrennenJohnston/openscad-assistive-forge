@@ -2012,3 +2012,242 @@ test.describe('ASCII City Walk — fireworks over the city (CW-64, CW-Q59)', () 
     ).toBeLessThanOrEqual(3)
   })
 })
+
+test.describe('ASCII City Walk — find the traveler (CW-65, CW-Q60)', () => {
+  const KEY = 'openscad-forge-city-walk-progress-seattle'
+  const announcer = (page) => page.locator('#cityWalkAnnouncer')
+  const bubble = (page) => page.locator('#cityWalkFoundDialog')
+
+  const state = (page) =>
+    page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const at = g.traveler.position()
+      return {
+        found: Boolean(g.travelerFound),
+        spot: g.travelerSpot,
+        placed: g.traveler.isPlaced(),
+        at,
+        fromSpawn: at
+          ? Math.hypot(at[0] - g.spawn.x, at[1] - g.spawn.y)
+          : null,
+      }
+    })
+
+  /**
+   * Stand the player `d` metres due south of the traveler and face them.
+   * The camera is posed through the app's own firstPersonPose, never by
+   * writing walkState and hoping it followed (CW-63).
+   */
+  const standOff = (page, d) =>
+    page.evaluate(async (dist) => {
+      const g = window.__cityWalkGame
+      const wc = await import('/src/js/game/walk-controls.js')
+      const s = g.travelerSpot
+      g.walkState.x = s.x
+      g.walkState.y = s.y - dist
+      g.walkState.headingRad = 0
+      const p = wc.firstPersonPose(g.walkState)
+      g.fpCamera.position.set(...p.eye)
+      g.fpCamera.lookAt(...p.target)
+      g.altView.invalidate()
+    }, d)
+
+  test('★★ stands one traveler far from the spawn, and remembers where (CW-65)', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const first = await state(page)
+    expect(first.placed).toBe(true)
+    expect(first.found).toBe(false)
+    // The reward is walked to. 150 m is the floor the placement enforces;
+    // finding them in the first ten seconds is not a search.
+    expect(
+      Math.hypot(
+        first.spot.x - (await page.evaluate(() => window.__cityWalkGame.spawn.x)),
+        first.spot.y - (await page.evaluate(() => window.__cityWalkGame.spawn.y))
+      )
+    ).toBeGreaterThan(150)
+
+    // ★ The spot is WRITTEN on first entry, so closing the tab cannot re-roll
+    // the traveler - and it rides in CW-62's object rather than a sibling key.
+    const stored = await page.evaluate(
+      (k) => JSON.parse(localStorage.getItem(k)),
+      KEY
+    )
+    expect(stored.traveler.found).toBe(false)
+    expect(stored.traveler.x).toBeCloseTo(first.spot.x, 6)
+    expect(Array.isArray(stored.visited)).toBe(true)
+
+    // And a second visit finds them in the SAME place. Through launchGame,
+    // not page.reload(): the unlock rides in ITS query string, and a bare
+    // reload comes back to a gated card that never opens.
+    await launchGame(page)
+    await enterCity(page)
+    const second = await state(page)
+    expect(second.spot.x).toBeCloseTo(first.spot.x, 9)
+    expect(second.spot.y).toBeCloseTo(first.spot.y, 9)
+    expect(second.found).toBe(false)
+  })
+
+  test('★★ walking up to them opens a focus-safe bubble that persists (CW-65)', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // Start OUTSIDE the 6 m radius: the promise is that WALKING UP does it.
+    await standOff(page, 9)
+    await expect(bubble(page)).toBeHidden()
+
+    // ★ Focus has to be in the game, not on a header button, or the walk keys
+    // never reach the controller and the find "fails" for no reason at all.
+    await page.locator('#cityWalkViewport').click({ position: { x: 400, y: 300 } })
+    // ★ HELD UNTIL IT OPENS, NOT FOR A FIXED TIME. A wall-clock hold is a bet
+    // on the frame rate, and this suite renders through SwiftShader at about
+    // seven frames a second where a headed browser gives sixty - 700 ms of
+    // walking is metres apart between the two. The walk steps in hops of
+    // PLAYER_RADIUS_M / 2, so it cannot tunnel past a 6 m radius however slow
+    // the frames are; what varies is only how long the last three metres take.
+    await page.keyboard.down('ArrowUp')
+    await expect(bubble(page)).toBeVisible({ timeout: 25000 })
+    await page.keyboard.up('ArrowUp')
+    await expect(announcer(page)).toContainText('You found the traveler')
+    // Focus moves to the one control the bubble has, so a keyboard player is
+    // not left hunting for it.
+    expect(await page.evaluate(() => document.activeElement?.id)).toBe(
+      'cityWalkFoundCloseBtn'
+    )
+
+    const stored = await page.evaluate(
+      (k) => JSON.parse(localStorage.getItem(k)),
+      KEY
+    )
+    expect(stored.traveler.found).toBe(true)
+
+    // Escape closes the bubble and NOTHING ELSE - it is the innermost thing
+    // on screen, one layer inside the travel dialog (CW-61's chain).
+    await page.keyboard.press('Escape')
+    await expect(bubble(page)).toBeHidden()
+    await expect(page.locator('#cityWalkLayer')).toBeVisible()
+    // Focus lands on a real control rather than <body>, which is D-59 and
+    // kills every key for the rest of the session.
+    const focus = await page.evaluate(() => document.activeElement?.id)
+    expect(focus).toBeTruthy()
+    expect(focus).not.toBe('')
+  })
+
+  test('★★ a city already found greets you with the companion and the badge (CW-65)', async ({
+    page,
+  }) => {
+    // Seeded rather than walked, so this case tests the RE-ENTRY path on its
+    // own - the walk is the previous case's job.
+    await page.addInitScript(
+      ([key, value]) => localStorage.setItem(key, value),
+      [
+        KEY,
+        JSON.stringify({
+          visited: [],
+          allFound: false,
+          traveler: { x: 400, y: 500, facing: 0, found: true },
+        }),
+      ]
+    )
+    await launchGame(page)
+    await enterCity(page)
+
+    const s = await state(page)
+    expect(s.found).toBe(true)
+    expect(s.placed).toBe(true)
+    // The companion stands BESIDE the spawn, not on it: a companion underfoot
+    // is the first thing a player collides with.
+    expect(s.fromSpawn).toBeGreaterThan(0.5)
+    expect(s.fromSpawn).toBeLessThan(6)
+
+    await page.keyboard.press('KeyM')
+    const badge = page.locator('.city-walk-legend-badge')
+    await expect(badge).toContainText('Traveler found')
+    // ★ A TEXT row, never an icon, and OUTSIDE the numbered list: refreshLegend
+    // indexes that list by game.landmarks[i], so an extra <li> would shift
+    // every landmark's compass direction by one.
+    expect(
+      await page.evaluate(
+        () =>
+          document.querySelector('.city-walk-legend-badge')?.closest('li') ===
+          null
+      )
+    ).toBe(true)
+  })
+
+  test('★★ X carries the search, and goes quiet once they are found (CW-65)', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const say = async (d) => {
+      await standOff(page, d)
+      await page.evaluate(() => {
+        document.getElementById('cityWalkAnnouncer').textContent = ''
+      })
+      await page.keyboard.press('KeyX')
+      await expect(announcer(page)).not.toHaveText('')
+      return page.evaluate(
+        () => document.getElementById('cityWalkAnnouncer').textContent
+      )
+    }
+
+    /**
+     * ★★ THIS CLAUSE IS THE SEARCH, NOT AN ACCESSIBILITY EXTRA, AND THE
+     * MEASUREMENT SAYS SO: a whole person is 2.5 x 4.2 character cells at
+     * 30 m, the jacket stops separating them from the crowd by about 20 m,
+     * and the city is 2.6 km across. Nobody finds one figure in that by
+     * looking, so the bands have to genuinely track distance.
+     */
+    const near = await say(25)
+    const mid = await say(200)
+    const far = await say(900)
+    expect(near).not.toBe(mid)
+    expect(mid).not.toBe(far)
+    expect(near).toContain('very near the traveler')
+    expect(far).toContain('a long way from here')
+    // Every band still carries the WHERE sentence it is appended to, because
+    // an announcement that replaced the street name would cost a blind player
+    // the map to buy them the game.
+    for (const said of [near, mid, far]) expect(said).toContain('facing')
+
+    // ★ Silent once found: "an empty clause is never spoken" is this
+    // function's own standing rule, and a warmer/colder hint about somebody
+    // standing beside you is noise.
+    await page.evaluate(() => {
+      window.__cityWalkGame.travelerFound = true
+      document.getElementById('cityWalkAnnouncer').textContent = ''
+    })
+    await page.keyboard.press('KeyX')
+    await expect(announcer(page)).not.toHaveText('')
+    const after = await page.evaluate(
+      () => document.getElementById('cityWalkAnnouncer').textContent
+    )
+    expect(after).not.toContain('traveler')
+    expect(after).toContain('facing')
+  })
+
+  test('axe: the traveler bubble has no violations (CW-65)', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+    await standOff(page, 9)
+    await page.locator('#cityWalkViewport').click({ position: { x: 400, y: 300 } })
+    await page.keyboard.down('ArrowUp')
+    await expect(bubble(page)).toBeVisible({ timeout: 25000 })
+    await page.keyboard.up('ArrowUp')
+
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .include('#cityWalkLayer')
+      .analyze()
+    expectOnlyAllowedViolations(results)
+  })
+})
