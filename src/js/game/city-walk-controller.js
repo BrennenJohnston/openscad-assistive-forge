@@ -612,6 +612,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       cameraPanel,
       mapBtn: toolbar.mapBtn,
       fastBtn: toolbar.fastBtn,
+      viewZone: toolbar.viewZone,
       hud,
       hudStatus,
       help,
@@ -746,18 +747,6 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
           press: () => adjustWalkSpeed(SPEED_LABEL_STEP),
           views: 'both',
         },
-        // CW-35: Fast moved here when the Move group retired. The Camera
-        // panel has no equivalent, and Shift is a KEYBOARD route only — with
-        // no button, anyone walking the city by mouse or touch would have
-        // lost the ability to hurry entirely. It belongs with Speed anyway.
-        {
-          id: 'cityWalkFastBtn',
-          label: 'Fast',
-          keys: 'Shift (hold)',
-          press: toggleFastWalk,
-          toggle: true,
-          views: 'street',
-        },
       ],
     },
     {
@@ -780,7 +769,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       ],
     },
     {
-      name: 'Weather',
+      // CW-59: this group was 'Weather' and held Photo beside Rain. Rain is a
+      // street-only control and now lives in the view zone, and a group of one
+      // still captioned Weather would have been describing a button that
+      // saves a picture.
+      name: 'Picture',
       buttons: [
         {
           id: 'cityWalkPhotoBtn',
@@ -788,14 +781,6 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
           keys: 'P',
           press: savePhoto,
           views: 'both',
-        },
-        {
-          id: 'cityWalkRainBtn',
-          label: 'Rain',
-          keys: 'G',
-          press: cycleRain,
-          toggle: true,
-          views: 'street',
         },
       ],
     },
@@ -809,6 +794,80 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
           press: toggleMapView,
           toggle: true,
           views: 'both',
+        },
+      ],
+    },
+    {
+      name: 'Landmarks',
+      buttons: [
+        {
+          id: 'cityWalkLandmarkPrevBtn',
+          label: 'Previous',
+          keys: 'Shift + L',
+          press: () => cycleLandmark(-1),
+          views: 'both',
+        },
+        {
+          id: 'cityWalkLandmarkNextBtn',
+          label: 'Next',
+          keys: 'L',
+          press: () => cycleLandmark(1),
+          views: 'both',
+        },
+        // CW-27: wayfinding belongs beside the landmarks, because it answers
+        // the same question a player asks when they are lost.
+        {
+          id: 'cityWalkWhereBtn',
+          label: 'Where am I?',
+          keys: 'X',
+          press: sayWhereYouAre,
+          views: 'both',
+        },
+      ],
+    },
+    {
+      /**
+       * ★★ THE VIEW ZONE (CW-59, CW-Q61). Every button that exists in only
+       * one view lives HERE, at the far end behind a divider, and nowhere
+       * else.
+       *
+       * Before this, view-only buttons sat inside the group they belonged to
+       * by meaning - Fast inside Speed, Rain inside Weather, the map controls
+       * inside Map - and hiding them made the whole strip re-lay-out. Measured
+       * on a 1280px window: **all NINE shared buttons moved**, by up to
+       * 186 px, and some moved LEFT while others moved RIGHT, because the
+       * toolbar centres itself and the total width changed. A player who
+       * reaches for Larger in the street view found Photo under the cursor
+       * after switching to the map.
+       *
+       * With every view-only button after every shared one, the shared zone
+       * cannot move: nothing that changes width is ever to its left.
+       *
+       * The caption swaps with the view because that is the honest label for
+       * a region whose contents come and go.
+       */
+      name: 'Street only',
+      viewZone: true,
+      buttons: [
+        // CW-35: Fast lived with Speed when the Move group retired, and the
+        // reasoning still holds - Shift is a keyboard-only route, so without
+        // a button nobody on mouse or touch could hurry. It is here now
+        // because it is street-only, not because it stopped belonging there.
+        {
+          id: 'cityWalkFastBtn',
+          label: 'Fast',
+          keys: 'Shift (hold)',
+          press: toggleFastWalk,
+          toggle: true,
+          views: 'street',
+        },
+        {
+          id: 'cityWalkRainBtn',
+          label: 'Rain',
+          keys: 'G',
+          press: cycleRain,
+          toggle: true,
+          views: 'street',
         },
         {
           id: 'cityWalkCenterBtn',
@@ -845,34 +904,6 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
         },
       ],
     },
-    {
-      name: 'Landmarks',
-      buttons: [
-        {
-          id: 'cityWalkLandmarkPrevBtn',
-          label: 'Previous',
-          keys: 'Shift + L',
-          press: () => cycleLandmark(-1),
-          views: 'both',
-        },
-        {
-          id: 'cityWalkLandmarkNextBtn',
-          label: 'Next',
-          keys: 'L',
-          press: () => cycleLandmark(1),
-          views: 'both',
-        },
-        // CW-27: wayfinding belongs beside the landmarks, because it answers
-        // the same question a player asks when they are lost.
-        {
-          id: 'cityWalkWhereBtn',
-          label: 'Where am I?',
-          keys: 'X',
-          press: sayWhereYouAre,
-          views: 'both',
-        },
-      ],
-    },
   ];
 
   /**
@@ -894,6 +925,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     const buttons = [];
     let mapBtn = null;
     let fastBtn = null;
+    let viewZone = null;
 
     for (const group of TOOLBAR_GROUPS) {
       const groupEl = document.createElement('div');
@@ -912,6 +944,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       labelEl.textContent = group.name;
       groupEl.appendChild(labelEl);
 
+      if (group.viewZone) {
+        groupEl.classList.add('city-walk-toolbar-view-zone');
+        viewZone = { groupEl, labelEl };
+      }
+
       for (const spec of group.buttons) {
         const btn = makeToolbarButton(spec);
         groupEl.appendChild(btn);
@@ -923,7 +960,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       el.appendChild(groupEl);
     }
 
-    return { el, buttons, mapBtn, fastBtn };
+    return { el, buttons, mapBtn, fastBtn, viewZone };
   }
 
   function makeToolbarButton(spec) {
@@ -990,9 +1027,16 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // The Camera panel reads the same view flag and relabels itself: the same
     // arrow that walks in the street pans over the map, and it has to say so.
     state.refs.cameraPanel?.syncView();
-    const { toolbarButtons, mapBtn, fastBtn } = state.refs;
+    const { toolbarButtons, mapBtn, fastBtn, viewZone } = state.refs;
     if (!toolbarButtons) return;
     const mapView = Boolean(state.game?.mapView);
+
+    // CW-59: the zone says which view it is showing. Its caption is the only
+    // thing in the strip that changes wording, and it sits INSIDE the zone,
+    // so it cannot move a shared button however long the word is.
+    if (viewZone) {
+      viewZone.labelEl.textContent = mapView ? 'Map only' : 'Street only';
+    }
 
     mapBtn?.setAttribute('aria-pressed', mapView ? 'true' : 'false');
     fastBtn?.setAttribute('aria-pressed', state.fastWalk ? 'true' : 'false');

@@ -326,6 +326,59 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     await expect(btn(page, 'cityWalkCamViewFront')).toBeVisible()
   })
 
+  test('★★ switching view moves NO shared toolbar button (CW-59)', async ({
+    page,
+  }) => {
+    // ★★ THE DEFECT THIS REPLACES WAS MEASURED, NOT IMAGINED. On a 1280px
+    // window every one of the NINE shared buttons moved when the view
+    // switched - up to 186 px - and they moved in BOTH directions: Slower
+    // went 138 px left while Previous went 138 px right. A player reaching
+    // for Larger in the street found Photo under the cursor on the map.
+    //
+    // Two things caused it together, and only fixing both works. View-only
+    // buttons sat INSIDE the group they belonged to by meaning, so hiding
+    // them changed the width of a group in the middle of the strip; and the
+    // strip CENTRED itself, which turns any width change anywhere into a
+    // position change everywhere. The buttons that moved never changed at all.
+    await launchGame(page)
+    await enterCity(page)
+
+    const positions = () =>
+      page.evaluate(() =>
+        Object.fromEntries(
+          [...document.querySelectorAll('#cityWalkToolbar button')]
+            .filter((b) => !b.hidden)
+            .map((b) => [b.id, Math.round(b.getBoundingClientRect().left)])
+        )
+      )
+
+    const street = await positions()
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
+    const map = await positions()
+
+    // Every button visible in BOTH views is a shared button, and every one of
+    // them must be at the same x. Nine of them, so this is not vacuous - a
+    // guard that found no shared buttons would pass while proving nothing.
+    const shared = Object.keys(street).filter((id) => id in map)
+    expect(shared.length).toBeGreaterThanOrEqual(9)
+    for (const id of shared) {
+      expect(map[id], `${id} moved`).toBe(street[id])
+    }
+
+    // And the view zone really is the far end: every view-only button starts
+    // after every shared one. That is WHY the shared zone cannot move, so it
+    // is worth asserting rather than trusting.
+    const lastShared = Math.max(...shared.map((id) => map[id]))
+    const mapOnly = Object.keys(map).filter((id) => !(id in street))
+    expect(mapOnly.length).toBeGreaterThanOrEqual(4)
+    for (const id of mapOnly) {
+      expect(map[id], `${id} is not past the shared zone`).toBeGreaterThan(
+        lastShared
+      )
+    }
+  })
+
   test('Enter on a hold button takes one step and then stops', async ({
     page,
   }) => {
