@@ -1410,11 +1410,6 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
 
     // Landmarks (CW-10): beacons on the map, a legend, proximity text.
     const landmarks = extractLandmarks(model);
-    const beacons = buildLandmarkBeacons(landmarks);
-    beacons.group.visible = false;
-    scene.add(beacons.group);
-    buildLegend(landmarks);
-
     // Bright beacon marking the player in the top-down map view, sized
     // relative to the city so it stays visible at map scale.
     const spanM = Math.max(
@@ -1422,6 +1417,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       model.boundsM.maxY - model.boundsM.minY,
       100
     );
+
+    // CW-62: the landmark marks need the city's span for the same reason the
+    // player's marker does - a mark is a screen size, not a number of metres.
+    const beacons = buildLandmarkBeacons(landmarks, spanM);
+    beacons.group.visible = false;
+    scene.add(beacons.group);
+    buildLegend(landmarks);
     const markerSize = Math.max(14, spanM * 0.025);
     const markerGeom = new BoxGeometry(markerSize, markerSize, 120);
     // CW-40: never occluded. Once the marker scales with zoom (see
@@ -1747,6 +1749,9 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // purpose — a fresh city is a fresh walk, and nothing is stored.
     game.visited = new Set();
     game.announcedAllFound = false;
+    // CW-62: start the marks from whatever the set says, so there is one
+    // place the map's state comes from rather than two that can drift.
+    game.beacons.setVisited(game.visited);
     game.rainLevel = null;
     game.thunderStartMs = 0;
     game.nextThunderMs = THUNDER_GAP_MS;
@@ -2465,6 +2470,9 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   function markVisited(game, name) {
     if (game.visited.has(name)) return;
     game.visited.add(name);
+    // CW-62: the map's marks carry the same state the legend's ticks do.
+    game.beacons.setVisited(game.visited);
+    game.altView.invalidate();
     refreshLegend(game);
     updateHud();
     if (
@@ -2914,6 +2922,9 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // CW-61: the circle is the same family and shares the same number. Two
     // marks that mean one thing between them cannot drift apart in size.
     game.pickMark.scale.set(markerScale, markerScale, 1);
+    // CW-62: and so do the landmark diamonds. Three marks on one map, one
+    // number deciding how big a mark is.
+    game.beacons.setScale(markerScale);
 
     // CW-60: the wayfinding marks are sized on SCREEN, so they belong to the
     // same seam the marker's own scale does - every zoom, every frame of a

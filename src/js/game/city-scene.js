@@ -37,6 +37,7 @@ import {
   BufferAttribute,
   BufferGeometry,
   CanvasTexture,
+  CircleGeometry,
   Color,
   DirectionalLight,
   ExtrudeGeometry,
@@ -5404,39 +5405,139 @@ export function buildStreetProps(model, collision = null) {
 }
 
 /**
- * Landmark beacons for the map view (CW-10): one slim pillar per landmark,
- * dim by default, the selected one bright white. MeshBasicMaterial ignores
- * lighting, so beacons read the same at every ambient level.
+ * Landmark marks for the map view (CW-10, redesigned by CW-62).
+ *
+ * ★★ WHAT WAS HERE WAS NOT DIM, IT WAS NOT THERE. CW-10 drew one 7x7x90
+ * pillar per landmark, and the owner's complaint that cycling landmarks
+ * "only moves the camera" turned out to be arithmetic. MEASURED at CW-62,
+ * blacked out at the same pose against a same-run control that read 0.000%:
+ *
+ *   zoom 0.4   a beacon is 1.36 px wide, 0.34 CELLS   the layer owns 0.000%
+ *   zoom 1     3.39 px, 0.85 cells                    0.002%
+ *   zoom 2     6.78 px, 1.69 cells                    0.013%
+ *
+ * The converter's cell is 4 px wide, so at the zoom a player opens the map at
+ * a whole landmark is smaller than one character. Twelve of them together
+ * owned two thousandths of one per cent of the frame - and this round REFUSED
+ * fallen leaves at under one per cent (CW-56).
+ *
+ * So the marks are rebuilt to the laws the map's other marks already obey:
+ *
+ * ★ A MARK IS A SCREEN SIZE, NOT A NUMBER OF METRES (CW-60, photographed
+ *   empty twice to learn it). Size comes from a fraction of the CITY'S span
+ *   and the caller scales the root by the same `2.2 / zoom` clamp the player
+ *   marker and the pick circle use, so a mark holds its footprint in glyphs
+ *   rather than in ground.
+ *
+ * ★★ A BRIGHT OUTLINE ONLY READS WHEN IT IS WRAPPED AROUND EXACT BLACK
+ *   (CW-40, restated by CW-61 after a bare bright ring came back invisible in
+ *   three palettes of five while owning up to 1% of the frame). Exact black is
+ *   the one value the converter renders as an EMPTY cell, and an empty patch
+ *   inside a mark is a footprint no building in any palette has.
+ *
+ * The map now carries three marks and they have to stay apart: the player is
+ * a SQUARE, the travel pick is a CIRCLE (CW-61), and a landmark is a DIAMOND.
  *
  * @param {Array<{name: string, x: number, y: number}>} landmarks
- * @returns {{group: import('three').Group, setSelected: (index: number|null) => void, dispose: () => void}}
+ * @param {number} spanM the city's own span, so the marks scale with it
  */
-export function buildLandmarkBeacons(landmarks) {
+export function buildLandmarkBeacons(landmarks, spanM) {
   const group = new Group();
   group.name = 'landmark-beacons';
 
-  const geom = new BoxGeometry(7, 7, 90);
-  const dimMat = new MeshBasicMaterial({ color: 0x777777 });
-  const brightMat = new MeshBasicMaterial({ color: 0xffffff });
+  const span = Math.max(100, spanM || 0);
+  // Smaller than the player's marker: the player is the one mark that must
+  // always win, and there are twelve of these.
+  const outer = Math.max(10, span * 0.016);
 
-  const meshes = landmarks.map((lm) => {
-    const mesh = new Mesh(geom, dimMat);
-    mesh.position.set(lm.x, lm.y, 0);
-    group.add(mesh);
-    return mesh;
+  const frameMat = new MeshBasicMaterial({
+    color: 0xffffff,
+    depthTest: false,
+  });
+  const coreMat = new MeshBasicMaterial({ color: 0x000000, depthTest: false });
+
+  /**
+   * ★★ EVERY STATE IS A FOOTPRINT, AND VISITED-AS-A-TONE WAS TRIED FIRST AND
+   * FAILED IN THE MOST INSTRUCTIVE WAY.
+   *
+   * Visited began as a dimmer frame (0x8a8a8a against white). Measured, that
+   * changed 0.46% of the frame in colour, 0.66% in mono green and 0.46% in
+   * HC-light, against a 0.000% same-run control - a real, repeatable change,
+   * about forty per cent of the layer's own pixels. It looked like a pass.
+   *
+   * Photographed, every visited diamond DISAPPEARED. The dim grey sank into
+   * the map's own glyph noise and what remained was the selected mark and the
+   * player. **Changed is not readable**, the same way CW-61 found that
+   * present is not findable - and the number would have shipped it.
+   *
+   * So all three states stay bright with their holes intact, and differ by
+   * SIZE, which is what this grid can carry (CW-61 told its circle from the
+   * player's square the same way):
+   *
+   *   unvisited   the base diamond
+   *   visited     the same mark at 0.72, hole intact - plainly lesser
+   *   selected    a halo behind it, plainly greater
+   */
+  // A four-segment circle is a diamond: its vertices sit on the axes.
+  const frameGeom = new CircleGeometry(outer, 4);
+  const coreGeom = new CircleGeometry(outer * 0.52, 4);
+  const visitedFrameGeom = new CircleGeometry(outer * 0.72, 4);
+  const visitedCoreGeom = new CircleGeometry(outer * 0.72 * 0.5, 4);
+  const selectedGeom = new CircleGeometry(outer * 1.5, 4);
+
+  const marks = landmarks.map((lm) => {
+    const root = new Group();
+    root.position.set(lm.x, lm.y, 0);
+
+    // The selected ring sits UNDER the frame and shows only for the chosen
+    // one, so selection changes the mark's outline rather than its colour.
+    const halo = new Mesh(selectedGeom, frameMat);
+    halo.position.z = 58;
+    halo.renderOrder = 990;
+    halo.visible = false;
+    root.add(halo);
+
+    const frame = new Mesh(frameGeom, frameMat);
+    frame.position.z = 59;
+    frame.renderOrder = 991;
+    root.add(frame);
+
+    const core = new Mesh(coreGeom, coreMat);
+    core.position.z = 60;
+    core.renderOrder = 992;
+    root.add(core);
+
+    group.add(root);
+    return { root, halo, frame, core };
   });
 
   return {
     group,
+    /** The caller drives this from applyMapCamera, with the marker's own scale. */
+    setScale(scale) {
+      for (const m of marks) m.root.scale.set(scale, scale, 1);
+    },
     setSelected(index) {
-      meshes.forEach((mesh, i) => {
-        mesh.material = i === index ? brightMat : dimMat;
+      marks.forEach((m, i) => {
+        m.halo.visible = i === index;
+      });
+    },
+    /** @param {Set<string>} visited names the player has reached */
+    setVisited(visited) {
+      marks.forEach((m, i) => {
+        const seen = Boolean(visited?.has(landmarks[i].name));
+        m.frame.geometry = seen ? visitedFrameGeom : frameGeom;
+        m.core.geometry = seen ? visitedCoreGeom : coreGeom;
       });
     },
     dispose() {
-      geom.dispose();
-      dimMat.dispose();
-      brightMat.dispose();
+      frameGeom.dispose();
+      coreGeom.dispose();
+      visitedFrameGeom.dispose();
+      visitedCoreGeom.dispose();
+      selectedGeom.dispose();
+      frameMat.dispose();
+      coreMat.dispose();
       group.clear();
     },
   };
