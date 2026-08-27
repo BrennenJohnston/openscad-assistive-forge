@@ -499,18 +499,24 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     await expect(dialog).toBeHidden()
   })
 
-  test('★ an over-threshold drag on an ARMED map pans and never teleports (CW-59)', async ({
+  test('★ an over-threshold drag pans and never travels (CW-59, CW-61)', async ({
     page,
   }) => {
+    // ★★ THIS CASE OUTLIVED THE MODE IT WAS WRITTEN AGAINST, AND THAT IS THE
+    // FINDING. It used to ARM pin mode first, because under CW-40 a click
+    // only acted on an armed map. CW-61 retired the arming - every click
+    // asks now - and the retirement sweep MISSED this case, because it
+    // reached for the mode through its OBSERVABLE (`aria-pressed` on the
+    // Teleport button) rather than through any of the names the sweep
+    // grepped for. It went red on BOTH engines, which is what said it was a
+    // real miss and not a runner.
+    //
+    // Sweep a retired feature by what it LOOKS like, not only by what it is
+    // called.
     await launchGame(page)
     await enterCity(page)
     await page.keyboard.press('KeyM')
     await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
-    await btn(page, 'cityWalkTeleportBtn').click()
-    await expect(btn(page, 'cityWalkTeleportBtn')).toHaveAttribute(
-      'aria-pressed',
-      'true'
-    )
 
     const walkerAt = () =>
       page.evaluate(() => {
@@ -530,11 +536,18 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     for (let i = 1; i <= 10; i++) await page.mouse.move(cx + i * 20, cy)
     await page.mouse.up()
     expect(await walkerAt()).toEqual(before)
+    // Nor does it even ASK: under CW-61 an over-threshold press is a drag
+    // and a drag never clicks, so there is no question to dismiss either.
+    await expect(page.locator('#cityWalkTravelDialog')).toBeHidden()
 
-    // And a real click still travels, so the drag did not cost the feature.
+    // And a real click still asks, and answering it still travels, so the
+    // drag did not cost the feature.
     await page.mouse.move(cx + 40, cy + 30)
     await page.mouse.down()
     await page.mouse.up()
+    await expect(page.locator('#cityWalkTravelDialog')).toBeVisible()
+    await page.locator('#cityWalkTravelGoBtn').click()
+    await expect(page.locator('#cityWalkTravelDialog')).toBeHidden()
     await expect.poll(async () => {
       const now = await walkerAt()
       return Math.hypot(now.x - before.x, now.y - before.y)

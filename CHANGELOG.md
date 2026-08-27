@@ -179,6 +179,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The map asks before it moves you** (CW-61) - clicking the City Walk's map used to do nothing
+  unless you had first pressed Teleport to arm it, and then any click sent you there instantly with
+  no way back to where you were. Now a click anywhere on the map asks, in a small dialog that names
+  the spot you would land on: "On 4th Avenue and Union Street", or one street where there is no
+  corner, or open ground. Nothing moves until you press Travel here, and Cancel or Escape leaves you
+  exactly where you were and says so. J asks the same question about the middle of the map, so the
+  keyboard reaches it too. The naming is careful about what it claims: it will only call a spot a
+  corner when a second street really is within twelve metres, and it will never offer a street its
+  own cycle track as the cross street. A circle marks the spot being asked about while you decide.
+  The old Teleport button stays, doing the asking rather than the arming
+
 - **Four maps in one** (CW-60) - the City Walk's overhead map can be drawn four ways now, and each
   one is a simplification rather than a repaint. Standard is the map as it has always been.
   Roads only hides the buildings and parks so the street network stands alone. Buildings only takes
