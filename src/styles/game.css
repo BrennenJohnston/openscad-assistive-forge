@@ -426,6 +426,47 @@
   gap: var(--space-sm);
 }
 
+/* CW-65: the traveler's speech bubble. It appears in STREET view, where the
+ * legend and the travel dialog never are, so it can take the centre - and it
+ * should: a player has just walked up to somebody, and the reply belongs where
+ * they are looking rather than tucked into a corner they are not.
+ *
+ * Same z-index family as the help and travel panels: above the ASCII overlay
+ * canvas (z-index 5 in _hfm-paint.js), or the glyphs render over it. */
+.city-walk-found {
+  position: absolute;
+  z-index: var(--z-index-dropdown);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: min(420px, calc(100vw - 2 * var(--space-md)));
+  padding: var(--space-md);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg, none);
+}
+
+.city-walk-found[hidden] {
+  display: none;
+}
+
+.city-walk-found h3 {
+  margin-top: 0;
+}
+
+.city-walk-found-body {
+  margin: var(--space-sm) 0 var(--space-md);
+}
+
+/* CW-65: the traveler's badge in the map legend. A text row, never an icon -
+ * the tick has to survive a screen reader and a high-contrast theme alike,
+ * which is CW-62's reason for the visited tick and holds identically here. */
+.city-walk-legend-badge {
+  margin: var(--space-sm) 0 0;
+  font-size: var(--font-size-sm);
+}
+
 /* Landmark legend (map view): real text over the map's left edge. */
 .city-walk-legend {
   position: absolute;

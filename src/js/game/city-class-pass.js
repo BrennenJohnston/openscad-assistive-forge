@@ -153,6 +153,14 @@ export const CLASS_BY_MESH_NAME = new Map([
   // voice as the sky behind it. SIGN is small and bright, which is what a star
   // is, and that is a LOOK decision - the right one, but not a visibility one.
   ['fireworks', SURFACE_CLASS.SIGN],
+  // CW-65: the blind traveler. Not a borrow so much as the right voice - PERSON
+  // is literally the vocabulary CW-45 built to draw a small standing person,
+  // and this is one. Zero new class ids, so CW-43's law is not even tested.
+  //
+  // ★ Like `fireworks`, this mesh is built STANDALONE and CW-56's builders
+  // guard could not see it: that guard enumerates buildStreetProps. It asks the
+  // standalone builders too now, so the next one cannot slip through.
+  ['traveler', SURFACE_CLASS.PERSON],
 ]);
 
 /**

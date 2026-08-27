@@ -142,6 +142,29 @@ feature — a bench on a tactile map is a promise about where a bench is — so
 every one of these comes from the extract's own surveyed nodes, never
 invented, and the schema document defines them all.
 
+Round 7 took that inventory off the page and **drew it**. Three additions
+matter for tactile work, and one of them is a warning rather than a gain:
+
+- **The wayfinding list is rendered for the first time.** Round 6 collected
+  crossings, kerbs and tactile paving; Round 7 put them on the map, under a
+  map style named for them. Data nobody draws is data nobody checks, and the
+  first time it was drawn it turned out to need two fixes before anything
+  appeared at all — which is the argument for drawing an inventory as soon as
+  you collect it.
+- **Landmarks are findable rather than merely listed.** They carry a mark on
+  the map and the map remembers which ones you have reached, per city and
+  between sessions.
+- **A non-visual path now exists for a task that has no visual answer**, and
+  measuring it is the finding worth carrying forward. Round 7 added a
+  character to find in the city, and then measured what a player can actually
+  resolve: **a whole person is about 2.5 by 4.2 character cells at thirty
+  metres**, and the brightest clothing stops separating them from the crowd at
+  about twenty. So the spoken distance report is not an accessible alternative
+  to looking — **it is the only instrument that works, for everybody**. When
+  tactile output is designed, expect the same shape of answer: the legible
+  channel is often not the one that looks obvious, and the way to find out is
+  to measure the medium before designing for it.
+
 It does **not** mean the game should grow an embosser export next.
 
 ### The safety rule, stated once and without exception

@@ -238,13 +238,17 @@ describe('city-class-pass', () => {
  */
 describe('every mesh the city builds has a class (CW-56)', () => {
   it('asks the builders, not a copy of the list', async () => {
-    const [{ CLASS_BY_MESH_NAME }, { buildStreetProps }, data, walk] =
-      await Promise.all([
-        import('../../../src/js/game/city-class-pass.js'),
-        import('../../../src/js/game/city-scene.js'),
-        import('../../../src/js/game/city-data.js'),
-        import('../../../src/js/game/walk-controls.js'),
-      ])
+    const [
+      { CLASS_BY_MESH_NAME },
+      { buildStreetProps, buildFireworks, buildTraveler },
+      data,
+      walk,
+    ] = await Promise.all([
+      import('../../../src/js/game/city-class-pass.js'),
+      import('../../../src/js/game/city-scene.js'),
+      import('../../../src/js/game/city-data.js'),
+      import('../../../src/js/game/walk-controls.js'),
+    ])
     const { buildCollisionGrid } = walk
     const CENTER = { lat: 40, lon: -100 }
     const COS = Math.cos((CENTER.lat * Math.PI) / 180)
@@ -301,6 +305,25 @@ describe('every mesh the city builds has a class (CW-56)', () => {
     const props = buildStreetProps(model, buildCollisionGrid(model))
     const built = props.group.children.filter((c) => c.isMesh).map((c) => c.name)
     expect(built.length).toBeGreaterThan(4)
+
+    /**
+     * ★★ CW-65: THE GUARD HAD A HOLE THE SIZE OF EVERY STANDALONE BUILDER.
+     * It enumerated buildStreetProps and nothing else, so `fireworks` (CW-64)
+     * and `traveler` (CW-65) were both outside what it could see - and a mesh
+     * it cannot see is exactly the mesh that gets forgotten. Ask THEM too.
+     */
+    const fireworks = buildFireworks(1000)
+    const traveler = buildTraveler('seattle')
+    traveler.place(0, 0, 0)
+    const standalone = [
+      ...fireworks.group.children,
+      ...traveler.group.children,
+    ]
+      .filter((c) => c.isMesh)
+      .map((c) => c.name)
+    expect(standalone).toContain('fireworks')
+    expect(standalone).toContain('traveler')
+    built.push(...standalone)
     const orphans = built.filter((n) => !CLASS_BY_MESH_NAME.has(n))
     expect(
       orphans,

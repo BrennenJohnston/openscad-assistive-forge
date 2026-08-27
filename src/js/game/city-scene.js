@@ -60,7 +60,13 @@ import {
   PAVEMENT_WIDTH_M,
   isPavementWay,
 } from './walk-controls.js';
-import { makeFigureSpec, makeFigureGeoms } from './city-figures.js';
+import {
+  makeFigureSpec,
+  makeFigureGeoms,
+  makeTravelerSpec,
+  TRAVELER_CANE_REACH_M,
+  TRAVELER_CANE_THICK_M,
+} from './city-figures.js';
 import {
   treeTableFor,
   pickSpecies,
@@ -6211,16 +6217,28 @@ export function buildFireworks(spanM) {
     const stars = [];
     for (let i = 0; i < FIREWORK_STARS; i++) {
       const mesh = new Mesh(geom, material);
+      // D-115: THE NAME HAS TO BE ON THE MESH. The class pass traverses with
+      // `if (!obj.isMesh) return` and then reads `obj.name`, so naming only the
+      // GROUP left every star resolving to SKY and CW-64's
+      // ['fireworks', SIGN] mapping applying to nothing at all. Found when
+      // CW-65 widened CW-56's builders guard to ask the standalone builders -
+      // the gap CW-64's own record named and did not close.
+      mesh.name = 'fireworks';
       mesh.visible = false;
       group.add(mesh);
       stars.push(mesh);
     }
     const mapRoot = new Group();
     const mapFrame = new Mesh(mapFrameGeom, mapFrameMat);
+    // D-115, and see the note on the stars above. The map marks are drawn over
+    // an ortho camera with their own materials, so what this buys them is the
+    // same voice the street bursts get rather than the sky's.
+    mapFrame.name = 'fireworks';
     mapFrame.position.z = 61;
     mapFrame.renderOrder = 995;
     mapRoot.add(mapFrame);
     const mapCore = new Mesh(mapCoreGeom, mapCoreMat);
+    mapCore.name = 'fireworks';
     mapCore.position.z = 62;
     mapCore.renderOrder = 996;
     mapRoot.add(mapCore);
@@ -6665,6 +6683,270 @@ export function attachCityLighting(scene, camera) {
       scene.fog = prevFog ?? null;
       ambient.dispose();
       headlight.dispose();
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// CW-65 (CW-Q60): the traveler
+// ---------------------------------------------------------------------------
+
+/**
+ * The tones the traveler wears, and why each is where it is.
+ *
+ * Ordinary figures wear FIGURE_TIERS [0.5, 0.65, 0.8] on the torso with legs a
+ * step below, and a head at HEAD_TIER 0.82 - so 0.8 is the brightest clothing
+ * anybody in the city has. A high-visibility jacket has to beat that to be a
+ * jacket rather than another bright shirt.
+ *
+ * ★ THE HEAD STAYS AT 0.82, EXACTLY LIKE EVERYONE ELSE'S. It is the ground the
+ * glasses are drawn against, and CW-49 measured that at 0.80 the mono frames
+ * moved by up to 0.74% of their pixels while at 0.82 they do not move at all.
+ */
+const TRAVELER_JACKET_TIER_DEFAULT = 0.92;
+
+/**
+ * ★ EVERY NUMBER THE TRAVELER LOOKS LIKE LIVES HERE, MUTABLE, SO IT CAN BE
+ * SWEPT WITHOUT REBUILDING THE CITY. CW-64 learned this the hard way: a value
+ * you cannot sweep is a value whose guard cannot be red-proven, and a flash
+ * counter that has only ever returned zero is not a measurement but a hope.
+ * `place()` reads this object every time, so a sweep patches it and re-places.
+ */
+export const TRAVELER_LOOK = {
+  jacketTier: TRAVELER_JACKET_TIER_DEFAULT,
+  /** Yellow: the hue high-visibility clothing actually is. Verified ENCODED,
+   *  never in linear (D-112) - it lands #ffff00 / #aaff00. */
+  jacketHueDeg: 60,
+  jacketChroma: 0.5,
+  /** A white cane is white: neutral, and above every tone anybody wears. */
+  caneTier: 0.95,
+  caneThickM: TRAVELER_CANE_THICK_M,
+  caneReachM: TRAVELER_CANE_REACH_M,
+  /** Trousers, low in the band so the jacket has something to be brighter
+   *  than - but never below the 0.45 floor the proof gate set when a 0.3 leg
+   *  vanished against black pavement. */
+  legTier: 0.5,
+  /** ★ THE HEAD STAYS AT 0.82, EXACTLY LIKE EVERYONE ELSE'S. It is the ground
+   *  the glasses are drawn against, and CW-49 measured that at 0.80 the mono
+   *  frames move by up to 0.74% of their pixels while at 0.82 they do not
+   *  move at all. */
+  headTier: 0.82,
+  headHueDeg: 30,
+};
+
+/**
+ * How far from a spot other figures are counted when looking for a busy
+ * stretch of pavement.
+ *
+ * ★★ AND "BUSY" IS A SMALLER WORD HERE THAN IT SOUNDS. Measured at this head,
+ * PERSON_SPACING_M is 26 m and the DENSEST 25 m neighbourhood in the whole of
+ * Seattle holds SEVEN figures - six other people over a 50 m circle, in a city
+ * 2,627 x 2,644 m across. So this bias does NOT hide the traveler in a crowd;
+ * there is no crowd. What it buys is that the traveler is found among people
+ * rather than alone on an empty street, which is the character of the thing.
+ */
+export const TRAVELER_BUSY_RADIUS_M = 25;
+/** How far the traveler is kept from the spawn, so the reward is walked to. */
+export const TRAVELER_MIN_FROM_SPAWN_M = 150;
+
+/**
+ * Choose where a city's traveler stands: deterministic per city, biased toward
+ * the busiest pavement, and never within sight of the spawn.
+ *
+ * ★ O(n), not O(n²). Scoring 3,029 spots against each other is nine million
+ * distance tests; bucketing them into cells the size of the search radius
+ * answers the same question in one pass, and the answer is a BIAS rather than
+ * an exact maximum, so the approximation costs nothing real.
+ *
+ * @param {{x: number, y: number, pose: string, facing: number}[]} spots
+ * @param {string} citySlug
+ * @param {{spawnX?: number, spawnY?: number}} [options]
+ * @returns {{x: number, y: number, facing: number, neighbours: number}|null}
+ */
+export function pickTravelerSpot(spots, citySlug, options = {}) {
+  if (!Array.isArray(spots) || spots.length === 0) return null;
+  const { spawnX = null, spawnY = null } = options;
+  const R = TRAVELER_BUSY_RADIUS_M;
+
+  const key = (x, y) => Math.floor(x / R) + ',' + Math.floor(y / R);
+  const counts = new Map();
+  for (const s of spots)
+    counts.set(key(s.x, s.y), (counts.get(key(s.x, s.y)) ?? 0) + 1);
+
+  // A spot's neighbourhood is its own cell plus the eight around it.
+  const scoreOf = (s) => {
+    const cx = Math.floor(s.x / R);
+    const cy = Math.floor(s.y / R);
+    let n = 0;
+    for (let dx = -1; dx <= 1; dx++)
+      for (let dy = -1; dy <= 1; dy++)
+        n += counts.get(cx + dx + ',' + (cy + dy)) ?? 0;
+    return n;
+  };
+
+  const far =
+    spawnX === null || spawnY === null
+      ? () => true
+      : (s) =>
+          Math.hypot(s.x - spawnX, s.y - spawnY) >= TRAVELER_MIN_FROM_SPAWN_M;
+
+  // A standing figure's spot, so the traveler is not planted mid-stride
+  // through a bench; the pose itself is always 'standing'.
+  let pool = spots.filter((s) => s.pose !== 'sitting' && far(s));
+  // ★ NEVER RETURN NULL FOR A CITY THAT HAS PEOPLE. If nothing is far enough
+  // from the spawn - a small extract, or a spawn in the middle of everything -
+  // the distance is what gives way, not the traveler.
+  if (pool.length === 0) pool = spots.filter((s) => s.pose !== 'sitting');
+  if (pool.length === 0) pool = spots;
+
+  const scored = pool.map((s) => ({ s, n: scoreOf(s) }));
+  scored.sort((a, b) => b.n - a.n || a.s.x - b.s.x || a.s.y - b.s.y);
+  // The busiest tenth, then one of those by the city's own hash - so the spot
+  // is stable per city but not always the single densest, which would put
+  // every city's traveler in the same kind of place.
+  const top = scored.slice(0, Math.max(1, Math.floor(scored.length * 0.1)));
+  let h = 2166136261 >>> 0;
+  const slug = String(citySlug);
+  for (let i = 0; i < slug.length; i++) {
+    h = (h ^ slug.charCodeAt(i)) >>> 0;
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  const pick = top[h % top.length];
+  return {
+    x: pick.s.x,
+    y: pick.s.y,
+    facing: pick.s.facing,
+    neighbours: pick.n,
+  };
+}
+
+/**
+ * One blind traveler, built STANDALONE and added to the scene beside the
+ * fireworks rather than inside the city group.
+ *
+ * ★★ IT CANNOT LIVE IN THE CITY GROUP, AND THE CONTROLLER'S OWN ORDER SAYS SO.
+ * `buildStreetProps(model, collision)` runs while the city is being built, and
+ * the saved progress is not read until much later - so at build time nothing
+ * knows whether this city's traveler has been found, or where they were put.
+ * Finding them also MOVES them (to the spawn, as the companion), and rebuilding
+ * a city's props to move one person is absurd. `buildFireworks` is the
+ * precedent and this follows it exactly.
+ *
+ * ★ THE MESH BORROWS SURFACE_CLASS.PERSON, WHICH IS NOT A BORROW SO MUCH AS
+ * THE RIGHT VOICE. The span table is full at 16 (CW-43's law), and PERSON is
+ * literally what this is: the vocabulary CW-45 built to draw a small standing
+ * person. Zero new class ids.
+ *
+ * ★ AND CW-56'S BUILDERS GUARD CANNOT SEE THIS MESH. That guard enumerates
+ * `buildStreetProps` only, so a standalone builder is outside it - the same gap
+ * CW-64 found for `fireworks`. The guard is widened to ask the standalone
+ * builders too.
+ *
+ * @param {string} citySlug - seeds the body, so a city's traveler is stable
+ * @returns {{group: Group, place: Function, isPlaced: () => boolean,
+ *            position: () => [number, number]|null,
+ *            setMapView: Function, dispose: Function}}
+ */
+export function buildTraveler(citySlug) {
+  const group = new Group();
+  group.name = 'traveler-group';
+  group.visible = false;
+
+  // ★ The body comes from a stream of the traveler's OWN, seeded from the city
+  // name. A draw taken from a road's stream would shift the pose and build of
+  // every figure planted after it (the CW-45/46 seed law) - and this is built
+  // outside every road's stream anyway, which is the belt to that braces.
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < String(citySlug).length; i++) {
+    h = (h ^ String(citySlug).charCodeAt(i)) >>> 0;
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  const spec = makeTravelerSpec(makeLcg(h), {
+    caneSide: h & 1 ? 1 : -1,
+  });
+
+  const material = new MeshLambertMaterial({
+    color: 0xffffff,
+    vertexColors: true,
+  });
+  let mesh = null;
+  let at = null;
+
+  // ★★ EXACT BLACK, not a dark colour. The converter renders exact black as an
+  // EMPTY CELL (CW-5), which is the only true dark this medium has - these
+  // palettes carry no dark neutral at all (CW-58 measured every bird landing
+  // white). A hole across the eyes of a bright head is CW-40's law used on
+  // purpose rather than worked around.
+  const glassesTint = [0, 0, 0];
+
+  const clear = () => {
+    if (!mesh) return;
+    group.remove(mesh);
+    mesh.geometry.dispose();
+    mesh = null;
+  };
+
+  /**
+   * Stand the traveler at a spot, facing a direction. Cheap enough to call on
+   * a find (it is ONE figure), which is what lets the same object be both the
+   * hidden traveler and the companion who turns up by the spawn afterwards.
+   */
+  const place = (x, y, facingRad) => {
+    clear();
+    const L = TRAVELER_LOOK;
+    // ★ inGamutChroma, not raw chroma: tintOf CLAMPS, and a clamped channel
+    // silently voids the luminance promise the monochrome schemes read (CW-49).
+    const jacketTint = tintOf(
+      L.jacketTier,
+      L.jacketHueDeg,
+      inGamutChroma(L.jacketTier, L.jacketHueDeg, L.jacketChroma)
+    );
+    const legTint = tintOf(L.legTier, 240, 0);
+    const headTint = tintOf(
+      L.headTier,
+      L.headHueDeg,
+      inGamutChroma(L.headTier, L.headHueDeg, 0.5)
+    );
+    const caneTint = tintOf(L.caneTier, 0, 0);
+    const zones = makeFigureGeoms(x, y, facingRad, {
+      ...spec,
+      cane: { thickM: L.caneThickM, reachM: L.caneReachM, tipZ: 0 },
+    });
+    for (const g of zones.torso) paintGeometry(g, jacketTint);
+    for (const g of zones.legs) paintGeometry(g, legTint);
+    for (const g of zones.figure) paintGeometry(g, headTint);
+    for (const g of zones.cane) paintGeometry(g, caneTint);
+    for (const g of zones.glasses) paintGeometry(g, glassesTint);
+    const all = [
+      ...zones.legs,
+      ...zones.torso,
+      ...zones.figure,
+      ...zones.cane,
+      ...zones.glasses,
+    ];
+    const merged = mergeGeometries(all, false);
+    for (const g of all) g.dispose();
+    mesh = new Mesh(merged, material);
+    // The name is what the class pass reads; see CLASS_BY_MESH_NAME.
+    mesh.name = 'traveler';
+    group.add(mesh);
+    group.visible = true;
+    at = [x, y];
+  };
+
+  return {
+    group,
+    spec,
+    place,
+    isPlaced: () => mesh !== null,
+    position: () => (at ? [at[0], at[1]] : null),
+    /** Street furniture hides on the map; so does a person. */
+    setMapView(isMap) {
+      group.visible = !isMap && mesh !== null;
+    },
+    dispose() {
+      clear();
+      material.dispose();
     },
   };
 }

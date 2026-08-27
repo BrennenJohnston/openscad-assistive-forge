@@ -10933,9 +10933,27 @@ if (rounded) {
     if (urlUnlock) {
       // Strip param to avoid accidental sharing
       urlParams.delete('hfm');
+      /**
+       * CW-66: ...and KEEP THE FRAGMENT. This cleanup composed the new URL
+       * from pathname and query alone, so a link of the form
+       * `/?hfm=unlock#v=1&params=...` lost its payload the moment it opened -
+       * the door destroyed the very thing the link was carrying.
+       *
+       * ★ THE MERGED HELPER `cleanUrlKeepingFragment()` IS NOT A DROP-IN
+       * HERE, WHICH IS WHY THIS IS A LINE RATHER THAN A CALL. That helper
+       * closes over `initUrlParams`, a DIFFERENT URLSearchParams built at
+       * module start; this block deletes `hfm` from its own local copy. Calling
+       * the helper would compose from a copy that still HAS `hfm` and put the
+       * parameter straight back, which is exactly what the comment above is
+       * preventing. Making the helper usable would mean mutating a
+       * module-level object other code reads afterwards - a bigger and less
+       * reversible change than the round's closing release should make.
+       *
+       * The arithmetic now lives in two places, and that is the stated cost.
+       */
       const newUrl = urlParams.toString()
-        ? `${window.location.pathname}?${urlParams}`
-        : window.location.pathname;
+        ? `${window.location.pathname}?${urlParams}${window.location.hash}`
+        : `${window.location.pathname}${window.location.hash}`;
       history.replaceState(null, '', newUrl);
     }
 
