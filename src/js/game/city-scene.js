@@ -64,6 +64,8 @@ import {
   makeFigureSpec,
   makeFigureGeoms,
   makeTravelerSpec,
+  TRAVELER_CANE_REACH_M,
+  TRAVELER_CANE_THICK_M,
 } from './city-figures.js';
 import {
   treeTableFor,
@@ -6701,18 +6703,36 @@ export function attachCityLighting(scene, camera) {
  * glasses are drawn against, and CW-49 measured that at 0.80 the mono frames
  * moved by up to 0.74% of their pixels while at 0.82 they do not move at all.
  */
-const TRAVELER_JACKET_TIER = 0.92;
-/** Yellow: the hue high-visibility clothing actually is, and one the sign set
- *  already lands (SIGN_HUES_DEG). Verified ENCODED, never in linear (D-112). */
-const TRAVELER_JACKET_HUE_DEG = 60;
-const TRAVELER_JACKET_CHROMA = 0.5;
-/** A white cane is white: neutral, and brighter than any clothing in the city
- *  so the diagonal is the brightest thing in its own neighbourhood. */
-const TRAVELER_CANE_TIER = 0.95;
-/** Trousers, low in the band so the jacket has something to be brighter than -
- *  but never below the 0.45 floor the proof gate set when a 0.3 leg vanished
- *  against black pavement. */
-const TRAVELER_LEG_TIER = 0.5;
+const TRAVELER_JACKET_TIER_DEFAULT = 0.92;
+
+/**
+ * ★ EVERY NUMBER THE TRAVELER LOOKS LIKE LIVES HERE, MUTABLE, SO IT CAN BE
+ * SWEPT WITHOUT REBUILDING THE CITY. CW-64 learned this the hard way: a value
+ * you cannot sweep is a value whose guard cannot be red-proven, and a flash
+ * counter that has only ever returned zero is not a measurement but a hope.
+ * `place()` reads this object every time, so a sweep patches it and re-places.
+ */
+export const TRAVELER_LOOK = {
+  jacketTier: TRAVELER_JACKET_TIER_DEFAULT,
+  /** Yellow: the hue high-visibility clothing actually is. Verified ENCODED,
+   *  never in linear (D-112) - it lands #ffff00 / #aaff00. */
+  jacketHueDeg: 60,
+  jacketChroma: 0.5,
+  /** A white cane is white: neutral, and above every tone anybody wears. */
+  caneTier: 0.95,
+  caneThickM: TRAVELER_CANE_THICK_M,
+  caneReachM: TRAVELER_CANE_REACH_M,
+  /** Trousers, low in the band so the jacket has something to be brighter
+   *  than - but never below the 0.45 floor the proof gate set when a 0.3 leg
+   *  vanished against black pavement. */
+  legTier: 0.5,
+  /** ★ THE HEAD STAYS AT 0.82, EXACTLY LIKE EVERYONE ELSE'S. It is the ground
+   *  the glasses are drawn against, and CW-49 measured that at 0.80 the mono
+   *  frames move by up to 0.74% of their pixels while at 0.82 they do not
+   *  move at all. */
+  headTier: 0.82,
+  headHueDeg: 30,
+};
 
 /**
  * One blind traveler, built STANDALONE and added to the scene beside the
@@ -6766,18 +6786,6 @@ export function buildTraveler(citySlug) {
   let mesh = null;
   let at = null;
 
-  const jacketTint = tintOf(
-    TRAVELER_JACKET_TIER,
-    TRAVELER_JACKET_HUE_DEG,
-    inGamutChroma(
-      TRAVELER_JACKET_TIER,
-      TRAVELER_JACKET_HUE_DEG,
-      TRAVELER_JACKET_CHROMA
-    )
-  );
-  const legTint = tintOf(TRAVELER_LEG_TIER, 240, 0);
-  const headTint = tintOf(0.82, 30, inGamutChroma(0.82, 30, 0.5));
-  const caneTint = tintOf(TRAVELER_CANE_TIER, 0, 0);
   // ★★ EXACT BLACK, not a dark colour. The converter renders exact black as an
   // EMPTY CELL (CW-5), which is the only true dark this medium has - these
   // palettes carry no dark neutral at all (CW-58 measured every bird landing
@@ -6799,7 +6807,25 @@ export function buildTraveler(citySlug) {
    */
   const place = (x, y, facingRad) => {
     clear();
-    const zones = makeFigureGeoms(x, y, facingRad, spec);
+    const L = TRAVELER_LOOK;
+    // ★ inGamutChroma, not raw chroma: tintOf CLAMPS, and a clamped channel
+    // silently voids the luminance promise the monochrome schemes read (CW-49).
+    const jacketTint = tintOf(
+      L.jacketTier,
+      L.jacketHueDeg,
+      inGamutChroma(L.jacketTier, L.jacketHueDeg, L.jacketChroma)
+    );
+    const legTint = tintOf(L.legTier, 240, 0);
+    const headTint = tintOf(
+      L.headTier,
+      L.headHueDeg,
+      inGamutChroma(L.headTier, L.headHueDeg, 0.5)
+    );
+    const caneTint = tintOf(L.caneTier, 0, 0);
+    const zones = makeFigureGeoms(x, y, facingRad, {
+      ...spec,
+      cane: { thickM: L.caneThickM, reachM: L.caneReachM, tipZ: 0 },
+    });
     for (const g of zones.torso) paintGeometry(g, jacketTint);
     for (const g of zones.legs) paintGeometry(g, legTint);
     for (const g of zones.figure) paintGeometry(g, headTint);

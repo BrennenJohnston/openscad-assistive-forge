@@ -111,6 +111,7 @@ import {
 import {
   buildFireworks,
   buildRain,
+  buildTraveler,
   RAIN_LEVEL_COUNT,
   RAIN_LEVEL_NAMES,
 } from './city-scene.js';
@@ -1621,6 +1622,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     const fireworks = buildFireworks(spanM);
     scene.add(fireworks.group);
     scene.add(fireworks.mapGroup);
+    // CW-65 (CW-Q60): the traveler stands OUTSIDE the city group, like the
+    // fireworks and for the same reason - the city is built here, at load,
+    // while the saved progress that says whether this city's traveler has been
+    // found is not read until much further down. Finding them also MOVES them,
+    // and rebuilding a city's props to move one person is absurd.
+    const traveler = buildTraveler(city.slug);
+    scene.add(traveler.group);
     scene.add(props.group);
     stampObstacles(collision, props.obstacles);
     const spawn = findSpawn(model, collision);
@@ -1653,6 +1661,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       props,
       rain,
       fireworks,
+      traveler,
       lighting,
       marker,
       markerGeom,
@@ -3145,6 +3154,9 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     }
     game.city3d.setMapView(game.mapView);
     game.props.setMapView(game.mapView);
+    // A person is street furniture as far as the map is concerned: at a
+    // kilometre up they are overhead fuzz, exactly like the benches.
+    game.traveler?.setMapView(game.mapView);
     // CW-60: the style is a map state, so it is applied on the way IN and
     // never has to be undone on the way out - setMapView restores the street.
     // The zoom follows from applyMapCamera below, which is the one place

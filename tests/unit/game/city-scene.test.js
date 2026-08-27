@@ -19,6 +19,8 @@ import {
   glassTint,
   CAR_TIERS,
   CAR_CABIN_LIFT,
+  TRAVELER_LOOK,
+  buildTraveler,
 } from '../../../src/js/game/city-scene.js'
 import {
   pickPaletteIndex,
@@ -2111,5 +2113,124 @@ describe('buildStreetProps — plantings (CW-57)', () => {
     )
     expect(nearBed, 'a flowerbed became something to walk into').toEqual([])
     props.dispose()
+  })
+})
+
+/**
+ * CW-65 (CW-Q60): what the traveler is actually identified BY.
+ *
+ * ★★ THE ANSWER IS SHAPE, NOT COLOUR, AND THE MEASUREMENT OVERTURNED MY OWN
+ * ASSUMPTION. The high-visibility jacket sits at tier 0.92 against the
+ * brightest ordinary torso's 0.8, and photographed at 8 m that is a real
+ * +55% in mean luminance. But in COLOUR mode the palette quantizes both to the
+ * SAME entry, and the green set has only six entries which ordinary figures
+ * reach ALL SIX of - 3,029 figures saturate it. So no colour anywhere in that
+ * palette belongs to the traveler alone, the jacket included.
+ *
+ * What is left, and what CW-Q60 signed from the start, is the CANE: a bright
+ * diagonal reaching the ground, which no other figure in the city has. These
+ * assertions pin the claims that survive rather than the one that did not.
+ */
+describe('the traveler is identified by shape, not by colour (CW-65)', () => {
+  const encode = (c) =>
+    c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055
+  const normalized = (p) => p.map((c) => normalizeChroma(parsePaletteColor(c)))
+  // D-112: the converter reads the frame AFTER the renderer's output
+  // encoding, so a palette claim tested on the linear tint is a claim about
+  // numbers nobody ever sees.
+  const landsOn = (tint, palette) => {
+    const e = tint.map(encode)
+    return palette[pickPaletteIndex(e[0], e[1], e[2], normalized(palette), 5)]
+  }
+  const lumOf = (t) => 0.2126 * t[0] + 0.7152 * t[1] + 0.0722 * t[2]
+  const jacket = () =>
+    tintOf(
+      TRAVELER_LOOK.jacketTier,
+      TRAVELER_LOOK.jacketHueDeg,
+      inGamutChroma(
+        TRAVELER_LOOK.jacketTier,
+        TRAVELER_LOOK.jacketHueDeg,
+        TRAVELER_LOOK.jacketChroma
+      )
+    )
+
+  it('wears a jacket brighter than the brightest ordinary torso', () => {
+    // FIGURE_TIERS tops out at 0.8 and the head sits at 0.82; a jacket that
+    // does not beat those is another bright shirt. This is the claim that
+    // carries in MONO, which is the default and the high-contrast mode.
+    expect(TRAVELER_LOOK.jacketTier).toBeGreaterThan(0.82)
+    // inGamutChroma, because tintOf CLAMPS and a clamped channel silently
+    // voids the luminance promise the mono schemes read (CW-49).
+    expect(lumOf(jacket())).toBeCloseTo(TRAVELER_LOOK.jacketTier, 3)
+  })
+
+  it('cannot be told from the crowd by COLOUR, and the record says so', () => {
+    // Not a wish - a measurement, kept here so a future release that "fixes"
+    // the jacket's hue knows what it is up against. Ordinary figures draw
+    // from eight hues over three tiers; between them they reach every entry
+    // the green set has.
+    const HUES = [0, 30, 60, 120, 180, 270, 300, 330]
+    const TIERS = [0.5, 0.65, 0.8, 0.45]
+    const reachable = new Set()
+    for (const h of HUES) {
+      for (const t of TIERS) reachable.add(landsOn(tintOf(t, h, 0.5), HC_PALETTE_GREEN))
+      reachable.add(landsOn(tintOf(0.82, h, inGamutChroma(0.82, h, 0.5)), HC_PALETTE_GREEN))
+    }
+    expect(reachable.size).toBe(HC_PALETTE_GREEN.length)
+    // Including the jacket's own colour, and the cane's white.
+    expect(reachable.has(landsOn(jacket(), HC_PALETTE_GREEN))).toBe(true)
+    expect(
+      reachable.has(landsOn(tintOf(TRAVELER_LOOK.caneTier, 0, 0), HC_PALETTE_GREEN))
+    ).toBe(true)
+  })
+
+  it('lands a real yellow in both sets rather than clipping to white', () => {
+    // The one thing the hue choice DOES buy: high-visibility yellow is the
+    // colour the thing is in life, and at 0.92 it survives the gamut cap.
+    expect(landsOn(jacket(), HC_PALETTE_GREEN)).toBe('#ffff00')
+    expect(landsOn(jacket(), HC_PALETTE_AMBER)).toBe('#aaff00')
+  })
+
+  it('draws the glasses in the one true dark this medium has', () => {
+    // Exact black is rendered as an EMPTY CELL (CW-5). These palettes carry no
+    // dark neutral at all (CW-58), so a band drawn "dark" would land on a
+    // colour that is not dark.
+    const t = buildTraveler('seattle')
+    t.place(0, 0, 0)
+    const mesh = t.group.children.find((c) => c.isMesh)
+    const colors = mesh.geometry.getAttribute('color').array
+    let exactBlack = 0
+    for (let i = 0; i < colors.length; i += 3) {
+      if (colors[i] === 0 && colors[i + 1] === 0 && colors[i + 2] === 0)
+        exactBlack++
+    }
+    // A box is 24 vertices; the glasses band is exactly one box.
+    expect(exactBlack).toBe(24)
+    t.dispose()
+  })
+
+  it('is one mesh, named so the class pass can find it', () => {
+    // A name on the GROUP dresses nothing: the class pass traverses with
+    // `if (!obj.isMesh) return` and reads obj.name. That is D-115, and it is
+    // why this asserts the MESH.
+    const t = buildTraveler('seattle')
+    expect(t.isPlaced()).toBe(false)
+    t.place(12, -3, 1)
+    const meshes = []
+    t.group.traverse((o) => {
+      if (o.isMesh) meshes.push(o.name)
+    })
+    expect(meshes).toEqual(['traveler'])
+    expect(t.position()).toEqual([12, -3])
+    t.dispose()
+  })
+
+  it('gives two cities two different travelers, and one city the same one', () => {
+    const a = buildTraveler('seattle').spec
+    const b = buildTraveler('seattle').spec
+    const c = buildTraveler('denver').spec
+    expect(a.heightM).toBe(b.heightM)
+    expect(a.build).toBe(b.build)
+    expect(c.heightM).not.toBe(a.heightM)
   })
 })

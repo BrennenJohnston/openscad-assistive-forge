@@ -147,7 +147,7 @@ export function makeFigureSpec(rng, pose, options = {}) {
  *
  * Every value here is one line reversible and each was settled by photograph.
  */
-export const TRAVELER_CANE_THICK_M = 0.12;
+export const TRAVELER_CANE_THICK_M = 0.18;
 /** How far ahead of the wrist the tip lands; the cane's length follows. */
 export const TRAVELER_CANE_REACH_M = 1;
 
