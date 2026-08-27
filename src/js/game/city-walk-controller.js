@@ -2085,6 +2085,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       lastY: event.clientY,
       travelPx: 0,
       looking: false,
+      map: false,
     };
     try {
       state.refs.viewport.setPointerCapture(event.pointerId);
@@ -2102,7 +2103,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       endDrag();
       return;
     }
-    if (drag.map !== Boolean(game.mapView)) {
+    // Boolean on BOTH sides. A street drag has no `map` field at all, and
+    // `undefined !== false` is true, so an unguarded comparison ended every
+    // street drag on its first move - mouselook stopped working entirely and
+    // the suite caught it within the release.
+    if (Boolean(drag.map) !== Boolean(game.mapView)) {
       // The view changed under a live drag. Whatever it was doing no longer
       // applies to what is on screen.
       endDrag();
