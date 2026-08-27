@@ -20,7 +20,9 @@ import {
   CAR_TIERS,
   CAR_CABIN_LIFT,
   TRAVELER_LOOK,
+  TRAVELER_MIN_FROM_SPAWN_M,
   buildTraveler,
+  pickTravelerSpot,
 } from '../../../src/js/game/city-scene.js'
 import {
   pickPaletteIndex,
@@ -2232,5 +2234,112 @@ describe('the traveler is identified by shape, not by colour (CW-65)', () => {
     expect(a.heightM).toBe(b.heightM)
     expect(a.build).toBe(b.build)
     expect(c.heightM).not.toBe(a.heightM)
+  })
+})
+
+/**
+ * CW-65: where the traveler stands.
+ *
+ * ★★ THESE EXIST BECAUSE THE E2E COULD NOT SEE THE MECHANISM. The e2e asserts
+ * that Seattle's traveler is more than 150 m from the spawn, and that is TRUE
+ * WITH THE FLOOR DELETED - the busiest pavement in Seattle happens to be 358 m
+ * away regardless. Red-proven: removing the floor outright left that case
+ * green. An outcome that holds by luck is not a guard, so the floor, the
+ * determinism and the never-null fallback are tested on the pure function
+ * where a defect has nowhere to hide.
+ */
+describe('pickTravelerSpot (CW-65)', () => {
+  const walkers = (list) =>
+    list.map(([x, y]) => ({ x, y, pose: 'walking', facing: 0 }))
+
+  it('keeps the traveler away from the spawn even when the crowd is there', () => {
+    // The densest cluster sits ON the spawn, and one lone spot is far away.
+    // With the floor, the far one has to win despite being the sparsest.
+    const near = []
+    for (let i = 0; i < 40; i++) near.push([i % 7, Math.floor(i / 7)])
+    const spots = walkers([...near, [900, 900]])
+    const got = pickTravelerSpot(spots, 'seattle', { spawnX: 0, spawnY: 0 })
+    expect(got).not.toBeNull()
+    expect(Math.hypot(got.x, got.y)).toBeGreaterThanOrEqual(
+      TRAVELER_MIN_FROM_SPAWN_M
+    )
+    expect([got.x, got.y]).toEqual([900, 900])
+  })
+
+  it('prefers the busier pavement when both are far enough away', () => {
+    // ★★ THE FIRST VERSION OF THIS PASSED WITH THE DENSITY SORT DELETED, by
+    // luck: it asserted the pick was near the crowd, and the hash happened to
+    // land there anyway. Asserting the pick is AS BUSY AS ANYTHING AVAILABLE
+    // is the claim the sort actually makes, and it cannot be satisfied by
+    // accident.
+    const busy = []
+    for (let i = 0; i < 30; i++)
+      busy.push([500 + (i % 5), 500 + Math.floor(i / 5)])
+    // Lone spots spread far apart, each with a neighbourhood of exactly one.
+    const lonely = [
+      [-600, -600],
+      [-900, 300],
+      [800, -900],
+      [-300, 900],
+    ]
+    const spots = walkers([...busy, ...lonely])
+    const got = pickTravelerSpot(spots, 'seattle', { spawnX: 0, spawnY: 0 })
+    // Every lonely spot scores 1; the crowd scores 30. A pick that is not the
+    // busiest means the bias is gone.
+    expect(got.neighbours).toBe(30)
+    expect(Math.hypot(got.x - 502, got.y - 502)).toBeLessThan(50)
+  })
+
+  it('gives the same city the same spot and different cities different ones', () => {
+    const spots = walkers(
+      Array.from({ length: 60 }, (_, i) => [400 + i * 13, 400 + ((i * 29) % 97)])
+    )
+    const a = pickTravelerSpot(spots, 'seattle', { spawnX: 0, spawnY: 0 })
+    const b = pickTravelerSpot(spots, 'seattle', { spawnX: 0, spawnY: 0 })
+    const c = pickTravelerSpot(spots, 'denver', { spawnX: 0, spawnY: 0 })
+    expect([a.x, a.y]).toEqual([b.x, b.y])
+    expect([c.x, c.y]).not.toEqual([a.x, a.y])
+  })
+
+  it('never strands a city that has people, even with nowhere far enough', () => {
+    // ★ The DISTANCE is what gives way, not the traveler. A small extract, or
+    // a spawn in the middle of everything, must still get one.
+    const spots = walkers([
+      [1, 1],
+      [2, 2],
+      [3, 1],
+    ])
+    const got = pickTravelerSpot(spots, 'burnaby', { spawnX: 0, spawnY: 0 })
+    expect(got).not.toBeNull()
+    expect(Number.isFinite(got.x)).toBe(true)
+  })
+
+  it('never strands a city whose only figures are SITTING', () => {
+    // ★★ THE LAST-RESORT FALLBACK HAD NO TEST AT ALL, and deleting it left
+    // every case green: the case above is rescued by the FIRST fallback (drop
+    // the distance rule) and never reaches the second. Only a city where every
+    // figure is on a bench exercises it - and a city with people in it must
+    // never come back empty-handed.
+    const spots = [
+      { x: 1, y: 1, pose: 'sitting', facing: 0 },
+      { x: 2, y: 2, pose: 'sitting', facing: 0 },
+    ]
+    const got = pickTravelerSpot(spots, 'denver', { spawnX: 0, spawnY: 0 })
+    expect(got).not.toBeNull()
+    expect(Number.isFinite(got.x)).toBe(true)
+  })
+
+  it('refuses a bench: a sitter is not standing on the pavement', () => {
+    const spots = [
+      { x: 500, y: 500, pose: 'sitting', facing: 0 },
+      { x: 900, y: 900, pose: 'walking', facing: 1 },
+    ]
+    const got = pickTravelerSpot(spots, 'seattle', { spawnX: 0, spawnY: 0 })
+    expect([got.x, got.y]).toEqual([900, 900])
+  })
+
+  it('has nothing to place in a city with no figures at all', () => {
+    expect(pickTravelerSpot([], 'seattle', {})).toBeNull()
+    expect(pickTravelerSpot(null, 'seattle', {})).toBeNull()
   })
 })

@@ -2107,30 +2107,69 @@ test.describe('ASCII City Walk — find the traveler (CW-65, CW-Q60)', () => {
      * So walk a while from far away FIRST and assert nothing happens. This is
      * the half that tests the radius; the approach below tests the find.
      */
-    await standOff(page, 30)
-    await page.locator('#cityWalkViewport').click({ position: { x: 400, y: 300 } })
-    await page.keyboard.down('ArrowUp')
-    await page.waitForTimeout(600)
-    await page.keyboard.up('ArrowUp')
-    await expect(bubble(page)).toBeHidden()
-    expect(
-      await page.evaluate(() => Boolean(window.__cityWalkGame.travelerFound))
-    ).toBe(false)
-
-    // Now start OUTSIDE the 6 m radius: the promise is that WALKING UP does it.
+    /**
+     * ★★ THE RADIUS HAS TO MEAN SOMETHING, AND TWO EARLIER VERSIONS OF THIS
+     * COULD NOT TELL. Deleting the radius check outright - the find firing at
+     * ANY distance - left all five cases GREEN, twice.
+     *
+     * The first attempt asserted the bubble hidden at 9 m before walking,
+     * which the defect passes trivially. The second walked from 30 m for
+     * 600 ms, and at the seven frames a second this suite renders at the
+     * player often had not moved AT ALL - and standing 30 m due south of the
+     * traveler puts them against a building, where holding the key for
+     * twenty-five seconds moves them nowhere.
+     *
+     * So the claim is: after a MOVEMENT FRAME HAS DEMONSTRABLY RUN, and while
+     * still outside the radius, nothing has fired. The snapshot is taken
+     * INSIDE the page at the first frame that qualifies, so there is no race
+     * between the check and the approach.
+     */
     await standOff(page, 9)
     await expect(bubble(page)).toBeHidden()
-
-    // ★ Focus has to be in the game, not on a header button, or the walk keys
-    // never reach the controller and the find "fails" for no reason at all.
     await page.locator('#cityWalkViewport').click({ position: { x: 400, y: 300 } })
-    // ★ HELD UNTIL IT OPENS, NOT FOR A FIXED TIME. A wall-clock hold is a bet
-    // on the frame rate, and this suite renders through SwiftShader at about
-    // seven frames a second where a headed browser gives sixty - 700 ms of
-    // walking is metres apart between the two. The walk steps in hops of
-    // PLAYER_RADIUS_M / 2, so it cannot tunnel past a 6 m radius however slow
-    // the frames are; what varies is only how long the last three metres take.
+    await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      window.__cw65 = { from: { x: g.walkState.x, y: g.walkState.y }, seen: null }
+    })
     await page.keyboard.down('ArrowUp')
+    await page.waitForFunction(
+      () => {
+        const g = window.__cityWalkGame
+        const p = window.__cw65
+        if (p.seen) return true
+        const moved = Math.hypot(
+          g.walkState.x - p.from.x,
+          g.walkState.y - p.from.y
+        )
+        const d = Math.hypot(
+          g.travelerSpot.x - g.walkState.x,
+          g.travelerSpot.y - g.walkState.y
+        )
+        // A frame that moved, taken while still clear of the radius.
+        if (moved > 0.5 && d > 6.8) {
+          p.seen = {
+            moved,
+            d,
+            found: Boolean(g.travelerFound),
+            hidden: document.getElementById('cityWalkFoundDialog').hidden,
+          }
+          return true
+        }
+        return false
+      },
+      undefined,
+      { timeout: 25000 }
+    )
+    const outside = await page.evaluate(() => window.__cw65.seen)
+    expect(outside, 'no movement frame was observed outside the radius').toBeTruthy()
+    expect(outside.found, `fired at ${outside.d.toFixed(1)}m`).toBe(false)
+    expect(outside.hidden, `bubble open at ${outside.d.toFixed(1)}m`).toBe(true)
+
+    // ★ STILL HELD, and held until it OPENS rather than for a fixed time. A
+    // wall-clock hold is a bet on the frame rate, and this suite renders at
+    // about seven frames a second where a headed browser gives sixty. The walk
+    // steps in hops of PLAYER_RADIUS_M / 2, so it cannot tunnel past a 6 m
+    // radius however slow the frames are; only the wait varies.
     await expect(bubble(page)).toBeVisible({ timeout: 25000 })
     await page.keyboard.up('ArrowUp')
     await expect(announcer(page)).toContainText('You found the traveler')
