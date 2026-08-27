@@ -379,16 +379,45 @@
   gap: var(--space-2xs);
 }
 
-/* CW-40 (CW-Q40): while pin mode is armed, the pick flow's ring becomes the
- * CURSOR. Drawn twice - a dark stroke under a light one - so it reads over
- * bright streets and dark blocks alike, in every phosphor. A data: URI is
- * same-document (no CSP host involved); `crosshair` is the fallback if the
- * platform refuses SVG cursors. The hotspot is the ring's centre. */
-.city-walk-viewport.city-walk-teleport-armed {
-  cursor:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Ccircle cx='12' cy='12' r='8' fill='none' stroke='%23000' stroke-width='5'/%3E%3Ccircle cx='12' cy='12' r='8' fill='none' stroke='%23fff' stroke-width='2.5'/%3E%3C/svg%3E")
-      12 12,
-    crosshair;
+/* CW-61 (CW-Q58): THE ARMED CURSOR HAS RETIRED WITH THE MODE IT ANNOUNCED.
+ * CW-40's ring cursor said "you are in teleport mode"; there is no mode any
+ * more, because every map click asks. A cursor that meant "this click is
+ * special" would now be lying about every click on the map. */
+
+/* CW-61: the travel dialog. Centred over the map rather than tucked into a
+ * corner, because it is asking a question and has to be found - and it is
+ * the one surface in this layer that stops the game to wait for an answer.
+ * Same z-index family as the help panel: above the ASCII overlay canvas
+ * (z-index 5 in _hfm-paint.js), or the glyphs render over it. */
+.city-walk-travel {
+  position: absolute;
+  z-index: var(--z-index-dropdown);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: min(420px, calc(100vw - 2 * var(--space-md)));
+  padding: var(--space-md);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg, none);
+}
+
+.city-walk-travel[hidden] {
+  display: none;
+}
+
+.city-walk-travel h3 {
+  margin-top: 0;
+}
+
+.city-walk-travel-where {
+  margin: var(--space-sm) 0 var(--space-md);
+}
+
+.city-walk-travel-actions {
+  display: flex;
+  gap: var(--space-sm);
 }
 
 /* Landmark legend (map view): real text over the map's left edge. */

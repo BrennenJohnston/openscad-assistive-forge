@@ -81,6 +81,7 @@ import {
   cycleMapStyle,
   mapStyleAnnouncement,
 } from './city-map-styles.js';
+import { describeJunction } from './city-junction.js';
 import { initAltView } from '../_hfm.js';
 import {
   CALIBRATION_CANDIDATES,
@@ -164,10 +165,25 @@ const THUNDER_GAP_MS = 30000;
 // words here means the sentence a screen-reader user hears and the line a
 // sighted user reads say the same thing about the same spot.
 // CW-40 (CW-Q40): the two-step pick-then-J flow retired, and the pick
-// announcements with it. The button arms PIN MODE instead; a click commits.
-const TELEPORT_MODE_ON_MESSAGE =
-  'Teleport mode on. Click the map to travel there.';
-const TELEPORT_MODE_OFF_MESSAGE = 'Teleport mode off.';
+// announcements with it. The button armed PIN MODE instead; a click committed.
+// CW-61 (CW-Q58) retires the arming as well - every map click now ASKS - so
+// the two mode sentences have gone with the mode. What replaces them is a
+// dialog that names the spot before you agree to it, which is a better
+// preview than an announcement was: it stays on screen, and it can be read
+// twice.
+//
+// ACCESSIBILITY-CRITICAL (D-35), flagged DOUBLY in the round text pack. For a
+// blind traveler this sentence IS the map, and the rules behind which names
+// it may use were MEASURED against the real road graph - see city-junction.js
+// and the CW-61 record.
+const TRAVEL_TITLE = 'Travel here?';
+const TRAVEL_WHERE_CORNER = (a, b, on) =>
+  `${on ? 'On' : 'Near'} ${a} and ${b}.`;
+const TRAVEL_WHERE_ONE = (a, on) => `${on ? 'On' : 'Near'} ${a}.`;
+const TRAVEL_WHERE_OPEN = 'Open ground, away from any named street.';
+const TRAVEL_CONFIRM_LABEL = 'Travel';
+const TRAVEL_CANCEL_LABEL = 'Cancel';
+const TRAVEL_CANCELLED_MESSAGE = 'Travel cancelled. You have not moved.';
 const TELEPORT_LANDED_MESSAGE = (street, on, compass) =>
   `Teleported ${on ? 'to' : 'near'} ${street}, facing ${compass}.`;
 const TELEPORT_LANDED_OPEN_MESSAGE = (compass) =>
@@ -247,7 +263,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // CW-40 (CW-Q40): pin mode. Armed by the Teleport button; a map click
     // commits while armed. Never persisted - a mode you cannot see the
     // arming of should never outlive the map it was armed on.
-    teleportArmed: false,
+    // CW-61: the spot the travel dialog is asking about, or null. Arming
+    // (CW-40) has retired: every map click asks, and nothing travels without
+    // a second press.
+    travel: null,
     themeUnsub: null,
     refs: {},
   };
@@ -321,6 +340,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   }
 
   function handleEscape() {
+    // CW-61: the travel dialog is the innermost thing Escape can close, so it
+    // goes first. Cancelling it must not also close the help or leave the
+    // game - one Escape, one dismissal.
+    if (state.travel) {
+      closeTravelDialog(false);
+      return;
+    }
     if (state.helpOpen) {
       toggleHelp(false);
       return;
@@ -556,7 +582,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       // ArrowUp moves it 302 m, and A, S and D match their arrows too.
       'On the map: arrow keys or W A S D pan, Page Up and Page Down zoom, Home returns to you',
       'On the map: K and Shift+K change the map style, between Standard, Roads only, Buildings only and Wayfinding',
-      'On the map: press Teleport, then click where you want to go; J drops you at the middle of the map',
+      'On the map: click anywhere to be asked whether to travel there; J asks about the middle of the map',
+      'The travel question names the corner you would land on, and nothing moves until you press Travel',
       'L and Shift+L: cycle landmarks on the map',
       'X: say where you are',
       // CW-42 (CW-Q39): the bottom of the range is per machine now, so the
@@ -600,6 +627,56 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
 
     layer.appendChild(help);
 
+    /**
+     * CW-61 (CW-Q58): the travel dialog.
+     *
+     * ★ NOT a second `aria-modal`. The layer is already `role="dialog"
+     * aria-modal="true"` and owns the focus trap, and nesting a second modal
+     * inside it would tell a screen reader that the outer one had gone away.
+     * This is a focus-managed panel with `role="group"` and its own labelled
+     * heading, the same shape the help panel has, plus Escape ahead of the
+     * help in the chain.
+     */
+    const travel = document.createElement('div');
+    travel.className = 'city-walk-travel';
+    travel.id = 'cityWalkTravelDialog';
+    travel.setAttribute('role', 'group');
+    travel.setAttribute('aria-labelledby', 'cityWalkTravelTitle');
+    travel.setAttribute('aria-describedby', 'cityWalkTravelWhere');
+    travel.hidden = true;
+
+    const travelTitle = document.createElement('h3');
+    travelTitle.id = 'cityWalkTravelTitle';
+    travelTitle.textContent = TRAVEL_TITLE;
+    travel.appendChild(travelTitle);
+
+    const travelWhere = document.createElement('p');
+    travelWhere.className = 'city-walk-travel-where';
+    travelWhere.id = 'cityWalkTravelWhere';
+    travel.appendChild(travelWhere);
+
+    const travelActions = document.createElement('div');
+    travelActions.className = 'city-walk-travel-actions';
+
+    const travelGo = document.createElement('button');
+    travelGo.type = 'button';
+    travelGo.id = 'cityWalkTravelGoBtn';
+    travelGo.className = 'btn btn-primary city-walk-btn';
+    travelGo.textContent = TRAVEL_CONFIRM_LABEL;
+
+    const travelCancel = document.createElement('button');
+    travelCancel.type = 'button';
+    travelCancel.id = 'cityWalkTravelCancelBtn';
+    travelCancel.className = 'btn btn-secondary city-walk-btn';
+    travelCancel.textContent = TRAVEL_CANCEL_LABEL;
+
+    travelActions.append(travelGo, travelCancel);
+    travel.appendChild(travelActions);
+    layer.appendChild(travel);
+
+    travelGo.addEventListener('click', () => closeTravelDialog(true));
+    travelCancel.addEventListener('click', () => closeTravelDialog(false));
+
     // Landmark legend (CW-10): real text beside the map view.
     const legend = document.createElement('aside');
     legend.className = 'city-walk-legend';
@@ -636,6 +713,9 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       hud,
       hudStatus,
       help,
+      travel,
+      travelWhere,
+      travelGo,
       legend,
       announcer,
     };
@@ -910,16 +990,17 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
           hold: 'zoomIn',
           views: 'map',
         },
-        // CW-40 (CW-Q40): an ARMING TOGGLE now, not a commit button. Press
-        // it, the cursor becomes the ring, and a click on the map travels
-        // there. J stays the keyboard commit at the centre crosshair, which
-        // is why it is still the key this button teaches.
+        // CW-61 (CW-Q58): the ARMING has retired and the button has not.
+        // It opens the travel dialog at the map's centre, which is exactly
+        // what J does - so a mouse-only player and a keyboard player reach
+        // the same question the same way, and the toolbar promise (every key
+        // has a button) survives the change. It is no longer a toggle:
+        // there is no mode left to be in.
         {
           id: 'cityWalkTeleportBtn',
-          label: 'Teleport',
+          label: 'Travel',
           keys: 'J',
-          press: toggleTeleportMode,
-          toggle: true,
+          press: teleportAtCrosshair,
           views: 'map',
         },
         // CW-60: the toolbar promise - every key has a button. It goes LAST
@@ -1085,14 +1166,6 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
           : 'true'
       );
     }
-
-    const teleportBtn = toolbarButtons.find(
-      (b) => b.spec.id === 'cityWalkTeleportBtn'
-    )?.btn;
-    teleportBtn?.setAttribute(
-      'aria-pressed',
-      state.teleportArmed ? 'true' : 'false'
-    );
 
     for (const { spec, btn } of toolbarButtons) {
       if (spec.views === 'both') continue;
@@ -2207,13 +2280,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   function handleViewportPointerUp(event) {
     if (state.drag && state.drag.pointerId !== event.pointerId) return;
     const drag = state.drag;
-    // A press that never crossed the threshold was a CLICK, and on an armed
-    // map a click is the teleport. Measured from where the press went DOWN,
-    // not from where it came up: a two-pixel wobble should send you where you
-    // aimed, not two pixels off it.
-    if (drag?.map && !drag.panning && state.teleportArmed) {
+    // A press that never crossed the threshold was a CLICK, and CW-61 makes
+    // every such click ASK rather than only an armed one act. Measured from
+    // where the press went DOWN, not from where it came up: a two-pixel
+    // wobble should ask about where you aimed, not two pixels off it.
+    if (drag?.map && !drag.panning) {
       const world = mapPointToWorld(drag.downX, drag.downY);
-      if (world) commitTeleport(world.x, world.y);
+      if (world) openTravelDialog(world.x, world.y);
     }
     endDrag();
   }
@@ -2748,10 +2821,14 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     endDrag();
     game.mapView = !game.mapView;
     game.marker.visible = game.mapView;
-    // CW-40: pin mode belongs to the map it was armed on. Leaving the map
-    // disarms it - silently, because this function's own announcement is
-    // the sentence this turn speaks.
-    if (!game.mapView) setTeleportArmed(false, false);
+    // CW-61: a question about a spot on the map cannot outlive the map.
+    // Closed silently, because this function's own announcement is the
+    // sentence this turn speaks - and closing it as a CANCEL would be a lie,
+    // since the player pressed M rather than Cancel.
+    if (!game.mapView && state.travel) {
+      state.travel = null;
+      state.refs.travel.hidden = true;
+    }
     game.city3d.setMapView(game.mapView);
     game.props.setMapView(game.mapView);
     // CW-60: the style is a map state, so it is applied on the way IN and
@@ -2836,42 +2913,86 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   }
 
   /**
-   * CW-40 (CW-Q40): the Teleport button arms PIN MODE. This supersedes
-   * CW-36's pick-then-J: while armed, a left click on the map IS the
-   * teleport, in one step, and the game stays on the map - entering the
-   * street is the player's separate choice. A second press disarms, and
-   * leaving the map disarms silently (the view change's own sentence is
-   * the one announcement that turn makes).
+   * CW-61 (CW-Q58): the travel dialog, and the retirement of arming.
+   *
+   * ★★ THE REVERSAL, STATED PLAINLY. CW-40 made an unarmed map click do
+   * NOTHING and an armed one travel immediately. Both halves are gone: every
+   * sub-threshold click now ASKS, and nothing travels without a second press.
+   * The trade is one extra press against a mode you could be in without
+   * knowing - and against a single mis-click sending you across the city with
+   * no way back to where you were.
+   *
+   * ★ AND J NO LONGER COMMITS SILENTLY. It opens this same dialog at the
+   * crosshair, so the keyboard route and the pointer route ask the same
+   * question and answer it with the same two buttons. CW-Q58 supersedes
+   * CW-Q40's one-step J deliberately: the preview is the point.
+   *
+   * @param {number} x world metres
+   * @param {number} y world metres
    */
-  function toggleTeleportMode() {
+  function openTravelDialog(x, y) {
     const game = state.game;
     if (!game?.mapView) return;
-    setTeleportArmed(!state.teleportArmed, true);
-  }
 
-  function setTeleportArmed(armed, announce) {
-    if (state.teleportArmed === armed) return;
-    state.teleportArmed = armed;
-    // The ring the pick flow used to draw in the world is the CURSOR now.
-    state.refs.viewport?.classList.toggle('city-walk-teleport-armed', armed);
-    syncToolbarView();
-    if (announce) {
-      announceInLayer(
-        armed ? TELEPORT_MODE_ON_MESSAGE : TELEPORT_MODE_OFF_MESSAGE
-      );
+    // ★ THE LANDING FIRST, THEN THE NAME. findLandingNear snaps to a street
+    // and refuses what it cannot stand on, so asking the street index where
+    // the CLICK was would describe a spot the player is not going to.
+    const landing = findLandingNear(game.model, game.collision, x, y);
+    if (!landing) {
+      announceInLayer(TELEPORT_REFUSED_MESSAGE);
+      return;
     }
+
+    const hits = game.streetIndex.query(landing.x, landing.y, STREET_NEAR_M);
+    const where = describeJunction(hits, {
+      onM: STREET_ON_M,
+      junctionM: STREET_JUNCTION_M,
+    });
+    const sentence = where.primary
+      ? where.secondary
+        ? TRAVEL_WHERE_CORNER(where.primary, where.secondary, where.on)
+        : TRAVEL_WHERE_ONE(where.primary, where.on)
+      : TRAVEL_WHERE_OPEN;
+
+    state.travel = { x: landing.x, y: landing.y, returnTo: null };
+    state.refs.travelWhere.textContent = sentence;
+    state.refs.travel.hidden = false;
+    state.refs.travelGo.focus();
   }
 
   /**
-   * J: commit at the map's centre crosshair, armed or not. The keyboard
-   * route needs no arming, because the arrows already steer the middle of
-   * the screen onto a street and PageUp/PageDown already zoom it (CW-Q41),
-   * so travelling from the keyboard was always one step.
+   * @param {boolean} commit Travel, or Cancel.
+   */
+  function closeTravelDialog(commit) {
+    const pick = state.travel;
+    state.travel = null;
+    state.refs.travel.hidden = true;
+    if (!pick) return;
+    if (commit) {
+      // commitTeleport speaks the landing, which is the sentence this turn
+      // makes; a cancel has nothing else to say for it, so it says its own.
+      commitTeleport(pick.x, pick.y);
+    } else {
+      announceInLayer(TRAVEL_CANCELLED_MESSAGE);
+    }
+    // Focus goes back to the control the map is driven from rather than to
+    // <body>, which is D-59 and kills every key for the rest of the session.
+    state.refs.mapBtn?.focus();
+  }
+
+  /**
+   * J: ask at the map's centre crosshair. The arrows already steer the middle
+   * of the screen onto a street and PageUp/PageDown already zoom it (CW-Q41),
+   * so the keyboard reaches any spot; what it lacked was the preview.
    */
   function teleportAtCrosshair() {
     const game = state.game;
     if (!game || !game.mapView) return;
-    commitTeleport(game.mapCam.centerX, game.mapCam.centerY);
+    if (state.travel) {
+      closeTravelDialog(false);
+      return;
+    }
+    openTravelDialog(game.mapCam.centerX, game.mapCam.centerY);
   }
 
   /**
@@ -2980,6 +3101,18 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   // HUD says "near" instead, and past it says nothing rather than lying.
   const STREET_ON_M = 12;
   const STREET_NEAR_M = 30;
+  /**
+   * CW-61: how close the SECOND street has to be before the travel dialog is
+   * allowed to call a spot a corner. MEASURED by walking away from 120 real
+   * junctions along one of their own streets: at 0, 5 and 10 m offsets ALL
+   * 120 still had a second street within twelve metres, and at 15 m only 27
+   * did. The runner-up's distance tracks the offset exactly, so the cliff is
+   * a cliff in distance and twelve metres sits inside it. It is ON_M's value
+   * and ON_M's meaning - close enough to be standing in it - which is why it
+   * is written as the same number rather than a second one that happens to
+   * match.
+   */
+  const STREET_JUNCTION_M = STREET_ON_M;
   // At an intersection two streets are almost equidistant (at the Seattle
   // spawn, 4th Avenue at 8.1 m and Union Street at 9.0 m). Without a margin
   // the clause would flap between them on every step.

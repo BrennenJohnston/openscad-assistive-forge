@@ -472,19 +472,31 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     // broken rather than ignored.
     expect(afterY.follow).toBe(false)
 
-    // ★ THE BOUNDARY, WRITTEN NOW BECAUSE CW-61's MODAL WILL HANG ON IT.
-    // Under DRAG_THRESHOLD_PX the press was a click and the map must not
-    // move at all; over it the press was a drag and it must.
+    // ★★ THE BOUNDARY, AND CW-61'S MODAL NOW HANGS ON IT, exactly as this
+    // case predicted it would. Under DRAG_THRESHOLD_PX the press was a click:
+    // the map must not move AND the travel dialog must open. Over it the
+    // press was a drag: the map must move AND the dialog must stay shut.
+    // Both halves on both sides, because a boundary asserted from one side
+    // only cannot tell a threshold from a control that never fires.
+    const dialog = page.locator('#cityWalkTravelDialog')
+
     const wobbleFrom = await cam()
     await drag(2, 0, 2)
     const wobbleTo = await cam()
     expect(wobbleTo.x).toBe(wobbleFrom.x)
     expect(wobbleTo.y).toBe(wobbleFrom.y)
+    await expect(dialog).toBeVisible()
+
+    // Escape it before dragging again: the dialog sits over the middle of
+    // the map, which is where this test grabs from.
+    await page.keyboard.press('Escape')
+    await expect(dialog).toBeHidden()
 
     const dragFrom = await cam()
     await drag(6, 0, 3)
     const dragTo = await cam()
     expect(dragTo.x).not.toBe(dragFrom.x)
+    await expect(dialog).toBeHidden()
   })
 
   test('★ an over-threshold drag on an ARMED map pans and never teleports (CW-59)', async ({
