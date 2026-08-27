@@ -6116,6 +6116,18 @@ export const FIREWORK_SHOW = {
    */
   starM: 7,
   spreadM: 35,
+  /**
+   * ★ THE CADENCE LIVES HERE SO 2.3.1 CAN BE RED-PROVEN. A flash counter that
+   * has only ever returned zero is not a measurement, it is a hope. With these
+   * two sweepable, the same instrument can be handed a deliberate strobe and
+   * asked whether it notices - which is the only thing that makes the shipped
+   * zero worth reporting.
+   *
+   * The bloom is comfortably over 2.3.1's one-second floor and the gap keeps
+   * bursts to about 0.71 a second against its ceiling of three.
+   */
+  bloomMs: 1600,
+  gapMs: 1400,
 };
 
 /**
@@ -6129,9 +6141,6 @@ const FIREWORK_STILL_SPAN_RAD = 0.7;
 const FIREWORK_STARS = 28;
 /** Concurrent bursts. One material per SLOT, so two bursts can share a hue. */
 const FIREWORK_SLOTS = 2;
-/** Well over 2.3.1's one-second floor, so there is room above it. */
-const FIREWORK_BLOOM_MS = 1600;
-const FIREWORK_GAP_MS = 1400;
 const FIREWORK_SHOW_MS = 20000;
 /** Gentle, so stars drift rather than drop out of the sky. */
 const FIREWORK_FALL_MSS = 3.5;
@@ -6423,19 +6432,19 @@ export function buildFireworks(spanM) {
         }
       } else if (nowMs >= nextBurstMs) {
         fireBurst(nowMs, x, y);
-        nextBurstMs = nowMs + FIREWORK_GAP_MS;
+        nextBurstMs = nowMs + FIREWORK_SHOW.gapMs;
       }
 
       for (const slot of slots) {
         if (slot.startMs < 0) continue;
         const since = nowMs - slot.startMs;
-        if (since > FIREWORK_BLOOM_MS) {
+        if (since > FIREWORK_SHOW.bloomMs) {
           slot.startMs = -1;
           for (const mesh of slot.stars) mesh.visible = false;
           slot.mapRoot.visible = false;
           continue;
         }
-        const k = since / FIREWORK_BLOOM_MS;
+        const k = since / FIREWORK_SHOW.bloomMs;
         // The thunder's hump. No edge anywhere in it, which is what keeps
         // 2.3.1 satisfied by construction rather than by luck.
         const bloom = Math.sin(k * Math.PI);

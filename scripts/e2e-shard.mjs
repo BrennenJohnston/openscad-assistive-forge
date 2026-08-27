@@ -36,9 +36,9 @@
  * A file with no entry is assumed to cost DEFAULT_WEIGHT_S, which is set well
  * above the median so an unmeasured newcomer is spread rather than dumped.
  */
-import { readdirSync } from 'node:fs'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { readdirSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 /**
  * Measured Chromium seconds per spec file.
@@ -76,7 +76,14 @@ export const MEASURED_SECONDS = {
   // pieces on DIFFERENT shards. These three weights are the old file's own
   // describe blocks, re-summed from the same run.
   'ascii-city-walk-controls.spec.js': 891.1,
-  'ascii-city-walk.spec.js': 704.3,
+  // CW-64 added four cases here (the trigger, the re-entry, the reduced-motion
+  // picture, and the WCAG 2.3.1 measurement), taking the file from 40 to 44.
+  // 775 is 704.3 scaled by test count and LABELLED an estimate, the same way
+  // CW-63 did the furniture spec - the next re-measure from a green run
+  // replaces it. The 2.3.1 case is the one that could beat this estimate: it
+  // watches a whole ~20 s show rather than driving a control, so it is dearer
+  // than the file's 17.6 s average. Worth watching on the first green board.
+  'ascii-city-walk.spec.js': 775,
   // 289.0 measured, plus ~40 for the two weather describes CW-29 added, which
   // no CI run has timed yet. The next board replaces this with a measurement.
   'ascii-city-walk-street.spec.js': 901.7,
@@ -201,10 +208,10 @@ export const MEASURED_SECONDS = {
   'svg-edit-door.spec.js': 34.1,
   'ink-modes.spec.js': 45.5,
   'dxf-roundtrip.spec.js': 19.7,
-}
+};
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */
-export const DEFAULT_WEIGHT_S = 60
+export const DEFAULT_WEIGHT_S = 60;
 
 /**
  * Deal the files into `total` shards, heaviest first, each one going to the
@@ -220,53 +227,56 @@ export const DEFAULT_WEIGHT_S = 60
  */
 export function planShards(files, weights, total) {
   if (!Number.isInteger(total) || total < 1) {
-    throw new Error(`shard count must be a positive integer, got ${total}`)
+    throw new Error(`shard count must be a positive integer, got ${total}`);
   }
-  const bins = Array.from({ length: total }, () => ({ load: 0, files: [] }))
+  const bins = Array.from({ length: total }, () => ({ load: 0, files: [] }));
   const ordered = [...files].sort((a, b) => {
-    const wa = weights[a] ?? DEFAULT_WEIGHT_S
-    const wb = weights[b] ?? DEFAULT_WEIGHT_S
-    return wb - wa || a.localeCompare(b)
-  })
+    const wa = weights[a] ?? DEFAULT_WEIGHT_S;
+    const wb = weights[b] ?? DEFAULT_WEIGHT_S;
+    return wb - wa || a.localeCompare(b);
+  });
   for (const file of ordered) {
-    let lightest = bins[0]
-    for (const bin of bins) if (bin.load < lightest.load) lightest = bin
-    lightest.load += weights[file] ?? DEFAULT_WEIGHT_S
-    lightest.files.push(file)
+    let lightest = bins[0];
+    for (const bin of bins) if (bin.load < lightest.load) lightest = bin;
+    lightest.load += weights[file] ?? DEFAULT_WEIGHT_S;
+    lightest.files.push(file);
   }
-  return bins.map((b) => b.files.sort())
+  return bins.map((b) => b.files.sort());
 }
 
 /** Every spec file under a directory, as paths relative to the repo root. */
 export function listSpecFiles(dir) {
-  const out = []
+  const out = [];
   const walk = (here) => {
     for (const entry of readdirSync(here, { withFileTypes: true })) {
-      const full = path.join(here, entry.name)
-      if (entry.isDirectory()) walk(full)
-      else if (entry.name.endsWith('.spec.js')) out.push(entry.name)
+      const full = path.join(here, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.endsWith('.spec.js')) out.push(entry.name);
     }
-  }
-  walk(dir)
-  return out.sort()
+  };
+  walk(dir);
+  return out.sort();
 }
 
 const invokedDirectly =
-  process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (invokedDirectly) {
-  const index = Number(process.argv[2])
-  const total = Number(process.argv[3])
+  const index = Number(process.argv[2]);
+  const total = Number(process.argv[3]);
   if (!Number.isInteger(index) || index < 1 || index > total) {
-    console.error('usage: node scripts/e2e-shard.mjs <shard> <total>')
-    process.exit(2)
+    console.error('usage: node scripts/e2e-shard.mjs <shard> <total>');
+    process.exit(2);
   }
-  const dir = path.resolve('tests/e2e')
-  const files = listSpecFiles(dir)
+  const dir = path.resolve('tests/e2e');
+  const files = listSpecFiles(dir);
   if (files.length === 0) {
-    console.error(`no spec files under ${dir} - refusing to run an empty shard`)
-    process.exit(1)
+    console.error(
+      `no spec files under ${dir} - refusing to run an empty shard`
+    );
+    process.exit(1);
   }
-  const shard = planShards(files, MEASURED_SECONDS, total)[index - 1]
-  process.stdout.write(shard.map((f) => `tests/e2e/${f}`).join(' '))
+  const shard = planShards(files, MEASURED_SECONDS, total)[index - 1];
+  process.stdout.write(shard.map((f) => `tests/e2e/${f}`).join(' '));
 }
