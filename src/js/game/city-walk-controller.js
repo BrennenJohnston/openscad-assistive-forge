@@ -531,11 +531,16 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       'Arrow Left / Q and Arrow Right / E: turn',
       'R and F: look up and down',
       'V: level the view',
-      'Drag with the mouse in street view: look around',
+      'Drag with the mouse: look around in street view, move the map in map view',
       'Shift (hold): move faster',
       'Left and Right Bracket: walking speed down or up',
       'M: switch between street view and map view',
-      'On the map: arrow keys pan, Page Up and Page Down zoom, Home returns to you',
+      // CW-59: W A S D already panned the map and always had - the same keys
+      // that walk the street, through the same actions. Only this line and
+      // the map-view announcement said otherwise, so the fix is a sentence
+      // rather than a key binding. Measured: W moves the map 302 m where
+      // ArrowUp moves it 302 m, and A, S and D match their arrows too.
+      'On the map: arrow keys or W A S D pan, Page Up and Page Down zoom, Home returns to you',
       'On the map: press Teleport, then click where you want to go; J drops you at the middle of the map',
       'L and Shift+L: cycle landmarks on the map',
       'X: say where you are',
@@ -2719,7 +2724,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     updateHud();
     announceInLayer(
       game.mapView
-        ? 'Map view, seen from above. Arrow keys pan, Page Up and Page Down zoom, Home returns to you. The toolbar now shows the map buttons.'
+        ? 'Map view, seen from above. Arrow keys or W A S D pan, or drag with the mouse. Page Up and Page Down zoom, Home returns to you. The toolbar now shows the map buttons.'
         : 'Street view. The toolbar now shows the walking buttons.'
     );
   }

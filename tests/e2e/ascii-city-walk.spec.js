@@ -1005,8 +1005,17 @@ test.describe('ASCII City Walk — looking around (CW-13)', () => {
     await expect(page.locator('#cityWalkHelpPanel')).toContainText(
       'V: level the view'
     )
+    // CW-59: the mouse drags the MAP now as well, so the line that taught
+    // it as street-only was describing half the feature.
     await expect(page.locator('#cityWalkHelpPanel')).toContainText(
-      'Drag with the mouse in street view: look around'
+      'Drag with the mouse: look around in street view, move the map in map view'
+    )
+    // ★ AND THE MAP LINE TEACHES W A S D, which it always should have. Those
+    // keys have panned the map since the map existed - the same actions the
+    // street walk binds - and only this sentence said arrows only. Pinned
+    // here so the teaching cannot drift away from the binding again.
+    await expect(page.locator('#cityWalkHelpPanel')).toContainText(
+      'On the map: arrow keys or W A S D pan'
     )
   })
 })

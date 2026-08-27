@@ -480,6 +480,72 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     }).toBeGreaterThan(1)
   })
 
+  test('★★ W A S D pan the map, exactly as the arrows do (CW-59, a PIN)', async ({
+    page,
+  }) => {
+    // ★★ THIS PASSES ON BASE, AND SAYING SO IS THE POINT. The plan for this
+    // release assumed W A S D did not pan the map and had to be made to.
+    // They always did: KeyW binds the same 'forward' action ArrowUp binds,
+    // and the map's panY reads that action, not the key. Measured before any
+    // code changed - W moved the camera 302 m where ArrowUp moved it 302 m,
+    // and A, S and D matched their arrows too.
+    //
+    // So this is NOT proof of a fix. It is a pin against a binding that was
+    // never written down, and the honest record of an inverted premise: what
+    // CW-59 actually changed was the SENTENCE that told players arrows only.
+    await launchGame(page)
+    await enterCity(page)
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
+
+    const centre = () =>
+      page.evaluate(() => ({
+        x: window.__cityWalkGame.mapCam.centerX,
+        y: window.__cityWalkGame.mapCam.centerY,
+      }))
+    // Park the camera and stop it following, so the walk cannot move it.
+    await page.evaluate(() => {
+      const c = window.__cityWalkGame.mapCam
+      c.centerX = 0
+      c.centerY = 0
+      c.follow = false
+    })
+
+    // Held until the map has MOVED, never for a number of milliseconds: the
+    // map only pans inside animation frames, and a loaded runner can render
+    // none inside a window (the trap this round has paid for four times).
+    const panBy = async (key) => {
+      await page.evaluate(() => {
+        const c = window.__cityWalkGame.mapCam
+        c.centerX = 0
+        c.centerY = 0
+        c.follow = false
+      })
+      await page.keyboard.down(key)
+      await expect
+        .poll(async () => {
+          const c = await centre()
+          return Math.hypot(c.x, c.y)
+        }, { timeout: 15000 })
+        .toBeGreaterThan(50)
+      await page.keyboard.up(key)
+      return centre()
+    }
+
+    const w = await panBy('KeyW')
+    expect(w.y).toBeGreaterThan(50)
+    expect(Math.abs(w.x)).toBeLessThan(1)
+
+    const s = await panBy('KeyS')
+    expect(s.y).toBeLessThan(-50)
+
+    const a = await panBy('KeyA')
+    expect(a.x).toBeLessThan(-50)
+
+    const d = await panBy('KeyD')
+    expect(d.x).toBeGreaterThan(50)
+  })
+
   test('Enter on a hold button takes one step and then stops', async ({
     page,
   }) => {
