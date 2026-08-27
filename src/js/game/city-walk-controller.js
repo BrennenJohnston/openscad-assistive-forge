@@ -108,7 +108,12 @@ import {
   MONO_BLOOM_PX,
   MONO_GLOW_FADE,
 } from './hc-palettes.js';
-import { buildRain, RAIN_LEVEL_COUNT, RAIN_LEVEL_NAMES } from './city-scene.js';
+import {
+  buildFireworks,
+  buildRain,
+  RAIN_LEVEL_COUNT,
+  RAIN_LEVEL_NAMES,
+} from './city-scene.js';
 import { buildCityCameraPanel } from './city-camera-panel.js';
 import { createClassPass } from './city-class-pass.js';
 import { GLYPH_VOCABULARIES } from './glyph-vocabularies.js';
@@ -1565,6 +1570,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // characters for free — no DOM rain, no converter changes.
     const rain = buildRain();
     scene.add(rain.group);
+    // CW-64 (CW-Q59): the second mover, and the only other one. Built with the
+    // city and idle until something starts it, so a city nobody celebrates in
+    // costs 56 hidden meshes and nothing else.
+    const fireworks = buildFireworks();
+    scene.add(fireworks.group);
     scene.add(props.group);
     stampObstacles(collision, props.obstacles);
     const spawn = findSpawn(model, collision);
@@ -1596,6 +1606,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       city3d,
       props,
       rain,
+      fireworks,
       lighting,
       marker,
       markerGeom,
@@ -1901,6 +1912,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       game.motionQuery.removeEventListener?.('change', game.onMotionChange);
     }
     game.rain?.dispose();
+    game.fireworks?.dispose();
     game.classPass?.dispose();
     game.altView?.dispose();
     game.lighting?.detach();
@@ -2680,6 +2692,14 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       game.lighting.stepFogDrift(nowMs);
     }
 
+    // CW-64: the show is the frozen world's one bounded exception. It marks
+    // frames dirty ONLY while it runs, which is what keeps the exception
+    // bounded rather than a second permanent mover.
+    if (game.fireworks?.isRunning()) {
+      game.fireworks.update(dtS, game.walkState.x, game.walkState.y, nowMs);
+      dirty = true;
+    }
+
     return dirty;
   }
   function adjustCharacterSize(delta) {
@@ -2992,6 +3012,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // picture rather than as rain — caught by eye in the four-city tour.
     if (game.rain)
       game.rain.group.visible = !game.mapView && game.rainLevel !== null;
+    // CW-64: the street show is street geometry. The map gets its own 2D
+    // representation (P2) rather than a bird's eye view of the same stars.
+    if (game.fireworks)
+      game.fireworks.group.visible =
+        !game.mapView && game.fireworks.isRunning();
     game.lighting.setMapBoost(game.mapView);
     game.beacons.group.visible = game.mapView;
     state.refs.legend.hidden = !game.mapView;

@@ -134,6 +134,17 @@ export const CLASS_BY_MESH_NAME = new Map([
   ['waste-baskets', SURFACE_CLASS.CAR],
   ['bike-racks', SURFACE_CLASS.CAR],
   ['hydrants', SURFACE_CLASS.LAMP],
+  // CW-64: a firework star. The span table is FULL at 16, so this is a borrow
+  // and not a new id (CW-43's law), and it is a DELIBERATE one - CW-56's
+  // builders guard cannot see this mesh at all, because it enumerates
+  // buildStreetProps and a firework is built beside the rain.
+  //
+  // ★ AND LEAVING IT OUT IS NOT A SAFE DEFAULT HERE. An unmapped mesh reads as
+  // SKY, which for something 200 m up sounds right and is in fact the reason
+  // the first show photographed as EMPTY BLACK SKY with 28 bright stars in the
+  // frustum: the sky's voice draws nothing, so the bursts rendered and the
+  // converter dressed them as background.
+  ['fireworks', SURFACE_CLASS.SIGN],
 ]);
 
 /**

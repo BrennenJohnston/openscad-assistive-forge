@@ -6047,6 +6047,258 @@ export const RAIN_LEVEL_COUNT = RAIN_LEVELS.length;
 export const RAIN_LEVEL_NAMES = RAIN_LEVELS.map((l) => l.name);
 
 /**
+ * ★★ CW-64 (CW-Q59): THE ONE BOUNDED EXCEPTION TO THE FROZEN WORLD.
+ *
+ * This city does not move. That is Round 4's directive and it is the reason
+ * the converter can run at all - a static frame is not re-converted. Rain has
+ * been the only mover since, and the owner signed CW-Q59 to add a second: a
+ * show that runs for about twenty seconds, marks frames dirty only while it
+ * runs, and leaves the world exactly as still as it found it.
+ *
+ * ★ THE BLOOM IS THE THUNDER'S HUMP, AND THAT IS NOT A COINCIDENCE.
+ * `stepWeather` already swells thunder with `Math.sin(k * Math.PI)` and its
+ * own comment says why: "a single smooth hump: up over the first half, down
+ * over the second, so there is no edge anywhere in it." WCAG 2.3.1 counts
+ * paired luminance SWINGS, not brightness, so a bloom with no edge is a bloom
+ * with no flash. The same shape answers both.
+ *
+ * ★★ THE BLOOM IS DRIVEN THROUGH COLOUR, NEVER OPACITY. Scaling
+ * `material.color` lands a star on EXACT BLACK at both ends of the hump, and
+ * exact black is the one value this converter renders as an empty cell (CW-5),
+ * so a burst fades to nothing rather than to a grey stain - and there is no
+ * transparency sorting anywhere in it.
+ */
+/**
+ * ★ THE SHOW'S NUMBERS LIVE IN ONE MUTABLE OBJECT so a photograph sweep can
+ * change one variable per page load without touching the file - the pattern
+ * CW-63's diagrid used, and the reason its six variants took one session
+ * rather than six.
+ */
+export const FIREWORK_SHOW = {
+  /** CW-Q59's signed radius. */
+  ringM: 200,
+  /**
+   * ★★ THE PLAN SAYS "z ~60-120 m, just above the buildings", AND MEASURED
+   * THAT IS NOT ABOVE THEM.
+   *
+   * Counted within 250 m of each city's centre: Seattle has 12 buildings over
+   * 60 m and 6 over 120 m (tallest 148); Denver 10 and 1 (tallest 152);
+   * Burnaby 10 and 0 (114); Albuquerque 2 and 0 (120). Photographed from the
+   * Seattle spawn, a burst at 68 m on the 200 m ring sat squarely BEHIND a
+   * facade - in frustum, bright, and invisible, because the depth test was
+   * doing its job.
+   *
+   * So the band is raised to clear the skyline the plan meant it to clear. The
+   * plan's INTENT ("just above the buildings") is what is honoured here; its
+   * number was written before anyone counted.
+   */
+  zMinM: 150,
+  zMaxM: 230,
+  /**
+   * ★★ SEVEN METRES, AND FIVE SIZES WERE PHOTOGRAPHED TO GET THERE.
+   *
+   * At the 200 m ring one metre is 3.27 px over the game viewport's 756, so a
+   * 1 m star is 0.82 of a character cell wide and 0.36 TALL - it would average
+   * away exactly as CW-63's published diagrid member did. Measured against a
+   * same-run control frame with the show stopped:
+   *
+   *   5 m   0.567% of the frame   separated points, but faint
+   *   7 m   1.169%                SHIPPED - bold, still distinct
+   *   10 m  2.253%                the stars MERGE into one green blob
+   *   16 m  3.797%                a cloud
+   *   24 m  5.305%                a wall
+   *
+   * ★ A share-of-frame number is the WRONG bar here and CW-58 is why: its
+   * goose measured below the leaves CW-56 refused and was unmistakable,
+   * because share-of-frame measures a carpet, not a single object. What
+   * settled 7 m was the photograph - at 10 m and up the burst stops being a
+   * scatter of stars and becomes a shape.
+   */
+  starM: 7,
+  spreadM: 35,
+};
+const FIREWORK_STARS = 28;
+/** Concurrent bursts. One material per SLOT, so two bursts can share a hue. */
+const FIREWORK_SLOTS = 2;
+/** Well over 2.3.1's one-second floor, so there is room above it. */
+const FIREWORK_BLOOM_MS = 1600;
+const FIREWORK_GAP_MS = 1400;
+const FIREWORK_SHOW_MS = 20000;
+/** Gentle, so stars drift rather than drop out of the sky. */
+const FIREWORK_FALL_MSS = 3.5;
+/** See the note in fireBurst: 0.9 lands four of six hues on white. */
+const FIREWORK_TIER = 0.75;
+
+export function buildFireworks() {
+  const group = new Group();
+  group.name = 'fireworks';
+  group.visible = false;
+
+  // One metre, scaled per star at update time, so the size stays sweepable
+  // without rebuilding the city.
+  const geom = new BoxGeometry(1, 1, 1);
+
+  // The star pattern is the same every burst on purpose: what a player reads
+  // is the position, the colour and the timing, and a per-burst direction set
+  // would be a new random stream inserted into a draw order (the seed law).
+  const rand = makeLcg(0xf1b0c0de);
+  const dirs = [];
+  for (let i = 0; i < FIREWORK_STARS; i++) {
+    // Even-ish over the sphere, flattened a little so a burst reads wider
+    // than it is tall - the cell grid is 2.25x coarser vertically.
+    const z = rand() * 2 - 1;
+    const r = Math.sqrt(Math.max(0, 1 - z * z));
+    const a = rand() * Math.PI * 2;
+    dirs.push([Math.cos(a) * r, Math.sin(a) * r, z * 0.6]);
+  }
+
+  const slots = [];
+  for (let s = 0; s < FIREWORK_SLOTS; s++) {
+    const material = new MeshBasicMaterial({ color: 0x000000, fog: false });
+    const stars = [];
+    for (let i = 0; i < FIREWORK_STARS; i++) {
+      const mesh = new Mesh(geom, material);
+      mesh.visible = false;
+      group.add(mesh);
+      stars.push(mesh);
+    }
+    slots.push({ material, stars, startMs: -1, centre: [0, 0, 0], tint: null });
+  }
+
+  // ★★ start() TAKES NO CLOCK, AND THAT IS THE POINT. The first version had it
+  // take `nowMs`, and the very first attempt to photograph the show handed it
+  // `performance.now()` while `update` receives the game's own
+  // `performance.now() - startedAtMs`. Two clocks, hours apart in value, so
+  // every burst was scheduled in the far future and nothing ever fired - a
+  // show that started, reported itself running, and drew nothing. The start is
+  // established by the first update instead, on whatever clock the caller is
+  // actually stepping with.
+  let armed = false;
+  let showStartMs = -1;
+  let nextBurstMs = -1;
+  let burstIndex = 0;
+
+  const fireBurst = (nowMs, centreX, centreY) => {
+    const slot = slots.find((s) => s.startMs < 0);
+    if (!slot) return;
+    // Position and colour from the burst's own index, never a new stream.
+    // ★ THE OFFSETS ARE NOT DECORATION: hashSpot(0, 0) is 0, so without them
+    // the FIRST burst of every show would fire at angle 0 in the first hue,
+    // every time. Checked, not assumed.
+    const h = hashSpot(burstIndex * 97 + 13, burstIndex * 131 + 29);
+    const angle = ((h % 3600) / 3600) * Math.PI * 2;
+    const z =
+      FIREWORK_SHOW.zMinM +
+      (((h >>> 12) % 100) / 100) * (FIREWORK_SHOW.zMaxM - FIREWORK_SHOW.zMinM);
+    slot.centre = [
+      centreX + Math.sin(angle) * FIREWORK_SHOW.ringM,
+      centreY + Math.cos(angle) * FIREWORK_SHOW.ringM,
+      z,
+    ];
+    // SIGN_HUES_DEG is the set already chosen to land palette entries.
+    // ★ THE BIT SLICE WAS CHOSEN BY PRINTING THE SEQUENCE, not by habit. Over
+    // the ~14 bursts a 20 s show fires, `>>> 5` uses only FOUR of the six hues
+    // and `>>> 0` five; 13, 17 and 21 each use all six. A modulus is not a
+    // guarantee of variety at fourteen draws - look at the actual sequence.
+    const hue = SIGN_HUES_DEG[(h >>> 17) % SIGN_HUES_DEG.length];
+    // ★★ 0.75, NOT 0.9, AND D-112 IS WHY. Fitted with inGamutChroma, encoded
+    // to sRGB and handed to the real pickPaletteIndex with chromaBoost 5:
+    // at tier 0.9 FOUR OF SIX hues land white in each palette set, because the
+    // gamut cap makes the colour impossible rather than merely hard. At 0.75
+    // every hue lands its own entry in both sets. The bloom scales down from
+    // the peak and lower tiers land their hue MORE reliably, so the peak is
+    // the only value that needed checking.
+    slot.tint = tintOf(
+      FIREWORK_TIER,
+      hue,
+      inGamutChroma(FIREWORK_TIER, hue, 0.9)
+    );
+    slot.startMs = nowMs;
+    burstIndex++;
+  };
+
+  return {
+    group,
+
+    start() {
+      armed = true;
+      showStartMs = -1;
+      burstIndex = 0;
+      group.visible = true;
+    },
+
+    isRunning() {
+      return armed;
+    },
+
+    /**
+     * The show does NOT re-centre on the player the way rain does: a firework
+     * is at a place in the city, so walking toward one gets you nearer.
+     */
+    update(dtS, x, y, nowMs) {
+      if (!armed) return;
+      if (showStartMs < 0) {
+        showStartMs = nowMs;
+        nextBurstMs = nowMs;
+      }
+      if (nowMs - showStartMs > FIREWORK_SHOW_MS) {
+        const anyLive = slots.some((s) => s.startMs >= 0);
+        if (!anyLive) {
+          armed = false;
+          showStartMs = -1;
+          group.visible = false;
+          for (const slot of slots) {
+            for (const mesh of slot.stars) mesh.visible = false;
+          }
+          return;
+        }
+      } else if (nowMs >= nextBurstMs) {
+        fireBurst(nowMs, x, y);
+        nextBurstMs = nowMs + FIREWORK_GAP_MS;
+      }
+
+      for (const slot of slots) {
+        if (slot.startMs < 0) continue;
+        const since = nowMs - slot.startMs;
+        if (since > FIREWORK_BLOOM_MS) {
+          slot.startMs = -1;
+          for (const mesh of slot.stars) mesh.visible = false;
+          continue;
+        }
+        const k = since / FIREWORK_BLOOM_MS;
+        // The thunder's hump. No edge anywhere in it, which is what keeps
+        // 2.3.1 satisfied by construction rather than by luck.
+        const bloom = Math.sin(k * Math.PI);
+        slot.material.color.setRGB(
+          slot.tint[0] * bloom,
+          slot.tint[1] * bloom,
+          slot.tint[2] * bloom
+        );
+        // Decelerating outward, then a gentle fall.
+        const spread = FIREWORK_SHOW.spreadM * (1 - (1 - k) * (1 - k));
+        const drop = 0.5 * FIREWORK_FALL_MSS * (since / 1000) ** 2;
+        for (let i = 0; i < slot.stars.length; i++) {
+          const d = dirs[i];
+          slot.stars[i].position.set(
+            slot.centre[0] + d[0] * spread,
+            slot.centre[1] + d[1] * spread,
+            slot.centre[2] + d[2] * spread - drop
+          );
+          slot.stars[i].scale.setScalar(FIREWORK_SHOW.starM);
+          slot.stars[i].visible = true;
+        }
+      }
+    },
+
+    dispose() {
+      group.clear();
+      geom.dispose();
+      for (const slot of slots) slot.material.dispose();
+    },
+  };
+}
+
+/**
  * Attach the game's lighting: a dim ambient fill plus a headlight parented
  * to the camera (the same view-space arrangement the model preview uses, so
  * walls facing the player read brightest in the ASCII conversion).
