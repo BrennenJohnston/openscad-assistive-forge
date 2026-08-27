@@ -567,3 +567,17 @@ export const STORAGE_KEY_CITY_WALK_COLOUR = getAppPrefKey('city-walk-colour');
  */
 export const STORAGE_KEY_CITY_WALK_CAMERA_PANEL =
   getDrawerStateKey('camera-city-walk');
+
+/**
+ * localStorage key for the City Walk map's drawing style (CW-60, CW-Q57).
+ * One of 'standard', 'roads', 'buildings', 'wayfinding'.
+ *
+ * ABSENT means Standard, which is the map as it has always been drawn, so a
+ * player who never touches this sees no change at all. An unrecognised value
+ * also falls back to Standard rather than to nothing: a style is how the map
+ * is DRAWN, and a map that failed to draw would be a worse answer than a
+ * plain one.
+ */
+export const STORAGE_KEY_CITY_WALK_MAP_STYLE = getAppPrefKey(
+  'city-walk-map-style'
+);

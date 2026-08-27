@@ -105,6 +105,7 @@ function el(tag, className, attrs = {}) {
  * @param {() => void} actions.levelView
  * @param {() => void} actions.recenterMap
  * @param {(delta: number) => void} actions.adjustCharacterSize
+ * @param {(delta: number) => void} actions.cycleMapStyle - CW-60, map only
  * @param {(rad: number, word: string) => void} actions.setHeading
  * @param {(rad: number) => void} actions.setPitch
  * @param {(text: string) => void} actions.announce
@@ -189,7 +190,18 @@ export function buildCityCameraPanel(actions) {
     btn.addEventListener('pointercancel', stop);
     // Keyboard: Enter and Space fire click, which has no press and release,
     // so a key press is one step of movement rather than a hold.
-    btn.addEventListener('click', () => {
+    //
+    // ★★ D-113 (CW-60): AND A POINTER CLICK MUST NOT ARRIVE HERE TWICE. A
+    // mouse press fires pointerdown, pointerup AND a click, so this handler
+    // used to run `start()` a second time for a press pointerdown had already
+    // served. On the hold path that only stretched the step and nobody
+    // noticed; on the PRESS path it did the job twice. Measured before the
+    // fix: one click on this panel's Zoom in moved the character size 0.5 to
+    // 0.7 where Enter on the same button moved it 0.5 to 0.6. The toolbar's
+    // own buttons have carried this exact guard since CW-15; the panel never
+    // did, and CW-60's style cycling would have skipped a style per click.
+    btn.addEventListener('click', (event) => {
+      if (event.detail !== 0) return;
       start();
       stop();
     });
@@ -223,11 +235,21 @@ export function buildCityCameraPanel(actions) {
     return btn;
   };
 
+  /**
+   * `ariaLabel` may be a string, or a function of the view when the pad does
+   * a different job in each one (CW-60's style pad). A group whose buttons
+   * change meaning has to change its own name with them, or the name is a
+   * label for controls that are no longer there.
+   */
   const dpad = (ariaLabel, buttons) => {
-    const grid = el('div', 'camera-control-dpad', {
-      role: 'group',
-      'aria-label': ariaLabel,
-    });
+    const grid = el('div', 'camera-control-dpad', { role: 'group' });
+    if (typeof ariaLabel === 'function') {
+      viewAware.push((isMap) =>
+        grid.setAttribute('aria-label', ariaLabel(isMap))
+      );
+    } else {
+      grid.setAttribute('aria-label', ariaLabel);
+    }
     for (const b of buttons) grid.appendChild(b);
     return grid;
   };
@@ -236,8 +258,9 @@ export function buildCityCameraPanel(actions) {
    * CW-38: the owner read "Rotate View" and "Pan View" as camera jargon,
    * because they are - the Forge preview's words, not the game's. The titles
    * now speak game verbs and follow the view the way the buttons under them
-   * already do. Over the map BOTH pads pan, and both say so - two identical
-   * titles is the honest description of two pads doing the same job.
+   * already do. Over the map BOTH pads used to pan and both said so, which
+   * was honest and also a waste of four buttons; CW-60 gives the second pad
+   * the map styles, and the titles part company there.
    */
   const viewTitle = (wrap, street, map) => {
     const h3 = wrap.querySelector('.camera-control-section-title');
@@ -252,73 +275,106 @@ export function buildCityCameraPanel(actions) {
   const rotate = section('Look Around');
   viewTitle(rotate, 'Look Around', 'Pan Map');
   rotate.appendChild(
-    dpad('Rotation controls', [
-      holdButton({
-        id: 'cityWalkCamRotateUp',
-        className: 'dpad-up',
-        icon: ICONS.up,
-        action: (isMap) => (isMap ? 'forward' : 'lookUp'),
-        label: (isMap) => (isMap ? 'Pan map up' : 'Look up'),
-      }),
-      holdButton({
-        id: 'cityWalkCamRotateLeft',
-        className: 'dpad-left',
-        icon: ICONS.left,
-        action: () => 'turnLeft',
-        label: (isMap) => (isMap ? 'Pan map left' : 'Turn left'),
-      }),
-      holdButton({
-        id: 'cityWalkCamRotateRight',
-        className: 'dpad-right',
-        icon: ICONS.right,
-        action: () => 'turnRight',
-        label: (isMap) => (isMap ? 'Pan map right' : 'Turn right'),
-      }),
-      holdButton({
-        id: 'cityWalkCamRotateDown',
-        className: 'dpad-down',
-        icon: ICONS.down,
-        action: (isMap) => (isMap ? 'back' : 'lookDown'),
-        label: (isMap) => (isMap ? 'Pan map down' : 'Look down'),
-      }),
-    ])
+    dpad(
+      // Over the map this pad pans, so calling it the rotation controls
+      // names a job it is not doing - conspicuously so now that the pad
+      // below it renames itself. The visible title already swapped (CW-38).
+      (isMap) => (isMap ? 'Pan controls' : 'Rotation controls'),
+      [
+        holdButton({
+          id: 'cityWalkCamRotateUp',
+          className: 'dpad-up',
+          icon: ICONS.up,
+          action: (isMap) => (isMap ? 'forward' : 'lookUp'),
+          label: (isMap) => (isMap ? 'Pan map up' : 'Look up'),
+        }),
+        holdButton({
+          id: 'cityWalkCamRotateLeft',
+          className: 'dpad-left',
+          icon: ICONS.left,
+          action: () => 'turnLeft',
+          label: (isMap) => (isMap ? 'Pan map left' : 'Turn left'),
+        }),
+        holdButton({
+          id: 'cityWalkCamRotateRight',
+          className: 'dpad-right',
+          icon: ICONS.right,
+          action: () => 'turnRight',
+          label: (isMap) => (isMap ? 'Pan map right' : 'Turn right'),
+        }),
+        holdButton({
+          id: 'cityWalkCamRotateDown',
+          className: 'dpad-down',
+          icon: ICONS.down,
+          action: (isMap) => (isMap ? 'back' : 'lookDown'),
+          label: (isMap) => (isMap ? 'Pan map down' : 'Look down'),
+        }),
+      ]
+    )
   );
   body.appendChild(rotate);
 
-  // --- Pan -----------------------------------------------------------------
+  // --- Pan / Map style ------------------------------------------------------
+  /**
+   * ★★ CW-60: THIS PAD HAD NOTHING OF ITS OWN TO DO OVER THE MAP. Both pads
+   * sent the same four pan actions there, so the panel offered eight buttons
+   * for four jobs. MEASURED at this head, one 700 ms hold each, in metres of
+   * map moved: Rotate up +1147 / down -1168 / left -1147 / right +1147, and
+   * this pad +1127 / -1127 / -1188 / +1168. The same axes, the same signs -
+   * a genuine duplicate rather than two controls that merely look alike.
+   *
+   * So over the map it becomes the style pad, and the Rotate pad above stays
+   * the panner - which it already was, and which is why nothing is lost.
+   *
+   * Up and left step BACK through the styles, down and right step FORWARD:
+   * the list conventions of both axes at once, so neither reading is wrong.
+   * Two buttons sharing a name is the honest arrangement here rather than a
+   * smell - they do the identical job, and WCAG's Consistent Identification
+   * asks for exactly that.
+   */
   const pan = section('Walk Around');
-  viewTitle(pan, 'Walk Around', 'Pan Map');
+  viewTitle(pan, 'Walk Around', 'Map Style');
+  const styleStep = (delta) => (isMap) => {
+    if (isMap) actions.cycleMapStyle(delta);
+  };
   pan.appendChild(
-    dpad('Pan controls', [
-      holdButton({
-        id: 'cityWalkCamPanUp',
-        className: 'dpad-up',
-        icon: ICONS.up,
-        action: () => 'forward',
-        label: (isMap) => (isMap ? 'Pan map up' : 'Walk forward'),
-      }),
-      holdButton({
-        id: 'cityWalkCamPanLeft',
-        className: 'dpad-left',
-        icon: ICONS.left,
-        action: (isMap) => (isMap ? 'turnLeft' : 'strafeLeft'),
-        label: (isMap) => (isMap ? 'Pan map left' : 'Step left'),
-      }),
-      holdButton({
-        id: 'cityWalkCamPanRight',
-        className: 'dpad-right',
-        icon: ICONS.right,
-        action: (isMap) => (isMap ? 'turnRight' : 'strafeRight'),
-        label: (isMap) => (isMap ? 'Pan map right' : 'Step right'),
-      }),
-      holdButton({
-        id: 'cityWalkCamPanDown',
-        className: 'dpad-down',
-        icon: ICONS.down,
-        action: () => 'back',
-        label: (isMap) => (isMap ? 'Pan map down' : 'Walk back'),
-      }),
-    ])
+    dpad(
+      (isMap) => (isMap ? 'Map style controls' : 'Pan controls'),
+      [
+        holdButton({
+          id: 'cityWalkCamPanUp',
+          className: 'dpad-up',
+          icon: ICONS.up,
+          action: (isMap) => (isMap ? null : 'forward'),
+          press: styleStep(-1),
+          label: (isMap) => (isMap ? 'Previous map style' : 'Walk forward'),
+        }),
+        holdButton({
+          id: 'cityWalkCamPanLeft',
+          className: 'dpad-left',
+          icon: ICONS.left,
+          action: (isMap) => (isMap ? null : 'strafeLeft'),
+          press: styleStep(-1),
+          label: (isMap) => (isMap ? 'Previous map style' : 'Step left'),
+        }),
+        holdButton({
+          id: 'cityWalkCamPanRight',
+          className: 'dpad-right',
+          icon: ICONS.right,
+          action: (isMap) => (isMap ? null : 'strafeRight'),
+          press: styleStep(1),
+          label: (isMap) => (isMap ? 'Next map style' : 'Step right'),
+        }),
+        holdButton({
+          id: 'cityWalkCamPanDown',
+          className: 'dpad-down',
+          icon: ICONS.down,
+          action: (isMap) => (isMap ? null : 'back'),
+          press: styleStep(1),
+          label: (isMap) => (isMap ? 'Next map style' : 'Walk back'),
+        }),
+      ]
+    )
   );
   body.appendChild(pan);
 

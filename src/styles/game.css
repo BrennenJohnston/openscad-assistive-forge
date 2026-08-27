@@ -140,9 +140,23 @@
  * phosphor and contrast mode the player has chosen. */
 .city-walk-toolbar {
   display: flex;
-  flex-wrap: wrap;
+  /* ★★ CW-60: wrap-REVERSE, and the reason is the same promise CW-59 made.
+   *
+   * The strip is anchored to the bottom of the layer, so a second line makes
+   * it grow UPWARD and every button on the first line rises with it. With
+   * CW-60's fifth map-only button the zone no longer fits on one row between
+   * about 1280px and 1365px, and MEASURED at 1280 the nine shared buttons
+   * moved from y=820 to y=770 on a view switch - CW-59's defect exactly,
+   * arriving on the axis its guard was not watching.
+   *
+   * Reversed, the FIRST line sits at the bottom of the strip: the shared
+   * groups keep the y they had with one row and the view zone takes the new
+   * line above them. Nothing changes on a window wide enough not to wrap,
+   * which is every case that works today. */
+  flex-wrap: wrap-reverse;
   align-items: center;
-  justify-content: center;
+  /* Start-aligned, not centred: see the view-zone rule below. */
+  justify-content: flex-start;
   gap: var(--space-sm) var(--space-md);
   padding: var(--space-sm) var(--space-md);
   border-top: 1px solid var(--color-border);
@@ -161,6 +175,26 @@
   /* Wide enough that a 3px focus ring at a 2px offset does not sit on the
    * neighbouring button. */
   gap: var(--space-xs);
+}
+
+/* CW-59 (CW-Q61): the view zone, and why the whole strip is start-aligned.
+ *
+ * Every button that exists in only one view lives in this zone, at the far
+ * end. That alone is not enough while the strip centres itself: changing the
+ * zone's width re-centres everything, and measured on a 1280px window all
+ * NINE shared buttons moved, up to 186px, some left and some right. Centring
+ * is what made a width change into a POSITION change for buttons that never
+ * changed at all.
+ *
+ * Start-aligned, the shared zone is anchored to the strip's own edge and the
+ * view zone grows and shrinks to the right of it, off the end, where nothing
+ * depends on it. This also survives what comes next: CW-60 adds a button to
+ * this zone and CW-61 takes one away, and neither can move a shared control.
+ */
+.city-walk-toolbar-view-zone {
+  border-inline-start: 1px solid var(--color-border);
+  padding-inline-start: var(--space-md);
+  margin-inline-start: var(--space-xs);
 }
 
 .city-walk-toolbar-group-label {
@@ -345,16 +379,51 @@
   gap: var(--space-2xs);
 }
 
-/* CW-40 (CW-Q40): while pin mode is armed, the pick flow's ring becomes the
- * CURSOR. Drawn twice - a dark stroke under a light one - so it reads over
- * bright streets and dark blocks alike, in every phosphor. A data: URI is
- * same-document (no CSP host involved); `crosshair` is the fallback if the
- * platform refuses SVG cursors. The hotspot is the ring's centre. */
-.city-walk-viewport.city-walk-teleport-armed {
-  cursor:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Ccircle cx='12' cy='12' r='8' fill='none' stroke='%23000' stroke-width='5'/%3E%3Ccircle cx='12' cy='12' r='8' fill='none' stroke='%23fff' stroke-width='2.5'/%3E%3C/svg%3E")
-      12 12,
-    crosshair;
+/* CW-61 (CW-Q58): THE ARMED CURSOR HAS RETIRED WITH THE MODE IT ANNOUNCED.
+ * CW-40's ring cursor said "you are in teleport mode"; there is no mode any
+ * more, because every map click asks. A cursor that meant "this click is
+ * special" would now be lying about every click on the map. */
+
+/* CW-61: the travel dialog. Centred over the map rather than tucked into a
+ * corner, because it is asking a question and has to be found - and it is
+ * the one surface in this layer that stops the game to wait for an answer.
+ * Same z-index family as the help panel: above the ASCII overlay canvas
+ * (z-index 5 in _hfm-paint.js), or the glyphs render over it. */
+.city-walk-travel {
+  position: absolute;
+  z-index: var(--z-index-dropdown);
+  /* ★ NOT CENTRED, AND THAT IS THE WHOLE POSITIONING DECISION. Centred, it
+   * sat exactly on top of the spot it was describing: J asks about the middle
+   * of the map, and the circle marking that spot was underneath the panel
+   * every time. High and centred clears the crosshair, clears the landmark
+   * legend at the left and the Camera panel at the right, and keeps one
+   * position whichever route opened it. */
+  top: calc(var(--space-lg) + 44px + var(--space-md));
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(420px, calc(100vw - 2 * var(--space-md)));
+  padding: var(--space-md);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg, none);
+}
+
+.city-walk-travel[hidden] {
+  display: none;
+}
+
+.city-walk-travel h3 {
+  margin-top: 0;
+}
+
+.city-walk-travel-where {
+  margin: var(--space-sm) 0 var(--space-md);
+}
+
+.city-walk-travel-actions {
+  display: flex;
+  gap: var(--space-sm);
 }
 
 /* Landmark legend (map view): real text over the map's left edge. */

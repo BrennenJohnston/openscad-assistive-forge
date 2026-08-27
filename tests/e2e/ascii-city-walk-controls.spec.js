@@ -263,6 +263,8 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
       'cityWalkCenterBtn',
       'cityWalkZoomOutBtn',
       'cityWalkZoomInBtn',
+      // CW-60: the map style button lives in the same zone, last.
+      'cityWalkMapStyleBtn',
     ]
 
     for (const id of streetOnly) await expect(btn(page, id)).toBeVisible()
@@ -282,9 +284,13 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     for (const id of mapOnly) await expect(btn(page, id)).toBeVisible()
 
     await expect(btn(page, 'cityWalkCamPanUp')).toBeVisible()
+    // CW-60: this pad panned the map exactly as the one above it did, which
+    // is four buttons for a job four other buttons were already doing. Over
+    // the map it is the style pad now; the Rotate pad above still pans, so
+    // the mouse route to panning is untouched.
     await expect(btn(page, 'cityWalkCamPanUp')).toHaveAttribute(
       'aria-label',
-      'Pan map up'
+      'Previous map style'
     )
     // Face north/east/south/west have no meaning with no walker on screen,
     // so they stand down rather than take a second job (CW-35 P3).
@@ -302,7 +308,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     // …a pan breaks follow mode, and Center on you restores it.
     const follow = () =>
       page.evaluate(() => window.__cityWalkGame.mapCam.follow)
-    await holdButton(page, 'cityWalkCamPanRight', () =>
+    await holdButton(page, 'cityWalkCamRotateRight', () =>
       expect.poll(follow, { timeout: 15000 }).toBe(false)
     )
 
@@ -324,6 +330,294 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     for (const id of streetOnly) await expect(btn(page, id)).toBeVisible()
     for (const id of mapOnly) await expect(btn(page, id)).toBeHidden()
     await expect(btn(page, 'cityWalkCamViewFront')).toBeVisible()
+  })
+
+  test('★★ switching view moves NO shared toolbar button (CW-59)', async ({
+    page,
+  }) => {
+    // ★★ THE DEFECT THIS REPLACES WAS MEASURED, NOT IMAGINED. On a 1280px
+    // window every one of the NINE shared buttons moved when the view
+    // switched - up to 186 px - and they moved in BOTH directions: Slower
+    // went 138 px left while Previous went 138 px right. A player reaching
+    // for Larger in the street found Photo under the cursor on the map.
+    //
+    // Two things caused it together, and only fixing both works. View-only
+    // buttons sat INSIDE the group they belonged to by meaning, so hiding
+    // them changed the width of a group in the middle of the strip; and the
+    // strip CENTRED itself, which turns any width change anywhere into a
+    // position change everywhere. The buttons that moved never changed at all.
+    await launchGame(page)
+    await enterCity(page)
+
+    const positions = () =>
+      page.evaluate(() =>
+        Object.fromEntries(
+          [...document.querySelectorAll('#cityWalkToolbar button')]
+            .filter((b) => !b.hidden)
+            .map((b) => {
+              const r = b.getBoundingClientRect()
+              return [b.id, { x: Math.round(r.left), y: Math.round(r.top) }]
+            })
+        )
+      )
+
+    /**
+     * ★ "PAST" CANNOT BE A BARE x ONCE THE STRIP WRAPS (CW-60). The fifth
+     * map-only button no longer fits on one row between about 1280px and
+     * 1365px, so the view zone takes a line of its own - and the strip is
+     * bottom-anchored, so the new line goes ABOVE (flex-wrap: wrap-reverse,
+     * which is what keeps the shared row where it was; without it the nine
+     * shared buttons measured a 50px move, y=820 to y=770, on a view switch).
+     *
+     * What the zone claim actually means is that nothing view-only sits in
+     * the shared row ahead of a shared button. That is neutral about which
+     * way lines stack, and the 1600px pass below - asserted to be ONE row -
+     * is what keeps it from going soft.
+     */
+    const past = (a, b) => a.y !== b.y || a.x > b.x
+
+    for (const width of [1600, 1280]) {
+      await page.setViewportSize({ width, height: 900 })
+      await page.waitForTimeout(200)
+
+      const street = await positions()
+      await page.keyboard.press('KeyM')
+      await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
+      const map = await positions()
+
+      // Every button visible in BOTH views is a shared button, and every one
+      // of them must be where it was. Nine of them, so this is not vacuous -
+      // a guard that found no shared buttons would pass proving nothing.
+      const shared = Object.keys(street).filter((id) => id in map)
+      expect(shared.length, `${width}px`).toBeGreaterThanOrEqual(9)
+      for (const id of shared) {
+        expect(map[id], `${id} moved at ${width}px`).toEqual(street[id])
+      }
+
+      // And the view zone really is the far end: every view-only button
+      // comes after every shared one. That is WHY the shared zone cannot
+      // move, so it is worth asserting rather than trusting.
+      const mapOnly = Object.keys(map).filter((id) => !(id in street))
+      expect(mapOnly.length, `${width}px`).toBeGreaterThanOrEqual(5)
+      for (const id of mapOnly) {
+        for (const s of shared) {
+          expect(
+            past(map[id], map[s]),
+            `${id} is not past ${s} at ${width}px`
+          ).toBe(true)
+        }
+      }
+
+      // ★ AND AT 1600 THE WHOLE STRIP IS ONE ROW, which is what makes the
+      // pass above an x comparison rather than a free one. Without this the
+      // wrapped case could pass on nothing but "it is on another line".
+      const rows = new Set(Object.values(map).map((p) => p.y))
+      if (width === 1600) {
+        expect(rows.size, 'the 1600px pass wrapped, so it proved less').toBe(1)
+      } else {
+        // And where it does wrap, the shared row is still ONE row: the zone
+        // took the new line by itself and took nothing with it.
+        expect(rows.size).toBe(2)
+        expect(new Set(shared.map((id) => map[id].y)).size).toBe(1)
+      }
+
+      await page.keyboard.press('KeyM')
+      await expect(page.locator('#cityWalkHudStatus')).toContainText(
+        'street view'
+      )
+    }
+  })
+
+  test('★★ a drag pans the map, and the threshold keeps click and drag apart (CW-59)', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
+
+    const cam = () =>
+      page.evaluate(() => {
+        const c = window.__cityWalkGame.mapCam
+        return { x: c.centerX, y: c.centerY, follow: c.follow }
+      })
+    const box = await page.locator('#cityWalkViewport').boundingBox()
+    const cx = box.x + box.width / 2
+    const cy = box.y + box.height / 2
+    const drag = async (dx, dy, steps) => {
+      await page.mouse.move(cx, cy)
+      await page.mouse.down()
+      for (let i = 1; i <= steps; i++) {
+        await page.mouse.move(cx + (dx * i) / steps, cy + (dy * i) / steps)
+      }
+      await page.mouse.up()
+    }
+
+    // Grab and drag: the world point under the cursor stays under it, so
+    // dragging RIGHT walks the camera centre WEST. The sign is the whole
+    // difference between moving a map and nudging a camera, and getting it
+    // backwards would still have "panned".
+    const before = await cam()
+    expect(before.follow).toBe(true)
+    await drag(200, 0, 10)
+    const afterX = await cam()
+    expect(afterX.x).toBeLessThan(before.x - 100)
+    // Dragging DOWN pulls northern ground into view: screen y grows down and
+    // world y grows north, so this one flips.
+    await drag(0, 150, 10)
+    const afterY = await cam()
+    expect(afterY.y).toBeGreaterThan(afterX.y + 100)
+    // Any manual pan breaks player-follow, exactly as the keys and buttons
+    // do. Without this the next frame snaps the map back and the drag looks
+    // broken rather than ignored.
+    expect(afterY.follow).toBe(false)
+
+    // ★★ THE BOUNDARY, AND CW-61'S MODAL NOW HANGS ON IT, exactly as this
+    // case predicted it would. Under DRAG_THRESHOLD_PX the press was a click:
+    // the map must not move AND the travel dialog must open. Over it the
+    // press was a drag: the map must move AND the dialog must stay shut.
+    // Both halves on both sides, because a boundary asserted from one side
+    // only cannot tell a threshold from a control that never fires.
+    const dialog = page.locator('#cityWalkTravelDialog')
+
+    const wobbleFrom = await cam()
+    await drag(2, 0, 2)
+    const wobbleTo = await cam()
+    expect(wobbleTo.x).toBe(wobbleFrom.x)
+    expect(wobbleTo.y).toBe(wobbleFrom.y)
+    await expect(dialog).toBeVisible()
+
+    // Escape it before dragging again: the dialog sits over the middle of
+    // the map, which is where this test grabs from.
+    await page.keyboard.press('Escape')
+    await expect(dialog).toBeHidden()
+
+    const dragFrom = await cam()
+    await drag(6, 0, 3)
+    const dragTo = await cam()
+    expect(dragTo.x).not.toBe(dragFrom.x)
+    await expect(dialog).toBeHidden()
+  })
+
+  test('★ an over-threshold drag pans and never travels (CW-59, CW-61)', async ({
+    page,
+  }) => {
+    // ★★ THIS CASE OUTLIVED THE MODE IT WAS WRITTEN AGAINST, AND THAT IS THE
+    // FINDING. It used to ARM pin mode first, because under CW-40 a click
+    // only acted on an armed map. CW-61 retired the arming - every click
+    // asks now - and the retirement sweep MISSED this case, because it
+    // reached for the mode through its OBSERVABLE (`aria-pressed` on the
+    // Teleport button) rather than through any of the names the sweep
+    // grepped for. It went red on BOTH engines, which is what said it was a
+    // real miss and not a runner.
+    //
+    // Sweep a retired feature by what it LOOKS like, not only by what it is
+    // called.
+    await launchGame(page)
+    await enterCity(page)
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
+
+    const walkerAt = () =>
+      page.evaluate(() => {
+        const w = window.__cityWalkGame.walkState
+        return { x: w.x, y: w.y }
+      })
+    const box = await page.locator('#cityWalkViewport').boundingBox()
+    const cx = box.x + box.width / 2
+    const cy = box.y + box.height / 2
+
+    // ★ THIS IS WHY THE TELEPORT MOVED TO THE POINTER-UP. It used to fire on
+    // the way DOWN, and the press that begins a pan is the same press - so
+    // the map would have jumped away the instant anyone tried to drag it.
+    const before = await walkerAt()
+    await page.mouse.move(cx, cy)
+    await page.mouse.down()
+    for (let i = 1; i <= 10; i++) await page.mouse.move(cx + i * 20, cy)
+    await page.mouse.up()
+    expect(await walkerAt()).toEqual(before)
+    // Nor does it even ASK: under CW-61 an over-threshold press is a drag
+    // and a drag never clicks, so there is no question to dismiss either.
+    await expect(page.locator('#cityWalkTravelDialog')).toBeHidden()
+
+    // And a real click still asks, and answering it still travels, so the
+    // drag did not cost the feature.
+    await page.mouse.move(cx + 40, cy + 30)
+    await page.mouse.down()
+    await page.mouse.up()
+    await expect(page.locator('#cityWalkTravelDialog')).toBeVisible()
+    await page.locator('#cityWalkTravelGoBtn').click()
+    await expect(page.locator('#cityWalkTravelDialog')).toBeHidden()
+    await expect.poll(async () => {
+      const now = await walkerAt()
+      return Math.hypot(now.x - before.x, now.y - before.y)
+    }).toBeGreaterThan(1)
+  })
+
+  test('★★ W A S D pan the map, exactly as the arrows do (CW-59, a PIN)', async ({
+    page,
+  }) => {
+    // ★★ THIS PASSES ON BASE, AND SAYING SO IS THE POINT. The plan for this
+    // release assumed W A S D did not pan the map and had to be made to.
+    // They always did: KeyW binds the same 'forward' action ArrowUp binds,
+    // and the map's panY reads that action, not the key. Measured before any
+    // code changed - W moved the camera 302 m where ArrowUp moved it 302 m,
+    // and A, S and D matched their arrows too.
+    //
+    // So this is NOT proof of a fix. It is a pin against a binding that was
+    // never written down, and the honest record of an inverted premise: what
+    // CW-59 actually changed was the SENTENCE that told players arrows only.
+    await launchGame(page)
+    await enterCity(page)
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
+
+    const centre = () =>
+      page.evaluate(() => ({
+        x: window.__cityWalkGame.mapCam.centerX,
+        y: window.__cityWalkGame.mapCam.centerY,
+      }))
+    // Park the camera and stop it following, so the walk cannot move it.
+    await page.evaluate(() => {
+      const c = window.__cityWalkGame.mapCam
+      c.centerX = 0
+      c.centerY = 0
+      c.follow = false
+    })
+
+    // Held until the map has MOVED, never for a number of milliseconds: the
+    // map only pans inside animation frames, and a loaded runner can render
+    // none inside a window (the trap this round has paid for four times).
+    const panBy = async (key) => {
+      await page.evaluate(() => {
+        const c = window.__cityWalkGame.mapCam
+        c.centerX = 0
+        c.centerY = 0
+        c.follow = false
+      })
+      await page.keyboard.down(key)
+      await expect
+        .poll(async () => {
+          const c = await centre()
+          return Math.hypot(c.x, c.y)
+        }, { timeout: 15000 })
+        .toBeGreaterThan(50)
+      await page.keyboard.up(key)
+      return centre()
+    }
+
+    const w = await panBy('KeyW')
+    expect(w.y).toBeGreaterThan(50)
+    expect(Math.abs(w.x)).toBeLessThan(1)
+
+    const s = await panBy('KeyS')
+    expect(s.y).toBeLessThan(-50)
+
+    const a = await panBy('KeyA')
+    expect(a.x).toBeLessThan(-50)
+
+    const d = await panBy('KeyD')
+    expect(d.x).toBeGreaterThan(50)
   })
 
   test('Enter on a hold button takes one step and then stops', async ({
@@ -1082,5 +1376,384 @@ test.describe('ASCII City Walk — C and T reach the toggles (CW-Q15)', () => {
       'true'
     )
     await expect(announcer(page)).toHaveText('Theme: Light')
+  })
+})
+
+/**
+ * ASCII City Walk - the map styles and the pad that cycles them (CW-60,
+ * CW-Q57).
+ *
+ * P1 built the four styles and the first ever rendering of CW-43's
+ * wayfinding data. These are the CONTROLS: the pad that had nothing of its
+ * own to do over the map, the key, the toolbar button, and the choice
+ * outliving the session.
+ */
+test.describe('ASCII City Walk — four map styles (CW-60)', () => {
+  const btn = (page, id) => page.locator('#' + id)
+  const announcer = (page) => page.locator('#cityWalkAnnouncer')
+
+  /**
+   * The style the game says it is showing, read the way a player reads it.
+   * There is no test-only hook for this on purpose: the HUD line is the
+   * feature's own answer to "which map am I looking at", so a guard that
+   * read anything else would pass with the HUD broken.
+   */
+  const styleName = (page) =>
+    page
+      .locator('#cityWalkHudStatus')
+      .innerText()
+      .then((t) => t.match(/map view · ([^·]+) ·/)?.[1]?.trim() ?? null)
+
+  /** What the wayfinding layer is actually drawing, asked of the scene. */
+  const wayfindDrawn = (page) =>
+    page.evaluate(() => {
+      let meshes = 0
+      let visible = 0
+      let quads = 0
+      window.__cityWalkGame.city3d.group.traverse((o) => {
+        if (o.name !== 'wayfinding-marks') return
+        meshes++
+        if (!o.visible) return
+        visible++
+        quads += o.geometry.getAttribute('position').count / 6
+      })
+      return {
+        meshes,
+        visible,
+        quads,
+        points: window.__cityWalkGame.model.wayfinding.length,
+      }
+    })
+
+  const openMap = async (page) => {
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
+  }
+
+  /**
+   * Wait for the CONVERTER, not the clock. The picture a pixel test reads is
+   * whatever the converter last produced, and on a loaded runner that can be
+   * several frames behind the state change that prompted it.
+   */
+  const convertSamples = (page) =>
+    page.evaluate(
+      () => window.__cityWalkGame?.altView?.getConvertStats?.()?.samples ?? 0
+    )
+  async function waitForConversions(page, n) {
+    const from = await convertSamples(page)
+    await expect
+      .poll(() => convertSamples(page), { timeout: 60000 })
+      .toBeGreaterThanOrEqual(from + n)
+  }
+
+  test('★★ the Walk pad cycles the styles over the map (CW-60)', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+    await openMap(page)
+
+    // Standard is the map as it has always been drawn, so a player who never
+    // touches this sees no change at all.
+    expect(await styleName(page)).toBe('Standard')
+
+    // ★★ ONE CLICK IS ONE STEP, and this is the assertion that says so. With
+    // four styles, "click four times and land back on Standard" would pass
+    // just as happily if every click moved two - eight steps is also a whole
+    // lap. A single click from Standard has to be Roads only and nothing
+    // else. D-113 is the defect that made that worth writing down.
+    await btn(page, 'cityWalkCamPanRight').click()
+    await expect(announcer(page)).toHaveText(/^Map style: Roads only\./)
+    expect(await styleName(page)).toBe('Roads only')
+
+    await btn(page, 'cityWalkCamPanDown').click()
+    expect(await styleName(page)).toBe('Buildings only')
+
+    await btn(page, 'cityWalkCamPanDown').click()
+    expect(await styleName(page)).toBe('Wayfinding')
+    await expect(announcer(page)).toHaveText(/tactile paving/)
+
+    // Up and left run the other way, which is the list convention on both
+    // axes rather than a second forward.
+    await btn(page, 'cityWalkCamPanUp').click()
+    expect(await styleName(page)).toBe('Buildings only')
+    await btn(page, 'cityWalkCamPanLeft').click()
+    expect(await styleName(page)).toBe('Roads only')
+    await btn(page, 'cityWalkCamPanLeft').click()
+    expect(await styleName(page)).toBe('Standard')
+    // And backwards from the first wraps to the last.
+    await btn(page, 'cityWalkCamPanLeft').click()
+    expect(await styleName(page)).toBe('Wayfinding')
+  })
+
+  test('★★ one mouse click on a Camera panel button is ONE step (D-113)', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // A mouse press fires pointerdown, pointerup AND click, and the panel's
+    // hold buttons served the press action from pointerdown and again from
+    // the click. On the hold path it only stretched the step; on the PRESS
+    // path it did the job twice. MEASURED on the base of this release: one
+    // click moved the character size 0.5 -> 0.7 where Enter on the same
+    // button moved it 0.5 -> 0.6.
+    const size = () =>
+      page.evaluate(() => window.__cityWalkGame.altView.getFontScale())
+
+    const beforeClick = await size()
+    await btn(page, 'cityWalkCamZoomIn').click()
+    await expect.poll(size, { timeout: 10000 }).toBeGreaterThan(beforeClick)
+    expect(
+      (await size()) - beforeClick,
+      'a pointer click took more than one step'
+    ).toBeCloseTo(0.1, 5)
+
+    // The keyboard route was always one step, and still is. Both are asserted
+    // because the fix is a guard on the click path and a guard can be written
+    // so tightly it takes the keyboard route out with it.
+    await btn(page, 'cityWalkCamZoomIn').focus()
+    const beforeKey = await size()
+    await page.keyboard.press('Enter')
+    await expect.poll(size, { timeout: 10000 }).toBeGreaterThan(beforeKey)
+    expect((await size()) - beforeKey).toBeCloseTo(0.1, 5)
+  })
+
+  test('K, Shift+K and the toolbar button reach the same styles (CW-60)', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // ★ A STYLE IS A MAP STATE. K in the street says nothing and changes
+    // nothing, the same shape Home and the zoom keys already have.
+    await page.keyboard.press('KeyK')
+    await page.waitForTimeout(300)
+    await openMap(page)
+    expect(await styleName(page)).toBe('Standard')
+
+    await page.keyboard.press('KeyK')
+    await expect(announcer(page)).toHaveText(/^Map style: Roads only\./)
+    expect(await styleName(page)).toBe('Roads only')
+
+    await page.keyboard.press('Shift+KeyK')
+    expect(await styleName(page)).toBe('Standard')
+
+    await page.keyboard.press('Shift+KeyK')
+    expect(await styleName(page)).toBe('Wayfinding')
+
+    // The toolbar promise: every key has a button, and it steps forward.
+    await expect(btn(page, 'cityWalkMapStyleBtn')).toBeVisible()
+    await expect(btn(page, 'cityWalkMapStyleBtn')).toHaveAttribute(
+      'title',
+      'Keyboard: K'
+    )
+    await btn(page, 'cityWalkMapStyleBtn').click()
+    expect(await styleName(page)).toBe('Standard')
+
+    // Back in the street the key is inert again - and this is not a vacuous
+    // claim, because the style it must NOT move is no longer the default.
+    await btn(page, 'cityWalkMapStyleBtn').click()
+    expect(await styleName(page)).toBe('Roads only')
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'street view'
+    )
+    await page.keyboard.press('KeyK')
+    await page.waitForTimeout(300)
+    await openMap(page)
+    expect(await styleName(page)).toBe('Roads only')
+  })
+
+  test('★ only the Wayfinding style draws the wayfinding layer, and it draws every point (CW-60)', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+    await openMap(page)
+
+    // CW-43 parsed crossings, kerbs and tactile paving and drew none of it.
+    // The layer exists in every style and shows in exactly one.
+    const standard = await wayfindDrawn(page)
+    expect(
+      standard.points,
+      'this city has no wayfinding data to draw'
+    ).toBeGreaterThan(100)
+    expect(
+      standard.meshes,
+      'no wayfinding meshes were built at all'
+    ).toBeGreaterThan(0)
+    expect(standard.visible).toBe(0)
+
+    for (const expected of ['Roads only', 'Buildings only']) {
+      await page.keyboard.press('KeyK')
+      expect(await styleName(page)).toBe(expected)
+      expect((await wayfindDrawn(page)).visible).toBe(0)
+    }
+
+    await page.keyboard.press('KeyK')
+    expect(await styleName(page)).toBe('Wayfinding')
+    const way = await wayfindDrawn(page)
+    expect(way.visible).toBe(way.meshes)
+    // Every parsed point gets a quad. A layer that drew a tenth of them
+    // would still photograph as "marks on the map".
+    expect(way.quads).toBe(way.points)
+  })
+
+  test('axe: no violations with the styles reachable, wrapped strip and not (CW-60)', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // Both widths, because CW-60 made them structurally different layouts:
+    // at 1280 the view zone takes a line of its own above the shared row and
+    // at 1600 the whole strip is one line. A scan of one says nothing about
+    // the other.
+    for (const width of [1600, 1280]) {
+      await page.setViewportSize({ width, height: 900 })
+      await openMap(page)
+      // Wayfinding is the busiest style and the one with a layer nothing
+      // else draws, so it is the state worth scanning.
+      for (let i = 0; i < 5; i++) {
+        if ((await styleName(page)) === 'Wayfinding') break
+        await page.keyboard.press('KeyK')
+      }
+      expect(await styleName(page), `${width}px`).toBe('Wayfinding')
+
+      // A hover state is invisible to a scan unless something is hovering
+      // (D-55), and both new controls repaint on hover.
+      await btn(page, 'cityWalkMapStyleBtn').hover()
+      const results = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+        .include('#cityWalkLayer')
+        .analyze()
+      expectOnlyAllowedViolations(results)
+
+      await btn(page, 'cityWalkCamPanRight').hover()
+      const padResults = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+        .include('#cityWalkCameraPanel')
+        .analyze()
+      expectOnlyAllowedViolations(padResults)
+      await page.mouse.move(2, 2)
+
+      // 44px, the same floor every other control in this strip holds.
+      const box = await btn(page, 'cityWalkMapStyleBtn').boundingBox()
+      expect(box.height, `${width}px`).toBeGreaterThanOrEqual(43.5)
+      expect(box.width, `${width}px`).toBeGreaterThanOrEqual(43.5)
+
+      // ★ AND THE STRIP STAYS INSIDE THE WINDOW. Wrapping is the answer to a
+      // strip too wide for its window; a button hanging off the end is not.
+      const right = await page.evaluate(() =>
+        Math.max(
+          ...[...document.querySelectorAll('#cityWalkToolbar button')]
+            .filter((b) => !b.hidden)
+            .map((b) => b.getBoundingClientRect().right)
+        )
+      )
+      expect(right, `${width}px overflowed`).toBeLessThanOrEqual(width)
+
+      await page.keyboard.press('KeyM')
+      await expect(page.locator('#cityWalkHudStatus')).toContainText(
+        'street view'
+      )
+    }
+  })
+
+  test('★★ a map style does not follow you back into the street (D-114)', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await launchGame(page)
+    await enterCity(page)
+
+    // The whole converted frame's mean luminance. The street has people and
+    // cars in it, so this is banded rather than compared exactly - but the
+    // band is narrow enough that the defect it guards (a THIRTY-NINE PER
+    // CENT drop) sails through it by a factor of eight.
+    const ink = () =>
+      page.evaluate(() => {
+        const c = document.querySelector(
+          '#cityWalkViewport canvas.hfm-overlay-canvas'
+        )
+        const d = c
+          .getContext('2d', { willReadFrequently: true })
+          .getImageData(0, 0, c.width, c.height).data
+        let sum = 0
+        for (let i = 0; i < d.length; i += 4) {
+          sum += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]
+        }
+        return sum / (d.length / 4)
+      })
+
+    /** Every building material's tint, which is the mechanism underneath. */
+    const tints = () =>
+      page.evaluate(() => {
+        const seen = new Set()
+        window.__cityWalkGame.city3d.group.traverse((o) => {
+          if (o.name === 'buildings' && o.material)
+            seen.add(o.material.color.getHexString())
+        })
+        return [...seen]
+      })
+
+    await waitForConversions(page, 4)
+    const before = await ink()
+    expect(before, 'the street is not drawing anything').toBeGreaterThan(2)
+    expect(await tints()).toEqual(['ffffff'])
+
+    // Wayfinding is the darkest style and therefore the worst leak: it tints
+    // the buildings to 0x181818, and before the fix the street stayed that
+    // way for the rest of the session.
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
+    for (let i = 0; i < 5; i++) {
+      if ((await styleName(page)) === 'Wayfinding') break
+      await page.keyboard.press('KeyK')
+    }
+    expect(await styleName(page)).toBe('Wayfinding')
+    // Non-vacuity: the style really did tint them, so the check below is
+    // asking a question that had a wrong answer available.
+    expect(await tints(), 'the style never tinted the buildings').not.toEqual([
+      'ffffff',
+    ])
+
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'street view'
+    )
+    await waitForConversions(page, 4)
+
+    // ★ THE EFFECT FIRST, THE MECHANISM SECOND, and the order is deliberate:
+    // whichever assertion fires first is the one the red proof exercises, so
+    // the one that must fire is the one a player would notice. Measured with
+    // the fix reverted, this comes back 39.2% against a 5% band.
+    const after = await ink()
+    const drift = Math.abs(after - before) / before
+    expect(
+      drift,
+      `street ink moved ${(drift * 100).toFixed(1)}% across a map visit ` +
+        `(${before.toFixed(2)} -> ${after.toFixed(2)})`
+    ).toBeLessThan(0.05)
+    expect(await tints(), 'a map tint stayed on the buildings').toEqual([
+      'ffffff',
+    ])
+  })
+
+  test('the chosen map style outlives the session (CW-60)', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-city-walk-map-style', 'wayfinding')
+    })
+    await launchGame(page)
+    await enterCity(page)
+    await openMap(page)
+
+    expect(await styleName(page)).toBe('Wayfinding')
+    const way = await wayfindDrawn(page)
+    expect(way.visible).toBe(way.meshes)
+    expect(way.visible).toBeGreaterThan(0)
   })
 })

@@ -80,6 +80,12 @@ import {
   PLANTER_H_M,
 } from './city-planting.js';
 import {
+  DEFAULT_MAP_STYLE,
+  mapStyleById,
+  wayfindMarkSizeM,
+  wayfindTierOf,
+} from './city-map-styles.js';
+import {
   birdTableFor,
   pickBird,
   birdSpec,
@@ -167,8 +173,18 @@ const UNDRAWN_ROAD_KINDS = new Set([
   'track',
 ]);
 
+/**
+ * A building's own colour comes from its vertex colours, so the material tint
+ * is a plain multiplier and white is the identity. CW-60's styles move it
+ * over the map; naming it means the street's value and the restore cannot
+ * drift apart (D-114).
+ */
+const BUILDING_STREET_TINT = 0xffffff;
+
 // Roads float just above the ground plane so they win the depth test.
 const ROAD_LIFT_M = 0.08;
+/** CW-60: wayfinding marks ride above every flat surface on the map. */
+const WAYFIND_LIFT_M = ROAD_LIFT_M + 0.12;
 // CW-50: the roadway is CUT DOWN a curb's height rather than the pavement
 // being built up, which is what keeps every prop standing where it already
 // stood. ROAD_LIFT_M keeps its own separate job - a depth epsilon on whatever
@@ -2578,6 +2594,9 @@ export function buildCityGroup(model) {
   // name 'buildings', which is what the surface-class pass (CW-23) and the
   // map-view swap below both key on.
   const buildingMats = [];
+  // CW-60: a style can hide or retint the buildings, which needs the meshes
+  // themselves and not only their materials.
+  const buildingMeshRefs = [];
   // CW-41: every material filtered for the cell raster, so one setter can
   // follow the character size.
   const cellRasterMats = [];
@@ -2586,7 +2605,7 @@ export function buildCityGroup(model) {
     const merged = mergeGeometries(geoms, false);
     for (const geom of geoms) geom.dispose();
     const material = new MeshLambertMaterial({
-      color: 0xffffff,
+      color: BUILDING_STREET_TINT,
       map: windowTextures[familyIndex] ?? null,
       vertexColors: true,
     });
@@ -2598,6 +2617,7 @@ export function buildCityGroup(model) {
     group.add(mesh);
     disposables.push(merged, material);
     buildingMats.push({ material, texture: windowTextures[familyIndex] });
+    buildingMeshRefs.push({ mesh, material });
     buildingTriangles += merged.getAttribute('position').count / 3;
   });
 
@@ -2798,6 +2818,8 @@ export function buildCityGroup(model) {
 
   let roadTriangles = 0;
   let roadMat = null;
+  let roadMeshRef = null;
+  let sidewalkMeshRef = null;
   let curbMesh = null;
   let lineMesh = null;
   if (roadPositions.length > 0) {
@@ -2808,7 +2830,7 @@ export function buildCityGroup(model) {
       polygonOffsetFactor: -1,
       polygonOffsetUnits: -1,
     });
-    makeFlatMesh(roadPositions, roadMat, 'roads', roadColors);
+    roadMeshRef = makeFlatMesh(roadPositions, roadMat, 'roads', roadColors);
     roadTriangles = roadPositions.length / 9;
 
     const curbMat = new MeshLambertMaterial({
@@ -2857,7 +2879,7 @@ export function buildCityGroup(model) {
     // the filter takes the whole of what the beat pattern had to give.
     applyCellRasterFiltering(sidewalkMat);
     cellRasterMats.push(sidewalkMat);
-    makeFlatMesh(
+    sidewalkMeshRef = makeFlatMesh(
       sidewalkPositions,
       sidewalkMat,
       'sidewalks',
@@ -2871,6 +2893,7 @@ export function buildCityGroup(model) {
   // ring-to-shape path is the one extrudeBuilding already uses, so a park
   // with a concave edge comes out the shape it is mapped as.
   let greenMat = null;
+  let greenMeshRef = null;
   const greenGeoms = [];
   for (const green of model.greens ?? []) {
     const shape = new Shape();
@@ -2898,14 +2921,139 @@ export function buildCityGroup(model) {
     // to the list - the shader carries a bias uniform nothing writes.
     applyCellRasterFiltering(greenMat);
     cellRasterMats.push(greenMat);
-    const greenMesh = new Mesh(merged, greenMat);
-    greenMesh.name = 'greens';
-    group.add(greenMesh);
+    greenMeshRef = new Mesh(merged, greenMat);
+    greenMeshRef.name = 'greens';
+    group.add(greenMeshRef);
     disposables.push(merged, greenMat);
     roadTriangles += merged.index
       ? merged.index.count / 3
       : merged.getAttribute('position').count / 3;
   }
+
+  /**
+   * ★★ THE WAYFINDING LAYER, RENDERED FOR THE FIRST TIME (CW-60).
+   *
+   * CW-43 parsed crossings, kerbs and tactile paving into `model.wayfinding`
+   * and drew none of it - the record at the time said so plainly, that the
+   * typed points ride the model for a future feature. This is that feature,
+   * and the mission sentence is what it serves: wayfinding information for a
+   * blind traveler, finally visible on the map rather than only in the data.
+   *
+   * Marks are built at a UNIT size and scaled per frame by the map's zoom,
+   * because a mark has to be a SCREEN size (see city-map-styles.js). One
+   * merged mesh per kind so each can carry its own brightness, and so the
+   * three can be told apart at a size where shape cannot survive.
+   */
+  const wayfindMeshes = [];
+  const wayfindCounts = {};
+  {
+    const byKind = new Map();
+    for (const point of model.wayfinding ?? []) {
+      const list = byKind.get(point.kind) ?? [];
+      list.push(point);
+      byKind.set(point.kind, list);
+    }
+    for (const [kind, points] of byKind) {
+      const positions = [];
+      for (const { x, y } of points) {
+        // ★ LIFTED ABOVE THE ROAD, and the first version was not. Built at
+        // z = 0 the marks sat UNDER the road surface, which rides at
+        // ROAD_LIFT_M, and the style photographed as a dimmed map with
+        // nothing on it at all. Seen from straight overhead, a hair too low
+        // is the same as not existing.
+        const h = 0.5;
+        const z = WAYFIND_LIFT_M;
+        positions.push(
+          x - h,
+          y - h,
+          z,
+          x + h,
+          y - h,
+          z,
+          x + h,
+          y + h,
+          z,
+          x - h,
+          y - h,
+          z,
+          x + h,
+          y + h,
+          z,
+          x - h,
+          y + h,
+          z
+        );
+      }
+      if (positions.length === 0) continue;
+      const tier = wayfindTierOf(kind);
+      const mat = new MeshBasicMaterial({
+        color: new Color(tier, tier, tier),
+        // Flat marks over a flat road: without an offset of their own these
+        // z-fight in the surface-id buffer, which is D-110 exactly.
+        polygonOffset: true,
+        polygonOffsetFactor: -6,
+        polygonOffsetUnits: -6,
+      });
+      const geom = new BufferGeometry();
+      geom.setAttribute(
+        'position',
+        new BufferAttribute(new Float32Array(positions), 3)
+      );
+      const normals = new Float32Array(positions.length);
+      for (let i = 0; i < normals.length; i += 3) normals[i + 2] = 1;
+      geom.setAttribute('normal', new BufferAttribute(normals, 3));
+      const mesh = new Mesh(geom, mat);
+      // Borrows the SIGN voice: a small bright mark that means something,
+      // which is what a sign face already is. The span table is FULL.
+      mesh.name = 'wayfinding-marks';
+      mesh.visible = false;
+      mesh.renderOrder = 3;
+      // The unit square is centred on the point, so scaling the MESH about
+      // the world origin would slide every mark. Each mark is instead built
+      // around its own centre and the mesh scaled about that centre per
+      // frame - see setMapZoom below.
+      mesh.userData.wayfindKind = kind;
+      mesh.userData.points = points;
+      mesh.userData.geom = geom;
+      group.add(mesh);
+      disposables.push(geom, mat);
+      wayfindMeshes.push(mesh);
+      wayfindCounts[kind] = points.length;
+    }
+  }
+
+  let currentStyleId = DEFAULT_MAP_STYLE;
+  /**
+   * The zoom the marks were last BUILT for. Rewriting five thousand quads is
+   * cheap once and not cheap sixty times a second, and a held zoom key calls
+   * the map camera every frame, so the work is skipped when the number has
+   * not moved. null forces a rebuild, which is what a style change wants:
+   * the marks may have been invisible, and therefore skipped, at this very
+   * zoom a moment ago.
+   */
+  let wayfindBuiltZoom = null;
+
+  /**
+   * Put one style's visibility and tones onto the layers. Only ever called
+   * while the map is showing.
+   */
+  const applyMapStyle = (styleId) => {
+    const style = mapStyleById(styleId);
+    const put = (mesh, mat, layer, mapTone) => {
+      if (mesh) mesh.visible = layer.show;
+      if (mat) mat.color = new Color(layer.tone ?? mapTone);
+    };
+    put(roadMeshRef, roadMat, style.roads, ROAD_TONES.map);
+    put(sidewalkMeshRef, sidewalkMat, style.sidewalks, SIDEWALK_TONES.map);
+    put(greenMeshRef, greenMat, style.greens, GREEN_TONES.map);
+    for (const { mesh, material } of buildingMeshRefs) {
+      mesh.visible = style.buildings.show;
+      // A building's tone is per-family vertex colour, so a style tints the
+      // material rather than replacing a single colour.
+      material.color = new Color(style.buildings.tone ?? BUILDING_STREET_TINT);
+    }
+    for (const mesh of wayfindMeshes) mesh.visible = style.wayfinding.show;
+  };
 
   return {
     group,
@@ -2949,6 +3097,89 @@ export function buildCityGroup(model) {
       if (!groundTexture || isMap) groundMat.color.setHex(0x000000);
       else groundMat.color.setHex(0xffffff);
       groundMat.needsUpdate = true;
+      if (!isMap) {
+        // Leaving the map puts every layer back the way the street expects,
+        // whatever style was showing. A style is a MAP state and nothing
+        // else, which is why street view never has to know about it.
+        //
+        // ★★ D-114: THAT SENTENCE WAS FALSE FOR ONE LAYER, AND IT WAS THE
+        // ONE THIS FUNCTION DOES NOT OWN A LINE FOR. The three ribbon
+        // materials above are re-toned every call, and the buildings are
+        // not: this branch restored their TEXTURE and their VISIBILITY and
+        // left `material.color` wherever `applyMapStyle` put it. Measured
+        // street ink, Seattle at the spawn: 22.28 before any map, 18.65
+        // after a look at Buildings only, and 13.54 - THIRTY-NINE PER CENT
+        // DIMMER, for the rest of the session - after a look at Wayfinding.
+        // A style is a map state, so the map has to hand it back.
+        for (const mesh of wayfindMeshes) mesh.visible = false;
+        if (roadMeshRef) roadMeshRef.visible = true;
+        if (sidewalkMeshRef) sidewalkMeshRef.visible = true;
+        if (greenMeshRef) greenMeshRef.visible = true;
+        for (const { mesh, material } of buildingMeshRefs) {
+          mesh.visible = true;
+          material.color = new Color(BUILDING_STREET_TINT);
+        }
+      } else {
+        applyMapStyle(currentStyleId);
+      }
+    },
+
+    /**
+     * CW-60: the SECOND axis over the map. `setMapView` decides street or
+     * map; this decides which of the four maps. Tones and visibility only -
+     * no geometry is rebuilt - so switching is free and cannot drift out of
+     * step with the street view.
+     * @param {string} styleId
+     */
+    setMapStyle(styleId) {
+      currentStyleId = mapStyleById(styleId).id;
+      applyMapStyle(currentStyleId);
+      // A layer that was hidden was also being skipped by setMapZoom, so the
+      // marks it is about to show may be built for some older zoom entirely.
+      wayfindBuiltZoom = null;
+    },
+
+    /**
+     * CW-60: a wayfinding mark is a SCREEN size, so the map's zoom has to
+     * reach it. Called from the map's own frame step.
+     * @param {number} zoom
+     */
+    setMapZoom(zoom) {
+      if (wayfindMeshes.length === 0) return;
+      if (wayfindBuiltZoom === zoom) return;
+      wayfindBuiltZoom = zoom;
+      const b = model.boundsM;
+      const spanM = Math.max(b.maxX - b.minX, b.maxY - b.minY, 100);
+      const size = wayfindMarkSizeM(zoom, spanM);
+      for (const mesh of wayfindMeshes) {
+        if (!mesh.visible) continue;
+        const points = mesh.userData.points;
+        const pos = mesh.geometry.getAttribute('position');
+        const h = size / 2;
+        for (let i = 0; i < points.length; i++) {
+          const { x, y } = points[i];
+          const o = i * 18;
+          const quad = [
+            x - h,
+            y - h,
+            x + h,
+            y - h,
+            x + h,
+            y + h,
+            x - h,
+            y - h,
+            x + h,
+            y + h,
+            x - h,
+            y + h,
+          ];
+          for (let v = 0; v < 6; v++) {
+            pos.array[o + v * 3] = quad[v * 2];
+            pos.array[o + v * 3 + 1] = quad[v * 2 + 1];
+          }
+        }
+        pos.needsUpdate = true;
+      }
     },
     /**
      * CW-41: follow the character size. The bias makes the facade texture's

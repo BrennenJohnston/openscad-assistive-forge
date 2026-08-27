@@ -31,6 +31,8 @@ import {
   OrthographicCamera,
   WebGLRenderer,
   BoxGeometry,
+  RingGeometry,
+  CircleGeometry,
   Mesh,
   MeshBasicMaterial,
 } from 'three';
@@ -75,6 +77,13 @@ import {
   CHAR_SCALE_STEP,
   SPEED_LABEL_STEP,
 } from './walk-controls.js';
+import {
+  DEFAULT_MAP_STYLE,
+  mapStyleById,
+  cycleMapStyle,
+  mapStyleAnnouncement,
+} from './city-map-styles.js';
+import { describeJunction } from './city-junction.js';
 import { initAltView } from '../_hfm.js';
 import {
   CALIBRATION_CANDIDATES,
@@ -110,6 +119,7 @@ import {
   STORAGE_KEY_CITY_WALK_FONT_SCALE,
   STORAGE_KEY_CITY_WALK_CALIBRATED_FLOOR,
   STORAGE_KEY_CITY_WALK_COLOUR,
+  STORAGE_KEY_CITY_WALK_MAP_STYLE,
   STORAGE_KEY_CITY_WALK_CAMERA_PANEL,
 } from '../storage-keys.js';
 
@@ -157,10 +167,31 @@ const THUNDER_GAP_MS = 30000;
 // words here means the sentence a screen-reader user hears and the line a
 // sighted user reads say the same thing about the same spot.
 // CW-40 (CW-Q40): the two-step pick-then-J flow retired, and the pick
-// announcements with it. The button arms PIN MODE instead; a click commits.
-const TELEPORT_MODE_ON_MESSAGE =
-  'Teleport mode on. Click the map to travel there.';
-const TELEPORT_MODE_OFF_MESSAGE = 'Teleport mode off.';
+// announcements with it. The button armed PIN MODE instead; a click committed.
+// CW-61 (CW-Q58) retires the arming as well - every map click now ASKS - so
+// the two mode sentences have gone with the mode. What replaces them is a
+// dialog that names the spot before you agree to it, which is a better
+// preview than an announcement was: it stays on screen, and it can be read
+// twice.
+//
+// ACCESSIBILITY-CRITICAL (D-35), flagged DOUBLY in the round text pack. For a
+// blind traveler this sentence IS the map, and the rules behind which names
+// it may use were MEASURED against the real road graph - see city-junction.js
+// and the CW-61 record.
+const TRAVEL_TITLE = 'Travel here?';
+const TRAVEL_WHERE_CORNER = (a, b, on) =>
+  `${on ? 'On' : 'Near'} ${a} and ${b}.`;
+const TRAVEL_WHERE_ONE = (a, on) => `${on ? 'On' : 'Near'} ${a}.`;
+const TRAVEL_WHERE_OPEN = 'Open ground, away from any named street.';
+// ★ 'Travel here', not 'Travel', and the toolbar button beside it is the
+// reason. That button opens this question; this one answers it. Two controls
+// on screen at once, both called Travel, doing different jobs is precisely
+// what WCAG's Consistent Identification is about, read from the wrong end.
+// Answering the heading word for word is also the plainest thing the button
+// could say.
+const TRAVEL_CONFIRM_LABEL = 'Travel here';
+const TRAVEL_CANCEL_LABEL = 'Cancel';
+const TRAVEL_CANCELLED_MESSAGE = 'Travel cancelled. You have not moved.';
 const TELEPORT_LANDED_MESSAGE = (street, on, compass) =>
   `Teleported ${on ? 'to' : 'near'} ${street}, facing ${compass}.`;
 const TELEPORT_LANDED_OPEN_MESSAGE = (compass) =>
@@ -221,6 +252,12 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     rafId: null,
     game: null, // per-city resources, see loadCity()
     helpOpen: false,
+    // CW-60: which of the four map styles is showing. Absent storage means
+    // Standard, so a player who never touches this sees the map they always
+    // have.
+    mapStyle: mapStyleById(
+      safeGetItem(STORAGE_KEY_CITY_WALK_MAP_STYLE) ?? DEFAULT_MAP_STYLE
+    ).id,
     // keys is the union frame() reads; keyHeld and btnHeld are its two
     // sources, so a click on Forward can never cancel a held Arrow Up.
     keys: new Set(),
@@ -234,7 +271,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // CW-40 (CW-Q40): pin mode. Armed by the Teleport button; a map click
     // commits while armed. Never persisted - a mode you cannot see the
     // arming of should never outlive the map it was armed on.
-    teleportArmed: false,
+    // CW-61: the spot the travel dialog is asking about, or null. Arming
+    // (CW-40) has retired: every map click asks, and nothing travels without
+    // a second press.
+    travel: null,
     themeUnsub: null,
     refs: {},
   };
@@ -308,6 +348,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   }
 
   function handleEscape() {
+    // CW-61: the travel dialog is the innermost thing Escape can close, so it
+    // goes first. Cancelling it must not also close the help or leave the
+    // game - one Escape, one dismissal.
+    if (state.travel) {
+      closeTravelDialog(false);
+      return;
+    }
     if (state.helpOpen) {
       toggleHelp(false);
       return;
@@ -476,6 +523,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       recenterMap: () => recenterMap(),
       adjustCharacterSize: (steps) =>
         adjustCharacterSize(steps * CHAR_SCALE_STEP),
+      cycleMapStyle: (delta) => stepMapStyle(delta),
       setHeading: (rad) => faceHeading(rad),
       setPitch: (rad) => setGazePitch(rad),
       announce: (text) => announceInLayer(text),
@@ -531,12 +579,19 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       'Arrow Left / Q and Arrow Right / E: turn',
       'R and F: look up and down',
       'V: level the view',
-      'Drag with the mouse in street view: look around',
+      'Drag with the mouse: look around in street view, move the map in map view',
       'Shift (hold): move faster',
       'Left and Right Bracket: walking speed down or up',
       'M: switch between street view and map view',
-      'On the map: arrow keys pan, Page Up and Page Down zoom, Home returns to you',
-      'On the map: press Teleport, then click where you want to go; J drops you at the middle of the map',
+      // CW-59: W A S D already panned the map and always had - the same keys
+      // that walk the street, through the same actions. Only this line and
+      // the map-view announcement said otherwise, so the fix is a sentence
+      // rather than a key binding. Measured: W moves the map 302 m where
+      // ArrowUp moves it 302 m, and A, S and D match their arrows too.
+      'On the map: arrow keys or W A S D pan, Page Up and Page Down zoom, Home returns to you',
+      'On the map: K and Shift+K change the map style, between Standard, Roads only, Buildings only and Wayfinding',
+      'On the map: click anywhere to be asked whether to travel there; J asks about the middle of the map',
+      'The travel question names the corner you would land on, and nothing moves until you press Travel',
       'L and Shift+L: cycle landmarks on the map',
       'X: say where you are',
       // CW-42 (CW-Q39): the bottom of the range is per machine now, so the
@@ -580,6 +635,56 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
 
     layer.appendChild(help);
 
+    /**
+     * CW-61 (CW-Q58): the travel dialog.
+     *
+     * ★ NOT a second `aria-modal`. The layer is already `role="dialog"
+     * aria-modal="true"` and owns the focus trap, and nesting a second modal
+     * inside it would tell a screen reader that the outer one had gone away.
+     * This is a focus-managed panel with `role="group"` and its own labelled
+     * heading, the same shape the help panel has, plus Escape ahead of the
+     * help in the chain.
+     */
+    const travel = document.createElement('div');
+    travel.className = 'city-walk-travel';
+    travel.id = 'cityWalkTravelDialog';
+    travel.setAttribute('role', 'group');
+    travel.setAttribute('aria-labelledby', 'cityWalkTravelTitle');
+    travel.setAttribute('aria-describedby', 'cityWalkTravelWhere');
+    travel.hidden = true;
+
+    const travelTitle = document.createElement('h3');
+    travelTitle.id = 'cityWalkTravelTitle';
+    travelTitle.textContent = TRAVEL_TITLE;
+    travel.appendChild(travelTitle);
+
+    const travelWhere = document.createElement('p');
+    travelWhere.className = 'city-walk-travel-where';
+    travelWhere.id = 'cityWalkTravelWhere';
+    travel.appendChild(travelWhere);
+
+    const travelActions = document.createElement('div');
+    travelActions.className = 'city-walk-travel-actions';
+
+    const travelGo = document.createElement('button');
+    travelGo.type = 'button';
+    travelGo.id = 'cityWalkTravelGoBtn';
+    travelGo.className = 'btn btn-primary city-walk-btn';
+    travelGo.textContent = TRAVEL_CONFIRM_LABEL;
+
+    const travelCancel = document.createElement('button');
+    travelCancel.type = 'button';
+    travelCancel.id = 'cityWalkTravelCancelBtn';
+    travelCancel.className = 'btn btn-secondary city-walk-btn';
+    travelCancel.textContent = TRAVEL_CANCEL_LABEL;
+
+    travelActions.append(travelGo, travelCancel);
+    travel.appendChild(travelActions);
+    layer.appendChild(travel);
+
+    travelGo.addEventListener('click', () => closeTravelDialog(true));
+    travelCancel.addEventListener('click', () => closeTravelDialog(false));
+
     // Landmark legend (CW-10): real text beside the map view.
     const legend = document.createElement('aside');
     legend.className = 'city-walk-legend';
@@ -612,9 +717,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       cameraPanel,
       mapBtn: toolbar.mapBtn,
       fastBtn: toolbar.fastBtn,
+      viewZone: toolbar.viewZone,
       hud,
       hudStatus,
       help,
+      travel,
+      travelWhere,
+      travelGo,
       legend,
       announcer,
     };
@@ -746,18 +855,6 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
           press: () => adjustWalkSpeed(SPEED_LABEL_STEP),
           views: 'both',
         },
-        // CW-35: Fast moved here when the Move group retired. The Camera
-        // panel has no equivalent, and Shift is a KEYBOARD route only — with
-        // no button, anyone walking the city by mouse or touch would have
-        // lost the ability to hurry entirely. It belongs with Speed anyway.
-        {
-          id: 'cityWalkFastBtn',
-          label: 'Fast',
-          keys: 'Shift (hold)',
-          press: toggleFastWalk,
-          toggle: true,
-          views: 'street',
-        },
       ],
     },
     {
@@ -780,7 +877,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       ],
     },
     {
-      name: 'Weather',
+      // CW-59: this group was 'Weather' and held Photo beside Rain. Rain is a
+      // street-only control and now lives in the view zone, and a group of one
+      // still captioned Weather would have been describing a button that
+      // saves a picture.
+      name: 'Picture',
       buttons: [
         {
           id: 'cityWalkPhotoBtn',
@@ -788,14 +889,6 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
           keys: 'P',
           press: savePhoto,
           views: 'both',
-        },
-        {
-          id: 'cityWalkRainBtn',
-          label: 'Rain',
-          keys: 'G',
-          press: cycleRain,
-          toggle: true,
-          views: 'street',
         },
       ],
     },
@@ -809,39 +902,6 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
           press: toggleMapView,
           toggle: true,
           views: 'both',
-        },
-        {
-          id: 'cityWalkCenterBtn',
-          label: 'Center on you',
-          keys: 'Home',
-          press: recenterMap,
-          views: 'map',
-        },
-        {
-          id: 'cityWalkZoomOutBtn',
-          label: 'Zoom out',
-          keys: 'Page Down',
-          hold: 'zoomOut',
-          views: 'map',
-        },
-        {
-          id: 'cityWalkZoomInBtn',
-          label: 'Zoom in',
-          keys: 'Page Up',
-          hold: 'zoomIn',
-          views: 'map',
-        },
-        // CW-40 (CW-Q40): an ARMING TOGGLE now, not a commit button. Press
-        // it, the cursor becomes the ring, and a click on the map travels
-        // there. J stays the keyboard commit at the centre crosshair, which
-        // is why it is still the key this button teaches.
-        {
-          id: 'cityWalkTeleportBtn',
-          label: 'Teleport',
-          keys: 'J',
-          press: toggleTeleportMode,
-          toggle: true,
-          views: 'map',
         },
       ],
     },
@@ -873,6 +933,99 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
         },
       ],
     },
+    {
+      /**
+       * ★★ THE VIEW ZONE (CW-59, CW-Q61). Every button that exists in only
+       * one view lives HERE, at the far end behind a divider, and nowhere
+       * else.
+       *
+       * Before this, view-only buttons sat inside the group they belonged to
+       * by meaning - Fast inside Speed, Rain inside Weather, the map controls
+       * inside Map - and hiding them made the whole strip re-lay-out. Measured
+       * on a 1280px window: **all NINE shared buttons moved**, by up to
+       * 186 px, and some moved LEFT while others moved RIGHT, because the
+       * toolbar centres itself and the total width changed. A player who
+       * reaches for Larger in the street view found Photo under the cursor
+       * after switching to the map.
+       *
+       * With every view-only button after every shared one, the shared zone
+       * cannot move: nothing that changes width is ever to its left.
+       *
+       * The caption swaps with the view because that is the honest label for
+       * a region whose contents come and go.
+       */
+      name: 'Street only',
+      viewZone: true,
+      buttons: [
+        // CW-35: Fast lived with Speed when the Move group retired, and the
+        // reasoning still holds - Shift is a keyboard-only route, so without
+        // a button nobody on mouse or touch could hurry. It is here now
+        // because it is street-only, not because it stopped belonging there.
+        {
+          id: 'cityWalkFastBtn',
+          label: 'Fast',
+          keys: 'Shift (hold)',
+          press: toggleFastWalk,
+          toggle: true,
+          views: 'street',
+        },
+        {
+          id: 'cityWalkRainBtn',
+          label: 'Rain',
+          keys: 'G',
+          press: cycleRain,
+          toggle: true,
+          views: 'street',
+        },
+        {
+          id: 'cityWalkCenterBtn',
+          label: 'Center on you',
+          keys: 'Home',
+          press: recenterMap,
+          views: 'map',
+        },
+        {
+          id: 'cityWalkZoomOutBtn',
+          label: 'Zoom out',
+          keys: 'Page Down',
+          hold: 'zoomOut',
+          views: 'map',
+        },
+        {
+          id: 'cityWalkZoomInBtn',
+          label: 'Zoom in',
+          keys: 'Page Up',
+          hold: 'zoomIn',
+          views: 'map',
+        },
+        // CW-61 (CW-Q58): the ARMING has retired and the button has not.
+        // It opens the travel dialog at the map's centre, which is exactly
+        // what J does - so a mouse-only player and a keyboard player reach
+        // the same question the same way, and the toolbar promise (every key
+        // has a button) survives the change. It is no longer a toggle:
+        // there is no mode left to be in.
+        {
+          id: 'cityWalkTeleportBtn',
+          label: 'Travel',
+          keys: 'J',
+          press: teleportAtCrosshair,
+          views: 'map',
+        },
+        // CW-60: the toolbar promise - every key has a button. It goes LAST
+        // in the zone, where its own width is behind everything else in it,
+        // and the zone is behind every shared button (CW-59). The label does
+        // not name the current style: a label that changed width would move
+        // its neighbours, and the style is already said out loud, written in
+        // the HUD, and visible on the map.
+        {
+          id: 'cityWalkMapStyleBtn',
+          label: 'Map style',
+          keys: 'K',
+          press: () => stepMapStyle(1),
+          views: 'map',
+        },
+      ],
+    },
   ];
 
   /**
@@ -894,6 +1047,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     const buttons = [];
     let mapBtn = null;
     let fastBtn = null;
+    let viewZone = null;
 
     for (const group of TOOLBAR_GROUPS) {
       const groupEl = document.createElement('div');
@@ -912,6 +1066,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       labelEl.textContent = group.name;
       groupEl.appendChild(labelEl);
 
+      if (group.viewZone) {
+        groupEl.classList.add('city-walk-toolbar-view-zone');
+        viewZone = { groupEl, labelEl };
+      }
+
       for (const spec of group.buttons) {
         const btn = makeToolbarButton(spec);
         groupEl.appendChild(btn);
@@ -923,7 +1082,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       el.appendChild(groupEl);
     }
 
-    return { el, buttons, mapBtn, fastBtn };
+    return { el, buttons, mapBtn, fastBtn, viewZone };
   }
 
   function makeToolbarButton(spec) {
@@ -990,9 +1149,16 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // The Camera panel reads the same view flag and relabels itself: the same
     // arrow that walks in the street pans over the map, and it has to say so.
     state.refs.cameraPanel?.syncView();
-    const { toolbarButtons, mapBtn, fastBtn } = state.refs;
+    const { toolbarButtons, mapBtn, fastBtn, viewZone } = state.refs;
     if (!toolbarButtons) return;
     const mapView = Boolean(state.game?.mapView);
+
+    // CW-59: the zone says which view it is showing. Its caption is the only
+    // thing in the strip that changes wording, and it sits INSIDE the zone,
+    // so it cannot move a shared button however long the word is.
+    if (viewZone) {
+      viewZone.labelEl.textContent = mapView ? 'Map only' : 'Street only';
+    }
 
     mapBtn?.setAttribute('aria-pressed', mapView ? 'true' : 'false');
     fastBtn?.setAttribute('aria-pressed', state.fastWalk ? 'true' : 'false');
@@ -1008,14 +1174,6 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
           : 'true'
       );
     }
-
-    const teleportBtn = toolbarButtons.find(
-      (b) => b.spec.id === 'cityWalkTeleportBtn'
-    )?.btn;
-    teleportBtn?.setAttribute(
-      'aria-pressed',
-      state.teleportArmed ? 'true' : 'false'
-    );
 
     for (const { spec, btn } of toolbarButtons) {
       if (spec.views === 'both') continue;
@@ -1302,9 +1460,92 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     markerInner.position.z = 61;
     marker.add(markerInner);
 
-    // CW-36's pick-preview ring retired with the pick flow (CW-40): while
-    // pin mode is armed the ring is the CURSOR, and the committed landing
-    // is marked by the player marker itself - the walker is really there.
+    /**
+     * ★★ CW-61: THE MAN IS REFUSED, AND THE REASON IS THE SHAPE OF A
+     * CHARACTER CELL.
+     *
+     * The plan asked for the logo's accessibility figure to become the player
+     * marker, with the pick spot as the logo's circle, reunited on travel. It
+     * was built, photographed at five palettes and five zooms, and dropped.
+     *
+     * MEASURED at this head: the converter's cell is **4 px wide and 9 px
+     * tall**, and the marker's black core is 35 px across at every zoom
+     * inside the 2.2/zoom clamp (0.8 through 2), 22 px at the map's minimum
+     * and 77 px at its maximum. In cells that is
+     *
+     *   zoom 0.4   5.6 wide x 2.4 tall
+     *   zoom 0.8-2 8.8 wide x 3.9 tall
+     *   zoom 8    19.2 wide x 8.6 tall
+     *
+     * A standing figure is head, arms, body and legs: five ROWS at the very
+     * least. It gets 3.9 at every zoom a player spends time at. The mark is
+     * not too small - it is too SHORT, because the cell is two and a quarter
+     * times taller than it is wide, and a human figure needs its height most.
+     *
+     * Growing the marker to fit was the other way out and CW-40 already
+     * refused it for a reason that still holds: a marker big enough to draw a
+     * person in swallows a city block. And the first attempt at the figure
+     * proved the cost of getting it wrong - arms 0.51 of the marker wide
+     * against a core reaching 0.25 either side spilled onto the frame, and
+     * the marker photographed as a solid white block, which is exactly the
+     * camouflage the frame-around-a-hole exists to escape.
+     *
+     * So the player keeps the mark CW-40 photographed and chose. What ships
+     * from the icon language is the CIRCLE below, which is a shape this grid
+     * can carry.
+     */
+
+    /**
+     * ★ CW-61: THE CIRCLE, which is where the dialog is asking about.
+     *
+     * The same laws as the marker - a bright ring around an exact-black core,
+     * never occluded, one shared scale - so the two marks are the same family
+     * and the eye reads them as one language. It shows only while the
+     * question is open, and travelling retires it because the man is standing
+     * there now.
+     */
+    const pickMat = new MeshBasicMaterial({
+      color: 0xffffff,
+      depthTest: false,
+    });
+    // ★ BIGGER THAN THE PLAYER'S MARK, ON PURPOSE. Both are bright outlines
+    // around an empty middle, and at nine cells across the difference between
+    // a ring and a square is not something this grid can carry (CW-60 found
+    // the same thing about its wayfinding kinds, and CW-36's ring died of
+    // it). What the grid CAN carry is size, so the circle is drawn wide
+    // enough to read as a ring around a spot rather than as a second marker.
+    const pickGeom = new RingGeometry(markerSize * 0.72, markerSize * 1.0, 28);
+    const pickMark = new Mesh(pickGeom, pickMat);
+    pickMark.position.z = 60;
+    pickMark.renderOrder = 998;
+    pickMark.visible = false;
+    scene.add(pickMark);
+
+    /**
+     * ★★ AND THE HOLE, WITHOUT WHICH THE RING DOES NOT READ AT ALL.
+     *
+     * The ring shipped first as a bare outline and was photographed in five
+     * palettes: clear in both monochromes, and INVISIBLE in colour, HC-dark
+     * and HC-light. Those palettes fill the map with white and grey glyphs,
+     * so a white ring is a white thing among white things - which is CW-40's
+     * finding arriving a second time from a new direction.
+     *
+     * CW-40's law is not "a bright outline reads". It is "a bright outline
+     * around EXACT BLACK reads", because exact black is the one value the
+     * converter renders as an empty cell (CW-5), and an empty patch in the
+     * middle of a mark is a footprint no building in any palette has. The
+     * player's marker has had that hole since CW-40; the circle needed its
+     * own.
+     */
+    const pickCoreGeom = new CircleGeometry(markerSize * 0.72, 28);
+    const pickCoreMat = new MeshBasicMaterial({
+      color: 0x000000,
+      depthTest: false,
+    });
+    const pickCore = new Mesh(pickCoreGeom, pickCoreMat);
+    pickCore.position.z = -1;
+    pickCore.renderOrder = 997;
+    pickMark.add(pickCore);
 
     // Order matters here. The collision grid is built from the buildings
     // first so the props can refuse to stand inside one; the props then hand
@@ -1358,6 +1599,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       markerMat,
       markerInnerGeom,
       markerInnerMat,
+      // CW-61: the circle, disposed with the marker it belongs to rather
+      // than left for the garbage collector to not collect.
+      pickMark,
+      pickGeom,
+      pickMat,
+      pickCoreGeom,
+      pickCoreMat,
       collision,
       surface,
       walkState,
@@ -1633,6 +1881,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     game.markerMat?.dispose();
     game.markerInnerGeom?.dispose();
     game.markerInnerMat?.dispose();
+    game.pickGeom?.dispose();
+    game.pickMat?.dispose();
+    game.pickCoreGeom?.dispose();
+    game.pickCoreMat?.dispose();
     game.renderer?.dispose();
     game.renderer?.domElement?.remove();
     state.game = null;
@@ -1792,6 +2044,17 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       return;
     }
 
+    // CW-60 (CW-Q57): K steps forward through the map styles and Shift+K
+    // steps back, the same pair L and Shift+L already spend on landmarks.
+    // K was free at this head - the letters still unspoken are B I K N U Y Z,
+    // re-derived here rather than taken from the plan.
+    if (state.game.mapView && event.code === 'KeyK') {
+      event.preventDefault();
+      event.stopPropagation();
+      stepMapStyle(event.shiftKey ? -1 : 1);
+      return;
+    }
+
     if (
       state.game.mapView &&
       (event.code === 'Home' ||
@@ -1914,6 +2177,28 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     announceInLayer(state.fastWalk ? 'Fast walking on.' : 'Fast walking off.');
   }
 
+  /**
+   * CW-60 (CW-Q57): step through the four map styles.
+   *
+   * A style is a MAP state, so this does nothing in the street - the same
+   * shape as Home and the zoom keys, which are also map-only and also say
+   * nothing when there is no map to act on. The choice is stored either way,
+   * so the pad, the key and the button all leave the same trace.
+   *
+   * @param {number} delta +1 forward through the list, -1 back
+   */
+  function stepMapStyle(delta) {
+    const game = state.game;
+    if (!game?.mapView) return;
+    state.mapStyle = cycleMapStyle(state.mapStyle, delta);
+    safeSetItem(STORAGE_KEY_CITY_WALK_MAP_STYLE, state.mapStyle);
+    game.city3d.setMapStyle(state.mapStyle);
+    game.city3d.setMapZoom(game.mapCam.zoom);
+    game.altView.invalidate();
+    updateHud();
+    announceInLayer(mapStyleAnnouncement(state.mapStyle));
+  }
+
   /** Home, and the map view's Center on you button. */
   function recenterMap() {
     const game = state.game;
@@ -1999,15 +2284,32 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     event.preventDefault();
 
     if (game.mapView) {
-      // CW-40 (CW-Q40): while pin mode is armed, a click on the map IS the
-      // teleport - one step, no confirmation press. Unarmed, a click does
-      // nothing here again (the pre-CW-36 behaviour): the two-step
-      // pick-then-J flow this branch used to start is retired, and a ring
-      // that no longer led anywhere would be a promise the game cannot
-      // keep.
-      if (state.teleportArmed) {
-        const world = mapPointToWorld(event.clientX, event.clientY);
-        if (world) commitTeleport(world.x, world.y);
+      // CW-59: a press on the map now STARTS A DRAG rather than acting.
+      //
+      // ★ AND THAT IS WHY THE TELEPORT MOVED TO THE POINTER-UP. It used to
+      // fire here, on the way down, which cannot coexist with dragging: the
+      // press that begins a pan is the same press that would have teleported,
+      // so the map would jump away the instant you tried to move it. The
+      // DRAG_THRESHOLD_PX boundary is what separates them - under it the
+      // press was a click and still teleports; over it the press was a drag,
+      // it pans, and it never clicks. CW-61's modal hangs on this same
+      // boundary.
+      if (state.drag) return;
+      state.drag = {
+        pointerId: event.pointerId,
+        lastX: event.clientX,
+        lastY: event.clientY,
+        downX: event.clientX,
+        downY: event.clientY,
+        travelPx: 0,
+        panning: false,
+        map: true,
+      };
+      try {
+        state.refs.viewport.setPointerCapture(event.pointerId);
+      } catch {
+        // Capture is an optimization; a drag without it simply ends at the
+        // viewport edge. Never worth failing the press over.
       }
       return;
     }
@@ -2019,6 +2321,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       lastY: event.clientY,
       travelPx: 0,
       looking: false,
+      map: false,
     };
     try {
       state.refs.viewport.setPointerCapture(event.pointerId);
@@ -2032,8 +2335,22 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     const drag = state.drag;
     const game = state.game;
     if (!drag || drag.pointerId !== event.pointerId) return;
-    if (!game || game.mapView) {
+    if (!game) {
       endDrag();
+      return;
+    }
+    // Boolean on BOTH sides. A street drag has no `map` field at all, and
+    // `undefined !== false` is true, so an unguarded comparison ended every
+    // street drag on its first move - mouselook stopped working entirely and
+    // the suite caught it within the release.
+    if (Boolean(drag.map) !== Boolean(game.mapView)) {
+      // The view changed under a live drag. Whatever it was doing no longer
+      // applies to what is on screen.
+      endDrag();
+      return;
+    }
+    if (drag.map) {
+      panMapByDrag(drag, event);
       return;
     }
 
@@ -2064,7 +2381,62 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
 
   function handleViewportPointerUp(event) {
     if (state.drag && state.drag.pointerId !== event.pointerId) return;
+    const drag = state.drag;
+    // A press that never crossed the threshold was a CLICK, and CW-61 makes
+    // every such click ASK rather than only an armed one act. Measured from
+    // where the press went DOWN, not from where it came up: a two-pixel
+    // wobble should ask about where you aimed, not two pixels off it.
+    if (drag?.map && !drag.panning) {
+      const world = mapPointToWorld(drag.downX, drag.downY);
+      if (world) openTravelDialog(world.x, world.y);
+    }
     endDrag();
+  }
+
+  /**
+   * Drag the map under the pointer. The world point you grabbed stays under
+   * the cursor, which is the only behaviour that feels like moving a map
+   * rather than nudging a camera.
+   *
+   * The arithmetic is `mapPointToWorld` inverted: that turns a screen point
+   * into a world point through the same frustum, so one screen pixel is
+   * `(right - left) / width` metres across and `(top - bottom) / height`
+   * metres up. Screen y grows downward and world y grows north, so the y
+   * term flips.
+   */
+  function panMapByDrag(drag, event) {
+    const game = state.game;
+    const { viewport } = state.refs;
+    const dx = event.clientX - drag.lastX;
+    const dy = event.clientY - drag.lastY;
+    drag.lastX = event.clientX;
+    drag.lastY = event.clientY;
+
+    if (!drag.panning) {
+      drag.travelPx += Math.abs(dx) + Math.abs(dy);
+      if (drag.travelPx < DRAG_THRESHOLD_PX) return;
+      drag.panning = true;
+    }
+
+    const rect = viewport.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const aspect = Math.max(1, rect.width) / Math.max(1, rect.height);
+    const fit = mapCameraFrustum(game.mapCam, game.model.boundsM, aspect);
+    const perPxX = (fit.right - fit.left) / rect.width;
+    const perPxY = (fit.top - fit.bottom) / rect.height;
+
+    const bounds = game.model.boundsM;
+    const nextX = game.mapCam.centerX - dx * perPxX;
+    const nextY = game.mapCam.centerY + dy * perPxY;
+    game.mapCam.centerX = Math.min(bounds.maxX, Math.max(bounds.minX, nextX));
+    game.mapCam.centerY = Math.min(bounds.maxY, Math.max(bounds.minY, nextY));
+    // Any manual pan breaks player-follow, exactly as the keys and the
+    // buttons do - otherwise the next frame snaps the map back and the drag
+    // looks broken.
+    game.mapCam.follow = false;
+
+    game.altView.invalidate();
+    updateHud();
   }
 
   function endDrag() {
@@ -2539,6 +2911,14 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // 0.8x/1x/2x, in colour mode too, before the factors were chosen.
     const markerScale = Math.min(3.5, Math.max(0.6, 2.2 / game.mapCam.zoom));
     game.marker.scale.set(markerScale, markerScale, 1);
+    // CW-61: the circle is the same family and shares the same number. Two
+    // marks that mean one thing between them cannot drift apart in size.
+    game.pickMark.scale.set(markerScale, markerScale, 1);
+
+    // CW-60: the wayfinding marks are sized on SCREEN, so they belong to the
+    // same seam the marker's own scale does - every zoom, every frame of a
+    // held zoom, not only the moment the map opened.
+    game.city3d.setMapZoom(game.mapCam.zoom);
   }
 
   function toggleMapView() {
@@ -2546,12 +2926,23 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     endDrag();
     game.mapView = !game.mapView;
     game.marker.visible = game.mapView;
-    // CW-40: pin mode belongs to the map it was armed on. Leaving the map
-    // disarms it - silently, because this function's own announcement is
-    // the sentence this turn speaks.
-    if (!game.mapView) setTeleportArmed(false, false);
+    if (!game.mapView) game.pickMark.visible = false;
+    // CW-61: a question about a spot on the map cannot outlive the map.
+    // Closed silently, because this function's own announcement is the
+    // sentence this turn speaks - and closing it as a CANCEL would be a lie,
+    // since the player pressed M rather than Cancel.
+    if (!game.mapView && state.travel) {
+      state.travel = null;
+      state.refs.travel.hidden = true;
+      game.pickMark.visible = false;
+    }
     game.city3d.setMapView(game.mapView);
     game.props.setMapView(game.mapView);
+    // CW-60: the style is a map state, so it is applied on the way IN and
+    // never has to be undone on the way out - setMapView restores the street.
+    // The zoom follows from applyMapCamera below, which is the one place
+    // anything screen-sized on the map is sized.
+    if (game.mapView) game.city3d.setMapStyle(state.mapStyle);
     // CW-20: the weather belongs to the street. Seen from overhead the drops
     // streak diagonally across the whole map and read as scratches on the
     // picture rather than as rain — caught by eye in the four-city tour.
@@ -2593,7 +2984,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     updateHud();
     announceInLayer(
       game.mapView
-        ? 'Map view, seen from above. Arrow keys pan, Page Up and Page Down zoom, Home returns to you. The toolbar now shows the map buttons.'
+        ? 'Map view, seen from above. Arrow keys or W A S D pan, or drag with the mouse. Page Up and Page Down zoom, Home returns to you. The toolbar now shows the map buttons.'
         : 'Street view. The toolbar now shows the walking buttons.'
     );
   }
@@ -2629,42 +3020,99 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   }
 
   /**
-   * CW-40 (CW-Q40): the Teleport button arms PIN MODE. This supersedes
-   * CW-36's pick-then-J: while armed, a left click on the map IS the
-   * teleport, in one step, and the game stays on the map - entering the
-   * street is the player's separate choice. A second press disarms, and
-   * leaving the map disarms silently (the view change's own sentence is
-   * the one announcement that turn makes).
+   * CW-61 (CW-Q58): the travel dialog, and the retirement of arming.
+   *
+   * ★★ THE REVERSAL, STATED PLAINLY. CW-40 made an unarmed map click do
+   * NOTHING and an armed one travel immediately. Both halves are gone: every
+   * sub-threshold click now ASKS, and nothing travels without a second press.
+   * The trade is one extra press against a mode you could be in without
+   * knowing - and against a single mis-click sending you across the city with
+   * no way back to where you were.
+   *
+   * ★ AND J NO LONGER COMMITS SILENTLY. It opens this same dialog at the
+   * crosshair, so the keyboard route and the pointer route ask the same
+   * question and answer it with the same two buttons. CW-Q58 supersedes
+   * CW-Q40's one-step J deliberately: the preview is the point.
+   *
+   * @param {number} x world metres
+   * @param {number} y world metres
    */
-  function toggleTeleportMode() {
+  function openTravelDialog(x, y) {
     const game = state.game;
     if (!game?.mapView) return;
-    setTeleportArmed(!state.teleportArmed, true);
-  }
 
-  function setTeleportArmed(armed, announce) {
-    if (state.teleportArmed === armed) return;
-    state.teleportArmed = armed;
-    // The ring the pick flow used to draw in the world is the CURSOR now.
-    state.refs.viewport?.classList.toggle('city-walk-teleport-armed', armed);
-    syncToolbarView();
-    if (announce) {
-      announceInLayer(
-        armed ? TELEPORT_MODE_ON_MESSAGE : TELEPORT_MODE_OFF_MESSAGE
-      );
+    // ★ THE LANDING FIRST, THEN THE NAME. findLandingNear snaps to a street
+    // and refuses what it cannot stand on, so asking the street index where
+    // the CLICK was would describe a spot the player is not going to.
+    const landing = findLandingNear(game.model, game.collision, x, y);
+    if (!landing) {
+      announceInLayer(TELEPORT_REFUSED_MESSAGE);
+      return;
     }
+
+    const hits = game.streetIndex.query(landing.x, landing.y, STREET_NEAR_M);
+    const where = describeJunction(hits, {
+      onM: STREET_ON_M,
+      junctionM: STREET_JUNCTION_M,
+    });
+    const sentence = where.primary
+      ? where.secondary
+        ? TRAVEL_WHERE_CORNER(where.primary, where.secondary, where.on)
+        : TRAVEL_WHERE_ONE(where.primary, where.on)
+      : TRAVEL_WHERE_OPEN;
+
+    state.travel = { x: landing.x, y: landing.y };
+    // ★ THE CIRCLE MARKS THE SPOT WHILE THE QUESTION IS OPEN. It stands on
+    // the LANDING, not on the click: the sentence describes where you would
+    // arrive, and a mark somewhere else would contradict it.
+    game.pickMark.position.set(landing.x, landing.y, 0);
+    game.pickMark.visible = true;
+    game.altView.invalidate();
+    state.refs.travelWhere.textContent = sentence;
+    state.refs.travel.hidden = false;
+    state.refs.travelGo.focus();
   }
 
   /**
-   * J: commit at the map's centre crosshair, armed or not. The keyboard
-   * route needs no arming, because the arrows already steer the middle of
-   * the screen onto a street and PageUp/PageDown already zoom it (CW-Q41),
-   * so travelling from the keyboard was always one step.
+   * @param {boolean} commit Travel, or Cancel.
+   */
+  function closeTravelDialog(commit) {
+    const pick = state.travel;
+    state.travel = null;
+    state.refs.travel.hidden = true;
+    // Either answer retires the circle. On Travel the man arrives and stands
+    // where it was, which is the logo completing itself; on Cancel there is
+    // no longer a spot in question.
+    if (state.game) {
+      state.game.pickMark.visible = false;
+      state.game.altView.invalidate();
+    }
+    if (!pick) return;
+    if (commit) {
+      // commitTeleport speaks the landing, which is the sentence this turn
+      // makes; a cancel has nothing else to say for it, so it says its own.
+      commitTeleport(pick.x, pick.y);
+    } else {
+      announceInLayer(TRAVEL_CANCELLED_MESSAGE);
+    }
+    // Focus goes back to the control the map is driven from rather than to
+    // <body>, which is D-59 and kills every key for the rest of the session.
+    state.refs.mapBtn?.focus();
+  }
+
+  /**
+   * J: ask at the map's centre crosshair. The arrows already steer the middle
+   * of the screen onto a street and PageUp/PageDown already zoom it (CW-Q41),
+   * so the keyboard reaches any spot; what it lacked was the preview.
    */
   function teleportAtCrosshair() {
     const game = state.game;
     if (!game || !game.mapView) return;
-    commitTeleport(game.mapCam.centerX, game.mapCam.centerY);
+    if (state.travel) {
+      closeTravelDialog(false);
+      return;
+    }
+    openTravelDialog(game.mapCam.centerX, game.mapCam.centerY);
   }
 
   /**
@@ -2773,6 +3221,18 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   // HUD says "near" instead, and past it says nothing rather than lying.
   const STREET_ON_M = 12;
   const STREET_NEAR_M = 30;
+  /**
+   * CW-61: how close the SECOND street has to be before the travel dialog is
+   * allowed to call a spot a corner. MEASURED by walking away from 120 real
+   * junctions along one of their own streets: at 0, 5 and 10 m offsets ALL
+   * 120 still had a second street within twelve metres, and at 15 m only 27
+   * did. The runner-up's distance tracks the offset exactly, so the cliff is
+   * a cliff in distance and twelve metres sits inside it. It is ON_M's value
+   * and ON_M's meaning - close enough to be standing in it - which is why it
+   * is written as the same number rather than a second one that happens to
+   * match.
+   */
+  const STREET_JUNCTION_M = STREET_ON_M;
   // At an intersection two streets are almost equidistant (at the Seattle
   // spawn, 4th Avenue at 8.1 m and Union Street at 9.0 m). Without a margin
   // the clause would flap between them on every step.
@@ -2854,8 +3314,12 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   function updateHud() {
     const game = state.game;
     if (!game) return;
+    // CW-60: which map you are looking at, written down. The pad and the
+    // button both cycle without naming a destination, so a sighted player
+    // needs somewhere to read the answer that is not the announcement.
     const view = game.mapView
-      ? `map view · zoom ${game.mapCam.zoom.toFixed(1)}x`
+      ? `map view · ${mapStyleById(state.mapStyle).name} · ` +
+        `zoom ${game.mapCam.zoom.toFixed(1)}x`
       : `street view · speed ${game.speedLabel}%`;
     const near =
       !game.mapView && game.nearLandmark
