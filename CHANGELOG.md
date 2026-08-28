@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The Stencil Maker's designs are this project's own now** (DP-14) - the gallery used to offer
+  six icons copied out of the charm tool's library: a smiley, a heart, a star, a bolt, a crown
+  and a sun, none of which had anything to do with stencils. They are gone. In their place is the
+  Forge logo, beside the ring that was already there. Getting the logo in took some doing, and it
+  is the same thing that happens to any drawing exported from a CAD program: the logo is drawn in
+  lines with nothing filled in, and OpenSCAD fills in every shape it is given, so the file as it
+  stood came out as one solid blob. The app's own preparer turns the lines into thin filled
+  ribbons, which is what a stencil of a line drawing should be, and that is what ships. The ring
+  is still the design you start with, because the logo's ellipses and figure close into pieces
+  the default single support bar does not reach, and the ring is there to show a bar doing its
+  job. The Stencil Maker card still credits the Stencil Forge project by name, but no longer
+  links to it: that repository is private, so the link was a dead end for everybody who followed
+  it. The same credit is now in CREDITS.md, saying which parts were carried over and under what
+  licence. Behind the scenes, the Bracelet Clip Charm stopped borrowing its six gallery icons
+  from a neighbouring tool's folder and uses its own copies, which have been sitting there unused
+  since they were added
+
 - **A pendant can take the shape of your own drawing** (DP-11) - the Flat Pendant gains a shape
   called "design": instead of a circle or a square, the outline of your drawing becomes the
   pendant itself, and everything inside it stands up on the surface as raised detail. A traced
