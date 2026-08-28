@@ -42,6 +42,18 @@ import {
   pathToCurve,
 } from 'svg-path-commander';
 
+/**
+ * Colour is how laser software decides what to DO with a line: it maps each
+ * colour to an operation and an order, so two operations need two colours.
+ *
+ * These are the ordinary defaults. The guide tells a LightBurn user to set
+ * black to Cut and red to Score or Fill once, after which the machine
+ * remembers. Anything is possible; what matters is that the file DISTINGUISHES
+ * them, because a single colour cannot be split back apart afterwards.
+ */
+export const CUT_COLOR = '#000000';
+export const ENGRAVE_COLOR = '#FF0000';
+
 /** Registration cross arm length and stroke, in millimetres. */
 export const MARK_ARM_MM = 6;
 export const MARK_WIDTH_MM = 1;
@@ -122,6 +134,9 @@ export function plateFit({
  * @param {number} args.marginMm
  * @param {number} [args.scalePercent]
  * @param {boolean} [args.marks]
+ * @param {boolean} [args.engraveLabel] - Add the plate's name as an engraved
+ *   layer in its own colour. Off by default: it only helps a machine that can
+ *   engrave, and an SVG <text> element depends on the reader's font handling.
  * @param {number} args.layer - Which plate this is, 1-based
  * @param {number} args.layerCount - How many plates the design makes
  * @returns {{svg: string, label: string}}
@@ -135,6 +150,7 @@ export function buildStencilPlate({
   marginMm,
   scalePercent = 100,
   marks = true,
+  engraveLabel = false,
   layer,
   layerCount,
 }) {
@@ -164,13 +180,87 @@ export function buildStencilPlate({
     d += ` ${scaleTranslatePath(cutPathData, fit.scale, fit.dx, fit.dy)}`;
   }
 
+  const text = plateLabel(layer, layerCount);
+  // The label rides as its own colour so it arrives as a separate layer a
+  // laser can engrave rather than cut. Left out entirely when not wanted -
+  // an empty layer is a thing to explain rather than a thing to use.
+  const engraved = engraveLabel
+    ? `<text x="${round(plateW / 2)}" y="${round(plateH - 4)}" ` +
+      `font-size="6" text-anchor="middle" fill="none" ` +
+      `stroke="${ENGRAVE_COLOR}" stroke-width="0.2">${text}</text>`
+    : '';
+
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="${round(plateW)}mm" ` +
     `height="${round(plateH)}mm" viewBox="0 0 ${round(plateW)} ` +
-    `${round(plateH)}"><path d="${d}" fill="black" ` +
+    `${round(plateH)}"><path d="${d}" fill="${CUT_COLOR}" ` +
+    `fill-rule="evenodd"/>${engraved}</svg>`;
+
+  return { svg, label: text };
+}
+
+/**
+ * One laser-ready sheet: everything cut, with bridges holding the islands.
+ *
+ * A laser cuts one sheet once, so an enclosed shape falls out unless a rib of
+ * material holds it. Bridges are SUBTRACTED from the cut, which restores that
+ * material. This is the opposite situation from the layered 3D print, where
+ * the stacked-mask law means nothing is ever an island in the first place.
+ *
+ * The result is true size on purpose: kerf belongs to the laser's own software,
+ * which knows the material and the beam. Two corrections make a part undersized
+ * by a full kerf with nothing on screen to show it.
+ *
+ * @param {object} args
+ * @param {string|null} args.cutPathData - The whole design's cut
+ * @param {string} [args.bridgePathData] - Ribs to restore, same coordinates
+ * @param {number} args.canvasSpan
+ * @param {number} args.canvasHeight
+ * @param {number} args.plateW
+ * @param {number} args.plateH
+ * @param {number} args.marginMm
+ * @param {number} [args.scalePercent]
+ * @param {boolean} [args.marks]
+ * @returns {{svg: string}}
+ */
+export function buildLaserSheet({
+  cutPathData,
+  bridgePathData = '',
+  canvasSpan,
+  canvasHeight,
+  plateW,
+  plateH,
+  marginMm,
+  scalePercent = 100,
+  marks = true,
+}) {
+  const fit = plateFit({
+    canvasSpan,
+    canvasHeight,
+    plateW,
+    plateH,
+    marginMm,
+    scalePercent,
+  });
+
+  let d = `M 0 0 H ${plateW} V ${plateH} H 0 Z`;
+  if (marks) d += ` ${registrationMarks(plateW, plateH)}`;
+  if (cutPathData) {
+    d += ` ${scaleTranslatePath(cutPathData, fit.scale, fit.dx, fit.dy)}`;
+  }
+  // A rib inside a cut cancels back to material under even-odd, which is
+  // exactly what a bridge is: the cut with a piece put back.
+  if (bridgePathData) {
+    d += ` ${scaleTranslatePath(bridgePathData, fit.scale, fit.dx, fit.dy)}`;
+  }
+
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${round(plateW)}mm" ` +
+    `height="${round(plateH)}mm" viewBox="0 0 ${round(plateW)} ` +
+    `${round(plateH)}"><path d="${d}" fill="${CUT_COLOR}" ` +
     `fill-rule="evenodd"/></svg>`;
 
-  return { svg, label: plateLabel(layer, layerCount) };
+  return { svg };
 }
 
 /**

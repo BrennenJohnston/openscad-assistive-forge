@@ -30,6 +30,77 @@ export const EDITED_SVG_NAME = 'edited.svg';
 export const CONVERT_TIMEOUT_MS = 120000;
 
 /**
+ * DXF group code 70 value meaning "millimeters" for $INSUNITS.
+ * https://help.autodesk.com/view/ACD/2024/ENU/?guid=GUID-A68542A9-9A4E-4F55-9C3F-1D4C40D5F5A1
+ */
+export const INSUNITS_MILLIMETERS = 4;
+
+/**
+ * Declare the drawing's units, so a laser cutter does not guess.
+ *
+ * MEASURED on our own export: OpenSCAD writes correct millimetre COORDINATES
+ * but no $INSUNITS and no $MEASUREMENT, so the file says nothing at all about
+ * what its numbers mean. Software configured for inches reads 50 as fifty
+ * INCHES - a 25.4x error that looks perfectly fine on screen and ruins a sheet
+ * of material.
+ *
+ * The header OpenSCAD writes is $ACADVER = AC1006 (R10), which predates both
+ * variables. Permissive readers - which is nearly all laser software - honour
+ * them anyway, and a strict one is no worse off than it is today. $ACADVER is
+ * deliberately left alone: raising it would claim a format whose entities this
+ * file does not otherwise use.
+ *
+ * @param {string} dxfText
+ * @returns {string} The same drawing, saying what unit it is in
+ */
+export function withMetricUnits(dxfText) {
+  if (typeof dxfText !== 'string' || !dxfText.includes('HEADER')) {
+    return dxfText;
+  }
+  if (dxfText.includes('$INSUNITS')) return dxfText;
+
+  // DXF is line-oriented - a group code on one line, its value on the next -
+  // so this walks lines rather than pattern-matching across them. The line
+  // ending the file already uses is kept; OpenSCAD writes CRLF.
+  const crlf = dxfText.includes('\r\n');
+  const eol = crlf ? '\r\n' : '\n';
+  const lines = dxfText.split(/\r?\n/);
+
+  const block = [
+    '  9',
+    '$INSUNITS',
+    ' 70',
+    `     ${INSUNITS_MILLIMETERS}`,
+    '  9',
+    '$MEASUREMENT',
+    ' 70',
+    '     1',
+  ];
+
+  // Straight after $ACADVER's value, which is the first variable in the header
+  // OpenSCAD writes. Failing that, at the top of the header.
+  let at = -1;
+  for (let i = 0; i < lines.length - 2; i++) {
+    if (lines[i].trim() === '$ACADVER') {
+      at = i + 3;
+      break;
+    }
+  }
+  if (at === -1) {
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].trim() === 'HEADER') {
+        at = i + 1;
+        break;
+      }
+    }
+  }
+  if (at === -1) return dxfText;
+
+  lines.splice(at, 0, ...block);
+  return lines.join(eol);
+}
+
+/**
  * The one-line project that imports a drawing so the engine can re-emit it.
  * @param {string} fileName - Name the drawing is mounted under
  * @returns {string}
@@ -252,5 +323,5 @@ export async function svgToDxf({ svgText, fileName, render }) {
   if (!dxf || !dxf.includes('SECTION')) {
     throw emptyDrawingError();
   }
-  return { dxf, ms: Date.now() - started };
+  return { dxf: withMetricUnits(dxf), ms: Date.now() - started };
 }

@@ -20,7 +20,12 @@ import {
   paintSequence,
   stencilLayers,
   scaleTranslatePath,
+  CUT_COLOR,
+  ENGRAVE_COLOR,
+  buildLaserSheet,
 } from '../../src/js/stencil-plates.js';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
   parseSvgElements,
   classifyElements,
@@ -377,5 +382,102 @@ describe('the backdrop rule measures against the CANVAS', () => {
     const tree = buildNestingTree(els);
     const roles = els.map((e) => e.role);
     expect(stencilLayers(tree, roles, 3, null).layers[0]).toBe(1);
+  });
+});
+
+describe('cut and engrave arrive as separate colours (DP-13)', () => {
+  const args = {
+    cutPathData: 'M 10 10 H 90 V 40 H 10 Z',
+    canvasSpan: 100,
+    canvasHeight: 50,
+    plateW: 200,
+    plateH: 150,
+    marginMm: 15,
+    layer: 2,
+    layerCount: 3,
+  };
+
+  it('cuts in one colour so a laser can map it to an operation', () => {
+    const { svg } = buildStencilPlate(args);
+    expect(svg).toContain(`fill="${CUT_COLOR}"`);
+    expect(CUT_COLOR).toBe('#000000');
+  });
+
+  it('★ an engraved label is a DIFFERENT colour, or it gets cut out', () => {
+    // Laser software decides what to do with a line by its colour. A label in
+    // the cut colour is not a label: it is a hole in the shape of some words.
+    const { svg } = buildStencilPlate({ ...args, engraveLabel: true });
+    expect(svg).toContain(ENGRAVE_COLOR);
+    expect(ENGRAVE_COLOR).not.toBe(CUT_COLOR);
+    expect(svg).toContain('Plate 2 of 3');
+  });
+
+  it('leaves the label out entirely when it is not wanted', () => {
+    // An empty layer is a thing to explain rather than a thing to use.
+    const { svg } = buildStencilPlate(args);
+    expect(svg).not.toContain('<text');
+    expect(svg).not.toContain(ENGRAVE_COLOR);
+  });
+
+  it('the label is stroked, not filled, so it scores rather than floods', () => {
+    const { svg } = buildStencilPlate({ ...args, engraveLabel: true });
+    expect(svg).toMatch(/<text[^>]*fill="none"/);
+    expect(svg).toMatch(/<text[^>]*stroke="#FF0000"/);
+  });
+});
+
+describe('buildLaserSheet - one sheet, cut once (DP-13)', () => {
+  const base = {
+    cutPathData: 'M 20 20 H 80 V 80 H 20 Z M 40 40 H 60 V 60 H 40 Z',
+    canvasSpan: 100,
+    canvasHeight: 100,
+    plateW: 200,
+    plateH: 200,
+    marginMm: 15,
+  };
+
+  it('writes plate, marks and cuts as one even-odd path in mm', () => {
+    const { svg } = buildLaserSheet(base);
+    expect(svg).toContain('width="200mm"');
+    expect(svg).toContain('fill-rule="evenodd"');
+    expect((svg.match(/<path/g) || []).length).toBe(1);
+  });
+
+  it('★ a bridge puts material BACK into the cut', () => {
+    // MEASURED through the engine: 300 facets without ribs, 388 with two.
+    // Under even-odd a rib inside a cut cancels back to material, which is
+    // exactly what a bridge is - the cut with a piece put back.
+    const without = buildLaserSheet(base).svg;
+    const withRibs = buildLaserSheet({
+      ...base,
+      bridgePathData: 'M 45 48 H 55 V 52 H 45 Z',
+    }).svg;
+    const count = (s) => (s.match(/M /g) || []).length;
+    expect(count(withRibs)).toBe(count(without) + 1);
+  });
+
+  it('is TRUE SIZE: no kerf is taken out here', () => {
+    // LightBurn, LaserGRBL, xTool and Glowforge all offset for kerf
+    // themselves. Two corrections make the part undersized by a full kerf
+    // with nothing on screen to show it.
+    const src = readFileSync(
+      resolve(process.cwd(), 'src/js/stencil-plates.js'),
+      'utf8'
+    );
+    const body = src.slice(
+      src.indexOf('export function buildLaserSheet('),
+      src.indexOf('export function stencilLayers(')
+    );
+    expect(body).not.toMatch(/kerf/i);
+    expect(body).not.toMatch(/offset\(/);
+  });
+
+  it('cuts in the cut colour', () => {
+    expect(buildLaserSheet(base).svg).toContain(`fill="${CUT_COLOR}"`);
+  });
+
+  it('still makes a sheet when there is nothing to cut', () => {
+    const { svg } = buildLaserSheet({ ...base, cutPathData: null });
+    expect(svg).toContain('M 0 0 H 200 V 200 H 0 Z');
   });
 });

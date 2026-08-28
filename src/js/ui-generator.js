@@ -22,6 +22,7 @@ import {
   classifyElements,
   flattenLayers,
   flattenSilhouette,
+  flattenToCompoundPath,
   LAYER_EMIT_CAP,
 } from './svg-preparer.js';
 import { buildNestingTree, suggestLayers, layerLimit } from './svg-nesting.js';
@@ -30,7 +31,12 @@ import {
   extractSvgMeta,
 } from './svg-preparer-workspace.js';
 import { checkHolePlacement } from './hole-placement.js';
-import { buildStencilPlate, stencilLayers } from './stencil-plates.js';
+import {
+  buildStencilPlate,
+  buildLaserSheet,
+  stencilLayers,
+} from './stencil-plates.js';
+import { buildBridges, bridgesToPathData } from './stencil-bridges.js';
 import { svgToDataUrl, dataUrlToText } from './svg-text-encoding.js';
 import {
   loadOpenGroupIds,
@@ -1977,6 +1983,11 @@ export function isAspectCompanionParam(name, parameters) {
  * @param {Object} parameters - All extracted parameters, keyed by name
  * @returns {Array<{file: Object, plate: number}>}
  */
+export function findLaserParam(parameters) {
+  const p = parameters && parameters.stencil_laser_file;
+  return p && p.uiType === 'file' ? p : null;
+}
+
 export function findPlateParams(parameters) {
   if (!parameters) return [];
   const out = [];
@@ -2115,13 +2126,33 @@ export function reportHolePlacement(values, parameters) {
   if (message) announceChange(message);
 }
 
+/**
+ * The bridge warning: a shape that will fall out when the sheet is cut.
+ *
+ * NOT DISMISSIBLE, on purpose. The failure is invisible until the material is
+ * cut and the piece is on the floor, so there is no moment at which hiding it
+ * helps. It shares the one warning region, because a model is either a pendant
+ * or a stencil and never both.
+ *
+ * @param {string|null} message
+ */
+export function reportBridgeWarning(message) {
+  if (!holeWarningEl) return;
+  if (message === lastHoleWarning) return;
+  lastHoleWarning = message;
+  holeWarningEl.textContent = message || '';
+  holeWarningEl.hidden = !message;
+  if (message) announceChange(message);
+}
+
 function createFileControl(
   param,
   onChange,
   aspectParam = null,
   layerParams = [],
   silhouetteParams = null,
-  plateParams = []
+  plateParams = [],
+  laserParam = null
 ) {
   const container = document.createElement('div');
   container.className = 'param-control param-control--file';
@@ -2309,6 +2340,7 @@ function createFileControl(
   function buildPlateCompanions(value, values) {
     const out = {};
     for (const { file } of plateParams) out[file.name] = null;
+    if (laserParam) out[laserParam.name] = null;
     if (!value || !currentRawSvg) return out;
 
     try {
@@ -2340,19 +2372,59 @@ function createFileControl(
       const marginMm = Number(values.margin) || 15;
       const scalePercent = Number(values.design_scale) || 100;
 
+      // ONE canvas for every plate and for the laser sheet, so they agree.
+      let canvasSpan = 100;
+      let canvasHeight = 100;
+      const firstCut = cuts.find(Boolean);
+      if (firstCut) {
+        const fvb = /viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(firstCut);
+        if (fvb) {
+          canvasSpan = parseFloat(fvb[1]);
+          canvasHeight = parseFloat(fvb[2]);
+        }
+      }
+
+      // DP-13. The laser lane is ONE sheet, cut once, so an enclosed shape
+      // falls out unless a rib holds it. Kerf is deliberately NOT applied
+      // here: the laser's own software does that, and two corrections
+      // undersize the part by a full kerf with nothing on screen to show it.
+      if (laserParam) {
+        const whole = flattenToCompoundPath(els, meta);
+        const wholeD = whole ? (/ d="([^"]*)"/.exec(whole)?.[1] ?? null) : null;
+        let ribD = '';
+        let warning = null;
+        if (values.bridges !== 'no') {
+          const b = buildBridges(els, tree, {
+            count: Number(values.bridge_count) || 2,
+            widthMm: Number(values.bridge_width) || undefined,
+          });
+          ribD = bridgesToPathData(b.rects);
+          warning = b.message;
+        }
+        const sheet = buildLaserSheet({
+          cutPathData: wholeD,
+          bridgePathData: ribD,
+          canvasSpan,
+          canvasHeight,
+          plateW,
+          plateH,
+          marginMm,
+          scalePercent,
+          marks: values.marks !== 'no',
+        });
+        out[laserParam.name] = {
+          name: `${layerFileStem(value.name)}_laser.svg`,
+          data: svgToDataUrl(sheet.svg),
+          type: 'image/svg+xml',
+        };
+        reportBridgeWarning(warning);
+      }
+
       plateParams.forEach(({ file, plate }) => {
         const cut = cuts[plate - 1];
-        let cutPathData = null;
-        let canvasSpan = 100;
-        let canvasHeight = 100;
-        if (cut) {
-          cutPathData = / d="([^"]*)"/.exec(cut)?.[1] ?? null;
-          const vb = /viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(cut);
-          if (vb) {
-            canvasSpan = parseFloat(vb[1]);
-            canvasHeight = parseFloat(vb[2]);
-          }
-        }
+        const cutPathData = cut
+          ? (/ d="([^"]*)"/.exec(cut)?.[1] ?? null)
+          : null;
         const { svg } = buildStencilPlate({
           cutPathData,
           canvasSpan,
@@ -3280,7 +3352,11 @@ export function renderParameterUI(
   // DP-11. One warning region for the model, built only when this model can
   // take its shape from a design and therefore can have a hole in mid-air.
   resetHolePlacementRegion();
-  if (Object.keys(parameters).some((n) => n.endsWith('_silhouette'))) {
+  if (
+    Object.keys(parameters).some(
+      (n) => n.endsWith('_silhouette') || n === 'stencil_laser_file'
+    )
+  ) {
     ensureHoleWarningRegion(container);
   }
   const currentValues = initialValues ? { ...initialValues } : {};
@@ -3484,7 +3560,8 @@ export function renderParameterUI(
             parameters[`${param.name}_aspect`] || null,
             findLayerParams(param, parameters),
             findSilhouetteParams(param, parameters),
-            findPlateParams(parameters)
+            findPlateParams(parameters),
+            findLaserParam(parameters)
           );
           break;
 

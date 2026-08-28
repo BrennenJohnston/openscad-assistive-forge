@@ -85,8 +85,20 @@ bar_width = 3; // [1.2:0.1:8]
 marks = "yes"; // [yes, no]
 
 /* [Laser] */
-// Laser beam width (mm). In laser mode every cut shrinks by half of this so the burned line lands on size
-kerf = 0.1; // [0:0.01:0.5]
+// Add bridges: narrow ribs of material left across a cut so an enclosed shape
+// stays attached. A laser cuts one sheet once, so the middle of an O falls out
+// without them. Leave this on unless you know your design has nothing enclosed.
+bridges = "yes"; // [yes, no]
+
+// How wide each rib is (mm). Wider holds better and shows more in the paint.
+bridge_width = 3.0; // [1:0.1:8]
+
+// How many ribs hold each enclosed shape.
+bridge_count = 2; // [1:1:6]
+
+// The laser-ready drawing, prepared by the Assistive Forge app: true size,
+// with the bridges already worked out. Used only when Output type is laser cut.
+stencil_laser_file = ""; // [file:svg]
 
 /* [Quality] */
 $fn = 64; // [24:8:128]
@@ -118,7 +130,13 @@ fit_h = design_area_h * design_scale / 100;
 mark_size = min(10, margin - 2);
 mark_stroke = 1.2;
 mark_c = margin / 2;
-kerf_shrink = output_type == "laser_cut" ? kerf / 2 : 0;
+// NO KERF COMPENSATION HERE, on purpose. A laser beam removes material, so a
+// cut lands about half a beam width inside the line - but LightBurn, LaserGRBL,
+// xTool and Glowforge all apply that offset themselves, as a cutting setting
+// that knows the material and the power. This model used to shrink every cut by
+// kerf/2 as well, and two corrections make the part undersized by a FULL kerf
+// with nothing on screen to show it. The file is exported TRUE SIZE and the
+// laser's own software does the one job it is better placed to do.
 
 echo(str("Design area: ", design_area_w, " x ", design_area_h,
          " mm; design box: ", fit_w, " x ", fit_h, " mm"));
@@ -126,16 +144,15 @@ echo(str("Design area: ", design_area_w, " x ", design_area_h,
 module design_2d() {
     // Contain-fit: anchor the resize to whichever axis the design hits
     // first (OpenSCAD cannot measure an import; design_file_aspect
-    // carries the ratio). In laser mode the cuts shrink by kerf/2 per
-    // side so the burned line lands on size.
+    // carries the ratio). Exported TRUE SIZE: kerf is the laser software's
+    // job, not this model's.
     translate([plate_width / 2 + design_left_right,
                plate_height / 2 + design_up_down])
-        offset(delta = -kerf_shrink)
-            resize(design_file_aspect >= fit_w / fit_h
-                       ? [fit_w, 0]
-                       : [0, fit_h],
-                   auto = true)
-                import(design_file, center = true);
+        resize(design_file_aspect >= fit_w / fit_h
+                   ? [fit_w, 0]
+                   : [0, fit_h],
+               auto = true)
+            import(design_file, center = true);
 }
 
 // One + cross centered at (cx, cy)
@@ -210,9 +227,17 @@ layered = stencil_mode == "layered" &&
 assert(stencil_mode != "layered" || layered,
        "stencil_mode is \"layered\" but no plate files are set - choose a design first");
 
+// In laser mode the app hands over a drawing that is already true size, already
+// bridged and already colour-separated, so this model just passes it through.
+// Falling back to stencil_2d() keeps the tile usable before a design is chosen.
+module laser_2d() {
+    if (stencil_laser_file != "") import(stencil_laser_file, center = false);
+    else stencil_2d();
+}
+
 if (output_type == "3d_print") {
     linear_extrude(height = plate_thickness)
         if (layered) plate_2d(); else stencil_2d();
 } else {
-    if (layered) plate_2d(); else stencil_2d();
+    laser_2d();
 }
