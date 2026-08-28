@@ -223,6 +223,38 @@ one-second one.
 Add each example pass file to `files`, the same as any other file your design
 reads.
 
+## 5b. The feature contract (charm-program models)
+
+STRINGS/PROSE: owner review pending (DP-R1 text pack).
+
+Three models share the charm program, and features kept being added to one and
+forgotten on the others. This table is the contract. It is not documentation
+ABOUT the models - `tests/unit/parity-charm-models.test.js` PARSES this table
+and checks each model's `.scad` against it, so a row that stops being true
+fails the build rather than quietly ageing.
+
+`N-A` needs a reason. "Not done yet" is not one; write `yes` and do it, or say
+why the feature does not belong to that model.
+
+<!-- parity-contract:start -->
+
+| Feature | key | q-charm | nasif-charm-maker | logo-plate |
+|---|---|---|---|---|
+| Design file | design_file | yes | yes | yes |
+| Aspect companion | aspect | yes | yes | yes |
+| Design size control | scale | yes | yes | yes |
+| Design position and rotation | placement | yes | yes | yes |
+| Line thickening for FDM | thickening | yes | yes | yes |
+| Two text layers | text2 | yes | yes | yes |
+| Icon gallery | gallery | yes | yes | yes |
+| Large and small presets | presets | yes | yes | yes |
+| Choice of attachment | attachment | yes | yes | N-A the plate has one keychain hole and controls to place it, not a choice of fitting |
+| Second design layer | design2 | yes | N-A superseded by the layered engine, which does the same job for any number of passes | N-A superseded by the layered engine |
+| Layered design passes | layers | yes | N-A prototype scope: one model builds the stack this round | N-A prototype scope: one model builds the stack this round |
+| Clip fit for a silicone band | clipfit | yes | N-A a flat pendant is not a clip | N-A a plate is not a clip |
+
+<!-- parity-contract:end -->
+
 ## 6. Tactile designs
 
 **Owner sign-off required. This section is a draft.**

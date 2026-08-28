@@ -185,3 +185,130 @@ describe('the signed parity matrix, per model', () => {
     }
   });
 });
+
+// ── DP-10: the contract table IS the guard ──────────────────────────────────
+
+/**
+ * How each feature is DETECTED in a model's own parameter surface.
+ *
+ * Keyed by the `key` column of the table in TILE_AUTHOR_GUIDE.md. Each entry
+ * answers one question: does this model actually ship this feature? The
+ * answer comes from the .scad, never from a list kept beside it.
+ */
+const DETECT = {
+  design_file: (p) => Object.values(p).some((x) => x.uiType === 'file'),
+  aspect: (p) =>
+    Object.values(p)
+      .filter((x) => x.uiType === 'file')
+      .every((x) => !!p[`${x.name}_aspect`]),
+  scale: (p, key) => !!p[`${pre(key)}_scale`],
+  placement: (p, key) =>
+    ['left_right', 'up_down', 'rotation'].every((s) => !!p[`${pre(key)}_${s}`]),
+  thickening: (p, key) => !!p[`${pre(key)}_offset`],
+  text2: (p) => !!p.text_content && !!p.text_content_2 && !!p.text_2_thickness,
+  gallery: (p, key) => {
+    const manifest = JSON.parse(
+      readFileSync(join(PUBLIC_DIR, MODELS[key], '..', 'manifest.json'), 'utf8')
+    );
+    // Two shapes are in use and both are supported by file-handler.js: an
+    // ARRAY of {paramName, options} and, on the older tile, a single such
+    // OBJECT. Accepting only the array made this guard report a gallery the
+    // Flat Pendant has been shipping all along as missing.
+    const lib = manifest.svgLibrary;
+    const entries = Array.isArray(lib) ? lib : lib ? [lib] : [];
+    return entries.some((e) => (e.options || []).length > 0);
+  },
+  presets: (p, key) => {
+    const manifest = JSON.parse(
+      readFileSync(join(PUBLIC_DIR, MODELS[key], '..', 'manifest.json'), 'utf8')
+    );
+    const presets = manifest.files.filter((f) => f.startsWith('presets/'));
+    return (
+      presets.some((f) => /large/.test(f)) &&
+      presets.some((f) => /small/.test(f))
+    );
+  },
+  attachment: (p) => !!p.attachment_type,
+  design2: (p, key) => !!p[`${pre(key)}_file_2`],
+  layers: (p) => !!p.design_layer_1 && !!p.design_layer_1_depth,
+  clipfit: (p) => !!p.gap_width || !!p.inner_height,
+};
+
+/** The contract table, read out of the guide the same way a person reads it. */
+function readContract() {
+  const guide = readFileSync(
+    join(process.cwd(), 'docs/guides/TILE_AUTHOR_GUIDE.md'),
+    'utf8'
+  );
+  const block = guide.slice(
+    guide.indexOf('<!-- parity-contract:start -->'),
+    guide.indexOf('<!-- parity-contract:end -->')
+  );
+  expect(block.length).toBeGreaterThan(200);
+
+  const rows = block
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith('|') && !/^\|\s*-+/.test(l))
+    .map((l) =>
+      l
+        .replace(/^\|/, '')
+        .replace(/\|$/, '')
+        .split('|')
+        .map((c) => c.trim())
+    );
+
+  const header = rows.shift();
+  expect(header.slice(0, 2)).toEqual(['Feature', 'key']);
+  const models = header.slice(2);
+  return { models, rows };
+}
+
+describe('the parity contract (DP-10)', () => {
+  const { models, rows } = readContract();
+
+  it('names the models this repo actually ships', () => {
+    expect(models).toEqual(Object.keys(MODELS));
+  });
+
+  it('every row can be checked, and every check has a row', () => {
+    // A table entry nothing knows how to verify is a promise with no keeper.
+    const keys = rows.map((r) => r[1]);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(keys.sort()).toEqual(Object.keys(DETECT).sort());
+  });
+
+  it('every N-A carries a reason, and "not yet" is not a reason', () => {
+    for (const row of rows) {
+      for (let i = 0; i < models.length; i++) {
+        const cell = row[2 + i];
+        if (cell === 'yes') continue;
+        expect(
+          cell.startsWith('N-A '),
+          `${row[1]}/${models[i]}: "${cell}"`
+        ).toBe(true);
+        expect(cell.length).toBeGreaterThan(12);
+        expect(cell).not.toMatch(/not (yet|done)|todo|later|planned/i);
+      }
+    }
+  });
+
+  it.each(
+    readContract().rows.flatMap((row) =>
+      readContract().models.map((model, i) => [row[1], model, row[2 + i]])
+    )
+  )('%s on %s matches the .scad', (key, model, cell) => {
+    // The whole point: the table is checked against the model, not trusted.
+    const shipped = DETECT[key](paramsOf(model), model);
+    if (cell === 'yes') {
+      expect(shipped, `${model} promises ${key} but does not ship it`).toBe(
+        true
+      );
+    } else {
+      expect(
+        shipped,
+        `${model} ships ${key} but the contract says N-A - update the table`
+      ).toBe(false);
+    }
+  });
+});
