@@ -231,7 +231,12 @@ describe('paintSequence', () => {
 describe('stencilLayers - which shape is the paper', () => {
   const treeOf = (svgText) => {
     const els = classifyElements(parseSvgElements(svgText));
-    return { tree: buildNestingTree(els), roles: els.map((e) => e.role) };
+    const vb = /viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(svgText);
+    return {
+      tree: buildNestingTree(els),
+      roles: els.map((e) => e.role),
+      canvas: { width: parseFloat(vb[1]), height: parseFloat(vb[2]) },
+    };
   };
 
   it('★ steps past a LIGHT full-bleed background', () => {
@@ -239,8 +244,8 @@ describe('stencilLayers - which shape is the paper', () => {
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">' +
       '<rect width="40" height="40" fill="#efe9dc"/>' +
       '<path d="M10 10 H30 V30 H10 Z" fill="#111"/></svg>';
-    const { tree, roles } = treeOf(svg);
-    const { layers, plateCount } = stencilLayers(tree, roles);
+    const { tree, roles, canvas } = treeOf(svg);
+    const { layers, plateCount } = stencilLayers(tree, roles, 3, canvas);
     expect(layers[0]).toBe(0);
     expect(layers[1]).toBe(1);
     expect(plateCount).toBe(1);
@@ -256,9 +261,9 @@ describe('stencilLayers - which shape is the paper', () => {
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">' +
       '<rect width="40" height="40" fill="rgb(54,59,127)"/>' +
       '<path d="M10 10 H30 V30 H10 Z" fill="#eee"/></svg>';
-    const { tree, roles } = treeOf(svg);
+    const { tree, roles, canvas } = treeOf(svg);
     // The inner shape here is LIGHT on a dark ground - content, not paper.
-    const { layers } = stencilLayers(tree, roles);
+    const { layers } = stencilLayers(tree, roles, 3, canvas);
     expect(layers[0]).toBe(0);
     expect(layers[1]).toBe(1);
   });
@@ -268,8 +273,8 @@ describe('stencilLayers - which shape is the paper', () => {
     const svg =
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">' +
       '<rect width="40" height="40" fill="#111"/></svg>';
-    const { tree, roles } = treeOf(svg);
-    expect(stencilLayers(tree, roles).layers[0]).toBe(1);
+    const { tree, roles, canvas } = treeOf(svg);
+    expect(stencilLayers(tree, roles, 3, canvas).layers[0]).toBe(1);
   });
 
   it('numbers nested islands 1, 2, 3 from the drawing, not the paper', () => {
@@ -279,8 +284,8 @@ describe('stencilLayers - which shape is the paper', () => {
       '<path d="M5 5 H95 V95 H5 Z" fill="#111"/>' +
       '<path d="M20 20 H80 V80 H20 Z" fill="#eee"/>' +
       '<path d="M40 40 H60 V60 H40 Z" fill="#111"/></svg>';
-    const { tree, roles } = treeOf(svg);
-    const { layers, plateCount } = stencilLayers(tree, roles);
+    const { tree, roles, canvas } = treeOf(svg);
+    const { layers, plateCount } = stencilLayers(tree, roles, 3, canvas);
     expect(layers).toEqual([0, 1, 2, 3]);
     expect(plateCount).toBe(3);
   });
@@ -296,8 +301,8 @@ describe('stencilLayers - which shape is the paper', () => {
       );
     }
     parts.push('</svg>');
-    const { tree, roles } = treeOf(parts.join(''));
-    const { layers, plateCount } = stencilLayers(tree, roles, 3);
+    const { tree, roles, canvas } = treeOf(parts.join(''));
+    const { layers, plateCount } = stencilLayers(tree, roles, 3, canvas);
     expect(Math.max(...layers)).toBe(3);
     expect(plateCount).toBe(3);
   });
@@ -306,8 +311,8 @@ describe('stencilLayers - which shape is the paper', () => {
     const svg =
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">' +
       '<path d="M0 0 H40 V40 H0 Z" fill="#111"/></svg>';
-    const { tree } = treeOf(svg);
-    expect(stencilLayers(tree, ['ignore']).layers[0]).toBe(0);
+    const { tree, canvas } = treeOf(svg);
+    expect(stencilLayers(tree, ['ignore'], 3, canvas).layers[0]).toBe(0);
   });
 
   it('survives nonsense', () => {
@@ -331,5 +336,46 @@ describe('scaleTranslatePath', () => {
   it('survives nonsense rather than throwing', () => {
     expect(scaleTranslatePath('', 1, 0, 0)).toBe('');
     expect(scaleTranslatePath(null, 1, 0, 0)).toBe('');
+  });
+});
+
+describe('the backdrop rule measures against the CANVAS', () => {
+  it('★ does NOT eat a design whose outer shape merely is the largest', () => {
+    // The first version compared a root's area with the LARGEST area in the
+    // drawing. The outermost shape is always the largest, so every root with
+    // children was called paper: three nested squares lost their outer square
+    // and the stencil came out a plate short. Measured against the canvas
+    // instead, they cover 81 per cent and are all design.
+    const els = classifyElements(
+      parseSvgElements(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">' +
+          '<path d="M2 2 H38 V38 H2 Z" fill="#000"/>' +
+          '<path d="M10 10 H30 V30 H10 Z" fill="#000"/>' +
+          '<path d="M16 16 H24 V24 H16 Z" fill="#000"/></svg>'
+      )
+    );
+    const tree = buildNestingTree(els);
+    const roles = els.map((e) => e.role);
+    const { layers, plateCount } = stencilLayers(tree, roles, 3, {
+      width: 40,
+      height: 40,
+    });
+    expect(layers).toEqual([1, 2, 3]);
+    expect(plateCount).toBe(3);
+  });
+
+  it('with no canvas given, nothing is treated as paper', () => {
+    // The safe way to be wrong: a stencil with an extra plate beats one with
+    // its middle missing.
+    const els = classifyElements(
+      parseSvgElements(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">' +
+          '<rect width="40" height="40" fill="#efe9dc"/>' +
+          '<path d="M10 10 H30 V30 H10 Z" fill="#111"/></svg>'
+      )
+    );
+    const tree = buildNestingTree(els);
+    const roles = els.map((e) => e.role);
+    expect(stencilLayers(tree, roles, 3, null).layers[0]).toBe(1);
   });
 });

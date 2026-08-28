@@ -30,6 +30,7 @@ import {
   extractSvgMeta,
 } from './svg-preparer-workspace.js';
 import { checkHolePlacement } from './hole-placement.js';
+import { buildStencilPlate, stencilLayers } from './stencil-plates.js';
 import { svgToDataUrl, dataUrlToText } from './svg-text-encoding.js';
 import {
   loadOpenGroupIds,
@@ -1967,6 +1968,26 @@ export function isAspectCompanionParam(name, parameters) {
  * @param {Object} parameters - All extracted parameters, keyed by name
  * @returns {Array<{file: Object, aspect: Object|null, layer: number}>}
  */
+/**
+ * The stencil plates a layered tile declares (DP-12).
+ *
+ * A file parameter looks for `stencil_plate_1..3` beside it. A tile that
+ * declares none is not a layered stencil and nothing below this runs for it.
+ *
+ * @param {Object} parameters - All extracted parameters, keyed by name
+ * @returns {Array<{file: Object, plate: number}>}
+ */
+export function findPlateParams(parameters) {
+  if (!parameters) return [];
+  const out = [];
+  for (let n = 1; n <= LAYER_EMIT_CAP; n++) {
+    const file = parameters[`stencil_plate_${n}`];
+    if (!file || file.uiType !== 'file') break;
+    out.push({ file, plate: n });
+  }
+  return out;
+}
+
 export function findSilhouetteParams(param, parameters) {
   if (!param || !parameters) return null;
   const base = param.name.endsWith('_file')
@@ -2006,6 +2027,7 @@ export function findLayerParams(param, parameters) {
  * @returns {boolean}
  */
 export function isLayerCompanionParam(name, parameters) {
+  if (/^stencil_plate_\d+$/.test(name)) return true;
   const m = /^(.*)_(?:layer_\d+|silhouette)(_aspect)?$/.exec(name);
   if (!m) return false;
   const base = parameters[`${m[1]}_file`] || parameters[m[1]];
@@ -2098,7 +2120,8 @@ function createFileControl(
   onChange,
   aspectParam = null,
   layerParams = [],
-  silhouetteParams = null
+  silhouetteParams = null,
+  plateParams = []
 ) {
   const container = document.createElement('div');
   container.className = 'param-control param-control--file';
@@ -2267,6 +2290,95 @@ function createFileControl(
     return out;
   }
 
+  /**
+   * The stencil plates, for a tile that builds them (DP-12).
+   *
+   * A CONTRACT with public/examples/stencil-maker/stencil_maker.scad: the
+   * plate size is read from `plate_width`, `plate_height` and `margin`,
+   * because the app writes plates that are already mm-true and the model is a
+   * dumb extruder. Change those names in the model and change them here.
+   *
+   * The plates are cut with DEPTH deciding, not paint roles, and with the
+   * paper stepped over - see stencilLayers - and each cut is solid, which is
+   * what makes the method need no bridges.
+   *
+   * @param {Object|null} value - The design being emitted
+   * @param {Object} values - Current parameter values, for the plate size
+   * @returns {Object} Parameter names to values, for the SAME state update
+   */
+  function buildPlateCompanions(value, values) {
+    const out = {};
+    for (const { file } of plateParams) out[file.name] = null;
+    if (!value || !currentRawSvg) return out;
+
+    try {
+      const raw = parseSvgElements(currentRawSvg);
+      const els = classifyElements(raw);
+      const tree = buildNestingTree(els);
+      const meta = extractSvgMeta(currentRawSvg);
+      const vb = String(meta.viewBox || '')
+        .split(/[\s,]+/)
+        .map(Number);
+      const canvas =
+        vb.length === 4 && vb[2] > 0 && vb[3] > 0
+          ? { width: vb[2], height: vb[3] }
+          : null;
+      const { layers, plateCount } = stencilLayers(
+        tree,
+        els.map((el) => el.role),
+        LAYER_EMIT_CAP,
+        canvas
+      );
+      if (plateCount === 0) return out;
+
+      const cuts = flattenLayers(els, layers, plateCount, meta, null, {
+        solid: true,
+      });
+
+      const plateW = Number(values.plate_width) || 200;
+      const plateH = Number(values.plate_height) || 200;
+      const marginMm = Number(values.margin) || 15;
+      const scalePercent = Number(values.design_scale) || 100;
+
+      plateParams.forEach(({ file, plate }) => {
+        const cut = cuts[plate - 1];
+        let cutPathData = null;
+        let canvasSpan = 100;
+        let canvasHeight = 100;
+        if (cut) {
+          cutPathData = / d="([^"]*)"/.exec(cut)?.[1] ?? null;
+          const vb = /viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(cut);
+          if (vb) {
+            canvasSpan = parseFloat(vb[1]);
+            canvasHeight = parseFloat(vb[2]);
+          }
+        }
+        const { svg } = buildStencilPlate({
+          cutPathData,
+          canvasSpan,
+          canvasHeight,
+          plateW,
+          plateH,
+          marginMm,
+          scalePercent,
+          marks: values.marks !== 'no',
+          layer: plate,
+          layerCount: plateCount,
+        });
+        out[file.name] = {
+          name: `${layerFileStem(value.name)}_plate_${plate}.svg`,
+          data: svgToDataUrl(svg),
+          type: 'image/svg+xml',
+        };
+      });
+    } catch (err) {
+      // A design the plate builder cannot read still uploads as an ordinary
+      // single-sheet stencil; only the layered mode is unavailable.
+      console.warn('Stencil plate emission failed:', err);
+    }
+    return out;
+  }
+
   function emitFileValue(value, assignments = null) {
     let extra = null;
     if (aspectParam) {
@@ -2292,6 +2404,12 @@ function createFileControl(
     }
     if (silhouetteParams) {
       extra = { ...(extra || {}), ...buildSilhouetteCompanion(value) };
+    }
+    if (plateParams.length > 0) {
+      extra = {
+        ...(extra || {}),
+        ...buildPlateCompanions(value, currentParameterValues),
+      };
     }
     onChange(param.name, value, extra);
   }
@@ -3365,7 +3483,8 @@ export function renderParameterUI(
             handleChange,
             parameters[`${param.name}_aspect`] || null,
             findLayerParams(param, parameters),
-            findSilhouetteParams(param, parameters)
+            findSilhouetteParams(param, parameters),
+            findPlateParams(parameters)
           );
           break;
 

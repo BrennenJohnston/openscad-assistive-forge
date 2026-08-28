@@ -16,6 +16,7 @@ import {
   isAspectCompanionParam,
   findLayerParams,
   findSilhouetteParams,
+  findPlateParams,
   isLayerCompanionParam,
 } from '../../src/js/ui-generator.js';
 import { readFileSync } from 'node:fs';
@@ -2128,6 +2129,52 @@ describe('per-layer design companions (DP-7)', () => {
       expect(el.querySelector('#param-design_file')).toBeTruthy();
       expect(el.querySelector('#param-design_silhouette')).toBeNull();
       expect(el.querySelector('#param-design_silhouette_aspect')).toBeNull();
+      el.remove();
+    });
+  });
+
+  describe('the stencil plates (DP-12)', () => {
+    it('are found when a tile builds them', () => {
+      const parameters = {
+        design_file: fileParam('design_file'),
+        stencil_plate_1: fileParam('stencil_plate_1'),
+        stencil_plate_2: fileParam('stencil_plate_2'),
+        stencil_plate_3: fileParam('stencil_plate_3'),
+      };
+      expect(findPlateParams(parameters).map((p) => p.plate)).toEqual([
+        1, 2, 3,
+      ]);
+    });
+
+    it('stop at the first gap rather than skipping one', () => {
+      const parameters = {
+        stencil_plate_1: fileParam('stencil_plate_1'),
+        stencil_plate_3: fileParam('stencil_plate_3'),
+      };
+      expect(findPlateParams(parameters)).toHaveLength(1);
+    });
+
+    it('are absent for an ordinary tile', () => {
+      expect(
+        findPlateParams({ design_file: fileParam('design_file') })
+      ).toEqual([]);
+      expect(findPlateParams(null)).toEqual([]);
+    });
+
+    it('get a value but NO control: the app writes them', () => {
+      const params = buildParams({
+        params: [
+          fileParam('design_file'),
+          fileParam('stencil_plate_1'),
+          fileParam('stencil_plate_2'),
+        ],
+      });
+      const el = document.createElement('div');
+      document.body.appendChild(el);
+      renderParameterUI(params, el, vi.fn(), {});
+      expect(el.querySelector('#param-design_file')).toBeTruthy();
+      expect(el.querySelector('#param-stencil_plate_1')).toBeNull();
+      expect(el.querySelector('#param-stencil_plate_2')).toBeNull();
       el.remove();
     });
   });

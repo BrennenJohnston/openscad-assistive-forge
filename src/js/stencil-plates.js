@@ -189,19 +189,23 @@ export function buildStencilPlate({
  * @param {{nodes: Array, roots: Array<number>}} tree
  * @param {Array<string>} roles - Role per element, positionally aligned
  * @param {number} cap - Most plates to make
+ * @param {{width: number, height: number}} [canvas] - The artwork's own
+ *   viewBox. Without it nothing is treated as paper, which is the safe way to
+ *   be wrong: a stencil with an extra plate beats one with its middle missing.
  * @returns {{layers: Array<number>, plateCount: number}} layer 0 means "never
  *   cut": the background, and anything ignored
  */
-export function stencilLayers(tree, roles, cap = 3) {
+export function stencilLayers(tree, roles, cap = 3, canvas = null) {
   const layers = [];
   if (!tree || !Array.isArray(tree.nodes)) return { layers, plateCount: 0 };
   const roleAt = (i) => (Array.isArray(roles) ? roles[i] : 'foreground');
 
   for (let i = 0; i < tree.nodes.length; i++) layers[i] = 0;
 
-  // The largest area anything covers, for the full-bleed test below.
-  let widest = 0;
-  for (const n of tree.nodes) if (n.area > widest) widest = n.area;
+  const canvasArea =
+    canvas && canvas.width > 0 && canvas.height > 0
+      ? canvas.width * canvas.height
+      : 0;
 
   /**
    * Is this root the paper rather than the drawing?
@@ -219,7 +223,18 @@ export function stencilLayers(tree, roles, cap = 3) {
    */
   const isBackdrop = (index) => {
     const n = tree.nodes[index];
-    return n.children.length > 0 && widest > 0 && n.area >= widest * 0.95;
+    // Against the CANVAS, not against the other shapes. The first version of
+    // this compared a root's area with the LARGEST area in the drawing - but
+    // the outermost shape is always the largest, so every root with children
+    // was called paper. Three nested squares lost their outer square and the
+    // stencil came out a plate short.
+    //
+    // The paper is the thing that fills the picture: a traced photograph's
+    // background rect IS the viewBox. A drawing's outer shape has margin
+    // around it - three nested squares in a 40-unit box cover 81 per cent,
+    // well under this.
+    if (!canvasArea || n.children.length === 0) return false;
+    return n.area >= canvasArea * 0.98;
   };
 
   let deepest = 0;
