@@ -3262,6 +3262,43 @@
                           aria-label="Upload overlay image file"
                         />
                       </label>
+                      <!-- DP-5: cropping saves a COPY; the original stays in
+                           the image list. Disabled until there is a raster
+                           image chosen, because an SVG has nothing to crop. -->
+                      <button
+                        type="button"
+                        id="overlayCropBtn"
+                        class="btn btn-sm btn-outline overlay-crop-btn"
+                        disabled
+                      >
+                        Crop
+                      </button>
+                    </div>
+                    <!-- DP-6: the picture you have been tracing against is
+                         usually the picture you want ON the model. This hands
+                         it to a design parameter through the ordinary upload
+                         path, so it traces, opens the editor and lands in the
+                         gallery exactly as a file chosen by hand would. -->
+                    <div class="overlay-use-row" id="overlayUseRow" hidden>
+                      <label
+                        class="overlay-control-label"
+                        for="overlayUseTargetSelect"
+                        id="overlayUseTargetLabel"
+                      >
+                        Use it as
+                      </label>
+                      <select
+                        id="overlayUseTargetSelect"
+                        class="overlay-select"
+                        aria-labelledby="overlayUseTargetLabel"
+                      ></select>
+                      <button
+                        type="button"
+                        id="overlayUseAsDesignBtn"
+                        class="btn btn-sm btn-outline"
+                      >
+                        Use as design
+                      </button>
                     </div>
                     <span
                       id="overlaySourceHelp"
@@ -3392,6 +3429,55 @@
                       More options
                     </summary>
                     <div class="overlay-advanced-controls">
+                      <!-- DP-5: which surface the overlay sits against. A
+                           raw millimetre box alone is a poor control here -
+                           "-0.25" says nothing to someone who wants to trace
+                           onto the top of a charm - so the presets name the
+                           surfaces and the number field stays for the rest. -->
+                      <div class="overlay-control overlay-z-control">
+                        <label
+                          class="overlay-control-label"
+                          for="overlayZPresetSelect"
+                          id="overlayZPresetLabel"
+                        >
+                          Sits against
+                        </label>
+                        <select
+                          id="overlayZPresetSelect"
+                          class="overlay-select"
+                          aria-describedby="overlayZHelp"
+                        >
+                          <option value="under-plate">Under the plate</option>
+                          <option value="build-plate">Build plate</option>
+                          <option value="model-top">Top of the model</option>
+                          <option value="custom">A height I choose</option>
+                        </select>
+                        <span id="overlayZHelp" class="sr-only"
+                          >Chooses the height the reference image sits at. Top
+                          of the model follows the model as it changes.</span
+                        >
+                        <div
+                          class="overlay-z-custom"
+                          id="overlayZCustomRow"
+                          hidden
+                        >
+                          <label
+                            class="overlay-control-label"
+                            for="overlayZCustomInput"
+                            id="overlayZCustomLabel"
+                          >
+                            Height (mm)
+                          </label>
+                          <input
+                            type="number"
+                            id="overlayZCustomInput"
+                            class="overlay-number-input"
+                            step="0.25"
+                            value="0"
+                            aria-labelledby="overlayZCustomLabel"
+                          />
+                        </div>
+                      </div>
                       <!-- Manual override master toggle -->
                       <label
                         class="overlay-enable-toggle overlay-override-toggle"
@@ -6541,6 +6627,111 @@
       aria-live="assertive"
       aria-atomic="true"
     ></div>
+    <!-- Crop the reference image (DP-5). Numeric fields are the primary
+         control, not a fallback: a drag handle cannot be operated by keyboard
+         or described to a screen reader, and the numbers are what the person
+         is actually deciding. The picture beside them shows the rectangle. -->
+    <div
+      class="modal hidden"
+      id="cropImageModal"
+      role="dialog"
+      aria-labelledby="cropModalTitle"
+      aria-describedby="cropModalHelp"
+      aria-modal="true"
+      aria-hidden="true"
+    >
+      <div class="modal-overlay" id="cropModalOverlay"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="cropModalTitle">Crop the reference image</h2>
+          <button
+            type="button"
+            class="modal-close"
+            id="cropModalClose"
+            aria-label="Close without cropping"
+          >
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p id="cropModalHelp" class="crop-modal-help">
+            Choose the part of the picture to keep. Your original image is not
+            changed: cropping saves a copy and the overlay uses that.
+          </p>
+          <div class="crop-modal-layout">
+            <div class="crop-preview" id="cropPreview">
+              <!-- The picture is set when the dialog opens. A 1x1 transparent
+                   placeholder keeps this a valid img until then; alt is empty
+                   because the numbers beside it are the accessible content. -->
+              <img
+                id="cropPreviewImage"
+                alt=""
+                src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+              />
+              <div class="crop-preview-rect" id="cropPreviewRect"></div>
+            </div>
+            <div class="crop-fields">
+              <label class="crop-field">
+                <span>Left</span>
+                <input type="number" id="cropX" min="0" step="1" value="0" />
+              </label>
+              <label class="crop-field">
+                <span>Top</span>
+                <input type="number" id="cropY" min="0" step="1" value="0" />
+              </label>
+              <label class="crop-field">
+                <span>Width</span>
+                <input
+                  type="number"
+                  id="cropWidth"
+                  min="1"
+                  step="1"
+                  value="0"
+                />
+              </label>
+              <label class="crop-field">
+                <span>Height</span>
+                <input
+                  type="number"
+                  id="cropHeight"
+                  min="1"
+                  step="1"
+                  value="0"
+                />
+              </label>
+              <p class="crop-field-note" id="cropSizeNote"></p>
+              <button
+                type="button"
+                class="btn btn-secondary"
+                id="cropSelectAllBtn"
+              >
+                Select the whole picture
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-primary" id="cropApplyBtn">
+            Crop and use the copy
+          </button>
+          <button type="button" class="btn btn-secondary" id="cropCancelBtn">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Render Queue Modal -->
     <div
       class="modal hidden"

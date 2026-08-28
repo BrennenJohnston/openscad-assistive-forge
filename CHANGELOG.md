@@ -76,6 +76,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The reference image can sit on any surface, be cropped, and be used as the design** (DP-5,
+  DP-6) - three additions to the Reference Image panel. **Sits against** chooses the height by
+  naming a surface (under the plate, the plate itself, the top of the model, or a height you
+  type) instead of asking for a number; "top of the model" follows the model as it changes, which
+  is what you want when tracing onto the top of a charm. **Crop** keeps the part of a photograph
+  you want, by typing the edges with the picture beside them showing the same rectangle; it never
+  changes your picture, it saves a copy named after the original. **Use as design** hands the
+  image to one of the model's design parameters, the same way a file you chose by hand would go
+  in, so a photograph is traced and its proportions measured in the same step
+
+- **Forge remembers where you put the reference image, per project** (DP-5) - position, rotation,
+  size and chosen surface are saved with the project, so reopening it puts the reference back
+  where you left it. Opacity and colour stay the same across every project, because those are
+  settings for how you like to work rather than facts about one design. A project saved before
+  this release opens exactly as it did
+
 - **Groundwork for opening a file straight into Forge from your desktop** (IR-10, not switched on) -
   an installed app can be registered with the operating system so double-clicking a `.scad`, `.zip`,
   `.svg` or `.dxf` opens it in Forge. The routing is built and tested: a file handed over by the

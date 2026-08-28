@@ -10,6 +10,8 @@ import { announceImmediate } from './announcer.js';
 import { escapeHtml } from './html-utils.js';
 import * as SharedImageStore from './shared-image-store.js';
 import { getAppPrefKey, safeGetItem, safeSetItem } from './storage-keys.js';
+import { noteOverlayChanged } from './overlay-settings.js';
+import { createCropDialog } from './crop-dialog.js';
 // UF-14 (U-25): auto-rotate and its speed are PER-UI viewing preferences
 // (signed Q-40 table); the reference-overlay cluster stays app-level.
 import { readScopedPref, writeScopedPref } from './ui-scoped-prefs.js';
@@ -64,6 +66,17 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
   const overlayOffsetXInput = document.getElementById('overlayOffsetXInput');
   const overlayOffsetYInput = document.getElementById('overlayOffsetYInput');
   const overlayRotationInput = document.getElementById('overlayRotationInput');
+  const overlayZPresetSelect = document.getElementById('overlayZPresetSelect');
+  const overlayZCustomInput = document.getElementById('overlayZCustomInput');
+  const overlayZCustomRow = document.getElementById('overlayZCustomRow');
+  const overlayCropBtn = document.getElementById('overlayCropBtn');
+  const overlayUseRow = document.getElementById('overlayUseRow');
+  const overlayUseTargetSelect = document.getElementById(
+    'overlayUseTargetSelect'
+  );
+  const overlayUseAsDesignBtn = document.getElementById(
+    'overlayUseAsDesignBtn'
+  );
   const overlayRotationValue = document.getElementById('overlayRotationValue');
   const overlayStatus = document.getElementById('overlayStatus');
   const overlayFileInput = document.getElementById('overlayFileInput');
@@ -659,6 +672,10 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       overlayDimensionsValue.textContent = `${w} × ${h} mm`;
     }
 
+    syncOverlayZControls();
+    updateCropButton();
+    updateUseAsDesignRow();
+
     updateOverlayStatus();
   }
 
@@ -680,6 +697,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
             if (!overlayToggle?.checked) {
               overlayToggle.checked = true;
               previewManager.setOverlayEnabled(true);
+              noteOverlayChanged();
             }
             updateOverlayUIFromConfig();
             overlaySourceSelect.value = fileName;
@@ -771,6 +789,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       if (!overlayToggle?.checked) {
         overlayToggle.checked = true;
         previewManager.setOverlayEnabled(true);
+        noteOverlayChanged();
       }
 
       updateOverlayUIFromConfig();
@@ -789,6 +808,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       const previewManager = getPreviewManager();
       if (previewManager) {
         previewManager.setOverlayEnabled(enabled);
+        noteOverlayChanged();
         updateOverlayStatus();
         localStorage.setItem(
           STORAGE_KEY_OVERLAY_ENABLED,
@@ -825,6 +845,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       const previewManager = getPreviewManager();
       if (previewManager) {
         previewManager.setOverlayOpacity(opacityPercent / 100);
+        noteOverlayChanged();
         localStorage.setItem(
           STORAGE_KEY_OVERLAY_OPACITY,
           opacityPercent.toString()
@@ -855,6 +876,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
     const previewManager = getPreviewManager();
     if (previewManager) {
       previewManager.setOverlaySvgColor(color);
+      noteOverlayChanged();
     }
     localStorage.setItem(STORAGE_KEY_OVERLAY_SVG_COLOR, color);
     localStorage.setItem(
@@ -963,6 +985,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       const previewManager = getPreviewManager();
       if (previewManager) {
         previewManager.setOverlayTransform({ offsetX: 0, offsetY: 0 });
+        noteOverlayChanged();
         updateOverlayUIFromConfig();
       }
     });
@@ -975,6 +998,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       const previewManager = getPreviewManager();
       if (!isNaN(width) && previewManager) {
         previewManager.setOverlaySize({ width });
+        noteOverlayChanged();
         updateOverlayUIFromConfig();
         localStorage.setItem(STORAGE_KEY_OVERLAY_WIDTH, String(width));
       }
@@ -988,6 +1012,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       const previewManager = getPreviewManager();
       if (!isNaN(height) && previewManager) {
         previewManager.setOverlaySize({ height });
+        noteOverlayChanged();
         updateOverlayUIFromConfig();
         localStorage.setItem(STORAGE_KEY_OVERLAY_HEIGHT, String(height));
       }
@@ -1018,6 +1043,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       const previewManager = getPreviewManager();
       if (!isNaN(offsetX) && previewManager) {
         previewManager.setOverlayTransform({ offsetX });
+        noteOverlayChanged();
       }
     });
   }
@@ -1029,6 +1055,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       const previewManager = getPreviewManager();
       if (!isNaN(offsetY) && previewManager) {
         previewManager.setOverlayTransform({ offsetY });
+        noteOverlayChanged();
       }
     });
   }
@@ -1043,6 +1070,216 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       const previewManager = getPreviewManager();
       if (previewManager) {
         previewManager.setOverlayTransform({ rotationDeg });
+        noteOverlayChanged();
+      }
+    });
+  }
+
+  /**
+   * DP-6: hand the picture you have been tracing against to a design
+   * parameter.
+   *
+   * It goes in through the parameter's OWN file input, as a real File on a
+   * real change event, rather than through a second code path that writes the
+   * value directly. That is deliberate: the upload path already traces a
+   * raster, opens the preparation editor when the drawing needs it, measures
+   * and emits the aspect companion in the same state update (the D-108 law),
+   * appends the gallery entry and persists it with the project. A parallel
+   * path would have to copy all of that and then stay copied.
+   */
+  function fileParamControls() {
+    return Array.from(
+      document.querySelectorAll('.param-control--file input[type="file"]')
+    ).filter((input) => input.id.startsWith('param-'));
+  }
+
+  /** A readable name for a file parameter, taken from its own label. */
+  function fileParamLabel(input) {
+    const wrap = input.closest('.param-control');
+    const label = wrap?.querySelector('label');
+    const text = label?.textContent?.trim();
+    return text || input.id.replace(/^param-/, '').replace(/_/g, ' ');
+  }
+
+  function updateUseAsDesignRow() {
+    if (!overlayUseRow || !overlayUseTargetSelect) return;
+    const inputs = fileParamControls();
+    const rec = currentOverlayImage();
+    // Nothing to hand over, or nowhere to hand it to.
+    overlayUseRow.hidden = inputs.length === 0 || !rec;
+    if (overlayUseRow.hidden) return;
+
+    const previous = overlayUseTargetSelect.value;
+    overlayUseTargetSelect.replaceChildren();
+    for (const input of inputs) {
+      const option = document.createElement('option');
+      option.value = input.id;
+      option.textContent = fileParamLabel(input);
+      overlayUseTargetSelect.appendChild(option);
+    }
+    if (inputs.some((i) => i.id === previous)) {
+      overlayUseTargetSelect.value = previous;
+    }
+    // One choice is not a choice: the select only earns its place when there
+    // is more than one design slot to pick between.
+    overlayUseTargetSelect.hidden = inputs.length < 2;
+  }
+
+  /** The image currently behind the model, whichever lane it came from. */
+  function currentOverlayImage() {
+    const value = overlaySourceSelect?.value || '';
+    if (!value) return null;
+    if (value.startsWith('screenshot:')) {
+      return SharedImageStore.getImageByName(value.slice('screenshot:'.length));
+    }
+    const uploaded = uploadedOverlayFiles.get(value);
+    if (uploaded) {
+      return { name: value, dataUrl: uploaded.content, isSvg: uploaded.isSvg };
+    }
+    return null;
+  }
+
+  async function useOverlayAsDesign() {
+    const rec = currentOverlayImage();
+    const targetId = overlayUseTargetSelect?.value;
+    const input = targetId ? document.getElementById(targetId) : null;
+    if (!rec || !input) return;
+
+    try {
+      const isSvg = rec.isSvg || /^\s*<svg|image\/svg/i.test(rec.dataUrl || '');
+      const blob = isSvg
+        ? new Blob([rec.dataUrl], { type: 'image/svg+xml' })
+        : await (await fetch(rec.dataUrl)).blob();
+      const file = new File([blob], rec.name, {
+        type: blob.type || 'image/png',
+      });
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      input.files = transfer.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      announceImmediate(
+        `${rec.name} sent to ${fileParamLabel(input)}. Forge is preparing it.`
+      );
+    } catch (error) {
+      console.error('[Overlay] Could not use the image as a design:', error);
+      announceImmediate('Could not use that image as a design.');
+    }
+  }
+
+  if (overlayUseAsDesignBtn) {
+    overlayUseAsDesignBtn.addEventListener('click', () => {
+      void useOverlayAsDesign();
+    });
+  }
+
+  /**
+   * DP-5: cropping. Only a raster from the shared image store can be cropped -
+   * an SVG has no pixels to cut - so the button follows the chosen source.
+   */
+  function currentCroppableImage() {
+    const value = overlaySourceSelect?.value || '';
+    if (!value) return null;
+    // Two places a croppable picture can come from: the shared image store
+    // (the Screenshots lane, which knows its own size) and this panel's own
+    // Upload button, which holds only the data URL. An SVG is excluded from
+    // both - there are no pixels in it to cut.
+    if (value.startsWith('screenshot:')) {
+      return SharedImageStore.getImageByName(value.slice('screenshot:'.length));
+    }
+    const uploaded = uploadedOverlayFiles.get(value);
+    if (uploaded && !uploaded.isSvg) {
+      return { name: value, dataUrl: uploaded.content };
+    }
+    return null;
+  }
+
+  function updateCropButton() {
+    if (!overlayCropBtn) return;
+    const rec = currentCroppableImage();
+    overlayCropBtn.disabled = !rec;
+    overlayCropBtn.title = rec
+      ? `Crop ${rec.name} and use the copy`
+      : 'Choose an uploaded picture to crop it';
+  }
+
+  const cropDialog = createCropDialog({
+    saveCopy: (name, dataUrl) =>
+      SharedImageStore.addImageFromDataUrl(name, dataUrl),
+    onCropped: async (record) => {
+      // The copy becomes the overlay straight away: cropping is something you
+      // do IN ORDER to trace, so making the person go and select it again
+      // would be a step with no decision in it.
+      updateOverlaySourceDropdown();
+      const previewManager = getPreviewManager();
+      if (!previewManager || !record?.dataUrl) return;
+      try {
+        await previewManager.setReferenceOverlaySource({
+          kind: 'raster',
+          name: record.name,
+          dataUrlOrText: record.dataUrl,
+        });
+        updateOverlayUIFromConfig();
+        // AFTER the config sync, not before: updateOverlayUIFromConfig writes
+        // config.sourceFileName into this select, and that name has no
+        // "screenshot:" prefix - so setting the value first left the select
+        // matching no option at all, showing blank, and disabling the Crop
+        // button that focus was about to return to.
+        if (overlaySourceSelect) {
+          overlaySourceSelect.value = `screenshot:${record.name}`;
+        }
+        updateCropButton();
+        noteOverlayChanged();
+      } catch (error) {
+        console.error('[Overlay] Could not use the cropped copy:', error);
+      }
+    },
+  });
+
+  if (overlayCropBtn) {
+    overlayCropBtn.addEventListener('click', () => {
+      const rec = currentCroppableImage();
+      if (rec) cropDialog.open(rec, overlayCropBtn);
+    });
+  }
+
+  /**
+   * DP-5: the millimetre field belongs to the "A height I choose" preset, so
+   * it is hidden the rest of the time rather than sitting there inert with a
+   * number that the preset is about to overwrite.
+   */
+  function syncOverlayZControls() {
+    if (!overlayZPresetSelect) return;
+    const previewManager = getPreviewManager();
+    const config = previewManager?.getOverlayConfig?.();
+    const preset = config?.zPreset || 'under-plate';
+    overlayZPresetSelect.value = preset;
+    if (overlayZCustomRow) overlayZCustomRow.hidden = preset !== 'custom';
+    if (overlayZCustomInput && config) {
+      overlayZCustomInput.value = Number.isFinite(config.zCustomMm)
+        ? config.zCustomMm
+        : 0;
+    }
+  }
+
+  if (overlayZPresetSelect) {
+    overlayZPresetSelect.addEventListener('change', () => {
+      const previewManager = getPreviewManager();
+      if (previewManager) {
+        previewManager.setOverlayZ({ preset: overlayZPresetSelect.value });
+        noteOverlayChanged();
+      }
+      syncOverlayZControls();
+    });
+  }
+
+  if (overlayZCustomInput) {
+    overlayZCustomInput.addEventListener('input', () => {
+      const customMm = parseFloat(overlayZCustomInput.value);
+      if (!Number.isFinite(customMm)) return;
+      const previewManager = getPreviewManager();
+      if (previewManager) {
+        previewManager.setOverlayZ({ preset: 'custom', customMm });
+        noteOverlayChanged();
       }
     });
   }

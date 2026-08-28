@@ -3527,4 +3527,88 @@ describe('loadOFF() heuristic skip — CSG color preprocessing', () => {
     const innerAttr = geometry.getAttribute('aIsInner')
     expect(innerAttr).toBeDefined()
   })
+
+  /**
+   * DP-5: which surface the reference overlay sits against.
+   *
+   * The old control surface was a single number, -0.25, which says nothing to
+   * someone who wants to trace onto the top of a charm. These pin the presets
+   * as VALUES, and pin the two things that are easy to get wrong: that
+   * "top of the model" asks the model rather than remembering a height, and
+   * that it does not z-fight the face it is sitting on.
+   */
+  describe('reference overlay Z (DP-5)', () => {
+    it('starts under the plate, where it always was', () => {
+      const manager = new PreviewManager(container)
+      const config = manager.getOverlayConfig()
+      expect(config.zPreset).toBe('under-plate')
+      expect(config.zPosition).toBe(-0.25)
+    })
+
+    it('resolves each preset to its own height', () => {
+      const manager = new PreviewManager(container)
+      expect(manager.resolveOverlayZ('under-plate')).toBe(-0.25)
+      expect(manager.resolveOverlayZ('build-plate')).toBe(0)
+      expect(manager.resolveOverlayZ('custom', 3.5)).toBe(3.5)
+    })
+
+    it('setOverlayZ writes both the preset and the height it resolves to', () => {
+      const manager = new PreviewManager(container)
+      manager.setOverlayZ({ preset: 'build-plate' })
+      expect(manager.getOverlayConfig().zPosition).toBe(0)
+      manager.setOverlayZ({ preset: 'custom', customMm: -2.25 })
+      expect(manager.getOverlayConfig().zPreset).toBe('custom')
+      expect(manager.getOverlayConfig().zPosition).toBe(-2.25)
+    })
+
+    it('falls back to the build plate when there is no model to sit on', () => {
+      // Not to a stale height from a previous object, which is the failure
+      // this is here to prevent.
+      const manager = new PreviewManager(container)
+      expect(manager.mesh).toBeFalsy()
+      manager.setOverlayZ({ preset: 'model-top' })
+      expect(manager.getOverlayConfig().zPosition).toBe(0)
+    })
+
+    it('reads the REAL model height, and sits just above the top face', () => {
+      // Coincident planes z-fight, and the overlay is the thing being traced
+      // against, so it has to win. A real mesh, not a mocked resolver: mocking
+      // the function under test would only prove the mock.
+      const manager = new PreviewManager(container)
+      const box = new Mesh(new BoxGeometry(10, 10, 8), new MeshPhongMaterial())
+      box.position.set(0, 0, 0)
+      manager.mesh = box
+
+      manager.setOverlayZ({ preset: 'model-top' })
+      // A 8mm-tall box centred on the origin tops out at +4.
+      expect(manager.getOverlayConfig().zPosition).toBeCloseTo(4.25, 6)
+      expect(manager.getOverlayConfig().zPosition).toBeGreaterThan(4)
+    })
+
+    it('follows the model when a different one is loaded', () => {
+      const manager = new PreviewManager(container)
+      manager.mesh = new Mesh(new BoxGeometry(10, 10, 8), new MeshPhongMaterial())
+      manager.setOverlayZ({ preset: 'model-top' })
+      expect(manager.getOverlayConfig().zPosition).toBeCloseTo(4.25, 6)
+
+      // A taller object arrives; refreshOverlayZ is what the load path calls.
+      manager.mesh = new Mesh(new BoxGeometry(10, 10, 40), new MeshPhongMaterial())
+      manager.refreshOverlayZ()
+      expect(manager.getOverlayConfig().zPosition).toBeCloseTo(20.25, 6)
+    })
+
+    it('refreshOverlayZ only does work for the preset that depends on a model', () => {
+      const manager = new PreviewManager(container)
+      manager.setOverlayZ({ preset: 'custom', customMm: 7 })
+      manager.refreshOverlayZ()
+      // A constant preset is not recomputed out from under the person.
+      expect(manager.getOverlayConfig().zPosition).toBe(7)
+    })
+
+    it('an unknown preset behaves like the default rather than throwing', () => {
+      const manager = new PreviewManager(container)
+      expect(manager.resolveOverlayZ('something-else')).toBe(-0.25)
+    })
+  })
+
 })

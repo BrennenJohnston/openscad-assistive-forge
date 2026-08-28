@@ -509,6 +509,47 @@ Want to see how your model lines up against a reference image? The Reference Ima
 - **Center** -- snaps the image back to the origin
 - **Offset / Rotation** -- nudge or rotate for a better fit
 
+### Which surface it sits against
+
+**Sits against** chooses the height the image is drawn at, by naming a surface
+rather than asking for a number:
+
+| Choice | Where the image goes |
+|--------|----------------------|
+| **Under the plate** | Just below the build plate. The default, and where it has always been |
+| **Build plate** | Level with the plate itself |
+| **Top of the model** | Just above the model's highest face, which is what you want when tracing something onto the top of a charm. It follows the model, so it moves when the model changes |
+| **A height I choose** | Type the height in mm |
+
+### Cropping
+
+A photograph of a page is mostly page. **Crop** lets you keep the part you
+want by typing the edges, with the picture beside the numbers showing the same
+rectangle. If you type something that will not fit, the number is pulled back
+to what actually fits, so the boxes always say what will really happen.
+
+Cropping never changes your picture. It saves a copy named after the original
+(`bird.png` becomes `bird-crop.png`), leaves the original in the list, and
+points the overlay at the copy.
+
+### Using it as a design
+
+**Use as design** hands the image you have been tracing against to one of the
+model's design parameters. It goes in the same way a file you chose by hand
+would: a photograph is traced, the preparation editor opens if the drawing
+needs it, and the design's proportions are measured at the same moment. If the
+model has more than one design slot, you choose which one.
+
+### Forge remembers where you put it
+
+The image's position, rotation, size and chosen surface are saved **with the
+project**, so reopening it later puts the reference back where you left it.
+Opacity and colour are settings for how you like to work, so they stay the
+same across every project rather than travelling with one.
+
+Your images never leave your device. Cropping, tracing and measuring all
+happen in your browser.
+
 ### A note on accessibility
 
 The overlay is purely visual -- screen reader users won't perceive it. If you need non-visual verification, use the Image Measurement tool to check dimensions by the numbers instead.

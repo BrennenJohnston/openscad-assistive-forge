@@ -79,6 +79,13 @@ ColorManagement.enabled = false;
 /** Default grid config — 220×220mm matches popular mid-range FDM printers (Creality K1C, FlashForge Adventurer 5M Pro) */
 const DEFAULT_GRID_CONFIG = { widthMm: 220, heightMm: 220 };
 
+/**
+ * How far above a face the reference overlay sits when it is placed ON that
+ * face (DP-5). Exactly coincident planes z-fight, and the overlay is meant to
+ * be traced against the surface, so it has to win.
+ */
+const OVERLAY_SURFACE_EPSILON_MM = 0.25;
+
 /** Scratch target for renderer.getSize() in the triad pass (r162 requires one). */
 const _triadSizeScratch = new Vector2();
 
@@ -523,7 +530,16 @@ export class PreviewManager {
       rotationDeg: 0,
       width: 200, // mm (default; replaced by SVG physical size or explicit sizing)
       height: 150, // mm
+      // DP-5: the effective Z, in mm. Derived from zPreset except when the
+      // preset is 'custom', where the person typed it.
       zPosition: -0.25, // Slightly below Z=0 build plate (avoid z-fighting with grid)
+      // Which surface the overlay is meant to sit against. A raw number is a
+      // poor control here: -0.25 means nothing to someone deciding "I want to
+      // trace onto the top of the charm". 'model-top' is recomputed whenever
+      // the model changes, so it follows the object rather than freezing at
+      // whatever the height happened to be when it was chosen.
+      zPreset: 'under-plate',
+      zCustomMm: 0,
       lockAspect: true,
       intrinsicAspect: null, // Width/height ratio from source image
       sourceFileName: null, // Name of the file used as overlay source
@@ -1663,6 +1679,10 @@ export class PreviewManager {
           this._postLoadHook();
         }
         this._firePostLoadListeners();
+        // DP-5: "Top of the model" is a promise about THIS model, so it is
+        // re-resolved whenever one arrives. Any other preset is a constant and
+        // this returns immediately.
+        this.refreshOverlayZ();
 
         if (this.measurementsEnabled) {
           this.showMeasurements();
@@ -1986,6 +2006,10 @@ export class PreviewManager {
           this._postLoadHook();
         }
         this._firePostLoadListeners();
+        // DP-5: "Top of the model" is a promise about THIS model, so it is
+        // re-resolved whenever one arrives. Any other preset is a constant and
+        // this returns immediately.
+        this.refreshOverlayZ();
         if (this.measurementsEnabled) {
           this.showMeasurements();
         }
@@ -4416,6 +4440,67 @@ export class PreviewManager {
         this.showOverlayMeasurements();
       }
     }
+  }
+
+  /**
+   * The Z a preset resolves to, in mm, for the model currently loaded.
+   *
+   * 'model-top' asks the mesh, so it is only meaningful while there is one;
+   * with no model it falls back to the build plate rather than to a stale
+   * height from a previous object.
+   *
+   * @param {string} preset
+   * @param {number} customMm - Used only by the 'custom' preset
+   * @returns {number} Z in mm
+   */
+  resolveOverlayZ(preset, customMm) {
+    switch (preset) {
+      case 'build-plate':
+        return 0;
+      case 'model-top': {
+        if (!this.mesh) return 0;
+        const box = new Box3().setFromObject(this.mesh);
+        if (!Number.isFinite(box.max.z)) return 0;
+        // A hair above the face, or it z-fights the surface it is tracing.
+        return box.max.z + OVERLAY_SURFACE_EPSILON_MM;
+      }
+      case 'custom':
+        return Number.isFinite(customMm) ? customMm : 0;
+      case 'under-plate':
+      default:
+        return -0.25;
+    }
+  }
+
+  /**
+   * Choose which surface the overlay sits against (DP-5).
+   *
+   * @param {Object} options
+   * @param {string} [options.preset] - under-plate | build-plate | model-top | custom
+   * @param {number} [options.customMm] - Z in mm, used by the custom preset
+   */
+  setOverlayZ({ preset, customMm } = {}) {
+    if (typeof preset === 'string') this.overlayConfig.zPreset = preset;
+    if (Number.isFinite(customMm)) this.overlayConfig.zCustomMm = customMm;
+    this.overlayConfig.zPosition = this.resolveOverlayZ(
+      this.overlayConfig.zPreset,
+      this.overlayConfig.zCustomMm
+    );
+    if (this.overlayConfig.enabled) {
+      this.createOrUpdateReferenceOverlay();
+      if (this.overlayMeasurementsEnabled) {
+        this.showOverlayMeasurements();
+      }
+    }
+  }
+
+  /**
+   * Re-resolve the overlay Z against whatever model is loaded now.
+   * Called after a render, so 'Top of model' follows the object.
+   */
+  refreshOverlayZ() {
+    if (this.overlayConfig.zPreset !== 'model-top') return;
+    this.setOverlayZ({});
   }
 
   /**
