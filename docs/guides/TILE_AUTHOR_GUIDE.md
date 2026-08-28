@@ -174,6 +174,55 @@ errored while the status line said "Preview ready". Nobody noticed for months.
 The validator now checks this for you. It reads your `.scad`, finds everything
 it reads from disk, and tells you if `files` does not name it.
 
+### Layered designs (prototype)
+
+STRINGS/PROSE: owner review pending (DP-R1 text pack).
+
+Most designs are one shape cut or raised once. A **layered** design is built
+in passes: the app looks at which shapes sit inside which, writes one file per
+pass, and your model builds them one on top of the other. Three nested squares
+come out as a stepped pyramid rather than a single flat square.
+
+Your `.scad` opts in simply by declaring the parameters. If a file parameter
+is called `design_file`, the app looks for `design_layer_1`, `design_layer_2`
+and `design_layer_3` beside it, each with an `_aspect` companion:
+
+```openscad
+design_layer_1 = "";        // [file:svg]
+design_layer_1_aspect = 1;  // [0.05:0.01:20]
+design_layer_1_depth = 0.8; // [0.4:0.1:3.0]
+design_layer_1_style = "raised"; // [raised, engraved]
+```
+
+There is no flag anywhere else. Your parameters ARE the opt-in, so nothing can
+drift out of step with them. Declare them all empty: a layered design should be
+something a person turns on, not something they discover.
+
+Four things about the files the app writes, each of which will bite you:
+
+- **Every pass is written on the same canvas**, `100mm` wide, sized from the
+  first pass. Scale by ONE factor and never call `resize()` on a pass. OpenSCAD's
+  `resize()` fits the shape's own bounding box, so fitting each pass separately
+  scales the smallest one up to the size of the largest and your stack prints
+  as identical slabs.
+- **Import with `center = false`.** The passes already share one coordinate
+  system; `center = true` re-centres each on its own bounding box and pulls
+  the stack apart.
+- **Anchor each pass where the last one finished**, and overlap by `0.01`.
+  Raised passes travel up, engraved passes travel down. Nothing may exactly
+  touch.
+- **Join `total_top_z`.** If your model measures anything down from the top,
+  a stack that raised the model without telling it will cut in the wrong place.
+
+Cost, measured on this machine with OpenSCAD 2026.01.03: three passes of simple
+artwork render in 0.34 s against 0.31 s for one. Three passes of an 831-subpath
+drawing take 10.2 s against 3.5 s - close to linear in the number of passes, so
+a detailed drawing built in three passes is a ten-second render, not a
+one-second one.
+
+Add each example pass file to `files`, the same as any other file your design
+reads.
+
 ## 6. Tactile designs
 
 **Owner sign-off required. This section is a draft.**
