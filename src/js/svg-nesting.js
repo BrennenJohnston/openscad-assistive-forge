@@ -469,6 +469,65 @@ export function layerLimit(tree, cap = LAYER_CAP) {
 }
 
 /**
+ * Shortest distance from a point to a polygon's edge, in the polygon's units.
+ *
+ * @param {{x: number, y: number}} pt
+ * @param {Array<{x: number, y: number}>} polygon
+ * @returns {number}
+ */
+export function distanceToEdge(pt, polygon) {
+  let best = Infinity;
+  const n = polygon.length;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const a = polygon[j];
+    const b = polygon[i];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len2 = dx * dx + dy * dy;
+    let t = 0;
+    if (len2 > 0) {
+      t = ((pt.x - a.x) * dx + (pt.y - a.y) * dy) / len2;
+      t = Math.max(0, Math.min(1, t));
+    }
+    const ex = a.x + t * dx - pt.x;
+    const ey = a.y + t * dy - pt.y;
+    const d = Math.hypot(ex, ey);
+    if (d < best) best = d;
+  }
+  return best;
+}
+
+/**
+ * Whether a round hole can be cut at a point without breaking out of the
+ * shape or leaving a wall too thin to survive (DP-11).
+ *
+ * NOTHING IS MOVED. A hole that does not fit is reported, with the numbers,
+ * so the person can decide. Sliding it somewhere legal would put the ring in
+ * a place they did not choose, on a pendant shaped like their own drawing.
+ *
+ * @param {Array<{x: number, y: number}>} polygon - The body outline
+ * @param {{x: number, y: number}} centre - Hole centre, same units
+ * @param {number} radius - Hole radius
+ * @param {number} web - Minimum material between hole and edge
+ * @returns {{fits: boolean, reason: string|null, clearance: number,
+ *   required: number}}
+ */
+export function holeFits(polygon, centre, radius, web) {
+  const required = radius + web;
+  if (!polygon || polygon.length < 3) {
+    return { fits: false, reason: 'no-outline', clearance: 0, required };
+  }
+  if (!pointInPolygon(centre, polygon)) {
+    return { fits: false, reason: 'outside', clearance: 0, required };
+  }
+  const clearance = distanceToEdge(centre, polygon);
+  if (clearance < required) {
+    return { fits: false, reason: 'too-close', clearance, required };
+  }
+  return { fits: true, reason: null, clearance, required };
+}
+
+/**
  * Check an assignment against the owner's containment law.
  *
  * The law, verbatim from the directive (line 9):

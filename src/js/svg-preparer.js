@@ -32,7 +32,11 @@ import {
   applyToPoint,
 } from 'transformation-matrix';
 import { offsetPath } from './svg-offset.js';
-import { polygonFromPathData, boundsOf } from './svg-nesting.js';
+import {
+  polygonFromPathData,
+  boundsOf,
+  buildNestingTree,
+} from './svg-nesting.js';
 import {
   pathFromPathData,
   pathToPathData,
@@ -878,6 +882,73 @@ export function flattenToCompoundPath(
  * @returns {Array<string|null>} One SVG per layer; null where a layer has
  *   nothing to build
  */
+/**
+ * The design's OUTER SILHOUETTE: its outline with every hole filled (DP-11).
+ *
+ * A traced bird becomes a bird-shaped pendant. Two measurements shape this,
+ * and without either one the pendant comes out wrong in a way that renders
+ * perfectly and prints as rubbish.
+ *
+ * ★ IT WORKS ON THE RAW GEOMETRY, NOT THE CONVERTED GEOMETRY. The bird's own
+ * outline is a stroke - `fill="none" stroke="#1a1a1a" stroke-width="14"` -
+ * and strokeToFill turns a stroke into a thin BAND. Built from the converted
+ * paths the pendant came out as a HOLLOW RING with the eye and the feathers
+ * floating in the hole. The raw subpath, implicitly closed, is the shape the
+ * eye sees, and filling it is the whole point of a silhouette.
+ *
+ * ★ AND THE OUTERMOST SHAPE OF A TRACED PHOTOGRAPH IS ALMOST NEVER THE
+ * DRAWING. This repo's bird fixture has one root: a full-bleed
+ * `<rect fill="#efe9dc">`, the paper it was drawn on. Taking roots naively
+ * gave a 600x450 RECTANGLE, so every traced photograph would have made a
+ * rectangular pendant. A root classified as a hole is a background, and this
+ * descends past it to the shapes drawn on it.
+ *
+ * Below the top level, roles stop mattering: a hole is a hole in the RELIEF,
+ * not a hole in the pendant. Something marked "cut out" should not saw the
+ * body in half.
+ *
+ * @param {Array} rawElements - Output of parseSvgElements(), NOT classified
+ * @param {Array<string>} roles - Role per element, positionally aligned
+ * @param {object} [svgMeta] - viewBox/width/height of the source
+ * @param {string[]} [warningsOut] - Receives flatten fallback warnings
+ * @returns {string|null} One compound-path SVG, or null when there is no shape
+ */
+export function flattenSilhouette(
+  rawElements,
+  roles,
+  svgMeta = {},
+  warningsOut = null
+) {
+  if (!Array.isArray(rawElements) || rawElements.length === 0) return null;
+  const roleAt = (i) => (Array.isArray(roles) ? roles[i] : 'foreground');
+
+  // The tree is built on the RAW outlines, which is also the only tree that
+  // matches what a person sees: converting strokes first would put the bird
+  // INSIDE its own outline band rather than being it.
+  const tree = buildNestingTree(rawElements);
+
+  const outline = [];
+  const visit = (index, depth) => {
+    const el = rawElements[index];
+    const node = tree.nodes[index];
+    if (!el || !node || depth > 4) return;
+    const role = roleAt(index);
+    if (role !== 'hole' && role !== 'ignore' && el.pathData) {
+      outline.push({ ...el, role: 'foreground' });
+      return;
+    }
+    for (const child of node.children) visit(child, depth + 1);
+  };
+  for (const root of tree.roots) visit(root, 0);
+
+  if (outline.length === 0) return null;
+  const svg = flattenToCompoundPath(outline, svgMeta, warningsOut);
+  if (!svg) return null;
+  // Normalized against its own outline, so the body and the relief files land
+  // on one canvas and a model needs one scale factor for both.
+  return normalizeLayerStack([svg])[0];
+}
+
 export function flattenLayers(
   classifiedElements,
   layers,

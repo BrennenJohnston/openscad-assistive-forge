@@ -21,6 +21,7 @@ import {
   parseSvgElements,
   classifyElements,
   flattenLayers,
+  flattenSilhouette,
   LAYER_EMIT_CAP,
 } from './svg-preparer.js';
 import { buildNestingTree, suggestLayers, layerLimit } from './svg-nesting.js';
@@ -28,6 +29,7 @@ import {
   createSvgPrepWorkspace,
   extractSvgMeta,
 } from './svg-preparer-workspace.js';
+import { checkHolePlacement } from './hole-placement.js';
 import { svgToDataUrl, dataUrlToText } from './svg-text-encoding.js';
 import {
   loadOpenGroupIds,
@@ -1965,6 +1967,16 @@ export function isAspectCompanionParam(name, parameters) {
  * @param {Object} parameters - All extracted parameters, keyed by name
  * @returns {Array<{file: Object, aspect: Object|null, layer: number}>}
  */
+export function findSilhouetteParams(param, parameters) {
+  if (!param || !parameters) return null;
+  const base = param.name.endsWith('_file')
+    ? param.name.slice(0, -'_file'.length)
+    : param.name;
+  const file = parameters[`${base}_silhouette`];
+  if (!file || file.uiType !== 'file') return null;
+  return { file, aspect: parameters[`${base}_silhouette_aspect`] || null };
+}
+
 export function findLayerParams(param, parameters) {
   if (!param || !parameters) return [];
   const base = param.name.endsWith('_file')
@@ -1994,7 +2006,7 @@ export function findLayerParams(param, parameters) {
  * @returns {boolean}
  */
 export function isLayerCompanionParam(name, parameters) {
-  const m = /^(.*)_layer_(\d+)(_aspect)?$/.exec(name);
+  const m = /^(.*)_(?:layer_\d+|silhouette)(_aspect)?$/.exec(name);
   if (!m) return false;
   const base = parameters[`${m[1]}_file`] || parameters[m[1]];
   return !!base && base.uiType === 'file';
@@ -2013,11 +2025,80 @@ function layerFileStem(name) {
   return dot > 0 ? safe.slice(0, dot) : safe;
 }
 
+/**
+ * Where the hole warning is shown, if this model can have one (DP-11).
+ *
+ * One region for the whole model rather than one per control: the warning is
+ * about a PLACE, and the three numbers that decide it (across, up, and the
+ * hole's size) each move it. Announcing from three different controls would
+ * say the same sentence three times.
+ */
+let holeWarningEl = null;
+let lastHoleWarning = null;
+
+export function resetHolePlacementRegion() {
+  holeWarningEl = null;
+  lastHoleWarning = null;
+}
+
+function ensureHoleWarningRegion(container) {
+  if (holeWarningEl && holeWarningEl.isConnected) return holeWarningEl;
+  holeWarningEl = document.createElement('p');
+  holeWarningEl.className = 'hole-placement-warning';
+  holeWarningEl.setAttribute('role', 'status');
+  holeWarningEl.setAttribute('aria-live', 'polite');
+  holeWarningEl.hidden = true;
+  container.prepend(holeWarningEl);
+  return holeWarningEl;
+}
+
+/**
+ * Check the hole against the design's outline and say so, once.
+ *
+ * NOTHING IS MOVED and nothing is blocked: the person is told, with the
+ * numbers, and decides. Silently relocating a ring on a pendant shaped like
+ * their own drawing would be a change they never made and never saw.
+ *
+ * @param {Object} values - Current parameter values
+ * @param {Object} parameters - The model's parameter table
+ */
+export function reportHolePlacement(values, parameters) {
+  if (!holeWarningEl || !values || !parameters) return;
+  const outlineParam = Object.keys(parameters).find((n) =>
+    n.endsWith('_silhouette')
+  );
+  if (!outlineParam) return;
+
+  const outline = values[outlineParam];
+  const svgText =
+    outline && typeof outline === 'object' && outline.data
+      ? dataUrlToText(outline.data)
+      : null;
+
+  const result = checkHolePlacement({
+    outlineSvg: svgText,
+    widthMm: Number(values.charm_width) || 0,
+    holeDiameterMm: Number(values.hole_diameter) || 0,
+    offsetXMm: Number(values.attachment_x) || 0,
+    offsetYMm: Number(values.attachment_y) || 0,
+  });
+
+  const attached = values.attachment_type && values.attachment_type !== 'none';
+  const message = attached && !result.ok ? result.message : null;
+  if (message === lastHoleWarning) return;
+  lastHoleWarning = message;
+
+  holeWarningEl.textContent = message || '';
+  holeWarningEl.hidden = !message;
+  if (message) announceChange(message);
+}
+
 function createFileControl(
   param,
   onChange,
   aspectParam = null,
-  layerParams = []
+  layerParams = [],
+  silhouetteParams = null
 ) {
   const container = document.createElement('div');
   container.className = 'param-control param-control--file';
@@ -2150,6 +2231,42 @@ function createFileControl(
     return out;
   }
 
+  /**
+   * The design's outline, for a model that can take its shape from it (DP-11).
+   *
+   * Cut from the RAW svg for the same reason the layers are: by the time a
+   * value reaches emitFileValue it is one compound path. And from the raw
+   * GEOMETRY specifically - an outline drawn as a stroke would otherwise come
+   * back as a thin band and the pendant would print as a hollow ring.
+   *
+   * @param {Object|null} value - The file value being emitted
+   * @returns {Object} Parameter names to values, for the SAME state update
+   */
+  function buildSilhouetteCompanion(value) {
+    const { file, aspect } = silhouetteParams;
+    const out = { [file.name]: null };
+    if (aspect) out[aspect.name] = aspect.default ?? 1;
+    if (!value || !currentRawSvg) return out;
+    try {
+      const raw = parseSvgElements(currentRawSvg);
+      const roles = classifyElements(raw).map((el) => el.role);
+      const svg = flattenSilhouette(raw, roles, extractSvgMeta(currentRawSvg));
+      if (!svg) return out;
+      out[file.name] = {
+        name: `${layerFileStem(value.name)}_outline.svg`,
+        data: svgToDataUrl(svg),
+        type: 'image/svg+xml',
+      };
+      if (aspect)
+        out[aspect.name] = measureSvgAspect(svg) ?? aspect.default ?? 1;
+    } catch (err) {
+      // A design whose outline cannot be read still uploads as an ordinary
+      // design; only the shape-from-design option is unavailable.
+      console.warn('Silhouette emission failed:', err);
+    }
+    return out;
+  }
+
   function emitFileValue(value, assignments = null) {
     let extra = null;
     if (aspectParam) {
@@ -2172,6 +2289,9 @@ function createFileControl(
     // can never see a stack half-changed.
     if (layerParams.length > 0) {
       extra = { ...(extra || {}), ...buildLayerCompanions(value, assignments) };
+    }
+    if (silhouetteParams) {
+      extra = { ...(extra || {}), ...buildSilhouetteCompanion(value) };
     }
     onChange(param.name, value, extra);
   }
@@ -3038,6 +3158,13 @@ export function renderParameterUI(
   container.innerHTML = '';
 
   const { groups, parameters } = extractedParams;
+
+  // DP-11. One warning region for the model, built only when this model can
+  // take its shape from a design and therefore can have a hole in mid-air.
+  resetHolePlacementRegion();
+  if (Object.keys(parameters).some((n) => n.endsWith('_silhouette'))) {
+    ensureHoleWarningRegion(container);
+  }
   const currentValues = initialValues ? { ...initialValues } : {};
 
   // Reset stored limits and metadata when re-rendering
@@ -3205,6 +3332,9 @@ export function renderParameterUI(
         }
         // Update dependent parameters visibility
         updateDependentParameters(name, value);
+        // DP-11: a hole on a design-shaped body can land on a wingtip or on
+        // nothing at all, and neither shows in a preview.
+        reportHolePlacement(currentValues, parameters);
         // Pass a shallow copy so callers (e.g. stateManager.setState) never
         // hold a reference to our mutable currentValues object — this is
         // critical for undo/redo: recordParameterState() must snapshot the
@@ -3234,7 +3364,8 @@ export function renderParameterUI(
             param,
             handleChange,
             parameters[`${param.name}_aspect`] || null,
-            findLayerParams(param, parameters)
+            findLayerParams(param, parameters),
+            findSilhouetteParams(param, parameters)
           );
           break;
 
