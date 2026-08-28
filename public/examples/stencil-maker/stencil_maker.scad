@@ -17,6 +17,30 @@
 // 3D print (extruded plate) or laser cut (flat 2D for SVG/DXF export)
 output_type = "3d_print"; // [3d_print, laser_cut]
 
+// How the stencil is made. Single sheet is one plate with support bars, and
+// works exactly as it always has. Layered is the bridge-less method: the app
+// works out which shapes sit inside which and writes one plate per layer, so
+// nothing ever needs a bridge holding it. Paint through plate 1 first, then
+// line plate 2 up on the corner marks and paint again.
+stencil_mode = "single_sheet"; // [single_sheet, layered]
+
+// Which plate to show and export. Only used in layered mode.
+plate_number = 1; // [1:1:3]
+
+// Plate 1, written by the app from your design. It cuts every part of the
+// design at once and takes the first coat of paint. Each plate already carries
+// its own outline, cuts and registration marks in millimetres, so this model
+// only has to give it thickness.
+stencil_plate_1 = ""; // [file:svg]
+
+// Plate 2. It covers the background and everything plate 1 painted, and opens
+// only the shapes nested inside them, so the second coat lands on those alone.
+stencil_plate_2 = ""; // [file:svg]
+
+// Plate 3. It covers everything except the shapes nested deepest, for a third
+// coat. Empty when your design is not nested three deep.
+stencil_plate_3 = ""; // [file:svg]
+
 /* [Design] */
 // Image file for the stencil (SVG, PNG, or JPG — raster images auto-convert to SVG)
 design_file = "sample-design.svg"; // [file:svg,png,jpg]
@@ -167,9 +191,28 @@ module stencil_2d() {
     }
 }
 
+// The layered plates arrive complete and mm-true, so this is deliberately a
+// DUMB EXTRUDER: it adds thickness and nothing else. Every decision about what
+// is cut was made in the app, which means the preview and the exported file
+// cannot drift apart - there is no second implementation to disagree.
+module plate_2d() {
+    chosen = plate_number == 1 ? stencil_plate_1
+           : plate_number == 2 ? stencil_plate_2
+           : stencil_plate_3;
+    if (chosen != "") import(chosen, center = false);
+}
+
+layered = stencil_mode == "layered" &&
+          (stencil_plate_1 != "" || stencil_plate_2 != "" || stencil_plate_3 != "");
+
+// Choosing layered mode without plates would silently fall back to the single
+// sheet, which is not what was asked for and gives no clue why.
+assert(stencil_mode != "layered" || layered,
+       "stencil_mode is \"layered\" but no plate files are set - choose a design first");
+
 if (output_type == "3d_print") {
     linear_extrude(height = plate_thickness)
-        stencil_2d();
+        if (layered) plate_2d(); else stencil_2d();
 } else {
-    stencil_2d();
+    if (layered) plate_2d(); else stencil_2d();
 }
