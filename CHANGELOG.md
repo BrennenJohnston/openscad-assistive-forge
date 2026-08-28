@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Shapes can be deleted from the editor's list, not just left out of the result** (DP-4) -
+  marking a shape "Ignore" kept it out of what gets printed but left it in the list, which is no
+  help when a drawing has hundreds of them. Every row now has a Delete button, and above the list
+  there are two ways to clear out a lot at once: remove everything smaller than a size you give,
+  or keep only the largest few and remove the rest. Sizes are in square millimetres measured
+  against the design width, so they are the size the shape will really print. One step of undo is
+  available while you are working, and what you removed is remembered with the project, so
+  reopening it shows the list you left behind. Removing enough shapes to get under fifty brings
+  the automatic preview back
+
 - **Drawings with more than fifty shapes can be opened and edited now** (DP-3) - the editor used
   to refuse any drawing with more than fifty shapes outright, showing no list at all, which was
   precisely backwards: the list is what you would use to delete the shapes you do not want. The

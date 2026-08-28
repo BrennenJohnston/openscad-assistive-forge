@@ -315,18 +315,52 @@ The editor shows a side-by-side view of your source SVG and the prepared result.
 - **Hole**: Subtracted from the foreground (creates cutouts)
 - **Ignore**: Dropped from the output entirely
 
-Every role change updates the prepared result preview in real time, so you can see exactly what your changes do before applying.
+For a drawing of fifty shapes or fewer, every role change updates the prepared
+result preview straight away, so you can see exactly what your changes do before
+applying.
+
+**Bigger drawings: the preview waits to be asked**
+
+Combining shapes into one outline is the expensive step, and it grows steeply:
+about a second for fifty shapes, a minute for two hundred. So above fifty shapes
+the list and the original are shown immediately, and the "Will print as" pane
+stays empty with a **Render preview** button under it. Press it when you want to
+see the result; Forge tells you it is working and how long it took. Apply and
+Save wait until you have rendered, so you are never applying something you have
+not seen.
+
+Above a thousand shapes Forge says so and asks you to simplify the drawing
+first, naming both numbers.
+
+**Removing shapes you do not want**
+
+"Ignore" leaves a shape in the list but out of the result. To take shapes out of
+the *list* as well, which is what you want when there are hundreds of them:
+
+| Action | How |
+|--------|-----|
+| Remove one shape | The **Delete** button at the end of its row |
+| Remove every shape below a size | Type a size in **Smaller than … mm²** and press **Delete those** |
+| Keep only the biggest ones | Type a number in **Keep largest …** and press **Delete the rest** |
+| Put the last removal back | **Undo delete** (one step, and only for this session) |
+
+Sizes are measured against the design width in the editor's header, so they are
+the size the shape will really print. If removing shapes brings the drawing under
+fifty, the preview starts updating on its own again.
+
+Removals are remembered with the project, so reopening it later shows the list
+you left behind rather than starting over.
 
 **Editor controls:**
 
 | Action | How |
 |--------|-----|
 | Change a role | Click a radio button or use arrow keys in the radio group |
-| See the effect | The prepared result updates instantly |
+| See the effect | The prepared result updates instantly, or after **Render preview** on a big drawing |
 | Apply changes | Click "Apply prepared SVG" |
 | Save it as a file | Click "Save edited SVG" |
 | Keep the original | Click "Keep original" (bypasses preparation) |
-| Reset roles | Click "Reset" to return to auto-classification |
+| Reset roles | Click "Reset" to return to auto-classification (this does not bring deleted shapes back) |
 | Expand to fullscreen | Click the fullscreen button (top-right) |
 | Exit fullscreen | Press `Escape` or click the fullscreen button again |
 
