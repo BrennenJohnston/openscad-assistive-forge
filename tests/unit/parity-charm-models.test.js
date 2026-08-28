@@ -20,7 +20,16 @@ const PUBLIC_DIR = join(process.cwd(), 'public');
 const MODELS = {
   'q-charm': 'examples/q-charm/q_charm.scad',
   'nasif-charm-maker': 'examples/nasif-charm-maker/nasif_charm_maker.scad',
+  'logo-plate': 'examples/logo-plate/logo_plate.scad',
 };
+
+/**
+ * The Logo Plate names its design parameter logo_file, not design_file, so
+ * the matrix is checked against each model's OWN prefix rather than against
+ * one hard-coded family of names.
+ */
+const PREFIX = { 'logo-plate': 'logo', default: 'design' };
+const pre = (key) => PREFIX[key] || PREFIX.default;
 
 const sourceOf = (key) => readFileSync(join(PUBLIC_DIR, MODELS[key]), 'utf8');
 const paramsOf = (key) => extractParameters(sourceOf(key)).parameters;
@@ -90,18 +99,15 @@ describe('raised text is clamped to the face, like designs', () => {
     expect(sites.length).toBeGreaterThanOrEqual(4);
     for (const around of sites) {
       expect(around).toMatch(/intersection\(\)/);
-      expect(around).toMatch(/(top_)?face_2d\(\)/);
+      // Each model names its own footprint: the charm has a flat top face,
+      // the pendant has a face inside its border, the plate has the plate.
+      expect(around).toMatch(/(top_face_2d|face_2d|plate_2d)\(\)/);
     }
   });
 });
 
 describe('the signed parity matrix, per model', () => {
-  const PLACEMENT = [
-    'design_offset',
-    'design_left_right',
-    'design_up_down',
-    'design_rotation',
-  ];
+  const PLACEMENT = ['offset', 'left_right', 'up_down', 'rotation'];
   const TEXT = [
     'text_content',
     'text_depth',
@@ -118,7 +124,8 @@ describe('the signed parity matrix, per model', () => {
 
   it.each(Object.keys(MODELS))('%s offers design placement', (key) => {
     const params = paramsOf(key);
-    for (const name of PLACEMENT) {
+    for (const suffix of PLACEMENT) {
+      const name = `${pre(key)}_${suffix}`;
       expect(params[name], `${key} is missing ${name}`).toBeTruthy();
     }
   });
@@ -130,11 +137,23 @@ describe('the signed parity matrix, per model', () => {
     }
   });
 
-  it.each(Object.keys(MODELS))('%s offers a lanyard slot', (key) => {
-    // A slot takes a flat strap where a round hole takes a ring. Someone who
-    // needs the strap needs it on whichever model they chose.
-    const values = paramsOf(key).attachment_type.enum.map((e) => e.value);
-    expect(values).toContain('lanyard_slot');
+  it.each(['q-charm', 'nasif-charm-maker'])(
+    '%s offers a lanyard slot',
+    (key) => {
+      // A slot takes a flat strap where a round hole takes a ring. Both models
+      // that carry an attachment CHOICE must offer it. The Logo Plate is not
+      // in this list on purpose: the signed matrix gives it the hole plus
+      // position controls, not a choice of attachment, so demanding a slot of
+      // it would be this guard inventing scope rather than checking it.
+      const values = paramsOf(key).attachment_type.enum.map((e) => e.value);
+      expect(values).toContain('lanyard_slot');
+    }
+  );
+
+  it('the Logo Plate can place its hole instead', () => {
+    const params = paramsOf('logo-plate');
+    expect(params.hole_left_right).toBeTruthy();
+    expect(params.hole_up_down).toBeTruthy();
   });
 
   it.each(Object.keys(MODELS))('%s ships a large and a small preset', (key) => {
