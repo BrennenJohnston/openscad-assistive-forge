@@ -383,8 +383,19 @@ test.describe('The drawing editor door', () => {
       }).observe(el, { childList: true, characterData: true, subtree: true })
     })
 
-    await btn.focus()
-    await expect(btn).toBeFocused()
+    // The editor opens fullscreen and its focus trap takes focus as it
+    // activates, so a single focus() can be undone a frame later. Retrying
+    // until it sticks still proves the button can hold focus - which is what
+    // this is about - without racing the trap.
+    await expect
+      .poll(
+        async () => {
+          await btn.focus()
+          return btn.evaluate((el) => el === document.activeElement)
+        },
+        { timeout: 15000 }
+      )
+      .toBe(true)
     await page.keyboard.press('Enter')
 
     // Busy first, then done - waiting only for "not disabled" would pass on
@@ -439,6 +450,87 @@ test.describe('The drawing editor door', () => {
     await expect(page.locator('.svg-prep-warnings')).toContainText(
       'stroked path(s) converted to filled outline(s)'
     )
+  })
+
+
+  /**
+   * DP-4's acceptance, and the directive's own ask: take a drawing that is
+   * far too complex and get it down to something usable WITHOUT leaving the
+   * app, by keyboard alone.
+   *
+   * "Ignore" already removed a shape from the OUTPUT. This removes it from the
+   * LIST, which at several hundred rows is the difference between a table you
+   * can work in and one you only scroll past.
+   */
+  test('a too-complex drawing can be cut down to size by keyboard alone', async ({
+    page,
+  }) => {
+    test.setTimeout(300000)
+    await openApp(page)
+    await openEditorByKeyboard(page, MANY_210)
+    await expect(page.locator('.svg-prep-object')).toHaveCount(210)
+    await expect(page.locator('.svg-prep-bulk-count')).toHaveText('210 shapes')
+
+    // Keep the 40 largest, by keyboard: into the field, type, then the button.
+    const keepField = page.locator('.svg-prep-bulk-field', { hasText: 'Keep largest' })
+    await keepField.locator('input').fill('40')
+    const keepBtn = page.locator('[data-action="keep-largest"]')
+    await expect
+      .poll(
+        async () => {
+          await keepBtn.focus()
+          return keepBtn.evaluate((el) => el === document.activeElement)
+        },
+        { timeout: 15000 }
+      )
+      .toBe(true)
+    await page.keyboard.press('Enter')
+
+    await expect(page.locator('.svg-prep-object')).toHaveCount(40)
+    await expect(page.locator('.svg-prep-bulk-count')).toHaveText('40 shapes')
+
+    // Under tier A now, so the preview comes back on its own - the drawing
+    // has been made simple enough to behave like a simple one.
+    await expect(page.locator('.svg-prep-result-pane svg')).toHaveCount(1, {
+      timeout: 120000,
+    })
+
+    // And it is undoable, one level, from the keyboard too.
+    const undo = page.locator('[data-action="undo-delete"]')
+    await undo.focus()
+    await page.keyboard.press('Enter')
+    await expect(page.locator('.svg-prep-object')).toHaveCount(210)
+    await expect(undo).toBeDisabled()
+  })
+
+  test('a single row delete is reachable and reversible by keyboard', async ({
+    page,
+  }) => {
+    test.setTimeout(180000)
+    await openApp(page)
+    await openEditorByKeyboard(page, CLASS_STYLED)
+    await expect(page.locator('.svg-prep-object')).toHaveCount(3)
+
+    const firstDelete = page.locator('.svg-prep-object-delete').first()
+    await expect
+      .poll(
+        async () => {
+          await firstDelete.focus()
+          return firstDelete.evaluate((el) => el === document.activeElement)
+        },
+        { timeout: 15000 }
+      )
+      .toBe(true)
+    // 44px floor, measured rather than read off the stylesheet.
+    const box = await firstDelete.boundingBox()
+    expect(box.height).toBeGreaterThanOrEqual(44)
+    expect(box.width).toBeGreaterThanOrEqual(44)
+
+    await page.keyboard.press('Enter')
+    await expect(page.locator('.svg-prep-object')).toHaveCount(2)
+
+    await page.locator('[data-action="undo-delete"]').click()
+    await expect(page.locator('.svg-prep-object')).toHaveCount(3)
   })
 
   test('the open editor passes an accessibility scan', async ({ page }) => {

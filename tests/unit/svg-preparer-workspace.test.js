@@ -2700,3 +2700,200 @@ describe('Phase 9: Reset restores offsets', () => {
     ws.destroy();
   });
 });
+
+/**
+ * DP-4: removing shapes from the LIST, not just from the output.
+ *
+ * The sharp edge here is not the deleting, it is what deleting does to
+ * everything that is keyed by position: the rows' data-index, the radio group
+ * names, the roles and offsets arrays, and above all the SAVED
+ * prepOverrides / prepOffsets. The editor reopens on the raw SVG and
+ * re-analyses it, so a saved role array that is positional against the
+ * post-delete list would be applied to the wrong shapes on the next visit.
+ */
+describe('deleting shapes from the list (DP-4)', () => {
+  const openWith = (ws, count, callbacks = {}) => {
+    const analysis = makeAnalysis(count);
+    ws.open(SIMPLE_SVG, analysis, callbacks);
+    return analysis;
+  };
+  const rows = (ws) => ws._root.querySelectorAll('.svg-prep-object');
+  const deleteRow = (ws, i) =>
+    ws._root.querySelector(`.svg-prep-object-delete[data-delete-index="${i}"]`).click();
+
+  it('a row delete removes exactly that row and renumbers the rest', () => {
+    const ws = createSvgPrepWorkspace(container);
+    openWith(ws, 5);
+    expect(rows(ws).length).toBe(5);
+
+    deleteRow(ws, 1);
+
+    const after = rows(ws);
+    expect(after.length).toBe(4);
+    // Renumbered with no gaps: a stale data-index is how a radio in one row
+    // ends up driving another.
+    expect(Array.from(after).map((r) => r.dataset.index)).toEqual([
+      '0',
+      '1',
+      '2',
+      '3',
+    ]);
+    ws.destroy();
+  });
+
+  it('keeps the surviving roles with their own shapes, not their old slots', () => {
+    const ws = createSvgPrepWorkspace(container);
+    openWith(ws, 4, { initialOverrides: ['foreground', 'hole', 'ignore', 'hole'] });
+
+    deleteRow(ws, 1); // the 'hole' at index 1 goes
+
+    const checked = Array.from(rows(ws)).map(
+      (r) => r.querySelector('input[type="radio"]:checked').value
+    );
+    expect(checked).toEqual(['foreground', 'ignore', 'hole']);
+    ws.destroy();
+  });
+
+  it('saves roles against the ORIGINAL indices, so a reopen lands them right', () => {
+    const ws = createSvgPrepWorkspace(container);
+    openWith(ws, 4, { initialOverrides: ['foreground', 'hole', 'ignore', 'hole'] });
+
+    deleteRow(ws, 1);
+
+    // Position 1 in the saved array is still the shape that WAS at position 1,
+    // and it is absent because it was deleted.
+    const saved = ws.getRoleOverrides();
+    expect(saved[0]).toBe('foreground');
+    expect(saved[1]).toBeUndefined();
+    expect(saved[2]).toBe('ignore');
+    expect(saved[3]).toBe('hole');
+    expect(ws.getDeletedIndices()).toEqual([1]);
+    ws.destroy();
+  });
+
+  it('round-trips a delete through save and reopen', () => {
+    const ws = createSvgPrepWorkspace(container);
+    openWith(ws, 4, { initialOverrides: ['foreground', 'hole', 'ignore', 'hole'] });
+    deleteRow(ws, 1);
+    const savedRoles = ws.getRoleOverrides();
+    const savedDeleted = ws.getDeletedIndices();
+
+    // Reopen on a FRESH analysis of the untouched source, the way the Edit
+    // button does - four elements again, with the saved arrays applied.
+    ws.open(SIMPLE_SVG, makeAnalysis(4), {
+      initialOverrides: savedRoles,
+      initialDeleted: savedDeleted,
+    });
+
+    expect(rows(ws).length).toBe(3);
+    const checked = Array.from(rows(ws)).map(
+      (r) => r.querySelector('input[type="radio"]:checked').value
+    );
+    expect(checked).toEqual(['foreground', 'ignore', 'hole']);
+    ws.destroy();
+  });
+
+  it('reads a saved project from before deletions existed unchanged', () => {
+    // prepDeleted is absent in older saves, which is exactly right: nothing
+    // was deleted then, and the dense positional array still means what it did.
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(3), {
+      initialOverrides: ['hole', 'foreground', 'ignore'],
+    });
+    expect(rows(ws).length).toBe(3);
+    expect(
+      Array.from(rows(ws)).map(
+        (r) => r.querySelector('input[type="radio"]:checked').value
+      )
+    ).toEqual(['hole', 'foreground', 'ignore']);
+    ws.destroy();
+  });
+
+  it('undo is one level and puts the shape back where it was', () => {
+    const ws = createSvgPrepWorkspace(container);
+    openWith(ws, 4, { initialOverrides: ['foreground', 'hole', 'ignore', 'hole'] });
+
+    const undoBtn = ws._root.querySelector('[data-action="undo-delete"]');
+    expect(undoBtn.disabled).toBe(true);
+
+    deleteRow(ws, 1);
+    expect(rows(ws).length).toBe(3);
+    expect(undoBtn.disabled).toBe(false);
+
+    undoBtn.click();
+    expect(rows(ws).length).toBe(4);
+    expect(
+      Array.from(rows(ws)).map(
+        (r) => r.querySelector('input[type="radio"]:checked').value
+      )
+    ).toEqual(['foreground', 'hole', 'ignore', 'hole']);
+    expect(ws.getDeletedIndices()).toEqual([]);
+    // One level only: a second undo has nothing to do.
+    expect(undoBtn.disabled).toBe(true);
+    ws.destroy();
+  });
+
+  it('the bulk bar lives outside the list, which takes listitems only', () => {
+    // D-101: a toolbar inside role="list" is dropped from the accessibility
+    // tree, so this is a placement the markup has to keep.
+    const ws = createSvgPrepWorkspace(container);
+    openWith(ws, 3);
+    const list = ws._root.querySelector('.svg-prep-objects');
+    const bar = ws._root.querySelector('.svg-prep-bulk-bar');
+    expect(bar).not.toBeNull();
+    expect(list.contains(bar)).toBe(false);
+    expect(bar.getAttribute('role')).toBe('group');
+    ws.destroy();
+  });
+
+  it('says how many shapes are left, and updates as they go', () => {
+    const ws = createSvgPrepWorkspace(container);
+    openWith(ws, 5);
+    const count = ws._root.querySelector('.svg-prep-bulk-count');
+    expect(count.textContent).toBe('5 shapes');
+    deleteRow(ws, 0);
+    expect(count.textContent).toBe('4 shapes');
+    ws.destroy();
+  });
+
+  it('announces the delete and the undo, with the count left', () => {
+    const ws = createSvgPrepWorkspace(container);
+    openWith(ws, 3);
+    deleteRow(ws, 0);
+    const said = announce.mock.calls.map((c) => c[0]).join(' | ');
+    expect(said).toMatch(/Deleted/);
+    expect(said).toMatch(/2 shapes left/);
+    expect(said).toMatch(/Undo available/);
+    ws._root.querySelector('[data-action="undo-delete"]').click();
+    expect(announce.mock.calls.map((c) => c[0]).join(' | ')).toMatch(/Undone\. 3 shapes\./);
+    ws.destroy();
+  });
+
+  it('every delete control clears the 44 px target floor in its own styles', () => {
+    // jsdom has no layout, so the rule is asserted where it is WRITTEN rather
+    // than measured - the e2e walk measures it for real. The block is cut at
+    // its own closing brace: reading a fixed number of characters would let a
+    // neighbouring rule's min-height satisfy this, which is a guard that
+    // cannot fail.
+    const css = readFileSync(
+      resolve(process.cwd(), 'src/styles/components.css'),
+      'utf8'
+    );
+    const ruleBlock = (selector) => {
+      const at = css.indexOf(`${selector} {`);
+      if (at === -1) return null;
+      const open = css.indexOf('{', at);
+      const close = css.indexOf('}', open);
+      return css.slice(open, close);
+    };
+    for (const sel of [
+      '.svg-prep-object-delete',
+      '.svg-prep-bulk-btn',
+      '.svg-prep-bulk-input',
+    ]) {
+      const block = ruleBlock(sel);
+      expect(block, `${sel} must have a rule of its own`).not.toBeNull();
+      expect(block, sel).toMatch(/min-height:\s*44px/);
+    }
+  });
+});

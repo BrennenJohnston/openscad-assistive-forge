@@ -17,7 +17,9 @@ import {
   classifyElements,
   flattenToCompoundPath,
   applyPerPathOffsets,
+  tierForCount,
 } from './svg-preparer.js';
+import { getPathBBox } from 'svg-path-commander';
 import { mmToSvgUnits } from './svg-offset.js';
 import { isEnabled } from './feature-flags.js';
 
@@ -222,6 +224,75 @@ function buildWorkspaceDom() {
   resultPane.setAttribute('role', 'group');
   resultPane.setAttribute('aria-label', 'Prepared result');
 
+  // DP-4's bulk bar. It sits OUTSIDE the object list on purpose: that list is
+  // role="list", which accepts only listitem children, so a toolbar inside it
+  // would be dropped from the accessibility tree (D-101).
+  const bulkBar = document.createElement('div');
+  bulkBar.className = 'svg-prep-bulk-bar';
+  bulkBar.setAttribute('role', 'group');
+  bulkBar.setAttribute('aria-label', 'Remove shapes from the list');
+
+  const bulkCount = document.createElement('span');
+  bulkCount.className = 'svg-prep-bulk-count';
+
+  const bulkHelp = document.createElement('p');
+  bulkHelp.className = 'svg-prep-bulk-help';
+  bulkHelp.id = 'svgPrepBulkHelp';
+  bulkHelp.textContent =
+    'Sizes are measured against the design width above, so they are the size the shape will really print.';
+
+  const smallLabel = document.createElement('label');
+  smallLabel.className = 'svg-prep-bulk-field';
+  smallLabel.append(document.createTextNode('Smaller than '));
+  const smallInput = document.createElement('input');
+  smallInput.type = 'number';
+  smallInput.className = 'svg-prep-bulk-input';
+  smallInput.min = '0';
+  smallInput.step = '0.1';
+  smallInput.value = '1';
+  smallInput.setAttribute('aria-describedby', bulkHelp.id);
+  smallLabel.append(smallInput, document.createTextNode(' mm²'));
+
+  const deleteSmallBtn = document.createElement('button');
+  deleteSmallBtn.type = 'button';
+  deleteSmallBtn.className = 'btn btn-secondary svg-prep-bulk-btn';
+  deleteSmallBtn.dataset.action = 'delete-small';
+  deleteSmallBtn.textContent = 'Delete those';
+
+  const keepLabel = document.createElement('label');
+  keepLabel.className = 'svg-prep-bulk-field';
+  keepLabel.append(document.createTextNode('Keep largest '));
+  const keepInput = document.createElement('input');
+  keepInput.type = 'number';
+  keepInput.className = 'svg-prep-bulk-input';
+  keepInput.min = '1';
+  keepInput.step = '1';
+  keepInput.value = '50';
+  keepLabel.appendChild(keepInput);
+
+  const keepLargestBtn = document.createElement('button');
+  keepLargestBtn.type = 'button';
+  keepLargestBtn.className = 'btn btn-secondary svg-prep-bulk-btn';
+  keepLargestBtn.dataset.action = 'keep-largest';
+  keepLargestBtn.textContent = 'Delete the rest';
+
+  const undoDeleteBtn = document.createElement('button');
+  undoDeleteBtn.type = 'button';
+  undoDeleteBtn.className = 'btn btn-secondary svg-prep-bulk-btn';
+  undoDeleteBtn.dataset.action = 'undo-delete';
+  undoDeleteBtn.textContent = 'Undo delete';
+  undoDeleteBtn.disabled = true;
+
+  bulkBar.append(
+    bulkCount,
+    smallLabel,
+    deleteSmallBtn,
+    keepLabel,
+    keepLargestBtn,
+    undoDeleteBtn,
+    bulkHelp
+  );
+
   const resultZoom = buildZoomControls('result');
   resultPane.appendChild(resultZoom);
 
@@ -338,6 +409,7 @@ function buildWorkspaceDom() {
     toolsSlot,
     previews,
     legendRow,
+    bulkBar,
     objects,
     warnings,
     footer
@@ -362,6 +434,13 @@ function buildWorkspaceDom() {
       legendRow,
       sourceZoom,
       resultZoom,
+      bulkBar,
+      bulkCount,
+      smallInput,
+      keepInput,
+      deleteSmallBtn,
+      keepLargestBtn,
+      undoDeleteBtn,
       renderRow,
       renderNote,
       renderBtn,
@@ -500,6 +579,17 @@ function populateObjectList(listEl, elements, liveRegion, isCompound = false) {
       item.appendChild(warning);
     }
 
+    // DP-4. Ignore already removes a shape from the OUTPUT; this removes it
+    // from the LIST. At 831 rows that is the difference between a table you
+    // can work in and one you only scroll past.
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'svg-prep-object-delete';
+    deleteBtn.dataset.deleteIndex = String(i);
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.setAttribute('aria-label', `Delete ${name}`);
+    item.appendChild(deleteBtn);
+
     listEl.appendChild(item);
   });
 
@@ -621,6 +711,20 @@ export function createSvgPrepWorkspace(containerEl) {
   // DP-3: whether the boolean flatten may run by itself. True only in tier A
   // (50 shapes or fewer), where DP-0 measured it at about a second.
   let autoPreview = true;
+  // DP-4. Deleting a row shifts every index after it, and roles, offsets, the
+  // rows' data-index, the radio names and the SAVED prepOverrides/prepOffsets
+  // are ALL positional. So each surviving row remembers the index it had in
+  // the analysis as first read, and everything that leaves this module is
+  // expressed in those ORIGINAL indices. Without it, deleting one shape and
+  // reopening the project would silently apply every later shape's role to
+  // its neighbour.
+  let originalIndex = [];
+  // The element list as it stands after deletions - what the rows, roles and
+  // offsets are parallel to. currentAnalysis.elements keeps the full original.
+  let liveElements = [];
+  // One level, this session only. A stack that rode prepMetadata into saved
+  // projects would grow without bound in a 2 MB localStorage lane.
+  let lastDeletion = null;
 
   // ARIA live region for role-change and preview announcements
   const liveRegion = document.createElement('div');
@@ -680,7 +784,7 @@ export function createSvgPrepWorkspace(containerEl) {
     clearSvgGroup(layer);
     if (!rolesVisible || !currentAnalysis) return;
 
-    (currentAnalysis.elements || []).forEach((el, i) => {
+    liveElements.forEach((el, i) => {
       if (!el.pathData) return;
       const role = roles[i] || 'ignore';
       const p = document.createElementNS(SVG_NS, 'path');
@@ -743,6 +847,19 @@ export function createSvgPrepWorkspace(containerEl) {
   }
 
   /**
+   * Read the tier from the number of shapes ON SCREEN and set whether the
+   * boolean may run by itself.
+   *
+   * Anything the analyzer did not label is treated as tier A, so an older
+   * caller keeps exactly the behaviour it had.
+   */
+  function setPreviewBand() {
+    const count = liveElements.length;
+    autoPreview = count > 0 && tierForCount(count) === 'auto';
+    refs.renderRow.hidden = autoPreview;
+  }
+
+  /**
    * Ask for the result preview the way this drawing's size allows.
    *
    * DP-3: `updateResultPreview` IS the boolean flatten - the "Will print as"
@@ -782,7 +899,7 @@ export function createSvgPrepWorkspace(containerEl) {
 
   /** The sentence under the Render preview button. */
   function staleNoteText() {
-    const count = currentAnalysis?.elements?.length ?? 0;
+    const count = liveElements.length;
     return (
       `This drawing has ${count} shapes. Combining them takes a while, ` +
       `so Forge waits until you ask.`
@@ -806,7 +923,7 @@ export function createSvgPrepWorkspace(containerEl) {
         roleOverrides[i] = role;
       });
 
-      const classified = classifyElements(currentAnalysis.elements, {
+      const classified = classifyElements(liveElements, {
         roleOverrides,
       });
 
@@ -955,7 +1072,7 @@ export function createSvgPrepWorkspace(containerEl) {
       if (!overlay || !currentAnalysis) return;
       clearSvgGroup(overlay);
       const idx = parseInt(item.dataset.index, 10);
-      const el = currentAnalysis.elements?.[idx];
+      const el = liveElements[idx];
       if (!el || !el.pathData) return;
       const p = document.createElementNS(SVG_NS, 'path');
       p.setAttribute('d', el.pathData);
@@ -1081,7 +1198,7 @@ export function createSvgPrepWorkspace(containerEl) {
    */
   function renderPreviewOnDemand() {
     if (!currentAnalysis) return;
-    const count = currentAnalysis.elements?.length ?? 0;
+    const count = liveElements.length;
     refs.renderBtn.disabled = true;
     refs.renderNote.textContent = `Combining ${count} shapes. This can take a while.`;
     const message = `Combining ${count} shapes. This can take a while.`;
@@ -1111,6 +1228,179 @@ export function createSvgPrepWorkspace(containerEl) {
     });
   }
 
+  // ── DP-4: deleting rows, and keeping the saved metadata honest ──────────
+
+  /**
+   * Rebuild the rows from `liveElements`, then put the kept roles and offsets
+   * back on them.
+   *
+   * Re-running populateObjectList rather than surgically renumbering the DOM:
+   * data-index, the radio group names, the offset input names and every
+   * aria-label all carry the index, and a partial renumber that misses one of
+   * them is a defect nobody sees until a radio in row 40 drives row 41.
+   */
+  function rebuildRows() {
+    // DP-4: the band is a property of HOW MANY shapes there are, so it has to
+    // be re-read after every delete and undo. Cutting a 210-shape drawing down
+    // to 40 puts it in tier A, and the preview should start behaving like the
+    // simple drawing it has just been made into.
+    setPreviewBand();
+    const keptRoles = [...roles];
+    const keptOffsets = [...offsets];
+    const populated = populateObjectList(
+      refs.objects,
+      liveElements,
+      liveRegion,
+      Boolean(currentAnalysis?.isCompoundPathOnly)
+    );
+    roles = populated.roles;
+    offsets = populated.offsets;
+    for (let i = 0; i < roles.length; i++) {
+      if (keptRoles[i]) roles[i] = keptRoles[i];
+      offsets[i] = keptOffsets[i] ?? 0;
+    }
+    applyInitialOverrides(roles);
+    applyInitialOffsets(offsets);
+    renderRoleLayer();
+    requestResultPreview();
+  }
+
+  /**
+   * The name a row shows, for announcements.
+   * @param {number} i - Position in the CURRENT list
+   */
+  function rowName(i) {
+    const item = refs.objects.querySelector(
+      `.svg-prep-object[data-index="${i}"]`
+    );
+    const span = item?.querySelector('.svg-prep-object-name');
+    return span ? span.textContent : `Element ${i + 1}`;
+  }
+
+  /**
+   * Remove rows by their CURRENT positions, remembering enough to undo.
+   * @param {number[]} positions
+   * @param {string} what - How to describe them in the announcement
+   */
+  function deleteRows(positions, what) {
+    if (!currentAnalysis || positions.length === 0) return;
+    const doomed = new Set(positions);
+    lastDeletion = {
+      elements: [...liveElements],
+      roles: [...roles],
+      offsets: [...offsets],
+      originalIndex: [...originalIndex],
+    };
+    const keep = (arr) => arr.filter((_, i) => !doomed.has(i));
+    liveElements = keep(liveElements);
+    roles = keep(roles);
+    offsets = keep(offsets);
+    originalIndex = keep(originalIndex);
+    rebuildRows();
+    updateDeleteUi();
+    const message =
+      positions.length === 1
+        ? `Deleted ${what}. ${liveElements.length} shapes left. Undo available.`
+        : `Deleted ${positions.length} shapes. ${liveElements.length} left. Undo available.`;
+    liveRegion.textContent = message;
+    announce(message);
+  }
+
+  /** Put the last deletion back. One level, by design. */
+  function undoDelete() {
+    if (!lastDeletion) return;
+    liveElements = lastDeletion.elements;
+    roles = lastDeletion.roles;
+    offsets = lastDeletion.offsets;
+    originalIndex = lastDeletion.originalIndex;
+    lastDeletion = null;
+    rebuildRows();
+    updateDeleteUi();
+    const message = `Undone. ${liveElements.length} shapes.`;
+    liveRegion.textContent = message;
+    announce(message);
+  }
+
+  /**
+   * The bbox area of a row's path, in square millimetres.
+   *
+   * The viewBox-to-mm mapping is the one the offsets already use: the design's
+   * width in mm (the header field) divided by the viewBox width. Quoting the
+   * area in mm rather than SVG units matters because "smaller than 1" means
+   * nothing without a unit, and the person is deciding about a printed thing.
+   *
+   * @param {number} i - Position in the CURRENT list
+   * @returns {number} Area in mm squared, or 0 when it cannot be measured
+   */
+  function rowAreaMm2(i) {
+    const el = liveElements[i];
+    if (!el || !el.pathData) return 0;
+    const vb = parseViewBox(currentSvgMeta?.viewBox);
+    if (!vb || !vb.w) return 0;
+    const designWidthMm = parseFloat(refs.designWidthInput.value) || 14;
+    const perUnit = designWidthMm / vb.w;
+    try {
+      const box = getPathBBox(el.pathData);
+      if (!box || !Number.isFinite(box.width) || !Number.isFinite(box.height)) {
+        return 0;
+      }
+      return box.width * perUnit * (box.height * perUnit);
+    } catch {
+      return 0;
+    }
+  }
+
+  /** Keep the delete controls telling the truth about what they can do. */
+  function updateDeleteUi() {
+    const count = liveElements.length;
+    refs.undoDeleteBtn.disabled = !lastDeletion;
+    refs.deleteSmallBtn.disabled = count === 0;
+    refs.keepLargestBtn.disabled = count === 0;
+    refs.bulkCount.textContent = `${count} ${count === 1 ? 'shape' : 'shapes'}`;
+  }
+
+  /** A click on a row's Delete, or on one of the bulk controls. */
+  function handleDeleteClick(e) {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    if (btn.dataset.deleteIndex !== undefined) {
+      const i = parseInt(btn.dataset.deleteIndex, 10);
+      if (Number.isInteger(i)) deleteRows([i], rowName(i));
+      return;
+    }
+    if (btn.dataset.action === 'undo-delete') {
+      undoDelete();
+    } else if (btn.dataset.action === 'delete-small') {
+      const limit = parseFloat(refs.smallInput.value);
+      if (!Number.isFinite(limit) || limit < 0) return;
+      const doomed = [];
+      for (let i = 0; i < liveElements.length; i++) {
+        if (rowAreaMm2(i) < limit) doomed.push(i);
+      }
+      if (doomed.length === 0) {
+        const nothing = `Nothing is smaller than ${limit} square millimetres.`;
+        liveRegion.textContent = nothing;
+        announce(nothing);
+        return;
+      }
+      deleteRows(doomed, `${doomed.length} small shapes`);
+    } else if (btn.dataset.action === 'keep-largest') {
+      const keep = parseInt(refs.keepInput.value, 10);
+      if (!Number.isInteger(keep) || keep < 1) return;
+      if (keep >= liveElements.length) {
+        const nothing = `There are already ${liveElements.length} or fewer shapes.`;
+        liveRegion.textContent = nothing;
+        announce(nothing);
+        return;
+      }
+      const ranked = liveElements
+        .map((_, i) => ({ i, area: rowAreaMm2(i) }))
+        .sort((a, b) => b.area - a.area);
+      const doomed = ranked.slice(keep).map((r) => r.i);
+      deleteRows(doomed, `${doomed.length} smaller shapes`);
+    }
+  }
+
   function handleFooterClick(e) {
     const btn = e.target.closest('button[data-action]');
     if (!btn) return;
@@ -1138,14 +1428,14 @@ export function createSvgPrepWorkspace(containerEl) {
       close();
     } else if (btn.dataset.action === 'reset') {
       if (currentAnalysis) {
-        roles = currentAnalysis.elements.map((el) => {
+        roles = liveElements.map((el) => {
           let role = el.autoRole || 'ignore';
           if (currentAnalysis.isCompoundPathOnly && role !== 'ignore') {
             role = 'foreground';
           }
           return role;
         });
-        offsets = currentAnalysis.elements.map(() => 0);
+        offsets = liveElements.map(() => 0);
         const items = refs.objects.querySelectorAll('.svg-prep-object');
         items.forEach((item, i) => {
           const role = roles[i];
@@ -1205,12 +1495,48 @@ export function createSvgPrepWorkspace(containerEl) {
     });
   }
 
+  /**
+   * Re-index a saved array (original indices) onto the CURRENT rows.
+   * @param {Array} saved
+   * @returns {Array} One entry per surviving row, in row order
+   */
+  function byOriginalIndex(saved) {
+    if (!Array.isArray(saved)) return [];
+    return originalIndex.map((orig) => saved[orig]);
+  }
+
+  /**
+   * Roles as an array indexed by ORIGINAL element index, so a saved project
+   * can be reopened against a fresh analysis of the untouched source file.
+   *
+   * The editor reopens on the RAW svg and re-analyses it (ui-generator's Edit
+   * button), so anything positional against the post-delete list would be
+   * applied to the wrong shapes. Deleted positions are left undefined and the
+   * deleted list carries them instead.
+   */
   function getRoleOverrides() {
-    return [...roles];
+    const out = [];
+    originalIndex.forEach((orig, i) => {
+      out[orig] = roles[i];
+    });
+    return out;
   }
 
   function getOffsetOverrides() {
-    return [...offsets];
+    const out = [];
+    originalIndex.forEach((orig, i) => {
+      out[orig] = offsets[i];
+    });
+    return out;
+  }
+
+  /** Original indices of the shapes removed from the list. */
+  function getDeletedIndices() {
+    const kept = new Set(originalIndex);
+    const total = currentAnalysis?.elements?.length ?? 0;
+    const out = [];
+    for (let i = 0; i < total; i++) if (!kept.has(i)) out.push(i);
+    return out;
   }
 
   function open(svgString, analysis, callbacks = {}) {
@@ -1261,9 +1587,20 @@ export function createSvgPrepWorkspace(containerEl) {
       refs.toolsSlot.hidden = true;
     }
 
+    // DP-4: deletions are restored FIRST, so the roles and offsets that follow
+    // are read against the list the person actually left behind. They travel as
+    // ORIGINAL indices, which is the only numbering that survives a delete.
+    const allElements = analysis.elements || [];
+    const deleted = new Set(
+      Array.isArray(callbacks.initialDeleted) ? callbacks.initialDeleted : []
+    );
+    originalIndex = allElements.map((_, i) => i).filter((i) => !deleted.has(i));
+    liveElements = originalIndex.map((i) => allElements[i]);
+    lastDeletion = null;
+
     const populated = populateObjectList(
       refs.objects,
-      analysis.elements || [],
+      liveElements,
       liveRegion,
       Boolean(analysis.isCompoundPathOnly)
     );
@@ -1271,11 +1608,12 @@ export function createSvgPrepWorkspace(containerEl) {
     offsets = populated.offsets;
 
     if (callbacks.initialOverrides) {
-      applyInitialOverrides(callbacks.initialOverrides);
+      applyInitialOverrides(byOriginalIndex(callbacks.initialOverrides));
     }
     if (callbacks.initialOffsets) {
-      applyInitialOffsets(callbacks.initialOffsets);
+      applyInitialOffsets(byOriginalIndex(callbacks.initialOffsets));
     }
+    updateDeleteUi();
 
     renderWarnings(refs.warnings, analysis.warnings || []);
 
@@ -1284,8 +1622,7 @@ export function createSvgPrepWorkspace(containerEl) {
     // DP-3: tier decides whether the boolean may run without being asked.
     // Anything the analyzer did not label is treated as tier A, so an older
     // caller keeps exactly the behaviour it had.
-    autoPreview = (analysis.tier ?? 'auto') === 'auto';
-    refs.renderRow.hidden = autoPreview;
+    setPreviewBand();
     if (autoPreview) {
       updateResultPreview();
     } else {
@@ -1312,6 +1649,8 @@ export function createSvgPrepWorkspace(containerEl) {
     // The render control lives under the result pane, not in the footer, so
     // the footer's delegated handler cannot see it.
     refs.renderBtn.addEventListener('click', renderPreviewOnDemand);
+    refs.objects.addEventListener('click', handleDeleteClick);
+    refs.bulkBar.addEventListener('click', handleDeleteClick);
     refs.rolesToggleBtn.addEventListener('click', handleRolesToggle);
     refs.closeBtn.addEventListener('click', close);
     refs.fullscreenBtn.addEventListener('click', handleFullscreenButton);
@@ -1381,6 +1720,8 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.designWidthInput.removeEventListener('input', handleDesignWidthChange);
     refs.footer.removeEventListener('click', handleFooterClick);
     refs.renderBtn.removeEventListener('click', renderPreviewOnDemand);
+    refs.objects.removeEventListener('click', handleDeleteClick);
+    refs.bulkBar.removeEventListener('click', handleDeleteClick);
     refs.rolesToggleBtn.removeEventListener('click', handleRolesToggle);
     refs.closeBtn.removeEventListener('click', close);
     refs.fullscreenBtn.removeEventListener('click', handleFullscreenButton);
@@ -1485,6 +1826,7 @@ export function createSvgPrepWorkspace(containerEl) {
     getResult,
     getRoleOverrides,
     getOffsetOverrides,
+    getDeletedIndices,
     destroy,
     openFullscreen,
     closeFullscreen,

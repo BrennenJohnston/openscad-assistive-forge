@@ -15503,6 +15503,68 @@ body.tutorial-body-locked {
   display: none;
 }
 
+/* DP-4: removing shapes from the list, not just from the output. The bar sits
+   outside the role="list" container because that list takes listitem children
+   only (D-101). */
+.svg-prep-bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  padding: var(--space-xs) 0;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.svg-prep-bulk-count {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.svg-prep-bulk-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  /* Keep "Smaller than" and "Keep largest" on one line. The bar itself wraps,
+     so a long label moves to its own row rather than being clipped - the
+     nowrap-plus-flex-end trap from UF-40 needs a NON-wrapping container. */
+  white-space: nowrap;
+}
+
+.svg-prep-bulk-input {
+  width: 5rem;
+  min-height: 44px;
+}
+
+.svg-prep-bulk-btn {
+  min-height: 44px;
+}
+
+.svg-prep-bulk-help {
+  margin: 0;
+  flex: 1 1 100%;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.svg-prep-object-delete {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.svg-prep-object-delete:hover {
+  border-color: var(--color-border-hover);
+}
+
 /* DP-3: the on-demand render control under the result pane. Only present
    above tier A, where the boolean is too slow to run on its own. */
 .svg-prep-render-row {
