@@ -2,9 +2,17 @@
  * First-visit interface choice (U-9, UF-3b)
  *
  * The first-visit modal carries a Forge/Classic choice: two labelled radio
- * cards with screenshots, no pre-selection, a remember-my-choice checkbox
- * (default checked), and one Download & Continue action that still gates the
- * WASM download. These cases deliberately do NOT stamp
+ * cards with screenshots, Assistive Forge PRESELECTED, a remember-my-choice
+ * checkbox that ships UNCHECKED, and one Download & Continue action that still
+ * gates the WASM download.
+ *
+ * DP-1 (owner directive line 2, 2026-08-27) supersedes Q-21's "no
+ * pre-selection (recommendation badge only)" and its checked-by-default
+ * remember box; Q-21's other parts are untouched. The consequence these cases
+ * pin: a visitor who simply presses Continue lands in Forge and is asked AGAIN
+ * next visit, because the marker is written only when remember is ticked.
+ *
+ * These cases deliberately do NOT stamp
  * openscad-forge-first-visit-seen — the modal appearing is the point — and
  * none of them needs WASM, so they assert against the blocked state only.
  *
@@ -33,7 +41,7 @@ test.describe('First-visit interface choice', () => {
     });
   });
 
-  test('modal appears with both options unchosen and the app blocked', async ({
+  test('modal appears with Assistive Forge preselected and the app blocked', async ({
     page,
   }) => {
     await page.goto('/');
@@ -42,9 +50,10 @@ test.describe('First-visit interface choice', () => {
     await expect(page.locator('body')).toHaveClass(/first-visit-blocking/);
     await expect(page.locator('#app')).toHaveAttribute('aria-hidden', 'true');
 
-    await expect(page.locator('#firstVisitChoiceForge')).not.toBeChecked();
+    // DP-1: Forge is the preselected recommendation; remember ships unchecked.
+    await expect(page.locator('#firstVisitChoiceForge')).toBeChecked();
     await expect(page.locator('#firstVisitChoiceClassic')).not.toBeChecked();
-    await expect(page.locator('#firstVisitRemember')).toBeChecked();
+    await expect(page.locator('#firstVisitRemember')).not.toBeChecked();
 
     // Both screenshots actually load from public/screenshots/
     for (const id of ['#firstVisitForgeShot', '#firstVisitClassicShot']) {
@@ -60,11 +69,28 @@ test.describe('First-visit interface choice', () => {
     await expect(page.locator('body')).toHaveClass(/first-visit-blocking/);
   });
 
-  test('continue without a choice blocks with a visible, announced message', async ({
+  test('the no-choice error still guards the U-10 race, and recovers', async ({
     page,
   }) => {
+    // DP-1: with Forge preselected, a user can no longer reach "nothing
+    // chosen" by pressing Continue on a fresh modal - radios cannot be
+    // user-unchecked. The error path is NOT dead code, though: the U-10
+    // viewport gate unchecks a CHECKED Classic radio when the window turns
+    // mobile-shaped (main.js updateFirstVisitClassicGate), and
+    // handleFirstVisitClose has a belt-and-braces branch for the same race.
+    // That is the route this case now drives, so the alert, its re-announce
+    // and its focus move stay pinned.
+    await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/');
     await waitForModal(page);
+
+    await page.locator('#firstVisitChoiceClassic').check();
+    await expect(page.locator('#firstVisitChoiceForge')).not.toBeChecked();
+
+    // Turn the window mobile-shaped: the gate disables Classic and clears it.
+    await page.setViewportSize({ width: 800, height: 1000 });
+    await expect(page.locator('#firstVisitChoiceClassic')).toBeDisabled();
+    await expect(page.locator('#firstVisitChoiceClassic')).not.toBeChecked();
 
     await page.locator('#first-visit-continue').click();
 
@@ -84,13 +110,15 @@ test.describe('First-visit interface choice', () => {
     await expect(page.locator('body')).not.toHaveClass(/first-visit-blocking/);
   });
 
-  test('choosing Assistive Forge stays in the default UI and remembers', async ({
+  test('pressing Continue with no interaction lands in Forge and does NOT remember', async ({
     page,
   }) => {
+    // DP-1's whole point: the recommendation is already made, so the shortest
+    // possible path through the modal is one click - and because remember
+    // ships unchecked, that click does not commit the visitor to anything.
     await page.goto('/');
     await waitForModal(page);
 
-    await page.locator('#firstVisitChoiceForge').check();
     await page.locator('#first-visit-continue').click();
     await expect(page.locator(MODAL)).toBeHidden();
 
@@ -101,7 +129,25 @@ test.describe('First-visit interface choice', () => {
     const seen = await page.evaluate(() =>
       localStorage.getItem('openscad-forge-first-visit-seen')
     );
+    expect(seen).toBeNull();
+  });
+
+  test('ticking remember writes the first-visit marker', async ({ page }) => {
+    await page.goto('/');
+    await waitForModal(page);
+
+    await page.locator('#firstVisitRemember').check();
+    await page.locator('#first-visit-continue').click();
+    await expect(page.locator(MODAL)).toBeHidden();
+
+    const seen = await page.evaluate(() =>
+      localStorage.getItem('openscad-forge-first-visit-seen')
+    );
     expect(seen).toBe('true');
+
+    // ...and the modal does not come back.
+    await page.reload();
+    await expect(page.locator('body')).not.toHaveClass(/first-visit-blocking/);
   });
 
   test('choosing Classic applies the existing ui-mode switch after acceptance', async ({
@@ -111,6 +157,10 @@ test.describe('First-visit interface choice', () => {
     await waitForModal(page);
 
     await page.locator('#firstVisitChoiceClassic').check();
+    // DP-1: remember now ships unchecked, so this case ticks it deliberately -
+    // it is asserting that the marker AND the ui-mode both land, which is only
+    // the remembered path.
+    await page.locator('#firstVisitRemember').check();
     await page.locator('#first-visit-continue').click();
     await expect(page.locator(MODAL)).toBeHidden();
 
@@ -129,6 +179,8 @@ test.describe('First-visit interface choice', () => {
   test('unchecked remember proceeds this session and prompts again next visit', async ({
     page,
   }) => {
+    // DP-1 made unchecked the DEFAULT; the explicit uncheck() below is kept so
+    // the case still states its own precondition rather than leaning on it.
     await page.goto('/');
     await waitForModal(page);
 
@@ -211,7 +263,10 @@ test.describe('First-visit interface choice', () => {
     await expect(classicLink).toHaveAttribute('href', /CLASSIC_UI_GUIDE\.md/);
 
     // Click each link (navigation suppressed - no network in this suite)
-    // and prove neither radio picked up the click.
+    // and prove neither radio picked up the click. DP-1: the assertion is
+    // "the selection did not MOVE", which since preselection means Forge is
+    // still the checked one and Classic is still not - a link that toggled a
+    // radio would show up as Classic becoming checked.
     await page.evaluate(() => {
       document
         .querySelectorAll('.first-visit-option-more a')
@@ -221,7 +276,7 @@ test.describe('First-visit interface choice', () => {
     });
     await forgeLink.click();
     await classicLink.click();
-    await expect(page.locator('#firstVisitChoiceForge')).not.toBeChecked();
+    await expect(page.locator('#firstVisitChoiceForge')).toBeChecked();
     await expect(page.locator('#firstVisitChoiceClassic')).not.toBeChecked();
   });
 
@@ -830,6 +885,17 @@ test.describe('UF-41: the collapsible intro on a mobile-shaped viewport', () => 
     // #srAnnouncer is inert while this modal blocks, so the in-modal
     // role=alert is the only voice here (UF-3). The rebuild must not have
     // moved it out of the scrolling body or muted it.
+    //
+    // DP-1: on a mobile-shaped viewport Forge is preselected and Classic is
+    // gated, so no sequence of user actions reaches "nothing chosen" here.
+    // The no-choice STATE is still what this alert exists for (the U-10 race
+    // clears a gated Classic radio), so it is entered directly - this case is
+    // about where the alert lives and whether it speaks, not about how the
+    // state is reached. The reachable-by-hand route is pinned in the desktop
+    // describe above.
+    await page.evaluate(() => {
+      document.getElementById('firstVisitChoiceForge').checked = false;
+    });
     const error = page.locator('#firstVisitChoiceError');
     await expect(error).toBeHidden();
     await page.locator('#first-visit-continue').click();
