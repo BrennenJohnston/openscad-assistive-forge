@@ -2883,6 +2883,36 @@ dialog:modal {
   align-items: stretch;
 }
 
+/* DP-5: which surface the reference image sits against. The millimetre field
+   belongs to the "A height I choose" preset and is hidden otherwise, so the
+   panel never shows a number the preset is about to overwrite. */
+.overlay-z-control {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.overlay-z-custom {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.overlay-z-custom[hidden] {
+  display: none;
+}
+
+.overlay-number-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-input-bg);
+  color: var(--color-text-primary);
+}
+
 .overlay-source-help-text {
   font-size: var(--font-size-xs);
   color: var(--color-text-tertiary, var(--color-text-secondary));

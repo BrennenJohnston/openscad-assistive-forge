@@ -64,6 +64,9 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
   const overlayOffsetXInput = document.getElementById('overlayOffsetXInput');
   const overlayOffsetYInput = document.getElementById('overlayOffsetYInput');
   const overlayRotationInput = document.getElementById('overlayRotationInput');
+  const overlayZPresetSelect = document.getElementById('overlayZPresetSelect');
+  const overlayZCustomInput = document.getElementById('overlayZCustomInput');
+  const overlayZCustomRow = document.getElementById('overlayZCustomRow');
   const overlayRotationValue = document.getElementById('overlayRotationValue');
   const overlayStatus = document.getElementById('overlayStatus');
   const overlayFileInput = document.getElementById('overlayFileInput');
@@ -659,6 +662,8 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       overlayDimensionsValue.textContent = `${w} × ${h} mm`;
     }
 
+    syncOverlayZControls();
+
     updateOverlayStatus();
   }
 
@@ -1043,6 +1048,46 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       const previewManager = getPreviewManager();
       if (previewManager) {
         previewManager.setOverlayTransform({ rotationDeg });
+      }
+    });
+  }
+
+  /**
+   * DP-5: the millimetre field belongs to the "A height I choose" preset, so
+   * it is hidden the rest of the time rather than sitting there inert with a
+   * number that the preset is about to overwrite.
+   */
+  function syncOverlayZControls() {
+    if (!overlayZPresetSelect) return;
+    const previewManager = getPreviewManager();
+    const config = previewManager?.getOverlayConfig?.();
+    const preset = config?.zPreset || 'under-plate';
+    overlayZPresetSelect.value = preset;
+    if (overlayZCustomRow) overlayZCustomRow.hidden = preset !== 'custom';
+    if (overlayZCustomInput && config) {
+      overlayZCustomInput.value = Number.isFinite(config.zCustomMm)
+        ? config.zCustomMm
+        : 0;
+    }
+  }
+
+  if (overlayZPresetSelect) {
+    overlayZPresetSelect.addEventListener('change', () => {
+      const previewManager = getPreviewManager();
+      if (previewManager) {
+        previewManager.setOverlayZ({ preset: overlayZPresetSelect.value });
+      }
+      syncOverlayZControls();
+    });
+  }
+
+  if (overlayZCustomInput) {
+    overlayZCustomInput.addEventListener('input', () => {
+      const customMm = parseFloat(overlayZCustomInput.value);
+      if (!Number.isFinite(customMm)) return;
+      const previewManager = getPreviewManager();
+      if (previewManager) {
+        previewManager.setOverlayZ({ preset: 'custom', customMm });
       }
     });
   }
