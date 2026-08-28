@@ -151,12 +151,23 @@ export function createCropDialog({ saveCopy, onCropped } = {}) {
       );
       const name = croppedName(source.name);
       const record = await saveCopy?.(name, dataUrl);
+      // Everything the crop sets in motion finishes BEFORE the dialog closes,
+      // so that closing is the last thing that happens and the focus it
+      // restores cannot be taken away again.
+      //
+      // MEASURED on CI Linux, three attempts, all red: with close() first the
+      // callback below rebuilt the source select and the Crop button after
+      // the restore, and focus ended up nowhere. It passed every time on a
+      // faster machine, which is exactly the kind of race a single frame of
+      // deferral hides rather than fixes.
+      if (onCropped) {
+        await onCropped(record || { name, dataUrl, width, height });
+      }
       // The message names the COPY, because the next thing the person does is
       // look for it in the image list.
       close(
         `Cropped to ${width} by ${height} pixels. Saved as ${name}. Your original is unchanged.`
       );
-      if (onCropped) onCropped(record || { name, dataUrl, width, height });
     } catch (err) {
       console.error('[Crop] Failed:', err);
       announceImmediate(`Could not crop that image. ${err.message}`);
