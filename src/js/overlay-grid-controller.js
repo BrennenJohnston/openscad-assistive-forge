@@ -11,6 +11,7 @@ import { escapeHtml } from './html-utils.js';
 import * as SharedImageStore from './shared-image-store.js';
 import { getAppPrefKey, safeGetItem, safeSetItem } from './storage-keys.js';
 import { noteOverlayChanged } from './overlay-settings.js';
+import { createCropDialog } from './crop-dialog.js';
 // UF-14 (U-25): auto-rotate and its speed are PER-UI viewing preferences
 // (signed Q-40 table); the reference-overlay cluster stays app-level.
 import { readScopedPref, writeScopedPref } from './ui-scoped-prefs.js';
@@ -68,6 +69,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
   const overlayZPresetSelect = document.getElementById('overlayZPresetSelect');
   const overlayZCustomInput = document.getElementById('overlayZCustomInput');
   const overlayZCustomRow = document.getElementById('overlayZCustomRow');
+  const overlayCropBtn = document.getElementById('overlayCropBtn');
   const overlayRotationValue = document.getElementById('overlayRotationValue');
   const overlayStatus = document.getElementById('overlayStatus');
   const overlayFileInput = document.getElementById('overlayFileInput');
@@ -664,6 +666,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
     }
 
     syncOverlayZControls();
+    updateCropButton();
 
     updateOverlayStatus();
   }
@@ -1061,6 +1064,76 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
         previewManager.setOverlayTransform({ rotationDeg });
         noteOverlayChanged();
       }
+    });
+  }
+
+  /**
+   * DP-5: cropping. Only a raster from the shared image store can be cropped -
+   * an SVG has no pixels to cut - so the button follows the chosen source.
+   */
+  function currentCroppableImage() {
+    const value = overlaySourceSelect?.value || '';
+    if (!value) return null;
+    // Two places a croppable picture can come from: the shared image store
+    // (the Screenshots lane, which knows its own size) and this panel's own
+    // Upload button, which holds only the data URL. An SVG is excluded from
+    // both - there are no pixels in it to cut.
+    if (value.startsWith('screenshot:')) {
+      return SharedImageStore.getImageByName(value.slice('screenshot:'.length));
+    }
+    const uploaded = uploadedOverlayFiles.get(value);
+    if (uploaded && !uploaded.isSvg) {
+      return { name: value, dataUrl: uploaded.content };
+    }
+    return null;
+  }
+
+  function updateCropButton() {
+    if (!overlayCropBtn) return;
+    const rec = currentCroppableImage();
+    overlayCropBtn.disabled = !rec;
+    overlayCropBtn.title = rec
+      ? `Crop ${rec.name} and use the copy`
+      : 'Choose an uploaded picture to crop it';
+  }
+
+  const cropDialog = createCropDialog({
+    saveCopy: (name, dataUrl) =>
+      SharedImageStore.addImageFromDataUrl(name, dataUrl),
+    onCropped: async (record) => {
+      // The copy becomes the overlay straight away: cropping is something you
+      // do IN ORDER to trace, so making the person go and select it again
+      // would be a step with no decision in it.
+      updateOverlaySourceDropdown();
+      const previewManager = getPreviewManager();
+      if (!previewManager || !record?.dataUrl) return;
+      try {
+        await previewManager.setReferenceOverlaySource({
+          kind: 'raster',
+          name: record.name,
+          dataUrlOrText: record.dataUrl,
+        });
+        updateOverlayUIFromConfig();
+        // AFTER the config sync, not before: updateOverlayUIFromConfig writes
+        // config.sourceFileName into this select, and that name has no
+        // "screenshot:" prefix - so setting the value first left the select
+        // matching no option at all, showing blank, and disabling the Crop
+        // button that focus was about to return to.
+        if (overlaySourceSelect) {
+          overlaySourceSelect.value = `screenshot:${record.name}`;
+        }
+        updateCropButton();
+        noteOverlayChanged();
+      } catch (error) {
+        console.error('[Overlay] Could not use the cropped copy:', error);
+      }
+    },
+  });
+
+  if (overlayCropBtn) {
+    overlayCropBtn.addEventListener('click', () => {
+      const rec = currentCroppableImage();
+      if (rec) cropDialog.open(rec, overlayCropBtn);
     });
   }
 

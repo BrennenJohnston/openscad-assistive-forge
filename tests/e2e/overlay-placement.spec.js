@@ -13,6 +13,17 @@
  */
 
 import { test, expect } from '@playwright/test'
+import path from 'node:path'
+
+// A raster the repo already ships, so this spec does not depend on a
+// screenshot's name staying put.
+const RASTER = path.join(
+  process.cwd(),
+  'tests',
+  'fixtures',
+  'svg-edit',
+  'bird-drawing.png'
+)
 
 const SEEN_KEY = 'openscad-forge-first-visit-seen'
 
@@ -113,6 +124,83 @@ test.describe('Reference image placement (DP-5)', () => {
     await expect
       .poll(async () => (await placement(page))?.zPosition)
       .toBeGreaterThan(0)
+  })
+
+  test('cropping saves a COPY, keyboard-first, and hands focus back', async ({
+    page,
+  }) => {
+    test.setTimeout(240000)
+    await boot(page)
+    await openCharm(page)
+    await saveProject(page)
+    await openOverlayPanel(page)
+
+    // Nothing chosen yet, so there is nothing to crop and the button says so
+    // rather than opening an empty dialog.
+    const cropBtn = page.locator('#overlayCropBtn')
+    await expect(cropBtn).toBeDisabled()
+
+    await page.locator('#overlayFileInput').setInputFiles(RASTER)
+    await expect(cropBtn).toBeEnabled({ timeout: 30000 })
+
+    await cropBtn.click()
+    const modal = page.locator('#cropImageModal')
+    await expect(modal).not.toHaveClass(/hidden/)
+    // The numeric fields are the control, so one of them takes focus - not a
+    // drag handle nobody can reach.
+    await expect(page.locator('#cropX')).toBeFocused({ timeout: 10000 })
+
+    // It opens on the whole picture: the first thing shown is what you have.
+    const full = await page.locator('#cropWidth').inputValue()
+    expect(Number(full)).toBeGreaterThan(0)
+    await expect(page.locator('#cropSizeNote')).toContainText('Keeping')
+
+    // An impossible rectangle is pulled back, and the FIELD says so, so what
+    // is shown and what would be cropped cannot disagree.
+    await page.locator('#cropX').fill('10')
+    await page.locator('#cropWidth').fill('999999')
+    await expect
+      .poll(async () => Number(await page.locator('#cropWidth').inputValue()))
+      .toBeLessThanOrEqual(Number(full))
+
+    await page.locator('#cropApplyBtn').click()
+    await expect(modal).toHaveClass(/hidden/, { timeout: 60000 })
+
+    // The copy is what the overlay now uses, and the ORIGINAL is still listed.
+    const options = await page
+      .locator('#overlaySourceSelect option')
+      .allTextContents()
+    expect(options.some((o) => o.includes('-crop'))).toBe(true)
+    await expect(page.locator('#overlaySourceSelect')).toHaveValue(/-crop\./)
+
+    // Focus goes back to the button that opened the dialog, never to <body>.
+    await expect(cropBtn).toBeFocused({ timeout: 10000 })
+  })
+
+  test('Escape leaves the picture alone', async ({ page }) => {
+    test.setTimeout(180000)
+    await boot(page)
+    await openCharm(page)
+    await saveProject(page)
+    await openOverlayPanel(page)
+    await page.locator('#overlayFileInput').setInputFiles(RASTER)
+    const cropBtn = page.locator('#overlayCropBtn')
+    await expect(cropBtn).toBeEnabled({ timeout: 30000 })
+
+    const before = await page
+      .locator('#overlaySourceSelect option')
+      .allTextContents()
+
+    await cropBtn.click()
+    await expect(page.locator('#cropImageModal')).not.toHaveClass(/hidden/)
+    await page.keyboard.press('Escape')
+    await expect(page.locator('#cropImageModal')).toHaveClass(/hidden/)
+
+    const after = await page
+      .locator('#overlaySourceSelect option')
+      .allTextContents()
+    expect(after).toEqual(before)
+    await expect(cropBtn).toBeFocused({ timeout: 10000 })
   })
 
   test('placement is remembered with the project, and comes back on reload', async ({

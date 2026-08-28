@@ -2883,6 +2883,81 @@ dialog:modal {
   align-items: stretch;
 }
 
+/* DP-5: the crop dialog. The picture is a read-only illustration of what the
+   numeric fields say, so it carries no controls of its own. */
+.crop-modal-help {
+  margin: 0 0 var(--space-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.crop-modal-layout {
+  display: flex;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.crop-preview {
+  position: relative;
+  flex: 1 1 18rem;
+  min-width: 12rem;
+  max-width: 100%;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+}
+
+.crop-preview img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.crop-preview-rect {
+  position: absolute;
+  border: 2px solid var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 18%, transparent);
+  pointer-events: none;
+}
+
+.crop-fields {
+  flex: 1 1 12rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.crop-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.crop-field input {
+  width: 7rem;
+  min-height: 44px;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-input-bg);
+  color: var(--color-text-primary);
+}
+
+.crop-field-note {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+#cropSelectAllBtn,
+#cropApplyBtn,
+#cropCancelBtn {
+  min-height: 44px;
+}
+
 /* DP-5: which surface the reference image sits against. The millimetre field
    belongs to the "A height I choose" preset and is hidden otherwise, so the
    panel never shows a number the preset is about to overwrite. */
