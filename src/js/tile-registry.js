@@ -135,12 +135,11 @@ const EXAMPLES = {
     manifest: '/examples/stencil-maker/manifest.json',
     additionalFiles: [
       '/examples/stencil-maker/sample-design.svg',
-      '/examples/stencil-maker/smiley.svg',
-      '/examples/stencil-maker/heart.svg',
-      '/examples/stencil-maker/star.svg',
-      '/examples/stencil-maker/lightning.svg',
-      '/examples/stencil-maker/crown.svg',
-      '/examples/stencil-maker/sun.svg',
+      // DP-14. The gallery is this project's own work now: the ring, which
+      // demonstrates a support bar holding an enclosed centre, and the Forge
+      // logo. The six charm icons that used to sit here were copies of another
+      // tile's library and had nothing to do with stencils.
+      '/examples/stencil-maker/forge-logo.svg',
     ],
   },
   'q-charm': {
@@ -158,18 +157,21 @@ const EXAMPLES = {
       '/examples/q-charm/design_layer_1.svg',
       '/examples/q-charm/design_layer_2.svg',
       '/examples/q-charm/design_layer_3.svg',
-      '/examples/nasif-charm-maker/svg-library/smiley.svg',
-      '/examples/nasif-charm-maker/svg-library/heart.svg',
-      '/examples/nasif-charm-maker/svg-library/star.svg',
-      '/examples/nasif-charm-maker/svg-library/paw.svg',
-      '/examples/nasif-charm-maker/svg-library/lightning.svg',
-      '/examples/nasif-charm-maker/svg-library/music-note.svg',
-      '/examples/nasif-charm-maker/svg-library/moon.svg',
-      '/examples/nasif-charm-maker/svg-library/flower.svg',
-      '/examples/nasif-charm-maker/svg-library/diamond.svg',
-      '/examples/nasif-charm-maker/svg-library/crown.svg',
-      '/examples/nasif-charm-maker/svg-library/leaf.svg',
-      '/examples/nasif-charm-maker/svg-library/sun.svg',
+      // D-106, closed in DP-14. This list used to reach into
+      // nasif-charm-maker/svg-library/ for twelve files while q-charm's own
+      // manifest declared six by bare name. Both lists produced `smiley.svg`
+      // in the WASM filesystem, so the gallery worked and the disagreement
+      // stayed invisible - until you rename or drop the sibling. The six
+      // copies have been in this tile's folder since D-109; these are they,
+      // and manifest and registry now name the same files. The other six the
+      // borrowed list carried (paw, music-note, moon, flower, diamond, leaf)
+      // were never in q-charm's gallery and are gone with it.
+      '/examples/q-charm/smiley.svg',
+      '/examples/q-charm/heart.svg',
+      '/examples/q-charm/star.svg',
+      '/examples/q-charm/lightning.svg',
+      '/examples/q-charm/crown.svg',
+      '/examples/q-charm/sun.svg',
     ],
   },
 };

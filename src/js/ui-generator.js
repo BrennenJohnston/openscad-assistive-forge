@@ -22,6 +22,7 @@ import {
   classifyElements,
   flattenLayers,
   flattenSilhouette,
+  flattenToCompoundPath,
   LAYER_EMIT_CAP,
 } from './svg-preparer.js';
 import { buildNestingTree, suggestLayers, layerLimit } from './svg-nesting.js';
@@ -30,6 +31,12 @@ import {
   extractSvgMeta,
 } from './svg-preparer-workspace.js';
 import { checkHolePlacement } from './hole-placement.js';
+import {
+  buildStencilPlate,
+  buildLaserSheet,
+  stencilLayers,
+} from './stencil-plates.js';
+import { buildBridges, bridgesToPathData } from './stencil-bridges.js';
 import { svgToDataUrl, dataUrlToText } from './svg-text-encoding.js';
 import {
   loadOpenGroupIds,
@@ -1967,6 +1974,31 @@ export function isAspectCompanionParam(name, parameters) {
  * @param {Object} parameters - All extracted parameters, keyed by name
  * @returns {Array<{file: Object, aspect: Object|null, layer: number}>}
  */
+/**
+ * The stencil plates a layered tile declares (DP-12).
+ *
+ * A file parameter looks for `stencil_plate_1..3` beside it. A tile that
+ * declares none is not a layered stencil and nothing below this runs for it.
+ *
+ * @param {Object} parameters - All extracted parameters, keyed by name
+ * @returns {Array<{file: Object, plate: number}>}
+ */
+export function findLaserParam(parameters) {
+  const p = parameters && parameters.stencil_laser_file;
+  return p && p.uiType === 'file' ? p : null;
+}
+
+export function findPlateParams(parameters) {
+  if (!parameters) return [];
+  const out = [];
+  for (let n = 1; n <= LAYER_EMIT_CAP; n++) {
+    const file = parameters[`stencil_plate_${n}`];
+    if (!file || file.uiType !== 'file') break;
+    out.push({ file, plate: n });
+  }
+  return out;
+}
+
 export function findSilhouetteParams(param, parameters) {
   if (!param || !parameters) return null;
   const base = param.name.endsWith('_file')
@@ -2006,6 +2038,7 @@ export function findLayerParams(param, parameters) {
  * @returns {boolean}
  */
 export function isLayerCompanionParam(name, parameters) {
+  if (/^stencil_plate_\d+$/.test(name)) return true;
   const m = /^(.*)_(?:layer_\d+|silhouette)(_aspect)?$/.exec(name);
   if (!m) return false;
   const base = parameters[`${m[1]}_file`] || parameters[m[1]];
@@ -2093,12 +2126,33 @@ export function reportHolePlacement(values, parameters) {
   if (message) announceChange(message);
 }
 
+/**
+ * The bridge warning: a shape that will fall out when the sheet is cut.
+ *
+ * NOT DISMISSIBLE, on purpose. The failure is invisible until the material is
+ * cut and the piece is on the floor, so there is no moment at which hiding it
+ * helps. It shares the one warning region, because a model is either a pendant
+ * or a stencil and never both.
+ *
+ * @param {string|null} message
+ */
+export function reportBridgeWarning(message) {
+  if (!holeWarningEl) return;
+  if (message === lastHoleWarning) return;
+  lastHoleWarning = message;
+  holeWarningEl.textContent = message || '';
+  holeWarningEl.hidden = !message;
+  if (message) announceChange(message);
+}
+
 function createFileControl(
   param,
   onChange,
   aspectParam = null,
   layerParams = [],
-  silhouetteParams = null
+  silhouetteParams = null,
+  plateParams = [],
+  laserParam = null
 ) {
   const container = document.createElement('div');
   container.className = 'param-control param-control--file';
@@ -2267,6 +2321,136 @@ function createFileControl(
     return out;
   }
 
+  /**
+   * The stencil plates, for a tile that builds them (DP-12).
+   *
+   * A CONTRACT with public/examples/stencil-maker/stencil_maker.scad: the
+   * plate size is read from `plate_width`, `plate_height` and `margin`,
+   * because the app writes plates that are already mm-true and the model is a
+   * dumb extruder. Change those names in the model and change them here.
+   *
+   * The plates are cut with DEPTH deciding, not paint roles, and with the
+   * paper stepped over - see stencilLayers - and each cut is solid, which is
+   * what makes the method need no bridges.
+   *
+   * @param {Object|null} value - The design being emitted
+   * @param {Object} values - Current parameter values, for the plate size
+   * @returns {Object} Parameter names to values, for the SAME state update
+   */
+  function buildPlateCompanions(value, values) {
+    const out = {};
+    for (const { file } of plateParams) out[file.name] = null;
+    if (laserParam) out[laserParam.name] = null;
+    if (!value || !currentRawSvg) return out;
+
+    try {
+      const raw = parseSvgElements(currentRawSvg);
+      const els = classifyElements(raw);
+      const tree = buildNestingTree(els);
+      const meta = extractSvgMeta(currentRawSvg);
+      const vb = String(meta.viewBox || '')
+        .split(/[\s,]+/)
+        .map(Number);
+      const canvas =
+        vb.length === 4 && vb[2] > 0 && vb[3] > 0
+          ? { width: vb[2], height: vb[3] }
+          : null;
+      const { layers, plateCount } = stencilLayers(
+        tree,
+        els.map((el) => el.role),
+        LAYER_EMIT_CAP,
+        canvas
+      );
+      if (plateCount === 0) return out;
+
+      const cuts = flattenLayers(els, layers, plateCount, meta, null, {
+        solid: true,
+      });
+
+      const plateW = Number(values.plate_width) || 200;
+      const plateH = Number(values.plate_height) || 200;
+      const marginMm = Number(values.margin) || 15;
+      const scalePercent = Number(values.design_scale) || 100;
+
+      // ONE canvas for every plate and for the laser sheet, so they agree.
+      let canvasSpan = 100;
+      let canvasHeight = 100;
+      const firstCut = cuts.find(Boolean);
+      if (firstCut) {
+        const fvb = /viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(firstCut);
+        if (fvb) {
+          canvasSpan = parseFloat(fvb[1]);
+          canvasHeight = parseFloat(fvb[2]);
+        }
+      }
+
+      // DP-13. The laser lane is ONE sheet, cut once, so an enclosed shape
+      // falls out unless a rib holds it. Kerf is deliberately NOT applied
+      // here: the laser's own software does that, and two corrections
+      // undersize the part by a full kerf with nothing on screen to show it.
+      if (laserParam) {
+        const whole = flattenToCompoundPath(els, meta);
+        const wholeD = whole ? (/ d="([^"]*)"/.exec(whole)?.[1] ?? null) : null;
+        let ribD = '';
+        let warning = null;
+        if (values.bridges !== 'no') {
+          const b = buildBridges(els, tree, {
+            count: Number(values.bridge_count) || 2,
+            widthMm: Number(values.bridge_width) || undefined,
+          });
+          ribD = bridgesToPathData(b.rects);
+          warning = b.message;
+        }
+        const sheet = buildLaserSheet({
+          cutPathData: wholeD,
+          bridgePathData: ribD,
+          canvasSpan,
+          canvasHeight,
+          plateW,
+          plateH,
+          marginMm,
+          scalePercent,
+          marks: values.marks !== 'no',
+        });
+        out[laserParam.name] = {
+          name: `${layerFileStem(value.name)}_laser.svg`,
+          data: svgToDataUrl(sheet.svg),
+          type: 'image/svg+xml',
+        };
+        reportBridgeWarning(warning);
+      }
+
+      plateParams.forEach(({ file, plate }) => {
+        const cut = cuts[plate - 1];
+        const cutPathData = cut
+          ? (/ d="([^"]*)"/.exec(cut)?.[1] ?? null)
+          : null;
+        const { svg } = buildStencilPlate({
+          cutPathData,
+          canvasSpan,
+          canvasHeight,
+          plateW,
+          plateH,
+          marginMm,
+          scalePercent,
+          marks: values.marks !== 'no',
+          layer: plate,
+          layerCount: plateCount,
+        });
+        out[file.name] = {
+          name: `${layerFileStem(value.name)}_plate_${plate}.svg`,
+          data: svgToDataUrl(svg),
+          type: 'image/svg+xml',
+        };
+      });
+    } catch (err) {
+      // A design the plate builder cannot read still uploads as an ordinary
+      // single-sheet stencil; only the layered mode is unavailable.
+      console.warn('Stencil plate emission failed:', err);
+    }
+    return out;
+  }
+
   function emitFileValue(value, assignments = null) {
     let extra = null;
     if (aspectParam) {
@@ -2292,6 +2476,12 @@ function createFileControl(
     }
     if (silhouetteParams) {
       extra = { ...(extra || {}), ...buildSilhouetteCompanion(value) };
+    }
+    if (plateParams.length > 0) {
+      extra = {
+        ...(extra || {}),
+        ...buildPlateCompanions(value, currentParameterValues),
+      };
     }
     onChange(param.name, value, extra);
   }
@@ -3162,7 +3352,11 @@ export function renderParameterUI(
   // DP-11. One warning region for the model, built only when this model can
   // take its shape from a design and therefore can have a hole in mid-air.
   resetHolePlacementRegion();
-  if (Object.keys(parameters).some((n) => n.endsWith('_silhouette'))) {
+  if (
+    Object.keys(parameters).some(
+      (n) => n.endsWith('_silhouette') || n === 'stencil_laser_file'
+    )
+  ) {
     ensureHoleWarningRegion(container);
   }
   const currentValues = initialValues ? { ...initialValues } : {};
@@ -3365,7 +3559,9 @@ export function renderParameterUI(
             handleChange,
             parameters[`${param.name}_aspect`] || null,
             findLayerParams(param, parameters),
-            findSilhouetteParams(param, parameters)
+            findSilhouetteParams(param, parameters),
+            findPlateParams(parameters),
+            findLaserParam(parameters)
           );
           break;
 

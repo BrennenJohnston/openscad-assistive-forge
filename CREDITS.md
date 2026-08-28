@@ -126,6 +126,23 @@ it, the Braille Charm's `bracelet_clip` shape).
 
 ---
 
+## Stencil Maker Program
+
+### Stencil Forge
+
+The **Stencil Forge** project is where the Stencil Maker tool comes from. Its
+plate defaults (200 x 200 x 0.6 mm, a 15 mm margin, 10 mm corner crosses) are
+carried over as approved values, and two pieces of its geometry code were
+ported into this repository and adapted: the island-and-bridge geometry in
+`src/js/stencil-bridges.js` and the containment analysis in
+`src/js/svg-nesting.js`. Both source and destination are GPL-3.0-or-later, and
+each file records what changed and why at the top.
+
+Stencil Forge is a private repository, so this credit deliberately names it
+without linking to it.
+
+---
+
 ## Special Thanks
 
 - The OpenSCAD community for creating and maintaining an accessible parametric CAD tool
