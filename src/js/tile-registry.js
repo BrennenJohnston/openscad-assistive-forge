@@ -71,6 +71,14 @@ const EXAMPLES = {
     description: 'Charm Customizer',
     manifest: '/examples/nasif-charm-maker/manifest.json',
     additionalFiles: [
+      // DP-9. The default design, BESIDE the .scad, so desktop OpenSCAD can
+      // open it: import("heart.svg") looked in the model's own folder and the
+      // only copy lived in svg-library/. Desktop printed
+      // "ERROR: Can't open file ... heart.svg" and then rendered a blank
+      // charm anyway, reporting Status: NoError and writing an STL.
+      '/examples/nasif-charm-maker/heart.svg',
+      '/examples/nasif-charm-maker/presets/large-pendant.json',
+      '/examples/nasif-charm-maker/presets/small-pendant.json',
       '/examples/nasif-charm-maker/svg-library/heart.svg',
       '/examples/nasif-charm-maker/svg-library/star.svg',
       '/examples/nasif-charm-maker/svg-library/paw.svg',

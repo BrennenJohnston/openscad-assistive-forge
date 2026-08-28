@@ -33,7 +33,66 @@ design_raised = "no"; // [yes, no]
 design_scale = 70; // [10:5:110]
 
 // Design width divided by height. The Assistive Forge app measures and sets this when you choose a file; in desktop OpenSCAD set it to your file's width/height so 100 truly fills the face (1 assumes a square design)
-design_aspect = 1; // [0.05:0.01:20]
+design_file_aspect = 1; // [0.05:0.01:20]
+
+// Offset to thicken SVG lines for FDM printability (0 = off; 0.6 = recommended for 0.4mm nozzle)
+design_offset = 0; // [0:0.2:1.5]
+
+// Left (-) / right (+) position offset for design
+design_left_right = 0; // [-15:0.5:15]
+
+// Down (-) / up (+) position offset for design
+design_up_down = 0; // [-15:0.5:15]
+
+// Rotation angle for design (degrees, counter-clockwise)
+design_rotation = 0; // [-180:5:180]
+
+/* [Text] */
+// Text or number to display on the charm face (leave empty for none)
+text_content = "";
+
+// Depth of text engraving (or height of raised text)
+text_depth = 0.8; // [0.2:0.1:2]
+
+// Text style on the charm surface
+text_style = "raised"; // [raised, engraved]
+
+// Text size
+text_size = 5; // [3:0.5:12]
+
+// Left (-) / right (+) position offset for text
+text_left_right = 0; // [-15:0.5:15]
+
+// Down (-) / up (+) position offset for text
+text_up_down = 8; // [-15:0.5:15]
+
+// Rotation angle for text (degrees, counter-clockwise)
+text_rotation = 0; // [-180:5:180]
+
+/* [Text Layer 2] */
+// Second line of text (leave empty for none)
+text_content_2 = "";
+
+// Depth of second text engraving (or height of raised text)
+text_depth_2 = 0.8; // [0.2:0.1:2]
+
+// Second text style on the charm surface
+text_style_2 = "raised"; // [raised, engraved]
+
+// Second text size
+text_size_2 = 5; // [3:0.5:12]
+
+// Left (-) / right (+) position offset for second text
+text_2_left_right = 0; // [-15:0.5:15]
+
+// Down (-) / up (+) position offset for second text
+text_2_up_down = -8; // [-15:0.5:15]
+
+// Rotation angle for second text (degrees, counter-clockwise)
+text_rotation_2 = 0; // [-180:5:180]
+
+// Thickness offset for second text (height relative to the charm surface)
+text_2_thickness = 0; // [-3:0.1:3]
 
 /* [Border] */
 // Add a raised border ring
@@ -47,7 +106,7 @@ border_height = 0.5; // [0.2:0.1:2.0]
 
 /* [Attachment] */
 // How the charm attaches to a chain or pin
-attachment_type = "keychain_hole"; // [keychain_hole, bail_loop, none]
+attachment_type = "keychain_hole"; // [keychain_hole, lanyard_slot, bail_loop, none]
 
 // Hole diameter (for keychain hole)
 hole_diameter = 4; // [2:0.5:8]
@@ -69,7 +128,7 @@ face_w = effective_width - (add_border == "yes" ? 2 * border_width : 0);
 face_h = effective_height - (add_border == "yes" ? 2 * border_width : 0);
 fit_w = face_w * design_scale / 100;
 fit_h = face_h * design_scale / 100;
-assert(design_aspect > 0, "design_aspect must be positive (width divided by height)");
+assert(design_file_aspect > 0, "design_file_aspect must be positive (width divided by height)");
 
 module charm_base_2d() {
     if (charm_shape == "circle") {
@@ -123,11 +182,47 @@ module charm_body() {
 module design_2d() {
     if (design_file != "") {
         // Contain-fit: anchor the resize to whichever axis the design hits
-        // first (OpenSCAD cannot measure an import; design_aspect carries
+        // first (OpenSCAD cannot measure an import; design_file_aspect carries
         // the ratio), so a tall design no longer overflows the charm.
-        resize(design_aspect >= fit_w / fit_h ? [fit_w, 0] : [0, fit_h],
-               auto = true)
-            import(design_file, center = true);
+        translate([design_left_right, design_up_down])
+            rotate([0, 0, design_rotation])
+                offset(r = design_offset)
+                    resize(design_file_aspect >= fit_w / fit_h
+                               ? [fit_w, 0]
+                               : [0, fit_h],
+                           auto = true)
+                        import(design_file, center = true);
+    }
+}
+
+// The flat face a design or a piece of text may fill. Inside the border ring
+// when there is one, because raised material over the ring would stand on a
+// wall rather than on the face, and an engraved cut there would breach it.
+module face_2d() {
+    if (add_border == "yes") {
+        offset(r = -border_width) charm_base_2d();
+    } else {
+        charm_base_2d();
+    }
+}
+
+module text_2d() {
+    if (text_content != "") {
+        translate([text_left_right, text_up_down])
+            rotate([0, 0, text_rotation])
+                text(text_content, size = text_size,
+                     font = "Liberation Sans",
+                     halign = "center", valign = "center");
+    }
+}
+
+module text_2d_layer2() {
+    if (text_content_2 != "") {
+        translate([text_2_left_right, text_2_up_down])
+            rotate([0, 0, text_rotation_2])
+                text(text_content_2, size = text_size_2,
+                     font = "Liberation Sans",
+                     halign = "center", valign = "center");
     }
 }
 
@@ -139,6 +234,18 @@ module attachment() {
             : effective_height / 2 - hole_diameter / 2 - 1;
         translate([0, hole_y, -0.01])
             cylinder(d = hole_diameter, h = charm_thickness + border_height + 0.02);
+    } else if (attachment_type == "lanyard_slot") {
+        slot_width = hole_diameter * 2;
+        r = hole_diameter / 4;
+        slot_y = charm_shape == "circle"
+            ? effective_width / 2 - hole_diameter / 2 - 1
+            : effective_height / 2 - hole_diameter / 2 - 1;
+        translate([0, slot_y, -0.01])
+            linear_extrude(height = charm_thickness + border_height + 0.02)
+                hull() {
+                    translate([-(slot_width / 2 - r), 0]) circle(r = r);
+                    translate([ (slot_width / 2 - r), 0]) circle(r = r);
+                }
     } else if (attachment_type == "bail_loop") {
         bail_y = charm_shape == "circle"
             ? effective_width / 2
@@ -151,13 +258,46 @@ module attachment() {
     }
 }
 
+// Raised text, clamped to the flat face. Written this way from birth rather
+// than added later: text that overhangs the face stands on the border ring or
+// on nothing at all.
+module raised_text() {
+    if (text_content != "" && text_style == "raised") {
+        translate([0, 0, charm_thickness - 0.02])
+            linear_extrude(height = text_depth + 0.02)
+                intersection() { text_2d(); face_2d(); }
+    }
+    if (text_content_2 != "" && text_style_2 == "raised") {
+        translate([0, 0, charm_thickness + text_2_thickness - 0.02])
+            linear_extrude(height = text_depth_2 + 0.02)
+                intersection() { text_2d_layer2(); face_2d(); }
+    }
+}
+
+module engraved_text() {
+    if (text_content != "" && text_style != "raised") {
+        translate([0, 0, charm_thickness - text_depth])
+            linear_extrude(height = text_depth + border_height + 0.02)
+                intersection() { text_2d(); face_2d(); }
+    }
+    if (text_content_2 != "" && text_style_2 != "raised") {
+        translate([0, 0, charm_thickness - text_depth_2 + text_2_thickness])
+            linear_extrude(height = text_depth_2 + border_height + 0.02)
+                intersection() { text_2d_layer2(); face_2d(); }
+    }
+}
+
 module engraved_charm() {
     difference() {
-        charm_body();
+        union() {
+            charm_body();
+            raised_text();
+        }
         // Engrave design into top surface
         translate([0, 0, charm_thickness - engrave_depth])
             linear_extrude(height = engrave_depth + border_height + 0.02)
                 design_2d();
+        engraved_text();
         attachment();
     }
 }
@@ -176,7 +316,9 @@ module raised_charm() {
                         design_2d();
                         charm_base_2d();
                     }
+            raised_text();
         }
+        engraved_text();
         attachment();
     }
 }
