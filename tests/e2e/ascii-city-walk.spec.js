@@ -293,13 +293,20 @@ test.describe('ASCII City Walk — playing', () => {
     const spawnHeading = await hudHeading(page)
     expect(spawnHeading).not.toBeNull()
 
-    // Turning right for >1s moves the compass off the spawn sector - a
-    // ~117 degree turn always leaves a 45 degree sector. Exact label, not
-    // substring (see hudHeading).
+    // Held until the compass moves OFF the spawn sector, never for a fixed
+    // 1300 ms: turning integrates per FRAME, and a wall-clock hold on a
+    // loaded runner can deliver too few frames to cross a 45 degree sector.
+    // Measured - that is exactly how the sibling case below went red on a
+    // Chromium CI shard, still reading its start sector after the hold.
+    // Exact label, not substring (see hudHeading).
     await page.keyboard.down('ArrowRight')
-    await page.waitForTimeout(1300)
-    await page.keyboard.up('ArrowRight')
-    await expect.poll(() => hudHeading(page)).not.toBe(spawnHeading)
+    try {
+      await expect
+        .poll(() => hudHeading(page), { timeout: 30000, intervals: [150] })
+        .not.toBe(spawnHeading)
+    } finally {
+      await page.keyboard.up('ArrowRight')
+    }
 
     // Map view toggle and back
     await page.keyboard.press('KeyM')
@@ -393,17 +400,41 @@ test.describe('ASCII City Walk — map navigation and walking speed (CW-9)', () 
     )
 
     // Held PageUp zooms in exponentially (CW-Q41 moved map zoom here).
+    //
+    // The hold ends on a CONDITION, not on the clock. Zoom accrues per
+    // rendered frame, so a fixed 700 ms buys however many frames the runner
+    // happens to manage - and CW-50's kerbs added 22% more city geometry,
+    // which was enough to make a loaded Firefox miss the bar once in a
+    // seventeen-minute suite. The wall clock is the outer bound now, and the
+    // zoom itself is the quota (the #148 shape).
     await page.keyboard.down('PageUp')
-    await page.waitForTimeout(700)
-    await page.keyboard.up('PageUp')
+    try {
+      await expect
+        .poll(
+          () => page.evaluate(() => window.__cityWalkGame.mapCam.zoom),
+          { timeout: 20_000 }
+        )
+        .toBeGreaterThan(1.3)
+    } finally {
+      await page.keyboard.up('PageUp')
+    }
     const hud = await page.textContent('#cityWalkHudStatus')
     const zoom = parseFloat(/zoom (\d+\.\d)x/.exec(hud)?.[1] ?? '0')
     expect(zoom).toBeGreaterThan(1.2)
 
-    // Panning breaks player-follow (asserted via the DEV handle).
+    // Panning breaks player-follow (asserted via the DEV handle). Same shape:
+    // held until follow actually breaks, rather than for a fixed 400 ms.
     await page.keyboard.down('ArrowRight')
-    await page.waitForTimeout(400)
-    await page.keyboard.up('ArrowRight')
+    try {
+      await expect
+        .poll(
+          () => page.evaluate(() => window.__cityWalkGame.mapCam.follow),
+          { timeout: 20_000 }
+        )
+        .toBe(false)
+    } finally {
+      await page.keyboard.up('ArrowRight')
+    }
     const afterPan = await page.evaluate(() => ({
       follow: window.__cityWalkGame.mapCam.follow,
       centerX: window.__cityWalkGame.mapCam.centerX,
@@ -792,14 +823,28 @@ test.describe('ASCII City Walk — looking around (CW-13)', () => {
       'looking'
     )
 
-    // Held R climbs; 45 deg/s means half a second cannot reach the clamp, so
-    // this asserts real integration rather than a jump to the limit.
+    // Held R climbs - and the key is held until it HAS climbed, never for a
+    // fixed 600 ms. Pitch integrates per FRAME with dt clamped to 0.1 s, so
+    // one rendered frame is worth at most 4.5 deg and passing 5 needs at
+    // least two of them; a 600 ms hold on a software renderer is not
+    // guaranteed to deliver two. Measured: this is exactly how it went red on
+    // an Edge shard in CI, having been green on the same branch before the
+    // scene grew heavier. The clause below it already learned this lesson;
+    // this one and the F case had not.
     await page.keyboard.down('KeyR')
-    await page.waitForTimeout(600)
-    await page.keyboard.up('KeyR')
-    await expect
-      .poll(async () => (await gaze(page)).pitch > 5 * DEG)
-      .toBe(true)
+    try {
+      await expect
+        .poll(async () => (await gaze(page)).pitch > 5 * DEG, {
+          timeout: 30000,
+          intervals: [100],
+        })
+        .toBe(true)
+    } finally {
+      await page.keyboard.up('KeyR')
+    }
+    // It CLIMBED rather than jumping to the stop, which is what the fixed
+    // hold was really asserting: 5 deg arrives long before the 60 deg clamp.
+    expect((await gaze(page)).pitch).toBeLessThan(60 * DEG)
     await expect(page.locator('#cityWalkHudStatus')).toContainText('looking up')
 
     // The bearing is untouched by looking up - pitch and yaw are separate.
@@ -833,13 +878,20 @@ test.describe('ASCII City Walk — looking around (CW-13)', () => {
       'looking'
     )
 
-    // F goes the other way, and the HUD words it differently.
+    // F goes the other way, and the HUD words it differently. Held until it
+    // has fallen, for the same reason R is.
     await page.keyboard.down('KeyF')
-    await page.waitForTimeout(600)
-    await page.keyboard.up('KeyF')
-    await expect
-      .poll(async () => (await gaze(page)).pitch < -5 * DEG)
-      .toBe(true)
+    try {
+      await expect
+        .poll(async () => (await gaze(page)).pitch < -5 * DEG, {
+          timeout: 30000,
+          intervals: [100],
+        })
+        .toBe(true)
+    } finally {
+      await page.keyboard.up('KeyF')
+    }
+    expect((await gaze(page)).pitch).toBeGreaterThan(-60 * DEG)
     await expect(page.locator('#cityWalkHudStatus')).toContainText(
       'looking down'
     )
@@ -953,8 +1005,17 @@ test.describe('ASCII City Walk — looking around (CW-13)', () => {
     await expect(page.locator('#cityWalkHelpPanel')).toContainText(
       'V: level the view'
     )
+    // CW-59: the mouse drags the MAP now as well, so the line that taught
+    // it as street-only was describing half the feature.
     await expect(page.locator('#cityWalkHelpPanel')).toContainText(
-      'Drag with the mouse in street view: look around'
+      'Drag with the mouse: look around in street view, move the map in map view'
+    )
+    // ★ AND THE MAP LINE TEACHES W A S D, which it always should have. Those
+    // keys have panned the map since the map existed - the same actions the
+    // street walk binds - and only this sentence said arrows only. Pinned
+    // here so the teaching cannot drift away from the binding again.
+    await expect(page.locator('#cityWalkHelpPanel')).toContainText(
+      'On the map: arrow keys or W A S D pan'
     )
   })
 })
@@ -1049,9 +1110,13 @@ test.describe('ASCII City Walk — high contrast (CW-6)', () => {
     // (CW-44 spawns facing the clearest street).
     const sizeKeysHeading = await hudHeading(page)
     await page.keyboard.down('ArrowRight')
-    await page.waitForTimeout(1300)
-    await page.keyboard.up('ArrowRight')
-    await expect.poll(() => hudHeading(page)).not.toBe(sizeKeysHeading)
+    try {
+      await expect
+        .poll(() => hudHeading(page), { timeout: 30000, intervals: [150] })
+        .not.toBe(sizeKeysHeading)
+    } finally {
+      await page.keyboard.up('ArrowRight')
+    }
 
     await page.keyboard.press('Escape')
     await expect(page.locator('#cityWalkLayer')).toBeHidden()
@@ -1208,11 +1273,24 @@ test.describe('ASCII City Walk — accessibility toggles (CW-14)', () => {
     // The keys still reach the game: focus staying put is only worth
     // asserting if the city still answers to it (CW-13's lesson). The
     // reference heading is captured, never assumed north (CW-44).
+    //
+    // The key is held until the heading MOVES, never for a fixed 1300 ms.
+    // Turning integrates per FRAME, so a wall-clock hold on a loaded runner
+    // can deliver too few frames to cross a compass sector - measured, this
+    // is exactly how it went red on a Chromium shard, still reading
+    // "southeast" after the hold. Holding until it moves asserts the same
+    // thing (the keys still reach the game) and cannot be starved into a
+    // false negative; if the keys are dead it times out, which is the
+    // failure this exists to catch.
     const themeFocusHeading = await hudHeading(page)
     await page.keyboard.down('ArrowRight')
-    await page.waitForTimeout(1300)
-    await page.keyboard.up('ArrowRight')
-    await expect.poll(() => hudHeading(page)).not.toBe(themeFocusHeading)
+    try {
+      await expect
+        .poll(() => hudHeading(page), { timeout: 30000, intervals: [150] })
+        .not.toBe(themeFocusHeading)
+    } finally {
+      await page.keyboard.up('ArrowRight')
+    }
 
     // And Tab does not escape the modal.
     await page.keyboard.press('Tab')
@@ -1383,5 +1461,852 @@ test.describe('ASCII City Walk — the loading line (CW-44)', () => {
     await expect(
       page.getByRole('button', { name: 'Seattle, Washington' })
     ).toBeEnabled()
+  })
+})
+
+test.describe('ASCII City Walk — landmarks you can find, and progress that lasts (CW-62)', () => {
+  const hud = (page) => page.locator('#cityWalkHudStatus')
+  const announcer = (page) => page.locator('#cityWalkAnnouncer')
+  const KEY = 'openscad-forge-city-walk-progress-seattle'
+
+  const stats = (page) =>
+    page.evaluate(
+      () => window.__cityWalkGame?.altView?.getConvertStats?.()?.samples ?? 0
+    )
+  async function waitForConversions(page, n) {
+    const from = await stats(page)
+    await expect
+      .poll(() => stats(page), { timeout: 60000 })
+      .toBeGreaterThanOrEqual(from + n)
+  }
+
+  /** What the map's landmark marks actually are, asked of the scene. */
+  const marks = (page) =>
+    page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const group = g.beacons.group
+      const out = []
+      for (const root of group.children) {
+        const [halo, frame, core] = root.children
+        out.push({
+          scale: root.scale.x,
+          selected: halo.visible,
+          frameR: frame.geometry.parameters.radius,
+          coreR: core.geometry.parameters.radius,
+          coreHex: core.material.color.getHexString(),
+          frameHex: frame.material.color.getHexString(),
+          depthTest: frame.material.depthTest,
+        })
+      }
+      return { count: out.length, marks: out, visible: group.visible }
+    })
+
+  test('★★ a landmark mark is a mark: bright, holed, and a constant footprint (CW-62)', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+    await page.keyboard.press('KeyM')
+    await expect(hud(page)).toContainText('map view')
+
+    const m = await marks(page)
+    expect(m.visible).toBe(true)
+    expect(m.count, 'no landmark marks were built').toBeGreaterThan(4)
+
+    for (const one of m.marks) {
+      // ★★ THE LAW CW-61 PAID FOR. A bright outline only reads when it is
+      // wrapped around EXACT BLACK: exact black is the one value the
+      // converter renders as an empty cell, and an empty patch inside a mark
+      // is a footprint no building in any palette has. A bare bright ring
+      // was invisible in three palettes of five while owning up to 1% of the
+      // frame.
+      expect(one.coreHex, 'a landmark mark lost its exact-black core').toBe(
+        '000000'
+      )
+      expect(one.frameHex).not.toBe('000000')
+      // Never occluded by a tall building, like every other map mark.
+      expect(one.depthTest).toBe(false)
+      // The hole is really a hole: the core is inside the frame, not over it.
+      expect(one.coreR).toBeLessThan(one.frameR)
+      expect(one.coreR).toBeGreaterThan(0)
+    }
+
+    // ★ ONE SCALE FOR EVERY MAP MARK. The player's square, CW-61's circle and
+    // these diamonds all take applyMapCamera's number, so a mark holds its
+    // footprint in glyphs rather than in ground - which is the whole reason
+    // the old 7 m beacons were 0.85 cells wide and unfindable.
+    const playerScale = await page.evaluate(
+      () => window.__cityWalkGame.marker.scale.x
+    )
+    for (const one of m.marks) expect(one.scale).toBeCloseTo(playerScale, 6)
+
+    // And zooming keeps them in step rather than letting them drift.
+    await page.keyboard.down('PageUp')
+    await page.waitForTimeout(500)
+    await page.keyboard.up('PageUp')
+    await waitForConversions(page, 2)
+    const zoomed = await marks(page)
+    const after = await page.evaluate(
+      () => window.__cityWalkGame.marker.scale.x
+    )
+    expect(after).not.toBeCloseTo(playerScale, 3)
+    for (const one of zoomed.marks) expect(one.scale).toBeCloseTo(after, 6)
+  })
+
+  test('★★ selected and visited are FOOTPRINTS, not tones (CW-62)', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+    await page.keyboard.press('KeyM')
+    await expect(hud(page)).toContainText('map view')
+
+    // Nothing selected to begin with.
+    expect((await marks(page)).marks.filter((m) => m.selected)).toHaveLength(0)
+
+    await page.keyboard.press('KeyL')
+    await expect(announcer(page)).toContainText(/Landmark 1 of/)
+    const afterSelect = await marks(page)
+    // Exactly one, and selection is a HALO - an outline change - rather than
+    // a colour change. CW-36 died of a mark that differed only in tone.
+    expect(afterSelect.marks.filter((m) => m.selected)).toHaveLength(1)
+
+    // ★★ VISITED WAS A TONE FIRST AND IT VANISHED. A dimmer frame changed
+    // 0.46% of the frame against a 0.000% control - a real, repeatable,
+    // three-palette change - and photographed as the marks DISAPPEARING into
+    // the map's own glyph noise. Changed is not readable. So visited is a
+    // smaller mark that keeps its brightness and its hole.
+    const before = (await marks(page)).marks
+    const name = await page.evaluate(() => window.__cityWalkGame.landmarks[0].name)
+    await page.evaluate((n) => {
+      const g = window.__cityWalkGame
+      g.beacons.setVisited(new Set([n]))
+      g.altView.invalidate()
+    }, name)
+    const after = (await marks(page)).marks
+
+    const shrank = after.filter((m, i) => m.frameR < before[i].frameR)
+    expect(shrank, 'visited changed nothing about the footprint').toHaveLength(1)
+    const i = after.findIndex((m, k) => m.frameR < before[k].frameR)
+    // Still bright, and still holed: a visited landmark is a lesser mark, not
+    // an absent one.
+    expect(after[i].frameHex).toBe(before[i].frameHex)
+    expect(after[i].coreHex).toBe('000000')
+    expect(after[i].coreR).toBeLessThan(after[i].frameR)
+    expect(after[i].coreR).toBeGreaterThan(0)
+  })
+
+  test('★★ what you found is still found when you come back (CW-62)', async ({
+    page,
+  }) => {
+    // SEEDED: the store decides what the game opens with.
+    await page.addInitScript(
+      ([key, value]) => localStorage.setItem(key, value),
+      [
+        KEY,
+        JSON.stringify({
+          visited: ['Space Needle'],
+          allFound: false,
+          fireworksUnlocked: true,
+        }),
+      ]
+    )
+    await launchGame(page)
+    await enterCity(page)
+
+    await expect(hud(page)).toContainText('landmarks 1/')
+    await page.keyboard.press('KeyM')
+    await expect(hud(page)).toContainText('map view')
+    const seeded = await marks(page)
+    const smaller = seeded.marks.filter(
+      (m) => m.frameR < Math.max(...seeded.marks.map((x) => x.frameR))
+    )
+    expect(smaller, 'the seeded visit did not reach the map').toHaveLength(1)
+
+    // And the legend agrees, which is the sighted half of the same fact.
+    await expect(page.locator('#cityWalkLegend')).toContainText('Space Needle')
+  })
+
+  test('★★ a REAL re-entry keeps what a real walk found (CW-62)', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    // ★ SEEDED STORAGE PROVES THE READ. Only a real round trip proves the
+    // WRITE, and the write is the half a seeded test can never reach.
+    await launchGame(page)
+    await enterCity(page)
+
+    const name = await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      // Mark one through the game's own path, not by writing storage.
+      const lm = g.landmarks[0]
+      window.__cwMark(lm.name)
+      return lm.name
+    })
+    await expect(hud(page)).toContainText('landmarks 1/')
+
+    const stored = await page.evaluate((k) => localStorage.getItem(k), KEY)
+    expect(stored, 'nothing was written').toBeTruthy()
+    expect(JSON.parse(stored).visited).toContain(name)
+
+    // Leave the city and come back in, the way a player would.
+    await page.keyboard.press('Escape')
+    await expect(page.locator('#cityWalkCard')).toBeVisible({ timeout: 20000 })
+    await launchGame(page)
+    await enterCity(page)
+    await expect(hud(page)).toContainText('landmarks 1/')
+    expect(
+      await page.evaluate(() => [...window.__cityWalkGame.visited]),
+      'the walk was forgotten across a real re-entry'
+    ).toContain(name)
+  })
+
+  test('★★ a completed city does not re-announce itself (CW-62)', async ({
+    page,
+  }) => {
+    await page.addInitScript(
+      ([key, value]) => localStorage.setItem(key, value),
+      [KEY, JSON.stringify({ visited: [], allFound: true })]
+    )
+    await launchGame(page)
+    await enterCity(page)
+
+    // Walk into every landmark. The all-found line is a REWARD, and a reward
+    // that fires every time you walk back in stops being one - so a city the
+    // store already calls complete stays quiet. CW-64's trigger wants the
+    // TRANSITION, which is why the flag is seeded rather than recomputed.
+    await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      for (const lm of g.landmarks) window.__cwMark(lm.name)
+    })
+    await page.waitForTimeout(600)
+    await expect(announcer(page)).not.toContainText('All landmarks found')
+  })
+})
+
+test.describe('ASCII City Walk — fireworks over the city (CW-64, CW-Q59)', () => {
+  const announcer = (page) => page.locator('#cityWalkAnnouncer')
+  const KEY = 'openscad-forge-city-walk-progress-seattle'
+  const btn = (page) => page.locator('#cityWalkFireworksBtn')
+
+  const show = (page) =>
+    page.evaluate(() => {
+      const g = window.__cityWalkGame
+      return {
+        running: g.fireworks.isRunning(),
+        stars: g.fireworks.group.children.filter((m) => m.visible).length,
+        marks: g.fireworks.mapGroup.children.filter((m) => m.visible).length,
+        unlocked: Boolean(g.fireworksUnlocked),
+        prm: Boolean(g.motionReduced),
+      }
+    })
+
+  const findEverything = (page) =>
+    page.evaluate(() => {
+      const g = window.__cityWalkGame
+      for (const lm of g.landmarks) window.__cwMark(lm.name)
+    })
+
+  test('★★ finishing a city plays the show, once, and leaves a button (CW-64)', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // Nothing before the city is finished: the key and the button are both a
+    // reward, and a reward you can take early is not one.
+    expect(await show(page)).toMatchObject({ running: false, unlocked: false })
+    await expect(btn(page)).toBeHidden()
+    await page.keyboard.press('KeyY')
+    expect((await show(page)).running).toBe(false)
+
+    await findEverything(page)
+    await expect(announcer(page)).toContainText('Fireworks over the city')
+    await expect(btn(page)).toBeVisible()
+    const lit = await show(page)
+    expect(lit.unlocked).toBe(true)
+    expect(lit.running).toBe(true)
+    expect(lit.stars).toBeGreaterThan(0)
+
+    // ★ THE UNLOCK RIDES IN CW-62's OWN OBJECT, not a sibling key. An older
+    // build reading this must still find its visited list where it left it.
+    const stored = await page.evaluate(
+      (k) => JSON.parse(localStorage.getItem(k)),
+      KEY
+    )
+    expect(stored.fireworksUnlocked).toBe(true)
+    expect(stored.allFound).toBe(true)
+    expect(stored.visited.length).toBeGreaterThan(0)
+  })
+
+  test('★★ a finished city does not re-fire, but the button still works (CW-64)', async ({
+    page,
+  }) => {
+    await page.addInitScript(
+      ([key, value]) => localStorage.setItem(key, value),
+      [
+        KEY,
+        JSON.stringify({
+          visited: ['Space Needle'],
+          allFound: true,
+          fireworksUnlocked: true,
+        }),
+      ]
+    )
+    await launchGame(page)
+    await enterCity(page)
+
+    // The button is here because the store says so, and nothing is playing:
+    // walking back into a city you finished last week is not an occasion.
+    await expect(btn(page)).toBeVisible()
+    expect((await show(page)).running).toBe(false)
+
+    await btn(page).click()
+    await expect(announcer(page)).toContainText('Fireworks')
+    expect((await show(page)).running).toBe(true)
+  })
+
+  test('★★ reduced motion gets a picture, not a refusal (CW-64)', async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await launchGame(page)
+    await enterCity(page)
+    await findEverything(page)
+
+    // "Never nothing" is the plan's phrase and it is a claim about a PICTURE:
+    // the bursts are composed and held still, so a player who has asked the
+    // machine to stop moving things still gets to see that they finished.
+    const still = await show(page)
+    expect(still.prm).toBe(true)
+    expect(still.unlocked).toBe(true)
+    expect(still.stars).toBeGreaterThan(0)
+    // Held, not running - nothing animates and the step loop never touches it.
+    expect(still.running).toBe(false)
+    await expect(announcer(page)).toContainText('reduced motion')
+  })
+
+  test('★★ WCAG 2.3.1: no more than three general flashes in any one second (CW-64)', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // Face the ring and look up. A 2.3.1 number taken from a view with no
+    // fireworks in it would be a lie by omission.
+    await page.evaluate(async () => {
+      const g = window.__cityWalkGame
+      const wc = await import('/src/js/game/walk-controls.js')
+      g.walkState.pitchRad = (38 * Math.PI) / 180
+      const p = wc.firstPersonPose(g.walkState)
+      g.fpCamera.position.set(...p.eye)
+      g.fpCamera.lookAt(...p.target)
+      g.altView.invalidate()
+    })
+
+    /**
+     * ★★ SAMPLED PER RENDERED FRAME, AND THE BUFFER IS CLEARED EVERY TIME.
+     *
+     * The overlay canvas is GLYPHS ON TRANSPARENCY - the WebGL canvas beneath
+     * it carries the black - so drawing it repeatedly onto one offscreen
+     * buffer without clearing accumulates every frame that ever passed. Built
+     * that way first, a deliberate strobe whose star count was visibly
+     * toggling 28/0/28/0 produced a luminance trace that only ever climbed.
+     *
+     * The loop is gated on the show's OWN state, not a clock, with a generous
+     * outer bound (the #148 shape).
+     */
+    const measured = await page.evaluate(async () => {
+      const g = window.__cityWalkGame
+      const canvas = document.querySelector('canvas.hfm-overlay-canvas')
+      const w = 200
+      const h = 120
+      const off = document.createElement('canvas')
+      off.width = w
+      off.height = h
+      const cx = off.getContext('2d', { willReadFrequently: true })
+      const lin = (v) => {
+        const c = v / 255
+        return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
+      }
+      const sample = () => {
+        cx.clearRect(0, 0, w, h)
+        cx.drawImage(canvas, 0, 0, w, h)
+        const d = cx.getImageData(0, 0, w, h).data
+        let sum = 0
+        for (let i = 0; i < d.length; i += 4) {
+          sum +=
+            0.2126 * lin(d[i]) + 0.7152 * lin(d[i + 1]) + 0.0722 * lin(d[i + 2])
+        }
+        return sum / (w * h)
+      }
+      const out = []
+      return await new Promise((resolve) => {
+        const t0 = performance.now()
+        g.fireworks.start()
+        const tick = () => {
+          const t = performance.now() - t0
+          out.push([t, sample()])
+          if (g.fireworks.isRunning() && t < 40000) requestAnimationFrame(tick)
+          else resolve(out)
+        }
+        requestAnimationFrame(tick)
+      })
+    })
+
+    /**
+     * ★★ THE BOUND IS THE ASSERTION AND THE COUNT IS THE CORROBORATION,
+     * BECAUSE AT THIS FRAME RATE THE COUNT CANNOT FAIL.
+     *
+     * 2.3.1's general flash is a PAIR of opposing relative-luminance changes
+     * of at least 10% where the darker is below 0.80. So if the WHOLE show's
+     * luminance range never reaches 10%, no such pair can exist and the count
+     * is provably zero rather than merely measured zero. The bound is a
+     * SUFFICIENT CONDITION, and it survives a slow sampler: a burst blooms
+     * over 1.6 s, so a handful of samples still catches its peak.
+     *
+     * The count does not survive it. Measured here, this sampler runs at about
+     * SEVEN samples a second - the e2e renders through SwiftShader where a
+     * headed browser gives sixty - and a flash lasting 90 ms is aliased away.
+     * Red-proven twice: with the show turned into a deliberate strobe the
+     * range went to 0.123 and then 0.517, and the count assertion passed BOTH
+     * times while the bound failed both times. A guard that cannot fail is not
+     * a guard, so the bound goes first (CW-61's lesson about assertion order)
+     * and the count rides behind it as a second opinion.
+     *
+     * The headed measurement, which CAN count, is in the release record: zero
+     * general flashes over 1,436 samples at 59.8/s, and the same instrument
+     * reads 17 flashes with a worst second of 6 on the strobe.
+     */
+    const t = measured.map((m) => m[0])
+    const lum = measured.map((m) => m[1])
+    const spanS = (t[t.length - 1] - t[0]) / 1000
+    const rate = measured.length / spanS
+    const how =
+      `${measured.length} samples over ${spanS.toFixed(1)}s ` +
+      `= ${rate.toFixed(1)}/s`
+
+    /**
+     * ★★ THE STIMULUS BEFORE THE DETECTOR (CW-64's own lesson B). A luminance
+     * range of zero is a pass if the show ran and a LIE if it did not, and the
+     * two look identical in the number. The loop exits on isRunning(), which
+     * reduced motion deliberately answers false to, so a runner with reduced
+     * motion forced on would sample a still frame and "pass" gloriously.
+     */
+    expect(
+      spanS,
+      `the show has to have RUN for a flash bound to mean anything, and this ` +
+        `sampled ${how}. A near-zero span means it never started, or reduced ` +
+        `motion held it still, not that it did not flash.`
+    ).toBeGreaterThan(1)
+
+    /**
+     * ★★ AND THEN A CAPABILITY GATE, NOT A COUNT, BECAUSE THIS IS WHERE CI
+     * WENT RED AND THE REASON MATTERS.
+     *
+     * The first version asserted `measured.length > 60`. On a CI runner it
+     * collected FIFTEEN: the suite renders through SwiftShader, where this
+     * sampler runs at about seven a second against a headed browser's sixty.
+     * So the build failed on the sampler's speed while the accessibility bound
+     * below - the thing anybody actually cares about - was never evaluated at
+     * all, because it sat AFTER the count.
+     *
+     * ★ That is D-114's shape exactly, and this file's own comment had already
+     * named it: "the bound goes first (CW-61's lesson about assertion order)
+     * and the count rides behind it as a second opinion". The comment was
+     * right and the code did the opposite. The bound goes first now.
+     *
+     * What replaces the count is a gate on CAPABILITY, the way `enterCity`
+     * gates on WebGL rather than on a browser name: a sampler too coarse to
+     * catch a bloom's peak has NOT MEASURED this, and saying so is honest
+     * where passing would not be. A burst blooms over 1.6 s, so three samples
+     * inside one bloom is the floor worth having. Locally this runs at ~7/s
+     * and clears it by a wide margin; nothing skips on a real machine.
+     */
+    const SAMPLES_PER_BLOOM = 3
+    test.skip(
+      rate * 1.6 < SAMPLES_PER_BLOOM,
+      `this runner samples the canvas at ${rate.toFixed(1)}/s (${how}), which ` +
+        `is under ${SAMPLES_PER_BLOOM} samples per 1.6s bloom - too coarse to ` +
+        `resolve a flash, so 2.3.1 is NOT MEASURED here rather than passed`
+    )
+
+    const TH = 0.1
+    const swing = Math.max(...lum) - Math.min(...lum)
+    expect(
+      swing,
+      `the show swung ${swing.toFixed(4)} of relative luminance over ` +
+        `${spanS.toFixed(1)}s at ${rate.toFixed(1)} samples/s; a general flash ` +
+        `needs a PAIR of opposing changes of at least ${TH}, so a range under ` +
+        `that is zero flashes by construction`
+    ).toBeLessThan(TH)
+
+    // The literal count, found with a hysteresis zig-zag. Pairing adjacent
+    // local extrema instead splits every real swing into micro-steps.
+    const turns = []
+    let dir = 0
+    let ext = lum[0]
+    let extAt = t[0]
+    let runMin = lum[0]
+    let runMax = lum[0]
+    let minAt = t[0]
+    let maxAt = t[0]
+    for (let i = 1; i < lum.length; i++) {
+      const v = lum[i]
+      if (dir === 1) {
+        if (v > ext) {
+          ext = v
+          extAt = t[i]
+        } else if (ext - v >= TH) {
+          turns.push({ at: extAt, v: ext })
+          dir = -1
+          ext = v
+          extAt = t[i]
+        }
+      } else if (dir === -1) {
+        if (v < ext) {
+          ext = v
+          extAt = t[i]
+        } else if (v - ext >= TH) {
+          turns.push({ at: extAt, v: ext })
+          dir = 1
+          ext = v
+          extAt = t[i]
+        }
+      } else {
+        if (v > runMax) {
+          runMax = v
+          maxAt = t[i]
+        }
+        if (v < runMin) {
+          runMin = v
+          minAt = t[i]
+        }
+        if (runMax - v >= TH) {
+          turns.push({ at: maxAt, v: runMax })
+          dir = -1
+          ext = v
+          extAt = t[i]
+        } else if (v - runMin >= TH) {
+          turns.push({ at: minAt, v: runMin })
+          dir = 1
+          ext = v
+          extAt = t[i]
+        }
+      }
+    }
+    const flashes = []
+    for (let k = 1; k < turns.length; k++) {
+      if (Math.min(turns[k - 1].v, turns[k].v) < 0.8) flashes.push(turns[k].at)
+    }
+    let worst = 0
+    for (const f of flashes) {
+      worst = Math.max(
+        worst,
+        flashes.filter((x) => x >= f && x < f + 1000).length
+      )
+    }
+    expect(
+      worst,
+      `worst one-second window held ${worst} general flashes`
+    ).toBeLessThanOrEqual(3)
+  })
+})
+
+test.describe('ASCII City Walk — find the traveler (CW-65, CW-Q60)', () => {
+  const KEY = 'openscad-forge-city-walk-progress-seattle'
+  const announcer = (page) => page.locator('#cityWalkAnnouncer')
+  const bubble = (page) => page.locator('#cityWalkFoundDialog')
+
+  const state = (page) =>
+    page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const at = g.traveler.position()
+      return {
+        found: Boolean(g.travelerFound),
+        spot: g.travelerSpot,
+        placed: g.traveler.isPlaced(),
+        at,
+        fromSpawn: at
+          ? Math.hypot(at[0] - g.spawn.x, at[1] - g.spawn.y)
+          : null,
+      }
+    })
+
+  /**
+   * Stand the player `d` metres due south of the traveler and face them.
+   * The camera is posed through the app's own firstPersonPose, never by
+   * writing walkState and hoping it followed (CW-63).
+   */
+  const standOff = (page, d) =>
+    page.evaluate(async (dist) => {
+      const g = window.__cityWalkGame
+      const wc = await import('/src/js/game/walk-controls.js')
+      const s = g.travelerSpot
+      g.walkState.x = s.x
+      g.walkState.y = s.y - dist
+      g.walkState.headingRad = 0
+      const p = wc.firstPersonPose(g.walkState)
+      g.fpCamera.position.set(...p.eye)
+      g.fpCamera.lookAt(...p.target)
+      g.altView.invalidate()
+    }, d)
+
+  test('★★ stands one traveler far from the spawn, and remembers where (CW-65)', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const first = await state(page)
+    expect(first.placed).toBe(true)
+    expect(first.found).toBe(false)
+    // The reward is walked to. 150 m is the floor the placement enforces;
+    // finding them in the first ten seconds is not a search.
+    expect(
+      Math.hypot(
+        first.spot.x - (await page.evaluate(() => window.__cityWalkGame.spawn.x)),
+        first.spot.y - (await page.evaluate(() => window.__cityWalkGame.spawn.y))
+      )
+    ).toBeGreaterThan(150)
+
+    // ★ The spot is WRITTEN on first entry, so closing the tab cannot re-roll
+    // the traveler - and it rides in CW-62's object rather than a sibling key.
+    const stored = await page.evaluate(
+      (k) => JSON.parse(localStorage.getItem(k)),
+      KEY
+    )
+    expect(stored.traveler.found).toBe(false)
+    expect(stored.traveler.x).toBeCloseTo(first.spot.x, 6)
+    expect(Array.isArray(stored.visited)).toBe(true)
+
+    // And a second visit finds them in the SAME place. Through launchGame,
+    // not page.reload(): the unlock rides in ITS query string, and a bare
+    // reload comes back to a gated card that never opens.
+    await launchGame(page)
+    await enterCity(page)
+    const second = await state(page)
+    expect(second.spot.x).toBeCloseTo(first.spot.x, 9)
+    expect(second.spot.y).toBeCloseTo(first.spot.y, 9)
+    expect(second.found).toBe(false)
+  })
+
+  test('★★ walking up to them opens a focus-safe bubble that persists (CW-65)', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    /**
+     * ★★ THE RADIUS HAS TO MEAN SOMETHING, AND THE FIRST VERSION OF THIS CASE
+     * COULD NOT TELL. It stood at 9 m, asserted the bubble hidden, then walked
+     * in - so deleting the radius check outright (the find firing at ANY
+     * distance) left all five cases GREEN. Red-proven and caught: a guard that
+     * cannot fail is not a guard.
+     *
+     * So walk a while from far away FIRST and assert nothing happens. This is
+     * the half that tests the radius; the approach below tests the find.
+     */
+    /**
+     * ★★ THE RADIUS HAS TO MEAN SOMETHING, AND TWO EARLIER VERSIONS OF THIS
+     * COULD NOT TELL. Deleting the radius check outright - the find firing at
+     * ANY distance - left all five cases GREEN, twice.
+     *
+     * The first attempt asserted the bubble hidden at 9 m before walking,
+     * which the defect passes trivially. The second walked from 30 m for
+     * 600 ms, and at the seven frames a second this suite renders at the
+     * player often had not moved AT ALL - and standing 30 m due south of the
+     * traveler puts them against a building, where holding the key for
+     * twenty-five seconds moves them nowhere.
+     *
+     * So the claim is: after a MOVEMENT FRAME HAS DEMONSTRABLY RUN, and while
+     * still outside the radius, nothing has fired. The snapshot is taken
+     * INSIDE the page at the first frame that qualifies, so there is no race
+     * between the check and the approach.
+     */
+    await standOff(page, 9)
+    await expect(bubble(page)).toBeHidden()
+    await page.locator('#cityWalkViewport').click({ position: { x: 400, y: 300 } })
+    await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      window.__cw65 = { from: { x: g.walkState.x, y: g.walkState.y }, seen: null }
+    })
+    await page.keyboard.down('ArrowUp')
+    await page.waitForFunction(
+      () => {
+        const g = window.__cityWalkGame
+        const p = window.__cw65
+        if (p.seen) return true
+        const moved = Math.hypot(
+          g.walkState.x - p.from.x,
+          g.walkState.y - p.from.y
+        )
+        const d = Math.hypot(
+          g.travelerSpot.x - g.walkState.x,
+          g.travelerSpot.y - g.walkState.y
+        )
+        // A frame that moved, taken while still clear of the radius.
+        if (moved > 0.5 && d > 6.8) {
+          p.seen = {
+            moved,
+            d,
+            found: Boolean(g.travelerFound),
+            hidden: document.getElementById('cityWalkFoundDialog').hidden,
+          }
+          return true
+        }
+        return false
+      },
+      undefined,
+      { timeout: 25000 }
+    )
+    const outside = await page.evaluate(() => window.__cw65.seen)
+    expect(outside, 'no movement frame was observed outside the radius').toBeTruthy()
+    expect(outside.found, `fired at ${outside.d.toFixed(1)}m`).toBe(false)
+    expect(outside.hidden, `bubble open at ${outside.d.toFixed(1)}m`).toBe(true)
+
+    // ★ STILL HELD, and held until it OPENS rather than for a fixed time. A
+    // wall-clock hold is a bet on the frame rate, and this suite renders at
+    // about seven frames a second where a headed browser gives sixty. The walk
+    // steps in hops of PLAYER_RADIUS_M / 2, so it cannot tunnel past a 6 m
+    // radius however slow the frames are; only the wait varies.
+    await expect(bubble(page)).toBeVisible({ timeout: 25000 })
+    await page.keyboard.up('ArrowUp')
+    await expect(announcer(page)).toContainText('You found the traveler')
+    // Focus moves to the one control the bubble has, so a keyboard player is
+    // not left hunting for it.
+    expect(await page.evaluate(() => document.activeElement?.id)).toBe(
+      'cityWalkFoundCloseBtn'
+    )
+
+    const stored = await page.evaluate(
+      (k) => JSON.parse(localStorage.getItem(k)),
+      KEY
+    )
+    expect(stored.traveler.found).toBe(true)
+
+    // Escape closes the bubble and NOTHING ELSE - it is the innermost thing
+    // on screen, one layer inside the travel dialog (CW-61's chain).
+    await page.keyboard.press('Escape')
+    await expect(bubble(page)).toBeHidden()
+    await expect(page.locator('#cityWalkLayer')).toBeVisible()
+    // Focus lands on a real control rather than <body>, which is D-59 and
+    // kills every key for the rest of the session.
+    const focus = await page.evaluate(() => document.activeElement?.id)
+    expect(focus).toBeTruthy()
+    expect(focus).not.toBe('')
+  })
+
+  test('★★ a city already found greets you with the companion and the badge (CW-65)', async ({
+    page,
+  }) => {
+    // Seeded rather than walked, so this case tests the RE-ENTRY path on its
+    // own - the walk is the previous case's job.
+    await page.addInitScript(
+      ([key, value]) => localStorage.setItem(key, value),
+      [
+        KEY,
+        JSON.stringify({
+          visited: [],
+          allFound: false,
+          traveler: { x: 400, y: 500, facing: 0, found: true },
+        }),
+      ]
+    )
+    await launchGame(page)
+    await enterCity(page)
+
+    const s = await state(page)
+    expect(s.found).toBe(true)
+    expect(s.placed).toBe(true)
+    // The companion stands BESIDE the spawn, not on it: a companion underfoot
+    // is the first thing a player collides with.
+    expect(s.fromSpawn).toBeGreaterThan(0.5)
+    expect(s.fromSpawn).toBeLessThan(6)
+
+    await page.keyboard.press('KeyM')
+    const badge = page.locator('.city-walk-legend-badge')
+    await expect(badge).toContainText('Traveler found')
+    // ★ A TEXT row, never an icon, and OUTSIDE the numbered list: refreshLegend
+    // indexes that list by game.landmarks[i], so an extra <li> would shift
+    // every landmark's compass direction by one.
+    expect(
+      await page.evaluate(
+        () =>
+          document.querySelector('.city-walk-legend-badge')?.closest('li') ===
+          null
+      )
+    ).toBe(true)
+  })
+
+  test('★★ X carries the search, and goes quiet once they are found (CW-65)', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const say = async (d) => {
+      await standOff(page, d)
+      await page.evaluate(() => {
+        document.getElementById('cityWalkAnnouncer').textContent = ''
+      })
+      await page.keyboard.press('KeyX')
+      await expect(announcer(page)).not.toHaveText('')
+      return page.evaluate(
+        () => document.getElementById('cityWalkAnnouncer').textContent
+      )
+    }
+
+    /**
+     * ★★ THIS CLAUSE IS THE SEARCH, NOT AN ACCESSIBILITY EXTRA, AND THE
+     * MEASUREMENT SAYS SO: a whole person is 2.5 x 4.2 character cells at
+     * 30 m, the jacket stops separating them from the crowd by about 20 m,
+     * and the city is 2.6 km across. Nobody finds one figure in that by
+     * looking, so the bands have to genuinely track distance.
+     */
+    const near = await say(25)
+    const mid = await say(200)
+    const far = await say(900)
+    expect(near).not.toBe(mid)
+    expect(mid).not.toBe(far)
+    expect(near).toContain('very near the traveler')
+    expect(far).toContain('a long way from here')
+    // Every band still carries the WHERE sentence it is appended to, because
+    // an announcement that replaced the street name would cost a blind player
+    // the map to buy them the game.
+    for (const said of [near, mid, far]) expect(said).toContain('facing')
+
+    // ★ Silent once found: "an empty clause is never spoken" is this
+    // function's own standing rule, and a warmer/colder hint about somebody
+    // standing beside you is noise.
+    await page.evaluate(() => {
+      window.__cityWalkGame.travelerFound = true
+      document.getElementById('cityWalkAnnouncer').textContent = ''
+    })
+    await page.keyboard.press('KeyX')
+    await expect(announcer(page)).not.toHaveText('')
+    const after = await page.evaluate(
+      () => document.getElementById('cityWalkAnnouncer').textContent
+    )
+    expect(after).not.toContain('traveler')
+    expect(after).toContain('facing')
+  })
+
+  test('axe: the traveler bubble has no violations (CW-65)', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+    await standOff(page, 9)
+    await page.locator('#cityWalkViewport').click({ position: { x: 400, y: 300 } })
+    await page.keyboard.down('ArrowUp')
+    await expect(bubble(page)).toBeVisible({ timeout: 25000 })
+    await page.keyboard.up('ArrowUp')
+
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .include('#cityWalkLayer')
+      .analyze()
+    expectOnlyAllowedViolations(results)
   })
 })

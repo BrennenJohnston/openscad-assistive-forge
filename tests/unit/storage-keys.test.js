@@ -99,8 +99,8 @@ const EXPECTED_KEYS = {
 
   // City Walk game (CW-Q16): colour on/off; absent means follow high contrast
   STORAGE_KEY_CITY_WALK_COLOUR: 'openscad-forge-city-walk-colour',
-  STORAGE_KEY_CITY_WALK_CAMERA_PANEL:
-    'openscad-drawer-camera-city-walk-state',
+  STORAGE_KEY_CITY_WALK_MAP_STYLE: 'openscad-forge-city-walk-map-style',
+  STORAGE_KEY_CITY_WALK_CAMERA_PANEL: 'openscad-drawer-camera-city-walk-state',
 };
 
 describe('storage-keys exported constants', () => {
@@ -216,6 +216,22 @@ describe('safeGetItem / safeSetItem / safeRemoveItem', () => {
 describe('storage-keys helpers', () => {
   it('getAppPrefKey generates openscad-forge-* keys', () => {
     expect(storageKeys.getAppPrefKey('theme')).toBe('openscad-forge-theme');
+  });
+
+  it('getCityWalkProgressKey is one key per city, under the app prefix', () => {
+    // CW-62. A key per city, because progress is per city - and the shape is
+    // pinned here because CW-64 and CW-65 are going to EXTEND its value
+    // rather than mint sibling keys beside it.
+    expect(storageKeys.getCityWalkProgressKey('seattle')).toBe(
+      'openscad-forge-city-walk-progress-seattle'
+    );
+    expect(storageKeys.getCityWalkProgressKey('denver')).toBe(
+      'openscad-forge-city-walk-progress-denver'
+    );
+    // Two cities never share a key, which is the whole point of the shape.
+    expect(storageKeys.getCityWalkProgressKey('seattle')).not.toBe(
+      storageKeys.getCityWalkProgressKey('burnaby')
+    );
   });
 
   it('getDrawerStateKey generates openscad-drawer-*-state keys', () => {

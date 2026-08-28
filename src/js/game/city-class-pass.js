@@ -60,10 +60,25 @@ export const SURFACE_CLASS = {
  * and reads as sky, which is the safe direction: an unclassified cell falls
  * back to the full glyph vocabulary it has always used.
  */
-const CLASS_BY_MESH_NAME = new Map([
+/**
+ * Exported so a test can ask the QUESTION THIS MAP KEEPS FAILING: does every
+ * mesh the city actually builds have a class here?
+ *
+ * A name missing from this map is not an error anywhere - the pass simply
+ * leaves that mesh out and it reads as SKY. That is a safe default for a mesh
+ * nobody added, and a silent, invisible defect for one somebody just did.
+ * CW-56 added a ground mesh that would have been dressed as sky and nothing
+ * would have said so; the guard in city-class-pass.test.js asks the builders
+ * themselves now.
+ */
+export const CLASS_BY_MESH_NAME = new Map([
   ['ground', SURFACE_CLASS.GROUND],
   ['roads', SURFACE_CLASS.ROAD],
   ['curbs', SURFACE_CLASS.CURB],
+  // CW-51: painted lines borrow the curb's voice rather than minting an id -
+  // the span table is exactly full, and a curb is already the thin ribbon
+  // that reads as dashes near and sub-samples away, which is what paint wants.
+  ['road-lines', SURFACE_CLASS.CURB],
   // buildings splits into wall and roof by normal; see ROOF_SPLIT below.
   ['buildings', SURFACE_CLASS.BUILDING_WALL],
   ['storefronts', SURFACE_CLASS.STOREFRONT],
@@ -84,6 +99,28 @@ const CLASS_BY_MESH_NAME = new Map([
   ['light-heads', SURFACE_CLASS.SIGN],
   // CW-33: the ground you walk on, and the ground you walk past.
   ['sidewalks', SURFACE_CLASS.SIDEWALK],
+  // CW-57 plantings, borrowed rather than minted - the span table is full.
+  // A planter is a knee-high box on the kerb, which is what a bench is, so it
+  // takes the same voice CW-43 gave the benches. Its FLOWERS are small and
+  // bright, which is what a sign face is. A picnic table is a low frame with a
+  // flat top, again a bench. A flowerbed is a patch of ground and takes the
+  // ground it lies on.
+  ['planters', SURFACE_CLASS.CAR],
+  ['planter-flowers', SURFACE_CLASS.SIGN],
+  ['picnic-tables', SURFACE_CLASS.CAR],
+  ['flowerbeds', SURFACE_CLASS.GREEN],
+  // CW-58: birds, PHOTOGRAPH-DECIDED against the three other candidates at one
+  // pose, one goose, 30%. The span table is FULL at 16, so this is a borrow
+  // and not a new id - CW-43's law.
+  //
+  // SIGN turned the bird into a solid slab: most mass, least shape. CAR banded
+  // it horizontally so the body read as a block with a neck stuck on. LAMP and
+  // PERSON both kept the head, neck and body separate; PERSON's striations run
+  // with the bird's own form, and it is also what the vocabulary is FOR - a
+  // small living thing standing on a surface, which is what CW-45 built it to
+  // draw. For a bird the silhouette is the whole picture, so the voice that
+  // preserves silhouette wins.
+  ['birds', SURFACE_CLASS.PERSON],
   ['greens', SURFACE_CLASS.GREEN],
   // CW-43 street furniture: dressed in the EXISTING voices of the things
   // they physically resemble — the span table (_gpuVocabLists,
@@ -97,6 +134,33 @@ const CLASS_BY_MESH_NAME = new Map([
   ['waste-baskets', SURFACE_CLASS.CAR],
   ['bike-racks', SURFACE_CLASS.CAR],
   ['hydrants', SURFACE_CLASS.LAMP],
+  // CW-64: a firework star. The span table is FULL at 16, so this is a borrow
+  // and not a new id (CW-43's law), and it is a DELIBERATE one - CW-56's
+  // builders guard cannot see this mesh at all, because it enumerates
+  // buildStreetProps and a firework is built beside the rain.
+  //
+  // ★★ AND THE FIRST VERSION OF THIS COMMENT WAS WRONG, WHICH IS WHY IT SAYS
+  // SO. It claimed an unmapped mesh "draws nothing" and blamed the sky's voice
+  // for a show that photographed empty. `_hfm.js` settles it in one line -
+  // `classMap ? (st.classLookups.get(classMap[idx]) ?? st.lookup) : st.lookup`
+  // - so an unclassed cell falls through to the DEFAULT vocabulary and still
+  // gets a glyph from its own luminance. A class decides WHICH glyph, never
+  // WHETHER. The empty frames were a clock mismatch in the builder, and the
+  // measurement that seemed to blame the class was an instrument drawing its
+  // stars a fifth of the size it thought.
+  //
+  // What the mapping is actually for: without it a burst would wear the same
+  // voice as the sky behind it. SIGN is small and bright, which is what a star
+  // is, and that is a LOOK decision - the right one, but not a visibility one.
+  ['fireworks', SURFACE_CLASS.SIGN],
+  // CW-65: the blind traveler. Not a borrow so much as the right voice - PERSON
+  // is literally the vocabulary CW-45 built to draw a small standing person,
+  // and this is one. Zero new class ids, so CW-43's law is not even tested.
+  //
+  // ★ Like `fireworks`, this mesh is built STANDALONE and CW-56's builders
+  // guard could not see it: that guard enumerates buildStreetProps. It asks the
+  // standalone builders too now, so the next one cannot slip through.
+  ['traveler', SURFACE_CLASS.PERSON],
 ]);
 
 /**
@@ -161,8 +225,30 @@ export function createClassPass(renderer, root) {
   let classMap = null;
   let disposed = false;
 
-  const materialFor = (id, roofId) => {
-    const key = `${id}:${roofId}`;
+  /**
+   * D-110: the class material must carry the mesh's own POLYGON OFFSET.
+   *
+   * Several of this city's surfaces are deliberately coplanar with the one
+   * behind them - a storefront strip on its wall, paint on its roadway, a
+   * pavement on the ground - and each is pulled forward by a polygon offset
+   * rather than by a gap, because a gap would show. Dressing a mesh in a
+   * material that drops that offset makes it coplanar again HERE, in the id
+   * buffer, where which surface wins is then decided by floating-point luck
+   * per pixel and re-rolled by any view change.
+   *
+   * MEASURED before the fix, over a 20-frame 0.05 degree turn at the Seattle
+   * spawn: 104,180 class transitions, 101,263 of them the storefront/wall
+   * pair, with 18,131 cells of 67,158 changing class MORE THAN ONCE. The
+   * class id chooses the cell's glyph vocabulary, so better than a quarter of
+   * the frame was re-rolling its character set frame after frame - which is
+   * the fractured flashing the owner reported.
+   *
+   * The offset is part of the cache key: two meshes of the same class with
+   * different offsets are different materials, and only the combinations that
+   * actually occur are ever built.
+   */
+  const materialFor = (id, roofId, offsetFactor, offsetUnits) => {
+    const key = `${id}:${roofId}:${offsetFactor}:${offsetUnits}`;
     let mat = materials.get(key);
     if (!mat) {
       mat = new ShaderMaterial({
@@ -176,10 +262,20 @@ export function createClassPass(renderer, root) {
         // No fog and no lighting: this pass encodes identity, and anything
         // that shades or blends it corrupts the number.
         fog: false,
+        polygonOffset: offsetFactor !== 0 || offsetUnits !== 0,
+        polygonOffsetFactor: offsetFactor,
+        polygonOffsetUnits: offsetUnits,
       });
       materials.set(key, mat);
     }
     return mat;
+  };
+
+  /** The depth bias a mesh's own material is drawn with, or none. */
+  const offsetOf = (material) => {
+    const own = Array.isArray(material) ? material[0] : material;
+    if (!own?.polygonOffset) return [0, 0];
+    return [own.polygonOffsetFactor ?? 0, own.polygonOffsetUnits ?? 0];
   };
 
   const ensureTarget = (cols, rows) => {
@@ -211,8 +307,14 @@ export function createClassPass(renderer, root) {
     root.traverse((obj) => {
       if (!obj.isMesh) return;
       const id = CLASS_BY_MESH_NAME.get(obj.name) ?? SURFACE_CLASS.SKY;
+      const [factor, units] = offsetOf(obj.material);
       originals.set(obj, obj.material);
-      obj.material = materialFor(id, ROOF_SPLIT.get(obj.name) ?? 0);
+      obj.material = materialFor(
+        id,
+        ROOF_SPLIT.get(obj.name) ?? 0,
+        factor,
+        units
+      );
     });
 
     const prevTarget = renderer.getRenderTarget();

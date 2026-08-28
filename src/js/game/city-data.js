@@ -86,14 +86,30 @@ export function resolveRoof(tags = {}, heightM = 0, minHeightM = 0) {
 
 // Visual approximation of paved width per highway class, in meters. These
 // are game-world ribbons, not survey data.
+//
+// CW-50 widened the four classes a walker actually stands beside. The old
+// numbers were the carriageway alone; these are curb to curb, which is what
+// the pavement runs against and therefore what the view has to be true to.
+// A US travel lane is 3.0-3.7 m and a parking lane about 2.4 m, so a
+// two-lane residential street with parking on both sides is nearer 8 m than
+// 6, and each step up the class ladder adds a lane's worth.
+//
+// unclassified moves with residential (CW-Q62): it is the same kind of street
+// and reading two metres narrower than an identical neighbour was an accident
+// of the class list, not a design. living_street stays at 6 because a shared
+// street is narrow ON PURPOSE - that narrowness is the traffic calming.
+//
+// primary and trunk therefore both sit at 14 m (CW-Q63, left deliberately):
+// both are major arterials, 14 m is honest for each, and widening trunk to
+// keep them distinct would only put more black surface in the frame.
 export const ROAD_WIDTHS_M = {
   motorway: 16,
   trunk: 14,
-  primary: 12,
-  secondary: 10,
-  tertiary: 8,
-  residential: 6,
-  unclassified: 6,
+  primary: 14,
+  secondary: 12,
+  tertiary: 10,
+  residential: 8,
+  unclassified: 8,
   living_street: 6,
   pedestrian: 8,
   service: 4,
@@ -213,6 +229,36 @@ export const FURNITURE_EMERGENCY_VALUES = ['fire_hydrant'];
  * kind (the Great Wheel is attraction=big_wheel).
  */
 export const ATTRACTION_TOURISM_VALUES = ['attraction'];
+
+/**
+ * CW-55 (CW-Q55): the planting and resting seeds CW-57 renders.
+ *
+ * One list per query family, the same bargain FURNITURE_* strikes: the bake
+ * asks for exactly these values and the parser types by them, so an extract
+ * can never carry what the game will not read and the game can never expect
+ * what the bake did not fetch.
+ *
+ * A planter is a node OR a way (a raised bed with a footprint); a flowerbed
+ * is a way, tagged either leisure or landuse, and deliberately NOT added to
+ * the GREEN_* lists - a flowerbed is a planting to be dressed, not a lawn to
+ * be coloured green. A picnic table is a node.
+ */
+export const PLANTER_MAN_MADE_VALUES = ['planter'];
+export const FLOWERBED_VALUES = ['flowerbed'];
+export const PICNIC_LEISURE_VALUES = ['picnic_table'];
+
+/**
+ * Whether tags make a CW-55 planting - a planter or a flowerbed. Kept apart
+ * from isGreenTags on purpose: these are dressed, not drawn as lawn.
+ */
+export function isPlantingTags(tags) {
+  if (!tags) return false;
+  return (
+    PLANTER_MAN_MADE_VALUES.includes(tags.man_made) ||
+    FLOWERBED_VALUES.includes(tags.leisure) ||
+    FLOWERBED_VALUES.includes(tags.landuse)
+  );
+}
 
 /** Whether a way's tags make it greenspace the game draws. */
 export function isGreenTags(tags) {
@@ -506,6 +552,11 @@ export function parseCityExtract(extract, options = {}) {
   const furniture = [];
   const wayfinding = [];
   const attractions = [];
+  // CW-55 (CW-Q55): the seeds CW-57 renders. Kept apart from `furniture`
+  // because furniture is DRAWN today and its counts are e2e-pinned; these
+  // ride the model until a release renders them.
+  const plantings = [];
+  const picnicTables = [];
   const partWays = [];
   let droppedRings = 0;
   let droppedElements = 0;
@@ -537,7 +588,33 @@ export function parseCityExtract(extract, options = {}) {
         continue;
       }
       if (tags.natural === 'tree') {
-        trees.push(projectLatLon(el.lat, el.lon, center));
+        // CW-55: a tree is a TYPED OBJECT now, not a bare [x, y]. What it is
+        // has to travel with where it is or CW-56 would need a parallel array
+        // keyed by index, which is the classic way for two lists to drift.
+        // There was exactly one consumer of the array form to convert.
+        const [x, y] = projectLatLon(el.lat, el.lon, center);
+        const tree = { x, y };
+        if (typeof tags.leaf_type === 'string') tree.leafType = tags.leaf_type;
+        if (typeof tags.genus === 'string') tree.genus = tags.genus;
+        if (typeof tags.species === 'string') tree.species = tags.species;
+        if (typeof tags.denotation === 'string') {
+          tree.denotation = tags.denotation;
+        }
+        trees.push(tree);
+        continue;
+      }
+      // CW-55: a planter node and a picnic table, typed at their true
+      // positions. Routed BEFORE the poi branch for the same reason a bench
+      // is: a picnic table is a leisure node and must not be handed to the
+      // storefront chooser.
+      if (PLANTER_MAN_MADE_VALUES.includes(tags.man_made)) {
+        const [x, y] = projectLatLon(el.lat, el.lon, center);
+        plantings.push({ x, y, kind: 'planter', areaM2: 0 });
+        continue;
+      }
+      if (PICNIC_LEISURE_VALUES.includes(tags.leisure)) {
+        const [x, y] = projectLatLon(el.lat, el.lon, center);
+        picnicTables.push({ x, y });
         continue;
       }
       // CW-43 (CW-Q43): rendered street furniture, typed, at the node's true
@@ -607,9 +684,21 @@ export function parseCityExtract(extract, options = {}) {
       // CW-33/CW-34: a shop or a place to eat, kept as a point with its kind.
       // Nothing is drawn AT the point - it says what sort of ground floor the
       // building nearest to it should wear.
+      //
+      // CW-53: a shop keeps its OWN VALUE, prefixed so the two tag families
+      // can never collide. This used to collapse all 1,042 shop nodes in the
+      // four extracts to one kind, which sent every one of them to the same
+      // ground floor - and the value was already in the extract, so nothing
+      // had to be rebaked to start reading it. The game decides which values
+      // are worth their own shopfront; the parser only stops throwing the
+      // answer away.
       if (tags.shop || tags.amenity) {
         const [x, y] = projectLatLon(el.lat, el.lon, center);
-        pois.push({ x, y, kind: tags.shop ? 'shop' : tags.amenity });
+        pois.push({
+          x,
+          y,
+          kind: tags.shop ? `shop:${tags.shop}` : tags.amenity,
+        });
         continue;
       }
       continue;
@@ -655,6 +744,11 @@ export function parseCityExtract(extract, options = {}) {
       }
       const { heightM, minHeightM } = resolveBuildingHeight(tags);
       buildings.push({
+        // CW-63: the OSM way id, carried so a landmark dressing can be keyed
+        // by it. A NAME would have been easier and is the wrong key: names
+        // are edited, translated and disambiguated upstream, and CW-62 has
+        // just recorded what names-as-identity costs when a rebake moves one.
+        id: el.id,
         outer,
         holes: [],
         heightM,
@@ -698,6 +792,7 @@ export function parseCityExtract(extract, options = {}) {
         // Round 1 simplification: every hole rides every outer ring of its
         // relation. Extra holes outside an outer are harmless to triangulate.
         buildings.push({
+          id: el.id,
           outer,
           holes,
           heightM,
@@ -754,6 +849,32 @@ export function parseCityExtract(extract, options = {}) {
       const ring = projectRing(el.geometry, center, true);
       if (ring) {
         greens.push({ outer: ring, kind: tags.leisure ?? tags.landuse });
+      } else {
+        droppedRings++;
+      }
+    }
+
+    // CW-55: a planter or a flowerbed mapped as a POLYGON. It is carried as a
+    // centroid and an area rather than as a ring, because what CW-57 needs is
+    // where the bed is and how much of it there is - a two-by-four pixel cell
+    // cannot show the shape of a flowerbed, and keeping the ring would put
+    // real bytes in every extract for a detail no one can see.
+    if (
+      el.type === 'way' &&
+      isPlantingTags(tags) &&
+      Array.isArray(el.geometry)
+    ) {
+      const ring = projectRing(el.geometry, center, true);
+      if (ring) {
+        const [x, y] = ringCentroid(ring);
+        plantings.push({
+          x,
+          y,
+          kind: PLANTER_MAN_MADE_VALUES.includes(tags.man_made)
+            ? 'planter'
+            : 'flowerbed',
+          areaM2: Math.round(Math.abs(signedArea(ring)) * 100) / 100,
+        });
       } else {
         droppedRings++;
       }
@@ -830,6 +951,10 @@ export function parseCityExtract(extract, options = {}) {
 
   return {
     center: { lat: center.lat, lon: center.lon },
+    // CW-51: the extract has always carried which city it is, and the model
+    // was dropping it on the floor. The scene needs it to give each city the
+    // pavement finish its own municipality actually specifies.
+    name: typeof extract?.name === 'string' ? extract.name : null,
     attribution:
       typeof extract?.attribution === 'string'
         ? extract.attribution
@@ -840,6 +965,8 @@ export function parseCityExtract(extract, options = {}) {
     trees,
     pois,
     furniture,
+    plantings,
+    picnicTables,
     wayfinding,
     attractions,
     boundsM,
@@ -864,6 +991,14 @@ export function parseCityExtract(extract, options = {}) {
       }, {}),
       wayfindingCount: wayfinding.length,
       attractionCount: attractions.length,
+      // CW-55: what the rebake carries for CW-56/57 to render.
+      plantingCount: plantings.length,
+      plantingByKind: plantings.reduce((acc, p) => {
+        acc[p.kind] = (acc[p.kind] ?? 0) + 1;
+        return acc;
+      }, {}),
+      picnicTableCount: picnicTables.length,
+      leafTypedTreeCount: trees.filter((t) => t.leafType).length,
     },
   };
 }
@@ -942,6 +1077,17 @@ export function trimOverpassElement(el) {
     'traffic_signals:vibration',
     // CW-44 (CW-Q44): the specific attraction kind (big_wheel, viewpoint…).
     'attraction',
+    // CW-55 (CW-Q55): what a tree IS, and where a planting is. genus and
+    // species are near-absent in all four cities and are kept anyway, at no
+    // measurable cost, so a later release never has to rebake to read them;
+    // leaf_type is the one that is actually there (Seattle 56%, Burnaby 70%)
+    // and is what CW-56 drives a species from. denotation says whether a tree
+    // is an avenue tree or a landmark. man_made carries the planter.
+    'genus',
+    'species',
+    'leaf_type',
+    'denotation',
+    'man_made',
   ];
 
   const trimTags = (tags) => {
@@ -966,12 +1112,16 @@ export function trimOverpassElement(el) {
     // CW-33 repeats the CW-26 lesson: keeping a tag is not enough, this gate
     // has to admit the way as well. A leisure=park polygon carries none of
     // the three keys above and would die here with its tags intact.
+    // CW-55 pays the gate lesson a FOURTH time: a planter way and a flowerbed
+    // way carry none of the keys above and would die here with their tags
+    // intact.
     if (
       !tags ||
       (!tags.building &&
         !tags.highway &&
         !tags['building:part'] &&
-        !isGreenTags(tags))
+        !isGreenTags(tags) &&
+        !isPlantingTags(tags))
     )
       return null;
     return { type: 'way', id: el.id, tags, geometry: el.geometry.map(roundPt) };
@@ -1007,6 +1157,8 @@ export function trimOverpassElement(el) {
     // enough — a bus stop (highway), a hydrant (emergency), a bare kerb or
     // tactile node, and an attraction (tourism/attraction) all die here
     // unless the gate admits them too.
+    // CW-55, a FOURTH time: a planter node (man_made) and a picnic table
+    // (leisure) have to be admitted here as well as kept above.
     if (
       !tags ||
       (!tags.natural &&
@@ -1017,7 +1169,9 @@ export function trimOverpassElement(el) {
         !tags.kerb &&
         !tags.tactile_paving &&
         !tags.tourism &&
-        !tags.attraction)
+        !tags.attraction &&
+        !tags.man_made &&
+        !tags.leisure)
     ) {
       return null;
     }

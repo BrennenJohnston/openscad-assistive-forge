@@ -8,8 +8,35 @@ import {
   ROAD_TONES,
   trafficLightState,
   buildRain,
+  tintOf,
+  inGamutChroma,
+  hashSpot,
+  CITY_PAVING,
+  STOREFRONT_BAND_NAMES,
+  storefrontBandFor,
+  CAR_HEADLAMP_TINT,
+  CAR_TAILLAMP_TINT,
+  glassTint,
+  CAR_TIERS,
+  CAR_CABIN_LIFT,
+  TRAVELER_LOOK,
+  TRAVELER_MIN_FROM_SPAWN_M,
+  buildTraveler,
+  pickTravelerSpot,
 } from '../../../src/js/game/city-scene.js'
-import { parseCityExtract } from '../../../src/js/game/city-data.js'
+import {
+  pickPaletteIndex,
+  parsePaletteColor,
+  normalizeChroma,
+} from '../../../src/js/_hfm-paint.js'
+import {
+  HC_PALETTE_GREEN,
+  HC_PALETTE_AMBER,
+} from '../../../src/js/game/hc-palettes.js'
+import {
+  parseCityExtract,
+  ROAD_WIDTHS_M,
+} from '../../../src/js/game/city-data.js'
 import {
   buildCollisionGrid,
   pointInRing,
@@ -72,7 +99,10 @@ describe('buildCityGroup', () => {
     expect(names).toContain('ground')
     expect(names).toContain('roads')
     expect(stats.buildingTriangles).toBeGreaterThan(0)
-    expect(stats.roadTriangles).toBe(2) // one segment = two triangles
+    // One segment is two triangles of roadway plus two more for each of its
+    // pavement aprons (CW-50): every street carries a pavement now, not only
+    // the ones OpenStreetMap maps a pavement for.
+    expect(stats.roadTriangles).toBe(6)
 
     dispose()
   })
@@ -156,9 +186,10 @@ describe('buildCityGroup — CW-8 distinctness', () => {
     expect(roads.material.color.getHex()).toBe(ROAD_TONES.street)
     expect(curbs).toBeDefined()
     expect(curbs.visible).toBe(true)
-    // Two curb ribbons per surface ribbon → 2× the triangle count.
+    // Each side of a roadway carries a curb TOP and a curb FACE (CW-50), so
+    // four ribbons' worth against the one roadway ribbon.
     expect(curbs.geometry.getAttribute('position').count).toBe(
-      roads.geometry.getAttribute('position').count * 2
+      roads.geometry.getAttribute('position').count * 4
     )
 
     setMapView(true)
@@ -195,6 +226,36 @@ describe('buildCityGroup — CW-8 distinctness', () => {
     }
     setCellRaster(1)
     for (const m of biased) expect(m.userData.cellLodBias.value).toBe(0)
+
+    dispose()
+  })
+
+  it('drives the cell raster on every surface that opts into it (D-111)', () => {
+    // The test above can only see materials that already carry the uniform,
+    // and it never asks WHICH ones do. A material that opts into the filter
+    // and is then left out of the driven list carries a bias uniform nothing
+    // ever writes: its shader says it is filtered for the cell grid while it
+    // renders at stock filtering at every character size. That is how the
+    // pavement shipped in CW-51, and only a check by NAME can see it.
+    const { group, setCellRaster, dispose } = buildCityGroup(model())
+    const opted = []
+    group.traverse((o) => {
+      if (o.isMesh && o.material?.userData?.cellLodBias) opted.push(o.name)
+    })
+    expect([...new Set(opted)].sort()).toEqual([
+      'buildings',
+      'ground',
+      'sidewalks',
+      'storefronts',
+    ])
+
+    setCellRaster(8)
+    const undriven = []
+    group.traverse((o) => {
+      const bias = o.isMesh ? o.material?.userData?.cellLodBias : null
+      if (bias && bias.value !== 3) undriven.push(o.name)
+    })
+    expect(undriven).toEqual([])
 
     dispose()
   })
@@ -431,9 +492,13 @@ describe('buildStreetProps (CW-16)', () => {
       minAbsY = Math.min(minAbsY, Math.abs(a[i + 1]))
       maxZ = Math.max(maxZ, a[i + 2])
     }
-    // The residential road is 6 m wide, so its curb line runs at 2.5-3.0 m.
-    // A car turned across the road, or parked on the sidewalk, breaks this.
-    expect(maxAbsY).toBeLessThanOrEqual(2.5)
+    // Parked cars sit inside the curb ribbon, whose inner edge runs half a
+    // road width in, less the 0.5 m ribbon. Derived from the width rather
+    // than written out, because CW-50 moved it and will not be the last to.
+    // What this catches - a car turned across the road, or parked on the
+    // pavement - stays the same whatever the class is worth.
+    const curbInnerM = ROAD_WIDTHS_M.residential / 2 - 0.5
+    expect(maxAbsY).toBeLessThanOrEqual(curbInnerM + 1e-3)
     expect(minAbsY).toBeGreaterThan(0.4)
     // CW-46: parked cars are CLASSES now - the tallest (pickup/SUV) tops
     // out at 1.9 m and nothing exceeds the class table.
@@ -580,12 +645,15 @@ describe('buildStreetProps — streetlights (CW-18)', () => {
     const poles = verticesOf(props.group, 'lamp-poles')
     expect(poles.length).toBeGreaterThan(0)
 
-    // The road runs along y = 0 at width 6, so every pole stands on the
-    // 3.45 m sidewalk line of one side or the other and nowhere in between
-    // (a vertex sits half the 0.15 m post off that line).
+    // The road runs along y = 0, so every pole stands 0.45 m beyond its edge
+    // on one side or the other and nowhere in between (a vertex sits half the
+    // 0.15 m post off that line). Derived from the class width, which CW-50
+    // moved: the invariant is that poles line up on the pavement, not the
+    // particular metre they line up on.
+    const poleLineM = ROAD_WIDTHS_M.residential / 2 + 0.45
     const sides = new Set()
     for (const [, y] of poles) {
-      expect(Math.abs(Math.abs(y) - 3.45)).toBeLessThanOrEqual(0.076)
+      expect(Math.abs(Math.abs(y) - poleLineM)).toBeLessThanOrEqual(0.076)
       sides.add(Math.sign(y))
     }
     expect(sides.size).toBe(2)
@@ -604,8 +672,8 @@ describe('buildStreetProps — streetlights (CW-18)', () => {
       // line by more than three metres.
       expect(z).toBeGreaterThan(5.7)
       expect(z).toBeLessThan(5.9)
-      // Reaching back toward the centerline from the 3.45 m pole line.
-      expect(Math.abs(y)).toBeLessThan(3.45)
+      // Reaching back toward the centerline from the pole line.
+      expect(Math.abs(y)).toBeLessThan(ROAD_WIDTHS_M.residential / 2 + 0.45)
     }
 
     for (const [, , z] of verticesOf(props.group, 'lamp-poles')) {
@@ -1306,5 +1374,972 @@ describe('cars are cars (CW-46, CW-Q46)', () => {
       }
     }
     props.dispose()
+  })
+})
+
+describe('figure tones follow the colour scheme (CW-49)', () => {
+  // sRGB luma, the same weights tintOf balances against.
+  const lum = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b
+  const HUES = [0, 30, 60, 120, 180, 270, 300, 330]
+
+  it('keeps a tone at its tier for EVERY hue, which is what mono reads', () => {
+    // tintOf holds luminance at the tier by moving channels apart, but it
+    // clamps, and a clamped channel silently breaks that. The monochrome
+    // schemes have only luminance to go on, so a tone that drifts off its
+    // tier moves them - which the head tone must never do.
+    for (const tier of [0.45, 0.65, 0.82, 0.9]) {
+      for (const hue of HUES) {
+        const c = inGamutChroma(tier, hue, 0.5)
+        expect(c, `tier ${tier} hue ${hue}`).toBeLessThanOrEqual(0.5)
+        expect(lum(tintOf(tier, hue, c)), `tier ${tier} hue ${hue}`).toBeCloseTo(
+          tier,
+          12
+        )
+      }
+    }
+  })
+
+  it('shows that the unlimited chroma really would have drifted', () => {
+    // The control for the test above: without the limit, a warm hue at the
+    // head tier lands measurably off its tier. A guard nobody has watched
+    // fail is a guard nobody should trust.
+    const drifted = lum(tintOf(0.82, 0, 0.5))
+    expect(drifted).toBeLessThan(0.8)
+    expect(lum(tintOf(0.82, 0, inGamutChroma(0.82, 0, 0.5)))).toBeCloseTo(
+      0.82,
+      12
+    )
+  })
+
+  it('gives a spot the same hue every time, and spreads hues over spots', () => {
+    // The head hue comes from the spot, not from a draw on the shared prop
+    // stream, so it must be stable per spot and varied across them.
+    expect(hashSpot(12.5, -8.25)).toBe(hashSpot(12.5, -8.25))
+    expect(hashSpot(12.5, -8.25)).not.toBe(hashSpot(-8.25, 12.5))
+
+    const seen = new Map()
+    for (let i = 0; i < 4000; i++) {
+      const h = HUES[hashSpot(i * 0.37, i * -0.61) % HUES.length]
+      seen.set(h, (seen.get(h) ?? 0) + 1)
+    }
+    expect(seen.size).toBe(HUES.length)
+    for (const [hue, n] of seen) {
+      // Even coverage would be 500; this only rejects a hash that collapses.
+      expect(n, `hue ${hue} drawn ${n} times`).toBeGreaterThan(200)
+    }
+  })
+})
+
+describe('road lines (CW-51)', () => {
+  /** A long arterial and a long residential, on one model. */
+  function linesModel() {
+    return parseCityExtract(
+      {
+        elements: [
+          {
+            type: 'way',
+            id: 1,
+            tags: { building: 'yes', height: '12' },
+            geometry: squareRing(-90, -90, 5),
+          },
+          {
+            type: 'way',
+            id: 2,
+            tags: { highway: 'primary' },
+            geometry: [pt(-60, 0), pt(60, 0)],
+          },
+          {
+            type: 'way',
+            id: 3,
+            tags: { highway: 'residential' },
+            geometry: [pt(-60, 40), pt(60, 40)],
+          },
+        ],
+      },
+      { center: CENTER }
+    )
+  }
+
+  const lineMesh = (group) =>
+    group.children.find((c) => c.name === 'road-lines')
+
+  it('paints arterials and leaves residential streets bare', () => {
+    const { group, dispose } = buildCityGroup(linesModel())
+    const lines = lineMesh(group)
+    expect(lines, 'the arterial got no paint at all').toBeDefined()
+
+    // Every painted vertex sits on the arterial at y=0, never on the
+    // residential street at y=40. OpenStreetMap carries no road_marking tags
+    // in any baked circle, so the CLASS is the only signal there is, and this
+    // is what pins that it is being read.
+    const a = lines.geometry.getAttribute('position').array
+    let maxAbsY = 0
+    for (let i = 0; i < a.length; i += 3) {
+      maxAbsY = Math.max(maxAbsY, Math.abs(a[i + 1]))
+    }
+    expect(maxAbsY).toBeLessThan(1)
+
+    dispose()
+  })
+
+  it('dashes rather than running an unbroken stripe', () => {
+    const { group, dispose } = buildCityGroup(linesModel())
+    const a = lineMesh(group).geometry.getAttribute('position').array
+    // Total painted length along the road, from the triangles themselves.
+    // Two triangles per dash, six vertices; the run is the x-spread.
+    let painted = 0
+    for (let i = 0; i + 17 < a.length; i += 18) {
+      let lo = Infinity
+      let hi = -Infinity
+      for (let v = 0; v < 6; v++) {
+        const x = a[i + v * 3]
+        lo = Math.min(lo, x)
+        hi = Math.max(hi, x)
+      }
+      painted += hi - lo
+    }
+    // The arterial is 120 m long and the skip line is 3 m painted in every
+    // 12 m, so about a quarter of it carries paint. A builder that forgot to
+    // leave gaps would report the whole 120.
+    expect(painted).toBeGreaterThan(20)
+    expect(painted).toBeLessThan(45)
+
+    dispose()
+  })
+
+  it('lies flat on the roadway, below the pavement it runs between', () => {
+    const { group, dispose } = buildCityGroup(linesModel())
+    const a = lineMesh(group).geometry.getAttribute('position').array
+    for (let i = 2; i < a.length; i += 3) {
+      // Paint is on the road, which CW-50 cut a curb's depth below pavement.
+      expect(a[i]).toBeLessThan(0)
+    }
+    dispose()
+  })
+})
+
+describe('per-city paving (CW-51, CW-Q51)', () => {
+  it('gives each city the finish its own municipality specifies', () => {
+    // Two of these are the owner's words and two were fetched from the
+    // cities' own standards. Denver and Burnaby SHARE a finish because they
+    // genuinely specify the same one - Denver Parks and Recreation requires a
+    // broom finish on all concrete walkways, and Burnaby's Supplementary
+    // Specifications adopt MMCD 03 30 20, which specifies broom finish too.
+    // Inventing a difference so four cities looked four ways would have been
+    // the dishonest option, so this pins the sharing on purpose.
+    expect(CITY_PAVING.seattle).toBe('aggregate')
+    expect(CITY_PAVING.albuquerque).toBe('cracked')
+    expect(CITY_PAVING.denver).toBe('broom')
+    expect(CITY_PAVING.burnaby).toBe('broom')
+    expect(CITY_PAVING.denver).toBe(CITY_PAVING.burnaby)
+  })
+
+  it('carries the city name out of the extract so the scene can read it', () => {
+    // The extract has always had it; the model was dropping it on the floor.
+    const named = parseCityExtract(
+      { name: 'denver', elements: [] },
+      { center: CENTER }
+    )
+    expect(named.name).toBe('denver')
+    // An extract without one still parses, and the scene falls back.
+    expect(parseCityExtract({ elements: [] }, { center: CENTER }).name).toBeNull()
+  })
+
+  it('gives pavements real-world UVs so paving keeps one scale', () => {
+    const { group, dispose } = buildCityGroup(model())
+    const walks = group.children.find((c) => c.name === 'sidewalks')
+    expect(walks, 'the model grew no pavement').toBeDefined()
+
+    const uv = walks.geometry.getAttribute('uv')
+    expect(uv, 'pavements have no UVs, so no paving can land on them').toBeDefined()
+    expect(uv.count).toBe(walks.geometry.getAttribute('position').count)
+
+    // UVs are in METRES along the ribbon, not normalized 0..1: the road in
+    // this fixture is 100 m long, so v has to run far past 1. Normalized UVs
+    // would stretch one paving tile over a whole street.
+    let maxV = 0
+    for (let i = 0; i < uv.count; i++) maxV = Math.max(maxV, uv.getY(i))
+    expect(maxV).toBeGreaterThan(50)
+
+    dispose()
+  })
+})
+
+
+/**
+ * CW-53: twenty ground floors instead of five, and the map data decides which
+ * one a corner wears wherever the map knows.
+ *
+ * The band index is baked into every storefront's UVs, so it can be read back
+ * out of the built geometry - which is what these cases do rather than
+ * trusting the table they are meant to be guarding.
+ */
+describe('buildCityGroup — twenty storefront bands (CW-53)', () => {
+  const STOREFRONT_HEIGHT_M = 3.5
+
+  /** One building, optionally with a POI node beside it and its own tags. */
+  function oneBuilding({ buildingTags = { building: 'yes', height: '25' }, poi } = {}) {
+    const elements = [
+      { type: 'way', id: 1, tags: buildingTags, geometry: squareRing(0, 0, 5) },
+      {
+        type: 'way',
+        id: 3,
+        tags: { highway: 'residential' },
+        geometry: [pt(-50, 20), pt(50, 20)],
+      },
+    ]
+    if (poi) {
+      const [x, y] = poi.at ?? [8, 0]
+      elements.push({ type: 'node', id: 900, tags: poi.tags, ...pt(x, y) })
+    }
+    return parseCityExtract({ elements }, { center: CENTER })
+  }
+
+  /**
+   * The band a built city put its one storefront on.
+   *
+   * The band is applied as a UV OFFSET of band x STOREFRONT_HEIGHT_M, and the
+   * strip's own v is centred on zero for a building at the origin - so it is
+   * the CENTRE of the v range that names the band, not its minimum. Measured:
+   * a bakery node beside this fixture puts the range at 57.53..68.47, whose
+   * centre is exactly 18 x 3.5.
+   */
+  function bandOf(m) {
+    const { group, dispose } = buildCityGroup(m)
+    const mesh = group.children.find((c) => c.name === 'storefronts')
+    expect(mesh, 'this fixture grew no storefront at all').toBeDefined()
+    const uv = mesh.geometry.getAttribute('uv')
+    expect(uv, 'the storefront strip carries no UVs').toBeTruthy()
+    let minV = Infinity
+    let maxV = -Infinity
+    for (let i = 0; i < uv.count; i++) {
+      minV = Math.min(minV, uv.getY(i))
+      maxV = Math.max(maxV, uv.getY(i))
+    }
+    dispose()
+    const band = (minV + maxV) / 2 / STOREFRONT_HEIGHT_M
+    // If the UV scheme ever changes shape, this readout stops meaning a band
+    // and every case below would quietly agree with itself instead.
+    expect(
+      Math.abs(band - Math.round(band)),
+      `the storefront v range ${minV}..${maxV} is not centred on a band`
+    ).toBeLessThan(0.01)
+    return Math.round(band)
+  }
+
+  it('names its twenty bands, in the order their indices mean', () => {
+    // Design data the owner can veto row by row. The index is baked into
+    // shipped UVs, so a reordering is not a cosmetic change.
+    expect(STOREFRONT_BAND_NAMES).toEqual([
+      'glass',
+      'awning',
+      'shutter',
+      'arcade',
+      'service',
+      'cafe-tables',
+      'barfront',
+      'market',
+      'lobby',
+      'roller',
+      'restaurant',
+      'fastfood',
+      'clothes',
+      'salon',
+      'grocer',
+      'hotel',
+      'bank',
+      'vacant',
+      'bakery',
+      'marquee',
+    ])
+  })
+
+  it('sends each kind the map knows to the band that was measured for it', () => {
+    const bandNamed = (name) => STOREFRONT_BAND_NAMES.indexOf(name)
+    expect(storefrontBandFor('restaurant')).toBe(bandNamed('restaurant'))
+    expect(storefrontBandFor('fast_food')).toBe(bandNamed('fastfood'))
+    expect(storefrontBandFor('cafe')).toBe(bandNamed('cafe-tables'))
+    expect(storefrontBandFor('bar')).toBe(bandNamed('barfront'))
+    expect(storefrontBandFor('pub')).toBe(bandNamed('barfront'))
+    expect(storefrontBandFor('bank')).toBe(bandNamed('bank'))
+    expect(storefrontBandFor('theatre')).toBe(bandNamed('marquee'))
+    expect(storefrontBandFor('cinema')).toBe(bandNamed('marquee'))
+    expect(storefrontBandFor('marketplace')).toBe(bandNamed('market'))
+    expect(storefrontBandFor('library')).toBe(bandNamed('lobby'))
+    expect(storefrontBandFor('hotel')).toBe(bandNamed('hotel'))
+    expect(storefrontBandFor('shop:clothes')).toBe(bandNamed('clothes'))
+    expect(storefrontBandFor('shop:hairdresser')).toBe(bandNamed('salon'))
+    expect(storefrontBandFor('shop:convenience')).toBe(bandNamed('grocer'))
+    expect(storefrontBandFor('shop:bakery')).toBe(bandNamed('bakery'))
+    expect(storefrontBandFor('shop:vacant')).toBe(bandNamed('vacant'))
+  })
+
+  it('keeps an unlisted shop as a shop instead of dropping it to the hash', () => {
+    // shop=gift is 57 nodes across the four extracts and has no band of its
+    // own. Letting it fall through would throw away the one thing the map
+    // recorded about that corner, which is the opposite of what keeping the
+    // shop value was for.
+    expect(storefrontBandFor('shop:gift')).toBe(
+      STOREFRONT_BAND_NAMES.indexOf('glass')
+    )
+    expect(storefrontBandFor('shop:jewelry')).toBe(
+      STOREFRONT_BAND_NAMES.indexOf('glass')
+    )
+    // A kind nobody mapped falls to the hash, and says so with null.
+    expect(storefrontBandFor('townhall')).toBeNull()
+    expect(storefrontBandFor(null)).toBeNull()
+  })
+
+  it('dresses a corner as what the map says stands on it', () => {
+    expect(bandOf(oneBuilding({ poi: { tags: { shop: 'bakery' } } }))).toBe(
+      STOREFRONT_BAND_NAMES.indexOf('bakery')
+    )
+    expect(bandOf(oneBuilding({ poi: { tags: { amenity: 'restaurant' } } }))).toBe(
+      STOREFRONT_BAND_NAMES.indexOf('restaurant')
+    )
+    expect(bandOf(oneBuilding({ poi: { tags: { shop: 'vacant' } } }))).toBe(
+      STOREFRONT_BAND_NAMES.indexOf('vacant')
+    )
+    // And an unlisted shop still reads as a shop rather than as a dice roll.
+    expect(bandOf(oneBuilding({ poi: { tags: { shop: 'gift' } } }))).toBe(
+      STOREFRONT_BAND_NAMES.indexOf('glass')
+    )
+  })
+
+  it("lets a hotel's own tag beat the shop next door", () => {
+    // Every one of the 75 hotels in the four extracts is a WAY, never a node,
+    // so the POI index can never see one - a hotel has to be read off the
+    // building itself.
+    const m = oneBuilding({
+      buildingTags: { building: 'yes', height: '25', tourism: 'hotel' },
+      poi: { tags: { shop: 'bakery' } },
+    })
+    expect(bandOf(m)).toBe(STOREFRONT_BAND_NAMES.indexOf('hotel'))
+  })
+
+  it('counts what landed on each band, so a dead band can be seen', () => {
+    // A band nobody uses and a band everybody uses look identical in a
+    // texture. Measured on the real extracts with this counter: all twenty
+    // bands are used in all four cities, and each city's shape is its own -
+    // Seattle restaurant 12.7% against Albuquerque's much flatter spread,
+    // which is what a city with fewer mapped POIs should look like.
+    const { stats, dispose } = buildCityGroup(model())
+    expect(stats.storefrontBands).toHaveLength(STOREFRONT_BAND_NAMES.length)
+    // This model has two buildings and only one of them is grounded, so the
+    // counter must total exactly one - a count that merely exceeded zero
+    // would pass just as happily if it were counting something else.
+    expect(stats.storefrontBands.reduce((a, b) => a + b, 0)).toBe(1)
+    dispose()
+
+    // And a POI moves the count onto its own band rather than anywhere else.
+    const withBakery = buildCityGroup(
+      oneBuilding({ poi: { tags: { shop: 'bakery' } } })
+    )
+    const bakery = STOREFRONT_BAND_NAMES.indexOf('bakery')
+    expect(withBakery.stats.storefrontBands[bakery]).toBe(1)
+    expect(
+      withBakery.stats.storefrontBands.reduce((a, b) => a + b, 0)
+    ).toBe(1)
+    withBakery.dispose()
+  })
+
+  it('is deterministic, and a building with no POI still varies', () => {
+    // THE SEED LAW: the hash draw is the same draw it has always been, so the
+    // same city dresses the same way twice.
+    const plain = () => bandOf(oneBuilding())
+    const first = plain()
+    expect(plain()).toBe(first)
+    expect(first).toBeGreaterThanOrEqual(0)
+    expect(first).toBeLessThan(STOREFRONT_BAND_NAMES.length)
+  })
+})
+
+
+/**
+ * CW-54: cars have wheels and the driving ones have their lights on.
+ *
+ * The lamp numbers are decided by the luminance ladder, not by taste, so what
+ * has to be guarded is that they still SIT on it after tintOf has had its way
+ * with them - and that a converter in colour mode still reads the hue out of a
+ * tint whose chroma had to be cut to almost nothing to stay in gamut.
+ */
+describe('buildStreetProps — car anatomy and lamps (CW-54)', () => {
+  const LUM = [0.2126, 0.7152, 0.0722]
+  const luminance = (t) => t[0] * LUM[0] + t[1] * LUM[1] + t[2] * LUM[2]
+
+  it('keeps the lamp luminances the ladder was told they would be', () => {
+    // tintOf CLAMPS, and a clamped channel silently voids the luminance it
+    // promised - which is the whole reason inGamutChroma exists. A head lamp
+    // has to stay clear of the 0.80 reverse-video threshold to read as a lit
+    // POINT and clear of the 0.93-0.95 storefront reserve so it does not
+    // invade it; a tail lamp is dimmer because a tail light is.
+    expect(luminance(CAR_HEADLAMP_TINT)).toBeCloseTo(0.92, 4)
+    expect(luminance(CAR_TAILLAMP_TINT)).toBeCloseTo(0.82, 4)
+    // The tail lamp also has a CEILING, which is the whole of D-112: past
+    // about 0.837 its in-gamut red is so pale that the encoded canvas reads it
+    // as white. 0.82 is the middle of the window between that and the 0.80
+    // floor below.
+    expect(luminance(CAR_TAILLAMP_TINT)).toBeLessThan(0.835)
+    // Both cross the reverse-video threshold, so both read as lit POINTS
+    // rather than as bright grey.
+    expect(luminance(CAR_HEADLAMP_TINT)).toBeGreaterThan(0.8)
+    expect(luminance(CAR_TAILLAMP_TINT)).toBeGreaterThan(0.8)
+    // And the head lamp is at least as bright as the brightest paint a car
+    // can wear - a top-tier cabin, 0.8 + 0.12 - without reaching the 0.93
+    // floor of the storefront reserve. That window is one hundredth wide,
+    // which is why the number is measured rather than chosen.
+    const brightestCabin = Math.max(...CAR_TIERS) + CAR_CABIN_LIFT
+    expect(luminance(CAR_HEADLAMP_TINT)).toBeGreaterThanOrEqual(
+      brightestCabin - 1e-6
+    )
+    expect(luminance(CAR_HEADLAMP_TINT)).toBeLessThan(0.93)
+  })
+
+  it('still lands the colour each lamp is meant to be, ENCODED (D-112)', () => {
+    // The tail lamp's chroma had to fall from the 0.75 asked for to about 0.18
+    // to keep its luminance where the ladder wants it - a saturated red simply
+    // is not that bright - and what survives is a pale pink. Whether a
+    // converter can still read RED out of that depends entirely on WHICH
+    // NUMBERS IT IS HANDED.
+    //
+    // This is D-112. The tint is linear light; the canvas the converter samples
+    // has been through the renderer's output encoding, and sRGB's toe lifts the
+    // green and blue channels much closer to the red one. Handed the linear
+    // tint, pickPaletteIndex says red at every tier this lamp could plausibly
+    // take, which is why the first version of this guard was green while a
+    // photograph of the same lamp came back white. Encode first, and the guard
+    // has an opinion: at 0.85 it says #ffffff, at 0.82 it says #ff3333.
+    const encode = (c) =>
+      c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055
+    const normalized = (p) => p.map((c) => normalizeChroma(parsePaletteColor(c)))
+    const entry = (tint, palette) => {
+      const e = tint.map(encode)
+      return palette[pickPaletteIndex(e[0], e[1], e[2], normalized(palette), 5)]
+    }
+    expect(entry(CAR_TAILLAMP_TINT, HC_PALETTE_GREEN)).toBe('#ff3333')
+    expect(entry(CAR_TAILLAMP_TINT, HC_PALETTE_AMBER)).toBe('#ff2d95')
+    // A head lamp is white, and lands white. The linear-space reading called
+    // it yellow; the encoded one, which is the one the frame agrees with, does
+    // not.
+    expect(entry(CAR_HEADLAMP_TINT, HC_PALETTE_GREEN)).toBe('#ffffff')
+    expect(entry(CAR_HEADLAMP_TINT, HC_PALETTE_AMBER)).toBe('#ffffff')
+  })
+
+  it('glazes every car the same cool colour without moving mono (CW-54)', () => {
+    // The cabin used to take the car's own paint hue, so a red car had red
+    // windows. It takes one fixed cool tint now - and the whole point of the
+    // exercise is that a MONOCHROME screen cannot tell, because luminance
+    // alone is what it reads. That promise only holds while nothing clamps,
+    // which is why glassTint goes through inGamutChroma: pin the four cabin
+    // luminances exactly, and the promise is a fact rather than an intention.
+    const cabins = CAR_TIERS.map((t) => Math.min(1, t + CAR_CABIN_LIFT))
+    const tints = CAR_TIERS.map((t) => glassTint(t))
+    tints.forEach((tint, i) => {
+      expect(luminance(tint)).toBeCloseTo(cabins[i], 6)
+      // Cool: blue above green above red, on every tier.
+      expect(tint[2]).toBeGreaterThan(tint[1])
+      expect(tint[1]).toBeGreaterThan(tint[0])
+    })
+    // ENCODED (D-112), the three lower cabins read cool and the brightest one
+    // cannot: at 0.92 the gamut caps the chroma at 0.204, under the 0.235 it
+    // would need. That is the ladder's arithmetic, not a tuning choice, and it
+    // is pinned so a later change to the tiers cannot quietly whiten the rest.
+    const encode = (c) =>
+      c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055
+    const normalized = (p) => p.map((c) => normalizeChroma(parsePaletteColor(c)))
+    const landed = tints.map((tint) => {
+      const e = tint.map(encode)
+      return HC_PALETTE_GREEN[
+        pickPaletteIndex(e[0], e[1], e[2], normalized(HC_PALETTE_GREEN), 5)
+      ]
+    })
+    expect(landed).toEqual(['#00ffff', '#00ffff', '#00ffff', '#ffffff'])
+
+    // And it is WIRED IN, not merely available. Without this the whole case
+    // passes with both call sites still handing the cabin the paint hue.
+    const m = propsModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    const cars = props.group.children.find((c) => c.name === 'cars')
+    const col = cars.geometry.getAttribute('color')
+    const wears = (tint) => {
+      for (let i = 0; i < col.count; i++) {
+        if (
+          Math.abs(col.getX(i) - tint[0]) < 1e-4 &&
+          Math.abs(col.getY(i) - tint[1]) < 1e-4 &&
+          Math.abs(col.getZ(i) - tint[2]) < 1e-4
+        ) {
+          return true
+        }
+      }
+      return false
+    }
+    expect(tints.some(wears), 'no parked cabin wears a glass tint').toBe(true)
+    props.dispose()
+  })
+
+  it('lights the traffic and leaves the parked cars dark', () => {
+    // A parked car is parked. Lighting the kerbside rows would also string
+    // bright points down every street, which is the carpet law's territory.
+    //
+    // Asked as "does this mesh CONTAIN a lamp tint", not "which mesh is
+    // brighter" - the first form of this compared brightest luminances and
+    // failed, because a top-tier parked cabin is already 0.92 and the lamps
+    // sit in the same neighbourhood on purpose. Presence is the fact; the
+    // brightness ordering never was one.
+    // The plain fixture's road is 100 m of residential, which is 0.8 traffic
+    // cars and therefore none - and the first form of this case guarded the
+    // traffic half with `if (traffic)`, so it passed happily with the lamps
+    // removed entirely.
+    //
+    // The road added here is 120 m of secondary and it is INSIDE THE MODEL
+    // BOUNDS, which the buildings set at plus or minus 66 m. Props are placed
+    // only within those bounds, so a longer road laid across them grows no
+    // traffic at all - measured: 400 m at y=40 gives zero, 120 m at y=25
+    // gives five.
+    const m = propsModel([
+      {
+        type: 'way',
+        id: 99,
+        tags: { highway: 'secondary' },
+        geometry: [pt(-60, 25), pt(60, 25)],
+      },
+    ])
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    const parked = props.group.children.find((c) => c.name === 'cars')
+    const traffic = props.group.children.find((c) => c.name === 'traffic-cars')
+    expect(parked, 'this fixture parked no cars').toBeDefined()
+    expect(
+      traffic,
+      'this fixture grew no frozen traffic, so the lamp half would measure nothing'
+    ).toBeDefined()
+
+    const hasTint = (mesh, tint) => {
+      const c = mesh.geometry.getAttribute('color')
+      for (let i = 0; i < c.count; i++) {
+        if (
+          Math.abs(c.getX(i) - tint[0]) < 1e-4 &&
+          Math.abs(c.getY(i) - tint[1]) < 1e-4 &&
+          Math.abs(c.getZ(i) - tint[2]) < 1e-4
+        ) {
+          return true
+        }
+      }
+      return false
+    }
+    expect(hasTint(parked, CAR_HEADLAMP_TINT)).toBe(false)
+    expect(hasTint(parked, CAR_TAILLAMP_TINT)).toBe(false)
+    expect(hasTint(traffic, CAR_HEADLAMP_TINT)).toBe(true)
+    expect(hasTint(traffic, CAR_TAILLAMP_TINT)).toBe(true)
+    props.dispose()
+  })
+
+  it('stands every car on its wheels, with the body lifted clear', () => {
+    // The body used to sit flush on the ground, which is why a parked row read
+    // as a low dotted mass.
+    //
+    // The tell is not how MANY vertices reach the ground - four wheel boxes
+    // put more there than one flush body did, measured 0.30 against 0.19, so
+    // that ratio moves the wrong way. It is that a box has vertices only at
+    // its two ends in z, so a car whose body starts at a ride height has
+    // vertices AT that ride height and a flush one has none. Both clearances
+    // in the table are checked because both classes park here.
+    const m = propsModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    const cars = props.group.children.find((c) => c.name === 'cars')
+    const a = cars.geometry.getAttribute('position').array
+    let minZ = Infinity
+    let atClearance = 0
+    for (let i = 2; i < a.length; i += 3) {
+      minZ = Math.min(minZ, a[i])
+      if (Math.abs(a[i] - 0.2) < 1e-3 || Math.abs(a[i] - 0.28) < 1e-3) {
+        atClearance++
+      }
+    }
+    // Something still touches the ground, and it is the wheels.
+    expect(minZ).toBeCloseTo(0, 5)
+    // And a body starts at a ride height, which is what a flush car has none
+    // of.
+    expect(
+      atClearance,
+      'no car body starts at a ride height - they are still sitting on the ground'
+    ).toBeGreaterThan(0)
+    props.dispose()
+  })
+})
+
+/**
+ * CW-56 (CW-Q55): the species reach the city, and the map's own leaf gets a
+ * say.
+ *
+ * The table guards live in city-trees.test.js, where they belong. What has to
+ * be guarded HERE is the wiring - because a perfect species table that nothing
+ * calls looks exactly like a perfect species table that everything calls, and
+ * the seed law is the alarm that would otherwise go unheard.
+ */
+describe('buildStreetProps — species trees (CW-56)', () => {
+  it('plants more than one kind of tree, and counts what it planted', () => {
+    const m = propsModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    const planted = props.stats.speciesPlanted
+    expect(planted, 'nothing recorded a species').toBeDefined()
+    const total = Object.values(planted).reduce((a, b) => a + b, 0)
+    expect(total).toBe(props.stats.treeCount)
+    // A table nobody uses and a table everybody uses look identical inside a
+    // merged mesh (CW-53's lesson), so the build counts its own.
+    expect(Object.keys(planted).length).toBeGreaterThan(1)
+    props.dispose()
+  })
+
+  it('lets a needleleaved tree in the DATA become a conifer', () => {
+    // The wiring guard. Two models identical but for one tag, so what is
+    // being measured is the tag and nothing else: a mapped needleleaved tree
+    // must come out as a cone, which is three stacked crowns rather than one
+    // and therefore 40 more triangles on that tree.
+    const plain = propsModel([
+      { type: 'node', id: 900, tags: { natural: 'tree' }, ...pt(-20, 6) },
+    ])
+    const needled = propsModel([
+      {
+        type: 'node',
+        id: 900,
+        tags: { natural: 'tree', leaf_type: 'needleleaved' },
+        ...pt(-20, 6),
+      },
+    ])
+    const a = buildStreetProps(plain, buildCollisionGrid(plain))
+    const b = buildStreetProps(needled, buildCollisionGrid(needled))
+    expect(a.stats.treeCount).toBe(b.stats.treeCount)
+    const conifersOf = (s) => s.conifer ?? 0
+    expect(
+      conifersOf(b.stats.speciesPlanted),
+      'the leaf_type never reached the planter'
+    ).toBeGreaterThan(conifersOf(a.stats.speciesPlanted))
+    a.dispose()
+    b.dispose()
+  })
+
+  it('adds five species without moving one other count (the seed law)', () => {
+    // The species draw takes DIFFERENT BITS of the seed the canopy tier
+    // already uses, rather than a new random stream, so nothing is inserted
+    // into an existing draw order. If that ever stops being true, these
+    // counts are what says so first.
+    const m = propsModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    expect(props.stats.treeCount).toBeGreaterThan(0)
+    expect(props.stats.carCount).toBeGreaterThan(0)
+    expect(props.stats.lampCount).toBeGreaterThan(0)
+    const again = buildStreetProps(m, buildCollisionGrid(m))
+    expect(again.stats.speciesPlanted).toEqual(props.stats.speciesPlanted)
+    expect(again.stats.carCount).toBe(props.stats.carCount)
+    props.dispose()
+    again.dispose()
+  })
+})
+
+/**
+ * CW-57 (CW-Q55): plantings and picnic tables in the city.
+ *
+ * The shapes are guarded in city-planting.test.js. What has to be guarded HERE
+ * is the law the CW-43 record set and this release could most easily break:
+ * REAL DATA WINS. A fallback that fires where the map already answered would
+ * be decorative scatter standing on top of a real position, which is exactly
+ * what the owner's mission sentence forbids.
+ */
+describe('buildStreetProps — plantings (CW-57)', () => {
+  const plantingModel = (extra = []) =>
+    propsModel([
+      { type: 'way', id: 80, tags: { leisure: 'park' }, geometry: squareRing(35, 0, 25) },
+      ...extra,
+    ])
+
+  it('stands a mapped planter at its own position, and calls it data', () => {
+    const m = plantingModel([
+      { type: 'node', id: 81, tags: { man_made: 'planter' }, ...pt(-30, 5) },
+    ])
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    expect(props.stats.plantingPlaced.planter).toBeGreaterThan(0)
+    // ★ REAL DATA WINS: a city with a mapped planter never reaches the
+    // fallback, so nothing invented stands beside something real.
+    expect(
+      props.stats.fallbackPlanters,
+      'the fallback fired in a city that had real planters'
+    ).toBe(0)
+    expect(hasVertexNear(props.group, 'planters', -30, 5, 1.2)).toBe(true)
+    props.dispose()
+  })
+
+  it('fills a city that has NO planters, and says that it did', () => {
+    // Denver and Albuquerque have zero mapped planters and zero flowerbeds -
+    // measured in CW-55's rebake, not assumed. The directive licenses filling
+    // that gap; what this pins is that the count is reported SEPARATELY, so a
+    // reader can always tell design from data.
+    const m = plantingModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    expect(props.stats.fallbackPlanters).toBeGreaterThan(0)
+    expect(props.stats.plantingPlaced.planter).toBe(
+      props.stats.fallbackPlanters
+    )
+    props.dispose()
+  })
+
+  it('gives a picnic table a footprint, and no one sitting at it', () => {
+    const m = plantingModel([
+      { type: 'node', id: 82, tags: { leisure: 'picnic_table' }, ...pt(-25, 5) },
+    ])
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    expect(props.stats.plantingPlaced.picnic_table).toBe(1)
+    const stamped = props.obstacles.filter(
+      (o) => Math.hypot(o.x + 25, o.y - 5) < 0.5 && o.halfLengthM > 0.8
+    )
+    expect(stamped, 'a picnic table nobody can walk into').toHaveLength(1)
+    // Sitters are bench-only. That is CW-45's settled law and no signed
+    // question has extended it, so picnic tables ship unoccupied.
+    expect(props.stats.sitterCount).toBe(0)
+    props.dispose()
+  })
+
+  it('lays a flowerbed flat and lets you walk over it', () => {
+    const m = plantingModel([
+      {
+        type: 'way',
+        id: 83,
+        tags: { leisure: 'flowerbed' },
+        geometry: squareRing(-35, 8, 3),
+      },
+    ])
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    expect(props.stats.plantingPlaced.flowerbed).toBe(1)
+    // A bed of flowers is not an obstacle: nothing here should stop a cane.
+    const nearBed = props.obstacles.filter(
+      (o) => Math.hypot(o.x + 35, o.y - 8) < 3
+    )
+    expect(nearBed, 'a flowerbed became something to walk into').toEqual([])
+    props.dispose()
+  })
+})
+
+/**
+ * CW-65 (CW-Q60): what the traveler is actually identified BY.
+ *
+ * ★★ THE ANSWER IS SHAPE, NOT COLOUR, AND THE MEASUREMENT OVERTURNED MY OWN
+ * ASSUMPTION. The high-visibility jacket sits at tier 0.92 against the
+ * brightest ordinary torso's 0.8, and photographed at 8 m that is a real
+ * +55% in mean luminance. But in COLOUR mode the palette quantizes both to the
+ * SAME entry, and the green set has only six entries which ordinary figures
+ * reach ALL SIX of - 3,029 figures saturate it. So no colour anywhere in that
+ * palette belongs to the traveler alone, the jacket included.
+ *
+ * What is left, and what CW-Q60 signed from the start, is the CANE: a bright
+ * diagonal reaching the ground, which no other figure in the city has. These
+ * assertions pin the claims that survive rather than the one that did not.
+ */
+describe('the traveler is identified by shape, not by colour (CW-65)', () => {
+  const encode = (c) =>
+    c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055
+  const normalized = (p) => p.map((c) => normalizeChroma(parsePaletteColor(c)))
+  // D-112: the converter reads the frame AFTER the renderer's output
+  // encoding, so a palette claim tested on the linear tint is a claim about
+  // numbers nobody ever sees.
+  const landsOn = (tint, palette) => {
+    const e = tint.map(encode)
+    return palette[pickPaletteIndex(e[0], e[1], e[2], normalized(palette), 5)]
+  }
+  const lumOf = (t) => 0.2126 * t[0] + 0.7152 * t[1] + 0.0722 * t[2]
+  const jacket = () =>
+    tintOf(
+      TRAVELER_LOOK.jacketTier,
+      TRAVELER_LOOK.jacketHueDeg,
+      inGamutChroma(
+        TRAVELER_LOOK.jacketTier,
+        TRAVELER_LOOK.jacketHueDeg,
+        TRAVELER_LOOK.jacketChroma
+      )
+    )
+
+  it('wears a jacket brighter than the brightest ordinary torso', () => {
+    // FIGURE_TIERS tops out at 0.8 and the head sits at 0.82; a jacket that
+    // does not beat those is another bright shirt. This is the claim that
+    // carries in MONO, which is the default and the high-contrast mode.
+    expect(TRAVELER_LOOK.jacketTier).toBeGreaterThan(0.82)
+    // inGamutChroma, because tintOf CLAMPS and a clamped channel silently
+    // voids the luminance promise the mono schemes read (CW-49).
+    expect(lumOf(jacket())).toBeCloseTo(TRAVELER_LOOK.jacketTier, 3)
+  })
+
+  it('cannot be told from the crowd by COLOUR, and the record says so', () => {
+    // Not a wish - a measurement, kept here so a future release that "fixes"
+    // the jacket's hue knows what it is up against. Ordinary figures draw
+    // from eight hues over three tiers; between them they reach every entry
+    // the green set has.
+    const HUES = [0, 30, 60, 120, 180, 270, 300, 330]
+    const TIERS = [0.5, 0.65, 0.8, 0.45]
+    const reachable = new Set()
+    for (const h of HUES) {
+      for (const t of TIERS) reachable.add(landsOn(tintOf(t, h, 0.5), HC_PALETTE_GREEN))
+      reachable.add(landsOn(tintOf(0.82, h, inGamutChroma(0.82, h, 0.5)), HC_PALETTE_GREEN))
+    }
+    expect(reachable.size).toBe(HC_PALETTE_GREEN.length)
+    // Including the jacket's own colour, and the cane's white.
+    expect(reachable.has(landsOn(jacket(), HC_PALETTE_GREEN))).toBe(true)
+    expect(
+      reachable.has(landsOn(tintOf(TRAVELER_LOOK.caneTier, 0, 0), HC_PALETTE_GREEN))
+    ).toBe(true)
+  })
+
+  it('lands a real yellow in both sets rather than clipping to white', () => {
+    // The one thing the hue choice DOES buy: high-visibility yellow is the
+    // colour the thing is in life, and at 0.92 it survives the gamut cap.
+    expect(landsOn(jacket(), HC_PALETTE_GREEN)).toBe('#ffff00')
+    expect(landsOn(jacket(), HC_PALETTE_AMBER)).toBe('#aaff00')
+  })
+
+  it('draws the glasses in the one true dark this medium has', () => {
+    // Exact black is rendered as an EMPTY CELL (CW-5). These palettes carry no
+    // dark neutral at all (CW-58), so a band drawn "dark" would land on a
+    // colour that is not dark.
+    const t = buildTraveler('seattle')
+    t.place(0, 0, 0)
+    const mesh = t.group.children.find((c) => c.isMesh)
+    const colors = mesh.geometry.getAttribute('color').array
+    let exactBlack = 0
+    for (let i = 0; i < colors.length; i += 3) {
+      if (colors[i] === 0 && colors[i + 1] === 0 && colors[i + 2] === 0)
+        exactBlack++
+    }
+    // A box is 24 vertices; the glasses band is exactly one box.
+    expect(exactBlack).toBe(24)
+    t.dispose()
+  })
+
+  it('is one mesh, named so the class pass can find it', () => {
+    // A name on the GROUP dresses nothing: the class pass traverses with
+    // `if (!obj.isMesh) return` and reads obj.name. That is D-115, and it is
+    // why this asserts the MESH.
+    const t = buildTraveler('seattle')
+    expect(t.isPlaced()).toBe(false)
+    t.place(12, -3, 1)
+    const meshes = []
+    t.group.traverse((o) => {
+      if (o.isMesh) meshes.push(o.name)
+    })
+    expect(meshes).toEqual(['traveler'])
+    expect(t.position()).toEqual([12, -3])
+    t.dispose()
+  })
+
+  it('gives two cities two different travelers, and one city the same one', () => {
+    const a = buildTraveler('seattle').spec
+    const b = buildTraveler('seattle').spec
+    const c = buildTraveler('denver').spec
+    expect(a.heightM).toBe(b.heightM)
+    expect(a.build).toBe(b.build)
+    expect(c.heightM).not.toBe(a.heightM)
+  })
+})
+
+/**
+ * CW-65: where the traveler stands.
+ *
+ * ★★ THESE EXIST BECAUSE THE E2E COULD NOT SEE THE MECHANISM. The e2e asserts
+ * that Seattle's traveler is more than 150 m from the spawn, and that is TRUE
+ * WITH THE FLOOR DELETED - the busiest pavement in Seattle happens to be 358 m
+ * away regardless. Red-proven: removing the floor outright left that case
+ * green. An outcome that holds by luck is not a guard, so the floor, the
+ * determinism and the never-null fallback are tested on the pure function
+ * where a defect has nowhere to hide.
+ */
+describe('pickTravelerSpot (CW-65)', () => {
+  const walkers = (list) =>
+    list.map(([x, y]) => ({ x, y, pose: 'walking', facing: 0 }))
+
+  it('keeps the traveler away from the spawn even when the crowd is there', () => {
+    // The densest cluster sits ON the spawn, and one lone spot is far away.
+    // With the floor, the far one has to win despite being the sparsest.
+    const near = []
+    for (let i = 0; i < 40; i++) near.push([i % 7, Math.floor(i / 7)])
+    const spots = walkers([...near, [900, 900]])
+    const got = pickTravelerSpot(spots, 'seattle', { spawnX: 0, spawnY: 0 })
+    expect(got).not.toBeNull()
+    expect(Math.hypot(got.x, got.y)).toBeGreaterThanOrEqual(
+      TRAVELER_MIN_FROM_SPAWN_M
+    )
+    expect([got.x, got.y]).toEqual([900, 900])
+  })
+
+  it('prefers the busier pavement when both are far enough away', () => {
+    // ★★ THE FIRST VERSION OF THIS PASSED WITH THE DENSITY SORT DELETED, by
+    // luck: it asserted the pick was near the crowd, and the hash happened to
+    // land there anyway. Asserting the pick is AS BUSY AS ANYTHING AVAILABLE
+    // is the claim the sort actually makes, and it cannot be satisfied by
+    // accident.
+    const busy = []
+    for (let i = 0; i < 30; i++)
+      busy.push([500 + (i % 5), 500 + Math.floor(i / 5)])
+    // Lone spots spread far apart, each with a neighbourhood of exactly one.
+    const lonely = [
+      [-600, -600],
+      [-900, 300],
+      [800, -900],
+      [-300, 900],
+    ]
+    const spots = walkers([...busy, ...lonely])
+    const got = pickTravelerSpot(spots, 'seattle', { spawnX: 0, spawnY: 0 })
+    // Every lonely spot scores 1; the crowd scores 30. A pick that is not the
+    // busiest means the bias is gone.
+    expect(got.neighbours).toBe(30)
+    expect(Math.hypot(got.x - 502, got.y - 502)).toBeLessThan(50)
+  })
+
+  it('gives the same city the same spot and different cities different ones', () => {
+    const spots = walkers(
+      Array.from({ length: 60 }, (_, i) => [400 + i * 13, 400 + ((i * 29) % 97)])
+    )
+    const a = pickTravelerSpot(spots, 'seattle', { spawnX: 0, spawnY: 0 })
+    const b = pickTravelerSpot(spots, 'seattle', { spawnX: 0, spawnY: 0 })
+    const c = pickTravelerSpot(spots, 'denver', { spawnX: 0, spawnY: 0 })
+    expect([a.x, a.y]).toEqual([b.x, b.y])
+    expect([c.x, c.y]).not.toEqual([a.x, a.y])
+  })
+
+  it('never strands a city that has people, even with nowhere far enough', () => {
+    // ★ The DISTANCE is what gives way, not the traveler. A small extract, or
+    // a spawn in the middle of everything, must still get one.
+    const spots = walkers([
+      [1, 1],
+      [2, 2],
+      [3, 1],
+    ])
+    const got = pickTravelerSpot(spots, 'burnaby', { spawnX: 0, spawnY: 0 })
+    expect(got).not.toBeNull()
+    expect(Number.isFinite(got.x)).toBe(true)
+  })
+
+  it('never strands a city whose only figures are SITTING', () => {
+    // ★★ THE LAST-RESORT FALLBACK HAD NO TEST AT ALL, and deleting it left
+    // every case green: the case above is rescued by the FIRST fallback (drop
+    // the distance rule) and never reaches the second. Only a city where every
+    // figure is on a bench exercises it - and a city with people in it must
+    // never come back empty-handed.
+    const spots = [
+      { x: 1, y: 1, pose: 'sitting', facing: 0 },
+      { x: 2, y: 2, pose: 'sitting', facing: 0 },
+    ]
+    const got = pickTravelerSpot(spots, 'denver', { spawnX: 0, spawnY: 0 })
+    expect(got).not.toBeNull()
+    expect(Number.isFinite(got.x)).toBe(true)
+  })
+
+  it('refuses a bench: a sitter is not standing on the pavement', () => {
+    const spots = [
+      { x: 500, y: 500, pose: 'sitting', facing: 0 },
+      { x: 900, y: 900, pose: 'walking', facing: 1 },
+    ]
+    const got = pickTravelerSpot(spots, 'seattle', { spawnX: 0, spawnY: 0 })
+    expect([got.x, got.y]).toEqual([900, 900])
+  })
+
+  it('has nothing to place in a city with no figures at all', () => {
+    expect(pickTravelerSpot([], 'seattle', {})).toBeNull()
+    expect(pickTravelerSpot(null, 'seattle', {})).toBeNull()
   })
 })

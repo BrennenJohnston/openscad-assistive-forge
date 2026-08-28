@@ -139,10 +139,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   adult range (1.50-1.95 m, the span of published anthropometric reference tables), broader or
   slighter builds, and jointed poses - walkers caught mid-step, joggers leaning with bent elbows,
   people standing about, and figures sitting on real benches (only where OpenStreetMap actually
-  records a bench - a city with two benches seats at most two people). Clothing colors come from
-  the game's own color schemes - torso and legs each take a scheme hue while heads and shoulders
-  keep one neutral figure tone, deliberately: color identity is palette-based, not race-based, and
-  no skin is modelled at all. The same spot always holds the same person on every visit
+  records a bench - a city with two benches seats at most two people). Their colors come from the
+  game's own color schemes. The same spot always holds the same person on every visit
 
 - **Seattle reaches the Space Needle** (CW-44) - the Seattle map grew from a downtown patch to a
   1.3 km circle centered toward the waterfront: Pike Place, the Great Wheel piers, Pioneer Square
@@ -180,6 +178,175 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nowhere to stand near where you picked, it says so instead of putting you somewhere wrong
 
 ### Changed
+
+- **Someone to find in every city** (CW-65) - a traveler is standing somewhere in each city, with a
+  white cane and a high-visibility jacket, and walking up to them is worth doing: they say hello,
+  the map legend records that you found them, and from then on they are waiting near where you start
+  whenever you come back. Where they stand is fixed per city and remembered between sessions, so the
+  search is the same one each time until you finish it. **The X key is how you actually find them**,
+  and that is not a fallback for anyone - it is the search itself. Pressing X adds a line saying
+  roughly how far away they are, from "a long way from here" down to "you can hear a cane tapping
+  close by", and it goes quiet once you have found them. The reason is measured rather than assumed:
+  a whole person is about two and a half characters wide and four tall at thirty metres, and the
+  jacket stops standing out from the crowd at about twenty, in a city two and a half kilometres
+  across. Nobody finds one figure in that by looking, so nobody is asked to. **The cane you see is
+  drawn thicker than a real one** - a real cane is two-thirds of a screen pixel at that distance and
+  could not mark a single character - and the record says so plainly rather than pretending
+  otherwise
+
+- **Links that unlock the City Walk no longer throw away what they were carrying** (CW-66) - opening
+  a link with `?hfm=unlock` on it removes that part of the address afterwards, so the link is not
+  passed on by accident. It was also removing everything after the `#`, which is where a shared set
+  of parameters lives - so a link that both unlocked the game and carried a shared model destroyed
+  the model on arrival. The part after the `#` is kept now, and the unlock is still stripped
+
+- **Fireworks when you finish a city** (CW-64) - find all twelve landmarks and the sky over the
+  city lights up for about twenty seconds: bursts on a ring around you, well above the rooftops,
+  drawn as characters like everything else here. Afterwards a Fireworks button appears and the Y key
+  replays it whenever you like, and the city remembers that you earned it. The overhead map shows
+  the bursts where they really are, so you can watch it from up there instead. **If you use reduced
+  motion you still get a celebration**: the same bursts, composed and held still for a few seconds
+  in front of you, with a spoken line saying what it is and why it is not moving - because a reward
+  that answers "no" is worse than one that answers quietly. The show was measured against WCAG
+  2.3.1, the standard that protects people who can have seizures from flashing: it produces no
+  flashes at all, and the whole picture's brightness moves about a ninth of what a single flash
+  would need. The instrument that says so was first proven able to catch seventeen flashes in a
+  deliberately strobing version
+
+- **Two Seattle landmarks now look like themselves** (CW-63) - every building in the City Walk is
+  drawn by one pipeline from its own OpenStreetMap data, on purpose, because a city where the code
+  knows about particular buildings stops working when the data moves. Two named landmarks are now a
+  deliberate exception, and only two. The Space Needle has its arched tripod: the map data holds
+  thirteen straight volumes and no curve at all, so the hourglass - the one thing that makes the
+  silhouette the Space Needle rather than a mast - is drawn from the published dimensions. The
+  Seattle Central Library has its five offset platforms with the flowing planes between them and the
+  diamond steel grid over the whole envelope, where before it was a plain box: its map data is a
+  60 metre outline and four roof planes, with no massing in it at all. Both are authored from
+  published heights, storey counts and section drawings, cited in the code beside the numbers they
+  produced; there is no imagery involved and nothing traced from anybody's photographs. Every other
+  building in every city takes exactly the path it always did, and each landmark is one line to
+  reverse
+
+- **The map asks before it moves you** (CW-61) - clicking the City Walk's map used to do nothing
+  unless you had first pressed Teleport to arm it, and then any click sent you there instantly with
+  no way back to where you were. Now a click anywhere on the map asks, in a small dialog that names
+  the spot you would land on: "On 4th Avenue and Union Street", or one street where there is no
+  corner, or open ground. Nothing moves until you press Travel here, and Cancel or Escape leaves you
+  exactly where you were and says so. J asks the same question about the middle of the map, so the
+  keyboard reaches it too. The naming is careful about what it claims: it will only call a spot a
+  corner when a second street really is within twelve metres, and it will never offer a street its
+  own cycle track as the cross street. A circle marks the spot being asked about while you decide.
+  The old Teleport button stays, doing the asking rather than the arming
+
+- **Four maps in one** (CW-60) - the City Walk's overhead map can be drawn four ways now, and each
+  one is a simplification rather than a repaint. Standard is the map as it has always been.
+  Roads only hides the buildings and parks so the street network stands alone. Buildings only takes
+  the streets down to a hairline so the shapes of the buildings carry the place. Wayfinding is the
+  reason the other three exist: it marks every crossing, every stretch of tactile paving and every
+  kerb the map records, over everything else dimmed to be the ground they sit on. That information
+  has been read out of OpenStreetMap and carried around in the game for eight releases without
+  anything ever drawing it. The idea comes from how tactile maps are made, where one map carries one
+  kind of thing because a finger cannot read a page as an eye can. Over the map the second control
+  pad in the Camera panel changes the style, K and Shift+K step through it, there is a Map style
+  button in the map toolbar, and the choice is remembered. Street view is untouched by all of it
+
+- **Birds where birds rest** (CW-58) - gulls and crows on parapets and lamp heads, pigeons and
+  sparrows on bench backs, picnic tables and planter rims, Canada geese gathered on park grass, and
+  in Albuquerque the greater roadrunner along the roadside its name comes from. Each city has its
+  own roster and each bird sits only on a perch that bird actually uses. Everything is built at its
+  real field-guide size, and nothing was made bigger in order to be seen: the goose reads
+  unmistakably, neck and all, while a house sparrow at true scale is a small mark on a bench back
+  rather than a recognisable bird. That is the honest trade, and it is written down rather than
+  papered over
+
+- **Planters, flowerbeds and picnic tables** (CW-57) - where a city's map records them, and only
+  there. Seattle and Burnaby have real ones and use them; Denver and Albuquerque have none recorded,
+  so they get hash-placed planters inside their own real parks, counted separately so design can
+  always be told from data. Denver's map has no picnic tables at all and none were invented. Each
+  city's flowers come from a cited list of what its parks actually plant, which is why Albuquerque's
+  come out yellow where Seattle's come out pink
+
+- **Trees with names** (CW-56) - a street tree used to be one shape repeated. Each city now plants
+  the species its own street-tree inventory records, in the crown form that species has, and where
+  the map says a tree is needle-leaved it is drawn as a conifer even when the city's common list
+  names none. Heights are compressed against the cited ranges, because at full size this city's
+  infill spacing closes the sky into a ceiling
+
+- **The cars have wheels, and the ones that are driving have their lights on** (CW-54) - a parked
+  row used to read as a low dotted mass, because every car body sat flat on the road with nothing
+  under it. Each car now rides on four wheels at a height typical of its own kind, so there is a gap
+  under it, and at this size that shadow line is what says vehicle long before a wheel is big enough
+  to see. Tyres are a little darker than the body they carry, but not so dark that they vanish
+  against black tarmac. The cars standing in the traffic lanes have white head lamps at the front
+  and red brake lights at the back; the parked ones are dark, because a parked car is parked and
+  because a string of bright points down every kerb is not what a street looks like at night
+
+- **Twenty kinds of shop front instead of five** (CW-53) - the ground floor of a building used to
+  come from one of five window patterns picked at random. There are now twenty, and which one a
+  building gets is decided by what the map actually records there: a restaurant gets warm glass with
+  dark tables along the bottom, a bakery a lit counter under a canopy, a bank one lit alcove in a
+  dark front, a theatre a bright bulb band, an empty unit papered windows with no light in them at
+  all. Buildings with nothing recorded near them still fall back to a pattern chosen from the
+  building itself, so a street is never uniform. All twenty appear in all four cities
+
+- **The city stops flickering while you move** (CW-52) - lit surfaces used to fizz and flash as you
+  walked or turned, in a way a screenshot could never show. The cause was not the lighting. A
+  second, hidden pass tells the drawing which surface each character is looking at, so a shopfront
+  and the wall behind it can be drawn with different characters, and that pass could not reliably
+  tell the two apart where they touch: it changed its mind again and again as you moved, and better
+  than a quarter of the screen kept swapping character sets frame after frame. It now keeps them
+  apart the same way the picture itself does. Measured over twenty consecutive frames of a very
+  slow turn, the flicker drops by more than nine tenths at every character size, in both screen
+  colors, while the brightness of the picture is unchanged to the last digit - the glow stays, the
+  fracture goes. Two ground textures that were never actually being filtered for the character grid
+  are now filtered, and the ground far ahead of you, which you see almost edge on, is filtered for
+  that angle as well
+
+- **Lines on the road, and a pavement with the finish its own city specifies** (CW-51) - the
+  arterial streets now carry a dashed centre line, so a main road reads as a main road rather than
+  as a wider gap. The lines are derived from what kind of street it is, because the map data does
+  not record road markings anywhere in the four cities. Pavements had no surface at all and now
+  carry control joints about every metre and a half, plus the finish the city itself specifies:
+  pebbly river stone in Seattle, flat with cracks and grip scoring in Albuquerque, and a broom
+  finish in Denver and Burnaby, which is what both of those cities' construction standards call
+  for
+
+- **The streets are the width real streets are, and they have curbs** (CW-50) - the road widths
+  described the driving lanes only, so a street read as narrower than the one you would stand on,
+  and the roadway itself was an indistinct dark gap between two thin lines. Widths are now measured
+  curb to curb, the way a pavement meets a road: a two-lane residential street with parking on both
+  sides is about eight metres across, not six, and each step up from there adds a lane. Every
+  street now has a raised pavement beside it and a real curb you can step down off and back up
+  onto, instead of only the few streets whose pavements the map happens to record separately. Your
+  eye follows the ground: it drops as you step into the road and climbs as you step back up, over a
+  short distance rather than in a jump, and it never changes with how fast you are walking. The
+  curb is never a wall - you can always walk across it. Pedestrianised streets have no curb at all,
+  because they are pavement from one side to the other
+
+- **Every part of a figure takes a color from the scheme** (CW-49) - a person's torso and legs
+  already wore colors from the city's own color scheme, but their head and shoulders kept a single
+  fixed tone, so a street of people repeated one note at the top of every figure. All three zones
+  now take their own hue, picked from the figure's own position so the same spot always holds the
+  same person. The monochrome screens are unchanged by design: there is no color scheme to show
+  there, so a head is simply a bright head
+
+- **The city walks at city speed** (CW-48) - walking used to start at a stroll, and the way to a
+  brisk pace was to turn the speed up every time you arrived. What the slider called 300 percent is
+  now what it calls 100, and it is where the game starts. The top of the range is faster than the
+  old top was, and Shift now always outruns whatever pace you have set - it used to be a fixed
+  speed that a turned-up walk could overtake. The numbers the slider announces are the same 50 to
+  300 they always were, so nothing you learned about it has changed except how far it gets you. A
+  walking speed you saved before is carried over, with the old top of the range becoming the new
+  normal one. If you had it near the bottom you will come back a little faster than you left,
+  because the slowest setting on the new scale is quicker than the slowest on the old one
+
+- **Walking into things works the same however fast you are going** (CW-48) - collision was checked
+  once per drawn frame, so how precisely it worked depended on how far you travelled in that frame,
+  which meant it depended on your walking speed and on how busy your machine was. Tripling the
+  default speed would have made the loose case the usual one, and at the very top of the new range
+  a sprint on a slow frame could cross a tree trunk entirely. Each frame's movement is now checked
+  in fixed short steps instead, so how close you can get to a bench, a car or a wall no longer
+  depends on your pace or your hardware
 
 - **The sharing guide stops recommending hosting that does not work** (IR-2) - it told authors to
   put a GitHub release URL, or a Cloudflare R2 / S3 bucket URL, into their manifest. Forge's

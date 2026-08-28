@@ -12,8 +12,25 @@
  */
 
 export const EYE_HEIGHT_M = 1.7;
-export const WALK_SPEED_MPS = 1.6;
-export const FAST_SPEED_MPS = 4.0;
+
+// CW-48: the announced percent is a LABEL on a two-slope curve, not a
+// multiplier of anything. Two anchors fix the curve: label 100 is the
+// default brisk city walk and label 300 is the top of the range. Below the
+// default the slope is three times as steep, so the 50-point span down to
+// label 50 still reaches a slow stroll instead of crawling toward zero.
+export const SPEED_LABEL_MIN = 50;
+export const SPEED_LABEL_DEFAULT = 100;
+export const SPEED_LABEL_MAX = 300;
+export const SPEED_LABEL_STEP = 25;
+export const WALK_SPEED_MPS = 4.8;
+const SPEED_AT_MAX_LABEL_MPS = 8.0;
+const SPEED_AT_MIN_LABEL_MPS = 2.4;
+
+// Shift outruns the CURRENT walk at every label rather than racing a fixed
+// floor, which is what let a fast walk overtake sprinting before CW-48.
+export const SPRINT_MULTIPLIER = 1.6;
+export const SPRINT_MAX_MPS = 9.6;
+
 export const TURN_SPEED_RADPS = (90 * Math.PI) / 180;
 export const PITCH_SPEED_RADPS = (45 * Math.PI) / 180;
 // Gaze limit (CW-13). lookAt() with a fixed world up degenerates when the
@@ -25,6 +42,23 @@ export const PLAYER_RADIUS_M = 0.3;
 
 // Integration clamp: a background tab must not teleport the player.
 const MAX_STEP_DT_S = 0.1;
+
+// Collision is tested at the ENDS of a move, so a move longer than the thing
+// it crosses can step over it. Before CW-48 that resolution silently depended
+// on how fast you walked - 0.16 m per clamped frame at the default, 0.48 m
+// for anyone who had turned the speed up - and tripling the default would
+// have made the loose case the normal one. Measured on a lone street prop
+// (one blocked cell): clean at 0.80 m of travel, thirty pass-throughs at
+// 0.96 m, which the top of the new range reaches.
+//
+// So each move is split into hops of a fixed length instead, and collision
+// resolution stops depending on speed at all. Half the player's own radius is
+// short enough that no hop can skip a cell the body probe would have caught,
+// and it happens to match the resolution the game shipped at its old default.
+// Measured cost of the split on the real Seattle grid: stepWalk runs once per
+// frame at 0.10-0.14 us, and each extra hop adds about 0.03 us, against a
+// 33 ms frame budget.
+const MAX_SUBSTEP_M = PLAYER_RADIUS_M / 2;
 
 /**
  * @param {{x: number, y: number, headingRad?: number, pitchRad?: number}} spawn
@@ -55,15 +89,64 @@ export function clampPitch(p) {
 }
 
 /**
+ * Snap an arbitrary number onto the speed-label grid the controls step by,
+ * and hold it inside the range. A label that is not a number at all reads as
+ * the default, which is what an absent preference means.
+ *
+ * @param {number} label
+ * @returns {number}
+ */
+export function clampSpeedLabel(label) {
+  if (!Number.isFinite(label)) return SPEED_LABEL_DEFAULT;
+  const snapped = Math.round(label / SPEED_LABEL_STEP) * SPEED_LABEL_STEP;
+  return Math.max(SPEED_LABEL_MIN, Math.min(SPEED_LABEL_MAX, snapped));
+}
+
+/**
+ * Metres per second for an announced speed label (CW-48).
+ *
+ * @param {number} label
+ * @returns {number}
+ */
+export function speedForLabel(label) {
+  const l = clampSpeedLabel(label);
+  if (l >= SPEED_LABEL_DEFAULT) {
+    const t =
+      (l - SPEED_LABEL_DEFAULT) / (SPEED_LABEL_MAX - SPEED_LABEL_DEFAULT);
+    return WALK_SPEED_MPS + t * (SPEED_AT_MAX_LABEL_MPS - WALK_SPEED_MPS);
+  }
+  const t = (SPEED_LABEL_DEFAULT - l) / (SPEED_LABEL_DEFAULT - SPEED_LABEL_MIN);
+  return WALK_SPEED_MPS - t * (WALK_SPEED_MPS - SPEED_AT_MIN_LABEL_MPS);
+}
+
+/**
+ * Read a stored walking-speed preference as a label, migrating the value the
+ * pre-CW-48 game wrote under the same key (UF-14: the key NAME never moves,
+ * the values do). That key held a 0.5–3.0 multiplier of a slower walk; it now
+ * holds a 50–300 label. The two ranges do not overlap, so the stored number
+ * itself says which vocabulary wrote it. An old multiplier m announced itself
+ * as m*100 percent, and the old 300 percent is this scale's 100.
+ *
+ * @param {string|number|null|undefined} raw
+ * @returns {number}
+ */
+export function speedLabelFromStored(raw) {
+  const value = typeof raw === 'string' ? parseFloat(raw) : raw;
+  if (!Number.isFinite(value)) return SPEED_LABEL_DEFAULT;
+  if (value < SPEED_LABEL_MIN) return clampSpeedLabel(value * 100 - 200);
+  return clampSpeedLabel(value);
+}
+
+/**
  * Advance the walk state by one frame.
  *
  * @param {{x:number,y:number,headingRad:number,pitchRad?:number}} state - mutated in place
- * @param {{forward?: number, strafe?: number, turn?: number, pitch?: number, fast?: boolean, speedScale?: number}} input
+ * @param {{forward?: number, strafe?: number, turn?: number, pitch?: number, fast?: boolean, speedLabel?: number}} input
  *   forward: +1 forward / -1 back; strafe: +1 right / -1 left;
  *   turn: +1 clockwise (right) / -1 counter-clockwise;
- *   pitch: +1 look up / -1 look down (CW-13); speedScale: the
- *   CW-Q8 walking-speed multiplier (0.5–3.0, default 1) — Shift sprint
- *   never drops below its 4 m/s floor but scales up past it
+ *   pitch: +1 look up / -1 look down (CW-13); speedLabel: the announced
+ *   CW-48 speed label (50–300, default 100) — Shift sprint multiplies
+ *   whatever that label is currently worth
  * @param {number} dtS - seconds since last frame
  * @param {{isBlocked: (x: number, y: number) => boolean}} [collision]
  * @returns {{moved: boolean, turned: boolean, pitched: boolean}}
@@ -98,11 +181,10 @@ export function stepWalk(state, input, dtS, collision) {
 
   if (forward === 0 && strafe === 0) return { moved: false, turned, pitched };
 
-  const userScale = Number.isFinite(input.speedScale)
-    ? Math.max(0.5, Math.min(3, input.speedScale))
-    : 1;
-  const walkSpeed = WALK_SPEED_MPS * userScale;
-  const speed = input.fast ? Math.max(FAST_SPEED_MPS, walkSpeed) : walkSpeed;
+  const walkSpeed = speedForLabel(input.speedLabel);
+  const speed = input.fast
+    ? Math.min(SPRINT_MAX_MPS, walkSpeed * SPRINT_MULTIPLIER)
+    : walkSpeed;
   const sin = Math.sin(state.headingRad);
   const cos = Math.cos(state.headingRad);
   // Forward along the bearing; strafe 90° clockwise from it.
@@ -114,17 +196,27 @@ export function stepWalk(state, input, dtS, collision) {
 
   const blocked = (x, y) => isCircleBlocked(collision, x, y);
 
+  const hops = collision
+    ? Math.max(1, Math.ceil(Math.hypot(dx, dy) / MAX_SUBSTEP_M))
+    : 1;
+  const hopX = dx / hops;
+  const hopY = dy / hops;
+
   let moved = false;
-  if (!blocked(state.x + dx, state.y + dy)) {
-    state.x += dx;
-    state.y += dy;
-    moved = true;
-  } else if (dx !== 0 && !blocked(state.x + dx, state.y)) {
-    state.x += dx; // slide along Y-facing wall
-    moved = true;
-  } else if (dy !== 0 && !blocked(state.x, state.y + dy)) {
-    state.y += dy; // slide along X-facing wall
-    moved = true;
+  for (let i = 0; i < hops; i++) {
+    if (!blocked(state.x + hopX, state.y + hopY)) {
+      state.x += hopX;
+      state.y += hopY;
+      moved = true;
+    } else if (hopX !== 0 && !blocked(state.x + hopX, state.y)) {
+      state.x += hopX; // slide along Y-facing wall
+      moved = true;
+    } else if (hopY !== 0 && !blocked(state.x, state.y + hopY)) {
+      state.y += hopY; // slide along X-facing wall
+      moved = true;
+    } else {
+      break; // nose to the wall: the remaining hops go nowhere either
+    }
   }
   return { moved, turned, pitched };
 }
@@ -132,6 +224,185 @@ export function stepWalk(state, input, dtS, collision) {
 /** Level for anything built before CW-13 or by a fixture that omits it. */
 function currentPitch(state) {
   return Number.isFinite(state.pitchRad) ? state.pitchRad : 0;
+}
+
+/**
+ * Curb height (CW-50). The common US barrier curb is 6 inches; municipal
+ * standard details put it at 0.15 m, which is the number used here.
+ *
+ * The city is modelled the way it is built: the PAVEMENT is the ground, and
+ * the ROADWAY is cut down into it. Cutting down rather than building up is
+ * what keeps every prop where it already stood - a tree, a bench and a person
+ * are all placed at ground zero, and raising the pavement under them would
+ * have buried them to the knee. It also means the eye height on a pavement,
+ * which is where most walking happens, is exactly what it always was.
+ */
+export const CURB_HEIGHT_M = 0.15;
+
+/**
+ * How much ground the walker covers while the eye climbs a curb. Short enough
+ * to feel like a step up rather than a ramp, long enough that it is not a
+ * jolt. Distance rather than time, so the feel does not change with walking
+ * speed - the same reasoning that fixed the collision hop in CW-48.
+ */
+export const CURB_EASE_M = 0.5;
+
+/**
+ * Rasterize the PAVEMENT into a grid, so the walker's eye knows what is
+ * underfoot. Mirrors buildCollisionGrid deliberately: same origin, same cell
+ * size, same out-of-bounds convention, so the two can be reasoned about
+ * together.
+ *
+ * Pavement reads as zero and the roadway as a curb below it, rather than the
+ * other way round. That is not arbitrary: every prop in the city is placed at
+ * ground zero, so building the pavement UP would have buried trees, benches
+ * and people to the knee, while cutting the roadway DOWN leaves all of them
+ * exactly where they stand and only moves the surface nobody stands on.
+ *
+ * What counts as pavement:
+ *
+ *   - a strip one pavement wide beyond each roadway edge, both sides
+ *   - separately-mapped pavement ways, over their own width
+ *   - minus every roadway, stamped last, so a crossing street cuts the apron
+ *     rather than being paved over by it
+ *
+ * Open ground away from any street is left at roadway level. In a downtown
+ * almost everything walkable is apron, and this is stated rather than hidden.
+ *
+ * @param {ReturnType<import('./city-data.js').parseCityExtract>} model
+ * @param {{cellM?: number, marginM?: number, pavementM?: number}} [options]
+ * @returns {{heightAt: (x:number, y:number) => number, cols:number, rows:number, cellM:number}}
+ */
+export function buildSurfaceGrid(model, options = {}) {
+  const cellM = options.cellM ?? 1;
+  const marginM = options.marginM ?? 30;
+  const pavementM = options.pavementM ?? PAVEMENT_WIDTH_M;
+  const b = model.boundsM;
+  const originX = b.minX - marginM;
+  const originY = b.minY - marginM;
+  const cols = Math.max(1, Math.ceil((b.maxX - b.minX + marginM * 2) / cellM));
+  const rows = Math.max(1, Math.ceil((b.maxY - b.minY + marginM * 2) / cellM));
+  const cells = new Uint8Array(cols * rows);
+
+  /** Stamp every cell whose centre is within `reachM` of the polyline. */
+  const stampAlong = (pts, reachM, value) => {
+    const reach = Math.ceil(reachM / cellM);
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [x1, y1] = pts[i];
+      const [x2, y2] = pts[i + 1];
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const len = Math.hypot(dx, dy);
+      if (len < 1e-6) continue;
+      // Half-cell steps along the segment, stamping a disc at each: cheaper
+      // than a true quad rasterizer and, at a metre cell against a strip
+      // metres wide, indistinguishable from one.
+      const steps = Math.ceil(len / (cellM * 0.5));
+      for (let s = 0; s <= steps; s++) {
+        const t = s / steps;
+        const px = x1 + dx * t;
+        const py = y1 + dy * t;
+        const c0 = Math.floor((px - originX) / cellM);
+        const r0 = Math.floor((py - originY) / cellM);
+        for (let r = r0 - reach; r <= r0 + reach; r++) {
+          if (r < 0 || r >= rows) continue;
+          for (let c = c0 - reach; c <= c0 + reach; c++) {
+            if (c < 0 || c >= cols) continue;
+            const gx = originX + (c + 0.5) * cellM;
+            const gy = originY + (r + 0.5) * cellM;
+            if (Math.hypot(gx - px, gy - py) <= reachM) {
+              cells[r * cols + c] = value;
+            }
+          }
+        }
+      }
+    }
+  };
+
+  const drawn = (model.roads ?? []).filter(
+    (r) => r.sidewalk || !UNPAVED_FOR_SURFACE.has(r.kind)
+  );
+  // Aprons first...
+  for (const road of drawn) {
+    const pts = road.points ?? [];
+    if (isPavementWay(road)) stampAlong(pts, road.widthM / 2, 1);
+    else stampAlong(pts, road.widthM / 2 + pavementM, 1);
+  }
+  // ...then the roadways, which cut back through them.
+  for (const road of drawn) {
+    if (isPavementWay(road)) continue;
+    stampAlong(road.points ?? [], road.widthM / 2, 0);
+  }
+
+  return {
+    cols,
+    rows,
+    cellM,
+    heightAt(x, y) {
+      const cx = Math.floor((x - originX) / cellM);
+      const cy = Math.floor((y - originY) / cellM);
+      if (cx < 0 || cy < 0 || cx >= cols || cy >= rows) return 0;
+      return cells[cy * cols + cx] === 1 ? 0 : -CURB_HEIGHT_M;
+    },
+  };
+}
+
+/**
+ * How wide the pavement apron beside a roadway is drawn (CW-50). The same
+ * number a separately-mapped pavement uses, so a street with a mapped
+ * pavement and one without read alike.
+ */
+export const PAVEMENT_WIDTH_M = 1.8;
+
+/** Classes the scene never draws, so they never cut a roadway either. */
+const UNPAVED_FOR_SURFACE = new Set([
+  'footway',
+  'path',
+  'cycleway',
+  'steps',
+  'track',
+]);
+
+/**
+ * Whether a way IS pavement rather than a roadway with pavement beside it
+ * (CW-50, CW-Q64). A separately-mapped pavement obviously is one; so is a
+ * pedestrianised street, which is pavement end to end - cutting a roadway
+ * down the middle of one would invent a road that is not there.
+ *
+ * The scene and this grid both read it, so the two cannot drift apart about
+ * where the ground is: cross-file disagreement about a shared value is this
+ * project's most expensive recurring bug.
+ *
+ * @param {{sidewalk?: boolean, kind?: string}} road
+ * @returns {boolean}
+ */
+export function isPavementWay(road) {
+  return Boolean(road?.sidewalk) || road?.kind === 'pedestrian';
+}
+
+/**
+ * Move the walker's ground height toward what is underfoot, at a rate fixed
+ * per METRE travelled rather than per second (CW-50). Standing still on a
+ * changed surface - a teleport, a spawn - snaps, because there is no step to
+ * smooth out.
+ *
+ * @param {{x:number, y:number, groundZ?:number}} state - mutated in place
+ * @param {{heightAt: (x:number, y:number) => number}} surface
+ * @param {number} travelledM - ground covered since the last call
+ * @returns {number} the ground height now in effect
+ */
+export function easeGroundZ(state, surface, travelledM) {
+  const target = surface ? surface.heightAt(state.x, state.y) : 0;
+  const current = Number.isFinite(state.groundZ) ? state.groundZ : target;
+  if (!(travelledM > 0)) {
+    state.groundZ = target;
+    return target;
+  }
+  const step = (CURB_HEIGHT_M / CURB_EASE_M) * travelledM;
+  const delta = target - current;
+  state.groundZ =
+    Math.abs(delta) <= step ? target : current + Math.sign(delta) * step;
+  return state.groundZ;
 }
 
 /**
@@ -210,12 +481,17 @@ export function firstPersonPose(state) {
   const cosP = Math.cos(pitch);
   const sin = Math.sin(state.headingRad);
   const cos = Math.cos(state.headingRad);
+  // CW-50: the eye rides whatever is underfoot. A state that carries no
+  // ground height - a fixture, anything built before the curb existed - reads
+  // as level ground, which is what it was.
+  const eyeZ =
+    EYE_HEIGHT_M + (Number.isFinite(state.groundZ) ? state.groundZ : 0);
   return {
-    eye: [state.x, state.y, EYE_HEIGHT_M],
+    eye: [state.x, state.y, eyeZ],
     target: [
       state.x + sin * cosP,
       state.y + cos * cosP,
-      EYE_HEIGHT_M + Math.sin(pitch),
+      eyeZ + Math.sin(pitch),
     ],
   };
 }

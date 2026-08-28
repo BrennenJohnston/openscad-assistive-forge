@@ -720,3 +720,59 @@ test.describe('The header toggles describe the state they are in (D-60)', () => 
       .toBe('Current theme: dark. Click to cycle themes.')
   })
 })
+
+/**
+ * CW-66: the unlock door used to eat the fragment.
+ *
+ * It strips `hfm` from the query so the link is not accidentally shared on,
+ * and it composed the replacement URL from pathname and query ALONE - so a
+ * link of the form `/?hfm=unlock#v=1&params=...` arrived, unlocked, and then
+ * destroyed the payload it was carrying. The fragment is where state.js puts a
+ * shared parameter set, so the door was breaking exactly the links most worth
+ * sending.
+ *
+ * ★★ ITS OWN DESCRIBE, WITH NO PRIOR NAVIGATION, AND THAT IS THE POINT. The
+ * unlock-flow block above opens `/?hfm=unlock` in a beforeEach, so a case
+ * nested there ARRIVES ALREADY UNLOCKED and its second navigation measures
+ * something else - which is exactly what happened, and it reported the door
+ * broken while a direct trace of `history.replaceState` showed it working.
+ * These cases are about what happens ON ARRIVAL, so they arrive.
+ *
+ * ★★ AND THE FRAGMENT UNDER TEST IS DELIBERATELY NOT `#v=1&params=`, even
+ * though that is the one that matters. state.js CONSUMES that payload and
+ * clears it - measured, it is gone before the door has even run - so a test
+ * written with it watches state.js and reports on the door. `#keep=me` is
+ * inert, which is what makes it an instrument.
+ */
+test.describe('the unlock door keeps the fragment (CW-66)', () => {
+  test('keeps the URL fragment while still stripping the unlock', async ({
+    page,
+  }) => {
+    await page.goto('/?hfm=unlock#keep=me')
+    await expect(page.locator('h1')).toBeVisible()
+    // Polled, not read once: the door runs after the first paint, so an
+    // immediate read races it and would pass before the cleanup happened.
+    await expect
+      .poll(() => page.evaluate(() => window.location.search))
+      .toBe('')
+    // ★ The `hfm` half matters too: a "fix" that kept the fragment by leaving
+    // the whole URL alone would pass a fragment-only check while quietly
+    // re-sharing the unlock. The assertion above is `toBe('')`, not merely
+    // "does not contain hfm", for that reason.
+    expect(await page.evaluate(() => window.location.hash)).toBe('#keep=me')
+  })
+
+  test('keeps the fragment when other query parameters survive too', async ({
+    page,
+  }) => {
+    // The composition has TWO branches - one for a query with something left
+    // in it and one for a query left empty - and a fix applied to only one of
+    // them would pass the case above and still break real links.
+    await page.goto('/?hfm=unlock&keepme=1#keep=me')
+    await expect(page.locator('h1')).toBeVisible()
+    await expect
+      .poll(() => page.evaluate(() => window.location.search))
+      .toBe('?keepme=1')
+    expect(await page.evaluate(() => window.location.hash)).toBe('#keep=me')
+  })
+})

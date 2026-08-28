@@ -46,6 +46,25 @@ function sceneWith(names) {
   return scene
 }
 
+/** A scene whose meshes wear the depth bias their real materials wear. */
+function sceneWithOffsets(spec) {
+  const scene = new Scene()
+  for (const [name, offset] of Object.entries(spec)) {
+    const mesh = new Mesh()
+    mesh.name = name
+    mesh.material = offset
+      ? {
+          tag: `original:${name}`,
+          polygonOffset: true,
+          polygonOffsetFactor: offset[0],
+          polygonOffsetUnits: offset[1],
+        }
+      : { tag: `original:${name}` }
+    scene.add(mesh)
+  }
+  return scene
+}
+
 /**
  * The class material each named mesh wears WHILE the pass is rendering - the
  * only moment it can be caught, since the pass puts the originals back.
@@ -122,6 +141,57 @@ describe('city-class-pass', () => {
     expect(seen.get('hydrants').uniforms.uId.value).toBe(SURFACE_CLASS.LAMP)
   })
 
+  it('carries each mesh own depth bias into the class material (D-110)', () => {
+    // Several of this city surfaces are deliberately coplanar with the one
+    // behind them and are pulled forward by a polygon offset rather than by a
+    // gap. Dressing them in a material that DROPS that offset makes them
+    // coplanar again here, in the id buffer, where the winner is then decided
+    // by floating-point luck and re-rolled by any view change - and the class
+    // id is what picks the cell glyph vocabulary. MEASURED before the fix,
+    // over a 20-frame sub-cell turn at the Seattle spawn: 104,180 class
+    // transitions, 101,263 of them the storefront/wall pair.
+    const seen = materialsDuringPass(
+      sceneWithOffsets({
+        buildings: null,
+        storefronts: [-2, -2],
+        roads: [-1, -1],
+        'road-lines': [-4, -4],
+      })
+    )
+    const wall = seen.get('buildings')
+    expect(wall.polygonOffset).toBe(false)
+    expect(wall.polygonOffsetFactor).toBe(0)
+
+    const front = seen.get('storefronts')
+    expect(front.polygonOffset).toBe(true)
+    expect(front.polygonOffsetFactor).toBe(-2)
+    expect(front.polygonOffsetUnits).toBe(-2)
+
+    // Not one shared offset for everything: paint sits in front of its
+    // roadway by a different amount than a storefront sits off its wall.
+    expect(seen.get('roads').polygonOffsetFactor).toBe(-1)
+    expect(seen.get('road-lines').polygonOffsetFactor).toBe(-4)
+
+    // And the storefront must actually WIN against the wall it covers - a
+    // matching pair of numbers proves nothing if both are zero.
+    expect(front.polygonOffsetFactor).toBeLessThan(wall.polygonOffsetFactor)
+  })
+
+  it('gives two meshes of one class different materials when their bias differs', () => {
+    // The material cache is keyed on the offset as well as the class, or the
+    // first mesh of a class would lend its depth bias to every later one.
+    // Curbs and painted lines share the CURB voice (CW-51) but sit at
+    // different depths above the roadway.
+    const seen = materialsDuringPass(
+      sceneWithOffsets({ curbs: [-2, -2], 'road-lines': [-4, -4] })
+    )
+    expect(seen.get('curbs').uniforms.uId.value).toBe(SURFACE_CLASS.CURB)
+    expect(seen.get('road-lines').uniforms.uId.value).toBe(SURFACE_CLASS.CURB)
+    expect(seen.get('curbs')).not.toBe(seen.get('road-lines'))
+    expect(seen.get('curbs').polygonOffsetFactor).toBe(-2)
+    expect(seen.get('road-lines').polygonOffsetFactor).toBe(-4)
+  })
+
   it('puts every material back after the pass', () => {
     const scene = sceneWith(['buildings', 'roads'])
     const pass = createClassPass(fakeRenderer(() => 0), scene)
@@ -149,5 +219,123 @@ describe('city-class-pass', () => {
     expect(pass.read({}, 4, 0)).toBeNull()
     pass.dispose()
     expect(pass.read({}, 4, 3)).toBeNull()
+  })
+})
+
+/**
+ * ★ CW-56: the question this map keeps failing.
+ *
+ * A mesh name missing from CLASS_BY_MESH_NAME is not an error anywhere. The
+ * pass simply leaves that mesh out, and it reads as SKY - a safe default for
+ * a mesh nobody added, and a silent, invisible defect for one somebody just
+ * did. CW-56 built a ground mesh that would have been dressed in the sky's
+ * voice, and nothing anywhere would have said so.
+ *
+ * So this does not copy the list. It BUILDS a city, enumerates the meshes the
+ * builders actually made, and asks the map about each one. A future release
+ * that adds a mesh and forgets this map fails here rather than in a
+ * photograph nobody takes.
+ */
+describe('every mesh the city builds has a class (CW-56)', () => {
+  it('asks the builders, not a copy of the list', async () => {
+    const [
+      { CLASS_BY_MESH_NAME },
+      { buildStreetProps, buildFireworks, buildTraveler },
+      data,
+      walk,
+    ] = await Promise.all([
+      import('../../../src/js/game/city-class-pass.js'),
+      import('../../../src/js/game/city-scene.js'),
+      import('../../../src/js/game/city-data.js'),
+      import('../../../src/js/game/walk-controls.js'),
+    ])
+    const { buildCollisionGrid } = walk
+    const CENTER = { lat: 40, lon: -100 }
+    const COS = Math.cos((CENTER.lat * Math.PI) / 180)
+    const pt = (xM, yM) => ({
+      lat: CENTER.lat + yM / 110540,
+      lon: CENTER.lon + xM / (111320 * COS),
+    })
+    const ring = (cx, cy, h) => [
+      pt(cx - h, cy - h),
+      pt(cx + h, cy - h),
+      pt(cx + h, cy + h),
+      pt(cx - h, cy + h),
+      pt(cx - h, cy - h),
+    ]
+    const model = data.parseCityExtract(
+      {
+        elements: [
+          {
+            type: 'way',
+            id: 1,
+            tags: { building: 'yes', height: '20' },
+            geometry: ring(-60, -60, 6),
+          },
+          {
+            type: 'way',
+            id: 2,
+            tags: { building: 'yes', height: '20' },
+            geometry: ring(60, 60, 6),
+          },
+          {
+            type: 'way',
+            id: 3,
+            tags: { highway: 'residential' },
+            geometry: [pt(-50, 0), pt(50, 0)],
+          },
+          { type: 'node', id: 4, tags: { natural: 'tree' }, ...pt(10, 6) },
+          {
+            type: 'node',
+            id: 5,
+            tags: { highway: 'bus_stop', shelter: 'yes' },
+            ...pt(-14, 3),
+          },
+          { type: 'node', id: 6, tags: { amenity: 'bench' }, ...pt(-8, 3) },
+          {
+            type: 'node',
+            id: 7,
+            tags: { emergency: 'fire_hydrant' },
+            ...pt(-4, 3),
+          },
+        ],
+      },
+      { center: CENTER }
+    )
+    const props = buildStreetProps(model, buildCollisionGrid(model))
+    const built = props.group.children.filter((c) => c.isMesh).map((c) => c.name)
+    expect(built.length).toBeGreaterThan(4)
+
+    /**
+     * ★★ CW-65: THE GUARD HAD A HOLE THE SIZE OF EVERY STANDALONE BUILDER.
+     * It enumerated buildStreetProps and nothing else, so `fireworks` (CW-64)
+     * and `traveler` (CW-65) were both outside what it could see - and a mesh
+     * it cannot see is exactly the mesh that gets forgotten. Ask THEM too.
+     */
+    const fireworks = buildFireworks(1000)
+    const traveler = buildTraveler('seattle')
+    traveler.place(0, 0, 0)
+    const standalone = [
+      ...fireworks.group.children,
+      ...traveler.group.children,
+    ]
+      .filter((c) => c.isMesh)
+      .map((c) => c.name)
+    expect(standalone).toContain('fireworks')
+    expect(standalone).toContain('traveler')
+    built.push(...standalone)
+    const orphans = built.filter((n) => !CLASS_BY_MESH_NAME.has(n))
+    expect(
+      orphans,
+      `these meshes would be dressed as SKY: ${orphans.join(', ')}`
+    ).toEqual([])
+    // The fixture is built so the props include a spread of classes, not one:
+    // a guard that only ever sees tree trunks would pass with every other
+    // mesh unclassified.
+    expect(built).toContain('tree-trunks')
+    expect(built).toContain('cars')
+    expect(built).toContain('people')
+    expect(CLASS_BY_MESH_NAME.get('tree-trunks')).toBe(SURFACE_CLASS.TREE)
+    props.dispose()
   })
 })

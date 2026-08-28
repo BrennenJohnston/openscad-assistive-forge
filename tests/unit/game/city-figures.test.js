@@ -5,8 +5,11 @@ import {
   FIGURE_BUILD_MIN,
   FIGURE_BUILD_MAX,
   FIGURE_POSES,
+  TRAVELER_CANE_REACH_M,
+  TRAVELER_CANE_THICK_M,
   makeFigureSpec,
   makeFigureGeoms,
+  makeTravelerSpec,
 } from '../../../src/js/game/city-figures.js'
 
 /** The same LCG shape the scene uses - deterministic across runs. */
@@ -180,5 +183,123 @@ describe('makeFigureGeoms', () => {
     )
     // Facing 0 = +X: the front leg reaches forward of the pelvis.
     expect(east.maxF).toBeGreaterThan(0.2)
+  })
+})
+
+/**
+ * ★★ CW-65 ADDED TWO ZONES TO THIS FUNCTION, AND 3,029 FIGURES IN SEATTLE
+ * ALONE GO THROUGH IT. The property worth a permanent guard is not that the
+ * traveler is right - it is that NOTHING ELSE MOVED.
+ *
+ * The checksums below are FNV-1a over the raw float bits of every vertex in
+ * the three original zones, taken at the commit that added the cane, and
+ * verified against the pre-CW-65 implementation directly: 800 specs across all
+ * four poses, 633,600 float comparisons, ZERO differences. The instrument that
+ * said so was red-proven by perturbing HEAD_FRACTION by one part in a million,
+ * which flagged all 800.
+ *
+ * If one of these moves, a figure moved. That is the whole point, so DO NOT
+ * re-baseline a failing number without finding out which vertex went where.
+ */
+describe('the traveler zones cost the ordinary figure nothing (CW-65)', () => {
+  /** FNV-1a over the float bits of legs + torso + figure. */
+  const zoneSum = (zones) => {
+    let h = 0x811c9dc5 >>> 0
+    const buf = new DataView(new ArrayBuffer(4))
+    for (const zone of ['legs', 'torso', 'figure']) {
+      for (const g of zones[zone]) {
+        const a = g.getAttribute('position').array
+        for (let i = 0; i < a.length; i++) {
+          buf.setFloat32(0, a[i])
+          for (let b = 0; b < 4; b++) {
+            h = (h ^ buf.getUint8(b)) >>> 0
+            h = Math.imul(h, 16777619) >>> 0
+          }
+        }
+      }
+    }
+    return h >>> 0
+  }
+
+  const PINNED = {
+    standing: 0x40832148,
+    walking: 0x0ae7957a,
+    jogging: 0xdc72ab09,
+    sitting: 0x2e25329f,
+  }
+
+  it.each(FIGURE_POSES)('%s is bit-for-bit what it was', (pose) => {
+    const spec = makeFigureSpec(lcg(0x5eed), pose, { seatZ: 0.45 })
+    const zones = makeFigureGeoms(3.5, -7.25, 0.9, spec)
+    expect(zoneSum(zones)).toBe(PINNED[pose])
+  })
+
+  it('gives an ordinary figure no cane and no glasses at all', () => {
+    for (const pose of FIGURE_POSES) {
+      const spec = makeFigureSpec(lcg(7), pose, { seatZ: 0.45 })
+      const zones = makeFigureGeoms(0, 0, 0, spec)
+      expect(zones.cane, `${pose} cane`).toEqual([])
+      expect(zones.glasses, `${pose} glasses`).toEqual([])
+    }
+  })
+})
+
+describe('the traveler (CW-65, CW-Q60)', () => {
+  it('is one more figure spec, inside the same signed ranges', () => {
+    // NOT a hardcoded body. The accessibility rule is that dimensions
+    // describing PEOPLE are parameters with documented ranges, and the
+    // traveler is a person like every other person in the city.
+    for (let i = 0; i < 200; i++) {
+      const spec = makeTravelerSpec(lcg(1000 + i))
+      expect(spec.pose).toBe('standing')
+      expect(spec.heightM).toBeGreaterThanOrEqual(FIGURE_HEIGHT_MIN_M)
+      expect(spec.heightM).toBeLessThanOrEqual(FIGURE_HEIGHT_MAX_M)
+      expect(spec.build).toBeGreaterThanOrEqual(FIGURE_BUILD_MIN)
+      expect(spec.build).toBeLessThanOrEqual(FIGURE_BUILD_MAX)
+    }
+  })
+
+  it('carries exactly one cane and one glasses band', () => {
+    const zones = makeFigureGeoms(0, 0, 0, makeTravelerSpec(lcg(11)))
+    expect(zones.cane).toHaveLength(1)
+    expect(zones.glasses).toHaveLength(1)
+  })
+
+  it('puts the cane tip ON THE GROUND, ahead of the figure', () => {
+    // A cane that floats is not a cane, and a cane that ends under the
+    // pavement is worse: the tip is what a player reads as contact.
+    const spec = makeTravelerSpec(lcg(3), { caneSide: 1 })
+    // Facing +x, so "ahead" is +x and the tip's reach is readable directly.
+    const zones = makeFigureGeoms(0, 0, 0, spec)
+    const cane = zones.cane[0]
+    cane.computeBoundingBox()
+    const bb = cane.boundingBox
+    // The tip reaches the ground within half a thickness (the box has width).
+    expect(bb.min.z).toBeLessThanOrEqual(TRAVELER_CANE_THICK_M)
+    expect(bb.min.z).toBeGreaterThan(-TRAVELER_CANE_THICK_M)
+    // And it leans FORWARD, not backward or straight down.
+    expect(bb.max.x).toBeGreaterThan(TRAVELER_CANE_REACH_M * 0.5)
+
+    // The head is above the cane's top: the cane hangs from a hand, and a
+    // hand is below a head. This is the cheap check that the joint chain was
+    // not read off the wrong end.
+    const body = [...zones.figure]
+    let headTop = -Infinity
+    for (const g of body) {
+      g.computeBoundingBox()
+      headTop = Math.max(headTop, g.boundingBox.max.z)
+    }
+    expect(headTop).toBeGreaterThan(bb.max.z)
+  })
+
+  it('hangs the cane off the SAME side the caller asks for', () => {
+    const right = makeFigureGeoms(0, 0, 0, makeTravelerSpec(lcg(5), { caneSide: 1 }))
+    const left = makeFigureGeoms(0, 0, 0, makeTravelerSpec(lcg(5), { caneSide: -1 }))
+    right.cane[0].computeBoundingBox()
+    left.cane[0].computeBoundingBox()
+    // Facing +x, so the two sides differ in y and nothing else about them.
+    expect(right.cane[0].boundingBox.min.y).toBeGreaterThan(
+      left.cane[0].boundingBox.max.y
+    )
   })
 })
