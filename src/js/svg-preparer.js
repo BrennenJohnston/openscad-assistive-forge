@@ -32,6 +32,7 @@ import {
   applyToPoint,
 } from 'transformation-matrix';
 import { offsetPath } from './svg-offset.js';
+import { polygonFromPathData, boundsOf } from './svg-nesting.js';
 import {
   pathFromPathData,
   pathToPathData,
@@ -887,6 +888,7 @@ export function flattenLayers(
   const out = [];
   if (!Array.isArray(classifiedElements) || !Array.isArray(layers)) return out;
   const count = Math.max(0, Math.min(limit || 0, LAYER_EMIT_CAP));
+  const raw = [];
 
   for (let layer = 1; layer <= count; layer++) {
     const forThisLayer = classifiedElements.filter((el, i) => {
@@ -896,14 +898,91 @@ export function flattenLayers(
       const assigned = layers[i] || 1;
       return assigned >= layer;
     });
-    out.push(
+    raw.push(
       forThisLayer.length === 0
         ? null
         : flattenToCompoundPath(forThisLayer, svgMeta, warningsOut)
     );
   }
-  return out;
+  return normalizeLayerStack(raw);
 }
+
+/**
+ * Put every layer on one shared, normalized canvas sized from LAYER 1 (DP-7).
+ *
+ * Four things were MEASURED against OpenSCAD 2026.01.03 to arrive at this,
+ * every one of which would otherwise have shipped as geometry that looks
+ * correct from directly above:
+ *
+ *   1. resize() fits the CONTENT bounding box, not the document. Fitting each
+ *      layer to the charm face independently scaled the probe's 8 mm inner
+ *      square up to 20 mm, the same size as the 36 mm outer one. Three
+ *      identical slabs.
+ *   2. import(center = false) preserves ABSOLUTE user coordinates (the probe
+ *      came back at 2..38 and 16..24 exactly), so layers already share one
+ *      coordinate system and need ONE transform between them.
+ *   3. OpenSCAD honours a <g transform> on import: a translate+scale wrapper
+ *      moved a square from 16..24 to 12..28 as written.
+ *   4. A width with NO unit is pixels, converted at 72 dpi: a 100-wide
+ *      document came in at 35.28 mm. The unit is therefore always written.
+ *
+ * And one quirk worth naming: OpenSCAD maps the viewBox as x_out = x - minX
+ * but y_out = (height - minY) - y, so a NEGATIVE minY shifts the result by
+ * twice itself. The canvas is always written with minX and minY at zero, and
+ * then the mapping is simply a y flip inside [0,W] x [0,H] - the same flip the
+ * single-design path already lives with, so the two agree.
+ *
+ * The result: layer 1 spans the full canvas width, deeper layers sit inside it
+ * at their true relative size and position, and the model needs one scale
+ * factor plus the aspect it already carries.
+ *
+ * @param {Array<string|null>} svgs - Per-layer SVGs, layer 1 first
+ * @returns {Array<string|null>} The same list on the normalized canvas
+ */
+function normalizeLayerStack(svgs) {
+  const first = svgs.find((v) => v);
+  if (!first) return svgs;
+  const d = /\sd="([^"]*)"/.exec(first);
+  if (!d) return svgs;
+
+  const { points } = polygonFromPathData(d[1]);
+  const box = boundsOf(points);
+  if (!box) return svgs;
+  const width = box.maxX - box.minX;
+  const height = box.maxY - box.minY;
+  if (!(width > 0) || !(height > 0)) return svgs;
+
+  const scale = LAYER_CANVAS_SPAN / width;
+  const canvasH = round6(height * scale);
+  // translate(a,b) scale(s) scales first, so this lands the design's own
+  // bounding box exactly on [0, SPAN] x [0, canvasH].
+  const t =
+    `translate(${round6(-scale * box.minX)},${round6(-scale * box.minY)}) ` +
+    `scale(${round6(scale)})`;
+  const open =
+    `<svg xmlns="http://www.w3.org/2000/svg" ` +
+    `width="${LAYER_CANVAS_SPAN}mm" height="${canvasH}mm" ` +
+    `viewBox="0 0 ${LAYER_CANVAS_SPAN} ${canvasH}">` +
+    `<g transform="${t}">`;
+
+  return svgs.map((svg) =>
+    svg
+      ? svg.replace(/^<svg[^>]*>/, open).replace(/<\/svg>$/, '</g></svg>')
+      : null
+  );
+}
+
+function round6(n) {
+  return Math.round(n * 1e6) / 1e6;
+}
+
+/**
+ * The width every layer file is normalized to, in millimetres of SVG canvas.
+ * A CONTRACT between this emitter and any tile that reads layer files: the
+ * model multiplies by one scale factor to reach the size it wants, and may
+ * not be changed without changing them together.
+ */
+export const LAYER_CANVAS_SPAN = 100;
 
 /**
  * Full SVG preparation pipeline.

@@ -2477,14 +2477,47 @@ describe('flattenLayers - the stacked-mask law', () => {
     });
   });
 
-  it('carries the probe viewBox onto every layer, so the files align', () => {
-    // Three imports have to land in the same place; a layer written on a
-    // different viewBox would print offset from the one under it.
-    for (const svg of emitProbe()) {
-      expect(svg).toContain('viewBox="0 0 40 40"');
-      expect(svg).toContain('width="40mm"');
+  it('puts every layer on ONE normalized canvas, sized from layer 1', () => {
+    // Three imports have to land in the same place at their true relative
+    // sizes. OpenSCAD's resize() fits the CONTENT box, so fitting each layer
+    // separately would scale the innermost square up to the outermost's size.
+    // Instead every layer carries the SAME transform, computed from layer 1.
+    const out = emitProbe();
+    const transforms = out.map((s) => /<g transform="([^"]*)"/.exec(s)[1]);
+    expect(new Set(transforms).size).toBe(1);
+
+    for (const svg of out) {
+      // The unit is written: a width with no unit is PIXELS, converted at
+      // 72 dpi, and a 100-wide document came back 35.28 mm.
+      expect(svg).toContain('width="100mm"');
+      expect(svg).toContain('viewBox="0 0 100 100"');
       expect(svg).toContain('fill-rule="evenodd"');
+      // minY is zero on purpose: OpenSCAD maps y as (height - minY) - y, so a
+      // negative minY would shift the import by twice itself.
+      expect(svg).toMatch(/viewBox="0 0 /);
     }
+  });
+
+  it('normalizes layer 1 to exactly the canvas span', () => {
+    const svg = emitProbe()[0];
+    const m = /translate\(([-\d.]+),([-\d.]+)\) scale\(([\d.]+)\)/.exec(svg);
+    expect(m).toBeTruthy();
+    const scale = parseFloat(m[3]);
+    // The probe's outer square is 36 units wide and the canvas is 100.
+    expect(scale).toBeCloseTo(100 / 36, 6);
+    // translate puts the design's own minimum corner on the origin.
+    expect(parseFloat(m[1])).toBeCloseTo(-scale * 2, 6);
+  });
+
+  it('a non-square design gets a canvas of its own aspect', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50">' +
+      '<path d="M0 0 H80 V20 H0 Z" fill="#000"/></svg>';
+    const els = classifyElements(parseSvgElements(svg));
+    const out = flattenLayers(els, [1], 1, { viewBox: '0 0 100 50' });
+    // 80 wide by 20 tall becomes 100 by 25.
+    expect(out[0]).toContain('viewBox="0 0 100 25"');
+    expect(out[0]).toContain('height="25mm"');
   });
 
   it('a single-shape layer passes through byte for byte', () => {

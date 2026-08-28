@@ -131,6 +131,12 @@ const EXAMPLES = {
       '/examples/q-charm/q_Charm_L.dxf',
       '/examples/q-charm/presets/large-charm.json',
       '/examples/q-charm/presets/small-charm.json',
+      // DP-8. Example passes for the layered mode, so desktop OpenSCAD has
+      // something to point the layer parameters at. The parameters themselves
+      // default to empty: the tiered mode is off until someone fills one in.
+      '/examples/q-charm/design_layer_1.svg',
+      '/examples/q-charm/design_layer_2.svg',
+      '/examples/q-charm/design_layer_3.svg',
       '/examples/nasif-charm-maker/svg-library/smiley.svg',
       '/examples/nasif-charm-maker/svg-library/heart.svg',
       '/examples/nasif-charm-maker/svg-library/star.svg',
