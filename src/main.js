@@ -16444,6 +16444,29 @@ if (typeof window !== 'undefined') {
     },
 
     /**
+     * The reference overlay's live placement (DP-5). Where the image SITS is
+     * saved per project, and a spec has to be able to prove the numbers came
+     * back rather than infer it from a picture.
+     * @returns {Object|null}
+     */
+    overlayPlacement() {
+      const c = previewManager?.overlayConfig;
+      if (!c) return null;
+      return {
+        enabled: c.enabled,
+        offsetX: c.offsetX,
+        offsetY: c.offsetY,
+        rotationDeg: c.rotationDeg,
+        width: c.width,
+        height: c.height,
+        lockAspect: c.lockAspect,
+        zPreset: c.zPreset,
+        zCustomMm: c.zCustomMm,
+        zPosition: c.zPosition,
+      };
+    },
+
+    /**
      * Mouse-wheel zoom focal point (UF-11). The Preferences checkbox became
      * this setting's only control, so specs prove a change against the
      * manager's state rather than a second checkbox.
