@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A pendant can take the shape of your own drawing** (DP-11) - the Flat Pendant gains a shape
+  called "design": instead of a circle or a square, the outline of your drawing becomes the
+  pendant itself, and everything inside it stands up on the surface as raised detail. A traced
+  bird becomes a bird-shaped pendant. Two things this needed getting right, neither of which
+  would have looked wrong on screen. An outline that was DRAWN as a line, rather than filled in,
+  used to come out as a hollow ring with the details floating in the middle; it is now filled.
+  And a traced photograph's outermost shape is almost always the paper it was drawn on, which
+  would have made every traced photo a rectangle; the background is now stepped over. The
+  keychain hole gains position controls, and because the pendant is now whatever shape you drew,
+  the app checks that the hole is actually inside it with at least 1.2 mm of material around it.
+  If it is not, it says so in plain words with both measurements, and leaves the hole exactly
+  where you put it
+
 - **The Flat Pendant and the Logo Plate caught up with the Bracelet Clip Charm** (DP-9, DP-10) -
   three models share the charm program and features kept being added to one and forgotten on the
   others. All three now offer the same things: move, rotate and resize your design, thicken its
