@@ -10,6 +10,7 @@ import { announceImmediate } from './announcer.js';
 import { escapeHtml } from './html-utils.js';
 import * as SharedImageStore from './shared-image-store.js';
 import { getAppPrefKey, safeGetItem, safeSetItem } from './storage-keys.js';
+import { noteOverlayChanged } from './overlay-settings.js';
 // UF-14 (U-25): auto-rotate and its speed are PER-UI viewing preferences
 // (signed Q-40 table); the reference-overlay cluster stays app-level.
 import { readScopedPref, writeScopedPref } from './ui-scoped-prefs.js';
@@ -685,6 +686,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
             if (!overlayToggle?.checked) {
               overlayToggle.checked = true;
               previewManager.setOverlayEnabled(true);
+              noteOverlayChanged();
             }
             updateOverlayUIFromConfig();
             overlaySourceSelect.value = fileName;
@@ -776,6 +778,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       if (!overlayToggle?.checked) {
         overlayToggle.checked = true;
         previewManager.setOverlayEnabled(true);
+        noteOverlayChanged();
       }
 
       updateOverlayUIFromConfig();
@@ -794,6 +797,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       const previewManager = getPreviewManager();
       if (previewManager) {
         previewManager.setOverlayEnabled(enabled);
+        noteOverlayChanged();
         updateOverlayStatus();
         localStorage.setItem(
           STORAGE_KEY_OVERLAY_ENABLED,
@@ -830,6 +834,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       const previewManager = getPreviewManager();
       if (previewManager) {
         previewManager.setOverlayOpacity(opacityPercent / 100);
+        noteOverlayChanged();
         localStorage.setItem(
           STORAGE_KEY_OVERLAY_OPACITY,
           opacityPercent.toString()
@@ -860,6 +865,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
     const previewManager = getPreviewManager();
     if (previewManager) {
       previewManager.setOverlaySvgColor(color);
+      noteOverlayChanged();
     }
     localStorage.setItem(STORAGE_KEY_OVERLAY_SVG_COLOR, color);
     localStorage.setItem(
@@ -968,6 +974,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       const previewManager = getPreviewManager();
       if (previewManager) {
         previewManager.setOverlayTransform({ offsetX: 0, offsetY: 0 });
+        noteOverlayChanged();
         updateOverlayUIFromConfig();
       }
     });
@@ -980,6 +987,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       const previewManager = getPreviewManager();
       if (!isNaN(width) && previewManager) {
         previewManager.setOverlaySize({ width });
+        noteOverlayChanged();
         updateOverlayUIFromConfig();
         localStorage.setItem(STORAGE_KEY_OVERLAY_WIDTH, String(width));
       }
@@ -993,6 +1001,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       const previewManager = getPreviewManager();
       if (!isNaN(height) && previewManager) {
         previewManager.setOverlaySize({ height });
+        noteOverlayChanged();
         updateOverlayUIFromConfig();
         localStorage.setItem(STORAGE_KEY_OVERLAY_HEIGHT, String(height));
       }
@@ -1023,6 +1032,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       const previewManager = getPreviewManager();
       if (!isNaN(offsetX) && previewManager) {
         previewManager.setOverlayTransform({ offsetX });
+        noteOverlayChanged();
       }
     });
   }
@@ -1034,6 +1044,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       const previewManager = getPreviewManager();
       if (!isNaN(offsetY) && previewManager) {
         previewManager.setOverlayTransform({ offsetY });
+        noteOverlayChanged();
       }
     });
   }
@@ -1048,6 +1059,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       const previewManager = getPreviewManager();
       if (previewManager) {
         previewManager.setOverlayTransform({ rotationDeg });
+        noteOverlayChanged();
       }
     });
   }
@@ -1076,6 +1088,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       const previewManager = getPreviewManager();
       if (previewManager) {
         previewManager.setOverlayZ({ preset: overlayZPresetSelect.value });
+        noteOverlayChanged();
       }
       syncOverlayZControls();
     });
@@ -1088,6 +1101,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       const previewManager = getPreviewManager();
       if (previewManager) {
         previewManager.setOverlayZ({ preset: 'custom', customMm });
+        noteOverlayChanged();
       }
     });
   }

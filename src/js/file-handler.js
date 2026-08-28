@@ -58,6 +58,12 @@ import { getErrorLogPanel, ERROR_LOG_TYPE } from './error-log-panel.js';
 import * as SharedImageStore from './shared-image-store.js';
 import { importProjectFromFiles } from './storage-manager.js';
 import { addProjectFile, getProjectFiles } from './saved-projects-manager.js';
+import {
+  applyOverlaySettings,
+  readOverlaySettings,
+  registerOverlaySettingsHost,
+} from './overlay-settings.js';
+import { getScaleFactor } from './unit-sync.js';
 import { showMissingDependenciesDialog, showConfirmDialog } from './dialogs.js';
 import { getEditorStateManager } from './editor-state-manager.js';
 import { escapeHtml } from './html-utils.js';
@@ -1407,6 +1413,7 @@ export function initFileHandler({
         const savedProjectId = getCurrentSavedProjectId?.();
         if (savedProjectId) {
           try {
+            await restoreOverlaySettings(savedProjectId);
             await loadUserSvgsIntoGallery(savedProjectId);
           } catch (error) {
             console.warn(
@@ -1635,6 +1642,28 @@ export function initFileHandler({
       console.warn('[SVG Upload] Failed to save to project:', err);
     }
   });
+
+  /**
+   * Put a project's saved reference-overlay placement back (DP-5).
+   *
+   * A project with no settings file is the ordinary case and is left alone:
+   * the app-level overlay preferences still apply, exactly as before.
+   *
+   * @param {string} projectId
+   */
+  async function restoreOverlaySettings(projectId) {
+    try {
+      const previewManager = getPreviewManager?.();
+      if (!previewManager) return;
+      const files = await getProjectFiles(projectId);
+      const settings = readOverlaySettings(files);
+      if (!settings) return;
+      applyOverlaySettings(previewManager, settings);
+      console.log(`[Overlay settings] Restored for project ${projectId}`);
+    } catch (err) {
+      console.warn('[Overlay settings] Could not restore:', err);
+    }
+  }
 
   /**
    * Load user-uploaded SVGs from a project's file store into the gallery.
@@ -1868,6 +1897,20 @@ export function initFileHandler({
   // ------------------------------------------------------------------
   // Public API
   // ------------------------------------------------------------------
+
+  // DP-5: this module is the layer that knows which project is open, so it is
+  // the one that tells overlay-settings where to write. Registering here
+  // rather than importing file-handler from the overlay controller keeps the
+  // two from depending on each other.
+  registerOverlaySettingsHost({
+    getProjectId: () => getCurrentSavedProjectId?.() ?? null,
+    getConfig: () => getPreviewManager()?.getOverlayConfig?.() ?? null,
+    getCalibration: () => {
+      const pxPerMm = getScaleFactor();
+      return Number.isFinite(pxPerMm) && pxPerMm > 0 ? 1 / pxPerMm : null;
+    },
+    writeFile: addProjectFile,
+  });
 
   return {
     handleFile,
