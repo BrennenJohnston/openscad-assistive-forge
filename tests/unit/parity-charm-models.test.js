@@ -232,6 +232,9 @@ const DETECT = {
   design2: (p, key) => !!p[`${pre(key)}_file_2`],
   layers: (p) => !!p.design_layer_1 && !!p.design_layer_1_depth,
   clipfit: (p) => !!p.gap_width || !!p.inner_height,
+  shapefromdesign: (p) =>
+    !!p.design_silhouette &&
+    (p.charm_shape?.enum || []).some((e) => e.value === 'design'),
 };
 
 /** The contract table, read out of the guide the same way a person reads it. */

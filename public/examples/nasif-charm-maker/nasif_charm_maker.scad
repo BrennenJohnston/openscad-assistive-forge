@@ -5,7 +5,7 @@
 
 /* [Shape] */
 // Base shape of the charm
-charm_shape = "circle"; // [circle, square, rounded_rect, hexagon, oval]
+charm_shape = "circle"; // [circle, square, rounded_rect, hexagon, oval, design]
 
 // Width of the charm
 charm_width = 30; // [15:1:60]
@@ -46,6 +46,14 @@ design_up_down = 0; // [-15:0.5:15]
 
 // Rotation angle for design (degrees, counter-clockwise)
 design_rotation = 0; // [-180:5:180]
+
+// The design's own outline, with every hole filled. Written by the Assistive
+// Forge app from your drawing; used only when Charm shape is "design", where
+// it becomes the whole pendant instead of a circle or a square.
+design_silhouette = ""; // [file:svg]
+
+// Outline width divided by height (set automatically by the app)
+design_silhouette_aspect = 1; // [0.05:0.01:20]
 
 /* [Text] */
 // Text or number to display on the charm face (leave empty for none)
@@ -111,6 +119,12 @@ attachment_type = "keychain_hole"; // [keychain_hole, lanyard_slot, bail_loop, n
 // Hole diameter (for keychain hole)
 hole_diameter = 4; // [2:0.5:8]
 
+// Left (-) / right (+) position offset for the attachment
+attachment_x = 0; // [-30:0.5:30]
+
+// Down (-) / up (+) position offset for the attachment
+attachment_y = 0; // [-30:0.5:30]
+
 // Bail loop thickness (for bail loop)
 bail_thickness = 2; // [1:0.5:4]
 
@@ -121,17 +135,41 @@ bail_inner_radius = 3; // [2:0.5:6]
 $fn = 64; // [24:8:128]
 
 /* [Hidden] */
+// The app writes the outline on a canvas this many units wide. A CONTRACT
+// with src/js/svg-preparer.js: change one and you change both.
+silhouette_canvas_span = 100;
+shape_is_design = charm_shape == "design" && design_silhouette != "";
+
 effective_width = charm_width;
-effective_height = charm_shape == "circle" ? charm_width : charm_height;
+// A design-shaped pendant takes its height from the drawing, not from a
+// separate dial: the outline decides its own proportions, and a height set
+// against it would squash the very shape the person chose.
+effective_height = shape_is_design
+    ? charm_width / design_silhouette_aspect
+    : (charm_shape == "circle" ? charm_width : charm_height);
 // The face the design may fill: inside the border ring when there is one
 face_w = effective_width - (add_border == "yes" ? 2 * border_width : 0);
 face_h = effective_height - (add_border == "yes" ? 2 * border_width : 0);
 fit_w = face_w * design_scale / 100;
 fit_h = face_h * design_scale / 100;
 assert(design_file_aspect > 0, "design_file_aspect must be positive (width divided by height)");
+assert(design_silhouette_aspect > 0, "design_silhouette_aspect must be positive (width divided by height)");
+// Choosing the design shape without an outline would silently fall back to a
+// circle, which is not what was asked for and gives no clue why.
+assert(charm_shape != "design" || design_silhouette != "",
+       "charm_shape is \"design\" but no outline file is set - choose a design first");
 
 module charm_base_2d() {
-    if (charm_shape == "circle") {
+    if (shape_is_design) {
+        // The drawing's own outline becomes the pendant. Scaled by ONE factor
+        // and never resize()d: the outline and the relief files share a
+        // canvas, and fitting them separately would size the detail against a
+        // different box from the body it sits on.
+        canvas_h = silhouette_canvas_span / design_silhouette_aspect;
+        scale(effective_width / silhouette_canvas_span)
+            translate([-silhouette_canvas_span / 2, -canvas_h / 2])
+                import(design_silhouette, center = false);
+    } else if (charm_shape == "circle") {
         circle(d = effective_width);
     } else if (charm_shape == "oval") {
         scale([1, effective_height / effective_width])
@@ -232,7 +270,7 @@ module attachment() {
         hole_y = charm_shape == "circle"
             ? effective_width / 2 - hole_diameter / 2 - 1
             : effective_height / 2 - hole_diameter / 2 - 1;
-        translate([0, hole_y, -0.01])
+        translate([attachment_x, hole_y + attachment_y, -0.01])
             cylinder(d = hole_diameter, h = charm_thickness + border_height + 0.02);
     } else if (attachment_type == "lanyard_slot") {
         slot_width = hole_diameter * 2;
@@ -240,7 +278,7 @@ module attachment() {
         slot_y = charm_shape == "circle"
             ? effective_width / 2 - hole_diameter / 2 - 1
             : effective_height / 2 - hole_diameter / 2 - 1;
-        translate([0, slot_y, -0.01])
+        translate([attachment_x, slot_y + attachment_y, -0.01])
             linear_extrude(height = charm_thickness + border_height + 0.02)
                 hull() {
                     translate([-(slot_width / 2 - r), 0]) circle(r = r);
@@ -250,7 +288,7 @@ module attachment() {
         bail_y = charm_shape == "circle"
             ? effective_width / 2
             : effective_height / 2;
-        translate([0, bail_y, charm_thickness / 2])
+        translate([attachment_x, bail_y + attachment_y, charm_thickness / 2])
             rotate([0, 90, 0])
                 rotate_extrude(angle = 180, $fn = 32)
                     translate([bail_inner_radius, 0, 0])

@@ -529,7 +529,15 @@ test.describe('The drawing editor door', () => {
     await page.keyboard.press('Enter')
     await expect(page.locator('.svg-prep-object')).toHaveCount(2)
 
-    await page.locator('[data-action="undo-delete"]').click()
+    // The delete rebuilds the whole list, so the undo control is a NEW node
+    // by the time we reach for it. Waiting for it to be actionable rather
+    // than clicking straight away is not a proven fix for the flake this
+    // case has shown on Edge and Chromium - it has passed on retry every
+    // time and has never reproduced locally - but clicking a control that
+    // was just re-rendered without waiting for it is a race either way.
+    const undo = page.locator('[data-action="undo-delete"]')
+    await expect(undo).toBeEnabled({ timeout: 15000 })
+    await undo.click()
     await expect(page.locator('.svg-prep-object')).toHaveCount(3)
   })
 

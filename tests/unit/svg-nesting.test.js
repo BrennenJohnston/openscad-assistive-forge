@@ -24,7 +24,15 @@ import {
   suggestLayers,
   layerLimit,
   validateLayers,
+  distanceToEdge,
+  holeFits,
 } from '../../src/js/svg-nesting.js';
+import {
+  parseSvgElements,
+  classifyElements,
+  flattenSilhouette,
+  flattenLayers,
+} from '../../src/js/svg-preparer.js';
 
 /** A square as a path `d` string. */
 const square = (x, y, size) =>
@@ -374,5 +382,178 @@ describe('the clipper2-js trap', () => {
     // And the ported implementation is genuinely present, so the guard is
     // not passing merely because the module forgot to do the work.
     expect(code).toMatch(/export function pointInPolygon/);
+  });
+});
+
+// ── DP-11: the outline, and where a hole may go ─────────────────────────────
+
+describe('distanceToEdge', () => {
+  const sq = polygonFromPathData('M 0 0 L 20 0 L 20 20 L 0 20 Z').points;
+
+  it('measures to the nearest edge, not the nearest corner', () => {
+    expect(distanceToEdge({ x: 10, y: 10 }, sq)).toBeCloseTo(10, 6);
+    expect(distanceToEdge({ x: 2, y: 10 }, sq)).toBeCloseTo(2, 6);
+    expect(distanceToEdge({ x: 10, y: 19 }, sq)).toBeCloseTo(1, 6);
+  });
+
+  it('measures from outside as a positive distance too', () => {
+    // The sign is the caller's business: holeFits() asks pointInPolygon
+    // separately, so this only ever answers "how far is the edge".
+    expect(distanceToEdge({ x: -5, y: 10 }, sq)).toBeCloseTo(5, 6);
+  });
+});
+
+describe('holeFits - where a keychain hole may go', () => {
+  const sq = polygonFromPathData('M 0 0 L 40 0 L 40 40 L 0 40 Z').points;
+
+  it('accepts a hole with room around it', () => {
+    const r = holeFits(sq, { x: 20, y: 20 }, 2, 1.2);
+    expect(r.fits).toBe(true);
+    expect(r.reason).toBeNull();
+    expect(r.clearance).toBeCloseTo(20, 6);
+    expect(r.required).toBeCloseTo(3.2, 6);
+  });
+
+  it('refuses a hole outside the shape, and says so', () => {
+    const r = holeFits(sq, { x: 60, y: 20 }, 2, 1.2);
+    expect(r.fits).toBe(false);
+    expect(r.reason).toBe('outside');
+  });
+
+  it('refuses a hole that would leave too thin a wall', () => {
+    // Inside, but 2 mm from the edge with a 2 mm radius: the web left is
+    // nothing at all. A print like that snaps on the first tug.
+    const r = holeFits(sq, { x: 2, y: 20 }, 2, 1.2);
+    expect(r.fits).toBe(false);
+    expect(r.reason).toBe('too-close');
+    expect(r.clearance).toBeCloseTo(2, 6);
+    expect(r.required).toBeCloseTo(3.2, 6);
+  });
+
+  it('accepts the same hole once the wall is thick enough', () => {
+    expect(holeFits(sq, { x: 3.3, y: 20 }, 2, 1.2).fits).toBe(true);
+    expect(holeFits(sq, { x: 3.1, y: 20 }, 2, 1.2).fits).toBe(false);
+  });
+
+  it('refuses when there is no outline to check against', () => {
+    expect(holeFits([], { x: 0, y: 0 }, 2, 1.2).reason).toBe('no-outline');
+    expect(holeFits(null, { x: 0, y: 0 }, 2, 1.2).fits).toBe(false);
+  });
+
+  it('handles a concave outline, where a bounding box would lie', () => {
+    // A C shape: the middle of its bounding box is in the gap, not in the
+    // material. Anything checking a rectangle would put the ring in mid-air.
+    const c = polygonFromPathData(
+      'M 0 0 L 30 0 L 30 10 L 10 10 L 10 30 L 30 30 L 30 40 L 0 40 Z'
+    ).points;
+    expect(holeFits(c, { x: 20, y: 20 }, 2, 1.2).reason).toBe('outside');
+    expect(holeFits(c, { x: 5, y: 20 }, 2, 1.2).fits).toBe(true);
+  });
+});
+
+describe('flattenSilhouette - the outline a pendant is cut from', () => {
+  const dOf = (svg) => svg.match(/ d="([^"]*)"/)[1];
+
+  function silhouetteOf(svgText) {
+    // RAW elements, with the classified roles beside them. The outline is the
+    // shape the eye sees, and stroke-to-fill would turn it into a thin band.
+    const raw = parseSvgElements(svgText);
+    const roles = classifyElements(raw).map((e) => e.role);
+    return flattenSilhouette(raw, roles, { viewBox: '0 0 40 40' });
+  }
+
+  it('★ a stroke-drawn outline becomes a SOLID body, not a ring', () => {
+    // The bird fixture's own outline is a stroke. Built from the CONVERTED
+    // geometry the pendant came out as a hollow ring with the eye and the
+    // feathers floating in the hole. The raw subpath, filled, is the body.
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">' +
+      '<path d="M5 5 H35 V35 H5 Z" fill="none" stroke="#000" ' +
+      'stroke-width="2"/></svg>';
+    const out = silhouetteOf(svg);
+    const box = boundsOf(polygonFromPathData(dOf(out)).points);
+    // The whole 30-unit square, not a 2-unit-wide band around it.
+    expect(box).toEqual({ minX: 5, minY: 5, maxX: 35, maxY: 35 });
+    expect((dOf(out).match(/M/gi) || []).length).toBe(1);
+  });
+
+  it('★ descends past a full-bleed background to the drawing on it', () => {
+    // A traced photograph's outermost shape is the paper it was drawn on.
+    // Taking roots naively gave a rectangle, so every traced photograph would
+    // have made a rectangular pendant.
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">' +
+      '<rect width="40" height="40" fill="#efe9dc"/>' +
+      '<path d="M10 10 H30 V30 H10 Z" fill="#111"/></svg>';
+    const box = boundsOf(polygonFromPathData(dOf(silhouetteOf(svg))).points);
+    expect(box).toEqual({ minX: 10, minY: 10, maxX: 30, maxY: 30 });
+  });
+
+  it('keeps the outermost shape and drops what is inside it', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">' +
+      '<path d="M2 2 H38 V38 H2 Z" fill="#000"/>' +
+      '<path d="M10 10 H30 V30 H10 Z" fill="#000"/>' +
+      '<path d="M16 16 H24 V24 H16 Z" fill="#000"/></svg>';
+    const out = silhouetteOf(svg);
+    const box = boundsOf(polygonFromPathData(dOf(out)).points);
+    expect(box).toEqual({ minX: 2, minY: 2, maxX: 38, maxY: 38 });
+    // One outline, not three: the inner squares are detail, not body.
+    expect((dOf(out).match(/M/gi) || []).length).toBe(1);
+  });
+
+  it('a hole in the RELIEF is not a hole in the pendant', () => {
+    // Someone marked the middle "cut out" so it would not print as material.
+    // Sawing the body in half is not what they asked for.
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">' +
+      '<path d="M0 0 H40 V40 H0 Z" fill="#000"/>' +
+      '<path d="M10 10 H30 V30 H10 Z" fill="#fff"/></svg>';
+    const els = classifyElements(parseSvgElements(svg));
+    expect(els.map((e) => e.role)).toEqual(['foreground', 'hole']);
+    const box = boundsOf(polygonFromPathData(dOf(silhouetteOf(svg))).points);
+    expect(box).toEqual({ minX: 0, minY: 0, maxX: 40, maxY: 40 });
+  });
+
+  it('keeps every separate shape when a drawing has several', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 20">' +
+      '<path d="M0 0 H10 V10 H0 Z" fill="#000"/>' +
+      '<path d="M50 0 H60 V10 H50 Z" fill="#000"/></svg>';
+    const box = boundsOf(polygonFromPathData(dOf(silhouetteOf(svg))).points);
+    expect(box.minX).toBe(0);
+    expect(box.maxX).toBe(60);
+  });
+
+  it('lands on the SAME canvas as the layer files', () => {
+    // The body and the reliefs must share one coordinate system, or the
+    // pendant and the detail on it are fitted against different boxes.
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">' +
+      '<path d="M2 2 H38 V38 H2 Z" fill="#000"/>' +
+      '<path d="M10 10 H30 V30 H10 Z" fill="#000"/>' +
+      '<path d="M16 16 H24 V24 H16 Z" fill="#000"/></svg>';
+    const raw = parseSvgElements(svg);
+    const els = classifyElements(raw);
+    const tree = buildNestingTree(els);
+    const meta = { viewBox: '0 0 40 40' };
+    const roles = els.map((e) => e.role);
+    const body = flattenSilhouette(raw, roles, meta);
+    const layers = flattenLayers(
+      els,
+      suggestLayers(tree),
+      layerLimit(tree),
+      meta
+    );
+    const tOf = (v) => /<g transform="([^"]*)"/.exec(v)[1];
+    expect(tOf(body)).toBe(tOf(layers[0]));
+    expect(body).toContain('width="100mm"');
+  });
+
+  it('returns nothing when there is no shape to cut', () => {
+    const els = classifyElements(parseSvgElements('<svg/>'));
+    expect(flattenSilhouette(parseSvgElements('<svg/>'), [], {})).toBeNull();
+    expect(flattenSilhouette(null, null, {})).toBeNull();
+    expect(flattenSilhouette([], ['foreground'], {})).toBeNull();
   });
 });

@@ -15,6 +15,7 @@ import {
   clearSvgPrepMetadata,
   isAspectCompanionParam,
   findLayerParams,
+  findSilhouetteParams,
   isLayerCompanionParam,
 } from '../../src/js/ui-generator.js';
 import { readFileSync } from 'node:fs';
@@ -37,6 +38,7 @@ vi.mock('../../src/js/svg-preparer.js', () => ({
   parseSvgElements: vi.fn(() => []),
   classifyElements: vi.fn((els) => els),
   flattenLayers: vi.fn(() => []),
+  flattenSilhouette: vi.fn(() => null),
   LAYER_EMIT_CAP: 3,
   analyzeSvg: vi.fn(() => ({
     status: 'ready',
@@ -2089,6 +2091,44 @@ describe('per-layer design companions (DP-7)', () => {
       expect(isLayerCompanionParam('design_file', parameters)).toBe(false);
       // No design_file to hang off: not a companion, just a name.
       expect(isLayerCompanionParam('other_layer_1', parameters)).toBe(false);
+    });
+  });
+
+  describe('the outline companion (DP-11)', () => {
+    it('is found when a model can take its shape from the design', () => {
+      const parameters = {
+        design_file: fileParam('design_file'),
+        design_silhouette: fileParam('design_silhouette'),
+        design_silhouette_aspect: numParam('design_silhouette_aspect'),
+      };
+      const found = findSilhouetteParams(parameters.design_file, parameters);
+      expect(found.file.name).toBe('design_silhouette');
+      expect(found.aspect.name).toBe('design_silhouette_aspect');
+    });
+
+    it('is absent for a model that cannot', () => {
+      const parameters = { design_file: fileParam('design_file') };
+      expect(
+        findSilhouetteParams(parameters.design_file, parameters)
+      ).toBeNull();
+      expect(findSilhouetteParams(null, null)).toBeNull();
+    });
+
+    it('gets a value but NO control, like the other companions', () => {
+      const params = buildParams({
+        params: [
+          fileParam('design_file'),
+          fileParam('design_silhouette'),
+          numParam('design_silhouette_aspect'),
+        ],
+      });
+      const el = document.createElement('div');
+      document.body.appendChild(el);
+      renderParameterUI(params, el, vi.fn(), {});
+      expect(el.querySelector('#param-design_file')).toBeTruthy();
+      expect(el.querySelector('#param-design_silhouette')).toBeNull();
+      expect(el.querySelector('#param-design_silhouette_aspect')).toBeNull();
+      el.remove();
     });
   });
 
