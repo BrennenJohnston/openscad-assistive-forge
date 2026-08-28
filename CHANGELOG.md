@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Saying "Not now" to the tour puts you back at the top of the Main Page** (DP-2) - the tour
+  question scrolls the tour cards up so it can point at the button it is asking about, and until
+  now answering "no" left you there, with "Open or start a project" and Saved Projects scrolled
+  off the top. Answering no now takes you back to the top of the page and lands you on the Main
+  Page heading, so a keyboard or screen-reader user carries on from the beginning of the page
+  rather than from the middle. The Not now button, the Escape key and clicking outside the
+  question all do the same thing, and the tip on the tour card still appears exactly as before.
+  Choosing to start the tour is unchanged
+
 - **The first screen makes the recommendation instead of asking you to** (DP-1) - the welcome
   modal now opens with Assistive Forge already chosen, and "Remember my choice on this device"
   now starts UNCHECKED. A first-time visitor can press Download & Continue once and be in the
