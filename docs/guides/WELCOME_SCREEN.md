@@ -18,7 +18,7 @@ Five, in this order:
 | **Beginners Start Here** | Loads the `simple-box` example and starts the introductory tour. Also has an "Open Help" link to the Workflow page. |
 | **Charm Customizer** | Opens the `q-charm` example -- design a charm, pendant or zipper pull. |
 | **Braille Card Customizer** | Opens the `braille-sign` example -- type text, get printable braille. |
-| **Stencil Maker** | Opens the `stencil-maker` example -- turn a picture into a spray-paint stencil for 3D printing or laser cutting. |
+| **Stencil Maker** | Opens the `stencil-maker` example -- turn a picture into a spray-paint stencil for 3D printing or laser cutting. Its card credits the Stencil Forge project by name; there is no link, because that repository is private. |
 
 Only the first two start a tutorial. The others open a ready-made tool.
 

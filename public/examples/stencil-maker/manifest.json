@@ -5,32 +5,20 @@
   "author": "OpenSCAD Assistive Forge contributors",
   "license": "CC0-1.0",
   "main": "stencil_maker.scad",
-  "files": [
-    "stencil_maker.scad",
-    "sample-design.svg",
-    "smiley.svg",
-    "heart.svg",
-    "star.svg",
-    "lightning.svg",
-    "crown.svg",
-    "sun.svg"
-  ],
+  "files": ["stencil_maker.scad", "sample-design.svg", "forge-logo.svg"],
   "svgLibrary": {
     "paramName": "design_file",
     "options": [
       { "file": "sample-design.svg", "label": "Ring (sample)" },
-      { "file": "smiley.svg", "label": "Smiley face" },
-      { "file": "heart.svg", "label": "Heart" },
-      { "file": "star.svg", "label": "Star" },
-      { "file": "lightning.svg", "label": "Lightning bolt" },
-      { "file": "crown.svg", "label": "Crown" },
-      { "file": "sun.svg", "label": "Sun" }
+      { "file": "forge-logo.svg", "label": "Forge logo" }
     ]
+  },
+  "sample_provenance": {
+    "forge-logo.svg": "This project's own logo, derived from public/icons/logo.svg. That file draws the mark in strokes with no fill, and OpenSCAD's import() fills every path it is handed, so Forge's own SVG preparer converted all 139 strokes to filled outlines; the point count was then reduced by 0.005 SVG units (0.015 mm on a 200 mm stencil) for file size. Nothing in it is redrawn or traced."
   },
   "program": "stencil-maker",
   "tags": ["stencil", "spray", "paint", "svg", "import", "laser", "plate"],
   "inspired_by": {
-    "name": "Stencil Forge",
-    "reference": "https://github.com/BrennenJohnston/stencil-forge"
+    "name": "Stencil Forge"
   }
 }
