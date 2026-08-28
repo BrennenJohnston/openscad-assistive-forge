@@ -7,6 +7,9 @@
   "main": "nasif_charm_maker.scad",
   "files": [
     "nasif_charm_maker.scad",
+    "heart.svg",
+    "presets/large-pendant.json",
+    "presets/small-pendant.json",
     "svg-library/heart.svg",
     "svg-library/star.svg",
     "svg-library/paw.svg",

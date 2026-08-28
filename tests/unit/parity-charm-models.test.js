@@ -1,0 +1,314 @@
+/**
+ * Feature parity across the charm-program models (DP-9).
+ *
+ * The Bracelet Clip Charm grew features that the Flat Pendant and the Logo
+ * Plate never got, and nothing noticed. These cases are the noticing: they
+ * read each model's own parameter surface and compare it against the signed
+ * matrix, so a feature added to one model and forgotten on the others fails
+ * here rather than in someone's hands.
+ *
+ * @license GPL-3.0-or-later
+ */
+
+import { describe, it, expect } from 'vitest';
+import { readFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { extractParameters } from '../../src/js/parser.js';
+
+const PUBLIC_DIR = join(process.cwd(), 'public');
+
+const MODELS = {
+  'q-charm': 'examples/q-charm/q_charm.scad',
+  'nasif-charm-maker': 'examples/nasif-charm-maker/nasif_charm_maker.scad',
+  'logo-plate': 'examples/logo-plate/logo_plate.scad',
+};
+
+/**
+ * The Logo Plate names its design parameter logo_file, not design_file, so
+ * the matrix is checked against each model's OWN prefix rather than against
+ * one hard-coded family of names.
+ */
+const PREFIX = { 'logo-plate': 'logo', default: 'design' };
+const pre = (key) => PREFIX[key] || PREFIX.default;
+
+const sourceOf = (key) => readFileSync(join(PUBLIC_DIR, MODELS[key]), 'utf8');
+const paramsOf = (key) => extractParameters(sourceOf(key)).parameters;
+
+describe('D-116 - the aspect companion the app actually writes', () => {
+  it('every design file parameter has a "<name>_aspect" beside it', () => {
+    // The app sets `${fileParam}_aspect`. The Flat Pendant called its one
+    // design_aspect, so every measured ratio went into a parameter nothing
+    // read, and a tall design was fitted against a square assumption. The
+    // stripe in the DP-0 A/B cut off both rims because of exactly this.
+    for (const key of Object.keys(MODELS)) {
+      const params = paramsOf(key);
+      const files = Object.values(params).filter((p) => p.uiType === 'file');
+      expect(files.length).toBeGreaterThan(0);
+      for (const f of files) {
+        expect(
+          params[`${f.name}_aspect`],
+          `${key}: ${f.name} has no ${f.name}_aspect companion`
+        ).toBeTruthy();
+      }
+    }
+  });
+
+  it('the Flat Pendant no longer carries the old name anywhere', () => {
+    const src = sourceOf('nasif-charm-maker');
+    expect(src).not.toMatch(/\bdesign_aspect\b/);
+    expect(src).toContain('design_file_aspect');
+  });
+});
+
+describe('a default design file desktop OpenSCAD can actually open', () => {
+  it('resolves beside the .scad, not only in a subfolder', () => {
+    // import() looks in the model's own folder. The Flat Pendant defaulted to
+    // "heart.svg" with the only copy in svg-library/, so desktop printed
+    // "ERROR: Can't open file ... heart.svg" and then rendered a blank charm
+    // ANYWAY - Status: NoError, an STL written, no design on it.
+    for (const [key, rel] of Object.entries(MODELS)) {
+      const dir = join(PUBLIC_DIR, rel, '..');
+      for (const p of Object.values(paramsOf(key))) {
+        if (p.uiType !== 'file') continue;
+        const value = String(p.default || '');
+        if (!value) continue;
+        expect(
+          existsSync(join(dir, value)),
+          `${key}: default "${value}" does not resolve beside the .scad`
+        ).toBe(true);
+      }
+    }
+  });
+});
+
+describe('raised text is clamped to the face, like designs', () => {
+  it.each(Object.keys(MODELS))('%s clamps every raised text layer', (key) => {
+    // MEASURED on the Bracelet Clip Charm before the repair: text at size 7
+    // pushed sideways reached X 34.09 on a charm whose body ends at 11.01 -
+    // material floating in mid-air. Clamped, the whole model measures
+    // -11.01 to 11.01 and 29,760 facets against 31,424.
+    const src = sourceOf(key);
+    // Every place a text module is extruded must sit inside an intersection
+    // with the face. Reading it this way, rather than by matching whole
+    // if-blocks, keeps the guard from depending on brace layout - which is
+    // how the first version of it went green for nothing.
+    const sites = [...src.matchAll(/\btext_2d(_layer2)?\(\)/g)]
+      // The module's own definition is not a call site.
+      .filter((m) => !/module\s+$/.test(src.slice(0, m.index)))
+      .map((m) => src.slice(Math.max(0, m.index - 220), m.index + 120));
+    expect(sites.length).toBeGreaterThanOrEqual(4);
+    for (const around of sites) {
+      expect(around).toMatch(/intersection\(\)/);
+      // Each model names its own footprint: the charm has a flat top face,
+      // the pendant has a face inside its border, the plate has the plate.
+      expect(around).toMatch(/(top_face_2d|face_2d|plate_2d)\(\)/);
+    }
+  });
+});
+
+describe('the signed parity matrix, per model', () => {
+  const PLACEMENT = ['offset', 'left_right', 'up_down', 'rotation'];
+  const TEXT = [
+    'text_content',
+    'text_depth',
+    'text_style',
+    'text_size',
+    'text_rotation',
+    'text_content_2',
+    'text_depth_2',
+    'text_style_2',
+    'text_size_2',
+    'text_rotation_2',
+    'text_2_thickness',
+  ];
+
+  it.each(Object.keys(MODELS))('%s offers design placement', (key) => {
+    const params = paramsOf(key);
+    for (const suffix of PLACEMENT) {
+      const name = `${pre(key)}_${suffix}`;
+      expect(params[name], `${key} is missing ${name}`).toBeTruthy();
+    }
+  });
+
+  it.each(Object.keys(MODELS))('%s offers two text layers', (key) => {
+    const params = paramsOf(key);
+    for (const name of TEXT) {
+      expect(params[name], `${key} is missing ${name}`).toBeTruthy();
+    }
+  });
+
+  it.each(['q-charm', 'nasif-charm-maker'])(
+    '%s offers a lanyard slot',
+    (key) => {
+      // A slot takes a flat strap where a round hole takes a ring. Both models
+      // that carry an attachment CHOICE must offer it. The Logo Plate is not
+      // in this list on purpose: the signed matrix gives it the hole plus
+      // position controls, not a choice of attachment, so demanding a slot of
+      // it would be this guard inventing scope rather than checking it.
+      const values = paramsOf(key).attachment_type.enum.map((e) => e.value);
+      expect(values).toContain('lanyard_slot');
+    }
+  );
+
+  it('the Logo Plate can place its hole instead', () => {
+    const params = paramsOf('logo-plate');
+    expect(params.hole_left_right).toBeTruthy();
+    expect(params.hole_up_down).toBeTruthy();
+  });
+
+  it.each(Object.keys(MODELS))('%s ships a large and a small preset', (key) => {
+    const dir = join(PUBLIC_DIR, MODELS[key], '..', 'presets');
+    const files = existsSync(dir)
+      ? readFileSync(join(dir, '..', 'manifest.json'), 'utf8')
+      : '';
+    expect(files).toMatch(/presets\/[a-z-]*large[a-z-]*\.json/);
+    expect(files).toMatch(/presets\/[a-z-]*small[a-z-]*\.json/);
+  });
+
+  it.each(Object.keys(MODELS))('%s presets name their own model', (key) => {
+    const manifest = JSON.parse(
+      readFileSync(join(PUBLIC_DIR, MODELS[key], '..', 'manifest.json'), 'utf8')
+    );
+    const modelFile = MODELS[key].split('/').pop();
+    for (const rel of manifest.files.filter((f) => f.startsWith('presets/'))) {
+      const preset = JSON.parse(
+        readFileSync(join(PUBLIC_DIR, MODELS[key], '..', rel), 'utf8')
+      );
+      expect(preset.modelName).toBe(modelFile);
+      // A preset that names a parameter the model does not have is a preset
+      // that silently does nothing.
+      const params = paramsOf(key);
+      for (const name of Object.keys(preset.preset.parameters)) {
+        if (name === '$fn') continue;
+        expect(params[name], `${rel} sets unknown ${name}`).toBeTruthy();
+      }
+    }
+  });
+});
+
+// ── DP-10: the contract table IS the guard ──────────────────────────────────
+
+/**
+ * How each feature is DETECTED in a model's own parameter surface.
+ *
+ * Keyed by the `key` column of the table in TILE_AUTHOR_GUIDE.md. Each entry
+ * answers one question: does this model actually ship this feature? The
+ * answer comes from the .scad, never from a list kept beside it.
+ */
+const DETECT = {
+  design_file: (p) => Object.values(p).some((x) => x.uiType === 'file'),
+  aspect: (p) =>
+    Object.values(p)
+      .filter((x) => x.uiType === 'file')
+      .every((x) => !!p[`${x.name}_aspect`]),
+  scale: (p, key) => !!p[`${pre(key)}_scale`],
+  placement: (p, key) =>
+    ['left_right', 'up_down', 'rotation'].every((s) => !!p[`${pre(key)}_${s}`]),
+  thickening: (p, key) => !!p[`${pre(key)}_offset`],
+  text2: (p) => !!p.text_content && !!p.text_content_2 && !!p.text_2_thickness,
+  gallery: (p, key) => {
+    const manifest = JSON.parse(
+      readFileSync(join(PUBLIC_DIR, MODELS[key], '..', 'manifest.json'), 'utf8')
+    );
+    // Two shapes are in use and both are supported by file-handler.js: an
+    // ARRAY of {paramName, options} and, on the older tile, a single such
+    // OBJECT. Accepting only the array made this guard report a gallery the
+    // Flat Pendant has been shipping all along as missing.
+    const lib = manifest.svgLibrary;
+    const entries = Array.isArray(lib) ? lib : lib ? [lib] : [];
+    return entries.some((e) => (e.options || []).length > 0);
+  },
+  presets: (p, key) => {
+    const manifest = JSON.parse(
+      readFileSync(join(PUBLIC_DIR, MODELS[key], '..', 'manifest.json'), 'utf8')
+    );
+    const presets = manifest.files.filter((f) => f.startsWith('presets/'));
+    return (
+      presets.some((f) => /large/.test(f)) &&
+      presets.some((f) => /small/.test(f))
+    );
+  },
+  attachment: (p) => !!p.attachment_type,
+  design2: (p, key) => !!p[`${pre(key)}_file_2`],
+  layers: (p) => !!p.design_layer_1 && !!p.design_layer_1_depth,
+  clipfit: (p) => !!p.gap_width || !!p.inner_height,
+};
+
+/** The contract table, read out of the guide the same way a person reads it. */
+function readContract() {
+  const guide = readFileSync(
+    join(process.cwd(), 'docs/guides/TILE_AUTHOR_GUIDE.md'),
+    'utf8'
+  );
+  const block = guide.slice(
+    guide.indexOf('<!-- parity-contract:start -->'),
+    guide.indexOf('<!-- parity-contract:end -->')
+  );
+  expect(block.length).toBeGreaterThan(200);
+
+  const rows = block
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith('|') && !/^\|\s*-+/.test(l))
+    .map((l) =>
+      l
+        .replace(/^\|/, '')
+        .replace(/\|$/, '')
+        .split('|')
+        .map((c) => c.trim())
+    );
+
+  const header = rows.shift();
+  expect(header.slice(0, 2)).toEqual(['Feature', 'key']);
+  const models = header.slice(2);
+  return { models, rows };
+}
+
+describe('the parity contract (DP-10)', () => {
+  const { models, rows } = readContract();
+
+  it('names the models this repo actually ships', () => {
+    expect(models).toEqual(Object.keys(MODELS));
+  });
+
+  it('every row can be checked, and every check has a row', () => {
+    // A table entry nothing knows how to verify is a promise with no keeper.
+    const keys = rows.map((r) => r[1]);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(keys.sort()).toEqual(Object.keys(DETECT).sort());
+  });
+
+  it('every N-A carries a reason, and "not yet" is not a reason', () => {
+    for (const row of rows) {
+      for (let i = 0; i < models.length; i++) {
+        const cell = row[2 + i];
+        if (cell === 'yes') continue;
+        expect(
+          cell.startsWith('N-A '),
+          `${row[1]}/${models[i]}: "${cell}"`
+        ).toBe(true);
+        expect(cell.length).toBeGreaterThan(12);
+        expect(cell).not.toMatch(/not (yet|done)|todo|later|planned/i);
+      }
+    }
+  });
+
+  it.each(
+    readContract().rows.flatMap((row) =>
+      readContract().models.map((model, i) => [row[1], model, row[2 + i]])
+    )
+  )('%s on %s matches the .scad', (key, model, cell) => {
+    // The whole point: the table is checked against the model, not trusted.
+    const shipped = DETECT[key](paramsOf(model), model);
+    if (cell === 'yes') {
+      expect(shipped, `${model} promises ${key} but does not ship it`).toBe(
+        true
+      );
+    } else {
+      expect(
+        shipped,
+        `${model} ships ${key} but the contract says N-A - update the table`
+      ).toBe(false);
+    }
+  });
+});

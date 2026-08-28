@@ -524,14 +524,22 @@ module q_charm() {
                         }
             }
             if (text_content != "" && text_style == "raised") {
+                // Clamped to the flat face, the way designs already are: raised
+                // text past the face stands on the rounded edge, or on nothing.
                 translate([profile_center_x, 0, charm_top_z])
                     linear_extrude(height = text_depth)
-                        text_2d();
+                        intersection() {
+                            text_2d();
+                            top_face_2d();
+                        }
             }
             if (text_content_2 != "" && text_style_2 == "raised") {
                 translate([profile_center_x, 0, charm_top_z + text_2_thickness])
                     linear_extrude(height = text_depth_2)
-                        text_2d_layer2();
+                        intersection() {
+                            text_2d_layer2();
+                            top_face_2d();
+                        }
             }
         }
         if (design_style != "raised") {
@@ -560,14 +568,25 @@ module q_charm() {
                     design_layer_2d(design_layer_3, design_layer_3_aspect);
         }
         if (text_content != "" && text_style != "raised") {
+            // Clamped like the raised case. WIDER than the signed repair,
+            // which named raised text only: an engraved cut that runs off the
+            // flat face gouges the rounded edge instead of lettering it, and
+            // the Flat Pendant clamps both. Two models disagreeing is what
+            // this release exists to end.
             translate([profile_center_x, 0, charm_top_z - text_depth])
                 linear_extrude(height = text_depth + 0.01)
-                    text_2d();
+                    intersection() {
+                        text_2d();
+                        top_face_2d();
+                    }
         }
         if (text_content_2 != "" && text_style_2 != "raised") {
             translate([profile_center_x, 0, charm_top_z - text_depth_2 + text_2_thickness])
                 linear_extrude(height = text_depth_2 + 0.01)
-                    text_2d_layer2();
+                    intersection() {
+                        text_2d_layer2();
+                        top_face_2d();
+                    }
         }
         attachment_cutout();
     }

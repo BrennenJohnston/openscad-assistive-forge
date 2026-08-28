@@ -63,7 +63,20 @@ const EXAMPLES = {
     // the file has always been on disk, but the loader reads THIS list - so
     // the first preview errored with "Can't open file '/tmp/sample-logo.svg'"
     // while the status said "Preview ready".
-    additionalFiles: ['/examples/logo-plate/sample-logo.svg'],
+    additionalFiles: [
+      '/examples/logo-plate/sample-logo.svg',
+      // DP-9. The shared gallery set, copied into this tile rather than
+      // borrowed from another: a tile that reaches into a sibling's folder
+      // breaks the moment that sibling is renamed or dropped.
+      '/examples/logo-plate/smiley.svg',
+      '/examples/logo-plate/heart.svg',
+      '/examples/logo-plate/star.svg',
+      '/examples/logo-plate/lightning.svg',
+      '/examples/logo-plate/crown.svg',
+      '/examples/logo-plate/sun.svg',
+      '/examples/logo-plate/presets/large-plate.json',
+      '/examples/logo-plate/presets/small-plate.json',
+    ],
   },
   'nasif-charm-maker': {
     path: '/examples/nasif-charm-maker/nasif_charm_maker.scad',
@@ -71,6 +84,14 @@ const EXAMPLES = {
     description: 'Charm Customizer',
     manifest: '/examples/nasif-charm-maker/manifest.json',
     additionalFiles: [
+      // DP-9. The default design, BESIDE the .scad, so desktop OpenSCAD can
+      // open it: import("heart.svg") looked in the model's own folder and the
+      // only copy lived in svg-library/. Desktop printed
+      // "ERROR: Can't open file ... heart.svg" and then rendered a blank
+      // charm anyway, reporting Status: NoError and writing an STL.
+      '/examples/nasif-charm-maker/heart.svg',
+      '/examples/nasif-charm-maker/presets/large-pendant.json',
+      '/examples/nasif-charm-maker/presets/small-pendant.json',
       '/examples/nasif-charm-maker/svg-library/heart.svg',
       '/examples/nasif-charm-maker/svg-library/star.svg',
       '/examples/nasif-charm-maker/svg-library/paw.svg',

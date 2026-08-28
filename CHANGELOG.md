@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The Flat Pendant and the Logo Plate caught up with the Bracelet Clip Charm** (DP-9, DP-10) -
+  three models share the charm program and features kept being added to one and forgotten on the
+  others. All three now offer the same things: move, rotate and resize your design, thicken its
+  lines for printing, two lines of text, an icon gallery, and large and small presets. Three
+  older faults are fixed with them. The Flat Pendant's design ratio was being written into a
+  setting the model never read, so a tall design was squeezed as though it were square. Its
+  default heart could not be found by desktop OpenSCAD at all, which said so and then quietly
+  built a blank pendant anyway. And text could run off the edge of a charm and print standing on
+  nothing; text is now cut off at the edge of the face on every model. The guide gains a table
+  saying which model has which feature, and the tests read that table, so a promise it makes
+  that stops being true now fails the build instead of quietly ageing
+
 - **A drawing can be built as a stack of layers, not just one flat shape** (DP-7, DP-8) - if the
   shapes in your drawing sit inside one another, the app can now work that out and build them as
   separate passes, each standing on the one before it. Three nested squares come out as a stepped
