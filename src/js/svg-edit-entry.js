@@ -218,10 +218,19 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
 
     const shapeCount = analysis.elements ? analysis.elements.length : 0;
     if (shapeCount === 0) {
-      fail(
-        `${currentFileName} has no shapes Forge can work with. ` +
-          `A photo needs dark lines on a light background to trace.`
-      );
+      // D-117: analyzeSvg returns an empty table for two different reasons,
+      // and this used to tell the user the wrong one. When a drawing is over
+      // the cap, the analyzer has already written the honest sentence - the
+      // real count and the real cap - and throwing it away to say "no shapes
+      // ... a photo needs dark lines" gave photo advice for a vector file and
+      // named a cause that was not the cause. MEASURED before the fix on both
+      // of the owner's SVGs and on Forge's own logo.
+      const reason =
+        analysis.warnings && analysis.warnings.length > 0
+          ? analysis.warnings[0]
+          : `${currentFileName} has no shapes Forge can work with. ` +
+            `A photo needs dark lines on a light background to trace.`;
+      fail(reason);
       return false;
     }
 

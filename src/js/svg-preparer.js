@@ -60,11 +60,54 @@ const NON_RENDERING_CONTAINERS = new Set([
 ]);
 
 /**
- * Maximum rendering elements before an SVG is rejected as too complex.
- * Beyond this threshold path-bool operations become prohibitively slow
- * and produce unreliable output.
+ * Element-count tiers, signed by the owner at DP-Q9 (2026-08-28) against the
+ * DP-0 bench rather than assumed.
+ *
+ * The old single cap of 50 was documented as guarding path-bool, and DP-0's
+ * measurement says that was exactly right - and that it was ALSO doing a job
+ * it had no business doing. The two bills are wildly different:
+ *
+ *   count | table (parse+classify+analyze) | flattenToCompoundPath
+ *         | desktop      4x throttle       | desktop
+ *   ------+-------------------------------+-----------------------
+ *      50 | 1.8-3.2 ms   10.8-20.8 ms     |   1.02 s
+ *     100 | 2.7-7.7 ms   12.6-27.9 ms     |   7.53 s
+ *     200 | 4.2-4.8 ms   19.6-23.6 ms     |  56.70 s
+ *     400 | 8.5-10.0 ms  32.1-50.2 ms     | 447.90 s
+ *     800 | 16.5-17.9 ms 71.5-86.4 ms     | ~59 min (extrapolated)
+ *
+ * and on the real file this round exists for, WATAP Logo HD.svg at 831
+ * elements, the whole table builds in 24-27 ms desktop / 117-143 ms at 4x.
+ * So the table is free and the boolean is everything: the cap was a BOOLEAN
+ * cap wearing a TABLE cap's clothes, and refusing to show the table was
+ * refusing the one thing that costs nothing.
+ *
+ * AUTO_RENDER_MAX (A): the whole chain runs on its own. 1.02 s desktop,
+ *   4.9-5.3 s at 4x - right on the 5 s bar the plan set for the low end.
+ * DEFER_FLATTEN_MAX (B): table and live preview stay; the boolean waits for
+ *   a deliberate Apply, which costs 56.7 s desktop / 4 min 32 s at 4x and is
+ *   said so in words.
+ * TABLE_MAX (C): table only, preview on request. Admits the owner's 831.
+ * Above C, a plain refusal that names the count and the cap.
  */
-const MAX_ELEMENT_COUNT = 50;
+export const ELEMENT_TIERS = Object.freeze({
+  autoRenderMax: 50,
+  deferFlattenMax: 200,
+  tableMax: 1000,
+});
+
+/**
+ * Which tier a rendering-element count falls in.
+ *
+ * @param {number} count - Number of rendering elements
+ * @returns {'auto'|'defer_flatten'|'manual_render'|'too_complex'}
+ */
+export function tierForCount(count) {
+  if (count <= ELEMENT_TIERS.autoRenderMax) return 'auto';
+  if (count <= ELEMENT_TIERS.deferFlattenMax) return 'defer_flatten';
+  if (count <= ELEMENT_TIERS.tableMax) return 'manual_render';
+  return 'too_complex';
+}
 
 // CSS Level 2 named colors → hex.
 // parseLuminance() (image-import.js:130) handles rgb() and #hex only;
@@ -343,6 +386,131 @@ export function bakeElementTransforms(element, pathData) {
  * @returns {string|null} Effective paint value, or null when unset anywhere
  *   (callers apply the SVG defaults: black fill, no stroke)
  */
+/**
+ * Declarations a document's <style> blocks give to each class and element
+ * name, parsed once per document and cached.
+ *
+ * D-118 (DP-0, 2026-08-28): getEffectivePaint used to read the presentation
+ * attribute, the `style` ATTRIBUTE and ancestors, and nothing else. Every CAD
+ * and Illustrator export declares paint by CLASS instead:
+ *
+ *   <defs><style>.cls-1 { fill: none; stroke: #000 }</style></defs>
+ *   <path class="cls-1" d="..."/>
+ *
+ * so `fill` resolved to null, the SVG default BLACK was assumed, and a
+ * stroke-only line drawing became a page of solid black shapes. MEASURED on
+ * the owner's own files: 70/70 and 831/831 elements classified `foreground`
+ * with ZERO stroke conversions, which is why their art came out of the
+ * stencil as one hole the shape of its outer boundary.
+ *
+ * Deliberately small: this resolves simple class, type and id selectors,
+ * which is the shape every exporter emits. Anything with a combinator, a
+ * pseudo-class or an attribute test is skipped rather than half-understood -
+ * a wrong answer here silently changes geometry.
+ */
+const STYLESHEET_CACHE = new WeakMap();
+
+/**
+ * Parse a declaration block ("fill:none;stroke:#000") into a plain object.
+ * @param {string} body
+ * @returns {Object<string, string>}
+ */
+function parseDeclarations(body) {
+  const out = {};
+  for (const part of body.split(';')) {
+    const colon = part.indexOf(':');
+    if (colon === -1) continue;
+    const name = part.slice(0, colon).trim().toLowerCase();
+    const value = part.slice(colon + 1).trim();
+    if (name && value) out[name] = value;
+  }
+  return out;
+}
+
+/**
+ * Build {classes, types, ids} declaration maps from a document's <style>
+ * blocks. Later rules win, matching CSS's own last-one-wins for equal
+ * specificity.
+ *
+ * @param {Document} doc
+ * @returns {{classes: Object, types: Object, ids: Object}}
+ */
+function buildStylesheetIndex(doc) {
+  const index = { classes: {}, types: {}, ids: {} };
+  const styles = doc.querySelectorAll ? doc.querySelectorAll('style') : [];
+  for (const styleEl of styles) {
+    // Comments first, so a commented-out rule cannot be read as live.
+    const css = (styleEl.textContent || '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const ruleRe = /([^{}]+)\{([^{}]*)\}/g;
+    let match;
+    while ((match = ruleRe.exec(css)) !== null) {
+      const declarations = parseDeclarations(match[2]);
+      if (Object.keys(declarations).length === 0) continue;
+      for (const rawSelector of match[1].split(',')) {
+        const selector = rawSelector.trim();
+        if (!selector) continue;
+        let bucket = null;
+        let key = null;
+        if (/^\.[A-Za-z_][\w-]*$/.test(selector)) {
+          bucket = index.classes;
+          key = selector.slice(1);
+        } else if (/^#[A-Za-z_][\w-]*$/.test(selector)) {
+          bucket = index.ids;
+          key = selector.slice(1);
+        } else if (/^[A-Za-z][\w-]*$/.test(selector)) {
+          bucket = index.types;
+          key = selector.toLowerCase();
+        }
+        // Anything else (combinators, pseudo-classes, attribute tests) is
+        // left alone rather than guessed at.
+        if (!bucket) continue;
+        bucket[key] = { ...(bucket[key] || {}), ...declarations };
+      }
+    }
+  }
+  return index;
+}
+
+/**
+ * The value a document's <style> rules give this element for one property,
+ * in ascending specificity: type < class < id.
+ *
+ * @param {Element} element
+ * @param {string} prop
+ * @returns {string|null}
+ */
+function stylesheetValueFor(element, prop) {
+  const doc = element.ownerDocument;
+  if (!doc) return null;
+  let index = STYLESHEET_CACHE.get(doc);
+  if (!index) {
+    index = buildStylesheetIndex(doc);
+    STYLESHEET_CACHE.set(doc, index);
+  }
+  let value = null;
+  const type = element.tagName ? element.tagName.toLowerCase() : null;
+  if (type && index.types[type] && index.types[type][prop] !== undefined) {
+    value = index.types[type][prop];
+  }
+  const classAttr = element.getAttribute && element.getAttribute('class');
+  if (classAttr) {
+    for (const name of classAttr.split(/\s+/)) {
+      if (
+        name &&
+        index.classes[name] &&
+        index.classes[name][prop] !== undefined
+      ) {
+        value = index.classes[name][prop];
+      }
+    }
+  }
+  const id = element.getAttribute && element.getAttribute('id');
+  if (id && index.ids[id] && index.ids[id][prop] !== undefined) {
+    value = index.ids[id][prop];
+  }
+  return value;
+}
+
 export function getEffectivePaint(element, prop) {
   const styleRe = new RegExp(`(?:^|;)\\s*${prop}\\s*:\\s*([^;]+)`, 'i');
   let node = element;
@@ -353,6 +521,10 @@ export function getEffectivePaint(element, prop) {
       const m = styleAttr.match(styleRe);
       if (m) return m[1].trim();
     }
+    // D-118: a <style> rule outranks a presentation attribute, and loses to
+    // the style attribute above. Same order the browser uses.
+    const fromSheet = stylesheetValueFor(node, prop);
+    if (fromSheet !== null && fromSheet !== '') return fromSheet;
     const attr = node.getAttribute && node.getAttribute(prop);
     if (attr !== null && attr !== undefined && attr !== '') return attr;
     node = node.parentElement;
@@ -824,14 +996,17 @@ export function analyzeSvg(svgString) {
     }
   }
 
-  if (renderElements.length > MAX_ELEMENT_COUNT) {
+  const tier = tierForCount(renderElements.length);
+
+  if (tier === 'too_complex') {
     return {
       status: 'too_complex',
+      tier,
       confidence: 0,
       elements: [],
       warnings: [
-        `This SVG has ${renderElements.length} elements — the maximum is ${MAX_ELEMENT_COUNT}. ` +
-          'Simplify the SVG in a vector editor (e.g., merge paths, remove hidden layers) before importing.',
+        `This drawing has ${renderElements.length} shapes, and Forge can work with ${ELEMENT_TIERS.tableMax} at a time. ` +
+          'Simplify it in a vector editor (merge paths, remove hidden layers) and try again.',
       ],
       unsupportedFeatures: [],
       recommendation: 'reject',
@@ -994,8 +1169,23 @@ export function analyzeSvg(svgString) {
     recommendation = 'open_editor';
   }
 
+  // DP-3: above tier A, nothing may start a boolean flatten by itself.
+  // `auto_prepare` is the only recommendation that does, so it becomes
+  // `open_editor` and the person decides when to spend the time.
+  // `pass_through` is left alone at every tier ON PURPOSE: it means the
+  // shapes need no flattening at all (OpenSCAD unions overlapping fills
+  // natively), so it costs nothing however many there are, and downgrading
+  // it would send people to the editor for a file that is already fine.
+  // The advisory copy for each tier lives in the UI, not here: this function
+  // stays an analyzer, and `warnings` keeps meaning "something about this
+  // drawing is off" for the code that already filters it.
+  if (tier !== 'auto' && recommendation === 'auto_prepare') {
+    recommendation = 'open_editor';
+  }
+
   return {
     status,
+    tier,
     confidence,
     elements,
     warnings,
@@ -1003,6 +1193,7 @@ export function analyzeSvg(svgString) {
     recommendation,
     singleElement,
     isCompoundPathOnly,
+    elementCount: renderElements.length,
   };
 }
 

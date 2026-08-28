@@ -232,7 +232,7 @@ export function clearGalleryOptions() {
  * Get stored SVG preparation metadata for a given filename.
  * Returns the metadata object or null if none is stored.
  * @param {string} fileName
- * @returns {{rawSvg: string, preparedSvg: string|null, prepOverrides: string[]|null, prepOffsets: number[]|null, prepAnalysis: Object|null}|null}
+ * @returns {{rawSvg: string, preparedSvg: string|null, prepOverrides: string[]|null, prepOffsets: number[]|null, prepDeleted: number[]|null, prepAnalysis: Object|null}|null}
  */
 export function getSvgPrepMetadata(fileName) {
   return svgPrepMetadataByFile[fileName] || null;
@@ -242,7 +242,7 @@ export function getSvgPrepMetadata(fileName) {
  * Store SVG preparation metadata for a given filename.
  * Pass null to clear metadata for the file.
  * @param {string} fileName
- * @param {{rawSvg: string, preparedSvg: string|null, prepOverrides: string[]|null, prepOffsets: number[]|null}|null} metadata
+ * @param {{rawSvg: string, preparedSvg: string|null, prepOverrides: string[]|null, prepOffsets: number[]|null, prepDeleted: number[]|null}|null} metadata
  */
 export function setSvgPrepMetadata(fileName, metadata) {
   if (metadata) {
@@ -2081,6 +2081,12 @@ function createFileControl(param, onChange, aspectParam = null) {
         sourceName: currentFileName,
         initialOverrides: storedMeta?.prepOverrides || null,
         initialOffsets: storedMeta?.prepOffsets || null,
+        // DP-4: restored BEFORE the roles above, because the editor reopens on
+        // the raw SVG and re-analyses it - so everything saved is expressed in
+        // the ORIGINAL element indices, the only numbering a delete leaves
+        // meaningful. Absent in older saved projects, which is exactly right:
+        // nothing was deleted then.
+        initialDeleted: storedMeta?.prepDeleted || null,
       });
       announceChange('SVG preparation editor opened');
     });
@@ -2156,12 +2162,14 @@ function createFileControl(param, onChange, aspectParam = null) {
     if (!result) return;
     const overrides = workspace ? workspace.getRoleOverrides() : null;
     const offsetOverrides = workspace ? workspace.getOffsetOverrides() : null;
+    const deleted = workspace ? workspace.getDeletedIndices() : null;
     if (currentFileName) {
       setSvgPrepMetadata(currentFileName, {
         rawSvg: currentRawSvg,
         preparedSvg: result,
         prepOverrides: overrides,
         prepOffsets: offsetOverrides,
+        prepDeleted: deleted,
       });
     }
     const svgDataUrl = svgToDataUrl(result);
@@ -2184,6 +2192,7 @@ function createFileControl(param, onChange, aspectParam = null) {
         preparedSvg: null,
         prepOverrides: null,
         prepOffsets: null,
+        prepDeleted: null,
       });
     }
     const svgDataUrl = svgToDataUrl(currentRawSvg);
@@ -2221,7 +2230,11 @@ function createFileControl(param, onChange, aspectParam = null) {
       onChange: (settings) => {
         clearTimeout(inkRetraceTimer);
         inkRetraceTimer = setTimeout(() => {
-          applyTracedImage(settings, { announceResult: false });
+          // applyTracedImage re-throws after reporting (D-119), and this call
+          // is a timer callback with nobody to await it. The catch exists only
+          // so a re-trace failure cannot become an unhandled rejection - the
+          // user has already been shown and told, in applyTracedImage itself.
+          applyTracedImage(settings, { announceResult: false }).catch(() => {});
         }, 180);
       },
     });
@@ -2268,10 +2281,23 @@ function createFileControl(param, onChange, aspectParam = null) {
         );
       }
     } catch (err) {
-      fileInfo.textContent = `Conversion failed: ${err.message}`;
+      const shown = `Conversion failed: ${err.message}`;
+      fileInfo.textContent = shown;
       fileInfo.className = 'file-info file-info--error';
+      // setBusy wrote "Re-reading the picture…" and only setSummary clears it,
+      // so without this the ink panel would still claim work was under way.
+      if (inkControls) inkControls.setFailed(shown);
       announceChange(`Image conversion failed: ${err.message}`);
       console.error('[ImageImport] Conversion error:', err);
+      // D-119: this used to swallow the failure and return normally, so the
+      // awaiting caller ran on and OVERWROTE the message above with
+      // "<name>.svg (converted from <name>.png)". MEASURED with a 7.99 MP
+      // file against the 2 MP cap: the control claimed success while wearing
+      // the error class, the model parameter was left empty, the preview
+      // badge said "Preview ready" over the PREVIOUS design, and no visible
+      // alert appeared in 28 samples over 14 seconds. Re-throwing lets the
+      // caller's own catch do its job, which is what it was written for.
+      throw err;
     }
   }
 

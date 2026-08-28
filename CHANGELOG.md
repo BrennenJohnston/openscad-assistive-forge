@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Shapes can be deleted from the editor's list, not just left out of the result** (DP-4) -
+  marking a shape "Ignore" kept it out of what gets printed but left it in the list, which is no
+  help when a drawing has hundreds of them. Every row now has a Delete button, and above the list
+  there are two ways to clear out a lot at once: remove everything smaller than a size you give,
+  or keep only the largest few and remove the rest. Sizes are in square millimetres measured
+  against the design width, so they are the size the shape will really print. One step of undo is
+  available while you are working, and what you removed is remembered with the project, so
+  reopening it shows the list you left behind. Removing enough shapes to get under fifty brings
+  the automatic preview back
+
+- **Drawings with more than fifty shapes can be opened and edited now** (DP-3) - the editor used
+  to refuse any drawing with more than fifty shapes outright, showing no list at all, which was
+  precisely backwards: the list is what you would use to delete the shapes you do not want. The
+  limit turned out to be guarding one particular step, combining the shapes into a single
+  outline, and not the list. So the list is now shown for drawings up to a thousand shapes, and
+  the combining step waits until you press Render preview, telling you it is working and how
+  long it took. Measured on a real 831-shape drawing: it used to be refused outright, then took
+  64 seconds to open once the refusal was lifted, and now opens in about 2 seconds. Drawings of
+  fifty shapes or fewer behave exactly as before
+
 - **Saying "Not now" to the tour puts you back at the top of the Main Page** (DP-2) - the tour
   question scrolls the tour cards up so it can point at the button it is asking about, and until
   now answering "no" left you there, with "Open or start a project" and Saved Projects scrolled
@@ -26,6 +46,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   including the wording, the mobile layout, and the notice that Classic is desktop-only
 
 ### Fixed
+
+- **Drawings that declare their colours in a style block are no longer read as solid black**
+  (DP-3) - drawings exported from CAD and illustration programs usually set "no fill, black
+  outline" once at the top of the file and refer to it by name from every shape. Forge was not
+  reading that, so it assumed every shape was filled in, and a line drawing became a page of
+  solid blocks. On a stencil that meant the whole picture came out as one hole the shape of its
+  outer edge, with none of the artwork in it. Forge now reads those rules, and such a drawing
+  opens as the line art it is
+
+- **The editor said the wrong thing about drawings it could not open** (DP-3) - a drawing with
+  too many shapes was turned away with "has no shapes Forge can work with. A photo needs dark
+  lines on a light background to trace." That is advice about photographs, given about a
+  drawing, and it named a cause that was not the cause. It now says how many shapes the drawing
+  has and how many Forge can work with
+
+- **A picture that was too large to convert no longer reports that it worked** (DP-3) - when a
+  photograph was too big to trace, the message saying so was immediately overwritten by one
+  saying the file had been converted. The model got nothing, the preview said it was ready, and
+  the only place the truth appeared was a message that scrolled past. The failure now stands
 
 - **Two pieces of text on the chosen card were just under the contrast minimum** (DP-1) - putting
   a card in the chosen state on first paint was the first time the modal's amber text had ever sat

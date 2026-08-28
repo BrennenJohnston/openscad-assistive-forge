@@ -31,6 +31,8 @@ import {
   applyPerPathOffsets,
   getEffectivePaint,
   measureSvgAspect,
+  ELEMENT_TIERS,
+  tierForCount,
 } from '../../src/js/svg-preparer.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -2213,5 +2215,198 @@ describe('measureSvgAspect', () => {
     const aspect = measureSvgAspect(HEART_SVG);
     expect(aspect).toBeGreaterThan(0.2);
     expect(aspect).toBeLessThan(5);
+  });
+});
+
+/**
+ * DP-3: the element-count tiers signed at DP-Q9 (2026-08-28).
+ *
+ * The boundaries are pinned as VALUES, not as "whatever the constant says",
+ * because they are an owner signature against a measured bench and drifting
+ * them silently is the whole risk.
+ */
+describe('element-count tiers (DP-Q9)', () => {
+  /** N filled rects, every 5th one a smaller white one nested in the last. */
+  const syntheticSvg = (n) => {
+    const parts = [];
+    for (let i = 0; i < n; i++) {
+      const x = (i % 20) * 24 + 2;
+      const y = Math.floor(i / 20) * 24 + 2;
+      parts.push(
+        i % 5 === 4
+          ? `<rect x="${x - 18}" y="${y + 6}" width="8" height="8" fill="#ffffff"/>`
+          : `<rect x="${x}" y="${y}" width="20" height="20" fill="#111111"/>`
+      );
+    }
+    const h = Math.ceil(n / 20) * 24 + 4;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 484 ${h}">${parts.join('')}</svg>`;
+  };
+
+  it('carries the signed boundary values', () => {
+    expect(ELEMENT_TIERS.autoRenderMax).toBe(50);
+    expect(ELEMENT_TIERS.deferFlattenMax).toBe(200);
+    expect(ELEMENT_TIERS.tableMax).toBe(1000);
+  });
+
+  it.each([
+    [1, 'auto'],
+    [50, 'auto'],
+    [51, 'defer_flatten'],
+    [200, 'defer_flatten'],
+    [201, 'manual_render'],
+    [1000, 'manual_render'],
+    [1001, 'too_complex'],
+    [831, 'manual_render'],
+  ])('tierForCount(%i) is %s', (count, expected) => {
+    expect(tierForCount(count)).toBe(expected);
+  });
+
+  it.each([
+    [10, 'auto'],
+    [50, 'auto'],
+    [51, 'defer_flatten'],
+    [200, 'defer_flatten'],
+    [201, 'manual_render'],
+  ])('analyzeSvg reports tier %s for %i elements', (count, expected) => {
+    const result = analyzeSvg(syntheticSvg(count));
+    expect(result.elementCount).toBe(count);
+    expect(result.tier).toBe(expected);
+  });
+
+  it('RETURNS THE TABLE right up to the cap, instead of an empty refusal', () => {
+    // The old behaviour returned elements: [] for anything over 50, which is
+    // the exact inverse of being able to delete elements down to usable.
+    for (const count of [51, 200, 201, 600]) {
+      const result = analyzeSvg(syntheticSvg(count));
+      expect(result.elements.length, `${count} elements`).toBe(count);
+      expect(result.status, `${count} elements`).not.toBe('too_complex');
+    }
+  });
+
+  it('refuses above the cap, naming the real count and the cap', () => {
+    const result = analyzeSvg(syntheticSvg(1001));
+    expect(result.tier).toBe('too_complex');
+    expect(result.status).toBe('too_complex');
+    expect(result.recommendation).toBe('reject');
+    expect(result.elements).toEqual([]);
+    expect(result.elementCount).toBe(1001);
+    expect(result.warnings[0]).toContain('1001');
+    expect(result.warnings[0]).toContain('1000');
+  });
+
+  it('never auto-prepares above tier A, because that would start the boolean', () => {
+    // flattenToCompoundPath measured 56.7 s at 200 elements on desktop. No
+    // count above A may set it running without a deliberate act.
+    for (const count of [51, 201]) {
+      const result = analyzeSvg(syntheticSvg(count));
+      expect(result.recommendation, `${count} elements`).not.toBe(
+        'auto_prepare'
+      );
+    }
+  });
+
+  it('leaves pass_through alone at every tier: it costs no boolean at all', () => {
+    // All-foreground shapes need no flattening - OpenSCAD unions them - so
+    // sending them to the editor for their size would be a made-up cost.
+    const manyDark = Array.from(
+      { length: 300 },
+      (_, i) =>
+        `<rect x="${(i % 20) * 24}" y="${Math.floor(i / 20) * 24}" width="20" height="20" fill="#111111"/>`
+    ).join('');
+    const result = analyzeSvg(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 484 400">${manyDark}</svg>`
+    );
+    expect(result.elementCount).toBe(300);
+    expect(result.tier).toBe('manual_render');
+    expect(result.recommendation).toBe('pass_through');
+  });
+});
+
+/**
+ * D-118: paint declared in a <style> block by class.
+ *
+ * Every CAD and Illustrator export writes paint this way. Before this fix the
+ * parser saw no fill at all, assumed the SVG default black, and turned a
+ * stroke-only line drawing into a page of solid shapes - which is why the
+ * owner's own artwork came out of the stencil as one hole.
+ */
+describe('paint declared in a <style> block (D-118)', () => {
+  const strokeOnly = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+    <defs><style>
+      .cls-1, .cls-2 { fill: none; stroke: #000; stroke-width: .5px; }
+    </style></defs>
+    <circle class="cls-2" cx="50" cy="50" r="40"/>
+    <path class="cls-1" d="M10,50 L90,50"/>
+  </svg>`;
+
+  it('reads fill and stroke from a class rule', () => {
+    const els = parseSvgElements(strokeOnly);
+    expect(els.length).toBe(2);
+    for (const el of els) {
+      expect(el.fill).toBe('none');
+      expect(el.stroke).toBe('#000');
+    }
+  });
+
+  it('no longer assumes black fill for a stroke-only drawing', () => {
+    // The defect in one assertion: these used to classify as foreground with
+    // zero stroke conversions, i.e. as solid black shapes.
+    const classified = classifyElements(parseSvgElements(strokeOnly));
+    expect(classified.every((c) => c.strokeConverted)).toBe(true);
+  });
+
+  it('the style ATTRIBUTE still outranks a class rule', () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg"><defs><style>
+      .a { fill: #ff0000 }
+    </style></defs><rect class="a" style="fill:#00ff00" width="10" height="10"/></svg>`;
+    const el = parseSvgElements(svg)[0];
+    expect(el.fill).toBe('#00ff00');
+  });
+
+  it('a class rule outranks a presentation attribute', () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg"><defs><style>
+      .a { fill: #ff0000 }
+    </style></defs><rect class="a" fill="#00ff00" width="10" height="10"/></svg>`;
+    const el = parseSvgElements(svg)[0];
+    expect(el.fill).toBe('#ff0000');
+  });
+
+  it('an id rule outranks a class rule, and a class rule a type rule', () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg"><defs><style>
+      rect { fill: #0000ff }
+      .a { fill: #00ff00 }
+      #mine { fill: #ff0000 }
+    </style></defs><rect id="mine" class="a" width="10" height="10"/></svg>`;
+    expect(parseSvgElements(svg)[0].fill).toBe('#ff0000');
+  });
+
+  it('a commented-out rule is not read as live', () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg"><defs><style>
+      /* .a { fill: none } */
+      .a { fill: #123456 }
+    </style></defs><rect class="a" width="10" height="10"/></svg>`;
+    expect(parseSvgElements(svg)[0].fill).toBe('#123456');
+  });
+
+  it('skips selectors it does not fully understand rather than guessing', () => {
+    // A wrong answer here silently changes geometry, so a descendant
+    // combinator is left alone and the presentation attribute stands.
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg"><defs><style>
+      g .a { fill: #ff0000 }
+    </style></defs><g><rect class="a" fill="#00ff00" width="10" height="10"/></g></svg>`;
+    expect(parseSvgElements(svg)[0].fill).toBe('#00ff00');
+  });
+
+  it('a class rule on an ancestor group is inherited', () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg"><defs><style>
+      .wrap { fill: #ff0000 }
+    </style></defs><g class="wrap"><rect width="10" height="10"/></g></svg>`;
+    expect(parseSvgElements(svg)[0].fill).toBe('#ff0000');
+  });
+
+  it('leaves an SVG with no <style> block exactly as it was', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg"><rect fill="#abcdef" width="10" height="10"/></svg>';
+    expect(parseSvgElements(svg)[0].fill).toBe('#abcdef');
   });
 });
