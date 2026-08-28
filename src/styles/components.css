@@ -5752,6 +5752,18 @@ body.first-visit-blocking #app {
   background: var(--color-accent-subtle);
 }
 
+/* DP-1 put a card in the checked state on first paint, which is the first
+   time this modal's accent-coloured text has ever sat on the subtle accent
+   fill. MEASURED: --color-accent-fg (#a35e00) is 4.44:1 on yellow-4, just
+   under AA - it was only ever validated against white and slate-2. The
+   selected-card tint stays (a yellow-9 border alone is ~1.3:1 on white, so
+   dropping it would weaken the selected affordance); the foreground moves to
+   the token for this surface instead. */
+.first-visit-option-cell:has(input:checked) .first-visit-badge,
+.first-visit-option-cell:has(input:checked) .first-visit-option-more a {
+  color: var(--color-on-accent-subtle);
+}
+
 .first-visit-option-cell:has(input:focus-visible) {
   outline: 3px solid var(--color-focus);
   outline-offset: 2px;

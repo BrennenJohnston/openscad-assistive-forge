@@ -56,6 +56,15 @@
      Radix amber-11 (#ab6400) only achieves ~4.38:1 on slate-2 (#f9f9fb), failing AA.
      Custom #a35e00 achieves ~4.81:1 on slate-2 and ~5.06:1 on white, passing AA. */
   --color-accent-fg: #a35e00;
+  /* Foreground for accent-coloured text sitting ON --color-accent-subtle.
+     DP-1 (2026-08-28) MEASURED the gap this fills: --color-accent-fg was
+     validated on white and slate-2 only, and on yellow-4 (#fff394) it lands
+     at 4.44:1 — just under AA. #8a4f00 is the same hue, darker, and measures
+     5.78:1 on yellow-4, 6.56:1 on white, 6.24:1 on slate-2.
+     Every OTHER theme's own accent-fg already clears AA on its own
+     accent-subtle (dark 11.05, HC light 8.59, HC dark 5.09, Classic 5.59,
+     mono variants 13.33 / 10.63), so those blocks alias this to accent-fg. */
+  --color-on-accent-subtle: #8a4f00;
 
   /* ========================================================================
      Text on Solid Semantic Surfaces
@@ -211,6 +220,8 @@
   --color-accent-subtle: var(--yellow-4);
   /* On dark backgrounds yellow-9 (~#FFE629) achieves ~12:1 — no amber swap needed */
   --color-accent-fg: var(--yellow-9);
+  /* 11.05:1 on dark yellow-4 (#362b00) — no darkening needed here. */
+  --color-on-accent-subtle: var(--color-accent-fg);
 
   /* Text on Solid Semantic Surfaces */
   --color-on-accent: var(--color-accent-text);
@@ -294,6 +305,7 @@
     --color-accent-text: var(--slate-1);
     --color-accent-subtle: var(--yellow-4);
     --color-accent-fg: var(--yellow-9);
+    --color-on-accent-subtle: var(--color-accent-fg);
 
     /* Text on Solid Semantic Surfaces */
     --color-on-accent: var(--color-accent-text);
@@ -379,6 +391,7 @@
   --color-accent-text: var(--slate-12);
   --color-accent-subtle: var(--yellow-4);
   --color-accent-fg: #a35e00;
+  --color-on-accent-subtle: #8a4f00;
 
   /* Text on Solid Semantic Surfaces */
   --color-on-accent: var(--color-accent-text);
