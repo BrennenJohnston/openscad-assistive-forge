@@ -59,6 +59,7 @@ body[data-ui-mode='classic'] {
   --color-accent-text: #ffffff;
   --color-accent-subtle: #cfe4f7;
   --color-accent-fg: #0a55a8;
+  --color-on-accent-subtle: var(--color-accent-fg); /* 5.59:1 on #cfe4f7 */
   --color-on-accent: #ffffff;
   --color-brand-yellow: #0067c0;
 

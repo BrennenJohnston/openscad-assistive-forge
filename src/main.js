@@ -3052,7 +3052,13 @@ async function initApp() {
     updateStoragePrefs({ allowLargeDownloads: true, seenDisclosure: true });
     // Unchecked "remember" = proceed this session only; the modal returns
     // next visit because the first-visit marker is never written.
-    if (document.getElementById('firstVisitRemember')?.checked !== false) {
+    //
+    // Q-21 (2026-08-10) signed "remember checked by default". The owner's
+    // directive of 2026-08-27 (line 2) supersedes it: the box now ships
+    // UNCHECKED, so the test has to be null-safe toward NOT remembering.
+    // `?.checked !== false` would remember whenever the element goes missing,
+    // which is remember-by-default surviving as DOM drift.
+    if (document.getElementById('firstVisitRemember')?.checked === true) {
       markFirstVisitComplete();
     }
     closeModal(firstVisitModal);

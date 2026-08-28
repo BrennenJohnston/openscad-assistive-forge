@@ -58,6 +58,7 @@
   --color-accent-text: #000000;
   --color-accent-subtle: #001a00;
   --color-accent-fg: #00ff00;
+  --color-on-accent-subtle: var(--color-accent-fg); /* 13.33:1 on #001a00 */
   --color-on-accent: #000000;
 
   --color-border: #00ff00;
@@ -139,6 +140,7 @@
   --color-accent-text: #000000;
   --color-accent-subtle: #1a0800;
   --color-accent-fg: #ffb000;
+  --color-on-accent-subtle: var(--color-accent-fg); /* 10.63:1 on #1a0800 */
   --color-on-accent: #000000;
   --color-on-success: #000000;
   --color-on-warning: #000000;

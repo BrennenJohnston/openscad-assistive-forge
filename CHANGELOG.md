@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Saying "Not now" to the tour puts you back at the top of the Main Page** (DP-2) - the tour
+  question scrolls the tour cards up so it can point at the button it is asking about, and until
+  now answering "no" left you there, with "Open or start a project" and Saved Projects scrolled
+  off the top. Answering no now takes you back to the top of the page and lands you on the Main
+  Page heading, so a keyboard or screen-reader user carries on from the beginning of the page
+  rather than from the middle. The Not now button, the Escape key and clicking outside the
+  question all do the same thing, and the tip on the tour card still appears exactly as before.
+  Choosing to start the tour is unchanged
+
+- **The first screen makes the recommendation instead of asking you to** (DP-1) - the welcome
+  modal now opens with Assistive Forge already chosen, and "Remember my choice on this device"
+  now starts UNCHECKED. A first-time visitor can press Download & Continue once and be in the
+  recommended interface, without that one press deciding anything permanent for the device: the
+  choice is remembered only if you tick the box. Everything else about the modal is unchanged,
+  including the wording, the mobile layout, and the notice that Classic is desktop-only
+
+### Fixed
+
+- **Two pieces of text on the chosen card were just under the contrast minimum** (DP-1) - putting
+  a card in the chosen state on first paint was the first time the modal's amber text had ever sat
+  on the pale yellow chosen fill, and there it measured 4.44 to 1 where the standard asks for 4.5.
+  The badge and the Accessibility highlights link now use a foreground colour picked for that
+  fill, measured at 5.78 to 1. The colour was missing from the design system rather than wrong in
+  the modal, so it is added there and every theme states its own value; nothing that was already
+  correct changed. Anyone who clicked a card before this release met the same problem
+
 ### Added
 
 - **Groundwork for opening a file straight into Forge from your desktop** (IR-10, not switched on) -
