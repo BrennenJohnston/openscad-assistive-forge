@@ -1091,7 +1091,9 @@
               role="region"
               aria-labelledby="features-heading"
             >
-              <h2 id="features-heading">Main Page</h2>
+              <!-- DP-2: tabindex="-1" so "Not now" on the tour nudge can land
+                   focus here. Not in the tab order; script-focusable only. -->
+              <h2 id="features-heading" tabindex="-1">Main Page</h2>
               <!-- UF-40 (U-44): the landing surface carries the name the
                    tours, the header button and the docs all use, so the
                    vocabulary is visible where it is introduced. The id and
