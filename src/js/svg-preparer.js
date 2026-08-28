@@ -954,7 +954,8 @@ export function flattenLayers(
   layers,
   limit,
   svgMeta = {},
-  warningsOut = null
+  warningsOut = null,
+  options = {}
 ) {
   const out = [];
   if (!Array.isArray(classifiedElements) || !Array.isArray(layers)) return out;
@@ -962,13 +963,23 @@ export function flattenLayers(
   const raw = [];
 
   for (let layer = 1; layer <= count; layer++) {
-    const forThisLayer = classifiedElements.filter((el, i) => {
-      // A hole stays a hole on every layer it appears in: the mask must be
-      // cut the same way at each height, or the walls of a counter would
-      // close over as the stack rises.
-      const assigned = layers[i] || 1;
-      return assigned >= layer;
-    });
+    const forThisLayer = classifiedElements
+      .filter((el, i) => (layers[i] || 1) >= layer)
+      // ★ SOLID MODE, for the bridge-less stencil (DP-12). There, DEPTH alone
+      // decides and every cut must be one solid region: layer 1's cut is the
+      // letter A INCLUDING where its counter will be, because the counter is
+      // cut at layer 1 too and only becomes its own shape at layer 2. That is
+      // the whole reason the method needs no bridges - no cut is ever an
+      // annulus, so nothing is ever left connected to nothing.
+      //
+      // MEASURED without it: the letter A came out as TWO subpaths, its
+      // counter a hole, and layer 2 came out NULL, because the counter was
+      // classified 'hole' and a compound path with no foreground is nothing.
+      //
+      // The charm keeps roles on purpose - there a hole IS a hole in the
+      // relief, and the walls of a counter must not close over as the stack
+      // rises. One law, two different jobs.
+      .map((el) => (options.solid ? { ...el, role: 'foreground' } : el));
     raw.push(
       forThisLayer.length === 0
         ? null
