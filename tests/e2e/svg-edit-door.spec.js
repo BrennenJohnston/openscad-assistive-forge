@@ -21,6 +21,13 @@ import path from 'node:path'
 const FIXTURES = path.join(process.cwd(), 'tests', 'fixtures', 'svg-edit')
 const BIRD_PNG = path.join(FIXTURES, 'bird-drawing.png')
 const BIRD_SVG = path.join(FIXTURES, 'bird-drawing.svg')
+// DP-3 tiers. 210 shapes sits in the manual-render band (B=200 < 210 <= C=1000);
+// 1200 is over the cap. Both are built from plain rects so the fixtures say
+// what they test without a drawing program in the loop.
+const MANY_210 = path.join(FIXTURES, 'many-shapes-210.svg')
+const OVER_CAP_1200 = path.join(FIXTURES, 'over-cap-1200.svg')
+// D-118: paint declared by CSS class, the way every CAD export writes it.
+const CLASS_STYLED = path.join(FIXTURES, 'class-styled-strokes.svg')
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -321,6 +328,117 @@ test.describe('The drawing editor door', () => {
     })
     await expect(toast.first()).toBeVisible({ timeout: 15000 })
     await expect(page.locator('.svg-prep-object')).toHaveCount(0)
+  })
+
+
+  /**
+   * DP-3: the cap became three tiers (DP-Q9: A=50, B=200, C=1000), because
+   * DP-0 measured that the TABLE is free and the BOOLEAN is the whole cost.
+   * Before this, anything over 50 got no table at all - the exact inverse of
+   * being able to delete elements down to something usable.
+   */
+  test('a drawing over the old cap opens, with its table, and does not render itself', async ({
+    page,
+  }) => {
+    test.setTimeout(180000)
+    await openApp(page)
+    await openEditorByKeyboard(page, MANY_210)
+
+    // The whole table is there. It used to be nothing.
+    await expect(page.locator('.svg-prep-object')).toHaveCount(210)
+
+    // And the boolean has NOT run: the result pane is empty and says why.
+    await expect(page.locator('.svg-prep-result-pane svg')).toHaveCount(0)
+    const row = page.locator('.svg-prep-render-row')
+    await expect(row).toBeVisible()
+    await expect(page.locator('.svg-prep-render-note')).toContainText('210 shapes')
+
+    // Applying a result nobody has seen is refused, and the reason says so
+    // rather than claiming there is nothing to apply.
+    const apply = page.locator('.svg-prep-footer button[data-action="apply"]')
+    if (await apply.isVisible()) await expect(apply).toBeDisabled()
+    await expect(page.locator('.svg-prep-apply-hint')).toContainText('Render the preview')
+  })
+
+  test('Render preview is keyboard-operable, meets the target floor, and announces both ends', async ({
+    page,
+  }) => {
+    test.setTimeout(300000)
+    await openApp(page)
+    await openEditorByKeyboard(page, MANY_210)
+
+    const btn = page.locator('.svg-prep-render-btn')
+    const box = await btn.boundingBox()
+    expect(box.height, '44px target floor').toBeGreaterThanOrEqual(44)
+    expect(box.width, '44px target floor').toBeGreaterThanOrEqual(44)
+
+    // Record everything the live region says across the whole render, so a
+    // start message that is swallowed by the finish message cannot pass.
+    await page.evaluate(() => {
+      window.__live = []
+      const el = document.querySelector('.svg-prep-workspace > .sr-only[aria-live]')
+      new MutationObserver(() => {
+        const t = (el.textContent || '').trim()
+        if (t) window.__live.push(t)
+      }).observe(el, { childList: true, characterData: true, subtree: true })
+    })
+
+    await btn.focus()
+    await expect(btn).toBeFocused()
+    await page.keyboard.press('Enter')
+
+    // Busy first, then done - waiting only for "not disabled" would pass on
+    // the click's own frame and measure nothing.
+    await expect(btn).toBeDisabled()
+    await expect(btn).toBeEnabled({ timeout: 300000 })
+
+    await expect(page.locator('.svg-prep-result-pane svg')).toHaveCount(1)
+    const said = await page.evaluate(() => window.__live)
+    expect(said.some((t) => /Combining 210 shapes/.test(t)), said.join(' | ')).toBe(true)
+    expect(said.some((t) => /Preview ready/.test(t)), said.join(' | ')).toBe(true)
+  })
+
+  test('above the cap it says the real reason, with the real numbers (D-117)', async ({
+    page,
+  }) => {
+    await openApp(page)
+    await page.evaluate(() => {
+      document.getElementById('accessibilitySpotlights').open = true
+    })
+    await armPickerWatch(page)
+    await page.click('#editDrawingSpotlightBtn')
+    await expectPickerOpened(page)
+    await page.locator('#svgEditFileInput').setInputFiles(OVER_CAP_1200)
+
+    // analyzeSvg had already written this sentence; showSvg used to throw it
+    // away and say "has no shapes Forge can work with. A photo needs dark
+    // lines on a light background to trace." - photo advice for a vector
+    // file, naming a cause that was not the cause.
+    const toast = page.locator('.toast, [role="alert"]', {
+      hasText: 'Forge can work with',
+    })
+    await expect(toast.first()).toBeVisible({ timeout: 30000 })
+    await expect(toast.first()).toContainText('1200')
+    await expect(toast.first()).toContainText('1000')
+    await expect(page.locator('body')).not.toContainText(
+      'A photo needs dark lines on a light background'
+    )
+    await expect(page.locator('.svg-prep-object')).toHaveCount(0)
+  })
+
+  test('paint declared in a <style> block is read, so line art stays line art (D-118)', async ({
+    page,
+  }) => {
+    await openApp(page)
+    await openEditorByKeyboard(page, CLASS_STYLED)
+
+    // Three stroke-only shapes whose fill:none lives in a class rule. They
+    // used to be read as solid black - which is how the owner's own artwork
+    // became one hole the shape of its outer boundary.
+    await expect(page.locator('.svg-prep-object')).toHaveCount(3)
+    await expect(page.locator('.svg-prep-warnings')).toContainText(
+      'stroked path(s) converted to filled outline(s)'
+    )
   })
 
   test('the open editor passes an accessibility scan', async ({ page }) => {
