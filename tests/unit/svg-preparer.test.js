@@ -21,6 +21,13 @@ import {
   FillRule,
 } from 'path-bool';
 import {
+  buildNestingTree,
+  suggestLayers,
+  layerLimit,
+  polygonFromPathData,
+  boundsOf,
+} from '../../src/js/svg-nesting.js';
+import {
   parseSvgElements,
   classifyElements,
   flattenToCompoundPath,
@@ -33,6 +40,8 @@ import {
   measureSvgAspect,
   ELEMENT_TIERS,
   tierForCount,
+  flattenLayers,
+  LAYER_EMIT_CAP,
 } from '../../src/js/svg-preparer.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -374,7 +383,8 @@ describe('parseSvgElements', () => {
   });
 
   it('returns empty array for SVG with no shape elements', () => {
-    const svg = '<svg xmlns="http://www.w3.org/2000/svg"><text>hello</text></svg>';
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg"><text>hello</text></svg>';
     expect(parseSvgElements(svg)).toEqual([]);
   });
 
@@ -1433,18 +1443,14 @@ describe('analyzeSvg', () => {
 
     it('notes the stroked smile path was converted', () => {
       const result = analyzeSvg(SMILEY_SVG);
-      const smile = result.elements.find(
-        (el) => el.strokeConverted
-      );
+      const smile = result.elements.find((el) => el.strokeConverted);
       expect(smile.warnings.length).toBeGreaterThan(0);
       expect(smile.warnings[0]).toContain('converted');
     });
 
     it('has a global info about converted stroked paths', () => {
       const result = analyzeSvg(SMILEY_SVG);
-      expect(result.warnings.some((w) => w.includes('converted'))).toBe(
-        true
-      );
+      expect(result.warnings.some((w) => w.includes('converted'))).toBe(true);
     });
 
     it('has no unsupported features', () => {
@@ -1694,9 +1700,9 @@ describe('analyzeSvg', () => {
       const result = analyzeSvg(svg);
       expect(result.confidence).toBe(1.0);
       expect(result.recommendation).toBe('pass_through');
-      expect(
-        result.warnings.some((w) => w.includes('similar luminance'))
-      ).toBe(false);
+      expect(result.warnings.some((w) => w.includes('similar luminance'))).toBe(
+        false
+      );
     });
 
     it('reduces confidence for similar luminance when roles are mixed', () => {
@@ -1708,9 +1714,9 @@ describe('analyzeSvg', () => {
         '</svg>';
       const result = analyzeSvg(svg);
       expect(result.confidence).toBeLessThan(1.0);
-      expect(
-        result.warnings.some((w) => w.includes('similar luminance'))
-      ).toBe(true);
+      expect(result.warnings.some((w) => w.includes('similar luminance'))).toBe(
+        true
+      );
     });
 
     it('does not penalize single-element SVGs for luminance', () => {
@@ -1729,9 +1735,9 @@ describe('analyzeSvg', () => {
         '<circle cx="50" cy="20" r="10" fill="white"/>' +
         '</svg>';
       const result = analyzeSvg(svg);
-      expect(
-        result.warnings.some((w) => w.includes('similar luminance'))
-      ).toBe(false);
+      expect(result.warnings.some((w) => w.includes('similar luminance'))).toBe(
+        false
+      );
     });
   });
 
@@ -2408,5 +2414,149 @@ describe('paint declared in a <style> block (D-118)', () => {
     const svg =
       '<svg xmlns="http://www.w3.org/2000/svg"><rect fill="#abcdef" width="10" height="10"/></svg>';
     expect(parseSvgElements(svg)[0].fill).toBe('#abcdef');
+  });
+});
+
+// ── DP-7 P3: per-layer emission ──────────────────────────────────────────────
+
+describe('flattenLayers - the stacked-mask law', () => {
+  /** The `d` string out of an emitted layer SVG. */
+  const dOf = (svg) => svg.match(/ d="([^"]*)"/)[1];
+
+  /** Bounds of an emitted layer, in user units. */
+  function boundsOfLayer(svg) {
+    const { points } = polygonFromPathData(dOf(svg));
+    return boundsOf(points);
+  }
+
+  /** The DP-0 probe's own three squares, as one design. */
+  const PROBE_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="40mm" height="40mm" ' +
+    'viewBox="0 0 40 40">' +
+    '<path d="M2 2 H38 V38 H2 Z" fill="#000"/>' +
+    '<path d="M10 10 H30 V30 H10 Z" fill="#000"/>' +
+    '<path d="M16 16 H24 V24 H16 Z" fill="#000"/></svg>';
+  const PROBE_META = { viewBox: '0 0 40 40', width: '40mm', height: '40mm' };
+
+  function emitProbe() {
+    const els = classifyElements(parseSvgElements(PROBE_SVG));
+    const tree = buildNestingTree(els);
+    return flattenLayers(
+      els,
+      suggestLayers(tree),
+      layerLimit(tree),
+      PROBE_META
+    );
+  }
+
+  it('reproduces the DP-0 probe, layer for layer', () => {
+    // The probe stack was built and manifold-checked before this code existed.
+    // Its layer files hold one square each; the stacked-mask law unions each
+    // layer with everything deeper, and because the squares are NESTED that
+    // union collapses back to the enclosing square. Same geometry, arrived at
+    // by the law rather than by hand.
+    const out = emitProbe();
+    expect(out).toHaveLength(3);
+    expect(boundsOfLayer(out[0])).toEqual({
+      minX: 2,
+      minY: 2,
+      maxX: 38,
+      maxY: 38,
+    });
+    expect(boundsOfLayer(out[1])).toEqual({
+      minX: 10,
+      minY: 10,
+      maxX: 30,
+      maxY: 30,
+    });
+    expect(boundsOfLayer(out[2])).toEqual({
+      minX: 16,
+      minY: 16,
+      maxX: 24,
+      maxY: 24,
+    });
+  });
+
+  it('carries the probe viewBox onto every layer, so the files align', () => {
+    // Three imports have to land in the same place; a layer written on a
+    // different viewBox would print offset from the one under it.
+    for (const svg of emitProbe()) {
+      expect(svg).toContain('viewBox="0 0 40 40"');
+      expect(svg).toContain('width="40mm"');
+      expect(svg).toContain('fill-rule="evenodd"');
+    }
+  });
+
+  it('a single-shape layer passes through byte for byte', () => {
+    // Nothing to union, so nothing is rewritten - the innermost layer is the
+    // probe's own d string, character for character.
+    expect(dOf(emitProbe()[2])).toBe('M16 16 H24 V24 H16 Z');
+  });
+
+  it('STACKS: a shallower layer carries the deeper ones too', () => {
+    // The nested fixture cannot show this, because a union of nested squares
+    // collapses to the outer one either way. Two shapes side by side can:
+    // layer 1 must span BOTH, layer 2 only the second. (The assignment breaks
+    // the containment law on purpose - the emitter's job is to emit, and the
+    // law is enforced in the editor where a person can act on it.)
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 20">' +
+      '<path d="M0 0 H10 V10 H0 Z" fill="#000"/>' +
+      '<path d="M50 0 H60 V10 H50 Z" fill="#000"/></svg>';
+    const els = classifyElements(parseSvgElements(svg));
+    const out = flattenLayers(els, [1, 2], 2, { viewBox: '0 0 100 20' });
+
+    expect(boundsOfLayer(out[0]).maxX).toBe(60);
+    expect(boundsOfLayer(out[0]).minX).toBe(0);
+    expect(boundsOfLayer(out[1]).minX).toBe(50);
+    expect(boundsOfLayer(out[1]).maxX).toBe(60);
+  });
+
+  it('emits nothing for a layer no shape reached', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">' +
+      '<path d="M0 0 H10 V10 H0 Z" fill="#000"/></svg>';
+    const els = classifyElements(parseSvgElements(svg));
+    const out = flattenLayers(els, [1], 3, { viewBox: '0 0 20 20' });
+    expect(out).toHaveLength(3);
+    expect(out[0]).toBeTruthy();
+    expect(out[1]).toBeNull();
+    expect(out[2]).toBeNull();
+  });
+
+  it('never writes a fourth file', () => {
+    const els = classifyElements(parseSvgElements(PROBE_SVG));
+    expect(flattenLayers(els, [1, 2, 3], 9, PROBE_META)).toHaveLength(
+      LAYER_EMIT_CAP
+    );
+    expect(LAYER_EMIT_CAP).toBe(3);
+  });
+
+  it('keeps a hole cut on every layer it appears in', () => {
+    // A counter that closed over as the stack rose would fill in the middle
+    // of a letter at the second pass.
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">' +
+      '<path d="M0 0 H40 V40 H0 Z" fill="#000"/>' +
+      '<path d="M10 10 H30 V30 H10 Z" fill="#fff"/></svg>';
+    const els = classifyElements(parseSvgElements(svg));
+    expect(els.map((e) => e.role)).toEqual(['foreground', 'hole']);
+    const out = flattenLayers(els, [1, 1], 2, { viewBox: '0 0 40 40' });
+    // Both subpaths survive into the layer: the outer region and its hole.
+    expect(dOf(out[0]).match(/M/gi).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('survives nonsense arguments rather than throwing at the caller', () => {
+    expect(flattenLayers(null, [1], 3)).toEqual([]);
+    expect(flattenLayers([], null, 3)).toEqual([]);
+    expect(flattenLayers([], [], 0)).toEqual([]);
+  });
+
+  it('treats a missing assignment as layer 1', () => {
+    const els = classifyElements(parseSvgElements(PROBE_SVG));
+    const out = flattenLayers(els, [], 2, PROBE_META);
+    // Everything defaulted to layer 1, so layer 2 has nothing to build.
+    expect(out[0]).toBeTruthy();
+    expect(out[1]).toBeNull();
   });
 });

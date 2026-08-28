@@ -102,6 +102,12 @@ export const ELEMENT_TIERS = Object.freeze({
  * @param {number} count - Number of rendering elements
  * @returns {'auto'|'defer_flatten'|'manual_render'|'too_complex'}
  */
+/**
+ * The prototype builds three passes, so no more than three files are ever
+ * written. The owner's number; the tiered charm model is built to it.
+ */
+export const LAYER_EMIT_CAP = 3;
+
 export function tierForCount(count) {
   if (count <= ELEMENT_TIERS.autoRenderMax) return 'auto';
   if (count <= ELEMENT_TIERS.deferFlattenMax) return 'defer_flatten';
@@ -845,6 +851,58 @@ export function flattenToCompoundPath(
   if (height) attrs += ` height="${height}"`;
 
   return `<svg ${attrs}><path d="${compoundD}" fill="black" fill-rule="evenodd"/></svg>`;
+}
+
+/**
+ * Flatten a design into one compound-path SVG PER LAYER (DP-7).
+ *
+ * The stacked-mask law, which is the containment law seen from the printer's
+ * side: layer L carries the FULL regions of every element assigned to L AND
+ * to every layer below it. The directive says layer 2's elements "were
+ * embossed in layer 1 and layer 2", and that is exactly this - each pass
+ * lays down a smaller mask on top of the last, so nested regions accumulate
+ * height and nothing is ever left standing on air.
+ *
+ * Not rings, and not per-layer differences: full regions, stacked. The DP-0
+ * probe built a stepped pyramid this way and it came out watertight.
+ *
+ * Layer 1 therefore costs what today's single flatten costs, and each deeper
+ * layer holds strictly fewer elements than the one before it.
+ *
+ * @param {Array} classifiedElements - Output of classifyElements()
+ * @param {Array<number>} layers - Layer per element, positionally aligned
+ * @param {number} limit - How many layers to emit
+ * @param {object} [svgMeta] - viewBox/width/height for the written SVG
+ * @param {string[]} [warningsOut] - Receives flatten fallback warnings
+ * @returns {Array<string|null>} One SVG per layer; null where a layer has
+ *   nothing to build
+ */
+export function flattenLayers(
+  classifiedElements,
+  layers,
+  limit,
+  svgMeta = {},
+  warningsOut = null
+) {
+  const out = [];
+  if (!Array.isArray(classifiedElements) || !Array.isArray(layers)) return out;
+  const count = Math.max(0, Math.min(limit || 0, LAYER_EMIT_CAP));
+
+  for (let layer = 1; layer <= count; layer++) {
+    const forThisLayer = classifiedElements.filter((el, i) => {
+      // A hole stays a hole on every layer it appears in: the mask must be
+      // cut the same way at each height, or the walls of a counter would
+      // close over as the stack rises.
+      const assigned = layers[i] || 1;
+      return assigned >= layer;
+    });
+    out.push(
+      forThisLayer.length === 0
+        ? null
+        : flattenToCompoundPath(forThisLayer, svgMeta, warningsOut)
+    );
+  }
+  return out;
 }
 
 /**

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   renderParameterUI,
   setLimitsUnlocked,
@@ -13,55 +13,69 @@ import {
   getSvgPrepMetadata,
   setSvgPrepMetadata,
   clearSvgPrepMetadata,
-  isAspectCompanionParam
-} from '../../src/js/ui-generator.js'
-import { isEnabled } from '../../src/js/feature-flags.js'
-import { analyzeSvg, prepareSvg, measureSvgAspect } from '../../src/js/svg-preparer.js'
+  isAspectCompanionParam,
+  findLayerParams,
+  isLayerCompanionParam,
+} from '../../src/js/ui-generator.js';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { isEnabled } from '../../src/js/feature-flags.js';
+import {
+  analyzeSvg,
+  prepareSvg,
+  measureSvgAspect,
+} from '../../src/js/svg-preparer.js';
 
 vi.mock('../../src/js/feature-flags.js', () => ({
-  isEnabled: vi.fn(() => false)
-}))
+  isEnabled: vi.fn(() => false),
+}));
 
 vi.mock('../../src/js/svg-preparer.js', () => ({
   prepareSvg: vi.fn((svg) => svg),
   needsPreparation: vi.fn(() => false),
   measureSvgAspect: vi.fn(() => 1),
+  parseSvgElements: vi.fn(() => []),
+  classifyElements: vi.fn((els) => els),
+  flattenLayers: vi.fn(() => []),
+  LAYER_EMIT_CAP: 3,
   analyzeSvg: vi.fn(() => ({
     status: 'ready',
     recommendation: 'pass_through',
     elements: [],
-    warnings: []
-  }))
-}))
+    warnings: [],
+  })),
+}));
 
 const buildParams = ({ groups = null, params = [] }) => {
-  const resolvedGroups = groups || [{ id: 'General', label: 'General', order: 0 }]
-  const parameters = {}
+  const resolvedGroups = groups || [
+    { id: 'General', label: 'General', order: 0 },
+  ];
+  const parameters = {};
   params.forEach((param, index) => {
-    const groupId = param.group || resolvedGroups[0].id
+    const groupId = param.group || resolvedGroups[0].id;
     parameters[param.name] = {
       order: index,
       group: groupId,
       description: '',
-      ...param
-    }
-  })
-  return { groups: resolvedGroups, parameters }
-}
+      ...param,
+    };
+  });
+  return { groups: resolvedGroups, parameters };
+};
 
 describe('UI Generator', () => {
-  let container
+  let container;
 
   beforeEach(() => {
-    container = document.createElement('div')
-    document.body.appendChild(container)
-  })
+    container = document.createElement('div');
+    document.body.appendChild(container);
+  });
 
   afterEach(() => {
     if (container?.parentNode) {
-      document.body.removeChild(container)
+      document.body.removeChild(container);
     }
-  })
+  });
 
   describe('Number Parameters', () => {
     it('renders a slider control when uiType is slider', () => {
@@ -75,24 +89,24 @@ describe('UI Generator', () => {
             minimum: 10,
             maximum: 100,
             step: 1,
-            uiType: 'slider'
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            uiType: 'slider',
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const slider = container.querySelector('input[type="range"]')
-      const spinbox = container.querySelector('.slider-spinbox')
-      expect(slider).toBeTruthy()
-      expect(slider.min).toBe('10')
-      expect(slider.max).toBe('100')
-      expect(slider.value).toBe('50')
+      const slider = container.querySelector('input[type="range"]');
+      const spinbox = container.querySelector('.slider-spinbox');
+      expect(slider).toBeTruthy();
+      expect(slider.min).toBe('10');
+      expect(slider.max).toBe('100');
+      expect(slider.value).toBe('50');
       // Value is now in editable spinbox instead of read-only output
-      expect(spinbox).toBeTruthy()
-      expect(spinbox.value).toBe('50')
-    })
+      expect(spinbox).toBeTruthy();
+      expect(spinbox.value).toBe('50');
+    });
 
     it('calls onChange with updated values when slider changes', () => {
       const schema = buildParams({
@@ -104,21 +118,21 @@ describe('UI Generator', () => {
             default: 40,
             minimum: 10,
             maximum: 80,
-            uiType: 'slider'
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            uiType: 'slider',
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const slider = container.querySelector('input[type="range"]')
-      slider.value = 70
-      slider.dispatchEvent(new Event('input'))
+      const slider = container.querySelector('input[type="range"]');
+      slider.value = 70;
+      slider.dispatchEvent(new Event('input'));
 
-      expect(onChange).toHaveBeenCalled()
-      expect(onChange.mock.calls[0][0]).toEqual({ height: 70 })
-    })
+      expect(onChange).toHaveBeenCalled();
+      expect(onChange.mock.calls[0][0]).toEqual({ height: 70 });
+    });
 
     it('spinbox step is independent from slider step for integer ranges', () => {
       // Item 10 desktop parity: [0:50:10000] slider steps by 50, spinbox must step by 1
@@ -132,23 +146,23 @@ describe('UI Generator', () => {
             minimum: 0,
             maximum: 10000,
             step: 50,
-            uiType: 'slider'
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            uiType: 'slider',
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const slider = container.querySelector('input[type="range"]')
-      const spinbox = container.querySelector('.slider-spinbox')
-      expect(slider).toBeTruthy()
-      expect(spinbox).toBeTruthy()
+      const slider = container.querySelector('input[type="range"]');
+      const spinbox = container.querySelector('.slider-spinbox');
+      expect(slider).toBeTruthy();
+      expect(spinbox).toBeTruthy();
       // Slider step should be the annotation step (50)
-      expect(slider.step).toBe('50')
+      expect(slider.step).toBe('50');
       // Spinbox step must be 1 for integers (desktop OpenSCAD parity)
-      expect(spinbox.step).toBe('1')
-    })
+      expect(spinbox.step).toBe('1');
+    });
 
     it('spinbox step is "any" for float ranges', () => {
       // Item 10 desktop parity: float spinbox accepts precise decimal input
@@ -162,23 +176,23 @@ describe('UI Generator', () => {
             minimum: 0,
             maximum: 10,
             step: 0.5,
-            uiType: 'slider'
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            uiType: 'slider',
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const slider = container.querySelector('input[type="range"]')
-      const spinbox = container.querySelector('.slider-spinbox')
-      expect(slider).toBeTruthy()
-      expect(spinbox).toBeTruthy()
+      const slider = container.querySelector('input[type="range"]');
+      const spinbox = container.querySelector('.slider-spinbox');
+      expect(slider).toBeTruthy();
+      expect(spinbox).toBeTruthy();
       // Slider step should be the annotation step (0.5)
-      expect(slider.step).toBe('0.5')
+      expect(slider.step).toBe('0.5');
       // Spinbox step must be "any" for floats (accepts precise values like 3.14)
-      expect(spinbox.step).toBe('any')
-    })
+      expect(spinbox.step).toBe('any');
+    });
 
     it('spinbox has correct inputmode for integers and floats', () => {
       const schema = buildParams({
@@ -191,7 +205,7 @@ describe('UI Generator', () => {
             minimum: 0,
             maximum: 100,
             step: 10,
-            uiType: 'slider'
+            uiType: 'slider',
           },
           {
             name: 'float_param',
@@ -200,21 +214,21 @@ describe('UI Generator', () => {
             minimum: 0,
             maximum: 5,
             step: 0.1,
-            uiType: 'slider'
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            uiType: 'slider',
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const spinboxes = container.querySelectorAll('.slider-spinbox')
-      expect(spinboxes.length).toBe(2)
+      const spinboxes = container.querySelectorAll('.slider-spinbox');
+      expect(spinboxes.length).toBe(2);
       // Integer should use numeric inputmode
-      expect(spinboxes[0].getAttribute('inputmode')).toBe('numeric')
+      expect(spinboxes[0].getAttribute('inputmode')).toBe('numeric');
       // Float should use decimal inputmode
-      expect(spinboxes[1].getAttribute('inputmode')).toBe('decimal')
-    })
+      expect(spinboxes[1].getAttribute('inputmode')).toBe('decimal');
+    });
 
     it('spinbox accepts arbitrary typed values not constrained by slider step', () => {
       // The core Item 10 bug: typing 1234 into a [0:50:10000] spinbox must work
@@ -228,23 +242,23 @@ describe('UI Generator', () => {
             minimum: 0,
             maximum: 10000,
             step: 50,
-            uiType: 'slider'
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            uiType: 'slider',
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const spinbox = container.querySelector('.slider-spinbox')
-      expect(spinbox).toBeTruthy()
+      const spinbox = container.querySelector('.slider-spinbox');
+      expect(spinbox).toBeTruthy();
       // Simulate typing an arbitrary value
-      spinbox.value = '1234'
-      spinbox.dispatchEvent(new Event('change', { bubbles: true }))
+      spinbox.value = '1234';
+      spinbox.dispatchEvent(new Event('change', { bubbles: true }));
       // onChange should receive the exact typed value, not rounded to step 50
-      expect(onChange).toHaveBeenCalled()
-      expect(onChange.mock.calls[0][0]).toEqual({ length: 1234 })
-    })
+      expect(onChange).toHaveBeenCalled();
+      expect(onChange.mock.calls[0][0]).toEqual({ length: 1234 });
+    });
 
     it('renders a number input when uiType is input and type is number', () => {
       const schema = buildParams({
@@ -254,19 +268,19 @@ describe('UI Generator', () => {
             name: 'count',
             type: 'number',
             default: 5,
-            uiType: 'input'
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            uiType: 'input',
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const input = container.querySelector('input[type="number"]')
-      expect(input).toBeTruthy()
-      expect(input.value).toBe('5')
-    })
-  })
+      const input = container.querySelector('input[type="number"]');
+      expect(input).toBeTruthy();
+      expect(input.value).toBe('5');
+    });
+  });
 
   describe('Text Parameters', () => {
     it('renders a text input when uiType is input and type is string', () => {
@@ -277,18 +291,18 @@ describe('UI Generator', () => {
             name: 'label',
             type: 'string',
             default: 'Hello',
-            uiType: 'input'
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            uiType: 'input',
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const input = container.querySelector('input[type="text"]')
-      expect(input).toBeTruthy()
-      expect(input.value).toBe('Hello')
-    })
+      const input = container.querySelector('input[type="text"]');
+      expect(input).toBeTruthy();
+      expect(input.value).toBe('Hello');
+    });
 
     it('updates values when text input changes', () => {
       const schema = buildParams({
@@ -297,22 +311,22 @@ describe('UI Generator', () => {
             name: 'message',
             type: 'string',
             default: 'test',
-            uiType: 'input'
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            uiType: 'input',
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const input = container.querySelector('input[type="text"]')
-      input.value = 'new message'
-      input.dispatchEvent(new Event('change'))
+      const input = container.querySelector('input[type="text"]');
+      input.value = 'new message';
+      input.dispatchEvent(new Event('change'));
 
-      expect(onChange).toHaveBeenCalled()
-      expect(onChange.mock.calls[0][0]).toEqual({ message: 'new message' })
-    })
-  })
+      expect(onChange).toHaveBeenCalled();
+      expect(onChange.mock.calls[0][0]).toEqual({ message: 'new message' });
+    });
+  });
 
   describe('Enum Parameters', () => {
     it('renders a select dropdown for uiType select', () => {
@@ -323,19 +337,19 @@ describe('UI Generator', () => {
             type: 'string',
             default: 'circle',
             enum: ['circle', 'square', 'triangle'],
-            uiType: 'select'
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            uiType: 'select',
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const select = container.querySelector('select')
-      expect(select).toBeTruthy()
-      expect(select.value).toBe('circle')
-      expect(select.options.length).toBe(3)
-    })
+      const select = container.querySelector('select');
+      expect(select).toBeTruthy();
+      expect(select.value).toBe('circle');
+      expect(select.options.length).toBe(3);
+    });
 
     it('calls onChange when dropdown value changes', () => {
       const schema = buildParams({
@@ -345,22 +359,22 @@ describe('UI Generator', () => {
             type: 'string',
             default: 'circle',
             enum: ['circle', 'square'],
-            uiType: 'select'
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            uiType: 'select',
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const select = container.querySelector('select')
-      select.value = 'square'
-      select.dispatchEvent(new Event('change'))
+      const select = container.querySelector('select');
+      select.value = 'square';
+      select.dispatchEvent(new Event('change'));
 
-      expect(onChange).toHaveBeenCalled()
-      expect(onChange.mock.calls[0][0]).toEqual({ shape: 'square' })
-    })
-  })
+      expect(onChange).toHaveBeenCalled();
+      expect(onChange.mock.calls[0][0]).toEqual({ shape: 'square' });
+    });
+  });
 
   describe('Toggle Parameters', () => {
     it('renders a toggle switch for uiType toggle', () => {
@@ -371,19 +385,19 @@ describe('UI Generator', () => {
             type: 'string',
             default: 'yes',
             enum: ['yes', 'no'],
-            uiType: 'toggle'
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            uiType: 'toggle',
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const checkbox = container.querySelector('input[type="checkbox"]')
-      expect(checkbox).toBeTruthy()
-      expect(checkbox.checked).toBe(true)
-      expect(checkbox.getAttribute('aria-checked')).toBe('true')
-    })
+      const checkbox = container.querySelector('input[type="checkbox"]');
+      expect(checkbox).toBeTruthy();
+      expect(checkbox.checked).toBe(true);
+      expect(checkbox.getAttribute('aria-checked')).toBe('true');
+    });
 
     it('updates values when toggle changes', () => {
       const schema = buildParams({
@@ -393,21 +407,21 @@ describe('UI Generator', () => {
             type: 'string',
             default: 'no',
             enum: ['yes', 'no'],
-            uiType: 'toggle'
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            uiType: 'toggle',
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const checkbox = container.querySelector('input[type="checkbox"]')
-      checkbox.checked = true
-      checkbox.dispatchEvent(new Event('change'))
+      const checkbox = container.querySelector('input[type="checkbox"]');
+      checkbox.checked = true;
+      checkbox.dispatchEvent(new Event('change'));
 
-      expect(onChange).toHaveBeenCalled()
-      expect(onChange.mock.calls[0][0]).toEqual({ enabled: 'yes' })
-    })
+      expect(onChange).toHaveBeenCalled();
+      expect(onChange.mock.calls[0][0]).toEqual({ enabled: 'yes' });
+    });
 
     it('renders toggle for boolean type parameters (true/false)', () => {
       const schema = buildParams({
@@ -416,19 +430,19 @@ describe('UI Generator', () => {
             name: 'rounded',
             type: 'boolean',
             default: true,
-            uiType: 'toggle'
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            uiType: 'toggle',
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const checkbox = container.querySelector('input[type="checkbox"]')
-      expect(checkbox).toBeTruthy()
-      expect(checkbox.checked).toBe(true)
-      expect(checkbox.getAttribute('aria-checked')).toBe('true')
-    })
+      const checkbox = container.querySelector('input[type="checkbox"]');
+      expect(checkbox).toBeTruthy();
+      expect(checkbox.checked).toBe(true);
+      expect(checkbox.getAttribute('aria-checked')).toBe('true');
+    });
 
     it('returns true/false strings for boolean type toggles', () => {
       const schema = buildParams({
@@ -437,22 +451,22 @@ describe('UI Generator', () => {
             name: 'rounded',
             type: 'boolean',
             default: true,
-            uiType: 'toggle'
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            uiType: 'toggle',
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const checkbox = container.querySelector('input[type="checkbox"]')
+      const checkbox = container.querySelector('input[type="checkbox"]');
       // Toggle off (was true, now false)
-      checkbox.checked = false
-      checkbox.dispatchEvent(new Event('change'))
+      checkbox.checked = false;
+      checkbox.dispatchEvent(new Event('change'));
 
-      expect(onChange).toHaveBeenCalled()
-      expect(onChange.mock.calls[0][0]).toEqual({ rounded: 'false' })
-    })
+      expect(onChange).toHaveBeenCalled();
+      expect(onChange.mock.calls[0][0]).toEqual({ rounded: 'false' });
+    });
 
     it('handles boolean default value of false', () => {
       const schema = buildParams({
@@ -461,27 +475,27 @@ describe('UI Generator', () => {
             name: 'solid',
             type: 'boolean',
             default: false,
-            uiType: 'toggle'
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            uiType: 'toggle',
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const checkbox = container.querySelector('input[type="checkbox"]')
-      expect(checkbox).toBeTruthy()
-      expect(checkbox.checked).toBe(false)
-      expect(checkbox.getAttribute('aria-checked')).toBe('false')
+      const checkbox = container.querySelector('input[type="checkbox"]');
+      expect(checkbox).toBeTruthy();
+      expect(checkbox.checked).toBe(false);
+      expect(checkbox.getAttribute('aria-checked')).toBe('false');
 
       // Toggle on
-      checkbox.checked = true
-      checkbox.dispatchEvent(new Event('change'))
+      checkbox.checked = true;
+      checkbox.dispatchEvent(new Event('change'));
 
-      expect(onChange).toHaveBeenCalled()
-      expect(onChange.mock.calls[0][0]).toEqual({ solid: 'true' })
-    })
-  })
+      expect(onChange).toHaveBeenCalled();
+      expect(onChange.mock.calls[0][0]).toEqual({ solid: 'true' });
+    });
+  });
 
   describe('Color and File Parameters', () => {
     it('renders a color picker when uiType is color', () => {
@@ -491,18 +505,18 @@ describe('UI Generator', () => {
             name: 'color',
             type: 'color',
             default: '#FF0000',
-            uiType: 'color'
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            uiType: 'color',
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const colorInput = container.querySelector('input[type="color"]')
-      expect(colorInput).toBeTruthy()
-      expect(colorInput.value.toLowerCase()).toBe('#ff0000')
-    })
+      const colorInput = container.querySelector('input[type="color"]');
+      expect(colorInput).toBeTruthy();
+      expect(colorInput.value.toLowerCase()).toBe('#ff0000');
+    });
 
     it('renders a file upload control when uiType is file', () => {
       const schema = buildParams({
@@ -512,78 +526,116 @@ describe('UI Generator', () => {
             type: 'file',
             default: '',
             uiType: 'file',
-            acceptedExtensions: ['png', 'jpg']
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            acceptedExtensions: ['png', 'jpg'],
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const fileInput = container.querySelector('input[type="file"]')
-      expect(fileInput).toBeTruthy()
-      expect(fileInput.accept).toBe('.png,.jpg')
-    })
-  })
+      const fileInput = container.querySelector('input[type="file"]');
+      expect(fileInput).toBeTruthy();
+      expect(fileInput.accept).toBe('.png,.jpg');
+    });
+  });
 
   describe('Groups and Labels', () => {
     it('creates collapsible groups with correct labels', () => {
       const schema = buildParams({
         groups: [
           { id: 'GroupA', label: 'Group A', order: 0 },
-          { id: 'GroupB', label: 'Group B', order: 1 }
+          { id: 'GroupB', label: 'Group B', order: 1 },
         ],
         params: [
-          { name: 'param1', type: 'number', default: 10, uiType: 'input', group: 'GroupA' },
-          { name: 'param2', type: 'string', default: 'test', uiType: 'input', group: 'GroupB' }
-        ]
-      })
-      const onChange = vi.fn()
+          {
+            name: 'param1',
+            type: 'number',
+            default: 10,
+            uiType: 'input',
+            group: 'GroupA',
+          },
+          {
+            name: 'param2',
+            type: 'string',
+            default: 'test',
+            uiType: 'input',
+            group: 'GroupB',
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const groups = container.querySelectorAll('details.param-group')
-      const summaries = container.querySelectorAll('summary')
-      expect(groups.length).toBe(2)
-      expect(summaries[0].querySelector('.param-group-label')?.textContent ?? summaries[0].textContent.replace(/✕$/, '')).toBe('Group A')
-      expect(summaries[1].querySelector('.param-group-label')?.textContent ?? summaries[1].textContent.replace(/✕$/, '')).toBe('Group B')
-    })
+      const groups = container.querySelectorAll('details.param-group');
+      const summaries = container.querySelectorAll('summary');
+      expect(groups.length).toBe(2);
+      expect(
+        summaries[0].querySelector('.param-group-label')?.textContent ??
+          summaries[0].textContent.replace(/✕$/, '')
+      ).toBe('Group A');
+      expect(
+        summaries[1].querySelector('.param-group-label')?.textContent ??
+          summaries[1].textContent.replace(/✕$/, '')
+      ).toBe('Group B');
+    });
 
     it('skips groups with no parameters', () => {
       const schema = buildParams({
         groups: [
           { id: 'Empty', label: 'Empty Group', order: 0 },
-          { id: 'Filled', label: 'Filled Group', order: 1 }
+          { id: 'Filled', label: 'Filled Group', order: 1 },
         ],
         params: [
-          { name: 'param', type: 'number', default: 2, uiType: 'input', group: 'Filled' }
-        ]
-      })
-      const onChange = vi.fn()
+          {
+            name: 'param',
+            type: 'number',
+            default: 2,
+            uiType: 'input',
+            group: 'Filled',
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
       const summaries = Array.from(container.querySelectorAll('summary')).map(
-        el => el.querySelector('.param-group-label')?.textContent ?? el.textContent.replace(/✕$/, '')
-      )
-      expect(summaries).toEqual(['Filled Group'])
-    })
+        (el) =>
+          el.querySelector('.param-group-label')?.textContent ??
+          el.textContent.replace(/✕$/, '')
+      );
+      expect(summaries).toEqual(['Filled Group']);
+    });
 
     it('does not render parameters for groups not listed', () => {
       const schema = buildParams({
         groups: [{ id: 'Visible', label: 'Visible', order: 0 }],
         params: [
-          { name: 'visible_param', type: 'number', default: 10, uiType: 'input', group: 'Visible' },
-          { name: 'hidden_param', type: 'number', default: 99, uiType: 'input', group: 'Hidden' }
-        ]
-      })
-      const onChange = vi.fn()
+          {
+            name: 'visible_param',
+            type: 'number',
+            default: 10,
+            uiType: 'input',
+            group: 'Visible',
+          },
+          {
+            name: 'hidden_param',
+            type: 'number',
+            default: 99,
+            uiType: 'input',
+            group: 'Hidden',
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      expect(container.textContent).toContain('visible param')
-      expect(container.textContent).not.toContain('hidden param')
-    })
+      expect(container.textContent).toContain('visible param');
+      expect(container.textContent).not.toContain('hidden param');
+    });
 
     it('formats parameter names by replacing underscores with spaces', () => {
       const schema = buildParams({
@@ -592,18 +644,18 @@ describe('UI Generator', () => {
             name: 'palm_loop_height',
             type: 'number',
             default: 30,
-            uiType: 'input'
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            uiType: 'input',
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const label = container.querySelector('label')
-      expect(label.textContent).toContain('palm loop height')
-    })
-  })
+      const label = container.querySelector('label');
+      expect(label.textContent).toContain('palm loop height');
+    });
+  });
 
   describe('Accessibility and Defaults', () => {
     it('sets aria-label for sliders', () => {
@@ -615,21 +667,21 @@ describe('UI Generator', () => {
             default: 50,
             minimum: 0,
             maximum: 100,
-            uiType: 'slider'
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            uiType: 'slider',
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const slider = container.querySelector('input[type="range"]')
+      const slider = container.querySelector('input[type="range"]');
       // Slider aria-label contains parameter name
-      expect(slider.getAttribute('aria-label')).toContain('width')
-      expect(slider.getAttribute('aria-label')).toContain('slider')
+      expect(slider.getAttribute('aria-label')).toContain('width');
+      expect(slider.getAttribute('aria-label')).toContain('slider');
       // Current value is in aria-valuenow attribute
-      expect(slider.getAttribute('aria-valuenow')).toBe('50')
-    })
+      expect(slider.getAttribute('aria-valuenow')).toBe('50');
+    });
 
     it('includes help tooltips when descriptions are provided', () => {
       const schema = buildParams({
@@ -641,18 +693,18 @@ describe('UI Generator', () => {
             minimum: 0,
             maximum: 100,
             uiType: 'slider',
-            description: 'The width of the object'
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            description: 'The width of the object',
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const helpButton = container.querySelector('.param-help-button')
-      expect(helpButton).toBeTruthy()
-      expect(helpButton.getAttribute('aria-label')).toContain('Help for width')
-    })
+      const helpButton = container.querySelector('.param-help-button');
+      expect(helpButton).toBeTruthy();
+      expect(helpButton.getAttribute('aria-label')).toContain('Help for width');
+    });
 
     it('uses initial values instead of defaults when provided', () => {
       const schema = buildParams({
@@ -663,39 +715,42 @@ describe('UI Generator', () => {
             default: 50,
             minimum: 0,
             maximum: 100,
-            uiType: 'slider'
+            uiType: 'slider',
           },
           {
             name: 'name',
             type: 'string',
             default: 'default',
-            uiType: 'input'
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            uiType: 'input',
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, { width: 75, name: 'custom' })
+      renderParameterUI(schema, container, onChange, {
+        width: 75,
+        name: 'custom',
+      });
 
-      const slider = container.querySelector('input[type="range"]')
-      const textInput = container.querySelector('input[type="text"]')
-      expect(slider.value).toBe('75')
-      expect(textInput.value).toBe('custom')
-    })
-  })
+      const slider = container.querySelector('input[type="range"]');
+      const textInput = container.querySelector('input[type="text"]');
+      expect(slider.value).toBe('75');
+      expect(textInput.value).toBe('custom');
+    });
+  });
 
   describe('Limits Management', () => {
     it('tracks unlock state via setLimitsUnlocked and areLimitsUnlocked', () => {
       // Initially should be false (reset state)
-      setLimitsUnlocked(false)
-      expect(areLimitsUnlocked()).toBe(false)
+      setLimitsUnlocked(false);
+      expect(areLimitsUnlocked()).toBe(false);
 
-      setLimitsUnlocked(true)
-      expect(areLimitsUnlocked()).toBe(true)
+      setLimitsUnlocked(true);
+      expect(areLimitsUnlocked()).toBe(true);
 
-      setLimitsUnlocked(false)
-      expect(areLimitsUnlocked()).toBe(false)
-    })
+      setLimitsUnlocked(false);
+      expect(areLimitsUnlocked()).toBe(false);
+    });
 
     it('unlocks slider limits when setLimitsUnlocked(true) is called', () => {
       const schema = buildParams({
@@ -706,30 +761,30 @@ describe('UI Generator', () => {
             default: 50,
             minimum: 10,
             maximum: 100,
-            uiType: 'slider'
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            uiType: 'slider',
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const slider = container.querySelector('input[type="range"]')
-      expect(slider.min).toBe('10')
-      expect(slider.max).toBe('100')
+      const slider = container.querySelector('input[type="range"]');
+      expect(slider.min).toBe('10');
+      expect(slider.max).toBe('100');
 
-      setLimitsUnlocked(true)
+      setLimitsUnlocked(true);
 
       // Limits should be expanded
-      expect(parseFloat(slider.min)).toBeLessThan(10)
-      expect(parseFloat(slider.max)).toBeGreaterThan(100)
+      expect(parseFloat(slider.min)).toBeLessThan(10);
+      expect(parseFloat(slider.max)).toBeGreaterThan(100);
 
-      setLimitsUnlocked(false)
+      setLimitsUnlocked(false);
 
       // Limits should be restored
-      expect(slider.min).toBe('10')
-      expect(slider.max).toBe('100')
-    })
+      expect(slider.min).toBe('10');
+      expect(slider.max).toBe('100');
+    });
 
     it('clamps slider value when limits are restored', () => {
       const schema = buildParams({
@@ -740,24 +795,24 @@ describe('UI Generator', () => {
             default: 50,
             minimum: 10,
             maximum: 100,
-            uiType: 'slider'
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            uiType: 'slider',
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const slider = container.querySelector('input[type="range"]')
-      
+      const slider = container.querySelector('input[type="range"]');
+
       // Unlock and set value outside normal range
-      setLimitsUnlocked(true)
-      slider.value = 150
-      
+      setLimitsUnlocked(true);
+      slider.value = 150;
+
       // Now restore limits - value should be clamped
-      setLimitsUnlocked(false)
-      expect(parseFloat(slider.value)).toBeLessThanOrEqual(100)
-    })
+      setLimitsUnlocked(false);
+      expect(parseFloat(slider.value)).toBeLessThanOrEqual(100);
+    });
 
     it('unlocks number input limits when setLimitsUnlocked(true) is called', () => {
       const schema = buildParams({
@@ -768,53 +823,53 @@ describe('UI Generator', () => {
             default: 5,
             minimum: 1,
             maximum: 10,
-            uiType: 'input'
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            uiType: 'input',
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const numberInput = container.querySelector('input[type="number"]')
-      expect(numberInput.min).toBe('1')
-      expect(numberInput.max).toBe('10')
+      const numberInput = container.querySelector('input[type="number"]');
+      expect(numberInput.min).toBe('1');
+      expect(numberInput.max).toBe('10');
 
-      setLimitsUnlocked(true)
+      setLimitsUnlocked(true);
 
       // Min/max should be removed
-      expect(numberInput.hasAttribute('min')).toBe(false)
-      expect(numberInput.hasAttribute('max')).toBe(false)
+      expect(numberInput.hasAttribute('min')).toBe(false);
+      expect(numberInput.hasAttribute('max')).toBe(false);
 
-      setLimitsUnlocked(false)
+      setLimitsUnlocked(false);
 
       // Limits should be restored
-      expect(numberInput.min).toBe('1')
-      expect(numberInput.max).toBe('10')
-    })
-  })
+      expect(numberInput.min).toBe('1');
+      expect(numberInput.max).toBe('10');
+    });
+  });
 
   describe('Default Values', () => {
     it('stores and retrieves default values via getAllDefaults and getDefaultValue', () => {
       const schema = buildParams({
         params: [
           { name: 'width', type: 'number', default: 100, uiType: 'input' },
-          { name: 'label', type: 'string', default: 'test', uiType: 'input' }
-        ]
-      })
-      const onChange = vi.fn()
+          { name: 'label', type: 'string', default: 'test', uiType: 'input' },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const defaults = getAllDefaults()
-      expect(defaults.width).toBe(100)
-      expect(defaults.label).toBe('test')
+      const defaults = getAllDefaults();
+      expect(defaults.width).toBe(100);
+      expect(defaults.label).toBe('test');
 
-      expect(getDefaultValue('width')).toBe(100)
-      expect(getDefaultValue('label')).toBe('test')
-      expect(getDefaultValue('nonexistent')).toBeUndefined()
-    })
-  })
+      expect(getDefaultValue('width')).toBe(100);
+      expect(getDefaultValue('label')).toBe('test');
+      expect(getDefaultValue('nonexistent')).toBeUndefined();
+    });
+  });
 
   describe('Parameter Reset', () => {
     it('resets a slider parameter to its default value', () => {
@@ -826,22 +881,22 @@ describe('UI Generator', () => {
             default: 25,
             minimum: 0,
             maximum: 50,
-            uiType: 'slider'
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            uiType: 'slider',
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, { height: 40 })
+      renderParameterUI(schema, container, onChange, { height: 40 });
 
-      const slider = container.querySelector('input[type="range"]')
-      expect(slider.value).toBe('40')
+      const slider = container.querySelector('input[type="range"]');
+      expect(slider.value).toBe('40');
 
-      const result = resetParameter('height', onChange)
+      const result = resetParameter('height', onChange);
 
-      expect(result).toBe(25)
-      expect(slider.value).toBe('25')
-    })
+      expect(result).toBe(25);
+      expect(slider.value).toBe('25');
+    });
 
     it('resets a select parameter to its default value', () => {
       const schema = buildParams({
@@ -851,34 +906,36 @@ describe('UI Generator', () => {
             type: 'string',
             default: 'circle',
             enum: ['circle', 'square', 'triangle'],
-            uiType: 'select'
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            uiType: 'select',
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, { shape: 'square' })
+      renderParameterUI(schema, container, onChange, { shape: 'square' });
 
-      const select = container.querySelector('select')
-      expect(select.value).toBe('square')
+      const select = container.querySelector('select');
+      expect(select.value).toBe('square');
 
-      resetParameter('shape', onChange)
+      resetParameter('shape', onChange);
 
-      expect(select.value).toBe('circle')
-    })
+      expect(select.value).toBe('circle');
+    });
 
     it('returns undefined when resetting non-existent parameter', () => {
       const schema = buildParams({
-        params: [{ name: 'width', type: 'number', default: 50, uiType: 'input' }]
-      })
-      const onChange = vi.fn()
+        params: [
+          { name: 'width', type: 'number', default: 50, uiType: 'input' },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const result = resetParameter('nonexistent', onChange)
-      expect(result).toBeUndefined()
-    })
-  })
+      const result = resetParameter('nonexistent', onChange);
+      expect(result).toBeUndefined();
+    });
+  });
 
   describe('Dependent Parameters', () => {
     it('updates dependent parameter visibility when parent changes', () => {
@@ -889,7 +946,7 @@ describe('UI Generator', () => {
             type: 'string',
             default: 'simple',
             enum: ['simple', 'advanced'],
-            uiType: 'select'
+            uiType: 'select',
           },
           {
             name: 'detail_level',
@@ -898,25 +955,31 @@ describe('UI Generator', () => {
             minimum: 1,
             maximum: 10,
             uiType: 'slider',
-            dependency: { parameter: 'mode', operator: '==', value: 'advanced' }
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            dependency: {
+              parameter: 'mode',
+              operator: '==',
+              value: 'advanced',
+            },
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const detailControl = container.querySelector('[data-param-name="detail_level"]')
-      
+      const detailControl = container.querySelector(
+        '[data-param-name="detail_level"]'
+      );
+
       // Initially hidden (mode is 'simple') - uses .hidden class per UI_STANDARDS.md
-      expect(detailControl.classList.contains('hidden')).toBe(true)
+      expect(detailControl.classList.contains('hidden')).toBe(true);
 
       // Change mode to advanced
-      updateDependentParameters('mode', 'advanced')
+      updateDependentParameters('mode', 'advanced');
 
       // Should now be visible
-      expect(detailControl.classList.contains('hidden')).toBe(false)
-    })
+      expect(detailControl.classList.contains('hidden')).toBe(false);
+    });
 
     it('handles != operator in dependencies', () => {
       const schema = buildParams({
@@ -926,33 +989,35 @@ describe('UI Generator', () => {
             type: 'string',
             default: 'basic',
             enum: ['basic', 'none'],
-            uiType: 'select'
+            uiType: 'select',
           },
           {
             name: 'options',
             type: 'number',
             default: 3,
             uiType: 'input',
-            dependency: { parameter: 'type', operator: '!=', value: 'none' }
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            dependency: { parameter: 'type', operator: '!=', value: 'none' },
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const optionsControl = container.querySelector('[data-param-name="options"]')
-      
+      const optionsControl = container.querySelector(
+        '[data-param-name="options"]'
+      );
+
       // Initially visible (type != none) - no .hidden class
-      expect(optionsControl.classList.contains('hidden')).toBe(false)
+      expect(optionsControl.classList.contains('hidden')).toBe(false);
 
       // Change type to 'none'
-      updateDependentParameters('type', 'none')
+      updateDependentParameters('type', 'none');
 
       // Should now be hidden - uses .hidden class per UI_STANDARDS.md
-      expect(optionsControl.classList.contains('hidden')).toBe(true)
-    })
-  })
+      expect(optionsControl.classList.contains('hidden')).toBe(true);
+    });
+  });
 
   describe('Unit Display', () => {
     it('displays unit suffix in slider when parameter has unit', () => {
@@ -965,23 +1030,23 @@ describe('UI Generator', () => {
             minimum: 10,
             maximum: 100,
             uiType: 'slider',
-            unit: 'mm'
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            unit: 'mm',
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
       // Value is in the editable spinbox input
-      const spinbox = container.querySelector('.slider-spinbox')
-      expect(spinbox).toBeTruthy()
-      expect(spinbox.value).toBe('50')
+      const spinbox = container.querySelector('.slider-spinbox');
+      expect(spinbox).toBeTruthy();
+      expect(spinbox.value).toBe('50');
       // Unit is displayed as a separate label
-      const unitLabel = container.querySelector('.slider-unit')
-      expect(unitLabel).toBeTruthy()
-      expect(unitLabel.textContent).toBe('mm')
-    })
+      const unitLabel = container.querySelector('.slider-unit');
+      expect(unitLabel).toBeTruthy();
+      expect(unitLabel.textContent).toBe('mm');
+    });
 
     it('displays degree symbol for angle parameters', () => {
       const schema = buildParams({
@@ -993,35 +1058,35 @@ describe('UI Generator', () => {
             minimum: 0,
             maximum: 360,
             uiType: 'slider',
-            unit: '°'
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            unit: '°',
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
       // Value is in the editable spinbox input
-      const spinbox = container.querySelector('.slider-spinbox')
-      expect(spinbox).toBeTruthy()
-      expect(spinbox.value).toBe('45')
+      const spinbox = container.querySelector('.slider-spinbox');
+      expect(spinbox).toBeTruthy();
+      expect(spinbox.value).toBe('45');
       // Unit (degree symbol) is displayed as a separate label
-      const unitLabel = container.querySelector('.slider-unit')
-      expect(unitLabel).toBeTruthy()
-      expect(unitLabel.textContent).toBe('°')
-    })
-  })
+      const unitLabel = container.querySelector('.slider-unit');
+      expect(unitLabel).toBeTruthy();
+      expect(unitLabel.textContent).toBe('°');
+    });
+  });
 
   describe('SVG Gallery Picker', () => {
     afterEach(() => {
-      clearGalleryOptions()
-    })
+      clearGalleryOptions();
+    });
 
     it('renders gallery when galleryOptions are registered for a file param', () => {
       setGalleryOptions('design_file', [
         { file: 'heart.svg', label: 'Heart', url: '/examples/heart.svg' },
         { file: 'star.svg', label: 'Star', url: '/examples/star.svg' },
-      ])
+      ]);
 
       const schema = buildParams({
         params: [
@@ -1030,25 +1095,25 @@ describe('UI Generator', () => {
             type: 'file',
             default: '',
             uiType: 'file',
-            acceptedExtensions: ['svg', 'png', 'jpg']
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            acceptedExtensions: ['svg', 'png', 'jpg'],
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const gallery = container.querySelector('.svg-gallery')
-      expect(gallery).toBeTruthy()
+      const gallery = container.querySelector('.svg-gallery');
+      expect(gallery).toBeTruthy();
 
-      const listbox = gallery.querySelector('[role="listbox"]')
-      expect(listbox).toBeTruthy()
+      const listbox = gallery.querySelector('[role="listbox"]');
+      expect(listbox).toBeTruthy();
 
-      const options = gallery.querySelectorAll('[role="option"]')
-      expect(options.length).toBe(2)
-      expect(options[0].title).toBe('Heart')
-      expect(options[1].title).toBe('Star')
-    })
+      const options = gallery.querySelectorAll('[role="option"]');
+      expect(options.length).toBe(2);
+      expect(options[0].title).toBe('Heart');
+      expect(options[1].title).toBe('Star');
+    });
 
     it('does not render gallery when no galleryOptions are registered', () => {
       const schema = buildParams({
@@ -1058,22 +1123,22 @@ describe('UI Generator', () => {
             type: 'file',
             default: '',
             uiType: 'file',
-            acceptedExtensions: ['svg']
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            acceptedExtensions: ['svg'],
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const gallery = container.querySelector('.svg-gallery')
-      expect(gallery).toBeFalsy()
-    })
+      const gallery = container.querySelector('.svg-gallery');
+      expect(gallery).toBeFalsy();
+    });
 
     it('gallery options have accessible labels and thumbnails', () => {
       setGalleryOptions('design_file', [
         { file: 'flower.svg', label: 'Flower', url: '/examples/flower.svg' },
-      ])
+      ]);
 
       const schema = buildParams({
         params: [
@@ -1082,32 +1147,32 @@ describe('UI Generator', () => {
             type: 'file',
             default: '',
             uiType: 'file',
-            acceptedExtensions: ['svg']
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            acceptedExtensions: ['svg'],
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const option = container.querySelector('[role="option"]')
-      expect(option).toBeTruthy()
-      expect(option.getAttribute('aria-selected')).toBe('false')
+      const option = container.querySelector('[role="option"]');
+      expect(option).toBeTruthy();
+      expect(option.getAttribute('aria-selected')).toBe('false');
 
-      const thumb = option.querySelector('img')
-      expect(thumb).toBeTruthy()
-      expect(thumb.alt).toBe('Flower')
-      expect(thumb.src).toContain('/examples/flower.svg')
+      const thumb = option.querySelector('img');
+      expect(thumb).toBeTruthy();
+      expect(thumb.alt).toBe('Flower');
+      expect(thumb.src).toContain('/examples/flower.svg');
 
-      const label = option.querySelector('.svg-gallery-label')
-      expect(label).toBeTruthy()
-      expect(label.textContent).toBe('Flower')
-    })
+      const label = option.querySelector('.svg-gallery-label');
+      expect(label).toBeTruthy();
+      expect(label.textContent).toBe('Flower');
+    });
 
     it('gallery listbox has proper ARIA attributes', () => {
       setGalleryOptions('design_file', [
         { file: 'heart.svg', label: 'Heart', url: '/examples/heart.svg' },
-      ])
+      ]);
 
       const schema = buildParams({
         params: [
@@ -1116,28 +1181,30 @@ describe('UI Generator', () => {
             type: 'file',
             default: '',
             uiType: 'file',
-            acceptedExtensions: ['svg']
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            acceptedExtensions: ['svg'],
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const listbox = container.querySelector('[role="listbox"]')
-      expect(listbox).toBeTruthy()
-      expect(listbox.getAttribute('aria-labelledby')).toBe('gallery-heading-design_file')
-      expect(listbox.getAttribute('tabindex')).toBe('0')
+      const listbox = container.querySelector('[role="listbox"]');
+      expect(listbox).toBeTruthy();
+      expect(listbox.getAttribute('aria-labelledby')).toBe(
+        'gallery-heading-design_file'
+      );
+      expect(listbox.getAttribute('tabindex')).toBe('0');
 
-      const heading = container.querySelector('#gallery-heading-design_file')
-      expect(heading).toBeTruthy()
-      expect(heading.textContent).toBe('Choose a design')
-    })
+      const heading = container.querySelector('#gallery-heading-design_file');
+      expect(heading).toBeTruthy();
+      expect(heading.textContent).toBe('Choose a design');
+    });
 
     it('clearGalleryOptions removes gallery on re-render', () => {
       setGalleryOptions('design_file', [
         { file: 'heart.svg', label: 'Heart', url: '/examples/heart.svg' },
-      ])
+      ]);
 
       const schema = buildParams({
         params: [
@@ -1146,26 +1213,26 @@ describe('UI Generator', () => {
             type: 'file',
             default: '',
             uiType: 'file',
-            acceptedExtensions: ['svg']
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            acceptedExtensions: ['svg'],
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
-      expect(container.querySelector('.svg-gallery')).toBeTruthy()
+      renderParameterUI(schema, container, onChange, {});
+      expect(container.querySelector('.svg-gallery')).toBeTruthy();
 
-      clearGalleryOptions()
-      renderParameterUI(schema, container, onChange, {})
-      expect(container.querySelector('.svg-gallery')).toBeFalsy()
-    })
+      clearGalleryOptions();
+      renderParameterUI(schema, container, onChange, {});
+      expect(container.querySelector('.svg-gallery')).toBeFalsy();
+    });
 
     it('gallery options support keyboard navigation', () => {
       setGalleryOptions('design_file', [
         { file: 'heart.svg', label: 'Heart', url: '/examples/heart.svg' },
         { file: 'star.svg', label: 'Star', url: '/examples/star.svg' },
         { file: 'moon.svg', label: 'Moon', url: '/examples/moon.svg' },
-      ])
+      ]);
 
       const schema = buildParams({
         params: [
@@ -1174,40 +1241,48 @@ describe('UI Generator', () => {
             type: 'file',
             default: '',
             uiType: 'file',
-            acceptedExtensions: ['svg']
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            acceptedExtensions: ['svg'],
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
-      const listbox = container.querySelector('[role="listbox"]')
-      expect(listbox).toBeTruthy()
+      const listbox = container.querySelector('[role="listbox"]');
+      expect(listbox).toBeTruthy();
 
       // Navigate right
-      listbox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
-      const options = container.querySelectorAll('[role="option"]')
-      expect(options[0].getAttribute('aria-selected')).toBe('true')
+      listbox.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })
+      );
+      const options = container.querySelectorAll('[role="option"]');
+      expect(options[0].getAttribute('aria-selected')).toBe('true');
 
       // Navigate right again
-      listbox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
-      expect(options[0].getAttribute('aria-selected')).toBe('false')
-      expect(options[1].getAttribute('aria-selected')).toBe('true')
+      listbox.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })
+      );
+      expect(options[0].getAttribute('aria-selected')).toBe('false');
+      expect(options[1].getAttribute('aria-selected')).toBe('true');
 
       // Navigate to end
-      listbox.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }))
-      expect(options[2].getAttribute('aria-selected')).toBe('true')
+      listbox.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'End', bubbles: true })
+      );
+      expect(options[2].getAttribute('aria-selected')).toBe('true');
 
       // Navigate to home
-      listbox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }))
-      expect(options[0].getAttribute('aria-selected')).toBe('true')
-    })
+      listbox.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Home', bubbles: true })
+      );
+      expect(options[0].getAttribute('aria-selected')).toBe('true');
+    });
 
     it('appendUserSvgToGallery creates exactly one "Your uploads" heading for multiple uploads', () => {
       setGalleryOptions('design_file', [
         { file: 'heart.svg', label: 'Heart', url: '/examples/heart.svg' },
-      ])
+      ]);
 
       const schema = buildParams({
         params: [
@@ -1216,40 +1291,51 @@ describe('UI Generator', () => {
             type: 'file',
             default: '',
             uiType: 'file',
-            acceptedExtensions: ['svg']
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            acceptedExtensions: ['svg'],
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
       appendUserSvgToGallery('design_file', {
-        file: 'upload1.svg', label: 'Upload 1', url: '/uploads/upload1.svg', userUpload: true
-      })
+        file: 'upload1.svg',
+        label: 'Upload 1',
+        url: '/uploads/upload1.svg',
+        userUpload: true,
+      });
       appendUserSvgToGallery('design_file', {
-        file: 'upload2.svg', label: 'Upload 2', url: '/uploads/upload2.svg', userUpload: true
-      })
+        file: 'upload2.svg',
+        label: 'Upload 2',
+        url: '/uploads/upload2.svg',
+        userUpload: true,
+      });
       appendUserSvgToGallery('design_file', {
-        file: 'upload3.svg', label: 'Upload 3', url: '/uploads/upload3.svg', userUpload: true
-      })
+        file: 'upload3.svg',
+        label: 'Upload 3',
+        url: '/uploads/upload3.svg',
+        userUpload: true,
+      });
 
-      const gallery = container.querySelector('.svg-gallery')
-      const headings = gallery.querySelectorAll('.svg-gallery-user-heading')
-      expect(headings.length).toBe(1)
-      expect(headings[0].textContent).toBe('Your uploads')
+      const gallery = container.querySelector('.svg-gallery');
+      const headings = gallery.querySelectorAll('.svg-gallery-user-heading');
+      expect(headings.length).toBe(1);
+      expect(headings[0].textContent).toBe('Your uploads');
 
-      const userListboxes = gallery.querySelectorAll('.svg-gallery-user-listbox')
-      expect(userListboxes.length).toBe(1)
+      const userListboxes = gallery.querySelectorAll(
+        '.svg-gallery-user-listbox'
+      );
+      expect(userListboxes.length).toBe(1);
 
-      const userOptions = userListboxes[0].querySelectorAll('[role="option"]')
-      expect(userOptions.length).toBe(3)
-    })
+      const userOptions = userListboxes[0].querySelectorAll('[role="option"]');
+      expect(userOptions.length).toBe(3);
+    });
 
     it('appendUserSvgToGallery deduplicates by file name and userUpload flag', () => {
       setGalleryOptions('design_file', [
         { file: 'heart.svg', label: 'Heart', url: '/examples/heart.svg' },
-      ])
+      ]);
 
       const schema = buildParams({
         params: [
@@ -1258,25 +1344,28 @@ describe('UI Generator', () => {
             type: 'file',
             default: '',
             uiType: 'file',
-            acceptedExtensions: ['svg']
-          }
-        ]
-      })
-      const onChange = vi.fn()
+            acceptedExtensions: ['svg'],
+          },
+        ],
+      });
+      const onChange = vi.fn();
 
-      renderParameterUI(schema, container, onChange, {})
+      renderParameterUI(schema, container, onChange, {});
 
       const svgOpt = {
-        file: 'upload1.svg', label: 'Upload 1', url: '/uploads/upload1.svg', userUpload: true
-      }
-      appendUserSvgToGallery('design_file', svgOpt)
-      appendUserSvgToGallery('design_file', svgOpt)
+        file: 'upload1.svg',
+        label: 'Upload 1',
+        url: '/uploads/upload1.svg',
+        userUpload: true,
+      };
+      appendUserSvgToGallery('design_file', svgOpt);
+      appendUserSvgToGallery('design_file', svgOpt);
 
-      const userListbox = container.querySelector('.svg-gallery-user-listbox')
-      const userOptions = userListbox.querySelectorAll('[role="option"]')
-      expect(userOptions.length).toBe(1)
-    })
-  })
+      const userListbox = container.querySelector('.svg-gallery-user-listbox');
+      const userOptions = userListbox.querySelectorAll('[role="option"]');
+      expect(userOptions.length).toBe(1);
+    });
+  });
 
   // ── Phase 4a — SVG preparation integration ─────────────────────────────
 
@@ -1288,10 +1377,10 @@ describe('UI Generator', () => {
           type: 'file',
           default: '',
           uiType: 'file',
-          acceptedExtensions: ['svg']
-        }
-      ]
-    })
+          acceptedExtensions: ['svg'],
+        },
+      ],
+    });
 
     const nonSvgFileSchema = buildParams({
       params: [
@@ -1300,145 +1389,152 @@ describe('UI Generator', () => {
           type: 'file',
           default: '',
           uiType: 'file',
-          acceptedExtensions: ['stl']
-        }
-      ]
-    })
+          acceptedExtensions: ['stl'],
+        },
+      ],
+    });
 
     it('SVG file control contains a status card element', () => {
-      const onChange = vi.fn()
-      renderParameterUI(svgFileSchema, container, onChange, {})
+      const onChange = vi.fn();
+      renderParameterUI(svgFileSchema, container, onChange, {});
 
-      const statusCard = container.querySelector('.svg-prep-status')
-      expect(statusCard).toBeTruthy()
-    })
+      const statusCard = container.querySelector('.svg-prep-status');
+      expect(statusCard).toBeTruthy();
+    });
 
     it('status card is hidden by default', () => {
-      const onChange = vi.fn()
-      renderParameterUI(svgFileSchema, container, onChange, {})
+      const onChange = vi.fn();
+      renderParameterUI(svgFileSchema, container, onChange, {});
 
-      const statusCard = container.querySelector('.svg-prep-status')
-      expect(statusCard.style.display).toBe('none')
-    })
+      const statusCard = container.querySelector('.svg-prep-status');
+      expect(statusCard.style.display).toBe('none');
+    });
 
     it('status card has proper ARIA attributes', () => {
-      const onChange = vi.fn()
-      renderParameterUI(svgFileSchema, container, onChange, {})
+      const onChange = vi.fn();
+      renderParameterUI(svgFileSchema, container, onChange, {});
 
-      const statusCard = container.querySelector('.svg-prep-status')
-      expect(statusCard.getAttribute('role')).toBe('status')
-      expect(statusCard.getAttribute('aria-live')).toBe('polite')
-    })
+      const statusCard = container.querySelector('.svg-prep-status');
+      expect(statusCard.getAttribute('role')).toBe('status');
+      expect(statusCard.getAttribute('aria-live')).toBe('polite');
+    });
 
     it('SVG file control contains a workspace container', () => {
-      const onChange = vi.fn()
-      renderParameterUI(svgFileSchema, container, onChange, {})
+      const onChange = vi.fn();
+      renderParameterUI(svgFileSchema, container, onChange, {});
 
-      const wsContainer = container.querySelector('.svg-prep-workspace-container')
-      expect(wsContainer).toBeTruthy()
-    })
+      const wsContainer = container.querySelector(
+        '.svg-prep-workspace-container'
+      );
+      expect(wsContainer).toBeTruthy();
+    });
 
     it('workspace container includes the workspace root element', () => {
-      const onChange = vi.fn()
-      renderParameterUI(svgFileSchema, container, onChange, {})
+      const onChange = vi.fn();
+      renderParameterUI(svgFileSchema, container, onChange, {});
 
-      const wsRoot = container.querySelector('.svg-prep-workspace')
-      expect(wsRoot).toBeTruthy()
-      expect(wsRoot.getAttribute('role')).toBe('region')
-      expect(wsRoot.hidden).toBe(true)
-    })
+      const wsRoot = container.querySelector('.svg-prep-workspace');
+      expect(wsRoot).toBeTruthy();
+      expect(wsRoot.getAttribute('role')).toBe('region');
+      expect(wsRoot.hidden).toBe(true);
+    });
 
     it('non-SVG file control does not include a workspace container', () => {
-      const onChange = vi.fn()
-      renderParameterUI(nonSvgFileSchema, container, onChange, {})
+      const onChange = vi.fn();
+      renderParameterUI(nonSvgFileSchema, container, onChange, {});
 
-      const wsContainer = container.querySelector('.svg-prep-workspace-container')
-      expect(wsContainer).toBeFalsy()
-    })
+      const wsContainer = container.querySelector(
+        '.svg-prep-workspace-container'
+      );
+      expect(wsContainer).toBeFalsy();
+    });
 
     it('status card is present even for non-SVG file controls', () => {
-      const onChange = vi.fn()
-      renderParameterUI(nonSvgFileSchema, container, onChange, {})
+      const onChange = vi.fn();
+      renderParameterUI(nonSvgFileSchema, container, onChange, {});
 
-      const statusCard = container.querySelector('.svg-prep-status')
-      expect(statusCard).toBeTruthy()
-      expect(statusCard.style.display).toBe('none')
-    })
+      const statusCard = container.querySelector('.svg-prep-status');
+      expect(statusCard).toBeTruthy();
+      expect(statusCard.style.display).toBe('none');
+    });
 
     it('old Prepare SVG button is removed (Phase 4b)', () => {
-      const onChange = vi.fn()
-      renderParameterUI(svgFileSchema, container, onChange, {})
+      const onChange = vi.fn();
+      renderParameterUI(svgFileSchema, container, onChange, {});
 
-      const prepBtn = container.querySelector('.file-prepare-svg-button')
-      expect(prepBtn).toBeNull()
-    })
-  })
+      const prepBtn = container.querySelector('.file-prepare-svg-button');
+      expect(prepBtn).toBeNull();
+    });
+  });
 
   // ── Phase 5 — SVG prep metadata persistence ──────────────────────────
 
   describe('SVG prep metadata storage', () => {
     afterEach(() => {
-      clearSvgPrepMetadata()
-    })
+      clearSvgPrepMetadata();
+    });
 
     it('getSvgPrepMetadata returns null for unknown file', () => {
-      expect(getSvgPrepMetadata('unknown.svg')).toBeNull()
-    })
+      expect(getSvgPrepMetadata('unknown.svg')).toBeNull();
+    });
 
     it('setSvgPrepMetadata stores and retrieves metadata', () => {
       const meta = {
         rawSvg: '<svg></svg>',
         preparedSvg: '<svg>prep</svg>',
         prepOverrides: ['foreground', 'hole'],
-        prepAnalysis: { elementCount: 2 }
-      }
-      setSvgPrepMetadata('test.svg', meta)
-      expect(getSvgPrepMetadata('test.svg')).toEqual(meta)
-    })
+        prepAnalysis: { elementCount: 2 },
+      };
+      setSvgPrepMetadata('test.svg', meta);
+      expect(getSvgPrepMetadata('test.svg')).toEqual(meta);
+    });
 
     it('setSvgPrepMetadata with null clears metadata', () => {
-      setSvgPrepMetadata('test.svg', { rawSvg: '<svg/>' })
-      setSvgPrepMetadata('test.svg', null)
-      expect(getSvgPrepMetadata('test.svg')).toBeNull()
-    })
+      setSvgPrepMetadata('test.svg', { rawSvg: '<svg/>' });
+      setSvgPrepMetadata('test.svg', null);
+      expect(getSvgPrepMetadata('test.svg')).toBeNull();
+    });
 
     it('clearSvgPrepMetadata removes all entries', () => {
-      setSvgPrepMetadata('a.svg', { rawSvg: 'a' })
-      setSvgPrepMetadata('b.svg', { rawSvg: 'b' })
-      clearSvgPrepMetadata()
-      expect(getSvgPrepMetadata('a.svg')).toBeNull()
-      expect(getSvgPrepMetadata('b.svg')).toBeNull()
-    })
+      setSvgPrepMetadata('a.svg', { rawSvg: 'a' });
+      setSvgPrepMetadata('b.svg', { rawSvg: 'b' });
+      clearSvgPrepMetadata();
+      expect(getSvgPrepMetadata('a.svg')).toBeNull();
+      expect(getSvgPrepMetadata('b.svg')).toBeNull();
+    });
 
     it('clearGalleryOptions also clears SVG prep metadata', () => {
-      setSvgPrepMetadata('test.svg', { rawSvg: '<svg/>' })
-      clearGalleryOptions()
-      expect(getSvgPrepMetadata('test.svg')).toBeNull()
-    })
+      setSvgPrepMetadata('test.svg', { rawSvg: '<svg/>' });
+      clearGalleryOptions();
+      expect(getSvgPrepMetadata('test.svg')).toBeNull();
+    });
 
     it('metadata entries are independent per filename', () => {
-      const meta1 = { rawSvg: '<svg>1</svg>', preparedSvg: null }
-      const meta2 = { rawSvg: '<svg>2</svg>', preparedSvg: '<svg>2p</svg>' }
-      setSvgPrepMetadata('one.svg', meta1)
-      setSvgPrepMetadata('two.svg', meta2)
+      const meta1 = { rawSvg: '<svg>1</svg>', preparedSvg: null };
+      const meta2 = { rawSvg: '<svg>2</svg>', preparedSvg: '<svg>2p</svg>' };
+      setSvgPrepMetadata('one.svg', meta1);
+      setSvgPrepMetadata('two.svg', meta2);
 
-      expect(getSvgPrepMetadata('one.svg')).toEqual(meta1)
-      expect(getSvgPrepMetadata('two.svg')).toEqual(meta2)
+      expect(getSvgPrepMetadata('one.svg')).toEqual(meta1);
+      expect(getSvgPrepMetadata('two.svg')).toEqual(meta2);
 
-      setSvgPrepMetadata('one.svg', null)
-      expect(getSvgPrepMetadata('one.svg')).toBeNull()
-      expect(getSvgPrepMetadata('two.svg')).toEqual(meta2)
-    })
+      setSvgPrepMetadata('one.svg', null);
+      expect(getSvgPrepMetadata('one.svg')).toBeNull();
+      expect(getSvgPrepMetadata('two.svg')).toEqual(meta2);
+    });
 
     it('overwriting metadata replaces the previous entry', () => {
-      setSvgPrepMetadata('test.svg', { rawSvg: 'old' })
-      setSvgPrepMetadata('test.svg', { rawSvg: 'new', prepOverrides: ['ignore'] })
+      setSvgPrepMetadata('test.svg', { rawSvg: 'old' });
+      setSvgPrepMetadata('test.svg', {
+        rawSvg: 'new',
+        prepOverrides: ['ignore'],
+      });
 
-      const stored = getSvgPrepMetadata('test.svg')
-      expect(stored.rawSvg).toBe('new')
-      expect(stored.prepOverrides).toEqual(['ignore'])
-    })
-  })
+      const stored = getSvgPrepMetadata('test.svg');
+      expect(stored.rawSvg).toBe('new');
+      expect(stored.prepOverrides).toEqual(['ignore']);
+    });
+  });
 
   describe('Edit button in needs_review and unsupported status cards', () => {
     const svgFileSchema = buildParams({
@@ -1448,27 +1544,35 @@ describe('UI Generator', () => {
           type: 'file',
           default: '',
           uiType: 'file',
-          acceptedExtensions: ['svg']
-        }
-      ]
-    })
+          acceptedExtensions: ['svg'],
+        },
+      ],
+    });
 
     beforeEach(() => {
-      vi.mocked(isEnabled).mockReturnValue(true)
-      vi.mocked(prepareSvg).mockImplementation((svg) => svg)
-    })
+      vi.mocked(isEnabled).mockReturnValue(true);
+      vi.mocked(prepareSvg).mockImplementation((svg) => svg);
+    });
 
     afterEach(() => {
-      vi.mocked(isEnabled).mockReturnValue(false)
-      vi.mocked(analyzeSvg).mockReset()
-      vi.mocked(prepareSvg).mockReset()
-    })
+      vi.mocked(isEnabled).mockReturnValue(false);
+      vi.mocked(analyzeSvg).mockReset();
+      vi.mocked(prepareSvg).mockReset();
+    });
 
-    async function uploadSvg(fileInput, svgContent = '<svg><path/><circle/></svg>') {
-      const file = new File([svgContent], 'test.svg', { type: 'image/svg+xml' })
-      Object.defineProperty(fileInput, 'files', { value: [file], configurable: true })
-      fileInput.dispatchEvent(new Event('change'))
-      await new Promise(resolve => setTimeout(resolve, 100))
+    async function uploadSvg(
+      fileInput,
+      svgContent = '<svg><path/><circle/></svg>'
+    ) {
+      const file = new File([svgContent], 'test.svg', {
+        type: 'image/svg+xml',
+      });
+      Object.defineProperty(fileInput, 'files', {
+        value: [file],
+        configurable: true,
+      });
+      fileInput.dispatchEvent(new Event('change'));
+      await new Promise((resolve) => setTimeout(resolve, 100));
     }
 
     it('shows Edit button for needs_review status', async () => {
@@ -1476,303 +1580,398 @@ describe('UI Generator', () => {
         status: 'needs_review',
         recommendation: 'needs_review',
         elements: [{ type: 'path' }, { type: 'circle' }],
-        warnings: []
-      })
+        warnings: [],
+      });
 
-      const onChange = vi.fn()
-      renderParameterUI(svgFileSchema, container, onChange, {})
+      const onChange = vi.fn();
+      renderParameterUI(svgFileSchema, container, onChange, {});
 
-      const fileInput = container.querySelector('input[type="file"]')
-      await uploadSvg(fileInput)
+      const fileInput = container.querySelector('input[type="file"]');
+      await uploadSvg(fileInput);
 
-      const statusCard = container.querySelector('.svg-prep-status')
-      const editBtn = statusCard.querySelector('.svg-prep-edit-btn')
-      expect(editBtn).toBeTruthy()
-      expect(editBtn.getAttribute('aria-label')).toBe('Open SVG preparation editor')
-      expect(editBtn.textContent).toBe('Edit')
+      const statusCard = container.querySelector('.svg-prep-status');
+      const editBtn = statusCard.querySelector('.svg-prep-edit-btn');
+      expect(editBtn).toBeTruthy();
+      expect(editBtn.getAttribute('aria-label')).toBe(
+        'Open SVG preparation editor'
+      );
+      expect(editBtn.textContent).toBe('Edit');
 
-      const badge = statusCard.querySelector('.svg-prep-status-badge')
-      expect(badge.dataset.level).toBe('review')
-    })
+      const badge = statusCard.querySelector('.svg-prep-status-badge');
+      expect(badge.dataset.level).toBe('review');
+    });
 
     it('shows Edit button for unsupported status', async () => {
       vi.mocked(analyzeSvg).mockReturnValue({
         status: 'unsupported',
         recommendation: 'unsupported',
         elements: [{ type: 'text' }],
-        warnings: ['Contains text elements']
-      })
+        warnings: ['Contains text elements'],
+      });
 
-      const onChange = vi.fn()
-      renderParameterUI(svgFileSchema, container, onChange, {})
+      const onChange = vi.fn();
+      renderParameterUI(svgFileSchema, container, onChange, {});
 
-      const fileInput = container.querySelector('input[type="file"]')
-      await uploadSvg(fileInput)
+      const fileInput = container.querySelector('input[type="file"]');
+      await uploadSvg(fileInput);
 
-      const statusCard = container.querySelector('.svg-prep-status')
-      const editBtn = statusCard.querySelector('.svg-prep-edit-btn')
-      expect(editBtn).toBeTruthy()
-      expect(editBtn.getAttribute('aria-label')).toBe('Open SVG preparation editor')
+      const statusCard = container.querySelector('.svg-prep-status');
+      const editBtn = statusCard.querySelector('.svg-prep-edit-btn');
+      expect(editBtn).toBeTruthy();
+      expect(editBtn.getAttribute('aria-label')).toBe(
+        'Open SVG preparation editor'
+      );
 
-      const warnings = statusCard.querySelector('.svg-prep-status-warnings')
-      expect(warnings).toBeTruthy()
-      expect(warnings.textContent).toContain('Contains text elements')
-    })
+      const warnings = statusCard.querySelector('.svg-prep-status-warnings');
+      expect(warnings).toBeTruthy();
+      expect(warnings.textContent).toContain('Contains text elements');
+    });
 
     it('Edit button has semantic button element with correct attributes', async () => {
       vi.mocked(analyzeSvg).mockReturnValue({
         status: 'needs_review',
         recommendation: 'needs_review',
         elements: [{ type: 'path' }],
-        warnings: []
-      })
+        warnings: [],
+      });
 
-      const onChange = vi.fn()
-      renderParameterUI(svgFileSchema, container, onChange, {})
+      const onChange = vi.fn();
+      renderParameterUI(svgFileSchema, container, onChange, {});
 
-      const fileInput = container.querySelector('input[type="file"]')
-      await uploadSvg(fileInput)
+      const fileInput = container.querySelector('input[type="file"]');
+      await uploadSvg(fileInput);
 
-      const editBtn = container.querySelector('.svg-prep-edit-btn')
-      expect(editBtn.tagName).toBe('BUTTON')
-      expect(editBtn.type).toBe('button')
-      expect(editBtn.classList.contains('btn')).toBe(true)
-      expect(editBtn.classList.contains('btn-ghost')).toBe(true)
-    })
-  })
-})
+      const editBtn = container.querySelector('.svg-prep-edit-btn');
+      expect(editBtn.tagName).toBe('BUTTON');
+      expect(editBtn.type).toBe('button');
+      expect(editBtn.classList.contains('btn')).toBe(true);
+      expect(editBtn.classList.contains('btn-ghost')).toBe(true);
+    });
+  });
+});
 
-import { setCustomizerFileId, getOpenGroupIdsFromDOM } from '../../src/js/ui-generator.js'
+import {
+  setCustomizerFileId,
+  getOpenGroupIdsFromDOM,
+} from '../../src/js/ui-generator.js';
 
 describe('UI Generator — F5 group collapse defaults', () => {
-  let container
+  let container;
   const threeGroupSchema = () => ({
     groups: [
       { id: 'Tablet', label: 'Tablet', order: 0 },
       { id: 'Grid Info', label: 'Grid Info', order: 1 },
-      { id: 'Mounting', label: 'Mounting', order: 2 }
+      { id: 'Mounting', label: 'Mounting', order: 2 },
     ],
     parameters: {
-      width: { name: 'width', order: 0, group: 'Tablet', type: 'number', default: 100, uiType: 'input' },
-      cell_size: { name: 'cell_size', order: 0, group: 'Grid Info', type: 'number', default: 24, uiType: 'input' },
-      mount_kind: { name: 'mount_kind', order: 0, group: 'Mounting', type: 'string', default: 'velcro', uiType: 'input' }
-    }
-  })
+      width: {
+        name: 'width',
+        order: 0,
+        group: 'Tablet',
+        type: 'number',
+        default: 100,
+        uiType: 'input',
+      },
+      cell_size: {
+        name: 'cell_size',
+        order: 0,
+        group: 'Grid Info',
+        type: 'number',
+        default: 24,
+        uiType: 'input',
+      },
+      mount_kind: {
+        name: 'mount_kind',
+        order: 0,
+        group: 'Mounting',
+        type: 'string',
+        default: 'velcro',
+        uiType: 'input',
+      },
+    },
+  });
 
   beforeEach(() => {
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    localStorage.clear()
-    setCustomizerFileId(null)
-  })
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    localStorage.clear();
+    setCustomizerFileId(null);
+  });
 
   afterEach(() => {
-    if (container?.parentNode) document.body.removeChild(container)
-    setCustomizerFileId(null)
-    localStorage.clear()
-  })
+    if (container?.parentNode) document.body.removeChild(container);
+    setCustomizerFileId(null);
+    localStorage.clear();
+  });
 
   it('collapses every group on a fresh render with no stored state', () => {
-    renderParameterUI(threeGroupSchema(), container, vi.fn(), {})
-    const details = container.querySelectorAll('details.param-group')
-    expect(details.length).toBe(3)
-    details.forEach(d => expect(d.open).toBe(false))
-  })
+    renderParameterUI(threeGroupSchema(), container, vi.fn(), {});
+    const details = container.querySelectorAll('details.param-group');
+    expect(details.length).toBe(3);
+    details.forEach((d) => expect(d.open).toBe(false));
+  });
 
   it('renders only the explicit openGroupIds when provided', () => {
-    renderParameterUI(threeGroupSchema(), container, vi.fn(), {}, {
-      openGroupIds: new Set(['Grid Info'])
-    })
+    renderParameterUI(
+      threeGroupSchema(),
+      container,
+      vi.fn(),
+      {},
+      {
+        openGroupIds: new Set(['Grid Info']),
+      }
+    );
     const byGroup = Array.from(
       container.querySelectorAll('details.param-group')
     ).reduce((acc, d) => {
-      acc[d.dataset.groupId] = d.open
-      return acc
-    }, {})
+      acc[d.dataset.groupId] = d.open;
+      return acc;
+    }, {});
     expect(byGroup).toEqual({
-      'Tablet': false,
+      Tablet: false,
       'Grid Info': true,
-      'Mounting': false
-    })
-  })
+      Mounting: false,
+    });
+  });
 
   it('treats an explicit empty Set as "all collapsed"', () => {
-    renderParameterUI(threeGroupSchema(), container, vi.fn(), {}, {
-      openGroupIds: new Set()
-    })
-    container.querySelectorAll('details.param-group').forEach(d =>
-      expect(d.open).toBe(false)
-    )
-  })
+    renderParameterUI(
+      threeGroupSchema(),
+      container,
+      vi.fn(),
+      {},
+      {
+        openGroupIds: new Set(),
+      }
+    );
+    container
+      .querySelectorAll('details.param-group')
+      .forEach((d) => expect(d.open).toBe(false));
+  });
 
   it('uses stored state when useStoredState is true and a fileId is active', () => {
-    setCustomizerFileId('keyguard.scad')
+    setCustomizerFileId('keyguard.scad');
     localStorage.setItem(
       'openscad-forge-customizer-groups-keyguard.scad',
       JSON.stringify({ open: ['Tablet', 'Mounting'] })
-    )
-    renderParameterUI(threeGroupSchema(), container, vi.fn(), {}, {
-      useStoredState: true
-    })
-    const open = getOpenGroupIdsFromDOM(container)
-    expect([...open].sort()).toEqual(['Mounting', 'Tablet'])
-  })
+    );
+    renderParameterUI(
+      threeGroupSchema(),
+      container,
+      vi.fn(),
+      {},
+      {
+        useStoredState: true,
+      }
+    );
+    const open = getOpenGroupIdsFromDOM(container);
+    expect([...open].sort()).toEqual(['Mounting', 'Tablet']);
+  });
 
   it('falls back to all-collapsed when useStoredState is true but nothing is stored', () => {
-    setCustomizerFileId('keyguard.scad')
-    renderParameterUI(threeGroupSchema(), container, vi.fn(), {}, {
-      useStoredState: true
-    })
-    container.querySelectorAll('details.param-group').forEach(d =>
-      expect(d.open).toBe(false)
-    )
-  })
+    setCustomizerFileId('keyguard.scad');
+    renderParameterUI(
+      threeGroupSchema(),
+      container,
+      vi.fn(),
+      {},
+      {
+        useStoredState: true,
+      }
+    );
+    container
+      .querySelectorAll('details.param-group')
+      .forEach((d) => expect(d.open).toBe(false));
+  });
 
   it('preserves the current DOM open state on a re-render with no options', () => {
-    renderParameterUI(threeGroupSchema(), container, vi.fn(), {}, {
-      openGroupIds: new Set(['Grid Info'])
-    })
-    expect(getOpenGroupIdsFromDOM(container).has('Grid Info')).toBe(true)
+    renderParameterUI(
+      threeGroupSchema(),
+      container,
+      vi.fn(),
+      {},
+      {
+        openGroupIds: new Set(['Grid Info']),
+      }
+    );
+    expect(getOpenGroupIdsFromDOM(container).has('Grid Info')).toBe(true);
 
-    renderParameterUI(threeGroupSchema(), container, vi.fn(), {})
-    expect([...getOpenGroupIdsFromDOM(container)]).toEqual(['Grid Info'])
-  })
+    renderParameterUI(threeGroupSchema(), container, vi.fn(), {});
+    expect([...getOpenGroupIdsFromDOM(container)]).toEqual(['Grid Info']);
+  });
 
   it('persists user toggles to localStorage when a fileId is active', () => {
-    setCustomizerFileId('keyguard.scad')
-    renderParameterUI(threeGroupSchema(), container, vi.fn(), {}, {
-      useStoredState: true
-    })
+    setCustomizerFileId('keyguard.scad');
+    renderParameterUI(
+      threeGroupSchema(),
+      container,
+      vi.fn(),
+      {},
+      {
+        useStoredState: true,
+      }
+    );
 
-    const tablet = container.querySelector('details.param-group[data-group-id="Tablet"]')
-    tablet.open = true
-    tablet.dispatchEvent(new Event('toggle'))
+    const tablet = container.querySelector(
+      'details.param-group[data-group-id="Tablet"]'
+    );
+    tablet.open = true;
+    tablet.dispatchEvent(new Event('toggle'));
 
     const raw = localStorage.getItem(
       'openscad-forge-customizer-groups-keyguard.scad'
-    )
-    expect(raw).not.toBeNull()
-    expect(JSON.parse(raw).open).toEqual(['Tablet'])
-  })
+    );
+    expect(raw).not.toBeNull();
+    expect(JSON.parse(raw).open).toEqual(['Tablet']);
+  });
 
   it('does not persist toggles when no fileId is active', () => {
-    setCustomizerFileId(null)
-    renderParameterUI(threeGroupSchema(), container, vi.fn(), {})
-    const tablet = container.querySelector('details.param-group[data-group-id="Tablet"]')
-    tablet.open = true
-    tablet.dispatchEvent(new Event('toggle'))
-    expect(localStorage.length).toBe(0)
-  })
+    setCustomizerFileId(null);
+    renderParameterUI(threeGroupSchema(), container, vi.fn(), {});
+    const tablet = container.querySelector(
+      'details.param-group[data-group-id="Tablet"]'
+    );
+    tablet.open = true;
+    tablet.dispatchEvent(new Event('toggle'));
+    expect(localStorage.length).toBe(0);
+  });
 
   it('forwards toggles to the optional onGroupToggle callback', () => {
-    const cb = vi.fn()
-    renderParameterUI(threeGroupSchema(), container, vi.fn(), {}, {
-      onGroupToggle: cb
-    })
-    const tablet = container.querySelector('details.param-group[data-group-id="Tablet"]')
-    tablet.open = true
-    tablet.dispatchEvent(new Event('toggle'))
-    expect(cb).toHaveBeenCalledWith('Tablet', true)
-  })
+    const cb = vi.fn();
+    renderParameterUI(
+      threeGroupSchema(),
+      container,
+      vi.fn(),
+      {},
+      {
+        onGroupToggle: cb,
+      }
+    );
+    const tablet = container.querySelector(
+      'details.param-group[data-group-id="Tablet"]'
+    );
+    tablet.open = true;
+    tablet.dispatchEvent(new Event('toggle'));
+    expect(cb).toHaveBeenCalledWith('Tablet', true);
+  });
 
   it('getOpenGroupIdsFromDOM returns an empty set on a null container', () => {
-    expect(getOpenGroupIdsFromDOM(null).size).toBe(0)
-  })
-})
+    expect(getOpenGroupIdsFromDOM(null).size).toBe(0);
+  });
+});
 
 describe('Aspect companion parameters', () => {
-  let container
+  let container;
 
   beforeEach(() => {
-    container = document.createElement('div')
-    document.body.appendChild(container)
-  })
+    container = document.createElement('div');
+    document.body.appendChild(container);
+  });
 
   afterEach(() => {
-    if (container?.parentNode) document.body.removeChild(container)
-    vi.mocked(measureSvgAspect).mockReset()
-  })
+    if (container?.parentNode) document.body.removeChild(container);
+    vi.mocked(measureSvgAspect).mockReset();
+  });
 
-  const schema = () => buildParams({
-    params: [
-      {
-        name: 'design_file',
-        type: 'file',
-        default: '',
-        uiType: 'file',
-        acceptedExtensions: ['svg', 'png', 'jpg']
-      },
-      { name: 'design_file_aspect', type: 'number', default: 1, uiType: 'input' },
-      { name: 'design_scale', type: 'number', default: 100, uiType: 'input' }
-    ]
-  })
+  const schema = () =>
+    buildParams({
+      params: [
+        {
+          name: 'design_file',
+          type: 'file',
+          default: '',
+          uiType: 'file',
+          acceptedExtensions: ['svg', 'png', 'jpg'],
+        },
+        {
+          name: 'design_file_aspect',
+          type: 'number',
+          default: 1,
+          uiType: 'input',
+        },
+        { name: 'design_scale', type: 'number', default: 100, uiType: 'input' },
+      ],
+    });
 
   async function uploadFile(fileInput, name, content, type) {
-    const file = new File([content], name, { type })
-    Object.defineProperty(fileInput, 'files', { value: [file], configurable: true })
-    fileInput.dispatchEvent(new Event('change'))
-    await new Promise(resolve => setTimeout(resolve, 100))
+    const file = new File([content], name, { type });
+    Object.defineProperty(fileInput, 'files', {
+      value: [file],
+      configurable: true,
+    });
+    fileInput.dispatchEvent(new Event('change'));
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
 
   it('isAspectCompanionParam recognizes only real companions', () => {
-    const { parameters } = schema()
-    expect(isAspectCompanionParam('design_file_aspect', parameters)).toBe(true)
-    expect(isAspectCompanionParam('design_scale', parameters)).toBe(false)
-    expect(isAspectCompanionParam('orphan_aspect', parameters)).toBe(false)
-  })
+    const { parameters } = schema();
+    expect(isAspectCompanionParam('design_file_aspect', parameters)).toBe(true);
+    expect(isAspectCompanionParam('design_scale', parameters)).toBe(false);
+    expect(isAspectCompanionParam('orphan_aspect', parameters)).toBe(false);
+  });
 
   it('renders no control for the companion but keeps its value', () => {
-    const onChange = vi.fn()
-    const values = renderParameterUI(schema(), container, onChange, {})
-    expect(values.design_file_aspect).toBe(1)
-    expect(container.querySelector('#param-design_file_aspect')).toBeFalsy()
-    expect(container.querySelector('#param-design_scale')).toBeTruthy()
-  })
+    const onChange = vi.fn();
+    const values = renderParameterUI(schema(), container, onChange, {});
+    expect(values.design_file_aspect).toBe(1);
+    expect(container.querySelector('#param-design_file_aspect')).toBeFalsy();
+    expect(container.querySelector('#param-design_scale')).toBeTruthy();
+  });
 
   it('uploading an SVG commits the file and its measured aspect in ONE snapshot', async () => {
-    vi.mocked(measureSvgAspect).mockReturnValue(2.5)
-    const onChange = vi.fn()
-    renderParameterUI(schema(), container, onChange, {})
+    vi.mocked(measureSvgAspect).mockReturnValue(2.5);
+    const onChange = vi.fn();
+    renderParameterUI(schema(), container, onChange, {});
 
-    const fileInput = container.querySelector('input[type="file"]')
-    await uploadFile(fileInput, 'wide.svg', '<svg><rect width="10" height="4"/></svg>', 'image/svg+xml')
+    const fileInput = container.querySelector('input[type="file"]');
+    await uploadFile(
+      fileInput,
+      'wide.svg',
+      '<svg><rect width="10" height="4"/></svg>',
+      'image/svg+xml'
+    );
 
-    const last = onChange.mock.calls.at(-1)[0]
-    expect(last.design_file).toMatchObject({ name: 'wide.svg' })
-    expect(last.design_file_aspect).toBe(2.5)
+    const last = onChange.mock.calls.at(-1)[0];
+    expect(last.design_file).toMatchObject({ name: 'wide.svg' });
+    expect(last.design_file_aspect).toBe(2.5);
     // No snapshot may pair the new file with a stale aspect
     for (const call of onChange.mock.calls) {
-      const v = call[0]
+      const v = call[0];
       if (v.design_file && typeof v.design_file === 'object') {
-        expect(v.design_file_aspect).toBe(2.5)
+        expect(v.design_file_aspect).toBe(2.5);
       }
     }
-  })
+  });
 
   it('clearing the file resets the companion to its declared default', async () => {
-    vi.mocked(measureSvgAspect).mockReturnValue(3)
-    const onChange = vi.fn()
-    renderParameterUI(schema(), container, onChange, {})
+    vi.mocked(measureSvgAspect).mockReturnValue(3);
+    const onChange = vi.fn();
+    renderParameterUI(schema(), container, onChange, {});
 
-    const fileInput = container.querySelector('input[type="file"]')
-    await uploadFile(fileInput, 'tall.svg', '<svg><rect width="4" height="12"/></svg>', 'image/svg+xml')
-    expect(onChange.mock.calls.at(-1)[0].design_file_aspect).toBe(3)
+    const fileInput = container.querySelector('input[type="file"]');
+    await uploadFile(
+      fileInput,
+      'tall.svg',
+      '<svg><rect width="4" height="12"/></svg>',
+      'image/svg+xml'
+    );
+    expect(onChange.mock.calls.at(-1)[0].design_file_aspect).toBe(3);
 
-    container.querySelector('.file-clear-button').click()
-    const cleared = onChange.mock.calls.at(-1)[0]
-    expect(cleared.design_file).toBeNull()
-    expect(cleared.design_file_aspect).toBe(1)
-  })
+    container.querySelector('.file-clear-button').click();
+    const cleared = onChange.mock.calls.at(-1)[0];
+    expect(cleared.design_file).toBeNull();
+    expect(cleared.design_file_aspect).toBe(1);
+  });
 
   it('an unmeasurable design falls back to the declared default', async () => {
-    vi.mocked(measureSvgAspect).mockReturnValue(null)
-    const onChange = vi.fn()
-    renderParameterUI(schema(), container, onChange, {})
+    vi.mocked(measureSvgAspect).mockReturnValue(null);
+    const onChange = vi.fn();
+    renderParameterUI(schema(), container, onChange, {});
 
-    const fileInput = container.querySelector('input[type="file"]')
-    await uploadFile(fileInput, 'odd.svg', '<svg></svg>', 'image/svg+xml')
-    expect(onChange.mock.calls.at(-1)[0].design_file_aspect).toBe(1)
-  })
+    const fileInput = container.querySelector('input[type="file"]');
+    await uploadFile(fileInput, 'odd.svg', '<svg></svg>', 'image/svg+xml');
+    expect(onChange.mock.calls.at(-1)[0].design_file_aspect).toBe(1);
+  });
 
   it('a file param without a companion never calls the measurer', async () => {
     const bare = buildParams({
@@ -1782,16 +1981,167 @@ describe('Aspect companion parameters', () => {
           type: 'file',
           default: '',
           uiType: 'file',
-          acceptedExtensions: ['svg']
-        }
-      ]
-    })
-    const onChange = vi.fn()
-    renderParameterUI(bare, container, onChange, {})
+          acceptedExtensions: ['svg'],
+        },
+      ],
+    });
+    const onChange = vi.fn();
+    renderParameterUI(bare, container, onChange, {});
 
-    const fileInput = container.querySelector('input[type="file"]')
-    await uploadFile(fileInput, 'plain.svg', '<svg><circle r="5"/></svg>', 'image/svg+xml')
-    expect(vi.mocked(measureSvgAspect)).not.toHaveBeenCalled()
-    expect(onChange.mock.calls.at(-1)[0].logo_file).toMatchObject({ name: 'plain.svg' })
-  })
-})
+    const fileInput = container.querySelector('input[type="file"]');
+    await uploadFile(
+      fileInput,
+      'plain.svg',
+      '<svg><circle r="5"/></svg>',
+      'image/svg+xml'
+    );
+    expect(vi.mocked(measureSvgAspect)).not.toHaveBeenCalled();
+    expect(onChange.mock.calls.at(-1)[0].logo_file).toMatchObject({
+      name: 'plain.svg',
+    });
+  });
+});
+
+// ── DP-7 P3: per-layer companions through every emit path ────────────────────
+
+describe('per-layer design companions (DP-7)', () => {
+  const fileParam = (name) => ({
+    name,
+    uiType: 'file',
+    type: 'string',
+    default: '',
+    group: 'General',
+  });
+  const numParam = (name) => ({
+    name,
+    uiType: 'number',
+    type: 'number',
+    default: 1,
+    group: 'General',
+  });
+
+  describe('findLayerParams', () => {
+    it('finds the layer files a layered tile declares', () => {
+      const parameters = {
+        design_file: fileParam('design_file'),
+        design_layer_1: fileParam('design_layer_1'),
+        design_layer_1_aspect: numParam('design_layer_1_aspect'),
+        design_layer_2: fileParam('design_layer_2'),
+        design_layer_2_aspect: numParam('design_layer_2_aspect'),
+      };
+      const found = findLayerParams(parameters.design_file, parameters);
+      expect(found.map((f) => f.file.name)).toEqual([
+        'design_layer_1',
+        'design_layer_2',
+      ]);
+      expect(found[0].aspect.name).toBe('design_layer_1_aspect');
+      expect(found[1].layer).toBe(2);
+    });
+
+    it('finds nothing for an ordinary tile, so nothing below it ever runs', () => {
+      const parameters = { design_file: fileParam('design_file') };
+      expect(findLayerParams(parameters.design_file, parameters)).toEqual([]);
+    });
+
+    it('stops at the first gap rather than skipping one', () => {
+      // design_layer_2 without design_layer_1 is a malformed model, and
+      // guessing which pass the person meant would build the wrong stack.
+      const parameters = {
+        design_file: fileParam('design_file'),
+        design_layer_2: fileParam('design_layer_2'),
+      };
+      expect(findLayerParams(parameters.design_file, parameters)).toEqual([]);
+    });
+
+    it('never looks past the cap of three', () => {
+      const parameters = { design_file: fileParam('design_file') };
+      for (let n = 1; n <= 5; n++) {
+        parameters[`design_layer_${n}`] = fileParam(`design_layer_${n}`);
+      }
+      expect(findLayerParams(parameters.design_file, parameters)).toHaveLength(
+        3
+      );
+    });
+
+    it('survives a missing parameter table', () => {
+      expect(findLayerParams(null, {})).toEqual([]);
+      expect(findLayerParams(fileParam('design_file'), null)).toEqual([]);
+    });
+  });
+
+  describe('isLayerCompanionParam', () => {
+    const parameters = {
+      design_file: fileParam('design_file'),
+      design_layer_1: fileParam('design_layer_1'),
+      design_layer_1_aspect: numParam('design_layer_1_aspect'),
+      wall_thickness: numParam('wall_thickness'),
+    };
+
+    it('recognises a layer file and its aspect', () => {
+      expect(isLayerCompanionParam('design_layer_1', parameters)).toBe(true);
+      expect(isLayerCompanionParam('design_layer_1_aspect', parameters)).toBe(
+        true
+      );
+    });
+
+    it('leaves ordinary parameters alone', () => {
+      expect(isLayerCompanionParam('wall_thickness', parameters)).toBe(false);
+      expect(isLayerCompanionParam('design_file', parameters)).toBe(false);
+      // No design_file to hang off: not a companion, just a name.
+      expect(isLayerCompanionParam('other_layer_1', parameters)).toBe(false);
+    });
+  });
+
+  describe('the six emit paths', () => {
+    it('every one of them goes through the SINGLE funnel', () => {
+      // The six paths are upload, raster trace, editor Apply, editor Keep,
+      // gallery pick, and clear-to-default. Rather than testing six sites and
+      // hoping a seventh is never added, this pins the STRUCTURE that makes
+      // all of them correct: the file control reports a value in exactly one
+      // place, and that place attaches the aspect and the layer companions in
+      // the same state update (D-108's law).
+      const source = readFileSync(
+        resolve(process.cwd(), 'src/js/ui-generator.js'),
+        'utf8'
+      );
+      const start = source.indexOf('function createFileControl(');
+      expect(start).toBeGreaterThan(-1);
+      const end = source.indexOf('\nfunction ', start + 10);
+      const body = source.slice(start, end === -1 ? source.length : end);
+
+      const direct = body.match(/onChange\(\s*param\.name/g) || [];
+      expect(direct).toHaveLength(1);
+
+      const emitStart = body.indexOf('function emitFileValue(');
+      const emitEnd = body.indexOf('\n  }', emitStart);
+      const emitBody = body.slice(emitStart, emitEnd);
+      expect(emitBody).toContain('onChange(param.name');
+      expect(emitBody).toContain('buildLayerCompanions');
+
+      // And the six callers really are six.
+      const calls = body.match(/emitFileValue\(/g) || [];
+      expect(calls.length).toBeGreaterThanOrEqual(7); // 6 calls + the definition
+    });
+  });
+
+  describe('in the rendered UI', () => {
+    it('gives layer companions a value but NO control', () => {
+      const params = buildParams({
+        params: [
+          fileParam('design_file'),
+          numParam('design_file_aspect'),
+          fileParam('design_layer_1'),
+          numParam('design_layer_1_aspect'),
+        ],
+      });
+      const el = document.createElement('div');
+      document.body.appendChild(el);
+      renderParameterUI(params, el, vi.fn(), {});
+
+      expect(el.querySelector('#param-design_file')).toBeTruthy();
+      expect(el.querySelector('#param-design_layer_1')).toBeNull();
+      expect(el.querySelector('#param-design_layer_1_aspect')).toBeNull();
+      el.remove();
+    });
+  });
+});

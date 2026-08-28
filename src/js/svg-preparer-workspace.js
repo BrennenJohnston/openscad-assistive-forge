@@ -95,7 +95,16 @@ function swatchColor(el) {
   return '#000000';
 }
 
-function extractSvgMeta(svgString) {
+/**
+ * viewBox/width/height off an SVG, deriving a viewBox when it has none.
+ *
+ * Exported for DP-7's per-layer emission: every layer file must be written on
+ * the SAME viewBox as the design, or the passes print offset from each other.
+ *
+ * @param {string} svgString
+ * @returns {{viewBox: string, width: string, height: string}}
+ */
+export function extractSvgMeta(svgString) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(svgString, 'image/svg+xml');
   const svg = doc.querySelector('svg');

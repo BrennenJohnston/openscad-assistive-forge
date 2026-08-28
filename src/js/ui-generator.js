@@ -18,8 +18,16 @@ import {
   needsPreparation,
   analyzeSvg,
   measureSvgAspect,
+  parseSvgElements,
+  classifyElements,
+  flattenLayers,
+  LAYER_EMIT_CAP,
 } from './svg-preparer.js';
-import { createSvgPrepWorkspace } from './svg-preparer-workspace.js';
+import { buildNestingTree, suggestLayers, layerLimit } from './svg-nesting.js';
+import {
+  createSvgPrepWorkspace,
+  extractSvgMeta,
+} from './svg-preparer-workspace.js';
 import { svgToDataUrl, dataUrlToText } from './svg-text-encoding.js';
 import {
   loadOpenGroupIds,
@@ -232,7 +240,7 @@ export function clearGalleryOptions() {
  * Get stored SVG preparation metadata for a given filename.
  * Returns the metadata object or null if none is stored.
  * @param {string} fileName
- * @returns {{rawSvg: string, preparedSvg: string|null, prepOverrides: string[]|null, prepOffsets: number[]|null, prepDeleted: number[]|null, prepAnalysis: Object|null}|null}
+ * @returns {{rawSvg: string, preparedSvg: string|null, prepOverrides: string[]|null, prepOffsets: number[]|null, prepDeleted: number[]|null, prepLayers: number[]|null, prepAnalysis: Object|null}|null}
  */
 export function getSvgPrepMetadata(fileName) {
   return svgPrepMetadataByFile[fileName] || null;
@@ -242,7 +250,7 @@ export function getSvgPrepMetadata(fileName) {
  * Store SVG preparation metadata for a given filename.
  * Pass null to clear metadata for the file.
  * @param {string} fileName
- * @param {{rawSvg: string, preparedSvg: string|null, prepOverrides: string[]|null, prepOffsets: number[]|null, prepDeleted: number[]|null}|null} metadata
+ * @param {{rawSvg: string, preparedSvg: string|null, prepOverrides: string[]|null, prepOffsets: number[]|null, prepDeleted: number[]|null, prepLayers: number[]|null}|null} metadata
  */
 export function setSvgPrepMetadata(fileName, metadata) {
   if (metadata) {
@@ -1945,7 +1953,72 @@ export function isAspectCompanionParam(name, parameters) {
   return !!base && base.uiType === 'file';
 }
 
-function createFileControl(param, onChange, aspectParam = null) {
+/**
+ * The per-layer companions a layered tile declares (DP-7).
+ *
+ * A file parameter named `design_file` looks for `design_layer_1`,
+ * `design_layer_2`, `design_layer_3` and their `_aspect` companions - the
+ * names the plan fixed. A tile that declares none is not a layered tile and
+ * nothing below this ever runs for it.
+ *
+ * @param {Object} param - The file parameter
+ * @param {Object} parameters - All extracted parameters, keyed by name
+ * @returns {Array<{file: Object, aspect: Object|null, layer: number}>}
+ */
+export function findLayerParams(param, parameters) {
+  if (!param || !parameters) return [];
+  const base = param.name.endsWith('_file')
+    ? param.name.slice(0, -'_file'.length)
+    : param.name;
+  const out = [];
+  for (let n = 1; n <= LAYER_EMIT_CAP; n++) {
+    const file = parameters[`${base}_layer_${n}`];
+    if (!file || file.uiType !== 'file') break;
+    out.push({
+      file,
+      aspect: parameters[`${base}_layer_${n}_aspect`] || null,
+      layer: n,
+    });
+  }
+  return out;
+}
+
+/**
+ * Whether a parameter is a per-layer companion the app writes for itself.
+ *
+ * Like the aspect companions, these get a value but no control: they are
+ * derived from the design and the Layer column, never typed.
+ *
+ * @param {string} name - Parameter name to test
+ * @param {Object} parameters - All extracted parameters, keyed by name
+ * @returns {boolean}
+ */
+export function isLayerCompanionParam(name, parameters) {
+  const m = /^(.*)_layer_(\d+)(_aspect)?$/.exec(name);
+  if (!m) return false;
+  const base = parameters[`${m[1]}_file`] || parameters[m[1]];
+  return !!base && base.uiType === 'file';
+}
+
+/**
+ * A file name with its extension removed, for naming layer companions after
+ * the design they were cut from.
+ *
+ * @param {string} name
+ * @returns {string}
+ */
+function layerFileStem(name) {
+  const safe = String(name || 'design');
+  const dot = safe.lastIndexOf('.');
+  return dot > 0 ? safe.slice(0, dot) : safe;
+}
+
+function createFileControl(
+  param,
+  onChange,
+  aspectParam = null,
+  layerParams = []
+) {
   const container = document.createElement('div');
   container.className = 'param-control param-control--file';
 
@@ -2018,7 +2091,66 @@ function createFileControl(param, onChange, aspectParam = null) {
    * never be seen apart by the renderer or by undo.
    * @param {Object|null} value - File object {name, data, ...} or null
    */
-  function emitFileValue(value) {
+  /**
+   * The per-layer companion values for one design (DP-7).
+   *
+   * Runs on the RAW svg, because by the time a value reaches emitFileValue it
+   * is a single compound path and the element identities the layers are cut
+   * from are gone.
+   *
+   * Every layer param the model declares gets a value on every emit, INCLUDING
+   * null when there is nothing to build at that depth. Leaving a stale layer
+   * file behind would print the previous design's second pass on top of this
+   * one.
+   *
+   * @param {Object|null} value - The file value being emitted
+   * @param {Array<number>|null} assignments - The editor's Layer column, by
+   *   original index; null means use the depth suggestion
+   * @returns {Object} Parameter names to values, for the SAME state update
+   */
+  function buildLayerCompanions(value, assignments) {
+    const out = {};
+    for (const { file, aspect } of layerParams) {
+      out[file.name] = null;
+      if (aspect) out[aspect.name] = aspect.default ?? 1;
+    }
+    if (!value || !currentRawSvg) return out;
+
+    let svgs = [];
+    try {
+      const elements = classifyElements(parseSvgElements(currentRawSvg));
+      const tree = buildNestingTree(elements);
+      const limit = layerLimit(tree);
+      const layers = Array.isArray(assignments)
+        ? elements.map((_, i) => assignments[i] || 1)
+        : suggestLayers(tree).map((v) => v || 1);
+      const meta = extractSvgMeta(currentRawSvg);
+      svgs = flattenLayers(elements, layers, limit, meta);
+    } catch (err) {
+      // A design the layer analysis cannot read still uploads: the ordinary
+      // single-file path is unaffected, and the layer params stay null rather
+      // than carrying half a stack.
+      console.warn('Per-layer emission failed:', err);
+      return out;
+    }
+
+    layerParams.forEach(({ file, aspect, layer }) => {
+      const svg = svgs[layer - 1];
+      if (!svg) return;
+      const name = `${layerFileStem(value.name)}_layer_${layer}.svg`;
+      out[file.name] = {
+        name,
+        data: svgToDataUrl(svg),
+        type: 'image/svg+xml',
+      };
+      if (aspect) {
+        out[aspect.name] = measureSvgAspect(svg) ?? aspect.default ?? 1;
+      }
+    });
+    return out;
+  }
+
+  function emitFileValue(value, assignments = null) {
     let extra = null;
     if (aspectParam) {
       let aspect = null;
@@ -2034,6 +2166,12 @@ function createFileControl(param, onChange, aspectParam = null) {
       // Cleared or unmeasurable: back to the declared default so the
       // model's fallback stays deterministic.
       extra = { [aspectParam.name]: aspect ?? aspectParam.default ?? 1 };
+    }
+    // D-108's law generalized: every layer file and every layer aspect rides
+    // in the SAME state update as the design itself, so the renderer and undo
+    // can never see a stack half-changed.
+    if (layerParams.length > 0) {
+      extra = { ...(extra || {}), ...buildLayerCompanions(value, assignments) };
     }
     onChange(param.name, value, extra);
   }
@@ -2087,6 +2225,9 @@ function createFileControl(param, onChange, aspectParam = null) {
         // meaningful. Absent in older saved projects, which is exactly right:
         // nothing was deleted then.
         initialDeleted: storedMeta?.prepDeleted || null,
+        // DP-7. The column exists only for a tile that declares layer params.
+        layersEnabled: layerParams.length > 0,
+        initialLayers: storedMeta?.prepLayers || null,
       });
       announceChange('SVG preparation editor opened');
     });
@@ -2163,6 +2304,11 @@ function createFileControl(param, onChange, aspectParam = null) {
     const overrides = workspace ? workspace.getRoleOverrides() : null;
     const offsetOverrides = workspace ? workspace.getOffsetOverrides() : null;
     const deleted = workspace ? workspace.getDeletedIndices() : null;
+    // DP-7. The Layer column travels with the roles and offsets, in the same
+    // ORIGINAL-index numbering, so reopening the design finds the layers the
+    // person set rather than re-suggesting over the top of them.
+    const layerResult = workspace ? workspace.getLayerAssignments() : null;
+    const prepLayers = layerResult?.limit ? layerResult.layers : null;
     if (currentFileName) {
       setSvgPrepMetadata(currentFileName, {
         rawSvg: currentRawSvg,
@@ -2170,6 +2316,7 @@ function createFileControl(param, onChange, aspectParam = null) {
         prepOverrides: overrides,
         prepOffsets: offsetOverrides,
         prepDeleted: deleted,
+        prepLayers,
       });
     }
     const svgDataUrl = svgToDataUrl(result);
@@ -2179,7 +2326,7 @@ function createFileControl(param, onChange, aspectParam = null) {
       type: 'image/svg+xml',
       data: svgDataUrl,
     };
-    emitFileValue(fileObj);
+    emitFileValue(fileObj, prepLayers);
     if (fileUploadListener) fileUploadListener(param.name, fileObj);
     announceChange('SVG prepared for OpenSCAD');
   }
@@ -2193,6 +2340,7 @@ function createFileControl(param, onChange, aspectParam = null) {
         prepOverrides: null,
         prepOffsets: null,
         prepDeleted: null,
+        prepLayers: null,
       });
     }
     const svgDataUrl = svgToDataUrl(currentRawSvg);
@@ -2353,6 +2501,7 @@ function createFileControl(param, onChange, aspectParam = null) {
             onApply: handleEditorApply,
             onKeepOriginal: handleEditorKeep,
             sourceName: currentFileName,
+            layersEnabled: layerParams.length > 0,
           });
           announceChange('SVG needs review \u2014 editor opened');
         }
@@ -2920,6 +3069,10 @@ export function renderParameterUI(
     // no control and no search entry.
     if (isAspectCompanionParam(param.name, parameters)) return;
 
+    // Per-layer design companions are written by the file control from the
+    // Layer column, so they too get a value but no control.
+    if (isLayerCompanionParam(param.name, parameters)) return;
+
     // Create a copy of param with the effective default
     const paramWithValue = { ...param, default: effectiveDefault };
 
@@ -3080,7 +3233,8 @@ export function renderParameterUI(
           control = createFileControl(
             param,
             handleChange,
-            parameters[`${param.name}_aspect`] || null
+            parameters[`${param.name}_aspect`] || null,
+            findLayerParams(param, parameters)
           );
           break;
 
