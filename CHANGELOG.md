@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A drawing can be built as a stack of layers, not just one flat shape** (DP-7, DP-8) - if the
+  shapes in your drawing sit inside one another, the app can now work that out and build them as
+  separate passes, each standing on the one before it. Three nested squares come out as a stepped
+  pyramid instead of a single flat square. In the drawing editor each shape gets a Layer control,
+  suggested from how deeply it is nested and yours to change. If you put a shape on a layer with
+  nothing under it, the row says so in plain words and explains what to do, and nothing is moved
+  for you: the choice stays yours. The Bracelet Clip Charm is the first model that can build
+  them, with its own depth and raised-or-engraved choice per pass, and it is entirely optional -
+  leave the layer files empty and the charm is exactly what it was. Measured: a simple drawing in
+  three passes renders in 0.34 seconds against 0.31 for one; a very detailed one takes about ten
+  seconds against three and a half, so a complicated drawing built in three passes is a
+  ten-second render
+
 - **Shapes can be deleted from the editor's list, not just left out of the result** (DP-4) -
   marking a shape "Ignore" kept it out of what gets printed but left it in the list, which is no
   help when a drawing has hundreds of them. Every row now has a Delete button, and above the list

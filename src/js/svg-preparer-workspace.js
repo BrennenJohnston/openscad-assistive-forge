@@ -19,6 +19,12 @@ import {
   applyPerPathOffsets,
   tierForCount,
 } from './svg-preparer.js';
+import {
+  buildNestingTree,
+  suggestLayers,
+  layerLimit,
+  validateLayers,
+} from './svg-nesting.js';
 import { getPathBBox } from 'svg-path-commander';
 import { mmToSvgUnits } from './svg-offset.js';
 import { isEnabled } from './feature-flags.js';
@@ -89,7 +95,16 @@ function swatchColor(el) {
   return '#000000';
 }
 
-function extractSvgMeta(svgString) {
+/**
+ * viewBox/width/height off an SVG, deriving a viewBox when it has none.
+ *
+ * Exported for DP-7's per-layer emission: every layer file must be written on
+ * the SAME viewBox as the design, or the passes print offset from each other.
+ *
+ * @param {string} svgString
+ * @returns {{viewBox: string, width: string, height: string}}
+ */
+export function extractSvgMeta(svgString) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(svgString, 'image/svg+xml');
   const svg = doc.querySelector('svg');
@@ -335,6 +350,12 @@ function buildWorkspaceDom() {
     legendRow.appendChild(chipWrap);
   });
 
+  // DP-7. How many layers this artwork can carry, and how many rows currently
+  // break the containment law. Sits OUTSIDE the role="list" (D-101).
+  const layerSummary = document.createElement('p');
+  layerSummary.className = 'svg-prep-layer-summary';
+  layerSummary.hidden = true;
+
   // Object list
   const objects = document.createElement('div');
   objects.className = 'svg-prep-objects';
@@ -409,6 +430,7 @@ function buildWorkspaceDom() {
     toolsSlot,
     previews,
     legendRow,
+    layerSummary,
     bulkBar,
     objects,
     warnings,
@@ -432,6 +454,7 @@ function buildWorkspaceDom() {
       sourceCaption,
       resultCaption,
       legendRow,
+      layerSummary,
       sourceZoom,
       resultZoom,
       bulkBar,
@@ -499,12 +522,20 @@ function buildZoomControls(pane) {
  * @param {boolean} [isCompound=false] - Compound-path mode (Include/Exclude)
  * @returns {{roles: string[], offsets: number[]}} Initial assignments
  */
-function populateObjectList(listEl, elements, liveRegion, isCompound = false) {
+function populateObjectList(
+  listEl,
+  elements,
+  liveRegion,
+  isCompound = false,
+  layerInfo = null
+) {
   listEl.innerHTML = '';
   const roles = [];
   const offsets = [];
   const offsetEnabled = isEnabled('svg_path_offset');
   const roleOptions = isCompound ? COMPOUND_ROLE_OPTIONS : ROLE_OPTIONS;
+  const layerCount = layerInfo ? layerInfo.limit : 0;
+  const layers = [];
 
   elements.forEach((el, i) => {
     const name = isCompound
@@ -571,6 +602,39 @@ function populateObjectList(listEl, elements, liveRegion, isCompound = false) {
       item.appendChild(offsetInput);
     }
 
+    if (layerCount > 0) {
+      // The suggestion is the shape's nesting depth. Editable straight away:
+      // auto-categorized is a starting point, not a verdict.
+      const suggested = Math.min(
+        Math.max(layerInfo.suggestions[i] || 1, 1),
+        layerCount
+      );
+      layers.push(suggested);
+
+      const layerSelect = document.createElement('select');
+      layerSelect.className = 'svg-prep-layer-select';
+      layerSelect.name = `svg-prep-layer-${i}`;
+      layerSelect.setAttribute('aria-label', `Layer for ${name}`);
+      for (let n = 1; n <= layerCount; n++) {
+        const opt = document.createElement('option');
+        opt.value = String(n);
+        opt.textContent = `Layer ${n}`;
+        if (n === suggested) opt.selected = true;
+        layerSelect.appendChild(opt);
+      }
+      if (role === 'ignore') layerSelect.disabled = true;
+      item.appendChild(layerSelect);
+
+      // Filled in by validateAndMarkLayers(); an empty node keeps the row's
+      // layout from jumping when a warning appears under it.
+      const layerNote = document.createElement('span');
+      layerNote.className = 'svg-prep-layer-note';
+      layerNote.hidden = true;
+      item.appendChild(layerNote);
+    } else {
+      layers.push(1);
+    }
+
     if (el.warnings && el.warnings.length > 0) {
       const warning = document.createElement('span');
       warning.className = 'svg-prep-object-warning';
@@ -593,7 +657,7 @@ function populateObjectList(listEl, elements, liveRegion, isCompound = false) {
     listEl.appendChild(item);
   });
 
-  return { roles, offsets };
+  return { roles, offsets, layers };
 }
 
 /**
@@ -725,6 +789,12 @@ export function createSvgPrepWorkspace(containerEl) {
   // One level, this session only. A stack that rode prepMetadata into saved
   // projects would grow without bound in a 2 MB localStorage lane.
   let lastDeletion = null;
+  // DP-7. The layer column appears only for a tile that asked for it, so a
+  // non-layered editor is byte-for-byte what it was before.
+  let layersEnabled = false;
+  let nestingTree = null;
+  let layerCount = 0;
+  let layers = [];
 
   // ARIA live region for role-change and preview announcements
   const liveRegion = document.createElement('div');
@@ -1146,10 +1216,120 @@ export function createSvgPrepWorkspace(containerEl) {
           offsetInput.disabled = false;
         }
       }
+
+      // An ignored shape is not built at all, so it cannot be on a layer.
+      const layerSelect = item.querySelector('.svg-prep-layer-select');
+      if (layerSelect) layerSelect.disabled = e.target.value === 'ignore';
     }
+
+    if (layersEnabled) validateAndMarkLayers();
 
     renderRoleLayer();
     requestResultPreview();
+  }
+
+  /**
+   * Re-check every assignment against the containment law and mark the rows
+   * that break it. NOTHING is reassigned: a row the person set stays as they
+   * set it, wearing the reason it will not build.
+   */
+  function validateAndMarkLayers() {
+    if (!layersEnabled || !nestingTree) return [];
+    const problems = validateLayers(nestingTree, layers);
+    const byIndex = new Map(problems.map((pr) => [pr.index, pr]));
+
+    const items = refs.objects.querySelectorAll('.svg-prep-object');
+    for (const item of items) {
+      const idx = parseInt(item.dataset.index, 10);
+      const note = item.querySelector('.svg-prep-layer-note');
+      const select = item.querySelector('.svg-prep-layer-select');
+      if (!note || !select) continue;
+      const problem = byIndex.get(idx);
+      if (problem) {
+        note.textContent = layerProblemText(problem);
+        note.hidden = false;
+        item.classList.add('svg-prep-layer-problem');
+        select.setAttribute('aria-invalid', 'true');
+        select.setAttribute('aria-describedby', ensureNoteId(note, idx));
+      } else {
+        note.textContent = '';
+        note.hidden = true;
+        item.classList.remove('svg-prep-layer-problem');
+        select.removeAttribute('aria-invalid');
+        select.removeAttribute('aria-describedby');
+      }
+    }
+    updateLayerSummary(problems.length);
+    return problems;
+  }
+
+  function ensureNoteId(note, idx) {
+    if (!note.id) note.id = `svg-prep-layer-note-${idx}`;
+    return note.id;
+  }
+
+  /**
+   * The containment law, said to a person rather than quoted at them.
+   * STRINGS: owner review pending (accessibility-critical, DP-R1 text pack).
+   */
+  function layerProblemText(problem) {
+    const below = problem.layer - 1;
+    if (problem.reason === 'not-enclosed') {
+      return `Nothing surrounds this shape, so layer ${problem.layer} would print with nothing under it. Put it on layer 1, or place it inside a shape on layer ${below}.`;
+    }
+    return `The shape around this one is not on layer ${below}, so it is cut away before layer ${problem.layer} is built. This shape would print with nothing under it.`;
+  }
+
+  function updateLayerSummary(problemCount) {
+    if (!refs.layerSummary) return;
+    if (!layersEnabled || layerCount === 0) {
+      refs.layerSummary.hidden = true;
+      return;
+    }
+    refs.layerSummary.hidden = false;
+    const limitText =
+      layerCount === 1
+        ? 'This design supports 1 layer.'
+        : `This design supports ${layerCount} layers.`;
+    const problemText =
+      problemCount === 0
+        ? ''
+        : problemCount === 1
+          ? ' 1 shape needs a different layer.'
+          : ` ${problemCount} shapes need a different layer.`;
+    refs.layerSummary.textContent = limitText + problemText;
+    refs.layerSummary.classList.toggle(
+      'svg-prep-layer-summary-problem',
+      problemCount > 0
+    );
+  }
+
+  function handleLayerChange(e) {
+    if (!layersEnabled) return;
+    const target = e.target;
+    if (!target || !target.classList.contains('svg-prep-layer-select')) return;
+    const match = target.name.match(/^svg-prep-layer-(\d+)$/);
+    if (!match) return;
+    const idx = parseInt(match[1], 10);
+    layers[idx] = parseInt(target.value, 10) || 1;
+
+    const problems = validateAndMarkLayers();
+    const mine = problems.find((pr) => pr.index === idx);
+    if (mine) {
+      announce(layerProblemText(mine));
+    } else if (problems.length > 0) {
+      // Moving one shape can strand a DIFFERENT one - lift the middle square
+      // to layer 1 and it is the inner square that ends up standing on air.
+      // Announcing only this row would report success while the design broke
+      // somewhere the person is not looking.
+      announce(
+        problems.length === 1
+          ? `Layer ${layers[idx]} set. 1 other shape now needs a different layer.`
+          : `Layer ${layers[idx]} set. ${problems.length} other shapes now need a different layer.`
+      );
+    } else {
+      announce(`Layer ${layers[idx]} set. This shape has something under it.`);
+    }
   }
 
   function handleRolesToggle() {
@@ -1247,22 +1427,55 @@ export function createSvgPrepWorkspace(containerEl) {
     setPreviewBand();
     const keptRoles = [...roles];
     const keptOffsets = [...offsets];
+    const keptLayers = [...layers];
+    // Deleting a shape CHANGES what encloses what: remove the outer square and
+    // the inner one is supported by nothing. The tree has to be rebuilt or the
+    // law would be checked against a design that no longer exists. Deleting is
+    // deliberate and occasional, so the 157 ms is affordable here in a way it
+    // would not be on every role click.
+    if (layersEnabled) {
+      nestingTree = buildNestingTree(liveElements);
+      layerCount = layerLimit(nestingTree);
+    }
     const populated = populateObjectList(
       refs.objects,
       liveElements,
       liveRegion,
-      Boolean(currentAnalysis?.isCompoundPathOnly)
+      Boolean(currentAnalysis?.isCompoundPathOnly),
+      layersEnabled && layerCount > 0
+        ? { limit: layerCount, suggestions: suggestLayers(nestingTree) }
+        : null
     );
     roles = populated.roles;
     offsets = populated.offsets;
+    layers = populated.layers;
     for (let i = 0; i < roles.length; i++) {
       if (keptRoles[i]) roles[i] = keptRoles[i];
       offsets[i] = keptOffsets[i] ?? 0;
+      // A layer the person chose survives, but never above a limit the
+      // shortened design can no longer support.
+      if (keptLayers[i]) layers[i] = Math.min(keptLayers[i], layerCount || 1);
     }
     applyInitialOverrides(roles);
     applyInitialOffsets(offsets);
+    applyLayerSelections();
     renderRoleLayer();
     requestResultPreview();
+  }
+
+  /** Push the current layer array back into the selects, then re-check. */
+  function applyLayerSelections() {
+    if (!layersEnabled || layerCount === 0) {
+      updateLayerSummary(0);
+      return;
+    }
+    const items = refs.objects.querySelectorAll('.svg-prep-object');
+    for (const item of items) {
+      const idx = parseInt(item.dataset.index, 10);
+      const select = item.querySelector('.svg-prep-layer-select');
+      if (select && layers[idx]) select.value = String(layers[idx]);
+    }
+    validateAndMarkLayers();
   }
 
   /**
@@ -1539,6 +1752,31 @@ export function createSvgPrepWorkspace(containerEl) {
     return out;
   }
 
+  /**
+   * Layer per element, keyed by ORIGINAL index - the same numbering the role
+   * and offset overrides travel in, and the only one that survives a delete.
+   *
+   * A SPARSE ARRAY, the same shape roles and offsets travel in, so the
+   * persistence and reopen plumbing needs no special case for layers.
+   *
+   * @returns {{layers: Array, limit: number, problems: Array}} Empty when the
+   *   tile did not opt in.
+   */
+  function getLayerAssignments() {
+    if (!layersEnabled || layerCount === 0) {
+      return { layers: [], limit: 0, problems: [] };
+    }
+    const out = [];
+    originalIndex.forEach((original, live) => {
+      out[original] = layers[live] || 1;
+    });
+    const problems = validateLayers(nestingTree, layers).map((pr) => ({
+      ...pr,
+      index: originalIndex[pr.index],
+    }));
+    return { layers: out, limit: layerCount, problems };
+  }
+
   function open(svgString, analysis, callbacks = {}) {
     // A re-trace calls open() on an editor that is already up. Closing drops
     // it out of fullscreen and hands focus back to whatever opened it, which
@@ -1598,14 +1836,33 @@ export function createSvgPrepWorkspace(containerEl) {
     liveElements = originalIndex.map((i) => allElements[i]);
     lastDeletion = null;
 
+    // DP-7. The tree is built ONCE per open, on the geometry the emission
+    // will actually use - analysis.elements carries stroke-converted pathData.
+    // MEASURED (browser, WATAP HD, 831 elements): 157 ms on the converted
+    // geometry against 9 ms on the raw. Recomputing it on every radio click
+    // would be that cost per click, and the depth SUGGESTION is a starting
+    // point that does not need to chase each role change.
+    layersEnabled = callbacks.layersEnabled === true;
+    if (layersEnabled) {
+      nestingTree = buildNestingTree(liveElements);
+      layerCount = layerLimit(nestingTree);
+    } else {
+      nestingTree = null;
+      layerCount = 0;
+    }
+
     const populated = populateObjectList(
       refs.objects,
       liveElements,
       liveRegion,
-      Boolean(analysis.isCompoundPathOnly)
+      Boolean(analysis.isCompoundPathOnly),
+      layersEnabled && layerCount > 0
+        ? { limit: layerCount, suggestions: suggestLayers(nestingTree) }
+        : null
     );
     roles = populated.roles;
     offsets = populated.offsets;
+    layers = populated.layers;
 
     if (callbacks.initialOverrides) {
       applyInitialOverrides(byOriginalIndex(callbacks.initialOverrides));
@@ -1613,6 +1870,16 @@ export function createSvgPrepWorkspace(containerEl) {
     if (callbacks.initialOffsets) {
       applyInitialOffsets(byOriginalIndex(callbacks.initialOffsets));
     }
+    if (layersEnabled && callbacks.initialLayers) {
+      const saved = byOriginalIndex(callbacks.initialLayers);
+      for (let i = 0; i < layers.length; i++) {
+        const v = parseInt(saved[i], 10);
+        if (v >= 1) layers[i] = Math.min(v, layerCount || 1);
+      }
+    }
+    // Run the law once on open, so a design that already breaks it says so
+    // instead of waiting for the person to touch a control first.
+    applyLayerSelections();
     updateDeleteUi();
 
     renderWarnings(refs.warnings, analysis.warnings || []);
@@ -1643,6 +1910,7 @@ export function createSvgPrepWorkspace(containerEl) {
 
     root.addEventListener('keydown', handleKeydown);
     refs.objects.addEventListener('change', handleRoleChange);
+    refs.objects.addEventListener('change', handleLayerChange);
     refs.objects.addEventListener('input', handleOffsetChange);
     refs.designWidthInput.addEventListener('input', handleDesignWidthChange);
     refs.footer.addEventListener('click', handleFooterClick);
@@ -1827,6 +2095,7 @@ export function createSvgPrepWorkspace(containerEl) {
     getRoleOverrides,
     getOffsetOverrides,
     getDeletedIndices,
+    getLayerAssignments,
     destroy,
     openFullscreen,
     closeFullscreen,

@@ -15563,6 +15563,51 @@ body.tutorial-body-locked {
   cursor: not-allowed;
 }
 
+/* ── Layer column (DP-7, shown only for a tile that opts in) ────────────── */
+.svg-prep-object .svg-prep-layer-select {
+  flex-shrink: 0;
+  padding: var(--space-2xs) var(--space-xs);
+  font-size: var(--font-size-sm);
+  min-height: var(--size-touch-target);
+}
+
+.svg-prep-layer-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* The row keeps its shape and the note wraps under it, so a warning never
+   squeezes the controls a person is reaching for. */
+.svg-prep-layer-note {
+  flex-basis: 100%;
+  font-size: var(--font-size-sm);
+  color: var(--color-warning-text);
+}
+
+.svg-prep-layer-note[hidden] {
+  display: none;
+}
+
+/* Colour is not the only signal: the border carries it too, for anyone who
+   cannot separate these two hues. */
+.svg-prep-object.svg-prep-layer-problem {
+  border-inline-start: var(--border-width-thick, 3px) solid var(--color-warning);
+}
+
+.svg-prep-layer-summary {
+  margin: var(--space-xs) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.svg-prep-layer-summary[hidden] {
+  display: none;
+}
+
+.svg-prep-layer-summary-problem {
+  color: var(--color-warning-text);
+}
+
 /* ── Design width input (header) ────────────────────────────────────────── */
 .svg-prep-design-width {
   display: flex;
@@ -16033,6 +16078,23 @@ body.tutorial-body-locked {
 
   .svg-prep-swatch {
     border: 2px solid ButtonText;
+  }
+
+  /* The row carries a written note as well, so nothing here is the only way
+     to learn a shape breaks the law - this just keeps the marker visible. */
+  .svg-prep-object.svg-prep-layer-problem {
+    border-inline-start: 3px solid Highlight;
+  }
+
+  .svg-prep-layer-note,
+  .svg-prep-layer-summary-problem {
+    color: CanvasText;
+  }
+
+  .svg-prep-layer-select {
+    border: 1px solid ButtonText;
+    background: ButtonFace;
+    color: ButtonText;
   }
 
   .svg-prep-source-pane,

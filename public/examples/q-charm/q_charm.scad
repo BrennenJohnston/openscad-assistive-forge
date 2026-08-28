@@ -58,6 +58,47 @@ design_rotation_2 = 0; // [-180:5:180]
 // Thickness offset for second design (height relative to the charm surface)
 design_2_thickness = 0; // [-3:0.1:3]
 
+/* [Layered design (prototype)] */
+// Build the design as a stack of passes instead of one. Leave every file empty
+// to keep the charm exactly as it was; fill layer 1 in to turn the stack on.
+// The Assistive Forge app writes these files and their aspects for you from
+// the Layer column in the drawing editor. Each pass starts where the one
+// before it finished, so layer 2 sits on layer 1 rather than on the charm.
+design_layer_1 = ""; // [file:svg]
+
+// Layer 1 width divided by height (set automatically by the app)
+design_layer_1_aspect = 1; // [0.05:0.01:20]
+
+// How far layer 1 rises above, or cuts into, the charm face
+design_layer_1_depth = 0.8; // [0.4:0.1:3.0]
+
+// Whether layer 1 stands up from the face or is cut into it
+design_layer_1_style = "raised"; // [raised, engraved]
+
+// Second pass (leave empty for none)
+design_layer_2 = ""; // [file:svg]
+
+// Layer 2 width divided by height (set automatically by the app)
+design_layer_2_aspect = 1; // [0.05:0.01:20]
+
+// How far layer 2 rises above, or cuts into, where layer 1 finished
+design_layer_2_depth = 0.8; // [0.4:0.1:3.0]
+
+// Whether layer 2 stands up from layer 1 or is cut into it
+design_layer_2_style = "raised"; // [raised, engraved]
+
+// Third pass (leave empty for none)
+design_layer_3 = ""; // [file:svg]
+
+// Layer 3 width divided by height (set automatically by the app)
+design_layer_3_aspect = 1; // [0.05:0.01:20]
+
+// How far layer 3 rises above, or cuts into, where layer 2 finished
+design_layer_3_depth = 0.8; // [0.4:0.1:3.0]
+
+// Whether layer 3 stands up from layer 2 or is cut into it
+design_layer_3_style = "raised"; // [raised, engraved]
+
 /* [Text] */
 // Text or number to display on the charm face (leave empty for none)
 text_content = "";
@@ -191,12 +232,62 @@ design_fit_w_2 = face_y * design_scale_2 / 100;
 design_fit_h_2 = face_x * design_scale_2 / 100;
 assert(design_file_aspect > 0, "design_file_aspect must be positive (width divided by height)");
 assert(design_file_2_aspect > 0, "design_file_2_aspect must be positive (width divided by height)");
+// ── Layered design (prototype) ──────────────────────────────────────────────
+// The containment law from the directive, as arithmetic: each pass is anchored
+// where the previous one FINISHED, so a raised layer 2 stands on layer 1's top
+// and an engraved layer 2 cuts down from layer 1's floor. Nothing floats.
+//
+// The app writes each layer file onto one shared canvas layer_canvas_span wide
+// (a CONTRACT with src/js/svg-preparer.js: change one and you change both), so
+// every pass keeps its true size and place relative to the others. Fitting the
+// files separately would scale the smallest pass up to the largest.
+layer_canvas_span = 100;
+layer_eps = 0.01;
+layer_depth_min = 0.4;
+layer_depth_max = 3.0;
+
+layer_1_on = design_layer_1 != "";
+layer_2_on = design_layer_2 != "";
+layer_3_on = design_layer_3 != "";
+layered_mode = layer_1_on || layer_2_on || layer_3_on;
+
+// Signed travel: up for a raised pass, down for an engraved one, nothing at
+// all for a layer with no file.
+layer_1_rise = layer_1_on ? ((design_layer_1_style == "raised") ? design_layer_1_depth : -design_layer_1_depth) : 0;
+layer_2_rise = layer_2_on ? ((design_layer_2_style == "raised") ? design_layer_2_depth : -design_layer_2_depth) : 0;
+layer_3_rise = layer_3_on ? ((design_layer_3_style == "raised") ? design_layer_3_depth : -design_layer_3_depth) : 0;
+
+layer_base_1 = charm_top_z;
+layer_base_2 = layer_base_1 + layer_1_rise;
+layer_base_3 = layer_base_2 + layer_2_rise;
+layer_stack_top = max(charm_top_z, layer_base_2, layer_base_3, layer_base_3 + layer_3_rise);
+
+// A pass thinner than layer_depth_min will not survive a 0.4 mm nozzle; one
+// thicker than layer_depth_max stops reading as relief and starts snagging.
+assert(!layer_1_on || (design_layer_1_depth >= layer_depth_min && design_layer_1_depth <= layer_depth_max),
+       "design_layer_1_depth outside 0.4-3.0 mm");
+assert(!layer_2_on || (design_layer_2_depth >= layer_depth_min && design_layer_2_depth <= layer_depth_max),
+       "design_layer_2_depth outside 0.4-3.0 mm");
+assert(!layer_3_on || (design_layer_3_depth >= layer_depth_min && design_layer_3_depth <= layer_depth_max),
+       "design_layer_3_depth outside 0.4-3.0 mm");
+assert(design_layer_1_aspect > 0, "design_layer_1_aspect must be positive (width divided by height)");
+assert(design_layer_2_aspect > 0, "design_layer_2_aspect must be positive (width divided by height)");
+assert(design_layer_3_aspect > 0, "design_layer_3_aspect must be positive (width divided by height)");
+// A pass may not cut through the charm: the stack's floor has to stay inside
+// the material it is carved from.
+assert(!layered_mode || min(layer_base_1, layer_base_2, layer_base_3, layer_base_3 + layer_3_rise) > 0,
+       "layered design cuts through the charm - reduce the engraved depths");
+
+echo(str("layer anchors mm: base1=", layer_base_1, " base2=", layer_base_2,
+         " base3=", layer_base_3, " stack_top=", layer_stack_top));
+
 total_top_z = charm_top_z
     + max(
         (design_style == "raised") ? engrave_depth : 0,
         (design_file_2 != "" && design_style_2 == "raised") ? max(0, engrave_depth + design_2_thickness) : 0,
         (text_content != "" && text_style == "raised") ? text_depth : 0,
-        (text_content_2 != "" && text_style_2 == "raised") ? max(0, text_depth_2 + text_2_thickness) : 0
+        (text_content_2 != "" && text_style_2 == "raised") ? max(0, text_depth_2 + text_2_thickness) : 0,
+        layer_stack_top - charm_top_z
     );
 
 module profile_2d() {
@@ -309,6 +400,24 @@ module design_2d_layer2() {
     }
 }
 
+// One pass of a layered design, placed exactly like the single design above so
+// the two surfaces agree. The file arrives on the shared canvas with its own
+// minimum corner at the origin, so it is centred here and then scaled by ONE
+// factor - never resize()d, which would fit each pass to the face separately
+// and scale the smallest one up to the size of the largest.
+module design_layer_2d(layer_file, layer_aspect) {
+    canvas_h = layer_canvas_span / layer_aspect;
+    fit = (layer_aspect >= design_fit_w / design_fit_h)
+              ? design_fit_w / layer_canvas_span
+              : design_fit_h / canvas_h;
+    translate([-design_up_down, design_left_right])
+        rotate([0, 0, design_rotation + 90])
+            offset(r = design_offset)
+                scale(fit)
+                    translate([-layer_canvas_span / 2, -canvas_h / 2])
+                        import(layer_file, center = false);
+}
+
 // The region of the top surface that is truly flat at charm_top_z; raised
 // material outside it would float over the rounded edges.
 module top_face_2d() {
@@ -390,6 +499,30 @@ module q_charm() {
                             top_face_2d();
                         }
             }
+            if (layer_1_on && design_layer_1_style == "raised") {
+                translate([profile_center_x, 0, layer_base_1 - layer_eps])
+                    linear_extrude(height = design_layer_1_depth + layer_eps)
+                        intersection() {
+                            design_layer_2d(design_layer_1, design_layer_1_aspect);
+                            top_face_2d();
+                        }
+            }
+            if (layer_2_on && design_layer_2_style == "raised") {
+                translate([profile_center_x, 0, layer_base_2 - layer_eps])
+                    linear_extrude(height = design_layer_2_depth + layer_eps)
+                        intersection() {
+                            design_layer_2d(design_layer_2, design_layer_2_aspect);
+                            top_face_2d();
+                        }
+            }
+            if (layer_3_on && design_layer_3_style == "raised") {
+                translate([profile_center_x, 0, layer_base_3 - layer_eps])
+                    linear_extrude(height = design_layer_3_depth + layer_eps)
+                        intersection() {
+                            design_layer_2d(design_layer_3, design_layer_3_aspect);
+                            top_face_2d();
+                        }
+            }
             if (text_content != "" && text_style == "raised") {
                 translate([profile_center_x, 0, charm_top_z])
                     linear_extrude(height = text_depth)
@@ -410,6 +543,21 @@ module q_charm() {
             translate([profile_center_x, 0, charm_top_z - engrave_depth + design_2_thickness])
                 linear_extrude(height = engrave_depth + 0.01)
                     design_2d_layer2();
+        }
+        if (layer_1_on && design_layer_1_style != "raised") {
+            translate([profile_center_x, 0, layer_base_1 - design_layer_1_depth])
+                linear_extrude(height = design_layer_1_depth + layer_eps)
+                    design_layer_2d(design_layer_1, design_layer_1_aspect);
+        }
+        if (layer_2_on && design_layer_2_style != "raised") {
+            translate([profile_center_x, 0, layer_base_2 - design_layer_2_depth])
+                linear_extrude(height = design_layer_2_depth + layer_eps)
+                    design_layer_2d(design_layer_2, design_layer_2_aspect);
+        }
+        if (layer_3_on && design_layer_3_style != "raised") {
+            translate([profile_center_x, 0, layer_base_3 - design_layer_3_depth])
+                linear_extrude(height = design_layer_3_depth + layer_eps)
+                    design_layer_2d(design_layer_3, design_layer_3_aspect);
         }
         if (text_content != "" && text_style != "raised") {
             translate([profile_center_x, 0, charm_top_z - text_depth])

@@ -216,9 +216,18 @@ export const MEASURED_SECONDS = {
   'param-links.spec.js': 73.1,
   'publish-dialog.spec.js': 23.4,
   'share-settings.spec.js': 53.5,
-  'svg-edit-door.spec.js': 34.1,
   'ink-modes.spec.js': 45.5,
   'dxf-roundtrip.spec.js': 19.7,
+
+  // Design Pipeline Round 1, summed from the Chromium shards of run
+  // 33186286382 (2026-08-28), the same method. svg-edit-door grew from 6 cases
+  // to 12 across DP-3 and DP-4 and was still booked at its Interop-era 34.1,
+  // a 3.8x under-count; overlay-placement is new and was riding the 60s
+  // default against a real 107.9. Between them that is 143 seconds of work
+  // the planner could not see, and the Edge lanes of that very run ended at
+  // 35 minutes with "25 did not run".
+  'svg-edit-door.spec.js': 129.8,
+  'overlay-placement.spec.js': 107.9,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */
