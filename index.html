@@ -3274,6 +3274,32 @@
                         Crop
                       </button>
                     </div>
+                    <!-- DP-6: the picture you have been tracing against is
+                         usually the picture you want ON the model. This hands
+                         it to a design parameter through the ordinary upload
+                         path, so it traces, opens the editor and lands in the
+                         gallery exactly as a file chosen by hand would. -->
+                    <div class="overlay-use-row" id="overlayUseRow" hidden>
+                      <label
+                        class="overlay-control-label"
+                        for="overlayUseTargetSelect"
+                        id="overlayUseTargetLabel"
+                      >
+                        Use it as
+                      </label>
+                      <select
+                        id="overlayUseTargetSelect"
+                        class="overlay-select"
+                        aria-labelledby="overlayUseTargetLabel"
+                      ></select>
+                      <button
+                        type="button"
+                        id="overlayUseAsDesignBtn"
+                        class="btn btn-sm btn-outline"
+                      >
+                        Use as design
+                      </button>
+                    </div>
                     <span
                       id="overlaySourceHelp"
                       class="overlay-source-help-text"

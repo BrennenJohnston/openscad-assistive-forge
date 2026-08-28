@@ -70,6 +70,13 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
   const overlayZCustomInput = document.getElementById('overlayZCustomInput');
   const overlayZCustomRow = document.getElementById('overlayZCustomRow');
   const overlayCropBtn = document.getElementById('overlayCropBtn');
+  const overlayUseRow = document.getElementById('overlayUseRow');
+  const overlayUseTargetSelect = document.getElementById(
+    'overlayUseTargetSelect'
+  );
+  const overlayUseAsDesignBtn = document.getElementById(
+    'overlayUseAsDesignBtn'
+  );
   const overlayRotationValue = document.getElementById('overlayRotationValue');
   const overlayStatus = document.getElementById('overlayStatus');
   const overlayFileInput = document.getElementById('overlayFileInput');
@@ -667,6 +674,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
 
     syncOverlayZControls();
     updateCropButton();
+    updateUseAsDesignRow();
 
     updateOverlayStatus();
   }
@@ -1064,6 +1072,103 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
         previewManager.setOverlayTransform({ rotationDeg });
         noteOverlayChanged();
       }
+    });
+  }
+
+  /**
+   * DP-6: hand the picture you have been tracing against to a design
+   * parameter.
+   *
+   * It goes in through the parameter's OWN file input, as a real File on a
+   * real change event, rather than through a second code path that writes the
+   * value directly. That is deliberate: the upload path already traces a
+   * raster, opens the preparation editor when the drawing needs it, measures
+   * and emits the aspect companion in the same state update (the D-108 law),
+   * appends the gallery entry and persists it with the project. A parallel
+   * path would have to copy all of that and then stay copied.
+   */
+  function fileParamControls() {
+    return Array.from(
+      document.querySelectorAll('.param-control--file input[type="file"]')
+    ).filter((input) => input.id.startsWith('param-'));
+  }
+
+  /** A readable name for a file parameter, taken from its own label. */
+  function fileParamLabel(input) {
+    const wrap = input.closest('.param-control');
+    const label = wrap?.querySelector('label');
+    const text = label?.textContent?.trim();
+    return text || input.id.replace(/^param-/, '').replace(/_/g, ' ');
+  }
+
+  function updateUseAsDesignRow() {
+    if (!overlayUseRow || !overlayUseTargetSelect) return;
+    const inputs = fileParamControls();
+    const rec = currentOverlayImage();
+    // Nothing to hand over, or nowhere to hand it to.
+    overlayUseRow.hidden = inputs.length === 0 || !rec;
+    if (overlayUseRow.hidden) return;
+
+    const previous = overlayUseTargetSelect.value;
+    overlayUseTargetSelect.replaceChildren();
+    for (const input of inputs) {
+      const option = document.createElement('option');
+      option.value = input.id;
+      option.textContent = fileParamLabel(input);
+      overlayUseTargetSelect.appendChild(option);
+    }
+    if (inputs.some((i) => i.id === previous)) {
+      overlayUseTargetSelect.value = previous;
+    }
+    // One choice is not a choice: the select only earns its place when there
+    // is more than one design slot to pick between.
+    overlayUseTargetSelect.hidden = inputs.length < 2;
+  }
+
+  /** The image currently behind the model, whichever lane it came from. */
+  function currentOverlayImage() {
+    const value = overlaySourceSelect?.value || '';
+    if (!value) return null;
+    if (value.startsWith('screenshot:')) {
+      return SharedImageStore.getImageByName(value.slice('screenshot:'.length));
+    }
+    const uploaded = uploadedOverlayFiles.get(value);
+    if (uploaded) {
+      return { name: value, dataUrl: uploaded.content, isSvg: uploaded.isSvg };
+    }
+    return null;
+  }
+
+  async function useOverlayAsDesign() {
+    const rec = currentOverlayImage();
+    const targetId = overlayUseTargetSelect?.value;
+    const input = targetId ? document.getElementById(targetId) : null;
+    if (!rec || !input) return;
+
+    try {
+      const isSvg = rec.isSvg || /^\s*<svg|image\/svg/i.test(rec.dataUrl || '');
+      const blob = isSvg
+        ? new Blob([rec.dataUrl], { type: 'image/svg+xml' })
+        : await (await fetch(rec.dataUrl)).blob();
+      const file = new File([blob], rec.name, {
+        type: blob.type || 'image/png',
+      });
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      input.files = transfer.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      announceImmediate(
+        `${rec.name} sent to ${fileParamLabel(input)}. Forge is preparing it.`
+      );
+    } catch (error) {
+      console.error('[Overlay] Could not use the image as a design:', error);
+      announceImmediate('Could not use that image as a design.');
+    }
+  }
+
+  if (overlayUseAsDesignBtn) {
+    overlayUseAsDesignBtn.addEventListener('click', () => {
+      void useOverlayAsDesign();
     });
   }
 

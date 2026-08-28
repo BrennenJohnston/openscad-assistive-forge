@@ -2883,6 +2883,23 @@ dialog:modal {
   align-items: stretch;
 }
 
+/* DP-6: handing the reference image to a design parameter. */
+.overlay-use-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+  margin-top: var(--space-xs);
+}
+
+.overlay-use-row[hidden] {
+  display: none;
+}
+
+#overlayUseTargetSelect[hidden] {
+  display: none;
+}
+
 /* DP-5: the crop dialog. The picture is a read-only illustration of what the
    numeric fields say, so it carries no controls of its own. */
 .crop-modal-help {

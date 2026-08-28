@@ -177,6 +177,62 @@ test.describe('Reference image placement (DP-5)', () => {
     await expect(cropBtn).toBeFocused({ timeout: 10000 })
   })
 
+  /**
+   * DP-6: the picture you have been tracing against is usually the picture you
+   * want ON the model.
+   *
+   * The handoff goes in through the parameter's OWN file input, as a real File
+   * on a real change event. That is the whole point: the upload path already
+   * traces a raster, opens the editor when the drawing needs it, and emits the
+   * aspect companion in the SAME state update (the D-108 law). A second path
+   * would have to copy all of that and then stay copied - so the case below
+   * asserts the aspect landed, which is the cheapest proof it really is one
+   * path and not two.
+   */
+  test('the reference image can be handed to a design, aspect and all', async ({
+    page,
+  }) => {
+    test.setTimeout(240000)
+    await boot(page)
+    await openCharm(page)
+    await saveProject(page)
+    await openOverlayPanel(page)
+
+    // Nothing chosen yet, so there is nothing to hand over.
+    await expect(page.locator('#overlayUseRow')).toBeHidden()
+
+    await page.locator('#overlayFileInput').setInputFiles(RASTER)
+    await expect(page.locator('#overlayUseRow')).toBeVisible({ timeout: 30000 })
+
+    // q-charm has two design slots, so the choice is offered. With one slot
+    // the select would be hidden: one choice is not a choice.
+    const target = page.locator('#overlayUseTargetSelect')
+    await expect(target).toBeVisible()
+    const options = await target.locator('option').allTextContents()
+    expect(options.length).toBeGreaterThan(1)
+
+    await page.locator('#overlayUseAsDesignBtn').click()
+
+    // The raster was traced and the design parameter took the SVG...
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(() => {
+            const v = window.stateManager?.getState()?.parameters?.design_file
+            return v && typeof v === 'object' ? v.name : v
+          }),
+        { timeout: 120000 }
+      )
+      .toMatch(/bird-drawing\.svg$/)
+
+    // ...and its measured aspect arrived with it, in the same snapshot.
+    const aspect = await page.evaluate(
+      () => window.stateManager?.getState()?.parameters?.design_file_aspect
+    )
+    expect(typeof aspect).toBe('number')
+    expect(aspect).toBeGreaterThan(0)
+  })
+
   test('Escape leaves the picture alone', async ({ page }) => {
     test.setTimeout(180000)
     await boot(page)
