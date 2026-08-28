@@ -224,7 +224,26 @@ function buildWorkspaceDom() {
 
   const resultZoom = buildZoomControls('result');
   resultPane.appendChild(resultZoom);
-  resultPaneWrap.append(resultCaption, resultPane);
+
+  // DP-3: above tier A the boolean never runs on its own, so the result pane
+  // needs a way to ask for it. Hidden (and never focusable) in the auto band.
+  const renderRow = document.createElement('div');
+  renderRow.className = 'svg-prep-render-row';
+  renderRow.hidden = true;
+
+  const renderNote = document.createElement('p');
+  renderNote.className = 'svg-prep-render-note';
+  renderNote.id = 'svgPrepRenderNote';
+
+  const renderBtn = document.createElement('button');
+  renderBtn.type = 'button';
+  renderBtn.className = 'btn btn-primary svg-prep-render-btn';
+  renderBtn.dataset.action = 'render-preview';
+  renderBtn.textContent = 'Render preview';
+  renderBtn.setAttribute('aria-describedby', renderNote.id);
+
+  renderRow.append(renderNote, renderBtn);
+  resultPaneWrap.append(resultCaption, resultPane, renderRow);
 
   previews.append(sourcePaneWrap, resultPaneWrap);
 
@@ -343,6 +362,9 @@ function buildWorkspaceDom() {
       legendRow,
       sourceZoom,
       resultZoom,
+      renderRow,
+      renderNote,
+      renderBtn,
       objects,
       warnings,
       footer,
@@ -596,6 +618,9 @@ export function createSvgPrepWorkspace(containerEl) {
   // replaced by an auto-prepared version.
   let resolved = false;
   let rolesVisible = true;
+  // DP-3: whether the boolean flatten may run by itself. True only in tier A
+  // (50 shapes or fewer), where DP-0 measured it at about a second.
+  let autoPreview = true;
 
   // ARIA live region for role-change and preview announcements
   const liveRegion = document.createElement('div');
@@ -685,9 +710,17 @@ export function createSvgPrepWorkspace(containerEl) {
     return `<svg ${attrs}><path d="${compoundD}" fill="black" fill-rule="evenodd"/></svg>`;
   }
 
-  function setApplyEnabled(enabled) {
+  /**
+   * @param {boolean} enabled
+   * @param {string} [hint] - Why not, when disabled. Naming the real reason
+   *   matters: the hint's one fixed sentence used to be "No shapes included",
+   *   which is a lie when the shapes are there and only the flatten is
+   *   waiting (D-117's mistake in miniature).
+   */
+  function setApplyEnabled(enabled, hint = 'No shapes included') {
     refs.applyBtn.disabled = !enabled;
     refs.applyBtn.setAttribute('aria-disabled', String(!enabled));
+    if (!enabled) refs.applyHint.textContent = hint;
     refs.applyHint.hidden = enabled;
     // Nothing to save either: an empty result is an empty file.
     refs.saveBtn.disabled = !enabled;
@@ -707,6 +740,53 @@ export function createSvgPrepWorkspace(containerEl) {
     err.className = 'svg-prep-result-error';
     err.textContent = message;
     refs.resultPane.insertBefore(err, refs.resultZoom);
+  }
+
+  /**
+   * Ask for the result preview the way this drawing's size allows.
+   *
+   * DP-3: `updateResultPreview` IS the boolean flatten - the "Will print as"
+   * pane is its output - and DP-0 measured that flatten at 1.0 s for 50
+   * shapes, 56.7 s for 200 and 447.9 s for 400, roughly 7.5x per doubling.
+   * Running it on open and again on every role change is what made the
+   * owner's 831-shape drawing take 64.7 SECONDS to appear. Above tier A the
+   * pane goes stale instead, and waits to be asked.
+   */
+  function requestResultPreview() {
+    if (autoPreview) {
+      updateResultPreview();
+      return;
+    }
+    markPreviewStale();
+  }
+
+  /**
+   * Show that the result pane is out of date and offer to bring it up to
+   * date, rather than silently showing a picture of older choices.
+   */
+  function markPreviewStale() {
+    // currentResult === null IS "stale": Apply and Save already refuse on it,
+    // so a second flag saying the same thing could only drift from it.
+    currentResult = null;
+    const existingSvg = refs.resultPane.querySelector('svg');
+    if (existingSvg) existingSvg.remove();
+    clearResultError();
+    setApplyEnabled(
+      false,
+      'Render the preview before applying it, so you can see what you get.'
+    );
+    refs.renderRow.hidden = false;
+    refs.renderNote.textContent = staleNoteText();
+    refs.renderBtn.disabled = false;
+  }
+
+  /** The sentence under the Render preview button. */
+  function staleNoteText() {
+    const count = currentAnalysis?.elements?.length ?? 0;
+    return (
+      `This drawing has ${count} shapes. Combining them takes a while, ` +
+      `so Forge waits until you ask.`
+    );
   }
 
   function updateResultPreview() {
@@ -952,7 +1032,7 @@ export function createSvgPrepWorkspace(containerEl) {
     }
 
     renderRoleLayer();
-    updateResultPreview();
+    requestResultPreview();
   }
 
   function handleRolesToggle() {
@@ -974,7 +1054,7 @@ export function createSvgPrepWorkspace(containerEl) {
 
     clearTimeout(offsetDebounceTimer);
     offsetDebounceTimer = setTimeout(() => {
-      updateResultPreview();
+      requestResultPreview();
       if (currentResult) {
         const item = refs.objects.querySelector(
           `.svg-prep-object[data-index="${idx}"]`
@@ -989,6 +1069,46 @@ export function createSvgPrepWorkspace(containerEl) {
   function handleDesignWidthChange() {
     clearTimeout(offsetDebounceTimer);
     offsetDebounceTimer = setTimeout(updateResultPreview, 300);
+  }
+
+  /**
+   * Run the flatten because someone asked for it, and say so while it happens.
+   *
+   * The work is synchronous and, on a big drawing, long - DP-0 measured 56.7 s
+   * at 200 shapes. So the waiting state is painted and announced, then a frame
+   * is yielded, so the button really does look and read as busy instead of the
+   * page freezing with the old label still on it.
+   */
+  function renderPreviewOnDemand() {
+    if (!currentAnalysis) return;
+    const count = currentAnalysis.elements?.length ?? 0;
+    refs.renderBtn.disabled = true;
+    refs.renderNote.textContent = `Combining ${count} shapes. This can take a while.`;
+    const message = `Combining ${count} shapes. This can take a while.`;
+    liveRegion.textContent = message;
+    announce(message);
+
+    // Two frames: one to paint the busy state, one to be sure it was painted
+    // before the main thread is taken for the boolean.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const started = performance.now();
+        updateResultPreview();
+        const seconds = Math.max(
+          1,
+          Math.round((performance.now() - started) / 1000)
+        );
+        refs.renderBtn.disabled = false;
+        refs.renderNote.textContent = currentResult
+          ? `Preview is up to date. Change anything and you can render it again.`
+          : staleNoteText();
+        const done = currentResult
+          ? `Preview ready. It took ${seconds} seconds.`
+          : 'Preview could not be built from these choices.';
+        liveRegion.textContent = done;
+        announce(done);
+      });
+    });
   }
 
   function handleFooterClick(e) {
@@ -1043,7 +1163,7 @@ export function createSvgPrepWorkspace(containerEl) {
           item.setAttribute('aria-label', `${nameText}, role: ${role}`);
         });
         renderRoleLayer();
-        updateResultPreview();
+        requestResultPreview();
       }
       liveRegion.textContent = 'Roles reset to auto-classification';
     }
@@ -1161,7 +1281,16 @@ export function createSvgPrepWorkspace(containerEl) {
 
     renderSourcePane();
     renderRoleLayer();
-    updateResultPreview();
+    // DP-3: tier decides whether the boolean may run without being asked.
+    // Anything the analyzer did not label is treated as tier A, so an older
+    // caller keeps exactly the behaviour it had.
+    autoPreview = (analysis.tier ?? 'auto') === 'auto';
+    refs.renderRow.hidden = autoPreview;
+    if (autoPreview) {
+      updateResultPreview();
+    } else {
+      markPreviewStale();
+    }
 
     sourceZoomCleanup = setupPaneZoom(
       refs.sourcePane,
@@ -1180,6 +1309,9 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.objects.addEventListener('input', handleOffsetChange);
     refs.designWidthInput.addEventListener('input', handleDesignWidthChange);
     refs.footer.addEventListener('click', handleFooterClick);
+    // The render control lives under the result pane, not in the footer, so
+    // the footer's delegated handler cannot see it.
+    refs.renderBtn.addEventListener('click', renderPreviewOnDemand);
     refs.rolesToggleBtn.addEventListener('click', handleRolesToggle);
     refs.closeBtn.addEventListener('click', close);
     refs.fullscreenBtn.addEventListener('click', handleFullscreenButton);
@@ -1248,6 +1380,7 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.objects.removeEventListener('input', handleOffsetChange);
     refs.designWidthInput.removeEventListener('input', handleDesignWidthChange);
     refs.footer.removeEventListener('click', handleFooterClick);
+    refs.renderBtn.removeEventListener('click', renderPreviewOnDemand);
     refs.rolesToggleBtn.removeEventListener('click', handleRolesToggle);
     refs.closeBtn.removeEventListener('click', close);
     refs.fullscreenBtn.removeEventListener('click', handleFullscreenButton);

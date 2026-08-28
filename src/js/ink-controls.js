@@ -309,6 +309,21 @@ export function createInkControls({ idPrefix, onChange, announce }) {
       if (busy) summaryEl.textContent = 'Re-reading the picture…';
     },
     /**
+     * Replace the waiting line when a trace did not finish.
+     *
+     * D-119: setBusy writes "Re-reading the picture…" and only setSummary
+     * clears it, so a failed trace used to leave that sentence standing as if
+     * work were still going on. Takes the caller's own already-shown failure
+     * text rather than inventing a second wording for the same event.
+     *
+     * @param {string} text - The failure message already shown to the user
+     */
+    setFailed(text) {
+      summaryEl.textContent = text;
+      warningsEl.replaceChildren();
+      warningsEl.hidden = true;
+    },
+    /**
      * Report what the extraction did.
      * @param {Object|null} summary
      * @param {number} pathCount

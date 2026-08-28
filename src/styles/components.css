@@ -15503,6 +15503,35 @@ body.tutorial-body-locked {
   display: none;
 }
 
+/* DP-3: the on-demand render control under the result pane. Only present
+   above tier A, where the boolean is too slow to run on its own. */
+.svg-prep-render-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  margin-top: var(--space-xs);
+}
+
+.svg-prep-render-row[hidden] {
+  display: none;
+}
+
+.svg-prep-render-note {
+  margin: 0;
+  flex: 1 1 12rem;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.svg-prep-render-btn {
+  /* 44px target floor, same as every other control in this editor. */
+  min-height: 44px;
+  min-width: 44px;
+  flex: 0 0 auto;
+}
+
 .svg-prep-footer button[data-action='apply']:disabled {
   opacity: 0.5;
   cursor: not-allowed;
