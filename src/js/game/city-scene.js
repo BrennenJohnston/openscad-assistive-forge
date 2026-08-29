@@ -59,6 +59,8 @@ import {
   CURB_HEIGHT_M,
   PAVEMENT_WIDTH_M,
   isPavementWay,
+  buildRoadwayIndex,
+  rectsOverlap,
 } from './walk-controls.js';
 import {
   makeFigureSpec,
@@ -4337,6 +4339,10 @@ const PERSON_DARK_TINT = [0.5, 0.5, 0.5];
 const PERSON_SPACING_M = 26;
 const PERSON_MIN_GAP_M = 3;
 const PERSON_CURB_OFFSET_M = 1.1;
+// CW-75: how far a mapped crossing reaches. A person standing on tarmac is a
+// mistake everywhere except here, where it is somebody crossing the road -
+// and OpenStreetMap says exactly where those are.
+const CROSSING_REACH_M = 12;
 const DOG_HEIGHT_M = 0.45;
 const DOG_LENGTH_M = 0.6;
 const DOG_WIDTH_M = 0.2;
@@ -4392,7 +4398,9 @@ function makeDogGeoms(x, y, facingRad) {
   return out;
 }
 
-const TRAFFIC_LANE_INSET_M = 1.6;
+// CW-75 retired TRAFFIC_LANE_INSET_M (a flat 1.6 m from the kerb, which put
+// a moving car 0.10 m from a parked one on every road this game parks on).
+// The lane is derived from the road's own width by `laneLayoutFor` below.
 const TRAFFIC_MIN_SPACING_M = 9;
 const TRAFFIC_END_MARGIN_M = 6;
 
@@ -4403,6 +4411,60 @@ const CAR_ROAD_KINDS = new Set([
   'unclassified',
   'living_street',
 ]);
+
+/**
+ * The widest car the class table holds (CW-75). A parking bay and a travel
+ * lane each have to hold one, so the lane arithmetic below is written in
+ * terms of the table rather than a number somebody typed.
+ */
+const CAR_MAX_HALF_W_M = Math.max(...CAR_CLASSES.map((cls) => cls.widM)) / 2;
+
+/**
+ * ★ HOW A ROADWAY DIVIDES INTO A PARKING BAY AND A TRAVEL LANE (CW-75).
+ *
+ * The frozen traffic used to sit a flat 1.6 m in from the kerb and the parked
+ * row 1.5 m in, which put the two CENTRES 0.10 m apart on every road class
+ * this game parks on - the whole "cars clip through each other" complaint, by
+ * construction rather than by accident. Parked cars never overlapped each
+ * other; a moving car was simply parked on top of them.
+ *
+ * So the lane is derived instead of assumed. The parked row keeps exactly the
+ * place it has always had, one car-half inside the kerb, and the travel lanes
+ * take what is left between it and the centreline:
+ *
+ *   - two lanes, one each side of the centreline, when the free strip holds
+ *     two car widths;
+ *   - one lane down the middle, shared by both directions, when it holds one -
+ *     which is what an 8 m residential street with cars parked on both sides
+ *     really is;
+ *   - no parking at all when the free strip cannot hold a car even so, and
+ *     the road gives its whole width to traffic.
+ *
+ * @param {{widthM?: number}} road
+ * @returns {{parks: boolean, laneOffsetM: number, sharedLane: boolean, hasTraffic: boolean}}
+ */
+function laneLayoutFor(road) {
+  const halfM = (road?.widthM ?? 0) / 2;
+  const kerbFreeM = halfM - CURB_WIDTH_M;
+  // Unchanged: the parked row's own centre.
+  const parkedCentreM = halfM - CURB_WIDTH_M - 1;
+  // Tarmac between the centreline and the parked row's inner flank.
+  const parkedFreeM = parkedCentreM - CAR_MAX_HALF_W_M;
+  const parks = parkedCentreM >= 0.8 && parkedFreeM >= CAR_MAX_HALF_W_M;
+  const freeM = parks ? parkedFreeM : kerbFreeM;
+  if (freeM >= CAR_MAX_HALF_W_M * 2) {
+    return {
+      parks,
+      laneOffsetM: freeM / 2,
+      sharedLane: false,
+      hasTraffic: true,
+    };
+  }
+  if (freeM >= CAR_MAX_HALF_W_M) {
+    return { parks, laneOffsetM: 0, sharedLane: true, hasTraffic: true };
+  }
+  return { parks, laneOffsetM: 0, sharedLane: false, hasTraffic: false };
+}
 // No car within this distance of a road vertex: OSM splits ways at junctions,
 // so the segment ends ARE the intersections.
 const JUNCTION_MARGIN_M = 5;
@@ -4809,6 +4871,63 @@ function makeKindGrid(cellM) {
   };
 }
 
+/**
+ * ★ WHERE THE CARS ARE, AS RECTANGLES (CW-75).
+ *
+ * `makePointGrid` answers "is anything within N metres", which is the right
+ * question for a row of parked cars sharing a kerb and the WRONG one for a
+ * moving car in the next lane. MEASURED on Seattle: entering the frozen
+ * traffic into the parked stream's 6 m point grid does take the last car-on-
+ * car overlap out, and it costs 856 parked cars and 401 traffic cars to do
+ * it - because a radius cannot tell "two metres to the side, which is a lane"
+ * from "two metres along, which is a collision".
+ *
+ * So the streams share this instead: the same spatial buckets, but the test
+ * is the true rectangle overlap the census scores them on. Same zero, 66
+ * refusals instead of 1,257.
+ *
+ * @param {number} cellM
+ */
+function makeFootprintGrid(cellM) {
+  const buckets = new Map();
+  const key = (cx, cy) => cx + ',' + cy;
+  const spanOf = (rect) =>
+    Math.hypot(rect.halfLengthM ?? 0, rect.halfWidthM ?? 0);
+  return {
+    add(rect) {
+      const reach = spanOf(rect);
+      const cx0 = Math.floor((rect.x - reach) / cellM);
+      const cx1 = Math.floor((rect.x + reach) / cellM);
+      const cy0 = Math.floor((rect.y - reach) / cellM);
+      const cy1 = Math.floor((rect.y + reach) / cellM);
+      for (let gy = cy0; gy <= cy1; gy++) {
+        for (let gx = cx0; gx <= cx1; gx++) {
+          const k = key(gx, gy);
+          const list = buckets.get(k);
+          if (list) list.push(rect);
+          else buckets.set(k, [rect]);
+        }
+      }
+    },
+    /** @returns {boolean} whether `rect` overlaps anything already added */
+    overlaps(rect) {
+      const reach = spanOf(rect);
+      const cx0 = Math.floor((rect.x - reach) / cellM);
+      const cx1 = Math.floor((rect.x + reach) / cellM);
+      const cy0 = Math.floor((rect.y - reach) / cellM);
+      const cy1 = Math.floor((rect.y + reach) / cellM);
+      for (let gy = cy0; gy <= cy1; gy++) {
+        for (let gx = cx0; gx <= cx1; gx++) {
+          for (const other of buckets.get(key(gx, gy)) ?? []) {
+            if (rectsOverlap(rect, other)) return true;
+          }
+        }
+      }
+      return false;
+    },
+  };
+}
+
 function makePointGrid(cellM) {
   const buckets = new Map();
   let count = 0;
@@ -5073,9 +5192,47 @@ export function buildStreetProps(model, collision = null) {
     y <= b.maxY + PROP_MARGIN_M;
   const isBlocked = (x, y) => (collision ? collision.isBlocked(x, y) : false);
 
+  // ★ CW-75: ONE index of every drawn roadway, shared by every stream below.
+  //
+  // Each stream used to know about exactly one road - its own - and planted
+  // relative to that road's kerb. A side street's infill trees therefore
+  // walked straight into the ribbon of the street they cross, and nothing in
+  // the build was ever asked about it. `insideRoadway` is that question, and
+  // it is asked with the prop's own footprint so a trunk is rejected when its
+  // BOX reaches the tarmac, not only when its centre does.
+  const roadways = buildRoadwayIndex(model.roads);
+  // Where a person may stand in the road: on a mapped crossing. The cell size
+  // IS the reach, so `occupied`'s one-cell neighbourhood covers it exactly.
+  const crossingSpots = makePointGrid(CROSSING_REACH_M);
+  for (const point of model.wayfinding ?? []) {
+    if (point.kind === 'crossing') crossingSpots.add(point.x, point.y);
+  }
+  /** Whether a prop of this half-size would stand on tarmac here. */
+  const inRoadway = (x, y, halfM) => roadways.insideRoadway(x, y, -halfM);
+  const standingInRoad = (x, y, halfM) =>
+    inRoadway(x, y, halfM) && !crossingSpots.occupied(x, y, CROSSING_REACH_M);
+  let treesDemoted = 0;
+  let treesDropped = 0;
+  let treesSkippedInRoad = 0;
+  let lampsSkippedInRoad = 0;
+  let peopleSkippedInRoad = 0;
+  let roadsWithoutParking = 0;
+  let carsRefusedOverlap = 0;
+
   const treeSpots = makePointGrid(PROP_SPATIAL_CELL_M);
   const carSpots = makePointGrid(PROP_SPATIAL_CELL_M);
   const lampSpots = makePointGrid(PROP_SPATIAL_CELL_M);
+  // CW-75: every car this build placed, parked and moving alike, as the
+  // rectangle it actually occupies. The parked stream already stamps its
+  // cars into `obstacles`, but the frozen traffic never did - which is why
+  // "cars clip through each other" could be argued about for two rounds
+  // without anyone being able to count it. A census that has to re-derive a
+  // placement is a census that can be wrong in the same direction as the
+  // code it audits, so the build writes down what it did.
+  const carFootprints = [];
+  // The registry both car streams consult before taking a spot (CW-75).
+  const carBoxes = makeFootprintGrid(PROP_SPATIAL_CELL_M);
+  let parkedCount = 0;
   let mappedTreeCount = 0;
 
   // CW-56: which species, and therefore how tall and what shape. The draw
@@ -5124,10 +5281,39 @@ export function buildStreetProps(model, collision = null) {
   // 1. The trees the map records. Real data wins every argument with the
   //    infill below, so these are placed first and only skipped where a
   //    building stands on them (or a duplicate node repeats one).
+  //
+  //    CW-75: except about standing in the road. A mapped tree node whose
+  //    coordinates land inside a drawn roadway is not a tree in the road in
+  //    the real world - it is a street tree whose kerb this game draws a
+  //    metre or two off, because the ribbon is a class width rather than a
+  //    survey. The tree keeps its side of the street and steps back onto the
+  //    pavement; only where there is no pavement to take it is it dropped,
+  //    and then it is counted rather than quietly forgotten.
   model.trees.forEach(({ x, y, leafType }, index) => {
-    if (!inCore(x, y) || isBlocked(x, y)) return;
-    if (treeSpots.occupied(x, y, MAPPED_TREE_MIN_GAP_M)) return;
-    plantTree(x, y, hashBuilding(index, 'osm-tree'), leafType);
+    let tx = x;
+    let ty = y;
+    const hit = inRoadway(tx, ty, TRUNK_SIDE_M / 2);
+    if (hit) {
+      const outM = hit.widthM / 2 + TREE_SIDEWALK_OFFSET_M;
+      const px = hit.cx + hit.nx * outM;
+      const py = hit.cy + hit.ny * outM;
+      if (
+        inCore(px, py) &&
+        !isBlocked(px, py) &&
+        !inRoadway(px, py, TRUNK_SIDE_M / 2) &&
+        !treeSpots.occupied(px, py, MAPPED_TREE_MIN_GAP_M)
+      ) {
+        tx = px;
+        ty = py;
+        treesDemoted++;
+      } else {
+        treesDropped++;
+        return;
+      }
+    }
+    if (!inCore(tx, ty) || isBlocked(tx, ty)) return;
+    if (treeSpots.occupied(tx, ty, MAPPED_TREE_MIN_GAP_M)) return;
+    plantTree(tx, ty, hashBuilding(index, 'osm-tree'), leafType);
     mappedTreeCount++;
   });
 
@@ -5473,6 +5659,13 @@ export function buildStreetProps(model, collision = null) {
     const along = (rng() * 2 - 1) * (BENCH_SEAT_L_M / 2 - 0.35);
     const sx = bench.x + Math.cos(bench.angle) * along;
     const sy = bench.y + Math.sin(bench.angle) * along;
+    // CW-75: the bench is mapped data and stays where the map put it, but
+    // seating somebody is this build's own invention - and it will not
+    // invent a person sitting on the tarmac.
+    if (standingInRoad(sx, sy, PERSON_DEPTH_M / 2)) {
+      peopleSkippedInRoad++;
+      return;
+    }
     const spec = makeFigureSpec(rng, 'sitting', { seatZ: BENCH_SEAT_H_M });
     plantFigure(sx, sy, bench.facing, spec, rng);
     sitterCount++;
@@ -5516,6 +5709,9 @@ export function buildStreetProps(model, collision = null) {
     const treeOffset = road.widthM / 2 + TREE_SIDEWALK_OFFSET_M;
     // Inside the curb line, one car-half clear of it.
     const carOffset = road.widthM / 2 - CURB_WIDTH_M - 1;
+    // CW-75: how this road divides between parking and travel.
+    const lanes = laneLayoutFor(road);
+    if (carRng && !lanes.parks) roadsWithoutParking++;
     const lampOffset = road.widthM / 2 + LAMP_CURB_OFFSET_M;
     // Lamps run down the whole way, alternating sides, so the cursor and the
     // side carry ACROSS segments: OSM splits a street into many short
@@ -5564,6 +5760,13 @@ export function buildStreetProps(model, collision = null) {
           if (treeSpots.occupied(px, py, PERSON_MIN_GAP_M)) continue;
           if (lampSpots.occupied(px, py, PERSON_MIN_GAP_M)) continue;
           if (personSpots.occupied(px, py, PERSON_MIN_GAP_M)) continue;
+          // A pavement offset measured from THIS road's kerb still lands in
+          // the middle of the road this one crosses. Nobody stands there
+          // unless the map says there is a crossing (CW-75).
+          if (standingInRoad(px, py, PERSON_DEPTH_M / 2)) {
+            peopleSkippedInRoad++;
+            continue;
+          }
 
           const roll = peopleRng();
           // Along the pavement, or turned a quarter to face the shopfronts.
@@ -5603,15 +5806,16 @@ export function buildStreetProps(model, collision = null) {
       }
 
       if (trafficRng) {
-        // Both directions: one lane each side of the centreline, each facing
-        // the way that lane runs.
+        // Both directions: a lane each side of the centreline where the road
+        // is wide enough for two, otherwise one lane down the middle that
+        // both directions share (CW-75 `laneLayoutFor`).
         for (const dir of [1, -1]) {
           let cursor = trafficCursor[dir > 0 ? 0 : 1];
           while (cursor <= len) {
             const along = cursor;
             cursor += trafficSpacingM * (0.7 + trafficRng() * 0.6);
-            const lane = road.widthM / 2 - TRAFFIC_LANE_INSET_M;
-            if (lane <= 0.5) break;
+            if (!lanes.hasTraffic) break;
+            const lane = lanes.laneOffsetM;
             const x = x1 + ux * along + nx * lane * dir;
             const y = y1 + uy * along + ny * lane * dir;
             if (!inCore(x, y)) continue;
@@ -5631,6 +5835,21 @@ export function buildStreetProps(model, collision = null) {
               CAR_CHROMA
             );
             const cls = pickCarClass(((seed >>> 3) % 1000) / 1000);
+            // CW-75: a moving car takes its slot off the street like any
+            // other. Until now the traffic stream never wrote itself down,
+            // so the parked stream could not see it and parked on top of it.
+            const box = {
+              x,
+              y,
+              halfLengthM: cls.lenM / 2,
+              halfWidthM: cls.widM / 2,
+              rotationRad: heading,
+              stream: 'traffic',
+            };
+            if (carBoxes.overlaps(box)) {
+              carsRefusedOverlap++;
+              continue;
+            }
             pushCarClassGeoms(
               trafficGeoms,
               cls,
@@ -5642,6 +5861,8 @@ export function buildStreetProps(model, collision = null) {
               wheelTint,
               true
             );
+            carBoxes.add(box);
+            carFootprints.push(box);
             trafficCount++;
           }
           trafficCursor[dir > 0 ? 0 : 1] = Math.max(0, cursor - len);
@@ -5661,6 +5882,13 @@ export function buildStreetProps(model, collision = null) {
           if (treeSpots.occupied(x, y, LAMP_MIN_TREE_GAP_M)) continue;
           if (lampSpots.occupied(x, y, LAMP_MIN_LAMP_GAP_M)) continue;
           if (furnitureSpots.occupied(x, y, FURNITURE_CLEAR_M)) continue;
+          // Outside this road's kerb can still be inside the next one's -
+          // which is how 373 poles came to stand on tarmac, most of them in
+          // the I-5 trench where the ribbons overlap (CW-75).
+          if (inRoadway(x, y, POLE_SIDE_M / 2)) {
+            lampsSkippedInRoad++;
+            continue;
+          }
 
           poleGeoms.push(
             makeBox(
@@ -5724,6 +5952,12 @@ export function buildStreetProps(model, collision = null) {
             if (!inCore(x, y)) continue;
             if (treeSpots.occupied(x, y, INFILL_TREE_MIN_GAP_M)) continue;
             if (furnitureSpots.occupied(x, y, FURNITURE_CLEAR_M)) continue;
+            // 1.2 m outside THIS road's kerb is the middle of the road it
+            // crosses (CW-75). The infill stream plants nothing on tarmac.
+            if (inRoadway(x, y, TRUNK_SIDE_M / 2)) {
+              treesSkippedInRoad++;
+              continue;
+            }
             const h = TRUNK_SIDE_M / 2;
             if (
               isBlocked(x, y) ||
@@ -5742,7 +5976,7 @@ export function buildStreetProps(model, collision = null) {
           }
         }
 
-        if (carRng && carOffset >= 0.8) {
+        if (carRng && lanes.parks) {
           const ox = nx * carOffset * side;
           const oy = ny * carOffset * side;
           const maxHalfLen = CAR_CLASSES[0].lenM / 2;
@@ -5783,6 +6017,19 @@ export function buildStreetProps(model, collision = null) {
             }
             if (!clear) continue;
 
+            const box = {
+              x,
+              y,
+              halfLengthM: hl,
+              halfWidthM: hw,
+              rotationRad: angle,
+              stream: 'parked',
+            };
+            if (carBoxes.overlaps(box)) {
+              carsRefusedOverlap++;
+              continue;
+            }
+
             const tier = CAR_TIERS[seed % CAR_TIERS.length];
             const hue = TINT_HUES_DEG[(seed >>> 5) % TINT_HUES_DEG.length];
             const bodyTint = tintOf(tier, hue, CAR_CHROMA);
@@ -5804,6 +6051,9 @@ export function buildStreetProps(model, collision = null) {
             );
 
             carSpots.add(x, y);
+            carBoxes.add(box);
+            parkedCount++;
+            carFootprints.push(box);
             obstacles.push({
               x,
               y,
@@ -6244,6 +6494,12 @@ export function buildStreetProps(model, collision = null) {
     /** CW-45: where each figure stands and its pose - deterministic per
      * city; the proof-gate driver and the e2e counts read this. */
     figureSpots,
+    /**
+     * CW-75: the rectangle every car occupies, `stream` telling parked from
+     * frozen traffic. The placement audit and its census read this.
+     * @type {Array<{x:number, y:number, halfLengthM:number, halfWidthM:number, rotationRad:number, stream:'parked'|'traffic'}>}
+     */
+    carFootprints,
     obstacles,
     /**
      * The map view is a clean street network seen from a kilometer up:
@@ -6267,8 +6523,17 @@ export function buildStreetProps(model, collision = null) {
       plantingPlaced,
       birdsPlaced,
       fallbackPlanters,
-      carCount: carSpots.size,
+      carCount: parkedCount,
       lampCount: lampSpots.size,
+      // CW-75: what the road-ribbon index cost each stream, so a census can
+      // show the placement audit moved only what it claimed to move.
+      treesDemoted,
+      treesDropped,
+      treesSkippedInRoad,
+      lampsSkippedInRoad,
+      peopleSkippedInRoad,
+      roadsWithoutParking,
+      carsRefusedOverlap,
       // CW-43: what actually stands in the city, per class — the model's
       // own counts minus anything out of core or inside a building.
       furnitureCount: furnitureSpots.size,

@@ -381,6 +381,225 @@ export function isPavementWay(road) {
 }
 
 /**
+ * Whether a way is drawn as a ROADWAY - the ribbon a car drives on and a
+ * lamp post must not stand in (CW-75).
+ *
+ * It is the same test the surface grid above makes and the same one
+ * `city-scene.js` makes when it lays the road ribbons down, said once so the
+ * placement audit cannot disagree with the thing it audits.
+ *
+ * @param {{sidewalk?: boolean, kind?: string}} road
+ * @returns {boolean}
+ */
+export function isDrawnRoadway(road) {
+  return !isPavementWay(road) && !UNPAVED_FOR_SURFACE.has(road?.kind);
+}
+
+/** The four corners of one of these rectangles, in order. */
+function rectCorners(rect) {
+  const c = Math.cos(rect.rotationRad ?? 0);
+  const s = Math.sin(rect.rotationRad ?? 0);
+  const hl = rect.halfLengthM ?? 0;
+  const hw = rect.halfWidthM ?? 0;
+  const out = [];
+  for (const [u, v] of [
+    [hl, hw],
+    [hl, -hw],
+    [-hl, -hw],
+    [-hl, hw],
+  ]) {
+    out.push(rect.x + u * c - v * s, rect.y + u * s + v * c);
+  }
+  return out;
+}
+
+/**
+ * Whether two rotated rectangles overlap - separating axis, exact (CW-75).
+ *
+ * Touching is NOT overlapping: two cars parked nose to tail with their
+ * bumpers on the same line are legal, and the test says so, because the
+ * alternative is a floating-point coin toss on every kerb in the city.
+ *
+ * The one implementation. The placement streams use it to refuse a spot, and
+ * `scripts/census-city-walk.mjs` uses it to audit them - two copies of a
+ * geometry test is how a census comes to disagree with the build for a reason
+ * that is not a bug.
+ *
+ * @param {{x:number, y:number, halfLengthM:number, halfWidthM:number, rotationRad?:number}} a
+ * @param {{x:number, y:number, halfLengthM:number, halfWidthM:number, rotationRad?:number}} b
+ * @returns {boolean}
+ */
+export function rectsOverlap(a, b) {
+  const pa = rectCorners(a);
+  const pb = rectCorners(b);
+  for (const quad of [pa, pb]) {
+    for (let i = 0; i < 8; i += 2) {
+      const j = (i + 2) % 8;
+      const axX = -(quad[j + 1] - quad[i + 1]);
+      const axY = quad[j] - quad[i];
+      let aMin = Infinity;
+      let aMax = -Infinity;
+      let bMin = Infinity;
+      let bMax = -Infinity;
+      for (let k = 0; k < 8; k += 2) {
+        const p = pa[k] * axX + pa[k + 1] * axY;
+        if (p < aMin) aMin = p;
+        if (p > aMax) aMax = p;
+        const q = pb[k] * axX + pb[k + 1] * axY;
+        if (q < bMin) bMin = q;
+        if (q > bMax) bMax = q;
+      }
+      if (aMax <= bMin || bMax <= aMin) return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * How far outside a ribbon the index can still answer questions. A segment
+ * registers in every bucket its half-width PLUS this reaches, so a query is
+ * one bucket lookup and still exact.
+ */
+const ROADWAY_SLACK_M = 2;
+
+/**
+ * ★ THE ROAD-RIBBON INDEX (CW-75).
+ *
+ * Every placement stream in `buildStreetProps` used to know about exactly one
+ * road: its own. Infill trees are planted 1.2 m outside THEIR kerb and never
+ * asked whether that spot is in the middle of the street they are crossing,
+ * which is how 735 tree trunks came to stand inside Seattle roadways - a side
+ * street planting into the ribbon of the street it meets. Lamps ride the same
+ * law. A prop cannot be tested against every road by scanning every road, so
+ * the roads are bucketed once and every stream asks the same index.
+ *
+ * The index is pure geometry: no meshes, no model, no random stream. That is
+ * what lets `scripts/census-city-walk.mjs` audit placement with the code's own
+ * answer rather than a second implementation of it.
+ *
+ * @param {Array<{points: number[][], widthM: number, kind?: string, name?: string, sidewalk?: boolean}>} roads
+ * @param {{cellM?: number}} [options]
+ */
+export function buildRoadwayIndex(roads, options = {}) {
+  const cellM = options.cellM ?? 16;
+  /** @type {Map<string, number[]>} */
+  const buckets = new Map();
+  // Flat segment store: six numbers per segment, then the road it came from.
+  /** @type {number[]} */
+  const seg = [];
+  /** @type {Array<{kind?: string, name?: string, widthM: number}>} */
+  const owners = [];
+  let count = 0;
+
+  for (const road of roads ?? []) {
+    if (!isDrawnRoadway(road)) continue;
+    const pts = road?.points ?? [];
+    if (pts.length < 2) continue;
+    count++;
+    const halfW = (road.widthM ?? 0) / 2;
+    if (!(halfW > 0)) continue;
+    const owner = { kind: road.kind, name: road.name, widthM: road.widthM };
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const [x1, y1] = pts[i];
+      const [x2, y2] = pts[i + 1];
+      if (Math.hypot(x2 - x1, y2 - y1) < 1e-6) continue;
+      const index = owners.length;
+      owners.push(owner);
+      seg.push(x1, y1, x2, y2, halfW, 0);
+      const reach = halfW + ROADWAY_SLACK_M;
+      const cx0 = Math.floor((Math.min(x1, x2) - reach) / cellM);
+      const cx1 = Math.floor((Math.max(x1, x2) + reach) / cellM);
+      const cy0 = Math.floor((Math.min(y1, y2) - reach) / cellM);
+      const cy1 = Math.floor((Math.max(y1, y2) + reach) / cellM);
+      for (let gy = cy0; gy <= cy1; gy++) {
+        for (let gx = cx0; gx <= cx1; gx++) {
+          const k = gx + ',' + gy;
+          const list = buckets.get(k);
+          if (list) list.push(index);
+          else buckets.set(k, [index]);
+        }
+      }
+    }
+  }
+
+  return {
+    /** How many drawn roadway ways went in. */
+    count,
+    /** How many segments went in - the size the buckets index. */
+    segments: owners.length,
+    /**
+     * The roadway a point stands deepest inside, or null.
+     *
+     * `inside` is metres of ribbon between the point and the nearest kerb:
+     * positive means in the road. A NEGATIVE `marginM` asks the wider
+     * question "is this within |marginM| of a roadway", which is how a prop
+     * with a footprint asks whether its box - not just its centre - reaches
+     * the tarmac.
+     *
+     * @param {number} x
+     * @param {number} y
+     * @param {number} [marginM] report only hits deeper than this
+     * @returns {{kind?: string, name?: string, widthM: number, inside: number,
+     *            cx: number, cy: number, nx: number, ny: number}|null}
+     */
+    insideRoadway(x, y, marginM = 0) {
+      if (marginM < -ROADWAY_SLACK_M) {
+        throw new RangeError(
+          `insideRoadway margin ${marginM} reaches past the index's ` +
+            `${ROADWAY_SLACK_M} m slack`
+        );
+      }
+      const list = buckets.get(
+        Math.floor(x / cellM) + ',' + Math.floor(y / cellM)
+      );
+      if (!list) return null;
+      let best = null;
+      for (let k = 0; k < list.length; k++) {
+        const s = list[k] * 6;
+        const ax = seg[s];
+        const ay = seg[s + 1];
+        const dx = seg[s + 2] - ax;
+        const dy = seg[s + 3] - ay;
+        const halfW = seg[s + 4];
+        const l2 = dx * dx + dy * dy;
+        let t = l2 > 0 ? ((x - ax) * dx + (y - ay) * dy) / l2 : 0;
+        if (t < 0) t = 0;
+        else if (t > 1) t = 1;
+        const px = ax + dx * t;
+        const py = ay + dy * t;
+        const d = Math.hypot(x - px, y - py);
+        const inside = halfW - d;
+        if (best && inside <= best.inside) continue;
+        // Which way is out: from the centreline toward the point, or the
+        // segment's own normal when the point sits exactly on the line.
+        let nx = x - px;
+        let ny = y - py;
+        if (d > 1e-6) {
+          nx /= d;
+          ny /= d;
+        } else {
+          const len = Math.hypot(dx, dy) || 1;
+          nx = -dy / len;
+          ny = dx / len;
+        }
+        const owner = owners[list[k]];
+        best = {
+          kind: owner.kind,
+          name: owner.name,
+          widthM: owner.widthM,
+          inside,
+          cx: px,
+          cy: py,
+          nx,
+          ny,
+        };
+      }
+      return best && best.inside > marginM ? best : null;
+    },
+  };
+}
+
+/**
  * Move the walker's ground height toward what is underfoot, at a rate fixed
  * per METRE travelled rather than per second (CW-50). Standing still on a
  * changed surface - a teleport, a spawn - snaps, because there is no step to

@@ -189,8 +189,34 @@ to make. Writing the roadmap down is not the same as starting it.
 A picture that stands still and a picture that is being walked through are two
 different things, and only one of them can be judged from a screenshot. Three
 rounds of this game were steered by stills and by a two-centimetre test step,
-and the walk a player actually does is 4.8 m/s. There are now two instruments,
-and they ask different questions.
+and the walk a player actually does is 4.8 m/s. There are now three
+instruments, and they ask different questions.
+
+**`scripts/census-city-walk.mjs`** asks a different kind of question from the
+other two: not what the picture does, but what is IN it. It builds all four
+cities with the real parser and the real builders and counts what stands where.
+
+```
+node scripts/census-city-walk.mjs
+node scripts/census-city-walk.mjs --cities=seattle --samples=6
+node scripts/census-city-walk.mjs --json=build/census.json
+```
+
+It prints one column per city and a sample of coordinates under the table, so a
+row that says 474 can be followed to the street it is on. The rows that matter:
+
+| row | what a non-zero means |
+|---|---|
+| trunks / lamp posts inside a roadway | a prop standing on the tarmac. Both are counted from the obstacle's own square side, never lumped together: a 0.15 m lamp pole is not a tree, and a count that mixes them is a wrong number with a right shape |
+| traffic vs parked, parked vs parked, traffic vs traffic | two cars occupying the same ground, as a true rotated-rectangle overlap rather than a distance |
+| people in a roadway, no crossing | somebody standing in the road where the map records no crossing |
+| floating buildings, roofs solid from the ground | CW-76's subject, measured here so that release inherits a before number it did not take itself |
+
+**It never re-implements a placement.** Every position it judges comes out of
+the builders themselves - `buildStreetProps` writes down every car it places,
+parked and moving alike - and the overlap test is the one the placement streams
+use to refuse a spot. Two copies of a geometry test is how a census comes to
+disagree with the build for a reason that is not a bug.
 
 **`scripts/stability-city-walk.mjs`** asks whether a nearly still picture
 fractures: it scores a 0.05 degree turn and a two-centimetre creep, which is

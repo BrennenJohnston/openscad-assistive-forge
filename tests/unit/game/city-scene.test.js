@@ -40,6 +40,8 @@ import {
 import {
   buildCollisionGrid,
   pointInRing,
+  buildRoadwayIndex,
+  rectsOverlap,
 } from '../../../src/js/game/walk-controls.js'
 
 const CENTER = { lat: 40, lon: -100 }
@@ -2341,5 +2343,308 @@ describe('pickTravelerSpot (CW-65)', () => {
   it('has nothing to place in a city with no figures at all', () => {
     expect(pickTravelerSpot([], 'seattle', {})).toBeNull()
     expect(pickTravelerSpot(null, 'seattle', {})).toBeNull()
+  })
+})
+
+describe('nothing stands in the road (CW-75)', () => {
+  // An 8 m residential street east-west along y = 0, crossed by a 12 m
+  // secondary north-south at x = 40, with buildings far enough away that
+  // the collision grid never decides anything on its own.
+  function crossroadsModel(extraElements = []) {
+    return parseCityExtract(
+      {
+        elements: [
+          {
+            type: 'way',
+            id: 1,
+            tags: { building: 'yes', height: '20' },
+            geometry: squareRing(-120, -120, 6),
+          },
+          {
+            type: 'way',
+            id: 2,
+            tags: { building: 'yes', height: '20' },
+            geometry: squareRing(120, 120, 6),
+          },
+          {
+            type: 'way',
+            id: 3,
+            tags: { highway: 'residential' },
+            geometry: [pt(-100, 0), pt(100, 0)],
+          },
+          {
+            type: 'way',
+            id: 4,
+            tags: { highway: 'secondary' },
+            geometry: [pt(40, -100), pt(40, 100)],
+          },
+          ...extraElements,
+        ],
+      },
+      { center: CENTER }
+    )
+  }
+
+  /** Every rectangle a build placed a car in, parked and moving alike. */
+  function overlappingCarPairs(props, wanted) {
+    const cars = props.carFootprints
+    let pairs = 0
+    for (let i = 0; i < cars.length; i++) {
+      for (let j = i + 1; j < cars.length; j++) {
+        if (wanted && !wanted(cars[i], cars[j])) continue
+        if (rectsOverlap(cars[i], cars[j])) pairs++
+      }
+    }
+    return pairs
+  }
+
+  it('steps a mapped tree in the roadway back onto its own pavement', () => {
+    // A tree node the map puts 1 m off the residential centreline - inside
+    // an 8 m ribbon by 3 m, on the north side.
+    const m = crossroadsModel([
+      { type: 'node', id: 90, tags: { natural: 'tree' }, ...pt(-20, 1) },
+    ])
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+
+    expect(props.stats.treesDemoted).toBe(1)
+    expect(props.stats.treesDropped).toBe(0)
+    // It kept the side of the street it was already on, and landed on the
+    // pavement: the kerb is 4 m out, the tree line 1.2 m beyond that.
+    const halfM = ROAD_WIDTHS_M.residential / 2
+    expect(
+      hasVertexNear(props.group, 'tree-trunks', -20, halfM + 1.2, 0.3)
+    ).toBe(true)
+    expect(hasVertexNear(props.group, 'tree-trunks', -20, 1, 0.3)).toBe(false)
+
+    props.dispose()
+  })
+
+  it('drops a mapped tree with no pavement to take it, and counts it', () => {
+    // In the middle of the junction, where stepping out of the residential
+    // ribbon only lands inside the secondary one.
+    const m = crossroadsModel([
+      { type: 'node', id: 91, tags: { natural: 'tree' }, ...pt(40, 0) },
+    ])
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+
+    expect(props.stats.treesDropped).toBe(1)
+    expect(props.stats.treesDemoted).toBe(0)
+    expect(hasVertexNear(props.group, 'tree-trunks', 40, 0, 1)).toBe(false)
+
+    props.dispose()
+  })
+
+  it('plants no trunk and stands no pole on tarmac', () => {
+    const m = crossroadsModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    const roadways = buildRoadwayIndex(m.roads)
+
+    for (const o of props.obstacles) {
+      const side = o.halfLengthM * 2
+      const square = Math.abs(o.halfLengthM - o.halfWidthM) < 1e-6
+      if (!square || side > 0.7) continue
+      expect(roadways.insideRoadway(o.x, o.y, -side / 2)).toBeNull()
+    }
+    // The junction is where the streams cross, so it has to have refused
+    // something - a guard that never fires proves nothing (CW-73).
+    expect(
+      props.stats.treesSkippedInRoad + props.stats.lampsSkippedInRoad
+    ).toBeGreaterThan(0)
+
+    props.dispose()
+  })
+
+  it('never parks a car where a moving one already is', () => {
+    const m = crossroadsModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+
+    expect(props.carFootprints.length).toBeGreaterThan(0)
+    expect(props.carFootprints.some((c) => c.stream === 'traffic')).toBe(true)
+    expect(props.carFootprints.some((c) => c.stream === 'parked')).toBe(true)
+    expect(overlappingCarPairs(props, (a, b) => a.stream !== b.stream)).toBe(0)
+    expect(overlappingCarPairs(props)).toBe(0)
+
+    props.dispose()
+  })
+
+  it('gives an 8 m street one shared lane, clear of the parked rows', () => {
+    const m = crossroadsModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+
+    // Residential traffic runs along y = 0; the road is 8 m, so its free
+    // strip either side of the centreline is 1.5 m - one car wide only.
+    const onResidential = props.carFootprints.filter(
+      (c) => Math.abs(c.y) < ROAD_WIDTHS_M.residential / 2 && c.x < 30
+    )
+    const traffic = onResidential.filter((c) => c.stream === 'traffic')
+    const parked = onResidential.filter((c) => c.stream === 'parked')
+    expect(traffic.length).toBeGreaterThan(0)
+    expect(parked.length).toBeGreaterThan(0)
+    for (const car of traffic) expect(Math.abs(car.y)).toBeCloseTo(0, 6)
+    // ...and the parked rows keep the place they have always had.
+    const parkedOffset = ROAD_WIDTHS_M.residential / 2 - 0.5 - 1
+    for (const car of parked) {
+      expect(Math.abs(car.y)).toBeCloseTo(parkedOffset, 6)
+    }
+    // Which is the whole point: a lane and a bay, not one slot for both.
+    expect(parkedOffset - 1).toBeGreaterThanOrEqual(1)
+
+    props.dispose()
+  })
+
+  it('parks nobody on a 6 m living street, and says how many', () => {
+    const m = parseCityExtract(
+      {
+        elements: [
+          {
+            type: 'way',
+            id: 1,
+            tags: { building: 'yes', height: '20' },
+            geometry: squareRing(-800, -800, 6),
+          },
+          {
+            type: 'way',
+            id: 2,
+            tags: { building: 'yes', height: '20' },
+            geometry: squareRing(800, 800, 6),
+          },
+          {
+            // Long enough that a living street's own 4 cars per kilometre
+            // is a number this road can actually show.
+            type: 'way',
+            id: 3,
+            tags: { highway: 'living_street' },
+            geometry: [pt(-700, 0), pt(700, 0)],
+          },
+        ],
+      },
+      { center: CENTER }
+    )
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+
+    // 6 m leaves 2.5 m of tarmac each side of the centreline once the kerb
+    // is taken off - a parking bay would leave a car half a metre of lane.
+    expect(props.stats.roadsWithoutParking).toBe(1)
+    expect(props.stats.carCount).toBe(0)
+    // It is still a street, so it still carries traffic.
+    expect(props.frozenTrafficCount).toBeGreaterThan(0)
+
+    props.dispose()
+  })
+
+  it('stands nobody in the road unless the map maps a crossing there', () => {
+    const m = crossroadsModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    const roadways = buildRoadwayIndex(m.roads)
+
+    expect(props.figureSpots.length).toBeGreaterThan(0)
+    for (const f of props.figureSpots) {
+      expect(roadways.insideRoadway(f.x, f.y, 0)).toBeNull()
+    }
+    expect(props.stats.peopleSkippedInRoad).toBeGreaterThan(0)
+
+    props.dispose()
+  })
+
+  it('lets somebody stand in the road where a crossing IS mapped', () => {
+    const plain = crossroadsModel()
+    const withCrossing = crossroadsModel([
+      { type: 'node', id: 92, tags: { highway: 'crossing' }, ...pt(40, 0) },
+    ])
+    const before = buildStreetProps(plain, buildCollisionGrid(plain))
+    const after = buildStreetProps(
+      withCrossing,
+      buildCollisionGrid(withCrossing)
+    )
+
+    // One mapped crossing is the only difference, and it buys back people
+    // the junction had been refusing.
+    expect(after.stats.peopleSkippedInRoad).toBeLessThan(
+      before.stats.peopleSkippedInRoad
+    )
+
+    before.dispose()
+    after.dispose()
+  })
+})
+
+describe('a side street sharing a corridor with an arterial (CW-75)', () => {
+  // ★ The shape the census found 373 Seattle lamp poles standing in: two
+  // ways whose ribbons overlap end to end, most of them along the I-5
+  // trench. A lamp planted 0.45 m outside ITS road's kerb is metres inside
+  // the next one's, and a parked slot measured off ITS kerb is somebody
+  // else's travel lane. One crossing at a junction cannot show either; a
+  // shared corridor shows both on every metre of it.
+  function corridorModel(mainTags, sideY) {
+    return parseCityExtract(
+      {
+        elements: [
+          {
+            type: 'way',
+            id: 1,
+            tags: { building: 'yes', height: '20' },
+            geometry: squareRing(-300, -300, 6),
+          },
+          {
+            type: 'way',
+            id: 2,
+            tags: { building: 'yes', height: '20' },
+            geometry: squareRing(300, 300, 6),
+          },
+          {
+            type: 'way',
+            id: 3,
+            tags: mainTags,
+            geometry: [pt(-200, 0), pt(200, 0)],
+          },
+          {
+            type: 'way',
+            id: 4,
+            tags: { highway: 'residential' },
+            geometry: [pt(-200, sideY), pt(200, sideY)],
+          },
+        ],
+      },
+      { center: CENTER }
+    )
+  }
+
+  it('stands no pole in the roadway running alongside', () => {
+    // A residential street 9 m off a 14 m primary: the residential lamp line
+    // at 4.45 m is 4.55 m inside the primary's ribbon.
+    const m = corridorModel({ highway: 'primary' }, 9)
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    const roadways = buildRoadwayIndex(m.roads)
+
+    expect(props.stats.lampsSkippedInRoad).toBeGreaterThan(0)
+    for (const o of props.obstacles) {
+      const side = o.halfLengthM * 2
+      if (Math.abs(o.halfLengthM - o.halfWidthM) > 1e-6) continue
+      if (Math.abs(side - 0.15) > 0.005) continue
+      expect(roadways.insideRoadway(o.x, o.y, -side / 2)).toBeNull()
+    }
+
+    props.dispose()
+  })
+
+  it('refuses a parked slot a moving car already fills', () => {
+    // The primary's outer travel lane runs at 3.25 m; a residential street
+    // at 5.75 m puts its near parked row on exactly that line. The primary
+    // parks nobody, so nothing but the footprint registry stands between
+    // the two.
+    const m = corridorModel({ highway: 'primary' }, 5.75)
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+
+    expect(props.stats.carsRefusedOverlap).toBeGreaterThan(0)
+    const cars = props.carFootprints
+    let pairs = 0
+    for (let i = 0; i < cars.length; i++) {
+      for (let j = i + 1; j < cars.length; j++) {
+        if (rectsOverlap(cars[i], cars[j])) pairs++
+      }
+    }
+    expect(pairs).toBe(0)
+
+    props.dispose()
   })
 })

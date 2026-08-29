@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Nothing stands in the road** (CW-75) - a tree, a lamp post or a person was placed relative to one
+  street and never asked whether that spot was in the middle of the street it crosses. 474 tree
+  trunks and 373 lamp posts stood on the tarmac in Seattle alone, and hundreds more across the other
+  three cities. Every prop is now tested against every roadway. A tree the map records inside a
+  roadway steps back onto the pavement on its own side of the street, and is only dropped where there
+  is no pavement to take it. Nobody stands in the road unless the map records a crossing there
+
+- **Cars no longer drive through parked cars** (CW-75) - a moving car sat a fixed 1.6 metres in from
+  the kerb and a parked car 1.5 metres, which put the two of them 10 centimetres apart on every kind
+  of street this game parks on: 637 pairs of cars occupied the same ground in Seattle, the nearest of
+  them six metres from where the player starts. The travel lane is now worked out from the road's own
+  width, so a wide street gets a lane each way and a narrow one gets a single shared lane down the
+  middle, with the parked rows left exactly where they were. A street too narrow to hold both a
+  parking bay and a travel lane carries no parked cars
+
 - **A building's ground floor is what the map says it is** (CW-74) - the game decided what kind of
   shopfront a building had by looking for a cafe or a shop pinned within 35 metres of it, and never
   looked at the building itself. So the Central Library, which the map plainly labels a library, got
@@ -62,6 +77,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it had been sitting in
 
 ### Added
+
+- **A placement census you can run** (CW-75) - `node scripts/census-city-walk.mjs` builds all four
+  cities with the real parser and builders and counts what stands where: props per stream, trunks and
+  lamp posts inside a roadway, cars overlapping cars, people in the road away from a crossing,
+  buildings that float and roofs drawn from the ground up
 
 - **Colour mode can say "this cell is dim" for the first time** (CW-71) - monochrome has an intensity
   ladder, so a dim cell is drawn dim and an empty one empty: three to seven per cent of a monochrome

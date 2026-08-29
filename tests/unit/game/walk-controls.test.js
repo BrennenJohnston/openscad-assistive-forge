@@ -48,6 +48,9 @@ import {
   CHAR_SCALE_MAX,
   CHAR_SCALE_STEP,
   CHAR_SCALE_DEFAULT,
+  buildRoadwayIndex,
+  isDrawnRoadway,
+  rectsOverlap,
 } from '../../../src/js/game/walk-controls.js'
 import {
   parseCityExtract,
@@ -1340,5 +1343,131 @@ describe('the ground underfoot (CW-50)', () => {
       ROAD_WIDTHS_M.residential / 2 + PAVEMENT_WIDTH_M
     )
     expect(state.groundZ).toBe(-CURB_HEIGHT_M)
+  })
+})
+
+describe('the road-ribbon index (CW-75)', () => {
+  // An 8 m residential street running east-west along y = 0, and a 12 m
+  // secondary crossing it north-south at x = 40.
+  const roads = [
+    {
+      points: [
+        [-50, 0],
+        [100, 0],
+      ],
+      widthM: ROAD_WIDTHS_M.residential,
+      kind: 'residential',
+      name: 'Main Street',
+    },
+    {
+      points: [
+        [40, -50],
+        [40, 50],
+      ],
+      widthM: ROAD_WIDTHS_M.secondary,
+      kind: 'secondary',
+      name: 'Cross Avenue',
+    },
+  ]
+
+  it('rejects a trunk 0.5 m inside a ribbon and accepts one 0.3 m outside', () => {
+    const index = buildRoadwayIndex(roads)
+    const halfM = ROAD_WIDTHS_M.residential / 2
+
+    // 0.5 m inside the kerb line.
+    const inside = index.insideRoadway(0, halfM - 0.5, 0)
+    expect(inside).not.toBeNull()
+    expect(inside.inside).toBeCloseTo(0.5, 6)
+    expect(inside.kind).toBe('residential')
+    expect(inside.name).toBe('Main Street')
+
+    // 0.3 m outside it.
+    expect(index.insideRoadway(0, halfM + 0.3, 0)).toBeNull()
+  })
+
+  it('answers for a footprint, not only for a centre point', () => {
+    const index = buildRoadwayIndex(roads)
+    const halfM = ROAD_WIDTHS_M.residential / 2
+    // A 0.3 m trunk standing 0.1 m clear of the kerb still has its box on
+    // the tarmac; one standing 0.2 m clear does not.
+    expect(index.insideRoadway(0, halfM + 0.1, -0.15)).not.toBeNull()
+    expect(index.insideRoadway(0, halfM + 0.2, -0.15)).toBeNull()
+  })
+
+  it('reports the ribbon a point is DEEPEST inside where two overlap', () => {
+    const index = buildRoadwayIndex(roads)
+    // In the junction, on the residential centreline and 1 m off the
+    // secondary's: 4 m of residential over it, 5 m of secondary.
+    const hit = index.insideRoadway(39, 0, 0)
+    expect(hit.kind).toBe('secondary')
+    expect(hit.inside).toBeCloseTo(ROAD_WIDTHS_M.secondary / 2 - 1, 6)
+  })
+
+  it('points its normal from the centreline out toward the prop', () => {
+    const index = buildRoadwayIndex(roads)
+    const hit = index.insideRoadway(10, 1.5, 0)
+    expect(hit.cx).toBeCloseTo(10, 6)
+    expect(hit.cy).toBeCloseTo(0, 6)
+    expect(hit.nx).toBeCloseTo(0, 6)
+    expect(hit.ny).toBeCloseTo(1, 6)
+  })
+
+  it('does not call a pedestrianised street or a pavement a roadway', () => {
+    // ★ The premise this release had to correct. The planning census counted
+    // pedestrian ways as roadways and reported 735 Seattle trunks standing in
+    // one; the scene draws a pedestrian street as pavement end to end
+    // (CW-Q64), and under the scene's own rule the count is 474. A third of
+    // the "trees in the road" were street trees on a pedestrian street.
+    expect(isDrawnRoadway({ kind: 'pedestrian', widthM: 8 })).toBe(false)
+    expect(isDrawnRoadway({ kind: 'footway', sidewalk: true, widthM: 1.8 })).toBe(
+      false
+    )
+    expect(isDrawnRoadway({ kind: 'residential', widthM: 8 })).toBe(true)
+
+    const pedestrian = buildRoadwayIndex([
+      {
+        points: [
+          [-50, 0],
+          [50, 0],
+        ],
+        widthM: ROAD_WIDTHS_M.pedestrian,
+        kind: 'pedestrian',
+      },
+    ])
+    expect(pedestrian.count).toBe(0)
+    expect(pedestrian.insideRoadway(0, 0, 0)).toBeNull()
+  })
+
+  it('refuses a margin that reaches past its own slack', () => {
+    const index = buildRoadwayIndex(roads)
+    expect(() => index.insideRoadway(0, 0, -8)).toThrow(RangeError)
+  })
+})
+
+describe('rectsOverlap (CW-75)', () => {
+  const car = (x, y, rot = 0) => ({
+    x,
+    y,
+    halfLengthM: 2.5,
+    halfWidthM: 1,
+    rotationRad: rot,
+  })
+
+  it('is false for cars nose to tail, true once they share ground', () => {
+    expect(rectsOverlap(car(0, 0), car(5, 0))).toBe(false)
+    expect(rectsOverlap(car(0, 0), car(4.9, 0))).toBe(true)
+  })
+
+  it('is false for cars in neighbouring lanes, however close along', () => {
+    // 2 m apart across is exactly touching for two 1 m half-widths.
+    expect(rectsOverlap(car(0, 0), car(0.5, 2))).toBe(false)
+    expect(rectsOverlap(car(0, 0), car(0.5, 1.9))).toBe(true)
+  })
+
+  it('sees a crossing car that no axis-aligned box test would', () => {
+    // Broadside across the first car's nose: neither car's own axes
+    // separate them.
+    expect(rectsOverlap(car(0, 0), car(2, 0, Math.PI / 2))).toBe(true)
+    expect(rectsOverlap(car(0, 0), car(4, 0, Math.PI / 2))).toBe(false)
   })
 })
