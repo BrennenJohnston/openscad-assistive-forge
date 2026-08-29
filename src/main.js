@@ -5340,6 +5340,21 @@ async function initApp() {
     shortcutsBtn.addEventListener('click', _openShortcutsModal);
   }
 
+  // ── The drawing editor takes the preview area (DP-19) ─────────────────
+  // The editor says it is opening; what that means for the 3D canvas is the
+  // preview's business, and this is the one place that knows both.
+  // Looked up at the moment, not at boot: the preview's init() rebuilds its
+  // container, and the element that was there before it is not the one that
+  // is there after.
+  const drawingEditorSurface = () =>
+    document.getElementById('drawingEditorSurface');
+  window.addEventListener('drawing-editor:open', () => {
+    previewManager?.showEditorSurface?.(drawingEditorSurface());
+  });
+  window.addEventListener('drawing-editor:close', () => {
+    previewManager?.hideEditorSurface?.(drawingEditorSurface());
+  });
+
   // Declare format selector elements
   const outputFormatSelect = document.getElementById('outputFormat');
 
@@ -16563,6 +16578,19 @@ if (typeof window !== 'undefined') {
      */
     previewColorScheme() {
       return previewManager?.currentTheme ?? null;
+    },
+
+    /**
+     * Where the active camera is (DP-19). A spec has to be able to prove
+     * that a key pressed inside the drawing editor did NOT move the model
+     * behind it, and a screenshot of a hidden canvas cannot say so.
+     * @returns {{x: number, y: number, z: number}|null}
+     */
+    cameraPosition() {
+      const camera = previewManager?.getActiveCamera?.();
+      if (!camera?.position) return null;
+      const { x, y, z } = camera.position;
+      return { x, y, z };
     },
 
     /**

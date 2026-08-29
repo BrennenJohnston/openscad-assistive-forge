@@ -818,6 +818,45 @@ export function serialisePlan(plan, regions = []) {
 }
 
 /**
+ * Lay a saved plan back over regions that were just found again.
+ *
+ * The regions the editor assigned and the regions the plate builder finds
+ * are the same shapes read by the same code, so their KEYS match - and when
+ * a key does not (a drawing edited between save and reopen), a filled region
+ * still has its element index, and a region neither matches goes back to the
+ * base. Nothing here is silently invented: the palette and the order are the
+ * person's, and every region gets exactly one of the colours in it.
+ *
+ * @param {object|string|null} saved - As `serialisePlan` wrote it
+ * @param {Array<object>} regions - As `buildRegions` found them
+ * @returns {{palette: Array, order: Array<string>, assignment: object,
+ *   rule: string, lineMode: string}|null} Null when there is nothing usable
+ */
+export function applySavedPlan(saved, regions) {
+  const plan = parsePlan(saved);
+  if (!plan || plan.palette.length === 0) return null;
+  const ids = new Set(plan.palette.map((c) => c.id));
+  const base = ids.has(BASE_COLOUR_ID) ? BASE_COLOUR_ID : plan.palette[0].id;
+  const usable = (v) => v === UNPAINTED || v === REMOVED || ids.has(v);
+  const assignment = {};
+  for (const r of regions || []) {
+    const byKey = plan.assignment[r.key];
+    const byElement =
+      r.elementIndex === null || r.elementIndex === undefined
+        ? undefined
+        : plan.byElement[r.elementIndex];
+    assignment[r.key] = [byKey, byElement].find(usable) || base;
+  }
+  return {
+    palette: plan.palette,
+    order: plan.order.filter((id) => ids.has(id)),
+    assignment,
+    rule: plan.rule,
+    lineMode: plan.lineMode,
+  };
+}
+
+/**
  * A saved plan back into one this module can use. Anything unreadable comes
  * back as null rather than as a plan with silent holes in it.
  *

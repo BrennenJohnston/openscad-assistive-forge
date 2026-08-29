@@ -522,7 +522,7 @@ jobs:
         # the board, but the packing works off the RATIOS between files, and
         # those are a property of what the tests do rather than of the browser.
         run: |
-          FILES=$(node scripts/e2e-shard.mjs ${{ matrix.shard }} 2)
+          FILES=$(node scripts/e2e-shard.mjs ${{ matrix.shard }} 2 msedge)
           echo "shard ${{ matrix.shard }}/2 runs: $FILES"
           npx playwright test --project=msedge $FILES
         env:
@@ -645,7 +645,7 @@ jobs:
       
       - name: Run E2E tests (Firefox shard ${{ matrix.shard }} of 2)
         run: |
-          FILES=$(node scripts/e2e-shard.mjs ${{ matrix.shard }} 2)
+          FILES=$(node scripts/e2e-shard.mjs ${{ matrix.shard }} 2 firefox)
           echo "shard ${{ matrix.shard }}/2 runs: $FILES"
           npx playwright test --project=firefox $FILES
         env:

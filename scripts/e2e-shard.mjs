@@ -236,10 +236,55 @@ export const MEASURED_SECONDS = {
   // to be a CI one, so this is booked at three times what was measured and
   // re-weighted from a green CI run at the round's close.
   'stencil-plates.spec.js': 60.0,
+  // DP-19. ONE case, one load of the stencil tile, seven walks on it:
+  // MEASURED locally at 8.5 s on a warm engine, booked at the same four-times
+  // ratio stencil-plates carries (14.5 measured, 60 booked). It was seven
+  // cases at first; the two-shard lanes (Edge, Firefox) were a third of a
+  // minute from their 35-minute ceiling before this file existed, and the
+  // walks were folded onto one page rather than the lane pushed over.
+  // Re-weighted from a green CI run at the round's close.
+  'drawing-editor.spec.js': 35.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */
 export const DEFAULT_WEIGHT_S = 60;
+
+/**
+ * Spec files a browser lane does NOT run, by Playwright project name.
+ *
+ * ONE source of truth: playwright.config.js builds each project's
+ * `testIgnore` from this table, and the planner leaves these files out of
+ * that project's shards and out of its projection, so a lane is booked for
+ * what it will actually run. Before this, wasm-smoke was ignored on Firefox
+ * by the config and still charged to Firefox's shards by the planner.
+ *
+ * ★ drawing-editor.spec.js (DP-19) runs on Chromium only. MEASURED before it
+ * was written: the two-shard lanes (Edge, Firefox) projected to 34.8 of their
+ * 35 minutes with nothing added, so no honest weight for a new file fits -
+ * 35 s, its measured cost scaled the way stencil-plates is, put the lane at
+ * 35.1. Edge cannot be re-split without the owner editing ruleset 12059827
+ * (on the owner ledger). The editor's walk is DOM and keyboard behaviour the
+ * Chromium lane covers on three shards; the door's twelve cases still run
+ * everywhere. Reverse: delete the two entries once the lanes are re-split.
+ */
+export const PROJECT_IGNORES = Object.freeze({
+  chromium: [],
+  msedge: ['drawing-editor.spec.js'],
+  firefox: ['wasm-smoke.spec.js', 'drawing-editor.spec.js'],
+});
+
+/**
+ * The spec files a project runs: everything under tests/e2e, less what the
+ * table above says it leaves out. An unknown project name runs everything.
+ *
+ * @param {string[]} files - every spec file name
+ * @param {string} [project] - Playwright project name
+ * @returns {string[]}
+ */
+export function filesForProject(files, project) {
+  const skip = new Set(PROJECT_IGNORES[project] || []);
+  return files.filter((f) => !skip.has(f));
+}
 
 /**
  * Deal the files into `total` shards, heaviest first, each one going to the
@@ -293,12 +338,17 @@ const invokedDirectly =
 if (invokedDirectly) {
   const index = Number(process.argv[2]);
   const total = Number(process.argv[3]);
+  // Optional: the Playwright project the shard is for, so files that
+  // project does not run are not dealt into it.
+  const project = process.argv[4] || 'chromium';
   if (!Number.isInteger(index) || index < 1 || index > total) {
-    console.error('usage: node scripts/e2e-shard.mjs <shard> <total>');
+    console.error(
+      'usage: node scripts/e2e-shard.mjs <shard> <total> [project]'
+    );
     process.exit(2);
   }
   const dir = path.resolve('tests/e2e');
-  const files = listSpecFiles(dir);
+  const files = filesForProject(listSpecFiles(dir), project);
   if (files.length === 0) {
     console.error(
       `no spec files under ${dir} - refusing to run an empty shard`

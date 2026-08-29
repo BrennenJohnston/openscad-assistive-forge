@@ -143,6 +143,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The drawing editor now lives where the 3D preview is** (DP-19) - it used to be a block nested
+  inside the customizer's file control, a long flat list with a before-and-after pair above it.
+  Now it takes the preview area, the biggest surface on the page and on a phone the whole of it:
+  a toolbar across the top, the drawing in the middle, and a side panel of collapsible sections
+  beside it (Colours, Regions, Plates and paint order, Warnings), each a native disclosure that
+  opens from the keyboard. The customizer stays one Tab away, the arrow keys you use inside the
+  editor no longer turn the model behind it, and Escape gives the area back. On the Stencil
+  Maker the editor reads a drawing into REGIONS, the faces between the lines, one row each with
+  a colour to choose, the plate that paints it and its share of the drawing; you can add a
+  colour, give it to a region, and when you apply, that colour comes out as a plate. A drawing
+  with no colours of its own, like a line drawing from a CAD program, used to be waved through
+  with "OpenSCAD merges these automatically", which is how one user's cat came out as a single
+  silhouette hole; on a stencil tile it now opens the editor by itself and says what it found:
+  "21 regions found, no colours yet: every one starts as the base coat." The editor's own door
+  on the welcome screen hosts the same surface over the whole page. The editing itself - roles,
+  layers, deleting shapes and undoing it, the render tiers - is the same tested code as before,
+  mounted inside the new surface rather than rewritten. Behind the scenes the editor is loaded
+  the first time it opens, so a project that never opens it never downloads it, and the tests
+  for the editor's own walk run on Chromium only, because the Edge and Firefox lanes were
+  within a third of a minute of their time ceiling before this release existed
+
 - **A set of real stencil plates to check Forge's own against** (DP-15) - one of this project's
   users made a six-plate spray stencil of their cat by hand, drawing it in Illustrator, cutting
   the plates in Fusion 360 and painting the result, and has contributed the drawing and the seven

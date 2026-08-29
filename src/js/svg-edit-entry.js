@@ -15,7 +15,6 @@
  * @license GPL-3.0-or-later
  */
 
-import { createSvgPrepWorkspace } from './svg-preparer-workspace.js';
 import { analyzeSvg } from './svg-preparer.js';
 import {
   convertImageDataToSvg,
@@ -190,13 +189,25 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
     say(message);
   };
 
-  function ensureWorkspace() {
+  /**
+   * The editor surface, hosted over the whole page. With no model behind it
+   * there is nothing for a person to Tab out to, so this is the one host that
+   * traps focus, and Escape is the way out (DP-19).
+   */
+  async function ensureWorkspace() {
+    if (workspace) return workspace;
+    const { createDrawingEditor } = await import('./drawing-editor/surface.js');
     if (workspace) return workspace;
     container = document.createElement('div');
-    container.className = 'svg-edit-standalone-host';
+    container.className = 'svg-edit-standalone-host drawing-editor-host';
     container.id = 'svgEditStandaloneHost';
+    container.hidden = true;
     document.body.appendChild(container);
-    workspace = createSvgPrepWorkspace(container);
+    workspace = createDrawingEditor({
+      surfaceEl: container,
+      fullscreen: true,
+      announce: say,
+    });
     return workspace;
   }
 
@@ -205,7 +216,7 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
    * after an ink setting changes.
    * @returns {boolean} false when the SVG has nothing the editor can work on
    */
-  function showSvg(svg, { announceOpen, summary } = {}) {
+  async function showSvg(svg, { announceOpen, summary } = {}) {
     let analysis;
     try {
       analysis = analyzeSvg(svg);
@@ -234,11 +245,15 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
       return false;
     }
 
-    const ws = ensureWorkspace();
+    const ws = await ensureWorkspace();
     ws.open(svg, analysis, {
+      purpose: 'relief',
       mode: 'file',
       sourceName: currentFileName,
       tools: inkControls ? inkControls.element : null,
+      // The surface announces its own opening; the door's sentence, which
+      // names the file and counts its shapes, is the one worth hearing.
+      openedSentence: announceOpen || undefined,
       onSave: (savedName) => {
         say(`${savedName} saved. Your original file is untouched.`);
       },
@@ -247,15 +262,9 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
       },
       onSaveDxf: typeof render === 'function' ? saveAsDxf : undefined,
     });
-    if (!open) {
-      // With no model behind it this is the whole screen's task, so it opens
-      // expanded: that is also where the editor's own focus trap lives.
-      ws.openFullscreen();
-    }
     open = true;
 
     if (inkControls) inkControls.setSummary(summary, shapeCount);
-    if (announceOpen) say(announceOpen);
     return true;
   }
 
@@ -314,7 +323,7 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
       const { svg, summary } = await convertImageDataToSvg(currentImageData, {
         ink: settings,
       });
-      showSvg(svg, { summary });
+      await showSvg(svg, { summary });
     } catch (error) {
       fail(`Forge could not re-read ${currentFileName}: ${error.message}`);
     } finally {

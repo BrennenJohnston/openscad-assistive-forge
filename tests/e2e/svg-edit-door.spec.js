@@ -189,13 +189,16 @@ test.describe('The drawing editor door', () => {
     // The door is the first stop inside the disclosure, not buried in it.
     expect(reach.doorPresses).toBeLessThanOrEqual(2)
 
-    // The editor took focus: its own trap put it on the close button. The trap
-    // hands focus over on a short delay, so this polls rather than racing it.
+    // The editor took focus. RE-PINNED at DP-19: the surface that hosts the
+    // workspace now puts focus on its own name (the "Drawing editor" heading)
+    // rather than on a close button, so a screen reader meets the name of
+    // the thing it just arrived on. The trap hands focus over on a short
+    // delay, so this polls rather than racing it.
     await expect
       .poll(async () => (await focused(page))?.className ?? '', {
         timeout: 10000,
       })
-      .toContain('svg-prep-close-btn')
+      .toContain('drawing-editor-title')
 
     const rows = page.locator('.svg-prep-object')
     const rowCount = await rows.count()

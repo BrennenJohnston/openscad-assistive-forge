@@ -3,7 +3,9 @@ import path from 'node:path'
 import {
   MEASURED_SECONDS,
   DEFAULT_WEIGHT_S,
+  PROJECT_IGNORES,
   planShards,
+  filesForProject,
   listSpecFiles,
 } from '../../scripts/e2e-shard.mjs'
 
@@ -86,14 +88,35 @@ describe('e2e shard planner (D-72)', () => {
     // it does is refuse to let the lane quietly cross the real ceiling, and
     // name the margin when it is asked.
     const CEILING_MIN = 35
-    for (const shard of planShards(files, MEASURED_SECONDS, 2)) {
-      const wallMin = projectMin(shard)
-      expect(
-        wallMin,
-        `a two-shard lane projects to ${wallMin.toFixed(1)} minutes, ` +
-          `${(CEILING_MIN - wallMin).toFixed(1)} short of the ceiling`
-      ).toBeLessThan(CEILING_MIN)
+    // Each lane is booked for what IT runs (DP-19): Firefox leaves out
+    // wasm-smoke, and both leave out the drawing editor's own walk, because
+    // with nothing added they projected to 34.8 of these 35 minutes.
+    for (const project of ['msedge', 'firefox']) {
+      const lane = filesForProject(files, project)
+      for (const shard of planShards(lane, MEASURED_SECONDS, 2)) {
+        const wallMin = projectMin(shard)
+        expect(
+          wallMin,
+          `a two-shard ${project} lane projects to ${wallMin.toFixed(1)} minutes, ` +
+            `${(CEILING_MIN - wallMin).toFixed(1)} short of the ceiling`
+        ).toBeLessThan(CEILING_MIN)
+      }
     }
+  })
+
+  it('a file a lane leaves out is left out of its shards, and only its (DP-19)', () => {
+    for (const [project, skipped] of Object.entries(PROJECT_IGNORES)) {
+      const lane = filesForProject(files, project)
+      for (const file of skipped) {
+        expect(files, `${file} must exist to be left out`).toContain(file)
+        expect(lane).not.toContain(file)
+        expect(planShards(lane, MEASURED_SECONDS, 2).flat()).not.toContain(file)
+      }
+      expect(lane.length).toBe(files.length - skipped.length)
+    }
+    // Chromium runs everything, on three shards.
+    expect(filesForProject(files, 'chromium')).toEqual(files)
+    expect(filesForProject(files, 'no-such-project')).toEqual(files)
   })
 
   it('places a file nobody has measured yet, and charges it for the room', () => {
