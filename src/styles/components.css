@@ -16732,3 +16732,152 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
 }
+
+/* ── The drawing editor surface (DP-19) ─────────────────────────────────────
+   It takes the preview area, so it is sized to fill whatever that is rather
+   than to a height of its own. Tokens only: every colour, space and radius
+   here is the same one the rest of the app uses, so a theme change reaches it
+   without anybody remembering to come back. */
+.drawing-editor-surface {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  background: var(--color-bg-primary);
+  overflow: hidden;
+  z-index: 1;
+}
+
+.drawing-editor-surface.hidden,
+.drawing-editor-surface[hidden] {
+  display: none;
+}
+
+.drawing-editor {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+}
+
+/* The skip links are visible on focus and out of the way otherwise: a
+   sighted keyboard user needs to SEE where the jump goes. */
+.drawing-editor-skip {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  z-index: 2;
+}
+
+.drawing-editor-skip:focus,
+.drawing-editor-skip:focus-visible {
+  left: var(--space-sm);
+}
+
+.drawing-editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  padding-bottom: var(--space-xs);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.drawing-editor-title {
+  margin: 0;
+  margin-right: auto;
+  font-size: var(--font-size-md);
+  color: var(--color-text-primary);
+}
+
+.drawing-editor-title:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.drawing-editor-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: var(--space-sm);
+}
+
+.drawing-editor-stage {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.drawing-editor-panel {
+  flex: 0 0 clamp(240px, 32%, 380px);
+  min-height: 0;
+  overflow: auto;
+  border-left: 1px solid var(--color-border);
+  padding-left: var(--space-sm);
+}
+
+.drawing-editor-section + .drawing-editor-section {
+  margin-top: var(--space-xs);
+}
+
+.drawing-editor-section-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xs);
+  /* 44 px, the touch-target floor, without a fixed height that would clip a
+     wrapped name at a large text size. */
+  min-height: var(--size-touch-target);
+  padding: var(--space-xs) var(--space-sm);
+  cursor: pointer;
+  color: var(--color-text-primary);
+  background: var(--color-bg-secondary);
+  border-radius: var(--border-radius-sm);
+  font-weight: 600;
+}
+
+.drawing-editor-section-summary:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.drawing-editor-section-count {
+  color: var(--color-text-secondary);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.drawing-editor-section-body {
+  padding: var(--space-xs) var(--space-sm);
+}
+
+.drawing-editor-status {
+  margin: 0;
+  min-height: 1.4em;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* Below the panel's own minimum the two stack, which on a phone is the only
+   thing that fits and is also the reading order a screen reader already has. */
+@media (max-width: 767px) {
+  .drawing-editor-body {
+    flex-direction: column;
+  }
+
+  .drawing-editor-panel {
+    flex: 0 0 auto;
+    border-left: none;
+    border-top: 1px solid var(--color-border);
+    padding-left: 0;
+    padding-top: var(--space-sm);
+  }
+}

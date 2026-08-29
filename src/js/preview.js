@@ -1445,6 +1445,12 @@ export class PreviewManager {
     const zoomSpeed = 10;
 
     this.keyboardHandler = (event) => {
+      // ★ The drawing editor lives in this container, and every key it uses -
+      // arrows between regions, Escape to leave - is a key this handler would
+      // otherwise spend on the camera. A button or a table row is not an INPUT,
+      // so the guard below does not cover it.
+      if (this._isEditorSurfaceActive) return;
+
       // Ignore if focus is in an input field
       if (
         event.target.tagName === 'INPUT' ||
@@ -5261,6 +5267,78 @@ export class PreviewManager {
         is2D ? 'Rendered 2D SVG preview' : '3D model preview and controls'
       );
     }
+  }
+
+  /**
+   * Give the preview area over to the drawing editor (DP-19).
+   *
+   * The editor goes WHERE THE 3D VIEW IS, not in a panel beside it and not in
+   * a block inside the customizer, because it is the biggest surface on the
+   * page and on a phone it is the whole of it. Same shape as the 2D preview's
+   * takeover: hide the canvas, hide the placeholder, say what the region is
+   * now.
+   *
+   * ★ AND STAND THE CAMERA KEYS DOWN. `keyboardHandler` fires for any keydown
+   * while focus is inside #previewContainer unless the target is an INPUT,
+   * TEXTAREA, SELECT or contentEditable - so a focused table row or a button
+   * inside the editor would rotate the model behind it while a person thought
+   * they were moving between regions.
+   *
+   * @param {HTMLElement} el - The editor's own root, already in the container
+   */
+  showEditorSurface(el) {
+    if (!el) return;
+    this._isEditorSurfaceActive = true;
+    el.hidden = false;
+    el.classList.remove('hidden');
+    if (this.renderer?.domElement) {
+      this.renderer.domElement.style.display = 'none';
+    }
+    const placeholder = this.container?.querySelector('.preview-placeholder');
+    if (placeholder) placeholder.style.display = 'none';
+    const twoD = document.getElementById('rendered2dPreview');
+    if (twoD) twoD.classList.add('hidden');
+    if (this.container) {
+      this.container.setAttribute('aria-label', 'Drawing editor');
+      // The container's own tabindex would put an extra stop in front of the
+      // editor's toolbar for no reason: inside the editor, the editor's
+      // controls are the tab stops.
+      this.container.removeAttribute('tabindex');
+    }
+  }
+
+  /**
+   * Give the preview area back, and put the camera keys back with it.
+   *
+   * @param {HTMLElement} el - The editor's own root
+   */
+  hideEditorSurface(el) {
+    this._isEditorSurfaceActive = false;
+    if (el) {
+      el.hidden = true;
+      el.classList.add('hidden');
+    }
+    if (this.renderer?.domElement) {
+      this.renderer.domElement.style.display = '';
+    }
+    const placeholder = this.container?.querySelector('.preview-placeholder');
+    if (placeholder) {
+      placeholder.style.display = this._is2DPreviewActive || this.mesh ? 'none' : '';
+    }
+    if (this.container) {
+      this.container.setAttribute(
+        'aria-label',
+        this._is2DPreviewActive
+          ? 'Rendered 2D SVG preview'
+          : '3D model preview and controls'
+      );
+      this.container.setAttribute('tabindex', '0');
+    }
+  }
+
+  /** Whether the drawing editor currently owns the preview area. */
+  isEditorSurfaceActive() {
+    return this._isEditorSurfaceActive === true;
   }
 
   /**

@@ -5340,6 +5340,17 @@ async function initApp() {
     shortcutsBtn.addEventListener('click', _openShortcutsModal);
   }
 
+  // ── The drawing editor takes the preview area (DP-19) ─────────────────
+  // The editor says it is opening; what that means for the 3D canvas is the
+  // preview's business, and this is the one place that knows both.
+  const drawingEditorSurface = document.getElementById('drawingEditorSurface');
+  window.addEventListener('drawing-editor:open', () => {
+    previewManager?.showEditorSurface?.(drawingEditorSurface);
+  });
+  window.addEventListener('drawing-editor:close', () => {
+    previewManager?.hideEditorSurface?.(drawingEditorSurface);
+  });
+
   // Declare format selector elements
   const outputFormatSelect = document.getElementById('outputFormat');
 

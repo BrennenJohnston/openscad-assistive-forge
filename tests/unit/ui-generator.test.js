@@ -1432,14 +1432,17 @@ describe('UI Generator', () => {
       expect(wsContainer).toBeTruthy();
     });
 
-    it('workspace container includes the workspace root element', () => {
+    it('SUPERSEDED by DP-19: the editor is built when it is opened, not when the control is', () => {
+      // It used to be built eagerly into a container inside this control. It
+      // lives in the PREVIEW AREA now and is built on the first "Open the
+      // drawing editor", so a person who never opens it never pays for it.
+      // What the old case was really pinning - that the editor exists, is a
+      // region, and starts hidden - is pinned on the surface itself in
+      // tests/unit/drawing-editor.test.js.
       const onChange = vi.fn();
       renderParameterUI(svgFileSchema, container, onChange, {});
-
-      const wsRoot = container.querySelector('.svg-prep-workspace');
-      expect(wsRoot).toBeTruthy();
-      expect(wsRoot.getAttribute('role')).toBe('region');
-      expect(wsRoot.hidden).toBe(true);
+      expect(container.querySelector('.svg-prep-workspace-container')).toBeTruthy();
+      expect(container.querySelector('.svg-prep-workspace')).toBeNull();
     });
 
     it('non-SVG file control does not include a workspace container', () => {
@@ -1596,9 +1599,11 @@ describe('UI Generator', () => {
       const editBtn = statusCard.querySelector('.svg-prep-edit-btn');
       expect(editBtn).toBeTruthy();
       expect(editBtn.getAttribute('aria-label')).toBe(
-        'Open SVG preparation editor'
+        'Open the drawing editor'
       );
-      expect(editBtn.textContent).toBe('Edit');
+      // REVISED at DP-19: "Edit" did not say what it opened, and on a
+      // stencil tile what it opens is the whole task.
+      expect(editBtn.textContent).toBe('Open the drawing editor');
 
       const badge = statusCard.querySelector('.svg-prep-status-badge');
       expect(badge.dataset.level).toBe('review');
@@ -1622,7 +1627,7 @@ describe('UI Generator', () => {
       const editBtn = statusCard.querySelector('.svg-prep-edit-btn');
       expect(editBtn).toBeTruthy();
       expect(editBtn.getAttribute('aria-label')).toBe(
-        'Open SVG preparation editor'
+        'Open the drawing editor'
       );
 
       const warnings = statusCard.querySelector('.svg-prep-status-warnings');

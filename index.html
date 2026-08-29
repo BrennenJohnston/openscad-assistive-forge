@@ -5209,6 +5209,17 @@
                     role="img"
                     aria-label="Rendered 2D SVG preview"
                   ></div>
+                  <!-- The drawing editor takes this space when it is open,
+                       the same way the 2D preview does (DP-19). It is where
+                       the 3D view was because that is the biggest surface on
+                       the page, and on a phone it IS the page. -->
+                  <div
+                    id="drawingEditorSurface"
+                    class="drawing-editor-surface hidden"
+                    role="region"
+                    aria-label="Drawing editor"
+                    hidden
+                  ></div>
                   <!-- Screen reader accessible model summary (WCAG 2.2 non-visual content) -->
                   <div
                     id="previewModelSummary"

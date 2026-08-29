@@ -31,6 +31,7 @@ import {
   layerLimit,
   boundsOf,
 } from './svg-nesting.js';
+import { createDrawingEditor } from './drawing-editor/index.js';
 import {
   createSvgPrepWorkspace,
   extractSvgMeta,
@@ -2597,26 +2598,54 @@ function createFileControl(
   let inkSourceFileName = null;
   let inkRetraceTimer = null;
 
-  // ── Inline workspace for SVG preparation ───────────────────────────────
+  // ── The drawing editor (DP-19) ─────────────────────────────────────────
+  // It lives in the PREVIEW AREA now, not in a block inside this control. The
+  // container below survives for the case where there is no preview area to
+  // take - a unit test mounting this generator on its own - so the editing
+  // still works and nothing has to know which it got.
   const workspaceContainer = document.createElement('div');
   workspaceContainer.className = 'svg-prep-workspace-container';
 
-  const workspace = acceptsSvg
-    ? createSvgPrepWorkspace(workspaceContainer)
-    : null;
+  let workspace = null;
+  function getEditor() {
+    if (workspace || !acceptsSvg) return workspace;
+    const surfaceEl = document.getElementById('drawingEditorSurface');
+    workspace = surfaceEl
+      ? createDrawingEditor({
+          surfaceEl,
+          announce: announceChange,
+          // The preview manager lives in main.js and this module does not
+          // reach for it: the surface says it is opening and whoever owns the
+          // preview decides what that means for the canvas.
+          onOpen: () =>
+            window.dispatchEvent(new CustomEvent('drawing-editor:open')),
+          onClose: () =>
+            window.dispatchEvent(new CustomEvent('drawing-editor:close')),
+        })
+      : createSvgPrepWorkspace(workspaceContainer);
+    return workspace;
+  }
 
   function createStatusEditButton() {
     const editBtn = document.createElement('button');
     editBtn.type = 'button';
     editBtn.className = 'svg-prep-edit-btn btn btn-ghost';
-    editBtn.textContent = 'Edit';
-    editBtn.setAttribute('aria-label', 'Open SVG preparation editor');
+    // STRINGS: owner review pending (DP-R2 text pack). "Edit" did not say what
+    // it opened, and on a stencil tile what it opens is the whole task.
+    editBtn.textContent = 'Open the drawing editor';
+    editBtn.setAttribute('aria-label', 'Open the drawing editor');
     editBtn.addEventListener('click', () => {
-      if (!currentRawSvg || !workspace || !currentSvgAnalysis) return;
+      const editor = getEditor();
+      if (!currentRawSvg || !editor || !currentSvgAnalysis) return;
       const storedMeta = currentFileName
         ? getSvgPrepMetadata(currentFileName)
         : null;
-      workspace.open(currentRawSvg, currentSvgAnalysis, {
+      editor.open(currentRawSvg, currentSvgAnalysis, {
+        purpose: plateParams.length > 0 ? 'stencil' : 'relief',
+        callbacks: {
+          onApply: handleEditorApply,
+          onKeepOriginal: handleEditorKeep,
+        },
         onApply: handleEditorApply,
         onKeepOriginal: handleEditorKeep,
         sourceName: currentFileName,
@@ -2632,7 +2661,7 @@ function createFileControl(
         layersEnabled: layerParams.length > 0,
         initialLayers: storedMeta?.prepLayers || null,
       });
-      announceChange('SVG preparation editor opened');
+      announceChange('Drawing editor opened');
     });
     return editBtn;
   }
@@ -2644,10 +2673,18 @@ function createFileControl(
     const count = analysis.elements.length;
 
     if (analysis.recommendation === 'pass_through') {
+      // ★ D-124. "Using original, OpenSCAD merges these automatically" is
+      // true for a charm, where a merge is the whole answer, and it is the
+      // wrong sentence entirely for a stencil, where merging every shape into
+      // one is how the owner's cat came out as a single silhouette hole. On a
+      // tile that makes plates, the same drawing gets a sentence that says
+      // there is something to decide and a way to go and decide it.
       badge.textContent =
-        count > 1
-          ? `Using original (${count} shapes) \u2014 OpenSCAD merges these automatically`
-          : 'SVG Ready';
+        plateParams.length > 0
+          ? `${count} shapes, no colours yet. Open the editor to say what each one gets.`
+          : count > 1
+            ? `Using original (${count} shapes) \u2014 OpenSCAD merges these automatically`
+            : 'SVG Ready';
       badge.dataset.level = 'ready';
       statusCard.appendChild(badge);
       statusCard.appendChild(createStatusEditButton());
