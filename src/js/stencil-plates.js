@@ -41,6 +41,8 @@ import {
   pathToAbsolute,
   pathToCurve,
 } from 'svg-path-commander';
+import { ringsToPathData } from './ring-geometry.js';
+import { jigHolePathData } from './stencil-jig.js';
 
 /**
  * Colour is how laser software decides what to DO with a line: it maps each
@@ -58,17 +60,7 @@ export const ENGRAVE_COLOR = '#FF0000';
 export const MARK_ARM_MM = 6;
 export const MARK_WIDTH_MM = 1;
 
-/**
- * The most plates a stencil can be made of. The owner's number (DP-Q21).
- *
- * ★ NOT the same law as the charm engine's `LAYER_EMIT_CAP`, which is 3 and
- * lives in svg-preparer. That one is a ceiling on how many RELIEF passes a
- * tiered charm builds, and three is what the model builds. This one is a
- * ceiling on how many PAINT COLOURS a stencil can have, and the owner's own
- * cat uses six. Two different questions that happened to be answered with a
- * number, which is exactly how they got confused in the first place.
- */
-export const STENCIL_PLATE_CAP = 8;
+export { STENCIL_PLATE_CAP } from './stencil-limits.js';
 
 /**
  * Every plate carries the SAME marks in the SAME places. They are how a
@@ -187,6 +179,7 @@ export function composeFit(fit, pre) {
 export function buildStencilPlate({
   cutPathData,
   cutTransform = null,
+  rings = null,
   canvasSpan,
   canvasHeight,
   plateW,
@@ -194,14 +187,16 @@ export function buildStencilPlate({
   marginMm,
   scalePercent = 100,
   marks = true,
+  pegs = null,
   engraveLabel = false,
   layer,
   layerCount,
+  colourName = null,
 }) {
   const fit = composeFit(
     plateFit({
-      canvasSpan,
-      canvasHeight,
+      canvasSpan: canvasSpan || 100,
+      canvasHeight: canvasHeight || 100,
       plateW,
       plateH,
       marginMm,
@@ -212,7 +207,16 @@ export function buildStencilPlate({
 
   let d = `M 0 0 H ${plateW} V ${plateH} H 0 Z`;
   if (marks) d += ` ${registrationMarks(plateW, plateH)}`;
-  if (cutPathData) {
+  // The jig's holes and notches are subpaths of the SAME path as everything
+  // else, for the reason in the comment below: a hole in a path of its own is
+  // not a hole.
+  if (pegs) d += ` ${jigHolePathData({ ...pegs, plateW, plateH })}`;
+  // Rings arrive already in plate millimetres (fitRingsToPlate did that, once)
+  // so there is nothing here to scale. This is the D-122-free path; the
+  // cutPathData one below is what the charm-era callers still use.
+  if (rings && rings.length > 0) {
+    d += ` ${ringsToPathData(rings)}`;
+  } else if (cutPathData) {
     // ★ ONE PATH, always. MEASURED against OpenSCAD 2026.01.03: two separate
     // <path> elements are UNIONED on import - a 40 mm square with a 20 mm
     // square in a second path came back as 12 facets, a plain solid square,
@@ -227,7 +231,7 @@ export function buildStencilPlate({
     d += ` ${scaleTranslatePath(cutPathData, fit.scale, fit.dx, fit.dy)}`;
   }
 
-  const text = plateLabel(layer, layerCount);
+  const text = plateLabel(layer, layerCount, colourName);
   // The label rides as its own colour so it arrives as a separate layer a
   // laser can engrave rather than cut. Left out entirely when not wanted -
   // an empty layer is a thing to explain rather than a thing to use.
@@ -453,8 +457,48 @@ export function scaleTranslatePath(d, s, dx, dy) {
  * What this plate is called, and what to do with it.
  * STRINGS: owner review pending (DP-R1 text pack).
  */
-export function plateLabel(layer, layerCount) {
-  return `Plate ${layer} of ${layerCount}`;
+export function plateLabel(layer, layerCount, colourName = null) {
+  return colourName
+    ? `Plate ${layer} of ${layerCount}, ${colourName}`
+    : `Plate ${layer} of ${layerCount}`;
+}
+
+/**
+ * Put rings on the plate, ONCE.
+ *
+ * ★ D-122 BY CONSTRUCTION. The rings arrive in the drawing's own units and
+ * `contentBox` says where the drawing is in them; this returns rings in plate
+ * millimetres, and it is the only place the two spaces meet. Nothing
+ * downstream fits anything again, because there is nothing left to fit.
+ *
+ * The whole DESIGN is fitted, not each plate: every plate takes the same
+ * transform, so the colours land on each other. Passing plate 3's own bounds
+ * as `contentBox` would blow a two-region plate up to fill the sheet.
+ *
+ * @param {Array<Array<{x: number, y: number}>>} rings
+ * @param {{minX: number, minY: number, maxX: number, maxY: number}} contentBox
+ *   The whole design's bounds, in the rings' units
+ * @param {{plateW: number, plateH: number, marginMm: number,
+ *   scalePercent?: number, offsetX?: number, offsetY?: number}} plate
+ * @returns {Array<Array<{x: number, y: number}>>} Rings in plate millimetres
+ */
+export function fitRingsToPlate(rings, contentBox, plate) {
+  const span = contentBox.maxX - contentBox.minX;
+  const height = contentBox.maxY - contentBox.minY;
+  if (!(span > 0) || !(height > 0)) return [];
+  const fit = plateFit({
+    canvasSpan: span,
+    canvasHeight: height,
+    plateW: plate.plateW,
+    plateH: plate.plateH,
+    marginMm: plate.marginMm,
+    scalePercent: plate.scalePercent ?? 100,
+  });
+  const dx = fit.dx - fit.scale * contentBox.minX + (plate.offsetX || 0);
+  const dy = fit.dy - fit.scale * contentBox.minY + (plate.offsetY || 0);
+  return rings.map((ring) =>
+    ring.map((p) => ({ x: p.x * fit.scale + dx, y: p.y * fit.scale + dy }))
+  );
 }
 
 /**
@@ -464,10 +508,23 @@ export function plateLabel(layer, layerCount) {
  * so it is spelled out rather than left to be inferred from a number.
  * STRINGS: owner review pending (DP-R1 text pack).
  *
- * @param {number} layerCount
+ * @param {number|string[]} layerCountOrNames - How many plates, or the colour
+ *   names in paint order when the caller knows them
  * @returns {string[]} One sentence per plate, in order
  */
-export function paintSequence(layerCount) {
+export function paintSequence(layerCountOrNames) {
+  // A colour name says more than a number, so when the caller knows the
+  // colours the sentence uses them. Callers that only have a count still get
+  // the sentences they had.
+  const names = Array.isArray(layerCountOrNames) ? layerCountOrNames : null;
+  const layerCount = names ? names.length : layerCountOrNames;
+  if (names) {
+    return names.map((name, i) =>
+      i === 0
+        ? `Plate 1, ${name}: lay it on the bare surface and paint. This coat is the ground every later colour sits on.`
+        : `Plate ${i + 1}, ${name}: line it up on the marks or drop it over the pegs, then paint. This coat covers part of what the last one put down.`
+    );
+  }
   const steps = [];
   for (let n = 1; n <= layerCount; n++) {
     if (n === 1) {

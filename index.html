@@ -4336,6 +4336,24 @@
               >
                 <!-- Parameters will be dynamically generated here -->
               </div>
+              <!-- The whole stencil set in one download (DP-17). Shown only
+                   when the loaded tile makes plates; main.js reveals it. -->
+              <div id="stencilSetExport" class="stencil-set-export" hidden>
+                <button
+                  type="button"
+                  id="exportStencilSetBtn"
+                  class="btn btn-secondary"
+                >
+                  Export all plates
+                </button>
+                <span
+                  class="stencil-set-export-info"
+                  id="stencilSetExportInfo"
+                  aria-live="polite"
+                >
+                  One file per plate, plus the jig and the paint order.
+                </span>
+              </div>
               <!-- Output Format Selector -->
               <div class="output-format-section">
                 <label for="outputFormat" class="output-format-label"

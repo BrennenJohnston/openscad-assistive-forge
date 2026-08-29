@@ -50,7 +50,7 @@ import {
   orientRegion,
 } from './ring-geometry.js';
 import { boundsOf, interiorPoint, pointInPolygon } from './svg-nesting.js';
-import { STENCIL_PLATE_CAP } from './stencil-plates.js';
+import { STENCIL_PLATE_CAP } from './stencil-limits.js';
 
 /** The colour every region starts at when the art has no colours of its own. */
 export const BASE_COLOUR_ID = 'base';

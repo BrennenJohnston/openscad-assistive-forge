@@ -152,6 +152,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and reports how much of the two cuts is the same shape. That number is what the stencil work in
   this round is judged by. The photograph the drawing was traced from is deliberately not included
 
+- **A stencil can now be a set of plates and a jig, up to eight colours** (DP-17) - the Stencil
+  Maker used to make three plates and decide what went on them by how deeply the shapes nested.
+  It now makes as many plates as the design has colours, up to eight, and it makes the thing that
+  holds them still: a printed base with four posts, and a matching hole in the corner of every
+  plate. The posts are round at one end and rectangular at the other, so a plate cannot go on
+  backwards, which is the mistake that ruins a six-colour picture on the last coat. Each plate
+  carries its own number cut through the bottom margin, so a stack of them on a bench still says
+  which is which. There is a new **Export all plates** button that renders the whole set in turn
+  and hands back one zip: a file per plate named for its colour, the jig base, and a text file
+  with the order to paint in. All of it is measured against a real stencil: one user made a
+  six-plate set of their cat by hand, and Forge's plates 1 to 4 now come out at 99.8% the same
+  shape as the ones they cut
+
 - **Forge now understands that a stencil layer is a paint colour** (DP-16) - not a nesting depth,
   which is what it used to work out for itself. Nothing on screen changes yet; this is the part
   underneath. It knows what a region of a drawing is, and for a line drawing that is the areas

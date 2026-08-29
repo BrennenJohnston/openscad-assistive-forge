@@ -228,6 +228,14 @@ export const MEASURED_SECONDS = {
   // 35 minutes with "25 did not run".
   'svg-edit-door.spec.js': 129.8,
   'overlay-placement.spec.js': 107.9,
+
+  // Design Pipeline Round 2. Booked from a LOCAL run rather than from CI,
+  // which is a weaker measurement and is said so here: four cases in 14.5 s
+  // on this machine, against an engine that was already warm. The 60 s
+  // default would have been closer to the truth than a local number pretending
+  // to be a CI one, so this is booked at three times what was measured and
+  // re-weighted from a green CI run at the round's close.
+  'stencil-plates.spec.js': 45.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */

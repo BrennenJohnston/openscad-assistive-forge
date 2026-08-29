@@ -23,20 +23,20 @@ import {
   flattenLayers,
   flattenSilhouette,
   flattenToCompoundPath,
-  readLayerFile,
   LAYER_EMIT_CAP,
 } from './svg-preparer.js';
-import { buildNestingTree, suggestLayers, layerLimit } from './svg-nesting.js';
+import {
+  buildNestingTree,
+  suggestLayers,
+  layerLimit,
+  boundsOf,
+} from './svg-nesting.js';
 import {
   createSvgPrepWorkspace,
   extractSvgMeta,
 } from './svg-preparer-workspace.js';
 import { checkHolePlacement } from './hole-placement.js';
-import {
-  buildStencilPlate,
-  buildLaserSheet,
-  stencilLayers,
-} from './stencil-plates.js';
+import { STENCIL_PLATE_CAP, JIG_DEFAULTS } from './stencil-limits.js';
 import { buildBridges, bridgesToPathData } from './stencil-bridges.js';
 import { svgToDataUrl, dataUrlToText } from './svg-text-encoding.js';
 import {
@@ -1989,10 +1989,55 @@ export function findLaserParam(parameters) {
   return p && p.uiType === 'file' ? p : null;
 }
 
+/**
+ * Everything that turns a drawing into stencil plates, loaded on demand.
+ *
+ * ★ IT IS A LAZY CHUNK BECAUSE IT DOES NOT FIT. The colour model, the ring
+ * geometry, the plate builder and the jig come to a little over 4 KB gzipped,
+ * and the core bundle had 704 bytes left. MEASURED: in the core, 516,052 B
+ * against a 512,000 budget; with the colour model alone split out, 513,070,
+ * still over; with the whole engine split out, 511,384 and passing. Most
+ * people never open a stencil, so this is where it belongs anyway.
+ *
+ * The load starts as soon as a tile with plate parameters builds its
+ * controls, which is seconds before anybody can choose a file. If a drawing
+ * somehow arrives first, the plates are emitted again the moment the chunk
+ * lands rather than half-emitted from a module that is not there.
+ */
+let stencilEngine = null;
+let stencilEnginePromise = null;
+
+function loadStencilEngine() {
+  if (!stencilEnginePromise) {
+    stencilEnginePromise = Promise.all([
+      import('./stencil-plates.js'),
+      import('./stencil-colours.js'),
+      import('./stencil-jig.js'),
+    ])
+      .then(([plates, colours, jig]) => {
+        stencilEngine = { ...plates, ...colours, ...jig };
+        return stencilEngine;
+      })
+      .catch((err) => {
+        // Not swallowed: without this chunk the layered mode cannot work, and
+        // saying nothing would leave a person waiting for plates that are
+        // never coming.
+        console.error('The stencil engine could not be loaded:', err);
+        stencilEnginePromise = null;
+        throw err;
+      });
+  }
+  return stencilEnginePromise;
+}
+
 export function findPlateParams(parameters) {
   if (!parameters) return [];
   const out = [];
-  for (let n = 1; n <= LAYER_EMIT_CAP; n++) {
+  // Up to STENCIL_PLATE_CAP, which is NOT the charm engine's LAYER_EMIT_CAP:
+  // one is how many paint colours a stencil may have (eight, the owner's
+  // number) and the other is how many relief passes a tiered charm builds
+  // (three). Walking the wrong one capped a six-colour cat at three plates.
+  for (let n = 1; n <= STENCIL_PLATE_CAP; n++) {
     const file = parameters[`stencil_plate_${n}`];
     if (!file || file.uiType !== 'file') break;
     out.push({ file, plate: n });
@@ -2155,6 +2200,10 @@ function createFileControl(
   plateParams = [],
   laserParam = null
 ) {
+  // Start the stencil engine on its way now. A person needs seconds at least
+  // to choose a drawing, and by then the chunk is here.
+  if (plateParams.length > 0) loadStencilEngine().catch(() => {});
+
   const container = document.createElement('div');
   container.className = 'param-control param-control--file';
 
@@ -2323,16 +2372,21 @@ function createFileControl(
   }
 
   /**
-   * The stencil plates, for a tile that builds them (DP-12).
+   * The stencil plates, for a tile that builds them (DP-12, DP-17).
    *
    * A CONTRACT with public/examples/stencil-maker/stencil_maker.scad: the
-   * plate size is read from `plate_width`, `plate_height` and `margin`,
-   * because the app writes plates that are already mm-true and the model is a
-   * dumb extruder. Change those names in the model and change them here.
+   * plate size is read from `plate_width`, `plate_height` and `margin`, and
+   * the jig from `registration` and its five numbers, because the app writes
+   * plates that are already mm-true and the model is a dumb extruder. Change
+   * those names in the model and change them here.
    *
-   * The plates are cut with DEPTH deciding, not paint roles, and with the
-   * paper stepped over - see stencilLayers - and each cut is solid, which is
-   * what makes the method need no bridges.
+   * ★ A PLATE IS A COLOUR NOW, not a nesting depth (DP-16). The regions of the
+   * drawing are found, given colours, put in a paint order, and each plate
+   * cuts what its rule says. Until the editor exists, a drawing with no
+   * colours of its own gets ONE colour - the base coat - and therefore one
+   * plate cutting the whole silhouette. That is the honest answer to "what
+   * colours does this line drawing have", and it is an answer a person changes
+   * by painting regions rather than one the app guesses from nesting depth.
    *
    * @param {Object|null} value - The design being emitted
    * @param {Object} values - Current parameter values, for the plate size
@@ -2344,55 +2398,90 @@ function createFileControl(
     if (laserParam) out[laserParam.name] = null;
     if (!value || !currentRawSvg) return out;
 
-    try {
-      const raw = parseSvgElements(currentRawSvg);
-      const els = classifyElements(raw);
-      const tree = buildNestingTree(els);
-      const meta = extractSvgMeta(currentRawSvg);
-      const vb = String(meta.viewBox || '')
-        .split(/[\s,]+/)
-        .map(Number);
-      const canvas =
-        vb.length === 4 && vb[2] > 0 && vb[3] > 0
-          ? { width: vb[2], height: vb[3] }
-          : null;
-      const { layers, plateCount } = stencilLayers(
-        tree,
-        els.map((el) => el.role),
-        LAYER_EMIT_CAP,
-        canvas
-      );
-      if (plateCount === 0) return out;
-
-      const cuts = flattenLayers(els, layers, plateCount, meta, null, {
-        solid: true,
+    if (!stencilEngine) {
+      // The chunk is still on its way. Emit nothing rather than half of it,
+      // and do the whole emission again when it lands, so a plate is never in
+      // a different state update from the design it was cut from (D-108).
+      loadStencilEngine().then(() => {
+        if (currentRawSvg) emitFileValue(value);
       });
+      return out;
+    }
+    const {
+      buildStencilPlate,
+      buildLaserSheet,
+      fitRingsToPlate,
+      buildRegions,
+      paletteFromFills,
+      autoAssign,
+      defaultOrder,
+      platesFor,
+      jigFits,
+    } = stencilEngine;
+
+    try {
+      const els = classifyElements(parseSvgElements(currentRawSvg));
+      const meta = extractSvgMeta(currentRawSvg);
 
       const plateW = Number(values.plate_width) || 200;
       const plateH = Number(values.plate_height) || 200;
       const marginMm = Number(values.margin) || 15;
       const scalePercent = Number(values.design_scale) || 100;
+      const registration = String(values.registration || 'crosses');
+      const wantPegs = registration === 'pegs' || registration === 'both';
+      const wantCrosses =
+        values.marks !== 'no' &&
+        (registration === 'crosses' || registration === 'both');
+      const askedPegs = wantPegs
+        ? {
+            pegDiameter:
+              Number(values.peg_diameter) || JIG_DEFAULTS.pegDiameter,
+            keyWidth: Number(values.key_width) || JIG_DEFAULTS.keyWidth,
+            keyDepth: Number(values.key_depth) || JIG_DEFAULTS.keyDepth,
+            featureInset:
+              Number(values.feature_inset) || JIG_DEFAULTS.featureInset,
+            holeClearance:
+              values.hole_clearance === undefined
+                ? JIG_DEFAULTS.holeClearance
+                : Number(values.hole_clearance),
+          }
+        : null;
+      // A jig that would break the plate edge or reach into the design is not
+      // drawn at all: half a registration hole is worse than none. The model
+      // asserts the same thing, so the two cannot disagree about it.
+      const jigOk = askedPegs
+        ? jigFits({ plateW, plateH, marginMm, ...askedPegs })
+        : null;
+      if (jigOk && !jigOk.ok) console.warn('Stencil jig:', jigOk.reason);
+      const pegs = jigOk && jigOk.ok ? askedPegs : null;
 
-      // ONE canvas for every plate and for the laser sheet, so they agree,
-      // and ONE transform onto it, carried beside the data all the way to the
-      // fit that consumes it (D-122). Every cut in a stack shares the canvas
-      // AND the transform: normalizeLayerStack sizes both from layer 1.
-      const firstCut = readLayerFile(cuts.find(Boolean));
-      const canvasSpan = firstCut ? firstCut.canvasSpan : 100;
-      const canvasHeight = firstCut ? firstCut.canvasHeight : 100;
-      const cutTransform = firstCut ? firstCut.transform : null;
+      const { regions, silhouette, lineMode } = buildRegions(els);
+      const palette = paletteFromFills(regions);
+      const assignment = autoAssign(regions, palette);
+      const order = defaultOrder(regions, assignment, palette).slice(
+        0,
+        STENCIL_PLATE_CAP
+      );
+      const plan = { palette, order, assignment, rule: 'stacked', lineMode };
+      const cuts = platesFor(plan, regions, silhouette);
+      const names = new Map(palette.map((c) => [c.id, c.name]));
 
-      // DP-13. The laser lane is ONE sheet, cut once, so an enclosed shape
-      // falls out unless a rib holds it. Kerf is deliberately NOT applied
-      // here: the laser's own software does that, and two corrections
-      // undersize the part by a full kerf with nothing on screen to show it.
+      // ONE content box for every plate and for the laser sheet, so the
+      // colours land on each other, and ONE fit from it onto the plate. That
+      // is the whole of D-122, said in two lines.
+      const contentBox = boundsOf(
+        [...(silhouette || []), ...cuts.flatMap((c) => c.rings)].flat()
+      );
+      if (!contentBox) return out;
+      const plateSpec = { plateW, plateH, marginMm, scalePercent };
+
       if (laserParam) {
         const whole = flattenToCompoundPath(els, meta);
         const wholeD = whole ? (/ d="([^"]*)"/.exec(whole)?.[1] ?? null) : null;
         let ribD = '';
         let warning = null;
         if (values.bridges !== 'no') {
-          const b = buildBridges(els, tree, {
+          const b = buildBridges(els, buildNestingTree(els), {
             count: Number(values.bridge_count) || 2,
             widthMm: Number(values.bridge_width) || undefined,
           });
@@ -2402,17 +2491,21 @@ function createFileControl(
         const sheet = buildLaserSheet({
           cutPathData: wholeD,
           // The whole-design flatten and the bridges are both in the design's
-          // own units - flattenToCompoundPath does not normalize - so they
-          // take the same transform onto the canvas the plates use.
-          cutTransform,
+          // own units, so they take the same move onto the shared box that
+          // the plates take.
+          cutTransform: {
+            scale: 1,
+            dx: -contentBox.minX,
+            dy: -contentBox.minY,
+          },
           bridgePathData: ribD,
-          canvasSpan,
-          canvasHeight,
+          canvasSpan: contentBox.maxX - contentBox.minX,
+          canvasHeight: contentBox.maxY - contentBox.minY,
           plateW,
           plateH,
           marginMm,
           scalePercent,
-          marks: values.marks !== 'no',
+          marks: wantCrosses,
         });
         out[laserParam.name] = {
           name: `${layerFileStem(value.name)}_laser.svg`,
@@ -2423,19 +2516,19 @@ function createFileControl(
       }
 
       plateParams.forEach(({ file, plate }) => {
-        const cut = readLayerFile(cuts[plate - 1]);
+        const cut = cuts[plate - 1];
+        if (!cut) return;
         const { svg } = buildStencilPlate({
-          cutPathData: cut ? cut.pathData : null,
-          cutTransform,
-          canvasSpan,
-          canvasHeight,
+          rings: fitRingsToPlate(cut.rings, contentBox, plateSpec),
           plateW,
           plateH,
           marginMm,
           scalePercent,
-          marks: values.marks !== 'no',
+          marks: wantCrosses,
+          pegs,
           layer: plate,
-          layerCount: plateCount,
+          layerCount: cuts.length,
+          colourName: names.get(cut.colourId) || null,
         });
         out[file.name] = {
           name: `${layerFileStem(value.name)}_plate_${plate}.svg`,

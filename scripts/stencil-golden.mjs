@@ -36,7 +36,12 @@
  *   node scripts/stencil-golden.mjs --render <file.stl> --out <file.png>
  */
 
-import { readFileSync, existsSync, mkdirSync } from 'node:fs';
+import {
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  mkdirSync,
+} from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, resolve, basename } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -451,6 +456,126 @@ function comparePair(plateFile, referenceFile, flipY) {
   return r;
 }
 
+/**
+ * Build the owner's six plates from their own drawing, through the app's real
+ * modules, and set each one beside the plate they cut by hand.
+ *
+ * The route is exactly the app's: the faces of the line network, the reference
+ * colour plan applied by point, `platesFor` under the OWN rule because that is
+ * how the owner cut theirs, one fit onto the plate, one even-odd path out.
+ *
+ * The plate is 60 x 60 with a 10.15 mm margin, which makes the design 39.70 mm
+ * tall - the height the owner's silhouette actually is - so a Forge plate and
+ * the plate it is set beside are the same size.
+ *
+ * @param {{write?: string|null, absorb?: boolean, rule?: string}} options
+ * @returns {Promise<number>} Exit code
+ */
+async function harleyFixture({ write = null, absorb = true, rule = 'own' }) {
+  // parseSvgElements reads through a DOM. The app has one; a script does not.
+  const { JSDOM } = await import('jsdom');
+  const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>');
+  globalThis.DOMParser = dom.window.DOMParser;
+  globalThis.XMLSerializer = dom.window.XMLSerializer;
+  globalThis.Node = dom.window.Node;
+
+  const { parseSvgElements, classifyElements } = await import(
+    '../src/js/svg-preparer.js'
+  );
+  const { buildRegions, regionAt, platesFor } = await import(
+    '../src/js/stencil-colours.js'
+  );
+  const { fitRingsToPlate, buildStencilPlate } = await import(
+    '../src/js/stencil-plates.js'
+  );
+
+  const svg = readFileSync(resolve(REFERENCE_DIR, 'sketch4.svg'), 'utf8');
+  const plan = JSON.parse(
+    readFileSync(resolve(REFERENCE_DIR, 'harley-plan.json'), 'utf8')
+  );
+  const elements = classifyElements(parseSvgElements(svg));
+  const { regions, silhouette, lineMode, droppedFaces } = buildRegions(elements);
+
+  const assignment = {};
+  for (const r of regions) assignment[r.key] = plan.order[0];
+  let matched = 0;
+  for (const row of plan.regions) {
+    const hit = regionAt(regions, { x: row.at[0], y: row.at[1] });
+    if (hit) {
+      assignment[hit.key] = row.colour;
+      matched += 1;
+    }
+  }
+  console.log(
+    `${regions.length} faces (${droppedFaces} dropped as litter), lineMode ${lineMode}, ` +
+      `${matched} of ${plan.regions.length} reference regions matched`
+  );
+
+  const cuts = platesFor(
+    { palette: plan.palette, order: plan.order, assignment, rule, lineMode },
+    regions,
+    silhouette,
+    { absorbEnclosedLines: absorb }
+  );
+
+  // The design's own bounds, shared by every plate so the colours land on each
+  // other. Not each plate's own bounds: that would blow a two-region plate up
+  // to fill the sheet.
+  const contentBox = boundsOf(
+    [...silhouette, ...cuts.flatMap((c) => c.rings)].flat()
+  );
+  const PLATE = { plateW: 60, plateH: 60, marginMm: 10.15, scalePercent: 100 };
+  const names = new Map(plan.palette.map((c) => [c.id, c.name]));
+
+  console.log(
+    '\n  plate  colour         Forge  reference    IoU   aspect Forge / reference'
+  );
+  const table = [];
+  for (let i = 0; i < cuts.length; i++) {
+    const ringsMm = fitRingsToPlate(cuts[i].rings, contentBox, PLATE);
+    const label = names.get(cuts[i].colourId) || cuts[i].colourId;
+    const plate = (marks) =>
+      buildStencilPlate({
+        rings: ringsMm,
+        ...PLATE,
+        marks,
+        layer: i + 1,
+        layerCount: cuts.length,
+        colourName: label,
+      }).svg;
+    if (write) {
+      mkdirSync(write, { recursive: true });
+      writeFileSync(resolve(write, `forge-plate-${i + 1}.svg`), plate(true));
+    }
+    // ★ The comparison takes the plate WITHOUT its crosses. Forge puts a cross
+    // 8 mm in from each corner and the reference puts a peg hole 2.5 mm in, so
+    // no single edge band can drop both: at 8 mm the band would be a seventh
+    // of the plate, and the cat's own silhouette comes within 8.16 mm of the
+    // edge. Registration differs by design between a hand-made plate and a
+    // generated one; the art is the thing being measured.
+    const forge = splitPlateRings(
+      subpathRings(/ d="([^"]*)"/.exec(plate(false))[1])
+    );
+    const reference = readPlate(referencePlate(i + 1));
+    const r = comparePlates(forge, reference, { flipY: true });
+    table.push({ plate: i + 1, colour: cuts[i].colourId, ...r });
+    console.log(
+      `  ${String(i + 1).padStart(5)}  ${label.padEnd(13)}` +
+        `${String(r.cutsA).padStart(6)}${String(r.cutsB).padStart(11)}  ${fmt(r.iou)}   ` +
+        `${fmt(r.aspectA ?? 0)} / ${fmt(r.aspectB ?? 0)}`
+    );
+  }
+  const mean = table.reduce((sum, t) => sum + t.iou, 0) / table.length;
+  console.log(
+    `\n  mean IoU ${fmt(mean)}   rule=${rule} absorbEnclosedLines=${absorb}`
+  );
+  if (write) {
+    writeFileSync(resolve(write, 'iou.json'), JSON.stringify(table, null, 1));
+    console.log(`  wrote ${write}`);
+  }
+  return 0;
+}
+
 function main(argv) {
   const arg = (name) => {
     const i = argv.indexOf(name);
@@ -474,11 +599,11 @@ function main(argv) {
   }
 
   if (arg('--fixture') === 'harley') {
-    console.error(
-      'The harley comparison needs the colour engine. It is wired in DP-17;\n' +
-        'until then use --self-check, or --plate and --reference.'
-    );
-    return 2;
+    return harleyFixture({
+      write: arg('--write-plates'),
+      absorb: !argv.includes('--no-absorb'),
+      rule: arg('--rule') || 'own',
+    });
   }
 
   console.error(
@@ -490,5 +615,6 @@ function main(argv) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  process.exitCode = main(process.argv.slice(2));
+  const result = main(process.argv.slice(2));
+  process.exitCode = result instanceof Promise ? await result : result;
 }
