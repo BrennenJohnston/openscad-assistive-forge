@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A way to ask the city which part of it is moving** (CW-69) - the pavement had been photographed
+  crawling underfoot, and the explanation on file was that the ground texture's mip-level rings were
+  riding along with the walker. The motion instrument gained `--scene-exp`, which takes one thing away
+  from the scene and measures again. The answer: the filtering was worth three to sixteen points of a
+  thirty-eight to sixty-four per cent churn, the mip chain and the blur are the same intervention, and
+  spreading the ground pattern over eight times the ground still left eight to twenty-one per cent.
+  Only removing the pattern entirely reached zero. **So the ground was left exactly as it is**: what
+  looked like a filtering bug is what a fine pattern does when you walk through it, and the
+  frame-to-frame memory added in the previous release already takes it to zero, including on a
+  ten-frames-a-second machine. The whole table is in `docs/CITY_WALK_ROADMAP.md`, so the next person
+  to look at the pavement starts from a measurement instead of a hypothesis
+
 - **Walking through the city no longer re-rolls the picture underneath you** (CW-68) - the converter
   decided every character, every brightness level and every solid cell from ONE frame, with no memory
   of the frame before, so a texture sliding a single pixel was enough to choose a different character.

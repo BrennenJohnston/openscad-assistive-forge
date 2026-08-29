@@ -109,6 +109,11 @@ const DEFAULTS = {
   // photographs before and after against ONE scene in ONE run this way; give
   // each run its own --label so the pictures do not overwrite each other.
   hysteresis: '',
+  // --scene-exp neutralises ONE part of the scene before measuring, so a
+  // release can ask which part a churn number is coming from instead of
+  // arguing about it. See SCENE_EXPERIMENTS below. It changes the scene in
+  // the page only; nothing is written and nothing is committed by it.
+  sceneExp: 'none',
   // --gpu-luid=high,low selects a D3D adapter (Chromium --use-adapter-luid).
   // Empty means whatever Windows hands out, which on this laptop is the
   // integrated GPU.
@@ -123,6 +128,30 @@ const CITY_BUTTONS = {
 }
 
 const MODES = ['stand', 'walk', 'walkclamp', 'look', 'creep', 'turn']
+
+/**
+ * What --scene-exp can take away, and from which mesh.
+ *
+ * These are DIAGNOSTIC, not settings: each one answers "how much of this
+ * class's churn is coming from that?" by removing it and re-measuring. CW-69
+ * used them to find that the ground's churn is the scattered dither itself
+ * rather than the mip rings it had been blamed on - `no-ground-mipmaps` and
+ * `no-cell-raster` each took 38 % per frame to 35 %, while
+ * `no-ground-texture` took it to 0.25 %.
+ *
+ * `report` changes nothing and prints what the meshes are wearing.
+ */
+const SCENE_EXPERIMENTS = new Map([
+  ['none', { meshes: [] }],
+  ['report', { meshes: ['ground', 'sidewalks', 'buildings'] }],
+  ['no-ground-texture', { meshes: ['ground'], drop: 'map' }],
+  ['no-ground-mipmaps', { meshes: ['ground'], mipmaps: false }],
+  ['no-window-texture', { meshes: ['buildings'], drop: 'map' }],
+  // The CW-41 cell-raster blur, off, on every material that took it.
+  ['no-cell-raster', { meshes: ['ground', 'sidewalks', 'buildings'], bias: 0 }],
+  // coarse-ground:N spreads the same tile over N times the metres.
+  ['coarse-ground', { meshes: ['ground', 'sidewalks'], coarse: true }],
+])
 
 function parseArgs(argv) {
   const opts = { ...DEFAULTS }
@@ -519,6 +548,86 @@ async function setSize(page, wanted) {
   return got
 }
 
+/** `coarse-ground:4` -> {name, factor}; anything else -> {name, factor: 4}. */
+function parseSceneExp(arg) {
+  const [name, factor] = String(arg || 'none').split(':')
+  if (!SCENE_EXPERIMENTS.has(name)) {
+    throw new Error(
+      `--scene-exp=${arg}: known experiments are ` +
+        [...SCENE_EXPERIMENTS.keys()].join(', ')
+    )
+  }
+  return { name, factor: Number(factor) > 0 ? Number(factor) : 4 }
+}
+
+/**
+ * Neutralise one part of the scene, in the page, and say what was touched.
+ *
+ * Idempotent per material for the ones that would compound (a repeat scaled
+ * twice is a different experiment), because it is called once per size.
+ */
+async function applySceneExperiment(page, exp) {
+  if (exp.name === 'none') return []
+  return page.evaluate(
+    ({ spec, name, factor }) => {
+      const game = window.__cityWalkGame
+      const touched = []
+      game.scene.traverse((object) => {
+        if (!object.isMesh || !object.material) return
+        if (!spec.meshes.includes(object.name)) return
+        const materials = Array.isArray(object.material)
+          ? object.material
+          : [object.material]
+        for (const material of materials) {
+          if (name === 'report') {
+            const map = material.map
+            touched.push(
+              `${object.name} map=${Boolean(map)}` +
+                (map
+                  ? ` mips=${map.generateMipmaps} minFilter=${map.minFilter}` +
+                    ` aniso=${map.anisotropy}`
+                  : '') +
+                ` bias=${material.userData.cellLodBias?.value ?? '-'}`
+            )
+            continue
+          }
+          if (spec.drop === 'map' && material.map) {
+            material.map = null
+            material.needsUpdate = true
+            touched.push(`${object.name}:no-map`)
+          }
+          if (spec.mipmaps === false && material.map?.generateMipmaps) {
+            material.map.generateMipmaps = false
+            // 1006 is three's LinearFilter; the constant is not reachable here.
+            material.map.minFilter = 1006
+            material.map.magFilter = 1006
+            material.map.anisotropy = 1
+            material.map.needsUpdate = true
+            touched.push(`${object.name}:no-mipmaps`)
+          }
+          if (spec.bias !== undefined && material.userData.cellLodBias) {
+            material.userData.cellLodBias.value = spec.bias
+            touched.push(`${object.name}:bias=${spec.bias}`)
+          }
+          if (spec.coarse && material.map && !material.userData.__seqCoarse) {
+            material.map.repeat.multiplyScalar(1 / factor)
+            material.map.needsUpdate = true
+            material.userData.__seqCoarse = factor
+            touched.push(`${object.name}:coarse=${factor}`)
+          }
+        }
+      })
+      game.altView.invalidate()
+      return touched
+    },
+    {
+      spec: SCENE_EXPERIMENTS.get(exp.name),
+      name: exp.name,
+      factor: exp.factor,
+    }
+  )
+}
+
 /**
  * Apply --hysteresis, and report what the instance ended up with.
  *
@@ -804,6 +913,7 @@ async function main() {
 
     await page.evaluate(() => window.__cityWalkGame.altView.setCellProbe(true))
     const hysteresis = await applyHysteresis(page, opts.hysteresis)
+    const sceneExp = parseSceneExp(opts.sceneExp)
     console.log(
       `hysteresis: ${hysteresis ? JSON.stringify(hysteresis) : 'OFF'}` +
         (opts.hysteresis ? '' : " (the game's own setting, untouched)")
@@ -854,7 +964,19 @@ async function main() {
     for (const size of sizes) {
       await setSize(page, size / 100)
       const cell = await page.evaluate(() => window.__seqApi.cell())
-      console.log(`\n-- size ${size}% cell ${cell.w}x${cell.h} px --`)
+      // AFTER the size change, every time. setSize() presses the size keys and
+      // the game's own syncCellRaster then re-applies the CW-41 blur, which
+      // silently undid a `no-cell-raster` experiment applied once before this
+      // loop: both runs came back byte-identical to the control, which is
+      // exactly what a silently-undone experiment looks like.
+      const applied = await applySceneExperiment(page, sceneExp)
+      console.log(
+        `\n-- size ${size}% cell ${cell.w}x${cell.h} px --` +
+          (sceneExp.name === 'none'
+            ? ''
+            : `  scene-exp ${opts.sceneExp}: ` +
+              (applied.join(' | ') || 'nothing matched'))
+      )
       for (const mode of modes) {
         const poses = generatePoses(mode, start, opts.frames, opts)
         const tag = `${opts.label || 'run'}-${colourOn ? 'colour' : 'mono'}-${size}-${mode}`
@@ -865,6 +987,7 @@ async function main() {
           mode,
           glRenderer: gl.renderer,
           hysteresis,
+          sceneExp: opts.sceneExp,
         })
         printSequence(res, res.mono)
       }

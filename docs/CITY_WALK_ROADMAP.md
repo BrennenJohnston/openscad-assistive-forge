@@ -279,6 +279,58 @@ It is off for everything except the game. The converter is shared with the main
 application's Alt View, which converts one still frame, and a memory of a
 previous frame can only cost it.
 
+### Asking the scene which part of it is moving
+
+`--scene-exp` takes one thing away from the scene and measures again, so a
+churn number can be attributed instead of argued about. It changes nothing in
+the repository and nothing is written: the mesh is altered in the page for the
+length of the run.
+
+The ground was the first thing it was pointed at. The pavement had been
+photographed as a field of crawling stipple, and the reading of the flip map
+was that the texture's mip-level rings were riding along with the walker. That
+reading was half right, and the table is why the release that would have
+rebuilt the ground pattern did not:
+
+Class `ground`, looking down at the pavement, the frame-to-frame memory turned
+OFF so the mechanism is visible, per cent of characters re-rolled per frame:
+
+| what was taken away | 10% walk | 10% at 10 fps | 30% walk | 30% at 10 fps |
+|---|---|---|---|---|
+| nothing (the control) | 38.0 | 57.8 | 46.6 | 63.5 |
+| the mip chain | 35.0 | 41.8 | 43.0 | 51.1 |
+| the cell-raster blur | 35.0 | 41.8 | 43.0 | 51.1 |
+| both | 35.0 | 41.8 | 43.0 | 51.1 |
+| the tile spread over 2x the metres | 34.9 | 34.9 | 35.1 | 35.3 |
+| ...4x | 21.2 | 32.4 | 28.3 | 38.8 |
+| ...8x | 8.4 | 19.2 | 14.5 | 20.9 |
+| **the ground texture itself** | **0.25** | **0.23** | **0.26** | **0.30** |
+
+Read it downwards. The filtering is worth three to sixteen points, and the
+mip chain and the blur turn out to be the same intervention: without the mip
+chain the blur has nothing to bias, and with the blur at zero the mip level is
+the natural one. Everything else is the scatter itself. Walking through a
+pattern finer than a character cell's footprint means every cell sees
+different marks every frame, and coarsening the pattern eightfold - which is
+already a visible change to what the pavement looks like - still leaves eight
+to twenty-one per cent. Only removing the pattern outright reaches zero.
+
+The same shape holds on the building faces: taking the window texture away
+drops a wall's churn from 8.0 to 3.6 per cent walking, and the rest is the
+geometry itself moving past.
+
+**So the ground was left alone.** The frame-to-frame memory already takes both
+numbers to zero, including at the ten-frames-a-second worst case, and no change
+to the sampling comes close to that. What the table says is that the ground's
+crawl was never a filtering bug to be fixed: it is what a fine pattern does when
+you walk through it, and the answer is the memory.
+
+One measured option is left on the table rather than taken: the cell-raster
+blur, which exists to stop window ROWS beating against the character grid, is
+applied to the ground as well, and the ground has no rows. Turning it off there
+would make the ground about a quarter steadier at ten frames a second. With the
+memory on it changes nothing at all, so it is recorded rather than shipped.
+
 ### Two things worth knowing before trusting a number
 
 **Which GPU rendered it.** Windows hands a non-fullscreen Chromium the
