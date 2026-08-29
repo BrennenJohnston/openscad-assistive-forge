@@ -235,7 +235,7 @@ export const MEASURED_SECONDS = {
   // default would have been closer to the truth than a local number pretending
   // to be a CI one, so this is booked at three times what was measured and
   // re-weighted from a green CI run at the round's close.
-  'stencil-plates.spec.js': 45.0,
+  'stencil-plates.spec.js': 60.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */

@@ -152,6 +152,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and reports how much of the two cuts is the same shape. That number is what the stencil work in
   this round is judged by. The photograph the drawing was traced from is deliberately not included
 
+- **A photo or a coloured drawing can become the colours of a stencil, by itself** (DP-18) - the
+  picture panel gains a fourth choice, **Colours**. Instead of deciding what counts as a line, it
+  separates the picture into flat colours, one region per colour, and hands them straight to the
+  plate maker: choose a photo, choose how many colours, and a set of plates comes out with nobody
+  having to point at anything. It also names the wall, which is the colour that is the surface
+  behind the stencil rather than paint on it, and gets no plate; Forge guesses by looking at the
+  edges of the picture, where a wall shows, and you can override it. The summary line names every
+  colour and how much of the picture it covers, so a colour you wanted and did not get is visible
+  rather than merely absent, and the answer is to ask for one more. Two things are worth knowing.
+  A colour that covers about one per cent of a picture is genuinely hard to find, and the way
+  Forge finds it is by looking at a smaller copy in which each pixel is the most common colour of
+  the block it came from, which removes the soft edges that would otherwise eat the search. And a
+  white that is five shades from the paper cannot be told apart from the paper by any amount of
+  cleverness, so if your picture has one, name your colours instead of asking Forge to find them.
+  A picture too big to trace is now made smaller and traced, instead of refused, and the amount it
+  was shrunk by is said out loud
+
 - **A stencil can now be a set of plates and a jig, up to eight colours** (DP-17) - the Stencil
   Maker used to make three plates and decide what went on them by how deeply the shapes nested.
   It now makes as many plates as the design has colours, up to eight, and it makes the thing that

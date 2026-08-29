@@ -2814,7 +2814,19 @@ function createFileControl(
       const svgDataUrl = svgToDataUrl(processedSvg);
 
       const pathCount = (svg.match(/<path/g) || []).length;
-      if (inkControls) inkControls.setSummary(summary, pathCount);
+      if (inkControls) {
+        // The Colours mode has its own sentence: the ink summary is about how
+        // much of a picture counted as a line, which is not a question this
+        // mode asks. It also feeds the wall-colour list, which cannot be
+        // offered until the colours are known.
+        if (summary && summary.mode === 'colours') {
+          inkControls.setColourResult(summary.colours, {
+            factor: summary.downscale ? summary.downscale.factor : null,
+          });
+        } else {
+          inkControls.setSummary(summary, pathCount);
+        }
+      }
 
       const convertedFile = {
         name: inkSourceFileName,
