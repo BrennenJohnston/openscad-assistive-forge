@@ -255,11 +255,17 @@ test.describe('ASCII City Walk — plantings (CW-57)', () => {
     await enterCity(page)
 
     const props = await propStats(page)
+    // CW-75 re-pinned these. An "open ground" perch is a spot a couple of
+    // metres off a LAMP POST, which is how the bird code finds pavement
+    // without a pavement polygon - so the roster follows the lamp count.
+    // Seattle's lamps went 2,560 -> 2,173 when every pole standing in a
+    // roadway was refused, and the birds went with the poles they were
+    // perched beside. What left the city is a bird standing on tarmac.
     expect(props.birdsPlaced).toEqual({
-      'house sparrow': 47,
-      gull: 76,
-      'rock pigeon': 104,
-      'american crow': 122,
+      'house sparrow': 41,
+      gull: 70,
+      'rock pigeon': 95,
+      'american crow': 103,
     })
     // Seattle's roster has no goose and no roadrunner, so it has none placed.
     // A roster is a claim about a city and this is where it is checked.
@@ -281,8 +287,17 @@ test.describe('ASCII City Walk — plantings (CW-57)', () => {
     // parkland is structurally scarce. Separating pavement from parkland -
     // which is where a roadrunner actually runs - took it to 15. If a later
     // change quietly starves it again, this fails.
-    expect(props.birdsPlaced['greater roadrunner']).toBe(15)
-    expect(props.birdsPlaced['rock pigeon']).toBe(81)
+    //
+    // ★ IT FIRED, AND IT WAS CHECKED RATHER THAN RE-PINNED. CW-75 took it to
+    // 13. An open-ground perch is a spot beside a LAMP POST, and Albuquerque's
+    // lamps fell 1,068 -> 915 (14 %) when every pole standing in a roadway was
+    // refused; the roadrunner fell 13 %, which is the same cut and no more.
+    // The perches that went were the ones hanging off poles that stood in the
+    // carriageway, so the bird did not lose habitat - it stopped standing in
+    // traffic. Thirteen is not one, and the pin below still guards the number
+    // that mattered.
+    expect(props.birdsPlaced['greater roadrunner']).toBe(13)
+    expect(props.birdsPlaced['rock pigeon']).toBe(78)
     // No crow and no gull on this roster, so none anywhere in the city.
     expect(props.birdsPlaced['american crow']).toBeUndefined()
     expect(props.birdsPlaced.gull).toBeUndefined()

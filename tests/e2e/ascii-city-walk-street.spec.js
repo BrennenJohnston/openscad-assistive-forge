@@ -1403,16 +1403,29 @@ test.describe('ASCII City Walk — people are people (CW-45)', () => {
     // road centreline, so no width could reach them. Standing is unmoved
     // between the two width passes for the same reason it moved at all: it
     // is the offsets, not the seed, that decide.
+    //
+    // CW-75 re-pinned them a second time, and for the same KIND of reason.
+    // A person is placed 1.1 m outside THEIR road's kerb, which at a junction
+    // is the middle of the road that crosses it: 141 figures stood on tarmac
+    // with no crossing mapped near them, and they are now refused. 3,029
+    // became 2,890, the refusals fall across all four poses, and sitters move
+    // for the first time (105 -> 102): FOURTEEN of Seattle's 280 mapped
+    // benches stand inside a drawn roadway, and three of them had been given
+    // a sitter. The bench stays where the map put it - CW-43 never invents or
+    // moves mapped furniture - and the sitter this build invents for it does
+    // not get to sit on tarmac. The seed still did not change: 2,890 is
+    // exactly what the shipped census reports for Seattle
+    // (scripts/census-city-walk.mjs), and the four poses sum to it.
     const stats = await page.evaluate(() => window.__cityWalkGame.props.stats)
     expect(stats.figuresByPose).toEqual({
-      sitting: 105,
-      standing: 705,
-      walking: 1879,
-      jogging: 340,
+      sitting: 102,
+      standing: 688,
+      walking: 1773,
+      jogging: 327,
     })
     expect(
       await page.evaluate(() => window.__cityWalkGame.props.peopleCount)
-    ).toBe(3029)
+    ).toBe(2890)
 
     /**
      * ★★ CW-65 ADDS A PERSON TO THE WORLD AND NOT TO THIS CENSUS, AND THAT IS
