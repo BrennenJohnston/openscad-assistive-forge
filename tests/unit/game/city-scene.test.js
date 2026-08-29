@@ -77,7 +77,10 @@ function model() {
         {
           type: 'way',
           id: 2,
-          tags: { building: 'yes', height: '10', min_height: '4' },
+          // CW-76: the skybridge this fixture has always meant, tagged the
+          // way all four extracts tag one. As `building=yes` it was a mass
+          // with an empty column under it and is now drawn to the street.
+          tags: { building: 'bridge', height: '10', min_height: '4' },
           geometry: squareRing(30, 0, 5),
         },
         {
@@ -142,6 +145,145 @@ describe('buildCityGroup', () => {
   })
 })
 
+describe('buildCityGroup - canopy legs (CW-76)', () => {
+  /** A canopy `cy` metres off an east-west secondary at y = 0. */
+  function canopyModel(cy) {
+    return parseCityExtract(
+      {
+        elements: [
+          {
+            type: 'way',
+            id: 900,
+            tags: { highway: 'secondary' },
+            geometry: [pt(-80, 0), pt(80, 0)],
+          },
+          {
+            type: 'way',
+            id: 901,
+            tags: { building: 'roof' },
+            geometry: squareRing(0, cy, 4),
+          },
+        ],
+      },
+      { center: CENTER }
+    )
+  }
+
+  it('puts legs under a canopy standing on open ground', () => {
+    // 60 m off the centreline of a 12 m secondary is well clear of it.
+    const { stats, dispose } = buildCityGroup(canopyModel(60))
+    expect(stats.canopyColumns).toBe(4)
+    expect(stats.canopyColumnsRefused).toBe(0)
+    expect(stats.canopyUnsupported).toBe(0)
+    dispose()
+  })
+
+  it('refuses every leg that would stand in the road, and says so', () => {
+    // CW-75's law: nothing of the city stands in a roadway. A canopy across
+    // a street gets NO legs rather than a post in a traffic lane, and the
+    // count is the record of it - a canopy quietly left bare and one that
+    // could not legally be supported look identical without it.
+    const { stats, dispose } = buildCityGroup(canopyModel(0))
+    expect(stats.canopyColumns).toBe(0)
+    expect(stats.canopyColumnsRefused).toBe(4)
+    expect(stats.canopyUnsupported).toBe(1)
+    dispose()
+  })
+
+  it('thins the legs to a colonnade, not a fence', () => {
+    // ★ THE RED PROOF SAID THIS GUARD DID NOT EXIST. A four-corner square
+    // places a leg at every vertex with or without the spacing rule, so the
+    // first version of this suite proved nothing about it. A twelve-sided
+    // canopy has vertices 3.1 m apart, which is where the rule bites.
+    const sides = 12
+    const radiusM = 6
+    const ring = []
+    for (let i = 0; i <= sides; i++) {
+      const a = (i / sides) * Math.PI * 2
+      ring.push(pt(Math.cos(a) * radiusM, 60 + Math.sin(a) * radiusM))
+    }
+    const model = parseCityExtract(
+      {
+        elements: [
+          {
+            type: 'way',
+            id: 930,
+            tags: { highway: 'secondary' },
+            geometry: [pt(-80, 0), pt(80, 0)],
+          },
+          { type: 'way', id: 931, tags: { building: 'roof' }, geometry: ring },
+        ],
+      },
+      { center: CENTER }
+    )
+    const { stats, dispose } = buildCityGroup(model)
+    expect(model.buildings[0].outer.length).toBe(sides)
+    expect(stats.canopyColumns).toBe(6)
+    expect(stats.canopyColumnsRefused).toBe(0)
+    dispose()
+  })
+
+  it('gives a canopy sitting on a building no legs at all', () => {
+    // The building under it IS the support; posts through its roof would be
+    // the invention.
+    const model = parseCityExtract(
+      {
+        elements: [
+          {
+            type: 'way',
+            id: 910,
+            tags: { building: 'yes', height: '8' },
+            geometry: squareRing(0, 0, 30),
+          },
+          {
+            type: 'way',
+            id: 911,
+            tags: { building: 'roof' },
+            geometry: squareRing(0, 0, 8),
+          },
+        ],
+      },
+      { center: CENTER }
+    )
+    const { stats, dispose } = buildCityGroup(model)
+    expect(stats.canopyColumns).toBe(0)
+    expect(stats.canopyColumnsRefused).toBe(0)
+    // Not "unsupported": the building holds it.
+    expect(stats.canopyUnsupported).toBe(0)
+    dispose()
+  })
+
+  it('draws the podium CW-76 put under a tower whose parts all float', () => {
+    const model = parseCityExtract(
+      {
+        elements: [
+          {
+            type: 'way',
+            id: 920,
+            tags: { building: 'yes', height: '120' },
+            geometry: squareRing(0, 0, 30),
+          },
+          {
+            type: 'way',
+            id: 921,
+            tags: { 'building:part': 'yes', height: '120', min_height: '45' },
+            geometry: squareRing(0, 0, 29),
+          },
+        ],
+      },
+      { center: CENTER }
+    )
+    const { group, stats, dispose } = buildCityGroup(model)
+    const buildings = group.children.find((c) => c.name === 'buildings')
+    buildings.geometry.computeBoundingBox()
+    // Without the podium the mesh would start at 45 m.
+    expect(buildings.geometry.boundingBox.min.z).toBe(0)
+    expect(buildings.geometry.boundingBox.max.z).toBeCloseTo(120, 5)
+    expect(stats.podiumsDrawn).toBe(1)
+    dispose()
+  })
+})
+
 describe('buildCityGroup — CW-8 distinctness', () => {
   it('buildings carry a per-vertex color attribute and vertex-color material', () => {
     const { group, dispose } = buildCityGroup(model())
@@ -155,7 +297,7 @@ describe('buildCityGroup — CW-8 distinctness', () => {
   })
 
   it('grounded buildings get a storefront strip; elevated parts do not', () => {
-    // model(): one grounded 25 m building, one min_height=4 skybridge part.
+    // model(): one grounded 25 m building, one min_height=4 skybridge.
     const { group, stats, dispose } = buildCityGroup(model())
     const storefronts = group.children.find((c) => c.name === 'storefronts')
 
@@ -171,10 +313,14 @@ describe('buildCityGroup — CW-8 distinctness', () => {
     expect(storefronts.geometry.boundingBox.max.z).toBeGreaterThanOrEqual(3.2)
     expect(storefronts.geometry.boundingBox.max.z).toBeLessThanOrEqual(5.0)
 
-    // Exactly one of the two buildings qualifies (the skybridge is skipped),
-    // so the strip has the same triangle count as one extruded square.
-    const perBuilding = stats.buildingTriangles / 2
-    expect(stats.storefrontTriangles).toBe(perBuilding)
+    // Exactly one of the two buildings qualifies, and WHICH one is the
+    // claim: the grounded building spans x -5..5 and the skybridge 25..35,
+    // so a strip that stopped short of 25 is the grounded one alone. CW-76
+    // put legs under the skybridge, which is why this no longer counts
+    // triangles against a whole-city total.
+    storefronts.geometry.computeBoundingBox()
+    expect(storefronts.geometry.boundingBox.max.x).toBeLessThan(25)
+    expect(stats.canopyColumns).toBeGreaterThan(0)
 
     dispose()
   })

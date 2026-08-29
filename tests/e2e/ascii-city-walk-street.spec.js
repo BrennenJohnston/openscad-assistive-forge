@@ -1416,16 +1416,26 @@ test.describe('ASCII City Walk — people are people (CW-45)', () => {
     // not get to sit on tarmac. The seed still did not change: 2,890 is
     // exactly what the shipped census reports for Seattle
     // (scripts/census-city-walk.mjs), and the four poses sum to it.
+    //
+    // CW-76 re-pinned them a THIRD time, and this one is not a placement
+    // change at all: it is the collision grid. 42 of Seattle's canopies stop
+    // blocking their footprint (a `building=roof` is a slab overhead now, not
+    // a solid from the pavement) and one volume that used to hang in the air
+    // is drawn down to the street and starts blocking. 43 of 1,421 buildings
+    // changed their collision base, and PROVING that is the whole cause: the
+    // new model run against the OLD collision bases reproduces 2,890 and this
+    // exact pose table to the person. So 2,890 becomes 2,895, and the five
+    // are people standing where a canopy used to be a wall.
     const stats = await page.evaluate(() => window.__cityWalkGame.props.stats)
     expect(stats.figuresByPose).toEqual({
-      sitting: 102,
-      standing: 688,
-      walking: 1773,
-      jogging: 327,
+      sitting: 103,
+      standing: 690,
+      walking: 1777,
+      jogging: 325,
     })
     expect(
       await page.evaluate(() => window.__cityWalkGame.props.peopleCount)
-    ).toBe(2890)
+    ).toBe(2895)
 
     /**
      * ★★ CW-65 ADDS A PERSON TO THE WORLD AND NOT TO THIS CENSUS, AND THAT IS

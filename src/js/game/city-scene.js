@@ -2314,6 +2314,69 @@ function extrudeBuilding(building, tint, options = {}) {
   return geometry;
 }
 
+// CW-76 canopy columns. A canopy is a slab held over something; where the
+// something is a building it needs nothing (the building holds it), and where
+// it is open ground it needs legs or it is exactly the floating slab this
+// release exists to remove.
+//
+// The legs go at the outline's own corners, which is where a real canopy's
+// posts stand, thinned to one every CANOPY_COLUMN_SPACING_M so a 29-corner
+// awning gets a colonnade and not a fence. A corner standing in a drawn
+// roadway gets NO column: CW-75's law is that nothing of the city stands in
+// the road, and a post in a traffic lane is worse than a slab with one fewer
+// leg. Some canopies span a street corner to corner and legally get none at
+// all - those are counted, not fudged.
+const CANOPY_COLUMN_W_M = 0.35;
+const CANOPY_COLUMN_SPACING_M = 6;
+
+/**
+ * @param {Object} building - a canopy, already resolved by city-data
+ * @param {number} tint
+ * @param {{insideRoadway: Function}|null} roadways
+ * @returns {{geoms: Array, placed: number, refused: number}}
+ */
+function canopyColumnGeometries(building, tint, roadways) {
+  const out = { geoms: [], placed: 0, refused: 0 };
+  const baseM = building.minHeightM ?? 0;
+  const ring = building.outer;
+  if (!(baseM > 0) || !Array.isArray(ring) || ring.length < 3) return out;
+
+  const half = CANOPY_COLUMN_W_M / 2;
+  let sinceLast = Infinity;
+  for (let i = 0; i < ring.length; i++) {
+    const [x, y] = ring[i];
+    if (i > 0) {
+      const [px, py] = ring[i - 1];
+      sinceLast += Math.hypot(x - px, y - py);
+    }
+    if (sinceLast < CANOPY_COLUMN_SPACING_M) continue;
+    // The whole post has to clear the kerb, not just its centre.
+    if (roadways?.insideRoadway(x, y, -CANOPY_COLUMN_W_M)) {
+      out.refused++;
+      continue;
+    }
+    const geom = extrudeBuilding(
+      {
+        outer: [
+          [x - half, y - half],
+          [x + half, y - half],
+          [x + half, y + half],
+          [x - half, y + half],
+        ],
+        holes: [],
+        heightM: baseM,
+        minHeightM: 0,
+      },
+      tint
+    );
+    if (!geom) continue;
+    out.geoms.push(geom);
+    out.placed++;
+    sinceLast = 0;
+  }
+  return out;
+}
+
 // CW-26 roofs. Only these three become geometry. Each has an exact
 // construction a walker can recognise on a skyline; round, dome, mansard,
 // skillion and the rest keep their flat top rather than being guessed at,
@@ -3070,6 +3133,20 @@ export function buildCityGroup(model) {
   const facadeFaceCounts = Object.fromEntries(
     Object.keys(FACADE_FAMILIES).map((k) => [k, {}])
   );
+  // CW-76: canopies, their legs, and the ones that legally get none.
+  let canopyColumns = 0;
+  let canopyColumnsRefused = 0;
+  let canopyUnsupported = 0;
+  let podiumsDrawn = 0;
+  // Built once, and only where a canopy actually needs asking - the index
+  // costs a pass over every road ribbon in the city.
+  let canopyRoadways;
+  const canopyRoadwayIndex = () => {
+    if (canopyRoadways === undefined) {
+      canopyRoadways = buildRoadwayIndex(model.roads ?? []);
+    }
+    return canopyRoadways;
+  };
   let fittedWalls = 0;
   let blankWalls = 0;
   let wallMetres = 0;
@@ -3147,10 +3224,28 @@ export function buildCityGroup(model) {
     // CW-63: an authored MASSING replaces the data's volumes outright - see
     // libraryPlatformGeometries for why that is the honest move for the one
     // building that has one.
+    //
+    // CW-76: where the parts cover the outline but NONE of them reaches the
+    // ground, the outline is still what holds them up. It is drawn as a
+    // podium from the pavement to the lowest part's base and the parts take
+    // it from there, so Metropolitan Park West Tower stands on Seattle
+    // instead of starting at 45 m. city-data decides the height; this only
+    // draws it.
+    const podium =
+      building.partsAreMass && building.podiumToM > 0
+        ? {
+            ...building,
+            heightM: building.podiumToM,
+            minHeightM: 0,
+            roof: null,
+          }
+        : null;
     const volumes = dressing?.massing
       ? []
       : building.partsAreMass
-        ? building.parts
+        ? podium
+          ? [podium, ...building.parts]
+          : building.parts
         : [building, ...(building.parts ?? [])];
     let anyGeom = false;
     for (const volume of volumes) {
@@ -3293,6 +3388,19 @@ export function buildCityGroup(model) {
         anyGeom = true;
       }
     }
+
+    // CW-76: a canopy standing over open ground gets legs. One over a
+    // building does not - the building under it IS the support, and posts
+    // through its roof would be the invention.
+    if (building.canopy && building.canopy.source !== 'covered') {
+      const legs = canopyColumnGeometries(building, tint, canopyRoadwayIndex());
+      for (const geom of legs.geoms) buildingGeoms[archetypeIndex].push(geom);
+      canopyColumns += legs.placed;
+      canopyColumnsRefused += legs.refused;
+      if (legs.placed === 0) canopyUnsupported++;
+      else anyGeom = true;
+    }
+    if (podium) podiumsDrawn++;
 
     if (!anyGeom) return;
 
@@ -4072,6 +4180,10 @@ export function buildCityGroup(model) {
       storefrontOwnTagHotel,
       facadeFamilyCounts,
       facadeFaceCounts,
+      canopyColumns,
+      canopyColumnsRefused,
+      canopyUnsupported,
+      podiumsDrawn,
       fittedWalls,
       blankWalls,
       wallMetres,

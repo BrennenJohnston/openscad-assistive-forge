@@ -32,9 +32,11 @@
 //     geometry test is how a census comes to disagree with the build for a
 //     reason that is not a bug.
 //   * People standing in a roadway with no mapped crossing near them.
-//   * Buildings whose lowest drawn volume floats, and `building=roof` ways
-//     extruded as a solid from the ground - CW-76's subject, measured here so
-//     that release inherits a before number it did not take itself.
+//   * Mass standing over an empty column, canopies and their legs (CW-76).
+//     The old "floating buildings" row counted a tower with no podium, one
+//     slice of a stack of orphan parts, and a canopy - which hangs on purpose
+//     - as the same thing; see the block that computes them for what replaced
+//     it and why.
 //
 // WHAT IT REFUSES TO DO. It never re-implements a placement. Every position it
 // judges comes out of the builders themselves, so the census cannot be wrong
@@ -272,56 +274,63 @@ function censusOf(city, samples) {
   row.peopleInRoadAtCrossing = peopleInRoadAtCrossing
   row.samples.peopleInRoad = peopleSamples
 
-  // --- buildings: what floats and what is a roof (CW-76's before numbers) --
-  let floating = 0
-  let roofWays = 0
+  // --- buildings: what floats and what is a canopy (CW-76) -----------------
+  //
+  // ★ THE ROW THAT USED TO BE HERE COUNTED THREE DIFFERENT THINGS. "Buildings
+  // whose lowest drawn volume floats" was 33 / 23 / 0 / 14 before CW-76, and
+  // only one of the three was a defect:
+  //
+  //   * a tower whose parts all start in the air with no podium under them
+  //     (Metropolitan Park West Tower at 45 m) - the defect;
+  //   * one slice of a STACK of orphaned building:parts whose lower slices
+  //     are separate ways standing on the street (Seattle has a stack running
+  //     8.2 -> 9.8 -> 15.8 -> 121.9 -> 134.1 m at one footprint, and the old
+  //     row called four of its five slices floating);
+  //   * a canopy, which hangs BY DEFINITION.
+  //
+  // So the row is replaced by three that each mean one thing. `floatingMass`
+  // is the oracle: a mass whose column really is empty under it, measured by
+  // city-data AFTER its own repair pass, so it is a post-condition and not an
+  // assumption.
+  const st = model.stats
+  row.floatingMass = st.floatingMass
+  row.canopies = st.canopyCount
+  row.canopiesCovered = st.canopyCovered
+  row.canopyBySource = Object.entries(st.canopyBySource)
+    .filter(([, n]) => n > 0)
+    .map(([k, n]) => `${k} ${n}`)
+    .join(', ')
+  row.podiums = st.podiumCount
+  row.groundedVolumes = st.groundedVolumes
+  row.canopyColumns = cityGroup.stats.canopyColumns
+  row.canopyColumnsRefused = cityGroup.stats.canopyColumnsRefused
+  row.canopyUnsupported = cityGroup.stats.canopyUnsupported
+
   let roofSolidFromGround = 0
   let roofOverRoadway = 0
-  const floatingSamples = []
+  let slabSum = 0
   const roofSamples = []
   for (const b of model.buildings) {
-    const kind = b.tags?.building
-    const lowest = Number.isFinite(b.minHeightM) ? b.minHeightM : 0
-    // Which volumes the SCENE actually extrudes. Where the parts cover the
-    // outline they REPLACE it (city-scene.js), so a tower whose parts all
-    // start at 45 m has nothing on the ground even though its outline says
-    // zero - and a census that averages the outline in cannot see it float.
-    const volumes = b.partsAreMass ? (b.parts ?? []) : [b, ...(b.parts ?? [])]
-    const bases = volumes.map((v) =>
-      Number.isFinite(v.minHeightM) ? v.minHeightM : 0
-    )
-    const base = bases.length ? Math.min(...bases) : lowest
-    if (base > 0.5) {
-      floating++
-      if (floatingSamples.length < samples) {
-        const [cx, cy] = centroid(b.outer)
-        floatingSamples.push(
-          `${b.id} ${b.name ?? ''} (${cx.toFixed(1)}, ${cy.toFixed(1)}) ` +
-            `base ${base.toFixed(1)} m`
-        )
-      }
-    }
-    if (kind === 'roof' || kind === 'bridge') {
-      roofWays++
-      if (!(lowest > 0.5)) roofSolidFromGround++
-      const [cx, cy] = centroid(b.outer)
-      const hit = roadways.insideRoadway(cx, cy, -1)
-      if (hit) {
-        roofOverRoadway++
-        if (roofSamples.length < samples) {
-          roofSamples.push(
-            `${b.id} ${b.name ?? ''} (${cx.toFixed(1)}, ${cy.toFixed(1)}) ` +
-              `over ${hit.kind} ${hit.name ?? ''}`
-          )
-        }
-      }
+    if (!b.canopy) continue
+    if (!(b.minHeightM > 0.5)) roofSolidFromGround++
+    slabSum += b.minHeightM
+    const [cx, cy] = centroid(b.outer)
+    const hit = roadways.insideRoadway(cx, cy, -1)
+    if (!hit) continue
+    roofOverRoadway++
+    if (roofSamples.length < samples) {
+      roofSamples.push(
+        `${b.id ?? 'orphan'} ${b.name ?? ''} (${cx.toFixed(1)}, ${cy.toFixed(1)}) ` +
+          `slab ${b.minHeightM.toFixed(1)}-${b.heightM.toFixed(1)} m ` +
+          `(${b.canopy.source}) over ${hit.kind} ${hit.name ?? ''}`
+      )
     }
   }
-  row.floating = floating
-  row.roofWays = roofWays
   row.roofSolidFromGround = roofSolidFromGround
   row.roofOverRoadway = roofOverRoadway
-  row.samples.floating = floatingSamples
+  row.canopySlabMean = st.canopyCount
+    ? (slabSum / st.canopyCount).toFixed(1)
+    : '0.0'
   row.samples.roofOverRoadway = roofSamples
 
   // --- CW-73/CW-74: read the builders' own counters, never recount the tags
@@ -390,10 +399,17 @@ const ROWS = [
   ['**people in a roadway, no crossing**', 'peopleInRoad'],
   ['people in a roadway at a crossing', 'peopleInRoadAtCrossing'],
   ['mapped crossings', 'crossings'],
-  ['floating buildings', 'floating'],
-  ['roof/bridge ways', 'roofWays'],
-  ['...solid from the ground', 'roofSolidFromGround'],
+  ['**mass floating over an empty column**', 'floatingMass'],
+  ['podiums drawn under floating parts', 'podiums'],
+  ['volumes drawn down to what is under them', 'groundedVolumes'],
+  ['canopies (roof/bridge)', 'canopies'],
+  ['...where the slab height came from', 'canopyBySource'],
+  ['...mean slab underside, m', 'canopySlabMean'],
+  ['**...still solid from the ground**', 'roofSolidFromGround'],
   ['...centroid over a roadway', 'roofOverRoadway'],
+  ['canopy columns placed', 'canopyColumns'],
+  ['...refused, the road was under them', 'canopyColumnsRefused'],
+  ['...canopies left with no column at all', 'canopyUnsupported'],
   ['storefront source', 'storefrontSource'],
   ['own-tagged storefronts', 'storefrontOwnTagged'],
   ['fitted walls', 'fittedWalls'],

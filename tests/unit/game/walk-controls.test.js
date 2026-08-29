@@ -203,6 +203,28 @@ describe('buildCollisionGrid', () => {
   })
 
   it('ignores elevated parts the player can walk under', () => {
+    // CW-76: a skybridge is `building=bridge` in all four shipped extracts,
+    // and a canopy is the one thing allowed to hang over nothing. The old
+    // fixture used `building=yes` with a min_height to stand for one, which
+    // is a shape the extracts only ever carry on TOWERS - Hotel Andra,
+    // Cirrus, Burnaby Center - and those are now drawn down to the street.
+    const model = testModel([
+      {
+        type: 'way',
+        id: 3,
+        tags: { building: 'bridge', height: '20', min_height: '5' },
+        geometry: squareRing(-20, 0, 5),
+      },
+    ])
+    const grid = buildCollisionGrid(model)
+    expect(grid.isBlocked(-20, 0)).toBe(false) // skybridge overhead
+    expect(grid.isBlocked(20, 0)).toBe(true) // grounded building still solid
+  })
+
+  it('blocks a mass that CW-76 drew down to the pavement', () => {
+    // The same footprint tagged as an ordinary building with nothing under
+    // it: city-data closes the empty column, so the walker cannot walk
+    // through what is now drawn from the ground.
     const model = testModel([
       {
         type: 'way',
@@ -211,9 +233,27 @@ describe('buildCollisionGrid', () => {
         geometry: squareRing(-20, 0, 5),
       },
     ])
+    expect(buildCollisionGrid(model).isBlocked(-20, 0)).toBe(true)
+  })
+
+  it('still walks under a part standing on a podium that is really there', () => {
+    const model = testModel([
+      {
+        type: 'way',
+        id: 3,
+        tags: { building: 'yes', height: '5' },
+        geometry: squareRing(-40, 0, 8),
+      },
+      {
+        type: 'way',
+        id: 4,
+        tags: { building: 'yes', height: '20', min_height: '5' },
+        geometry: squareRing(-20, 0, 5),
+      },
+    ])
     const grid = buildCollisionGrid(model)
-    expect(grid.isBlocked(-20, 0)).toBe(false) // skybridge overhead
-    expect(grid.isBlocked(20, 0)).toBe(true) // grounded building still solid
+    expect(grid.isBlocked(-40, 0)).toBe(true) // the podium itself
+    expect(grid.isBlocked(-20, 0)).toBe(true)
   })
 })
 

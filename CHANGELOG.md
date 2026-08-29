@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Roofs are roofs, and nothing floats** (CW-76) - a canopy over a downtown street was built as a
+  solid building from the pavement up, so the roof over 3rd Avenue was a wall across the street, with
+  a lit shop window across its face. 42 of Seattle's 46 roof and bridge ways were built that way, and
+  the same in every other city. A roof is now a thin slab at the height the map gives it, on slim
+  columns where there is room for them, and you can see and walk under it. The Convention Center
+  Arch, whose mapper wrote down both where it starts and where it ends, is unchanged
+
+- **Towers stand on the ground** (CW-76) - Metropolitan Park West Tower began 45 metres in the air,
+  and 32 other buildings in Seattle floated the same way, because the game drew the detailed volumes
+  a mapper had added and stopped drawing the plain outline under them. The outline is now drawn as
+  the podium those volumes stand on. Where a volume genuinely has nothing under it anywhere in the
+  city, it is drawn down to whatever it does stand on
+
 - **Nothing stands in the road** (CW-75) - a tree, a lamp post or a person was placed relative to one
   street and never asked whether that spot was in the middle of the street it crosses. 474 tree
   trunks and 373 lamp posts stood on the tarmac in Seattle alone, and hundreds more across the other

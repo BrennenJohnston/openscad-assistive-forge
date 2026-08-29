@@ -234,7 +234,13 @@ draws it.
       tags: object,
       parts: [ /* same shape, minus parts */ ],
       partsAreMass: boolean,
-      roof: { shape, heightM, orientation } | null
+      roof: { shape, heightM, orientation } | null,
+      // Set on `building=roof` and `building=bridge` only. See "How a roof
+      // is drawn" below.
+      canopy: { baseM, topM, source, coveredHeightM } | undefined,
+      // Where the outline is drawn to when the parts are the mass above it
+      // but none of them reaches the ground. 0 when there is no podium.
+      podiumToM: number
     }
   ],
   roads: [{ points: [[x, y], ...], widthM, kind, name, sidewalk, surface }],
@@ -325,7 +331,69 @@ and added to `buildings` in its own right. It is a real volume on a real street
 and drawing it beats dropping it.
 
 **Collision reads outlines and never parts.** The gaps between parts are inside
-the building, and a player must not be able to walk into one.
+the building, and a player must not be able to walk into one. A volume whose
+base is above head height does not block at all, which is what lets a walker
+pass under a canopy or a skybridge.
+
+### How a roof is drawn
+
+`building=roof` and `building=bridge` are not masses. A roof way is a surface
+held over something with no walls under it, and a bridge way spans a gap. Both
+are drawn as a thin **slab**, never extruded from the pavement: extruded from
+zero, a canopy over a downtown street becomes a building across the street, and
+in the shipped extracts 42 of Seattle's 46 roof and bridge ways were exactly
+that.
+
+Where the slab's underside sits, taking the first answer available:
+
+1. `min_height` or `building:min_level`, when the mapper stated one.
+2. The height of the building whose outline contains the canopy's centroid -
+   a rooftop canopy sits on the roof it belongs to. Where more than one
+   outline contains it, the tallest wins.
+3. The canopy's own tagged height, less the slab. A roof tagged three metres
+   tall has its SURFACE three metres up, not its underside.
+4. Four metres, a shelter height. Two thirds of the roof ways in the four
+   shipped extracts carry no height tag at all, so this is the number most
+   canopies actually wear.
+
+The underside is never lower than 2.2 m, which keeps a canopy walk-underable
+and above the height at which collision starts blocking. The top is the tagged
+height where there is one - so an arch tagged `min_height=10` and `height=18`
+keeps the whole ten-to-eighteen-metre volume its mapper described - and a
+slab's thickness otherwise. A canopy takes no pitched roof: a `roof:shape` on a
+0.3 m slab would cap it with a pyramid taller than the slab.
+
+A canopy standing over open ground gets thin **columns** at its outline's
+corners, thinned to one every six metres so a twelve-sided awning reads as a
+colonnade rather than a fence. A corner that falls inside a drawn roadway gets
+no column, because nothing in this city stands in the road; a canopy that
+spans a street corner to corner therefore gets none at all, and
+`stats.canopyUnsupported` counts those. A canopy sitting on a building gets
+none either - the building is the support.
+
+### Nothing is drawn standing on nothing
+
+Three shapes in real data put mass in mid-air with nothing under it, and all
+three are closed at parse time:
+
+- **A tower whose parts all float.** Where parts cover the outline they
+  replace it, but Metropolitan Park West Tower's three parts all start at
+  45 m, so the tower began in the air. The outline is now drawn as a
+  **podium** from the pavement up to the lowest part's base (`podiumToM`),
+  and the parts take it from there.
+- **A volume with an empty column under it.** The question is asked of the
+  whole city rather than of one way: an orphaned `building:part` at 121.9 m
+  is the top slice of a stack whose lower slices are separate ways standing
+  on the street, and a per-way test calls all of them floating. Where the
+  column really is empty the volume is drawn down to whatever IS under it -
+  the gap is closed, never doubled, so a slab a metre above an eight-metre
+  podium grows by a metre rather than sprouting a second copy of the podium.
+  Gaps under 1.5 m are left alone.
+- **Canopies are exempt.** A canopy hangs; that is what it is for.
+
+`stats.floatingMass` is the count of masses still standing on nothing after
+that pass. It is measured after the repair rather than assumed, and it is zero
+on all four shipped extracts.
 
 ### Roads
 

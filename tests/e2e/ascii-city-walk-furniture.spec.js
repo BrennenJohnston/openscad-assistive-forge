@@ -55,11 +55,19 @@ test.describe('ASCII City Walk — street furniture (CW-43)', () => {
     // What actually stands in the city: the same numbers minus nodes that
     // fall inside a building footprint or duplicate one another - measured
     // once, deterministic forever (hash-seeded placement, versioned data).
+    //
+    // CW-76 moved three of the five, and the cause is the collision grid
+    // rather than the placement: 42 canopies stopped blocking their
+    // footprints and one grounded volume started, so a bus stop, three
+    // benches and a waste basket that used to stand against a `building=roof`
+    // now have room. Re-derived from an independent Node run of the same
+    // builders - the new model against the OLD collision bases reproduces
+    // 154 / 268 / 285 exactly, which is what pins the cause.
     const props = await propStats(page)
     expect(props.furnitureByKind).toEqual({
-      bus_stop: 154,
-      bench: 268,
-      waste_basket: 285,
+      bus_stop: 155,
+      bench: 271,
+      waste_basket: 286,
       bicycle_parking: 811,
       fire_hydrant: 109,
     })
