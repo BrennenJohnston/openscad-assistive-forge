@@ -2092,3 +2092,89 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
     expect(cycle.after).toEqual(cycle.start)
   })
 })
+
+test.describe('ASCII City Walk — the solid bright layer, three ways (CW-70)', () => {
+  /** How many cells the converter painted solid in the frame on screen. */
+  const solidCells = (page) =>
+    page.evaluate(async () => {
+      const game = window.__cityWalkGame
+      const before = game.altView.getConvertTotals().samples
+      game.altView.invalidate()
+      const deadline = Date.now() + 15000
+      while (game.altView.getConvertTotals().samples <= before) {
+        if (Date.now() > deadline) throw new Error('no conversion in 15 s')
+        await new Promise((r) => requestAnimationFrame(r))
+      }
+      const probe = game.altView.readCellProbe()
+      const levels = game.altView.getIntensityLevels()
+      if (!probe?.intensity || !levels) return null
+      // The reverse-video atlas rides one past the last drive level.
+      let solid = 0
+      for (const value of probe.intensity) if (value === levels.length) solid++
+      return { solid, cells: probe.cols * probe.rows }
+    })
+
+  test('off draws no solid cells at all, and stock draws some', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+    await page.evaluate(() => {
+      window.__cityWalkGame.motionReduced = true
+      window.__cityWalkGame.altView.setCellProbe(true)
+    })
+
+    // Stock is what ships until the owner has chosen, and it must still paint
+    // the layer - a treatment that removed it by accident would pass every
+    // "fewer solid cells" assertion in this file.
+    expect(await page.evaluate(() => window.__cityWalkGame.getLuminanceLayer())).toBe('stock')
+    const stock = await solidCells(page)
+    expect(stock, 'this browser has no intensity ladder').not.toBeNull()
+    expect(
+      stock.solid,
+      `stock painted ${stock.solid} of ${stock.cells} cells solid`
+    ).toBeGreaterThan(0)
+
+    await page.evaluate(() => window.__cityWalkGame.setLuminanceLayer('off'))
+    const off = await solidCells(page)
+    expect(off.cells).toBe(stock.cells)
+    expect(off.solid).toBe(0)
+
+    // ...and back, so the switch is a switch and not a one-way door.
+    await page.evaluate(() => window.__cityWalkGame.setLuminanceLayer('stock'))
+    expect((await solidCells(page)).solid).toBeGreaterThan(0)
+
+    await page.evaluate(() => window.__cityWalkGame.altView.setCellProbe(false))
+  })
+
+  test('each treatment sets both halves, and an unknown name falls back', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+    const read = () =>
+      page.evaluate(() => ({
+        mode: window.__cityWalkGame.getLuminanceLayer(),
+        reverseAt: window.__cityWalkGame.altView.getReverseVideo(),
+        cap: window.__cityWalkGame.altView.getReverseShareCap(),
+      }))
+
+    await page.evaluate(() => window.__cityWalkGame.setLuminanceLayer('calm'))
+    expect(await read()).toEqual({ mode: 'calm', reverseAt: 0.8, cap: 0.01 })
+
+    await page.evaluate(() => window.__cityWalkGame.setLuminanceLayer('off'))
+    expect(await read()).toEqual({ mode: 'off', reverseAt: null, cap: null })
+
+    await page.evaluate(() => window.__cityWalkGame.setLuminanceLayer('stock'))
+    expect(await read()).toEqual({ mode: 'stock', reverseAt: 0.8, cap: null })
+
+    // A name nobody knows must land on the shipped treatment, not on whatever
+    // was set last: this switch is reachable from a script and a typo in one
+    // would otherwise measure the previous run.
+    await page.evaluate(() => window.__cityWalkGame.setLuminanceLayer('calm'))
+    await page.evaluate(() =>
+      window.__cityWalkGame.setLuminanceLayer('brighter please')
+    )
+    expect(await read()).toEqual({ mode: 'stock', reverseAt: 0.8, cap: null })
+  })
+})

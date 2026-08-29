@@ -105,6 +105,8 @@ export function classLabel(id) {
  * @property {Int32Array} reverseOrWhiteToggle per-cell count of crossings
  *   into or out of reverse video (mono) or white (colour)
  * @property {Uint8Array} everLit 1 where the cell carried ink in any frame
+ * @property {Uint8Array} everFlagged 1 where the cell was painted solid
+ *   (reverse video, mono) or white (colour) in any frame
  * @property {Int32Array} runLength the open run of one glyph, per cell
  * @property {Float64Array} runSum closed run lengths, per cell
  * @property {Int32Array} runCount closed runs, per cell
@@ -170,6 +172,7 @@ export function createFold(cols, rows, options = {}) {
     driveFlip: new Int32Array(cells),
     reverseOrWhiteToggle: new Int32Array(cells),
     everLit: new Uint8Array(cells),
+    everFlagged: new Uint8Array(cells),
     runLength: new Int32Array(cells).fill(1),
     runSum: new Float64Array(cells),
     runCount: new Int32Array(cells),
@@ -253,13 +256,19 @@ export function foldFrame(fold, frame) {
         lit++;
         fold.everLit[i] = 1;
       }
-      if (drive[i] === fold.reverseIndex) reverse++;
+      if (drive[i] === fold.reverseIndex) {
+        reverse++;
+        fold.everFlagged[i] = 1;
+      }
     } else {
       if (drive[i] >= 0) {
         lit++;
         fold.everLit[i] = 1;
       }
-      if (drive[i] === fold.whiteIndex) white++;
+      if (drive[i] === fold.whiteIndex) {
+        white++;
+        fold.everFlagged[i] = 1;
+      }
     }
   }
   fold.litShare.push(lit / n);
@@ -309,6 +318,8 @@ export function foldFrame(fold, frame) {
  * @property {string} name the class label, or `EDGE(class moved)`
  * @property {number} cells cells in this row
  * @property {number} lit cells that carried ink in ANY frame of the sequence
+ * @property {number} solid cells painted solid (reverse video) or white in ANY
+ *   frame - the size of the bright layer, where `lit` is the size of the ink
  * @property {number} glyphChangePct share of (cell, frame pair) slots where
  *   the glyph changed
  * @property {number} glyphFlipPct share of (cell, frame triple) slots where
@@ -370,6 +381,7 @@ export function finishFold(fold, options = {}) {
     }
     row.cells++;
     row.lit += fold.everLit[i];
+    row.solid += fold.everFlagged[i];
     row.glyphChange += fold.glyphChange[i];
     row.glyphFlip += fold.glyphFlip[i];
     row.driveChange += fold.driveChange[i];
@@ -384,6 +396,7 @@ export function finishFold(fold, options = {}) {
   for (const row of [...rows.values(), edge]) {
     total.cells += row.cells;
     total.lit += row.lit;
+    total.solid += row.solid;
     total.glyphChange += row.glyphChange;
     total.glyphFlip += row.glyphFlip;
     total.driveChange += row.driveChange;
@@ -436,6 +449,7 @@ function emptyRow(cls) {
     cls,
     cells: 0,
     lit: 0,
+    solid: 0,
     glyphChange: 0,
     glyphFlip: 0,
     driveChange: 0,
@@ -452,6 +466,7 @@ function summariseRow(row, pairs, triples) {
     name: classLabel(row.cls),
     cells: row.cells,
     lit: row.lit,
+    solid: row.solid,
     glyphChangePct: pct(row.glyphChange, row.cells * pairs),
     glyphFlipPct: pct(row.glyphFlip, row.cells * triples),
     driveOrColourChangePct: pct(row.driveChange, row.cells * pairs),

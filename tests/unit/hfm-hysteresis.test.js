@@ -325,6 +325,14 @@ describe('_hfm-hysteresis: whose converter gets a memory', () => {
    * guard is too - a future release that reaches for setTemporalHysteresis
    * from anywhere else has to come here and say why.
    */
+  /** Every converter switch that must stay the game's alone, and its caller. */
+  const GAME_ONLY_SWITCHES = [
+    ['.setTemporalHysteresis', 'js/game/city-walk-controller.js'],
+    // CW-70: the share cap bounds the solid bright layer. The main app's Alt
+    // View draws a still and has no layer to bound.
+    ['.setReverseShareCap', 'js/game/city-walk-controller.js'],
+  ]
+
   it('is turned on by the city walk, and by nothing else in src/', () => {
     // vitest runs from the repository root, and its import.meta.url is a
     // served URL rather than a file one - so the path comes from the cwd.
@@ -344,6 +352,27 @@ describe('_hfm-hysteresis: whose converter gets a memory', () => {
     }
     walk(root)
     expect(callers).toEqual(['js/game/city-walk-controller.js'])
+  })
+
+  it('keeps every other game-only converter switch out of the main app too', () => {
+    const root = join(process.cwd(), 'src')
+    const files = []
+    const walk = (dir) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name)
+        if (entry.isDirectory()) walk(full)
+        else if (entry.name.endsWith('.js')) files.push(full)
+      }
+    }
+    walk(root)
+    for (const [call, expected] of GAME_ONLY_SWITCHES) {
+      const callers = files
+        .filter((f) => readFileSync(f, 'utf8').includes(call))
+        .map((f) => relative(root, f).split(sep).join('/'))
+      expect(callers, `${call} is called from more than the game`).toEqual([
+        expected,
+      ])
+    }
   })
 
   it('the game asks for bands that are actually on', () => {

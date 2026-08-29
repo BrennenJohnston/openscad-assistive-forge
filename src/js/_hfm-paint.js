@@ -640,6 +640,50 @@ export function pickIntensityIndex(lum, levelCount) {
   return i < 0 ? 0 : i >= levelCount ? levelCount - 1 : i;
 }
 
+/**
+ * CW-70: how far to lift the reverse-video threshold, to hold the share of
+ * solid cells under a cap.
+ *
+ * A hard per-frame cap is not available: the reverse decision has to be made
+ * BEFORE the glyph is picked (a reverse cell is matched against an inverted
+ * shape vector), and on the GPU path that happens per fragment, where no cell
+ * can know the frame's total. So the cap is a controller instead: the previous
+ * conversion's share raises or relaxes the threshold for the next one. It is
+ * one frame behind by construction, and the instrument's per-frame share is
+ * where that overshoot is read, not argued about.
+ *
+ * ★ THE RELEASE IS FAR SLOWER THAN THE RISE, AND IT WAS MEASURED BEFORE IT WAS
+ * BELIEVED. A first version relaxed at three quarters of the cap by half a
+ * step, and a STANDING pose in front of a row of lit shopfronts - where the
+ * natural share is four times the cap - produced fourteen thousand
+ * reverse-video crossings over twenty-four frames where the uncapped picture
+ * produced NONE. The threshold was hunting: one step up put the share under
+ * three quarters of the cap, so the next frame relaxed, so the frame after
+ * that was over again. A cap that makes a still picture flicker is worse than
+ * no cap. The band is now half the cap and the release an eighth of a step, so
+ * a scene whose share settles anywhere between half the cap and the cap holds
+ * still, and the layer walks back only when the thing that lit it has gone.
+ *
+ * @param {number} share the share of cells painted solid last conversion
+ * @param {number|null} cap the share allowed, or null for no cap
+ * @param {number} lift the lift currently in force
+ * @param {{step?: number, max?: number, relaxAt?: number,
+ *   releaseShare?: number}} [options]
+ * @returns {number} the lift for the next conversion, in luminance
+ */
+export function nextReverseLift(share, cap, lift, options = {}) {
+  if (!(cap > 0)) return 0;
+  const step = options.step ?? 0.01;
+  const max = options.max ?? 0.19;
+  const relaxAt = options.relaxAt ?? 0.5;
+  const releaseShare = options.releaseShare ?? 0.125;
+  const current = Number.isFinite(lift) ? lift : 0;
+  if (!(share >= 0)) return current;
+  if (share > cap) return Math.min(max, current + step);
+  if (share < cap * relaxAt) return Math.max(0, current - step * releaseShare);
+  return current;
+}
+
 // ---------------------------------------------------------------------------
 // Palette mode helpers (CW-6) — pure math, unit-tested directly
 // ---------------------------------------------------------------------------

@@ -114,6 +114,73 @@ export const MONO_REVERSE_THRESHOLD = 0.8;
  * The main app's Alt View does NOT get this - it converts one still frame, and
  * a memory of a previous frame can only cost it. See src/js/_hfm-hysteresis.js.
  */
+/**
+ * CW-70 - three treatments of the SOLID BRIGHT LAYER, measured side by side.
+ *
+ * What "the luminance layer" is, measured: cells at or above
+ * MONO_REVERSE_THRESHOLD are painted as solid phosphor with the glyph knocked
+ * out of them, and the shopfront bands are painted at 0.93-0.95 luminance,
+ * which is the brightest thing in the picture and lands on WHITE in colour.
+ * At the spawn that is eight solid bands in a row; a lamp cone paints a solid
+ * block on whatever wall it touches; a lamp post two metres away is a solid bar
+ * from the pavement to the top of the frame.
+ *
+ * Three columns, one row each:
+ *
+ *   stock   what the game has always drawn. The comparison, and the default
+ *           until the owner chooses.
+ *   calm    the solid layer kept, but bounded: the share of solid cells is
+ *           held under `reverseShareCap` by lifting the threshold (see
+ *           nextReverseLift), and the shopfront bands come down to about 0.87
+ *           so they are still lit without being the whitest thing on screen.
+ *   off     no solid cells at all in the game - the intensity ladder only -
+ *           and the shopfront bands at about 0.78, below the cliff, so they
+ *           read as bright characters rather than slabs.
+ *
+ * The band scales are multipliers on the painted shopfront canvas, whose
+ * brightest paint is 0xef (0.937): 0.93 puts it at 0.871 and 0.83 at 0.777.
+ * The cap is 1 % because the lamp-lit pose measures 0.39 % standing and climbs
+ * past 2 % during a look - so 1 % bounds the sweep without touching a standing
+ * street.
+ *
+ * ★ `reverseLiftMax` is what keeps `calm` from quietly becoming `off`, and it
+ * was measured before it was chosen. A wall of shopfronts is painted at ONE
+ * luminance, so no threshold divides "some of them" from "all of them": at a
+ * shopfront pose the natural solid share is 4.3 %, four times the cap, and an
+ * unbounded cap lifted the threshold until every band had gone - a slow fade
+ * to `off` over about twenty frames, which is not a middle option, it is a
+ * worse way of choosing the other one. The lift is therefore bounded BELOW the
+ * headroom between the cliff and the lit band (0.871 - 0.80 = 0.071), so the
+ * cap can bound a sweeping lamp cone and can never delete a lit ground floor.
+ * Deleting them is what `off` is for.
+ *
+ * ONE of `calm` and `off` is deleted in CW-72, once the owner has seen both.
+ * Deleting a column and its `setLuminanceLayer` case is the whole removal.
+ */
+export const LUMINANCE_LAYER = Object.freeze({
+  stock: Object.freeze({
+    reverseAt: MONO_REVERSE_THRESHOLD,
+    reverseShareCap: null,
+    reverseLiftMax: 0,
+    storefrontScale: 1,
+  }),
+  calm: Object.freeze({
+    reverseAt: MONO_REVERSE_THRESHOLD,
+    reverseShareCap: 0.01,
+    reverseLiftMax: 0.06,
+    storefrontScale: 0.93,
+  }),
+  off: Object.freeze({
+    reverseAt: null,
+    reverseShareCap: null,
+    reverseLiftMax: 0,
+    storefrontScale: 0.83,
+  }),
+});
+
+/** The treatment the game starts in. The owner chooses the winner at G1. */
+export const LUMINANCE_LAYER_DEFAULT = 'stock';
+
 export const CITY_TEMPORAL_HYSTERESIS = Object.freeze({
   glyph: 0.4,
   drive: 0.1,

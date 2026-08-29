@@ -113,6 +113,18 @@ describe('seq-metrics: the mono fold', () => {
     expect(res.edge.lit).toBe(1)
   })
 
+  it('counts the SOLID layer separately from the ink', () => {
+    // Cell 3 spends one frame in reverse video; nothing else ever does. The
+    // size of the bright layer is a different question from how much of the
+    // picture carries ink, and a class row has to answer both.
+    const res = foldMono()
+    expect(res.perClass[0].solid).toBe(1)
+    expect(res.edge.solid).toBe(0)
+    expect(res.total.solid).toBe(1)
+    const still = [MONO_FRAMES[0], MONO_FRAMES[0], MONO_FRAMES[0]]
+    expect(foldMono(still).total.solid).toBe(0)
+  })
+
   it('reports a ghost when a class moved and the glyph did not follow', () => {
     const clean = foldMono()
     expect(clean.classMoveEvents).toBe(1)
@@ -185,6 +197,8 @@ describe('seq-metrics: the colour fold', () => {
     expect(res.total.driveOrColourFlipPct).toBe(50)
     expect(res.total.reverseOrWhiteToggles).toBe(2)
     expect(res.whiteShare).toEqual([0.5, 0, 0.5])
+    // Only cell 0 is ever white; cell 1 never is.
+    expect(res.total.solid).toBe(1)
     // a blank cell (-1) is not lit; the lit share climbs when cell 1 lights.
     expect(res.litShareMean).toBe(0.6667)
   })

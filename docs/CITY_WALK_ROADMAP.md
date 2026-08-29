@@ -331,6 +331,51 @@ applied to the ground as well, and the ground has no rows. Turning it off there
 would make the ground about a quarter steadier at ten frames a second. With the
 memory on it changes nothing at all, so it is recorded rather than shipped.
 
+### Three treatments of the solid bright layer
+
+The brightest cells are not drawn as characters at all. At or above a
+luminance of 0.80 the converter paints the whole cell in phosphor and knocks
+the character out of it, and the shopfront bands are painted at 0.937, which is
+the brightest thing the city draws. Standing across the street from a row of
+shops, that is eight solid blocks in a row at eye level; a lamp cone paints a
+solid patch on whatever wall it lands on.
+
+There are now three selectable treatments, so they can be compared against one
+scene in one session rather than remembered:
+
+| | solid cells | shopfront band | what it looks like |
+|---|---|---|---|
+| `stock` | above 0.80 | 0.937 | what the game has always drawn |
+| `calm` | above 0.80, share bounded | 0.871 | the blocks stay, the sweep is bounded |
+| `off` | never | 0.777 | no solid cells anywhere; lit shopfronts drawn as characters |
+
+Measured at a shopfront pose at the default size, standing: solid cells 2,936 /
+2,261 / 0, and the shopfront class's LIT cells 4,162 / 4,097 / 4,042. Turning
+the layer off costs three per cent of the ink in the shopfront band and all of
+its solidity: the same shop is still lit, and now you can see the characters in
+it. Under a sweeping look at the lamp pose, `calm` takes the solid-cell
+crossings from 37,386 to 14,191 and `off` to zero.
+
+**A share cap needs a bound, or it quietly becomes the other option.** The cap
+is a controller: the previous frame's share raises the threshold for the next
+one, because the solid decision has to be made before the character is chosen
+and no cell can know the frame's total. In front of a wall of shopfronts, where
+the natural share is four times the cap, the first version lifted the threshold
+until every band had gone - and then oscillated, because the shopfronts are all
+painted at ONE luminance, so no threshold keeps some of them and drops the rest.
+Measured: 10,164 solid crossings over 47 standing frames where the uncapped
+picture produced none. The lift is now bounded below the gap between the
+threshold and the lit band, so the cap can bound a sweeping cone and can never
+delete a lit ground floor. The same pose now settles in five frames and holds
+flat for the remaining forty-two.
+
+**None of this reaches colour mode.** The solid layer is a monochrome feature:
+with a palette active the converter has no intensity ladder, so it paints no
+solid cells at all. Measured across all three treatments, six poses and both
+distances: zero solid cells in colour, every time. What is bright in colour is
+the white palette entry, which is a different mechanism and a different
+release's question.
+
 ### Two things worth knowing before trusting a number
 
 **Which GPU rendered it.** Windows hands a non-fullscreen Chromium the

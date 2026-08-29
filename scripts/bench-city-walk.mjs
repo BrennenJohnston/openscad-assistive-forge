@@ -100,6 +100,9 @@ const DEFAULTS = {
   // the end of each run, for the eyes-on gates. Pair it with --rain=none
   // --walk=0 so the two variants photograph the same standing scene.
   shot: '',
+  // --luminance selects the CW-70 treatment of the solid bright layer for
+  // every run: stock | calm | off. Empty leaves the game's own.
+  luminance: '',
   // --gpu-luid=high,low selects a D3D adapter (Chromium --use-adapter-luid).
   // Empty means whatever Windows hands out, which on this laptop is the
   // integrated GPU - see the refusal note above.
@@ -287,6 +290,15 @@ async function benchCity(page, cdp, city, variant, opts, runIndex) {
     return off ? api.setTemporalHysteresis(null) : api.getTemporalHysteresis()
   }, variant === 'no-hysteresis')
 
+  const luminance = await page.evaluate((mode) => {
+    const game = window.__cityWalkGame
+    if (typeof game.setLuminanceLayer !== 'function') return undefined
+    return mode ? game.setLuminanceLayer(mode) : game.getLuminanceLayer()
+  }, opts.luminance)
+  if (opts.luminance && luminance !== opts.luminance) {
+    throw new Error(`--luminance=${opts.luminance} answered "${luminance}"`)
+  }
+
   const rainPresses = RAIN_PRESSES[opts.rain]
   if (rainPresses === undefined) throw new Error(`unknown rain: ${opts.rain}`)
   for (let i = 0; i < rainPresses; i++) await page.keyboard.press('KeyG')
@@ -455,6 +467,7 @@ async function benchCity(page, cdp, city, variant, opts, runIndex) {
     cells: result.stats.cells,
     charScale: opts.charScale,
     hysteresis,
+    luminance,
     charW: result.stats.charW,
     charH: result.stats.charH,
     fontSizePx: result.stats.fontSizePx,
@@ -567,13 +580,14 @@ async function main() {
     )
     console.log(`GL: ${gl.renderer}`)
     console.log(
-      '| city | variant | chars | mem | path | conv avg ms | conv max ms | conv/s | rAF fps | governor ms | cells | cell px | walked m | GL |'
+      '| city | variant | chars | mem | lum | path | conv avg ms | conv max ms | conv/s | rAF fps | governor ms | cells | cell px | walked m | GL |'
     )
-    console.log('|---|---|---|---|---|---|---|---|---|---|---|---|---|---|')
+    console.log('|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|')
     for (const r of rows) {
       console.log(
         `| ${r.city} | ${r.variant} | ${(r.charScale * 100).toFixed(0)}% | ` +
           `${r.hysteresis === undefined ? 'n/a' : r.hysteresis ? 'on' : 'off'} | ` +
+          `${r.luminance ?? 'n/a'} | ` +
           `${r.usedGpu ? 'gpu' : 'cpu'} | ${r.convertAvgMs.toFixed(1)} | ` +
           `${r.convertMaxMs.toFixed(1)} | ${r.convPerS.toFixed(1)} | ` +
           `${r.rafFps.toFixed(1)} | ${r.dynamicIntervalMs} | ${r.cells} | ` +

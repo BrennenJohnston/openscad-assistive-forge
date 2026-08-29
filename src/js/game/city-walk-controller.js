@@ -106,6 +106,8 @@ import {
   MONO_INTENSITY_LEVELS,
   MONO_REVERSE_THRESHOLD,
   CITY_TEMPORAL_HYSTERESIS,
+  LUMINANCE_LAYER,
+  LUMINANCE_LAYER_DEFAULT,
   MONO_BLOOM_PX,
   MONO_GLOW_FADE,
 } from './hc-palettes.js';
@@ -1882,6 +1884,37 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // frame. Opt-in per instance and OFF everywhere else, including the main
     // app's Alt View, which converts a still.
     game.altView.setTemporalHysteresis?.(CITY_TEMPORAL_HYSTERESIS);
+
+    /**
+     * CW-70 (CW-Q67): which treatment of the SOLID BRIGHT LAYER this session
+     * draws - `stock`, `calm` or `off`. Two halves move together: the
+     * converter's reverse-video threshold and its share cap, and the scene's
+     * shopfront band brightness. Both are per instance; the main app's Alt
+     * View is not touched by either.
+     *
+     * `stock` until the owner has seen all three side by side. The switch
+     * exists so they can be compared in ONE session against ONE scene, which
+     * is the only comparison this machine supports.
+     *
+     * @param {'stock'|'calm'|'off'} mode
+     * @returns {string} the treatment now in force
+     */
+    game.setLuminanceLayer = (mode) => {
+      const name = Object.prototype.hasOwnProperty.call(LUMINANCE_LAYER, mode)
+        ? mode
+        : LUMINANCE_LAYER_DEFAULT;
+      const spec = LUMINANCE_LAYER[name];
+      game.altView.setReverseVideo(spec.reverseAt);
+      game.altView.setReverseShareCap?.(spec.reverseShareCap, {
+        maxLift: spec.reverseLiftMax,
+      });
+      game.city3d?.setStorefrontBrightness?.(spec.storefrontScale);
+      game.luminanceLayer = name;
+      game.altView.invalidate();
+      return name;
+    };
+    game.getLuminanceLayer = () => game.luminanceLayer;
+    game.setLuminanceLayer(LUMINANCE_LAYER_DEFAULT);
 
     // CW-Q2/CW-Q5/CW-Q6: multicolor exists ONLY under high contrast —
     // neon in amber (light), the ANSI bright set in green (dark). The

@@ -1408,12 +1408,25 @@ function storefrontTemperatureTint(h, poiKind) {
  *
  * @returns {CanvasTexture|null}
  */
-function createStorefrontTexture() {
-  const bandH = 112;
-  const c = make2dContext(192, bandH * STOREFRONT_VARIANTS.length);
-  if (!c) return null;
-  const { canvas, ctx } = c;
-
+/**
+ * Paint the shopfront bands onto a canvas, at a brightness.
+ *
+ * CW-70 split this out of createStorefrontTexture so the bands can be
+ * repainted at run time: the three treatments of the bright layer differ in
+ * how bright a lit ground floor is, and the owner compares them side by side.
+ * `brightness` multiplies every painted channel, so 1 is exactly what the art
+ * direction above paints (a brightest paint of 0xef, luminance 0.937) and 0.83
+ * puts that at 0.777, below the reverse-video cliff.
+ *
+ * @param {HTMLCanvasElement} canvas
+ * @param {number} brightness
+ * @returns {number} the brightness actually applied
+ */
+function paintStorefrontCanvas(canvas, brightness) {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return 1;
+  const bandH = canvas.height / STOREFRONT_VARIANTS.length;
+  ctx.globalCompositeOperation = 'source-over';
   ctx.fillStyle = '#181818';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -1423,6 +1436,30 @@ function createStorefrontTexture() {
     variant.paint(ctx, canvas.width, bandH);
     ctx.restore();
   });
+
+  const scale = Number.isFinite(brightness) ? Math.max(0, brightness) : 1;
+  if (Math.abs(scale - 1) > 1e-6) {
+    // Scaled on the pixels rather than through a multiply composite, so the
+    // result is exactly `paint x scale` and a test can say what it should be.
+    const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = img.data;
+    for (let i = 0; i < data.length; i += 4) {
+      data[i] = Math.round(data[i] * scale);
+      data[i + 1] = Math.round(data[i + 1] * scale);
+      data[i + 2] = Math.round(data[i + 2] * scale);
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+  return scale;
+}
+
+function createStorefrontTexture(brightness = 1) {
+  const bandH = 112;
+  const c = make2dContext(192, bandH * STOREFRONT_VARIANTS.length);
+  if (!c) return null;
+  const { canvas } = c;
+
+  paintStorefrontCanvas(canvas, brightness);
 
   const tileHM = STOREFRONT_HEIGHT_M * STOREFRONT_VARIANTS.length;
   return makeRepeatingTexture(
@@ -3569,6 +3606,24 @@ export function buildCityGroup(model) {
      * window rows beat against); at 0 the filtering is exactly stock.
      * @param {number} cellHPx - cell height in canvas pixels
      */
+    /**
+     * CW-70: repaint the shopfront bands at a new brightness.
+     *
+     * The bands are the brightest thing the city paints, and at 0.93-0.95 they
+     * are what turns a lit ground floor into a solid block once the converter
+     * has read them. This is the scene half of the game's luminance-layer
+     * switch; the converter half is the reverse-video threshold and its share
+     * cap.
+     *
+     * @param {number} scale 1 is what the art direction paints
+     * @returns {number} the brightness now painted
+     */
+    setStorefrontBrightness(scale) {
+      if (!storefrontTexture?.image) return 1;
+      const applied = paintStorefrontCanvas(storefrontTexture.image, scale);
+      storefrontTexture.needsUpdate = true;
+      return applied;
+    },
     setCellRaster(cellHPx) {
       const bias = Math.max(0, Math.log2(Math.max(1, cellHPx)));
       for (const m of cellRasterMats) {

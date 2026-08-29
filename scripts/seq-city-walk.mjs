@@ -109,6 +109,9 @@ const DEFAULTS = {
   // photographs before and after against ONE scene in ONE run this way; give
   // each run its own --label so the pictures do not overwrite each other.
   hysteresis: '',
+  // --luminance selects the game's CW-70 treatment of the solid bright layer:
+  // stock | calm | off. Empty leaves whatever the game configured for itself.
+  luminance: '',
   // --scene-exp neutralises ONE part of the scene before measuring, so a
   // release can ask which part a churn number is coming from instead of
   // arguing about it. See SCENE_EXPERIMENTS below. It changes the scene in
@@ -805,13 +808,14 @@ function printSequence(res, mono) {
       `  [min ${pc(Math.min(...shares))} max ${pc(Math.max(...shares))}]`
   )
   console.log(
-    `  | class | cells | lit | glyph chg% | glyph FLIP% | ${mono ? 'drive' : 'colour'} chg% | flip% | ${mono ? 'rev' : 'white'} tog | churn% | persist |`
+    `  | class | cells | lit | ${mono ? 'solid' : 'white'} | glyph chg% | glyph FLIP% | ${mono ? 'drive' : 'colour'} chg% | flip% | ${mono ? 'rev' : 'white'} tog | churn% | persist |`
   )
-  console.log('  |---|---|---|---|---|---|---|---|---|---|')
+  console.log('  |---|---|---|---|---|---|---|---|---|---|---|')
   for (const row of [...res.perClass, res.edge]) {
     if (row.cells < 40) continue
     console.log(
-      `  | ${row.name} | ${row.cells} | ${row.lit} | ${row.glyphChangePct} | ` +
+      `  | ${row.name} | ${row.cells} | ${row.lit} | ${row.solid} | ` +
+        `${row.glyphChangePct} | ` +
         `${row.glyphFlipPct} | ${row.driveOrColourChangePct} | ` +
         `${row.driveOrColourFlipPct} | ${row.reverseOrWhiteToggles} | ` +
         `${row.churnCellsPct} | ${row.meanGlyphPersistenceFrames} |`
@@ -914,6 +918,18 @@ async function main() {
     await page.evaluate(() => window.__cityWalkGame.altView.setCellProbe(true))
     const hysteresis = await applyHysteresis(page, opts.hysteresis)
     const sceneExp = parseSceneExp(opts.sceneExp)
+    const luminance = await page.evaluate((mode) => {
+      const game = window.__cityWalkGame
+      if (typeof game.setLuminanceLayer !== 'function') return null
+      return mode ? game.setLuminanceLayer(mode) : game.getLuminanceLayer()
+    }, opts.luminance)
+    if (opts.luminance && luminance !== opts.luminance) {
+      throw new Error(
+        `--luminance=${opts.luminance}: this tree answered "${luminance}"` +
+          ` - either it predates CW-70 or the name is not one it knows`
+      )
+    }
+    console.log(`luminance layer: ${luminance ?? 'not available on this tree'}`)
     console.log(
       `hysteresis: ${hysteresis ? JSON.stringify(hysteresis) : 'OFF'}` +
         (opts.hysteresis ? '' : " (the game's own setting, untouched)")
@@ -987,6 +1003,7 @@ async function main() {
           mode,
           glRenderer: gl.renderer,
           hysteresis,
+          luminance,
           sceneExp: opts.sceneExp,
         })
         printSequence(res, res.mono)

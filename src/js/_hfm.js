@@ -45,6 +45,7 @@ import {
   normalizeChroma,
   pickPaletteIndex,
   driveColor,
+  nextReverseLift,
   pickIntensityIndex,
   GLYPH_COUNT,
   SPACE_INDEX,
@@ -193,6 +194,14 @@ function _createInstanceState() {
     // means a different place or a different vocabulary.
     hysteresis: null,
     hysteresisHistory: null,
+
+    // CW-70: an upper bound on the share of cells painted as solid phosphor.
+    // null is OFF and is the default everywhere. The bound is held by lifting
+    // the reverse-video threshold one conversion behind (nextReverseLift), so
+    // it costs one comparison per frame and no readback.
+    reverseShareCap: null,
+    reverseLift: 0,
+    reverseLiftMax: 0.19,
 
     // CW-30 contrast curves: pow(t, exp) tabulated per exponent, rebuilt only
     // when the contrast setting moves.
@@ -806,7 +815,7 @@ function _sampleOnGpu(
 
   const reverseAt =
     st.reverseAtlasIndex >= 0 && st.reverseThreshold !== null
-      ? st.reverseThreshold
+      ? st.reverseThreshold + st.reverseLift
       : 2;
 
   return st.gpuPass.sample({
@@ -972,7 +981,8 @@ function _renderFrame(
   const intensityCount = useIntensity
     ? st.intensityAtlases.length - (reverseIdx >= 0 ? 1 : 0)
     : 0;
-  const reverseAt = reverseIdx >= 0 ? st.reverseThreshold : Infinity;
+  const reverseAt =
+    reverseIdx >= 0 ? st.reverseThreshold + st.reverseLift : Infinity;
   let reverseCells = 0;
 
   // CW-32: the shader already chose every glyph. All that is left is the
@@ -1078,6 +1088,16 @@ function _renderFrame(
   st.lastCols = cols;
   st.lastRows = rows;
   st.lastReverseCells = reverseCells;
+  // CW-70: the share cap, one conversion behind. Read the overshoot off the
+  // instrument's per-frame reverse share rather than trusting this line.
+  if (st.reverseShareCap !== null) {
+    st.reverseLift = nextReverseLift(
+      reverseCells / Math.max(1, rows * cols),
+      st.reverseShareCap,
+      st.reverseLift,
+      { max: st.reverseLiftMax }
+    );
+  }
   st.lastUsedGpu = Boolean(gpu);
   if (st.devCellProbe) {
     // glyphIndices is freshly allocated per conversion, so holding the
@@ -1704,6 +1724,8 @@ export async function initAltView(previewManager, options = {}) {
           ? threshold
           : null;
       if (st.reverseThreshold === null) st.reverseAtlasIndex = -1;
+      // A lift is relative to the threshold it was measured against.
+      st.reverseLift = 0;
       st.atlasKey = '';
       st.dirty = true;
       return st.reverseThreshold;
@@ -1759,9 +1781,62 @@ export async function initAltView(previewManager, options = {}) {
       }
       return st.hysteresis;
     },
-    /** @returns {{glyph: number, drive: number, holdFrames: number}|null} */
+    /**
+     * @returns {{glyph: number, drive: number, reverse: number,
+     *   holdFrames: number}|null}
+     */
     getTemporalHysteresis() {
       return st.hysteresis;
+    },
+    /**
+     * CW-70: hold the share of solid (reverse-video) cells under `cap`.
+     *
+     * OFF (null) for every instance until a caller asks, and the main app's
+     * Alt View never does. The bound is a controller rather than a clamp: the
+     * reverse decision is made before the glyph is picked, per fragment on the
+     * GPU path, so no cell can know the frame's total. See `nextReverseLift`.
+     *
+     * `maxLift` bounds how far the threshold may be lifted, and it is not a
+     * detail: a surface painted at ONE luminance has no threshold that keeps
+     * some of it and drops the rest, so an unbounded cap in front of such a
+     * surface removes all of it. Bound the lift below the headroom between the
+     * threshold and that surface's luminance and the cap can bound a sweep
+     * without deleting a lit band.
+     *
+     * @param {number|null} cap share of all cells, e.g. 0.01
+     * @param {{maxLift?: number}} [options]
+     * @returns {number|null} the cap now in force
+     */
+    setReverseShareCap(cap, options = {}) {
+      const next =
+        typeof cap === 'number' && Number.isFinite(cap) && cap > 0 ? cap : null;
+      const maxLift =
+        typeof options.maxLift === 'number' &&
+        Number.isFinite(options.maxLift) &&
+        options.maxLift > 0
+          ? options.maxLift
+          : 0.19;
+      if (next !== st.reverseShareCap || maxLift !== st.reverseLiftMax) {
+        st.reverseShareCap = next;
+        st.reverseLiftMax = maxLift;
+        // A threshold left lifted after the cap is removed would keep the
+        // layer suppressed with nothing saying so.
+        st.reverseLift = 0;
+        st.dirty = true;
+      }
+      return st.reverseShareCap;
+    },
+    /** @returns {number|null} */
+    getReverseShareCap() {
+      return st.reverseShareCap;
+    },
+    /**
+     * DEV/instrument readout: how far the cap has currently lifted the
+     * reverse-video threshold, in luminance.
+     * @returns {number}
+     */
+    getReverseLift() {
+      return st.reverseLift;
     },
     setCrtEffects(options = {}) {
       st.bloomPx = Math.max(0, Number(options.bloomPx) || 0);

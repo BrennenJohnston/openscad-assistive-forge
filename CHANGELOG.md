@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Three selectable treatments of the solid bright layer, measured side by side** (CW-70) - the
+  brightest cells are not drawn as characters at all: at or above a luminance of 0.80 the whole cell
+  is painted in phosphor with the character knocked out, and shopfront bands are painted brighter than
+  anything else in the city, so a row of shops reads as a row of solid blocks. The game can now be put
+  into any of three treatments - `stock` (unchanged), `calm` (the blocks stay but the share of them is
+  bounded, and the bands come down a little) and `off` (no solid cells at all; a lit shopfront is
+  drawn as characters) - so the three can be compared against one scene in one session. Nothing
+  changes by default: `stock` is what ships until the choice is made. Measured at a shopfront pose:
+  solid cells 2,936 / 2,261 / 0, while the shopfront's LIT cells only move 4,162 / 4,097 / 4,042, so
+  turning the layer off costs three per cent of the ink and all of the solidity
+
+- **A share cap has to be bounded, or it quietly becomes the other option** (CW-70) - the cap works by
+  raising the threshold in response to the previous frame, because the decision is made before the
+  character is chosen and no cell can know the whole frame's total. Standing in front of a wall of
+  shopfronts, where four times the allowed share is lit, the first version raised the threshold until
+  every band had gone and then oscillated: 10,164 solid crossings over 47 standing frames, where the
+  uncapped picture produced none. Shopfronts are all painted at ONE brightness, so no threshold keeps
+  some and drops the rest. The lift is now bounded below the gap between the threshold and the lit
+  band, and the same pose settles in five frames and then holds perfectly still
+
 - **A way to ask the city which part of it is moving** (CW-69) - the pavement had been photographed
   crawling underfoot, and the explanation on file was that the ground texture's mip-level rings were
   riding along with the walker. The motion instrument gained `--scene-exp`, which takes one thing away
