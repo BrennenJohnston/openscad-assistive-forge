@@ -376,7 +376,51 @@ distances: zero solid cells in colour, every time. What is bright in colour is
 the white palette entry, which is a different mechanism and a different
 release's question.
 
-### Two things worth knowing before trusting a number
+### Colour mode had no way to say "this cell is dim"
+
+Monochrome has an intensity ladder, so a dim cell is drawn dim and an empty one
+is drawn empty: three to seven per cent of a monochrome frame carries ink.
+Palette mode has no ladder. The cell contrast curve normalises every cell to
+full scale before its character is chosen, and a palette entry is then put on
+whatever came out, so a cell's ABSOLUTE brightness never reaches the picture.
+Measured at the Seattle spawn: **seventy to eighty-nine per cent of every frame
+carried ink, and about sixty per cent of all cells were WHITE**.
+
+The histogram is the clearest way to see it. Mean cells per frame on each entry
+of the six-colour green palette, standing at the spawn at the default size:
+
+| entry | green | cyan | yellow | magenta | red | white | blank |
+|---|---|---|---|---|---|---|---|
+| without a budget | 6,305 | 2,802 | 5,543 | 1,373 | 2,299 | **41,559** | 7,277 |
+| with the budget | 435 | 450 | 813 | 203 | 188 | **5** | 65,064 |
+
+Six colours, and one of them was sixty-two per cent of the screen.
+
+There is now an ink budget with two rules, both about the absolute luminance
+the contrast curve threw away: a FLOOR below which the cell draws nothing (the
+monochrome ladder's own blank level), and a GATE on white, which a cell may
+take only if it is both bright enough and colourless enough. The sRGB match
+that measures colour distance is untouched; the budget only decides which
+entries a cell may choose from, and whether it draws at all.
+
+**The white and the ink turned out to be separate problems.** Three settings,
+measured at the spawn at the default size:
+
+| | inked | white | what it looks like |
+|---|---|---|---|
+| no budget | 89.3 % | 61.8 % | large flat fields, mostly white |
+| gate only, no floor | 89.2 % | 0.01 % | the same flat fields, now teal |
+| floor 0.3 | 28.5 % | 0.01 % | a street again, with one large flat cyan wall |
+| floor 0.5 (shipped) | 3.1 % | 0.01 % | near-black, with the lit signs and windows |
+
+The gate alone removes every white cell and changes nothing else - which says
+plainly that the flatness was never only about white. Take the ink away as
+well and the flat fields go with it, at the cost of a much emptier picture:
+at the monochrome floor, colour mode inks about as much of the screen as
+monochrome does, because it is the same rule. Both palettes keep all their
+entries in use at every setting - nothing collapses to two colours.
+
+
 
 **Which GPU rendered it.** Windows hands a non-fullscreen Chromium the
 power-saving adapter, so on a laptop with two GPUs the default is the

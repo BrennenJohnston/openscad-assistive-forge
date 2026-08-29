@@ -178,6 +178,31 @@ export const LUMINANCE_LAYER = Object.freeze({
   }),
 });
 
+/**
+ * CW-71 - the palette-mode INK BUDGET the game asks for.
+ *
+ * Measured before it was chosen. At the Seattle spawn, in colour, 70 to 83 per
+ * cent of ALL cells carry ink and 54 to 62 per cent of them are WHITE, against
+ * 3 to 7 per cent inked in monochrome. The cause is structural: palette mode
+ * has no intensity ladder, the cell contrast curve normalises every cell to
+ * full scale before its glyph is chosen, and a colour is then put on whatever
+ * came out - so a cell's ABSOLUTE brightness never reaches the picture.
+ *
+ * `floor` is the monochrome ladder's own blank level, applied to colour. Its
+ * consequence is deliberate and large: colour mode inks about as much of the
+ * screen as monochrome does, because that is what the same rule produces.
+ * `whiteLum` and `whiteChroma` are the gate on the white entry, which is what
+ * a low-chroma highlight lands on through the D-112 sRGB match.
+ *
+ * These three numbers are the owner's at G1 (CW-Q79). Two alternatives were
+ * measured beside them and are in the release record.
+ */
+export const CITY_PALETTE_INK_BUDGET = Object.freeze({
+  floor: 0.5,
+  whiteLum: 0.9,
+  whiteChroma: 0.12,
+});
+
 /** The treatment the game starts in. The owner chooses the winner at G1. */
 export const LUMINANCE_LAYER_DEFAULT = 'stock';
 

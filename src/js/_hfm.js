@@ -44,9 +44,12 @@ import {
   parsePaletteColor,
   normalizeChroma,
   pickPaletteIndex,
+  cellChroma,
   driveColor,
   nextReverseLift,
+  normalizeInkBudget,
   pickIntensityIndex,
+  whiteAllowed,
   GLYPH_COUNT,
   SPACE_INDEX,
   FIRST_CHAR_CODE,
@@ -202,6 +205,11 @@ function _createInstanceState() {
     reverseShareCap: null,
     reverseLift: 0,
     reverseLiftMax: 0.19,
+
+    // CW-71: the palette-mode ink budget. null is OFF and is the default for
+    // every instance; the game turns it on for its own. See _hfm-paint.js.
+    inkBudget: null,
+    paletteWhiteIndex: -1,
 
     // CW-30 contrast curves: pow(t, exp) tabulated per exponent, rebuilt only
     // when the contrast setting moves.
@@ -857,6 +865,8 @@ function _sampleOnGpu(
     spaceIndex: SPACE_INDEX,
     sparsestNonSpace: st.sparsestNonSpace ?? SPACE_INDEX,
     hysteresis: st.hysteresis,
+    inkBudget: usePalette ? st.inkBudget : null,
+    paletteWhiteIndex: st.paletteWhiteIndex,
   });
 }
 
@@ -1064,6 +1074,8 @@ function _renderFrame(
       onReverseCell: () => reverseCells++,
       hysteresis,
       history,
+      inkBudget: st.inkBudget,
+      paletteWhiteIndex: st.paletteWhiteIndex,
     });
   }
 
@@ -1154,8 +1166,14 @@ function _convertOnCpu(
     onReverseCell,
     hysteresis,
     history,
+    inkBudget,
+    paletteWhiteIndex,
   }
 ) {
+  // CW-71: palette mode never needed the cell's ABSOLUTE luminance, because
+  // nothing used it. The ink budget does: it is the one thing the cell
+  // contrast curve throws away.
+  const wantsLum = useIntensity || Boolean(inkBudget && usePalette);
   // CW-23: what each cell is looking at, if the caller can say. A provider
   // that returns the wrong size is ignored rather than trusted — a stale map
   // would hand cells the vocabulary of whatever used to be there.
@@ -1215,7 +1233,7 @@ function _convertOnCpu(
             sumG += tapPlan.green[t];
             sumB += tapPlan.blue[t];
           }
-          if (useIntensity) sumLum += v[i];
+          if (wantsLum) sumLum += v[i];
         }
       } else {
         for (let i = 0; i < 6; i++) {
@@ -1246,7 +1264,7 @@ function _convertOnCpu(
       // matching: intensity answers "how bright is this cell", the glyph
       // answers "what shape is it", and the two must not be the same signal
       // twice over.
-      const cellLum = useIntensity ? sumLum / 6 : 0;
+      const cellLum = wantsLum ? sumLum / 6 : 0;
       if (cellLumOut) cellLumOut[idx] = cellLum;
       // CW-68: `idx` walks on at the glyph assignment below, so the cell's own
       // index is taken here, once, and every history read uses it.
@@ -1275,13 +1293,28 @@ function _convertOnCpu(
       if (history) {
         history.drive[cell] = cellReversed ? -1 : st.intensityIndices[cell];
       }
+      let inkBlanked = false;
       if (usePalette) {
+        const meanR = sumR / (6 * 255);
+        const meanG = sumG / (6 * 255);
+        const meanB = sumB / (6 * 255);
+        let skip = -1;
+        if (inkBudget) {
+          inkBlanked = cellLum < inkBudget.floor;
+          if (
+            paletteWhiteIndex >= 0 &&
+            !whiteAllowed(cellLum, cellChroma(meanR, meanG, meanB), inkBudget)
+          ) {
+            skip = paletteWhiteIndex;
+          }
+        }
         st.colorIndices[idx] = pickPaletteIndex(
-          sumR / (6 * 255),
-          sumG / (6 * 255),
-          sumB / (6 * 255),
+          meanR,
+          meanG,
+          meanB,
           st.paletteChroma,
-          st.paletteChromaBoost
+          st.paletteChromaBoost,
+          skip
         );
       }
 
@@ -1316,6 +1349,19 @@ function _convertOnCpu(
       _applyCellContrast(st, v);
 
       const cellClass = classMap ? classMap[cell] : -1;
+      if (inkBlanked) {
+        // Below the floor the cell draws nothing at all, the way a mono cell
+        // below the ladder's blank level does. The memory is told, so it does
+        // not hold a glyph the cell is no longer allowed to draw.
+        if (history) {
+          history.glyph[cell] = SPACE_INDEX;
+          history.hold[cell] = 0;
+          history.reversed[cell] = 0;
+          history.cls[cell] = cellClass;
+        }
+        glyphIndices[idx++] = SPACE_INDEX;
+        continue;
+      }
       if (cellReversed) {
         // In a reverse cell the phosphor is the BACKGROUND and the glyph is a
         // hole, so brightness is one minus coverage. Matching the cell against
@@ -1653,11 +1699,18 @@ export async function initAltView(previewManager, options = {}) {
         st.paletteChromaBoost = Number.isFinite(options.chromaBoost)
           ? Math.max(1, options.chromaBoost)
           : 1;
+        // CW-71: which entry the ink budget may withhold. Found by hex rather
+        // than by position, because a palette is art direction and its order
+        // is not a contract.
+        st.paletteWhiteIndex = st.palette.findIndex(
+          (colour) => String(colour).trim().toLowerCase() === '#ffffff'
+        );
       } else {
         st.palette = null;
         st.paletteChroma = null;
         st.paletteAtlases = null;
         st.colorIndices = null;
+        st.paletteWhiteIndex = -1;
       }
       st.atlasKey = '';
       st.dirty = true;
@@ -1829,6 +1882,42 @@ export async function initAltView(previewManager, options = {}) {
     /** @returns {number|null} */
     getReverseShareCap() {
       return st.reverseShareCap;
+    },
+    /**
+     * CW-71: the palette-mode ink budget - an absolute-luminance floor below
+     * which a cell draws nothing, and a gate on the white entry.
+     *
+     * OFF (null) for every instance until a caller asks, and the main app's
+     * Alt View never does. It changes only WHICH palette entries a cell may
+     * take and whether it draws at all; the sRGB match that measures the
+     * distance is untouched. See `_hfm-paint.js` for the rules.
+     *
+     * @param {{floor?: number, whiteLum?: number, whiteChroma?: number}|null}
+     *   options
+     * @returns {{floor: number, whiteLum: number, whiteChroma: number}|null}
+     */
+    setPaletteInkBudget(options) {
+      const next = normalizeInkBudget(options);
+      const was = st.inkBudget;
+      const changed =
+        !was !== !next ||
+        (was &&
+          next &&
+          (was.floor !== next.floor ||
+            was.whiteLum !== next.whiteLum ||
+            was.whiteChroma !== next.whiteChroma));
+      st.inkBudget = next;
+      if (changed) {
+        // Cells decided under a different budget must not be held.
+        st.hysteresisHistory = null;
+        st.gpuPass?.forget?.();
+        st.dirty = true;
+      }
+      return st.inkBudget;
+    },
+    /** @returns {{floor: number, whiteLum: number, whiteChroma: number}|null} */
+    getPaletteInkBudget() {
+      return st.inkBudget;
     },
     /**
      * DEV/instrument readout: how far the cap has currently lifted the

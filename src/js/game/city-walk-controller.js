@@ -108,6 +108,7 @@ import {
   CITY_TEMPORAL_HYSTERESIS,
   LUMINANCE_LAYER,
   LUMINANCE_LAYER_DEFAULT,
+  CITY_PALETTE_INK_BUDGET,
   MONO_BLOOM_PX,
   MONO_GLOW_FADE,
 } from './hc-palettes.js';
@@ -1915,6 +1916,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     };
     game.getLuminanceLayer = () => game.luminanceLayer;
     game.setLuminanceLayer(LUMINANCE_LAYER_DEFAULT);
+
+    // CW-71: colour mode's own bright layer. Per instance; the main app's Alt
+    // View is not given one. The thresholds are the owner's (CW-Q79).
+    game.altView.setPaletteInkBudget?.(CITY_PALETTE_INK_BUDGET);
 
     // CW-Q2/CW-Q5/CW-Q6: multicolor exists ONLY under high contrast —
     // neon in amber (light), the ANSI bright set in green (dark). The

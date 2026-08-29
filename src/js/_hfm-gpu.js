@@ -103,6 +103,13 @@ uniform float uSparsestNonSpace;
 // frame after a reallocation, make every expression below the stateless one.
 // The rules are src/js/_hfm-hysteresis.js; this is the same arithmetic in GLSL
 // and the two must be changed together.
+// CW-71 the palette-mode ink budget: an absolute-luminance floor below which
+// the cell draws nothing, and a gate on the white entry. uWhiteIndex is -1
+// when the palette has no white. The rules are src/js/_hfm-paint.js.
+uniform float uInkFloor;
+uniform float uWhiteLum;
+uniform float uWhiteChroma;
+uniform float uWhiteIndex;
 uniform sampler2D uPrev;
 uniform float uHasPrev;
 uniform float uGlyphBand;
@@ -374,10 +381,18 @@ void main() {
     float mx = max(mean.r, max(mean.g, mean.b));
     vec3 n = mx < 1e-6 ? vec3(0.0) : mean / mx;
     if (abs(uChromaBoost - 1.0) > 1e-6) n = pow(max(n, vec3(0.0)), vec3(uChromaBoost));
+    // CW-71: how far from grey this cell is, in the same max-normalised
+    // space the match works in. n's largest component is 1, so the smallest
+    // one IS the distance from grey.
+    float chroma = 1.0 - min(n.r, min(n.g, n.b));
+    bool allowWhite =
+      uWhiteLum <= 0.0 || (cellLum >= uWhiteLum && chroma < uWhiteChroma);
+    int skipColour = allowWhite ? -1 : int(uWhiteIndex);
     int bestColour = 0;
     float bestColourD = 1e9;
     for (int i = 0; i < 16; i++) {
       if (float(i) >= uPaletteCount) break;
+      if (i == skipColour) continue;
       vec3 d = n - uPalette[i];
       float dist = dot(d, d);
       if (dist < bestColourD) {
@@ -393,6 +408,11 @@ void main() {
     // memory off, 87 % with it on.
     second = float(bestColour) + classId * 16.0;
   }
+
+  // CW-71: below the floor the cell draws nothing at all, the way a mono cell
+  // below the ladder's blank level does. Applied after the glyph search so the
+  // memory and the class byte are still written from the real decision.
+  if (uInkFloor > 0.0 && cellLum < uInkFloor) best = int(uSpaceIndex);
 
   // Alpha carries the memory forward: the hold counter and the reverse flag.
   // Blending is off for this material (three disables it for an opaque
@@ -506,6 +526,10 @@ export function createGpuGlyphPass(renderer) {
       uGlyphBand: { value: 0 },
       uReverseBand: { value: 0 },
       uHoldFrames: { value: 0 },
+      uInkFloor: { value: 0 },
+      uWhiteLum: { value: 0 },
+      uWhiteChroma: { value: 0 },
+      uWhiteIndex: { value: -1 },
     },
   });
   quadScene.add(new Mesh(new PlaneGeometry(2, 2), material));
@@ -680,6 +704,8 @@ export function createGpuGlyphPass(renderer) {
       spaceIndex,
       sparsestNonSpace,
       hysteresis,
+      inkBudget,
+      paletteWhiteIndex,
     }) {
       if (failed) return null;
       try {
@@ -741,6 +767,13 @@ export function createGpuGlyphPass(renderer) {
         u.uGlyphBand.value = hysteresis ? hysteresis.glyph : 0;
         u.uReverseBand.value = hysteresis ? hysteresis.reverse : 0;
         u.uHoldFrames.value = hysteresis ? hysteresis.holdFrames : 0;
+        u.uInkFloor.value = inkBudget ? inkBudget.floor : 0;
+        u.uWhiteLum.value = inkBudget ? inkBudget.whiteLum : 0;
+        u.uWhiteChroma.value = inkBudget ? inkBudget.whiteChroma : 0;
+        u.uWhiteIndex.value =
+          inkBudget && Number.isInteger(paletteWhiteIndex)
+            ? paletteWhiteIndex
+            : -1;
 
         renderer.setRenderTarget(target);
         renderer.render(quadScene, quadCamera);

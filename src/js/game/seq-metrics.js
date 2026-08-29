@@ -110,6 +110,8 @@ export function classLabel(id) {
  * @property {Int32Array} runLength the open run of one glyph, per cell
  * @property {Float64Array} runSum closed run lengths, per cell
  * @property {Int32Array} runCount closed runs, per cell
+ * @property {Int32Array} colourCounts cells taking each palette entry,
+ *   summed over frames (colour mode only; index 16 counts blank cells)
  * @property {number[]} litShare lit share per frame
  * @property {number[]} whiteShare white share per frame (colour)
  * @property {number[]} reverseShare reverse-video share per frame (mono)
@@ -173,6 +175,7 @@ export function createFold(cols, rows, options = {}) {
     reverseOrWhiteToggle: new Int32Array(cells),
     everLit: new Uint8Array(cells),
     everFlagged: new Uint8Array(cells),
+    colourCounts: new Int32Array(17),
     runLength: new Int32Array(cells).fill(1),
     runSum: new Float64Array(cells),
     runCount: new Int32Array(cells),
@@ -269,6 +272,10 @@ export function foldFrame(fold, frame) {
         white++;
         fold.everFlagged[i] = 1;
       }
+      // Which entries a palette actually uses. A palette that collapses to
+      // two of its six is a palette in name only, and no share of white or
+      // ink says so.
+      fold.colourCounts[drive[i] >= 0 && drive[i] < 16 ? drive[i] : 16]++;
     }
   }
   fold.litShare.push(lit / n);
@@ -345,8 +352,8 @@ export function foldFrame(fold, frame) {
  *   mono: boolean, classChangedCells: number, classPairs: Array<[string,
  *   number]>, litShareMean: number, whiteShare: number[],
  *   reverseShare: number[], ghostPct: number, classMoveEvents: number,
- *   classMoveLitEvents: number, total: SeqRow, perClass: SeqRow[],
- *   edge: SeqRow}}
+ *   classMoveLitEvents: number, colourHistogram: number[],
+ *   total: SeqRow, perClass: SeqRow[], edge: SeqRow}}
  */
 export function finishFold(fold, options = {}) {
   if (fold.finished) throw new Error('finishFold: this fold is already closed');
@@ -433,6 +440,10 @@ export function finishFold(fold, options = {}) {
     ),
     whiteShare: fold.whiteShare.map(round4),
     reverseShare: fold.reverseShare.map(round4),
+    // Mean cells per frame on each palette entry; the last slot is blank.
+    colourHistogram: fold.mono
+      ? []
+      : [...fold.colourCounts].map((count) => Math.round(count / fold.frames)),
     classMoveEvents: fold.classMoveEvents,
     classMoveLitEvents: fold.classMoveLitEvents,
     ghostPct: pct(fold.classMoveGlyphHeld, fold.classMoveLitEvents),

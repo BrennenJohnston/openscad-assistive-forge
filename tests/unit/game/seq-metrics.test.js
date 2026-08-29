@@ -204,6 +204,36 @@ describe('seq-metrics: the colour fold', () => {
   })
 })
 
+describe('seq-metrics: the palette histogram', () => {
+  it('counts the cells on each entry, and the blank ones', () => {
+    // The question the white share cannot answer: is this palette being USED,
+    // or has the picture collapsed onto one or two of its entries? Measured in
+    // the game at the Seattle spawn, white took 62 % of every cell and the
+    // other five entries shared 27 % between them.
+    const fold = createFold(2, 2, { mono: false, whiteIndex: 5 })
+    foldFrame(fold, {
+      glyphs: [1, 1, 1, 1],
+      colour: [5, 5, 2, -1],
+      cls: [WALL, WALL, WALL, WALL],
+    })
+    foldFrame(fold, {
+      glyphs: [1, 1, 1, 1],
+      colour: [5, 2, 2, -1],
+      cls: [WALL, WALL, WALL, WALL],
+    })
+    const res = finishFold(fold)
+    // Two frames: entry 5 taken three times, entry 2 three times, blank twice.
+    expect(res.colourHistogram[5]).toBe(2)
+    expect(res.colourHistogram[2]).toBe(2)
+    expect(res.colourHistogram[0]).toBe(0)
+    expect(res.colourHistogram[16]).toBe(1)
+  })
+
+  it('is empty in mono, where there is no palette to spend', () => {
+    expect(foldMono().colourHistogram).toEqual([])
+  })
+})
+
 describe('seq-metrics: the labels come from the class pass', () => {
   it('names every surface class the pass can emit', () => {
     for (const [name, id] of Object.entries(SURFACE_CLASS)) {

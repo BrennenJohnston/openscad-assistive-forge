@@ -100,6 +100,14 @@ const DEFAULTS = {
   // the end of each run, for the eyes-on gates. Pair it with --rain=none
   // --walk=0 so the two variants photograph the same standing scene.
   shot: '',
+  // --colour=on runs in palette mode. Needed to price anything that only
+  // exists there: the CW-71 ink budget is inert in monochrome, so a bench of
+  // it without this measures nothing at all.
+  colour: 'off',
+  // --ink-budget sets the CW-71 palette ink budget for every run: `off`, or
+  // `floor,whiteLum,whiteChroma`. Empty leaves the game's own. Only palette
+  // mode is affected, so pair it with a colour run.
+  inkBudget: '',
   // --luminance selects the CW-70 treatment of the solid bright layer for
   // every run: stock | calm | off. Empty leaves the game's own.
   luminance: '',
@@ -299,6 +307,28 @@ async function benchCity(page, cdp, city, variant, opts, runIndex) {
     throw new Error(`--luminance=${opts.luminance} answered "${luminance}"`)
   }
 
+  // A colour bench that quietly ran in monochrome would report a cost for a
+  // feature that was never reached.
+  const palette = await page.evaluate(
+    () => window.__cityWalkGame.altView.getPalette?.() ?? null
+  )
+  if ((opts.colour === 'on') !== Boolean(palette)) {
+    throw new Error(
+      `--colour=${opts.colour} but the game is ${palette ? 'in palette mode' : 'in mono'}`
+    )
+  }
+
+  const inkBudget = await page.evaluate((arg) => {
+    const api = window.__cityWalkGame.altView
+    if (typeof api.getPaletteInkBudget !== 'function') return undefined
+    if (!arg) return api.getPaletteInkBudget()
+    if (arg === 'off' || arg === 'none') return api.setPaletteInkBudget(null)
+    const [floor, whiteLum, whiteChroma] = String(arg)
+      .split(',')
+      .map(Number)
+    return api.setPaletteInkBudget({ floor, whiteLum, whiteChroma })
+  }, opts.inkBudget)
+
   const rainPresses = RAIN_PRESSES[opts.rain]
   if (rainPresses === undefined) throw new Error(`unknown rain: ${opts.rain}`)
   for (let i = 0; i < rainPresses; i++) await page.keyboard.press('KeyG')
@@ -468,6 +498,7 @@ async function benchCity(page, cdp, city, variant, opts, runIndex) {
     charScale: opts.charScale,
     hysteresis,
     luminance,
+    inkBudget,
     charW: result.stats.charW,
     charH: result.stats.charH,
     fontSizePx: result.stats.fontSizePx,
@@ -497,9 +528,13 @@ async function main() {
     deviceScaleFactor: 1,
     viewport: { width: opts.width, height: opts.height },
   })
-  await context.addInitScript(() => {
+  await context.addInitScript((colourOn) => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true')
     localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
+    localStorage.setItem(
+      'openscad-forge-city-walk-colour',
+      colourOn ? 'on' : 'off'
+    )
     // CW-42: benches measure the size THEY set. The inert forced-probe map
     // stops the entry calibration on its first frame, and clearing the
     // stored floor keeps a previous real calibration from seeding the
@@ -508,7 +543,7 @@ async function main() {
     // its config is still a dead bench).
     window.__cityWalkCalibrationForce = {}
     localStorage.removeItem('openscad-forge-city-walk-calibrated-floor')
-  })
+  }, opts.colour === 'on')
   const page = await context.newPage()
 
   try {
@@ -575,19 +610,23 @@ async function main() {
     console.log(
       `label: ${opts.label || '(none)'}   throttle: ${opts.throttle}x   ` +
         `chars: ${sizes.map((s) => `${(s * 100).toFixed(0)}%`).join(',')}   ` +
+        `colour: ${opts.colour}   ` +
         `rain: ${opts.rain}   viewport: ${opts.width}x${opts.height} @ dpr 1   ` +
         `adapter: ${opts.gpuLuid || 'default (whatever Windows hands out)'}`
     )
     console.log(`GL: ${gl.renderer}`)
     console.log(
-      '| city | variant | chars | mem | lum | path | conv avg ms | conv max ms | conv/s | rAF fps | governor ms | cells | cell px | walked m | GL |'
+      '| city | variant | chars | mem | lum | ink | path | conv avg ms | conv max ms | conv/s | rAF fps | governor ms | cells | cell px | walked m | GL |'
     )
-    console.log('|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|')
+    console.log(
+      '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|'
+    )
     for (const r of rows) {
       console.log(
         `| ${r.city} | ${r.variant} | ${(r.charScale * 100).toFixed(0)}% | ` +
           `${r.hysteresis === undefined ? 'n/a' : r.hysteresis ? 'on' : 'off'} | ` +
           `${r.luminance ?? 'n/a'} | ` +
+          `${r.inkBudget === undefined ? 'n/a' : r.inkBudget ? 'on' : 'off'} | ` +
           `${r.usedGpu ? 'gpu' : 'cpu'} | ${r.convertAvgMs.toFixed(1)} | ` +
           `${r.convertMaxMs.toFixed(1)} | ${r.convPerS.toFixed(1)} | ` +
           `${r.rafFps.toFixed(1)} | ${r.dynamicIntervalMs} | ${r.cells} | ` +

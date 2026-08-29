@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Colour mode can say "this cell is dim" for the first time** (CW-71) - monochrome has an intensity
+  ladder, so a dim cell is drawn dim and an empty one empty: three to seven per cent of a monochrome
+  frame carries ink. Colour had no ladder at all. Every cell was normalised to full brightness before
+  its character was chosen and then had a colour put on it, so **seventy to eighty-nine per cent of
+  every colour frame carried ink and about sixty per cent of all cells were white** - six colours in
+  the palette, and one of them was most of the screen. There is now an ink budget: a floor below which
+  a cell draws nothing, and a gate that lets a cell take white only if it is both bright enough and
+  colourless enough. Measured at the Seattle spawn: ink from 89.3 to 3.1 per cent, white from 61.8 to
+  0.01, and the colour flicker while walking from 15,677 changes over 24 frames to 171. Both palettes
+  still use all of their colours; nothing collapses
+
+- **The white and the ink turned out to be two problems, not one** (CW-71) - turning on the white gate
+  alone, with no floor, removes every white cell and changes nothing else: the same large flat fields
+  are still there, in teal instead of white. That says plainly that the flatness was never only about
+  white. Three settings are measured and photographed side by side in `docs/CITY_WALK_ROADMAP.md`, so
+  the choice of how empty colour mode should be is made from pictures rather than from a hunch
+
 - **Three selectable treatments of the solid bright layer, measured side by side** (CW-70) - the
   brightest cells are not drawn as characters at all: at or above a luminance of 0.80 the whole cell
   is painted in phosphor with the character knocked out, and shopfront bands are painted brighter than

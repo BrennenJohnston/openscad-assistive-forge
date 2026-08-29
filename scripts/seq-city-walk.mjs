@@ -112,6 +112,13 @@ const DEFAULTS = {
   // --luminance selects the game's CW-70 treatment of the solid bright layer:
   // stock | calm | off. Empty leaves whatever the game configured for itself.
   luminance: '',
+  // --scheme=light runs the page in the light theme, which is how the AMBER
+  // palette is reached; dark gives the green one. There are TWO palettes of
+  // six colours each, not six palettes.
+  scheme: 'dark',
+  // --ink-budget sets the CW-71 palette ink budget for the run: `off`, or
+  // `floor,whiteLum,whiteChroma`. Empty leaves the game's own.
+  inkBudget: '',
   // --scene-exp neutralises ONE part of the scene before measuring, so a
   // release can ask which part a churn number is coming from instead of
   // arguing about it. See SCENE_EXPERIMENTS below. It changes the scene in
@@ -551,6 +558,39 @@ async function setSize(page, wanted) {
   return got
 }
 
+/**
+ * Apply --ink-budget, and report what the instance ended up with.
+ *
+ * @returns {Promise<{floor: number, whiteLum: number, whiteChroma: number}|null>}
+ */
+async function applyInkBudget(page, arg) {
+  if (!arg) {
+    return page.evaluate(
+      () => window.__cityWalkGame.altView.getPaletteInkBudget?.() ?? null
+    )
+  }
+  let wanted = null
+  if (arg !== 'off' && arg !== 'none') {
+    const [floor, whiteLum, whiteChroma] = list(arg).map(Number)
+    if (![floor, whiteLum, whiteChroma].every((n) => Number.isFinite(n))) {
+      throw new Error(
+        `--ink-budget=${arg}: expected "off" or "floor,whiteLum,whiteChroma"`
+      )
+    }
+    wanted = { floor, whiteLum, whiteChroma }
+  }
+  const set = await page.evaluate(
+    (b) => window.__cityWalkGame.altView.setPaletteInkBudget?.(b) ?? null,
+    wanted
+  )
+  if (wanted && !set) {
+    throw new Error(
+      'this tree has no setPaletteInkBudget() - --ink-budget needs CW-71'
+    )
+  }
+  return set
+}
+
 /** `coarse-ground:4` -> {name, factor}; anything else -> {name, factor: 4}. */
 function parseSceneExp(arg) {
   const [name, factor] = String(arg || 'none').split(':')
@@ -821,6 +861,16 @@ function printSequence(res, mono) {
         `${row.churnCellsPct} | ${row.meanGlyphPersistenceFrames} |`
     )
   }
+  if (!mono && res.colourHistogram?.length) {
+    const used = res.colourHistogram
+      .slice(0, 16)
+      .map((n, i) => (n > 0 ? `${i}:${n}` : null))
+      .filter(Boolean)
+    console.log(
+      `  palette entries used (mean cells/frame): ${used.join(' ')} · blank ` +
+        `${res.colourHistogram[16]}`
+    )
+  }
   if (res.classPairs.length) {
     console.log(
       '  top class pairs: ' +
@@ -854,7 +904,7 @@ async function main() {
   const contextOptions = {
     deviceScaleFactor: 1,
     viewport: { width: opts.width, height: opts.height },
-    colorScheme: 'dark',
+    colorScheme: opts.scheme === 'light' ? 'light' : 'dark',
     // The instrument sets the pose itself; the game's own easing would be a
     // second thing moving in a sequence that is meant to have exactly one.
     reducedMotion: 'reduce',
@@ -918,6 +968,11 @@ async function main() {
     await page.evaluate(() => window.__cityWalkGame.altView.setCellProbe(true))
     const hysteresis = await applyHysteresis(page, opts.hysteresis)
     const sceneExp = parseSceneExp(opts.sceneExp)
+    const inkBudget = await applyInkBudget(page, opts.inkBudget)
+    console.log(
+      `ink budget: ${inkBudget ? JSON.stringify(inkBudget) : 'OFF'}` +
+        (opts.inkBudget ? '' : " (the game's own setting, untouched)")
+    )
     const luminance = await page.evaluate((mode) => {
       const game = window.__cityWalkGame
       if (typeof game.setLuminanceLayer !== 'function') return null
@@ -1004,6 +1059,7 @@ async function main() {
           glRenderer: gl.renderer,
           hysteresis,
           luminance,
+          inkBudget,
           sceneExp: opts.sceneExp,
         })
         printSequence(res, res.mono)
