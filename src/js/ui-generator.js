@@ -23,6 +23,7 @@ import {
   flattenLayers,
   flattenSilhouette,
   flattenToCompoundPath,
+  readLayerFile,
   LAYER_EMIT_CAP,
 } from './svg-preparer.js';
 import { buildNestingTree, suggestLayers, layerLimit } from './svg-nesting.js';
@@ -2372,17 +2373,14 @@ function createFileControl(
       const marginMm = Number(values.margin) || 15;
       const scalePercent = Number(values.design_scale) || 100;
 
-      // ONE canvas for every plate and for the laser sheet, so they agree.
-      let canvasSpan = 100;
-      let canvasHeight = 100;
-      const firstCut = cuts.find(Boolean);
-      if (firstCut) {
-        const fvb = /viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(firstCut);
-        if (fvb) {
-          canvasSpan = parseFloat(fvb[1]);
-          canvasHeight = parseFloat(fvb[2]);
-        }
-      }
+      // ONE canvas for every plate and for the laser sheet, so they agree,
+      // and ONE transform onto it, carried beside the data all the way to the
+      // fit that consumes it (D-122). Every cut in a stack shares the canvas
+      // AND the transform: normalizeLayerStack sizes both from layer 1.
+      const firstCut = readLayerFile(cuts.find(Boolean));
+      const canvasSpan = firstCut ? firstCut.canvasSpan : 100;
+      const canvasHeight = firstCut ? firstCut.canvasHeight : 100;
+      const cutTransform = firstCut ? firstCut.transform : null;
 
       // DP-13. The laser lane is ONE sheet, cut once, so an enclosed shape
       // falls out unless a rib holds it. Kerf is deliberately NOT applied
@@ -2403,6 +2401,10 @@ function createFileControl(
         }
         const sheet = buildLaserSheet({
           cutPathData: wholeD,
+          // The whole-design flatten and the bridges are both in the design's
+          // own units - flattenToCompoundPath does not normalize - so they
+          // take the same transform onto the canvas the plates use.
+          cutTransform,
           bridgePathData: ribD,
           canvasSpan,
           canvasHeight,
@@ -2421,12 +2423,10 @@ function createFileControl(
       }
 
       plateParams.forEach(({ file, plate }) => {
-        const cut = cuts[plate - 1];
-        const cutPathData = cut
-          ? (/ d="([^"]*)"/.exec(cut)?.[1] ?? null)
-          : null;
+        const cut = readLayerFile(cuts[plate - 1]);
         const { svg } = buildStencilPlate({
-          cutPathData,
+          cutPathData: cut ? cut.pathData : null,
+          cutTransform,
           canvasSpan,
           canvasHeight,
           plateW,

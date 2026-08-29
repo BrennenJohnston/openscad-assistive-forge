@@ -1,0 +1,64 @@
+{
+  "$comment": [
+    "The reference colour plan for the Harley cat, MEASURED from the owner's",
+    "own artefacts by DP-15 - not typed from a description. Each region is",
+    "located by a point INSIDE it, in sketch4.svg user units (x right, y down,",
+    "content box 119.813 x 150.065). Points, not indices: DP-16 extracts the",
+    "faces of the line network, and any index it hands out is its own.",
+    "",
+    "How each row was derived: the boundary loops of each reference plate's",
+    "top face were read out of its STL, mapped into SVG user units through the",
+    "silhouette of plate 1 (uniform scale 0.264525 mm per SVG unit, y flipped),",
+    "and the interior of each loop was sampled against sketch4.png with every",
+    "region a LATER plate sprays over removed first. The picture shows the last",
+    "coat, so without that removal the eyes read black rather than green.",
+    "Script: New Research 2026_08_28/DP15-measurements/scripts/",
+    "harley-plan-derive.mjs; output harley-regions-measured.json."
+  ],
+  "source": {
+    "art": "sketch4.svg",
+    "colours": "sketch4.png",
+    "plates": ["plate-1.stl", "plate-2.stl", "plate-3.stl", "plate-4.stl", "plate-5.stl", "plate-6.stl"],
+    "jig": "plate-base.stl",
+    "svgContentBox": { "minX": -0.003, "minY": 0, "maxX": 119.81, "maxY": 150.065 }
+  },
+  "rule": "own",
+  "lineMode": "edges",
+  "palette": [
+    { "id": "base-black", "name": "Black", "hex": "#171411", "note": "the base coat, sprayed through the whole silhouette" },
+    { "id": "brown", "name": "Brown", "hex": "#997048" },
+    { "id": "white", "name": "White", "hex": "#fafbf8" },
+    { "id": "green", "name": "Green", "hex": "#8b9770" },
+    { "id": "black-again", "name": "Black again", "hex": "#171411", "note": "the same paint as the base, sprayed late over the eyes and the nose line" },
+    { "id": "pink", "name": "Pink", "hex": "#b0767d" }
+  ],
+  "order": ["base-black", "brown", "white", "green", "black-again", "pink"],
+  "regions": [
+    { "at": [28.299, 122.031], "colour": "brown", "plate": 2, "areaMm2": 84.911, "name": "chin and lower left cheek", "sampled": "#997048 94.2%" },
+    { "at": [53.897, 70.057], "colour": "brown", "plate": 2, "areaMm2": 59.002, "name": "forehead patch", "sampled": "#997048 98.4%" },
+    { "at": [3.777, 33.032], "colour": "brown", "plate": 2, "areaMm2": 46.026, "name": "left ear outer band", "sampled": "#997048 96.3%" },
+    { "at": [96.242, 74.267], "colour": "brown", "plate": 2, "areaMm2": 12.521, "name": "patch above the right eye", "sampled": "#997048 92.5%" },
+
+    { "at": [84.195, 97.732], "colour": "white", "plate": 3, "areaMm2": 60.142, "name": "right cheek", "sampled": "#fafbf8 97.3%" },
+    { "at": [18.996, 40.917], "colour": "white", "plate": 3, "areaMm2": 48.706, "name": "left ear inner", "sampled": "#fafbf8 97.2%" },
+    { "at": [60.514, 109.807], "colour": "white", "plate": 3, "areaMm2": 42.042, "name": "muzzle stripe", "sampled": "#fafbf8 96.3%" },
+    { "at": [104.244, 49.212], "colour": "white", "plate": 3, "areaMm2": 17.487, "name": "right ear inner", "sampled": "#fafbf8 95.3%" },
+
+    { "at": [52.0, 88.992], "colour": "green", "plate": 4, "areaMm2": 18.803, "name": "left eye", "sampled": "#8b9770 94.0% with the pupil removed" },
+    { "at": [98.889, 92.025], "colour": "green", "plate": 4, "areaMm2": 11.835, "name": "right eye", "sampled": "#8b9770 73.4% with the pupil removed" },
+
+    { "at": [97.702, 91.985], "colour": "black-again", "plate": 5, "areaMm2": 7.678, "name": "right pupil", "sampled": "#171411 77.0%", "alsoCutOnPlate": 6 },
+    { "at": [54.886, 88.681], "colour": "black-again", "plate": 5, "areaMm2": 6.587, "name": "left pupil", "sampled": "#171411 69.6%", "alsoCutOnPlate": 6 },
+    { "at": [79.24, 115.329], "colour": "black-again", "plate": 5, "areaMm2": 2.422, "name": "nose bridge line", "sampled": "#171411 84.9%" },
+    { "at": [88.436, 128.559], "colour": "black-again", "plate": 5, "areaMm2": 0.986, "name": "mouth line", "sampled": "#171411 76.9%" },
+
+    { "at": [91.626, 116.73], "colour": "pink", "plate": 6, "areaMm2": 10.036, "name": "nose", "sampled": "#b0767d 91.3%" },
+    { "at": [89.67, 133.607], "colour": "pink", "plate": 6, "areaMm2": 4.017, "name": "tongue", "sampled": "#b0767d 84.0%" }
+  ],
+  "observations": [
+    "Sixteen regions, six plates. Plate 1 cuts the silhouette alone (882.23 mm2 of a 60 x 60 plate) and every later plate cuts only its own colour: the reference set is the 'own' rule, not the stacked one, which is why the owner had to paint black twice.",
+    "Plate 6 repeats plate 5's two pupil cuts EXACTLY (7.678 and 6.587 mm2, same bounding boxes to 0.01 mm, same centres). The art shows those pupils black and the nose and tongue pink, so plate 6 carries two colours' worth of openings. Recorded, not explained: only the owner knows whether that was a second black coat, an alignment window, or a leftover from editing plate 5.",
+    "The art has a grey (#978b84, 5.62% of the canvas: the sides of the muzzle) that NO reference plate cuts. Under this plan those faces keep the base coat. The reference set therefore realises five painted colours plus the base, not every colour in the drawing.",
+    "sketch4.png is 503 x 629 px for a 119.813 x 150.065 unit drawing: 4.1982 px per unit across and 4.1915 down, a 0.16% disagreement that comes from the export, not from the art."
+  ]
+}
