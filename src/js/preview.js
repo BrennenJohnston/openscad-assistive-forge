@@ -585,6 +585,19 @@ export class PreviewManager {
       this.container.appendChild(preview2d);
     }
 
+    // And the drawing editor's surface (DP-19), for the same reason: the
+    // markup in index.html is the honest picture of the container, and the
+    // wipe above takes it with everything else.
+    if (!document.getElementById('drawingEditorSurface')) {
+      const surface = document.createElement('div');
+      surface.id = 'drawingEditorSurface';
+      surface.className = 'drawing-editor-surface hidden';
+      surface.setAttribute('role', 'region');
+      surface.setAttribute('aria-label', 'Drawing editor');
+      surface.hidden = true;
+      this.container.appendChild(surface);
+    }
+
     // Detect initial theme
     this.currentTheme = this.detectTheme();
     const colors = PREVIEW_COLORS[this.currentTheme];
@@ -5249,6 +5262,11 @@ export class PreviewManager {
   _set2DPreviewActive(is2D) {
     this._is2DPreviewActive = is2D;
 
+    // While the drawing editor owns the area, a render behind it must not
+    // put the canvas or the label back: what it asked for is remembered
+    // above and honoured when the editor gives the area back.
+    if (this._isEditorSurfaceActive) return;
+
     // Hide 3D canvas when 2D is active, show when 3D
     if (this.renderer?.domElement) {
       this.renderer.domElement.style.display = is2D ? 'none' : '';
@@ -5291,6 +5309,13 @@ export class PreviewManager {
     this._isEditorSurfaceActive = true;
     el.hidden = false;
     el.classList.remove('hidden');
+    // The render-state pills (the ready badge, the generating pill, the
+    // status bar) float over this area and, MEASURED at 412 px wide, over
+    // the editor's own title. They fade while the editor has the area; they
+    // stay in the accessibility tree, so what they announce is still heard.
+    this.container
+      ?.closest('.preview-canvas-section')
+      ?.classList.add('has-drawing-editor');
     if (this.renderer?.domElement) {
       this.renderer.domElement.style.display = 'none';
     }
@@ -5318,22 +5343,15 @@ export class PreviewManager {
       el.hidden = true;
       el.classList.add('hidden');
     }
-    if (this.renderer?.domElement) {
-      this.renderer.domElement.style.display = '';
-    }
-    const placeholder = this.container?.querySelector('.preview-placeholder');
-    if (placeholder) {
-      placeholder.style.display = this._is2DPreviewActive || this.mesh ? 'none' : '';
-    }
-    if (this.container) {
-      this.container.setAttribute(
-        'aria-label',
-        this._is2DPreviewActive
-          ? 'Rendered 2D SVG preview'
-          : '3D model preview and controls'
-      );
-      this.container.setAttribute('tabindex', '0');
-    }
+    this.container
+      ?.closest('.preview-canvas-section')
+      ?.classList.remove('has-drawing-editor');
+    // Whatever was asked for while the editor had the area - a 2D preview,
+    // a mesh, nothing yet - is what comes back.
+    const twoD = document.getElementById('rendered2dPreview');
+    if (twoD) twoD.classList.toggle('hidden', !this._is2DPreviewActive);
+    if (this.container) this.container.setAttribute('tabindex', '0');
+    this._set2DPreviewActive(this._is2DPreviewActive === true);
   }
 
   /** Whether the drawing editor currently owns the preview area. */

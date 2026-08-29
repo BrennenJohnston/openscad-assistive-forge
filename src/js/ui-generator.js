@@ -31,7 +31,6 @@ import {
   layerLimit,
   boundsOf,
 } from './svg-nesting.js';
-import { createDrawingEditor } from './drawing-editor/index.js';
 import {
   createSvgPrepWorkspace,
   extractSvgMeta,
@@ -2457,13 +2456,23 @@ function createFileControl(
       const pegs = jigOk && jigOk.ok ? askedPegs : null;
 
       const { regions, silhouette, lineMode } = buildRegions(els);
-      const palette = paletteFromFills(regions);
-      const assignment = autoAssign(regions, palette);
-      const order = defaultOrder(regions, assignment, palette).slice(
-        0,
-        STENCIL_PLATE_CAP
-      );
-      const plan = { palette, order, assignment, rule: 'stacked', lineMode };
+      // The person's plan when they have applied one, the automatic first
+      // pass otherwise. Same regions, same keys, either way.
+      const planned = currentPlan
+        ? stencilEngine.applySavedPlan(currentPlan, regions)
+        : null;
+      const palette = planned?.palette || paletteFromFills(regions);
+      const assignment = planned?.assignment || autoAssign(regions, palette);
+      const order = (
+        planned?.order || defaultOrder(regions, assignment, palette)
+      ).slice(0, STENCIL_PLATE_CAP);
+      const plan = {
+        palette,
+        order,
+        assignment,
+        rule: planned?.rule || 'stacked',
+        lineMode,
+      };
       const cuts = platesFor(plan, regions, silhouette);
       const names = new Map(palette.map((c) => [c.id, c.name]));
 
@@ -2607,23 +2616,96 @@ function createFileControl(
   workspaceContainer.className = 'svg-prep-workspace-container';
 
   let workspace = null;
-  function getEditor() {
-    if (workspace || !acceptsSvg) return workspace;
+  // The colour plan the person applied in the editor (stencil purpose), as
+  // `serialisePlan` wrote it. Session only until DP-20 saves it with the
+  // project; null means the plates follow the automatic first pass.
+  let currentPlan = null;
+
+  /**
+   * The editor, built on first use. The surface and everything it pulls in
+   * is a lazy chunk: a person who never opens it never downloads it.
+   */
+  async function getEditor() {
+    if (!acceptsSvg) return null;
+    // The preview rebuilds its container when it re-initialises, and an
+    // editor built inside the old one is a tree nothing is attached to.
+    if (workspace && workspace._root && !workspace._root.isConnected) {
+      workspace.destroy();
+      workspace = null;
+    }
+    if (workspace) return workspace;
     const surfaceEl = document.getElementById('drawingEditorSurface');
-    workspace = surfaceEl
-      ? createDrawingEditor({
-          surfaceEl,
-          announce: announceChange,
-          // The preview manager lives in main.js and this module does not
-          // reach for it: the surface says it is opening and whoever owns the
-          // preview decides what that means for the canvas.
-          onOpen: () =>
-            window.dispatchEvent(new CustomEvent('drawing-editor:open')),
-          onClose: () =>
-            window.dispatchEvent(new CustomEvent('drawing-editor:close')),
-        })
-      : createSvgPrepWorkspace(workspaceContainer);
+    if (surfaceEl) {
+      const { createDrawingEditor } =
+        await import('./drawing-editor/surface.js');
+      // Two uploads in quick succession can both be waiting on the chunk.
+      if (workspace) return workspace;
+      workspace = createDrawingEditor({
+        surfaceEl,
+        announce: announceChange,
+        // The preview manager lives in main.js and this module does not
+        // reach for it: the surface says it is opening and whoever owns the
+        // preview decides what that means for the canvas.
+        onOpen: () =>
+          window.dispatchEvent(new CustomEvent('drawing-editor:open')),
+        onClose: () =>
+          window.dispatchEvent(new CustomEvent('drawing-editor:close')),
+      });
+    } else {
+      workspace = createSvgPrepWorkspace(workspaceContainer);
+    }
     return workspace;
+  }
+
+  /** What the editor needs to reopen the current drawing as it was left. */
+  function editorOptions(extra = {}) {
+    const storedMeta = currentFileName
+      ? getSvgPrepMetadata(currentFileName)
+      : null;
+    return {
+      purpose: plateParams.length > 0 ? 'stencil' : 'relief',
+      onApply: handleEditorApply,
+      onKeepOriginal: handleEditorKeep,
+      sourceName: currentFileName,
+      initialOverrides: storedMeta?.prepOverrides || null,
+      initialOffsets: storedMeta?.prepOffsets || null,
+      // DP-4: restored BEFORE the roles above, because the editor reopens on
+      // the raw SVG and re-analyses it - so everything saved is expressed in
+      // the ORIGINAL element indices, the only numbering a delete leaves
+      // meaningful. Absent in older saved projects, which is exactly right:
+      // nothing was deleted then.
+      initialDeleted: storedMeta?.prepDeleted || null,
+      // DP-7. The column exists only for a tile that declares layer params.
+      layersEnabled: layerParams.length > 0,
+      initialLayers: storedMeta?.prepLayers || null,
+      ...extra,
+    };
+  }
+
+  /** Open the editor on the current drawing; the surface says so itself. */
+  function openEditor(extra = {}) {
+    const svg = currentRawSvg;
+    const analysis = currentSvgAnalysis;
+    if (!svg || !analysis) return Promise.resolve(false);
+    return getEditor().then((editor) => {
+      // The drawing may have been replaced while the chunk was coming.
+      if (!editor || currentRawSvg !== svg) return false;
+      editor.open(svg, analysis, editorOptions(extra));
+      return true;
+    });
+  }
+
+  /**
+   * Does the drawing bring colours of its own? Two distinct fills at least;
+   * a line drawing is all black or all unfilled and brings none.
+   */
+  function hasOwnColours(analysis) {
+    const fills = new Set();
+    for (const el of analysis?.elements || []) {
+      const hex = (el.fill || '').trim().toLowerCase();
+      if (/^#[0-9a-f]{3,8}$/.test(hex)) fills.add(hex);
+    }
+    return fills.size >= 2;
   }
 
   function createStatusEditButton() {
@@ -2635,33 +2717,7 @@ function createFileControl(
     editBtn.textContent = 'Open the drawing editor';
     editBtn.setAttribute('aria-label', 'Open the drawing editor');
     editBtn.addEventListener('click', () => {
-      const editor = getEditor();
-      if (!currentRawSvg || !editor || !currentSvgAnalysis) return;
-      const storedMeta = currentFileName
-        ? getSvgPrepMetadata(currentFileName)
-        : null;
-      editor.open(currentRawSvg, currentSvgAnalysis, {
-        purpose: plateParams.length > 0 ? 'stencil' : 'relief',
-        callbacks: {
-          onApply: handleEditorApply,
-          onKeepOriginal: handleEditorKeep,
-        },
-        onApply: handleEditorApply,
-        onKeepOriginal: handleEditorKeep,
-        sourceName: currentFileName,
-        initialOverrides: storedMeta?.prepOverrides || null,
-        initialOffsets: storedMeta?.prepOffsets || null,
-        // DP-4: restored BEFORE the roles above, because the editor reopens on
-        // the raw SVG and re-analyses it - so everything saved is expressed in
-        // the ORIGINAL element indices, the only numbering a delete leaves
-        // meaningful. Absent in older saved projects, which is exactly right:
-        // nothing was deleted then.
-        initialDeleted: storedMeta?.prepDeleted || null,
-        // DP-7. The column exists only for a tile that declares layer params.
-        layersEnabled: layerParams.length > 0,
-        initialLayers: storedMeta?.prepLayers || null,
-      });
-      announceChange('Drawing editor opened');
+      openEditor();
     });
     return editBtn;
   }
@@ -2737,10 +2793,33 @@ function createFileControl(
       });
       statusCard.appendChild(ul);
     }
+
+    // The Design card's summary line: what the plates will be, once a plan
+    // has been applied. A colour can be painted twice, so the two counts are
+    // not the same number.
+    if (currentPlan) {
+      const summary = document.createElement('p');
+      summary.className = 'svg-prep-status-plan';
+      const colours = currentPlan.palette.length;
+      const plates = currentPlan.order.length;
+      // STRINGS: owner review pending (DP-R2 text pack).
+      summary.textContent =
+        `${colours} ${colours === 1 ? 'colour' : 'colours'}, ` +
+        `${plates} ${plates === 1 ? 'plate' : 'plates'}.`;
+      statusCard.appendChild(summary);
+    }
   }
 
   function handleEditorApply(result) {
     if (!result) return;
+    // The stencil purpose's colour plan rides with the drawing, so the
+    // plates that come out follow what the person said and not the automatic
+    // first pass. Null for a relief tile, which has no plan.
+    currentPlan =
+      workspace && typeof workspace.getPlan === 'function'
+        ? workspace.getPlan()
+        : null;
+    if (currentSvgAnalysis) updateStatusCard(currentSvgAnalysis);
     const overrides = workspace ? workspace.getRoleOverrides() : null;
     const offsetOverrides = workspace ? workspace.getOffsetOverrides() : null;
     const deleted = workspace ? workspace.getDeletedIndices() : null;
@@ -2773,6 +2852,8 @@ function createFileControl(
 
   function handleEditorKeep() {
     if (!currentRawSvg) return;
+    currentPlan = null;
+    if (currentSvgAnalysis) updateStatusCard(currentSvgAnalysis);
     if (currentFileName) {
       setSvgPrepMetadata(currentFileName, {
         rawSvg: currentRawSvg,
@@ -2903,6 +2984,8 @@ function createFileControl(
 
   function processSvgForOpenScad(rawSvgText) {
     currentRawSvg = rawSvgText;
+    // A new drawing has no plan yet; the plates start from the first pass.
+    currentPlan = null;
 
     // Picking a new design must never leave a stale editor open.
     // dismiss() skips the keep-original callback — the old file is
@@ -2935,6 +3018,19 @@ function createFileControl(
       statusCard.style.display = '';
 
       if (analysis.recommendation === 'pass_through') {
+        // \u2605 D-124. For a charm there is nothing to decide about a plain
+        // drawing: OpenSCAD fills every shape it is given. On a tile that
+        // makes plates, a drawing with no colours of its own IS the task -
+        // every region is base coat until somebody says otherwise - so the
+        // editor opens on it, saying so. A drawing that brings its colours
+        // (a traced picture, a filled SVG) already has a first pass worth
+        // looking at, and the card's button is the way in.
+        if (plateParams.length > 0 && !hasOwnColours(analysis)) {
+          // The surface says what it found as it opens ("21 regions found,
+          // no colours yet: every one starts as the base coat"), so there is
+          // no second sentence to write here.
+          openEditor();
+        }
         return rawSvgText;
       }
 
@@ -2948,15 +3044,10 @@ function createFileControl(
       if (analysis.recommendation === 'open_editor') {
         // Keep the original until the user explicitly applies a
         // prepared version from the editor.
-        if (workspace) {
-          workspace.open(rawSvgText, analysis, {
-            onApply: handleEditorApply,
-            onKeepOriginal: handleEditorKeep,
-            sourceName: currentFileName,
-            layersEnabled: layerParams.length > 0,
-          });
-          announceChange('SVG needs review \u2014 editor opened');
-        }
+        openEditor({
+          openedSentence:
+            'Drawing editor open. This drawing needs a look before it is used.',
+        });
         return rawSvgText;
       }
 
@@ -3114,6 +3205,7 @@ function createFileControl(
     currentRawSvg = null;
     currentFileName = null;
     currentSvgAnalysis = null;
+    currentPlan = null;
     preview.style.display = 'none';
     preview.alt = '';
     emitFileValue(null);

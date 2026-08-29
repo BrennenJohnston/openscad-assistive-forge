@@ -28,6 +28,7 @@ import {
   validatePlan,
   serialisePlan,
   parsePlan,
+  applySavedPlan,
   REMEDY_SENTENCES,
   LINE_ART_HOLE_RATIO,
   BASE_COLOUR_ID,
@@ -468,5 +469,63 @@ describe('a saved plan', () => {
     expect(parsePlan('not json')).toBeNull()
     expect(parsePlan({ palette: 'no' })).toBeNull()
     expect(parsePlan({})).toBeNull()
+  })
+})
+
+describe('a saved plan laid back over regions found again (DP-19)', () => {
+  it('lands on the same faces by key, and keeps the order and the rule', () => {
+    const { regions } = buildRegions(CAT)
+    const { plan } = referencePlanOn(regions)
+    const saved = JSON.stringify(serialisePlan(plan, regions))
+    const back = applySavedPlan(saved, buildRegions(CAT).regions)
+    expect(back.assignment).toEqual(plan.assignment)
+    expect(back.order).toEqual(plan.order)
+    expect(back.rule).toBe('own')
+    expect(back.palette.map((c) => c.id)).toEqual(plan.palette.map((c) => c.id))
+  })
+
+  it('falls back to the element index when a key has drifted', () => {
+    const { regions } = buildRegions(BIRD, { lineMode: 'shapes' })
+    const palette = paletteFromFills(regions)
+    const assignment = autoAssign(regions, palette)
+    const saved = serialisePlan(
+      { palette, order: palette.map((c) => c.id), assignment },
+      regions
+    )
+    const drifted = regions.map((r) => ({ ...r, key: `${r.key}:moved` }))
+    const back = applySavedPlan(saved, drifted)
+    for (const r of drifted) {
+      expect(back.assignment[r.key]).toBe(assignment[r.key.replace(':moved', '')])
+    }
+  })
+
+  it('sends a region it cannot place back to the base, never to a colour that is not there', () => {
+    const { regions } = buildRegions(CAT)
+    const saved = {
+      palette: [
+        { id: 'base', name: 'Base coat', hex: '#171411' },
+        { id: 'colour-2', name: 'Brown', hex: '#997048' },
+      ],
+      order: ['base', 'colour-2', 'colour-9'],
+      assignment: { [regions[0].key]: 'colour-2', [regions[1].key]: 'colour-9' },
+    }
+    const back = applySavedPlan(saved, regions)
+    expect(back.assignment[regions[0].key]).toBe('colour-2')
+    expect(back.assignment[regions[1].key]).toBe('base')
+    expect(back.assignment[regions[2].key]).toBe('base')
+    expect(back.order).toEqual(['base', 'colour-2'])
+  })
+
+  it('a palette without a base starts at its first colour, and nothing is null', () => {
+    const { regions } = buildRegions(BIRD, { lineMode: 'shapes' })
+    const saved = {
+      palette: [{ id: 'colour-1', name: 'Ink', hex: '#000000' }],
+      order: ['colour-1'],
+      assignment: {},
+    }
+    const back = applySavedPlan(saved, regions)
+    for (const r of regions) expect(back.assignment[r.key]).toBe('colour-1')
+    expect(applySavedPlan(null, regions)).toBeNull()
+    expect(applySavedPlan({ palette: [], order: [] }, regions)).toBeNull()
   })
 })

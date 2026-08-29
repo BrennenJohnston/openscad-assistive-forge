@@ -1,4 +1,9 @@
 import { defineConfig, devices } from '@playwright/test'
+import { PROJECT_IGNORES } from './scripts/e2e-shard.mjs'
+
+/** What a project leaves out, as Playwright wants it; the table says why. */
+const ignores = (project) =>
+  PROJECT_IGNORES[project].map((file) => `**/${file}`)
 
 const isWindows = process.platform === 'win32'
 const isCI = !!process.env.CI
@@ -56,6 +61,7 @@ export default defineConfig({
     {
       name: 'msedge',
       use: { ...devices['Desktop Edge'], channel: 'msedge' },
+      testIgnore: ignores('msedge'),
     },
     // Firefox - Tier 1 browser (extended timeouts for WASM init overhead)
     // wasm-smoke runs on Chromium-family projects only for now: it performs
@@ -69,7 +75,7 @@ export default defineConfig({
         navigationTimeout: 45000,
       },
       timeout: 90000,
-      testIgnore: '**/wasm-smoke.spec.js',
+      testIgnore: ignores('firefox'),
     },
     // Visual regression tests (Milestone 3: Performance & Stability)
     // Run separately with: npm run test:visual

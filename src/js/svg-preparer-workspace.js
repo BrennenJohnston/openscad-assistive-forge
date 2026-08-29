@@ -795,6 +795,11 @@ export function createSvgPrepWorkspace(containerEl) {
   let nestingTree = null;
   let layerCount = 0;
   let layers = [];
+  // DP-19. When a host surface has mounted this workspace inside itself, the
+  // host owns the announcements and the size: it says "opened" once, in its
+  // own words, and it is already the biggest thing on the page, so there is
+  // no cramped inline box to expand out of.
+  let hosted = false;
 
   // ARIA live region for role-change and preview announcements
   const liveRegion = document.createElement('div');
@@ -1795,6 +1800,7 @@ export function createSvgPrepWorkspace(containerEl) {
     currentCallbacks = callbacks;
     currentSourceName = callbacks.sourceName || null;
     hostMode = callbacks.mode === 'file' ? 'file' : 'parameter';
+    hosted = callbacks.hosted === true;
     currentSvgString = svgString;
     currentAnalysis = analysis;
     currentSvgMeta = extractSvgMeta(svgString);
@@ -1935,6 +1941,8 @@ export function createSvgPrepWorkspace(containerEl) {
       return;
     }
 
+    if (hosted) return;
+
     announce('SVG Preparation Editor opened');
 
     // Small screens: the inline editor is cramped, expand automatically
@@ -1995,7 +2003,7 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.fullscreenBtn.removeEventListener('click', handleFullscreenButton);
     refs.backdrop.removeEventListener('click', closeFullscreen);
 
-    announce('SVG Preparation Editor closed');
+    if (!hosted) announce('SVG Preparation Editor closed');
   }
 
   function openFullscreen({ initialFocus } = {}) {

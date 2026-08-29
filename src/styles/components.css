@@ -16745,6 +16745,10 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   background: var(--color-bg-primary);
   overflow: hidden;
   z-index: 1;
+  /* The layout below asks how wide the SURFACE is, not the window: at 768
+     the window is wide and the preview area beside the customizer is not
+     (MEASURED: a 135 px drawing next to a 245 px panel). */
+  container-type: inline-size;
 }
 
 .drawing-editor-surface.hidden,
@@ -16817,11 +16821,38 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
 }
 
 .drawing-editor-panel {
-  flex: 0 0 clamp(240px, 32%, 380px);
+  flex: 0 0 clamp(260px, 40%, 420px);
   min-height: 0;
   overflow: auto;
   border-left: 1px solid var(--color-border);
   padding-left: var(--space-sm);
+}
+
+/* Narrow surface: the two stack and the BODY scrolls as one, so the drawing
+   keeps a height of its own, the toolbar stays put, and nothing paints past
+   the box it is in. MEASURED before this: at 412 wide the panel grew to
+   1,674 px, the stage was squeezed to 0, and the status line was painted
+   under the table. */
+@container (max-width: 640px) {
+  .drawing-editor-body {
+    flex-direction: column;
+    overflow: auto;
+  }
+
+  .drawing-editor-stage {
+    flex: 0 0 auto;
+    min-height: 240px;
+    overflow: visible;
+  }
+
+  .drawing-editor-panel {
+    flex: 0 0 auto;
+    overflow: visible;
+    border-left: none;
+    border-top: 1px solid var(--color-border);
+    padding-left: 0;
+    padding-top: var(--space-sm);
+  }
 }
 
 .drawing-editor-section + .drawing-editor-section {
@@ -16866,18 +16897,241 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   font-size: var(--font-size-sm);
 }
 
-/* Below the panel's own minimum the two stack, which on a phone is the only
-   thing that fits and is also the reading order a screen reader already has. */
-@media (max-width: 767px) {
-  .drawing-editor-body {
-    flex-direction: column;
-  }
+/* The workspace's own pieces, re-homed. Its footer is the action row and
+   sits in the toolbar; its shape list and warnings sit in the panel; what
+   stays in the stage loses the box it used to draw around itself, because
+   the surface is the box now. */
+.drawing-editor-toolbar .svg-prep-footer {
+  border-top: 0;
+  padding-top: 0;
+  margin-left: auto;
+}
 
-  .drawing-editor-panel {
-    flex: 0 0 auto;
-    border-left: none;
-    border-top: 1px solid var(--color-border);
-    padding-left: 0;
-    padding-top: var(--space-sm);
-  }
+.drawing-editor-view-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.drawing-editor-view-controls:empty {
+  display: none;
+}
+
+.drawing-editor-stage .svg-prep-workspace {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.drawing-editor-stage .svg-prep-header {
+  display: none;
+}
+
+.drawing-editor-shapes[hidden],
+.drawing-editor-regions[hidden] {
+  display: none;
+}
+
+/* ── The stencil purpose: regions, colours, plates ─────────────────────── */
+.drawing-editor-regions-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.drawing-editor-regions-table caption {
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  padding-bottom: var(--space-xs);
+}
+
+.drawing-editor-regions-table th,
+.drawing-editor-regions-table td {
+  text-align: left;
+  vertical-align: middle;
+  padding: var(--space-xs) var(--space-xs);
+  border-bottom: 1px solid var(--color-border-light);
+  color: var(--color-text-primary);
+}
+
+.drawing-editor-regions-table thead th {
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+
+.drawing-editor-regions-table tbody th {
+  font-weight: 400;
+}
+
+.drawing-editor-regions-table td[data-plate] {
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+/* 44 px, the touch-target floor, on the one control the column has. */
+.drawing-editor-colour-select {
+  min-height: var(--size-touch-target);
+  max-width: 100%;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.drawing-editor-colour-select:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.drawing-editor-swatches {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.drawing-editor-swatch-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: var(--size-touch-target-sm);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
+/* The colour itself, beside its name: the name carries the meaning, the
+   chip is the picture of it. */
+.drawing-editor-swatch {
+  flex: 0 0 auto;
+  width: 1.25em;
+  height: 1.25em;
+  border-radius: var(--border-radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--swatch, transparent);
+}
+
+.drawing-editor-add-colour fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-sm);
+  margin: var(--space-sm) 0 0;
+  padding: var(--space-sm);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--border-radius-sm);
+}
+
+.drawing-editor-add-colour legend {
+  padding: 0 var(--space-xs);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.drawing-editor-add-colour label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.drawing-editor-add-colour input[type='text'] {
+  min-height: var(--size-touch-target);
+  min-width: 8em;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+
+.drawing-editor-add-colour input[type='color'] {
+  min-height: var(--size-touch-target);
+  min-width: var(--size-touch-target);
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-primary);
+}
+
+.drawing-editor-add-colour input:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.drawing-editor-plates,
+.drawing-editor-islands {
+  margin: 0;
+  padding-left: var(--space-md);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.drawing-editor-plates li + li,
+.drawing-editor-islands li + li {
+  margin-top: var(--space-xs);
+}
+
+.drawing-editor-islands ul {
+  margin: var(--space-xs) 0 0;
+  padding-left: var(--space-md);
+  color: var(--color-text-secondary);
+}
+
+/* While the editor owns the area, the preview's floating pills fade: they
+   are about the model behind the editor, and at 412 px wide one of them sat
+   on the editor's title. Opacity, not display, so their live regions still
+   speak. Reverse: delete this block. */
+.preview-canvas-section.has-drawing-editor .preview-state-indicator,
+.preview-canvas-section.has-drawing-editor .preview-rendering-overlay,
+.preview-canvas-section.has-drawing-editor .preview-status-bar {
+  opacity: 0;
+  pointer-events: none;
+  /* The ready badge pulses its opacity while a render runs, and an
+     animation outranks the cascade: MEASURED, it stayed on screen. */
+  animation: none;
+}
+
+/* ── The no-model door: the surface is the screen ─────────────────────── */
+.drawing-editor-host {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-index-modal, 1000);
+  display: flex;
+  background: var(--color-bg-primary);
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.drawing-editor-host.hidden,
+.drawing-editor-host[hidden] {
+  display: none;
+}
+
+/* The status line sits under the toolbar rather than at the foot: the
+   preview's own "Rendering preview" pill overlays the foot of this area, and
+   a live region nobody can read is not a live region. */
+.drawing-editor-status {
+  order: 1;
+}
+
+.drawing-editor-body {
+  order: 2;
+}
+
+/* The one control in the colour column gets the room the column has. */
+.drawing-editor-regions-table .drawing-editor-colour-cell {
+  width: 40%;
+}
+
+.drawing-editor-colour-select {
+  width: 100%;
+  min-width: 6em;
 }
