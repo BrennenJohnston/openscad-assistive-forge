@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A building's ground floor is what the map says it is** (CW-74) - the game decided what kind of
+  shopfront a building had by looking for a cafe or a shop pinned within 35 metres of it, and never
+  looked at the building itself. So the Central Library, which the map plainly labels a library, got
+  its ground floor from a coin toss, along with 130 other buildings in Seattle alone. A building's own
+  label now decides first, the nearest pinned place second, and the coin toss only where nothing at
+  all is known
+
+- **Car parks and churches no longer wear shop windows** (CW-74) - 65 multi-storey car parks, 18 bus
+  shelters and 13 places of worship across the four cities were each given a lit shop window across
+  their base, because the coin toss had no way to say "this building does not have one". They now get
+  a plain wall and no shop sign. Civic buildings - a courthouse, a town hall, a museum - get a lit
+  lobby instead of a shopfront
+
 - **Buildings look like what they are** (CW-73) - a block of flats and an office tower used to have
   exactly the same chance of every kind of window, because the game picked a facade by hash and never
   read the one thing the map data actually says. Flats now wear small punched windows in a regular

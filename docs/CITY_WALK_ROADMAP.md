@@ -548,6 +548,59 @@ offices the plain window instead of the curtain wall made it WORSE, not better
 where a striped bay is a dense pattern that looks much the same wherever it
 lands. Fine detail is not automatically the thing that flickers.
 
+### The ground floor reads the building
+
+The storefront picker looked at POI NODES within 35 metres and at nothing else.
+A building carrying `amenity=library` was never asked what it was, so the
+Central Library's ground floor - and 130 other grounded Seattle buildings, and
+27, 44 and 9 in the other three cities - came from a hash of the building's
+index. CW-53 had already carved out one exception, `tourism=hotel`, because a
+hotel is a way in every extract and the POI index only ever sees nodes; that
+exception is now the rule.
+
+The order is the building's OWN TAG, then the nearest POI, then the hash:
+`shop` beats `amenity` beats `tourism`.
+
+★ Only the first half of that order is decided by the data. Exactly three
+buildings in the four extracts carry more than one of the three tags, and only
+one of them resolves differently either way - the Richard Levy Gallery in
+Albuquerque, `shop=art` plus `tourism=gallery`, which gets a shop window rather
+than a gallery lobby. The Central Library carries `amenity=library` AND
+`tourism=attraction` and lands on the same lobby whichever is read first. So
+the amenity-before-tourism half is a stated convention (what a building IS
+beats what it is a destination FOR) with no case in this data to justify it,
+and the unit test that pins it says so rather than pretending otherwise.
+
+**A building with no shopfront now gets no band, and no shop sign either.** The
+biggest single own tag across the four cities is `amenity=parking` with 65
+buildings, followed by `shelter` with 18 and `place_of_worship` with 13. Every
+one of them was taking a hashed shop window across its base - the one answer
+the map data had already ruled out. The values that read as a lit frontage keep
+their band, the civic ones (a courthouse, a town hall, a museum) get the
+library's lobby, and everything else gets a plain wall.
+
+Where every ground floor's answer came from, measured in the running game:
+
+| city | own tag | nearest POI | hash | no band | own tags previously ignored |
+|---|---|---|---|---|---|
+| Seattle | 119 | 591 | 543 | 58 | 131 -> **0** |
+| Denver | 29 | 99 | 148 | 15 | 27 -> **0** |
+| Albuquerque | 27 | 110 | 455 | 22 | 44 -> **0** |
+| Burnaby | 2 | 100 | 321 | 8 | 9 -> **0** |
+
+The hash still decides most ground floors, and that is the right answer where
+the map says nothing at all; what changed is that it no longer decides where
+the map does say something. Seattle loses 2,268 storefront triangles (60,744 to
+58,476) because 58 buildings stopped having a shopfront they never had.
+
+**What it costs.** Nothing measurable. At the spawn's storefront pose, walking,
+glyph change is 7.54 per cent against 7.55 before in monochrome and 9.80
+against 9.79 in colour; the storefront class carries the same 2,193 cells with
+the same 2,156 lit. Standing, the storefront class actually settles better
+(glyph change 0.57 to 0.17, persistence 37.8 to 44.5 frames of 48). The band's
+brightness is untouched - that is the luminance treatment the owner chose at
+G1, and this release does not go near it.
+
 ## What this document is not
 
 It is not a commitment, an estimate, or a design review. Anyone starting either

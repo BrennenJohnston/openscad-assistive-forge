@@ -1343,6 +1343,64 @@ const STOREFRONT_BY_POI = new Map([
 ]);
 
 /**
+ * ★★ CW-74: WHAT A BUILDING SAYS ABOUT ITS OWN GROUND FLOOR.
+ *
+ * The picker read POI NODES within 35 m and nothing else, so a building
+ * carrying `amenity=library` was never asked what it was and its ground floor
+ * fell through to a hash of its index. The Central Library (way 37056442,
+ * `amenity=library` and `tourism=attraction`) got its shopfront from a coin
+ * toss; so did 136 other grounded Seattle buildings, and 28, 46 and 9 in the
+ * other three cities.
+ *
+ * Two tables carry the values the POI map has no answer for. Both are TASTE,
+ * measured against what is actually in the four extracts:
+ *
+ *   65 `amenity=parking`, 18 `shelter`, 13 `place_of_worship`,
+ *   13 `social_facility`, 8 `courthouse`, 5 `tourism=museum`, ...
+ *
+ * ★ A BUILDING WITH NO SHOPFRONT GETS NO BAND, and no shop sign either. A
+ * multi-storey car park with a lit shop window across its base is a worse
+ * answer than a plain wall, and it is the answer the hash was giving.
+ */
+const LOBBY_BAND = STOREFRONT_VARIANTS.findIndex((v) => v.name === 'lobby');
+
+/** Own-tag values that read as a LOBBY: a way in, not a shop window. */
+const OWN_TAG_LOBBY = new Set([
+  'arts_centre',
+  'attraction',
+  'bus_station',
+  'clinic',
+  'college',
+  'community_centre',
+  'conference_centre',
+  'courthouse',
+  'doctors',
+  'dojo',
+  'events_venue',
+  'fire_station',
+  'gallery',
+  'hospital',
+  'museum',
+  'police',
+  'school',
+  'social_centre',
+  'social_facility',
+  'studio',
+  'townhall',
+  'university',
+]);
+
+/** Own-tag values that read as a LIT FRONTAGE the POI map has no key for. */
+const OWN_TAG_BANDS = new Map([
+  ['biergarten', 6],
+  ['casino', 19],
+  ['food_court', 11],
+  ['ice_cream', 5],
+  ['nightclub', 19],
+  ['stripclub', 19],
+]);
+
+/**
  * CW-53: a shop value with no band of its own reads as the generic shop.
  *
  * The alternative - letting it fall through to the hash - would throw away the
@@ -1379,6 +1437,68 @@ export function storefrontBandFor(kind) {
   const normalized = normalizeStorefrontKind(kind ?? null);
   if (normalized === null) return null;
   return STOREFRONT_BY_POI.get(normalized) ?? null;
+}
+
+/**
+ * ★★ CW-74: WHICH GROUND FLOOR THIS BUILDING HAS, from the strongest evidence
+ * available: ITS OWN TAG FIRST, the nearest POI second, the hash last.
+ *
+ * `shop` beats `amenity` beats `tourism`. ★ ONLY THE FIRST OF THOSE IS
+ * DECIDED BY THE DATA. Exactly three buildings in the four extracts carry more
+ * than one of the three tags, and only one of them resolves differently either
+ * way: the Richard Levy Gallery in Albuquerque (way 437189766,
+ * `shop=art` + `tourism=gallery`) gets a shop window rather than a gallery
+ * lobby. The Central Library carries `amenity=library` AND
+ * `tourism=attraction` and lands on the same lobby whichever is read first.
+ * The amenity-before-tourism half is therefore a stated convention with no
+ * case in this data to justify it - what a building IS beats what it is a
+ * destination FOR - and the unit case that pins it says so.
+ *
+ * @param {Record<string,string>|undefined} tags the BUILDING's own tags
+ * @param {string|null} poiKind the nearest POI's kind, or null
+ * @returns {{band:number|null|undefined, kind:string|null,
+ *   source:'own'|'poi'|'hash'}} `band` is an index into STOREFRONT_VARIANTS;
+ *   **null means NO BAND** (this building has no shopfront at all);
+ *   **undefined means the caller's hash decides**, which is what happens when
+ *   nothing knows anything. `kind` is the vocabulary word the answer came
+ *   from, which is what the CW-46 warm/cool bias is keyed on - a BAND name is
+ *   not the same vocabulary and using one there silently loses the bias.
+ */
+export function storefrontBandForBuilding(tags, poiKind) {
+  const own = (key) => {
+    const v = tags?.[key];
+    return typeof v === 'string' && v.length > 0 ? v : null;
+  };
+
+  const shop = own('shop');
+  if (shop !== null) {
+    if (shop === 'no') return { band: null, kind: null, source: 'own' };
+    const kind = normalizeStorefrontKind(`shop:${shop}`);
+    return { band: storefrontBandFor(kind), kind, source: 'own' };
+  }
+
+  for (const key of ['amenity', 'tourism']) {
+    const value = own(key);
+    if (value === null) continue;
+    // CW-53 kept the hotel's lobby off the POI index because a hotel is a WAY
+    // in every extract and the index only ever sees nodes.
+    const direct = storefrontBandFor(value);
+    if (direct !== null) return { band: direct, kind: value, source: 'own' };
+    if (OWN_TAG_BANDS.has(value)) {
+      return { band: OWN_TAG_BANDS.get(value), kind: value, source: 'own' };
+    }
+    if (OWN_TAG_LOBBY.has(value)) {
+      // A lobby is lit like a library's: the temperature table already has a
+      // word for that, and `value` (a courthouse, a museum) does not.
+      return { band: LOBBY_BAND, kind: 'library', source: 'own' };
+    }
+    return { band: null, kind: null, source: 'own' };
+  }
+
+  const fromPoi = normalizeStorefrontKind(poiKind ?? null);
+  const band = storefrontBandFor(fromPoi);
+  if (band !== null) return { band, kind: fromPoi, source: 'poi' };
+  return { band: undefined, kind: null, source: 'hash' };
 }
 
 // CW-46 rider (c): "white shop lights is repetitive" - each storefront's
@@ -2928,6 +3048,13 @@ export function buildCityGroup(model) {
   // only way to see whether the map data is biasing anything - a band nobody
   // uses and a band everybody uses look identical in a texture.
   const storefrontBands = new Array(STOREFRONT_VARIANTS.length).fill(0);
+  // CW-74: where each ground floor's answer came from, and how many grounded
+  // buildings carry a tag of their own at all. `ownTagged` minus
+  // `ownTagHotel` is exactly what the picker used to THROW AWAY, because
+  // `tourism=hotel` was the only own tag it ever read (CW-53).
+  const storefrontSource = { own: 0, poi: 0, hash: 0, none: 0 };
+  let storefrontOwnTagged = 0;
+  let storefrontOwnTagHotel = 0;
   // CW-73: how the grammar actually landed on this city's data. A family
   // nobody reaches and a family everybody reaches look identical in a
   // texture, and the count of BLANK walls is the only way the "no half bay
@@ -3001,6 +3128,8 @@ export function buildCityGroup(model) {
     // `building:levels` is a statement about the whole building, so it is
     // read once and applied to the body only - a rooftop plant room is not
     // six storeys tall because the tower under it is.
+    // CW-74: set false when the building's own tag says it has no shopfront.
+    let hasBand = true;
     const taggedLevels = Number.parseFloat(
       building.tags?.['building:levels'] ?? ''
     );
@@ -3181,24 +3310,43 @@ export function buildCityGroup(model) {
       // CW-53: a hotel is a WAY in every one of the four extracts, never a
       // node, so it can only be read off the building's own tags - the POI
       // index would never see one. Its own tag beats a neighbour's point.
-      const poiKind =
-        building.tags?.tourism === 'hotel'
-          ? 'hotel'
-          : normalizeStorefrontKind(
-              poiIndex.nearestKind(cx, cy, STOREFRONT_POI_RANGE_M)
-            );
-      const poiBand = storefrontBandFor(poiKind);
-      const strip = extrudeBuilding(
-        building,
-        storefrontTemperatureTint(h, poiKind),
-        {
-          depthOverride: storefrontHM,
-        }
+      // CW-74: the building's own tag decides first. Everything the picker
+      // reads is counted, so a table nobody reaches and a table everybody
+      // reaches do not look the same in the record.
+      if (
+        typeof building.tags?.shop === 'string' ||
+        typeof building.tags?.amenity === 'string' ||
+        typeof building.tags?.tourism === 'string'
+      ) {
+        storefrontOwnTagged++;
+        if (building.tags?.tourism === 'hotel') storefrontOwnTagHotel++;
+      }
+      const choice = storefrontBandForBuilding(
+        building.tags,
+        poiIndex.nearestKind(cx, cy, STOREFRONT_POI_RANGE_M)
       );
+      // ★ A BUILDING WITH NO SHOPFRONT GETS NO BAND AND NO SIGN. A car park
+      // or a place of worship used to take a hashed shop window across its
+      // base, which is the one answer the map data had already ruled out.
+      if (choice.band === null) {
+        storefrontSource.none++;
+        hasBand = false;
+      }
+      const strip =
+        choice.band === null
+          ? null
+          : extrudeBuilding(
+              building,
+              storefrontTemperatureTint(h, choice.kind),
+              {
+                depthOverride: storefrontHM,
+              }
+            );
       if (strip) {
         // THE SEED LAW (CW-34, held through CW-53): this is the SAME hash
         // draw it has always been; only the modulus widened with the set.
-        const band = poiBand ?? (h >>> 23) % STOREFRONT_VARIANTS.length;
+        const band = choice.band ?? (h >>> 23) % STOREFRONT_VARIANTS.length;
+        storefrontSource[choice.source]++;
         storefrontBands[band]++;
         scaleGeometryUv(strip, 1, STOREFRONT_HEIGHT_M / storefrontHM);
         offsetGeometryUv(strip, 0, band * STOREFRONT_HEIGHT_M);
@@ -3215,6 +3363,7 @@ export function buildCityGroup(model) {
     if (
       wall &&
       grounded &&
+      hasBand &&
       building.heightM >= signBaseM + SIGN_BAND_HEIGHT_M + 0.5
     ) {
       const slots = Math.max(
@@ -3916,6 +4065,9 @@ export function buildCityGroup(model) {
       buildingTriangles,
       storefrontTriangles,
       storefrontBands,
+      storefrontSource,
+      storefrontOwnTagged,
+      storefrontOwnTagHotel,
       facadeFamilyCounts,
       facadeFaceCounts,
       fittedWalls,
