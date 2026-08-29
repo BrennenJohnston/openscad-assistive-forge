@@ -4911,6 +4911,25 @@ select:focus-visible {
 }
 
 /* Output Format Section (Left Panel) */
+/* The whole stencil set in one download (DP-17). Sits above the output format
+   because it is a different question: which parts, not which file type. */
+.stencil-set-export {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  margin-bottom: var(--space-md);
+}
+
+.stencil-set-export-info {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
 .output-format-section {
   padding: var(--space-md);
   background: var(--color-bg-secondary);

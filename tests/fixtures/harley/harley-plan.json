@@ -13,7 +13,16 @@
     "region a LATER plate sprays over removed first. The picture shows the last",
     "coat, so without that removal the eyes read black rather than green.",
     "Script: New Research 2026_08_28/DP15-measurements/scripts/",
-    "harley-plan-derive.mjs; output harley-regions-measured.json."
+    "harley-plan-derive.mjs; output harley-regions-measured.json.",
+    "",
+    "The point that names a region is not simply the interior point of the",
+    "reference cut. A reference cut is solid; the FACE it corresponds to is",
+    "not, because whatever is drawn inside it is a face of its own. The eyes",
+    "are the case: the widest span of plate 4's eye cut runs through the",
+    "middle, where the pupil is, so its interior point names the PUPIL's face",
+    "and the green plate comes out empty. Both eye points are therefore",
+    "chosen inside their cut and outside every strictly smaller cut nested in",
+    "it, which puts them in the iris."
   ],
   "source": {
     "art": "sketch4.svg",
@@ -44,8 +53,8 @@
     { "at": [60.514, 109.807], "colour": "white", "plate": 3, "areaMm2": 42.042, "name": "muzzle stripe", "sampled": "#fafbf8 96.3%" },
     { "at": [104.244, 49.212], "colour": "white", "plate": 3, "areaMm2": 17.487, "name": "right ear inner", "sampled": "#fafbf8 95.3%" },
 
-    { "at": [52.0, 88.992], "colour": "green", "plate": 4, "areaMm2": 18.803, "name": "left eye", "sampled": "#8b9770 94.0% with the pupil removed" },
-    { "at": [98.889, 92.025], "colour": "green", "plate": 4, "areaMm2": 11.835, "name": "right eye", "sampled": "#8b9770 73.4% with the pupil removed" },
+    { "at": [54.679, 96.907], "colour": "green", "plate": 4, "areaMm2": 18.803, "name": "left eye", "sampled": "#8b9770 94.0% with the pupil removed", "pointAvoids": "the 2 pupil cuts nested in this one" },
+    { "at": [98.107, 99.748], "colour": "green", "plate": 4, "areaMm2": 11.835, "name": "right eye", "sampled": "#8b9770 73.4% with the pupil removed", "pointAvoids": "the 2 pupil cuts nested in this one" },
 
     { "at": [97.702, 91.985], "colour": "black-again", "plate": 5, "areaMm2": 7.678, "name": "right pupil", "sampled": "#171411 77.0%", "alsoCutOnPlate": 6 },
     { "at": [54.886, 88.681], "colour": "black-again", "plate": 5, "areaMm2": 6.587, "name": "left pupil", "sampled": "#171411 69.6%", "alsoCutOnPlate": 6 },

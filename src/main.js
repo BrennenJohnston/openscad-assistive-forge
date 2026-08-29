@@ -5342,6 +5342,128 @@ async function initApp() {
 
   // Declare format selector elements
   const outputFormatSelect = document.getElementById('outputFormat');
+
+  // ── Export the whole stencil set (DP-17) ──────────────────────────────
+  // A six-colour stencil is seven printed parts, and the one thing that must
+  // not go wrong is which plate is which. The button renders them in order and
+  // hands back a zip whose names say what each file is.
+  const stencilSetExport = document.getElementById('stencilSetExport');
+  const exportStencilSetBtn = document.getElementById('exportStencilSetBtn');
+  const stencilSetExportInfo = document.getElementById('stencilSetExportInfo');
+
+  /** How many plates the app has actually written for the current design. */
+  function stencilPlateCount(parameters) {
+    let n = 0;
+    for (let i = 1; i <= 8; i++) {
+      const v = parameters?.[`stencil_plate_${i}`];
+      const has = v && (typeof v === 'string' ? v !== '' : !!v.data);
+      if (!has) break;
+      n += 1;
+    }
+    return n;
+  }
+
+  function updateStencilSetExport() {
+    if (!stencilSetExport) return;
+    const state = stateManager.getState();
+    const params = state.parameters || {};
+    const isStencil = 'stencil_plate_1' in params && 'plate_number' in params;
+    const count = isStencil ? stencilPlateCount(params) : 0;
+    const show = isStencil && params.stencil_mode === 'layered' && count > 0;
+    stencilSetExport.hidden = !show;
+    if (!show) return;
+    const pegs =
+      params.registration === 'pegs' || params.registration === 'both';
+    const parts = count + (pegs ? 1 : 0);
+    // STRINGS: owner review pending (DP-R2 text pack).
+    stencilSetExportInfo.textContent = pegs
+      ? `${count} plates and the jig base, plus the paint order.`
+      : `${count} plates, plus the paint order.`;
+    exportStencilSetBtn.setAttribute(
+      'aria-label',
+      `Export all plates: ${parts} files as a zip`
+    );
+  }
+
+  // Which plates exist changes when the design changes and when the plate
+  // params are rewritten, both of which land as a parameters update.
+  stateManager.subscribe((state, prevState) => {
+    if (state.parameters !== prevState.parameters) updateStencilSetExport();
+  });
+  updateStencilSetExport();
+
+  exportStencilSetBtn?.addEventListener('click', async () => {
+    const state = stateManager.getState();
+    const params = state.parameters || {};
+    const count = stencilPlateCount(params);
+    const pegs =
+      params.registration === 'pegs' || params.registration === 'both';
+    const format = outputFormatSelect ? outputFormatSelect.value : 'stl';
+    const designName = String(params.design_file?.name || 'stencil').replace(
+      /\.[^.]+$/,
+      ''
+    );
+    const { stencilSetJobs, exportStencilSet, EXPORT_STRINGS } =
+      await import('./js/stencil-export.js');
+    const colourNames = Array.isArray(state.stencilColourNames)
+      ? state.stencilColourNames
+      : [];
+    const jobs = stencilSetJobs({
+      parameters: params,
+      plateCount: count,
+      colourNames,
+      includeJig: pegs,
+      format,
+    });
+
+    exportStencilSetBtn.disabled = true;
+    const restore = exportStencilSetBtn.textContent;
+    exportStencilSetBtn.textContent = EXPORT_STRINGS.busy;
+    announceImmediate(EXPORT_STRINGS.start(jobs.length + 1));
+    try {
+      const libsForRender = getEnabledLibrariesForRender();
+      const { blob, filename, files } = await exportStencilSet({
+        jobs,
+        designName,
+        colourNames,
+        onProgress: (done, total, label) => {
+          if (!label) return;
+          const line = EXPORT_STRINGS.step(done, total, label);
+          updateStatus(line);
+          announceImmediate(line);
+        },
+        render: (parameters) =>
+          renderController.renderFull(state.uploadedFile.content, parameters, {
+            outputFormat: format,
+            paramTypes: state.paramTypes || {},
+            files: state.projectFiles,
+            mainFile: state.mainFilePath,
+            libraries: libsForRender,
+          }),
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      const done = EXPORT_STRINGS.done(files.length, filename);
+      updateStatus(done);
+      announceImmediate(done);
+    } catch (error) {
+      console.error('Stencil set export failed:', error);
+      const said = EXPORT_STRINGS.failed(error.message);
+      updateStatus(said);
+      announceImmediate(said);
+      showErrorToast({ title: 'Export stopped', message: error.message });
+    } finally {
+      exportStencilSetBtn.disabled = false;
+      exportStencilSetBtn.textContent = restore;
+    }
+  });
+
   const formatInfo = document.getElementById('formatInfo');
   const format2dGuidance = document.getElementById('format2dGuidance');
 
