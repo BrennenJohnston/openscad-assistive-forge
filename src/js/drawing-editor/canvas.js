@@ -159,17 +159,51 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
   svg.setAttribute('aria-describedby', help.id);
   svg.dataset.tool = 'select';
 
+  // The layers, in drawing order (DP-21): the art underneath, the regions
+  // tinted over it, the plate being stepped through, the keyboard highlight
+  // (two strokes), the marquee on top. A hatch pattern for removed regions
+  // lives in defs; its colour comes from the stylesheet's tokens.
+  const defs = document.createElementNS(SVG_NS, 'defs');
+  const hatchId = `${labelId}-hatch`;
+  const hatch = document.createElementNS(SVG_NS, 'pattern');
+  hatch.id = hatchId;
+  hatch.setAttribute('patternUnits', 'userSpaceOnUse');
+  hatch.setAttribute('width', '6');
+  hatch.setAttribute('height', '6');
+  hatch.setAttribute('patternTransform', 'rotate(45)');
+  const hatchLine = document.createElementNS(SVG_NS, 'line');
+  hatchLine.setAttribute('x1', '0');
+  hatchLine.setAttribute('y1', '0');
+  hatchLine.setAttribute('x2', '0');
+  hatchLine.setAttribute('y2', '6');
+  hatchLine.setAttribute('class', 'drawing-editor-hatch-line');
+  hatch.appendChild(hatchLine);
+  defs.appendChild(hatch);
+
   const artLayer = document.createElementNS(SVG_NS, 'g');
   artLayer.setAttribute('data-layer', 'art');
   artLayer.setAttribute('aria-hidden', 'true');
   const regionLayer = document.createElementNS(SVG_NS, 'g');
   regionLayer.setAttribute('data-layer', 'regions');
+  const plateLayer = document.createElementNS(SVG_NS, 'g');
+  plateLayer.setAttribute('data-layer', 'plate');
+  plateLayer.setAttribute('aria-hidden', 'true');
+  const highlightLayer = document.createElementNS(SVG_NS, 'g');
+  highlightLayer.setAttribute('data-layer', 'highlight');
+  highlightLayer.setAttribute('aria-hidden', 'true');
+  const halo = document.createElementNS(SVG_NS, 'path');
+  halo.setAttribute('class', 'drawing-editor-highlight-halo');
+  const focusStroke = document.createElementNS(SVG_NS, 'path');
+  focusStroke.setAttribute('class', 'drawing-editor-highlight-stroke');
+  highlightLayer.append(halo, focusStroke);
+  highlightLayer.setAttribute('visibility', 'hidden');
   const marquee = document.createElementNS(SVG_NS, 'rect');
   marquee.setAttribute('data-layer', 'marquee');
   marquee.setAttribute('class', 'drawing-editor-marquee');
   marquee.setAttribute('aria-hidden', 'true');
   marquee.setAttribute('visibility', 'hidden');
-  svg.append(artLayer, regionLayer, marquee);
+  svg.append(defs, artLayer, regionLayer, plateLayer, highlightLayer, marquee);
+  svg.dataset.view = 'plan';
 
   root.append(help, svg);
   container.appendChild(root);
@@ -181,6 +215,12 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
   let highlighted = null;
   let drag = null;
   const pathByKey = new Map();
+
+  /** Whether the person asked for less motion; read each time it matters. */
+  const reduceMotion = () =>
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches === true;
 
   function applyViewBox() {
     svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
@@ -234,6 +274,8 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
       regionLayer.appendChild(path);
       pathByKey.set(r.key, path);
     }
+    clearHighlight();
+    showPlate(null);
 
     if (bbox && bbox.maxX > bbox.minX && bbox.maxY > bbox.minY) {
       const w = bbox.maxX - bbox.minX;
@@ -267,18 +309,99 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
       else path.style.removeProperty('--region-fill');
       path.classList.toggle('is-selected', selected.has(key));
       path.classList.toggle('is-removed', removed.has(key));
+      if (removed.has(key)) path.setAttribute('fill', `url(#${hatchId})`);
+      else path.removeAttribute('fill');
       path.classList.toggle('is-highlighted', key === highlighted);
       path.setAttribute('aria-hidden', 'true');
     }
   }
 
-  function setHighlight(key) {
+  /**
+   * The keyboard highlight: a two-stroke outline drawn OVER the regions
+   * (the region's own stroke would sit under its neighbours), which PULSES
+   * for three beats and then settles, unless the person asked for less
+   * motion, in which case it settles at once. The classes are the contract a
+   * spec can read: `is-pulsing` until the animation ends, then `is-steady`.
+   *
+   * @param {string|null} key
+   * @param {{pulse?: boolean}} [options] - Pulse (a keyboard move) or settle
+   *   at once (a click, a hover)
+   */
+  function setHighlight(key, { pulse = false } = {}) {
     if (highlighted && pathByKey.has(highlighted)) {
       pathByKey.get(highlighted).classList.remove('is-highlighted');
     }
     highlighted = key && pathByKey.has(key) ? key : null;
-    if (highlighted) {
-      pathByKey.get(highlighted).classList.add('is-highlighted');
+    if (!highlighted) {
+      clearHighlight();
+      return;
+    }
+    const path = pathByKey.get(highlighted);
+    path.classList.add('is-highlighted');
+    const d = path.getAttribute('d');
+    halo.setAttribute('d', d);
+    focusStroke.setAttribute('d', d);
+    highlightLayer.setAttribute('visibility', 'visible');
+    highlightLayer.dataset.region = highlighted;
+    highlightLayer.classList.remove('is-pulsing', 'is-steady');
+    // Restarting an animation needs the class to leave and come back.
+    void highlightLayer.getBoundingClientRect?.();
+    highlightLayer.classList.add(
+      pulse && !reduceMotion() ? 'is-pulsing' : 'is-steady'
+    );
+  }
+
+  function clearHighlight() {
+    highlighted = null;
+    highlightLayer.setAttribute('visibility', 'hidden');
+    highlightLayer.classList.remove('is-pulsing', 'is-steady');
+    delete highlightLayer.dataset.region;
+    for (const path of pathByKey.values())
+      path.classList.remove('is-highlighted');
+  }
+
+  function onPulseEnd() {
+    if (highlightLayer.classList.contains('is-pulsing')) {
+      highlightLayer.classList.remove('is-pulsing');
+      highlightLayer.classList.add('is-steady');
+    }
+  }
+  highlightLayer.addEventListener('animationend', onPulseEnd);
+
+  /**
+   * Show the drawing as it arrived, or the plan drawn over it. The layers
+   * stay where they are; the stylesheet hides all but the art.
+   * @param {'plan'|'original'} view
+   */
+  function setView(view) {
+    svg.dataset.view = view === 'original' ? 'original' : 'plan';
+  }
+
+  /**
+   * Draw one plate's cut over the dimmed plan, or none.
+   * @param {string|null} pathData - The plate's rings as path data
+   */
+  function showPlate(pathData) {
+    while (plateLayer.firstChild) plateLayer.removeChild(plateLayer.firstChild);
+    if (pathData) {
+      const cut = document.createElementNS(SVG_NS, 'path');
+      cut.setAttribute('d', pathData);
+      cut.setAttribute('class', 'drawing-editor-plate-cut');
+      cut.setAttribute('fill-rule', 'evenodd');
+      plateLayer.appendChild(cut);
+      svg.dataset.plate = 'true';
+    } else {
+      delete svg.dataset.plate;
+    }
+  }
+
+  function onHover(event) {
+    const key = regionKeyOf(event.target);
+    for (const [k, path] of pathByKey) {
+      path.classList.toggle(
+        'is-hover',
+        k === key && event.type === 'pointerover'
+      );
     }
   }
 
@@ -433,7 +556,7 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
       event.preventDefault();
       const next = nearestInDirection(regions, highlighted, dir);
       if (next) {
-        setHighlight(next);
+        setHighlight(next, { pulse: true });
         on.onHighlight?.(next);
       }
       return;
@@ -445,7 +568,7 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
           ? (regions[0]?.key ?? null)
           : (regions[regions.length - 1]?.key ?? null);
       if (next) {
-        setHighlight(next);
+        setHighlight(next, { pulse: true });
         on.onHighlight?.(next);
       }
       return;
@@ -469,6 +592,8 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
   svg.addEventListener('dblclick', onDoubleClick);
   svg.addEventListener('wheel', onWheel, { passive: false });
   svg.addEventListener('keydown', onKeyDown);
+  svg.addEventListener('pointerover', onHover);
+  svg.addEventListener('pointerout', onHover);
 
   return {
     root,
@@ -476,6 +601,11 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
     setDrawing,
     setState,
     setHighlight,
+    clearHighlight,
+    setView,
+    getView: () => svg.dataset.view,
+    showPlate,
+    highlightLayer,
     getHighlight: () => highlighted,
     setTool,
     getTool: () => tool,
@@ -493,6 +623,9 @@ export function createRegionCanvas({ container, labelId, on = {} }) {
       svg.removeEventListener('dblclick', onDoubleClick);
       svg.removeEventListener('wheel', onWheel);
       svg.removeEventListener('keydown', onKeyDown);
+      svg.removeEventListener('pointerover', onHover);
+      svg.removeEventListener('pointerout', onHover);
+      highlightLayer.removeEventListener('animationend', onPulseEnd);
       root.remove();
     },
   };

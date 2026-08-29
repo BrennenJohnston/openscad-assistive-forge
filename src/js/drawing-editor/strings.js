@@ -204,6 +204,29 @@ export const EDITOR_STRINGS = Object.freeze({
     'On, a piece painted later is held by every plate before it and cannot fall out. Off, each plate cuts its own colour only, the way a hand-cut set does, and a loose piece is reported.',
   ruleStacked: 'Later colours cut through each plate.',
   ruleOwn: 'Each plate cuts its own colour only.',
+
+  // ── The view (DP-21) ───────────────────────────────────────────────────
+  /** A pressed toggle: the untouched drawing alone, or the plan over it. */
+  showOriginal: 'Show original',
+  showingOriginal: 'Showing the original drawing.',
+  showingPlan: 'Showing your edits.',
+  /** The plate stepper: one plate's cut on the drawing, the rest dimmed. */
+  stepperLabel: 'Plate',
+  allPlates: 'All plates',
+  plateOfN: (k, n, colour) => `Plate ${k} of ${n}, ${colour}`,
+  prevPlate: 'Previous plate',
+  nextPlate: 'Next plate',
+  showingAllPlates: 'Showing all plates.',
+  /** The legend under the drawing: what the tints mean. */
+  legendLabel: 'What the colours on the drawing mean',
+  legendPainted: 'Painted with its colour',
+  legendBase: 'Base coat',
+  legendRemoved: 'Removed',
+  legendUnpainted: 'Unpainted (the wall)',
+  legendPlate: 'This plate cuts here',
+  /** After a plate's largest few loose pieces, the rest, counted. */
+  moreIslands: (plate, n) =>
+    `And ${count(n, 'more loose piece', 'more loose pieces')} on plate ${plate}, all smaller.`,
   labelRule: (stacked) =>
     stacked
       ? 'plates set to cut later colours too'

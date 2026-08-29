@@ -64,8 +64,13 @@ function loadEngine() {
     enginePromise = Promise.all([
       import('../stencil-colours.js'),
       import('../ring-geometry.js'),
+      import('../stencil-plates.js'),
     ])
-      .then(([colours, rings]) => ({ ...colours, ...rings }))
+      .then(([colours, rings, plates]) => ({
+        ...colours,
+        ...rings,
+        paintSequence: plates.paintSequence,
+      }))
       .catch((err) => {
         enginePromise = null;
         throw err;
@@ -197,9 +202,43 @@ export function createDrawingEditor({
   zoomGroup.className = 'drawing-editor-zoom';
   zoomGroup.append(fitBtn, zoomInBtn, zoomOutBtn);
 
+  // The view (DP-21): the untouched drawing or the plan over it, and one
+  // plate at a time.
+  const showOriginalBtn = button(
+    S.showOriginal,
+    'btn btn-secondary drawing-editor-show-original',
+    'show-original'
+  );
+  showOriginalBtn.setAttribute('aria-pressed', 'false');
+
+  const stepper = document.createElement('div');
+  stepper.className = 'drawing-editor-stepper';
+  stepper.setAttribute('role', 'group');
+  stepper.setAttribute('aria-label', S.stepperLabel);
+  const prevPlateBtn = button('\u25C0', 'btn btn-secondary', 'prev-plate');
+  prevPlateBtn.setAttribute('aria-label', S.prevPlate);
+  const nextPlateBtn = button('\u25B6', 'btn btn-secondary', 'next-plate');
+  nextPlateBtn.setAttribute('aria-label', S.nextPlate);
+  const stepperText = button(
+    S.allPlates,
+    'btn btn-secondary drawing-editor-stepper-text',
+    'all-plates'
+  );
+  stepper.append(prevPlateBtn, stepperText, nextPlateBtn);
+
+  const viewGroup = document.createElement('div');
+  viewGroup.className = 'drawing-editor-view';
+  viewGroup.append(showOriginalBtn, stepper);
+
   const stencilTools = document.createElement('div');
   stencilTools.className = 'drawing-editor-stencil-tools';
-  stencilTools.append(toolsGroup, paintGroup, historyGroup, zoomGroup);
+  stencilTools.append(
+    toolsGroup,
+    paintGroup,
+    historyGroup,
+    viewGroup,
+    zoomGroup
+  );
   stencilTools.hidden = true;
 
   const viewControls = document.createElement('div');
@@ -306,6 +345,28 @@ export function createDrawingEditor({
   canvasLabel.id = canvasLabelId;
   canvasLabel.textContent = S.canvasLabel;
 
+  // What the tints mean, in words beside each swatch: colour is never the
+  // only signal, and the legend is the one place the four looks are named.
+  const legend = document.createElement('ul');
+  legend.className = 'drawing-editor-legend';
+  legend.setAttribute('aria-label', S.legendLabel);
+  for (const [kind, text] of [
+    ['painted', S.legendPainted],
+    ['base', S.legendBase],
+    ['removed', S.legendRemoved],
+    ['unpainted', S.legendUnpainted],
+    ['plate', S.legendPlate],
+  ]) {
+    const li = document.createElement('li');
+    li.dataset.kind = kind;
+    const chip = document.createElement('span');
+    chip.className = 'drawing-editor-legend-chip';
+    chip.setAttribute('aria-hidden', 'true');
+    li.append(chip, document.createTextNode(text));
+    legend.appendChild(li);
+  }
+  legend.hidden = true;
+
   body.append(stage, panel);
   toolbar.append(title, stencilTools, viewControls, applyBtn, closeBtn);
   root.append(skipToTable, toolbar, status, body);
@@ -373,6 +434,7 @@ export function createDrawingEditor({
     },
   });
   canvas.root.hidden = true;
+  stage.appendChild(legend);
 
   let isOpen = false;
   let purpose = 'relief';
@@ -390,6 +452,9 @@ export function createDrawingEditor({
   let selected = new Set();
   const rows = new Map();
   const stack = createCommandStack({ onChange: updateHistoryButtons });
+  // The view (DP-21): the plan or the original, and which plate, if any.
+  let showingOriginal = false;
+  let plateIndex = -1;
 
   const say = (message) => {
     if (!message) return;
@@ -523,6 +588,7 @@ export function createDrawingEditor({
     shapesBlock.hidden = stencil;
     stencilTools.hidden = !stencil;
     canvas.root.hidden = !stencil;
+    legend.hidden = !stencil;
     applyBtn.hidden = !stencil;
     // Roles, offsets, the design width and the before/after panes are the
     // relief purpose's vocabulary: a stencil region has a colour, not a
@@ -600,6 +666,10 @@ export function createDrawingEditor({
     }
     selected = new Set();
     stack.clear();
+    showingOriginal = false;
+    showOriginalBtn.setAttribute('aria-pressed', 'false');
+    canvas.setView('plan');
+    plateIndex = -1;
     const extent = boundsOf(
       [...(silhouette || []), ...regions.flatMap((r) => r.rings)].flat()
     );
@@ -667,6 +737,7 @@ export function createDrawingEditor({
     fillPaintSelect();
     ruleField.input.checked = plan.rule !== 'own';
     paintCanvas();
+    renderStepper(cuts);
     setCount('regions', regions.length);
     setCount('colours', plan.palette.length);
     setCount('plates', plan.order.length);
@@ -694,6 +765,60 @@ export function createDrawingEditor({
     }
     canvas.setState({ fills, selected, removed });
   }
+
+  // ── The view: the toggle and the plate stepper (DP-21) ──────────────────
+
+  showOriginalBtn.addEventListener('click', () => {
+    showingOriginal = !showingOriginal;
+    showOriginalBtn.setAttribute('aria-pressed', String(showingOriginal));
+    canvas.setView(showingOriginal ? 'original' : 'plan');
+    say(showingOriginal ? S.showingOriginal : S.showingPlan);
+  });
+
+  /** The stepper's text and buttons, and the plate drawn on the canvas. */
+  function renderStepper(cuts) {
+    if (plateIndex >= cuts.length) plateIndex = -1;
+    const n = cuts.length;
+    prevPlateBtn.disabled = n === 0 || plateIndex < 0;
+    nextPlateBtn.disabled = n === 0 || plateIndex >= n - 1;
+    if (plateIndex < 0) {
+      stepperText.textContent = S.allPlates;
+      canvas.showPlate(null);
+      return;
+    }
+    const cut = cuts[plateIndex];
+    stepperText.textContent = S.plateOfN(
+      plateIndex + 1,
+      n,
+      colourName(cut.colourId)
+    );
+    canvas.showPlate(cut.rings.length ? engine.ringsToPathData(cut.rings) : '');
+  }
+
+  function stepPlate(to) {
+    const cuts = currentCuts();
+    if (cuts.length === 0) return;
+    plateIndex = to < 0 || to >= cuts.length ? -1 : to;
+    renderStepper(cuts);
+    if (plateIndex < 0) {
+      say(S.showingAllPlates);
+      return;
+    }
+    const names = cuts.map((c) => colourName(c.colourId));
+    const sentence = engine.paintSequence(names)[plateIndex] || '';
+    say(`${stepperText.textContent}. ${sentence}`);
+  }
+
+  prevPlateBtn.addEventListener('click', () => stepPlate(plateIndex - 1));
+  nextPlateBtn.addEventListener('click', () => stepPlate(plateIndex + 1));
+  stepperText.addEventListener('click', () => stepPlate(-1));
+  stepper.addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      event.preventDefault();
+      event.stopPropagation();
+      stepPlate(plateIndex + (event.key === 'ArrowLeft' ? -1 : 1));
+    }
+  });
 
   // ── The regions table ───────────────────────────────────────────────────
 
@@ -1345,10 +1470,21 @@ export function createDrawingEditor({
     );
   });
 
+  /**
+   * How many loose pieces a plate lists in full. MEASURED on the cat PNG
+   * traced at seven colours: the masks do not tile, and 567 sliver gaps
+   * between them are honest islands - 236 on plate 1 alone. Listing every
+   * one is a wall nobody can walk with a screen reader, so each plate shows
+   * its largest few and counts the rest; the section's count stays true.
+   */
+  const ISLAND_LIST_CAP = 8;
+
   function renderIslands(cuts) {
     islandsList.replaceChildren();
     cuts.forEach((cut, k) => {
-      for (const island of cut.islands) {
+      const shown = cut.islands.slice(0, ISLAND_LIST_CAP);
+      const rest = cut.islands.length - shown.length;
+      for (const island of shown) {
         const li = document.createElement('li');
         const where = island.regionNames.length
           ? island.regionNames.join(', ')
@@ -1368,6 +1504,12 @@ export function createDrawingEditor({
         }
         li.appendChild(remedies);
         islandsList.appendChild(li);
+      }
+      if (rest > 0) {
+        const more = document.createElement('li');
+        more.className = 'drawing-editor-islands-more';
+        more.textContent = S.moreIslands(k + 1, rest);
+        islandsList.appendChild(more);
       }
     });
   }
@@ -1428,7 +1570,8 @@ export function createDrawingEditor({
   root.addEventListener('focusin', (event) => {
     const tr = event.target.closest?.('tr[data-region]');
     if (tr && regionsBlock.contains(tr) && plan) {
-      canvas.setHighlight(tr.dataset.region);
+      // A keyboard arrival: the highlight pulses, then settles (DP-21).
+      canvas.setHighlight(tr.dataset.region, { pulse: true });
       describeHighlight(tr.dataset.region);
     }
   });
@@ -1571,6 +1714,9 @@ export function createDrawingEditor({
     /** The selection and the tool, for a spec that wants to read them. */
     getSelection: () => [...selected],
     getTool: () => canvas.getTool(),
+    getView: () => canvas.getView(),
+    getPlateIndex: () => plateIndex,
+    stepPlate,
     setTool,
     undo,
     redo,

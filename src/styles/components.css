@@ -17193,21 +17193,30 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   pointer-events: none;
 }
 
-/* One path per region: its colour at reading strength, a selection as a
-   thick outline, the keyboard highlight as the focus colour. Colour is never
-   the only signal: the table says the same thing in words. */
+/* One path per region: its colour at FULL contrast (DP-21), a selection as
+   a thick outline, hover as a steady outline. Colour is never the only
+   signal: the table says the same thing in words, and the legend names the
+   four looks. */
 .drawing-editor-region {
   fill: var(--region-fill, transparent);
-  fill-opacity: 0.55;
+  fill-opacity: 1;
   stroke: var(--color-border);
   stroke-width: 1px;
   vector-effect: non-scaling-stroke;
   cursor: pointer;
 }
 
+/* Removed: hatched at low contrast, the fill attribute pointing at the
+   pattern in defs; the pattern's line takes the token below. */
 .drawing-editor-region.is-removed {
-  fill-opacity: 0.12;
+  fill-opacity: 1;
   stroke-dasharray: 4 3;
+}
+
+.drawing-editor-hatch-line {
+  stroke: var(--color-text-secondary);
+  stroke-width: 1px;
+  stroke-opacity: 0.45;
 }
 
 .drawing-editor-region.is-selected {
@@ -17215,9 +17224,160 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   stroke-width: 3px;
 }
 
-.drawing-editor-region.is-highlighted {
-  stroke: var(--color-accent);
+.drawing-editor-region.is-hover {
+  stroke: var(--color-text-primary);
+  stroke-width: 2px;
+}
+
+/* ★ The keyboard highlight: two strokes drawn over the regions, the outer in
+   the page's TEXT colour and the inner in its BACKGROUND colour. That pair is
+   black and white in the light theme and white and black in the dark one,
+   and for any region colour at least one of black and white contrasts with
+   it at 4.58:1 or better (the geometric mean of 21:1), which is the
+   guarantee "reads on any region colour" needs. The plan's page-background
+   halo under a --color-focus stroke was MEASURED first: the focus blue on a
+   white region is 2.2:1. */
+.drawing-editor-highlight-halo,
+.drawing-editor-highlight-stroke {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.drawing-editor-highlight-halo {
+  stroke: var(--color-text-primary);
+  stroke-width: 7px;
+}
+
+.drawing-editor-highlight-stroke {
+  stroke: var(--color-bg-primary);
   stroke-width: 3px;
+}
+
+/* Three beats, then it settles. The pulse is on the inner stroke's width and
+   opacity only, so the outline never leaves and never moves. */
+@keyframes drawing-editor-pulse {
+  0%,
+  100% {
+    stroke-width: 3px;
+    stroke-opacity: 1;
+  }
+  50% {
+    stroke-width: 6px;
+    stroke-opacity: 0.45;
+  }
+}
+
+[data-layer='highlight'].is-pulsing .drawing-editor-highlight-stroke {
+  animation: drawing-editor-pulse calc(var(--motion-slow) * 4) ease-in-out 3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-layer='highlight'].is-pulsing .drawing-editor-highlight-stroke {
+    animation: none;
+  }
+}
+
+/* One plate at a time (the stepper): the plan dims, the plate's cut is drawn
+   in the accent over it. */
+.drawing-editor-canvas-svg[data-plate='true'] [data-layer='regions'] {
+  opacity: 0.25;
+}
+
+.drawing-editor-plate-cut {
+  fill: var(--color-accent);
+  fill-opacity: 0.55;
+  stroke: var(--color-text-primary);
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+/* "Show original": the art at full strength and nothing drawn over it. */
+.drawing-editor-canvas-svg[data-view='original'] [data-layer='art'] {
+  opacity: 1;
+}
+
+.drawing-editor-canvas-svg[data-view='original'] [data-layer='regions'],
+.drawing-editor-canvas-svg[data-view='original'] [data-layer='plate'],
+.drawing-editor-canvas-svg[data-view='original'] [data-layer='highlight'],
+.drawing-editor-canvas-svg[data-view='original'] [data-layer='marquee'] {
+  display: none;
+}
+
+.drawing-editor-show-original[aria-pressed='true'] {
+  background: var(--color-hover-bg);
+  border-color: var(--color-accent);
+  box-shadow: inset 0 0 0 1px var(--color-accent);
+}
+
+.drawing-editor-view {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.drawing-editor-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.drawing-editor-stepper-text {
+  min-width: 8em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The legend under the drawing: a chip in each look, and its words. */
+.drawing-editor-legend {
+  list-style: none;
+  margin: var(--space-xs) 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-md);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.drawing-editor-legend[hidden] {
+  display: none;
+}
+
+.drawing-editor-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.drawing-editor-legend-chip {
+  width: 1.1em;
+  height: 1.1em;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-secondary);
+}
+
+.drawing-editor-legend [data-kind='painted'] .drawing-editor-legend-chip {
+  background: linear-gradient(135deg, #997048 50%, #8b9770 50%);
+}
+
+.drawing-editor-legend [data-kind='base'] .drawing-editor-legend-chip {
+  background: var(--drawing-editor-base-tint);
+}
+
+.drawing-editor-legend [data-kind='removed'] .drawing-editor-legend-chip {
+  background: repeating-linear-gradient(
+    45deg,
+    transparent 0 3px,
+    var(--color-text-secondary) 3px 4px
+  );
+}
+
+.drawing-editor-legend [data-kind='plate'] .drawing-editor-legend-chip {
+  background: var(--color-accent);
 }
 
 .drawing-editor-marquee {

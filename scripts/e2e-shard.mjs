@@ -236,14 +236,13 @@ export const MEASURED_SECONDS = {
   // to be a CI one, so this is booked at three times what was measured and
   // re-weighted from a green CI run at the round's close.
   'stencil-plates.spec.js': 60.0,
-  // DP-19. ONE case, one load of the stencil tile, seven walks on it:
-  // MEASURED locally at 8.5 s on a warm engine, booked at the same four-times
-  // ratio stencil-plates carries (14.5 measured, 60 booked). It was seven
-  // cases at first; the two-shard lanes (Edge, Firefox) were a third of a
-  // minute from their 35-minute ceiling before this file existed, and the
-  // walks were folded onto one page rather than the lane pushed over.
+  // DP-19..21. ONE case, one load of the stencil tile, every walk the editor
+  // has on it: MEASURED locally at 42 s after DP-21 (8.5 s at DP-19), booked
+  // at the same four-times ratio stencil-plates carries (14.5 measured, 60
+  // booked). Chromium only (PROJECT_IGNORES): the two-shard lanes were a
+  // third of a minute from their 35-minute ceiling before this file existed.
   // Re-weighted from a green CI run at the round's close.
-  'drawing-editor.spec.js': 35.0,
+  'drawing-editor.spec.js': 170.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */

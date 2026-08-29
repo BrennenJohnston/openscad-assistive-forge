@@ -143,6 +143,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **You can see what you did** (DP-21) - the drawing editor's canvas is one picture now. The
+  original drawing sits underneath, dimmed; every region is painted in its colour at full
+  strength, the base coat in a neutral grey so it reads differently from "unpainted"; a removed
+  region is hatched; a selected one has a thick outline. "Show original" is a button you press
+  to see the untouched drawing alone and press again to see your edits, and it says which. When
+  you move through the regions table, the drawing draws a two-stroke outline around the region
+  you are on - dark outside, light inside, so it reads on any colour - that pulses three times
+  and then settles; if your system asks for less motion, it settles at once. The plate stepper
+  in the toolbar walks the plates one at a time, drawing that plate's cut over the dimmed plan
+  and saying the same paint sentence the export writes, so you can see what plate 2 will cut
+  before anything is printed. A legend under the drawing names the five looks
+
 - **You can point at a region and say brown** (DP-20) - the drawing editor on the Stencil Maker
   gains its tools. The drawing is one canvas you work on directly: Select a region by clicking it
   (Shift adds another), drag a Marquee around several, Paint one with the current colour, Remove

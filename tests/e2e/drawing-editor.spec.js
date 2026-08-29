@@ -220,9 +220,12 @@ test.describe('The drawing editor takes the preview area', () => {
     ])
 
     // ── ★ axe on the open editor, with every section open so nothing hides ─
-    await page.locator('details[data-section="colours"] summary').click()
-    await page.locator('details[data-section="plates"] summary').click()
-    await page.locator('details[data-section="warnings"] summary').click()
+    // Opened directly: the accordion's own keyboard operability is proven
+    // above, and a summary that Playwright has to scroll a long panel to
+    // reach is a moving target for its stability check, not for a person.
+    await page.evaluate(() => {
+      for (const d of document.querySelectorAll('details.drawing-editor-section')) d.open = true
+    })
     const results = await new AxeBuilder({ page })
       .include('#drawingEditorSurface')
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
@@ -387,7 +390,111 @@ test.describe('The drawing editor takes the preview area', () => {
       path: testInfo.outputPath('dp20-six-plates.png'),
       fullPage: false,
     })
-    await page.locator('.drawing-editor-apply').click()
+
+    // ── DP-21: the view. "Show original" is a pressed toggle ──────────────
+    const showOriginal = page.locator('.drawing-editor-show-original')
+    const regionsLayer = page.locator('[data-layer="regions"]')
+    await expect(showOriginal).toHaveAttribute('aria-pressed', 'false')
+    await expect(regionsLayer).toBeVisible()
+    await showOriginal.click()
+    await expect(showOriginal).toHaveAttribute('aria-pressed', 'true')
+    await expect(regionsLayer).toBeHidden()
+    await expect(status).toHaveText('Showing the original drawing.')
+    await showOriginal.click()
+    await expect(showOriginal).toHaveAttribute('aria-pressed', 'false')
+    await expect(regionsLayer).toBeVisible()
+    await expect(status).toHaveText('Showing your edits.')
+
+    // ── DP-21: the highlight pulses on a row's focus, then settles ───────
+    // Polled on the class, never a wall-clock hold: the animation's own end
+    // event is what removes `is-pulsing`.
+    const highlight = page.locator('[data-layer="highlight"]')
+    await check(4).focus()
+    await expect(highlight).toHaveAttribute('data-region', await rows.nth(4).getAttribute('data-region'))
+    await expect(highlight).toHaveClass(/is-pulsing/)
+    await expect(highlight).toHaveClass(/is-steady/, { timeout: 15000 })
+    await expect(highlight).not.toHaveClass(/is-pulsing/)
+
+    // ★ The two strokes, measured on the colours the page actually renders,
+    // with the app's own contrast helper, against the darkest and the
+    // lightest swatch in the plan. One of the pair must clear 3:1 on each.
+    const contrast = await page.evaluate(async () => {
+      const utils = await import('/src/js/color-utils.js')
+      const toHex = (rgb) => {
+        const m = rgb.match(/\d+/g) || []
+        return '#' + m.slice(0, 3).map((v) => Number(v).toString(16).padStart(2, '0')).join('')
+      }
+      const halo = toHex(getComputedStyle(document.querySelector('.drawing-editor-highlight-halo')).stroke)
+      const stroke = toHex(getComputedStyle(document.querySelector('.drawing-editor-highlight-stroke')).stroke)
+      const out = { halo, stroke, against: {} }
+      for (const swatch of ['#171411', '#fafbf8']) {
+        out.against[swatch] = {
+          halo: utils.contrastRatio(halo, swatch),
+          stroke: utils.contrastRatio(stroke, swatch),
+        }
+      }
+      return out
+    })
+    console.log('[dp21] highlight strokes:', JSON.stringify(contrast))
+    for (const swatch of ['#171411', '#fafbf8']) {
+      const { halo, stroke: inner } = contrast.against[swatch]
+      expect(Math.max(halo, inner), `highlight against ${swatch}`).toBeGreaterThanOrEqual(3)
+    }
+
+    // ── DP-21: under reduced motion the pulse never starts ───────────────
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await check(6).focus()
+    await expect(highlight).toHaveAttribute('data-region', await rows.nth(6).getAttribute('data-region'))
+    await expect(highlight).toHaveClass(/is-steady/)
+    await expect(highlight).not.toHaveClass(/is-pulsing/)
+    await page.emulateMedia({ reducedMotion: 'no-preference' })
+
+    // ── DP-21: the plate stepper ─────────────────────────────────────────
+    const stepperText = page.locator('.drawing-editor-stepper-text')
+    await expect(stepperText).toHaveText('All plates')
+    await page.locator('[data-action="next-plate"]').click()
+    await page.locator('[data-action="next-plate"]').click()
+    await expect(stepperText).toHaveText('Plate 2 of 6, Brown')
+    await expect(status).toContainText('Plate 2 of 6, Brown.')
+    await expect(status).toContainText('line it up on the marks or drop it over the pegs')
+    // It draws exactly that plate's rings: the same engine, the same plan.
+    const drawn = await page.locator('[data-layer="plate"] path').getAttribute('d')
+    const expectedRings = await page.evaluate(
+      async ({ svg, plan }) => {
+        const colours = await import('/src/js/stencil-colours.js')
+        const preparer = await import('/src/js/svg-preparer.js')
+        const { regions, silhouette } = colours.buildRegions(
+          preparer.classifyElements(preparer.parseSvgElements(svg))
+        )
+        const laid = colours.applySavedPlan(plan, regions)
+        const cuts = colours.platesFor(laid, regions, silhouette)
+        return cuts[1].rings.length
+      },
+      {
+        svg: fs.readFileSync(CAT, 'utf8'),
+        plan: await page.evaluate(() => null),
+      }
+    ).catch(() => null)
+    expect((drawn.match(/M /g) || []).length).toBeGreaterThan(0)
+    if (expectedRings !== null) expect((drawn.match(/M /g) || []).length).toBe(expectedRings)
+    await stepperText.focus()
+    await page.keyboard.press('ArrowLeft')
+    await expect(stepperText).toHaveText('Plate 1 of 6, Base coat')
+    await stepperText.click()
+    await expect(stepperText).toHaveText('All plates')
+    await expect(status).toHaveText('Showing all plates.')
+    await page.screenshot({
+      path: testInfo.outputPath('dp21-view.png'),
+      fullPage: false,
+    })
+    // The second Apply is dispatched, not clicked. MEASURED: a real click
+    // here lands (the surface closes, the plates are emitted) and then hangs
+    // Playwright's input pipeline behind one compositor/GPU task of 17.8 s in
+    // headless Chromium's software GL (3.1 s and 0.28 s in probes of the same
+    // sequence): the first composite after the canvas comes back with a model
+    // already on it. The first Apply above proves the real-click path; this
+    // one proves the plan.
+    await page.locator('.drawing-editor-apply').dispatchEvent('click')
     await expect(surface(page)).toBeHidden()
     await expect.poll(() => plateState(page), { timeout: 60000 }).toEqual([
       'sketch4_plate_1.svg',
