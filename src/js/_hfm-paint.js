@@ -640,6 +640,50 @@ export function pickIntensityIndex(lum, levelCount) {
   return i < 0 ? 0 : i >= levelCount ? levelCount - 1 : i;
 }
 
+/**
+ * CW-70: how far to lift the reverse-video threshold, to hold the share of
+ * solid cells under a cap.
+ *
+ * A hard per-frame cap is not available: the reverse decision has to be made
+ * BEFORE the glyph is picked (a reverse cell is matched against an inverted
+ * shape vector), and on the GPU path that happens per fragment, where no cell
+ * can know the frame's total. So the cap is a controller instead: the previous
+ * conversion's share raises or relaxes the threshold for the next one. It is
+ * one frame behind by construction, and the instrument's per-frame share is
+ * where that overshoot is read, not argued about.
+ *
+ * ★ THE RELEASE IS FAR SLOWER THAN THE RISE, AND IT WAS MEASURED BEFORE IT WAS
+ * BELIEVED. A first version relaxed at three quarters of the cap by half a
+ * step, and a STANDING pose in front of a row of lit shopfronts - where the
+ * natural share is four times the cap - produced fourteen thousand
+ * reverse-video crossings over twenty-four frames where the uncapped picture
+ * produced NONE. The threshold was hunting: one step up put the share under
+ * three quarters of the cap, so the next frame relaxed, so the frame after
+ * that was over again. A cap that makes a still picture flicker is worse than
+ * no cap. The band is now half the cap and the release an eighth of a step, so
+ * a scene whose share settles anywhere between half the cap and the cap holds
+ * still, and the layer walks back only when the thing that lit it has gone.
+ *
+ * @param {number} share the share of cells painted solid last conversion
+ * @param {number|null} cap the share allowed, or null for no cap
+ * @param {number} lift the lift currently in force
+ * @param {{step?: number, max?: number, relaxAt?: number,
+ *   releaseShare?: number}} [options]
+ * @returns {number} the lift for the next conversion, in luminance
+ */
+export function nextReverseLift(share, cap, lift, options = {}) {
+  if (!(cap > 0)) return 0;
+  const step = options.step ?? 0.01;
+  const max = options.max ?? 0.19;
+  const relaxAt = options.relaxAt ?? 0.5;
+  const releaseShare = options.releaseShare ?? 0.125;
+  const current = Number.isFinite(lift) ? lift : 0;
+  if (!(share >= 0)) return current;
+  if (share > cap) return Math.min(max, current + step);
+  if (share < cap * relaxAt) return Math.max(0, current - step * releaseShare);
+  return current;
+}
+
 // ---------------------------------------------------------------------------
 // Palette mode helpers (CW-6) — pure math, unit-tested directly
 // ---------------------------------------------------------------------------
@@ -686,7 +730,89 @@ export function normalizeChroma([r, g, b]) {
  * @param {number} [chromaBoost=1]
  * @returns {number} palette index
  */
-export function pickPaletteIndex(r, g, b, normalizedPalette, chromaBoost = 1) {
+/**
+ * CW-71 - the INK BUDGET for palette mode.
+ *
+ * Monochrome has an intensity ladder, so a dim cell is drawn dim. Palette mode
+ * has none: the cell contrast curve normalises every cell to full scale before
+ * the glyph is chosen, and then a colour is put on whatever came out. The
+ * result, measured at the Seattle spawn: 70 to 83 per cent of ALL cells carry
+ * ink and more than half of them are WHITE, against 3 to 7 per cent inked in
+ * mono. The picture reads as three or four flat fields of colour rather than
+ * as a street.
+ *
+ * Two rules, both about the cell's ABSOLUTE luminance, which is the thing the
+ * contrast curve threw away:
+ *
+ *   floor        below this the cell draws nothing, exactly as the mono
+ *                ladder's blank level does.
+ *   whiteLum,    white is the brightest entry in every palette and it is what
+ *   whiteChroma  a low-chroma highlight lands on through the sRGB match. A
+ *                cell may take it only if it is BOTH bright enough and
+ *                colourless enough; anything else takes the nearest
+ *                CHROMATIC entry instead.
+ *
+ * The sRGB match itself is untouched: this decides which entries the match may
+ * choose from, not how it measures the distance.
+ */
+export const DEFAULT_INK_BUDGET = Object.freeze({
+  floor: 0.5,
+  whiteLum: 0.9,
+  whiteChroma: 0.12,
+});
+
+/**
+ * @param {{floor?: number, whiteLum?: number, whiteChroma?: number}|null|false}
+ *   options - null, false, or all-zero turns the budget off
+ * @returns {{floor: number, whiteLum: number, whiteChroma: number}|null}
+ */
+export function normalizeInkBudget(options) {
+  if (!options) return null;
+  const num = (value, fallback) =>
+    typeof value === 'number' && Number.isFinite(value) && value >= 0
+      ? value
+      : fallback;
+  const floor = num(options.floor, DEFAULT_INK_BUDGET.floor);
+  const whiteLum = num(options.whiteLum, DEFAULT_INK_BUDGET.whiteLum);
+  const whiteChroma = num(options.whiteChroma, DEFAULT_INK_BUDGET.whiteChroma);
+  if (floor <= 0 && whiteLum <= 0) return null;
+  return { floor, whiteLum, whiteChroma };
+}
+
+/**
+ * How far from grey a colour is, in the same max-normalised space the palette
+ * match works in: 0 for any grey, 1 for a fully saturated hue.
+ *
+ * @param {number} r @param {number} g @param {number} b in [0, 1]
+ * @returns {number}
+ */
+export function cellChroma(r, g, b) {
+  const max = Math.max(r, g, b);
+  if (max < 1e-6) return 0;
+  return 1 - Math.min(r, g, b) / max;
+}
+
+/**
+ * May this cell take the white entry?
+ *
+ * @param {number} lum absolute cell luminance in [0, 1]
+ * @param {number} chroma from `cellChroma`
+ * @param {{whiteLum: number, whiteChroma: number}|null} budget
+ * @returns {boolean} true when there is no budget at all
+ */
+export function whiteAllowed(lum, chroma, budget) {
+  if (!budget || !(budget.whiteLum > 0)) return true;
+  return lum >= budget.whiteLum && chroma < budget.whiteChroma;
+}
+
+export function pickPaletteIndex(
+  r,
+  g,
+  b,
+  normalizedPalette,
+  chromaBoost = 1,
+  skipIndex = -1
+) {
   const max = Math.max(r, g, b);
   let nr = max < 1e-6 ? 0 : r / max;
   let ng = max < 1e-6 ? 0 : g / max;
@@ -700,6 +826,8 @@ export function pickPaletteIndex(r, g, b, normalizedPalette, chromaBoost = 1) {
   let best = 0;
   let bestDist = Infinity;
   for (let i = 0; i < normalizedPalette.length; i++) {
+    // CW-71: an entry the ink budget has ruled out for this cell.
+    if (i === skipIndex) continue;
     const [pr, pg, pb] = normalizedPalette[i];
     const dr = nr - pr;
     const dg = ng - pg;

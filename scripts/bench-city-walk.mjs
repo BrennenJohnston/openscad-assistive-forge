@@ -11,6 +11,8 @@
 //
 //   node scripts/bench-city-walk.mjs --label=baseline
 //   node scripts/bench-city-walk.mjs --throttle=1 --seconds=30
+//   node scripts/bench-city-walk.mjs --sizes=0.1,0.3,0.5,0.1 --throttle=1
+//   node scripts/bench-city-walk.mjs --gpu-luid=0,101218   (the other adapter)
 //
 // WHAT IT REFUSES TO DO, and why each guard is here:
 //
@@ -30,6 +32,20 @@
 //   * It reads getConvertStats(), which only exists under import.meta.env.DEV,
 //     so this measures the dev server. A production build cannot be benched
 //     with it, by design - the counters are not shipped.
+//   * It refuses to guess which GPU it ran on. Windows hands a non-fullscreen
+//     Chromium the power-saving adapter, so on a two-GPU laptop the DEFAULT is
+//     the integrated one, and every table this script printed before CW-67 was
+//     an integrated-GPU table whether or not anybody read it that way.
+//     --gpu-luid=<high>,<low> (the LUIDs are on chrome://gpu) picks the other
+//     one; the renderer string is printed on EVERY ROW either way, because a
+//     bench row without one has measured nobody knows what.
+//
+// CW-67 RETIRED THE "reverse" COLUMN. It reported the reverse-video cell count
+// of the LAST converted frame, which is a snapshot of wherever the walker
+// happened to stop: it swung between 0 and 95,425 across runs of the same
+// configuration and said nothing about stability. What the reverse-video layer
+// does over a sequence is scripts/seq-city-walk.mjs's question, and that script
+// answers it per frame pair.
 //
 // NUMBERS FROM DIFFERENT SESSIONS ARE NOT COMPARABLE. Three rounds of
 // evidence on this machine say so: it is shared with other agent sessions and
@@ -46,11 +62,15 @@ const DEFAULTS = {
   seconds: 60,
   throttle: 4,
   charScale: 0.1,
+  // --sizes=0.1,0.3,0.5 sweeps the character size, one walk per size inside
+  // ONE browser session, in the order given. Repeat a size to check the run
+  // order is not itself the effect. Overrides --char-scale when set.
+  sizes: '',
   rain: 'heavy',
   // A string present in the tree under test and absent from develop. Update
   // it when the branch's identity changes; the run aborts if it is missing.
-  marker: 'MONO_BLOOM_PX',
-  markerPath: '/src/js/game/hc-palettes.js',
+  marker: 'createFold',
+  markerPath: '/src/js/game/seq-metrics.js',
   label: '',
   width: 1600,
   height: 900,
@@ -80,6 +100,21 @@ const DEFAULTS = {
   // the end of each run, for the eyes-on gates. Pair it with --rain=none
   // --walk=0 so the two variants photograph the same standing scene.
   shot: '',
+  // --colour=on runs in palette mode. Needed to price anything that only
+  // exists there: the CW-71 ink budget is inert in monochrome, so a bench of
+  // it without this measures nothing at all.
+  colour: 'off',
+  // --ink-budget sets the CW-71 palette ink budget for every run: `off`, or
+  // `floor,whiteLum,whiteChroma`. Empty leaves the game's own. Only palette
+  // mode is affected, so pair it with a colour run.
+  inkBudget: '',
+  // --luminance selects the CW-70 treatment of the solid bright layer for
+  // every run: stock | calm | off. Empty leaves the game's own.
+  luminance: '',
+  // --gpu-luid=high,low selects a D3D adapter (Chromium --use-adapter-luid).
+  // Empty means whatever Windows hands out, which on this laptop is the
+  // integrated GPU - see the refusal note above.
+  gpuLuid: '',
 }
 
 /** Variant name -> the setBenchLegacy payload that selects it. */
@@ -99,6 +134,11 @@ const VARIANTS = {
   // CW-41: the cell-raster facade filtering OFF (bias forced to zero), so
   // its cost can be A/B'd against the shipped filtering in one session.
   'no-cellraster': {},
+  // CW-68: the frame-to-frame memory turned OFF for this run, so its cost can
+  // be priced against the shipped configuration inside one session - which is
+  // the only kind of comparison this machine supports. Use it A-B-B-A:
+  //   --variants=no-hysteresis,new,new,no-hysteresis
+  'no-hysteresis': {},
 }
 
 /** What persistFade each variant runs at. */
@@ -247,6 +287,47 @@ async function benchCity(page, cdp, city, variant, opts, runIndex) {
       `character size is ${fontScale}, asked for ${opts.charScale}`
     )
   }
+
+  // CW-68. Read what the game configured for itself, or turn it off for the
+  // variant that prices it; either way the answer goes in the table, because
+  // a converter row that does not say whether the memory was on is a number
+  // about nothing.
+  const hysteresis = await page.evaluate((off) => {
+    const api = window.__cityWalkGame.altView
+    if (typeof api.getTemporalHysteresis !== 'function') return undefined
+    return off ? api.setTemporalHysteresis(null) : api.getTemporalHysteresis()
+  }, variant === 'no-hysteresis')
+
+  const luminance = await page.evaluate((mode) => {
+    const game = window.__cityWalkGame
+    if (typeof game.setLuminanceLayer !== 'function') return undefined
+    return mode ? game.setLuminanceLayer(mode) : game.getLuminanceLayer()
+  }, opts.luminance)
+  if (opts.luminance && luminance !== opts.luminance) {
+    throw new Error(`--luminance=${opts.luminance} answered "${luminance}"`)
+  }
+
+  // A colour bench that quietly ran in monochrome would report a cost for a
+  // feature that was never reached.
+  const palette = await page.evaluate(
+    () => window.__cityWalkGame.altView.getPalette?.() ?? null
+  )
+  if ((opts.colour === 'on') !== Boolean(palette)) {
+    throw new Error(
+      `--colour=${opts.colour} but the game is ${palette ? 'in palette mode' : 'in mono'}`
+    )
+  }
+
+  const inkBudget = await page.evaluate((arg) => {
+    const api = window.__cityWalkGame.altView
+    if (typeof api.getPaletteInkBudget !== 'function') return undefined
+    if (!arg) return api.getPaletteInkBudget()
+    if (arg === 'off' || arg === 'none') return api.setPaletteInkBudget(null)
+    const [floor, whiteLum, whiteChroma] = String(arg)
+      .split(',')
+      .map(Number)
+    return api.setPaletteInkBudget({ floor, whiteLum, whiteChroma })
+  }, opts.inkBudget)
 
   const rainPresses = RAIN_PRESSES[opts.rain]
   if (rainPresses === undefined) throw new Error(`unknown rain: ${opts.rain}`)
@@ -414,7 +495,10 @@ async function benchCity(page, cdp, city, variant, opts, runIndex) {
     dynamicIntervalMs: result.stats.dynamicIntervalMs,
     usedGpu: result.stats.usedGpu,
     cells: result.stats.cells,
-    reverseCells: result.stats.reverseCells,
+    charScale: opts.charScale,
+    hysteresis,
+    luminance,
+    inkBudget,
     charW: result.stats.charW,
     charH: result.stats.charH,
     fontSizePx: result.stats.fontSizePx,
@@ -428,26 +512,29 @@ async function main() {
     .map((c) => c.trim())
     .filter(Boolean)
 
-  const browser = await chromium.launch({
-    headless: false,
-    args: [
-      // Chromium throttles rAF to 1 Hz when it believes the window is
-      // occluded, which once turned a real measurement into a flat line
-      // (CW-12). These keep the tab running at full rate while it is behind
-      // whatever else is on screen.
-      '--disable-background-timer-throttling',
-      '--disable-backgrounding-occluded-windows',
-      '--disable-renderer-backgrounding',
-      '--disable-features=CalculateNativeWinOcclusion',
-    ],
-  })
+  const launchArgs = [
+    // Chromium throttles rAF to 1 Hz when it believes the window is
+    // occluded, which once turned a real measurement into a flat line
+    // (CW-12). These keep the tab running at full rate while it is behind
+    // whatever else is on screen.
+    '--disable-background-timer-throttling',
+    '--disable-backgrounding-occluded-windows',
+    '--disable-renderer-backgrounding',
+    '--disable-features=CalculateNativeWinOcclusion',
+  ]
+  if (opts.gpuLuid) launchArgs.push(`--use-adapter-luid=${opts.gpuLuid}`)
+  const browser = await chromium.launch({ headless: false, args: launchArgs })
   const context = await browser.newContext({
     deviceScaleFactor: 1,
     viewport: { width: opts.width, height: opts.height },
   })
-  await context.addInitScript(() => {
+  await context.addInitScript((colourOn) => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true')
     localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
+    localStorage.setItem(
+      'openscad-forge-city-walk-colour',
+      colourOn ? 'on' : 'off'
+    )
     // CW-42: benches measure the size THEY set. The inert forced-probe map
     // stops the entry calibration on its first frame, and clearing the
     // stored floor keeps a previous real calibration from seeding the
@@ -456,7 +543,7 @@ async function main() {
     // its config is still a dead bench).
     window.__cityWalkCalibrationForce = {}
     localStorage.removeItem('openscad-forge-city-walk-calibrated-floor')
-  })
+  }, opts.colour === 'on')
   const page = await context.newPage()
 
   try {
@@ -487,15 +574,34 @@ async function main() {
       .map((v) => v.trim())
       .filter(Boolean)
 
+    // A size sweep is a list of runs inside ONE session, which is the only
+    // kind of comparison this shared machine supports.
+    const sizes = opts.sizes
+      ? String(opts.sizes)
+          .split(',')
+          .map((s) => Number(s.trim()))
+          .filter((n) => Number.isFinite(n))
+      : [opts.charScale]
+
     const rows = []
     for (const city of cities) {
       for (const variant of variants) {
-        console.log(
-          `\n--- ${city} / ${variant} (${opts.seconds}s, ${opts.throttle}x CPU throttle) ---`
-        )
-        const row = await benchCity(page, cdp, city, variant, opts, rows.length)
-        console.log(`GL renderer: ${row.glRenderer}`)
-        rows.push(row)
+        for (const charScale of sizes) {
+          console.log(
+            `\n--- ${city} / ${variant} / chars ${(charScale * 100).toFixed(0)}% ` +
+              `(${opts.seconds}s, ${opts.throttle}x CPU throttle) ---`
+          )
+          const row = await benchCity(
+            page,
+            cdp,
+            city,
+            variant,
+            { ...opts, charScale },
+            rows.length
+          )
+          console.log(`GL renderer: ${row.glRenderer}`)
+          rows.push(row)
+        }
       }
     }
     const gl = { renderer: rows[0]?.glRenderer ?? 'unknown' }
@@ -503,19 +609,28 @@ async function main() {
     console.log('\n=== BENCH ===')
     console.log(
       `label: ${opts.label || '(none)'}   throttle: ${opts.throttle}x   ` +
-        `chars: ${opts.charScale * 100}%   rain: ${opts.rain}   ` +
-        `viewport: ${opts.width}x${opts.height} @ dpr 1`
+        `chars: ${sizes.map((s) => `${(s * 100).toFixed(0)}%`).join(',')}   ` +
+        `colour: ${opts.colour}   ` +
+        `rain: ${opts.rain}   viewport: ${opts.width}x${opts.height} @ dpr 1   ` +
+        `adapter: ${opts.gpuLuid || 'default (whatever Windows hands out)'}`
     )
     console.log(`GL: ${gl.renderer}`)
     console.log(
-      '| city | variant | path | conv avg ms | conv max ms | conv/s | rAF fps | governor ms | cells | reverse | cell px | walked m |'
+      '| city | variant | chars | mem | lum | ink | path | conv avg ms | conv max ms | conv/s | rAF fps | governor ms | cells | cell px | walked m | GL |'
     )
-    console.log('|---|---|---|---|---|---|---|---|---|---|---|---|')
+    console.log(
+      '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|'
+    )
     for (const r of rows) {
       console.log(
-        `| ${r.city} | ${r.variant} | ${r.usedGpu ? 'gpu' : 'cpu'} | ${r.convertAvgMs.toFixed(1)} | ${r.convertMaxMs.toFixed(1)} | ` +
-          `${r.convPerS.toFixed(1)} | ${r.rafFps.toFixed(1)} | ${r.dynamicIntervalMs} | ` +
-          `${r.cells} | ${r.reverseCells} | ${r.charW}x${r.charH} | ${r.walkedM.toFixed(0)} |`
+        `| ${r.city} | ${r.variant} | ${(r.charScale * 100).toFixed(0)}% | ` +
+          `${r.hysteresis === undefined ? 'n/a' : r.hysteresis ? 'on' : 'off'} | ` +
+          `${r.luminance ?? 'n/a'} | ` +
+          `${r.inkBudget === undefined ? 'n/a' : r.inkBudget ? 'on' : 'off'} | ` +
+          `${r.usedGpu ? 'gpu' : 'cpu'} | ${r.convertAvgMs.toFixed(1)} | ` +
+          `${r.convertMaxMs.toFixed(1)} | ${r.convPerS.toFixed(1)} | ` +
+          `${r.rafFps.toFixed(1)} | ${r.dynamicIntervalMs} | ${r.cells} | ` +
+          `${r.charW}x${r.charH} | ${r.walkedM.toFixed(0)} | ${r.glRenderer} |`
       )
     }
     for (const r of rows) {
@@ -547,6 +662,19 @@ async function main() {
             `keys may not have reached the game.`
         )
       }
+    }
+    // A scripted walk that runs into a building is a different scene from one
+    // that does not, however tidy the milliseconds look. Denver at 40% covered
+    // 57 m where its other rows covered 110-130, and only the distance column
+    // said so.
+    const walked = rows.map((r) => r.walkedM)
+    if (rows.length > 1 && Math.min(...walked) < 0.6 * Math.max(...walked)) {
+      console.log(
+        `\nWARNING: the walked distances range ` +
+          `${Math.min(...walked).toFixed(0)}-${Math.max(...walked).toFixed(0)} m ` +
+          `across these rows. The short ones saw different scenery; compare ` +
+          `them with that in mind.`
+      )
     }
   } finally {
     await browser.close()

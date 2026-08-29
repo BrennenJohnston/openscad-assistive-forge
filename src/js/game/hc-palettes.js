@@ -90,6 +90,130 @@ export const MONO_INTENSITY_LEVELS = [0.65, 1];
 export const MONO_REVERSE_THRESHOLD = 0.8;
 
 /**
+ * CW-68 - the converter's frame-to-frame memory, for the GAME's instance only.
+ *
+ * Measured before it was chosen: walking a Seattle street at the real 4.8 m/s
+ * re-rolled 9 to 11 per cent of facade glyphs every converted frame, and mean
+ * glyph persistence was 6 to 8 frames. The pick is stateless, so a texel
+ * scrolling one pixel is enough to choose a different character, and the
+ * reverse-video cliff at MONO_REVERSE_THRESHOLD turns a one per cent drift
+ * into a whole solid cell appearing and vanishing.
+ *
+ * `glyph` is a dead band in squared 6-D shape distance: the previous glyph is
+ * kept unless the new candidate is closer than it by more than this. `drive`
+ * is a half-width in luminance around the intensity ladder's 0.5 boundary,
+ * and `reverse` the same around MONO_REVERSE_THRESHOLD, so reverse video is
+ * entered above 0.82 and left below 0.78. The two are separate because the
+ * mistakes are different sizes: a drive step changes a cell's brightness,
+ * while the reverse cliff turns it into a solid block, and moving THAT is a
+ * decision about the look of the game rather than about steadiness.
+ * `holdFrames` bounds the smear: no cell may override the plain pick for more
+ * than this many conversions in a row, which at the converter's 30/s governor
+ * is a second.
+ *
+ * The main app's Alt View does NOT get this - it converts one still frame, and
+ * a memory of a previous frame can only cost it. See src/js/_hfm-hysteresis.js.
+ */
+/**
+ * CW-70 - three treatments of the SOLID BRIGHT LAYER, measured side by side.
+ *
+ * What "the luminance layer" is, measured: cells at or above
+ * MONO_REVERSE_THRESHOLD are painted as solid phosphor with the glyph knocked
+ * out of them, and the shopfront bands are painted at 0.93-0.95 luminance,
+ * which is the brightest thing in the picture and lands on WHITE in colour.
+ * At the spawn that is eight solid bands in a row; a lamp cone paints a solid
+ * block on whatever wall it touches; a lamp post two metres away is a solid bar
+ * from the pavement to the top of the frame.
+ *
+ * Three columns, one row each:
+ *
+ *   stock   what the game has always drawn. The comparison, and the default
+ *           until the owner chooses.
+ *   calm    the solid layer kept, but bounded: the share of solid cells is
+ *           held under `reverseShareCap` by lifting the threshold (see
+ *           nextReverseLift), and the shopfront bands come down to about 0.87
+ *           so they are still lit without being the whitest thing on screen.
+ *   off     no solid cells at all in the game - the intensity ladder only -
+ *           and the shopfront bands at about 0.78, below the cliff, so they
+ *           read as bright characters rather than slabs.
+ *
+ * The band scales are multipliers on the painted shopfront canvas, whose
+ * brightest paint is 0xef (0.937): 0.93 puts it at 0.871 and 0.83 at 0.777.
+ * The cap is 1 % because the lamp-lit pose measures 0.39 % standing and climbs
+ * past 2 % during a look - so 1 % bounds the sweep without touching a standing
+ * street.
+ *
+ * ★ `reverseLiftMax` is what keeps `calm` from quietly becoming `off`, and it
+ * was measured before it was chosen. A wall of shopfronts is painted at ONE
+ * luminance, so no threshold divides "some of them" from "all of them": at a
+ * shopfront pose the natural solid share is 4.3 %, four times the cap, and an
+ * unbounded cap lifted the threshold until every band had gone - a slow fade
+ * to `off` over about twenty frames, which is not a middle option, it is a
+ * worse way of choosing the other one. The lift is therefore bounded BELOW the
+ * headroom between the cliff and the lit band (0.871 - 0.80 = 0.071), so the
+ * cap can bound a sweeping lamp cone and can never delete a lit ground floor.
+ * Deleting them is what `off` is for.
+ *
+ * ONE of `calm` and `off` is deleted in CW-72, once the owner has seen both.
+ * Deleting a column and its `setLuminanceLayer` case is the whole removal.
+ */
+export const LUMINANCE_LAYER = Object.freeze({
+  stock: Object.freeze({
+    reverseAt: MONO_REVERSE_THRESHOLD,
+    reverseShareCap: null,
+    reverseLiftMax: 0,
+    storefrontScale: 1,
+  }),
+  calm: Object.freeze({
+    reverseAt: MONO_REVERSE_THRESHOLD,
+    reverseShareCap: 0.01,
+    reverseLiftMax: 0.06,
+    storefrontScale: 0.93,
+  }),
+  off: Object.freeze({
+    reverseAt: null,
+    reverseShareCap: null,
+    reverseLiftMax: 0,
+    storefrontScale: 0.83,
+  }),
+});
+
+/**
+ * CW-71 - the palette-mode INK BUDGET the game asks for.
+ *
+ * Measured before it was chosen. At the Seattle spawn, in colour, 70 to 83 per
+ * cent of ALL cells carry ink and 54 to 62 per cent of them are WHITE, against
+ * 3 to 7 per cent inked in monochrome. The cause is structural: palette mode
+ * has no intensity ladder, the cell contrast curve normalises every cell to
+ * full scale before its glyph is chosen, and a colour is then put on whatever
+ * came out - so a cell's ABSOLUTE brightness never reaches the picture.
+ *
+ * `floor` is the monochrome ladder's own blank level, applied to colour. Its
+ * consequence is deliberate and large: colour mode inks about as much of the
+ * screen as monochrome does, because that is what the same rule produces.
+ * `whiteLum` and `whiteChroma` are the gate on the white entry, which is what
+ * a low-chroma highlight lands on through the D-112 sRGB match.
+ *
+ * These three numbers are the owner's at G1 (CW-Q79). Two alternatives were
+ * measured beside them and are in the release record.
+ */
+export const CITY_PALETTE_INK_BUDGET = Object.freeze({
+  floor: 0.5,
+  whiteLum: 0.9,
+  whiteChroma: 0.12,
+});
+
+/** The treatment the game starts in. The owner chooses the winner at G1. */
+export const LUMINANCE_LAYER_DEFAULT = 'stock';
+
+export const CITY_TEMPORAL_HYSTERESIS = Object.freeze({
+  glyph: 0.4,
+  drive: 0.1,
+  reverse: 0.02,
+  holdFrames: 30,
+});
+
+/**
  * CW-21 — how much of the previous frame a cell is still glowing with.
  *
  * A slow phosphor kept emitting after the beam had passed, which is why an

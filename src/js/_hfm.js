@@ -25,6 +25,14 @@
 // interfering. Pure helpers (sampling layouts, vector math) stay module-level.
 
 import { createGpuGlyphPass } from './_hfm-gpu.js';
+import {
+  driveWithMemory,
+  ensureHistory,
+  glyphWithMemory,
+  normalizeHysteresis,
+  reverseWithMemory,
+  shapeDistance2,
+} from './_hfm-hysteresis.js';
 import { createLookup } from './_hfm-lookup.js';
 import {
   clearAfterglow,
@@ -36,8 +44,12 @@ import {
   parsePaletteColor,
   normalizeChroma,
   pickPaletteIndex,
+  cellChroma,
   driveColor,
+  nextReverseLift,
+  normalizeInkBudget,
   pickIntensityIndex,
+  whiteAllowed,
   GLYPH_COUNT,
   SPACE_INDEX,
   FIRST_CHAR_CODE,
@@ -175,6 +187,29 @@ function _createInstanceState() {
     gpuInternal: null,
     gpuExternal: null,
     gpuClassTextureProvider: null,
+
+    // CW-68 temporal hysteresis. OFF for every instance until a caller asks,
+    // because it changes what the converter draws and the main app's Alt View
+    // is a STILL: memory of a previous frame can only cost it. The game turns
+    // it on for its own instance. See _hfm-hysteresis.js for the rules; the
+    // history is per instance and is thrown away whenever the grid, the
+    // palette, the drive levels or the atlas change, since a cell index then
+    // means a different place or a different vocabulary.
+    hysteresis: null,
+    hysteresisHistory: null,
+
+    // CW-70: an upper bound on the share of cells painted as solid phosphor.
+    // null is OFF and is the default everywhere. The bound is held by lifting
+    // the reverse-video threshold one conversion behind (nextReverseLift), so
+    // it costs one comparison per frame and no readback.
+    reverseShareCap: null,
+    reverseLift: 0,
+    reverseLiftMax: 0.19,
+
+    // CW-71: the palette-mode ink budget. null is OFF and is the default for
+    // every instance; the game turns it on for its own. See _hfm-paint.js.
+    inkBudget: null,
+    paletteWhiteIndex: -1,
 
     // CW-30 contrast curves: pow(t, exp) tabulated per exponent, rebuilt only
     // when the contrast setting moves.
@@ -638,6 +673,12 @@ function _ensureGlyphModel(st, { fontFamily, fontSizePx, charW, charH, dpr }) {
   st.sparsestNonSpace = emptiest >= 0 ? emptiest : SPACE_INDEX;
   st.classLookups = _buildClassLookups(st);
   st.atlasKey = key;
+  // Every setter that changes the palette, the drive levels, the reverse
+  // threshold or the vocabularies clears atlasKey to force this rebuild, so
+  // this one line is where all of them forget the frame-to-frame memory. A
+  // held glyph index means nothing once the atlas it indexes has changed.
+  st.hysteresisHistory = null;
+  st.gpuPass?.forget?.();
 }
 
 /**
@@ -782,7 +823,7 @@ function _sampleOnGpu(
 
   const reverseAt =
     st.reverseAtlasIndex >= 0 && st.reverseThreshold !== null
-      ? st.reverseThreshold
+      ? st.reverseThreshold + st.reverseLift
       : 2;
 
   return st.gpuPass.sample({
@@ -800,9 +841,12 @@ function _sampleOnGpu(
     glyphKey: st.atlasKey,
     vocabLists: _gpuVocabLists(st),
     vocabKey: st.atlasKey,
-    classTexture: usePalette
-      ? null
-      : (st.gpuClassTextureProvider?.(cols, rows) ?? null),
+    // CW-68: the class map is bound in palette mode as well, where it is not
+    // a vocabulary but a RESET: a cell whose surface changed must drop the
+    // glyph it was holding, and without the map the shader cannot tell. The
+    // vocabulary is still mono-only, which is what useClassVocabularies says.
+    classTexture: st.gpuClassTextureProvider?.(cols, rows) ?? null,
+    useClassVocabularies: !usePalette,
     paletteChroma: usePalette ? st.paletteChroma : null,
     chromaBoost: st.paletteChromaBoost,
     contrastExp: st.contrastExp,
@@ -820,6 +864,9 @@ function _sampleOnGpu(
     reverseAt,
     spaceIndex: SPACE_INDEX,
     sparsestNonSpace: st.sparsestNonSpace ?? SPACE_INDEX,
+    hysteresis: st.hysteresis,
+    inkBudget: usePalette ? st.inkBudget : null,
+    paletteWhiteIndex: st.paletteWhiteIndex,
   });
 }
 
@@ -944,7 +991,8 @@ function _renderFrame(
   const intensityCount = useIntensity
     ? st.intensityAtlases.length - (reverseIdx >= 0 ? 1 : 0)
     : 0;
-  const reverseAt = reverseIdx >= 0 ? st.reverseThreshold : Infinity;
+  const reverseAt =
+    reverseIdx >= 0 ? st.reverseThreshold + st.reverseLift : Infinity;
   let reverseCells = 0;
 
   // CW-32: the shader already chose every glyph. All that is left is the
@@ -952,19 +1000,52 @@ function _renderFrame(
   // painter consumes — the shader hands back the pre-contrast brightness it
   // needs in the blue channel, so nothing is re-sampled to get it.
   const cellLumOut = st.devCellProbe ? _probeLumArray(st, rows * cols) : null;
+  // CW-68: the frame-to-frame memory, when a caller has asked for one. The
+  // GPU path decides the glyph and the reverse flag in the shader (it has to:
+  // a reverse cell is matched against an INVERTED vector, so the flag is
+  // needed before the pick) and hands both back; the drive level is decided
+  // here, on both paths, because only the CPU ever needed it.
+  const hysteresis = st.hysteresis;
+  const history = hysteresis
+    ? (st.hysteresisHistory = ensureHistory(st.hysteresisHistory, rows * cols))
+    : null;
   if (gpu) {
     const cellCount = rows * cols;
+    const gpuFlags = history ? gpu.flags : null;
     for (let i = 0; i < cellCount; i++) {
       glyphIndices[i] = gpu.indices[i];
-      if (usePalette) st.colorIndices[i] = gpu.colors[i];
+      // In palette mode the green channel carries TWO things: the palette
+      // index in the low nibble and the surface class in the high one, so
+      // that the shader can compare a cell's class with the one it had
+      // without a channel of its own. See _hfm-gpu.js.
+      if (usePalette) st.colorIndices[i] = gpu.colors[i] & 15;
       if (useIntensity) {
         const cellLum = gpu.lum[i] / 255;
         if (cellLumOut) cellLumOut[i] = cellLum;
-        if (cellLum >= reverseAt) {
+        // Reading the shader's own answer rather than recomputing the cliff
+        // is the only way the painted cell can agree with the glyph that was
+        // picked for it.
+        const cellReversed = gpuFlags
+          ? (gpuFlags[i] & 1) === 1
+          : cellLum >= reverseAt;
+        if (cellReversed) {
           st.intensityIndices[i] = reverseIdx;
           reverseCells++;
         } else {
-          st.intensityIndices[i] = pickIntensityIndex(cellLum, intensityCount);
+          st.intensityIndices[i] = history
+            ? driveWithMemory(
+                cellLum,
+                history.drive[i],
+                intensityCount,
+                hysteresis.drive
+              )
+            : pickIntensityIndex(cellLum, intensityCount);
+        }
+        if (history) {
+          // A reverse cell has no drive level, so it forgets one: on the way
+          // back out it takes the plain pick rather than a stale neighbour.
+          history.drive[i] = cellReversed ? -1 : st.intensityIndices[i];
+          history.reversed[i] = cellReversed ? 1 : 0;
         }
       }
     }
@@ -991,6 +1072,10 @@ function _renderFrame(
       intensityCount,
       cellLumOut,
       onReverseCell: () => reverseCells++,
+      hysteresis,
+      history,
+      inkBudget: st.inkBudget,
+      paletteWhiteIndex: st.paletteWhiteIndex,
     });
   }
 
@@ -1015,6 +1100,16 @@ function _renderFrame(
   st.lastCols = cols;
   st.lastRows = rows;
   st.lastReverseCells = reverseCells;
+  // CW-70: the share cap, one conversion behind. Read the overshoot off the
+  // instrument's per-frame reverse share rather than trusting this line.
+  if (st.reverseShareCap !== null) {
+    st.reverseLift = nextReverseLift(
+      reverseCells / Math.max(1, rows * cols),
+      st.reverseShareCap,
+      st.reverseLift,
+      { max: st.reverseLiftMax }
+    );
+  }
   st.lastUsedGpu = Boolean(gpu);
   if (st.devCellProbe) {
     // glyphIndices is freshly allocated per conversion, so holding the
@@ -1069,8 +1164,16 @@ function _convertOnCpu(
     intensityCount,
     cellLumOut,
     onReverseCell,
+    hysteresis,
+    history,
+    inkBudget,
+    paletteWhiteIndex,
   }
 ) {
+  // CW-71: palette mode never needed the cell's ABSOLUTE luminance, because
+  // nothing used it. The ink budget does: it is the one thing the cell
+  // contrast curve throws away.
+  const wantsLum = useIntensity || Boolean(inkBudget && usePalette);
   // CW-23: what each cell is looking at, if the caller can say. A provider
   // that returns the wrong size is ignored rather than trusted — a stale map
   // would hand cells the vocabulary of whatever used to be there.
@@ -1130,7 +1233,7 @@ function _convertOnCpu(
             sumG += tapPlan.green[t];
             sumB += tapPlan.blue[t];
           }
-          if (useIntensity) sumLum += v[i];
+          if (wantsLum) sumLum += v[i];
         }
       } else {
         for (let i = 0; i < 6; i++) {
@@ -1161,22 +1264,57 @@ function _convertOnCpu(
       // matching: intensity answers "how bright is this cell", the glyph
       // answers "what shape is it", and the two must not be the same signal
       // twice over.
-      const cellLum = useIntensity ? sumLum / 6 : 0;
+      const cellLum = wantsLum ? sumLum / 6 : 0;
       if (cellLumOut) cellLumOut[idx] = cellLum;
-      const cellReversed = cellLum >= reverseAt;
+      // CW-68: `idx` walks on at the glyph assignment below, so the cell's own
+      // index is taken here, once, and every history read uses it.
+      const cell = idx;
+      const cellReversed = history
+        ? reverseWithMemory(
+            cellLum,
+            history.reversed[cell] === 1,
+            reverseAt,
+            hysteresis.reverse
+          )
+        : cellLum >= reverseAt;
       if (useIntensity) {
         st.intensityIndices[idx] = cellReversed
           ? reverseIdx
-          : pickIntensityIndex(cellLum, intensityCount);
+          : history
+            ? driveWithMemory(
+                cellLum,
+                history.drive[cell],
+                intensityCount,
+                hysteresis.drive
+              )
+            : pickIntensityIndex(cellLum, intensityCount);
         if (cellReversed) onReverseCell();
       }
+      if (history) {
+        history.drive[cell] = cellReversed ? -1 : st.intensityIndices[cell];
+      }
+      let inkBlanked = false;
       if (usePalette) {
+        const meanR = sumR / (6 * 255);
+        const meanG = sumG / (6 * 255);
+        const meanB = sumB / (6 * 255);
+        let skip = -1;
+        if (inkBudget) {
+          inkBlanked = cellLum < inkBudget.floor;
+          if (
+            paletteWhiteIndex >= 0 &&
+            !whiteAllowed(cellLum, cellChroma(meanR, meanG, meanB), inkBudget)
+          ) {
+            skip = paletteWhiteIndex;
+          }
+        }
         st.colorIndices[idx] = pickPaletteIndex(
-          sumR / (6 * 255),
-          sumG / (6 * 255),
-          sumB / (6 * 255),
+          meanR,
+          meanG,
+          meanB,
           st.paletteChroma,
-          st.paletteChromaBoost
+          st.paletteChromaBoost,
+          skip
         );
       }
 
@@ -1210,6 +1348,20 @@ function _convertOnCpu(
       _applyDirectionalContrast(st, v, extSamples);
       _applyCellContrast(st, v);
 
+      const cellClass = classMap ? classMap[cell] : -1;
+      if (inkBlanked) {
+        // Below the floor the cell draws nothing at all, the way a mono cell
+        // below the ladder's blank level does. The memory is told, so it does
+        // not hold a glyph the cell is no longer allowed to draw.
+        if (history) {
+          history.glyph[cell] = SPACE_INDEX;
+          history.hold[cell] = 0;
+          history.reversed[cell] = 0;
+          history.cls[cell] = cellClass;
+        }
+        glyphIndices[idx++] = SPACE_INDEX;
+        continue;
+      }
       if (cellReversed) {
         // In a reverse cell the phosphor is the BACKGROUND and the glyph is a
         // hole, so brightness is one minus coverage. Matching the cell against
@@ -1218,17 +1370,57 @@ function _convertOnCpu(
         // would use and the cell comes back no brighter than it started.
         for (let i = 0; i < 6; i++) v[i] = 1 - v[i];
         const picked = st.lookup.nearestIndex(v);
-        glyphIndices[idx++] =
-          picked === SPACE_INDEX ? st.sparsestNonSpace : picked;
+        const chosen = picked === SPACE_INDEX ? st.sparsestNonSpace : picked;
+        glyphIndices[idx++] = history
+          ? _remember(st, history, cell, v, chosen, cellClass, true, hysteresis)
+          : chosen;
         continue;
       }
 
       const cellLookup = classMap
-        ? (st.classLookups.get(classMap[idx]) ?? st.lookup)
+        ? (st.classLookups.get(classMap[cell]) ?? st.lookup)
         : st.lookup;
-      glyphIndices[idx++] = cellLookup.nearestIndex(v);
+      const chosen = cellLookup.nearestIndex(v);
+      glyphIndices[idx++] = history
+        ? _remember(st, history, cell, v, chosen, cellClass, false, hysteresis)
+        : chosen;
     }
   }
+}
+
+/**
+ * CW-68, CPU path: hold this cell's previous glyph, or take the new one.
+ *
+ * The shader does the same arithmetic on its own copy of the rules; this is
+ * the readable one, and the one the unit tests pin. Both distances are
+ * measured against THIS frame's cell vector - the question is not how good the
+ * old glyph was when it was chosen, it is how wrong it is now.
+ *
+ * @returns {number} the glyph to draw
+ */
+function _remember(st, history, cell, v, chosen, cellClass, reversed, bands) {
+  const prevGlyph = history.glyph[cell];
+  const reset =
+    history.reversed[cell] !== (reversed ? 1 : 0) ||
+    (cellClass >= 0 && history.cls[cell] !== cellClass);
+  const { glyph, hold } = glyphWithMemory({
+    candidate: chosen,
+    candidateDist2: shapeDistance2(v, st.glyphVectors[chosen]),
+    prevGlyph,
+    prevDist2:
+      prevGlyph >= 0 && prevGlyph < st.glyphVectors.length
+        ? shapeDistance2(v, st.glyphVectors[prevGlyph])
+        : Infinity,
+    band: bands.glyph,
+    hold: history.hold[cell],
+    holdFrames: bands.holdFrames,
+    reset,
+  });
+  history.glyph[cell] = glyph;
+  history.hold[cell] = hold;
+  history.reversed[cell] = reversed ? 1 : 0;
+  history.cls[cell] = cellClass;
+  return glyph;
 }
 
 /** Blit the chosen glyphs to the overlay. Identical for both sampling paths. */
@@ -1507,11 +1699,18 @@ export async function initAltView(previewManager, options = {}) {
         st.paletteChromaBoost = Number.isFinite(options.chromaBoost)
           ? Math.max(1, options.chromaBoost)
           : 1;
+        // CW-71: which entry the ink budget may withhold. Found by hex rather
+        // than by position, because a palette is art direction and its order
+        // is not a contract.
+        st.paletteWhiteIndex = st.palette.findIndex(
+          (colour) => String(colour).trim().toLowerCase() === '#ffffff'
+        );
       } else {
         st.palette = null;
         st.paletteChroma = null;
         st.paletteAtlases = null;
         st.colorIndices = null;
+        st.paletteWhiteIndex = -1;
       }
       st.atlasKey = '';
       st.dirty = true;
@@ -1578,6 +1777,8 @@ export async function initAltView(previewManager, options = {}) {
           ? threshold
           : null;
       if (st.reverseThreshold === null) st.reverseAtlasIndex = -1;
+      // A lift is relative to the threshold it was measured against.
+      st.reverseLift = 0;
       st.atlasKey = '';
       st.dirty = true;
       return st.reverseThreshold;
@@ -1597,6 +1798,135 @@ export async function initAltView(previewManager, options = {}) {
      *
      * @param {{bloomPx?: number, scanlineDim?: number}} options
      */
+    /**
+     * CW-68: give this instance's per-cell decisions a memory of the last
+     * converted frame, so that a cell whose content barely moved keeps the
+     * glyph, drive level and reverse-video state it had.
+     *
+     * OFF by default and per instance, because it is a change to what the
+     * converter draws and it can only cost a caller that converts one still
+     * frame. The rules and their dead bands are documented in
+     * `_hfm-hysteresis.js`; a cell forgets everything the moment its surface
+     * class changes, its reverse-video state flips, or it has overridden the
+     * plain pick for `holdFrames` conversions in a row.
+     *
+     * @param {{glyph?: number, drive?: number, holdFrames?: number}|null}
+     *   options - null (or all-zero bands) turns it off
+     * @returns {{glyph: number, drive: number, holdFrames: number}|null}
+     */
+    setTemporalHysteresis(options) {
+      const next = normalizeHysteresis(options);
+      const was = st.hysteresis;
+      st.hysteresis = next;
+      // Turning it on or off, or moving a band, invalidates every remembered
+      // decision: the cells were decided under different rules.
+      if (
+        !was !== !next ||
+        (was &&
+          next &&
+          (was.glyph !== next.glyph ||
+            was.drive !== next.drive ||
+            was.holdFrames !== next.holdFrames))
+      ) {
+        st.hysteresisHistory = null;
+        st.gpuPass?.forget?.();
+        st.dirty = true;
+      }
+      return st.hysteresis;
+    },
+    /**
+     * @returns {{glyph: number, drive: number, reverse: number,
+     *   holdFrames: number}|null}
+     */
+    getTemporalHysteresis() {
+      return st.hysteresis;
+    },
+    /**
+     * CW-70: hold the share of solid (reverse-video) cells under `cap`.
+     *
+     * OFF (null) for every instance until a caller asks, and the main app's
+     * Alt View never does. The bound is a controller rather than a clamp: the
+     * reverse decision is made before the glyph is picked, per fragment on the
+     * GPU path, so no cell can know the frame's total. See `nextReverseLift`.
+     *
+     * `maxLift` bounds how far the threshold may be lifted, and it is not a
+     * detail: a surface painted at ONE luminance has no threshold that keeps
+     * some of it and drops the rest, so an unbounded cap in front of such a
+     * surface removes all of it. Bound the lift below the headroom between the
+     * threshold and that surface's luminance and the cap can bound a sweep
+     * without deleting a lit band.
+     *
+     * @param {number|null} cap share of all cells, e.g. 0.01
+     * @param {{maxLift?: number}} [options]
+     * @returns {number|null} the cap now in force
+     */
+    setReverseShareCap(cap, options = {}) {
+      const next =
+        typeof cap === 'number' && Number.isFinite(cap) && cap > 0 ? cap : null;
+      const maxLift =
+        typeof options.maxLift === 'number' &&
+        Number.isFinite(options.maxLift) &&
+        options.maxLift > 0
+          ? options.maxLift
+          : 0.19;
+      if (next !== st.reverseShareCap || maxLift !== st.reverseLiftMax) {
+        st.reverseShareCap = next;
+        st.reverseLiftMax = maxLift;
+        // A threshold left lifted after the cap is removed would keep the
+        // layer suppressed with nothing saying so.
+        st.reverseLift = 0;
+        st.dirty = true;
+      }
+      return st.reverseShareCap;
+    },
+    /** @returns {number|null} */
+    getReverseShareCap() {
+      return st.reverseShareCap;
+    },
+    /**
+     * CW-71: the palette-mode ink budget - an absolute-luminance floor below
+     * which a cell draws nothing, and a gate on the white entry.
+     *
+     * OFF (null) for every instance until a caller asks, and the main app's
+     * Alt View never does. It changes only WHICH palette entries a cell may
+     * take and whether it draws at all; the sRGB match that measures the
+     * distance is untouched. See `_hfm-paint.js` for the rules.
+     *
+     * @param {{floor?: number, whiteLum?: number, whiteChroma?: number}|null}
+     *   options
+     * @returns {{floor: number, whiteLum: number, whiteChroma: number}|null}
+     */
+    setPaletteInkBudget(options) {
+      const next = normalizeInkBudget(options);
+      const was = st.inkBudget;
+      const changed =
+        !was !== !next ||
+        (was &&
+          next &&
+          (was.floor !== next.floor ||
+            was.whiteLum !== next.whiteLum ||
+            was.whiteChroma !== next.whiteChroma));
+      st.inkBudget = next;
+      if (changed) {
+        // Cells decided under a different budget must not be held.
+        st.hysteresisHistory = null;
+        st.gpuPass?.forget?.();
+        st.dirty = true;
+      }
+      return st.inkBudget;
+    },
+    /** @returns {{floor: number, whiteLum: number, whiteChroma: number}|null} */
+    getPaletteInkBudget() {
+      return st.inkBudget;
+    },
+    /**
+     * DEV/instrument readout: how far the cap has currently lifted the
+     * reverse-video threshold, in luminance.
+     * @returns {number}
+     */
+    getReverseLift() {
+      return st.reverseLift;
+    },
     setCrtEffects(options = {}) {
       st.bloomPx = Math.max(0, Number(options.bloomPx) || 0);
       st.scanlineDim = Math.max(

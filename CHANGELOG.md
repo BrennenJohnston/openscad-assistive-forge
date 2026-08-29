@@ -9,6 +9,101 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Colour mode can say "this cell is dim" for the first time** (CW-71) - monochrome has an intensity
+  ladder, so a dim cell is drawn dim and an empty one empty: three to seven per cent of a monochrome
+  frame carries ink. Colour had no ladder at all. Every cell was normalised to full brightness before
+  its character was chosen and then had a colour put on it, so **seventy to eighty-nine per cent of
+  every colour frame carried ink and about sixty per cent of all cells were white** - six colours in
+  the palette, and one of them was most of the screen. There is now an ink budget: a floor below which
+  a cell draws nothing, and a gate that lets a cell take white only if it is both bright enough and
+  colourless enough. Measured at the Seattle spawn: ink from 89.3 to 3.1 per cent, white from 61.8 to
+  0.01, and the colour flicker while walking from 15,677 changes over 24 frames to 171. Both palettes
+  still use all of their colours; nothing collapses
+
+- **The white and the ink turned out to be two problems, not one** (CW-71) - turning on the white gate
+  alone, with no floor, removes every white cell and changes nothing else: the same large flat fields
+  are still there, in teal instead of white. That says plainly that the flatness was never only about
+  white. Three settings are measured and photographed side by side in `docs/CITY_WALK_ROADMAP.md`, so
+  the choice of how empty colour mode should be is made from pictures rather than from a hunch
+
+- **Three selectable treatments of the solid bright layer, measured side by side** (CW-70) - the
+  brightest cells are not drawn as characters at all: at or above a luminance of 0.80 the whole cell
+  is painted in phosphor with the character knocked out, and shopfront bands are painted brighter than
+  anything else in the city, so a row of shops reads as a row of solid blocks. The game can now be put
+  into any of three treatments - `stock` (unchanged), `calm` (the blocks stay but the share of them is
+  bounded, and the bands come down a little) and `off` (no solid cells at all; a lit shopfront is
+  drawn as characters) - so the three can be compared against one scene in one session. Nothing
+  changes by default: `stock` is what ships until the choice is made. Measured at a shopfront pose:
+  solid cells 2,936 / 2,261 / 0, while the shopfront's LIT cells only move 4,162 / 4,097 / 4,042, so
+  turning the layer off costs three per cent of the ink and all of the solidity
+
+- **A share cap has to be bounded, or it quietly becomes the other option** (CW-70) - the cap works by
+  raising the threshold in response to the previous frame, because the decision is made before the
+  character is chosen and no cell can know the whole frame's total. Standing in front of a wall of
+  shopfronts, where four times the allowed share is lit, the first version raised the threshold until
+  every band had gone and then oscillated: 10,164 solid crossings over 47 standing frames, where the
+  uncapped picture produced none. Shopfronts are all painted at ONE brightness, so no threshold keeps
+  some and drops the rest. The lift is now bounded below the gap between the threshold and the lit
+  band, and the same pose settles in five frames and then holds perfectly still
+
+- **A way to ask the city which part of it is moving** (CW-69) - the pavement had been photographed
+  crawling underfoot, and the explanation on file was that the ground texture's mip-level rings were
+  riding along with the walker. The motion instrument gained `--scene-exp`, which takes one thing away
+  from the scene and measures again. The answer: the filtering was worth three to sixteen points of a
+  thirty-eight to sixty-four per cent churn, the mip chain and the blur are the same intervention, and
+  spreading the ground pattern over eight times the ground still left eight to twenty-one per cent.
+  Only removing the pattern entirely reached zero. **So the ground was left exactly as it is**: what
+  looked like a filtering bug is what a fine pattern does when you walk through it, and the
+  frame-to-frame memory added in the previous release already takes it to zero, including on a
+  ten-frames-a-second machine. The whole table is in `docs/CITY_WALK_ROADMAP.md`, so the next person
+  to look at the pavement starts from a measurement instead of a hypothesis
+
+- **Walking through the city no longer re-rolls the picture underneath you** (CW-68) - the converter
+  decided every character, every brightness level and every solid cell from ONE frame, with no memory
+  of the frame before, so a texture sliding a single pixel was enough to choose a different character.
+  Measured on a Seattle street at real walking speed: nine to eleven per cent of the characters on a
+  building face changed every frame, and a character lasted six to eight frames. Each of those
+  decisions now has a dead band, and a cell keeps what it had unless the new answer is better by more
+  than that band. Measured after: **one to two per cent per frame, and a character lasts fifteen to
+  sixteen frames**; the ground underfoot, which used to boil in rings as you walked, now holds
+  completely still. A standing picture is still perfectly still, on both graphics cards
+
+- **The memory forgets the instant the thing under it changes** (CW-68) - holding a character is only
+  safe if it is dropped when it becomes wrong, and an earlier attempt at this was abandoned for
+  exactly that reason: cells kept the character of the surface they had just left. A cell now forgets
+  everything the moment its surface class changes under it or its solid-cell state flips, and no cell
+  may override the fresh answer for more than a second in a row. Measured: the share of surface
+  changes where the character failed to follow went DOWN, not up. In colour mode that reset was
+  missing at first because the surface map was never sent to the graphics card there, and the smear it
+  allowed was visible in the numbers (87 per cent of surface changes kept a stale character, against
+  44 with no memory at all); packing the palette colour and the surface into one byte fixed it, and
+  colour mode now measures better than it did with no memory at all. Nothing outside the game gets
+  any of this: the same converter draws the main app's alternate view, which converts one still frame
+
+- **An instrument that photographs the City Walk in motion** (CW-67) - every judgement this game has
+  made about whether its picture holds still was read off a screenshot or off a two-centimetre test
+  step, and the walk a player actually does is 4.8 metres a second. `scripts/seq-city-walk.mjs` runs
+  a scripted walk, a scripted look and a standing control, waits for one converted frame per step,
+  and scores the converter's own decisions cell by cell: how often a character changes, how often it
+  comes back to what it was two frames ago, how many frames a character survives on average, and
+  which surfaces those numbers belong to. It writes a contact sheet of every frame, a map of what
+  changed where, a map of which surface each cell was, a machine-readable summary and a video of the
+  run, so the next release can be compared with this one rather than remembered. The scoring is a
+  separate module with unit tests whose answers were worked out by hand, and the instrument loads
+  that same module, so the tested code is the code that produces the numbers. Nothing a player sees
+  changes
+
+- **Both City Walk instruments now say which graphics card measured the number** (CW-67) - Windows
+  gives a windowed browser the power-saving graphics chip, so on a laptop with two of them the
+  default is the integrated one, and every performance table this project has produced without a
+  card named on it was an integrated-chip table. The renderer string is now printed on every row of
+  every table, and `--gpu-luid` selects the other card when a comparison needs one. Measured on both:
+  two drivers rendering one identical scene disagree about roughly one per cent of the character
+  choices, while the surface-class pass agrees exactly - so the churn is a decision the converter
+  makes, not something the graphics card does. The frame-time bench also gained a character-size
+  sweep inside one browser session, and lost its "reverse" column, which counted solid cells in the
+  last frame of a run and swung between 0 and 95,425 between two runs of the same configuration
+
 - **Groundwork for opening a file straight into Forge from your desktop** (IR-10, not switched on) -
   an installed app can be registered with the operating system so double-clicking a `.scad`, `.zip`,
   `.svg` or `.dxf` opens it in Forge. The routing is built and tested: a file handed over by the

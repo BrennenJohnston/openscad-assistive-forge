@@ -87,6 +87,7 @@ uniform float uInvert;
 uniform float uEncodeSrgb;
 uniform float uVocabWidth;
 uniform float uUseClasses;
+uniform float uHasClass;
 uniform float uUsePalette;
 uniform float uPaletteCount;
 uniform float uChromaBoost;
@@ -94,6 +95,26 @@ uniform vec3 uPalette[16];
 uniform float uReverseAt;
 uniform float uSpaceIndex;
 uniform float uSparsestNonSpace;
+// CW-68 temporal hysteresis. uPrev is the PREVIOUS conversion's own output
+// target, bound as a texture (the two targets ping-pong), so the memory costs
+// no upload and no readback of its own: R the glyph, G the class or palette
+// index, B the cell luminance, A the hold counter and the reverse flag packed
+// as hold * 2 + reversed. Bands of zero, or uHasPrev of zero on the first
+// frame after a reallocation, make every expression below the stateless one.
+// The rules are src/js/_hfm-hysteresis.js; this is the same arithmetic in GLSL
+// and the two must be changed together.
+// CW-71 the palette-mode ink budget: an absolute-luminance floor below which
+// the cell draws nothing, and a gate on the white entry. uWhiteIndex is -1
+// when the palette has no white. The rules are src/js/_hfm-paint.js.
+uniform float uInkFloor;
+uniform float uWhiteLum;
+uniform float uWhiteChroma;
+uniform float uWhiteIndex;
+uniform sampler2D uPrev;
+uniform float uHasPrev;
+uniform float uGlyphBand;
+uniform float uReverseBand;
+uniform float uHoldFrames;
 // Per class: where its glyph list starts in uVocab and how long it is. Index
 // 0 is the fallback used by any cell whose class has no vocabulary.
 uniform vec2 uVocabSpan[16];
@@ -242,24 +263,45 @@ void main() {
     }
   }
 
+  // CW-68: what this cell decided last time. Read before anything depends on
+  // it so that the reverse flag, the vocabulary and the glyph all see one
+  // consistent history.
+  bool hasPrev = uHasPrev > 0.5;
+  vec4 prev = hasPrev
+    ? texelFetch(uPrev, ivec2(gl_FragCoord.xy), 0)
+    : vec4(0.0);
+  float prevPacked = floor(prev.a * 255.0 + 0.5);
+  bool prevReversed = mod(prevPacked, 2.0) >= 0.5;
+  float prevHold = floor(prevPacked * 0.5);
+  int prevGlyph = int(floor(prev.r * 255.0 + 0.5));
+  float prevSecond = floor(prev.g * 255.0 + 0.5);
+
   // Reverse video, which the CPU applies after the contrast curves and
   // before the vocabulary: the brightest cells are painted as solid phosphor
   // with the glyph knocked out, so the cell is matched against the INVERTED
   // shape and always against the full vocabulary.
-  bool reversed = cellLum >= uReverseAt;
+  bool reversed = (uReverseBand > 0.0 && hasPrev)
+    ? (prevReversed
+        ? cellLum >= uReverseAt - uReverseBand
+        : cellLum >= uReverseAt + uReverseBand)
+    : cellLum >= uReverseAt;
   if (reversed) {
     for (int i = 0; i < 6; i++) v[i] = 1.0 - v[i];
   }
 
-  // Which vocabulary this cell may draw from.
+  // Which vocabulary this cell may draw from - and, whether or not there are
+  // vocabularies, which SURFACE it is, because CW-68's memory is dropped the
+  // moment that changes.
   float classId = 0.0;
   int spanIndex = 0;
-  if (uUseClasses > 0.5 && !reversed) {
+  if (uHasClass > 0.5) {
     classId = floor(
       texelFetch(uClass, ivec2(int(col), int(gl_FragCoord.y)), 0).r * 255.0 + 0.5
     );
-    spanIndex = int(classId) + 1;
-    if (spanIndex > 15) spanIndex = 0;
+    if (uUseClasses > 0.5 && !reversed) {
+      spanIndex = int(classId) + 1;
+      if (spanIndex > 15) spanIndex = 0;
+    }
   }
   vec2 span = uVocabSpan[spanIndex];
   float start = span.x;
@@ -298,6 +340,38 @@ void main() {
   // blank, which would leave a hole exactly where the cell should be solid.
   if (reversed && best == int(uSpaceIndex)) best = int(uSparsestNonSpace);
 
+  // CW-68: keep the previous glyph unless the new one is closer to this
+  // frame's cell vector by more than the dead band. The memory is dropped
+  // whenever the surface under the cell changed - its class moved, or its
+  // reverse-video state flipped - because both of those also change which
+  // glyphs the cell is allowed to draw, so a held glyph could be illegal as
+  // well as wrong. That reset is the answer to CW-52's smearing objection.
+  float hold = 0.0;
+  float prevClassId = uUsePalette > 0.5
+    ? floor(prevSecond / 16.0)
+    : prevSecond;
+  bool keepable =
+    hasPrev &&
+    uGlyphBand > 0.0 &&
+    prevHold < uHoldFrames &&
+    reversed == prevReversed &&
+    (uHasClass < 0.5 || prevClassId == classId);
+  if (keepable && prevGlyph != best) {
+    vec4 pa = texelFetch(uGlyphs, ivec2(prevGlyph, 0), 0);
+    vec4 pb = texelFetch(uGlyphs, ivec2(prevGlyph, 1), 0);
+    float e0 = v[0] - pa.x;
+    float e1 = v[1] - pa.y;
+    float e2 = v[2] - pa.z;
+    float e3 = v[3] - pb.x;
+    float e4 = v[4] - pb.y;
+    float e5 = v[5] - pb.z;
+    float prevD = e0 * e0 + e1 * e1 + e2 * e2 + e3 * e3 + e4 * e4 + e5 * e5;
+    if (prevD - bestD <= uGlyphBand) {
+      best = prevGlyph;
+      hold = min(prevHold + 1.0, 127.0);
+    }
+  }
+
   // Palette mode (CW-6) picks each cell's colour from its mean tint, in
   // chroma-normalised space. Ported from pickPaletteIndex; the index rides
   // in the green channel, which otherwise only carries a debug class byte.
@@ -307,10 +381,18 @@ void main() {
     float mx = max(mean.r, max(mean.g, mean.b));
     vec3 n = mx < 1e-6 ? vec3(0.0) : mean / mx;
     if (abs(uChromaBoost - 1.0) > 1e-6) n = pow(max(n, vec3(0.0)), vec3(uChromaBoost));
+    // CW-71: how far from grey this cell is, in the same max-normalised
+    // space the match works in. n's largest component is 1, so the smallest
+    // one IS the distance from grey.
+    float chroma = 1.0 - min(n.r, min(n.g, n.b));
+    bool allowWhite =
+      uWhiteLum <= 0.0 || (cellLum >= uWhiteLum && chroma < uWhiteChroma);
+    int skipColour = allowWhite ? -1 : int(uWhiteIndex);
     int bestColour = 0;
     float bestColourD = 1e9;
     for (int i = 0; i < 16; i++) {
       if (float(i) >= uPaletteCount) break;
+      if (i == skipColour) continue;
       vec3 d = n - uPalette[i];
       float dist = dot(d, d);
       if (dist < bestColourD) {
@@ -318,14 +400,28 @@ void main() {
         bestColour = i;
       }
     }
-    second = float(bestColour);
+    // Both in one byte: the palette index in the low nibble (at most 16
+    // entries) and the surface class in the high one (at most 15). Without
+    // this the memory would have no way to know a palette cell's class had
+    // changed, and colour mode would smear where mono does not - measured
+    // before it was fixed: 44 % of class changes kept their glyph with the
+    // memory off, 87 % with it on.
+    second = float(bestColour) + classId * 16.0;
   }
 
+  // CW-71: below the floor the cell draws nothing at all, the way a mono cell
+  // below the ladder's blank level does. Applied after the glyph search so the
+  // memory and the class byte are still written from the real decision.
+  if (uInkFloor > 0.0 && cellLum < uInkFloor) best = int(uSpaceIndex);
+
+  // Alpha carries the memory forward: the hold counter and the reverse flag.
+  // Blending is off for this material (three disables it for an opaque
+  // NormalBlending material), so what is written here is what comes back.
   fragColor = vec4(
     float(best) / 255.0,
     second / 255.0,
     clamp(cellLum, 0.0, 1.0),
-    1.0
+    (hold * 2.0 + (reversed ? 1.0 : 0.0)) / 255.0
   );
 }
 `;
@@ -346,7 +442,8 @@ const MAX_CLASS_SPANS = 16;
  * @returns {{
  *   available: boolean,
  *   reason: string,
- *   sample: (options: object) => {indices: Uint8Array, lum: Uint8Array}|null,
+ *   sample: (options: object) => {indices: Uint8Array, lum: Uint8Array,
+ *     colors: Uint8Array, flags: Uint8Array}|null,
  *   dispose: () => void,
  * }}
  */
@@ -364,7 +461,14 @@ export function createGpuGlyphPass(renderer) {
     };
   }
   let sceneTarget = null;
-  let outTarget = null;
+  // CW-68: two pick targets, used alternately, so that the shader can read the
+  // previous conversion's answers while it writes this one's. `historyValid`
+  // is false until one full frame has been written into the pair, and is reset
+  // by any reallocation - a stale target of the wrong size would be read as
+  // somebody else's cells.
+  const outTargets = [null, null];
+  let outIndex = 0;
+  let historyValid = false;
   let glyphTexture = null;
   let glyphKey = '';
   let vocabTexture = null;
@@ -374,6 +478,7 @@ export function createGpuGlyphPass(renderer) {
   let indices = null;
   let lumOut = null;
   let secondOut = null;
+  let flagsOut = null;
   let failed = false;
   let failure = '';
 
@@ -405,6 +510,7 @@ export function createGpuGlyphPass(renderer) {
       uEncodeSrgb: { value: 0 },
       uVocabWidth: { value: 1 },
       uUseClasses: { value: 0 },
+      uHasClass: { value: 0 },
       uUsePalette: { value: 0 },
       uPaletteCount: { value: 0 },
       uChromaBoost: { value: 1 },
@@ -415,6 +521,15 @@ export function createGpuGlyphPass(renderer) {
       uSpaceIndex: { value: 0 },
       uSparsestNonSpace: { value: 0 },
       uVocabSpan: { value: new Float32Array(MAX_CLASS_SPANS * 2) },
+      uPrev: { value: null },
+      uHasPrev: { value: 0 },
+      uGlyphBand: { value: 0 },
+      uReverseBand: { value: 0 },
+      uHoldFrames: { value: 0 },
+      uInkFloor: { value: 0 },
+      uWhiteLum: { value: 0 },
+      uWhiteChroma: { value: 0 },
+      uWhiteIndex: { value: -1 },
     },
   });
   quadScene.add(new Mesh(new PlaneGeometry(2, 2), material));
@@ -448,26 +563,40 @@ export function createGpuGlyphPass(renderer) {
     sceneTarget.texture.magFilter = LinearFilter;
   };
 
-  const ensureOutTarget = (cols, rows) => {
-    if (outTarget && outTarget.width === cols && outTarget.height === rows) {
-      return;
-    }
-    outTarget?.dispose();
-    outTarget = new WebGLRenderTarget(cols, rows, {
+  const makeOutTarget = (cols, rows) => {
+    const target = new WebGLRenderTarget(cols, rows, {
       depthBuffer: false,
       stencilBuffer: false,
       type: UnsignedByteType,
       format: RGBAFormat,
     });
     // The glyph id must survive the round trip as the integer it is.
-    outTarget.texture.colorSpace = NoColorSpace;
-    outTarget.texture.generateMipmaps = false;
-    outTarget.texture.minFilter = NearestFilter;
-    outTarget.texture.magFilter = NearestFilter;
+    target.texture.colorSpace = NoColorSpace;
+    target.texture.generateMipmaps = false;
+    target.texture.minFilter = NearestFilter;
+    target.texture.magFilter = NearestFilter;
+    return target;
+  };
+
+  const ensureOutTarget = (cols, rows) => {
+    if (
+      outTargets[0] &&
+      outTargets[0].width === cols &&
+      outTargets[0].height === rows
+    ) {
+      return;
+    }
+    outTargets[0]?.dispose();
+    outTargets[1]?.dispose();
+    outTargets[0] = makeOutTarget(cols, rows);
+    outTargets[1] = makeOutTarget(cols, rows);
+    outIndex = 0;
+    historyValid = false;
     pixels = new Uint8Array(cols * rows * 4);
     indices = new Uint8Array(cols * rows);
     lumOut = new Uint8Array(cols * rows);
     secondOut = new Uint8Array(cols * rows);
+    flagsOut = new Uint8Array(cols * rows);
   };
 
   const ensureGlyphTexture = (glyphVectors, key) => {
@@ -541,8 +670,10 @@ export function createGpuGlyphPass(renderer) {
      * Render the scene, pick every cell's glyph on the GPU, and read the
      * answer back.
      *
-     * @returns {{indices: Uint8Array, lum: Uint8Array, classes: Uint8Array}|null}
-     *   null means this pass has given up and the caller must use the CPU.
+     * @returns {{indices: Uint8Array, lum: Uint8Array, colors: Uint8Array,
+     *   flags: Uint8Array}|null} `flags` is the packed CW-68 byte, hold * 2
+     *   plus the reverse-video bit. null means this pass has given up and the
+     *   caller must use the CPU.
      */
     sample({
       scene,
@@ -560,6 +691,7 @@ export function createGpuGlyphPass(renderer) {
       vocabLists,
       vocabKey: listKey,
       classTexture,
+      useClassVocabularies,
       paletteChroma,
       chromaBoost,
       contrastExp,
@@ -571,6 +703,9 @@ export function createGpuGlyphPass(renderer) {
       reverseAt,
       spaceIndex,
       sparsestNonSpace,
+      hysteresis,
+      inkBudget,
+      paletteWhiteIndex,
     }) {
       if (failed) return null;
       try {
@@ -589,7 +724,9 @@ export function createGpuGlyphPass(renderer) {
         u.uGlyphs.value = glyphTexture;
         u.uVocab.value = vocabTexture;
         u.uClass.value = classTexture ?? glyphTexture;
-        u.uUseClasses.value = classTexture ? 1 : 0;
+        u.uHasClass.value = classTexture ? 1 : 0;
+        u.uUseClasses.value =
+          classTexture && useClassVocabularies !== false ? 1 : 0;
         const paletteCount = Math.min(16, paletteChroma?.length ?? 0);
         u.uUsePalette.value = paletteCount > 0 ? 1 : 0;
         u.uPaletteCount.value = paletteCount;
@@ -619,11 +756,31 @@ export function createGpuGlyphPass(renderer) {
         u.uSpaceIndex.value = spaceIndex ?? 0;
         u.uSparsestNonSpace.value = sparsestNonSpace ?? 0;
         u.uVocabSpan.value = vocabSpans;
+        // CW-68. uPrev is bound to whichever target was written last; when
+        // there is nothing to read yet, any texture will do because uHasPrev
+        // is zero and the shader never samples it - a null sampler would
+        // still have to be bound to a unit.
+        const target = outTargets[outIndex];
+        const previous = outTargets[1 - outIndex];
+        u.uPrev.value = previous.texture;
+        u.uHasPrev.value = historyValid && hysteresis ? 1 : 0;
+        u.uGlyphBand.value = hysteresis ? hysteresis.glyph : 0;
+        u.uReverseBand.value = hysteresis ? hysteresis.reverse : 0;
+        u.uHoldFrames.value = hysteresis ? hysteresis.holdFrames : 0;
+        u.uInkFloor.value = inkBudget ? inkBudget.floor : 0;
+        u.uWhiteLum.value = inkBudget ? inkBudget.whiteLum : 0;
+        u.uWhiteChroma.value = inkBudget ? inkBudget.whiteChroma : 0;
+        u.uWhiteIndex.value =
+          inkBudget && Number.isInteger(paletteWhiteIndex)
+            ? paletteWhiteIndex
+            : -1;
 
-        renderer.setRenderTarget(outTarget);
+        renderer.setRenderTarget(target);
         renderer.render(quadScene, quadCamera);
-        renderer.readRenderTargetPixels(outTarget, 0, 0, cols, rows, pixels);
+        renderer.readRenderTargetPixels(target, 0, 0, cols, rows, pixels);
         renderer.setRenderTarget(prevTarget);
+        outIndex = 1 - outIndex;
+        historyValid = true;
 
         // Rows come back bottom-up; the grid counts from the top.
         for (let y = 0; y < rows; y++) {
@@ -633,9 +790,10 @@ export function createGpuGlyphPass(renderer) {
             indices[dst + x] = pixels[src + x * 4];
             secondOut[dst + x] = pixels[src + x * 4 + 1];
             lumOut[dst + x] = pixels[src + x * 4 + 2];
+            flagsOut[dst + x] = pixels[src + x * 4 + 3];
           }
         }
-        return { indices, lum: lumOut, colors: secondOut };
+        return { indices, lum: lumOut, colors: secondOut, flags: flagsOut };
       } catch (error) {
         failed = true;
         failure = String(error?.message || error);
@@ -646,6 +804,17 @@ export function createGpuGlyphPass(renderer) {
       }
     },
 
+    /**
+     * CW-68: drop the frame-to-frame memory.
+     *
+     * Called when the atlas is rebuilt or the bands move - the glyph indices
+     * in the previous target were chosen under rules, or against vectors,
+     * that no longer hold. A reallocation forgets on its own.
+     */
+    forget() {
+      historyValid = false;
+    },
+
     /** Why the pass gave up, for the record and the DEV readout. */
     get failure() {
       return failure;
@@ -653,12 +822,15 @@ export function createGpuGlyphPass(renderer) {
 
     dispose() {
       sceneTarget?.dispose();
-      outTarget?.dispose();
+      outTargets[0]?.dispose();
+      outTargets[1]?.dispose();
       glyphTexture?.dispose();
       vocabTexture?.dispose();
       material.dispose();
       sceneTarget = null;
-      outTarget = null;
+      outTargets[0] = null;
+      outTargets[1] = null;
+      historyValid = false;
       glyphTexture = null;
       vocabTexture = null;
     },
