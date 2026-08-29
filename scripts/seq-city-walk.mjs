@@ -103,6 +103,12 @@ const DEFAULTS = {
   sheetScale: 0.5,
   flipScale: 3,
   classScale: 2,
+  // --hysteresis leaves the game's own CW-68 setting alone when empty (the
+  // default), turns it off with `off`, or sets the bands with
+  // `glyph,drive,reverse,holdFrames`. A release measuring a converter change
+  // photographs before and after against ONE scene in ONE run this way; give
+  // each run its own --label so the pictures do not overwrite each other.
+  hysteresis: '',
   // --gpu-luid=high,low selects a D3D adapter (Chromium --use-adapter-luid).
   // Empty means whatever Windows hands out, which on this laptop is the
   // integrated GPU.
@@ -513,6 +519,46 @@ async function setSize(page, wanted) {
   return got
 }
 
+/**
+ * Apply --hysteresis, and report what the instance ended up with.
+ *
+ * An empty argument leaves the game's own configuration in place: the
+ * instrument's job is to photograph what ships, and it must not silently
+ * change the thing it is measuring.
+ *
+ * @returns {Promise<{glyph: number, drive: number, holdFrames: number}|null>}
+ */
+async function applyHysteresis(page, arg) {
+  if (!arg) {
+    return page.evaluate(
+      () => window.__cityWalkGame.altView.getTemporalHysteresis?.() ?? null
+    )
+  }
+  let wanted = null
+  if (arg !== 'off' && arg !== 'none') {
+    const [glyph, drive, reverse, holdFrames] = list(arg).map(Number)
+    if (
+      ![glyph, drive, reverse, holdFrames].every((n) => Number.isFinite(n))
+    ) {
+      throw new Error(
+        `--hysteresis=${arg}: expected "off" or ` +
+          `"glyph,drive,reverse,holdFrames"`
+      )
+    }
+    wanted = { glyph, drive, reverse, holdFrames }
+  }
+  const set = await page.evaluate(
+    (h) => window.__cityWalkGame.altView.setTemporalHysteresis?.(h) ?? null,
+    wanted
+  )
+  if (wanted && !set) {
+    throw new Error(
+      'this tree has no setTemporalHysteresis() - --hysteresis needs CW-68'
+    )
+  }
+  return set
+}
+
 /** Wait for the converter to produce one more frame than it had. */
 async function convertOnce(page) {
   const before = await page.evaluate(() => window.__seqApi.conversions())
@@ -757,6 +803,11 @@ async function main() {
     }
 
     await page.evaluate(() => window.__cityWalkGame.altView.setCellProbe(true))
+    const hysteresis = await applyHysteresis(page, opts.hysteresis)
+    console.log(
+      `hysteresis: ${hysteresis ? JSON.stringify(hysteresis) : 'OFF'}` +
+        (opts.hysteresis ? '' : " (the game's own setting, untouched)")
+    )
     let start = await page.evaluate(() => window.__seqApi.pose())
     if (opts.pose) {
       const [px, py, headingDeg, pitchDeg] = String(opts.pose)
@@ -808,7 +859,13 @@ async function main() {
         const poses = generatePoses(mode, start, opts.frames, opts)
         const tag = `${opts.label || 'run'}-${colourOn ? 'colour' : 'mono'}-${size}-${mode}`
         const res = await runSequence(page, opts, out, tag, poses, cell)
-        results.push({ ...res, size, mode, glRenderer: gl.renderer })
+        results.push({
+          ...res,
+          size,
+          mode,
+          glRenderer: gl.renderer,
+          hysteresis,
+        })
         printSequence(res, res.mono)
       }
     }

@@ -25,6 +25,14 @@
 // interfering. Pure helpers (sampling layouts, vector math) stay module-level.
 
 import { createGpuGlyphPass } from './_hfm-gpu.js';
+import {
+  driveWithMemory,
+  ensureHistory,
+  glyphWithMemory,
+  normalizeHysteresis,
+  reverseWithMemory,
+  shapeDistance2,
+} from './_hfm-hysteresis.js';
 import { createLookup } from './_hfm-lookup.js';
 import {
   clearAfterglow,
@@ -175,6 +183,16 @@ function _createInstanceState() {
     gpuInternal: null,
     gpuExternal: null,
     gpuClassTextureProvider: null,
+
+    // CW-68 temporal hysteresis. OFF for every instance until a caller asks,
+    // because it changes what the converter draws and the main app's Alt View
+    // is a STILL: memory of a previous frame can only cost it. The game turns
+    // it on for its own instance. See _hfm-hysteresis.js for the rules; the
+    // history is per instance and is thrown away whenever the grid, the
+    // palette, the drive levels or the atlas change, since a cell index then
+    // means a different place or a different vocabulary.
+    hysteresis: null,
+    hysteresisHistory: null,
 
     // CW-30 contrast curves: pow(t, exp) tabulated per exponent, rebuilt only
     // when the contrast setting moves.
@@ -638,6 +656,12 @@ function _ensureGlyphModel(st, { fontFamily, fontSizePx, charW, charH, dpr }) {
   st.sparsestNonSpace = emptiest >= 0 ? emptiest : SPACE_INDEX;
   st.classLookups = _buildClassLookups(st);
   st.atlasKey = key;
+  // Every setter that changes the palette, the drive levels, the reverse
+  // threshold or the vocabularies clears atlasKey to force this rebuild, so
+  // this one line is where all of them forget the frame-to-frame memory. A
+  // held glyph index means nothing once the atlas it indexes has changed.
+  st.hysteresisHistory = null;
+  st.gpuPass?.forget?.();
 }
 
 /**
@@ -800,9 +824,12 @@ function _sampleOnGpu(
     glyphKey: st.atlasKey,
     vocabLists: _gpuVocabLists(st),
     vocabKey: st.atlasKey,
-    classTexture: usePalette
-      ? null
-      : (st.gpuClassTextureProvider?.(cols, rows) ?? null),
+    // CW-68: the class map is bound in palette mode as well, where it is not
+    // a vocabulary but a RESET: a cell whose surface changed must drop the
+    // glyph it was holding, and without the map the shader cannot tell. The
+    // vocabulary is still mono-only, which is what useClassVocabularies says.
+    classTexture: st.gpuClassTextureProvider?.(cols, rows) ?? null,
+    useClassVocabularies: !usePalette,
     paletteChroma: usePalette ? st.paletteChroma : null,
     chromaBoost: st.paletteChromaBoost,
     contrastExp: st.contrastExp,
@@ -820,6 +847,7 @@ function _sampleOnGpu(
     reverseAt,
     spaceIndex: SPACE_INDEX,
     sparsestNonSpace: st.sparsestNonSpace ?? SPACE_INDEX,
+    hysteresis: st.hysteresis,
   });
 }
 
@@ -952,19 +980,52 @@ function _renderFrame(
   // painter consumes — the shader hands back the pre-contrast brightness it
   // needs in the blue channel, so nothing is re-sampled to get it.
   const cellLumOut = st.devCellProbe ? _probeLumArray(st, rows * cols) : null;
+  // CW-68: the frame-to-frame memory, when a caller has asked for one. The
+  // GPU path decides the glyph and the reverse flag in the shader (it has to:
+  // a reverse cell is matched against an INVERTED vector, so the flag is
+  // needed before the pick) and hands both back; the drive level is decided
+  // here, on both paths, because only the CPU ever needed it.
+  const hysteresis = st.hysteresis;
+  const history = hysteresis
+    ? (st.hysteresisHistory = ensureHistory(st.hysteresisHistory, rows * cols))
+    : null;
   if (gpu) {
     const cellCount = rows * cols;
+    const gpuFlags = history ? gpu.flags : null;
     for (let i = 0; i < cellCount; i++) {
       glyphIndices[i] = gpu.indices[i];
-      if (usePalette) st.colorIndices[i] = gpu.colors[i];
+      // In palette mode the green channel carries TWO things: the palette
+      // index in the low nibble and the surface class in the high one, so
+      // that the shader can compare a cell's class with the one it had
+      // without a channel of its own. See _hfm-gpu.js.
+      if (usePalette) st.colorIndices[i] = gpu.colors[i] & 15;
       if (useIntensity) {
         const cellLum = gpu.lum[i] / 255;
         if (cellLumOut) cellLumOut[i] = cellLum;
-        if (cellLum >= reverseAt) {
+        // Reading the shader's own answer rather than recomputing the cliff
+        // is the only way the painted cell can agree with the glyph that was
+        // picked for it.
+        const cellReversed = gpuFlags
+          ? (gpuFlags[i] & 1) === 1
+          : cellLum >= reverseAt;
+        if (cellReversed) {
           st.intensityIndices[i] = reverseIdx;
           reverseCells++;
         } else {
-          st.intensityIndices[i] = pickIntensityIndex(cellLum, intensityCount);
+          st.intensityIndices[i] = history
+            ? driveWithMemory(
+                cellLum,
+                history.drive[i],
+                intensityCount,
+                hysteresis.drive
+              )
+            : pickIntensityIndex(cellLum, intensityCount);
+        }
+        if (history) {
+          // A reverse cell has no drive level, so it forgets one: on the way
+          // back out it takes the plain pick rather than a stale neighbour.
+          history.drive[i] = cellReversed ? -1 : st.intensityIndices[i];
+          history.reversed[i] = cellReversed ? 1 : 0;
         }
       }
     }
@@ -991,6 +1052,8 @@ function _renderFrame(
       intensityCount,
       cellLumOut,
       onReverseCell: () => reverseCells++,
+      hysteresis,
+      history,
     });
   }
 
@@ -1069,6 +1132,8 @@ function _convertOnCpu(
     intensityCount,
     cellLumOut,
     onReverseCell,
+    hysteresis,
+    history,
   }
 ) {
   // CW-23: what each cell is looking at, if the caller can say. A provider
@@ -1163,12 +1228,32 @@ function _convertOnCpu(
       // twice over.
       const cellLum = useIntensity ? sumLum / 6 : 0;
       if (cellLumOut) cellLumOut[idx] = cellLum;
-      const cellReversed = cellLum >= reverseAt;
+      // CW-68: `idx` walks on at the glyph assignment below, so the cell's own
+      // index is taken here, once, and every history read uses it.
+      const cell = idx;
+      const cellReversed = history
+        ? reverseWithMemory(
+            cellLum,
+            history.reversed[cell] === 1,
+            reverseAt,
+            hysteresis.reverse
+          )
+        : cellLum >= reverseAt;
       if (useIntensity) {
         st.intensityIndices[idx] = cellReversed
           ? reverseIdx
-          : pickIntensityIndex(cellLum, intensityCount);
+          : history
+            ? driveWithMemory(
+                cellLum,
+                history.drive[cell],
+                intensityCount,
+                hysteresis.drive
+              )
+            : pickIntensityIndex(cellLum, intensityCount);
         if (cellReversed) onReverseCell();
+      }
+      if (history) {
+        history.drive[cell] = cellReversed ? -1 : st.intensityIndices[cell];
       }
       if (usePalette) {
         st.colorIndices[idx] = pickPaletteIndex(
@@ -1210,6 +1295,7 @@ function _convertOnCpu(
       _applyDirectionalContrast(st, v, extSamples);
       _applyCellContrast(st, v);
 
+      const cellClass = classMap ? classMap[cell] : -1;
       if (cellReversed) {
         // In a reverse cell the phosphor is the BACKGROUND and the glyph is a
         // hole, so brightness is one minus coverage. Matching the cell against
@@ -1218,17 +1304,57 @@ function _convertOnCpu(
         // would use and the cell comes back no brighter than it started.
         for (let i = 0; i < 6; i++) v[i] = 1 - v[i];
         const picked = st.lookup.nearestIndex(v);
-        glyphIndices[idx++] =
-          picked === SPACE_INDEX ? st.sparsestNonSpace : picked;
+        const chosen = picked === SPACE_INDEX ? st.sparsestNonSpace : picked;
+        glyphIndices[idx++] = history
+          ? _remember(st, history, cell, v, chosen, cellClass, true, hysteresis)
+          : chosen;
         continue;
       }
 
       const cellLookup = classMap
-        ? (st.classLookups.get(classMap[idx]) ?? st.lookup)
+        ? (st.classLookups.get(classMap[cell]) ?? st.lookup)
         : st.lookup;
-      glyphIndices[idx++] = cellLookup.nearestIndex(v);
+      const chosen = cellLookup.nearestIndex(v);
+      glyphIndices[idx++] = history
+        ? _remember(st, history, cell, v, chosen, cellClass, false, hysteresis)
+        : chosen;
     }
   }
+}
+
+/**
+ * CW-68, CPU path: hold this cell's previous glyph, or take the new one.
+ *
+ * The shader does the same arithmetic on its own copy of the rules; this is
+ * the readable one, and the one the unit tests pin. Both distances are
+ * measured against THIS frame's cell vector - the question is not how good the
+ * old glyph was when it was chosen, it is how wrong it is now.
+ *
+ * @returns {number} the glyph to draw
+ */
+function _remember(st, history, cell, v, chosen, cellClass, reversed, bands) {
+  const prevGlyph = history.glyph[cell];
+  const reset =
+    history.reversed[cell] !== (reversed ? 1 : 0) ||
+    (cellClass >= 0 && history.cls[cell] !== cellClass);
+  const { glyph, hold } = glyphWithMemory({
+    candidate: chosen,
+    candidateDist2: shapeDistance2(v, st.glyphVectors[chosen]),
+    prevGlyph,
+    prevDist2:
+      prevGlyph >= 0 && prevGlyph < st.glyphVectors.length
+        ? shapeDistance2(v, st.glyphVectors[prevGlyph])
+        : Infinity,
+    band: bands.glyph,
+    hold: history.hold[cell],
+    holdFrames: bands.holdFrames,
+    reset,
+  });
+  history.glyph[cell] = glyph;
+  history.hold[cell] = hold;
+  history.reversed[cell] = reversed ? 1 : 0;
+  history.cls[cell] = cellClass;
+  return glyph;
 }
 
 /** Blit the chosen glyphs to the overlay. Identical for both sampling paths. */
@@ -1597,6 +1723,46 @@ export async function initAltView(previewManager, options = {}) {
      *
      * @param {{bloomPx?: number, scanlineDim?: number}} options
      */
+    /**
+     * CW-68: give this instance's per-cell decisions a memory of the last
+     * converted frame, so that a cell whose content barely moved keeps the
+     * glyph, drive level and reverse-video state it had.
+     *
+     * OFF by default and per instance, because it is a change to what the
+     * converter draws and it can only cost a caller that converts one still
+     * frame. The rules and their dead bands are documented in
+     * `_hfm-hysteresis.js`; a cell forgets everything the moment its surface
+     * class changes, its reverse-video state flips, or it has overridden the
+     * plain pick for `holdFrames` conversions in a row.
+     *
+     * @param {{glyph?: number, drive?: number, holdFrames?: number}|null}
+     *   options - null (or all-zero bands) turns it off
+     * @returns {{glyph: number, drive: number, holdFrames: number}|null}
+     */
+    setTemporalHysteresis(options) {
+      const next = normalizeHysteresis(options);
+      const was = st.hysteresis;
+      st.hysteresis = next;
+      // Turning it on or off, or moving a band, invalidates every remembered
+      // decision: the cells were decided under different rules.
+      if (
+        !was !== !next ||
+        (was &&
+          next &&
+          (was.glyph !== next.glyph ||
+            was.drive !== next.drive ||
+            was.holdFrames !== next.holdFrames))
+      ) {
+        st.hysteresisHistory = null;
+        st.gpuPass?.forget?.();
+        st.dirty = true;
+      }
+      return st.hysteresis;
+    },
+    /** @returns {{glyph: number, drive: number, holdFrames: number}|null} */
+    getTemporalHysteresis() {
+      return st.hysteresis;
+    },
     setCrtEffects(options = {}) {
       st.bloomPx = Math.max(0, Number(options.bloomPx) || 0);
       st.scanlineDim = Math.max(

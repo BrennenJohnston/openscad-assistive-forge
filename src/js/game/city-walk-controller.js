@@ -105,6 +105,7 @@ import {
   HC_PALETTE_AMBER,
   MONO_INTENSITY_LEVELS,
   MONO_REVERSE_THRESHOLD,
+  CITY_TEMPORAL_HYSTERESIS,
   MONO_BLOOM_PX,
   MONO_GLOW_FADE,
 } from './hc-palettes.js';
@@ -1876,6 +1877,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // whenever a palette is active, so it costs colour mode nothing.
     game.altView.setIntensityLevels(MONO_INTENSITY_LEVELS);
     game.altView.setReverseVideo(MONO_REVERSE_THRESHOLD);
+
+    // CW-68: the game walks, so its converter gets a memory of the previous
+    // frame. Opt-in per instance and OFF everywhere else, including the main
+    // app's Alt View, which converts a still.
+    game.altView.setTemporalHysteresis?.(CITY_TEMPORAL_HYSTERESIS);
 
     // CW-Q2/CW-Q5/CW-Q6: multicolor exists ONLY under high contrast —
     // neon in amber (light), the ANSI bright set in green (dark). The

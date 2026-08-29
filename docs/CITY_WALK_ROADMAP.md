@@ -249,6 +249,36 @@ typed arrays, unit-tested against three-frame sequences whose answers were
 worked out by hand. The instrument imports that module through the dev server,
 so the code the tests cover is the code that produces the numbers.
 
+### What the instrument found first: the picture had no memory
+
+The converter's per-cell decision was stateless. Every converted frame chose
+each cell's character, brightness level and reverse-video flag from that frame
+alone, so a texture scrolling one pixel was enough to choose a different
+character, and the two brightness cliffs turned a one per cent drift into a
+whole cell flipping. Measured on a Seattle street at the real walking speed:
+**nine to eleven per cent of building-facade characters were re-rolled every
+frame**, and a character survived six to eight frames on average.
+
+Each of those decisions now has a dead band, and a cell keeps what it had
+unless the new answer is better by more than the band. What makes that safe
+rather than a smear is what DROPS the memory: a cell forgets the moment its
+surface class changes under it or its reverse-video state flips - the two
+moments when the thing it is drawing became a different thing - and no cell
+may override the plain pick for more than a second in a row. The rules are one
+small module, `src/js/_hfm-hysteresis.js`, and the same arithmetic is
+carried in the GPU shader, which reads the previous frame's answers out of its
+own previous render target.
+
+Measured after: facade characters re-roll **one to two per cent** per frame
+walking, a character survives **fifteen to sixteen** frames, and a standing
+picture is still perfectly still. The share of surface changes where the
+character failed to follow - the smear this could have introduced - went DOWN
+rather than up, on both graphics cards and in both colour and monochrome.
+
+It is off for everything except the game. The converter is shared with the main
+application's Alt View, which converts one still frame, and a memory of a
+previous frame can only cost it.
+
 ### Two things worth knowing before trusting a number
 
 **Which GPU rendered it.** Windows hands a non-fullscreen Chromium the

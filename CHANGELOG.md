@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Walking through the city no longer re-rolls the picture underneath you** (CW-68) - the converter
+  decided every character, every brightness level and every solid cell from ONE frame, with no memory
+  of the frame before, so a texture sliding a single pixel was enough to choose a different character.
+  Measured on a Seattle street at real walking speed: nine to eleven per cent of the characters on a
+  building face changed every frame, and a character lasted six to eight frames. Each of those
+  decisions now has a dead band, and a cell keeps what it had unless the new answer is better by more
+  than that band. Measured after: **one to two per cent per frame, and a character lasts fifteen to
+  sixteen frames**; the ground underfoot, which used to boil in rings as you walked, now holds
+  completely still. A standing picture is still perfectly still, on both graphics cards
+
+- **The memory forgets the instant the thing under it changes** (CW-68) - holding a character is only
+  safe if it is dropped when it becomes wrong, and an earlier attempt at this was abandoned for
+  exactly that reason: cells kept the character of the surface they had just left. A cell now forgets
+  everything the moment its surface class changes under it or its solid-cell state flips, and no cell
+  may override the fresh answer for more than a second in a row. Measured: the share of surface
+  changes where the character failed to follow went DOWN, not up. In colour mode that reset was
+  missing at first because the surface map was never sent to the graphics card there, and the smear it
+  allowed was visible in the numbers (87 per cent of surface changes kept a stale character, against
+  44 with no memory at all); packing the palette colour and the surface into one byte fixed it, and
+  colour mode now measures better than it did with no memory at all. Nothing outside the game gets
+  any of this: the same converter draws the main app's alternate view, which converts one still frame
+
 - **An instrument that photographs the City Walk in motion** (CW-67) - every judgement this game has
   made about whether its picture holds still was read off a screenshot or off a two-centimetre test
   step, and the walk a player actually does is 4.8 metres a second. `scripts/seq-city-walk.mjs` runs

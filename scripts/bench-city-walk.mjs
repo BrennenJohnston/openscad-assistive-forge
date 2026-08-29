@@ -123,6 +123,11 @@ const VARIANTS = {
   // CW-41: the cell-raster facade filtering OFF (bias forced to zero), so
   // its cost can be A/B'd against the shipped filtering in one session.
   'no-cellraster': {},
+  // CW-68: the frame-to-frame memory turned OFF for this run, so its cost can
+  // be priced against the shipped configuration inside one session - which is
+  // the only kind of comparison this machine supports. Use it A-B-B-A:
+  //   --variants=no-hysteresis,new,new,no-hysteresis
+  'no-hysteresis': {},
 }
 
 /** What persistFade each variant runs at. */
@@ -271,6 +276,16 @@ async function benchCity(page, cdp, city, variant, opts, runIndex) {
       `character size is ${fontScale}, asked for ${opts.charScale}`
     )
   }
+
+  // CW-68. Read what the game configured for itself, or turn it off for the
+  // variant that prices it; either way the answer goes in the table, because
+  // a converter row that does not say whether the memory was on is a number
+  // about nothing.
+  const hysteresis = await page.evaluate((off) => {
+    const api = window.__cityWalkGame.altView
+    if (typeof api.getTemporalHysteresis !== 'function') return undefined
+    return off ? api.setTemporalHysteresis(null) : api.getTemporalHysteresis()
+  }, variant === 'no-hysteresis')
 
   const rainPresses = RAIN_PRESSES[opts.rain]
   if (rainPresses === undefined) throw new Error(`unknown rain: ${opts.rain}`)
@@ -439,6 +454,7 @@ async function benchCity(page, cdp, city, variant, opts, runIndex) {
     usedGpu: result.stats.usedGpu,
     cells: result.stats.cells,
     charScale: opts.charScale,
+    hysteresis,
     charW: result.stats.charW,
     charH: result.stats.charH,
     fontSizePx: result.stats.fontSizePx,
@@ -551,12 +567,13 @@ async function main() {
     )
     console.log(`GL: ${gl.renderer}`)
     console.log(
-      '| city | variant | chars | path | conv avg ms | conv max ms | conv/s | rAF fps | governor ms | cells | cell px | walked m | GL |'
+      '| city | variant | chars | mem | path | conv avg ms | conv max ms | conv/s | rAF fps | governor ms | cells | cell px | walked m | GL |'
     )
-    console.log('|---|---|---|---|---|---|---|---|---|---|---|---|---|')
+    console.log('|---|---|---|---|---|---|---|---|---|---|---|---|---|---|')
     for (const r of rows) {
       console.log(
         `| ${r.city} | ${r.variant} | ${(r.charScale * 100).toFixed(0)}% | ` +
+          `${r.hysteresis === undefined ? 'n/a' : r.hysteresis ? 'on' : 'off'} | ` +
           `${r.usedGpu ? 'gpu' : 'cpu'} | ${r.convertAvgMs.toFixed(1)} | ` +
           `${r.convertMaxMs.toFixed(1)} | ${r.convPerS.toFixed(1)} | ` +
           `${r.rafFps.toFixed(1)} | ${r.dynamicIntervalMs} | ${r.cells} | ` +

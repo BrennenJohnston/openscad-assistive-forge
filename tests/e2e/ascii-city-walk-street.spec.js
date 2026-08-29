@@ -1945,3 +1945,150 @@ test.describe('ASCII City Walk — the surface map holds still (CW-52, D-110)', 
     ).toBeGreaterThan(0)
   })
 })
+
+test.describe('ASCII City Walk — the converter remembers the last frame (CW-68)', () => {
+  /**
+   * Convert N frames along a small step and count how many cells changed
+   * their glyph between consecutive frames.
+   *
+   * The step is deliberately tiny (two centimetres, the CW-52 creep) because
+   * the claim is about a cell whose content BARELY moved. Everything else is
+   * held still: the world's own clock is stopped first, so the only thing
+   * that differs between two frames is the pose this sets.
+   */
+  async function glyphChangesOverCreep(page, steps = 4) {
+    return page.evaluate(async (n) => {
+      const game = window.__cityWalkGame
+      const convert = async () => {
+        const before = game.altView.getConvertTotals().samples
+        game.altView.invalidate()
+        const deadline = Date.now() + 15000
+        while (game.altView.getConvertTotals().samples <= before) {
+          if (Date.now() > deadline) throw new Error('no conversion in 15 s')
+          await new Promise((r) => requestAnimationFrame(r))
+        }
+        const probe = game.altView.readCellProbe()
+        if (!probe) throw new Error('the cell probe is empty')
+        return probe
+      }
+      const start = { ...game.walkState }
+      let changes = 0
+      let cells = 0
+      let previous = null
+      for (let i = 0; i < n; i++) {
+        const d = 0.02 * i
+        const s = game.walkState
+        s.x = start.x + Math.sin(start.headingRad) * d
+        s.y = start.y + Math.cos(start.headingRad) * d
+        const eyeZ = 1.7 + (s.groundZ ?? 0)
+        game.fpCamera.position.set(s.x, s.y, eyeZ)
+        game.fpCamera.lookAt(
+          s.x + Math.sin(s.headingRad),
+          s.y + Math.cos(s.headingRad),
+          eyeZ
+        )
+        const probe = await convert()
+        cells = probe.cols * probe.rows
+        if (previous) {
+          for (let c = 0; c < cells; c++) {
+            if (probe.glyphs[c] !== previous[c]) changes++
+          }
+        }
+        previous = Int16Array.from(probe.glyphs)
+      }
+      Object.assign(game.walkState, start)
+      return {
+        changes,
+        cells,
+        pairs: n - 1,
+        usedGpu: game.altView.getConvertStats().usedGpu,
+      }
+    }, steps)
+  }
+
+  /**
+   * The margin matters, and it is not a taste. RED-PROOFED by disabling the
+   * hold in the shader: the memory then prevented ONE glyph change out of
+   * 61,440 cell-frames, and a bare "fewer than" assertion passed on 930
+   * against 931. A lever that does nothing must fail this, so the bar is a
+   * SHARE. Measured on this machine with the lever working: 256 and 124
+   * against 931, i.e. 13 to 28 per cent.
+   */
+  const MUST_PREVENT = 0.6
+
+  test('a cell whose content barely moved keeps the glyph it had', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+    await page.evaluate(() => {
+      window.__cityWalkGame.motionReduced = true
+      window.__cityWalkGame.altView.setCellProbe(true)
+    })
+
+    // The game configures its own instance at startup; this is what it chose.
+    const configured = await page.evaluate(() =>
+      window.__cityWalkGame.altView.getTemporalHysteresis()
+    )
+    expect(configured, 'the game turns the memory on for its instance').toEqual(
+      expect.objectContaining({ glyph: expect.any(Number) })
+    )
+
+    // BOTH converter paths, in one session. Which one a browser takes is not
+    // this test's to choose - CI renders in software and may land on either -
+    // and the two carry the rules separately: the GPU path evaluates them in
+    // its shader against the previous render target, the CPU path in
+    // _hfm-hysteresis.js. Each was red-proofed by disabling it alone, and
+    // each time the OTHER path still passed the test, which is how this case
+    // came to run both.
+    for (const cpuSample of [false, true]) {
+      await page.evaluate(
+        (cpu) => window.__cityWalkGame.altView.setBenchLegacy({ cpuSample: cpu }),
+        cpuSample
+      )
+      const withMemory = await glyphChangesOverCreep(page)
+      await page.evaluate(() =>
+        window.__cityWalkGame.altView.setTemporalHysteresis(null)
+      )
+      const without = await glyphChangesOverCreep(page)
+      await page.evaluate(
+        (h) => window.__cityWalkGame.altView.setTemporalHysteresis(h),
+        configured
+      )
+
+      const path = `${cpuSample ? 'cpu' : 'default'} path (usedGpu ${withMemory.usedGpu})`
+      expect(without.cells, path).toBe(withMemory.cells)
+      expect(
+        without.changes,
+        `${path}: the stateless pick re-rolls glyphs over a 2 cm step`
+      ).toBeGreaterThan(100)
+      expect(
+        withMemory.changes,
+        `${path}: memory ${withMemory.changes} of ${without.changes} stateless ` +
+          `changes over ${withMemory.cells * withMemory.pairs} cell-frames`
+      ).toBeLessThan(without.changes * MUST_PREVENT)
+    }
+
+    await page.evaluate(() => {
+      window.__cityWalkGame.altView.setBenchLegacy({ cpuSample: false })
+      window.__cityWalkGame.altView.setCellProbe(false)
+    })
+  })
+
+  test('the memory can be turned off and back on at run time', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+    const cycle = await page.evaluate(() => {
+      const view = window.__cityWalkGame.altView
+      const start = view.getTemporalHysteresis()
+      const off = view.setTemporalHysteresis(null)
+      const back = view.setTemporalHysteresis(start)
+      return { start, off, back, after: view.getTemporalHysteresis() }
+    })
+    expect(cycle.off).toBeNull()
+    expect(cycle.back).toEqual(cycle.start)
+    expect(cycle.after).toEqual(cycle.start)
+  })
+})

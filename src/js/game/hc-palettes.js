@@ -90,6 +90,38 @@ export const MONO_INTENSITY_LEVELS = [0.65, 1];
 export const MONO_REVERSE_THRESHOLD = 0.8;
 
 /**
+ * CW-68 - the converter's frame-to-frame memory, for the GAME's instance only.
+ *
+ * Measured before it was chosen: walking a Seattle street at the real 4.8 m/s
+ * re-rolled 9 to 11 per cent of facade glyphs every converted frame, and mean
+ * glyph persistence was 6 to 8 frames. The pick is stateless, so a texel
+ * scrolling one pixel is enough to choose a different character, and the
+ * reverse-video cliff at MONO_REVERSE_THRESHOLD turns a one per cent drift
+ * into a whole solid cell appearing and vanishing.
+ *
+ * `glyph` is a dead band in squared 6-D shape distance: the previous glyph is
+ * kept unless the new candidate is closer than it by more than this. `drive`
+ * is a half-width in luminance around the intensity ladder's 0.5 boundary,
+ * and `reverse` the same around MONO_REVERSE_THRESHOLD, so reverse video is
+ * entered above 0.82 and left below 0.78. The two are separate because the
+ * mistakes are different sizes: a drive step changes a cell's brightness,
+ * while the reverse cliff turns it into a solid block, and moving THAT is a
+ * decision about the look of the game rather than about steadiness.
+ * `holdFrames` bounds the smear: no cell may override the plain pick for more
+ * than this many conversions in a row, which at the converter's 30/s governor
+ * is a second.
+ *
+ * The main app's Alt View does NOT get this - it converts one still frame, and
+ * a memory of a previous frame can only cost it. See src/js/_hfm-hysteresis.js.
+ */
+export const CITY_TEMPORAL_HYSTERESIS = Object.freeze({
+  glyph: 0.4,
+  drive: 0.1,
+  reverse: 0.02,
+  holdFrames: 30,
+});
+
+/**
  * CW-21 — how much of the previous frame a cell is still glowing with.
  *
  * A slow phosphor kept emitting after the beam had passed, which is why an
