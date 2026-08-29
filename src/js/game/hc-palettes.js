@@ -125,17 +125,23 @@ export const MONO_REVERSE_THRESHOLD = 0.8;
  * block on whatever wall it touches; a lamp post two metres away is a solid bar
  * from the pavement to the top of the frame.
  *
- * Three columns, one row each:
+ * Two columns, one row each:
  *
- *   stock   what the game has always drawn. The comparison, and the default
- *           until the owner chooses.
- *   calm    the solid layer kept, but bounded: the share of solid cells is
- *           held under `reverseShareCap` by lifting the threshold (see
- *           nextReverseLift), and the shopfront bands come down to about 0.87
- *           so they are still lit without being the whitest thing on screen.
- *   off     no solid cells at all in the game - the intensity ladder only -
- *           and the shopfront bands at about 0.78, below the cliff, so they
- *           read as bright characters rather than slabs.
+ *   off     THE GAME'S DEFAULT since CW-72, on the owner's answer to CW-Q74 at
+ *           G1: no solid cells at all - the intensity ladder only - and the
+ *           shopfront bands at about 0.78, below the cliff, so they read as
+ *           bright characters rather than slabs. Measured at a shopfront pose:
+ *           the solid cells go 2,936 to 0 while the shopfronts' LIT cells only
+ *           move 4,162 to 4,042, so it costs three per cent of the ink and all
+ *           of the solidity.
+ *   stock   what the game drew before. Kept as the comparison an instrument
+ *           run can switch back to, not as anything a player can reach.
+ *
+ * A third column, `calm`, was built and measured for this choice and DELETED
+ * here when the owner picked `off`. It bounded the SHARE of solid cells with a
+ * controller instead of removing them; its measurement is in the CW-70 record,
+ * and the one thing worth carrying forward is that a cap on a share must be
+ * bounded below the lit band's headroom or it becomes `off` by a slower route.
  *
  * The band scales are multipliers on the painted shopfront canvas, whose
  * brightest paint is 0xef (0.937): 0.93 puts it at 0.871 and 0.83 at 0.777.
@@ -164,12 +170,6 @@ export const LUMINANCE_LAYER = Object.freeze({
     reverseLiftMax: 0,
     storefrontScale: 1,
   }),
-  calm: Object.freeze({
-    reverseAt: MONO_REVERSE_THRESHOLD,
-    reverseShareCap: 0.01,
-    reverseLiftMax: 0.06,
-    storefrontScale: 0.93,
-  }),
   off: Object.freeze({
     reverseAt: null,
     reverseShareCap: null,
@@ -194,17 +194,26 @@ export const LUMINANCE_LAYER = Object.freeze({
  * `whiteLum` and `whiteChroma` are the gate on the white entry, which is what
  * a low-chroma highlight lands on through the D-112 sRGB match.
  *
- * These three numbers are the owner's at G1 (CW-Q79). Two alternatives were
- * measured beside them and are in the release record.
+ * ★ THE FLOOR IS 0.3, ANSWERED BY THE OWNER AT G1 (CW-Q79), not the 0.5 that
+ * CW-71 shipped. Measured at the Seattle spawn, standing, at the default size:
+ *
+ *   no budget        89.3 % inked, 61.8 % white   flat white fields
+ *   white gate only  89.2 % inked,  0.01 % white  the SAME fields, in teal
+ *   floor 0.3        28.5 % inked,  0.01 % white  a street again  <- chosen
+ *   floor 0.5         3.1 % inked,  0.01 % white  near-black, lights only
+ *
+ * The white gate alone removes every white cell and changes nothing else,
+ * which is how it is known that the flatness was never only about white. 0.3
+ * keeps a street you can read; 0.5 is the monochrome rule and empties it.
  */
 export const CITY_PALETTE_INK_BUDGET = Object.freeze({
-  floor: 0.5,
+  floor: 0.3,
   whiteLum: 0.9,
   whiteChroma: 0.12,
 });
 
-/** The treatment the game starts in. The owner chooses the winner at G1. */
-export const LUMINANCE_LAYER_DEFAULT = 'stock';
+/** The treatment the game draws, answered by the owner at G1 (CW-Q74). */
+export const LUMINANCE_LAYER_DEFAULT = 'off';
 
 export const CITY_TEMPORAL_HYSTERESIS = Object.freeze({
   glyph: 0.4,

@@ -43,6 +43,7 @@ import {
   PITCH_LIMIT_RAD,
   clampCharScale,
   seedCharScale,
+  CITY_DEFAULT_CHAR_SCALE,
   CHAR_SCALE_MIN,
   CHAR_SCALE_MAX,
   CHAR_SCALE_STEP,
@@ -836,48 +837,43 @@ describe('character size (CW-12)', () => {
     })
   })
 
-  describe('seed order', () => {
-    it("prefers the game's own saved value", () => {
-      expect(seedCharScale('0.3', '0.9')).toBe(0.3)
+  describe('seed order (rewritten CW-72 for CW-Q75: ONE default)', () => {
+    it("prefers the player's own saved size", () => {
+      expect(seedCharScale('0.7')).toBeCloseTo(0.7, 10)
     })
 
-    it('falls back to the shared Alt View preference, clamped in', () => {
-      expect(seedCharScale(null, '0.9')).toBe(0.9)
-      // 2.5 is legal for the preview slider and far outside the game's range.
-      expect(seedCharScale(null, '2.5')).toBe(CHAR_SCALE_MAX)
+    it('is the ONE default when nothing is saved', () => {
+      expect(seedCharScale(null)).toBeCloseTo(CITY_DEFAULT_CHAR_SCALE, 10)
+      expect(seedCharScale(undefined)).toBeCloseTo(CITY_DEFAULT_CHAR_SCALE, 10)
+      expect(seedCharScale('')).toBeCloseTo(CITY_DEFAULT_CHAR_SCALE, 10)
     })
 
-    it('falls back to the default when neither is usable', () => {
-      expect(seedCharScale(null, null)).toBe(CHAR_SCALE_DEFAULT)
-      expect(seedCharScale(undefined, undefined)).toBe(CHAR_SCALE_DEFAULT)
-      expect(seedCharScale('', '')).toBe(CHAR_SCALE_DEFAULT)
-      expect(seedCharScale('banana', 'nonsense')).toBe(CHAR_SCALE_DEFAULT)
+    it('survives a junk saved value by falling through, not by throwing', () => {
+      expect(seedCharScale('banana')).toBeCloseTo(CITY_DEFAULT_CHAR_SCALE, 10)
     })
 
-    it('survives a junk game value by falling through, not by throwing', () => {
-      expect(seedCharScale('NaN', '0.4')).toBe(0.4)
+    it('RAISES a saved size that is below this machine floor', () => {
+      // The floor may make the picture coarser and nothing may make it finer:
+      // a player who chose 30% on a fast machine and then opened the game on
+      // a slow one gets that machine's floor, not a game it cannot hold.
+      expect(seedCharScale('0.3', 0.5)).toBeCloseTo(0.5, 10)
+      // ...and a saved size ABOVE the floor is left exactly alone.
+      expect(seedCharScale('0.7', 0.4)).toBeCloseTo(0.7, 10)
     })
 
-    describe('with a stored calibration (CW-42, CW-Q39)', () => {
-      it('the manual choice still wins, even below the calibrated default', () => {
-        expect(seedCharScale('0.1', null, 0.3)).toBe(0.1)
-      })
+    it('never seeds below the one default, whatever the floor says', () => {
+      // A floor below the default is not a thing this release can produce -
+      // decodeCalibration migrates CW-42's away - but the seed refuses it
+      // anyway, because that is the whole point of the release.
+      expect(seedCharScale(null, 0.1)).toBeCloseTo(CITY_DEFAULT_CHAR_SCALE, 10)
+      expect(seedCharScale('0.1', 0.1)).toBeCloseTo(CITY_DEFAULT_CHAR_SCALE, 10)
+    })
 
-      it('the calibrated default replaces the landing default', () => {
-        expect(seedCharScale(null, null, 0.1)).toBe(0.1)
-        expect(seedCharScale(null, null, 0.3)).toBe(0.3)
-      })
-
-      it('the calibrated default outranks the Alt View courtesy seed', () => {
-        // Fresh calibration would re-apply over the seed moments after
-        // entry; landing there spares the player the visible jump.
-        expect(seedCharScale(null, '0.9', 0.3)).toBe(0.3)
-      })
-
-      it('a junk calibration falls through to the old order', () => {
-        expect(seedCharScale(null, '0.9', NaN)).toBe(0.9)
-        expect(seedCharScale(null, null, null)).toBe(CHAR_SCALE_DEFAULT)
-      })
+    it('does not read the main app Alt View preference at all', () => {
+      // It used to. A slider in the main app deciding how coarse the city
+      // looks is exactly the second size CW-72 exists to remove, so the
+      // function no longer has a parameter for it.
+      expect(seedCharScale.length).toBeLessThanOrEqual(2)
     })
   })
 })

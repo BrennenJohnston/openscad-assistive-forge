@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **One character size for everyone** (CW-72) - the game used to measure your machine at the door and
+  put you on the size it decided you could hold, so two people playing the same city were not looking
+  at the same picture, and neither was one person on two machines. **Everybody now opens at 30 per
+  cent**, chosen from measured walks rather than from a preference: 45-second walks in heavy rain on a
+  low-end integrated graphics chip, where 30 per cent is the smallest size holding thirty frames a
+  second in both the lightest city and the heaviest. What your machine measures about itself is now
+  only a FLOOR: it can make the picture coarser if it must, never finer, and never a different game
+  from anybody else's. Your own choice of size still wins and is still remembered
+
+- **The floor needs two visits to agree before it moves** (CW-72) - a floor that moved on a single
+  slow reading gave you a different size every time you opened the game on a machine that was
+  sometimes busy. It now takes two consecutive visits that both ask for a coarser picture, one
+  contented visit clears the count, and nothing ever moves the floor down on its own. A size stored by
+  the old calibration that was FINER than the new default is quietly raised to it, because leaving it
+  would have kept that one machine on its own private game
+
+- **The bright layer is gone from the game, and the parks are visible** (CW-72) - the two treatments
+  built and measured in the previous release went to the owner with pictures, and the answer was to
+  remove the solid layer: no cell is painted as a solid block any more, and a lit shopfront is drawn
+  as characters you can see into. Colour mode's ink floor was set to the value that keeps a street
+  readable rather than the one that empties it, and a park's surface was raised out of the near-black
+  it had been sitting in
+
 ### Added
 
 - **Colour mode can say "this cell is dim" for the first time** (CW-71) - monochrome has an intensity

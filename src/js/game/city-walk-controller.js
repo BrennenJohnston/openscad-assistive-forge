@@ -87,9 +87,10 @@ import { describeJunction } from './city-junction.js';
 import { readCityProgress, writeCityProgress } from './city-progress.js';
 import { initAltView } from '../_hfm.js';
 import {
-  CALIBRATION_CANDIDATES,
+  CALIBRATION_FLOOR_LADDER,
   CALIBRATION_SAMPLES_PER_SCALE,
   chooseCalibratedSize,
+  raiseFloor,
   createProbePhase,
   decodeCalibration,
   encodeCalibration,
@@ -126,7 +127,6 @@ import { GLYPH_VOCABULARIES } from './glyph-vocabularies.js';
 import {
   safeGetItem,
   safeSetItem,
-  STORAGE_KEY_HFM_FONT_SCALE,
   STORAGE_KEY_CITY_WALK_SPEED,
   STORAGE_KEY_CITY_WALK_FONT_SCALE,
   STORAGE_KEY_CITY_WALK_CALIBRATED_FLOOR,
@@ -1858,13 +1858,14 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     const storedCalibration = decodeCalibration(
       safeGetItem(STORAGE_KEY_CITY_WALK_CALIBRATED_FLOOR)
     );
+    // CW-72 (CW-Q75): ONE default size for everyone. What a machine can
+    // measure about itself is a FLOOR - it may make the picture coarser, never
+    // finer, and never a different game from anybody else's. A stored CW-42
+    // landing below the default is migrated up by decodeCalibration.
     game.calibratedFloor = storedCalibration?.floorScale ?? null;
+    game.calibrationPending = storedCalibration?.pending ?? 0;
     game.altView.setFontScale(
-      seedCharScale(
-        savedManualScale,
-        safeGetItem(STORAGE_KEY_HFM_FONT_SCALE),
-        storedCalibration?.defaultScale ?? null
-      )
+      seedCharScale(savedManualScale, game.calibratedFloor)
     );
     syncCellRaster(game);
 
@@ -3212,7 +3213,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     if (
       !measured &&
       cal.readings.length === 0 &&
-      !CALIBRATION_CANDIDATES.some((s) => sameScale(s, current))
+      !CALIBRATION_FLOOR_LADDER.some((s) => sameScale(s, current))
     ) {
       return current;
     }
@@ -3292,28 +3293,39 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       restoreEntryScale(game);
       return;
     }
-    const result = chooseCalibratedSize(cal.readings);
-    cal.result = result;
-    game.calibratedFloor = result.floorScale;
+    const measured = chooseCalibratedSize(cal.readings);
+    // CW-72: a raise needs two passes to agree, so a machine that was busy
+    // once does not get a coarser picture for ever (the R6 floor-flapping
+    // item). Nothing here lowers a floor.
+    const next = raiseFloor(
+      { floorScale: game.calibratedFloor, pending: game.calibrationPending },
+      measured.floorScale
+    );
+    cal.result = { ...measured, ...next };
+    const raised =
+      Number.isFinite(game.calibratedFloor) &&
+      next.floorScale > game.calibratedFloor + 1e-9;
+    game.calibratedFloor = next.floorScale;
+    game.calibrationPending = next.pending;
     safeSetItem(
       STORAGE_KEY_CITY_WALK_CALIBRATED_FLOOR,
-      encodeCalibration(result)
+      encodeCalibration(next)
     );
     if (cal.manual) {
       restoreEntryScale(game);
-    } else if (!sameScale(game.altView.getFontScale(), result.defaultScale)) {
-      // The calibrated default lands through the renderer only - writing
-      // the manual key here would freeze the calibration as a choice.
-      game.altView.setFontScale(result.defaultScale);
+    } else if (game.altView.getFontScale() < next.floorScale - 1e-9) {
+      // The floor lands through the renderer only - writing the manual key
+      // here would freeze a measurement as if it were the player's choice.
+      game.altView.setFontScale(next.floorScale);
       syncCellRaster(game);
       game.altView.invalidate();
     }
     syncCharSizeControls();
-    if (result.fallback) {
+    if (raised) {
       const pct = Math.round(game.altView.getFontScale() * 100);
       announceInLayer(
-        'Small character sizes cannot hold 30 frames per second on this ' +
-          `machine. Character size stays at ${pct} percent.`
+        'This machine cannot hold 30 frames per second at the usual ' +
+          `character size. Character size raised to ${pct} percent.`
       );
     }
   }

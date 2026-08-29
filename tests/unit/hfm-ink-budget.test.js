@@ -106,16 +106,22 @@ describe('the ink budget: configuration', () => {
     expect(normalizeInkBudget({ floor: -1 }).floor).toBe(DEFAULT_INK_BUDGET.floor)
   })
 
-  it('asks the game for the same floor the monochrome ladder uses', () => {
-    // The consequence is deliberate and large: colour mode inks about as much
-    // of the screen as monochrome does, because it is the same rule. If this
-    // number ever drifts from the converter's blank level, colour and mono
-    // stop being two views of one picture.
-    expect(CITY_PALETTE_INK_BUDGET.floor).toBe(0.5)
+  it('asks the game for the floor the owner chose at G1, not the mono one', () => {
+    // CW-71 shipped 0.5 - the monochrome ladder's own blank level - which
+    // inks 3 % of a frame and leaves the city's lights floating in black. The
+    // owner answered CW-Q79 with 0.3, which inks 28 % and leaves a street you
+    // can read. Both were measured and photographed; this is their choice, and
+    // if it drifts, so does the picture they signed off.
+    expect(CITY_PALETTE_INK_BUDGET.floor).toBe(0.3)
     expect(normalizeInkBudget(CITY_PALETTE_INK_BUDGET)).toEqual({
-      floor: 0.5,
+      floor: 0.3,
       whiteLum: 0.9,
       whiteChroma: 0.12,
     })
+    // ...and it is still a floor a dim cell falls under: the white gate is
+    // the other half and neither does the other's job.
+    expect(CITY_PALETTE_INK_BUDGET.floor).toBeLessThan(
+      CITY_PALETTE_INK_BUDGET.whiteLum
+    )
   })
 })

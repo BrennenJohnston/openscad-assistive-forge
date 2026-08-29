@@ -23,16 +23,37 @@
 // convert that fits inside the governor's slot leaves the rAF loop its
 // headroom; one that does not is exactly what the governor backs off from.
 
-import { CHAR_SCALE_DEFAULT } from './walk-controls.js';
-
 /** The 30 fps bar, in convert milliseconds (the governor's own ceiling). */
 export const CALIBRATION_BAR_MS = 33;
 
-/** The owner's range: the calibrated size lives in [10%, 30%]. */
-export const CALIBRATION_CANDIDATES = [0.1, 0.3];
+// CW-72's one default lives with the other size constants, in walk-controls,
+// and is re-exported here because every caller of this module wants it.
+import { CITY_DEFAULT_CHAR_SCALE } from './walk-controls.js';
+export { CITY_DEFAULT_CHAR_SCALE };
+
+/**
+ * The sizes the floor may RAISE to, in order, on a machine that cannot hold
+ * the default. It never goes below: calibration is a floor now, not a landing.
+ * A slower machine gets a coarser picture of the same game.
+ */
+export const CALIBRATION_FLOOR_LADDER = [0.3, 0.4, 0.5];
+
+/**
+ * How many consecutive slow passes it takes to raise the floor.
+ *
+ * One slow pass is a busy afternoon; two is a machine. The ledger's
+ * floor-flapping item (R6, CW-42) is why: a floor that moved on every entry
+ * gave a player a different size each time they opened the game. Nothing
+ * lowers the floor automatically - only the player does, by choosing a size.
+ */
+export const CALIBRATION_RAISE_PASSES = 2;
+
+/** CW-42's candidates, kept ONLY so a stored value of its shape is recognised. */
+export const CALIBRATION_LEGACY_CANDIDATES = [0.1, 0.3];
 
 /** None of the range holds: the floor parks here and the default stays. */
-export const CALIBRATION_FALLBACK_FLOOR = 0.3;
+/** @deprecated CW-72 - the floor never parks below CITY_DEFAULT_CHAR_SCALE. */
+export const CALIBRATION_FALLBACK_FLOOR = CITY_DEFAULT_CHAR_SCALE;
 
 /** How many conversions make one honest probe reading. */
 export const CALIBRATION_SAMPLES_PER_SCALE = 20;
@@ -95,64 +116,105 @@ export function nextProbeScale(
   barMs = CALIBRATION_BAR_MS,
   currentScale = null
 ) {
+  // A rung that is already ON SCREEN is measured first: that reading costs no
+  // visible flip, and a player who chose 50% for themselves should not watch
+  // the game drop to 30% just to ask a question about it.
   if (Number.isFinite(currentScale)) {
-    const onScreen = CALIBRATION_CANDIDATES.find(
+    const onScreen = CALIBRATION_FLOOR_LADDER.find(
       (s) => Math.abs(s - currentScale) < EPS
     );
-    // A smaller candidate that already holds has decided the pick — the
-    // shortcut must not reopen it.
-    const decidedBelow =
-      onScreen !== undefined &&
-      CALIBRATION_CANDIDATES.some((s) => {
-        if (s >= onScreen - EPS) return false;
-        const r = forScale(readings, s);
-        return r !== undefined && r.avgMs <= barMs;
-      });
     if (
       onScreen !== undefined &&
-      !decidedBelow &&
       !forScale(readings, onScreen) &&
-      !dominatedByFailure(readings, onScreen, barMs)
+      !dominatedByFailure(readings, onScreen, barMs) &&
+      !CALIBRATION_FLOOR_LADDER.some((s) => {
+        if (s > onScreen - EPS) return false;
+        const r = forScale(readings, s);
+        return r !== undefined && r.avgMs <= barMs;
+      })
     ) {
       return onScreen;
     }
   }
-  for (const candidate of CALIBRATION_CANDIDATES) {
-    const reading = forScale(readings, candidate);
-    if (!reading) {
-      if (dominatedByFailure(readings, candidate, barMs)) continue;
-      return candidate;
+  // The ladder runs UPWARD from the one default. The pass asks one question -
+  // "can this machine hold the size everybody gets?" - and, only if it cannot,
+  // how far up it has to go.
+  for (const rung of CALIBRATION_FLOOR_LADDER) {
+    const reading = forScale(readings, rung);
+    if (reading) {
+      // A rung that holds ends the pass: nothing above it needs measuring.
+      if (reading.avgMs <= barMs) return null;
+      continue;
     }
-    if (reading.avgMs <= barMs) return null;
+    // A LARGER size that already failed condemns this one too (cost falls as
+    // the cells get bigger), so there is nothing to learn by measuring it.
+    if (dominatedByFailure(readings, rung, barMs)) continue;
+    return rung;
   }
   return null;
 }
 
 /**
- * The decision: the smallest measured candidate holding the bar, or the
- * honest fallback (floor parks at 30%, the default stays the game's own —
- * the fallback must never pretend a size the machine cannot hold).
+ * The decision: the smallest rung of the ladder this machine can hold.
+ *
+ * CW-72 turned this from a LANDING into a FLOOR. It answers "how coarse does
+ * this machine need the picture to be", never "which size should this player
+ * get" - the answer to that is CITY_DEFAULT_CHAR_SCALE for everybody, unless
+ * the floor is above it.
+ *
+ * `held` is false when nothing on the ladder held: the floor parks at the top
+ * rung, and the record says the machine did not reach the bar at any size
+ * rather than pretending one worked.
  *
  * @param {Array<{scale: number, avgMs: number, samples: number}>} readings
  * @param {number} [barMs]
- * @returns {{floorScale: number, defaultScale: number, fallback: boolean}}
+ * @returns {{floorScale: number, held: boolean}}
  */
 export function chooseCalibratedSize(readings, barMs = CALIBRATION_BAR_MS) {
-  for (const candidate of CALIBRATION_CANDIDATES) {
-    const reading = forScale(readings, candidate);
+  for (const rung of CALIBRATION_FLOOR_LADDER) {
+    const reading = forScale(readings, rung);
     if (reading && reading.avgMs <= barMs) {
-      return {
-        floorScale: candidate,
-        defaultScale: candidate,
-        fallback: false,
-      };
+      return { floorScale: rung, held: true };
     }
   }
   return {
-    floorScale: CALIBRATION_FALLBACK_FLOOR,
-    defaultScale: CHAR_SCALE_DEFAULT,
-    fallback: true,
+    floorScale: CALIBRATION_FLOOR_LADDER[CALIBRATION_FLOOR_LADDER.length - 1],
+    held: false,
   };
+}
+
+/**
+ * CW-72: the floor only moves UP, and only after two passes agree.
+ *
+ * A floor that moved on a single reading gave a player a different size every
+ * time they opened the game on a machine that was sometimes busy (the R6
+ * ledger's floor-flapping item). A raise now needs
+ * CALIBRATION_RAISE_PASSES consecutive passes that all want it, and one pass
+ * that is happy at the current floor clears the count.
+ *
+ * Nothing here ever lowers a floor. A player who wants a finer picture sets
+ * the size themselves, and their choice is remembered.
+ *
+ * @param {{floorScale: number, pending: number}|null} stored what is on record
+ * @param {number} measured this pass's answer from chooseCalibratedSize
+ * @param {number} [passes]
+ * @returns {{floorScale: number, pending: number}}
+ */
+export function raiseFloor(
+  stored,
+  measured,
+  passes = CALIBRATION_RAISE_PASSES
+) {
+  const floorScale = Number.isFinite(stored?.floorScale)
+    ? stored.floorScale
+    : CITY_DEFAULT_CHAR_SCALE;
+  const pending = Number.isFinite(stored?.pending) ? stored.pending : 0;
+  if (!Number.isFinite(measured) || measured <= floorScale + EPS) {
+    return { floorScale, pending: 0 };
+  }
+  const agreed = pending + 1;
+  if (agreed >= passes) return { floorScale: measured, pending: 0 };
+  return { floorScale, pending: agreed };
 }
 
 /**
@@ -168,7 +230,7 @@ export function chooseCalibratedSize(readings, barMs = CALIBRATION_BAR_MS) {
  */
 export function isConclusive(readings, barMs = CALIBRATION_BAR_MS) {
   return (
-    CALIBRATION_CANDIDATES.some((s) => forScale(readings, s) !== undefined) ||
+    CALIBRATION_FLOOR_LADDER.some((s) => forScale(readings, s) !== undefined) ||
     readings.some((r) => isReading(r) && r.avgMs > barMs)
   );
 }
@@ -243,44 +305,65 @@ export function stepProbePhase(phase, totals, nowMs) {
   return { status: 'sampling' };
 }
 
-/** The stored spelling of "no candidate held" (floor 30%, default stays). */
+/** CW-42's spelling of "no candidate held". Read, never written, since CW-72. */
 export const CALIBRATION_FALLBACK_TOKEN = 'fallback';
 
 /**
- * The persisted shape of a calibration result. A normal pick stores its
- * scale; the fallback stores a token, because its floor and default differ
- * and a bare number could not say so.
+ * The persisted shape: the floor, and how many consecutive passes have asked
+ * to raise it. "0.3" is a settled floor; "0.3,1" is a floor with one pass
+ * arguing for a coarser one.
  *
- * @param {{floorScale: number, fallback: boolean}} result
+ * @param {{floorScale: number, pending?: number}} result
  * @returns {string}
  */
 export function encodeCalibration(result) {
-  if (!result || result.fallback) return CALIBRATION_FALLBACK_TOKEN;
-  return String(result.floorScale);
+  const floorScale = Number.isFinite(result?.floorScale)
+    ? result.floorScale
+    : CITY_DEFAULT_CHAR_SCALE;
+  const pending = Number.isFinite(result?.pending) ? result.pending : 0;
+  return pending > 0 ? `${floorScale},${pending}` : String(floorScale);
 }
 
 /**
- * Read a stored calibration back. Junk — absent, unparseable, or a value
- * that is not one of the candidates — reads as null: this machine holds no
- * trusted calibration, and the caller falls back to the uncalibrated seed.
+ * Read a stored floor back, MIGRATING anything CW-42 left behind.
+ *
+ * CW-42 stored a landing, and the landing could be BELOW the one default -
+ * 10% was one of its two candidates. A stored 10% must not survive as a
+ * floor, or the machine that wrote it would keep its own private game after
+ * this release. So: a stored value at or above the default is honoured as a
+ * floor; anything below it, and CW-42's `fallback` token, migrate to the
+ * default. Junk still reads as null - no trusted floor, use the default.
  *
  * @param {string|null|undefined} raw straight from localStorage
- * @returns {{floorScale: number, defaultScale: number, fallback: boolean}|null}
+ * @returns {{floorScale: number, pending: number, migrated: boolean}|null}
  */
 export function decodeCalibration(raw) {
   if (raw === CALIBRATION_FALLBACK_TOKEN) {
     return {
-      floorScale: CALIBRATION_FALLBACK_FLOOR,
-      defaultScale: CHAR_SCALE_DEFAULT,
-      fallback: true,
+      floorScale: CITY_DEFAULT_CHAR_SCALE,
+      pending: 0,
+      migrated: true,
     };
   }
-  const value = parseFloat(raw ?? '');
-  const candidate = CALIBRATION_CANDIDATES.find(
+  const [floorText, pendingText] = String(raw ?? '').split(',');
+  const value = parseFloat(floorText);
+  if (!Number.isFinite(value)) return null;
+  const rung = CALIBRATION_FLOOR_LADDER.find((s) => Math.abs(s - value) < EPS);
+  if (rung !== undefined) {
+    const pending = Math.max(0, Math.trunc(parseFloat(pendingText)) || 0);
+    return { floorScale: rung, pending, migrated: false };
+  }
+  const legacy = CALIBRATION_LEGACY_CANDIDATES.find(
     (s) => Math.abs(s - value) < EPS
   );
-  if (candidate === undefined) return null;
-  return { floorScale: candidate, defaultScale: candidate, fallback: false };
+  if (legacy !== undefined) {
+    return {
+      floorScale: CITY_DEFAULT_CHAR_SCALE,
+      pending: 0,
+      migrated: true,
+    };
+  }
+  return null;
 }
 
 /**

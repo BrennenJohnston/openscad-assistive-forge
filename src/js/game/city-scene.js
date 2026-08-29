@@ -143,7 +143,17 @@ const SIDEWALK_TONES = { street: 0x161616, map: 0x6a6a6a };
  * distinctly lighter than the roadway overhead so a park reads as a shape on
  * the map rather than a hole in the grid.
  */
-const GREEN_TONES = { street: 0x101410, map: 0x3f5a3f };
+// CW-Q81, answered by the owner at G1 2026-08-29. A park's surface was
+// 0x101410 - a luminance of about 0.07 - so the converter drew almost nothing
+// on it and a park read as a hole in the city; with CW-71's colour ink floor
+// at 0.3 it would have drawn NOTHING at all in colour. The owner asked for it
+// raised ABOVE that floor, knowing that this puts a park brighter than the
+// road (0.15-0.23) and so on the far side of CW-8's carpet law, which was
+// written to stop a ground surface reading as a carpet. 0x4a5c4a is a
+// luminance of 0.341: over the ink floor, under the 0.5 blank level the
+// monochrome ladder uses, and the green texture multiplies it down from there.
+// PHOTOGRAPHED before it shipped; if it reads as a carpet it comes back.
+const GREEN_TONES = { street: 0x4a5c4a, map: 0x3f5a3f };
 
 /**
  * How the `surface` tag shifts a ribbon's tone, where OSM has one (CW-33).

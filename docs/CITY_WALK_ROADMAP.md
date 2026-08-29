@@ -445,6 +445,45 @@ of wherever the walker happened to stop, which swung between 0 and 95,425
 across runs of the same configuration. What the reverse-video layer does over a
 sequence belongs to the sequence instrument, and it is reported per frame pair.
 
+### One size, and a floor
+
+The game used to measure the machine at the door and land it on whichever of
+two sizes it could hold. That made a picture nobody else had: two players of
+the same city were not looking at the same thing, and a screenshot could not be
+compared with anybody's memory of it.
+
+There is one default now - 30 per cent, a 3x6 pixel character cell - and it was
+chosen from the bench rather than from taste. On the signed hardware target, in
+45-second walks in heavy rain, it is the smallest size that holds thirty frames
+a second on a four-times-slower machine in both the lightest city (41.6) and the
+heaviest (43.6); the next size down does not (27 to 30). Ten and twenty per cent
+are the same 2x4 pixel cell here because the font has a three-pixel floor, so
+the ladder is really 10 / 30 / 40 / 50.
+
+What a machine measures about itself is a FLOOR. It may raise the size, never
+lower it, and a raise needs two consecutive visits to agree - one slow visit is
+a busy afternoon, two is a machine. Nothing lowers a floor automatically; a
+player who wants a finer picture chooses one, and their choice is remembered.
+A size stored by the old calibration that is finer than the default is migrated
+up to it, or the machine that wrote it would keep its private game for ever.
+
+### What the owner chose when the pictures were on the table
+
+The three treatments of the bright layer, the four settings of the colour ink
+budget and the size were all put to the owner with the measurements and the
+pictures beside each option. The answers:
+
+- **No solid cells at all.** A lit shopfront is drawn as characters. It costs
+  three per cent of the ink in the shopfront band and all of its solidity.
+- **30 per cent**, as above.
+- **Colour's ink floor at 0.3**, which leaves a street you can read, rather
+  than the monochrome rule at 0.5, which empties it to a few lights.
+- **Raise a park's surface above the ink floor**, knowing that puts it brighter
+  than the road. Measured afterwards: the raise takes the share of park cells
+  that draw in colour from 26 to 35 per cent, and then SATURATES - a much
+  brighter tone adds two more points and nothing else. So the tone is set where
+  the gain is, not where the brightness is.
+
 ## What this document is not
 
 It is not a commitment, an estimate, or a design review. Anyone starting either

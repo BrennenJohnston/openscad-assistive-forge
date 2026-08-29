@@ -475,19 +475,20 @@ test.describe('ASCII City Walk — map navigation and walking speed (CW-9)', () 
     await page.keyboard.press('KeyM')
     await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
 
-    // Minus over the map changes SIZE now, and leaves the zoom alone.
+    // Minus over the map changes SIZE now, and leaves the zoom alone. One
+    // step down from the CW-72 default of 30%.
     const zoomBefore = await zoomOf()
     await page.keyboard.press('Minus')
     await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
-      /Character size 40 percent/
+      /Character size 20 percent/
     )
-    expect(await scaleOf()).toBeCloseTo(0.4, 5)
+    expect(await scaleOf()).toBeCloseTo(0.2, 5)
     expect(await zoomOf()).toBeCloseTo(zoomBefore, 5)
 
     // Equals brings it back, still without touching the zoom.
     await page.keyboard.press('Equal')
     await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
-      /Character size 50 percent/
+      /Character size 30 percent/
     )
     expect(await zoomOf()).toBeCloseTo(zoomBefore, 5)
 
@@ -531,9 +532,9 @@ test.describe('ASCII City Walk — map navigation and walking speed (CW-9)', () 
     )
     await page.keyboard.press('Minus')
     await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
-      /Character size 40 percent/
+      /Character size 20 percent/
     )
-    expect(await scaleOf()).toBeCloseTo(0.4, 5)
+    expect(await scaleOf()).toBeCloseTo(0.2, 5)
   })
 
   test('walking speed adjusts, announces, and persists across sessions', async ({
@@ -694,16 +695,18 @@ test.describe('ASCII City Walk — character size (CW-12)', () => {
     await launchGame(page)
     await enterCity(page)
 
-    // Opens at the game's own 50% default with nothing saved.
-    expect(await scaleOf(page)).toBeCloseTo(0.5, 5)
+    // Opens at the ONE default of 30% with nothing saved (CW-72). The
+    // default is where everybody STARTS; the range a player may choose from
+    // is unchanged, and still reaches the 10% end.
+    expect(await scaleOf(page)).toBeCloseTo(0.3, 5)
 
     await page.keyboard.press('Equal')
     await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
-      /Character size 60 percent/
+      /Character size 40 percent/
     )
 
-    // Down to the floor: 60 → 10 is five steps.
-    for (let i = 0; i < 5; i++) await page.keyboard.press('Minus')
+    // Down to the floor: 40 → 10 is three steps.
+    for (let i = 0; i < 3; i++) await page.keyboard.press('Minus')
     await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
       /Character size 10 percent/
     )
@@ -745,17 +748,19 @@ test.describe('ASCII City Walk — character size (CW-12)', () => {
     expect(await scaleOf(page)).toBeCloseTo(1, 5)
   })
 
-  test('a saved Alt View preference seeds the game, snapped into range', async ({
+  test('★★ the main app Alt View preference no longer seeds the game (CW-72)', async ({
     page,
   }) => {
-    // 2.5 is a legal preview-slider value and far outside the game's range;
-    // it must arrive as the game's 100% ceiling, not as 250%.
+    // It used to: a preview-slider value arrived as the game's opening size,
+    // snapped into range. That is a second size decided somewhere else, which
+    // is exactly what CW-72's ONE default exists to remove. 2.5 is a legal
+    // slider value; the game must ignore it entirely and open at 30%.
     await page.addInitScript(() => {
       localStorage.setItem('openscad-forge-hfm-font-scale', '2.5')
     })
     await launchGame(page)
     await enterCity(page)
-    expect(await scaleOf(page)).toBeCloseTo(1, 5)
+    expect(await scaleOf(page)).toBeCloseTo(0.3, 5)
   })
 
   test('the help panel states the range it actually offers', async ({
@@ -1098,11 +1103,11 @@ test.describe('ASCII City Walk — high contrast (CW-6)', () => {
     )
     expect(paletteOn).toBeGreaterThanOrEqual(4)
 
-    // …character size keys still work. The game opens at its own 50%
-    // default now (CW-12), so one step up is 60, not 110.
+    // …character size keys still work. The game opens at the ONE default of
+    // 30% (CW-72), so one step up is 40.
     await page.keyboard.press('Equal')
     await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
-      /Character size 60 percent/
+      /Character size 40 percent/
     )
 
     // …and walking still walks. Exact label, not substring (see

@@ -1039,6 +1039,28 @@ export const CHAR_SCALE_STEP = 0.1;
 export const CHAR_SCALE_DEFAULT = 0.5;
 
 /**
+ * CW-72 (CW-Q75, signed by the owner at G1): THE ONE DEFAULT CHARACTER SIZE.
+ *
+ * CW-42 landed every machine on its own calibrated size, so two players saw
+ * two different games and no picture either of them described was the picture
+ * the other had. This is the size everyone starts at, chosen from the bench
+ * rather than from a preference: 45-second scripted walks in heavy rain on an
+ * Intel Iris Xe, the owner's signed hardware target.
+ *
+ *   size   full speed   four times slow (Seattle / Denver)
+ *   10%      59.3 fps       29.8  -           fails the bar
+ *   30%      52.9-59.8      41.6 / 43.6       the smallest that holds
+ *   40%      -              -    / 43.5       holds
+ *   50%      59.9           41.6 / -          holds
+ *
+ * 10% and 20% are the SAME 2x4 pixel cell (the three-pixel font floor), so the
+ * ladder is really 10 / 30 / 40 / 50, and 30 is the smallest rung that clears
+ * thirty frames a second on a slow machine in BOTH the light city and the
+ * heavy one.
+ */
+export const CITY_DEFAULT_CHAR_SCALE = 0.3;
+
+/**
  * Clamp a character scale into the game's range and snap it onto the
  * 10-point step grid, so every announced value is a whole ten percent.
  *
@@ -1068,31 +1090,33 @@ export function clampCharScale(scale, floorScale = null) {
 }
 
 /**
- * Decide the character scale a session opens at (CW-Q10, amended CW-Q39).
+ * Decide the character scale a session opens at (CW-Q10, amended CW-Q39,
+ * rewritten CW-72 for CW-Q75).
  *
- * Order: the game's own saved value (the manual choice — it sticks, even
- * below today's floor), then the machine's stored calibrated default, then
- * the shared Alt View preference clamped into the game's range, then the
- * default. The calibrated default outranks the Alt View courtesy seed
- * because fresh calibration would re-apply over it moments after entry
- * anyway — landing there spares the player a visible jump.
+ * ONE DEFAULT FOR EVERYONE. CW-42 seeded from the machine's own calibrated
+ * landing and, failing that, from the main app's Alt View slider - so two
+ * players, and even one player on two machines, opened two different games.
+ * There are now two inputs and one of them is a floor:
+ *
+ *   1. The player's own saved size. Their choice, and it sticks.
+ *   2. The floor this machine measured for itself, which may only make the
+ *      picture COARSER. A saved size below the floor is raised to it.
+ *
+ * The shared Alt View preference no longer seeds the game at all: a slider in
+ * the main app deciding how coarse the city looks is exactly the second size
+ * this release exists to remove.
  *
  * @param {string|null|undefined} savedGame - the game's own persisted value
- * @param {string|null|undefined} savedAltView - the shared Alt View preference
- * @param {number|null} [calibratedDefault] - decoded stored calibration
+ * @param {number|null} [floorScale] - the decoded stored floor, if any
  * @returns {number}
  */
-export function seedCharScale(
-  savedGame,
-  savedAltView,
-  calibratedDefault = null
-) {
+export function seedCharScale(savedGame, floorScale = null) {
   const game = parseFloat(savedGame ?? '');
-  if (Number.isFinite(game)) return clampCharScale(game);
-  if (Number.isFinite(calibratedDefault)) {
-    return clampCharScale(calibratedDefault);
-  }
-  const altView = parseFloat(savedAltView ?? '');
-  if (Number.isFinite(altView)) return clampCharScale(altView);
-  return CHAR_SCALE_DEFAULT;
+  const floor = Number.isFinite(floorScale)
+    ? Math.max(floorScale, CITY_DEFAULT_CHAR_SCALE)
+    : CITY_DEFAULT_CHAR_SCALE;
+  // The player's own choice wins, but never below the floor this machine
+  // measured for itself: the floor makes the picture coarser, never finer.
+  if (Number.isFinite(game)) return clampCharScale(Math.max(game, floor));
+  return clampCharScale(floor);
 }
