@@ -13,6 +13,7 @@ import { test, expect } from '@playwright/test'
 import path from 'node:path'
 
 const CAT = path.join(process.cwd(), 'tests', 'fixtures', 'harley', 'sketch4.svg')
+const CAT_PNG = path.join(process.cwd(), 'tests', 'fixtures', 'harley', 'sketch4.png')
 
 const engineErrors = (page) => {
   const seen = []
@@ -176,5 +177,60 @@ test.describe('The Stencil Maker makes plates', () => {
     await expect.poll(triangles, { timeout: 180000 }).not.toBe(without)
     const withNumeral = await triangles()
     expect(withNumeral, 'text() produced no geometry').toBeGreaterThan(without)
+  })
+
+  test('★ the coloured photograph becomes colours, and colours become plates', async ({
+    page,
+  }) => {
+    test.setTimeout(400000)
+    const errors = engineErrors(page)
+    await openStencil(page)
+    await page.setInputFiles('#param-design_file', CAT_PNG)
+
+    // A raster file brings the ink panel with it.
+    const colours = page.locator('input[type="radio"][value="colours"]')
+    await colours.waitFor({ state: 'attached', timeout: 120000 })
+    // Set on the element: the panel lives inside a disclosure, and whether it
+    // happens to be open is not what this test is about.
+    await colours.evaluate((el) => {
+      el.checked = true
+      el.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+
+    // Seven, because this picture has seven colours a person would name: its
+    // outlines are a second, purer black than its fur.
+    const count = page.locator('input[type="range"][id$="-colours"]')
+    await count.evaluate((el) => {
+      el.value = '7'
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+      el.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+
+    // The summary names every colour and its share, so a person can SEE that
+    // a colour they wanted is missing and ask for one more.
+    const summary = page.locator('.ink-controls-summary')
+    await expect(summary).toContainText(/colours to paint, and the wall/, {
+      timeout: 180000,
+    })
+    await expect(summary).toContainText(/%/)
+
+    // The wall choice offers the colours that were actually found.
+    const wall = page.locator('select[id$="-wall"]')
+    await expect
+      .poll(async () => wall.evaluate((el) => el.options.length), {
+        timeout: 60000,
+      })
+      .toBeGreaterThan(1)
+
+    // And the colours become plates, without an editor and without anybody
+    // saying which region is which.
+    await expect
+      .poll(async () => (await plateState(page)).plates.filter(Boolean).length, {
+        timeout: 180000,
+      })
+      .toBeGreaterThan(1)
+
+    await page.waitForTimeout(2000)
+    expect(errors, errors.join(' | ')).toEqual([])
   })
 })

@@ -301,31 +301,46 @@ export function buildRegions(elements, options = {}) {
     };
   }
 
-  // Filled art: one region per element. The backdrop is stepped over by the
-  // same area rule the stencil layering uses - a root that covers essentially
-  // the whole picture is the paper, and colour cannot tell you that.
+  // Filled art: one region per DRAWN SHAPE. The backdrop is stepped over by
+  // the same area rule the stencil layering uses - a root that covers
+  // essentially the whole picture is the paper, and colour cannot tell you
+  // that.
+  //
+  // ★ ONE REGION PER DOM ELEMENT, NOT PER SUBPATH. `parseSvgElements` splits a
+  // compound path into one entry per subpath, which is right for a nesting
+  // tree and wrong here: the counter of a letter A is not a second region to
+  // paint, it is the hole in the first one. MEASURED on a traced photograph,
+  // where every hole came back as its own region and a six-colour picture
+  // produced 81 regions instead of 51.
   const canvasArea =
     (box.maxX - box.minX) * (box.maxY - box.minY) || Number.POSITIVE_INFINITY;
+  const groups = new Map();
+  list.forEach((el, i) => {
+    const key = el.element ?? i;
+    if (!groups.has(key)) groups.set(key, { fill: el.fill, indices: [] });
+    groups.get(key).indices.push(i);
+  });
   const regions = [];
-  list.forEach((el, elementIndex) => {
-    // One element read the way an SVG reads it, so a shape drawn with a
-    // counter keeps its counter, and wound the way everything downstream
-    // expects.
-    const rings = evenOddUnion(perElement[elementIndex]);
-    if (rings.length === 0) return;
+  for (const [, group] of groups) {
+    const el = { fill: group.fill };
+    const elementIndex = group.indices[0];
+    // One shape read the way an SVG reads it, so a counter stays a counter,
+    // and wound the way everything downstream expects.
+    const rings = evenOddUnion(group.indices.flatMap((i) => perElement[i]));
+    if (rings.length === 0) continue;
     const area = Math.abs(regionArea(rings));
-    if (area >= canvasArea * 0.98) return;
+    if (area >= canvasArea * 0.98) continue;
     const outer = rings.reduce((best, r) =>
       Math.abs(areaOf(r)) > Math.abs(areaOf(best)) ? r : best
     );
     const interior = interiorPoint(outer);
-    if (!interior) return;
+    if (!interior) continue;
     const i = regions.length;
     regions.push({
       index: i,
       key: regionKey(interior),
       elementIndex,
-      rings,
+      rings: orientRegion([outer, ...rings.filter((r) => r !== outer)]),
       area,
       outerArea: Math.abs(areaOf(outer)),
       bbox: boundsOf(outer),
@@ -334,7 +349,7 @@ export function buildRegions(elements, options = {}) {
       fill: el.fill || null,
       name: describeRegion(i, interior, box, null),
     });
-  });
+  }
   return {
     regions,
     silhouette: evenOddUnion(all).filter((r) => areaOf(r) > 0),
@@ -366,13 +381,26 @@ export function paletteFromFills(regions, options = {}) {
     seen.set(hex, seen.get(hex) + (r.area || 0));
   }
   if (seen.size < 2) return [base];
+  // ★ TWO SWATCHES MUST NOT SHARE A NAME. The colour table has eighteen
+  // saturated anchors, so anything muted lands on a grey: MEASURED on a
+  // traced photograph of the owner's cat, its sage-green eyes, its dusty-pink
+  // nose and its grey muzzle ALL came out "Gray" - three swatches called the
+  // same thing, in a list whose whole job is telling them apart. The second
+  // and later get a number, until the owner decides whether to add muted
+  // anchors to the table (on the ledger).
+  const used = new Map();
   return [...seen.entries()]
     .sort((a, b) => b[1] - a[1])
-    .map(([hex], i) => ({
-      id: `colour-${i + 1}`,
-      name: colourLabel(hex),
-      hex,
-    }));
+    .map(([hex], i) => {
+      const label = colourLabel(hex);
+      const n = (used.get(label) || 0) + 1;
+      used.set(label, n);
+      return {
+        id: `colour-${i + 1}`,
+        name: n === 1 ? label : `${label} ${n}`,
+        hex,
+      };
+    });
 }
 
 /**
