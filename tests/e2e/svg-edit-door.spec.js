@@ -135,6 +135,17 @@ async function openEditorByKeyboard(page, fixture) {
     .first()
     .waitFor({ state: 'visible', timeout: 60000 })
 
+  // The surface takes focus as it opens (its own name). Wait for that here,
+  // once, so no case below can focus a control only to have the opening
+  // take it back a moment later - which is what made the single-row delete
+  // case delete nothing on two CI lanes.
+  await expect
+    .poll(
+      async () => (await focused(page))?.className ?? '',
+      { timeout: 15000 }
+    )
+    .toContain('drawing-editor-title')
+
   return { summaryPresses: summary.presses, doorPresses: door.presses }
 }
 

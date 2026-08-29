@@ -14,6 +14,21 @@
 /** "1 region" or "N regions", and the same for anything else countable. */
 export const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
+/** "first", "second" ... for a place in the paint order. */
+export const ordinal = (n) => {
+  const words = [
+    'first',
+    'second',
+    'third',
+    'fourth',
+    'fifth',
+    'sixth',
+    'seventh',
+    'eighth',
+  ];
+  return words[n - 1] || `${n}th`;
+};
+
 export const EDITOR_STRINGS = Object.freeze({
   /** The surface's own name, and the first thing focus lands on. */
   title: 'Drawing editor',
@@ -57,6 +72,44 @@ export const EDITOR_STRINGS = Object.freeze({
   engineFailed:
     'The colour engine could not be loaded, so the regions cannot be shown. Reload the page and try again.',
 
+  // ── The toolbar (DP-20) ────────────────────────────────────────────────
+  /** The five tools, with the key that picks each in the accessible name. */
+  tools: Object.freeze({
+    select: 'Select',
+    marquee: 'Marquee',
+    paint: 'Paint',
+    remove: 'Remove',
+    hand: 'Hand',
+  }),
+  /** The tool group's name and the key hint read to a screen reader. A11Y. */
+  toolsLabel: 'Tools',
+  toolKeyHint: (name, key) => `${name}, key ${key.toUpperCase()}`,
+  toolChosen: (name) => `${name} tool.`,
+  /** The current colour for the Paint tool. A11Y. */
+  paintColourLabel: 'Paint with',
+  paintSelection: 'Colour the selection',
+  undo: 'Undo',
+  redo: 'Redo',
+  fit: 'Fit',
+  zoomIn: 'Zoom in',
+  zoomOut: 'Zoom out',
+  /** The stencil purpose's Apply: the plan goes with the drawing. */
+  applyColours: 'Apply colours',
+  /** What is undone or redone. A11Y. */
+  undone: (label) => `Undone: ${label}.`,
+  redone: (label) => `Redone: ${label}.`,
+  nothingToUndo: 'Nothing to undo.',
+  nothingToRedo: 'Nothing to redo.',
+
+  // ── The canvas ─────────────────────────────────────────────────────────
+  /** The canvas's own name and its keyboard help. A11Y. */
+  canvasLabel: 'The drawing',
+  canvasHelp:
+    'Arrow keys move between regions, Enter or Space adds one to the selection, number keys 1 to 8 colour the selection, 0 sets it to the base coat, Delete removes it.',
+  /** The status line as the highlight moves. A11Y (two shapes). */
+  highlighting: (name, colour, plate) => `${name}, ${colour}, plate ${plate}.`,
+  highlightingRemoved: (name) => `${name}, removed.`,
+
   // ── The regions table ──────────────────────────────────────────────────
   regionsCaption: 'Regions in this drawing',
   colRegion: 'Region',
@@ -64,18 +117,44 @@ export const EDITOR_STRINGS = Object.freeze({
   colPlate: 'Plate',
   /** The column head; the caption above it says "of this drawing". */
   colShare: 'Share',
+  colActions: 'Remove',
   /** The select's name: the row header is visible, the select needs its own. */
   colourFor: (name) => `Colour for ${name}`,
   unpainted: 'Unpainted',
   /** The plate cell for a region no plate cuts. */
   notCut: 'Not cut',
+  /** The plate cell for a region taken out of the design. */
+  removedCell: 'Removed',
   /** Under one percent of the drawing. */
   shareUnderOne: 'under 1%',
+  removeRegion: (name) => `Remove ${name}`,
+  restoreRegion: (name) => `Put back ${name}`,
+  putBack: 'Put back',
+  undoBesideTable: 'Undo',
 
   /** After a colour is chosen for a region. A11Y (two shapes). */
   regionSet: (name, colour, plate) =>
     `${name} set to ${colour}. Plate ${plate}.`,
   regionSetUnpainted: (name) => `${name} set to unpainted. No plate cuts it.`,
+  /** After a colour is given to a selection. A11Y (two shapes). */
+  regionsSet: (n, colour, plate) =>
+    `${count(n, 'region', 'regions')} set to ${colour}. Plate ${plate}.`,
+  regionsSetUnpainted: (n) =>
+    `${count(n, 'region', 'regions')} set to unpainted. No plate cuts them.`,
+  regionRemoved: (name) => `${name} removed.`,
+  regionsRemoved: (n) => `${count(n, 'region', 'regions')} removed.`,
+  regionRestored: (name) => `${name} put back.`,
+  /** The selection, as the canvas changes it. A11Y (two shapes). */
+  selected: (n) => `${count(n, 'region', 'regions')} selected.`,
+  selectionCleared: 'Selection cleared.',
+  nothingSelected: 'Nothing is selected. Tick a region first.',
+  /** Command labels, heard again on undo. */
+  labelSetColour: (name, colour) => `${name} set to ${colour}`,
+  labelSetColours: (n, colour) =>
+    `${count(n, 'region', 'regions')} set to ${colour}`,
+  labelRemove: (name) => `${name} removed`,
+  labelRemoveMany: (n) => `${count(n, 'region', 'regions')} removed`,
+  labelRestore: (name) => `${name} put back`,
 
   // ── The colours section ────────────────────────────────────────────────
   /** How many regions a swatch is on (two shapes). */
@@ -86,6 +165,22 @@ export const EDITOR_STRINGS = Object.freeze({
   addColourButton: 'Add colour',
   /** After a colour joins the palette. A11Y. */
   colourAdded: (name) => `${name} added. Choose it for a region.`,
+  labelAddColour: (name) => `${name} added`,
+  rename: 'Rename',
+  renameLabel: (name) => `New name for ${name}`,
+  colourRenamed: (from, to) => `${from} is now called ${to}.`,
+  labelRename: (from, to) => `${from} renamed ${to}`,
+  mergeInto: 'Merge into',
+  colourMerged: (from, to, n) =>
+    `${from} merged into ${to}: ${count(n, 'region', 'regions')} moved.`,
+  labelMerge: (from, to) => `${from} merged into ${to}`,
+  removeColour: 'Remove colour',
+  removeColourLabel: (name) => `Remove ${name}`,
+  colourRemoved: (name, n, base) =>
+    `${name} removed. ${count(n, 'region', 'regions')} back to ${base}.`,
+  labelRemoveColour: (name) => `${name} removed`,
+  /** The base coat cannot go: plate 1 is where it is sprayed. */
+  baseStays: 'The base coat stays: plate 1 is the whole outline.',
 
   // ── The plates section ─────────────────────────────────────────────────
   /** Plate 1 of a line drawing: the outline the base coat goes through. */
@@ -94,4 +189,23 @@ export const EDITOR_STRINGS = Object.freeze({
   plateLine: (k, colour, regions, islands) =>
     `Plate ${k}, ${colour}: ${count(regions, 'region', 'regions')}` +
     (islands > 0 ? `, ${count(islands, 'loose piece', 'loose pieces')}.` : '.'),
+  paintEarlier: 'Paint earlier',
+  paintLater: 'Paint later',
+  orderFor: (name, verb) => `${verb}: ${name}`,
+  /** After a colour moves in the order. A11Y. */
+  orderChanged: (name, position) => `${name} now paints ${ordinal(position)}.`,
+  labelOrder: (name, position) => `${name} moved to ${ordinal(position)}`,
+  /**
+   * The plate rule, DP-Q18. On is the stacked rule: every later colour is cut
+   * through this plate too, so nothing can fall out. Off is the hand method.
+   */
+  ruleLabel: 'Later colours also cut through each plate',
+  ruleHelp:
+    'On, a piece painted later is held by every plate before it and cannot fall out. Off, each plate cuts its own colour only, the way a hand-cut set does, and a loose piece is reported.',
+  ruleStacked: 'Later colours cut through each plate.',
+  ruleOwn: 'Each plate cuts its own colour only.',
+  labelRule: (stacked) =>
+    stacked
+      ? 'plates set to cut later colours too'
+      : 'plates set to their own colour only',
 });

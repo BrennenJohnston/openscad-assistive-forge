@@ -2678,6 +2678,11 @@ function createFileControl(
       // DP-7. The column exists only for a tile that declares layer params.
       layersEnabled: layerParams.length > 0,
       initialLayers: storedMeta?.prepLayers || null,
+      // DP-20. The colour plan a person applied, keyed by region (a property
+      // of the shape) so it survives the regions being found again. Absent
+      // in older saves and in a drawing nobody has coloured yet, which means
+      // what it always did: the automatic first pass.
+      initialPlan: currentPlan || storedMeta?.prepPlan || null,
       ...extra,
     };
   }
@@ -2836,6 +2841,7 @@ function createFileControl(
         prepOffsets: offsetOverrides,
         prepDeleted: deleted,
         prepLayers,
+        prepPlan: currentPlan,
       });
     }
     const svgDataUrl = svgToDataUrl(result);
@@ -2862,6 +2868,7 @@ function createFileControl(
         prepOffsets: null,
         prepDeleted: null,
         prepLayers: null,
+        prepPlan: null,
       });
     }
     const svgDataUrl = svgToDataUrl(currentRawSvg);
@@ -3006,6 +3013,10 @@ function createFileControl(
         // Always re-analyze: persisted analyses lose their DOM references
         // through JSON serialization and crash the editor on restore.
         currentSvgAnalysis = analyzeSvg(rawSvgText);
+        // DP-20. The plan the person applied comes back before the plates
+        // are emitted, so a reopened project cuts what it cut when it was
+        // saved and not the automatic first pass.
+        currentPlan = stored.prepPlan || null;
         updateStatusCard(currentSvgAnalysis);
         statusCard.style.display = '';
         return stored.preparedSvg || rawSvgText;

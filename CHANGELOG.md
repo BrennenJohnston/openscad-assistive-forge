@@ -143,6 +143,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **You can point at a region and say brown** (DP-20) - the drawing editor on the Stencil Maker
+  gains its tools. The drawing is one canvas you work on directly: Select a region by clicking it
+  (Shift adds another), drag a Marquee around several, Paint one with the current colour, Remove
+  one, or drag with the Hand to move around; the wheel zooms. Every one of those has a keyboard
+  equivalent: the regions table has a checkbox on each row, Up and Down walk the rows in the same
+  column while the drawing highlights the region you are on, Space ticks, Ctrl+A ticks them all,
+  the number keys 1 to 8 give the ticked regions the matching colour and 0 the base coat, Delete
+  removes them and "Put back" restores them. Everything you do is an Undo away - Ctrl+Z, Ctrl+Y,
+  the Undo button in the toolbar or the one under the table - and every undo says what came back,
+  in words. Colours can be renamed, merged into another, or removed (their regions go back to the
+  base coat), and the paint order has "Paint earlier" and "Paint later" buttons on each plate. One
+  checkbox decides the plate rule: on, later colours also cut through each plate so nothing can
+  fall out; off, each plate cuts its own colour only, the way a hand-cut set does. The plan you
+  apply is saved with the drawing and comes back when the drawing does, so a project reopened
+  cuts what it cut when it was saved. Walked through with one user's own cat: their six plates,
+  applied by hand through the interface, come out as six plates
+
 - **The drawing editor now lives where the 3D preview is** (DP-19) - it used to be a block nested
   inside the customizer's file control, a long flat list with a before-and-after pair above it.
   Now it takes the preview area, the biggest surface on the page and on a phone the whole of it:

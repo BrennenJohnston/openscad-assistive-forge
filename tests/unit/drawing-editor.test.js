@@ -437,7 +437,8 @@ describe('the stencil purpose, on the owner drawing', () => {
     expect(announce).toHaveBeenLastCalledWith(S.regionSet(name, 'Brown', 2))
     const swatches = [...surface.querySelectorAll('.drawing-editor-swatch-row')]
     expect(swatches[1].textContent).toContain(S.usedBy(1))
-    const plates = [...surface.querySelectorAll('.drawing-editor-plates li')]
+    // Each plate line carries its order buttons after the sentence (DP-20).
+    const plates = [...surface.querySelectorAll('.drawing-editor-plates li > span:first-child')]
     expect(plates[1].textContent).toBe(S.plateLine(2, 'Brown', 1, 0))
     expect(plates[0].textContent).toBe(S.plateGround(1, 'Base coat'))
     expect(editor.getPlan().assignment[row.dataset.region]).toBe(brownId)

@@ -19,9 +19,11 @@
 
 import { test, expect } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
+import fs from 'node:fs'
 import path from 'node:path'
 
 const CAT = path.join(process.cwd(), 'tests', 'fixtures', 'harley', 'sketch4.svg')
+const HARLEY_PLAN = path.join(process.cwd(), 'tests', 'fixtures', 'harley', 'harley-plan.json')
 
 const surface = (page) => page.locator('#drawingEditorSurface')
 const container = (page) => page.locator('#previewContainer')
@@ -76,9 +78,9 @@ const focusedIsInside = (page, selector) =>
   }, selector)
 
 test.describe('The drawing editor takes the preview area', () => {
-  test('★ D-124 opens it in the preview area; Tab leaves; arrows leave the camera; Escape gives the area back; axe; a colour becomes a plate', async ({
+  test('★ D-124 opens it in the preview area; Tab leaves; arrows leave the camera; Escape gives the area back; axe; colours become plates, by keyboard and by mouse, and come back', async ({
     page,
-  }) => {
+  }, testInfo) => {
     test.setTimeout(300000)
     await openStencil(page)
     await expect(surface(page)).toBeHidden()
@@ -238,27 +240,81 @@ test.describe('The drawing editor takes the preview area', () => {
       `unexpected axe violations in the drawing editor:\n${detail}`
     ).toEqual([])
 
-    // ── Add a colour, give it to a region, Apply ─────────────────────────
-    await page.locator('.drawing-editor-add-colour input[type="text"]').fill('Brown')
-    await page.locator('.drawing-editor-add-colour input[type="color"]').fill('#997048')
-    await page.locator('.drawing-editor-add-colour button[type="submit"]').click()
+    // ── Add a colour, give it to a region through the column ─────────────
+    const status = page.locator('.drawing-editor-status')
+    const addColour = async (name, hex) => {
+      await page.locator('.drawing-editor-add-colour input[type="text"]').fill(name)
+      await page.locator('.drawing-editor-add-colour input[type="color"]').fill(hex)
+      await page.locator('.drawing-editor-add-colour button[type="submit"]').click()
+      await expect(status).toHaveText(`${name} added. Choose it for a region.`)
+    }
+    await addColour('Brown', '#997048')
     await expect(page.locator('[data-count="plates"]')).toHaveText('2')
-    await expect(page.locator('.drawing-editor-status')).toHaveText(
-      'Brown added. Choose it for a region.'
-    )
 
-    const row = page.locator('.drawing-editor-regions-table tbody tr').last()
-    await row.locator('select').selectOption({ label: 'Brown' })
-    await expect(row.locator('[data-plate]')).toHaveText('2')
-    await expect(page.locator('.drawing-editor-status')).toContainText(
-      'set to Brown. Plate 2.'
-    )
+    const rows = page.locator('.drawing-editor-regions-table tbody tr')
+    await rows.last().locator('select').selectOption({ label: 'Brown' })
+    await expect(rows.last().locator('[data-plate]')).toHaveText('2')
+    await expect(status).toContainText('set to Brown. Plate 2.')
 
-    const apply = page.locator('.svg-prep-footer button[data-action="apply"]')
-    await expect(apply).toBeEnabled({ timeout: 60000 })
-    await apply.click()
+    // ── DP-20, by keyboard alone: tick three rows, press 2, hear the count ─
+    const check = (i) => rows.nth(i).locator('input[type="checkbox"]')
+    // The tool buttons are sized by the app's touch-target token (44 px on a
+    // coarse pointer, 36 px on this desktop); measured, not read off CSS.
+    const toolBox = await page.locator('.drawing-editor-tool').first().boundingBox()
+    expect(toolBox.height, 'touch-target token floor').toBeGreaterThanOrEqual(36)
+    await check(17).focus()
+    await page.keyboard.press('Space')
+    await expect(check(17)).toBeChecked()
+    // Down walks to the next row's checkbox, and the highlight follows it.
+    await page.keyboard.press('ArrowDown')
+    await expect(check(18)).toBeFocused()
+    await expect(status).toContainText(', Base coat, plate 1.')
+    const highlightedKey = await rows.nth(18).getAttribute('data-region')
+    await expect(
+      page.locator(`[data-layer="regions"] [data-region="${highlightedKey}"]`)
+    ).toHaveClass(/is-highlighted/)
+    await page.keyboard.press('Space')
+    await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('Space')
+    await expect(check(19)).toBeChecked()
+    await page.keyboard.press('2')
+    await expect(status).toHaveText('3 regions set to Brown. Plate 2.')
+    await expect(rows.nth(17).locator('[data-plate]')).toHaveText('2')
+    await expect(page.locator('[data-layer="regions"] path.is-selected')).toHaveCount(3)
+
+    // Remove a speck from its row; Undo puts it back and says so.
+    const speck = rows.nth(20)
+    const speckName = (await speck.locator('label').innerText()).trim()
+    await speck.locator('.drawing-editor-region-remove').focus()
+    await page.keyboard.press('Enter')
+    await expect(status).toHaveText(`${speckName} removed.`)
+    await expect(speck.locator('[data-plate]')).toHaveText('Removed')
+    await expect(speck.locator('.drawing-editor-region-remove')).toHaveText('Put back')
+    await page.keyboard.press('Control+z')
+    await expect(status).toHaveText(`Undone: ${speckName} removed.`)
+    await expect(speck.locator('[data-plate]')).toHaveText('2')
+
+    // ── DP-20, with the mouse: a marquee, then the selection painted ──────
+    await page.keyboard.press('m')
+    await expect(page.locator('.drawing-editor-tool[data-tool="marquee"]')).toHaveAttribute('aria-pressed', 'true')
+    await expect(status).toHaveText('Marquee tool.')
+    const svgBox = await page.locator('.drawing-editor-canvas-svg').boundingBox()
+    await page.mouse.move(svgBox.x + 2, svgBox.y + 2)
+    await page.mouse.down()
+    await page.mouse.move(svgBox.x + svgBox.width - 2, svgBox.y + svgBox.height - 2, { steps: 6 })
+    await page.mouse.up()
+    await expect(status).toHaveText('21 regions selected.')
+    await expect(page.locator('[data-layer="regions"] path.is-selected')).toHaveCount(21)
+    await page.locator('.drawing-editor-paint-select').selectOption({ label: 'Brown' })
+    await page.locator('[data-action="paint-selection"]').click()
+    await expect(status).toHaveText('21 regions set to Brown. Plate 2.')
+    await page.locator('[data-action="undo"]').first().click()
+    await expect(status).toHaveText('Undone: 21 regions set to Brown.')
+    await expect(rows.nth(0).locator('[data-plate]')).toHaveText('1')
+
+    // ── Apply, then reopen: the plan is exactly as left ──────────────────
+    await page.locator('.drawing-editor-apply').click()
     await expect(surface(page)).toBeHidden()
-
     // The plan rode with the drawing: two plates, and the card says so.
     await expect.poll(() => plateState(page), { timeout: 60000 }).toEqual([
       'sketch4_plate_1.svg',
@@ -270,8 +326,79 @@ test.describe('The drawing editor takes the preview area', () => {
       null,
       null,
     ])
-    await expect(page.locator('.svg-prep-status-plan')).toHaveText(
-      '2 colours, 2 plates.'
+    await expect(page.locator('.svg-prep-status-plan')).toHaveText('2 colours, 2 plates.')
+    await editBtn.click()
+    await expect(surface(page)).toBeVisible()
+    await expect(rows).toHaveCount(21)
+    await expect(page.locator('[data-count="colours"]')).toHaveText('2')
+    for (const i of [17, 18, 19, 20]) {
+      await expect(rows.nth(i).locator('[data-plate]')).toHaveText('2')
+    }
+    await expect(rows.nth(0).locator('[data-plate]')).toHaveText('1')
+
+    // ── ★ The six reference plates, by hand, through the interface ───────
+    // harley-plan.json is the owner's own colour plan, derived from their
+    // plates. Its regions are points; the engine the app uses says which row
+    // each point is, and the row's select is how a person would colour it.
+    for (const [name, hex] of [
+      ['White', '#fafbf8'],
+      ['Green', '#8b9770'],
+      ['Black again', '#171411'],
+      ['Pink', '#b0767d'],
+    ]) {
+      await addColour(name, hex)
+    }
+    await expect(page.locator('[data-count="colours"]')).toHaveText('6')
+    const reference = JSON.parse(fs.readFileSync(HARLEY_PLAN, 'utf8'))
+    const placed = await page.evaluate(
+      async ({ svg, points }) => {
+        const colours = await import('/src/js/stencil-colours.js')
+        const preparer = await import('/src/js/svg-preparer.js')
+        const { regions } = colours.buildRegions(
+          preparer.classifyElements(preparer.parseSvgElements(svg))
+        )
+        return points.map((p) => ({
+          colour: p.colour,
+          key: colours.regionAt(regions, { x: p.at[0], y: p.at[1] })?.key ?? null,
+        }))
+      },
+      { svg: fs.readFileSync(CAT, 'utf8'), points: reference.regions }
     )
+    const names = {
+      brown: 'Brown',
+      white: 'White',
+      green: 'Green',
+      'black-again': 'Black again',
+      pink: 'Pink',
+    }
+    // First everything back to the base, so only the reference's colours stand.
+    await page.keyboard.press('Control+a')
+    await page.keyboard.press('0')
+    await expect(status).toHaveText('21 regions set to Base coat. Plate 1.')
+    for (const { colour, key } of placed) {
+      expect(key, `${colour} at a point the engine finds`).not.toBeNull()
+      await page
+        .locator(`tr[data-region="${key}"] select`)
+        .selectOption({ label: names[colour] })
+    }
+    await expect(page.locator('[data-count="plates"]')).toHaveText('6')
+    await page.locator('details[data-section="colours"] summary').click()
+    await page.screenshot({
+      path: testInfo.outputPath('dp20-six-plates.png'),
+      fullPage: false,
+    })
+    await page.locator('.drawing-editor-apply').click()
+    await expect(surface(page)).toBeHidden()
+    await expect.poll(() => plateState(page), { timeout: 60000 }).toEqual([
+      'sketch4_plate_1.svg',
+      'sketch4_plate_2.svg',
+      'sketch4_plate_3.svg',
+      'sketch4_plate_4.svg',
+      'sketch4_plate_5.svg',
+      'sketch4_plate_6.svg',
+      null,
+      null,
+    ])
+    await expect(page.locator('.svg-prep-status-plan')).toHaveText('6 colours, 6 plates.')
   })
 })

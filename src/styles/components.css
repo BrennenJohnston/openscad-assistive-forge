@@ -16821,11 +16821,25 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
 }
 
 .drawing-editor-panel {
-  flex: 0 0 clamp(260px, 40%, 420px);
+  flex: 0 0 clamp(280px, 44%, 460px);
   min-height: 0;
   overflow: auto;
   border-left: 1px solid var(--color-border);
   padding-left: var(--space-sm);
+  /* The table below asks how wide the PANEL is. */
+  container-type: inline-size;
+  container-name: panel;
+}
+
+/* In a narrow side panel the Share column steps aside so the Remove button
+   is not the thing that scrolls out of sight: MEASURED at 1280, five
+   columns clipped it in a 310 px panel. Stacked below the drawing the panel
+   is the full width and every column shows. */
+@container panel (max-width: 360px) {
+  .drawing-editor-regions-table th:nth-child(4),
+  .drawing-editor-regions-table td:nth-child(4) {
+    display: none;
+  }
 }
 
 /* Narrow surface: the two stack and the BODY scrolls as one, so the drawing
@@ -16931,6 +16945,13 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
 .drawing-editor-shapes[hidden],
 .drawing-editor-regions[hidden] {
   display: none;
+}
+
+/* Five columns are wider than the side panel at 1280 (MEASURED: the Remove
+   button was clipped), so the table scrolls inside its own box rather than
+   the page or the panel ever scrolling sideways. */
+.drawing-editor-regions {
+  overflow-x: auto;
 }
 
 /* ── The stencil purpose: regions, colours, plates ─────────────────────── */
@@ -17082,6 +17103,225 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
 .drawing-editor-islands ul {
   margin: var(--space-xs) 0 0;
   padding-left: var(--space-md);
+  color: var(--color-text-secondary);
+}
+
+/* ── DP-20: the tools, the canvas, the table's checkboxes and actions ──── */
+.drawing-editor-stencil-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.drawing-editor-stencil-tools[hidden] {
+  display: none;
+}
+
+/* Each group wraps on its own: MEASURED at 412 px wide, five tool buttons
+   in one unwrapping row ran off the edge. */
+.drawing-editor-tools,
+.drawing-editor-paint,
+.drawing-editor-history,
+.drawing-editor-zoom {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.drawing-editor-tool[aria-pressed='true'] {
+  background: var(--color-hover-bg);
+  border-color: var(--color-accent);
+  box-shadow: inset 0 0 0 1px var(--color-accent);
+}
+
+.drawing-editor-paint-select,
+.drawing-editor-merge-select {
+  min-height: var(--size-touch-target);
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.drawing-editor-paint-select:focus-visible,
+.drawing-editor-merge-select:focus-visible,
+.drawing-editor-rename-input:focus-visible,
+.drawing-editor-region-check:focus-visible,
+.drawing-editor-canvas-svg:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* The canvas fills the stage; the drawing keeps its aspect inside it. */
+.drawing-editor-canvas {
+  width: 100%;
+  height: 100%;
+  min-height: 240px;
+  display: flex;
+}
+
+.drawing-editor-canvas[hidden] {
+  display: none;
+}
+
+.drawing-editor-canvas-svg {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-height: 240px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  touch-action: none;
+}
+
+.drawing-editor-canvas-svg[data-tool='hand'] {
+  cursor: grab;
+}
+
+.drawing-editor-canvas-svg[data-tool='marquee'] {
+  cursor: crosshair;
+}
+
+/* The original art underneath, dimmed so the regions read over it. */
+.drawing-editor-canvas-svg [data-layer='art'] {
+  opacity: var(--drawing-editor-art-opacity, 0.35);
+  pointer-events: none;
+}
+
+/* One path per region: its colour at reading strength, a selection as a
+   thick outline, the keyboard highlight as the focus colour. Colour is never
+   the only signal: the table says the same thing in words. */
+.drawing-editor-region {
+  fill: var(--region-fill, transparent);
+  fill-opacity: 0.55;
+  stroke: var(--color-border);
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+  cursor: pointer;
+}
+
+.drawing-editor-region.is-removed {
+  fill-opacity: 0.12;
+  stroke-dasharray: 4 3;
+}
+
+.drawing-editor-region.is-selected {
+  stroke: var(--color-focus);
+  stroke-width: 3px;
+}
+
+.drawing-editor-region.is-highlighted {
+  stroke: var(--color-accent);
+  stroke-width: 3px;
+}
+
+.drawing-editor-marquee {
+  fill: var(--color-focus);
+  fill-opacity: 0.12;
+  stroke: var(--color-focus);
+  stroke-width: 1.5px;
+  stroke-dasharray: 5 4;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+/* A neutral tint for the base coat, so "base" reads as painted and differs
+   from "unpainted" (nothing) at a glance. */
+:root {
+  --drawing-editor-base-tint: var(--color-text-secondary);
+}
+
+.drawing-editor-region-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  cursor: pointer;
+}
+
+.drawing-editor-region-check {
+  width: 1.25em;
+  height: 1.25em;
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.drawing-editor-regions-table tr.is-removed th,
+.drawing-editor-regions-table tr.is-removed td {
+  color: var(--color-text-secondary);
+  text-decoration: line-through;
+}
+
+.drawing-editor-regions-table tr.is-removed td:last-child {
+  text-decoration: none;
+}
+
+.drawing-editor-region-remove {
+  min-height: var(--size-touch-target);
+}
+
+.drawing-editor-table-actions {
+  margin-top: var(--space-sm);
+}
+
+.drawing-editor-swatch-row {
+  flex-wrap: wrap;
+}
+
+.drawing-editor-swatch-text {
+  flex: 1 1 8em;
+}
+
+.drawing-editor-swatch-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+
+.drawing-editor-rename-input {
+  flex: 1 1 8em;
+  min-height: var(--size-touch-target);
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+
+.drawing-editor-plates li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.drawing-editor-plate-actions {
+  display: inline-flex;
+  gap: var(--space-xs);
+  margin-left: auto;
+}
+
+.drawing-editor-rule {
+  margin-top: var(--space-sm);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.drawing-editor-rule label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: var(--size-touch-target);
+  cursor: pointer;
+}
+
+.drawing-editor-rule-help {
+  margin: var(--space-xs) 0 0;
   color: var(--color-text-secondary);
 }
 
