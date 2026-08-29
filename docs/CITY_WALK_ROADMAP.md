@@ -484,6 +484,70 @@ pictures beside each option. The answers:
   brighter tone adds two more points and nothing else. So the tone is set where
   the gain is, not where the brightness is.
 
+### Facades are a grammar of rows and bays
+
+A facade used to be picked by `hash % 9`, with a mapped `building:material`
+narrowing the choice where there was one, and then laid onto the wall in world
+metres. Two things followed, and CW-73 removes both.
+
+**The map data said which building was which, and nothing read it.** Across the
+four shipped extracts there are 605 `building=apartments`, 266 `commercial`,
+139 `retail`, 91 `office` and 32 `hotel`, and a block of flats had exactly the
+same chance of a curtain wall as an office tower. The type now chooses a
+FAMILY, the material narrows it, and the building's own hash still picks which
+face inside it - so the variety CW-34 bought is kept while the kind of building
+becomes legible.
+
+| family | `building=*` | glazing | storey |
+|---|---|---|---|
+| apartments | apartments, residential, terrace, dormitory | narrow, plain, cross | 3.0 m |
+| house | house, detached, semidetached_house, bungalow, hut, cabin, prefabricated | narrow, blinds | 3.0 m |
+| office | office, commercial, government, public, data_center, bridge | stripes, band, pair | 3.8 m |
+| retail | retail, supermarket, kiosk, shop, mall | wide, band | 4.0 m |
+| hotel | hotel, motel | pair, blinds | 3.2 m |
+| civic | civic, hospital, school, university, college, museum, library, pavilion, fire_station, train_station, transportation, stadium | slot, cross, plain | 4.0 m |
+| church | church, cathedral, chapel, mosque, synagogue, temple | slot | 6.0 m |
+| industrial | industrial, warehouse, shed, service, garage, garages, carport, greenhouse, construction, tower | slot, narrow | 4.5 m |
+| parking | parking | band, stripes | 3.0 m |
+| **mixed (the default)** | `yes`, `roof`, `no`, and anything unlisted | **all nine** | 3.2 m |
+
+The default is deliberately all nine. `building=yes` is the commonest value in
+three of the four cities - 511 of Albuquerque's 640 buildings - so a default
+that named one family would have traded this release's gain for a monoculture
+across most of the city.
+
+**UVs in world metres put a fractional bay at every corner.** The tile started
+wherever the building happened to stand, so a wall of arbitrary width finished
+mid-window and a building of arbitrary height finished mid-row. Now each wall
+run carries a whole number of bays that share it exactly, and the height above
+the reserved ground floor carries a whole number of rows. A wall the data split
+at a node is joined back into one wall first, or the two halves would carry
+different bay widths and the join is where the eye looks. A wall too narrow for
+one bay is left blank rather than given a window wider than itself.
+
+Measured on all four cities, over every fitted volume rather than a sample: the
+worst wall vertex anywhere sits 0.00003 of a row from a row boundary - float
+noise, and the only remaining evidence of the problem. Blank walls are 1.1 to
+2.1 per cent of wall METRES (10.7 to 22.8 per cent of wall COUNT: the blanks
+are short jogs, and counting walls rather than metres overstates them tenfold).
+
+**What it costs.** Nothing per frame and nothing in geometry - the fit is baked
+into the vertex data when the city is built, and the build itself moved from a
+median 207 ms to 210 ms, inside its own spread. What it costs is churn while
+you LOOK: sweeping the view moves the picture horizontally, and the bay rhythm
+is now a different width on every wall instead of one width everywhere, so
+glyph change over a 48-frame yaw sweep rose from 11.75 to 13.18 per cent.
+Walking, where the beat is vertical, improved slightly (2.17 to 2.07), and
+standing is unchanged.
+
+Two ways out were measured and both refused. Rounding the bay count DOWN
+instead of to nearest recovers a fifth of the rise (13.18 to 12.89) and buys
+it with windows up to twice the family's bay width on some walls. And giving
+offices the plain window instead of the curtain wall made it WORSE, not better
+(14.21): a plain pane is one big lit rectangle whose edge sweeps across cells,
+where a striped bay is a dense pattern that looks much the same wherever it
+lands. Fine detail is not automatically the thing that flickers.
+
 ## What this document is not
 
 It is not a commitment, an estimate, or a design review. Anyone starting either

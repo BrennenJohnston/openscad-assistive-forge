@@ -113,6 +113,14 @@ import {
   ringCentroid,
   trafficDensityFor,
 } from './city-data.js';
+import {
+  facadeCandidates,
+  facadeFamilyFor,
+  fitBays,
+  fitRows,
+  groupWallRuns,
+  FACADE_FAMILIES,
+} from './facade-grammar.js';
 
 // Per-view road treatment. Any visible SURFACE tone carpets the lower half
 // of the street view — perspective stacks every road between here and the
@@ -689,6 +697,22 @@ const WINDOW_ARCHETYPES = [
 ];
 
 /**
+ * The archetype names, in table order, for the grammar to point at (CW-73).
+ *
+ * facade-grammar.js names its archetypes rather than indexing them, so
+ * reordering the table above cannot silently re-point a whole family of
+ * buildings at the wrong glazing. Exported so the unit suite can prove every
+ * name the grammar uses is a real one.
+ */
+export const WINDOW_ARCHETYPE_NAMES = Object.freeze(
+  WINDOW_ARCHETYPES.map((a) => a.name)
+);
+
+const ARCHETYPE_INDEX_BY_NAME = new Map(
+  WINDOW_ARCHETYPE_NAMES.map((name, i) => [name, i])
+);
+
+/**
  * ★★ CW-63: FACADE FAMILIES A DRESSING CAN ASK FOR, AND THE GENERIC HASH
  * CANNOT.
  *
@@ -724,21 +748,22 @@ function dressingFacadeIndex(name) {
  * would trade the letterform monoculture this release removed for a material
  * monoculture in its place.
  *
- * Indices into WINDOW_ARCHETYPES: 0 plain, 1 slot, 2 pair, 3 blinds,
- * 4 stripes, 5 wide, 6 cross, 7 narrow, 8 band.
+ * CW-73: these were indices into WINDOW_ARCHETYPES and are NAMES now, so
+ * that the material table and facade-grammar.js's type table speak the same
+ * language and can be intersected. Same nine values, same shortlists.
  */
 const ARCHETYPES_BY_MATERIAL = new Map([
   // A curtain wall is glazing bars and continuous bands, not punched holes.
-  ['glass', [4, 5, 8]],
-  ['mirror', [4, 5, 8]],
-  ['glass_reinforced_concrete', [4, 8]],
+  ['glass', ['stripes', 'wide', 'band']],
+  ['mirror', ['stripes', 'wide', 'band']],
+  ['glass_reinforced_concrete', ['stripes', 'band']],
   // Masonry punches holes in a solid wall.
-  ['brick', [7, 1, 0]],
-  ['stone', [7, 1]],
-  ['sandstone', [7, 1]],
-  ['concrete', [6, 0, 2]],
-  ['plaster', [0, 2]],
-  ['metal', [4, 8]],
+  ['brick', ['narrow', 'slot', 'plain']],
+  ['stone', ['narrow', 'slot']],
+  ['sandstone', ['narrow', 'slot']],
+  ['concrete', ['cross', 'plain', 'pair']],
+  ['plaster', ['plain', 'pair']],
+  ['metal', ['stripes', 'band']],
 ]);
 
 /** The default pane rectangle, as fractions of a bay. */
@@ -1833,6 +1858,128 @@ function scaleGeometryUv(geometry, su, sv) {
   uv.needsUpdate = true;
 }
 
+/**
+ * ★★ CW-73: FIT THE WINDOW GRID TO THE WALL IT IS ON.
+ *
+ * ExtrudeGeometry lays a side wall out as u = whichever of world x or y the
+ * wall runs along, v = 1 - z, both in METRES, and every facade texture in this
+ * city carries a metre repeat that assumes it. That is why a wall of arbitrary
+ * width has a fractional bay at its corner and a building of arbitrary height
+ * a fractional row at its top: the grid is fitted to the WORLD, not to the
+ * building.
+ *
+ * This rewrites the side-wall UVs so that instead:
+ *
+ *   - each WALL RUN carries a whole number of bays, sharing the run exactly
+ *     (facade-grammar's `fitBays`), so no bay is cut at a corner;
+ *   - the wall's height above `baseM` carries a whole number of rows
+ *     (`fitRows`), so no row is cut at the top;
+ *   - `baseM` reserves the ground floor, which the storefront strip covers.
+ *
+ * ★ ONLY THE SIDE GROUP IS TOUCHED. ExtrudeGeometry emits the cap faces first
+ * (materialIndex 0) and the walls second (materialIndex 1), six vertices per
+ * wall segment in the order lower-i, lower-j, upper-i, lower-j, upper-j,
+ * upper-i. The caps are the roof and the underside; their UVs are the
+ * footprint's own x and y and re-fitting them would re-texture every roof in
+ * the city for no reason.
+ *
+ * The per-building phase that CW-34 introduced still applies and still moves
+ * in WHOLE bays and rows - `phaseU` in bay metres, `phaseV` in row metres -
+ * so fifty towers sharing one texture still do not share one lit pattern.
+ *
+ * @param {BufferGeometry} geometry
+ * @param {{bayWM:number, bayHM:number, bayPitchM:number, rowHeightM:number,
+ *          baseM:number, phaseU:number, phaseV:number}} fit
+ * @returns {{runs:number, blank:number, rowError:number}|null} null when the
+ *   geometry has no side walls to fit (which is not an error - a flat cap can
+ *   be all there is). `rowError` is how far the worst vertex on this volume
+ *   sits from a row boundary, MEASURED off the vertices rather than assumed:
+ *   the arithmetic cannot be wrong, but the mesh can be a shape the
+ *   arithmetic was never told about.
+ */
+export function fitFacadeUv(geometry, fit) {
+  const side = geometry.groups?.find((g) => g.materialIndex === 1);
+  if (!side || side.count < 6 || side.count % 6 !== 0) return null;
+  const pos = geometry.getAttribute('position');
+  const uv = geometry.getAttribute('uv');
+  if (!pos || !uv) return null;
+
+  const chunks = side.count / 6;
+  const segments = new Array(chunks);
+  for (let c = 0; c < chunks; c++) {
+    const i = side.start + c * 6;
+    segments[c] = [
+      [pos.getX(i), pos.getY(i)],
+      [pos.getX(i + 1), pos.getY(i + 1)],
+    ];
+  }
+
+  const vScale = fit.bayHM / fit.rowHeightM;
+  // Which of the six vertices sit at the segment's start, and which at its
+  // end. Getting this wrong mirrors every other triangle, which reads as a
+  // wall of windows that alternate direction.
+  const AT_END = [false, true, false, true, true, false];
+  let blank = 0;
+  let blankM = 0;
+  let wallM = 0;
+  let runCount = 0;
+  let topZ = -Infinity;
+
+  for (const run of groupWallRuns(segments)) {
+    runCount++;
+    const { bays, bayWidthM } = fitBays({
+      widthM: run.lengthM,
+      pitchM: fit.bayPitchM,
+    });
+    let travelledM = 0;
+    for (let c = run.start; c < run.start + run.count; c++) {
+      const i = side.start + c * 6;
+      const [a, b] = segments[c];
+      const segLenM = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      wallM += segLenM;
+      if (bays === 0) {
+        // A wall too narrow for one bay is BLANK, not squeezed. Every window
+        // texture is painted grout-first and every archetype's pane is inset,
+        // so the tile's own corner is grout in all nine: pinning the whole
+        // wall to it is a dark wall rather than a smeared window.
+        for (let k = 0; k < 6; k++) uv.setXY(i + k, 0, 1);
+        blankM += segLenM;
+        continue;
+      }
+      const uStart = fit.phaseU + (travelledM / bayWidthM) * fit.bayWM;
+      const uEnd =
+        fit.phaseU + ((travelledM + segLenM) / bayWidthM) * fit.bayWM;
+      for (let k = 0; k < 6; k++) {
+        const z = pos.getZ(i + k);
+        if (z > topZ) topZ = z;
+        uv.setXY(
+          i + k,
+          AT_END[k] ? uEnd : uStart,
+          1 + fit.phaseV - (z - fit.baseM) * vScale
+        );
+      }
+      travelledM += segLenM;
+    }
+    if (bays === 0) blank += run.count;
+  }
+  uv.needsUpdate = true;
+  // ★ MEASURE THE CLAIM AT THE TOP OF THE WALL, and only there. The BOTTOM of
+  // a wall with a reserved ground floor is off the row grid ON PURPOSE - the
+  // storefront strip covers it - so including it turns the honest number into
+  // a permanent half-row of noise. This asks the actual question: does the
+  // wall FINISH on a row boundary?
+  const topRows = (topZ - fit.baseM) / fit.rowHeightM;
+  return {
+    runs: runCount,
+    blank,
+    blankM,
+    wallM,
+    rowError: Number.isFinite(topRows)
+      ? Math.abs(topRows - Math.round(topRows))
+      : 0,
+  };
+}
+
 function offsetGeometryUv(geometry, du, dv) {
   const uv = geometry.getAttribute('uv');
   if (!uv) return;
@@ -2781,6 +2928,32 @@ export function buildCityGroup(model) {
   // only way to see whether the map data is biasing anything - a band nobody
   // uses and a band everybody uses look identical in a texture.
   const storefrontBands = new Array(STOREFRONT_VARIANTS.length).fill(0);
+  // CW-73: how the grammar actually landed on this city's data. A family
+  // nobody reaches and a family everybody reaches look identical in a
+  // texture, and the count of BLANK walls is the only way the "no half bay
+  // at a corner" rule can be seen to have a cost.
+  const facadeFamilyCounts = Object.fromEntries(
+    Object.keys(FACADE_FAMILIES).map((k) => [k, 0])
+  );
+  // ...and WHICH FACE inside the family, because "169 apartment buildings"
+  // and "169 apartment buildings wearing one face" are the same number until
+  // this is counted.
+  const facadeFaceCounts = Object.fromEntries(
+    Object.keys(FACADE_FAMILIES).map((k) => [k, {}])
+  );
+  let fittedWalls = 0;
+  let blankWalls = 0;
+  let wallMetres = 0;
+  let blankMetres = 0;
+  let shortWalls = 0;
+  let levelsTagged = 0;
+  // ★ The "no chopped top row" claim, MEASURED rather than asserted: how far
+  // the worst wall vertex in the whole city sits from a row boundary. A shape
+  // the fit was never told about - a roof shortening a body, a part standing
+  // on another part - would show up here and nowhere else.
+  let worstRowError = 0;
+  let worstRowErrorId = null;
+  const facadeFitSample = [];
 
   model.buildings.forEach((building, index) => {
     const h = hashBuilding(index, building.name);
@@ -2792,17 +2965,48 @@ export function buildCityGroup(model) {
     const materialBias = ARCHETYPES_BY_MATERIAL.get(
       building.tags?.['building:material']
     );
+    // ★★ CW-73: TYPE FIRST, MATERIAL SECOND, HASH ONLY AS THE TIEBREAK.
+    //
+    // The census says which buildings are which - 605 `apartments`, 266
+    // `commercial`, 139 `retail` across the four extracts - and until this
+    // release nothing read it, so a block of flats had the same chance of a
+    // curtain wall as an office tower. The family narrows the choice; where a
+    // material is also mapped the two are intersected (and the material wins
+    // an empty intersection, because it describes the actual wall); the
+    // building's own hash still picks which of the survivors it wears, so
+    // `building=yes` - most of Albuquerque - looks exactly as it always has.
+    const family = facadeFamilyFor(building.tags?.building);
+    facadeFamilyCounts[family]++;
+    const candidates = facadeCandidates(family, materialBias);
+    const chosenName = candidates[h % candidates.length];
+    facadeFaceCounts[family][chosenName] =
+      (facadeFaceCounts[family][chosenName] ?? 0) + 1;
     // CW-63: a dressed landmark can ask for a facade family reserved for
-    // dressings. The hash below still divides by WINDOW_ARCHETYPES.length, so
-    // no ordinary building can ever land on one.
+    // dressings. The generic path above can only ever reach the nine, so no
+    // ordinary building can land on one.
     const dressing = dressingFor(building.id);
     const dressedFacade = dressingFacadeIndex(dressing?.facade);
     const archetypeIndex =
       dressedFacade >= 0
         ? dressedFacade
-        : materialBias
-          ? materialBias[h % materialBias.length]
-          : h % WINDOW_ARCHETYPES.length;
+        : (ARCHETYPE_INDEX_BY_NAME.get(chosenName) ?? 0);
+
+    // CW-46 rider: the ground floor's HEIGHT is per building (hash within the
+    // documented 3.2-5.0 m range). CW-73 hoists it above the volume loop,
+    // because the window grid now has to know where the storefront ends
+    // before it can fit rows into what is left.
+    const storefrontHM = 3.2 + (((h >>> 9) % 10) / 9) * 1.8;
+    const grounded =
+      building.minHeightM === 0 && building.heightM >= storefrontHM + 1.5;
+    // `building:levels` is a statement about the whole building, so it is
+    // read once and applied to the body only - a rooftop plant room is not
+    // six storeys tall because the tower under it is.
+    const taggedLevels = Number.parseFloat(
+      building.tags?.['building:levels'] ?? ''
+    );
+    const levels = Number.isFinite(taggedLevels) ? taggedLevels : null;
+    if (levels !== null) levelsTagged++;
+    const familySpec = FACADE_FAMILIES[family];
     // CW-26: where the parts really are the mass (they cover the outline)
     // they REPLACE it - extruding the outline as well would bury them inside
     // a plain box, the very thing Simple 3D Buildings exists to avoid. Where
@@ -2837,24 +3041,92 @@ export function buildCityGroup(model) {
         // Nine archetypes over hundreds of buildings means roughly fifty
         // towers share each texture, and without this they would share it
         // EXACTLY - the same lit windows in the same places, which is the
-        // repetition this release exists to remove, only at a coarser grain.
-        // ExtrudeGeometry lays UVs out in world metres, so shifting the
-        // attribute by a hash-derived phase moves where the tile starts on
-        // this building alone. It survives the merge because it is baked into
+        // repetition CW-34 existed to remove, only at a coarser grain. The
+        // phase moves in WHOLE BAYS and WHOLE ROWS (CW-46: the archetype's
+        // own metre sizes), so no shift can put a half-height row of windows
+        // at a ground line. It survives the merge because it is baked into
         // the vertex data rather than set on the material.
-        // WHOLE BAYS, not a continuous slide. The texture's own v offset
-        // exists so that window rows count up from a building's base
-        // (`-1 / tileHM` in makeRepeatingTexture); a fractional shift would
-        // put a half-height row of windows at every ground line. CW-46: the
-        // bays are the ARCHETYPE'S OWN metre size now, so the phase moves
-        // in those units - same law, per family.
         const bayW = WINDOW_ARCHETYPES[archetypeIndex]?.bayWM ?? WINDOW_BAY_W_M;
         const bayH = WINDOW_ARCHETYPES[archetypeIndex]?.bayHM ?? WINDOW_BAY_H_M;
-        offsetGeometryUv(
-          geom,
-          ((h >>> 3) % WINDOW_TILE_BAYS_X) * bayW,
-          ((h >>> 13) % WINDOW_TILE_BAYS_Y) * bayH
-        );
+        const phaseU = ((h >>> 3) % WINDOW_TILE_BAYS_X) * bayW;
+        const phaseV = ((h >>> 13) % WINDOW_TILE_BAYS_Y) * bayH;
+        // ★ CW-73: the grid is FITTED to this volume, and only on the generic
+        // path. A dressing's facade (the library's diagrid) is a continuous
+        // lattice whose whole point is that it does not restart at a corner,
+        // so it keeps the world-metre UVs it was designed against.
+        //
+        // The ground floor is reserved where a storefront will cover it. A
+        // volume too short to give a row to anything else falls back to no
+        // reservation rather than drawing nothing.
+        //
+        // Every volume is fitted to ITS OWN extent, not to the building's, so
+        // a setback or a skybridge finishes on a full row too. That is also
+        // why `building:levels` is only offered to a volume standing on the
+        // ground: it counts storeys from the pavement, and the ground floor
+        // it counts is the one the reservation takes away.
+        const volumeBaseM = body.minHeightM ?? 0;
+        const reserveM = grounded && volumeBaseM === 0 ? storefrontHM : 0;
+        const volumeLevels =
+          volume === building && volumeBaseM === 0 ? levels : null;
+        const rowFit =
+          dressedFacade >= 0
+            ? null
+            : (fitRows({
+                heightM: body.heightM,
+                baseM: volumeBaseM + reserveM,
+                levels: volumeLevels,
+                levelM: familySpec.levelM,
+              }) ??
+              fitRows({
+                heightM: body.heightM,
+                baseM: volumeBaseM,
+                levels: volumeLevels,
+                levelM: familySpec.levelM,
+              }));
+        // COUNTED, NOT ACTED ON. A volume shorter than one storey gets a row
+        // of windows squashed into it, which is wrong and is left alone on
+        // purpose: blanking those bands costs a fifth of Denver's facade. The
+        // whole measurement is in facade-grammar.js beside the constant.
+        if (rowFit?.tooShort) shortWalls++;
+        const fitted = rowFit
+          ? fitFacadeUv(geom, {
+              bayWM: bayW,
+              bayHM: bayH,
+              bayPitchM: bayW,
+              rowHeightM: rowFit.rowHeightM,
+              baseM: rowFit.baseM,
+              phaseU,
+              phaseV,
+            })
+          : null;
+        if (fitted) {
+          fittedWalls += fitted.runs;
+          blankWalls += fitted.blank;
+          wallMetres += fitted.wallM;
+          blankMetres += fitted.blankM;
+          if (fitted.rowError > worstRowError) {
+            worstRowError = fitted.rowError;
+            worstRowErrorId = building.id;
+          }
+          if (facadeFitSample.length < 24) {
+            facadeFitSample.push({
+              id: building.id,
+              type: building.tags?.building ?? null,
+              family,
+              face: chosenName,
+              heightM: body.heightM,
+              baseM: rowFit.baseM,
+              levels: volumeLevels,
+              rows: rowFit.rows,
+              rowHeightM: rowFit.rowHeightM,
+              walls: fitted.runs,
+              blank: fitted.blank,
+              rowError: fitted.rowError,
+            });
+          }
+        } else {
+          offsetGeometryUv(geom, phaseU, phaseV);
+        }
         bucket.push(geom);
       }
       if (roof) bucket.push(roof);
@@ -2894,15 +3166,11 @@ export function buildCityGroup(model) {
     if (!anyGeom) return;
 
     // Grounded buildings tall enough to have an upstairs get the lit
-    // storefront strip; elevated parts (skybridges) do not. CW-46 rider:
-    // the ground floor's HEIGHT is per building now (hash within the
-    // documented 3.2-5.0 m range) - the directive's "same size first
-    // floor" complaint. The texture band still spans one
-    // STOREFRONT_HEIGHT_M in v, so the strip's v is scaled to fill its
-    // band exactly before the whole-band offset picks which look it wears.
-    const storefrontHM = 3.2 + (((h >>> 9) % 10) / 9) * 1.8;
-    const grounded =
-      building.minHeightM === 0 && building.heightM >= storefrontHM + 1.5;
+    // storefront strip; elevated parts (skybridges) do not. The texture band
+    // still spans one STOREFRONT_HEIGHT_M in v, so the strip's v is scaled to
+    // fill its band exactly before the whole-band offset picks which look it
+    // wears. `storefrontHM` and `grounded` are computed above, because CW-73's
+    // window grid has to know where this band ends.
     if (grounded) {
       // CW-34: which ground floor this building wears. The nearest shop or
       // eating place in the map data decides where there is one; the
@@ -3648,6 +3916,17 @@ export function buildCityGroup(model) {
       buildingTriangles,
       storefrontTriangles,
       storefrontBands,
+      facadeFamilyCounts,
+      facadeFaceCounts,
+      fittedWalls,
+      blankWalls,
+      wallMetres,
+      blankMetres,
+      shortWalls,
+      levelsTagged,
+      worstRowError,
+      worstRowErrorId,
+      facadeFitSample,
       roadTriangles,
       signCount,
       antennaCount,

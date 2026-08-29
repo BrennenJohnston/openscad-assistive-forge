@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Buildings look like what they are** (CW-73) - a block of flats and an office tower used to have
+  exactly the same chance of every kind of window, because the game picked a facade by hash and never
+  read the one thing the map data actually says. Flats now wear small punched windows in a regular
+  grid, offices wear horizontal bands and glazing bars, shops wear wide letterbox glazing, a church
+  wears one tall slot, and a car park wears open horizontal decks. Where the data says nothing at all
+  - which is most of Albuquerque - the building still chooses from all nine as it always did, so no
+  street becomes uniform
+
+- **Windows fit the wall they are on** (CW-73) - the window grid used to be laid out in world metres,
+  which meant a wall finished halfway through a window and a building finished halfway through a row
+  of them, wherever it happened to stand. Every wall now carries a whole number of windows across and
+  every building a whole number of rows up, the ground floor is kept clear for the shopfront, and a
+  wall too narrow for a single window is left blank instead of being given one wider than itself. A
+  straight wall that the map data happens to have split in the middle is joined back up first, so both
+  halves keep the same rhythm
+
 - **One character size for everyone** (CW-72) - the game used to measure your machine at the door and
   put you on the size it decided you could hold, so two people playing the same city were not looking
   at the same picture, and neither was one person on two machines. **Everybody now opens at 30 per
