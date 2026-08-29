@@ -123,10 +123,41 @@ export function plateFit({
 }
 
 /**
+ * One transform out of two, so path data is mapped exactly once.
+ *
+ * ★ D-122 again, from the other side. A cut can arrive already carrying a
+ * transform onto the layer canvas (see svg-preparer's readLayerFile), and the
+ * fit is a second transform from that canvas onto the plate. Applying them one
+ * after the other means walking every curve twice; applying only the second
+ * means the first is silently dropped, which is the defect. Both are uniform
+ * scales with a translate, so they compose into one:
+ *
+ *   p_mm = fit.s * (pre.s * p + pre.d) + fit.d
+ *        = (fit.s * pre.s) * p + (fit.s * pre.d + fit.d)
+ *
+ * @param {{scale: number, dx: number, dy: number}} fit - Canvas to plate
+ * @param {{scale: number, dx: number, dy: number}|null} [pre] - Data to canvas
+ * @returns {{scale: number, dx: number, dy: number}}
+ */
+export function composeFit(fit, pre) {
+  if (!pre) return fit;
+  return {
+    scale: fit.scale * pre.scale,
+    dx: fit.scale * pre.dx + fit.dx,
+    dy: fit.scale * pre.dy + fit.dy,
+  };
+}
+
+/**
  * One complete plate: outline, cuts and marks, as a single even-odd path.
  *
  * @param {object} args
- * @param {string|null} args.cutPathData - The layer's cut, on the layer canvas
+ * @param {string|null} args.cutPathData - The layer's cut. On the layer canvas
+ *   already, unless `cutTransform` says what still has to be applied to get
+ *   it there.
+ * @param {{scale: number, dx: number, dy: number}} [args.cutTransform] - The
+ *   transform from the cut's own units onto the layer canvas, composed with
+ *   the fit so the coordinates are mapped once (D-122).
  * @param {number} args.canvasSpan
  * @param {number} args.canvasHeight
  * @param {number} args.plateW - mm
@@ -143,6 +174,7 @@ export function plateFit({
  */
 export function buildStencilPlate({
   cutPathData,
+  cutTransform = null,
   canvasSpan,
   canvasHeight,
   plateW,
@@ -154,14 +186,17 @@ export function buildStencilPlate({
   layer,
   layerCount,
 }) {
-  const fit = plateFit({
-    canvasSpan,
-    canvasHeight,
-    plateW,
-    plateH,
-    marginMm,
-    scalePercent,
-  });
+  const fit = composeFit(
+    plateFit({
+      canvasSpan,
+      canvasHeight,
+      plateW,
+      plateH,
+      marginMm,
+      scalePercent,
+    }),
+    cutTransform
+  );
 
   let d = `M 0 0 H ${plateW} V ${plateH} H 0 Z`;
   if (marks) d += ` ${registrationMarks(plateW, plateH)}`;
@@ -213,6 +248,9 @@ export function buildStencilPlate({
  *
  * @param {object} args
  * @param {string|null} args.cutPathData - The whole design's cut
+ * @param {{scale: number, dx: number, dy: number}} [args.cutTransform] - The
+ *   transform onto the layer canvas, composed with the fit (D-122). The
+ *   bridges take the SAME one: they are built in the design's units too.
  * @param {string} [args.bridgePathData] - Ribs to restore, same coordinates
  * @param {number} args.canvasSpan
  * @param {number} args.canvasHeight
@@ -225,6 +263,7 @@ export function buildStencilPlate({
  */
 export function buildLaserSheet({
   cutPathData,
+  cutTransform = null,
   bridgePathData = '',
   canvasSpan,
   canvasHeight,
@@ -234,14 +273,17 @@ export function buildLaserSheet({
   scalePercent = 100,
   marks = true,
 }) {
-  const fit = plateFit({
-    canvasSpan,
-    canvasHeight,
-    plateW,
-    plateH,
-    marginMm,
-    scalePercent,
-  });
+  const fit = composeFit(
+    plateFit({
+      canvasSpan,
+      canvasHeight,
+      plateW,
+      plateH,
+      marginMm,
+      scalePercent,
+    }),
+    cutTransform
+  );
 
   let d = `M 0 0 H ${plateW} V ${plateH} H 0 Z`;
   if (marks) d += ` ${registrationMarks(plateW, plateH)}`;

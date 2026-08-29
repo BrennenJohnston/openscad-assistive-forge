@@ -102,6 +102,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A stencil plate no longer comes out several times the size of the plate it is cut from**
+  (DP-15) - a drawing is put on a shared canvas before the plates are cut from it, so that every
+  plate lines up with every other one, and that canvas is reached by a transform stored beside
+  the drawing. The plate builder read the canvas but not the transform, so it sized the drawing
+  as if it were already on the canvas. A drawing 119.81 units wide came out a fifth too big and
+  ran off the bottom of the plate; a drawing traced from a photograph, whose units are pixels,
+  came out five times over - a 100 mm plate with a 285 mm cat hanging off the corner of it, which
+  is exactly what one owner's export looked like. The transform is now applied, once, and a cut
+  lands inside the plate's margin on both axes. The design's own proportions did not change: the
+  cat that used to overflow a 70 mm design box now fills it exactly. The laser sheet was reading
+  the same drawing the same wrong way, and is fixed with it
+
 - **Drawings that declare their colours in a style block are no longer read as solid black**
   (DP-3) - drawings exported from CAD and illustration programs usually set "no fill, black
   outline" once at the top of the file and refer to it by name from every shape. Forge was not
@@ -130,6 +142,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   correct changed. Anyone who clicked a card before this release met the same problem
 
 ### Added
+
+- **A set of real stencil plates to check Forge's own against** (DP-15) - one of this project's
+  users made a six-plate spray stencil of their cat by hand, drawing it in Illustrator, cutting
+  the plates in Fusion 360 and painting the result, and has contributed the drawing and the seven
+  printed pieces to the project as test fixtures. They live in `tests/fixtures/harley/`, with the
+  colour plan measured out of the plates themselves rather than typed from a description, and a
+  new tool, `scripts/stencil-golden.mjs`, sets a plate Forge makes beside the plate the owner made
+  and reports how much of the two cuts is the same shape. That number is what the stencil work in
+  this round is judged by. The photograph the drawing was traced from is deliberately not included
 
 - **The reference image can sit on any surface, be cropped, and be used as the design** (DP-5,
   DP-6) - three additions to the Reference Image panel. **Sits against** chooses the height by

@@ -1059,6 +1059,49 @@ function round6(n) {
 }
 
 /**
+ * Read back a layer file written by normalizeLayerStack: the path data, the
+ * canvas it is normalized to, and the transform BETWEEN the two.
+ *
+ * ★ D-122. The path data inside a layer file is still in the design's own
+ * user units; the `<g transform>` is what puts it on the normalized canvas.
+ * A reader that takes the `d` and the viewBox and nothing else is holding two
+ * coordinate systems and has no way to know it: the plate builder did exactly
+ * that and fitted 119.81 units of cat as if they were 100. That is a 1.198x
+ * error on this SVG and 5x on a 503-pixel raster trace - the owner's 285 mm
+ * cat on a 100 mm plate. So this is the ONE reader of a layer file, it always
+ * hands back the transform beside the data, and the caller applies it exactly
+ * once.
+ *
+ * @param {string|null} layerSvg - One entry of a flattenLayers result
+ * @returns {{pathData: string, canvasSpan: number, canvasHeight: number,
+ *   transform: {scale: number, dx: number, dy: number}|null}|null}
+ */
+export function readLayerFile(layerSvg) {
+  if (!layerSvg || typeof layerSvg !== 'string') return null;
+  const pathData = / d="([^"]*)"/.exec(layerSvg)?.[1];
+  if (!pathData) return null;
+  const vb = /viewBox="0 0 ([\d.eE+-]+) ([\d.eE+-]+)"/.exec(layerSvg);
+  const t =
+    /<g transform="translate\(([^,)]+),([^)]+)\) scale\(([^)]+)\)"/.exec(
+      layerSvg
+    );
+  const num = (s) => {
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : null;
+  };
+  const scale = t ? num(t[3]) : null;
+  const dx = t ? num(t[1]) : null;
+  const dy = t ? num(t[2]) : null;
+  return {
+    pathData,
+    canvasSpan: vb ? (num(vb[1]) ?? LAYER_CANVAS_SPAN) : LAYER_CANVAS_SPAN,
+    canvasHeight: vb ? (num(vb[2]) ?? LAYER_CANVAS_SPAN) : LAYER_CANVAS_SPAN,
+    transform:
+      scale !== null && dx !== null && dy !== null ? { scale, dx, dy } : null,
+  };
+}
+
+/**
  * The width every layer file is normalized to, in millimetres of SVG canvas.
  * A CONTRACT between this emitter and any tile that reads layer files: the
  * model multiplies by one scale factor to reach the size it wants, and may
