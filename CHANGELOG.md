@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **An instrument that photographs the City Walk in motion** (CW-67) - every judgement this game has
+  made about whether its picture holds still was read off a screenshot or off a two-centimetre test
+  step, and the walk a player actually does is 4.8 metres a second. `scripts/seq-city-walk.mjs` runs
+  a scripted walk, a scripted look and a standing control, waits for one converted frame per step,
+  and scores the converter's own decisions cell by cell: how often a character changes, how often it
+  comes back to what it was two frames ago, how many frames a character survives on average, and
+  which surfaces those numbers belong to. It writes a contact sheet of every frame, a map of what
+  changed where, a map of which surface each cell was, a machine-readable summary and a video of the
+  run, so the next release can be compared with this one rather than remembered. The scoring is a
+  separate module with unit tests whose answers were worked out by hand, and the instrument loads
+  that same module, so the tested code is the code that produces the numbers. Nothing a player sees
+  changes
+
+- **Both City Walk instruments now say which graphics card measured the number** (CW-67) - Windows
+  gives a windowed browser the power-saving graphics chip, so on a laptop with two of them the
+  default is the integrated one, and every performance table this project has produced without a
+  card named on it was an integrated-chip table. The renderer string is now printed on every row of
+  every table, and `--gpu-luid` selects the other card when a comparison needs one. Measured on both:
+  two drivers rendering one identical scene disagree about roughly one per cent of the character
+  choices, while the surface-class pass agrees exactly - so the churn is a decision the converter
+  makes, not something the graphics card does. The frame-time bench also gained a character-size
+  sweep inside one browser session, and lost its "reverse" column, which counted solid cells in the
+  last frame of a run and swung between 0 and 95,425 between two runs of the same configuration
+
 - **Groundwork for opening a file straight into Forge from your desktop** (IR-10, not switched on) -
   an installed app can be registered with the operating system so double-clicking a `.scad`, `.zip`,
   `.svg` or `.dxf` opens it in Forge. The routing is built and tested: a file handed over by the

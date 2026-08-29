@@ -184,6 +184,96 @@ Tactile output and audio are both **on hold** until the visual and audio polish
 of the game itself lands. Audio is its own future round with its own decisions
 to make. Writing the roadmap down is not the same as starting it.
 
+## How the picture gets measured
+
+A picture that stands still and a picture that is being walked through are two
+different things, and only one of them can be judged from a screenshot. Three
+rounds of this game were steered by stills and by a two-centimetre test step,
+and the walk a player actually does is 4.8 m/s. There are now two instruments,
+and they ask different questions.
+
+**`scripts/stability-city-walk.mjs`** asks whether a nearly still picture
+fractures: it scores a 0.05 degree turn and a two-centimetre creep, which is
+the motion that was suspected of flashing.
+
+**`scripts/seq-city-walk.mjs`** asks what the picture does while somebody walks
+through it. It freezes the world's own clock, drives the pose analytically,
+waits for one CONVERTED frame per step, and scores the converter's decisions
+cell by cell. Its modes are the point:
+
+| mode | what it stands for |
+|---|---|
+| `stand` | the control. It must read zero. A non-zero stand row means something else is still moving and no other number in the run means anything |
+| `walk` | 4.8 m/s at the converter's 30/s governor, which is 0.16 m per converted frame - the walk a player does |
+| `walkclamp` | the same walk on a 10 fps machine, where the clamped time step moves 0.48 m between two conversions |
+| `look` | 1.5 degrees of yaw per frame, a moderate mouse sweep |
+| `creep`, `turn` | the older comparators, kept so a new number can be put beside the old verdict |
+
+### Reading what it writes
+
+Every sequence writes four things into `--out`, and a run writes one WebM of
+the whole session.
+
+- **The contact sheet** (`-sheet.png`) tiles every converted frame with its
+  frame number stamped on it. This is the filmstrip: what changed between two
+  tiles is what a player sees change.
+- **The flip map** (`-flipmap.png`) is one pixel per character cell, summed
+  over the sequence. **Green** is glyph change, **red** is drive change (the
+  intensity level in mono, the palette index in colour), **blue** marks a cell
+  whose surface CLASS moved at some point. A green field with no blue in it is
+  texture churn - the same surface picking different characters. Blue bands are
+  geometry edges sweeping across cells, which is honest motion.
+- **The class map** (`-classmap.png`) puts frame 0's surface classes on the
+  left, one colour per class, and on the right the cells whose class moved.
+  Reading it beside the flip map is what separates "this wall is boiling" from
+  "the camera swept a wall past this cell".
+- **The JSON summary** carries every table row, so a later release can diff
+  against it rather than against a remembered number.
+
+### The columns
+
+Change rate is the plain per-frame churn. **Flip** is the A-B-A signature: a
+cell that comes back to what it was two frames ago while its neighbours slide
+on is flashing rather than moving, and a flip rate means nothing without the
+change rate it is a fraction of. **Persistence** is the mean run length, in
+frames, of one glyph in one cell - two scenes with the same change rate feel
+completely different at 3 frames and at 15. **Churn cells** is the share of
+cells that changed in more than half the frame pairs: the population that is
+boiling rather than sliding. **Ghost** asks the opposite question, for the sake
+of any future frame-to-frame memory: of the moments a cell's class changed and
+the cell had ink in it, how often did its glyph fail to follow? A cell that
+holds a stale glyph after the thing under it changed is a ghost.
+
+The arithmetic lives in `src/js/game/seq-metrics.js` as pure functions over
+typed arrays, unit-tested against three-frame sequences whose answers were
+worked out by hand. The instrument imports that module through the dev server,
+so the code the tests cover is the code that produces the numbers.
+
+### Two things worth knowing before trusting a number
+
+**Which GPU rendered it.** Windows hands a non-fullscreen Chromium the
+power-saving adapter, so on a laptop with two GPUs the default is the
+INTEGRATED one. Both instruments and the frame-time bench print the GL renderer
+string on every table, and `--gpu-luid=<high>,<low>` (the LUIDs are listed on
+`chrome://gpu`) selects the other. Two drivers rendering one identical scene
+move about one per cent of the glyph picks, which is itself worth knowing: the
+per-cell decision sits that close to a knife edge. The class pass, being a
+deterministic id render, gives identical counts on both.
+
+**That the sequence really happened.** The instrument asserts the frame count,
+a constant grid, and a non-empty lit population, and it aborts on a software
+renderer or on a dev server that does not serve its marker module. A sweep that
+silently measured nothing has been this project's failure mode more than once,
+and a tidy zero is what it looks like.
+
+`scripts/bench-city-walk.mjs` remains the frame-TIME instrument and is separate
+on purpose. It gained `--sizes` (a character-size sweep inside one browser
+session) and the same `--gpu-luid`; its old "reverse" column has been retired,
+because it counted reverse-video cells in the LAST converted frame - a snapshot
+of wherever the walker happened to stop, which swung between 0 and 95,425
+across runs of the same configuration. What the reverse-video layer does over a
+sequence belongs to the sequence instrument, and it is reported per frame pair.
+
 ## What this document is not
 
 It is not a commitment, an estimate, or a design review. Anyone starting either
