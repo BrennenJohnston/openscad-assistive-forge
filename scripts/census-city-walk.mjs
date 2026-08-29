@@ -24,10 +24,13 @@
 //     roads" count that quietly includes 0.15 m lamp poles is a wrong number
 //     with a right shape (T51). Hydrants (0.30 m) and waste baskets (0.45 m)
 //     are square too and are excluded by exact side.
-//   * Car-on-car overlaps as TRUE rectangle overlaps (separating axis), split
-//     parked-vs-parked and traffic-vs-parked. The second pair had never been
-//     counted, because the frozen traffic left no record of where it went;
-//     `buildStreetProps` now writes one.
+//   * Car-on-car overlaps as TRUE rectangle overlaps, split parked-vs-parked
+//     and traffic-vs-parked. The second pair had never been counted, because
+//     the frozen traffic left no record of where it went; `buildStreetProps`
+//     now writes one. The overlap test is `rectsOverlap` from the game itself,
+//     the same one the placement streams refuse a spot with: two copies of a
+//     geometry test is how a census comes to disagree with the build for a
+//     reason that is not a bug.
 //   * People standing in a roadway with no mapped crossing near them.
 //   * Buildings whose lowest drawn volume floats, and `building=roof` ways
 //     extruded as a solid from the ground - CW-76's subject, measured here so
@@ -47,7 +50,7 @@ const ROOT = join(HERE, '..')
 const { parseCityExtract } = await import(
   pathToFileURL(join(ROOT, 'src/js/game/city-data.js')).href
 )
-const { buildCollisionGrid, buildRoadwayIndex } = await import(
+const { buildCollisionGrid, buildRoadwayIndex, rectsOverlap } = await import(
   pathToFileURL(join(ROOT, 'src/js/game/walk-controls.js')).href
 )
 const { buildStreetProps, buildCityGroup } = await import(
@@ -86,48 +89,6 @@ function parseArgs(argv) {
   return opts
 }
 
-/** The four corners of a rotated rectangle, in order. */
-function corners(rect) {
-  const c = Math.cos(rect.rotationRad ?? 0)
-  const s = Math.sin(rect.rotationRad ?? 0)
-  const hl = rect.halfLengthM
-  const hw = rect.halfWidthM
-  return [
-    [hl, hw],
-    [hl, -hw],
-    [-hl, -hw],
-    [-hl, hw],
-  ].map(([u, v]) => [rect.x + u * c - v * s, rect.y + u * s + v * c])
-}
-
-/** Separating-axis overlap of two convex quads. Touching is not overlapping. */
-function quadsOverlap(a, b) {
-  for (const quad of [a, b]) {
-    for (let i = 0; i < quad.length; i++) {
-      const [x1, y1] = quad[i]
-      const [x2, y2] = quad[(i + 1) % quad.length]
-      const axX = -(y2 - y1)
-      const axY = x2 - x1
-      let aMin = Infinity
-      let aMax = -Infinity
-      let bMin = Infinity
-      let bMax = -Infinity
-      for (const [px, py] of a) {
-        const p = px * axX + py * axY
-        if (p < aMin) aMin = p
-        if (p > aMax) aMax = p
-      }
-      for (const [px, py] of b) {
-        const p = px * axX + py * axY
-        if (p < bMin) bMin = p
-        if (p > bMax) bMax = p
-      }
-      if (aMax <= bMin || bMax <= aMin) return false
-    }
-  }
-  return true
-}
-
 /**
  * Count overlapping pairs among rectangles, bucketed so a city of thousands
  * of cars is not an O(n^2) wait.
@@ -135,7 +96,6 @@ function quadsOverlap(a, b) {
 function countOverlaps(rects, pairAccepted) {
   const cellM = 12
   const buckets = new Map()
-  const quads = rects.map(corners)
   rects.forEach((r, i) => {
     const k = Math.floor(r.x / cellM) + ',' + Math.floor(r.y / cellM)
     const list = buckets.get(k)
@@ -157,7 +117,7 @@ function countOverlaps(rects, pairAccepted) {
           const key = i + ':' + j
           if (seen.has(key)) continue
           seen.add(key)
-          if (quadsOverlap(quads[i], quads[j])) pairs++
+          if (rectsOverlap(rects[i], rects[j])) pairs++
         }
       }
     }
