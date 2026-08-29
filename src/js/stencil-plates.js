@@ -59,6 +59,18 @@ export const MARK_ARM_MM = 6;
 export const MARK_WIDTH_MM = 1;
 
 /**
+ * The most plates a stencil can be made of. The owner's number (DP-Q21).
+ *
+ * ★ NOT the same law as the charm engine's `LAYER_EMIT_CAP`, which is 3 and
+ * lives in svg-preparer. That one is a ceiling on how many RELIEF passes a
+ * tiered charm builds, and three is what the model builds. This one is a
+ * ceiling on how many PAINT COLOURS a stencil can have, and the owner's own
+ * cat uses six. Two different questions that happened to be answered with a
+ * number, which is exactly how they got confused in the first place.
+ */
+export const STENCIL_PLATE_CAP = 8;
+
+/**
  * Every plate carries the SAME marks in the SAME places. They are how a
  * person lines plate 2 up over paint that plate 1 laid down; a plate whose
  * marks moved would register the second colour a few millimetres out and

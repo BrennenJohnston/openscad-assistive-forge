@@ -40,12 +40,8 @@ import { readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, resolve, basename } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import {
-  parsePathString,
-  pathToAbsolute,
-  pathToCurve,
-} from 'svg-path-commander';
-import { polygonFromPathData, boundsOf, signedArea } from '../src/js/svg-nesting.js';
+import { boundsOf, signedArea } from '../src/js/svg-nesting.js';
+import { ringsFromPathData } from '../src/js/ring-geometry.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const REPO = resolve(HERE, '..');
@@ -72,42 +68,11 @@ export const OPENSCAD =
 // ---------------------------------------------------------------------------
 
 /**
- * Split path data into one ring per subpath.
- *
- * `polygonFromPathData` concatenates every subpath into a single point list,
- * which is right for a nesting bound and wrong for a hole: the joining
- * segment between two subpaths is not an edge of either. Everything is put
- * through `pathToCurve` first, so each subpath starts at an absolute M.
- *
- * @param {string} d - Path data
- * @returns {Array<Array<{x:number,y:number}>>} One closed ring per subpath
+ * One ring per subpath, re-exported so a plate SVG and a plate STL are read
+ * through the same splitter the app uses. See `ringsFromPathData` in
+ * `src/js/ring-geometry.js` for why concatenating subpaths is wrong here.
  */
-export function subpathRings(d) {
-  if (!d || typeof d !== 'string') return [];
-  let curve;
-  try {
-    curve = pathToCurve(pathToAbsolute(parsePathString(d)));
-  } catch {
-    return [];
-  }
-  const groups = [];
-  let current = null;
-  for (const seg of curve) {
-    if (seg[0] === 'M') {
-      current = [seg];
-      groups.push(current);
-    } else if (current) {
-      current.push(seg);
-    }
-  }
-  const rings = [];
-  for (const g of groups) {
-    const text = g.map((s) => s[0] + ' ' + s.slice(1).join(' ')).join(' ');
-    const { points } = polygonFromPathData(text);
-    if (points.length >= 3) rings.push(points);
-  }
-  return rings;
-}
+export const subpathRings = ringsFromPathData;
 
 /**
  * Read a binary STL and return its triangles.

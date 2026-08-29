@@ -152,6 +152,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and reports how much of the two cuts is the same shape. That number is what the stencil work in
   this round is judged by. The photograph the drawing was traced from is deliberately not included
 
+- **Forge now understands that a stencil layer is a paint colour** (DP-16) - not a nesting depth,
+  which is what it used to work out for itself. Nothing on screen changes yet; this is the part
+  underneath. It knows what a region of a drawing is, and for a line drawing that is the areas
+  BETWEEN the lines rather than the lines themselves, which is the thing the old version had
+  backwards: given a drawing of a cat traced as outlines, it finds the twenty-one faces of the
+  line network and the whole head as a silhouette, and every one of the sixteen regions the owner
+  of that drawing painted by hand is among them. It knows a palette, an order to paint in, which
+  plate cuts what under either of the two methods, and which openings will drop a loose piece out
+  of the plate, with the three ways round that named rather than chosen for you. The shapes are
+  worked out with a different geometry library than before, which on one real drawing of 831
+  pieces takes 0.55 seconds where the old path took 2 minutes 8
+
 - **The reference image can sit on any surface, be cropped, and be used as the design** (DP-5,
   DP-6) - three additions to the Reference Image panel. **Sits against** chooses the height by
   naming a surface (under the plate, the plate itself, the top of the model, or a height you
