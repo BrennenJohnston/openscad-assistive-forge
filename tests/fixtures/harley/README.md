@@ -9,7 +9,7 @@ Stencil Maker has to be able to produce.
 | `sketch4.svg` | the line drawing, exported from Illustrator with "Outline Stroke": one compound path (the outer contour of the line network plus one inner contour per enclosed face) and a group of three band paths for the eye rings. No fills, no colours, 119.813 x 150.065 user units. |
 | `sketch4.png` | the same drawing coloured, 503 x 629 px. This is where the colours live. |
 | `plate-base.stl` | the registration jig: a 60 x 60 x 0.6 mm sheet with four pegs 4.4 mm tall, round 3.0 mm diameter at the two top corners and rectangular 3.0 x 2.0 mm at the two bottom corners, all centred 2.5 mm in from both edges. Round at one end and rectangular at the other means a plate cannot be laid on backwards. |
-| `plate-1.stl` .. `plate-6.stl` | the six stencil plates, 60 x 60 x 0.6 mm each, with matching holes and notches and the plate number cut through the bottom margin. Plate 1 cuts the whole head silhouette (the base coat); plates 2 to 6 cut only their own colour's regions. |
+| `plate-1.stl` .. `plate-6.stl` | the six stencil plates, 60 x 60 x 0.6 mm each, with matching holes and notches and the plate number cut through the bottom margin. Plate 1 cuts the whole head silhouette (the base coat); plates 2 to 6 cut only their own colour's regions. **`plate-6.stl` is the owner's CORRECTED plate 6**, supplied at gate G1: the first one repeated plate 5's two pupil cuts, which they confirmed was a leftover from editing plate 5 rather than something a colour plan asks for. |
 | `harley-plan.json` | the colour plan those plates encode, MEASURED out of them by DP-15 rather than typed from a description. Regions are located by a point inside them, in `sketch4.svg` user units. |
 
 ## Provenance

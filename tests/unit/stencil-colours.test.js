@@ -326,9 +326,7 @@ describe("the reference plan, on the owner's own drawing", () => {
   it('matches the reference plate for plate 3, 4, 5 and 6 by count', () => {
     const plates = platesFor({ ...plan, rule: 'own' }, regions, silhouette)
     const counts = plates.map((p) => p.regionKeys.length)
-    // white 4, green 2, black again 4, pink 2. The reference's own plate 6
-    // also repeats plate 5's two pupil cuts, which is a property of the
-    // owner's plate and not of the plan it encodes.
+    // white 4, green 2, black again 4, pink 2.
     expect(counts.slice(1)).toEqual([4, 4, 2, 4, 2])
   })
 

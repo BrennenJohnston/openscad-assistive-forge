@@ -56,8 +56,8 @@
     { "at": [54.679, 96.907], "colour": "green", "plate": 4, "areaMm2": 18.803, "name": "left eye", "sampled": "#8b9770 94.0% with the pupil removed", "pointAvoids": "the 2 pupil cuts nested in this one" },
     { "at": [98.107, 99.748], "colour": "green", "plate": 4, "areaMm2": 11.835, "name": "right eye", "sampled": "#8b9770 73.4% with the pupil removed", "pointAvoids": "the 2 pupil cuts nested in this one" },
 
-    { "at": [97.702, 91.985], "colour": "black-again", "plate": 5, "areaMm2": 7.678, "name": "right pupil", "sampled": "#171411 77.0%", "alsoCutOnPlate": 6 },
-    { "at": [54.886, 88.681], "colour": "black-again", "plate": 5, "areaMm2": 6.587, "name": "left pupil", "sampled": "#171411 69.6%", "alsoCutOnPlate": 6 },
+    { "at": [97.702, 91.985], "colour": "black-again", "plate": 5, "areaMm2": 7.678, "name": "right pupil", "sampled": "#171411 77.0%" },
+    { "at": [54.886, 88.681], "colour": "black-again", "plate": 5, "areaMm2": 6.587, "name": "left pupil", "sampled": "#171411 70.4%" },
     { "at": [79.24, 115.329], "colour": "black-again", "plate": 5, "areaMm2": 2.422, "name": "nose bridge line", "sampled": "#171411 84.9%" },
     { "at": [88.436, 128.559], "colour": "black-again", "plate": 5, "areaMm2": 0.986, "name": "mouth line", "sampled": "#171411 76.9%" },
 
@@ -66,7 +66,7 @@
   ],
   "observations": [
     "Sixteen regions, six plates. Plate 1 cuts the silhouette alone (882.23 mm2 of a 60 x 60 plate) and every later plate cuts only its own colour: the reference set is the 'own' rule, not the stacked one, which is why the owner had to paint black twice.",
-    "Plate 6 repeats plate 5's two pupil cuts EXACTLY (7.678 and 6.587 mm2, same bounding boxes to 0.01 mm, same centres). The art shows those pupils black and the nose and tongue pink, so plate 6 carries two colours' worth of openings. Recorded, not explained: only the owner knows whether that was a second black coat, an alignment window, or a leftover from editing plate 5.",
+    "PLATE 6 WAS CORRECTED BY THE OWNER at gate G1 (2026-08-28). The plate first measured here repeated plate 5's two pupil cuts exactly - same areas to three decimals, same bounding boxes to 0.01 mm, same centres - so it carried openings for two colours at once. The owner confirmed that was a mistake, a leftover from editing plate 5, and supplied a corrected plate 6 that cuts only the nose and the tongue. `plate-6.stl` here IS the corrected one; the first version is not kept, because a fixture that is the answer sheet cannot also be a wrong answer.",
     "The art has a grey (#978b84, 5.62% of the canvas: the sides of the muzzle) that NO reference plate cuts. Under this plan those faces keep the base coat. The reference set therefore realises five painted colours plus the base, not every colour in the drawing.",
     "sketch4.png is 503 x 629 px for a 119.813 x 150.065 unit drawing: 4.1982 px per unit across and 4.1915 down, a 0.16% disagreement that comes from the export, not from the art."
   ]

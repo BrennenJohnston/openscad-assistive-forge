@@ -102,8 +102,9 @@ describe('the six plates, against the six the owner cut', () => {
     expect(svgs).toHaveLength(6)
   })
 
-  // Measured 2026-08-28: 0.999, 0.998, 0.998, 0.998, 0.724, 0.026.
-  const BARS = [0.94, 0.94, 0.94, 0.94, 0.67, 0.0]
+  // Measured 2026-08-28 and shown to the owner at gate G1:
+  // 0.999, 0.998, 0.998, 0.998, 0.724, 0.997. Bars sit 0.05 under.
+  const BARS = [0.94, 0.94, 0.94, 0.94, 0.67, 0.94]
   for (let n = 1; n <= 4; n++) {
     it(`cuts plate ${n} where the owner cut it`, () => {
       const r = iouOf(svgs[n - 1], n)
@@ -124,14 +125,15 @@ describe('the six plates, against the six the owner cut', () => {
     expect(r.iou).toBeLessThan(0.95)
   })
 
-  it('★ cuts plate 6 as two openings where the reference has four', () => {
-    // The owner's plate 6 repeats plate 5's two pupil cuts exactly, so it
-    // carries openings for two colours. No colour plan asks for that, and the
-    // low number is the honest report of it rather than a fault in the engine.
+  it('★ cuts plate 6 where the owner cut it, once they corrected it', () => {
+    // The plate first measured here repeated plate 5's two pupil cuts exactly,
+    // so it opened two colours at once, and the comparison came out at 0.026.
+    // The owner confirmed at G1 that this was a leftover from editing plate 5
+    // and supplied a corrected plate. It agrees at 0.997.
     const r = iouOf(svgs[5], 6)
     expect(r.cutsA).toBe(2)
-    expect(r.cutsB).toBe(4)
-    expect(r.iou).toBeLessThan(0.2)
+    expect(r.cutsB).toBe(2)
+    expect(r.iou).toBeGreaterThan(BARS[5])
   })
 
   it('makes plate 1 the silhouette, one solid cut, at the reference size', () => {

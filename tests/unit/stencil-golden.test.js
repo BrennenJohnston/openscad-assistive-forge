@@ -148,8 +148,13 @@ describe('the reference plates', () => {
   })
 
   it('finds the cut count of every reference plate', () => {
-    const counts = [1, 2, 3, 4, 5, 6].map((n) => readPlate(referencePlate(n)).cuts.length)
-    expect(counts).toEqual([1, 4, 4, 2, 4, 4])
+    const counts = [1, 2, 3, 4, 5, 6].map(
+      (n) => readPlate(referencePlate(n)).cuts.length
+    )
+    // Plate 6 is the owner's CORRECTED one, supplied at gate G1: the plate
+    // first measured here also repeated plate 5's two pupil cuts, which they
+    // confirmed was a leftover from editing plate 5.
+    expect(counts).toEqual([1, 4, 4, 2, 4, 2])
   })
 })
 

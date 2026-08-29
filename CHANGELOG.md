@@ -162,8 +162,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   which is which. There is a new **Export all plates** button that renders the whole set in turn
   and hands back one zip: a file per plate named for its colour, the jig base, and a text file
   with the order to paint in. All of it is measured against a real stencil: one user made a
-  six-plate set of their cat by hand, and Forge's plates 1 to 4 now come out at 99.8% the same
-  shape as the ones they cut
+  six-plate set of their cat by hand, and five of Forge's six plates now come out at 99.7% to
+  99.9% the same shape as the ones they cut. The sixth is lower for a reason worth knowing: on
+  that plate they opened the pupil of each eye together with the black ring around it, and Forge
+  opens the pupil
 
 - **Forge now understands that a stencil layer is a paint colour** (DP-16) - not a nesting depth,
   which is what it used to work out for itself. Nothing on screen changes yet; this is the part
