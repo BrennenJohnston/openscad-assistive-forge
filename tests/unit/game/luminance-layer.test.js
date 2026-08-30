@@ -16,13 +16,31 @@ import { nextReverseLift } from '../../../src/js/_hfm-paint.js'
 /** The brightest paint in the shopfront art direction: #efefef. */
 const BRIGHTEST_PAINT = 0xef / 255
 
-describe('the luminance layer: the two columns that survived G1', () => {
-  it('draws NO solid cells by default, which is the owner CW-Q74 answer', () => {
-    expect(LUMINANCE_LAYER_DEFAULT).toBe('off')
+describe('the luminance layer: what the owner chose, twice', () => {
+  it('★ draws CAPPED solid cells by default - the answer after PLAYING it', () => {
+    // CW-Q74 was answered `off` from still photographs at G1, and CW-72
+    // deleted the losing columns. Playing the deployed build, the owner called
+    // the result sad and asked for the solid cells back, capped. This is the
+    // second answer, and the reason it differs from the first is that a still
+    // is not a filmstrip - a lesson this round had already written down and
+    // then let a GATE question be answered from stills anyway.
+    expect(LUMINANCE_LAYER_DEFAULT).toBe('calm')
+    expect(LUMINANCE_LAYER.calm).toEqual({
+      reverseAt: MONO_REVERSE_THRESHOLD,
+      reverseShareCap: 0.01,
+      reverseLiftMax: 0.06,
+      storefrontScale: 0.93,
+    })
+  })
+
+  it('keeps off reachable, dimming and all', () => {
     expect(LUMINANCE_LAYER.off).toEqual({
       reverseAt: null,
       reverseShareCap: null,
       reverseLiftMax: 0,
+      // ★ THE PART NOBODY ASKED FOR. `off` was chosen as "no solid cells" and
+      // also dims every lit shopfront band by 17 %, because the treatments
+      // always moved both halves together.
       storefrontScale: 0.83,
     })
   })
@@ -36,12 +54,23 @@ describe('the luminance layer: the two columns that survived G1', () => {
     })
   })
 
-  it('has deleted the calm column the owner did not choose', () => {
-    // CW-70 built three treatments so the choice could be made from pictures;
-    // CW-72 keeps the answer and removes the losing one. A switch nobody can
-    // reach is a switch that rots.
-    expect(Object.keys(LUMINANCE_LAYER).sort()).toEqual(['off', 'stock'])
-    expect(LUMINANCE_LAYER.calm).toBeUndefined()
+  it('carries all three treatments again, because the choice was reopened', () => {
+    expect(Object.keys(LUMINANCE_LAYER).sort()).toEqual([
+      'calm',
+      'off',
+      'stock',
+    ])
+  })
+
+  it('★ and NONE of them lights a single extra cell', () => {
+    // Measured at the Seattle spawn, standing, 30 %, mono: the lit share is
+    // 4.5 % under `off`, `calm` AND `stock`. This layer only decides whether
+    // an ALREADY-lit cell is drawn as a solid slab or as a character; it can
+    // never lift a dark one. So monochrome's darkness - 95 % of the screen
+    // blank - is structural and older than this round, and CW-Q74 is not what
+    // made the city dark. Colour mode's ink floor is (see hfm-ink-budget).
+    const scales = Object.values(LUMINANCE_LAYER).map((m) => m.storefrontScale)
+    expect(Math.min(...scales)).toBeGreaterThan(0.5)
   })
 
   it('puts a lit shopfront either side of the cliff, as the two columns mean', () => {
@@ -57,6 +86,11 @@ describe('the luminance layer: the two columns that survived G1', () => {
     expect(band('off')).toBeCloseTo(0.778, 3)
     // ...and still lit: above the converter blank floor of 0.5.
     expect(band('off')).toBeGreaterThan(0.5)
+    // Calm: over the cliff like stock, so the band CAN go solid, but the cap
+    // bounds how much of the frame does.
+    expect(band('calm')).toBeGreaterThan(MONO_REVERSE_THRESHOLD)
+    expect(band('calm')).toBeCloseTo(0.8716, 4)
+    expect(band('calm')).toBeLessThan(band('stock'))
   })
 })
 

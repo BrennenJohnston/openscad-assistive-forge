@@ -170,10 +170,32 @@ export const LUMINANCE_LAYER = Object.freeze({
     reverseLiftMax: 0,
     storefrontScale: 1,
   }),
+  // ★★★ CALM IS BACK, AND WHY IT LEFT MATTERS. CW-70 built these three
+  // treatments and photographed them; the owner read the pictures at G1 and
+  // chose `off`, so CW-72 deleted this column. Playing the deployed build,
+  // they said the result was "sad" - and the pictures they chose from were
+  // STILLS. This round wrote down that a still is not a filmstrip (T-CW) and
+  // then let a GATE question be answered from stills anyway.
+  //
+  // `reverseShareCap` bounds how much of the frame may go solid; the LIFT
+  // bound below it is what keeps this from quietly becoming `off` (CW-70
+  // measured an unbounded cap oscillating 10,164 solid crossings over 47
+  // STANDING frames). Measured at the shopfront pose, standing, at the
+  // default size: 2,936 solid cells on `stock`, 2,261 here, 0 on `off`.
+  calm: Object.freeze({
+    reverseAt: MONO_REVERSE_THRESHOLD,
+    reverseShareCap: 0.01,
+    reverseLiftMax: 0.06,
+    storefrontScale: 0.93,
+  }),
   off: Object.freeze({
     reverseAt: null,
     reverseShareCap: null,
     reverseLiftMax: 0,
+    // ★ AND THIS 0.83 IS THE PART NOBODY ASKED FOR. `off` was chosen as "no
+    // solid cells"; it also dims every lit shopfront band by 17 %, because
+    // the three treatments always moved both halves together. Kept here so
+    // the column still means what it meant, but it is no longer the default.
     storefrontScale: 0.83,
   }),
 });
@@ -207,19 +229,56 @@ export const LUMINANCE_LAYER = Object.freeze({
  * keeps a street you can read; 0.5 is the monochrome rule and empties it.
  */
 export const CITY_PALETTE_INK_BUDGET = Object.freeze({
-  floor: 0.3,
+  // ★★★ THE FLOOR IS OFF, AND THE WHITE GATE STAYS. Answered by the owner
+  // after playing the deployed build: at 0.3 the screen is 28.5 % inked where
+  // it used to be 89.3 %, and seven cells in ten are simply black. The two
+  // halves of this budget were always separable and the measurement above
+  // says which one did which job - the white gate ALONE takes white from
+  // 61.8 % to 0.01 % and changes nothing else, so it is the gate that killed
+  // the flat white fields and the floor that made the city dark. The gate
+  // stays; the floor goes. `normalizeInkBudget` keeps the gate alive at
+  // floor 0 and only returns null when BOTH are off.
+  floor: 0,
   whiteLum: 0.9,
   whiteChroma: 0.12,
 });
 
 /** The treatment the game draws, answered by the owner at G1 (CW-Q74). */
-export const LUMINANCE_LAYER_DEFAULT = 'off';
+// The owner's second answer, given after playing the build rather than
+// reading a photograph of it: solid cells back, but capped.
+export const LUMINANCE_LAYER_DEFAULT = 'calm';
 
 export const CITY_TEMPORAL_HYSTERESIS = Object.freeze({
-  glyph: 0.4,
-  drive: 0.1,
+  // ★★★ THE MEMORY IS THE TRAIL. CW-68 bought the strobe fix with a smear and
+  // nobody said so out loud, because its own "ghost rate" metric asked a
+  // narrower question - inked cells that changed SURFACE and kept their glyph
+  // - than the one an owner walking through the city was asking. The number
+  // that answers theirs is mean glyph PERSISTENCE while walking, measured at
+  // the spawn, 30 %, mono, 24 frames, on an RTX 3080 Ti:
+  //
+  //   memory off        6.69 frames   glyph flip 1.14 %   churn cells 3.11 %
+  //   0.4 / 30 (was)   13.06          flip 0.17           churn 0
+  //   0.15 / 8         10.86          flip 0.26           churn 0
+  //   0.06 / 5          9.41          flip 0.48           churn 0   <- shipped
+  //
+  // At 0.4 a cell had to see its brightness move 40 % of the whole range
+  // before it was allowed a new glyph - twenty times the module's own default
+  // - and failing that it held for 30 conversions, about ONE SECOND at the
+  // converter's governor. That is frames blending together, and it is what
+  // the owner reported on the deployed build.
+  //
+  // ★ IT CANNOT BE TUNED AWAY, ONLY TRADED: persistence and flicker move
+  // together on this one knob, and the separation experiment says neither
+  // half owns it (holding the band at 0.4 and cutting the hold to 4 gives
+  // 10.98; cutting the band to 0.08 and holding 30 gives 10.24). The real fix
+  // is a THIRD reset - drop the memory when the cell's geometry moves under
+  // it, not only when its surface CLASS changes - which keeps the memory
+  // exactly where the picture is genuinely still. That is follow-up work and
+  // it is written down rather than half-done here.
+  glyph: 0.06,
+  drive: 0.03,
   reverse: 0.02,
-  holdFrames: 30,
+  holdFrames: 5,
 });
 
 /**

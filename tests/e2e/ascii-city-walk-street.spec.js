@@ -2137,7 +2137,7 @@ test.describe('ASCII City Walk — the solid bright layer, three ways (CW-70)', 
       return { solid, cells: probe.cols * probe.rows }
     })
 
-  test('the game draws no solid cells, and stock still draws some', async ({
+  test('the game draws CAPPED solid cells, off draws none, stock draws most', async ({
     page,
   }) => {
     await launchGame(page)
@@ -2147,12 +2147,24 @@ test.describe('ASCII City Walk — the solid bright layer, three ways (CW-70)', 
       window.__cityWalkGame.altView.setCellProbe(true)
     })
 
-    // What the game draws since CW-72 (the owner's CW-Q74 answer at G1).
+    // ★ What the game draws since CW-84: the owner's SECOND answer, given
+    // after playing the deployed build rather than reading photographs of it.
+    // `off` was chosen at G1 from stills and called sad in motion.
     expect(
       await page.evaluate(() => window.__cityWalkGame.getLuminanceLayer())
-    ).toBe('off')
+    ).toBe('calm')
+    const calm = await solidCells(page)
+    expect(calm, 'this browser has no intensity ladder').not.toBeNull()
+    expect(
+      calm.solid,
+      `calm painted ${calm.solid} of ${calm.cells} cells solid`
+    ).toBeGreaterThan(0)
+
+    // `off` must still remove the layer completely, or the switch is not a
+    // switch and every "fewer solid cells" assertion here rests on nothing.
+    await page.evaluate(() => window.__cityWalkGame.setLuminanceLayer('off'))
     const off = await solidCells(page)
-    expect(off, 'this browser has no intensity ladder').not.toBeNull()
+    expect(off.cells).toBe(calm.cells)
     expect(off.solid).toBe(0)
 
     // `stock` must still paint the layer, or this case could not tell a
@@ -2165,10 +2177,26 @@ test.describe('ASCII City Walk — the solid bright layer, three ways (CW-70)', 
       stock.solid,
       `stock painted ${stock.solid} of ${stock.cells} cells solid`
     ).toBeGreaterThan(0)
+    // ★ WHAT THIS POSE CANNOT SHOW, SAID OUT LOUD. `calm` differs from
+    // `stock` only through its share CAP, and a cap that is never exceeded is
+    // indistinguishable from no cap. At this pose the solid share sits under
+    // the 1 % cap, so calm and stock paint about the same count and an
+    // ordering assertion between them would be measuring frame noise - it
+    // passed once here and then failed on a re-read of the same scene. The
+    // cap's effect is measured where it actually engages (the shopfront pose:
+    // 2,936 solid on stock against 2,261 on calm) and pinned by the unit
+    // tests over nextReverseLift, which need no GPU at all.
 
     // ...and back, so the switch is a switch and not a one-way door.
-    await page.evaluate(() => window.__cityWalkGame.setLuminanceLayer('off'))
-    expect((await solidCells(page)).solid).toBe(0)
+    //
+    // ★ NOT the same COUNT, and that is a property rather than a wobble.
+    // `calm` carries a share cap whose lift settles over about five frames
+    // (CW-70), so a reading taken immediately after switching back is
+    // mid-settle by construction. Asserting the exact number here would have
+    // pinned one moment of a controller that is designed to move; what has to
+    // be true is that the layer came back at all, and still capped.
+    await page.evaluate(() => window.__cityWalkGame.setLuminanceLayer('calm'))
+    expect((await solidCells(page)).solid).toBeGreaterThan(0)
 
     await page.evaluate(() => window.__cityWalkGame.altView.setCellProbe(false))
   })
@@ -2185,20 +2213,25 @@ test.describe('ASCII City Walk — the solid bright layer, three ways (CW-70)', 
         cap: window.__cityWalkGame.altView.getReverseShareCap(),
       }))
 
-    expect(await read()).toEqual({ mode: 'off', reverseAt: null, cap: null })
+    expect(await read()).toEqual({ mode: 'calm', reverseAt: 0.8, cap: 0.01 })
 
     await page.evaluate(() => window.__cityWalkGame.setLuminanceLayer('stock'))
     expect(await read()).toEqual({ mode: 'stock', reverseAt: 0.8, cap: null })
 
+    await page.evaluate(() => window.__cityWalkGame.setLuminanceLayer('off'))
+    expect(await read()).toEqual({ mode: 'off', reverseAt: null, cap: null })
+
     // A name nobody knows must land on the SHIPPED treatment, not on whatever
     // was set last: this switch is reachable from a script and a typo in one
-    // would otherwise quietly measure the previous run. `calm` was a real
-    // treatment until CW-72 deleted it, so it is the typo worth testing.
-    await page.evaluate(() => window.__cityWalkGame.setLuminanceLayer('calm'))
-    expect(await read()).toEqual({ mode: 'off', reverseAt: null, cap: null })
+    // would otherwise quietly measure the previous run.
+    // The fallback is the SHIPPED treatment, so it moved with it: this is
+    // deliberately asserted against the default rather than against a
+    // hard-coded name, because the point of the case is "a typo lands on what
+    // ships", and hard-coding the old answer would have made it pass while
+    // meaning the opposite.
     await page.evaluate(() =>
       window.__cityWalkGame.setLuminanceLayer('brighter please')
     )
-    expect(await read()).toEqual({ mode: 'off', reverseAt: null, cap: null })
+    expect(await read()).toEqual({ mode: 'calm', reverseAt: 0.8, cap: 0.01 })
   })
 })

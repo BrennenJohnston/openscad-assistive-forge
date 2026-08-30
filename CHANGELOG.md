@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The city is not dark any more** (CW-84) - after playing the deployed build the owner reported the
+  picture was too dark and that frames looked like they were blending together. Three things changed.
+  In colour, the ink floor is gone: it had left 28 per cent of the screen carrying ink where 89 per
+  cent used to, so the sky, the road and the pavement were simply black. The gate that removed the
+  flat white fields stays, so nothing goes back to white. In monochrome the solid bright layer is
+  back, capped, so a lit shopfront reads as a bright block again. And the frame-to-frame memory that
+  stopped the strobing was holding a character on screen for up to a full second, which is what the
+  blending was; it now holds for a sixth of that
+
+
 - **Roofs are roofs, and nothing floats** (CW-76) - a canopy over a downtown street was built as a
   solid building from the pavement up, so the roof over 3rd Avenue was a wall across the street, with
   a lit shop window across its face. 42 of Seattle's 46 roof and bridge ways were built that way, and

@@ -106,22 +106,31 @@ describe('the ink budget: configuration', () => {
     expect(normalizeInkBudget({ floor: -1 }).floor).toBe(DEFAULT_INK_BUDGET.floor)
   })
 
-  it('asks the game for the floor the owner chose at G1, not the mono one', () => {
-    // CW-71 shipped 0.5 - the monochrome ladder's own blank level - which
-    // inks 3 % of a frame and leaves the city's lights floating in black. The
-    // owner answered CW-Q79 with 0.3, which inks 28 % and leaves a street you
-    // can read. Both were measured and photographed; this is their choice, and
-    // if it drifts, so does the picture they signed off.
-    expect(CITY_PALETTE_INK_BUDGET.floor).toBe(0.3)
+  it('★ has NO floor, and keeps the white gate - the answer after PLAYING it', () => {
+    // The history matters. CW-71 shipped 0.5, which inks 3 % of a frame and
+    // leaves the city's lights floating in black. The owner answered CW-Q79
+    // with 0.3 at G1, from photographs, which inks 28 %. Playing the deployed
+    // build they said the darkness was the thing they hated, so the floor
+    // comes off entirely. Measured at the Seattle spawn, standing, 30 %:
+    //
+    //   floor 0.5   3.1 % inked
+    //   floor 0.3  28.5 % inked
+    //   floor 0    88.4 % inked, white share 0.00 %   <- shipped
+    //
+    // ★ THE TWO HALVES DO DIFFERENT JOBS AND THAT IS WHY ONE CAN GO. The
+    // white gate ALONE takes white from 61.8 % to 0.01 % and changes nothing
+    // else, so the gate is what killed the flat white fields that made colour
+    // mode unreadable, and the floor is what made the city dark. The gate
+    // stays.
+    expect(CITY_PALETTE_INK_BUDGET.floor).toBe(0)
+    expect(CITY_PALETTE_INK_BUDGET.whiteLum).toBe(0.9)
+    // A floor of zero must NOT switch the whole budget off: the gate has to
+    // survive it, and normalizeInkBudget only returns null when both are off.
     expect(normalizeInkBudget(CITY_PALETTE_INK_BUDGET)).toEqual({
-      floor: 0.3,
+      floor: 0,
       whiteLum: 0.9,
       whiteChroma: 0.12,
     })
-    // ...and it is still a floor a dim cell falls under: the white gate is
-    // the other half and neither does the other's job.
-    expect(CITY_PALETTE_INK_BUDGET.floor).toBeLessThan(
-      CITY_PALETTE_INK_BUDGET.whiteLum
-    )
+    expect(normalizeInkBudget({ floor: 0, whiteLum: 0 })).toBeNull()
   })
 })
