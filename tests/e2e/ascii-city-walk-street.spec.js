@@ -2045,6 +2045,14 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
       }
       const start = { ...game.walkState }
       let changes = 0
+      // ★★★ CW-89: the memory's population, counted separately. The memory
+      // holds a cell's CHARACTER; since CW-89 it explicitly does not decide
+      // whether a cell has one, so a cell going blank or coming back is not a
+      // re-roll it was ever asked to prevent. Counting those made this guard
+      // measure more than it means - it read 81.8 % against its own 80 % bar
+      // the moment CW-89 stopped the trail, which would have looked like a
+      // regression and was the guard's population going stale.
+      let litChanges = 0
       let cells = 0
       let previous = null
       for (let i = 0; i < n; i++) {
@@ -2063,7 +2071,9 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
         cells = probe.cols * probe.rows
         if (previous) {
           for (let c = 0; c < cells; c++) {
-            if (probe.glyphs[c] !== previous[c]) changes++
+            if (probe.glyphs[c] === previous[c]) continue
+            changes++
+            if (probe.glyphs[c] !== 0 && previous[c] !== 0) litChanges++
           }
         }
         previous = Int16Array.from(probe.glyphs)
@@ -2071,6 +2081,7 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
       Object.assign(game.walkState, start)
       return {
         changes,
+        litChanges,
         cells,
         pairs: n - 1,
         usedGpu: game.altView.getConvertStats().usedGpu,
@@ -2157,22 +2168,38 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
       )
 
       const path = `${cpuSample ? 'cpu' : 'default'} path (usedGpu ${withMemory.usedGpu})`
+      // BOTH numbers are logged, because the difference between them is the
+      // whole of CW-89 and a reader of this line should be able to see it.
       console.log(
-        `[CW-68 memory] ${path}: ${withMemory.changes} of ${without.changes} ` +
-          `stateless re-rolls survive over ${withMemory.cells * withMemory.pairs} ` +
-          `cell-frames = ${((withMemory.changes / without.changes) * 100).toFixed(1)} % ` +
-          `(bar < ${MUST_PREVENT * 100} %)`
+        `[CW-68 memory] ${path}: LIT ${withMemory.litChanges} of ` +
+          `${without.litChanges} stateless re-rolls survive = ` +
+          `${((withMemory.litChanges / without.litChanges) * 100).toFixed(1)} % ` +
+          `(bar < ${MUST_PREVENT * 100} %); all cells incl. blanks ` +
+          `${withMemory.changes} of ${without.changes} = ` +
+          `${((withMemory.changes / without.changes) * 100).toFixed(1)} % ` +
+          `over ${withMemory.cells * withMemory.pairs} cell-frames`
       )
       expect(without.cells, path).toBe(withMemory.cells)
       expect(
-        without.changes,
+        without.litChanges,
         `${path}: the stateless pick re-rolls glyphs over a 2 cm step`
       ).toBeGreaterThan(100)
+      // ★★★ SCOPED TO LIT CELLS BY CW-89, AND THE BAR IS UNCHANGED AT 0.8.
+      // The memory holds a cell's CHARACTER. Since CW-89 it explicitly does
+      // not decide whether a cell HAS one - a blank answer is taken at once,
+      // in both paths - so a cell going blank or coming back was never a
+      // re-roll this guard was asking it to prevent. Counting those made the
+      // number jump to 81.8 % the moment the trail stopped, which reads as a
+      // regression and is nothing of the kind. This is CW-77's own trap paid
+      // again: a guard must not measure more than it means. The BAR did not
+      // move - it has been re-pinned once already (CW-77, 0.6 -> 0.8) and
+      // re-pinning it to match a result would leave it worth nothing.
       expect(
-        withMemory.changes,
-        `${path}: memory ${withMemory.changes} of ${without.changes} stateless ` +
-          `changes over ${withMemory.cells * withMemory.pairs} cell-frames`
-      ).toBeLessThan(without.changes * MUST_PREVENT)
+        withMemory.litChanges,
+        `${path}: memory ${withMemory.litChanges} of ${without.litChanges} ` +
+          `stateless changes between two REAL characters over ` +
+          `${withMemory.cells * withMemory.pairs} cell-frames`
+      ).toBeLessThan(without.litChanges * MUST_PREVENT)
     }
 
     await page.evaluate(() => {

@@ -350,11 +350,18 @@ void main() {
   float prevClassId = uUsePalette > 0.5
     ? floor(prevSecond / 16.0)
     : prevSecond;
+  // CW-89 (D-125): and BLANK IS NEVER HELD, NOR DOES IT BLOCK INK. The CPU
+  // rule is glyphWithMemory() in _hfm-hysteresis.js and this must stay the
+  // same rule - if the two disagree, a cell is painted with one path's glyph
+  // and the other's drive. The memory chooses between CHARACTERS; whether a
+  // cell has content at all was decided before it, by the blank floor.
   bool keepable =
     hasPrev &&
     uGlyphBand > 0.0 &&
     prevHold < uHoldFrames &&
     reversed == prevReversed &&
+    best != int(uSpaceIndex) &&
+    prevGlyph != int(uSpaceIndex) &&
     (uHasClass < 0.5 || prevClassId == classId);
   if (keepable && prevGlyph != best) {
     vec4 pa = texelFetch(uGlyphs, ivec2(prevGlyph, 0), 0);
