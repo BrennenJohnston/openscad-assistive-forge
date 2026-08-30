@@ -627,6 +627,116 @@ the same 2,156 lit. Standing, the storefront class actually settles better
 brightness is untouched - that is the luminance treatment the owner chose at
 G1, and this release does not go near it.
 
+### Lamps where the city has them, and the ground under it
+
+Every street lamp in this game was invented. `highway=street_lamp` was never
+queried, so the 221 lamps OpenStreetMap records inside Seattle's circle, the
+520 in Denver's, the 115 in Albuquerque's and the 142 in Burnaby's were all
+invisible to it, and one procedural lamp stood every 30 metres on every street
+of six road classes - and none at all on a pedestrian street.
+
+Three things changed, and each of them found something.
+
+**The map's own lamps go down first, and claim their stretch.** A procedural
+stream exists to light a street the map is silent about, not to double up on
+one it has already described, so a mapped lamp suppresses the invented ones
+within a share of that street's own interval.
+
+**Seattle carries a surveyed register.** Seattle City Light publishes every
+pole it owns with a "has streetlight" flag, and the owner authorised its use
+(CW-Q76) knowing the publisher states no licence. What it holds inside the
+baked circle:
+
+| | |
+|---|---|
+| poles returned | 4,115 |
+| of them flagged as carrying a streetlight | 3,679 |
+| with a height recorded | 1,366 (the rest record 0, meaning "not surveyed") |
+| nearest-neighbour spacing | p10 8.1 m, **median 16.7 m**, p90 29.1 m |
+
+★ **The service's own count is wrong by five times, and only the geometry says
+so.** `returnCountOnly` and `returnIdsOnly` both report 21,703 poles inside
+that circle. Fetching the features and measuring their distances gives 4,115,
+the furthest at 1,295 m of a 1,300 m radius. The same disagreement holds at
+200 m (1,484 claimed, 170 measured) and 400 m (4,174 claimed, 675 measured).
+The bake believes the features and re-checks every point against the radius
+itself. A count endpoint that cannot be reproduced by the features it counts
+is not evidence.
+
+★ **A surveyed pole register is the first thing able to measure how wide our
+roads really are.** 572 of the 3,679 lit poles stand inside a ribbon this game
+draws - and Seattle City Light does not put poles in traffic lanes, so the
+ribbon is what is wrong. The disagreement splits cleanly by class:
+
+| class | poles inside | median depth | worst |
+|---|---|---|---|
+| primary | 204 | 1.06 m | 6.73 m |
+| secondary | 116 | 0.83 m | 5.36 m |
+| service | 70 | 1.07 m | 1.99 m |
+| residential | 19 | 0.71 m | 2.87 m |
+| **motorway** | **114** | **4.86 m** | **7.89 m** |
+| **trunk** | **9** | **5.53 m** | 6.94 m |
+
+On an ordinary street the two descriptions disagree by about a metre: the game
+ribbon is slightly wider than the real carriageway, and the pole is nudged out
+to the kerb along the ribbon's own outward normal. On the freeway they
+disagree by five, because I-5 runs below grade there and the game draws a flat
+16 metre band across it - those poles are dropped and counted, since moving
+one five metres is inventing a position rather than correcting one.
+
+**Spacing follows the city's own standard.** Seattle Streets Illustrated 3.6:
+a street 50 ft (15.2 m) wide or less takes street lights alternating every
+180 ft (55 m); a wider one takes opposite pairs every 250 ft (76 m); a
+pedestrian street takes luminaires every 60 ft (18 m).
+
+★ **The wide-street rule cannot fire in any of these four cities, and the code
+says so out loud.** Every class this game lights is 14 m or narrower, and the
+only class wider than 15.2 m - motorway - has been deliberately unlit since
+CW-18. The rule is written against the WIDTH rather than the class name so a
+future change reaches it, and a unit test drives it with a synthetic 18 m road,
+because a rule nothing exercises is a rule nobody has tested.
+
+★ **And the standard says one more thing than this release implements.** Its
+full sentence is "street lights alternating every 180 ft, **pedestrian lights
+between them at 60 ft**" - so on a real Seattle street a walker passes a
+luminaire every 18 m, not every 55. That is exactly what City Light's register
+measures: a median of 16.7 m. This release lights ordinary streets at the
+street-light interval only, which is what its plan specified, and the
+consequence is that the three cities with no surveyed register get about half
+the lamps they had. Seattle does not, because its register supplies the real
+ones. The choice between the two readings is an owner question with the
+numbers now attached to it.
+
+**The ground, sampled but not yet drawn.** The extracts also carry a terrain
+grid, so a later release can put Seattle's hills back:
+
+| | |
+|---|---|
+| source | USGS 3DEP (EPQS) for the three US cities; NRCan CDEM/HRDEM for Burnaby |
+| licence | public domain / Open Government Licence - Canada, both written into the file |
+| grid | 30 m, square, centred on the city, clipped to the bake radius |
+
+★ **A burst is not a throughput.** Forty samples measured 21 per second at
+concurrency 8 and 41 at 16. Two hundred sustained samples, same machine, same
+minute, measure 1.2, 1.8 and 4.3 - the first numbers were the connection pool
+warming up. The grid step is 30 m rather than 20 because of the second set:
+5,913 points for Seattle instead of 13,273, for a difference no 3x6 pixel
+character cell can show.
+
+★ **HTTP 200 is not an answer.** EPQS returns 200 with an empty body often
+enough to hit once inside the first 2,000 points of a Seattle bake, and an
+unguarded `await response.json()` threw out of the worker, out of `Promise.all`
+and out of the whole script, twenty minutes in. An unreadable body is now a
+retryable failure like any other, and the sample cache is flushed as it goes
+so a crash costs nothing.
+
+★ **A gate that cannot see its own warnings is not a gate.** The bake refuses
+to write an extract if Overpass or the sampler reported a problem - and the
+first version of that check filtered its input for `/WARNING:|ERROR:/`, which
+none of the sampler's own messages contain. A unit test asked what the pattern
+actually matched and the answer was "not our own warnings". Any reported
+problem is now fatal.
+
 ## What this document is not
 
 It is not a commitment, an estimate, or a design review. Anyone starting either

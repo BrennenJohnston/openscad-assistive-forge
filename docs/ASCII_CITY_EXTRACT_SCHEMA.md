@@ -1,4 +1,4 @@
-# The `ascii-city-extract@1` format
+# The `ascii-city-extract` format
 
 This is the file format the ASCII City Walk reads: a trimmed extract of
 OpenStreetMap data describing one city centre. It is written by
@@ -22,7 +22,7 @@ to about 0.1 m.
 
 ```json
 {
-  "format": "ascii-city-extract@1",
+  "format": "ascii-city-extract@2",
   "name": "seattle",
   "center": { "lat": 47.6089, "lon": -122.3357 },
   "radiusM": 707,
@@ -38,7 +38,7 @@ to about 0.1 m.
 
 | field | type | what it means |
 | --- | --- | --- |
-| `format` | string | Always `ascii-city-extract@1` for this version. Check it before trusting anything else. |
+| `format` | string | `ascii-city-extract@1` or `@2`. Check it before trusting anything else; the versions are ADDITIVE, so a v1 reader handles a v2 file correctly and simply sees less of it. |
 | `name` | string | The slug the file is stored under, such as `seattle`. |
 | `center` | `{lat, lon}` | The projection origin. Every coordinate in the parsed model is in metres from this point. |
 | `radiusM` | number | The radius the extract was queried with, in metres. |
@@ -141,6 +141,10 @@ the size of the raw Overpass response.
 | `height`, `building:height` | The building's height, in metres or feet. |
 | `building:levels` | Storey count, used when no height is tagged. |
 | `min_height`, `building:min_level` | Where the volume starts, for things that do not touch the ground. |
+| `wikidata` | A stable identity for a landmark, where a name is not one. |
+| `layer`, `location` | How the map says a building is below the street. Both are read at BAKE time and such buildings are dropped from the extract; they are kept in the tag list so the bake can see them. |
+| `incline`, `ele` | OpenStreetMap's own slope and spot heights. Sparse - 28 of Seattle's 4,117 sidewalks carry an incline and none of the other three cities carries any - which is why the terrain comes from a DEM instead. |
+| `lamp_mount`, `support`, `operator`, `ref` | A street lamp's luminaire, its pole, whose asset it is and its id in that owner's register. |
 | `name` | Building and landmark names, and street names. |
 | `highway` | Road class, which sets the drawn width. |
 | `tourism`, `historic`, `amenity` | Landmark scoring. |
@@ -214,6 +218,74 @@ Two consequences for anyone writing an extract:
   `building` query.
 - Do not filter them out for lacking a `building` tag.
 
+### `ascii-city-extract@2`
+
+Version 2 (CW-77) is **additive**. Everything version 1 carried is present
+and unchanged, so a version 1 reader gets exactly the city it always got. Two
+things are new:
+
+- **`elevation`** - a terrain block, described below.
+- **`highway=street_lamp` nodes** - the lamps the map actually records, which
+  earlier versions never queried at all.
+
+Two things also changed about what is IN the file, and both are subtractions
+the game used to make at load time or not at all:
+
+- A building tagged `layer` below zero or `location=underground` is dropped at
+  bake time. It is not part of the street, and the game had been extruding it
+  from ground level like any other building.
+- `building:part` ways under 10 m2 were already dropped; that is unchanged.
+
+### The terrain block
+
+```js
+elevation: {
+  originX, originY,      // metres, relative to the city centre
+  stepM,                 // grid step; 30 m as shipped
+  cols, rows,            // the grid is square and centred on the city
+  inCircle,              // how many cells are inside the bake radius at all
+  samples: [ ... ],      // row-major, metres above sea level, null for a hole
+  source, license, attribution
+}
+```
+
+The grid is sampled at bake time from a national 1 m digital elevation model:
+USGS 3DEP through the EPQS point service for the three US cities (public
+domain), and Natural Resources Canada's CDEM/HRDEM altitude service for
+Burnaby (Open Government Licence - Canada). The licence and the requested
+credit travel in the file.
+
+`null` means the service had no answer there, and it is never written as
+zero: sea level is a real height and "no answer" is not. The parser turns
+those into `NaN` and reports `coverage`, measured against `inCircle` rather
+than against the whole rectangle - a circle fills only about 61 % of its own
+bounding square, and calling that "61 % covered" would read as missing data
+when nothing is missing.
+
+**Google Maps, Earth and Street View are prohibited** as a source for anything
+in this repository, including elevation.
+
+### Street lamps
+
+`highway=street_lamp` nodes ride their own list on the model (`model.lamps`),
+not the street furniture list: furniture is a separate stream with its own
+geometry and its own pinned counts, and folding lamps into it would move every
+furniture number in the game for no reason a reader could follow.
+
+A mapped lamp is placed FIRST and claims the stretch of street around it; the
+procedural stream then fills only the gaps. Where the map is silent, spacing
+follows Seattle Streets Illustrated 3.6: a street 15.2 m wide or less gets
+lamps alternating every 55 m, a wider one gets opposite pairs every 76 m, and
+a pedestrian street gets luminaires every 18 m.
+
+Seattle's extract additionally carries Seattle City Light's own surveyed pole
+register, on the project owner's explicit authorisation (CW-Q76) after being
+told the publisher's catalog page states no licence. Those nodes carry
+`operator=Seattle City Light` and a **negative id**: OpenStreetMap ids are
+positive, so a negative id marks an element that is not from OSM, and the ODbL
+statement on the file keeps meaning exactly what it says. The extract's
+`poleSource` block records the service, the publisher and the authorisation.
+
 ## What the parser gives you
 
 `parseCityExtract(extract)` turns the file into flat, renderer-ready data.
@@ -244,6 +316,9 @@ draws it.
     }
   ],
   roads: [{ points: [[x, y], ...], widthM, kind, name, sidewalk, surface }],
+  // CW-77. `lamps` is empty for a v1 extract; `elevation` is null.
+  lamps: [{ x, y, mount, heightM, operator, ref }],
+  elevation: { originX, originY, stepM, cols, rows, inCircle, samples: Float32Array, coverage, minM, maxM, source, license, attribution } | null,
   trees: [{ x, y, leafType?, genus?, species?, denotation? }, ...],
   greens: [{ outer: [[x, y], ...], kind }],
   pois: [{ x, y, kind }],

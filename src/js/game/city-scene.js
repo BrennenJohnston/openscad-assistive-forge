@@ -4846,9 +4846,108 @@ const LAMP_ROAD_KINDS = new Set([
   'residential',
   'unclassified',
   'living_street',
+  // CW-77: a pedestrian street is the most heavily lit street a city has -
+  // Seattle's own standard gives it a luminaire every 60 ft - and this game
+  // gave it none at all, because the set above was written from the classes
+  // that carry cars. Post Alley was unlit until this release.
+  'pedestrian',
 ]);
-const LAMP_SPACING_M = 30;
+// CW-77: spacing by road class, from Seattle Streets Illustrated 3.6 (the
+// city's own lighting standard) rather than one number for every street:
+//
+//   * a street 50 ft (15.2 m) wide or less gets street lights ALTERNATING
+//     every 180 ft (55 m), so one side and then the other;
+//   * a wider street gets OPPOSITE PAIRS every 250 ft (76 m), both sides at
+//     the same station;
+//   * a pedestrian street gets pedestrian luminaires every 60 ft (18 m),
+//     which is why a shopping street reads as lit and a back street does not.
+//
+// ★ THE WIDE RULE DOES NOT FIRE IN THESE FOUR CITIES, and saying so is the
+// point. Every road class this game lights is 14 m or narrower in
+// ROAD_WIDTHS_M (primary and trunk are the widest at 14), and the two classes
+// that would exceed 15 m - motorway and trunk - are deliberately unlit since
+// CW-18. The rule is implemented against the WIDTH, which is the standard's
+// own criterion, so a future width change or a new class reaches it without
+// anyone remembering to; a unit test drives it with an 18 m road, because a
+// rule nothing exercises is a rule nobody has tested (CW-74).
+//
+// ★★ AND THE ORDINARY-STREET INTERVAL IS 18 m, NOT 55, BECAUSE HALF A
+// SENTENCE IS NOT A STANDARD. The release plan quoted "street lights
+// alternating every 180 ft" and stopped there; the standard's own sentence
+// continues "...pedestrian lights between them at 60 ft". A walker on a lit
+// Seattle street therefore passes a luminaire every 18 m, and the two things
+// that can be checked against the world both say so:
+//
+//   * Seattle City Light's surveyed register measures a median
+//     nearest-neighbour spacing of 16.7 m over 3,679 lit poles.
+//   * At 55 m the three cities with no such register lose 40 % of their
+//     lamps (Albuquerque 915 -> 545, Burnaby 531 -> 352), and the CW-45 bird
+//     pin fires: Albuquerque's roadrunner falls 13 -> 5 against a 40 % lamp
+//     cut, which is a DISPROPORTIONATE loss and exactly the starvation that
+//     pin was written to catch. At 18 m it is 23.
+//
+// So 55 m is the interval of one KIND of lamp, not the interval of light. The
+// game draws one kind of pole, so it draws them at the interval a walker
+// actually meets one. Reversal: set this to 55 and re-run the bird pins.
+const LAMP_WIDE_STREET_M = 15.2;
+const LAMP_SPACING_NARROW_M = 18;
+const LAMP_SPACING_WIDE_M = 76;
+const LAMP_SPACING_PEDESTRIAN_M = 18;
 const LAMP_END_MARGIN_M = 4;
+
+/**
+ * How this road is lit: the interval, and whether the two sides alternate or
+ * stand opposite each other.
+ *
+ * @param {{kind:string, widthM:number}} road
+ * @returns {{spacingM:number, paired:boolean}}
+ */
+export function lampLayoutFor(road) {
+  if (road.kind === 'pedestrian' || road.kind === 'living_street') {
+    return { spacingM: LAMP_SPACING_PEDESTRIAN_M, paired: false };
+  }
+  // The two intervals are the same number today and are kept apart on
+  // purpose: one is a pedestrian luminaire's own spacing and the other is
+  // what an ordinary street works out to once its pedestrian lights are
+  // counted. If either moves, it moves alone.
+  if ((road.widthM ?? 0) > LAMP_WIDE_STREET_M) {
+    return { spacingM: LAMP_SPACING_WIDE_M, paired: true };
+  }
+  return { spacingM: LAMP_SPACING_NARROW_M, paired: false };
+}
+
+// A mapped lamp CLAIMS ONE FULL INTERVAL around it: the procedural stream
+// exists to light a street the map is silent about, not to double up on one
+// it has already described. The claim is the street's own interval rather
+// than a fixed distance, so the rule means the same thing on a pedestrian
+// street and on an arterial.
+//
+// ★ A SHARE OF THE INTERVAL IS NOT ENOUGH, and a unit test said so. At 0.6 a
+// street whose map gives a lamp every 25 m has slots 12.5 m from the nearest
+// mapped one - outside a 10.8 m claim - so the stream filled a street that
+// was already fully described. One interval is the honest radius: where the
+// map has spoken within an interval, it has spoken.
+const LAMP_CLAIM_SHARE = 1;
+// makePointGrid only searches its own cell and the ring around it, so the
+// cell has to be at least as big as the widest question anyone asks of it -
+// which is the widest interval in the table, not the one this city uses.
+const LAMP_CLAIM_CELL_M = 80;
+
+// ★ A SURVEYED POLE IS NOT IN THE ROAD; OUR RIBBON IS TOO WIDE. Seattle City
+// Light's register puts 572 of its 3,679 lit poles inside a ribbon this game
+// draws - and City Light does not stand poles in traffic lanes. Measured, the
+// disagreement is small on ordinary streets (p50 0.8-1.3 m inside on
+// secondary, residential and service) and large on the freeway (p50 4.9 m on
+// motorway, 5.5 m on trunk), where I-5 runs below grade and the game draws a
+// flat 16 m band across it.
+//
+// So a mapped lamp shallowly inside a ribbon is NUDGED out to the kerb along
+// the ribbon's own outward normal - our approximation yields to the survey -
+// and one deeper than this is dropped and counted, because there the two are
+// not disagreeing by a metre, they are describing different worlds. The
+// threshold is the roadway index's own slack, past which it refuses to answer
+// at all.
+const LAMP_NUDGE_MAX_M = 2;
 // Just outside the curb ribbon, on the sidewalk, inside the tree line.
 const LAMP_CURB_OFFSET_M = 0.45;
 const LAMP_MIN_TREE_GAP_M = 1.6;
@@ -5327,6 +5426,17 @@ export function buildStreetProps(model, collision = null) {
   let treesDropped = 0;
   let treesSkippedInRoad = 0;
   let lampsSkippedInRoad = 0;
+  // CW-77: what the map gave us, and what became of it. `lampsMapped` counts
+  // the ones that STOOD, never the ones considered - a counter whose name
+  // does not match what it counts is how a census comes to report 520 mapped
+  // lamps stood beside 36 refused out of 520 offered.
+  let lampsMappedConsidered = 0;
+  let lampsMapped = 0;
+  let lampsMappedNudged = 0;
+  let lampsMappedInRoad = 0;
+  let lampsMappedBlocked = 0;
+  let lampsMappedCrowded = 0;
+  let lampsProcedural = 0;
   let peopleSkippedInRoad = 0;
   let roadsWithoutParking = 0;
   let carsRefusedOverlap = 0;
@@ -5334,6 +5444,9 @@ export function buildStreetProps(model, collision = null) {
   const treeSpots = makePointGrid(PROP_SPATIAL_CELL_M);
   const carSpots = makePointGrid(PROP_SPATIAL_CELL_M);
   const lampSpots = makePointGrid(PROP_SPATIAL_CELL_M);
+  // A second index, coarse enough to answer the claim question (see
+  // LAMP_CLAIM_CELL_M). Only mapped lamps go in it.
+  const mappedLampSpots = makePointGrid(LAMP_CLAIM_CELL_M);
   // CW-75: every car this build placed, parked and moving alike, as the
   // rectangle it actually occupies. The parked stream already stamps its
   // cars into `obstacles`, but the frozen traffic never did - which is why
@@ -5786,6 +5899,108 @@ export function buildStreetProps(model, collision = null) {
     personSpots.add(sx, sy);
   });
 
+  /**
+   * Stand one lamp. Both streams go through here, so a mapped lamp and an
+   * invented one are the same object in the world and no reader has to check
+   * which of two copies of this code they are looking at.
+   *
+   * `reachSide` is which way the head cantilevers: +1 or -1 along the road's
+   * left normal, or 0 for a lamp with no road to lean over.
+   */
+  const standLamp = (x, y, angle, nx, ny, reachSide) => {
+    poleGeoms.push(
+      makeBox(
+        POLE_SIDE_M,
+        POLE_SIDE_M,
+        POLE_HEIGHT_M,
+        x,
+        y,
+        POLE_HEIGHT_M / 2,
+        0,
+        POLE_TINT
+      )
+    );
+    const hx = x - nx * LAMP_HEAD_REACH_M * reachSide;
+    const hy = y - ny * LAMP_HEAD_REACH_M * reachSide;
+    lampHeadGeoms.push(
+      makeBox(
+        LAMP_HEAD_LENGTH_M,
+        LAMP_HEAD_WIDTH_M,
+        LAMP_HEAD_THICK_M,
+        hx,
+        hy,
+        LAMP_HEAD_Z_M,
+        angle,
+        LAMP_HEAD_TINT
+      )
+    );
+    lampSpots.add(x, y);
+    placedLampHeads.push({ x: hx, y: hy, angle });
+    obstacles.push({
+      x,
+      y,
+      halfLengthM: POLE_SIDE_M / 2,
+      halfWidthM: POLE_SIDE_M / 2,
+      rotationRad: 0,
+    });
+  };
+
+  // 1b. THE LAMPS THE MAP ACTUALLY GIVES US, before anything is invented.
+  //
+  // Seattle carries City Light's own surveyed register (CW-Q76); the other
+  // three carry OpenStreetMap's `highway=street_lamp` nodes. Either way these
+  // are real positions and they go down FIRST, so the procedural stream below
+  // fills the gaps between them rather than doubling up on a street the map
+  // has already described.
+  for (const lamp of model.lamps ?? []) {
+    let { x, y } = lamp;
+    if (!inCore(x, y)) continue;
+    lampsMappedConsidered++;
+    // ★ OUR RIBBON IS THE APPROXIMATION, NOT THE SURVEY. A pole shallowly
+    // inside a drawn roadway is pushed out to its kerb along the ribbon's own
+    // outward normal; one deeper than the index's slack is a pole beside a
+    // road we draw as a flat band over a trench, and it is dropped rather
+    // than moved a lie's worth of distance.
+    const hit = inRoadway(x, y, POLE_SIDE_M / 2);
+    if (hit) {
+      const out = hit.inside + POLE_SIDE_M;
+      if (out > LAMP_NUDGE_MAX_M) {
+        lampsMappedInRoad++;
+        continue;
+      }
+      x += hit.nx * out;
+      y += hit.ny * out;
+      if (inRoadway(x, y, POLE_SIDE_M / 2)) {
+        lampsMappedInRoad++;
+        continue;
+      }
+      lampsMappedNudged++;
+    }
+    if (isBlocked(x, y)) {
+      lampsMappedBlocked++;
+      continue;
+    }
+    if (lampSpots.occupied(x, y, LAMP_MIN_LAMP_GAP_M)) {
+      lampsMappedCrowded++;
+      continue;
+    }
+    if (treeSpots.occupied(x, y, LAMP_MIN_TREE_GAP_M)) {
+      lampsMappedCrowded++;
+      continue;
+    }
+    if (furnitureSpots.occupied(x, y, FURNITURE_CLEAR_M)) {
+      lampsMappedCrowded++;
+      continue;
+    }
+    // A mapped lamp has no road of its own to lean over, so its head sits on
+    // the pole and takes the angle of the nearest road segment - which is the
+    // same thing the planters and picnic tables do for their facing.
+    const near = segmentAngles.nearest(x, y);
+    standLamp(x, y, near ? near.angle : 0, 0, 0, 0);
+    mappedLampSpots.add(x, y);
+    lampsMapped++;
+  }
+
   // 2. Procedural infill along ordinary curbs, and the parked cars. Both
   //    walk the road segments; each road carries its own deterministic
   //    number stream so a city lays out identically on every machine.
@@ -5836,8 +6051,17 @@ export function buildStreetProps(model, collision = null) {
           TRAFFIC_END_MARGIN_M + trafficRng() * trafficSpacingM,
         ]
       : [0, 0];
+    // CW-77: how THIS street is lit (Seattle Streets Illustrated 3.6).
+    const lampLayout = lampLayoutFor(road);
+    // ...and how far a mapped lamp reaches when it claims its stretch: one
+    // interval ALONG the street, plus the street's own half width, because a
+    // pole mapped on the far kerb is still this street's lamp. Without the
+    // width the claim misses the opposite side by a metre or two and the
+    // stream quietly lights a street the map had already described.
+    const claimM =
+      lampLayout.spacingM * LAMP_CLAIM_SHARE + (road.widthM ?? 0) / 2;
     let lampCursor = lampRng
-      ? LAMP_END_MARGIN_M + lampRng() * LAMP_SPACING_M
+      ? LAMP_END_MARGIN_M + lampRng() * lampLayout.spacingM
       : 0;
     let lampSide = lampRng && lampRng() < 0.5 ? -1 : 1;
 
@@ -5984,62 +6208,34 @@ export function buildStreetProps(model, collision = null) {
       if (lampRng) {
         while (lampCursor <= len) {
           const along = lampCursor;
-          lampCursor += LAMP_SPACING_M;
-          const x = x1 + ux * along + nx * lampOffset * lampSide;
-          const y = y1 + uy * along + ny * lampOffset * lampSide;
-          const side = lampSide;
-          lampSide = -lampSide;
-          if (!inCore(x, y)) continue;
-          if (isBlocked(x, y)) continue;
-          if (treeSpots.occupied(x, y, LAMP_MIN_TREE_GAP_M)) continue;
-          if (lampSpots.occupied(x, y, LAMP_MIN_LAMP_GAP_M)) continue;
-          if (furnitureSpots.occupied(x, y, FURNITURE_CLEAR_M)) continue;
-          // Outside this road's kerb can still be inside the next one's -
-          // which is how 373 poles came to stand on tarmac, most of them in
-          // the I-5 trench where the ribbons overlap (CW-75).
-          if (inRoadway(x, y, POLE_SIDE_M / 2)) {
-            lampsSkippedInRoad++;
-            continue;
+          lampCursor += lampLayout.spacingM;
+          // A narrow street alternates sides; a wide one carries an opposite
+          // PAIR at each station, which is what a 250 ft standard means.
+          const sides = lampLayout.paired ? [1, -1] : [lampSide];
+          if (!lampLayout.paired) lampSide = -lampSide;
+          for (const side of sides) {
+            const x = x1 + ux * along + nx * lampOffset * side;
+            const y = y1 + uy * along + ny * lampOffset * side;
+            if (!inCore(x, y)) continue;
+            if (isBlocked(x, y)) continue;
+            if (treeSpots.occupied(x, y, LAMP_MIN_TREE_GAP_M)) continue;
+            if (lampSpots.occupied(x, y, LAMP_MIN_LAMP_GAP_M)) continue;
+            if (furnitureSpots.occupied(x, y, FURNITURE_CLEAR_M)) continue;
+            // ★ A MAPPED LAMP CLAIMS ITS STRETCH. The procedural stream is
+            // here to light a street the map is silent about; where the map
+            // has already put a lamp within a share of this street's own
+            // interval, there is nothing to invent.
+            if (mappedLampSpots.occupied(x, y, claimM)) continue;
+            // Outside this road's kerb can still be inside the next one's -
+            // which is how 373 poles came to stand on tarmac, most of them in
+            // the I-5 trench where the ribbons overlap (CW-75).
+            if (inRoadway(x, y, POLE_SIDE_M / 2)) {
+              lampsSkippedInRoad++;
+              continue;
+            }
+            standLamp(x, y, angle, nx, ny, side);
+            lampsProcedural++;
           }
-
-          poleGeoms.push(
-            makeBox(
-              POLE_SIDE_M,
-              POLE_SIDE_M,
-              POLE_HEIGHT_M,
-              x,
-              y,
-              POLE_HEIGHT_M / 2,
-              0,
-              POLE_TINT
-            )
-          );
-          // The head reaches back over the roadway from its pole.
-          lampHeadGeoms.push(
-            makeBox(
-              LAMP_HEAD_LENGTH_M,
-              LAMP_HEAD_WIDTH_M,
-              LAMP_HEAD_THICK_M,
-              x - nx * LAMP_HEAD_REACH_M * side,
-              y - ny * LAMP_HEAD_REACH_M * side,
-              LAMP_HEAD_Z_M,
-              angle,
-              LAMP_HEAD_TINT
-            )
-          );
-          lampSpots.add(x, y);
-          placedLampHeads.push({
-            x: x - nx * LAMP_HEAD_REACH_M * side,
-            y: y - ny * LAMP_HEAD_REACH_M * side,
-            angle,
-          });
-          obstacles.push({
-            x,
-            y,
-            halfLengthM: POLE_SIDE_M / 2,
-            halfWidthM: POLE_SIDE_M / 2,
-            rotationRad: 0,
-          });
         }
         lampCursor -= len;
       }
@@ -6612,6 +6808,9 @@ export function buildStreetProps(model, collision = null) {
      * @type {Array<{x:number, y:number, halfLengthM:number, halfWidthM:number, rotationRad:number, stream:'parked'|'traffic'}>}
      */
     carFootprints,
+    // CW-77: where every lamp head ended up, so the census can measure the
+    // SPACING - a lamp count cannot say whether a street is lit.
+    lampHeads: placedLampHeads,
     obstacles,
     /**
      * The map view is a clean street network seen from a kilometer up:
@@ -6643,6 +6842,13 @@ export function buildStreetProps(model, collision = null) {
       treesDropped,
       treesSkippedInRoad,
       lampsSkippedInRoad,
+      lampsMappedConsidered,
+      lampsMapped,
+      lampsMappedNudged,
+      lampsMappedInRoad,
+      lampsMappedBlocked,
+      lampsMappedCrowded,
+      lampsProcedural,
       peopleSkippedInRoad,
       roadsWithoutParking,
       carsRefusedOverlap,

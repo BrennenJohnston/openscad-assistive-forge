@@ -801,15 +801,39 @@ describe('the bake keeps what the silhouettes need (CW-26)', () => {
         building: 'yes',
         'addr:housenumber': '12',
         'source:date': '2019',
-        wikidata: 'Q1',
-        operator: 'Someone',
+        'fixme': 'check this',
+        note: 'a note to mappers',
       },
     })
     expect(el.tags.building).toBe('yes')
     expect(el.tags['addr:housenumber']).toBeUndefined()
     expect(el.tags['source:date']).toBeUndefined()
-    expect(el.tags.wikidata).toBeUndefined()
-    expect(el.tags.operator).toBeUndefined()
+    expect(el.tags.fixme).toBeUndefined()
+    expect(el.tags.note).toBeUndefined()
+  })
+
+  it('CW-77 keeps wikidata and operator, which it used to throw away', () => {
+    // Both were dropped until CW-77, and both are now load-bearing: wikidata
+    // is the stable identity a landmark registry needs where a NAME is not
+    // one (CW-62), and operator is how a reader tells Seattle City Light's
+    // surveyed poles from OpenStreetMap's own lamps in the same file.
+    const el = trimOverpassElement({
+      type: 'node',
+      id: 3,
+      lat: 0,
+      lon: 0,
+      tags: {
+        highway: 'street_lamp',
+        wikidata: 'Q1',
+        operator: 'Seattle City Light',
+        ref: '1353729',
+        lamp_mount: 'bent_mast',
+      },
+    })
+    expect(el.tags.wikidata).toBe('Q1')
+    expect(el.tags.operator).toBe('Seattle City Light')
+    expect(el.tags.ref).toBe('1353729')
+    expect(el.tags.lamp_mount).toBe('bent_mast')
   })
 })
 

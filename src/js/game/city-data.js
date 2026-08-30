@@ -248,6 +248,17 @@ export const FURNITURE_AMENITY_VALUES = [
   'bicycle_parking',
 ];
 export const FURNITURE_HIGHWAY_VALUES = ['bus_stop', 'crossing'];
+
+/**
+ * CW-77: mapped street lamps.
+ *
+ * Kept OUT of `furniture` on purpose. `furniture` is CW-43's stream, with its
+ * own geometry, its own spacing grid and exact e2e counts; a lamp is drawn by
+ * the lamp stream instead, and folding one into the other would move every
+ * furniture count in the game for no reason a reader could follow. They ride
+ * their own list.
+ */
+export const LAMP_HIGHWAY_VALUE = 'street_lamp';
 export const FURNITURE_EMERGENCY_VALUES = ['fire_hydrant'];
 
 /**
@@ -656,6 +667,78 @@ export function resolveMassing(buildings) {
   return out;
 }
 
+/**
+ * CW-77: the terrain block an `ascii-city-extract@2` carries, validated.
+ *
+ * The bake samples a national 1 m DEM on a regular grid clipped to the
+ * circle and writes it as a flat row-major array with its own origin, step
+ * and dimensions, plus the licence and attribution the source requires. This
+ * turns it into something a heightfield can be built from and REFUSES a block
+ * it cannot trust rather than handing on a half-filled grid: a wrong terrain
+ * is a walker sunk to the knee or floating, which is worse than flat ground.
+ *
+ * Returns null for a v1 extract, which is the whole additive promise.
+ *
+ * @param {Object|undefined} raw
+ * @returns {{originX:number, originY:number, stepM:number, cols:number, rows:number, samples:Float32Array, coverage:number, minM:number, maxM:number, source:string, license:string, attribution:string}|null}
+ */
+export function parseElevation(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const { originX, originY, stepM, cols, rows } = raw;
+  const finite = (v) => typeof v === 'number' && Number.isFinite(v);
+  if (![originX, originY, stepM, cols, rows].every(finite)) return null;
+  if (!(stepM > 0) || !(cols > 1) || !(rows > 1)) return null;
+  if (!Array.isArray(raw.samples) || raw.samples.length !== cols * rows) {
+    return null;
+  }
+
+  // A null in the grid is a point the service had no data for, and it stays a
+  // hole rather than a zero: sea level is a real height and "no answer" is
+  // not. `coverage` is what fraction of the grid answered, so a consumer can
+  // refuse a city that is mostly holes.
+  const samples = new Float32Array(cols * rows);
+  let filled = 0;
+  let minM = Infinity;
+  let maxM = -Infinity;
+  for (let i = 0; i < samples.length; i++) {
+    const v = raw.samples[i];
+    if (typeof v === 'number' && Number.isFinite(v)) {
+      samples[i] = v;
+      filled++;
+      if (v < minM) minM = v;
+      if (v > maxM) maxM = v;
+    } else {
+      samples[i] = Number.NaN;
+    }
+  }
+  if (filled === 0) return null;
+
+  // Coverage is measured against the points the bake ASKED FOR, not against
+  // the whole rectangle: a circle fills about 61 % of its bounding square at
+  // this step, and reporting that as 61 % covered would read as "a third of
+  // the terrain is missing" when nothing is.
+  const asked =
+    typeof raw.inCircle === 'number' && raw.inCircle > 0
+      ? raw.inCircle
+      : samples.length;
+
+  return {
+    originX,
+    originY,
+    stepM,
+    cols,
+    rows,
+    samples,
+    inCircle: asked,
+    coverage: Math.min(1, filled / asked),
+    minM,
+    maxM,
+    source: typeof raw.source === 'string' ? raw.source : '',
+    license: typeof raw.license === 'string' ? raw.license : '',
+    attribution: typeof raw.attribution === 'string' ? raw.attribution : '',
+  };
+}
+
 /** Exact-coordinate key for ring stitching (Overpass repeats node coords). */
 function pointKey(pt) {
   return `${pt.lat},${pt.lon}`;
@@ -879,6 +962,8 @@ export function parseCityExtract(extract, options = {}) {
   const plantings = [];
   const picnicTables = [];
   const partWays = [];
+  // CW-77: mapped street lamps, their own stream (see LAMP_HIGHWAY_VALUE).
+  const lamps = [];
   let droppedRings = 0;
   let droppedElements = 0;
   let orphanParts = 0;
@@ -936,6 +1021,24 @@ export function parseCityExtract(extract, options = {}) {
       if (PICNIC_LEISURE_VALUES.includes(tags.leisure)) {
         const [x, y] = projectLatLon(el.lat, el.lon, center);
         picnicTables.push({ x, y });
+        continue;
+      }
+      // CW-77: a mapped street lamp, at its own position. Routed before the
+      // furniture branch for the same reason the furniture branch sits before
+      // the poi one: a lamp is a highway node and must not fall through into
+      // something that dresses a ground floor.
+      if (tags.highway === LAMP_HIGHWAY_VALUE) {
+        const [x, y] = projectLatLon(el.lat, el.lon, center);
+        const lamp = { x, y };
+        if (typeof tags.lamp_mount === 'string') lamp.mount = tags.lamp_mount;
+        const lampH = parseLengthMeters(tags.height);
+        if (lampH !== null && lampH > 0) lamp.heightM = lampH;
+        // Whose asset it is. The Seattle extract carries City Light's own
+        // pole register beside OpenStreetMap's lamps (CW-Q76), and a reader
+        // has to be able to tell them apart.
+        if (typeof tags.operator === 'string') lamp.operator = tags.operator;
+        if (typeof tags.ref === 'string') lamp.ref = tags.ref;
+        lamps.push(lamp);
         continue;
       }
       // CW-43 (CW-Q43): rendered street furniture, typed, at the node's true
@@ -1295,6 +1398,11 @@ export function parseCityExtract(extract, options = {}) {
     picnicTables,
     wayfinding,
     attractions,
+    // CW-77: mapped lamps, and the terrain the bake sampled. Both are
+    // ADDITIVE - a v1 extract simply has neither, and every reader of them
+    // has to cope with that.
+    lamps,
+    elevation: parseElevation(extract?.elevation),
     boundsM,
     stats: {
       buildingCount: buildings.length,
@@ -1333,6 +1441,13 @@ export function parseCityExtract(extract, options = {}) {
         return acc;
       }, {}),
       picnicTableCount: picnicTables.length,
+      // CW-77: how many lamps the map actually gave us, and whose they are.
+      lampNodeCount: lamps.length,
+      lampNodesByOperator: lamps.reduce((acc, l) => {
+        const k = l.operator ?? 'OpenStreetMap';
+        acc[k] = (acc[k] ?? 0) + 1;
+        return acc;
+      }, {}),
       leafTypedTreeCount: trees.filter((t) => t.leafType).length,
     },
   };
@@ -1355,6 +1470,25 @@ export function trimOverpassElement(el) {
     'building:min_level',
     'name',
     'highway',
+    // CW-77: what ascii-city-extract@2 adds.
+    //
+    // `wikidata` is the stable identity a landmark registry can be keyed on
+    // where a name cannot (CW-62: names are edited, translated and
+    // disambiguated upstream). `layer` and `location` are how the map says a
+    // building is below the street, which the bake now drops. `incline` is
+    // OSM's own slope, kept for the 28 Seattle sidewalks that carry one even
+    // though a DEM has to do the real work. `ele` is a spot height. Every one
+    // of them is ADDITIVE: a v1 reader ignores what it does not know.
+    'wikidata',
+    'layer',
+    'location',
+    'incline',
+    'ele',
+    // CW-77 street lamps: how the luminaire is carried, where the map says.
+    'lamp_mount',
+    'support',
+    'operator',
+    'ref',
     // Landmark families (CW-10)
     'tourism',
     'historic',

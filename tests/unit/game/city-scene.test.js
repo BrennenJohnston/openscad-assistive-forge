@@ -23,6 +23,7 @@ import {
   TRAVELER_MIN_FROM_SPAWN_M,
   buildTraveler,
   pickTravelerSpot,
+  lampLayoutFor,
 } from '../../../src/js/game/city-scene.js'
 import {
   pickPaletteIndex,
@@ -142,6 +143,196 @@ describe('buildCityGroup', () => {
     expect(group.children.map((c) => c.name)).toContain('ground')
     expect(stats.buildingTriangles).toBe(0)
     dispose()
+  })
+})
+
+describe('lampLayoutFor (CW-77)', () => {
+  it('★ lights an ordinary street every 18 m, which is HALF A SENTENCE more than 55', () => {
+    // Seattle Streets Illustrated 3.6 in full: "street lights alternating
+    // every 180 ft, PEDESTRIAN LIGHTS BETWEEN THEM AT 60 FT". 55 m is the
+    // interval of one kind of lamp; 18 m is the interval at which a walker
+    // meets one, and this game draws one kind of pole. Both checkable facts
+    // agree: City Light's surveyed register measures a 16.7 m median, and at
+    // 55 m the CW-45 roadrunner pin starves (13 -> 5 against a 40 % lamp
+    // cut, where 18 m gives 23).
+    for (const kind of ['residential', 'tertiary', 'secondary', 'primary']) {
+      const l = lampLayoutFor({ kind, widthM: ROAD_WIDTHS_M[kind] })
+      expect(l).toEqual({ spacingM: 18, paired: false })
+    }
+  })
+
+  it('gives a pedestrian street luminaires every 18 m', () => {
+    // 60 ft, and the reason a shopping street reads as lit.
+    expect(lampLayoutFor({ kind: 'pedestrian', widthM: 8 })).toEqual({
+      spacingM: 18,
+      paired: false,
+    })
+    expect(lampLayoutFor({ kind: 'living_street', widthM: 6 })).toEqual({
+      spacingM: 18,
+      paired: false,
+    })
+  })
+
+  it('★ pairs the sides on a street wider than 15.2 m - a rule NO CITY HERE REACHES', () => {
+    // 250 ft opposite pairs. The widest class this game lights is 14 m, and
+    // the two that would qualify - motorway and trunk - have been unlit since
+    // CW-18. So nothing in the four extracts exercises this, and without a
+    // synthetic road the rule would ship untested (CW-74's lesson: a guard
+    // that cannot fail is not a guard).
+    expect(lampLayoutFor({ kind: 'primary', widthM: 18 })).toEqual({
+      spacingM: 76,
+      paired: true,
+    })
+    expect(
+      Object.entries(ROAD_WIDTHS_M).filter(([, w]) => w > 15.2).map(([k]) => k)
+    ).toEqual(['motorway'])
+  })
+
+  it('reads the WIDTH, not the class name', () => {
+    // So a future width change reaches the rule without anyone remembering.
+    expect(lampLayoutFor({ kind: 'residential', widthM: 20 }).paired).toBe(true)
+    expect(lampLayoutFor({ kind: 'motorway', widthM: 9 }).paired).toBe(false)
+  })
+})
+
+describe('buildStreetProps - mapped lamps (CW-77)', () => {
+  /** A straight secondary street, with mapped lamps placed against it. */
+  function lampModel(lamps) {
+    return parseCityExtract(
+      {
+        elements: [
+          {
+            type: 'way',
+            id: 1,
+            tags: { highway: 'secondary' },
+            geometry: [pt(-200, 0), pt(200, 0)],
+          },
+          // Two far buildings, only to stretch the playable core: prop
+          // placement is clipped to the BUILDING bounds, so a street with no
+          // buildings near it gets no props at all.
+          {
+            type: 'way',
+            id: 2,
+            tags: { building: 'yes', height: '10' },
+            geometry: squareRing(-220, 60, 10),
+          },
+          {
+            type: 'way',
+            id: 3,
+            tags: { building: 'yes', height: '10' },
+            geometry: squareRing(220, -60, 10),
+          },
+          {
+            type: 'way',
+            id: 4,
+            tags: { building: 'yes', height: '10' },
+            geometry: squareRing(0, 120, 20),
+          },
+          ...lamps.map((l, i) => ({
+            type: 'node',
+            id: 1000 + i,
+            tags: { highway: 'street_lamp', ...(l.tags ?? {}) },
+            lat: pt(l.x, l.y).lat,
+            lon: pt(l.x, l.y).lon,
+          })),
+        ],
+      },
+      { center: CENTER }
+    )
+  }
+
+  const propsOf = (model) =>
+    buildStreetProps(model, buildCollisionGrid(model))
+
+  it('parses a mapped lamp into its own stream, not into the furniture', () => {
+    const m = lampModel([{ x: -50, y: 9 }])
+    expect(m.lamps).toHaveLength(1)
+    expect(m.stats.lampNodeCount).toBe(1)
+    // ★ CW-43's furniture counts are e2e-pinned; a lamp must not touch them.
+    expect(m.stats.furnitureByKind.street_lamp).toBeUndefined()
+    expect(m.furniture.some((f) => f.kind === 'street_lamp')).toBe(false)
+  })
+
+  it('stands a mapped lamp where the map put it', () => {
+    const { stats } = propsOf(lampModel([{ x: -50, y: 9 }]))
+    expect(stats.lampsMapped).toBe(1)
+    expect(stats.lampsMappedNudged).toBe(0)
+    expect(stats.lampsMappedInRoad).toBe(0)
+  })
+
+  it('★ NUDGES a surveyed pole out of our ribbon rather than deleting it', () => {
+    // A 12 m secondary means a ribbon from -6 to +6. A pole at 5 m is one
+    // metre inside it - which is what 572 of Seattle City Light's 3,679 poles
+    // look like, and City Light does not stand poles in traffic lanes. Our
+    // ribbon is the approximation, so it yields.
+    const { stats } = propsOf(lampModel([{ x: -50, y: 5 }]))
+    expect(stats.lampsMapped).toBe(1)
+    expect(stats.lampsMappedNudged).toBe(1)
+    expect(stats.lampsMappedInRoad).toBe(0)
+  })
+
+  it('...but DROPS one too deep to be a disagreement about a kerb', () => {
+    // A pole on the centre line is 6 m in. On the real freeway that is I-5
+    // running below a flat 16 m band, and moving it 6 m would be inventing a
+    // position, not correcting one.
+    const { stats } = propsOf(lampModel([{ x: -50, y: 0 }]))
+    expect(stats.lampsMappedConsidered).toBe(1)
+    expect(stats.lampsMapped).toBe(0)
+    expect(stats.lampsMappedNudged).toBe(0)
+    expect(stats.lampsMappedInRoad).toBe(1)
+  })
+
+  it('★ a mapped lamp CLAIMS its stretch, so nothing is invented beside it', () => {
+    // Two runs of the same street: one bare, one with lamps mapped every
+    // 25 m along it. The mapped run must not end up with the procedural
+    // lamps as well - that is the whole meaning of "seed".
+    const bare = propsOf(lampModel([]))
+    // Every 25 m: WIDER than the 18 m the stream would use, so the claim has
+    // to reach a full interval to cover the gaps between them. At 0.6 of an
+    // interval it did not, and the stream lit an already-lit street.
+    const mapped = []
+    for (let x = -180; x <= 180; x += 25) mapped.push({ x, y: 8 })
+    const seeded = propsOf(lampModel(mapped))
+    expect(bare.stats.lampsMapped).toBe(0)
+    expect(bare.stats.lampsProcedural).toBeGreaterThan(0)
+    expect(seeded.stats.lampsMapped).toBe(mapped.length)
+    expect(seeded.stats.lampsProcedural).toBe(0)
+  })
+
+  it('fills the gaps where the map is silent', () => {
+    // One lamp at one end leaves the rest of the street to the stream.
+    const { stats } = propsOf(lampModel([{ x: -180, y: 8 }]))
+    expect(stats.lampsMapped).toBe(1)
+    expect(stats.lampsProcedural).toBeGreaterThan(0)
+  })
+
+  it('counts every mapped lamp it could not use, rather than losing it', () => {
+    const { stats } = propsOf(
+      lampModel([
+        { x: -50, y: 9 },
+        // inside the building at (0, 120)
+        { x: 0, y: 120 },
+        // on the centre line
+        { x: 50, y: 0 },
+      ])
+    )
+    // ★ OFFERED is not STOOD. Three lamps were offered, one stood, and the
+    // other two are accounted for by name rather than lost - a counter whose
+    // label does not match what it counts is how a report comes to say "520
+    // stood" beside "36 refused" out of 520 offered.
+    expect(stats.lampsMappedConsidered).toBe(3)
+    expect(stats.lampsMapped).toBe(1)
+    expect(
+      stats.lampsMappedInRoad +
+        stats.lampsMappedBlocked +
+        stats.lampsMappedCrowded
+    ).toBe(2)
+    expect(
+      stats.lampsMapped +
+        stats.lampsMappedInRoad +
+        stats.lampsMappedBlocked +
+        stats.lampsMappedCrowded
+    ).toBe(stats.lampsMappedConsidered)
   })
 })
 

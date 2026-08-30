@@ -19,6 +19,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   blending was; it now holds for a sixth of that
 
 
+- **Street lights where the city actually has them** (CW-77) - every lamp in the game was invented,
+  one every 30 metres on every street, because the map's own `highway=street_lamp` nodes were never
+  asked for. They are now: Seattle carries Seattle City Light's surveyed register of 3,679 lit poles
+  and the other three cities carry OpenStreetMap's, and where the map has put a lamp the game no
+  longer invents one beside it. Where the map is silent the spacing follows Seattle's own lighting
+  standard - alternating every 55 metres on an ordinary street, and a luminaire every 18 metres on a
+  pedestrian street, which had no lighting at all before
+
+- **The ground under the city, measured** (CW-77) - the extracts now carry a terrain grid sampled
+  from the national 1 metre elevation models (USGS for the three US cities, Natural Resources Canada
+  for Burnaby), so a later release can put Seattle's hills back. Nothing is drawn on it yet. Buildings
+  the map records as being below the street are no longer built up from ground level
+
 - **Roofs are roofs, and nothing floats** (CW-76) - a canopy over a downtown street was built as a
   solid building from the pavement up, so the roof over 3rd Avenue was a wall across the street, with
   a lit shop window across its face. 42 of Seattle's 46 roof and bridge ways were built that way, and

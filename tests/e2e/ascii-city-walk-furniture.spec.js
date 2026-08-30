@@ -304,8 +304,20 @@ test.describe('ASCII City Walk — plantings (CW-57)', () => {
     // carriageway, so the bird did not lose habitat - it stopped standing in
     // traffic. Thirteen is not one, and the pin below still guards the number
     // that mattered.
-    expect(props.birdsPlaced['greater roadrunner']).toBe(13)
-    expect(props.birdsPlaced['rock pigeon']).toBe(78)
+    //
+    // ★★ AND IT FIRED AGAIN, AND THAT TIME IT CHANGED THE RELEASE. CW-77's
+    // first spacing put an ordinary street's lamps 55 m apart, which is what
+    // the release plan quoted from Seattle Streets Illustrated. Albuquerque's
+    // lamps fell 915 -> 545 (40 %) and the roadrunner fell 13 -> 5 (62 %) - a
+    // DISPROPORTIONATE cut, and five is close to the one this pin exists to
+    // prevent. Reading the standard's whole sentence rather than half of it
+    // ("street lights alternating every 180 ft, PEDESTRIAN LIGHTS BETWEEN
+    // THEM AT 60 FT") gives an 18 m interval, which is also what Seattle City
+    // Light's surveyed register measures (16.7 m median over 3,679 poles).
+    // At 18 m Albuquerque has 1,507 lamps and the roadrunner has 23. The bird
+    // pin is the thing that caught a misread standard.
+    expect(props.birdsPlaced['greater roadrunner']).toBe(23)
+    expect(props.birdsPlaced['rock pigeon']).toBe(105)
     // No crow and no gull on this roster, so none anywhere in the city.
     expect(props.birdsPlaced['american crow']).toBeUndefined()
     expect(props.birdsPlaced.gull).toBeUndefined()

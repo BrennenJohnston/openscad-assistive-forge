@@ -61,6 +61,45 @@ const { buildStreetProps, buildCityGroup } = await import(
 
 const ALL_CITIES = ['seattle', 'denver', 'albuquerque', 'burnaby']
 
+/**
+ * Median and quartile nearest-neighbour distance over a point set.
+ *
+ * CW-77: a lamp COUNT cannot say whether a street is lit - two cities with
+ * the same count light very different amounts of street. The spacing can, and
+ * it is the number the lighting standard is written in.
+ */
+function nearestSpacing(points) {
+  if (points.length < 2) return 'n/a'
+  const cell = 80
+  const grid = new Map()
+  points.forEach(([x, y], i) => {
+    const k = `${Math.floor(x / cell)},${Math.floor(y / cell)}`
+    if (!grid.has(k)) grid.set(k, [])
+    grid.get(k).push(i)
+  })
+  const near = []
+  for (let i = 0; i < points.length; i++) {
+    const [x, y] = points[i]
+    let best = Infinity
+    const cx = Math.floor(x / cell)
+    const cy = Math.floor(y / cell)
+    for (let a = -1; a <= 1; a++) {
+      for (let b = -1; b <= 1; b++) {
+        for (const j of grid.get(`${cx + a},${cy + b}`) ?? []) {
+          if (j === i) continue
+          const d = Math.hypot(points[j][0] - x, points[j][1] - y)
+          if (d < best) best = d
+        }
+      }
+    }
+    if (Number.isFinite(best)) near.push(best)
+  }
+  if (near.length === 0) return 'n/a'
+  near.sort((a, b) => a - b)
+  const q = (f) => near[Math.min(near.length - 1, Math.floor(near.length * f))]
+  return `p25 ${q(0.25).toFixed(1)} med ${q(0.5).toFixed(1)} p75 ${q(0.75).toFixed(1)} m`
+}
+
 // A prop is judged to stand in the road when more than this much of the
 // ribbon lies between it and the kerb. Below it the answer is "on the line",
 // which a 1 m surface grid and a rounded extract cannot settle either way.
@@ -77,12 +116,21 @@ const TRUNK_MIN_SIDE_M = 0.28
 const TRUNK_MAX_SIDE_M = 0.7
 
 function parseArgs(argv) {
-  const opts = { cities: ALL_CITIES, samples: 4, json: null }
+  const opts = {
+    cities: ALL_CITIES,
+    samples: 4,
+    json: null,
+    // CW-77: which copy of the extracts to read. A rebake moves counts for
+    // TWO reasons at once - the live map has changed, and the code has - and
+    // the only way to tell them apart is to run one against the other's data.
+    extracts: join(ROOT, 'public/examples/ascii-city'),
+  }
   for (const arg of argv) {
     const [key, value] = arg.replace(/^--/, '').split('=')
     if (key === 'cities') opts.cities = value.split(',').map((c) => c.trim())
     else if (key === 'samples') opts.samples = Number(value)
     else if (key === 'json') opts.json = value
+    else if (key === 'extracts') opts.extracts = value
     else throw new Error(`unknown argument: ${arg}`)
   }
   for (const city of opts.cities) {
@@ -137,9 +185,9 @@ function centroid(ring) {
   return [x / ring.length, y / ring.length]
 }
 
-function censusOf(city, samples) {
+function censusOf(city, samples, extractsDir) {
   const raw = JSON.parse(
-    readFileSync(join(ROOT, `public/examples/ascii-city/${city}.json`), 'utf8')
+    readFileSync(join(extractsDir, `${city}.json`), 'utf8')
   )
   const model = parseCityExtract(raw)
   const collision = buildCollisionGrid(model)
@@ -333,6 +381,30 @@ function censusOf(city, samples) {
     : '0.0'
   row.samples.roofOverRoadway = roofSamples
 
+  // --- CW-77: where the lamps came from, and the terrain the bake sampled.
+  row.lampsMappedConsidered = props.stats.lampsMappedConsidered ?? 0
+  row.lampsMapped = props.stats.lampsMapped ?? 0
+  row.lampsMappedNudged = props.stats.lampsMappedNudged ?? 0
+  row.lampsMappedRefused =
+    (props.stats.lampsMappedInRoad ?? 0) +
+    (props.stats.lampsMappedBlocked ?? 0) +
+    (props.stats.lampsMappedCrowded ?? 0)
+  row.lampsProcedural = props.stats.lampsProcedural ?? 0
+  row.lampNodes = model.stats.lampNodeCount ?? 0
+  row.lampOperators = Object.entries(model.stats.lampNodesByOperator ?? {})
+    .map(([k, n]) => `${k} ${n}`)
+    .join(', ')
+  row.terrain = model.elevation
+    ? `${model.elevation.cols}x${model.elevation.rows} @ ${model.elevation.stepM} m, ` +
+      `${(model.elevation.coverage * 100).toFixed(1)} % covered, ` +
+      `${model.elevation.minM.toFixed(1)}..${model.elevation.maxM.toFixed(1)} m`
+    : 'none (v1 extract)'
+
+  // --- the nearest-lamp spacing, which is what a lighting standard is ABOUT.
+  // A count says how many; only the spacing says whether the street is lit.
+  const lampPts = (props.lampHeads ?? []).map((l) => [l.x, l.y])
+  row.lampSpacing = nearestSpacing(lampPts)
+
   // --- CW-73/CW-74: read the builders' own counters, never recount the tags
   const s = cityGroup.stats
   row.storefrontSource = s.storefrontSource
@@ -393,6 +465,15 @@ const ROWS = [
   ['...of how many trunks', 'trunks'],
   ['**lamp poles inside a roadway**', 'lampsInRoad'],
   ['...of how many poles', 'lampPoles'],
+  ['...mapped lamps the extract carries', 'lampNodes'],
+  ['...whose they are', 'lampOperators'],
+  ['...mapped lamps offered', 'lampsMappedConsidered'],
+  ['...of them stood', 'lampsMapped'],
+  ['...of them nudged out of a ribbon', 'lampsMappedNudged'],
+  ['...mapped lamps refused', 'lampsMappedRefused'],
+  ['...invented to fill the gaps', 'lampsProcedural'],
+  ['...nearest-lamp spacing', 'lampSpacing'],
+  ['terrain', 'terrain'],
   ['**traffic vs parked overlaps**', 'trafficVsParked'],
   ['parked vs parked overlaps', 'parkedVsParked'],
   ['traffic vs traffic overlaps', 'trafficVsTraffic'],
@@ -419,7 +500,9 @@ const ROWS = [
 ]
 
 const opts = parseArgs(process.argv.slice(2))
-const rows = opts.cities.map((city) => censusOf(city, opts.samples))
+const rows = opts.cities.map((city) =>
+  censusOf(city, opts.samples, opts.extracts)
+)
 
 console.log(table(rows, 'placement', ROWS))
 
