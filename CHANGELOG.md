@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **In color, every surface gets its own characters back** (CW-93) - the game gives each kind of
+  surface its own small set of characters, so a road is drawn with characters that lie down, a
+  wall with characters that stand up, and foliage with characters that clump. In color that had
+  never actually happened: every surface was drawn from all ninety-five characters instead, so a
+  tree and the building behind it were made of the same alphabet and a window pattern could run
+  straight across a tree. Trees now look like trees, walls like walls, and paving like paving.
+  Nothing about monochrome changes, and there is nothing new to press. Measured at the spot this
+  was reported from, about seven cells in ten were drawing a character their surface is not
+  allowed; it is now none, and the picture is drawn very slightly faster than before, because each
+  surface has fewer characters to search through
+
+- **Turning color on mid-game now looks the same as starting in it** (CW-93) - switching to color
+  from the toolbar left a monochrome setting behind, and the brightest small things on the street,
+  cars and kerbs, were drawn inside out and from the wrong set of characters because of it.
+  Starting the game already in color never showed this. Both ways in now give the same picture
+
 - **Nothing is left behind when you walk** (CW-89) - characters were staying on screen after the
   thing that put them there had gone, so walking past a building dragged a faint speckle along the
   wall behind you. The game holds a character still for a few frames to stop it flickering, and

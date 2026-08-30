@@ -440,7 +440,50 @@ void main() {
 `;
 
 /** How many classes uVocabSpan can carry, plus the fallback at index 0. */
-const MAX_CLASS_SPANS = 16;
+export const MAX_CLASS_SPANS = 16;
+
+/**
+ * Flatten the vocabularies into one glyph-id list and the span table over it.
+ *
+ * Exported so the rule below can be unit-tested: the shader cannot run in the
+ * test environment, and this is the arithmetic that decides which characters a
+ * surface is allowed - the very thing CW-93 found the GPU path getting wrong.
+ *
+ * ★ A CLASS WITH NO VOCABULARY OF ITS OWN FALLS BACK TO THE FULL ATLAS. That
+ * is what the CPU path does (`st.classLookups.get(cls) ?? st.lookup`) and what
+ * city-class-pass.js promises in as many words: "an unclassified cell falls
+ * back to the full glyph vocabulary it has always used". Without the fallback
+ * such a cell reads a span of LENGTH ZERO, the shader's search loop never
+ * runs, and the cell keeps the loop's initial answer - glyph 0, the space. It
+ * draws nothing at all.
+ *
+ * Only SKY is in that position today (the vocabulary table starts at GROUND),
+ * and a night sky is black, which is why it sat unseen. It stops being
+ * invisible the moment the vocabularies reach palette mode, where far more of
+ * the picture carries ink.
+ *
+ * @param {Array<{spanIndex: number, ids: ArrayLike<number>}>} vocabLists span
+ *   0 first, carrying the full atlas; then one entry per class
+ * @returns {{flat: number[], spans: Float32Array}} the packed ids, and
+ *   `[start, length]` per span index
+ */
+export function buildVocabSpans(vocabLists) {
+  const flat = [];
+  const spans = new Float32Array(MAX_CLASS_SPANS * 2);
+  for (const { spanIndex, ids } of vocabLists) {
+    if (spanIndex >= MAX_CLASS_SPANS) continue;
+    spans[spanIndex * 2] = flat.length;
+    spans[spanIndex * 2 + 1] = ids.length;
+    for (const id of ids) flat.push(id);
+  }
+  for (let i = 1; i < MAX_CLASS_SPANS; i++) {
+    if (spans[i * 2 + 1] === 0) {
+      spans[i * 2] = spans[0];
+      spans[i * 2 + 1] = spans[1];
+    }
+  }
+  return { flat, spans };
+}
 
 /**
  * Build the GPU glyph pass, or report that this machine cannot run it.
@@ -641,14 +684,7 @@ export function createGpuGlyphPass(renderer) {
   const ensureVocabTexture = (vocabLists, key) => {
     if (vocabTexture && vocabKey === key) return;
     vocabTexture?.dispose();
-    const flat = [];
-    const spans = new Float32Array(MAX_CLASS_SPANS * 2);
-    for (const { spanIndex, ids } of vocabLists) {
-      if (spanIndex >= MAX_CLASS_SPANS) continue;
-      spans[spanIndex * 2] = flat.length;
-      spans[spanIndex * 2 + 1] = ids.length;
-      for (const id of ids) flat.push(id);
-    }
+    const { flat, spans } = buildVocabSpans(vocabLists);
     const width = Math.max(1, Math.min(1024, flat.length));
     const height = Math.max(1, Math.ceil(flat.length / width));
     const data = new Uint8Array(width * height);

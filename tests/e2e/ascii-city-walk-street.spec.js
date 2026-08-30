@@ -2817,3 +2817,176 @@ test.describe('ASCII City Walk — glyphs anchored to the surface (CW-86)', () =
     await page.evaluate(() => window.__cityWalkGame.setAnchoredGlyphs(false))
   })
 })
+
+test.describe('ASCII City Walk — ink belongs to its surface (CW-93, D-128, D-129)', () => {
+  const settle = (page) =>
+    page.evaluate(async () => {
+      const g = window.__cityWalkGame
+      for (let i = 0; i < 2; i++) {
+        const before = g.altView.getConvertTotals().samples
+        g.altView.invalidate()
+        const deadline = Date.now() + 15000
+        while (g.altView.getConvertTotals().samples <= before) {
+          if (Date.now() > deadline) throw new Error('no conversion')
+          await new Promise((r) => requestAnimationFrame(r))
+        }
+      }
+    })
+
+  const enter = async (page) => {
+    await launchGame(page)
+    await enterCity(page)
+    await page.evaluate(() => {
+      window.__cityWalkGame.motionReduced = true
+      window.__cityWalkGame.altView.setCellProbe(true)
+      window.__cityWalkGame.altView.setFontScale(0.3)
+    })
+    await settle(page)
+  }
+
+  /**
+   * Every cell whose DRAWN glyph is not in its own class's ladder.
+   *
+   * The same arithmetic the sequence instrument prints as its MISMATCH column
+   * (src/js/game/seq-metrics.js), read here against the REAL shader - which
+   * unit tests cannot reach, and which is where the defect lived.
+   *
+   * Reverse-video cells are exempt because both paths match them against the
+   * inverted shape and the full atlas on purpose; palette mode has no reverse
+   * video at all, so in colour the exempt count is zero.
+   */
+  const audit = (page) =>
+    page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const probe = g.altView.readCellProbe()
+      const cls = g.classPass.read(g.fpCamera, probe.cols, probe.rows)
+      const vocab = g.altView.getClassVocabularies()
+      const levels = g.altView.getIntensityLevels()
+      const reverseIndex = probe.intensity && levels ? levels.length : -1
+      const allowed = new Map(
+        Object.entries(vocab).map(([id, ids]) => [Number(id), new Set(ids)])
+      )
+      const distinct = new Map()
+      const examples = []
+      let classified = 0
+      let mismatch = 0
+      let exempt = 0
+      for (let i = 0; i < cls.length; i++) {
+        const legal = allowed.get(cls[i])
+        if (!legal) continue
+        classified++
+        if (probe.intensity && probe.intensity[i] === reverseIndex) {
+          exempt++
+          continue
+        }
+        let seen = distinct.get(cls[i])
+        if (!seen) {
+          seen = new Set()
+          distinct.set(cls[i], seen)
+        }
+        seen.add(probe.glyphs[i])
+        if (legal.has(probe.glyphs[i])) continue
+        mismatch++
+        if (examples.length < 6) {
+          examples.push(
+            `"${String.fromCharCode(32 + probe.glyphs[i])}" on class ${cls[i]}`
+          )
+        }
+      }
+      return {
+        classified,
+        mismatch,
+        exempt,
+        examples,
+        richest: Math.max(0, ...[...distinct.values()].map((s) => s.size)),
+        classesSeen: distinct.size,
+        palette: Boolean(g.altView.getPalette()),
+        usedGpu: g.altView.getConvertStats().usedGpu,
+      }
+    })
+
+  /** What a run must contain before its zero means anything. */
+  const expectRealFixture = (res) => {
+    // ★ A GUARD'S FIXTURE MUST CONTAIN THE THING IT GUARDS. Nought illegal
+    // characters out of nought classified cells is the shape of every guard
+    // this round has had to un-ship.
+    expect(res.classified).toBeGreaterThan(2000)
+    expect(res.classesSeen).toBeGreaterThan(3)
+    // And the picture must be drawing a real range of characters, not one
+    // character everywhere - which would satisfy any subset test.
+    expect(res.richest).toBeGreaterThan(3)
+  }
+
+  test('★★★ in COLOUR every classified cell draws its own surface\'s character', async ({
+    page,
+  }) => {
+    // The owner's defect, as a number. Until CW-93 the GPU path was handed
+    // `useClassVocabularies: !usePalette`, so in colour every classified cell
+    // searched the full 95-glyph atlas: a tree canopy and a building facade
+    // were drawn with the same alphabet, and a window pattern landed on a
+    // tree's underside. Measured at 69 % of the grid before the fix.
+    //
+    // ★ AND THIS CASE EARNED ITS KEEP THE DAY IT WAS WRITTEN. It went red on
+    // a SECOND defect the first fix uncovered (D-129): reaching colour by
+    // CLICKING the button - which is how a player reaches it, and what this
+    // case does - left the GPU path's reverse-video threshold set to the mono
+    // value, so 119 bright cells were matched against an inverted vector and
+    // drew from the whole atlas. Setting the mode before the page loads never
+    // showed it. Do not "simplify" this into a localStorage seed.
+    await enter(page)
+    await page.locator('#cityWalkColourBtn').click()
+    await expect(page.locator('#cityWalkColourBtn')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    )
+    await settle(page)
+
+    const res = await audit(page)
+    expect(res.palette, 'the game is in palette mode').toBe(true)
+    expect(res.usedGpu, 'colour takes the GPU path on this machine').toBe(true)
+    expectRealFixture(res)
+    expect(res.exempt, 'palette mode has no reverse video').toBe(0)
+    expect(
+      res.mismatch,
+      `${res.mismatch} of ${res.classified} classified cells drew a character ` +
+        `their surface does not own: ${res.examples.join(', ')}`
+    ).toBe(0)
+  })
+
+  test('★★ and the two converter paths agree about it, in both modes', async ({
+    page,
+  }) => {
+    // The defect was one path disagreeing with the other, which is the one
+    // thing a converter with two implementations must never do. So the case
+    // asks all four corners rather than the one the machine happens to pick.
+    await enter(page)
+    const mono = await audit(page)
+    expect(mono.palette).toBe(false)
+    expectRealFixture(mono)
+    expect(mono.mismatch, `mono, GPU: ${mono.examples.join(', ')}`).toBe(0)
+
+    await page.evaluate(() =>
+      window.__cityWalkGame.altView.setBenchLegacy({ cpuSample: true })
+    )
+    await settle(page)
+    const monoCpu = await audit(page)
+    expect(monoCpu.usedGpu).toBe(false)
+    expectRealFixture(monoCpu)
+    expect(monoCpu.mismatch, `mono, CPU: ${monoCpu.examples.join(', ')}`).toBe(0)
+
+    await page.locator('#cityWalkColourBtn').click()
+    await settle(page)
+    const colourCpu = await audit(page)
+    expect(colourCpu.palette).toBe(true)
+    expect(colourCpu.usedGpu).toBe(false)
+    expectRealFixture(colourCpu)
+    expect(
+      colourCpu.mismatch,
+      `colour, CPU: ${colourCpu.examples.join(', ')}`
+    ).toBe(0)
+
+    await page.evaluate(() =>
+      window.__cityWalkGame.altView.setBenchLegacy({ cpuSample: false })
+    )
+  })
+})

@@ -607,6 +607,26 @@ function _ensureGlyphModel(st, { fontFamily, fontSizePx, charW, charH, dpr }) {
     );
     st.atlas = st.paletteAtlases[0];
     st.intensityAtlases = null;
+    // ★★★ AND THE REVERSE ATLAS GOES WITH THEM (CW-93, D-129). This is an
+    // INDEX INTO `intensityAtlases`, and palette mode has none, so leaving it
+    // pointing into an array that no longer exists is a lie about the
+    // instance's state - and one the two converter paths read differently.
+    // The CPU asks `useIntensity ? st.reverseAtlasIndex : -1` and gets -1, so
+    // no palette cell is ever reversed. The GPU's `reverseAt` asked only
+    // whether the index was non-negative, so after a LIVE switch from mono to
+    // colour it kept the mono threshold of 0.80: every palette cell above it
+    // was matched against an INVERTED shape vector and, because a reversed
+    // cell deliberately draws from the whole atlas, without its own surface's
+    // vocabulary.
+    //
+    // Reaching colour from a cold start never showed it - no mono atlas had
+    // been built, so the index was still -1 - and CW-93's own fix is what made
+    // it visible at all: while the vocabularies were switched off in palette
+    // mode there was nothing left for it to break. Measured after that fix, at
+    // the Seattle spawn, 30 %: 119 of 68,666 classified cells, cars and kerbs,
+    // drew characters their surface does not own, and 81 of them were nowhere
+    // near a class edge.
+    st.reverseAtlasIndex = -1;
   } else {
     st.paletteAtlases = null;
     const atlasAt = (tint, reverse = false) =>
@@ -847,12 +867,28 @@ function _sampleOnGpu(
     glyphKey: st.atlasKey,
     vocabLists: _gpuVocabLists(st),
     vocabKey: st.atlasKey,
-    // CW-68: the class map is bound in palette mode as well, where it is not
-    // a vocabulary but a RESET: a cell whose surface changed must drop the
-    // glyph it was holding, and without the map the shader cannot tell. The
-    // vocabulary is still mono-only, which is what useClassVocabularies says.
+    // CW-68: the class map is bound in palette mode as well, where it is also
+    // a RESET: a cell whose surface changed must drop the glyph it was
+    // holding, and without the map the shader cannot tell.
+    //
+    // ★★★ AND THE VOCABULARY APPLIES IN PALETTE MODE TOO (CW-93, D-128). This
+    // line read `useClassVocabularies: !usePalette` from CW-32 until the owner
+    // photographed what that costs: a building's window pattern drawn onto the
+    // underside of a street tree. With the vocabularies off, EVERY classified
+    // cell searched the full 95-glyph atlas, so a canopy and a facade were
+    // drawn with the same alphabet and there was nothing left to tell them
+    // apart - measured at 69 % of the grid at the owner's own pose, on both
+    // Day and Night, with the memory on AND off. It was never a trail.
+    //
+    // The CPU path has always applied them in both modes (`_convertOnCpu`
+    // guards on `st.classLookups && st.classMapProvider`, never on the
+    // palette), so this was also the two paths disagreeing about what they
+    // draw - the one thing this converter's whole two-implementation design
+    // exists to prevent. CW-32's own commit message says it ported "the same
+    // exhaustive search over the same per-class vocabulary"; the exclusion was
+    // never a decision anybody wrote down a reason for.
     classTexture: st.gpuClassTextureProvider?.(cols, rows) ?? null,
-    useClassVocabularies: !usePalette,
+    useClassVocabularies: true,
     paletteChroma: usePalette ? st.paletteChroma : null,
     chromaBoost: st.paletteChromaBoost,
     contrastExp: st.contrastExp,
@@ -2347,6 +2383,29 @@ export async function initAltView(previewManager, options = {}) {
      * @returns {{cols: number, rows: number, glyphs: Int16Array,
      *   intensity: Int8Array|null, lum: Float32Array|null}|null}
      */
+    /**
+     * CW-93: the per-class glyph ladders THIS INSTANCE is searching.
+     *
+     * The instrument's vocabulary-mismatch counter has to check a drawn glyph
+     * against the list the converter actually used, not against a second copy
+     * derived from `glyph-vocabularies.js`. A copy would answer questions
+     * about itself: it would agree with the art direction while the converter
+     * quietly searched something else - which is exactly the class of defect
+     * CW-93 exists to find. `_buildClassLookups` adds the space character and
+     * drops a row too short to be a vocabulary, and both of those show up
+     * here because this IS that table.
+     *
+     * @returns {Record<number, number[]>|null} class id -> atlas indices, or
+     *   null before the atlas has been built or when no caller supplied any
+     */
+    api.getClassVocabularies = () => {
+      if (!st.classLookups) return null;
+      const out = {};
+      for (const [classId, lookup] of st.classLookups) {
+        if (lookup.glyphIds) out[classId] = [...lookup.glyphIds];
+      }
+      return out;
+    };
     api.readCellProbe = () => {
       if (!st.devCellProbe || !st.lastGlyphIndices) return null;
       return {

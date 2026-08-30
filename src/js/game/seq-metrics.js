@@ -43,6 +43,10 @@
 //     a ghost. The ink condition is not fussiness: two blank cells of
 //     different classes draw the same nothing, and counting those would bury
 //     the guard under a baseline it can never move.
+//   * ★ MISMATCH (CW-93) is the one column here that has a RIGHT ANSWER. Every
+//     other number is a description; this one is a defect count. See the block
+//     above `createMismatch` for what it means and what it deliberately does
+//     not count.
 //
 // Every count is folded incrementally so a long sequence costs one pass per
 // frame and no per-frame allocation beyond the two copies it must keep.
@@ -71,6 +75,101 @@ const LABEL_BY_ID = new Map(
 export function classLabel(id) {
   if (id === EDGE_CLASS) return 'EDGE(class moved)';
   return LABEL_BY_ID.get(id) ?? `class${id}`;
+}
+
+/**
+ * The character an atlas index stands for.
+ *
+ * Declared here rather than imported from `_hfm-paint.js` so this module stays
+ * the leaf its own header promises - `_hfm-hysteresis.js` declares SPACE_GLYPH
+ * for the same reason. A guard case asserts it IS that module's
+ * FIRST_CHAR_CODE, so the copy cannot drift without a red test.
+ */
+export const FIRST_GLYPH_CHAR_CODE = 32;
+
+/** How many atlas slots a flag table covers. The atlas itself has 95. */
+const GLYPH_SLOTS = 128;
+
+/**
+ * @param {number} glyph an atlas index
+ * @returns {string} the printable character, or `?` for an index off the atlas
+ */
+export function glyphChar(glyph) {
+  if (!Number.isInteger(glyph) || glyph < 0 || glyph >= GLYPH_SLOTS) return '?';
+  return String.fromCharCode(FIRST_GLYPH_CHAR_CODE + glyph);
+}
+
+/**
+ * ★★★ CW-93 (D-128): THE VOCABULARY-MISMATCH COUNTER, and what it means.
+ *
+ * The owner photographed a building's window pattern drawn onto the underside
+ * of a street tree. Every other column in this file describes a picture; this
+ * one asks a question with a right answer: **is this cell drawing a character
+ * its own surface is not allowed to draw?** A wall glyph on a TREE cell is
+ * exactly the reported artefact, and nothing legitimate produces one - the
+ * class pass says TREE, `glyph-vocabularies.js` says a TREE cell may only be
+ * one of ` .,^*oO&%@8wvV`, and both converter paths search that list and
+ * nothing else. So a non-zero count is a defect, not a description, and the
+ * release's bar is zero.
+ *
+ * WHAT IT DELIBERATELY DOES NOT COUNT, because each is the code working:
+ *
+ *   * A REVERSE-VIDEO cell (mono only). A cell above the reverse threshold is
+ *     painted as solid phosphor with its glyph knocked out, and BOTH paths
+ *     match it against the INVERTED shape and the FULL 95-glyph vocabulary on
+ *     purpose (`_hfm.js` `if (cellReversed)`, `_hfm-gpu.js` `spanIndex` is
+ *     left at 0 when `reversed`). Counting those would report the picture's
+ *     brightest cells as a defect forever. The exempted count is reported
+ *     beside the mismatch rather than hidden, so the exemption can be seen.
+ *   * A CELL WHOSE CLASS HAS NO VOCABULARY - SKY, and anything the class pass
+ *     could not name. Those fall back to the full vocabulary by design, so
+ *     there is no rule for them to break.
+ *
+ * The space character is in every vocabulary (`_buildClassLookups` adds it),
+ * so a blank cell never counts either, and it needs no special case here.
+ *
+ * THE TABLE IS BUILT FROM THE CONVERTER'S OWN LADDERS, handed in by the
+ * caller, not re-derived from `glyph-vocabularies.js`. A second copy of the
+ * ladder would answer questions about itself: this one answers questions about
+ * the list the converter actually searched.
+ *
+ * @param {Record<number|string, ArrayLike<number>>|Map<number,
+ *   ArrayLike<number>>|null} vocabularies class id -> the atlas indices that
+ *   class may draw
+ * @returns {{allowed: Map<number, Uint8Array>, perFrame: number[],
+ *   perCell: Int32Array, kinds: Map<string, number>, total: number,
+ *   reverseExempt: number}|null} null when the caller supplied none
+ */
+function createMismatch(vocabularies, cells) {
+  if (!vocabularies) return null;
+  const entries =
+    vocabularies instanceof Map
+      ? [...vocabularies.entries()]
+      : Object.entries(vocabularies);
+  const allowed = new Map();
+  for (const [key, ids] of entries) {
+    const classId = Number(key);
+    if (!Number.isInteger(classId) || !ids || typeof ids.length !== 'number') {
+      continue;
+    }
+    const flags = new Uint8Array(GLYPH_SLOTS);
+    for (let i = 0; i < ids.length; i++) {
+      const glyph = ids[i];
+      if (Number.isInteger(glyph) && glyph >= 0 && glyph < GLYPH_SLOTS) {
+        flags[glyph] = 1;
+      }
+    }
+    allowed.set(classId, flags);
+  }
+  if (allowed.size === 0) return null;
+  return {
+    allowed,
+    perFrame: [],
+    perCell: new Int32Array(cells),
+    kinds: new Map(),
+    total: 0,
+    reverseExempt: 0,
+  };
 }
 
 /**
@@ -121,6 +220,8 @@ export function classLabel(id) {
  *   in the new frame - the ones a person could see a glyph decision in
  * @property {number} classMoveGlyphHeld of the lit ones, where the glyph did
  *   not change with the class
+ * @property {ReturnType<createMismatch>} mismatch CW-93's counter, or null
+ *   when the caller handed in no vocabularies
  */
 
 /**
@@ -129,7 +230,8 @@ export function classLabel(id) {
  * @param {number} cols
  * @param {number} rows
  * @param {{mono: boolean, reverseIndex?: number, whiteIndex?: number,
- *   litLumMin?: number}} options
+ *   litLumMin?: number, vocabularies?: Record<number, ArrayLike<number>>|
+ *   Map<number, ArrayLike<number>>|null}} options
  * @returns {SeqFold}
  */
 export function createFold(cols, rows, options = {}) {
@@ -185,6 +287,7 @@ export function createFold(cols, rows, options = {}) {
     classMoveEvents: 0,
     classMoveLitEvents: 0,
     classMoveGlyphHeld: 0,
+    mismatch: createMismatch(options.vocabularies ?? null, cells),
   };
 }
 
@@ -282,6 +385,30 @@ export function foldFrame(fold, frame) {
   fold.whiteShare.push(white / n);
   fold.reverseShare.push(reverse / n);
 
+  const mm = fold.mismatch;
+  if (mm) {
+    let frameCount = 0;
+    for (let i = 0; i < n; i++) {
+      const flags = mm.allowed.get(cls[i]);
+      // No vocabulary for this class: the cell draws from the full atlas by
+      // design, so there is no rule here to break.
+      if (!flags) continue;
+      // A reverse cell is matched against the whole atlas on purpose.
+      if (fold.mono && drive[i] === fold.reverseIndex) {
+        mm.reverseExempt++;
+        continue;
+      }
+      const glyph = glyphs[i];
+      if (glyph >= 0 && glyph < GLYPH_SLOTS && flags[glyph]) continue;
+      frameCount++;
+      mm.perCell[i]++;
+      const key = `${cls[i]}>${glyph}`;
+      mm.kinds.set(key, (mm.kinds.get(key) ?? 0) + 1);
+    }
+    mm.perFrame.push(frameCount);
+    mm.total += frameCount;
+  }
+
   const prevGlyphs = fold.prevGlyphs;
   if (prevGlyphs) {
     const prevGlyphs2 = fold.prevGlyphs2;
@@ -337,6 +464,9 @@ export function foldFrame(fold, frame) {
  *   video (mono) or white (colour)
  * @property {number} churnCellsPct share of cells that changed in more than
  *   half the frame pairs
+ * @property {number} mismatch (cell, frame) slots where the drawn glyph was
+ *   not in the cell's own class vocabulary (CW-93). Zero in a healthy picture,
+ *   and zero when the fold was given no vocabularies.
  * @property {number} meanGlyphPersistenceFrames mean run length in frames
  */
 
@@ -353,6 +483,10 @@ export function foldFrame(fold, frame) {
  *   number]>, litShareMean: number, whiteShare: number[],
  *   reverseShare: number[], ghostPct: number, classMoveEvents: number,
  *   classMoveLitEvents: number, colourHistogram: number[],
+ *   mismatch: {total: number, perFrame: number[], cells: number,
+ *     cellsPct: number, reverseExempt: number, kinds: Array<{on: string,
+ *     glyph: number, char: string, count: number, belongsTo: string[]}>,
+ *     worstCells: Array<{x: number, y: number, frames: number}>}|null,
  *   total: SeqRow, perClass: SeqRow[], edge: SeqRow}}
  */
 export function finishFold(fold, options = {}) {
@@ -395,6 +529,7 @@ export function finishFold(fold, options = {}) {
     row.driveFlip += fold.driveFlip[i];
     row.reverseOrWhiteToggle += fold.reverseOrWhiteToggle[i];
     if (fold.glyphChange[i] > pairs * 0.5) row.churn++;
+    if (fold.mismatch) row.mismatch += fold.mismatch.perCell[i];
     row.runSum += fold.runSum[i];
     row.runCount += fold.runCount[i];
   }
@@ -410,6 +545,7 @@ export function finishFold(fold, options = {}) {
     total.driveFlip += row.driveFlip;
     total.reverseOrWhiteToggle += row.reverseOrWhiteToggle;
     total.churn += row.churn;
+    total.mismatch += row.mismatch;
     total.runSum += row.runSum;
     total.runCount += row.runCount;
   }
@@ -447,6 +583,7 @@ export function finishFold(fold, options = {}) {
     classMoveEvents: fold.classMoveEvents,
     classMoveLitEvents: fold.classMoveLitEvents,
     ghostPct: pct(fold.classMoveGlyphHeld, fold.classMoveLitEvents),
+    mismatch: summariseMismatch(fold, top),
     total: { ...summarise(total), name: 'TOTAL' },
     perClass: [...rows.values()]
       .sort((a, b) => b.cells - a.cells)
@@ -467,6 +604,7 @@ function emptyRow(cls) {
     driveFlip: 0,
     reverseOrWhiteToggle: 0,
     churn: 0,
+    mismatch: 0,
     runSum: 0,
     runCount: 0,
   };
@@ -484,7 +622,74 @@ function summariseRow(row, pairs, triples) {
     driveOrColourFlipPct: pct(row.driveFlip, row.cells * triples),
     reverseOrWhiteToggles: row.reverseOrWhiteToggle,
     churnCellsPct: pct(row.churn, row.cells),
+    // A COUNT, not a share. A share of a defect that should be zero reads as
+    // "small" at 0.004 %, and the whole point of this column is that any
+    // number above zero is a cell drawing a character it is not allowed.
+    mismatch: row.mismatch,
     meanGlyphPersistenceFrames: round2(row.runSum / Math.max(1, row.runCount)),
+  };
+}
+
+/**
+ * CW-93: the mismatch counter, closed and named.
+ *
+ * `kinds` is the row that names the artefact in words: which class was under
+ * the cell, which character it drew, and WHICH classes' vocabularies that
+ * character does belong to. "a `|` drawn on a tree cell, and `|` is a wall
+ * character" is the owner's report turned into a line of a table.
+ *
+ * `worstCells` is the cell list the release brief asks for: grid coordinates,
+ * so a mismatch can be found in the flip map and in the contact sheet.
+ *
+ * @param {SeqFold} fold a fold that has just been closed
+ * @param {number} top how many rows of each list to keep
+ */
+function summariseMismatch(fold, top) {
+  const mm = fold.mismatch;
+  if (!mm) return null;
+  // Which vocabularies DO contain a given glyph - computed once, off the same
+  // tables the counting used.
+  const owners = (glyph) => {
+    const out = [];
+    for (const [classId, flags] of mm.allowed) {
+      if (glyph >= 0 && glyph < flags.length && flags[glyph]) {
+        out.push(classLabel(classId));
+      }
+    }
+    return out;
+  };
+  let cells = 0;
+  const worst = [];
+  for (let i = 0; i < mm.perCell.length; i++) {
+    if (!mm.perCell[i]) continue;
+    cells++;
+    worst.push({
+      x: i % fold.cols,
+      y: Math.floor(i / fold.cols),
+      frames: mm.perCell[i],
+    });
+  }
+  worst.sort((a, b) => b.frames - a.frames);
+  return {
+    total: mm.total,
+    perFrame: mm.perFrame.slice(),
+    cells,
+    cellsPct: pct(cells, fold.cells),
+    reverseExempt: mm.reverseExempt,
+    kinds: [...mm.kinds.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, top)
+      .map(([key, count]) => {
+        const [classId, glyph] = key.split('>').map(Number);
+        return {
+          on: classLabel(classId),
+          glyph,
+          char: glyphChar(glyph),
+          count,
+          belongsTo: owners(glyph),
+        };
+      }),
+    worstCells: worst.slice(0, top),
   };
 }
 
