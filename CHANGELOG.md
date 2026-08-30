@@ -24,8 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   asked for. They are now: Seattle carries Seattle City Light's surveyed register of 3,679 lit poles
   and the other three cities carry OpenStreetMap's, and where the map has put a lamp the game no
   longer invents one beside it. Where the map is silent the spacing follows Seattle's own lighting
-  standard - alternating every 55 metres on an ordinary street, and a luminaire every 18 metres on a
-  pedestrian street, which had no lighting at all before
+  standard read whole, which is a luminaire every 18 metres on an ordinary street and on a
+  pedestrian street, on alternating sides. Pedestrian streets had no lighting at all before. A
+  street wider than 15 metres carries a facing pair every 76 metres instead
 
 - **The ground under the city, measured** (CW-77) - the extracts now carry a terrain grid sampled
   from the national 1 metre elevation models (USGS for the three US cities, Natural Resources Canada

@@ -2085,8 +2085,36 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
    * against 931. A lever that does nothing must fail this, so the bar is a
    * SHARE. Measured on this machine with the lever working: 256 and 124
    * against 931, i.e. 13 to 28 per cent.
+   *
+   * ★★ RE-PINNED IN CW-77, AND THE BAR HAD STOPPED MEASURING THE LEVER.
+   * 0.6 was set against a memory that no longer ships and a city with a
+   * third of the edges, and by CW-77 the guard was reading 58 per cent
+   * against a 60 per cent bar - close enough that it passed or failed on how
+   * many frames had converted before the creep started, which is warm-up and
+   * not the thing this case is about. The four-cell probe
+   * (build/cw77-memory.mjs, Iris Xe, 30 %, the Seattle spawn, share of the
+   * stateless re-rolls that survive, default path / cpu path):
+   *
+   *                          pre-CW-77 map      CW-77 map
+   *   glyph 0.4, hold 30      5.1 / 4.5 %      18.0 / 14.8 %
+   *   glyph 0.06, hold 5     35.6 / 22.4 %     58.1 / 53.6 %   <- ships
+   *
+   * Both moved it and they compound. CW-84 cut the band 0.4 -> 0.06 and the
+   * hold 30 -> 5 ON PURPOSE, to buy back the trail the owner saw on the
+   * deployed build; a weaker memory prevents less, by design. CW-77 nearly
+   * TRIPLED the stateless baseline at this pose (2,156 -> 6,210 re-rolls
+   * over the same 2 cm creep) because it put thousands of lamps and a
+   * terrain grid into the frame, and the memory deliberately drops a cell
+   * whose surface class moves under it - so more real edges mean more real
+   * re-rolls that no memory may hold.
+   *
+   * The bar is therefore re-pinned to the lever that SHIPS, with room for
+   * the warm-up: 0.8 still fails the do-nothing lever by a mile (it measured
+   * 99.9 per cent) while the shipped one has 18 points of margin. The share
+   * is logged on every run so the next session reads the number without
+   * having to make the case fail first.
    */
-  const MUST_PREVENT = 0.6
+  const MUST_PREVENT = 0.8
 
   test('a cell whose content barely moved keeps the glyph it had', async ({
     page,
@@ -2129,6 +2157,12 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
       )
 
       const path = `${cpuSample ? 'cpu' : 'default'} path (usedGpu ${withMemory.usedGpu})`
+      console.log(
+        `[CW-68 memory] ${path}: ${withMemory.changes} of ${without.changes} ` +
+          `stateless re-rolls survive over ${withMemory.cells * withMemory.pairs} ` +
+          `cell-frames = ${((withMemory.changes / without.changes) * 100).toFixed(1)} % ` +
+          `(bar < ${MUST_PREVENT * 100} %)`
+      )
       expect(without.cells, path).toBe(withMemory.cells)
       expect(
         without.changes,
