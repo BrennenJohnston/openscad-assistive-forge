@@ -754,6 +754,94 @@ none of the sampler's own messages contain. A unit test asked what the pattern
 actually matched and the answer was "not our own warnings". Any reported
 problem is now fatal.
 
+### What is behind the characters
+
+Until CW-85 the answer was: nothing. A cell the converter leaves blank is the
+page's own black, and the only solid paint in the game is the bright
+reverse-video layer. So a parked car was a car-shaped arrangement of characters
+with the void showing between them, and a wall was a hatch you could see
+through. The reference this project works from does the opposite on nearby
+surfaces: it fills those gaps with a dark tint of the material the ray hit,
+road slate, pavement tan, a trunk brown, and leaves the sky and the far skyline
+bare. The owner asked for that as a toggle. It is key **B**, it is called Day,
+and Night is what you get unless you ask for it.
+
+The layer is deliberately not a decision. Everything else the converter does to
+a cell is a CHOICE about that cell - which character, which palette entry,
+solid or not. This is paint that goes down before the character and is covered
+by it. It is computed after every glyph is already chosen and cannot be read by
+anything that chooses one, which is why "Day changes no character" is a fact
+about the shape of the code rather than a promise somebody has to keep. An
+end-to-end case still checks it cell for cell, because claims about the order
+of code are exactly the kind that quietly stop being true.
+
+The distance fade needed a channel. The class pass has always rendered the
+scene's surface classes into a texture's red channel; it now writes linear view
+depth, in metres, into the blue one. Linear rather than the depth buffer it
+already carried: that one is the non-linear curve the GPU needs for occlusion,
+and a tint faded on it would collapse inside the first few metres and then
+barely move for two hundred. Green is left free on purpose for the release
+after this one.
+
+★ **The tint source was decided by steadiness, not by taste.** Two were built
+and photographed against the same scene: a per-class table, and the cell's own
+colour driven down to a low luminance. The pictures were arguable. The numbers
+were not. Over a look of 1.5 degrees per frame, the per-class table changes
+12.23 per cent of its backings per frame and the sampled colour changes 17.06,
+against a floor of 7.12 per cent for the class map itself. The sampled source
+loses because it inherits the converter's per-cell colour decision, and that
+decision re-rolls - which is the churn this whole part of the document is
+about. The class table shipped.
+
+★ **The first version of that comparison measured one thing twice.** It rebuilt
+the backing from the development cell probe, which carries glyphs, intensity
+and luminance but not the palette or the colour indices, so the sampled arm
+silently fell back to the class table and both rows printed 12.23 per cent,
+identical to two decimal places. Two arms agreeing that exactly is the tell.
+The rewrite drives both through the same public entry point the real layer uses
+and asserts they differ before it reports a difference: they differ on 95.6 per
+cent of cells.
+
+★ **Painting behind a character takes contrast away, and amber is the binding
+case.** Today every glyph sits on pure black, which is the most contrast a
+screen can give, so every tint is bounded by measurement rather than by eye. A
+unit guard drives every palette entry against every tint at the dimmest ink the
+monochrome ladder ships and holds 4.5:1. Green carries a backing up to a drive
+of 0.180; amber only to 0.080, because amber's ink is itself much darker and
+the gap between ink and backing closes more than twice as fast. Each phosphor
+therefore gets its own table, and the consequence is worth saying plainly: in
+monochrome the backing is a good deal fainter in amber than in green, and
+fainter in both than in colour. That is a contrast bound, not a preference, and
+it cannot be turned up without taking legibility away from a player who has no
+other cue.
+
+★ **The performance bar was missed, and the release says so.** Filling a cell
+is about 1.1 million pixel writes per conversion at 30 per cent, and it costs
+4.2 milliseconds against a bar of 1.5. Two rewrites were measured and neither
+helped. Filling each row run with the array's own `fill` is five times WORSE,
+because a three-pixel run costs far more to ask for than to write by hand and
+the call happens roughly four hundred thousand times a frame. Sweeping along
+the scanline with the column geometry hoisted out of the inner loop lands
+within a twentieth of a millisecond of where it started. The cost is the memory
+traffic itself. Banding the fill by distance was the planned answer and cannot
+save it either: 79 per cent of the cells on screen are inside 60 metres, so the
+band would have to pull in to 15 or 20 metres, which backs the ground at your
+feet and leaves the street bare.
+
+What makes that acceptable is what the toggle already was. Day is off unless
+asked for, and at Night the layer returns nothing on its first line and the
+painter takes exactly the path it took before, so a player who does not want
+this pays nothing at all for it. A player who turns it on gives up about one
+frame per second. The bar was not moved to fit the result; it is recorded as
+missed.
+
+The same release empties the city, on key **U**. It hides the people and the
+parked cars, and it takes their footprints out of the collision grid at the
+same time. That second half is the one that is easy to forget and worse to get
+wrong: an empty street you cannot walk down, because you are bumping into cars
+nobody can see, would be a broken city rather than a quiet one.
+
+
 ## What this document is not
 
 It is not a commitment, an estimate, or a design review. Anyone starting either
