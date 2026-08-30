@@ -880,7 +880,7 @@ describe('character size (CW-12)', () => {
     })
   })
 
-  describe('seed order (rewritten CW-72 for CW-Q75: ONE default)', () => {
+  describe('seed order (CW-72 for CW-Q75, amended CW-88 for CW-Q87)', () => {
     it("prefers the player's own saved size", () => {
       expect(seedCharScale('0.7')).toBeCloseTo(0.7, 10)
     })
@@ -895,21 +895,36 @@ describe('character size (CW-12)', () => {
       expect(seedCharScale('banana')).toBeCloseTo(CITY_DEFAULT_CHAR_SCALE, 10)
     })
 
-    it('RAISES a saved size that is below this machine floor', () => {
-      // The floor may make the picture coarser and nothing may make it finer:
-      // a player who chose 30% on a fast machine and then opened the game on
-      // a slow one gets that machine's floor, not a game it cannot hold.
-      expect(seedCharScale('0.3', 0.5)).toBeCloseTo(0.5, 10)
-      // ...and a saved size ABOVE the floor is left exactly alone.
+    it('★★ HONOURS a saved size below this machine floor (CW-88)', () => {
+      // CW-72 raised it to the floor. The owner reversed that half of CW-Q68:
+      // the floor SEEDS somebody who has never chosen and does not clamp
+      // somebody who has. A player who chose 30% on a fast machine keeps 30%
+      // on a slow one, and is told what it costs rather than overruled.
+      expect(seedCharScale('0.3', 0.5)).toBeCloseTo(0.3, 10)
+      // ...and a saved size ABOVE the floor is still left exactly alone.
       expect(seedCharScale('0.7', 0.4)).toBeCloseTo(0.7, 10)
     })
 
-    it('never seeds below the one default, whatever the floor says', () => {
+    it('★★ a saved choice reaches the bottom of the range (CW-88)', () => {
+      // The oracle for "10 % is reachable again": 10 % is a size a player may
+      // choose and keep, on any floor. The red proof is the Math.max this
+      // replaced - reinstate it and every line here fails.
+      expect(seedCharScale('0.1', 0.3)).toBeCloseTo(CHAR_SCALE_MIN, 10)
+      expect(seedCharScale('0.1', 0.5)).toBeCloseTo(CHAR_SCALE_MIN, 10)
+      expect(seedCharScale('0.2', 0.4)).toBeCloseTo(0.2, 10)
+      // Below the range is still not a size: the bottom is the bottom.
+      expect(seedCharScale('0.02', 0.3)).toBeCloseTo(CHAR_SCALE_MIN, 10)
+    })
+
+    it('the floor still SEEDS a player who has never chosen', () => {
+      // The DEFAULT half of CW-Q68 stands, and this is the half CW-88 keeps.
+      expect(seedCharScale(null, 0.3)).toBeCloseTo(CITY_DEFAULT_CHAR_SCALE, 10)
+      expect(seedCharScale(null, 0.4)).toBeCloseTo(0.4, 10)
+      expect(seedCharScale(null, 0.5)).toBeCloseTo(0.5, 10)
       // A floor below the default is not a thing this release can produce -
       // decodeCalibration migrates CW-42's away - but the seed refuses it
-      // anyway, because that is the whole point of the release.
+      // anyway, because ONE default is what CW-72 exists for.
       expect(seedCharScale(null, 0.1)).toBeCloseTo(CITY_DEFAULT_CHAR_SCALE, 10)
-      expect(seedCharScale('0.1', 0.1)).toBeCloseTo(CITY_DEFAULT_CHAR_SCALE, 10)
     })
 
     it('does not read the main app Alt View preference at all', () => {

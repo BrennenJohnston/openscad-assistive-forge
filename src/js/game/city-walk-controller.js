@@ -3148,27 +3148,28 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     const current = game.altView.getFontScale();
     const floor = game.calibratedFloor;
     const floorRaised = Number.isFinite(floor) && floor > CHAR_SCALE_MIN + 1e-9;
-    if (delta < 0 && floorRaised && current <= floor + 1e-9) {
-      // The stop is the calibrated floor, and it says why (CW-Q39). Also
-      // true below the floor (a grandfathered manual choice): calibration
-      // found smaller sizes cannot hold the bar on this machine.
-      announceInLayer(
-        `Character size ${Math.round(current * 100)} percent. Smaller ` +
-          'sizes cannot hold 30 frames per second on this machine.'
-      );
-      return;
-    }
-    // Clamp to the GAME's range before the renderer sees it: the renderer
-    // instance itself accepts down to 0.05, which is below the smallest size
-    // that changes anything on screen. The calibrated floor bounds gestures
-    // only - a stored below-floor manual choice was seeded as-is.
-    const next = clampCharScale(current + delta, floor);
+    // CW-88 (CW-Q87): the calibrated floor no longer STOPS the gesture. It is
+    // what this machine measured, not a rule about what a player is allowed
+    // to look at, and the smallest size is theirs to choose again. The
+    // information in the old refusal was its useful half, so it survives as
+    // an advisory on the step that crosses below the floor. Clamping still
+    // happens here, to the GAME's range: the renderer instance accepts down
+    // to 0.05, which is below the smallest size that changes anything.
+    const next = clampCharScale(current + delta);
+    const crossedBelowFloor =
+      floorRaised && current >= floor - 1e-9 && next < floor - 1e-9;
     game.altView.setFontScale(next);
     syncCellRaster(game);
     game.altView.invalidate();
     safeSetItem(STORAGE_KEY_CITY_WALK_FONT_SCALE, String(next));
     syncCharSizeControls();
-    announceInLayer(`Character size ${Math.round(next * 100)} percent.`);
+    announceInLayer(
+      crossedBelowFloor
+        ? `Character size ${Math.round(next * 100)} percent. This machine ` +
+            `measured ${Math.round(floor * 100)} percent as the smallest size ` +
+            'that holds 30 frames per second.'
+        : `Character size ${Math.round(next * 100)} percent.`
+    );
   }
 
   /**
@@ -3311,21 +3312,46 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       STORAGE_KEY_CITY_WALK_CALIBRATED_FLOOR,
       encodeCalibration(next)
     );
+    // CW-88 (CW-Q87): a measurement never overrides a size the player chose.
+    // The manual key's PRESENCE is what says they chose one (storage-keys.js
+    // says so, and the step handler is its only writer), so this needs no new
+    // marker. Without a saved choice the floor still lands, which is the seed
+    // behaviour CW-Q68 asked for and this release keeps.
+    const chosenBySomebody = Number.isFinite(
+      parseFloat(safeGetItem(STORAGE_KEY_CITY_WALK_FONT_SCALE) ?? '')
+    );
     if (cal.manual) {
       restoreEntryScale(game);
-    } else if (game.altView.getFontScale() < next.floorScale - 1e-9) {
+    } else if (
+      !chosenBySomebody &&
+      game.altView.getFontScale() < next.floorScale - 1e-9
+    ) {
       // The floor lands through the renderer only - writing the manual key
       // here would freeze a measurement as if it were the player's choice.
+      // `chosenBySomebody` rather than `cal.manual` because a size chosen
+      // DURING this session must block the override too, and cal.manual was
+      // captured at entry.
       game.altView.setFontScale(next.floorScale);
       syncCellRaster(game);
       game.altView.invalidate();
     }
     syncCharSizeControls();
     if (raised) {
-      const pct = Math.round(game.altView.getFontScale() * 100);
+      // ★★ CW-88: say what happened, not what the floor wanted. This branch
+      // announced "Character size raised to N percent" for a manual entry as
+      // well, where N was the size it had just RESTORED - a raise that never
+      // happened, announced to a screen reader as if it had. Now the wording
+      // follows the outcome: the size moved, or it did not and a larger one
+      // is on offer.
+      const scaleNow = game.altView.getFontScale();
+      const leftBelowFloor = scaleNow < next.floorScale - 1e-9;
       announceInLayer(
-        'This machine cannot hold 30 frames per second at the usual ' +
-          `character size. Character size raised to ${pct} percent.`
+        leftBelowFloor
+          ? 'This machine cannot hold 30 frames per second at your character ' +
+              `size. A larger size of ${Math.round(next.floorScale * 100)} ` +
+              'percent is available, and your size is unchanged.'
+          : 'This machine cannot hold 30 frames per second at the usual ' +
+              `character size. Character size raised to ${Math.round(scaleNow * 100)} percent.`
       );
     }
   }
@@ -3359,12 +3385,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
    */
   function syncCharSizeControls() {
     const game = state.game;
-    const floor = game?.calibratedFloor;
+    // CW-88 (CW-Q87): the stop is the range's own bottom, not the machine's
+    // measured floor. A control disabled at the floor is the clamp wearing a
+    // different coat, and the player's choice now reaches 10 per cent.
     const atFloor =
-      Boolean(game) &&
-      Number.isFinite(floor) &&
-      floor > CHAR_SCALE_MIN + 1e-9 &&
-      game.altView.getFontScale() <= floor + 1e-9;
+      Boolean(game) && game.altView.getFontScale() <= CHAR_SCALE_MIN + 1e-9;
     const setDisabled = (btn, disabled) => {
       if (!btn) return;
       if (disabled) btn.setAttribute('aria-disabled', 'true');

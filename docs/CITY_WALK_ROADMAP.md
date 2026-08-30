@@ -486,12 +486,29 @@ heaviest (43.6); the next size down does not (27 to 30). Ten and twenty per cent
 are the same 2x4 pixel cell here because the font has a three-pixel floor, so
 the ladder is really 10 / 30 / 40 / 50.
 
-What a machine measures about itself is a FLOOR. It may raise the size, never
-lower it, and a raise needs two consecutive visits to agree - one slow visit is
-a busy afternoon, two is a machine. Nothing lowers a floor automatically; a
-player who wants a finer picture chooses one, and their choice is remembered.
-A size stored by the old calibration that is finer than the default is migrated
-up to it, or the machine that wrote it would keep its private game for ever.
+What a machine measures about itself is a FLOOR, and the floor SEEDS a player
+who has never chosen a size. It may raise that seed, never lower it, and a
+raise needs two consecutive visits to agree - one slow visit is a busy
+afternoon, two is a machine. A size stored by the old calibration that is finer
+than the default is migrated up to it, or the machine that wrote it would keep
+its private game for ever.
+
+**The floor does not overrule a player who has chosen one.** A size you set is
+yours: it is remembered, the game opens where you left it, and a later
+measurement never moves it. If the machine measures that it needs a coarser
+picture than the one you chose, it says so and offers the larger size instead
+of taking the choice away. Your choice runs the whole range, down to **10 per
+cent** - the same 2x4 pixel cell as 20 per cent, and it costs frames: on the
+four-times-slower proxy 10 per cent measures 26 to 31 frames a second in
+Seattle and 22.8 in Denver, against the thirty the default is chosen to hold.
+That is the trade, and it is yours to make.
+
+One consequence worth writing down: because a chosen size can now sit BELOW the
+30 / 40 / 50 ladder, and because a player's own size is measured where it
+stands rather than flipped, a reading taken at 10 per cent says nothing about
+whether the machine can hold 30. Cost rises as the cells get smaller. Such a
+pass is treated as inconclusive - nothing stored, nothing announced - rather
+than being read as a verdict on a size it never measured.
 
 ### What the owner chose when the pictures were on the table
 

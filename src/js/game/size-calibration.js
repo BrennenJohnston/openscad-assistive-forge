@@ -224,14 +224,29 @@ export function raiseFloor(
  * comfortable manual size holds proves nothing about the range — storing or
  * announcing a fallback from it would brand a fast machine as slow.
  *
+ * ★★ CW-88: "at any LARGER size" is what this always meant and it is now what
+ * it does. The direction test was missing, and until CW-88 nothing could
+ * reach the case: a manual size below the ladder's bottom was impossible,
+ * because the seed clamped every saved size up to the floor. CW-Q87 unlocked
+ * 10 %, and a manual entry there is measured where it stands - so without
+ * this test a failure at 10 % was read as a verdict on 30 %, the pass
+ * concluded from it, and `chooseCalibratedSize` fell through to the TOP rung
+ * and stored a 50 % floor. Cost RISES as the cells get smaller, so a size
+ * below the ladder failing says nothing whatever about the ladder. An
+ * inconclusive pass stores nothing and announces nothing, which is right:
+ * yesterday's floor stands until something actually measures the range.
+ *
  * @param {Array<{scale: number, avgMs: number, samples: number}>} readings
  * @param {number} [barMs]
  * @returns {boolean}
  */
 export function isConclusive(readings, barMs = CALIBRATION_BAR_MS) {
+  const bottomRung = CALIBRATION_FLOOR_LADDER[0];
   return (
     CALIBRATION_FLOOR_LADDER.some((s) => forScale(readings, s) !== undefined) ||
-    readings.some((r) => isReading(r) && r.avgMs > barMs)
+    readings.some(
+      (r) => isReading(r) && r.avgMs > barMs && r.scale >= bottomRung - EPS
+    )
   );
 }
 

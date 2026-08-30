@@ -208,6 +208,27 @@ describe('isConclusive', () => {
   it('a comfortable manual size holding proves nothing about the ladder', () => {
     expect(isConclusive([holds(0.7)])).toBe(false)
   })
+
+  it('★★ a failing size ABOVE the ladder still condemns the range', () => {
+    // The documented rule, and the half that always worked: cost falls as the
+    // cells get bigger, so a machine that cannot hold 70 % cannot hold any of
+    // 30/40/50 either.
+    expect(isConclusive([fails(0.7)])).toBe(true)
+  })
+
+  it('★★ a failing size BELOW the ladder decides nothing (CW-88)', () => {
+    // The direction test this function's docblock always claimed and did not
+    // have. Nothing could reach it until CW-88 unlocked 10 %: a manual entry
+    // is measured where it stands, and cost RISES as the cells get smaller,
+    // so 10 % failing says nothing about 30 %. Reading it as a verdict sent
+    // chooseCalibratedSize through to the TOP rung and stored a 50 % floor
+    // off one reading of a size the ladder does not contain.
+    expect(isConclusive([fails(0.1)])).toBe(false)
+    expect(isConclusive([fails(0.2)])).toBe(false)
+    // ...and a ladder reading beside it still decides, so the guard cannot
+    // go vacuous by simply refusing everything.
+    expect(isConclusive([fails(0.1), holds(0.3)])).toBe(true)
+  })
 })
 
 describe('stepProbePhase', () => {

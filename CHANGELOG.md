@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Your character size is yours** (CW-88) - the game measures what your machine can hold and used to
+  apply that as a rule: a size you had chosen was raised to the machine's floor when you opened the
+  game, the smaller steps refused to go below it, and the Smaller control switched itself off there.
+  The measurement is now advice. A size you set is remembered and opens where you left it, the size
+  controls reach 10 per cent again, and if the machine measures that it needs a coarser picture than
+  the one you chose it says so and offers the larger size rather than taking the choice away. Stepping
+  below what the machine measured tells you what it costs. 30 per cent is still what you get if you
+  have never chosen, and a machine that cannot hold it still starts you higher
+
+- **A reading taken at 10 per cent no longer decides what 30 per cent can do** (CW-88) - your own size
+  is measured where it stands rather than flipped, so unlocking 10 per cent meant a reading could be
+  taken below the range the game reasons about. A slow reading there was being read as a verdict on
+  the whole range and could store the coarsest floor there is, off one measurement of a size that
+  range does not contain. Smaller cells cost more, not less, so such a pass now decides nothing:
+  nothing is stored and nothing is announced
+
 - **The city is not dark any more** (CW-84) - after playing the deployed build the owner reported the
   picture was too dark and that frames looked like they were blending together. Three things changed.
   In colour, the ink floor is gone: it had left 28 per cent of the screen carrying ink where 89 per

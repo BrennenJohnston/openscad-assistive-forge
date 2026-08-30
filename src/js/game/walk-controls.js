@@ -1318,12 +1318,22 @@ export function clampCharScale(scale, floorScale = null) {
  * There are now two inputs and one of them is a floor:
  *
  *   1. The player's own saved size. Their choice, and it sticks.
- *   2. The floor this machine measured for itself, which may only make the
- *      picture COARSER. A saved size below the floor is raised to it.
+ *   2. The floor this machine measured for itself, which SEEDS a player who
+ *      has never chosen. It does not clamp one who has.
  *
  * The shared Alt View preference no longer seeds the game at all: a slider in
  * the main app deciding how coarse the city looks is exactly the second size
  * this release exists to remove.
+ *
+ * CW-88 (CW-Q87): the floor used to raise a saved size up to itself, and the
+ * owner reversed that half of CW-Q68 - keep 30 per cent as the default, and
+ * let a player who wants to adjust go as small as 10 again. Three comments in
+ * this codebase already described the behaviour restored here, including
+ * `clampCharScale`'s own docblock above ("a stored manual choice below
+ * today's floor is grandfathered on seed, never clamped up") and two in the
+ * controller; CW-72's `Math.max` is what diverged from them. The DEFAULT half
+ * of CW-Q68 stands: 30 per cent for anybody with no saved choice, raised by
+ * the calibration.
  *
  * @param {string|null|undefined} savedGame - the game's own persisted value
  * @param {number|null} [floorScale] - the decoded stored floor, if any
@@ -1331,11 +1341,11 @@ export function clampCharScale(scale, floorScale = null) {
  */
 export function seedCharScale(savedGame, floorScale = null) {
   const game = parseFloat(savedGame ?? '');
+  // A choice they made reaches CHAR_SCALE_MIN, and passing no floor is what
+  // says so: clampCharScale bounds below at CHAR_SCALE_MIN when it has none.
+  if (Number.isFinite(game)) return clampCharScale(game);
   const floor = Number.isFinite(floorScale)
     ? Math.max(floorScale, CITY_DEFAULT_CHAR_SCALE)
     : CITY_DEFAULT_CHAR_SCALE;
-  // The player's own choice wins, but never below the floor this machine
-  // measured for itself: the floor makes the picture coarser, never finer.
-  if (Number.isFinite(game)) return clampCharScale(Math.max(game, floor));
   return clampCharScale(floor);
 }
