@@ -253,6 +253,102 @@ describe('buildStreetProps - mapped lamps (CW-77)', () => {
     expect(m.furniture.some((f) => f.kind === 'street_lamp')).toBe(false)
   })
 
+  /**
+   * A street with enough perches on it to actually carry birds. The lamp
+   * fixture above carries NONE - 19 lamp heads at a 0.06 rate is a hash that
+   * never fires - and a test written on it passed with the accounting
+   * deliberately broken. Measured on this one: three birds over two perch
+   * kinds, which is what makes the assertions below able to fail.
+   */
+  function perchModel() {
+    const lamps = []
+    for (let x = -180; x <= 180; x += 12) lamps.push(x)
+    return parseCityExtract(
+      {
+        elements: [
+          {
+            type: 'way',
+            id: 1,
+            tags: { highway: 'secondary' },
+            geometry: [pt(-200, 0), pt(200, 0)],
+          },
+          {
+            type: 'way',
+            id: 2,
+            tags: { building: 'yes', height: '10' },
+            geometry: squareRing(-220, 60, 10),
+          },
+          {
+            type: 'way',
+            id: 3,
+            tags: { building: 'yes', height: '10' },
+            geometry: squareRing(220, -60, 10),
+          },
+          {
+            type: 'way',
+            id: 4,
+            tags: { building: 'yes', height: '10' },
+            geometry: squareRing(0, 120, 20),
+          },
+          {
+            type: 'way',
+            id: 5,
+            tags: { leisure: 'park' },
+            geometry: squareRing(0, 60, 35),
+          },
+          ...Array.from({ length: 12 }, (_, i) => ({
+            type: 'node',
+            id: 2000 + i,
+            tags: { amenity: 'bench', backrest: 'yes' },
+            lat: pt(-150 + i * 25, 8).lat,
+            lon: pt(-150 + i * 25, 8).lon,
+          })),
+          ...lamps.map((x, i) => ({
+            type: 'node',
+            id: 1000 + i,
+            tags: { highway: 'street_lamp' },
+            lat: pt(x, 9).lat,
+            lon: pt(x, 9).lon,
+          })),
+        ],
+      },
+      { center: CENTER }
+    )
+  }
+
+  it('★ counts every bird by the perch it took, and the parts sum to the whole', () => {
+    // ★ A TOTAL CANNOT ANSWER A QUESTION ABOUT COMPETITION. Only one perch
+    // kind - a mapped lawn - is open to a goose, while a crow works parapets,
+    // lamp heads and the open ground beside a pole as well. A guard written
+    // on the TOTALS therefore moves with the city's lamp count: CW-77 doubled
+    // Denver's lamps, the crow's total passed the goose's, and the goose had
+    // lost nothing at all (ground perch: goose 51, crow 8). `birdsByPerch` is
+    // what lets that question be asked where it can be answered.
+    //
+    // Nothing here pins a species to a perch - that is `city-birds.js`'s
+    // table and its own tests. This pins the ACCOUNTING: every bird the
+    // builder placed is counted once, under the pass that placed it.
+    const props = propsOf(perchModel())
+    const { birdsByPerch, birdsPlaced } = props.stats
+
+    // Not vacuous: there are birds, and they came from more than one pass.
+    const total = Object.values(birdsPlaced).reduce((a, c) => a + c, 0)
+    expect(total).toBeGreaterThan(0)
+    expect(Object.keys(birdsByPerch).length).toBeGreaterThan(1)
+    // Every bucket is a real perch kind, never the initial placeholder.
+    expect(Object.keys(birdsByPerch)).not.toContain('unknown')
+
+    const summed = {}
+    for (const names of Object.values(birdsByPerch)) {
+      for (const [name, n] of Object.entries(names)) {
+        summed[name] = (summed[name] ?? 0) + n
+      }
+    }
+    expect(summed).toEqual(birdsPlaced)
+
+    props.dispose()
+  })
+
   it('stands a mapped lamp where the map put it', () => {
     const { stats } = propsOf(lampModel([{ x: -50, y: 9 }]))
     expect(stats.lampsMapped).toBe(1)

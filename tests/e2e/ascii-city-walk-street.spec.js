@@ -1174,8 +1174,19 @@ test.describe('ASCII City Walk — real silhouettes (CW-26)', () => {
 
       let apexVerts = 0
       let above = 0
+      let aboveEaves = 0
       g.scene.traverse((o) => {
         if (!o.isMesh || !o.geometry?.getAttribute) return
+        // ★ THE BUILDINGS, AND ONLY THE BUILDINGS. This case asks whether a
+        // pitched roof CAPS its body or is stacked on a full-height box -
+        // a question about one mesh - and it used to answer it by sweeping
+        // every mesh in the city within 12 m. CW-77 nearly doubled Burnaby's
+        // lamps (531 -> 929) and put a crow on a lamp head 6.8 m from this
+        // house, at z 6.32 against the house's 6.00 m apex: 72 vertices
+        // "drawn above the roof apex", none of them the roof's. Measured, the
+        // `buildings` mesh's own maximum inside the radius is EXACTLY 6.00.
+        // A guard that a bird can fail is not measuring a roof.
+        if (o.name !== 'buildings') return
         const pos = o.geometry.getAttribute('position')
         if (!pos) return
         for (let i = 0; i < pos.count; i++) {
@@ -1184,12 +1195,21 @@ test.describe('ASCII City Walk — real silhouettes (CW-26)', () => {
           const z = pos.getZ(i)
           if (Math.hypot(x - cx, y - cy) > 12) continue
           if (z > apexZ + 0.05) above++
+          // The same sweep with the bar lowered to the eaves. If this is 0
+          // the sweep is looking at nothing and the line above is vacuous.
+          if (z > apexZ - target.roof.heightM + 0.05) aboveEaves++
           if (Math.hypot(x - cx, y - cy) < 1.5 && Math.abs(z - apexZ) < 0.05) {
             apexVerts++
           }
         }
       })
-      return { apexZ, apexVerts, above, roofM: target.roof.heightM }
+      return {
+        apexZ,
+        apexVerts,
+        above,
+        aboveEaves,
+        roofM: target.roof.heightM,
+      }
     })
 
     expect(roof, 'Burnaby grew no pyramidal roof').not.toBeNull()
@@ -1197,8 +1217,14 @@ test.describe('ASCII City Walk — real silhouettes (CW-26)', () => {
     // height the building is tagged with.
     expect(roof.apexVerts).toBeGreaterThan(0)
     // The roof CAPS the body rather than being stacked on a full-height box:
-    // nothing at all pokes above the tagged height.
-    expect(roof.above, 'something is drawn above the roof apex').toBe(0)
+    // no part of the BUILDING pokes above the tagged height. Proved able to
+    // fail: drop the threshold by the roof's own height and the same sweep
+    // counts 8 vertices, so the building's geometry is genuinely in view.
+    expect(roof.above, 'the building is drawn above its own apex').toBe(0)
+    expect(
+      roof.aboveEaves,
+      'the sweep cannot see the building at all'
+    ).toBeGreaterThan(0)
     expect(roof.roofM).toBeGreaterThan(0)
   })
 })
@@ -1426,16 +1452,37 @@ test.describe('ASCII City Walk — people are people (CW-45)', () => {
     // new model run against the OLD collision bases reproduces 2,890 and this
     // exact pose table to the person. So 2,890 becomes 2,895, and the five
     // are people standing where a canopy used to be a wall.
+    //
+    // ★★★ CW-77 RE-PINNED THEM A FOURTH TIME, AND THE RELEASE THAT DID IT
+    // WAS ABOUT LAMPS. `LAMP_ROAD_KINDS` in city-scene.js is a set named for
+    // one thing that gates two: `lampRng` AND `peopleRng`. CW-77 added
+    // `pedestrian` to it so that Post Alley would be lit - and Post Alley
+    // got its crowd in the same line. A four-cell run of the builders
+    // separates the three causes to the person:
+    //
+    //   pre-CW-77 code, pre-CW-77 extracts                    2895 <- the pin
+    //   CW-77 code, pedestrian NOT in the set, old extracts   2885
+    //   CW-77 code, pedestrian NOT in the set, new extracts   2652
+    //   CW-77 code as shipped, new extracts                   2999
+    //
+    // so: -10 people stand too close to the denser procedural poles, -233
+    // stand where City Light's surveyed register puts a real pole, and +347
+    // are the pedestrian streets that had nobody on them until this release.
+    // The seed law still holds - each road's people stream is its own - and
+    // a pedestrian street with lamps and no people would have been the
+    // stranger city. But the crowd arrived through a set named for lamps,
+    // which is worth a reader's minute: if you change what LAMP_ROAD_KINDS
+    // holds, you are changing the population.
     const stats = await page.evaluate(() => window.__cityWalkGame.props.stats)
     expect(stats.figuresByPose).toEqual({
-      sitting: 103,
-      standing: 690,
-      walking: 1777,
-      jogging: 325,
+      sitting: 101,
+      standing: 728,
+      walking: 1824,
+      jogging: 346,
     })
     expect(
       await page.evaluate(() => window.__cityWalkGame.props.peopleCount)
-    ).toBe(2895)
+    ).toBe(2999)
 
     /**
      * ★★ CW-65 ADDS A PERSON TO THE WORLD AND NOT TO THIS CENSUS, AND THAT IS
@@ -1444,8 +1491,10 @@ test.describe('ASCII City Walk — people are people (CW-45)', () => {
      * The traveler is built STANDALONE, beside the fireworks, because the city
      * group is built before the saved progress is read and because finding
      * them MOVES them. So they never pass through buildStreetProps and
-     * peopleCount - which counts what the CITY BUILD planted - is unchanged at
-     * 3,029. The pin above therefore stays exactly where CW-50 left it.
+     * peopleCount - which counts what the CITY BUILD planted - does not gain
+     * the traveler, whatever the pin above happens to read. (It read 3,029
+     * when this was written; four re-pins later it reads 2,999, and not one
+     * of the four was the traveler.)
      *
      * Asserted rather than assumed, both halves: the crowd did not gain
      * anybody, and the traveler exists all the same. A silent +1 here would

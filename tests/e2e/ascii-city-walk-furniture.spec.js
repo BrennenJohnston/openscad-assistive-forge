@@ -34,12 +34,19 @@ test.describe('ASCII City Walk — street furniture (CW-43)', () => {
     // The extract's own counts. CW-44's fallback bake (shifted center
     // 47.612,-122.340, r=1300 - the signed rule) re-measured these from
     // the shipped blob; the CW-43-era 707 m numbers were 71/31/155/309/43.
+    //
+    // CW-77 rebaked all four cities and two of these five moved: a waste
+    // basket and two bicycle stands, which is what a fortnight of OSM edits
+    // looks like. THE CAUSE IS THE MAP AND NOT THE CODE, and that is proved
+    // rather than assumed: CW-77's builders run against the PREVIOUS
+    // extracts reproduce 156 / 280 / 306 / 853 / 112 exactly, and the
+    // wayfinding count below with them.
     const model = await modelStats(page)
     expect(model.furnitureByKind).toEqual({
       bus_stop: 156,
       bench: 280,
-      waste_basket: 306,
-      bicycle_parking: 853,
+      waste_basket: 304,
+      bicycle_parking: 855,
       fire_hydrant: 112,
     })
     // The data-only wayfinding layer rides the model untouched.
@@ -50,7 +57,9 @@ test.describe('ASCII City Walk — street furniture (CW-43)', () => {
     // count below, came back identical - which is the reassuring half of a
     // rebake and worth writing down, because a rebake that moved everything
     // would mean the bake had changed rather than the map.
-    expect(model.wayfindingCount).toBe(5355)
+    //
+    // CW-77's rebake moved it back: 5355 -> 5354, one node gone again.
+    expect(model.wayfindingCount).toBe(5354)
 
     // What actually stands in the city: the same numbers minus nodes that
     // fall inside a building footprint or duplicate one another - measured
@@ -63,12 +72,18 @@ test.describe('ASCII City Walk — street furniture (CW-43)', () => {
     // now have room. Re-derived from an independent Node run of the same
     // builders - the new model against the OLD collision bases reproduces
     // 154 / 268 / 285 exactly, which is what pins the cause.
+    //
+    // CW-77 moved three of them again, by the same two nodes the map lost
+    // and gained plus their neighbours: bench 271 -> 269, waste basket
+    // 286 -> 284, bicycle parking 811 -> 813. Same proof as above - CW-77's
+    // builders on the PREVIOUS extracts reproduce 155 / 271 / 286 / 811 /
+    // 109 to the item, so no placement rule changed here.
     const props = await propStats(page)
     expect(props.furnitureByKind).toEqual({
       bus_stop: 155,
-      bench: 271,
-      waste_basket: 286,
-      bicycle_parking: 811,
+      bench: 269,
+      waste_basket: 284,
+      bicycle_parking: 813,
       fire_hydrant: 109,
     })
   })
@@ -269,11 +284,20 @@ test.describe('ASCII City Walk — plantings (CW-57)', () => {
     // Seattle's lamps went 2,560 -> 2,173 when every pole standing in a
     // roadway was refused, and the birds went with the poles they were
     // perched beside. What left the city is a bird standing on tarmac.
+    //
+    // ★ AND CW-77 RAN THE SAME ARITHMETIC THE OTHER WAY. Seattle stopped
+    // inventing every one of its lamps and took Seattle City Light's
+    // surveyed register instead: 2,174 poles became 4,221. The perch count
+    // followed the pole count, near enough proportionally (2,174 -> 4,221
+    // is x1.94; 309 birds -> 526 is x1.70, the shortfall being perches that
+    // now fall too close to a neighbour). This is the pin working as
+    // designed: it does not care which way the roster moves, only that it
+    // moves WITH the poles and never collapses.
     expect(props.birdsPlaced).toEqual({
-      'house sparrow': 41,
-      gull: 70,
-      'rock pigeon': 95,
-      'american crow': 103,
+      'house sparrow': 89,
+      gull: 103,
+      'rock pigeon': 154,
+      'american crow': 180,
     })
     // Seattle's roster has no goose and no roadrunner, so it has none placed.
     // A roster is a claim about a city and this is where it is checked.
@@ -336,9 +360,28 @@ test.describe('ASCII City Walk — plantings (CW-57)', () => {
     // geese to one. Geese gather on open grass, so they are placed as small
     // flocks, which is both the fix and the fact.
     expect(props.birdsPlaced['canada goose']).toBe(51)
-    expect(props.birdsPlaced['canada goose']).toBeGreaterThan(
-      props.birdsPlaced['american crow']
-    )
+    //
+    // ★★ AND THE COMPARISON BELOW USED TO BE ON THE TOTALS, WHICH IS NOT
+    // WHERE THE COMPETITION HAPPENS. A goose stands on ONE perch kind -
+    // `ground`, a mapped lawn (city-birds.js SPECIES_PERCHES) - while the
+    // crow also works parapets, lamp heads and the open ground beside a
+    // pole. So the crow's TOTAL moves with the city's lamp count and says
+    // nothing about lawns. CW-77 took Denver from 711 lamps to 1,336, the
+    // crow went 28 -> 54 on perches a goose can never use, and the goose
+    // stayed at exactly 51 - not one bird lost. The old line failed on a
+    // city where nothing it cared about had changed.
+    //
+    // Measured on the perch that matters (props.stats.birdsByPerch.ground):
+    // goose 51, crow 8, pigeon 7. The goose holds 77 % of Denver's lawn
+    // birds. Burnaby, the city that fell to one goose and prompted the
+    // flock fix, reads goose 8, gull 5, crow 3 - and went 3 -> 8 under
+    // CW-77 rather than down. This is the same worry, asked where it can
+    // be answered, and it is STRICTER: the failure it was written for
+    // (crow and gull taking two thirds of the ground sites) shows up here
+    // directly instead of through a total that four other perches move.
+    const ground = props.birdsByPerch.ground
+    expect(ground['canada goose']).toBe(51)
+    expect(ground['canada goose']).toBeGreaterThan(ground['american crow'])
   })
 
   /**

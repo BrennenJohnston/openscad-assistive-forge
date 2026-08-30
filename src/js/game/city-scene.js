@@ -6389,6 +6389,20 @@ export function buildStreetProps(model, collision = null) {
    */
   const birdGeoms = [];
   const birdsPlaced = {};
+  /**
+   * ★ WHICH BIRDS TOOK WHICH PERCH, because a total cannot answer a question
+   * about competition. Only two Denver birds can stand on a mapped lawn, and
+   * only there do they take sites from each other; the crow also works
+   * parapets, lamp heads and the open ground beside a pole, so its TOTAL
+   * moves with the city's lamp count and says nothing about the lawn. CW-77
+   * doubled the lamps and the crow's total passed the goose's while the
+   * goose lost not one bird - which is how a guard written on the totals
+   * came to fail on a city that had not changed.
+   *
+   * @type {Record<string, Record<string, number>>} perch kind -> name -> count
+   */
+  const birdsByPerch = {};
+  let birdPerch = 'unknown';
   const birdRoster = birdTableFor(model.name);
 
   const addBird = (px, py, pz, facing, name, sizeDraw) => {
@@ -6416,6 +6430,8 @@ export function buildStreetProps(model, collision = null) {
       );
     }
     birdsPlaced[name] = (birdsPlaced[name] ?? 0) + 1;
+    const byName = (birdsByPerch[birdPerch] ??= {});
+    byName[name] = (byName[name] ?? 0) + 1;
   };
 
   /**
@@ -6425,6 +6441,7 @@ export function buildStreetProps(model, collision = null) {
   const perchPass = (perch, sites, zOf, facingOf) => {
     const rate = BIRD_PER_PERCH[perch] ?? 0;
     if (rate <= 0) return;
+    birdPerch = perch;
     sites.forEach((site, index) => {
       const seed = hashBuilding(index, 'bird:' + perch);
       if ((seed % 1000) / 1000 >= rate) return;
@@ -6833,6 +6850,7 @@ export function buildStreetProps(model, collision = null) {
       // fallback - fallbackPlanters is design, everything else is the map.
       plantingPlaced,
       birdsPlaced,
+      birdsByPerch,
       fallbackPlanters,
       carCount: parkedCount,
       lampCount: lampSpots.size,
