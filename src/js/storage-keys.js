@@ -556,6 +556,33 @@ export const STORAGE_KEY_CITY_WALK_CALIBRATED_FLOOR = getAppPrefKey(
 export const STORAGE_KEY_CITY_WALK_COLOUR = getAppPrefKey('city-walk-colour');
 
 /**
+ * localStorage key for the City Walk's Day/Night choice (CW-85, CW-Q83).
+ * 'day' or 'night'. ABSENT means NIGHT, which is the city as it has always
+ * been drawn: characters on the page's own black, and nothing behind them.
+ *
+ * Day fills the black gaps on nearby surfaces with a dark material tint under
+ * the glyphs. It changes no glyph and no colour decision - only what is
+ * behind them - and it is the owner's own ask, taken from the reference the
+ * project is working from.
+ */
+export const STORAGE_KEY_CITY_WALK_DAYLIGHT =
+  getAppPrefKey('city-walk-daylight');
+
+/**
+ * localStorage key for the City Walk's empty-city choice (CW-85, CW-Q86).
+ * 'on' means the streets are empty. ABSENT means the city is populated, which
+ * is the shipped state.
+ *
+ * It hides the people and the cars AND takes their obstacles out of the
+ * collision grid, because a city you can walk through has to be a city you
+ * can walk through: an invisible car you bump into is worse than a visible
+ * one.
+ */
+export const STORAGE_KEY_CITY_WALK_EMPTY_CITY = getAppPrefKey(
+  'city-walk-empty-city'
+);
+
+/**
  * localStorage key for whether the City Walk's Camera panel is collapsed
  * (CW-35). 'true' or 'false'.
  *

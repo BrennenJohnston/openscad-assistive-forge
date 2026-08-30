@@ -1449,6 +1449,26 @@ function _paintConverted(
     resizeOverlay(st.overlayCanvas, width, height, dpr, st.persistCanvas);
   }
 
+  // CW-85: a provider that answers with the wrong length is ignored rather
+  // than trusted, the same rule the class map is read under - a half-sized
+  // backing would paint the top of the screen and leave the rest bare, which
+  // reads as a rendering fault rather than as the bug it is.
+  let backing = null;
+  if (st.backingProvider) {
+    const supplied = st.backingProvider(cols, rows, {
+      usePalette,
+      useIntensity,
+      // CW-85 measured TWO tint sources before choosing one, and the second
+      // needed the cell's OWN colour: this is the palette entry the glyph is
+      // about to be drawn in. Handing it over costs nothing (the array
+      // already exists for the paint) and it is the only way a provider
+      // outside the converter can ask what colour a cell came out.
+      colorIndices: usePalette ? st.colorIndices : null,
+      palette: usePalette ? st.palette : null,
+    });
+    if (supplied && supplied.length === rows * cols) backing = supplied;
+  }
+
   paintFrame(
     st.overlayCtx,
     glyphIndices,
@@ -1466,7 +1486,8 @@ function _paintConverted(
         ? { indices: st.intensityIndices, atlases: st.intensityAtlases }
         : undefined,
     st.glowInComposite,
-    st.scanlineDim
+    st.scanlineDim,
+    backing
   );
 }
 
@@ -1500,6 +1521,17 @@ export async function initAltView(previewManager, options = {}) {
       ? options.classMapProvider
       : null;
   st.classVocabularies = options.glyphVocabularies ?? null;
+  // CW-85: the backing layer ("Day"). Opt-in per instance and asked once per
+  // PAINT, not per rAF. It returns one opaque colour per cell (0 = leave this
+  // cell alone) and CANNOT reach the glyph decision: by the time it is called
+  // the glyphs are already chosen, which is what makes "the backing changes
+  // no decision" a fact about the shape of the code rather than a promise.
+  // An instance that passes nothing behaves exactly as it did before, and
+  // that is every instance but the game's.
+  st.backingProvider =
+    typeof options.backingProvider === 'function'
+      ? options.backingProvider
+      : null;
 
   _ensureOverlay(st, container);
 
@@ -1840,6 +1872,25 @@ export async function initAltView(previewManager, options = {}) {
      */
     getTemporalHysteresis() {
       return st.hysteresis;
+    },
+    /**
+     * CW-85: swap the backing provider at run time, or turn it off with null.
+     *
+     * Setting it marks the frame dirty and nothing else: the backing is read
+     * at PAINT time, after the glyphs are chosen, so there is no remembered
+     * decision to invalidate and no history to forget. That is the same fact
+     * the byte-identical guard rests on.
+     *
+     * @param {((cols: number, rows: number, ctx: {usePalette: boolean,
+     *   useIntensity: boolean}) => Uint32Array|null)|null} provider
+     */
+    setBackingProvider(provider) {
+      st.backingProvider = typeof provider === 'function' ? provider : null;
+      st.dirty = true;
+    },
+    /** @returns {boolean} whether this instance paints a backing at all */
+    hasBackingProvider() {
+      return Boolean(st.backingProvider);
     },
     /**
      * CW-70: hold the share of solid (reverse-video) cells under `cap`.

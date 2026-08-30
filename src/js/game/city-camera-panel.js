@@ -485,6 +485,35 @@ export function buildCityCameraPanel(actions) {
   views.appendChild(viewGrid);
   body.appendChild(views);
 
+  // --- Scene (CW-85) --------------------------------------------------------
+  // Two things about the SCENE rather than about the camera, put here because
+  // this is the panel a Forge user already reaches for and because both have
+  // a key nobody would find on their own. They are toggle buttons rather than
+  // a Day/Night radio pair: each is one thing on or off, and a two-option
+  // radio group for a binary reads as a choice between two unrelated states.
+  const sceneSection = section('Scene');
+  const daylightBtn = pressButton({
+    id: 'cityWalkCamDaylight',
+    className: 'btn-sm btn-outline camera-btn-full',
+    text: 'Day',
+    label: (isMap) =>
+      isMap ? null : 'Day. Fill in nearby surfaces behind the characters',
+    onPress: () => actions.flipDaylight(),
+  });
+  daylightBtn.setAttribute('aria-pressed', 'false');
+  sceneSection.appendChild(daylightBtn);
+
+  const emptyCityBtn = pressButton({
+    id: 'cityWalkCamEmptyCity',
+    className: 'btn-sm btn-outline camera-btn-full',
+    text: 'Empty city',
+    label: () => 'Empty city. Hide the people and the cars',
+    onPress: () => actions.flipEmptyCity(),
+  });
+  emptyCityBtn.setAttribute('aria-pressed', 'false');
+  sceneSection.appendChild(emptyCityBtn);
+  body.appendChild(sceneSection);
+
   // --- Reset ----------------------------------------------------------------
   const resetSection = section('Reset');
   const resetBtn = pressButton({

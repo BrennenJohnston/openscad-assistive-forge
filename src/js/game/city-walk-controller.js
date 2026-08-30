@@ -123,6 +123,12 @@ import {
 } from './city-scene.js';
 import { buildCityCameraPanel } from './city-camera-panel.js';
 import { createClassPass } from './city-class-pass.js';
+import {
+  backingTable,
+  buildBacking,
+  sampledTable,
+  SAMPLED_BACKING_DRIVE,
+} from './city-backing.js';
 import { GLYPH_VOCABULARIES } from './glyph-vocabularies.js';
 import {
   safeGetItem,
@@ -131,6 +137,8 @@ import {
   STORAGE_KEY_CITY_WALK_FONT_SCALE,
   STORAGE_KEY_CITY_WALK_CALIBRATED_FLOOR,
   STORAGE_KEY_CITY_WALK_COLOUR,
+  STORAGE_KEY_CITY_WALK_DAYLIGHT,
+  STORAGE_KEY_CITY_WALK_EMPTY_CITY,
   STORAGE_KEY_CITY_WALK_MAP_STYLE,
   STORAGE_KEY_CITY_WALK_CAMERA_PANEL,
 } from '../storage-keys.js';
@@ -621,6 +629,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       toggleMapView: () => toggleMapView(),
       levelView: () => levelTheView(),
       recenterMap: () => recenterMap(),
+      // CW-85: the panel drives the same two actions the keys and the toolbar
+      // buttons drive. Three ways in, one implementation - a panel control
+      // with its own copy of the logic is how two controls come to disagree.
+      flipDaylight: () => flipDaylight(),
+      flipEmptyCity: () => flipEmptyCity(),
       adjustCharacterSize: (steps) =>
         adjustCharacterSize(steps * CHAR_SCALE_STEP),
       cycleMapStyle: (delta) => stepMapStyle(delta),
@@ -701,6 +714,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       'C: high contrast on or off',
       'T: change the theme',
       'O: color on or off (off is a single-color retro screen)',
+      // CW-85 (CW-Q83, CW-Q86). FLAGGED STRINGS (D-35). Both name what the
+      // key DOES rather than the state it leaves you in, because the help
+      // is read from either state.
+      'B: day or night (day fills in nearby surfaces behind the characters)',
+      'U: empty the city of people and parked cars, or bring them back',
       'G: rain off, light, heavy (stays off if you use reduced motion)',
       'P: save a picture of what you can see',
       // FLAGGED STRING (D-35). It says "once you have found every landmark"
@@ -972,6 +990,102 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   }
 
   /**
+   * Is the backing painted right now? (CW-85, CW-Q83.)
+   *
+   * ABSENT means NIGHT, and Night is the city exactly as it has always been
+   * drawn: characters on the page's own black with nothing behind them. Day
+   * fills the black gaps on nearby surfaces with a dark material tint UNDER
+   * the glyphs, which is what makes a car read as a solid mass rather than as
+   * characters in front of nothing. The owner asked for it as a toggle and
+   * chose Night as the default.
+   *
+   * @returns {boolean}
+   */
+  function daylightIsOn() {
+    return safeGetItem(STORAGE_KEY_CITY_WALK_DAYLIGHT) === 'day';
+  }
+
+  /**
+   * The phosphor this theme paints monochrome with, read from the stylesheet
+   * rather than copied - variant.css owns it, and a copy here would drift.
+   */
+  function monoPhosphor() {
+    const value = getComputedStyle(root)
+      .getPropertyValue('--color-accent')
+      .trim();
+    return /^#[0-9a-f]{6}$/i.test(value) ? value : '#00ff00';
+  }
+
+  /** Day/Night, from B and from the toolbar button (CW-85, CW-Q83). */
+  function flipDaylight() {
+    const next = !daylightIsOn();
+    safeSetItem(STORAGE_KEY_CITY_WALK_DAYLIGHT, next ? 'day' : 'night');
+    syncDaylightControls();
+    // The backing is read at paint time, so nothing has to be rebuilt or
+    // forgotten: one dirty frame is the whole of it.
+    if (state.game) state.game.altView.invalidate();
+    announceInLayer(
+      next
+        ? 'Day. Nearby surfaces are filled in behind the characters.'
+        : 'Night. The characters stand on black, with nothing behind them.'
+    );
+  }
+
+  /**
+   * Are the streets empty right now? (CW-85, CW-Q86.)
+   *
+   * ABSENT means the city is populated, which is how it ships. Empty hides
+   * the people and the cars so the buildings and the street can be looked at
+   * on their own.
+   *
+   * @returns {boolean}
+   */
+  function emptyCityIsOn() {
+    return safeGetItem(STORAGE_KEY_CITY_WALK_EMPTY_CITY) === 'on';
+  }
+
+  /** Meshes an empty city hides. Traffic never reached the collision grid. */
+  const POPULATION_MESHES = new Set(['people', 'cars', 'traffic-cars']);
+
+  /**
+   * Put the city's population in or take it out, PICTURE AND GRID TOGETHER.
+   *
+   * ★ The grid is the half that is easy to forget, and forgetting it is worse
+   * than not building the feature: an empty street you cannot walk down,
+   * because you are bumping into cars nobody can see, is a broken city rather
+   * than a quiet one. So the grid is rebuilt from the buildings and re-stamped
+   * with only the footprints that are not population. `stepWalk` reads
+   * `game.collision` through the game object every frame, so the swap lands
+   * without anything having to be told about it.
+   */
+  function applyEmptyCity(game) {
+    const empty = emptyCityIsOn();
+    game.props?.group?.traverse((obj) => {
+      if (obj.isMesh && POPULATION_MESHES.has(obj.name)) obj.visible = !empty;
+    });
+    const obstacles = empty
+      ? (game.props?.obstacles ?? []).filter((o) => !o.population)
+      : (game.props?.obstacles ?? []);
+    const collision = buildCollisionGrid(game.model);
+    stampObstacles(collision, obstacles);
+    game.collision = collision;
+    game.altView?.invalidate();
+  }
+
+  /** Empty city on/off, from U and from the toolbar button (CW-Q86). */
+  function flipEmptyCity() {
+    const next = !emptyCityIsOn();
+    safeSetItem(STORAGE_KEY_CITY_WALK_EMPTY_CITY, next ? 'on' : 'off');
+    syncDaylightControls();
+    if (state.game) applyEmptyCity(state.game);
+    announceInLayer(
+      next
+        ? 'Empty city. The people and the cars are gone, and you can walk where they stood.'
+        : 'The city is busy again. People and parked cars are back.'
+    );
+  }
+
+  /**
    * The toolbar spec (CW-15). A `hold` entry names an action frame()
    * already reads out of state.keys, so a held button reaches street mode
    * and map mode exactly the way its key does; `press` is the same discrete
@@ -1049,6 +1163,29 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
           label: 'Map view',
           keys: 'M',
           press: toggleMapView,
+          toggle: true,
+          views: 'both',
+        },
+      ],
+    },
+    {
+      // CW-85: both of these are the owner's own asks, and both get a button
+      // as well as a key - CW-60's promise is that every key has one.
+      name: 'Scene',
+      buttons: [
+        {
+          id: 'cityWalkDaylightBtn',
+          label: 'Day',
+          keys: 'B',
+          press: flipDaylight,
+          toggle: true,
+          views: 'street',
+        },
+        {
+          id: 'cityWalkEmptyCityBtn',
+          label: 'Empty city',
+          keys: 'U',
+          press: flipEmptyCity,
           toggle: true,
           views: 'both',
         },
@@ -1285,6 +1422,35 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
    * than assumed: the strip is one row on a wide window and two on a narrow
    * one.
    */
+  /**
+   * The pressed state of the two CW-85 toggles.
+   *
+   * Both are ordinary aria-pressed buttons rather than a radio group: Day and
+   * Night are one thing on or off, and so is an empty city, and a two-option
+   * radio group for a binary is a control that reads as a choice between two
+   * unrelated things.
+   */
+  function syncDaylightControls() {
+    const find = (id) =>
+      state.refs.toolbarButtons?.find((b) => b.spec.id === id)?.btn;
+    find('cityWalkDaylightBtn')?.setAttribute(
+      'aria-pressed',
+      daylightIsOn() ? 'true' : 'false'
+    );
+    find('cityWalkEmptyCityBtn')?.setAttribute(
+      'aria-pressed',
+      emptyCityIsOn() ? 'true' : 'false'
+    );
+    // The camera panel carries the same two controls, so it hears the same
+    // answer. Both surfaces read one function; neither owns the state.
+    document
+      .getElementById('cityWalkCamDaylight')
+      ?.setAttribute('aria-pressed', daylightIsOn() ? 'true' : 'false');
+    document
+      .getElementById('cityWalkCamEmptyCity')
+      ?.setAttribute('aria-pressed', emptyCityIsOn() ? 'true' : 'false');
+  }
+
   function measureToolbar() {
     const { toolbar } = state.refs;
     if (!toolbar) return;
@@ -1311,6 +1477,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
 
     mapBtn?.setAttribute('aria-pressed', mapView ? 'true' : 'false');
     fastBtn?.setAttribute('aria-pressed', state.fastWalk ? 'true' : 'false');
+    syncDaylightControls();
 
     const rainBtn = toolbarButtons.find(
       (b) => b.spec.id === 'cityWalkRainBtn'
@@ -1557,6 +1724,16 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
 
     const orthoCamera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 2000);
     orthoCamera.up.set(0, 1, 0);
+
+    // CW-85: the backing's own state, kept beside the cameras because that is
+    // the scope its provider closes over. The lookup table is rebuilt only
+    // when the mode or the phosphor moves - fifteen entries per converted
+    // frame would be work for nothing - and the cell buffer is reused.
+    let backingKey = '';
+    let backingLut = null;
+    let backingBuf = null;
+    let sampledKey = '';
+    let sampledLut = null;
 
     const city3d = buildCityGroup(model);
     scene.add(city3d.group);
@@ -1830,12 +2007,20 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       gpuSample: true,
       // The provider is asked once per conversion, not per rAF: the class
       // pass only has to run on the frames the converter actually converts.
-      classMapProvider: (cols, rows) =>
-        game.classPass?.read(
-          game.mapView ? orthoCamera : fpCamera,
-          cols,
-          rows
-        ) ?? null,
+      classMapProvider: (cols, rows) => {
+        const map =
+          game.classPass?.read(
+            game.mapView ? orthoCamera : fpCamera,
+            cols,
+            rows
+          ) ?? null;
+        // CW-85: remembered so the backing can reuse this frame's read rather
+        // than rendering the class pass a second time. On the GPU glyph path
+        // this provider is never called at all and the backing reads for
+        // itself, which is the cost Day carries on that path.
+        game.lastClassMap = map;
+        return map;
+      },
       // The same class frame, handed over as a TEXTURE rather than read back
       // to the CPU — on the GPU path the shader samples it directly, so the
       // class pass's own readback disappears too.
@@ -1846,6 +2031,70 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
           rows
         ) ?? null,
       glyphVocabularies: GLYPH_VOCABULARIES,
+      // CW-85 (CW-Q83): the backing. Asked at PAINT time, after every glyph
+      // is already chosen, which is what makes "Day changes no glyph" a fact
+      // about the order of the code rather than a promise.
+      backingProvider: (cols, rows, ctx) => {
+        const { usePalette } = ctx;
+        if (!daylightIsOn()) return null;
+        // Street only. The map is an overhead plan with its fog nulled, so
+        // there is no distance for the tint to fade over and nothing it would
+        // say that the map's own colours do not already say better.
+        if (game.mapView) return null;
+        const pass = game.classPass;
+        if (!pass) return null;
+
+        const light = root.getAttribute('data-theme') === 'light';
+        const palette = light ? 'amber' : 'green';
+        const mono = !usePalette;
+        const phosphor = monoPhosphor();
+        const key = `${palette}|${mono}|${phosphor}`;
+        if (backingKey !== key) {
+          backingKey = key;
+          backingLut = backingTable({ mono, palette, phosphor });
+        }
+
+        let classMap = game.lastClassMap;
+        if (!classMap || classMap.length !== cols * rows) {
+          classMap = pass.read(fpCamera, cols, rows);
+        }
+        // One conversion, one read: dropping it here means the next frame
+        // fetches its own rather than tinting this frame's classes onto the
+        // next frame's picture.
+        game.lastClassMap = null;
+        const depthMap = pass.lastDepth();
+        if (!classMap || !depthMap || depthMap.length !== classMap.length) {
+          return null;
+        }
+        // CW-85's experiment, DEV-only and off unless a measurement turns it
+        // on: tint from the cell's own colour instead of from its class. It
+        // never reaches a player - the switch is not wired to a control and
+        // production strips import.meta.env.DEV - and it exists so the two
+        // sources could be photographed against ONE scene in one run rather
+        // than argued about.
+        let sampled = null;
+        if (
+          import.meta.env.DEV &&
+          window.__cityWalkBackingSource === 'sampled' &&
+          ctx.palette
+        ) {
+          const skey = `${ctx.palette.join(',')}`;
+          if (sampledKey !== skey) {
+            sampledKey = skey;
+            sampledLut = sampledTable(ctx.palette, SAMPLED_BACKING_DRIVE);
+          }
+          sampled = sampledLut;
+        }
+        backingBuf = buildBacking({
+          classMap,
+          depthMap,
+          table: backingLut,
+          sampled,
+          colorIndices: sampled ? ctx.colorIndices : null,
+          out: backingBuf,
+        });
+        return backingBuf;
+      },
     });
 
     // Character size (CW-Q10, amended CW-Q39): the game's own saved value
@@ -1927,6 +2176,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // observer follows live theme/contrast flips (e.g. a system
     // prefers-color-scheme change mid-game).
     applyHcPalette(game);
+    // CW-85 (CW-Q86): a stored empty city has to take effect at OPEN, not
+    // only when the key is next pressed - and it moves the collision grid, so
+    // it runs before the first frame rather than after the player has walked
+    // into somebody who is not there.
+    applyEmptyCity(game);
     game.themeObserver = new MutationObserver(() => {
       applyHcPalette(game);
       game.altView.rebuildGlyphs?.();
@@ -2222,10 +2476,35 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       return;
     }
 
-    // CW-64: replay the show. Y was free - measured across this file and
-    // walk-controls.js, the letters in use are A C D E F G H J K L M O P Q R
-    // S T U V W X, leaving B, I, N, Y and Z. Only once the city has been
-    // finished, so the key cannot conjure a reward nobody earned.
+    // CW-85 (CW-Q83): Day and Night. B was free - the letters in use across
+    // this file are A C D E F G H J K L M O P Q R S T V W X Y, so B, I, N, U
+    // and Z were the free set, N is spoken for by auto-walk (CW-Q80), and
+    // this release spends B and U. I and Z are what is left.
+    if (event.code === 'KeyB') {
+      event.preventDefault();
+      event.stopPropagation();
+      flipDaylight();
+      return;
+    }
+
+    // CW-85 (CW-Q86): the city with nobody in it.
+    if (event.code === 'KeyU') {
+      event.preventDefault();
+      event.stopPropagation();
+      flipEmptyCity();
+      return;
+    }
+
+    // CW-64: replay the show. Only once the city has been finished, so the
+    // key cannot conjure a reward nobody earned.
+    //
+    // ★ This comment used to carry a letter census that was wrong when it was
+    // written - it listed U as taken and Y as free, and Y is the letter this
+    // very block spends. Re-measured at CW-85 by grepping `'Key[A-Z]'` across
+    // src/ (walk-controls.js binds no keys at all): in use are A B C D E F G
+    // H J K L M O P Q R S T U V W X Y, leaving **I, N and Z**, of which N is
+    // spoken for by auto-walk (CW-Q80). A census in prose goes stale the next
+    // time anybody spends a letter; run the grep.
     if (event.code === 'KeyY') {
       event.preventDefault();
       event.stopPropagation();

@@ -6136,6 +6136,11 @@ export function buildStreetProps(model, collision = null) {
             halfLengthM: PERSON_DEPTH_M / 2,
             halfWidthM: PERSON_SHOULDER_W_M / 2,
             rotationRad: facing,
+            // CW-85 (CW-Q86): this footprint belongs to the POPULATION, so an
+            // empty city can leave it out when it rebuilds the grid. Tagging
+            // is what makes that possible at all: the list is otherwise flat
+            // and a bench is the same shape as a person standing still.
+            population: true,
           });
         }
         peopleCursor = Math.max(0, cursor - len);
@@ -6368,6 +6373,10 @@ export function buildStreetProps(model, collision = null) {
               halfLengthM: hl,
               halfWidthM: hw,
               rotationRad: angle,
+              // CW-85 (CW-Q86): a parked car is population too. The moving
+              // traffic never reaches this list at all, so an empty city has
+              // nothing to take out for it.
+              population: true,
             });
           }
         }

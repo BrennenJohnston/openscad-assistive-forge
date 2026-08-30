@@ -342,7 +342,8 @@ function _paintComposited(
   colorIndices,
   colorAtlases,
   glowFade,
-  scanlineDim
+  scanlineDim,
+  backing
 ) {
   const w = ctx.canvas.width;
   const h = ctx.canvas.height;
@@ -362,12 +363,44 @@ function _paintComposited(
 
     for (let col = 0; col < cols; col++) {
       const cell = rowBase + col;
-      const idx = glyphIndices[cell];
-      if (idx === SPACE_INDEX) continue;
 
       const dx0 = (col * stepX) | 0;
       if (dx0 >= w) continue;
       const runW = Math.min(cellW, w - dx0);
+
+      // CW-85: the backing goes down FIRST, under everything, and it goes
+      // down for a blank cell too - filling the black gaps is the whole
+      // point of it. Glyph pixels overwrite it below, so no decision changes
+      // and no blending is needed: the caller has already folded the
+      // distance fade into an opaque colour, because the page behind this
+      // canvas is black and fading toward black is the same arithmetic.
+      //
+      // ★★ THIS LOOP IS THE WHOLE COST OF DAY, AND IT CANNOT BE WRITTEN
+      // CHEAPER. About 1.1 million pixel writes per conversion at 30 %.
+      // Measured on the Iris Xe, A-B-B-A, Seattle, 30 %, colour, heavy rain,
+      // 45 s, against 24.9-25.4 ms at Night:
+      //
+      //   this loop, as written      +4.2 ms
+      //   dst.fill() per row run     +18 to +25 ms - fill() is a CALL, and a
+      //                              3 px run costs far more to ask for than
+      //                              to write by hand (~400,000 calls/frame)
+      //   a scanline sweep with the  +4.15 ms - no change worth the name
+      //   column geometry hoisted
+      //
+      // So the cost is the memory traffic itself, not the shape of the loop,
+      // and no third rewrite is going to find it. That is why Day is a
+      // toggle that ships OFF: see the CW-85 record for what it buys and
+      // what it costs.
+      const back = backing === null ? 0 : backing[cell];
+      if (back !== 0) {
+        for (let y = 0; y < runH; y++) {
+          let d = (dy0 + y) * w + dx0;
+          for (let x = 0; x < runW; x++, d++) dst[d] = back;
+        }
+      }
+
+      const idx = glyphIndices[cell];
+      if (idx === SPACE_INDEX) continue;
 
       let src = basePixels;
       let stride = baseStride;
@@ -505,7 +538,11 @@ export function paintFrame(
   persistFade,
   colorLayers,
   glowInComposite = false,
-  scanlineDim = 0
+  scanlineDim = 0,
+  // CW-85: one opaque colour per cell, or 0 for "leave this cell alone", or
+  // null for a caller that has no backing at all - which is every caller but
+  // the game's own instance, and the game itself while Night is on.
+  backing = null
 ) {
   const fade = glowInComposite
     ? Math.max(0, Math.min(1, Number(persistFade) || 0))
@@ -536,7 +573,8 @@ export function paintFrame(
       colorIndices,
       colorAtlases,
       glowInComposite ? fade : 0,
-      scanlineDim
+      scanlineDim,
+      backing
     );
     return;
   }

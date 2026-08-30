@@ -176,8 +176,20 @@ const ROOF_SPLIT = new Map([['buildings', SURFACE_CLASS.BUILDING_ROOF]]);
 /** Above this dot product with +Z a face counts as looking at the sky. */
 const ROOF_NORMAL_Z = 0.9;
 
+/**
+ * CW-85: how far the B channel's 255 steps reach, in metres.
+ *
+ * The backing fades out at the fog's own far plane (`Fog(0x000000, 40, 260)`,
+ * city-scene.js), so a byte that ran to a different distance would make the
+ * tint and the fog disagree about where the world ends. One step is 260/255 =
+ * 1.02 m, which is finer than the fade needs and far finer than a 3x6 px cell
+ * can show.
+ */
+export const CLASS_DEPTH_FAR_M = 260;
+
 const VERTEX_SHADER = /* glsl */ `
   varying float vUp;
+  varying float vViewDepth;
   void main() {
     // Object space is world space here: the city group is never rotated, the
     // merged meshes bake their own transforms in at build time, and nothing in
@@ -187,7 +199,13 @@ const VERTEX_SHADER = /* glsl */ `
     // face points relative to the CAMERA, and the roof test below would then
     // fire on whatever the walker happens to be looking straight at (D-73).
     vUp = normalize(normal).z;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    vec4 viewPos = modelViewMatrix * vec4(position, 1.0);
+    // CW-85: LINEAR view depth, in metres, interpolated across the face. The
+    // depth BUFFER this target already carries is the non-linear one the GPU
+    // needs for occlusion; a tint that faded on that curve would fall off a
+    // cliff in the first few metres and then barely move for two hundred.
+    vViewDepth = -viewPos.z;
+    gl_Position = projectionMatrix * viewPos;
   }
 `;
 
@@ -195,13 +213,23 @@ const FRAGMENT_SHADER = /* glsl */ `
   uniform float uId;
   uniform float uRoofId;
   uniform float uRoofNormalZ;
+  uniform float uDepthFar;
   varying float vUp;
+  varying float vViewDepth;
   void main() {
     float id = uId;
     // uRoofId is 0 for every mesh that has no separate top surface, and 0 is
     // the sky class, which no geometry can be.
     if (uRoofId > 0.0 && vUp >= uRoofNormalZ) id = uRoofId;
-    gl_FragColor = vec4(id / 255.0, 0.0, 0.0, 1.0);
+    // R is the class, as it has been since CW-23 and as the GPU glyph path
+    // reads it. G is left free ON PURPOSE for CW-86's world-anchored glyph
+    // field. B is CW-85's linear depth: nothing samples it but the backing.
+    gl_FragColor = vec4(
+      id / 255.0,
+      0.0,
+      clamp(vViewDepth / uDepthFar, 0.0, 1.0),
+      1.0
+    );
   }
 `;
 
@@ -223,6 +251,7 @@ export function createClassPass(renderer, root) {
   let target = null;
   let pixels = null;
   let classMap = null;
+  let depthMap = null;
   let disposed = false;
 
   /**
@@ -256,6 +285,7 @@ export function createClassPass(renderer, root) {
           uId: { value: id },
           uRoofId: { value: roofId },
           uRoofNormalZ: { value: ROOF_NORMAL_Z },
+          uDepthFar: { value: CLASS_DEPTH_FAR_M },
         },
         vertexShader: VERTEX_SHADER,
         fragmentShader: FRAGMENT_SHADER,
@@ -290,6 +320,10 @@ export function createClassPass(renderer, root) {
     target.texture.generateMipmaps = false;
     pixels = new Uint8Array(cols * rows * 4);
     classMap = new Uint8Array(cols * rows);
+    // CW-85: the readback has always moved four bytes per cell and used one.
+    // The depth map costs the same transfer and one more pass over a buffer
+    // that is already in cache.
+    depthMap = new Uint8Array(cols * rows);
   };
 
   const clearColor = new Color();
@@ -353,9 +387,32 @@ export function createClassPass(renderer, root) {
       for (let y = 0; y < rows; y++) {
         const src = (rows - 1 - y) * cols * 4;
         const dst = y * cols;
-        for (let x = 0; x < cols; x++) classMap[dst + x] = pixels[src + x * 4];
+        for (let x = 0; x < cols; x++) {
+          classMap[dst + x] = pixels[src + x * 4];
+          depthMap[dst + x] = pixels[src + x * 4 + 2];
+        }
       }
       return classMap;
+    },
+
+    /**
+     * The linear view depth of the LAST `read()`, one byte per cell, in the
+     * same row order as the class map (CW-85).
+     *
+     * It is a separate accessor rather than a second return value because
+     * `read()`'s contract is the classMap and every caller since CW-23 uses
+     * it that way; the backing is the only thing that wants this, and only
+     * while Day is on.
+     *
+     * Byte b is `b / 255 * CLASS_DEPTH_FAR_M` metres. A cell the city does
+     * not cover reads 0, which is the sky - and the sky is never backed, so
+     * the ambiguity between "zero metres away" and "nothing there" never has
+     * to be resolved.
+     *
+     * @returns {Uint8Array|null} the last read's depth bytes, or null
+     */
+    lastDepth() {
+      return disposed ? null : depthMap;
     },
 
     /**
@@ -386,6 +443,7 @@ export function createClassPass(renderer, root) {
       target = null;
       pixels = null;
       classMap = null;
+      depthMap = null;
     },
   };
 }

@@ -248,6 +248,167 @@ export const CITY_PALETTE_INK_BUDGET = Object.freeze({
 // reading a photograph of it: solid cells back, but capped.
 export const LUMINANCE_LAYER_DEFAULT = 'calm';
 
+// ---------------------------------------------------------------------------
+// CW-85 - the backing behind the characters ("Day")
+// ---------------------------------------------------------------------------
+//
+// A blank cell in this game is the page's black, and the only solid paint is
+// the BRIGHT reverse-video layer. The reference the owner is working from
+// fills the black gaps on nearby surfaces with a dark, material-coloured
+// backing UNDER the glyphs - road slate, pavement tan, a trunk brown - while
+// the sky stays black and the far skyline stays bare. That is what makes a
+// car read as a solid mass rather than as characters in front of nothing.
+//
+// ★★ THE BACKING TAKES CONTRAST AWAY, AND THAT IS THE ONE DIRECTION THIS
+// PROJECT DOES NOT LET A CHANGE GO. Today every glyph sits on pure black, the
+// most contrast a screen can give. Painting anything behind it lowers the
+// ratio, so every tint below is bounded by MEASUREMENT rather than by taste:
+// the guard in tests/unit/game/city-backing.test.js drives colorjs.io over
+// every palette entry against every tint, at the dimmest drive the mono
+// ladder ships, and holds the 4.5:1 this project holds itself to. A tint that
+// reads nicely and measures 4.3 is not a tint this file may carry.
+//
+// The numbers are deliberately dark for that reason. They say "a surface is
+// here" and must never read as ink.
+
+/** Full-strength backing out to here, in metres. */
+export const CITY_BACKING_NEAR_M = 60;
+
+/**
+ * Gone by here. It is the fog's own far plane (city-scene.js), so the tint
+ * and the fog agree about where the world ends; a backing that outlived the
+ * fog would draw a skyline the scene has already faded to black.
+ */
+export const CITY_BACKING_FAR_M = 260;
+
+/**
+ * Classes that are never backed, by SURFACE_CLASS id.
+ *
+ * Only the sky, for two reasons: it is not a surface, and a cell the city
+ * does not cover reads depth 0, which would otherwise back the entire sky at
+ * full strength as though it were a wall against the lens.
+ *
+ * Numeric rather than imported so this module stays a leaf with no imports at
+ * all - the converter, the controller and eight test files load it. The guard
+ * that every id here is a real class lives in the test, which is free to
+ * import the class list.
+ */
+export const CITY_BACKING_EXEMPT_CLASS_IDS = Object.freeze([0]);
+
+/**
+ * MONOCHROME backing: the phosphor itself, driven down.
+ *
+ * A single-phosphor tube has one colour, so a mono backing cannot be a
+ * material tint - it is the same phosphor at a low drive, which is what a
+ * dark surface looked like on the hardware this game imitates. Values are the
+ * `drive` argument to driveColor(), the same function the renderer paints
+ * with.
+ *
+ * ★★ THE TWO PHOSPHORS CANNOT CARRY THE SAME BACKING, AND AMBER IS THE
+ * BINDING ONE. Measured through driveColor and colorjs.io against the dimmest
+ * ink the ladder ships (drive 0.65): green (#00ff00) holds 4.6:1 up to a
+ * backing drive of **0.180**, amber (#ffb000) only to **0.080** - amber's ink
+ * is itself much darker, so the gap between ink and backing closes more than
+ * twice as fast. A single table would either waste green or fail amber, so
+ * each phosphor gets the brightest backing it can carry and the guard
+ * measures both. The consequence is worth saying out loud: in monochrome the
+ * backing is a good deal fainter in amber than in green, and fainter in both
+ * than in colour. It is a contrast bound, not a taste, and it cannot be
+ * turned up without taking legibility off a player who has no other cue.
+ *
+ * Every value is far below the ladder's dimmest ink level (0.65), so a blank
+ * cell over backing reads as surface and can never be taken for a character
+ * that happens to be dim.
+ *
+ * Keyed by SURFACE_CLASS id; the names are in the comments because this file
+ * has no imports.
+ */
+export const CITY_BACKING_MONO_DRIVE = Object.freeze({
+  green: Object.freeze({
+    0: 0, // SKY - exempt; the row exists so the table is total over the classes
+    1: 0.06, // GROUND
+    2: 0.07, // ROAD
+    3: 0.09, // CURB
+    4: 0.1, // BUILDING_WALL
+    5: 0.08, // BUILDING_ROOF
+    6: 0.12, // STOREFRONT
+    7: 0.12, // SIGN
+    8: 0.08, // MAST
+    9: 0.08, // TREE
+    10: 0.11, // CAR
+    11: 0.09, // LAMP
+    12: 0.11, // PERSON
+    13: 0.09, // SIDEWALK
+    14: 0.07, // GREEN
+  }),
+  // The same shape, scaled to amber's measured ceiling of 0.08. The ORDER is
+  // kept exactly: a road still reads darker than a storefront.
+  amber: Object.freeze({
+    0: 0, // SKY - exempt
+    1: 0.04, // GROUND
+    2: 0.045, // ROAD
+    3: 0.06, // CURB
+    4: 0.065, // BUILDING_WALL
+    5: 0.055, // BUILDING_ROOF
+    6: 0.08, // STOREFRONT
+    7: 0.08, // SIGN
+    8: 0.055, // MAST
+    9: 0.055, // TREE
+    10: 0.075, // CAR
+    11: 0.06, // LAMP
+    12: 0.075, // PERSON
+    13: 0.06, // SIDEWALK
+    14: 0.045, // GREEN
+  }),
+});
+
+/**
+ * COLOUR backing: a dark material tint per class, per palette.
+ *
+ * The reference's own way of doing it - the surface says what it is made of,
+ * not what colour the glyph on it happens to be. The two palettes get their
+ * own rows because a green-phosphor city and a neon-amber one are different
+ * worlds and a slate that sits right in one reads cold in the other. The
+ * tints are NOT palette entries: a backing is painted straight into the frame
+ * buffer and never goes through a glyph atlas.
+ */
+export const CITY_BACKING_COLOUR = Object.freeze({
+  green: Object.freeze({
+    0: '#000000', // SKY - exempt
+    1: '#0d0f0c', // GROUND, dark earth
+    2: '#0e1012', // ROAD, slate
+    3: '#111310', // CURB
+    4: '#101211', // BUILDING_WALL
+    5: '#0c0e0d', // BUILDING_ROOF
+    6: '#12120c', // STOREFRONT, warm
+    7: '#110e12', // SIGN
+    8: '#0e0e0e', // MAST
+    9: '#0a0f0a', // TREE, dark foliage
+    10: '#0f1113', // CAR, body
+    11: '#12110b', // LAMP, warm metal
+    12: '#100e11', // PERSON
+    13: '#12110d', // SIDEWALK, tan
+    14: '#090e09', // GREEN, dark planting
+  }),
+  amber: Object.freeze({
+    0: '#000000', // SKY - exempt
+    1: '#100d0a', // GROUND
+    2: '#0f1013', // ROAD, slate
+    3: '#131110', // CURB
+    4: '#121011', // BUILDING_WALL
+    5: '#0e0c0d', // BUILDING_ROOF
+    6: '#14110b', // STOREFRONT
+    7: '#120d13', // SIGN
+    8: '#0f0e0e', // MAST
+    9: '#0b0f0b', // TREE
+    10: '#101113', // CAR
+    11: '#14110a', // LAMP
+    12: '#110e12', // PERSON
+    13: '#13110c', // SIDEWALK
+    14: '#0a0e0a', // GREEN
+  }),
+});
+
 export const CITY_TEMPORAL_HYSTERESIS = Object.freeze({
   // ★★★ THE MEMORY IS THE TRAIL. CW-68 bought the strobe fix with a smear and
   // nobody said so out loud, because its own "ghost rate" metric asked a

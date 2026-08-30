@@ -2318,3 +2318,304 @@ test.describe('ASCII City Walk — the solid bright layer, three ways (CW-70)', 
     expect(await read()).toEqual({ mode: 'calm', reverseAt: 0.8, cap: 0.01 })
   })
 })
+
+test.describe('ASCII City Walk — Day and Night (CW-85, CW-Q83)', () => {
+  /** Convert one frame and hand back the glyph grid the converter chose. */
+  const glyphsNow = (page) =>
+    page.evaluate(async () => {
+      const g = window.__cityWalkGame
+      const before = g.altView.getConvertTotals().samples
+      g.altView.invalidate()
+      const deadline = Date.now() + 15000
+      while (g.altView.getConvertTotals().samples <= before) {
+        if (Date.now() > deadline) throw new Error('no conversion in 15 s')
+        await new Promise((r) => requestAnimationFrame(r))
+      }
+      const probe = g.altView.readCellProbe()
+      if (!probe) throw new Error('the cell probe is empty')
+      return Array.from(probe.glyphs)
+    })
+
+  const settle = (page) =>
+    page.evaluate(async () => {
+      const g = window.__cityWalkGame
+      for (let i = 0; i < 2; i++) {
+        const before = g.altView.getConvertTotals().samples
+        g.altView.invalidate()
+        const deadline = Date.now() + 15000
+        while (g.altView.getConvertTotals().samples <= before) {
+          if (Date.now() > deadline) throw new Error('no conversion')
+          await new Promise((r) => requestAnimationFrame(r))
+        }
+      }
+    })
+
+  const paintedShare = (page) =>
+    page.evaluate(() => {
+      const cv = document.querySelector('canvas.hfm-overlay-canvas')
+      const cx = cv.getContext('2d', { willReadFrequently: true })
+      const d = cx.getImageData(0, 0, cv.width, cv.height).data
+      let on = 0
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i] || d[i + 1] || d[i + 2]) on++
+      }
+      return on / (d.length / 4)
+    })
+
+  test('★★★ the backing changes NO glyph the converter chose', async ({
+    page,
+  }) => {
+    // The whole layer rests on this. The backing is computed at PAINT time,
+    // after every glyph is already picked, so it cannot reach the decision -
+    // and that is a claim about the ORDER of the code, which is exactly the
+    // kind of claim that quietly stops being true. Same pose, same frame,
+    // Night then Day: the grids must match cell for cell.
+    //
+    // RED PROOF (run by hand, CW-85): let buildBacking write into the glyph
+    // array it is handed, and this case names the first cell that moved.
+    await launchGame(page)
+    await enterCity(page)
+    const configuredHysteresis = await page.evaluate(() =>
+      window.__cityWalkGame.altView.getTemporalHysteresis()
+    )
+    await page.evaluate(() => {
+      window.__cityWalkGame.motionReduced = true
+      window.__cityWalkGame.altView.setCellProbe(true)
+      window.__cityWalkGame.altView.setFontScale(0.3)
+      // The CW-68 memory HOLDS a glyph for five converted frames and then
+      // lets it go, so two captures taken at different points in that cycle
+      // differ by thousands of cells whatever else is true. Measured while
+      // writing this case: with the memory on, frames 1 and 2 after a toggle
+      // match and frame 3 moves 4,237 of 73,600 - the hold expiring, not the
+      // backing; with the memory off every frame matches. So it comes off for
+      // the measurement and goes back after. This case asks whether the
+      // BACKING moves a decision, and the memory's own clock is not an answer.
+      window.__cityWalkGame.altView.setTemporalHysteresis(null)
+    })
+    await settle(page)
+
+    const countDiff = (a, b) => {
+      let n = 0
+      let first = -1
+      for (let i = 0; i < a.length; i++) {
+        if (a[i] !== b[i]) {
+          n++
+          if (first < 0) first = i
+        }
+      }
+      return { n, first }
+    }
+
+    // ★★ THE SAME-CODE CONTROL FIRST (CW-31's rule, and this case needed it
+    // - written without one it blamed Day for 4,237 glyphs that the harness
+    // moved on its own before the scene had settled). Two conversions of an
+    // unchanged scene, nothing toggled: whatever this reads is what a
+    // comparison in this harness costs, and the real measurement is only
+    // meaningful against it.
+    const nightA = await glyphsNow(page)
+    const nightB = await glyphsNow(page)
+    const control = countDiff(nightA, nightB)
+    expect(nightA.length).toBeGreaterThan(1000)
+    expect(
+      control.n,
+      `the control moved ${control.n} glyphs with nothing changed, so this ` +
+        'case cannot say anything about Day'
+    ).toBe(0)
+
+    await page.keyboard.press('KeyB')
+    await settle(page)
+    const day = await glyphsNow(page)
+    expect(day.length).toBe(nightB.length)
+    const moved = countDiff(nightB, day)
+    expect(
+      moved.n,
+      `Day moved ${moved.n} of ${nightB.length} glyphs (first at cell ` +
+        `${moved.first}) against a control of ${control.n}`
+    ).toBe(control.n)
+
+    await page.evaluate((h) => {
+      window.__cityWalkGame.altView.setCellProbe(false)
+      window.__cityWalkGame.altView.setTemporalHysteresis(h)
+    }, configuredHysteresis)
+  })
+
+  test('★★ Day paints a backing, and Night paints none', async ({ page }) => {
+    // The companion to the case above. Proving nothing CHANGED would pass
+    // just as well if the layer did nothing at all, so this one measures that
+    // it does something. Painted PIXELS are the measure, because a backing is
+    // pixels and not characters.
+    await launchGame(page)
+    await enterCity(page)
+    await page.evaluate(() => {
+      window.__cityWalkGame.motionReduced = true
+      window.__cityWalkGame.altView.setFontScale(0.3)
+    })
+
+    await settle(page)
+    const night = await paintedShare(page)
+    await page.keyboard.press('KeyB')
+    await settle(page)
+    const day = await paintedShare(page)
+
+    expect(
+      day,
+      `day painted ${(day * 100).toFixed(1)} % against night's ${(night * 100).toFixed(1)} %`
+    ).toBeGreaterThan(night * 1.3)
+  })
+
+  test('★★ B and the toolbar button agree, and the choice is remembered', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+    const btn = page.locator('#cityWalkDaylightBtn')
+    await expect(btn).toHaveAttribute('aria-pressed', 'false')
+
+    await page.keyboard.press('KeyB')
+    await expect(btn).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.locator('#cityWalkAnnouncer')).toContainText('Day')
+
+    // The button is the same action, not a second one: CW-60's promise is
+    // that every key has a button, and a button that disagreed with its key
+    // would be two features wearing one name.
+    await btn.click()
+    await expect(btn).toHaveAttribute('aria-pressed', 'false')
+    expect(
+      await page.evaluate(() =>
+        localStorage.getItem('openscad-forge-city-walk-daylight')
+      )
+    ).toBe('night')
+
+    await page.keyboard.press('KeyB')
+    // ★ LEAVE THE CITY THE WAY A PLAYER DOES, rather than bouncing the tab
+    // through about:blank. The bounce is this suite's usual second-visit
+    // recipe, but in Firefox it raced with a navigation of its own -
+    // 'Navigation to about:blank is interrupted by another navigation to
+    // about:blank' - and failed on every run. Escape closes the layer, which
+    // is what the calibration precedent's blank page was really buying: a
+    // same-URL navigation is only a problem from INSIDE the open layer.
+    // This is also the truer test, because it is what a player actually does.
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          localStorage.getItem('openscad-forge-city-walk-daylight')
+        )
+      )
+      .toBe('day')
+    await page.keyboard.press('Escape')
+    await expect(page.locator('#cityWalkLayer')).toBeHidden()
+    await launchGame(page)
+    await enterCity(page)
+    await expect(page.locator('#cityWalkDaylightBtn')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    )
+  })
+
+  test('★★★ an empty city takes the obstacles out with the people (CW-Q86)', async ({
+    page,
+  }) => {
+    // The half that is easy to forget. Hiding a car and leaving its footprint
+    // in the collision grid makes an empty street you cannot walk down, which
+    // is a worse city than the busy one it replaced.
+    await launchGame(page)
+    await enterCity(page)
+
+    const survey = () =>
+      page.evaluate(() => {
+        const g = window.__cityWalkGame
+        const names = ['people', 'cars', 'traffic-cars']
+        let visible = 0
+        let meshes = 0
+        g.props.group.traverse((o) => {
+          if (o.isMesh && names.includes(o.name)) {
+            meshes++
+            if (o.visible) visible++
+          }
+        })
+        let blocked = 0
+        for (const o of g.props.obstacles) {
+          if (g.collision.isBlocked(o.x, o.y)) blocked++
+        }
+        const population = g.props.obstacles.filter((o) => o.population)
+        const stillBlocked = population.filter((o) =>
+          g.collision.isBlocked(o.x, o.y)
+        )
+        // A footprint within a cell and a half of a NON-population rect is
+        // blocked by that thing, not by anybody who has just left. The margin
+        // is the grid's own rasterisation: cellM is 1 m and blockRect blocks
+        // every cell a rect touches.
+        const others = g.props.obstacles.filter((o) => !o.population)
+        const near = (pt, r) => {
+          const dx = pt.x - r.x
+          const dy = pt.y - r.y
+          const c = Math.cos(-r.rotationRad)
+          const sn = Math.sin(-r.rotationRad)
+          const lx = dx * c - dy * sn
+          const ly = dx * sn + dy * c
+          return (
+            Math.abs(lx) <= r.halfLengthM + 1.5 &&
+            Math.abs(ly) <= r.halfWidthM + 1.5
+          )
+        }
+        const unexplainedBlocked = stillBlocked.filter(
+          (o) => !others.some((r) => near(o, r))
+        ).length
+        return {
+          meshes,
+          visible,
+          blocked,
+          population: population.length,
+          populationBlocked: stillBlocked.length,
+          unexplainedBlocked,
+        }
+      })
+
+    const busy = await survey()
+    expect(busy.meshes, 'the city has people and cars to hide').toBeGreaterThan(
+      0
+    )
+    expect(busy.visible).toBe(busy.meshes)
+    expect(
+      busy.population,
+      'people and parked cars are tagged as population'
+    ).toBeGreaterThan(100)
+    expect(
+      busy.populationBlocked,
+      'a busy city blocks the ground every one of them stands on'
+    ).toBe(busy.population)
+
+    await page.keyboard.press('KeyU')
+    const empty = await survey()
+    expect(empty.visible, 'nobody is drawn').toBe(0)
+
+    // ★★ WHAT "NOBODY IS IN THE WAY" CAN HONESTLY MEAN. The collision grid is
+    // 1 m and `blockRect` blocks every cell a rect TOUCHES, so somebody
+    // standing beside a tree shares the tree's blocked cell and that cell
+    // stays blocked when they leave - correctly, because the tree is still
+    // there. Measured on Seattle: 7,359 population footprints, 7,315 freed,
+    // and every one of the 44 survivors within a cell and a half of a bench,
+    // a basket, a hydrant or a tree. So the claim is not "zero blocked" - it
+    // is that nothing stays blocked BECAUSE OF the population, and the
+    // survivors are named rather than tolerated.
+    const freed = busy.populationBlocked - empty.populationBlocked
+    expect(
+      freed / busy.population,
+      `emptying freed ${freed} of ${busy.population} footprints`
+    ).toBeGreaterThan(0.99)
+    expect(
+      empty.unexplainedBlocked,
+      `${empty.unexplainedBlocked} footprints are still blocked with nothing ` +
+        'but a hidden person or car to explain them'
+    ).toBe(0)
+
+    // The rest of the street furniture is untouched: a bench is still a bench.
+    expect(empty.blocked).toBeLessThan(busy.blocked)
+    expect(empty.blocked).toBeGreaterThan(0)
+
+    await page.keyboard.press('KeyU')
+    const back = await survey()
+    expect(back.visible).toBe(back.meshes)
+    expect(back.populationBlocked).toBe(busy.populationBlocked)
+  })
+})

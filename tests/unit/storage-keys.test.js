@@ -99,6 +99,11 @@ const EXPECTED_KEYS = {
 
   // City Walk game (CW-Q16): colour on/off; absent means follow high contrast
   STORAGE_KEY_CITY_WALK_COLOUR: 'openscad-forge-city-walk-colour',
+  // CW-85: Day/Night and the empty city. Both are player choices the
+  // game remembers, and both are ABSENT by default - Night and a busy
+  // city are what ships.
+  STORAGE_KEY_CITY_WALK_DAYLIGHT: 'openscad-forge-city-walk-daylight',
+  STORAGE_KEY_CITY_WALK_EMPTY_CITY: 'openscad-forge-city-walk-empty-city',
   STORAGE_KEY_CITY_WALK_MAP_STYLE: 'openscad-forge-city-walk-map-style',
   STORAGE_KEY_CITY_WALK_CAMERA_PANEL: 'openscad-drawer-camera-city-walk-state',
 };

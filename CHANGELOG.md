@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Day and Night** (CW-85) - the city has always been characters standing on the page's own
+  black: between one character and the next there was nothing, so a parked car read as a car
+  shape drawn in the air rather than as a solid thing. Day fills those gaps in. Every nearby
+  surface gets a dark tint of its own material painted behind the characters, road slate,
+  pavement tan, a wall the building's own hue, a tree its green, and the picture reads as
+  surfaces you could touch. The sky stays black and the far skyline stays bare, so distance
+  still reads as distance, and the fill fades out over the same range the fog does. It changes
+  no character and no color the game had already chosen: it is paint that goes down first and
+  is covered by them. Press B, or use the Day button in the toolbar or the Camera panel. Night
+  is what you get unless you ask, and it is the city exactly as it was
+
+- **An empty city** (CW-85) - press U and the people and the parked cars are gone, so a street,
+  a storefront or a hillside can be looked at on its own. They are taken out of your way as
+  well as out of the picture: the ground they stood on becomes ground you can walk across,
+  rather than leaving you bumping into a car nobody can see
+
 - **Your character size is yours** (CW-88) - the game measures what your machine can hold and used to
   apply that as a rule: a size you had chosen was raised to the machine's floor when you opened the
   game, the smaller steps refused to go below it, and the Smaller control switched itself off there.
