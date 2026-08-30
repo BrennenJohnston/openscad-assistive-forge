@@ -629,11 +629,6 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       toggleMapView: () => toggleMapView(),
       levelView: () => levelTheView(),
       recenterMap: () => recenterMap(),
-      // CW-85: the panel drives the same two actions the keys and the toolbar
-      // buttons drive. Three ways in, one implementation - a panel control
-      // with its own copy of the logic is how two controls come to disagree.
-      flipDaylight: () => flipDaylight(),
-      flipEmptyCity: () => flipEmptyCity(),
       adjustCharacterSize: (steps) =>
         adjustCharacterSize(steps * CHAR_SCALE_STEP),
       cycleMapStyle: (delta) => stepMapStyle(delta),
@@ -1171,16 +1166,17 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     {
       // CW-85: both of these are the owner's own asks, and both get a button
       // as well as a key - CW-60's promise is that every key has one.
+      //
+      // ★★ ONLY THE SHARED ONE IS HERE. Day is street-only (the map is an
+      // overhead plan with its fog nulled, so there is no distance for the
+      // tint to fade over), and CW-59's rule is that EVERY view-only button
+      // lives in the view zone at the far end and nowhere else. Day sat here
+      // first and the CW-59 guard caught it immediately: hiding it on the map
+      // moved Empty city 48 px, because a width change anywhere left of a
+      // shared button moves that button. The two stay together in the Camera
+      // panel, which is where a mouse user browses them.
       name: 'Scene',
       buttons: [
-        {
-          id: 'cityWalkDaylightBtn',
-          label: 'Day',
-          keys: 'B',
-          press: flipDaylight,
-          toggle: true,
-          views: 'street',
-        },
         {
           id: 'cityWalkEmptyCityBtn',
           label: 'Empty city',
@@ -1260,6 +1256,18 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
           label: 'Rain',
           keys: 'G',
           press: cycleRain,
+          toggle: true,
+          views: 'street',
+        },
+        // CW-85: Day is street-only, so by CW-59's rule it belongs in this
+        // zone rather than beside its own key's sibling. Its partner, the
+        // empty city, works in both views and stays in the shared Scene
+        // group; the Camera panel keeps the pair together.
+        {
+          id: 'cityWalkDaylightBtn',
+          label: 'Day',
+          keys: 'B',
+          press: flipDaylight,
           toggle: true,
           views: 'street',
         },
@@ -1441,14 +1449,6 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       'aria-pressed',
       emptyCityIsOn() ? 'true' : 'false'
     );
-    // The camera panel carries the same two controls, so it hears the same
-    // answer. Both surfaces read one function; neither owns the state.
-    document
-      .getElementById('cityWalkCamDaylight')
-      ?.setAttribute('aria-pressed', daylightIsOn() ? 'true' : 'false');
-    document
-      .getElementById('cityWalkCamEmptyCity')
-      ?.setAttribute('aria-pressed', emptyCityIsOn() ? 'true' : 'false');
   }
 
   function measureToolbar() {

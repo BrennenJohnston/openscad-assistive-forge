@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   surfaces you could touch. The sky stays black and the far skyline stays bare, so distance
   still reads as distance, and the fill fades out over the same range the fog does. It changes
   no character and no color the game had already chosen: it is paint that goes down first and
-  is covered by them. Press B, or use the Day button in the toolbar or the Camera panel. Night
+  is covered by them. Press B, or use the Day button in the toolbar. Night
   is what you get unless you ask, and it is the city exactly as it was
 
 - **An empty city** (CW-85) - press U and the people and the parked cars are gone, so a street,

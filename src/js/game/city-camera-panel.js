@@ -485,35 +485,24 @@ export function buildCityCameraPanel(actions) {
   views.appendChild(viewGrid);
   body.appendChild(views);
 
-  // --- Scene (CW-85) --------------------------------------------------------
-  // Two things about the SCENE rather than about the camera, put here because
-  // this is the panel a Forge user already reaches for and because both have
-  // a key nobody would find on their own. They are toggle buttons rather than
-  // a Day/Night radio pair: each is one thing on or off, and a two-option
-  // radio group for a binary reads as a choice between two unrelated states.
-  const sceneSection = section('Scene');
-  const daylightBtn = pressButton({
-    id: 'cityWalkCamDaylight',
-    className: 'btn-sm btn-outline camera-btn-full',
-    text: 'Day',
-    label: (isMap) =>
-      isMap ? null : 'Day. Fill in nearby surfaces behind the characters',
-    onPress: () => actions.flipDaylight(),
-  });
-  daylightBtn.setAttribute('aria-pressed', 'false');
-  sceneSection.appendChild(daylightBtn);
-
-  const emptyCityBtn = pressButton({
-    id: 'cityWalkCamEmptyCity',
-    className: 'btn-sm btn-outline camera-btn-full',
-    text: 'Empty city',
-    label: () => 'Empty city. Hide the people and the cars',
-    onPress: () => actions.flipEmptyCity(),
-  });
-  emptyCityBtn.setAttribute('aria-pressed', 'false');
-  sceneSection.appendChild(emptyCityBtn);
-  body.appendChild(sceneSection);
-
+  // CW-85 HAS NO SECTION HERE, AND THAT IS A MEASUREMENT RATHER THAN AN
+  // OVERSIGHT. Day and the empty city were built as a 'Scene' section right
+  // here, and the CW-38 guard caught it at once: in high contrast at
+  // 1600x900 the body held 775 px of content in a 683 px box, an overflow of
+  // 92 px, which puts Reset View back below the fold behind a scrollbar -
+  // the exact defect CW-38 exists to have fixed.
+  //
+  // There was no room to find. CW-38 already spent every spacing token it
+  // could ('the buttons never shrink - a target is a target'), and measured
+  // section by section the panel was EXACTLY full: 158 + 158 + 66 + 204 + 66
+  // with 2 px gaps. Even the compact form - both buttons side by side in one
+  // row like Zoom, 66 px rather than 112 - still overflowed by 46 px.
+  //
+  // So the two toggles live in the toolbar's own Scene group and on keys B
+  // and U, which already keeps CW-60's promise that every key has a button.
+  // It is also the better home on its own merits: this panel is the CAMERA -
+  // where you look, where you walk, how far you zoom, the standard views -
+  // and neither of those toggles moves the camera.
   // --- Reset ----------------------------------------------------------------
   const resetSection = section('Reset');
   const resetBtn = pressButton({
