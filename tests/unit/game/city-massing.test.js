@@ -391,3 +391,70 @@ describe('resolveMassing - the empty column', () => {
     expect(PART_GROUND_MAX_M).toBe(0.5)
   })
 })
+
+describe('★★★ CW-90 (D-126): nothing hovers, and every gap is closed', () => {
+  // The owner photographed a building with a floating half hanging above its
+  // lower half. CW-76 already grounded floaters and could not see this one:
+  // it asked only about each building's LOWEST volume, and a part sitting
+  // above a lower part is not the lowest thing its building draws, so the
+  // pass walked straight past it. CW-Q89 answered "close every gap".
+
+  it('★★★ a part hovering above a LOWER part is brought down to meet it', () => {
+    // The owner's picture, as a fixture: an outline 0-10 m with a part that
+    // starts at 25 m. Nothing else is anywhere near, so the only thing that
+    // could hold the part up is the building's own lower mass, 15 m below.
+    //
+    // RED PROOF (run by hand, CW-90): narrow the floaters loop back to each
+    // building's lowest volume and this case leaves the part at 25 m. Over the
+    // four shipped extracts the same revert leaves 65 volumes hanging
+    // (Seattle 34, Denver 28, Albuquerque 1, Burnaby 2) where CW-90 leaves 0.
+    const model = parseCityExtract(
+      extractOf(
+        way(1, { building: 'yes', height: '10' }, 0, 0, 12),
+        {
+          type: 'way',
+          id: 2,
+          tags: { 'building:part': 'yes', height: '40', min_height: '25' },
+          geometry: squareRing(0, 0, 4),
+        }
+      ),
+      { center: CENTER }
+    )
+    expect(model.stats.floatingMass).toBe(0)
+    // And the fixture really did contain a part - a model with none would
+    // report zero floating masses while proving nothing at all.
+    const volumes = model.buildings.flatMap((b) => drawn(b))
+    expect(volumes.length).toBeGreaterThan(1)
+    // The part now starts where the mass below it ends, not 15 m above it.
+    const high = volumes.filter(([base]) => base > PART_GROUND_MAX_M)
+    for (const [base] of high) {
+      expect(base, `a volume still starts at ${base} m with nothing under it`)
+        .toBeLessThanOrEqual(10 + SUPPORT_GAP_TOLERANCE_M)
+    }
+  })
+
+  it('★★ leaves a part that ALREADY sits on something exactly where it is', () => {
+    // The guard against over-correcting. A part starting at 10 m on top of a
+    // 10 m mass is supported, and CW-90 must not drag it to the ground - that
+    // would be the "drop it" option the owner did not choose.
+    const model = parseCityExtract(
+      extractOf(
+        way(1, { building: 'yes', height: '10' }, 0, 0, 12),
+        {
+          type: 'way',
+          id: 2,
+          tags: { 'building:part': 'yes', height: '40', min_height: '10' },
+          geometry: squareRing(0, 0, 4),
+        }
+      ),
+      { center: CENTER }
+    )
+    expect(model.stats.floatingMass).toBe(0)
+    const bases = model.buildings
+      .flatMap((b) => drawn(b))
+      .map(([base]) => base)
+      .sort((a, z) => a - z)
+    // One volume on the ground, one starting at 10 m and staying there.
+    expect(bases.some((b) => Math.abs(b - 10) < 0.001)).toBe(true)
+  })
+})

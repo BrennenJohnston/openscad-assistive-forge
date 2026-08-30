@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Nothing is left behind when you walk** (CW-89) - characters were staying on screen after the
+  thing that put them there had gone, so walking past a building dragged a faint speckle along the
+  wall behind you. The game holds a character still for a few frames to stop it flickering, and
+  that hold was being applied to cells that had gone dark as well as to cells that had merely
+  changed. It no longer is: a cell the game decides is empty is empty at once, and a cell that
+  lights up takes its character at once. Holding still is for choosing between characters, never
+  for deciding whether there is one. Measured walking, ink left where the game had chosen blank
+  went from about five hundred cells a frame to none
+
+- **Buildings do not hover** (CW-90) - some buildings were drawn starting several storeys above
+  the pavement, so a tower hung in the air with a gap underneath it, and some had an upper half
+  floating clear of their own lower half. Anything that would hover is now built down to whatever
+  is beneath it, or to the ground. The shape above is unchanged; only the hole underneath is
+  filled. Across the four cities this closed seventy-one gaps, including a two hundred metre tower
+  that began eighteen metres up
+
 - **The ground keeps its own characters** (CW-86, groundwork, off by default) - a cell's
   character has always been chosen by how bright that patch of SCREEN is, so walking re-rolled
   it constantly and the ground was the worst of it. This adds the other way of choosing: the

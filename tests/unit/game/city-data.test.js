@@ -886,10 +886,22 @@ describe('building parts become the silhouette (CW-26)', () => {
     expect(host.parts.map((p) => p.heightM).sort((a, b) => a - b)).toEqual([
       12, 90,
     ])
-    // The tower part starts where the wing stops - that stepped profile IS
-    // the silhouette this release exists to recover.
+    // ★★ THE TOWER NOW STARTS AT 8, NOT AT 12, AND THAT IS CW-90 (D-126).
+    //
+    // This expectation used to be 12 and its comment said the tower "starts
+    // where the wing stops". Read the fixture: the wing spans 0.1-0.4 D of
+    // latitude and the tower 0.5-0.8 D. They do not overlap ANYWHERE. Nothing
+    // was under that tower at all - it hung 12 m up over the outline's own
+    // 8 m mass, with a 4 m gap, which is exactly the defect the owner
+    // photographed and CW-Q89 answered with "close every gap".
+    //
+    // 8 is the top of the mass beneath it, NOT the ground: the part is
+    // lowered to meet what holds it up and no further, which is the
+    // difference between the option the owner chose and the one they did not.
+    // The stepped silhouette CW-26 exists to recover is unaffected - it is
+    // the tower being 90 m tall over an 8 m wing, and it still is.
     const tower = host.parts.find((p) => p.heightM === 90)
-    expect(tower.minHeightM).toBe(12)
+    expect(tower.minHeightM).toBe(8)
   })
 
   it('keeps the OUTLINE for collision, whatever the parts do', async () => {

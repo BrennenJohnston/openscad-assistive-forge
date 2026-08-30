@@ -598,11 +598,24 @@ export function resolveMassing(buildings) {
   const baseOf = (v) => (v.volume ? (v.volume.minHeightM ?? 0) : v.base);
   const topOf = (v) => (v.volume ? (v.volume.heightM ?? 0) : v.top);
 
-  /** How high the drawn volumes over (x, y) reach, ignoring `owner`'s own. */
-  const supportUnder = (x, y, owner) => {
+  /**
+   * How high anything drawn over (x, y) reaches, other than `self`.
+   *
+   * ★★★ CW-90 (D-126): A BUILDING'S OWN VOLUMES COUNT AS SUPPORT NOW. CW-76
+   * excluded them, which was right for the question it was asking - it only
+   * ever looked at a building's LOWEST volume, and a sibling could not be
+   * holding that up. It is wrong for the question the owner asked, which is
+   * about a part hovering above a LOWER PART of the same building: there, the
+   * lower part is exactly what support means.
+   *
+   * The walk still starts at the ground and only accepts a span whose base is
+   * within a tolerance of what it has reached so far, so a floating sibling
+   * cannot prop anything up - it has to be connected to the ground itself.
+   */
+  const supportUnder = (x, y, self) => {
     const spans = [];
     for (const v of all) {
-      if (v.owner === owner) continue;
+      if (v === self) continue;
       if (!(topOf(v) > baseOf(v))) continue;
       if (!pointInRing(x, y, v.ring)) continue;
       spans.push(v);
@@ -616,29 +629,47 @@ export function resolveMassing(buildings) {
     return reach;
   };
 
-  const lowestOf = (b) => {
-    const vols = drawnVolumes(b);
-    if (vols.length === 0) return null;
-    let low = vols[0];
-    for (const v of vols) if (v.base < low.base) low = v;
-    return low;
-  };
-
+  // ★★★ EVERY VOLUME, NOT EACH BUILDING'S LOWEST ONE (CW-90, D-126, CW-Q89
+  // "close every gap"). CW-76 built `lowestOf` and asked about that alone, so
+  // a part hanging above a lower part was never even a candidate - it is not
+  // the lowest thing its building draws, so the pass walked straight past it.
+  // That is the defect the owner photographed: a floating half over the half
+  // below it.
+  //
+  // MEASURED before this pass looked at all of them, over the four shipped
+  // extracts: 71 drawn volumes still hung with a gap beneath them - Seattle
+  // 35, Denver 31, Albuquerque 1, Burnaby 4. The worst were not obscure:
+  // Seattle Municipal Tower began at 18 m under a 220 m tower, Qualtrics
+  // Tower at 25 m, Museum House 88.5 m up with 77.8 m of nothing under it.
+  //
+  // It is also asked at each VOLUME'S own centre rather than at its
+  // building's: a wing off to one side of a big outline is not described by
+  // the middle of that outline.
   const floaters = [];
   for (let i = 0; i < buildings.length; i++) {
     if (canopy[i]) continue;
-    const low = lowestOf(buildings[i]);
-    if (!low || !low.volume || !(low.base > PART_GROUND_MAX_M)) continue;
-    floaters.push({ index: i, building: buildings[i], volume: low.volume });
+    for (const v of drawnVolumes(buildings[i])) {
+      if (!v.volume) continue;
+      if (!(v.base > PART_GROUND_MAX_M)) continue;
+      floaters.push({
+        index: i,
+        building: buildings[i],
+        volume: v.volume,
+        ring: v.ring,
+      });
+    }
   }
+  // Lowest first, and the reach is read LIVE, so grounding the 19 m slab of a
+  // stack lets the 19.5 m slab above it see solid ground on the same pass.
   floaters.sort(
     (a, z) => (a.volume.minHeightM ?? 0) - (z.volume.minHeightM ?? 0)
   );
 
   for (const f of floaters) {
     const base = f.volume.minHeightM ?? 0;
-    const [cx, cy] = centroids[f.index];
-    const reach = supportUnder(cx, cy, f.building);
+    if (!(base > PART_GROUND_MAX_M)) continue;
+    const [cx, cy] = ringCentroid(f.ring);
+    const reach = supportUnder(cx, cy, null);
     if (reach + SUPPORT_GAP_TOLERANCE_M >= base) continue;
     const newBase = reach <= PART_GROUND_MAX_M ? 0 : reach;
     f.volume.minHeightM = newBase;
@@ -650,17 +681,21 @@ export function resolveMassing(buildings) {
   }
 
   // The post-condition, MEASURED rather than assumed: after the pass, how
-  // many masses still stand on nothing?
+  // many DRAWN VOLUMES still stand on nothing? CW-90 widened this from
+  // "masses" to every volume, for the same reason it widened the pass: a part
+  // hanging over a lower part is the defect, and counting only each
+  // building's lowest volume could never see one. The e2e guard asserts this
+  // is zero in all four cities.
   for (let i = 0; i < buildings.length; i++) {
     if (canopy[i]) continue;
-    const low = lowestOf(buildings[i]);
-    if (!low || !(low.base > PART_GROUND_MAX_M)) continue;
-    const [cx, cy] = centroids[i];
-    if (
-      supportUnder(cx, cy, buildings[i]) + SUPPORT_GAP_TOLERANCE_M <
-      low.base
-    ) {
-      out.floatingMass++;
+    for (const v of drawnVolumes(buildings[i])) {
+      if (!v.volume) continue;
+      const base = v.volume.minHeightM ?? 0;
+      if (!(base > PART_GROUND_MAX_M)) continue;
+      const [cx, cy] = ringCentroid(v.ring);
+      if (supportUnder(cx, cy, null) + SUPPORT_GAP_TOLERANCE_M < base) {
+        out.floatingMass++;
+      }
     }
   }
 
