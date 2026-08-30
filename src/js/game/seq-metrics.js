@@ -513,3 +513,58 @@ function round2(v) {
 function round4(v) {
   return Number(v.toFixed(4));
 }
+
+/**
+ * CW-86: COHERENCE - of the cells that changed, how many took the glyph their
+ * neighbour along the motion had a frame ago.
+ *
+ * ★★ THIS EXISTS BECAUSE A GLYPH-CHANGE RATE CANNOT TELL A SLIDE FROM A
+ * RE-ROLL, AND THE DIFFERENCE IS THE WHOLE SUBJECT OF ROUND 8. A surface whose
+ * characters belong to it and are sliding past the eye changes a lot of cells
+ * per frame - every cell takes the character its neighbour had - and that is
+ * MOTION, which is what a walk is supposed to look like. A surface whose
+ * characters are re-rolled from screen luminance also changes a lot of cells,
+ * and that is CHURN. Both score the same on the glyph-change row. They score
+ * nothing alike here: a slide is near 100 %, a re-roll is at the vocabulary's
+ * chance level.
+ *
+ * The shift is in CELLS and is the caller's to supply, because only the caller
+ * knows which way the picture moved: dx = +1 means the picture slid one cell
+ * to the right between the two frames, so a cell should now hold what the cell
+ * to its LEFT held.
+ *
+ * @param {ArrayLike<number>} prev the previous frame's glyph indices
+ * @param {ArrayLike<number>} next this frame's
+ * @param {number} cols
+ * @param {number} rows
+ * @param {number} dx cells the picture moved right
+ * @param {number} dy cells the picture moved down
+ * @returns {{changed: number, coherent: number, pct: number}}
+ */
+export function coherence(prev, next, cols, rows, dx, dy) {
+  const n = cols * rows;
+  requireLength(prev, n, 'prev');
+  requireLength(next, n, 'next');
+  let changed = 0;
+  let coherent = 0;
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const i = y * cols + x;
+      if (prev[i] === next[i]) continue;
+      // Where this cell's content was a frame ago.
+      const sx = x - dx;
+      const sy = y - dy;
+      // ★ A CELL WHOSE SOURCE IS OFF THE GRID IS NOT EVIDENCE EITHER WAY, so
+      // it is left out of BOTH halves rather than counted as incoherent. Its
+      // content came from outside the picture and there is nothing to compare
+      // it against. Counting it against coherence made a PURE SLIDE score
+      // 87.5 % on an eight-cell row - the whole leading edge - and a metric
+      // whose best possible answer depends on the grid's width cannot be read
+      // beside another column.
+      if (sx < 0 || sy < 0 || sx >= cols || sy >= rows) continue;
+      changed++;
+      if (prev[sy * cols + sx] === next[i]) coherent++;
+    }
+  }
+  return { changed, coherent, pct: pct(coherent, changed) };
+}

@@ -2021,6 +2021,12 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
         game.lastClassMap = map;
         return map;
       },
+      // CW-86: the glyph field, read off the SAME class frame the line above
+      // just produced. The converter calls this immediately after
+      // classMapProvider within one conversion, so lastField() is that frame's
+      // G channel and not the previous one's - which is the whole reason the
+      // pass exposes it as an accessor rather than returning it.
+      glyphFieldProvider: () => game.classPass?.lastField() ?? null,
       // The same class frame, handed over as a TEXTURE rather than read back
       // to the CPU — on the GPU path the shader samples it directly, so the
       // class pass's own readback disappears too.
@@ -2166,6 +2172,46 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     };
     game.getLuminanceLayer = () => game.luminanceLayer;
     game.setLuminanceLayer(LUMINANCE_LAYER_DEFAULT);
+
+    /**
+     * CW-86: anchored glyphs on or off - BOTH halves, in one call.
+     *
+     * They are two switches in two modules and they have to move together:
+     * the class pass must render the field into its G channel, and the
+     * converter must be willing to read it. Either alone does nothing at all -
+     * a field nobody samples, or a sampler with no field - and "nothing at
+     * all" is the worst possible way for a prototype to fail, because it looks
+     * exactly like a change that did not help.
+     *
+     * Prototype-first (plan §10.3): this is OFF at start, and only the
+     * instrument and the release's own e2e case turn it on until the
+     * three-column table says whether it earns its place.
+     *
+     * @param {boolean} on
+     * @returns {boolean} what is now in force
+     */
+    game.setAnchoredGlyphs = (on) => {
+      const next = on === true;
+      game.classPass?.setGlyphField?.(next);
+      game.altView.setAnchoredGlyphs?.(next);
+      game.anchoredGlyphs = next;
+      game.altView.invalidate();
+      return next;
+    };
+    game.getAnchoredGlyphs = () => Boolean(game.anchoredGlyphs);
+    /** CW-86 P2: the field lattice, for the sweep that chooses it. */
+    game.setFieldMaxSize = (n) => {
+      const size = game.classPass?.setFieldMaxSize?.(n) ?? null;
+      game.altView.invalidate();
+      return size;
+    };
+    game.getFieldMaxSize = () => game.classPass?.fieldMaxSize?.() ?? null;
+    /** CW-86 P2: restrict the field to these classes, or null for all. */
+    game.setFieldClasses = (ids) => {
+      game.classPass?.setFieldClasses?.(ids);
+      game.altView.invalidate();
+    };
+    game.setAnchoredGlyphs(false);
 
     // CW-71: colour mode's own bright layer. Per instance; the main app's Alt
     // View is not given one. The thresholds are the owner's (CW-Q79).

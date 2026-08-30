@@ -54,6 +54,7 @@ import {
   SPACE_INDEX,
   FIRST_CHAR_CODE,
 } from './_hfm-paint.js';
+import { anchoredGlyph, buildLadders } from './game/city-glyph-field.js';
 
 // Tuning knobs
 // _MIN_INTERVAL_MS      — conversion throttle ceiling (~30 fps while dirty)
@@ -672,6 +673,11 @@ function _ensureGlyphModel(st, { fontFamily, fontSizePx, charW, charH, dpr }) {
   }
   st.sparsestNonSpace = emptiest >= 0 ? emptiest : SPACE_INDEX;
   st.classLookups = _buildClassLookups(st);
+  // CW-86: one ladder per anchored class, from field step to glyph. Built
+  // here and not on demand because it is derived from the atlas - the same
+  // reason the lookups are - and a ladder indexing a stale atlas would draw
+  // characters nobody chose.
+  st.classLadders = buildLadders(st.classLookups, st.glyphVectors);
   st.atlasKey = key;
   // Every setter that changes the palette, the drive levels, the reverse
   // threshold or the vocabularies clears atlasKey to force this rebuild, so
@@ -801,7 +807,7 @@ function _sampleOnGpu(
     usePalette,
   }
 ) {
-  if (!st.gpuSample || st.benchLegacyCpuSample) return null;
+  if (!_gpuPathInForce(st)) return null;
   if (!camera || !st.glyphVectors) return null;
   if (!st.gpuPass) {
     st.gpuPass = createGpuGlyphPass(renderer);
@@ -1127,6 +1133,37 @@ function _renderFrame(
  * @param {number} cellCount
  * @returns {Float32Array}
  */
+/**
+ * Is the GPU glyph path in force for this instance right now?
+ *
+ * ★★★ THERE MUST BE EXACTLY ONE ANSWER TO THIS, AND THIS IS IT. Two places
+ * need it and they MUST agree: the sampler, which decides who converts the
+ * frame, and render(), which skips drawing the scene to the canvas when the
+ * glyph pass is going to render it instead. CW-86 first made the sampler fall
+ * back to the CPU on its own, and the result was not a slower picture but an
+ * EMPTY one - render() still believed the GPU was driving, never drew the
+ * scene, and the CPU sampler read an untouched canvas. Every cell came back
+ * black, and the instrument refused the run with 'not one cell was lit in the
+ * whole sequence'. The symptom looked like a broken glyph decision and was
+ * nothing of the kind.
+ *
+ * @param {Object} st
+ * @returns {boolean}
+ */
+function _gpuPathInForce(st) {
+  if (!st.gpuSample || st.benchLegacyCpuSample) return false;
+  // CW-86: the anchored pick is an INDEX into a class's ladder from a byte the
+  // shader would also have to be handed, not the nearest-shape search the
+  // shader does - and that byte has no room in the packing the memory already
+  // uses (_hfm-gpu.js). Carrying it means a second class texture, which is a
+  // cost worth paying only once the anchored picture has earned its place.
+  // This is CW-68's own precedent: ship the CPU path first and let the
+  // instrument decide. A bench line taken with anchoring on is therefore a CPU
+  // line, and says so - it is not the price of anchoring, it is the price of
+  // anchoring before the shader learns it.
+  if (st.anchoredGlyphs) return false;
+  return st.gpuPass?.available !== false;
+}
 function _probeLumArray(st, cellCount) {
   if (st.lastCellLum?.length !== cellCount) {
     st.lastCellLum = new Float32Array(cellCount);
@@ -1173,6 +1210,7 @@ function _convertOnCpu(
   // CW-71: palette mode never needed the cell's ABSOLUTE luminance, because
   // nothing used it. The ink budget does: it is the one thing the cell
   // contrast curve throws away.
+  //
   const wantsLum = useIntensity || Boolean(inkBudget && usePalette);
   // CW-23: what each cell is looking at, if the caller can say. A provider
   // that returns the wrong size is ignored rather than trusted — a stale map
@@ -1181,6 +1219,20 @@ function _convertOnCpu(
   if (st.classLookups && st.classMapProvider) {
     const supplied = st.classMapProvider(cols, rows);
     if (supplied && supplied.length === rows * cols) classMap = supplied;
+  }
+  // CW-86: the surface's own tone per cell, read the same guarded way. It is
+  // only fetched when there is a class map to pair it with: the field says
+  // WHICH STEP, the class says which ladder, and one without the other
+  // cannot name a glyph.
+  let fieldMap = null;
+  if (
+    st.anchoredGlyphs &&
+    classMap &&
+    st.classLadders &&
+    st.glyphFieldProvider
+  ) {
+    const supplied = st.glyphFieldProvider(cols, rows);
+    if (supplied && supplied.length === rows * cols) fieldMap = supplied;
   }
   let idx = 0;
 
@@ -1290,7 +1342,19 @@ function _convertOnCpu(
             : pickIntensityIndex(cellLum, intensityCount);
         if (cellReversed) onReverseCell();
       }
-      if (history) {
+      // ★★★ GUARDED BY useIntensity, THE WAY THE GPU BRANCH ALWAYS HAS BEEN.
+      // `st.intensityIndices` is only allocated when there are drive levels to
+      // hold, and in COLOUR MODE there never are - useIntensity is
+      // `!usePalette && ...`, so it is false for every palette frame. This line
+      // read `st.intensityIndices[cell]` unconditionally and threw
+      // 'Cannot read properties of null' on the first colour frame it ever saw.
+      //
+      // It had never seen one: colour mode has always taken the GPU path, and
+      // the GPU branch guards the identical assignment. CW-86 forces the CPU
+      // path, which is how a crash that has been sitting in this file since the
+      // memory landed finally got to happen. The fix is to ask the same
+      // question the other branch asks.
+      if (history && useIntensity) {
         history.drive[cell] = cellReversed ? -1 : st.intensityIndices[cell];
       }
       let inkBlanked = false;
@@ -1377,6 +1441,31 @@ function _convertOnCpu(
         continue;
       }
 
+      // CW-86: THE GLYPH COMES FROM THE SURFACE, THE LIGHT STILL COMES FROM
+      // THE SCREEN. Everything above this line - the blank floor, the reverse
+      // decision, the intensity level, the palette colour - has already been
+      // decided from the lit cell and is untouched. All that changes is WHICH
+      // character carries it, and for an anchored cell that is a property of
+      // the wall rather than of where the camera is standing.
+      const anchored = fieldMap
+        ? anchoredGlyph(st.classLadders, cellClass, fieldMap[cell])
+        : -1;
+      if (anchored >= 0) {
+        // ★ AND THE MEMORY IS SKIPPED HERE, DELIBERATELY. The memory exists to
+        // hide a re-roll; an anchored cell has nothing to hide, and holding a
+        // glyph past the moment its surface slid to the next lattice square is
+        // exactly the trail CW-84 cut. The history is still WRITTEN so that a
+        // cell moving between anchored and screen-picked does not read a stale
+        // glyph on the way back.
+        if (history) {
+          history.glyph[cell] = anchored;
+          history.hold[cell] = 0;
+          history.reversed[cell] = 0;
+          history.cls[cell] = cellClass;
+        }
+        glyphIndices[idx++] = anchored;
+        continue;
+      }
       const cellLookup = classMap
         ? (st.classLookups.get(classMap[cell]) ?? st.lookup)
         : st.lookup;
@@ -1520,6 +1609,16 @@ export async function initAltView(previewManager, options = {}) {
     typeof options.classMapProvider === 'function'
       ? options.classMapProvider
       : null;
+
+  // CW-86: the GLYPH FIELD. One byte per cell saying what the SURFACE looks
+  // like there - 0 for "no field, use the screen pick". Opt-in per instance
+  // like the class map, and inert unless anchoredGlyphs is also on, so an
+  // instance that supplies neither behaves exactly as it did.
+  st.glyphFieldProvider =
+    typeof options.glyphFieldProvider === 'function'
+      ? options.glyphFieldProvider
+      : null;
+  st.anchoredGlyphs = options.anchoredGlyphs === true;
   st.classVocabularies = options.glyphVocabularies ?? null;
   // CW-85: the backing layer ("Day"). Opt-in per instance and asked once per
   // PAINT, not per rAF. It returns one opaque colour per cell (0 = leave this
@@ -1634,11 +1733,12 @@ export async function initAltView(previewManager, options = {}) {
       // city twice a frame for a canvas nobody can see (enable() sets it to
       // opacity 0). If the pass ever gives up, `available` turns false and
       // the canvas render resumes on the next frame.
+      // CW-86: one question, one answer - see _gpuPathInForce. `available`
+      // must still be strictly true here: before the first conversion there is
+      // no pass at all, and a scene that went undrawn on that frame would be a
+      // blank first paint.
       const gpuWillRender =
-        st.enabled &&
-        st.gpuSample &&
-        !st.benchLegacyCpuSample &&
-        st.gpuPass?.available === true;
+        st.enabled && _gpuPathInForce(st) && st.gpuPass?.available === true;
       if (!gpuWillRender) {
         // Always render the underlying scene so controls + animation stay
         // correct.
@@ -1891,6 +1991,39 @@ export async function initAltView(previewManager, options = {}) {
     /** @returns {boolean} whether this instance paints a backing at all */
     hasBackingProvider() {
       return Boolean(st.backingProvider);
+    },
+    /**
+     * CW-86: take anchored cells' glyphs from the surface, or from the
+     * screen as every cell always has.
+     *
+     * Turning it on or off FORGETS the frame memory, because the two paths
+     * disagree about what the previous frame's glyph meant: a held screen
+     * pick is not a starting point for an anchored cell, and an anchored
+     * glyph is not one the memory ever chose.
+     *
+     * @param {boolean} on
+     */
+    setAnchoredGlyphs(on) {
+      const next = on === true;
+      if (next === st.anchoredGlyphs) return;
+      st.anchoredGlyphs = next;
+      st.hysteresisHistory = null;
+      st.gpuPass?.forget?.();
+      st.dirty = true;
+    },
+    /** @returns {boolean} whether anchored glyphs are on */
+    anchoredGlyphsOn() {
+      return Boolean(st.anchoredGlyphs);
+    },
+    /**
+     * CW-86: swap the glyph-field provider at run time, or clear it.
+     *
+     * @param {((cols: number, rows: number) => Uint8Array|null)|null} provider
+     */
+    setGlyphFieldProvider(provider) {
+      st.glyphFieldProvider = typeof provider === 'function' ? provider : null;
+      st.hysteresisHistory = null;
+      st.dirty = true;
     },
     /**
      * CW-70: hold the share of solid (reverse-video) cells under `cap`.

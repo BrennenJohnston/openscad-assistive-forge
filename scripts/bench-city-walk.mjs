@@ -109,6 +109,10 @@ const DEFAULTS = {
   // paint time without changing a single glyph decision - the only way to
   // price it is to run the same walk twice.
   daylight: 'off',
+  // CW-86: --anchored=on takes ground, paving and greenspace glyphs from the
+  // surface. It currently forces the CPU glyph path, so this is the flag that
+  // prices that path as much as it prices the anchoring.
+  anchored: 'off',
   // --ink-budget sets the CW-71 palette ink budget for every run: `off`, or
   // `floor,whiteLum,whiteChroma`. Empty leaves the game's own. Only palette
   // mode is affected, so pair it with a colour run.
@@ -333,6 +337,18 @@ async function benchCity(page, cdp, city, variant, opts, runIndex) {
   // carrying paint is the thing to ask. Measured at the spawn at 30 %:
   // 27-57 % at Night against 85-95 % under Day, so 0.7 sits in a 30-point
   // gap rather than near either side.
+  // CW-86: and the same rule - ask what is IN FORCE, not what was requested.
+  const anchored = await page.evaluate((want) => {
+    const g = window.__cityWalkGame
+    if (typeof g.setAnchoredGlyphs !== 'function') return null
+    return g.setAnchoredGlyphs(want === 'on')
+  }, opts.anchored)
+  if (anchored !== null && anchored !== (opts.anchored === 'on')) {
+    throw new Error(
+      `--anchored=${opts.anchored} but the game answered "${anchored}"`
+    )
+  }
+
   const painted = await page.evaluate(() => {
     const cv = document.querySelector('canvas.hfm-overlay-canvas')
     if (!cv) return null

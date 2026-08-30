@@ -112,6 +112,14 @@ const DEFAULTS = {
   // --luminance selects the game's CW-70 treatment of the solid bright layer:
   // stock | calm | off. Empty leaves whatever the game configured for itself.
   luminance: '',
+  // CW-86: --anchored=on takes the glyph for wall, roof, storefront, ground,
+  // sidewalk and green from the SURFACE rather than from the screen. Empty
+  // leaves the game's own setting, which is off.
+  //
+  // It is the third column of this release's table, beside the memory off
+  // and the memory on. Note that it currently forces the CPU glyph path
+  // (_hfm.js says why), so a bench line taken with it on is a CPU line.
+  anchored: '',
   // --scheme=light runs the page in the light theme, which is how the AMBER
   // palette is reached; dark gives the green one. There are TWO palettes of
   // six colours each, not six palettes.
@@ -985,6 +993,27 @@ async function main() {
       )
     }
     console.log(`luminance layer: ${luminance ?? 'not available on this tree'}`)
+
+    // ★ A COLUMN THAT QUIETLY MEASURED THE OTHER ONE WOULD BE WORSE THAN NO
+    // COLUMN. Anchored glyphs are two switches in two modules, and either
+    // alone does nothing visible - so this asks the game what is actually in
+    // force and refuses the run if it is not what was requested.
+    const anchored = await page.evaluate((want) => {
+      const game = window.__cityWalkGame
+      if (typeof game.setAnchoredGlyphs !== 'function') return null
+      if (want === 'on') return game.setAnchoredGlyphs(true)
+      if (want === 'off') return game.setAnchoredGlyphs(false)
+      return game.getAnchoredGlyphs()
+    }, opts.anchored)
+    if (opts.anchored && anchored !== (opts.anchored === 'on')) {
+      throw new Error(
+        `--anchored=${opts.anchored}: this tree answered "${anchored}"` +
+          ' - either it predates CW-86 or the switch did not take'
+      )
+    }
+    console.log(
+      `anchored glyphs: ${anchored === null ? 'not available on this tree' : anchored}`
+    )
     console.log(
       `hysteresis: ${hysteresis ? JSON.stringify(hysteresis) : 'OFF'}` +
         (opts.hysteresis ? '' : " (the game's own setting, untouched)")
@@ -1059,6 +1088,7 @@ async function main() {
           glRenderer: gl.renderer,
           hysteresis,
           luminance,
+          anchored,
           inkBudget,
           sceneExp: opts.sceneExp,
         })

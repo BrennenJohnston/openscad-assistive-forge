@@ -2619,3 +2619,174 @@ test.describe('ASCII City Walk — Day and Night (CW-85, CW-Q83)', () => {
     expect(back.populationBlocked).toBe(busy.populationBlocked)
   })
 })
+
+test.describe('ASCII City Walk — glyphs anchored to the surface (CW-86)', () => {
+  const settle = (page) =>
+    page.evaluate(async () => {
+      const g = window.__cityWalkGame
+      for (let i = 0; i < 2; i++) {
+        const before = g.altView.getConvertTotals().samples
+        g.altView.invalidate()
+        const deadline = Date.now() + 15000
+        while (g.altView.getConvertTotals().samples <= before) {
+          if (Date.now() > deadline) throw new Error('no conversion')
+          await new Promise((r) => requestAnimationFrame(r))
+        }
+      }
+    })
+
+  const enter = async (page) => {
+    await launchGame(page)
+    await enterCity(page)
+    await page.evaluate(() => {
+      window.__cityWalkGame.motionReduced = true
+      window.__cityWalkGame.altView.setCellProbe(true)
+      window.__cityWalkGame.altView.setFontScale(0.3)
+    })
+    await settle(page)
+  }
+
+  test('★★★ it is OFF unless something turns it on, so the game is unchanged', async ({
+    page,
+  }) => {
+    // The release ships its prototype switched off (plan §10.3, the ship
+    // rule): anchoring forces the CPU glyph path, and that halves the frame
+    // rate on this laptop - 59.6 fps to 29.6, measured A-B-B-A. The picture it
+    // buys is real and the table is in the record, but a player must not pay
+    // that until the shader can carry the field byte itself.
+    await enter(page)
+    expect(await page.evaluate(() => window.__cityWalkGame.getAnchoredGlyphs())).toBe(
+      false
+    )
+    expect(
+      await page.evaluate(() => window.__cityWalkGame.altView.anchoredGlyphsOn())
+    ).toBe(false)
+    // And with it off, the class pass writes no field at all: every cell's
+    // field byte is zero, which is what tells the converter to keep its screen
+    // pick. A field being rendered while the switch says off would be paying
+    // the cost of a feature nobody asked for.
+    const field = await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const probe = g.altView.readCellProbe()
+      g.classPass.read(g.fpCamera, probe.cols, probe.rows)
+      const f = g.classPass.lastField()
+      let nonZero = 0
+      for (let i = 0; i < f.length; i++) if (f[i]) nonZero++
+      return { cells: f.length, nonZero }
+    })
+    expect(field.cells).toBeGreaterThan(1000)
+    expect(field.nonZero).toBe(0)
+  })
+
+  test('★★★ turning it on moves the GROUND and leaves the facade alone', async ({
+    page,
+  }) => {
+    // The release's whole verdict in one case. Anchoring is scoped to the
+    // surfaces whose texture is a dither - ground, paving, greenspace - and
+    // the facade keeps its screen pick, because the lattice that holds a wall
+    // still is the lattice that erases its windows. If a later release widens
+    // the set, this case fails and the record has to be rewritten with it.
+    await enter(page)
+    // ★★★ HOLD THE PATH CONSTANT, OR THIS MEASURES TWO CHANGES AT ONCE.
+    // Anchoring forces the CPU glyph path, and the CPU and GPU paths do not
+    // pick identical glyphs for the same frame - written without this line
+    // the case reported 4,701 WALL cells moving, and the wall is not anchored
+    // at all. What moved them was the path. Both sides now run on the CPU
+    // path, so the only difference left between them is the thing named in
+    // the title.
+    await page.evaluate(() =>
+      window.__cityWalkGame.altView.setBenchLegacy({ cpuSample: true })
+    )
+    await settle(page)
+
+    const grab = async () => {
+      const g = await page.evaluate(() => {
+        const game = window.__cityWalkGame
+        const probe = game.altView.readCellProbe()
+        const cls = game.classPass.read(game.fpCamera, probe.cols, probe.rows)
+        return { glyphs: Array.from(probe.glyphs), cls: Array.from(cls) }
+      })
+      return g
+    }
+
+    const before = await grab()
+    await page.evaluate(() => window.__cityWalkGame.setAnchoredGlyphs(true))
+    await settle(page)
+    const after = await grab()
+    expect(after.glyphs.length).toBe(before.glyphs.length)
+
+    const moved = { ground: 0, paving: 0, wall: 0, storefront: 0 }
+    const total = { ground: 0, paving: 0, wall: 0, storefront: 0 }
+    for (let i = 0; i < before.glyphs.length; i++) {
+      if (before.cls[i] !== after.cls[i]) continue
+      const key =
+        before.cls[i] === 1
+          ? 'ground'
+          : before.cls[i] === 13
+            ? 'paving'
+            : before.cls[i] === 4
+              ? 'wall'
+              : before.cls[i] === 6
+                ? 'storefront'
+                : null
+      if (!key) continue
+      total[key]++
+      if (before.glyphs[i] !== after.glyphs[i]) moved[key]++
+    }
+
+    // The fixture has to contain the thing it guards - a pose with no ground
+    // and no wall in it would pass every line below while proving nothing.
+    expect(total.ground + total.paving).toBeGreaterThan(200)
+    expect(total.wall + total.storefront).toBeGreaterThan(200)
+
+    // The anchored surfaces took their glyphs from somewhere else.
+    expect(moved.ground + moved.paving).toBeGreaterThan(0)
+    // And the facade did not move ONE cell: it is not in the set.
+    expect(
+      moved.wall,
+      `${moved.wall} wall cells moved, and the wall is not anchored`
+    ).toBe(0)
+    expect(moved.storefront).toBe(0)
+
+    await page.evaluate(() => {
+      window.__cityWalkGame.setAnchoredGlyphs(false)
+      window.__cityWalkGame.altView.setBenchLegacy({ cpuSample: false })
+    })
+  })
+
+  test('★★ an anchored surface holds perfectly still while the walker does', async ({
+    page,
+  }) => {
+    // The standing control, which is the row that makes every other row
+    // readable: if the picture moves while the world does not, nothing else
+    // measured here means anything.
+    await enter(page)
+    await page.evaluate(() => window.__cityWalkGame.setAnchoredGlyphs(true))
+    await settle(page)
+
+    const snap = () =>
+      page.evaluate(() => {
+        const g = window.__cityWalkGame
+        const probe = g.altView.readCellProbe()
+        const cls = g.classPass.read(g.fpCamera, probe.cols, probe.rows)
+        const out = []
+        for (let i = 0; i < cls.length; i++) {
+          if (cls[i] === 1 || cls[i] === 13) out.push([i, probe.glyphs[i]])
+        }
+        return out
+      })
+
+    const a = await snap()
+    await settle(page)
+    const b = await snap()
+    expect(a.length).toBeGreaterThan(200)
+    expect(b.length).toBe(a.length)
+    let moved = 0
+    for (let i = 0; i < a.length; i++) {
+      if (a[i][0] !== b[i][0] || a[i][1] !== b[i][1]) moved++
+    }
+    expect(moved, `${moved} anchored cells changed while standing still`).toBe(0)
+
+    await page.evaluate(() => window.__cityWalkGame.setAnchoredGlyphs(false))
+  })
+})
