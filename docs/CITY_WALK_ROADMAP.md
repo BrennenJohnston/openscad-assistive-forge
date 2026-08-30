@@ -842,6 +842,94 @@ wrong: an empty street you cannot walk down, because you are bumping into cars
 nobody can see, would be a broken city rather than a quiet one.
 
 
+### Where a character comes from
+
+Everything above this section measures how much the picture moves. This one is
+about why it moves at all.
+
+A cell's character is chosen by matching the brightness of that patch of SCREEN
+against the shape of every character the cell is allowed. Nothing in that
+sentence mentions the world. Walk 16 centimetres and the patch of screen is
+looking at a slightly different patch of wall, so the match can come out
+differently, and the character changes although nothing in the city did. That
+is the churn this whole part of the document has been circling: 8 per cent of
+facade cells and 23 per cent of ground cells every single frame, at a walking
+pace. The frame-to-frame memory added in CW-68 does not stop it happening; it
+holds the old character over the top, and the hold is what read as a trail.
+
+The reference this project works from never had the problem, because it chooses
+a character by looking up the texture of whatever the ray hit, in the surface's
+own coordinates. Its characters belong to the surface. Ours belong to the
+screen.
+
+So the class pass now renders a second thing beside the surface class: a GLYPH
+FIELD, one value per cell, read from the surface's own texture at the point the
+cell is looking at. The converter can take an anchored cell's character from
+that value instead of from the screen, and still uses the lit cell for
+everything else - whether the cell draws at all, how bright, what colour.
+
+★ **The field is deliberately coarse, and that is the mechanism rather than a
+compromise.** At the texture's own resolution a patch is a few centimetres, a
+cell forty metres away covers hundreds of them, and the smallest camera move
+slides onto a different one - the character would re-roll exactly as before.
+What makes a character belong to a wall is that a patch of wall about the size
+of a cell shares one value.
+
+★ **And that is why the facade cannot have this yet.** The lattice that holds a
+wall still is the lattice that erases its windows, because at this character
+size a window is about one cell across. Measured over a twenty-four frame walk,
+characters changing per frame:
+
+| lattice | wall | shopfront | ground | paving |
+| ------- | ---- | --------- | ------ | ------ |
+| screen (as shipped) | 6.52 % | 2.57 % | 3.12 % | 0.49 % |
+| 64 squares | 7.28 % | 4.25 % | 0.27 % | 0.01 % |
+| 16 squares | 4.77 % | 0.01 % | 0.00 % | 0.01 % |
+| 8 squares | 0.90 % | 0.01 % | 0.00 % | 0.01 % |
+
+At eight the wall is seven times steadier than the memory manages and the
+facade has become smooth diagonal bands with no windows in it. At sixty-four
+the windows read better than anything this game has drawn and the wall is no
+steadier than before. That is not a setting anybody has failed to find. It is
+the reference's character size: theirs is about six times the area of ours, so
+a window spans several of their cells and only a fraction of one of ours.
+
+So the facade keeps the way it is drawn today, and the surfaces whose texture
+is a dither rather than a structure - ground, paving, greenspace - take theirs
+from the world, where there is nothing to lose. Against a control that changes
+the drawing path but not the anchoring, the ground goes from 1.17 to 0.27 per
+cent per frame, the paving from 1.15 to 0.01, and the wall and the shopfront
+come out bit for bit identical, which is how the scoping is checked rather than
+asserted.
+
+★ **A low rate of change is not proof, so it is not what this rests on.** A
+picture frozen to the screen would score just as low while being exactly wrong.
+The claim is checked instead by following real points on the ground: forty-five
+of them, projected into the cell grid every frame as the walker advances. A
+point keeps its character 98.5 per cent of frame pairs with anchoring on,
+against 88.9 per cent without. The character stays with the ground.
+
+★ **It ships switched off, and the reason is not the feature.** The anchored
+choice is an index into a list - cheaper than the nearest-shape search it
+replaces - but the shader that normally does that search is not handed the
+field value, and there is no room beside what it already carries. So anchoring
+currently falls back to the slower path that runs on the processor, and that
+path halves the frame rate: 59.6 to 29.6 frames per second, conversion 25.1 to
+59.8 milliseconds, measured alternating on the same machine in one session.
+None of that is the price of anchoring. It is the price of anchoring before the
+graphics card has been taught it, and teaching it is a piece of work in its own
+right.
+
+Two older faults surfaced while forcing that path, both invisible until
+something did. Converting on the processor crashed on the first colour frame it
+had ever been asked for, because it read a drive-level array that only exists in
+monochrome, where the graphics path had always guarded the same line. And the
+renderer decided the graphics card was drawing the scene while the sampler had
+already fallen back, so the processor read a canvas nothing had been drawn onto
+and every cell came back black. The instrument refused the measurement rather
+than reporting a tidy set of zeroes, which is exactly what it is for.
+
+
 ## What this document is not
 
 It is not a commitment, an estimate, or a design review. Anyone starting either

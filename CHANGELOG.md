@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The ground keeps its own characters** (CW-86, groundwork, off by default) - a cell's
+  character has always been chosen by how bright that patch of SCREEN is, so walking re-rolled
+  it constantly and the ground was the worst of it. This adds the other way of choosing: the
+  character is read off the SURFACE itself, in the surface's own coordinates, so a patch of
+  ground keeps its character while you walk past instead of being redrawn every frame. Measured
+  on the ground and the paving it is decisive, and a patch followed across a walk keeps its
+  character 98 per cent of the time against 89. It is switched OFF in this release and nothing
+  you see changes: reading the surface currently forces a slower drawing path that halves the
+  frame rate, which is a price the picture is not worth until the graphics card can do the
+  reading itself. The measurements, and what it looks like, are recorded for review
+
+- **Building faces keep the way they are drawn today, on purpose** (CW-86) - the same technique
+  was measured on walls and shopfronts and cannot be had there yet. A wall only stops being
+  redrawn once the patch of surface behind one character is bigger than the character, and at
+  this size that is also big enough to swallow the windows: the setting that steadies a wall
+  turns it into smooth bands, and the setting that draws the best windows this game has managed
+  steadies nothing. Both were photographed and the pictures are kept
+
 - **Day and Night** (CW-85) - the city has always been characters standing on the page's own
   black: between one character and the next there was nothing, so a parked car read as a car
   shape drawn in the air rather than as a solid thing. Day fills those gaps in. Every nearby
