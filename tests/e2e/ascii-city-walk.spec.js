@@ -957,12 +957,18 @@ test.describe('ASCII City Walk — looking around (CW-13)', () => {
     // Positive control first: without proof the same press WORKS in street
     // view, "the map ignores it" would pass on a build that has no pitch at
     // all - which is exactly what the release base is.
+    //
+    // CW-97: hold until the GAME's own pitch answers, not for a wall-clock
+    // 700 ms. Look rates integrate per FRAME with dt clamped, so on a
+    // frame-starved fresh entry (the first seconds after the city builds -
+    // heavier since the crown clusters) a fixed wall-time hold delivers a
+    // fraction of the turn. The claim is that R pitches; the clock was
+    // only ever the measure.
     await page.keyboard.down('KeyR')
-    await page.waitForTimeout(700)
-    await page.keyboard.up('KeyR')
     await expect
-      .poll(async () => (await gaze(page)).pitch > 5 * DEG)
+      .poll(async () => (await gaze(page)).pitch > 5 * DEG, { timeout: 15000 })
       .toBe(true)
+    await page.keyboard.up('KeyR')
     await page.keyboard.press('KeyV')
     expect((await gaze(page)).pitch).toBe(0)
 
@@ -1026,14 +1032,14 @@ test.describe('ASCII City Walk — looking around (CW-13)', () => {
     await expect(page.locator('#cityWalkHelpPanel')).toContainText(
       'V: level the view'
     )
-    // CW-81: hover-look is the default now, so the help teaches the mouse
-    // MOVE first and the drag line keeps only its map half (CW-59's lesson
-    // that the map drags too survives in it).
+    // CW-96: the default is DRAG again (the owner's post-round call), so
+    // the help teaches the drag first - the full original line - and the
+    // Mouse look button's options ride their own line.
     await expect(page.locator('#cityWalkHelpPanel')).toContainText(
-      'Move the mouse: the view turns toward the cursor'
+      'Drag with the mouse: look around in street view, move the map in map view'
     )
     await expect(page.locator('#cityWalkHelpPanel')).toContainText(
-      'Drag with the mouse: move the map in map view'
+      'The Mouse look button can make the view follow the cursor'
     )
     await expect(page.locator('#cityWalkHelpPanel')).toContainText(
       'N: auto-walk forward, following the street, until something stops you'
