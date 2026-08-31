@@ -55,6 +55,7 @@ import {
   steerHeading,
   segmentClear,
   buildTerrain,
+  gradePercent,
 } from '../../../src/js/game/walk-controls.js'
 import {
   parseCityExtract,
@@ -529,6 +530,22 @@ describe('buildTerrain — the ground has height (CW-79)', () => {
     const h = t.heightAt(10, 10)
     expect(Number.isFinite(h)).toBe(true)
     expect(h).toBeGreaterThanOrEqual(0)
+  })
+
+  // CW-80: the spoken slope's arithmetic. Heading 90 degrees (east) on a
+  // grid that rises 10 m per 10 m eastward is a 100 percent grade uphill;
+  // about-face is the same figure downhill; a flat grid is zero; no
+  // terrain is null, never zero - a flat city must stay SILENT, and zero
+  // would read as 'Level.'.
+  it('★★ gradePercent signs uphill positive along the heading (CW-80)', () => {
+    const t = buildTerrain(
+      elevationOf([10, 20, 30, 10, 20, 30, 10, 20, 30])
+    )
+    expect(gradePercent(t, 5, 5, Math.PI / 2, 5)).toBeCloseTo(100, 3)
+    expect(gradePercent(t, 15, 5, -Math.PI / 2, 5)).toBeCloseTo(-100, 3)
+    const flat = buildTerrain(elevationOf(Array(9).fill(42)))
+    expect(gradePercent(flat, 5, 5, 1.234, 5)).toBeCloseTo(0, 5)
+    expect(gradePercent(null, 5, 5, 0)).toBeNull()
   })
 
   it('clamps beyond the grid edge to the edge rather than inventing a cliff', () => {

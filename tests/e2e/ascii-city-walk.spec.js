@@ -2634,3 +2634,103 @@ test.describe('ASCII City Walk — the ground has height (CW-79)', () => {
     expect(census.skirts).toBeGreaterThan(500)
   })
 })
+
+test.describe('ASCII City Walk — the spoken slope (CW-80)', () => {
+  const announcer = (page) => page.locator('#cityWalkAnnouncer')
+  const pose = (page, x, y, headingDeg) =>
+    page.evaluate(
+      (q) => {
+        const g = window.__cityWalkGame
+        const st = g.walkState
+        st.x = q.x
+        st.y = q.y
+        st.headingRad = (q.headingDeg * Math.PI) / 180
+        g.lookTarget.headingRad = st.headingRad
+        st.groundZ = g.surface.heightAt(st.x, st.y)
+        // A fresh tracker per pose: the first reading arms silently, which
+        // is the spawn law this suite relies on below.
+        g.slope = { cat: null, pct: null, sinceM: Infinity }
+      },
+      { x, y, headingDeg }
+    )
+
+  test('★★ walking onto a grade says Uphill, about-face says Downhill, and standing says nothing', async ({
+    page,
+  }) => {
+    test.setTimeout(180000)
+    await launchGame(page)
+    await enterCity(page)
+
+    // Start on the flat waterfront strip, facing the First Hill grade.
+    await pose(page, -160, -600, 60)
+    await page.keyboard.down('KeyW')
+    await expect(announcer(page)).toContainText(/Uphill \d+ percent\./, {
+      timeout: 60000,
+    })
+    await page.keyboard.up('KeyW')
+
+    // Standing still on the grade: the sentence does not repeat.
+    const said = await announcer(page).textContent()
+    await page.waitForTimeout(1500)
+    expect(await announcer(page).textContent()).toBe(said)
+
+    // About-face, walk back down: the same street is downhill now.
+    await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      g.walkState.headingRad =
+        (g.walkState.headingRad + Math.PI) % (2 * Math.PI)
+      g.lookTarget.headingRad = g.walkState.headingRad
+    })
+    await page.keyboard.down('KeyW')
+    await expect(announcer(page)).toContainText(/Downhill \d+ percent\./, {
+      timeout: 60000,
+    })
+    await page.keyboard.up('KeyW')
+  })
+
+  test('★★ X names the slope underfoot, and level ground adds no clause', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await launchGame(page)
+    await enterCity(page)
+
+    // On the grade, facing up: the X sentence carries the slope clause.
+    await pose(page, -60, -565, 60)
+    await page.keyboard.press('KeyX')
+    await expect(announcer(page)).toContainText(/Uphill \d+ percent\./)
+
+    // On level ground: the clause is absent - an empty clause is never
+    // spoken (the whereAmI family's standing rule). 'Level' is a bearing
+    // as much as a place (the shore tilts toward the water), so the test
+    // asks the game's own terrain for a bearing under the threshold
+    // rather than trusting a guessed compass point.
+    await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const st = g.walkState
+      st.x = -160
+      st.y = -629
+      for (let deg = 0; deg < 360; deg += 10) {
+        const rad = (deg * Math.PI) / 180
+        const ahead = g.surface.terrain.heightAt(
+          st.x + Math.sin(rad) * 6,
+          st.y + Math.cos(rad) * 6
+        )
+        const here = g.surface.terrain.heightAt(st.x, st.y)
+        if (Math.abs(((ahead - here) / 6) * 100) < 1.4) {
+          st.headingRad = rad
+          g.lookTarget.headingRad = rad
+          break
+        }
+      }
+      st.groundZ = g.surface.heightAt(st.x, st.y)
+      g.slope = { cat: null, pct: null, sinceM: Infinity }
+    })
+    await page.keyboard.press('KeyX')
+    // The live region clears before it speaks; wait for the sentence.
+    await expect(announcer(page)).toContainText('facing', { timeout: 5000 })
+    const text = await announcer(page).textContent()
+    expect(text).not.toContain('percent')
+    expect(text).not.toContain('Level')
+  })
+})

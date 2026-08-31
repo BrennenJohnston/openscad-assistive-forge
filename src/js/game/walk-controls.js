@@ -352,6 +352,27 @@ export function buildTerrain(elevation) {
 }
 
 /**
+ * CW-80: the grade under the walker's next stride, as a signed percent -
+ * positive uphill, negative downhill, null where the city has no terrain.
+ * Measured over probeM along the heading on the TERRAIN, never on the
+ * surface grid: the kerb cut is a step, not a slope, and a sentence that
+ * said "downhill 3 percent" at every kerb would be noise wearing words.
+ *
+ * @param {ReturnType<typeof buildTerrain>|null} terrain
+ * @param {number} x @param {number} y @param {number} headingRad
+ * @param {number} [probeM]
+ * @returns {number|null}
+ */
+export function gradePercent(terrain, x, y, headingRad, probeM = 6) {
+  if (!terrain) return null;
+  const ahead = terrain.heightAt(
+    x + Math.sin(headingRad) * probeM,
+    y + Math.cos(headingRad) * probeM
+  );
+  return ((ahead - terrain.heightAt(x, y)) / probeM) * 100;
+}
+
+/**
  * Rasterize the PAVEMENT into a grid, so the walker's eye knows what is
  * underfoot. Mirrors buildCollisionGrid deliberately: same origin, same cell
  * size, same out-of-bounds convention, so the two can be reasoned about

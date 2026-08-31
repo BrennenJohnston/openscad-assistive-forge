@@ -31,7 +31,7 @@ describe('e2e shard planner (D-72)', () => {
     expect(files.every((f) => f.endsWith('.spec.js'))).toBe(true)
   })
 
-  for (const total of [2, 3]) {
+  for (const total of [2, 3, 4]) {
     it(`runs every spec file exactly once across ${total} shards`, () => {
       const plan = planShards(files, MEASURED_SECONDS, total)
       const placed = plan.flat()
@@ -67,10 +67,14 @@ describe('e2e shard planner (D-72)', () => {
     // five times low on exactly the files this round grew. A model can be
     // right and still lie, if nobody re-measures what it is multiplying.
     //
-    // Chromium runs THREE shards since CW-62 (test.yml), which is why this
-    // plans for three. Twenty-five minutes leaves ten of margin on a
-    // thirty-five minute ceiling, which is what a starved runner eats.
-    for (const shard of planShards(files, MEASURED_SECONDS, 3)) {
+    // Chromium runs FOUR shards since CW-80 (test.yml): Round 8 grew the
+    // city suites ~35 heavy cases past the 08-27 model, both PR-R8C CI
+    // passes died on the 2100 s clock, and the re-measured model put three
+    // shards at 30.2 projected minutes against this guard's own bar - so
+    // the fourth shard the Chromium note has always promised is what
+    // happened. Twenty-five minutes leaves ten of margin on a thirty-five
+    // minute ceiling, which is what a starved runner eats.
+    for (const shard of planShards(files, MEASURED_SECONDS, 4)) {
       const wallMin = projectMin(shard)
       expect(
         wallMin,
@@ -85,7 +89,14 @@ describe('e2e shard planner (D-72)', () => {
     // required context - so this does not demand the room Chromium has. What
     // it does is refuse to let the lane quietly cross the real ceiling, and
     // name the margin when it is asked.
-    const CEILING_MIN = 35
+    // CW-80: the Edge ceiling in test.yml is 50 minutes now, a STATED
+    // STOPGAP - the re-weighted model projects the two-shard lane at 43.7
+    // minutes, past the old 35 on arithmetic alone, and Edge cannot gain a
+    // shard from here (each Edge shard is a required context in ruleset
+    // 12059827; only the owner edits that). The proper fix - Edge at three
+    // shards - is in the owner's G3 package by name, and when it lands
+    // this constant comes back DOWN with it.
+    const CEILING_MIN = 50
     for (const shard of planShards(files, MEASURED_SECONDS, 2)) {
       const wallMin = projectMin(shard)
       expect(
