@@ -2047,7 +2047,7 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
    * different piece of city.
    */
   async function glyphChangesOverCreep(page, steps = 4, creeps = 4, gapM = 4) {
-    return page.evaluate(async ({ n, anchoredIds, creeps, gapM }) => {
+    return page.evaluate(async ({ n, anchoredIds, creeps, gapM, TREE_ID }) => {
       const ANCHORED = new Set(anchoredIds)
       const game = window.__cityWalkGame
       const convert = async () => {
@@ -2087,8 +2087,21 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
       // nothing. What moved is WHICH CELLS the question is asked about: the
       // ones the memory still governs. Both numbers are logged so the
       // dilution stays visible.
+      // ★★★ CW-94: THE POPULATION WENT STALE A THIRD TIME, SAME LESSON.
+      // The blob crowns became sparse ring-branch trees, and a leaf-cube
+      // edge under a 2 cm creep re-rolls because the GEOMETRY slid across
+      // the cell - which is the ANCHORING question (trees are unanchored by
+      // design, CW-91's set), not the hold question. The memory deliberately
+      // drops a cell whose content moves under it, so tree cells joined the
+      // pool as re-rolls no memory may hold: the guard read 81.0 % against
+      // its 80 % bar the day the trees landed, with the converter unchanged.
+      // TREE cells leave the governed pool as the anchored classes did at
+      // CW-91; their numbers are counted BESIDE the pool so the dilution
+      // stays visible, and the bar still does not move.
       let governedChanges = 0
       let governedCells = 0
+      let treeChanges = 0
+      let treeCells = 0
       let cells = 0
       let previous = null
       let previousCls = null
@@ -2116,15 +2129,20 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
           for (let c = 0; c < cells; c++) {
             // A pair counts as governed only if the cell was unanchored in
             // BOTH frames: one that crossed the boundary is not evidence
-            // about the memory either way.
-            const governed =
+            // about the memory either way. Tree cells are counted apart -
+            // see the CW-94 note above.
+            const isTree = cls[c] === TREE_ID || previousCls[c] === TREE_ID
+            const unanchored =
               !ANCHORED.has(cls[c]) && !ANCHORED.has(previousCls[c])
+            const governed = unanchored && !isTree
             if (governed) governedCells++
+            if (unanchored && isTree) treeCells++
             if (probe.glyphs[c] === previous[c]) continue
             changes++
             if (probe.glyphs[c] !== 0 && previous[c] !== 0) {
               litChanges++
               if (governed) governedChanges++
+              if (unanchored && isTree) treeChanges++
             }
           }
         }
@@ -2138,11 +2156,13 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
         litChanges,
         governedChanges,
         governedCells,
+        treeChanges,
+        treeCells,
         cells,
         pairs: (n - 1) * creeps,
         usedGpu: game.altView.getConvertStats().usedGpu,
       }
-    }, { n: steps, anchoredIds: [...ANCHORED_CLASSES], creeps, gapM })
+    }, { n: steps, anchoredIds: [...ANCHORED_CLASSES], creeps, gapM, TREE_ID: SURFACE_CLASS.TREE })
   }
 
   /**
@@ -2231,11 +2251,17 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
         (cpu) => window.__cityWalkGame.altView.setBenchLegacy({ cpuSample: cpu }),
         cpuSample
       )
-      const withMemory = await glyphChangesOverCreep(page)
+      // ★ CW-94 widened the pool from four creep places to eight - CW-91's
+      // own precedent, and for CW-91's own reason: never lengthen the creep
+      // (frame count is part of the physics), make the SAMPLE wider. With
+      // trees now real structure, a four-place pool at this corner came
+      // down to ~1,300 events and the two converter paths flapped either
+      // side of the bar on ~56 cells of pick noise (T50).
+      const withMemory = await glyphChangesOverCreep(page, 4, 8)
       await page.evaluate(() =>
         window.__cityWalkGame.altView.setTemporalHysteresis(null)
       )
-      const without = await glyphChangesOverCreep(page)
+      const without = await glyphChangesOverCreep(page, 4, 8)
       await page.evaluate(
         (h) => window.__cityWalkGame.altView.setTemporalHysteresis(h),
         configured
@@ -2245,13 +2271,15 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
       // BOTH numbers are logged, because the difference between them is the
       // whole of CW-89 and a reader of this line should be able to see it.
       console.log(
-        `[CW-68 memory] ${path}: GOVERNED (unanchored, lit) ` +
+        `[CW-68 memory] ${path}: GOVERNED (unanchored, lit, non-tree) ` +
           `${withMemory.governedChanges} of ${without.governedChanges} ` +
           `stateless re-rolls survive = ` +
           `${((withMemory.governedChanges / without.governedChanges) * 100).toFixed(1)} % ` +
           `(bar < ${MUST_PREVENT * 100} %) over ${withMemory.governedCells} ` +
-          `governed cell-frames; every LIT cell including anchored ones ` +
-          `${withMemory.litChanges} of ${without.litChanges} = ` +
+          `governed cell-frames; TREE cells counted apart (CW-94): ` +
+          `${withMemory.treeChanges} of ${without.treeChanges} re-rolls over ` +
+          `${withMemory.treeCells} cell-frames; every LIT cell including ` +
+          `anchored ones ${withMemory.litChanges} of ${without.litChanges} = ` +
           `${((withMemory.litChanges / without.litChanges) * 100).toFixed(1)} % ` +
           `over ${withMemory.cells * withMemory.pairs} cell-frames`
       )

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Trees are their species now** (CW-94) - a tree used to be a lollipop: one thin stem and one
+  faceted blob, at half its real height. Every tree is built the way trees grow now: a full-height
+  trunk at the species' cited size with a base flare on the big ones, branches leaving the trunk
+  in rings - more, longer, thicker branches low and fewer, shorter ones high - and opaque leaf
+  clumps wrapping the outer run of each branch, with real gaps between clumps so the sky and the
+  street stay visible through the crown. The species tables and their citations are unchanged;
+  the half-height compression they carried is retired, and the sky stays open over a planted
+  street because the crowns are sparse instead of solid. Only the trunk blocks a cane, exactly
+  as before, and no leaf hangs below head height over a pavement. Placement is untouched - the
+  same trees stand in the same places; each simply looks like what it is
+
 ### Added
 
 - **Seven real landmarks per city, chosen by hand** (CW-78) - the landmark list used to be

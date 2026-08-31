@@ -74,7 +74,10 @@ import {
   treeTableFor,
   pickSpecies,
   treeSpec,
-  makeCanopyGeoms,
+  treeBranches,
+  branchLeafCubes,
+  trunkFlare,
+  CANOPY_BASE_MIN_M,
 } from './city-trees.js';
 import {
   flowerTableFor,
@@ -5510,6 +5513,28 @@ function makeBox(sizeX, sizeY, sizeZ, x, y, z, rotationRad, tint) {
 }
 
 /**
+ * CW-94: one pitched member between two points, INDEXED like every other
+ * prop box (the props merge among themselves, not with the extruded city).
+ * The rotation composition is memberBox's corrected one - rotateX(-pitch)
+ * then the yaw - because the tripod's original order MIRRORS the horizontal
+ * component, which the Wheel's rim photographed the hard way (CW-78 record).
+ */
+function makePitchedMember(ax, ay, az, bx, by, bz, thickM, tint) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const dz = bz - az;
+  const len = Math.hypot(dx, dy, dz);
+  if (!(len > 0)) return null;
+  const geom = new BoxGeometry(thickM, thickM, len + thickM / 2);
+  const pitch = Math.acos(Math.min(1, Math.max(-1, dz / len)));
+  geom.rotateX(-pitch);
+  geom.rotateZ(-Math.atan2(dx, dy));
+  geom.translate((ax + bx) / 2, (ay + by) / 2, (az + bz) / 2);
+  paintGeometry(geom, tint);
+  return geom;
+}
+
+/**
  * Furnish the streets with trees and parked cars (CW-16) and streetlights
  * (CW-18).
  *
@@ -5541,6 +5566,14 @@ export function buildStreetProps(model, collision = null) {
 
   const trunkGeoms = [];
   const canopyGeoms = [];
+  // CW-94: the ring-branch system's two kinds, merged separately so each
+  // wears its own name in the class pass (both TREE) and its own stated
+  // material colour (branches the trunk's wood, leaves the canopy tint).
+  const branchGeoms = [];
+  const leafGeoms = [];
+  let branchesClipped = 0;
+  let branchesDropped = 0;
+  let leavesHeldUp = 0;
   // CW-56: what actually got planted, per species. A table nobody uses and a
   // table everybody uses look identical in a merged mesh (CW-53's lesson),
   // so the build counts its own.
@@ -5708,6 +5741,23 @@ export function buildStreetProps(model, collision = null) {
   // order, so every other consumer of that stream sees the number it saw
   // before.
   const treeTable = treeTableFor(model.name);
+  /**
+   * ★★ CW-94 (CW-Q94): TREES ARE THEIR SPECIES - the blob crown is replaced
+   * by the owner's ring-branch system at full cited heights. The trunk is
+   * the leader; branch rings climb it under the taper law; opaque leaf
+   * cubes wrap each branch's outer run with deliberate gaps (the
+   * reference's own sparseness, CW94-STEP0-LEAF-TECHNIQUE.md). Every draw
+   * comes from the tree's existing seed through a PRIVATE derived stream,
+   * so no other placement number moves (the CW-46 law) - and the tier /
+   * species / size draws below keep their exact bits.
+   *
+   * Constraint (a): a branch never reaches into a building - probed against
+   * the collision grid, which at planting time holds ONLY buildings; a
+   * blocked branch is halved once, then dropped and counted. Constraint
+   * (e): no leaf cube's underside below CANOPY_BASE_MIN_M - CW-16's law
+   * generalised; the branch itself stays, bare, and ONLY the trunk stamps
+   * collision, exactly as before.
+   */
   const plantTree = (x, y, seed, leafType) => {
     const tier = CANOPY_TIERS[seed % CANOPY_TIERS.length];
     const species = pickSpecies(treeTable, (seed >>> 5) % 997, leafType);
@@ -5725,13 +5775,76 @@ export function buildStreetProps(model, collision = null) {
         TRUNK_TINT
       )
     );
-    // A faceted crown, not a smooth ball: the flat facets give the sampler
-    // the luminance steps it needs to read as leaves rather than a blob. The
-    // cone stacks three of them for the same reason.
+    const flare = trunkFlare(spec);
+    if (flare) {
+      trunkGeoms.push(
+        makeBox(
+          flare.sideM,
+          flare.sideM,
+          flare.heightM,
+          x,
+          y,
+          flare.heightM / 2,
+          0,
+          TRUNK_TINT
+        )
+      );
+    }
+
     const canopyTint = tintOf(tier, CANOPY_HUE_DEG, CANOPY_CHROMA);
-    for (const canopy of makeCanopyGeoms(x, y, spec)) {
-      paintGeometry(canopy, canopyTint);
-      canopyGeoms.push(canopy);
+    const half = spec.trunkSideM / 2;
+    for (const branch of treeBranches(spec, seed)) {
+      const dx = Math.sin(branch.bearingRad) * Math.cos(branch.pitchRad);
+      const dy = Math.cos(branch.bearingRad) * Math.cos(branch.pitchRad);
+      const dz = Math.sin(branch.pitchRad);
+      // Leave from the trunk face, not the axis, so the joint reads solid.
+      const ax = x + Math.sin(branch.bearingRad) * half;
+      const ay = y + Math.cos(branch.bearingRad) * half;
+      const az = branch.z0;
+      // Constraint (a): the tip and the midpoint must not stand in a
+      // building's footprint. Halve once, then drop and count.
+      let lengthM = branch.lengthM;
+      const clear = (m) => !isBlocked(ax + dx * m, ay + dy * m);
+      if (!clear(lengthM) || !clear(lengthM / 2)) {
+        lengthM /= 2;
+        if (!clear(lengthM) || !clear(lengthM / 2)) {
+          branchesDropped++;
+          continue;
+        }
+        branchesClipped++;
+      }
+      branchGeoms.push(
+        makePitchedMember(
+          ax,
+          ay,
+          az,
+          ax + dx * lengthM,
+          ay + dy * lengthM,
+          az + dz * lengthM,
+          branch.thickM,
+          TRUNK_TINT
+        )
+      );
+      for (const cube of branchLeafCubes({ ...branch, lengthM })) {
+        const cz = az + dz * cube.alongM;
+        // Constraint (e): the cube's underside stays above head height.
+        if (cz - cube.sizeM / 2 < CANOPY_BASE_MIN_M) {
+          leavesHeldUp++;
+          continue;
+        }
+        leafGeoms.push(
+          makeBox(
+            cube.sizeM,
+            cube.sizeM,
+            cube.sizeM,
+            ax + dx * cube.alongM,
+            ay + dy * cube.alongM,
+            cz,
+            0,
+            canopyTint
+          )
+        );
+      }
     }
 
     treeSpots.add(x, y);
@@ -6860,6 +6973,10 @@ export function buildStreetProps(model, collision = null) {
     new MeshLambertMaterial({ color: 0xffffff, vertexColors: true });
   addMerged(trunkGeoms, 'tree-trunks', propMaterial());
   addMerged(canopyGeoms, 'tree-canopies', propMaterial());
+  // CW-94: the ring-branch system, one merge per kind (the CW-56 crown
+  // lesson - never one mesh per species).
+  addMerged(branchGeoms, 'tree-branches', propMaterial());
+  addMerged(leafGeoms, 'tree-leaves', propMaterial());
   addMerged(carGeoms, 'cars', propMaterial());
   addMerged(trafficGeoms, 'traffic-cars', propMaterial());
   addMerged(personGeoms, 'people', propMaterial());
@@ -7096,6 +7213,12 @@ export function buildStreetProps(model, collision = null) {
       treeCount: treeSpots.size,
       mappedTreeCount,
       speciesPlanted,
+      // CW-94: what the ring system's two constraints cost, counted rather
+      // than silent - a branch halved at a wall, a branch dropped at one,
+      // a leaf cube held back above head height.
+      branchesClipped,
+      branchesDropped,
+      leavesHeldUp,
       // CW-57: what stands, split so a reader can tell DATA from the
       // fallback - fallbackPlanters is design, everything else is the map.
       plantingPlaced,

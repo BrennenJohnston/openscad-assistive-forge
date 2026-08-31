@@ -3,9 +3,16 @@ import {
   CITY_TREES,
   CANOPY_FORMS,
   CANOPY_BASE_MIN_M,
+  BRANCHES_PER_RING_MAX,
+  LEAF_CUBE_MIN_M,
+  LEAF_CUBE_SHARE,
+  LEAF_SPACING_SHARE,
   treeTableFor,
   pickSpecies,
   treeSpec,
+  treeBranches,
+  branchLeafCubes,
+  trunkFlare,
   makeCanopyGeoms,
 } from '../../../src/js/game/city-trees.js'
 
@@ -164,5 +171,107 @@ describe('per-city tree species and forms (CW-56)', () => {
         expect(maxZ, `${city} ${s.name} crown top`).toBeGreaterThan(spec.baseM)
       }
     }
+  })
+})
+
+describe("the ring-branch system (CW-94, CW-Q94 - the owner's own laws)", () => {
+  const oak = CITY_TREES.seattle.find((s) => s.name === 'oak')
+  const fir = CITY_TREES.burnaby.find((s) => s.name === 'Douglas-fir')
+
+  it('stands trees at their FULL cited heights - the compression is retired', () => {
+    // The squash halved the excess over 4 m; the ring system retires it.
+    // An oak drawn at t=1 is the cited 25 m, not 14.5.
+    expect(treeSpec(oak, 1).topM).toBe(25)
+    expect(treeSpec(oak, 0).topM).toBe(15)
+    expect(treeSpec(fir, 1).topM).toBe(30)
+    // And the trunk is the leader: it runs the full height for the rings.
+    expect(treeSpec(oak, 1).trunkHeightM).toBe(25)
+  })
+
+  it('never puts more than four branches on a ring, and uses its range', () => {
+    let maxSeen = 0
+    for (let seed = 1; seed <= 300; seed++) {
+      const spec = treeSpec(oak, ((seed % 100) + 0.5) / 100)
+      const byRing = new Map()
+      for (const b of treeBranches(spec, seed)) {
+        byRing.set(b.z0, (byRing.get(b.z0) ?? 0) + 1)
+      }
+      for (const [z0, n] of byRing) {
+        expect(n, `seed ${seed} ring at ${z0}`).toBeLessThanOrEqual(
+          BRANCHES_PER_RING_MAX
+        )
+        maxSeen = Math.max(maxSeen, n)
+      }
+    }
+    // Non-vacuity: a cap nothing ever approaches guards nothing.
+    expect(maxSeen).toBeGreaterThanOrEqual(3)
+  })
+
+  it('obeys the taper law: lower rings longer and thicker', () => {
+    // Thickness carries no jitter, so it is strictly monotone in ringFrac;
+    // length carries jitter, so the LAW is asserted on the envelope and on
+    // the pooled means of the bottom versus top thirds.
+    let low = []
+    let high = []
+    for (let seed = 1; seed <= 200; seed++) {
+      const spec = treeSpec(oak, ((seed % 100) + 0.5) / 100)
+      const branches = treeBranches(spec, seed)
+      for (const b of branches) {
+        for (const other of branches) {
+          if (b.ringFrac < other.ringFrac - 1e-9) {
+            expect(b.thickM).toBeGreaterThanOrEqual(other.thickM - 1e-9)
+          }
+        }
+        if (b.ringFrac < 0.34) low.push(b.lengthM)
+        if (b.ringFrac > 0.66) high.push(b.lengthM)
+      }
+    }
+    const mean = (xs) => xs.reduce((a, x) => a + x, 0) / xs.length
+    expect(low.length).toBeGreaterThan(50)
+    expect(high.length).toBeGreaterThan(50)
+    expect(mean(low)).toBeGreaterThan(mean(high) * 1.5)
+  })
+
+  it('wraps the outer run in cubes ~2x the member, with real gaps', () => {
+    const spec = treeSpec(oak, 0.75)
+    const [branch] = treeBranches(spec, 7)
+    expect(branch).toBeDefined()
+    const cubes = branchLeafCubes(branch)
+    expect(cubes.length).toBeGreaterThan(1)
+    const size = Math.max(LEAF_CUBE_MIN_M, branch.thickM * LEAF_CUBE_SHARE)
+    for (const c of cubes) expect(c.sizeM).toBe(size)
+    // The run ENVELOPS the branch (the owner's own words): successive cubes
+    // overlap into one clump, so the step stays at or under the cube size.
+    // The reference's sparseness lives BETWEEN runs, not inside one - the
+    // bare inner share and the ring spacing carry the gaps. Photographed at
+    // a 1.8-size step first, which read as winter buds on bare wood.
+    for (let i = 1; i < cubes.length - 1; i++) {
+      const step = cubes[i].alongM - cubes[i - 1].alongM
+      expect(step).toBeGreaterThan(size * 0.5)
+      expect(step).toBeLessThanOrEqual(size * 1.3)
+    }
+    // The tip always carries one - no branch ends in a bare spike.
+    expect(cubes[cubes.length - 1].alongM).toBeGreaterThanOrEqual(
+      branch.lengthM - size * LEAF_SPACING_SHARE * 0.5
+    )
+    // And the inner run stays bare (part budget, part head-height law).
+    expect(cubes[0].alongM).toBeGreaterThanOrEqual(branch.lengthM * 0.3)
+  })
+
+  it('is deterministic: one seed, one tree, every time', () => {
+    const spec = treeSpec(fir, 0.4)
+    expect(treeBranches(spec, 12345)).toEqual(treeBranches(spec, 12345))
+    // And a different seed is allowed to be a different tree.
+    expect(JSON.stringify(treeBranches(spec, 12345))).not.toBe(
+      JSON.stringify(treeBranches(spec, 54321))
+    )
+  })
+
+  it('flares the base of big trees only', () => {
+    expect(trunkFlare(treeSpec(oak, 1))).not.toBeNull()
+    const hawthorn = CITY_TREES.seattle.find((s) => s.name === 'hawthorn')
+    expect(trunkFlare(treeSpec(hawthorn, 0))).toBeNull()
+    const flare = trunkFlare(treeSpec(oak, 1))
+    expect(flare.sideM).toBeGreaterThan(treeSpec(oak, 1).trunkSideM)
   })
 })

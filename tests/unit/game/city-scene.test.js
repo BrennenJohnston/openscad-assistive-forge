@@ -894,19 +894,22 @@ describe('buildStreetProps (CW-16)', () => {
     props.dispose()
   })
 
-  it('walks under the crown but not through the trunk', () => {
+  it('walks under the leaves but not through the trunk', () => {
+    // CW-94: the blob crown became the ring-branch system, and the law this
+    // case holds did not move - CW-16's walk-under rule now binds the LEAF
+    // CUBES (constraint e): no cube's underside below CANOPY_BASE_MIN_M.
+    // Branches may pass lower, bare - a bare member is not a wall of leaves
+    // at head height - and only the trunk blocks a cane.
     const m = propsModel()
     const props = buildStreetProps(m, buildCollisionGrid(m))
     const trunks = props.group.children.find((c) => c.name === 'tree-trunks')
-    const canopies = props.group.children.find(
-      (c) => c.name === 'tree-canopies'
-    )
+    const leaves = props.group.children.find((c) => c.name === 'tree-leaves')
 
     trunks.geometry.computeBoundingBox()
-    canopies.geometry.computeBoundingBox()
+    leaves.geometry.computeBoundingBox()
     expect(trunks.geometry.boundingBox.min.z).toBeCloseTo(0, 5)
-    // Eye height is 1.7 m: the canopy must start above it.
-    expect(canopies.geometry.boundingBox.min.z).toBeGreaterThan(1.9)
+    // Eye height is 1.7 m: every leaf cube starts above it.
+    expect(leaves.geometry.boundingBox.min.z).toBeGreaterThan(1.9)
 
     props.dispose()
   })
@@ -950,7 +953,9 @@ describe('buildStreetProps (CW-16)', () => {
 
     for (const name of [
       'tree-trunks',
-      'tree-canopies',
+      // CW-94: the blob crown's mesh became the ring system's two kinds.
+      'tree-branches',
+      'tree-leaves',
       'cars',
       'lamp-poles',
       'lamp-heads',

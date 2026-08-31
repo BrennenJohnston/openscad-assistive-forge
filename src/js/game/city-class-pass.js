@@ -103,6 +103,11 @@ export const CLASS_BY_MESH_NAME = new Map([
   ['antennas', SURFACE_CLASS.MAST],
   ['tree-trunks', SURFACE_CLASS.TREE],
   ['tree-canopies', SURFACE_CLASS.TREE],
+  // CW-94: the ring-branch system's two kinds. TREE, exactly like the trunk
+  // and the crown they replace - a branch and its leaf run are the tree's
+  // own voice, not a new id (the span table stays full at 16).
+  ['tree-branches', SURFACE_CLASS.TREE],
+  ['tree-leaves', SURFACE_CLASS.TREE],
   ['cars', SURFACE_CLASS.CAR],
   ['traffic-cars', SURFACE_CLASS.CAR],
   ['people', SURFACE_CLASS.PERSON],
