@@ -174,9 +174,10 @@ import {
   pickSpecies,
   treeSpec,
   treeBranches,
-  branchLeafCubes,
+  crownCluster,
   trunkFlare,
   CANOPY_BASE_MIN_M,
+  CROWN_TONE,
 } from './city-trees.js';
 import {
   flowerTableFor,
@@ -5838,6 +5839,36 @@ function makeBox(sizeX, sizeY, sizeZ, x, y, z, rotationRad, tint) {
 }
 
 /**
+ * CW-97: paint one crown box with PER-VERTEX tone, not a flood. A flood
+ * turns a near box's face into one flat glyph field - the first shots read
+ * as awnings - because the converter sees one luminance across many cells.
+ * Corner tints jittered around the box's tier make Lambert interpolate a
+ * gradient across every face, so a face spans a few glyph steps instead of
+ * one. The jitter is a position hash (the classic sine hash), so it is a
+ * pure function of the built city - byte-identical on every load.
+ */
+function paintCrownBox(geometry, tier) {
+  const pos = geometry.getAttribute('position');
+  const colors = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const n =
+      Math.sin(
+        pos.getX(i) * 12.9898 + pos.getY(i) * 78.233 + pos.getZ(i) * 37.719
+      ) * 43758.5453;
+    const jitter = (n - Math.floor(n) - 0.5) * 0.11;
+    const t = tintOf(
+      Math.min(CROWN_TONE.tierMax, Math.max(CROWN_TONE.tierMin, tier + jitter)),
+      CANOPY_HUE_DEG,
+      CANOPY_CHROMA
+    );
+    colors[i * 3] = t[0];
+    colors[i * 3 + 1] = t[1];
+    colors[i * 3 + 2] = t[2];
+  }
+  geometry.setAttribute('color', new BufferAttribute(colors, 3));
+}
+
+/**
  * CW-94: one pitched member between two points, INDEXED like every other
  * prop box (the props merge among themselves, not with the extruded city).
  * The rotation composition is memberBox's corrected one - rotateX(-pitch)
@@ -5901,6 +5932,8 @@ export function buildStreetProps(model, collision = null) {
   let branchesClipped = 0;
   let branchesDropped = 0;
   let leavesHeldUp = 0;
+  // CW-97: crown boxes skipped for standing in a building's footprint.
+  let crownClipped = 0;
   // CW-56: what actually got planted, per species. A table nobody uses and a
   // table everybody uses look identical in a merged mesh (CW-53's lesson),
   // so the build counts its own.
@@ -6118,8 +6151,10 @@ export function buildStreetProps(model, collision = null) {
       );
     }
 
-    const canopyTint = tintOf(tier, CANOPY_HUE_DEG, CANOPY_CHROMA);
     const half = spec.trunkSideM / 2;
+    // CW-97: the branches stay, BARE - the understructure the crown sits on,
+    // seen below the canopy and through its punctures. The leaf runs that
+    // used to trace them are gone; the crown is the cluster below.
     for (const branch of treeBranches(spec, seed)) {
       const dx = Math.sin(branch.bearingRad) * Math.cos(branch.pitchRad);
       const dy = Math.cos(branch.bearingRad) * Math.cos(branch.pitchRad);
@@ -6152,26 +6187,55 @@ export function buildStreetProps(model, collision = null) {
           TRUNK_TINT
         )
       );
-      for (const cube of branchLeafCubes({ ...branch, lengthM })) {
-        const cz = az + dz * cube.alongM;
-        // Constraint (e): the cube's underside stays above head height.
-        if (cz - cube.sizeM / 2 < CANOPY_BASE_MIN_M) {
-          leavesHeldUp++;
-          continue;
-        }
-        leafGeoms.push(
-          makeBox(
-            cube.sizeM,
-            cube.sizeM,
-            cube.sizeM,
-            ax + dx * cube.alongM,
-            ay + dy * cube.alongM,
-            cz,
-            0,
-            canopyTint
-          )
-        );
+    }
+
+    // CW-97: the crown cluster (the research brief's assembly - envelope,
+    // hollow shell, sparse interior, larger-low, free rotation). Tone is
+    // decided HERE because palette choice lives in city-scene: each box
+    // offsets the tree's own tier by height, interiority and jitter - the
+    // brief's value gradient, in tiers tintOf can hold.
+    for (const box of crownCluster(spec, seed)) {
+      const bx = x + box.x;
+      const by = y + box.y;
+      // Constraint (a) for the crown: a mass whose centre stands in a
+      // building's footprint is skipped and counted, like a branch.
+      if (isBlocked(bx, by)) {
+        crownClipped++;
+        continue;
       }
+      let bz = box.z;
+      // Constraint (e): no leaf mass below head height. LIFTED rather than
+      // dropped - a street tree's crown genuinely is pruned flat above the
+      // pavement, and a lifted box keeps the mass the crown needs. The
+      // extent is the ROTATED one: a tilted cube reaches below sizeM/2, so
+      // the bound adds the tilt terms (corner z is at most
+      // (s/2)(1 + sin|a| + sin|b|) for rotateX(a) then rotateY(b)).
+      const halfZ =
+        (box.sizeM / 2) *
+        (1 +
+          Math.sin(Math.abs(box.tiltARad)) +
+          Math.sin(Math.abs(box.tiltBRad)));
+      if (bz - halfZ < CANOPY_BASE_MIN_M) {
+        leavesHeldUp++;
+        bz = CANOPY_BASE_MIN_M + halfZ;
+      }
+      const boxTier = Math.min(
+        CROWN_TONE.tierMax,
+        Math.max(
+          CROWN_TONE.tierMin,
+          tier +
+            CROWN_TONE.heightSpan * (box.heightFrac - 0.5) -
+            (box.interior ? CROWN_TONE.interiorDrop : 0) +
+            box.toneJitter
+        )
+      );
+      const g = new BoxGeometry(box.sizeM, box.sizeM, box.sizeM);
+      g.rotateX(box.tiltARad);
+      g.rotateY(box.tiltBRad);
+      g.rotateZ(box.yawRad);
+      g.translate(bx, by, bz);
+      paintCrownBox(g, boxTier);
+      leafGeoms.push(g);
     }
 
     treeSpots.add(x, y);
@@ -7551,10 +7615,12 @@ export function buildStreetProps(model, collision = null) {
       speciesPlanted,
       // CW-94: what the ring system's two constraints cost, counted rather
       // than silent - a branch halved at a wall, a branch dropped at one,
-      // a leaf cube held back above head height.
+      // a leaf mass lifted above head height (CW-97: lifted, not dropped).
       branchesClipped,
       branchesDropped,
       leavesHeldUp,
+      // CW-97: crown boxes skipped for standing in a building's footprint.
+      crownClipped,
       // CW-57: what stands, split so a reader can tell DATA from the
       // fallback - fallbackPlanters is design, everything else is the map.
       plantingPlaced,

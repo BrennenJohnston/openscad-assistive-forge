@@ -4,14 +4,14 @@ import {
   CANOPY_FORMS,
   CANOPY_BASE_MIN_M,
   BRANCHES_PER_RING_MAX,
-  LEAF_CUBE_MIN_M,
-  LEAF_CUBE_SHARE,
-  LEAF_SPACING_SHARE,
+  CROWN_CLUSTER,
+  CONIFER_WHORLS,
+  CROWN_TONE,
   treeTableFor,
   pickSpecies,
   treeSpec,
   treeBranches,
-  branchLeafCubes,
+  crownCluster,
   trunkFlare,
   makeCanopyGeoms,
 } from '../../../src/js/game/city-trees.js'
@@ -232,32 +232,6 @@ describe("the ring-branch system (CW-94, CW-Q94 - the owner's own laws)", () => 
     expect(mean(low)).toBeGreaterThan(mean(high) * 1.5)
   })
 
-  it('wraps the outer run in cubes ~2x the member, with real gaps', () => {
-    const spec = treeSpec(oak, 0.75)
-    const [branch] = treeBranches(spec, 7)
-    expect(branch).toBeDefined()
-    const cubes = branchLeafCubes(branch)
-    expect(cubes.length).toBeGreaterThan(1)
-    const size = Math.max(LEAF_CUBE_MIN_M, branch.thickM * LEAF_CUBE_SHARE)
-    for (const c of cubes) expect(c.sizeM).toBe(size)
-    // The run ENVELOPS the branch (the owner's own words): successive cubes
-    // overlap into one clump, so the step stays at or under the cube size.
-    // The reference's sparseness lives BETWEEN runs, not inside one - the
-    // bare inner share and the ring spacing carry the gaps. Photographed at
-    // a 1.8-size step first, which read as winter buds on bare wood.
-    for (let i = 1; i < cubes.length - 1; i++) {
-      const step = cubes[i].alongM - cubes[i - 1].alongM
-      expect(step).toBeGreaterThan(size * 0.5)
-      expect(step).toBeLessThanOrEqual(size * 1.3)
-    }
-    // The tip always carries one - no branch ends in a bare spike.
-    expect(cubes[cubes.length - 1].alongM).toBeGreaterThanOrEqual(
-      branch.lengthM - size * LEAF_SPACING_SHARE * 0.5
-    )
-    // And the inner run stays bare (part budget, part head-height law).
-    expect(cubes[0].alongM).toBeGreaterThanOrEqual(branch.lengthM * 0.3)
-  })
-
   it('is deterministic: one seed, one tree, every time', () => {
     const spec = treeSpec(fir, 0.4)
     expect(treeBranches(spec, 12345)).toEqual(treeBranches(spec, 12345))
@@ -273,5 +247,173 @@ describe("the ring-branch system (CW-94, CW-Q94 - the owner's own laws)", () => 
     expect(trunkFlare(treeSpec(hawthorn, 0))).toBeNull()
     const flare = trunkFlare(treeSpec(oak, 1))
     expect(flare.sideM).toBeGreaterThan(treeSpec(oak, 1).trunkSideM)
+  })
+})
+
+describe('the crown cluster (CW-97 - the canopy research, adapted)', () => {
+  const oak = CITY_TREES.seattle.find((s) => s.name === 'oak')
+  const hawthorn = CITY_TREES.seattle.find((s) => s.name === 'hawthorn')
+  const fir = CITY_TREES.burnaby.find((s) => s.name === 'Douglas-fir')
+
+  it('is deterministic: one seed, one crown, every time', () => {
+    const spec = treeSpec(oak, 0.5)
+    expect(crownCluster(spec, 4242)).toEqual(crownCluster(spec, 4242))
+    expect(JSON.stringify(crownCluster(spec, 4242))).not.toBe(
+      JSON.stringify(crownCluster(spec, 2424))
+    )
+  })
+
+  it('fills the envelope and never leaves it', () => {
+    // The crown SHAPE is the species' own numbers: every box centre inside
+    // the spec's ellipsoid (with the sink and jitter margin), z between the
+    // crown's base and top. The envelope is cue four - a crown outline the
+    // eye can name - and a box outside it is a defect, not variety.
+    for (const [species, t] of [
+      [oak, 0.5],
+      [hawthorn, 0.25],
+      [oak, 1],
+    ]) {
+      const spec = treeSpec(species, t)
+      const hr = spec.radiusM
+      const hz = spec.crownM / 2
+      const cz = spec.baseM + hz
+      for (const b of crownCluster(spec, 7)) {
+        const rn = Math.sqrt(
+          (b.x / hr) ** 2 + (b.y / hr) ** 2 + ((b.z - cz) / hz) ** 2
+        )
+        expect(rn, `${species.name} t=${t}`).toBeLessThanOrEqual(1.05)
+        expect(b.z).toBeGreaterThanOrEqual(spec.baseM - 1e-9)
+        expect(b.z).toBeLessThanOrEqual(spec.topM + 1e-9)
+      }
+    }
+  })
+
+  it('is a hollow shell with sparse interior fill, and real punctures', () => {
+    // The brief's 70-80% shell / 20-30% interior, held by construction and
+    // guarded here: interior boxes are a minority, shell boxes actually sit
+    // OUT at the envelope (radial share above 1 - sink, with the latitude
+    // jitter's margin), and the claimed area leaves sky: total box footprint
+    // stays meaningfully under the envelope's surface, and meaningfully
+    // above confetti.
+    const spec = treeSpec(oak, 0.5)
+    const boxes = crownCluster(spec, 99)
+    const shell = boxes.filter((b) => !b.interior)
+    const inner = boxes.filter((b) => b.interior)
+    expect(inner.length / boxes.length).toBeGreaterThan(0.1)
+    expect(inner.length / boxes.length).toBeLessThanOrEqual(0.35)
+
+    const hr = spec.radiusM
+    const hz = spec.crownM / 2
+    const cz = spec.baseM + hz
+    for (const b of shell) {
+      const rn = Math.sqrt(
+        (b.x / hr) ** 2 + (b.y / hr) ** 2 + ((b.z - cz) / hz) ** 2
+      )
+      expect(rn).toBeGreaterThan(1 - CROWN_CLUSTER.shellSinkShare - 0.12)
+    }
+    for (const b of inner) {
+      const rn = Math.sqrt(
+        (b.x / hr) ** 2 + (b.y / hr) ** 2 + ((b.z - cz) / hz) ** 2
+      )
+      expect(rn).toBeLessThanOrEqual(CROWN_CLUSTER.innerRadial[1] + 1e-9)
+    }
+
+    // Coverage arithmetic: punctures exist (under ~90% of the surface is
+    // claimed) and the crown is a mass (over ~40%).
+    const surface =
+      4 *
+      Math.PI *
+      Math.pow(
+        ((hr * hr) ** 1.6075 + 2 * (hr * hz) ** 1.6075) / 3,
+        1 / 1.6075
+      )
+    const claimed = shell.reduce((a, b) => a + b.sizeM ** 2, 0)
+    expect(claimed / surface).toBeGreaterThan(0.4)
+    expect(claimed / surface).toBeLessThan(0.9)
+  })
+
+  it('puts the larger masses low and the raggedest edge on top', () => {
+    // Pooled across seeds - the jitter is +/-35%, so one tree proves
+    // nothing; the GRADIENT is the law (the brief: larger low, smaller
+    // high, which is what makes the top edge the ragged one).
+    const low = []
+    const high = []
+    for (let seed = 1; seed <= 60; seed++) {
+      const spec = treeSpec(oak, ((seed % 20) + 0.5) / 20)
+      for (const b of crownCluster(spec, seed)) {
+        if (b.interior) continue
+        if (b.heightFrac < 0.33) low.push(b.sizeM)
+        if (b.heightFrac > 0.67) high.push(b.sizeM)
+      }
+    }
+    const mean = (xs) => xs.reduce((a, x) => a + x, 0) / xs.length
+    expect(low.length).toBeGreaterThan(100)
+    expect(high.length).toBeGreaterThan(100)
+    expect(mean(low)).toBeGreaterThan(mean(high) * 1.15)
+  })
+
+  it('rotates freely in yaw and only gently in tilt', () => {
+    // Free yaw breaks the crate-stack read (every box the same three
+    // faces); the tilt cap keeps a mass from becoming a thrown die. The
+    // tone jitter stays inside the band the palette promised.
+    const spec = treeSpec(oak, 0.5)
+    const yawSpread = new Set()
+    for (const b of crownCluster(spec, 5)) {
+      expect(b.yawRad).toBeGreaterThanOrEqual(0)
+      expect(b.yawRad).toBeLessThan(Math.PI)
+      expect(Math.abs(b.tiltARad)).toBeLessThanOrEqual(
+        Math.max(CROWN_CLUSTER.tiltMaxRad, CONIFER_WHORLS.droopRad) + 1e-9
+      )
+      expect(Math.abs(b.tiltBRad)).toBeLessThanOrEqual(
+        Math.max(CROWN_CLUSTER.tiltMaxRad, CONIFER_WHORLS.droopRad) + 1e-9
+      )
+      expect(Math.abs(b.toneJitter)).toBeLessThanOrEqual(CROWN_TONE.jitter)
+      yawSpread.add(Math.round(b.yawRad * 10))
+    }
+    expect(yawSpread.size).toBeGreaterThan(4)
+  })
+
+  it('builds a conifer as tapering whorls with a tip, not a ball', () => {
+    // The brief is explicit that a conifer is stacked layers. Guarded as
+    // geometry: the top quarter's widest box sits well inside the bottom
+    // quarter's, the tiers span the whole crown, and one apex box stands
+    // at the top so the tree ends in a point.
+    const spec = treeSpec(fir, 0.75)
+    const boxes = crownCluster(spec, 31)
+    const span = spec.topM - spec.baseM
+    const radius = (b) => Math.hypot(b.x, b.y)
+    const bottom = boxes.filter((b) => b.z < spec.baseM + span * 0.25)
+    const top = boxes.filter(
+      (b) => b.z > spec.topM - span * 0.25 && radius(b) > 0
+    )
+    expect(bottom.length).toBeGreaterThan(3)
+    expect(top.length).toBeGreaterThan(0)
+    expect(Math.max(...top.map(radius))).toBeLessThan(
+      Math.max(...bottom.map(radius)) * 0.5
+    )
+    const apex = boxes[boxes.length - 1]
+    expect(apex.x).toBe(0)
+    expect(apex.y).toBe(0)
+    expect(apex.z).toBeGreaterThan(spec.topM - 2)
+    // No interior fill in a whorl system - the trunk is the interior.
+    expect(boxes.every((b) => !b.interior)).toBe(true)
+  })
+
+  it('keeps every crown a bounded merge', () => {
+    // The budget end of the design: the biggest tree in the tables stays
+    // under the shell cap plus its interior share, and the smallest is
+    // still a cluster rather than three crates.
+    for (const city of Object.keys(CITY_TREES)) {
+      for (const s of CITY_TREES[city]) {
+        for (const t of [0, 1]) {
+          const n = crownCluster(treeSpec(s, t), 17).length
+          expect(n, `${city} ${s.name} t=${t}`).toBeGreaterThanOrEqual(10)
+          expect(n, `${city} ${s.name} t=${t}`).toBeLessThanOrEqual(
+            Math.round(CROWN_CLUSTER.shellMax * (1 + CROWN_CLUSTER.innerShare)) +
+              120
+          )
+        }
+      }
+    }
   })
 })
