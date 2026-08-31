@@ -2193,6 +2193,24 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
       window.__cityWalkGame.altView.setCellProbe(true)
     })
 
+    // ★★ CW-78: THE MEASUREMENT SCENE IS PINNED. This guard's bar was
+    // calibrated on the downtown spawn (CW-89's rescope; CW-91's widened
+    // pool read 74.6 % there). CW-78 moved the SPAWN to the waterfront and
+    // the first board after it read 83 % of re-rolls surviving - the
+    // converter had not changed one line, the CITY under the creep had. A
+    // guard must not measure more than it means, and this one never meant
+    // "wherever the spawn happens to be", so the creep runs at the pinned
+    // downtown pose from here on, whatever a later release does to spawns.
+    // The pose is the OLD spawn exactly as the old flow produced it:
+    // (-17.26, 14.48) facing 315 degrees - findClearHeading over the
+    // props-stamped grid, re-derived offline rather than guessed.
+    await page.evaluate(() => {
+      const st = window.__cityWalkGame.walkState
+      st.x = -17.26
+      st.y = 14.48
+      st.headingRad = (315 * Math.PI) / 180
+    })
+
     // The game configures its own instance at startup; this is what it chose.
     const configured = await page.evaluate(() =>
       window.__cityWalkGame.altView.getTemporalHysteresis()

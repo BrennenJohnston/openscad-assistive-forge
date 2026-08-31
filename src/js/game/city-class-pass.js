@@ -177,6 +177,19 @@ export const CLASS_BY_MESH_NAME = new Map([
   // guard could not see it: that guard enumerates buildStreetProps. It asks the
   // standalone builders too now, so the next one cannot slip through.
   ['traveler', SURFACE_CLASS.PERSON],
+  // CW-78: the node-keyed landmark bodies (the Great Wheel; the Needle's
+  // saucer stack and flare). MAST, stated deliberately: these are open
+  // steel structures read against the sky, which is what the mast voice
+  // draws, and MAST is a non-anchored class - a rim and a spoke must not be
+  // snapped to a facade's lattice. A borrow, not a new id (CW-43's law; the
+  // span table is full at 16).
+  ['landmark-masts', SURFACE_CLASS.MAST],
+  // CW-78: the waypoint marks. SIGN - a small bright plate on a post is
+  // exactly what the sign voice draws, and like the fireworks this is a
+  // LOOK decision: the mark's readability comes from its bright ring around
+  // an exact-black core, not from its vocabulary. Standalone builder, so
+  // the builders guard must ask it by name.
+  ['waypoints', SURFACE_CLASS.SIGN],
 ]);
 
 /**

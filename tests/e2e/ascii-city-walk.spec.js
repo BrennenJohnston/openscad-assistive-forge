@@ -1079,6 +1079,112 @@ test.describe('ASCII City Walk — landmarks (CW-10)', () => {
   })
 })
 
+test.describe('ASCII City Walk — the curated legend and the waypoints (CW-78)', () => {
+  const announcer = (page) => page.locator('#cityWalkAnnouncer')
+
+  test('★★ the legend is the curated seven, and Seattle spawns facing the Wheel', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const state = await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const wheel = g.landmarks[0]
+      const dx = wheel.x - g.walkState.x
+      const dy = wheel.y - g.walkState.y
+      const facing = Math.atan2(dx, dy)
+      let turn = facing - g.walkState.headingRad
+      while (turn > Math.PI) turn -= 2 * Math.PI
+      while (turn < -Math.PI) turn += 2 * Math.PI
+      return {
+        names: g.landmarks.map((l) => l.name),
+        wheelDistM: Math.hypot(dx, dy),
+        turnDeg: (Math.abs(turn) * 180) / Math.PI,
+        waypoints: g.waypointSpots.map((s) => s.placement),
+      }
+    })
+
+    // The seven, in TABLE order - the scorer put a Hyatt third and the
+    // Needle eleventh; the registry leads with the two icons.
+    expect(state.names).toEqual([
+      'Seattle Great Wheel',
+      'Space Needle',
+      'Seattle Central Library',
+      'Smith Tower',
+      'Public Market Clock',
+      'Paramount Theatre',
+      'Arctic Building',
+    ])
+    // The spawn rule: within 200 m of the Wheel, facing it.
+    expect(state.wheelDistM).toBeLessThan(200)
+    expect(state.turnDeg).toBeLessThan(10)
+    // And every landmark got its street-face mark, on pavement.
+    expect(state.waypoints).toEqual(Array(7).fill('pavement'))
+
+    await page.keyboard.press('KeyM')
+    const items = page.locator('#cityWalkLegend li')
+    await expect(items).toHaveCount(7)
+    await expect(items.first()).toContainText('Seattle Great Wheel')
+  })
+
+  test('★★ walking into a waypoint announces it and ticks the legend (T7)', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    // Stand a few metres street-side of the Wheel's waypoint, facing it,
+    // then WALK the rest - the touch must come from the real collision
+    // walk pressing against the plinth, not from a poked flag.
+    const posed = await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const spot = g.waypointSpots[0]
+      for (const d of [8, 10, 12, 14]) {
+        const x = spot.x + Math.sin(spot.facingRad) * d
+        const y = spot.y + Math.cos(spot.facingRad) * d
+        if (!g.collision.isBlocked(x, y)) {
+          const st = g.walkState
+          st.x = x
+          st.y = y
+          st.headingRad = Math.atan2(spot.x - x, spot.y - y)
+          return { name: spot.name, d }
+        }
+      }
+      return null
+    })
+    expect(posed?.name).toBe('Seattle Great Wheel')
+
+    // The whole approach happens with the live region under watch (T7):
+    // the walk is real keys, and the sentence must arrive by itself.
+    await page.keyboard.down('KeyW')
+    try {
+      await expect(announcer(page)).toContainText(
+        'Waypoint reached: Seattle Great Wheel.',
+        { timeout: 15000 }
+      )
+    } finally {
+      await page.keyboard.up('KeyW')
+    }
+
+    const touched = await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      return {
+        visited: [...g.visited],
+        touching: g.touchedWaypoint,
+      }
+    })
+    expect(touched.visited).toContain('Seattle Great Wheel')
+    expect(touched.touching).toBe('Seattle Great Wheel')
+
+    // The legend agrees - the tick and its screen-reader word.
+    await page.keyboard.press('KeyM')
+    const row = page.locator('#cityWalkLegend li').first()
+    await expect(row).toContainText('✓')
+    await expect(row).toContainText('Seattle Great Wheel')
+  })
+})
+
 test.describe('ASCII City Walk — high contrast (CW-6)', () => {
   test('launches and plays under high contrast with the palette active', async ({
     page,

@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Seven real landmarks per city, chosen by hand** (CW-78) - the landmark list used to be
+  arithmetic over map tags, which filled Seattle's legend with hotels and put the Space Needle
+  eleventh of twelve. Each city now carries seven landmarks drafted from its own landmark
+  register - Seattle's Landmarks Preservation Board list, Denver's landmark register, the
+  Albuquerque Landmarks Commission, Heritage Burnaby - in a fixed order, each row keyed to its
+  map element and cited in `docs/CITY_WALK_LANDMARKS.md`. A row that loses its map element in a
+  rebake fails a test instead of quietly shortening the legend. The old scoring survives for a
+  city without a table, with a mapped wikidata identity now breaking ties
+
+- **The Seattle Great Wheel exists** (CW-78) - the legend's number-two row had no body at all: the
+  wheel is mapped as a point, not a building, and only buildings were drawn. It stands on Pier 57
+  now at its published 175 ft - a closed rim, spokes, a hub, A-frame legs and a boarding platform,
+  the wheel's plane running along the pier so the circle reads from Alaskan Way the way the real
+  one does. The rim's diameter is drawn from the height by a stated ratio, because no primary
+  source publishes it
+
+- **The Space Needle has its saucer** (CW-78) - the map carries the shaft as narrow prisms, so
+  from a distance the Needle read as a radio mast. The published numbers are drawn in above the
+  legs now: the flare from the waist, the 42 m top house at the observation level, the halo ring,
+  and the spire to the full 605 ft
+
+- **A touchable waypoint at every landmark** (CW-78) - each of the seven gets a man-in-circle mark
+  on a plinth, standing on public pavement at the landmark's street face: a bright ring around an
+  exact-black core with the figure inside, at least five character rows tall from 40 m at the
+  default size. Walk into it and the game announces the landmark by name and ticks the legend - a
+  physical thing a cane-line walk runs into, not only a ring on the map
+
+- **Every city starts near its first landmark** (CW-78) - Seattle spawns within 200 m of the Great
+  Wheel, facing it; the other cities spawn near the first row of their table. The walk opens on
+  the thing the legend leads with instead of a generic downtown corner
+
+### Fixed
+
+- **Teleporting to a landmark counts as finding it** (CW-78) - landing beside one seeded the
+  "near" state without the visit, so the legend ticked at whatever later step happened to
+  re-enter the ring. The landing itself marks it now
+
 ### Changed
 
 - **In color, every surface now has a color of its own** (CW-92) - a wall used to change color as

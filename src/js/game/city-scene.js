@@ -38,6 +38,7 @@ import {
   BufferGeometry,
   CanvasTexture,
   CircleGeometry,
+  CylinderGeometry,
   Color,
   DirectionalLight,
   ExtrudeGeometry,
@@ -91,8 +92,14 @@ import {
 import {
   dressingFor,
   needleLegPoint,
+  needleFlarePoint,
+  nodeDressingFor,
+  wheelHubHeightM,
+  wheelRimPoint,
+  GREAT_WHEEL,
   NEEDLE_LEG,
   NEEDLE_LEG_BEARINGS_RAD,
+  NEEDLE_TOP,
   libraryPlatformRing,
   LIBRARY_DIAGRID,
   LIBRARY_PLATFORMS,
@@ -103,6 +110,7 @@ import {
   wayfindMarkSizeM,
   wayfindTierOf,
 } from './city-map-styles.js';
+import { WAYPOINT_MARK } from './landmark-registry.js';
 import {
   birdTableFor,
   pickBird,
@@ -2171,6 +2179,211 @@ function needleTripodGeometries(centre, groundZ, tint) {
 }
 
 /**
+ * One linear member as a merge-ready box: the tripod's own construction,
+ * factored out so the CW-78 bodies (the Needle's flare, the Wheel's rim and
+ * spokes and legs) draw with the same math the legs proved.
+ */
+function memberBox(ax, ay, az, bx, by, bz, thickM, tint) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const dz = bz - az;
+  const len = Math.hypot(dx, dy, dz);
+  if (!(len > 0)) return null;
+  const box = new BoxGeometry(thickM, thickM, len + thickM / 2).toNonIndexed();
+  const pitch = Math.acos(Math.min(1, Math.max(-1, dz / len)));
+  // ★ rotateX(-pitch), NOT the tripod's rotateX(+pitch): positive pitch tips
+  // the long axis toward -Y, and the yaw that follows then MIRRORS the
+  // horizontal component - photographed on the first Wheel build as rim
+  // chords pointing radially at every diagonal. The legs never showed it
+  // because their segments are near-vertical and 3.4 m thick, so the
+  // per-segment mirror hid inside the member's own width.
+  box.rotateX(-pitch);
+  box.rotateZ(-Math.atan2(dx, dy));
+  box.translate((ax + bx) / 2, (ay + by) / 2, (az + bz) / 2);
+  paintGeometry(box, tint);
+  return box;
+}
+
+/**
+ * ★★ CW-78: THE NEEDLE'S TOP - the flare from the waist and the stacked
+ * saucer the data never had. The thirteen `building:part` prisms stay
+ * exactly as mapped (the CW-63 law: this table ADDS); what is added is the
+ * silhouette's upper half: three flare arcs continuing the legs' bearings,
+ * then the cited 42 m disc at the cited observation level, the halo ring,
+ * the top house, and the spire to the cited 605 ft total. Numbers and the
+ * design choices among them are in landmark-dressings.js.
+ *
+ * Per-part material colours are STATED (CW-92: the family byte is honest per
+ * part): the flare keeps the building's own tint so it reads as one
+ * structure with the legs; the saucer stack is the published white-painted
+ * steel, drawn as bright neutrals.
+ */
+function needleTopGeometries(centre, groundZ, tint) {
+  const geoms = [];
+  const [cx, cy] = centre;
+  const { flareSegments } = NEEDLE_TOP;
+  for (const bearing of NEEDLE_LEG_BEARINGS_RAD) {
+    for (let i = 0; i < flareSegments; i++) {
+      const a = needleFlarePoint(bearing, i / flareSegments);
+      const b = needleFlarePoint(bearing, (i + 1) / flareSegments);
+      const box = memberBox(
+        cx + a[0],
+        cy + a[1],
+        groundZ + a[2],
+        cx + b[0],
+        cy + b[1],
+        groundZ + b[2],
+        NEEDLE_LEG.thicknessM,
+        tint
+      );
+      if (box) geoms.push(box);
+    }
+  }
+
+  const drum = (radius, bottom, top, tintValue, segments = 24) => {
+    const h = top - bottom;
+    const geom = new CylinderGeometry(radius, radius, h, segments)
+      .toNonIndexed()
+      .rotateX(Math.PI / 2)
+      .translate(cx, cy, groundZ + bottom + h / 2);
+    paintGeometry(geom, [tintValue, tintValue, tintValue]);
+    return geom;
+  };
+  geoms.push(
+    drum(
+      NEEDLE_TOP.discRadiusM,
+      NEEDLE_TOP.discBottomM,
+      NEEDLE_TOP.discTopM,
+      0.85
+    ),
+    drum(
+      NEEDLE_TOP.haloRadiusM,
+      NEEDLE_TOP.haloBottomM,
+      NEEDLE_TOP.haloTopM,
+      0.7
+    ),
+    drum(
+      NEEDLE_TOP.houseRadiusM,
+      NEEDLE_TOP.houseBottomM,
+      NEEDLE_TOP.houseTopM,
+      0.8
+    )
+  );
+  const spire = memberBox(
+    cx,
+    cy,
+    groundZ + NEEDLE_TOP.houseTopM,
+    cx,
+    cy,
+    groundZ + NEEDLE_TOP.spireTopM,
+    NEEDLE_TOP.spireThickM,
+    [0.75, 0.75, 0.75]
+  );
+  if (spire) geoms.push(spire);
+  return geoms;
+}
+
+/**
+ * ★★ CW-78: THE GREAT WHEEL EXISTS. A closed rim circle with spokes and a
+ * hub, on A-frame legs over the pier platform (the owner's silhouette sheet,
+ * plan §11.7), keyed to the attraction NODE and drawn in the same metres the
+ * city is built in - rim top at the cited 53.3 m. The wheel plane runs along
+ * the pier's own measured bearing, so the circle photographs from the
+ * Alaskan Way pavement exactly as the real one does.
+ *
+ * Per-part material colours are STATED (CW-92): white-painted rim, spokes
+ * and legs as bright neutrals, the gondolas a mid grey (the real blue would
+ * be manufactured hue in an achromatic scene), the deck dark.
+ */
+function greatWheelGeometries(node) {
+  const geoms = [];
+  const W = GREAT_WHEEL;
+  const bearing = (W.planeBearingDeg * Math.PI) / 180;
+  // In-plane [along, z] to world [x, y, z].
+  const ax = Math.sin(bearing);
+  const ay = Math.cos(bearing);
+  // The axle direction, perpendicular to the plane.
+  const nx = Math.cos(bearing);
+  const ny = -Math.sin(bearing);
+  const world = (along, out, z) => [
+    node.x + ax * along + nx * out,
+    node.y + ay * along + ny * out,
+    z,
+  ];
+  const hubZ = wheelHubHeightM();
+
+  const RIM_TINT = [0.85, 0.85, 0.85];
+  const SPOKE_TINT = [0.7, 0.7, 0.7];
+  const LEG_TINT = [0.75, 0.75, 0.75];
+  const HUB_TINT = [0.8, 0.8, 0.8];
+  const GONDOLA_TINT = [0.55, 0.55, 0.55];
+  const DECK_TINT = [0.35, 0.35, 0.35];
+
+  // The rim: a closed ring of members.
+  for (let i = 0; i < W.rimSegments; i++) {
+    const [a1, z1] = wheelRimPoint(i / W.rimSegments);
+    const [a2, z2] = wheelRimPoint((i + 1) / W.rimSegments);
+    const p = world(a1, 0, z1);
+    const q = world(a2, 0, z2);
+    const box = memberBox(...p, ...q, W.rimThickM, RIM_TINT);
+    if (box) geoms.push(box);
+  }
+
+  // Spokes, hub to rim.
+  for (let i = 0; i < W.spokes; i++) {
+    const [along, z] = wheelRimPoint(i / W.spokes);
+    const hub = world(0, 0, hubZ);
+    const rim = world(along, 0, z);
+    const box = memberBox(...hub, ...rim, W.spokeThickM, SPOKE_TINT);
+    if (box) geoms.push(box);
+  }
+
+  // The hub drum, along the axle.
+  const hub = new CylinderGeometry(W.hubRadiusM, W.hubRadiusM, W.hubWidthM, 12)
+    .toNonIndexed()
+    .rotateZ(-Math.atan2(nx, ny))
+    .translate(...world(0, 0, hubZ));
+  paintGeometry(hub, HUB_TINT);
+  geoms.push(hub);
+
+  // A-frame legs: two pairs, one either side of the wheel plane, each pair
+  // splayed along the plane so the side profile reads as the letter A.
+  for (const out of [-W.legOutM, W.legOutM]) {
+    for (const along of [-W.legSpreadM, W.legSpreadM]) {
+      const foot = world(along, out, 0);
+      const top = world(0, out, hubZ);
+      const box = memberBox(...foot, ...top, W.legThickM, LEG_TINT);
+      if (box) geoms.push(box);
+    }
+  }
+
+  // The boarding platform on the pier deck.
+  const deck = new BoxGeometry(
+    W.platformHalfAlongM * 2,
+    W.platformHalfAcrossM * 2,
+    W.platformThickM
+  )
+    .toNonIndexed()
+    .rotateZ(Math.PI / 2 - bearing)
+    .translate(node.x, node.y, W.platformThickM / 2);
+  paintGeometry(deck, DECK_TINT);
+  geoms.push(deck);
+
+  // Gondolas at the spoke ends - drawn count, photograph-gated (the CW-78
+  // blocker rule); deleting this loop is the whole removal.
+  for (let i = 0; i < W.gondolas; i++) {
+    const [along, z] = wheelRimPoint(i / W.gondolas);
+    const g = new BoxGeometry(W.gondolaM, W.gondolaM, W.gondolaM)
+      .toNonIndexed()
+      .translate(...world(along, 0, z - W.rimThickM / 2 - W.gondolaM / 2));
+    paintGeometry(g, GONDOLA_TINT);
+    geoms.push(g);
+  }
+
+  return geoms;
+}
+
+/**
  * ★★ CW-63 (CW-Q56): THE SEATTLE CENTRAL LIBRARY'S AUTHORED MASSING.
  *
  * This is the one dressing that REPLACES rather than adds, and the reason is
@@ -3094,6 +3307,9 @@ export function buildCityGroup(model) {
   // the texture is per-material, so a facade look means a mesh to carry it.
   const buildingGeoms = Array.from({ length: FACADE_COUNT }, () => []);
   const storefrontGeoms = [];
+  // CW-78: the node-keyed bodies and the Needle's top, merged into their own
+  // 'landmark-masts' mesh so they carry the MAST class rather than a facade's.
+  const landmarkMastGeoms = [];
   const signOut = { plates: [], faces: [] };
   const roadIndex = makePointGrid(SIGN_ROAD_CELL_M);
   for (const road of model.roads) {
@@ -3381,6 +3597,16 @@ export function buildCityGroup(model) {
         buildingGeoms[archetypeIndex].push(geom);
         anyGeom = true;
       }
+      // CW-78: the flare and the stacked saucer ride the same dressing row,
+      // into the landmark-mast mesh (MAST class - the drift rule that CW-78
+      // bodies are non-anchored classes, stated per mesh).
+      for (const geom of needleTopGeometries(
+        centre,
+        building.minHeightM,
+        tint
+      )) {
+        landmarkMastGeoms.push(geom);
+      }
     }
     if (dressing?.massing === 'library-platforms') {
       for (const geom of libraryPlatformGeometries(building, tint)) {
@@ -3603,7 +3829,7 @@ export function buildCityGroup(model) {
   // hidden overhead in one line each, the way the curbs already are.
   let dressingTriangles = 0;
   const dressingMeshes = [];
-  const addDressing = (geoms, name) => {
+  const addDressing = (geoms, name, { farSilhouette = false } = {}) => {
     if (geoms.length === 0) return;
     const merged = mergeGeometries(geoms, false);
     for (const g of geoms) g.dispose();
@@ -3611,6 +3837,11 @@ export function buildCityGroup(model) {
       color: 0xffffff,
       vertexColors: true,
     });
+    // CW-78: the landmark bodies keep the buildings' fog floor - a Wheel or
+    // a saucer that fogs to nothing at 260 m defeats the reason they exist
+    // (the icons where they stand). Signs and antennas keep vanishing: they
+    // are street dressing, not skyline.
+    if (farSilhouette) applyFarSilhouetteFog(material);
     const mesh = new Mesh(merged, material);
     mesh.name = name;
     group.add(mesh);
@@ -3623,6 +3854,16 @@ export function buildCityGroup(model) {
   addDressing(signOut.plates, 'sign-plates');
   addDressing(signOut.faces, 'sign-faces');
   addDressing(antennaGeoms, 'antennas');
+  // CW-78: a node-keyed landmark gets its body here - the Great Wheel is an
+  // attraction node with no way, which is why the CW-63 table never reached
+  // it. Generic over the node table: a city with no dressed node builds no
+  // mesh at all.
+  for (const node of model.attractions ?? []) {
+    if (nodeDressingFor(node.id)?.body === 'great-wheel') {
+      landmarkMastGeoms.push(...greatWheelGeometries(node));
+    }
+  }
+  addDressing(landmarkMastGeoms, 'landmark-masts', { farSilhouette: true });
 
   // Ground plane (PlaneGeometry lies in XY facing +Z — already our Z-up
   // floor). Black base + sparse dot texture = near-field dither only.
@@ -7923,6 +8164,123 @@ export function pickTravelerSpot(spots, citySlug, options = {}) {
     y: pick.s.y,
     facing: pick.s.facing,
     neighbours: pick.n,
+  };
+}
+
+/**
+ * ★★ CW-78 (CW-Q71): THE WAYPOINT MARKS - the app's man-in-circle on a tall
+ * plinth, one per registry landmark, standing on public pavement at each
+ * landmark's street face.
+ *
+ * THE MARK IS CW-40'S LAW AT STREET LEVEL: a bright ring around an
+ * EXACT-BLACK core (the one footprint no building in any palette has,
+ * because exact black renders as empty cells - CW-5), with the bright figure
+ * standing inside the hole. The core and the figure are drawn THICKER than
+ * the ring slab so they poke through both faces - one set of geometry reads
+ * from either side of the street.
+ *
+ * Sizes come from landmark-registry.js's WAYPOINT_MARK, set by the character
+ * grid (five-plus rows at 40 m at the default size, the CW-61 floor).
+ *
+ * Standalone like the traveler and the fireworks: the spots need the
+ * collision and surface grids, which exist only after the city group is
+ * built. Unlit material on purpose - a wayfinding mark must be as bright at
+ * night as by day, and the black core must be black under any light.
+ *
+ * @param {Array<ReturnType<import('./landmark-registry.js').findWaypointSpot>>} spots
+ * @returns {{group: Group, obstacles: Array<Object>, dispose: () => void}}
+ */
+export function buildWaypointMarks(spots) {
+  const group = new Group();
+  group.name = 'waypoint-group';
+
+  const M = WAYPOINT_MARK;
+  const BRIGHT = [0.92, 0.92, 0.92];
+  const CORE = [0, 0, 0];
+  const PLINTH = [0.5, 0.5, 0.5];
+
+  const geoms = [];
+  const obstacles = [];
+  for (const spot of spots) {
+    if (!spot) continue;
+    const f = spot.facingRad;
+    const centreZ = M.plinthTopM + M.ringOuterM;
+    // Local frame: X lateral, Y through the face, Z up; rotateZ(-f) turns
+    // local +Y into the facing direction.
+    const part = (geom, dz) => {
+      geom.rotateZ(-f);
+      geom.translate(spot.x, spot.y, centreZ + dz);
+      return geom;
+    };
+    const disc = (radiusM, thickM, tint) => {
+      const g = new CylinderGeometry(
+        radiusM,
+        radiusM,
+        thickM,
+        24
+      ).toNonIndexed();
+      paintGeometry(g, tint);
+      return g;
+    };
+
+    // The plinth, ground to the ring's underside.
+    const plinth = new BoxGeometry(
+      M.plinthHalfM * 2,
+      M.plinthHalfM * 2,
+      M.plinthTopM
+    ).toNonIndexed();
+    plinth.translate(spot.x, spot.y, M.plinthTopM / 2);
+    paintGeometry(plinth, PLINTH);
+    geoms.push(plinth);
+
+    // Bright ring slab, black core through it, bright figure through that.
+    geoms.push(part(disc(M.ringOuterM, M.faceThickM, BRIGHT), 0));
+    geoms.push(part(disc(M.ringInnerM, M.faceThickM + 0.16, CORE), 0));
+
+    const manDepth = M.faceThickM + 0.28;
+    const man = (w, h, dz, dx = 0, tiltRad = 0) => {
+      const g = new BoxGeometry(w, manDepth, h).toNonIndexed();
+      if (tiltRad) g.rotateY(tiltRad);
+      g.translate(dx, 0, 0);
+      paintGeometry(g, BRIGHT);
+      return part(g, dz);
+    };
+    const s = M.manHeightM / 2;
+    geoms.push(man(0.4, 0.4, s * 0.78)); // head
+    geoms.push(man(0.32, 0.8, s * 0.12)); // torso
+    geoms.push(man(1.1, 0.22, s * 0.42)); // arms, spread wide
+    geoms.push(man(0.24, 0.85, -s * 0.55, -0.17, 0.24)); // legs, splayed
+    geoms.push(man(0.24, 0.85, -s * 0.55, 0.17, -0.24));
+
+    obstacles.push({
+      x: spot.x,
+      y: spot.y,
+      halfLengthM: M.plinthHalfM,
+      halfWidthM: M.plinthHalfM,
+      rotationRad: 0,
+    });
+  }
+
+  let mesh = null;
+  let material = null;
+  if (geoms.length > 0) {
+    const merged = mergeGeometries(geoms, false);
+    for (const g of geoms) g.dispose();
+    material = new MeshBasicMaterial({ color: 0xffffff, vertexColors: true });
+    mesh = new Mesh(merged, material);
+    mesh.name = 'waypoints';
+    group.add(mesh);
+  }
+
+  return {
+    group,
+    obstacles,
+    dispose() {
+      if (mesh) {
+        mesh.geometry.dispose();
+        material.dispose();
+      }
+    },
   };
 }
 

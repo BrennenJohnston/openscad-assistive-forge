@@ -925,11 +925,52 @@ export function pointInRing(x, y, ring) {
  * Choose a spawn point: the road vertex nearest the extract center that is
  * not inside a building, falling back to a spiral probe around the center.
  *
+ * CW-78: an optional anchor moves the search - the spawn becomes the clear
+ * road vertex nearest the anchor among those within `withinM` of it (the
+ * registry's first row, so a city starts in sight of its icon). `minM`
+ * keeps a viewing distance: Seattle's nearest clear vertex to the Great
+ * Wheel is 18 m away ON the pier, where a 53 m wheel is legs filling the
+ * frame rather than a wheel - vertices nearer than minM are passed over
+ * while anything in the ring remains. If nothing within the ring is clear,
+ * the centre rule stands and the caller's record says so; a silent bad
+ * spawn is worse than an honest central one.
+ *
  * @param {ReturnType<import('./city-data.js').parseCityExtract>} model
  * @param {{isBlocked: (x:number, y:number) => boolean}} collision
+ * @param {{nearX?: number, nearY?: number, withinM?: number, minM?: number}} [anchor]
  * @returns {{x: number, y: number}}
  */
-export function findSpawn(model, collision) {
+export function findSpawn(model, collision, anchor) {
+  if (
+    anchor &&
+    Number.isFinite(anchor.nearX) &&
+    Number.isFinite(anchor.nearY)
+  ) {
+    const withinM = anchor.withinM ?? 200;
+    const minM = anchor.minM ?? 0;
+    let best = null;
+    let bestDist = Infinity;
+    let nearFallback = null;
+    let nearFallbackDist = Infinity;
+    for (const road of model.roads) {
+      for (const [x, y] of road.points) {
+        const dist = Math.hypot(x - anchor.nearX, y - anchor.nearY);
+        if (dist > withinM || isCircleBlocked(collision, x, y)) continue;
+        if (dist >= minM) {
+          if (dist < bestDist) {
+            best = { x, y };
+            bestDist = dist;
+          }
+        } else if (dist < nearFallbackDist) {
+          nearFallback = { x, y };
+          nearFallbackDist = dist;
+        }
+      }
+    }
+    if (best) return best;
+    if (nearFallback) return nearFallback;
+  }
+
   let best = null;
   let bestDist = Infinity;
   for (const road of model.roads) {

@@ -38,10 +38,16 @@ import {
 } from 'three';
 import {
   parseCityExtract,
-  extractLandmarks,
   nearestLandmarkName,
   buildStreetIndex,
 } from './city-data.js';
+import {
+  cityLandmarks,
+  findWaypointSpot,
+  registryFor,
+  WAYPOINT_TOUCH_M,
+  WAYPOINT_LEAVE_M,
+} from './landmark-registry.js';
 import {
   buildCityGroup,
   buildStreetProps,
@@ -118,6 +124,7 @@ import {
   buildFireworks,
   buildRain,
   buildTraveler,
+  buildWaypointMarks,
   pickTravelerSpot,
   RAIN_LEVEL_COUNT,
   RAIN_LEVEL_NAMES,
@@ -185,6 +192,14 @@ const FIREWORKS_CALM_MESSAGE =
   'Fireworks over the city, held still because reduced motion is on.';
 /** How long the calm celebration stays up. The plan's ~3 s. */
 const FIREWORKS_STILL_MS = 3200;
+
+// CW-78: the waypoint's words. ACCESSIBILITY-CRITICAL (D-35), flagged DOUBLY
+// in the round text pack. For a blind traveler the touch IS the landmark
+// visit: the plinth is a physical thing the cane-line walk runs into, and
+// this sentence says what was just reached by name. It repeats only after
+// leaving the mark's hysteresis ring, so pressing against the plinth is one
+// sentence, not a stream.
+const WAYPOINT_TOUCHED_MESSAGE = (name) => `Waypoint reached: ${name}.`;
 // Thunder no closer together than this, so it stays an event.
 const THUNDER_GAP_MS = 30000;
 
@@ -1743,8 +1758,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // (city3d.setMapView swaps the tone on toggle).
     const lighting = attachCityLighting(scene, fpCamera);
 
-    // Landmarks (CW-10): beacons on the map, a legend, proximity text.
-    const landmarks = extractLandmarks(model);
+    // Landmarks (CW-10, CW-78): the city's curated seven in table order
+    // where a registry table exists, the scorer where none does. Beacons on
+    // the map, a legend, proximity text.
+    const landmarks = cityLandmarks(model, city.slug);
     // Bright beacon marking the player in the top-down map view, sized
     // relative to the city so it stays visible at map scale.
     const spanM = Math.max(
@@ -1914,13 +1931,48 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     scene.add(traveler.group);
     scene.add(props.group);
     stampObstacles(collision, props.obstacles);
-    const spawn = findSpawn(model, collision);
+
+    // CW-78 (CW-Q71): a touchable waypoint mark at each landmark's street
+    // face. Spots need the props' collision stamped (a mark must not stand
+    // in a parked car) and must be stamped themselves BEFORE the spawn
+    // probe, or the player could start the game inside a plinth.
+    const waypointSpots = landmarks
+      .map((lm) => findWaypointSpot(model, collision, surface, lm))
+      .filter(Boolean);
+    const waypoints = buildWaypointMarks(waypointSpots);
+    scene.add(waypoints.group);
+    stampObstacles(collision, waypoints.obstacles);
+
+    // CW-78's spawn rule: a city with a registry spawns within 200 m of its
+    // table's first row (Seattle: the Great Wheel), so the walk begins in
+    // sight of the thing the legend leads with.
+    const registry = registryFor(city.slug);
+    const spawnAnchor = registry ? landmarks[0] : null;
+    const spawn = findSpawn(
+      model,
+      collision,
+      spawnAnchor
+        ? {
+            nearX: spawnAnchor.x,
+            nearY: spawnAnchor.y,
+            withinM: 200,
+            // A facing spawn needs room to SEE the thing it faces: 60 m
+            // keeps the Great Wheel a wheel instead of legs at the lens.
+            minM: registry.spawnFacesFirstRow ? 60 : 0,
+          }
+        : undefined
+    );
     // CW-44: face down the open street, never into whatever happens to
     // stand north - the bigger Seattle's spawn had a storefront 2.5 m that
     // way, and a first frame nose-to-wall walks the player straight into it.
+    // CW-78: Seattle overrides that with the signed rule - it spawns FACING
+    // the Great Wheel; the other cities keep the clear-heading facing.
     const walkState = createWalkState({
       ...spawn,
-      headingRad: findClearHeading(collision, spawn.x, spawn.y),
+      headingRad:
+        registry?.spawnFacesFirstRow && spawnAnchor
+          ? Math.atan2(spawnAnchor.x - spawn.x, spawnAnchor.y - spawn.y)
+          : findClearHeading(collision, spawn.x, spawn.y),
     });
     // CW-50: arriving is not walking, so the ground under a spawn is taken
     // whole rather than climbed up to.
@@ -1965,6 +2017,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       mapCam,
       speedLabel,
       landmarks,
+      // CW-78: the street-level waypoint marks and the touch hysteresis.
+      waypoints,
+      waypointSpots,
+      touchedWaypoint: null,
       // CW-27: named road segments, indexed once at city build.
       streetIndex: buildStreetIndex(model.roads),
       streetName: null,
@@ -2451,6 +2507,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     game.beacons?.dispose();
     game.city3d?.dispose();
     game.props?.dispose();
+    game.waypoints?.dispose();
     game.markerGeom?.dispose();
     game.markerMat?.dispose();
     game.markerInnerGeom?.dispose();
@@ -3239,6 +3296,38 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       raw: game.progressRaw,
     });
   }
+
+  /**
+   * CW-78: walking into a waypoint's plinth marks and announces its landmark.
+   *
+   * Distance-based against the stamped plinth cell rather than a collision
+   * callback, because stepWalk stops a walker BEFORE a blocked cell - the
+   * reachable minimum is the pressed-against distance WAYPOINT_TOUCH_M
+   * derives in landmark-registry.js. Hysteresis mirrors nearestLandmarkName's:
+   * one touch is one sentence until the player leaves the ring.
+   */
+  function checkWaypointTouch(game) {
+    const spots = game.waypointSpots ?? [];
+    if (spots.length === 0) return;
+    const { x, y } = game.walkState;
+    let touching = null;
+    for (const spot of spots) {
+      const d = Math.hypot(spot.x - x, spot.y - y);
+      const holding = game.touchedWaypoint === spot.name;
+      if (d <= (holding ? WAYPOINT_LEAVE_M : WAYPOINT_TOUCH_M)) {
+        touching = spot.name;
+        break;
+      }
+    }
+    if (touching && touching !== game.touchedWaypoint) {
+      game.touchedWaypoint = touching;
+      // ACCESSIBILITY-CRITICAL STRING (D-35) — flagged for owner review.
+      announceInLayer(WAYPOINT_TOUCHED_MESSAGE(touching));
+      markVisited(game, touching);
+    } else if (!touching) {
+      game.touchedWaypoint = null;
+    }
+  }
   /**
    * Save what the player is looking at as a PNG (CW-20).
    *
@@ -3846,6 +3935,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     }
     game.lighting.setMapBoost(game.mapView);
     game.beacons.group.visible = game.mapView;
+    // CW-78: the waypoints are street furniture; the map has the beacons.
+    if (game.waypoints) game.waypoints.group.visible = !game.mapView;
     state.refs.legend.hidden = !game.mapView;
     if (game.mapView) {
       // The whole map sits ~1 km from the overhead camera — distance fog
@@ -4048,6 +4139,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       game.walkState.y,
       null
     );
+    // CW-78: landing inside a landmark's ring MARKS it. Before this, the
+    // landing seeded nearLandmark without the tick, so the visit fired at
+    // whatever later movement frame happened to re-enter the ring - the
+    // "random time" the round's brief names. markVisited is idempotent and
+    // announces nothing for a single visit, so a landing beside a landmark
+    // ticks the legend without talking over the landing sentence below.
+    if (game.nearLandmark) markVisited(game, game.nearLandmark);
 
     // ★ THE TRAP THIS RELEASE EXISTS INSIDE OF (Round 4, CW-20). The camera
     // is only re-posed inside a movement step, so a teleport that only moved
@@ -4391,6 +4489,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
         // triggers it and a single step can never step PAST the radius - the
         // walk is stepped in hops of PLAYER_RADIUS_M / 2 (CW-48).
         checkTravelerFind(game);
+        // CW-78: and whether you have walked INTO a waypoint. The plinth's
+        // cell blocks, so the walk stops pressed against it - the touch
+        // radius is that pressed-against distance, and the leave radius is
+        // the hysteresis that makes one touch one sentence.
+        checkWaypointTouch(game);
       }
       game.altView.invalidate();
       updateHud();

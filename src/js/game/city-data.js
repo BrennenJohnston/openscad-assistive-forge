@@ -1129,6 +1129,10 @@ export function parseCityExtract(extract, options = {}) {
       ) {
         const [x, y] = projectLatLon(el.lat, el.lon, center);
         attractions.push({
+          // CW-78: the OSM node id, carried for the same reason buildings
+          // carry theirs (CW-63) - a landmark registry row and a node-keyed
+          // dressing are keyed on it, and a name is not an identity.
+          id: el.id,
           name: tags.name,
           x,
           y,
@@ -1137,6 +1141,7 @@ export function parseCityExtract(extract, options = {}) {
               ? tags.attraction
               : 'attraction',
           heightM: parseLengthMeters(tags.height) ?? 0,
+          wikidata: typeof tags.wikidata === 'string' ? tags.wikidata : null,
         });
         continue;
       }
@@ -1307,7 +1312,16 @@ export function parseCityExtract(extract, options = {}) {
     if (el.type === 'way' && isGreenTags(tags) && Array.isArray(el.geometry)) {
       const ring = projectRing(el.geometry, center, true);
       if (ring) {
-        greens.push({ outer: ring, kind: tags.leisure ?? tags.landuse });
+        // CW-78: id and name ride along so a landmark registry row can key a
+        // park the way it keys a building (Burnaby's Central Park is the
+        // city's most cited landmark and is a leisure=park way). Additive -
+        // nothing that draws a green reads either field.
+        greens.push({
+          id: el.id,
+          name: typeof tags.name === 'string' ? tags.name : undefined,
+          outer: ring,
+          kind: tags.leisure ?? tags.landuse,
+        });
       } else {
         droppedRings++;
       }
@@ -1747,6 +1761,7 @@ export function extractLandmarks(model, options = {}) {
       y: cy / building.outer.length,
       heightM: building.heightM,
       score,
+      wikidata: typeof tags.wikidata === 'string' ? tags.wikidata : null,
     });
   }
 
@@ -1772,10 +1787,20 @@ export function extractLandmarks(model, options = {}) {
       y: node.y,
       heightM: node.heightM || 0,
       score,
+      wikidata: node.wikidata ?? null,
     });
   }
 
-  scored.sort((a, b) => b.score - a.score || b.heightM - a.heightM);
+  // CW-78 (CW-Q70): `wikidata` presence is the generic tiebreaker for a city
+  // with no curated table - a mapped identity is the closest thing the data
+  // has to "people write about this" - and the old height arithmetic only
+  // where both sides of a tie are silent.
+  scored.sort(
+    (a, b) =>
+      b.score - a.score ||
+      (b.wikidata ? 1 : 0) - (a.wikidata ? 1 : 0) ||
+      b.heightM - a.heightM
+  );
   return scored.slice(0, max);
 }
 
