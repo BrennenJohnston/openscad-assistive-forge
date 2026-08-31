@@ -31,7 +31,7 @@ describe('e2e shard planner (D-72)', () => {
     expect(files.every((f) => f.endsWith('.spec.js'))).toBe(true)
   })
 
-  for (const total of [2, 3, 4]) {
+  for (const total of [2, 3, 4, 6]) {
     it(`runs every spec file exactly once across ${total} shards`, () => {
       const plan = planShards(files, MEASURED_SECONDS, total)
       const placed = plan.flat()
@@ -74,7 +74,10 @@ describe('e2e shard planner (D-72)', () => {
     // the fourth shard the Chromium note has always promised is what
     // happened. Twenty-five minutes leaves ten of margin on a thirty-five
     // minute ceiling, which is what a starved runner eats.
-    for (const shard of planShards(files, MEASURED_SECONDS, 4)) {
+    // CW-83 aftercare: SIX shards - the close-head run proved the model's
+    // CI factor optimistic (four shards still hit the clock; the two-core
+    // runner does not parallelize software 3D). The bar stays at 25.
+    for (const shard of planShards(files, MEASURED_SECONDS, 6)) {
       const wallMin = projectMin(shard)
       expect(
         wallMin,
