@@ -917,9 +917,13 @@ function printSequence(res, mono) {
   )
   printMismatch(res)
   console.log(
-    `  | class | cells | lit | ${mono ? 'solid' : 'white'} | glyph chg% | glyph FLIP% | ${mono ? 'drive' : 'colour'} chg% | flip% | ${mono ? 'rev' : 'white'} tog | churn% | MISMATCH | persist |`
+    `  | class | cells | lit | ${mono ? 'solid' : 'white'} | glyph chg% | glyph FLIP% | ${mono ? 'drive' : 'colour'} chg% | flip% | ${mono ? 'rev' : 'white'} tog | churn% | MISMATCH |${mono ? '' : ' FACE-FLIP% |'} persist |`
   )
-  console.log('  |---|---|---|---|---|---|---|---|---|---|---|---|')
+  console.log(
+    '  |---|---|---|---|---|---|---|---|---|---|---|' +
+      (mono ? '' : '---|') +
+      '---|'
+  )
   for (const row of [...res.perClass, res.edge]) {
     if (row.cells < 40) continue
     console.log(
@@ -928,6 +932,7 @@ function printSequence(res, mono) {
         `${row.glyphFlipPct} | ${row.driveOrColourChangePct} | ` +
         `${row.driveOrColourFlipPct} | ${row.reverseOrWhiteToggles} | ` +
         `${row.churnCellsPct} | ${row.mismatch} | ` +
+        (mono ? '' : `${row.faceFlipPct} | `) +
         `${row.meanGlyphPersistenceFrames} |`
     )
   }

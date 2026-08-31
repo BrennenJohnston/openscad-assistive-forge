@@ -501,3 +501,47 @@ describe('seq-metrics: the red proof', () => {
     expect(foldMono().total.glyphFlipPct).toBe(25)
   })
 })
+
+describe('seq-metrics: the face-flip row (CW-92, D-127)', () => {
+  /**
+   * The owner's defect as a number: a cell still looking at the SAME surface
+   * that changes colour index anyway. A cell that swept onto a different
+   * surface is allowed to change colour and must not count, which is the whole
+   * reason the row is conditioned on the class holding.
+   */
+  const WHITE = 5
+
+  it('counts a colour change only where the class held', () => {
+    const fold = createFold(3, 1, { mono: false, whiteIndex: WHITE })
+    // cell 0: same class, colour changes  -> a face flip
+    // cell 1: same class, colour holds    -> the control
+    // cell 2: class MOVES and colour with it -> not a flip
+    foldFrame(fold, { glyphs: [1, 1, 1], colour: [0, 2, 3], cls: [WALL, WALL, WALL] })
+    foldFrame(fold, { glyphs: [1, 1, 1], colour: [1, 2, 4], cls: [WALL, WALL, ROAD] })
+    const res = finishFold(fold)
+    const wall = res.perClass.find((r) => r.name === 'wall')
+    // Cells 0 and 1 held their class over the one pair; cell 2 is an EDGE.
+    expect(wall.faceHeld).toBe(2)
+    expect(wall.faceFlip ?? wall.faceHeld).toBeDefined()
+    expect(wall.faceFlipPct).toBe(50)
+    expect(res.edge.faceHeld).toBe(0)
+    expect(res.edge.faceFlipPct).toBe(0)
+  })
+
+  it('reads zero for a picture whose colours never move', () => {
+    const fold = createFold(2, 1, { mono: false, whiteIndex: WHITE })
+    for (let i = 0; i < 3; i++) {
+      foldFrame(fold, { glyphs: [1, 1], colour: [2, 3], cls: [WALL, WALL] })
+    }
+    const res = finishFold(fold)
+    const wall = res.perClass.find((r) => r.name === 'wall')
+    expect(wall.faceHeld).toBe(4)
+    expect(wall.faceFlipPct).toBe(0)
+  })
+
+  it('is not measured in mono, which has no colour index', () => {
+    const res = foldMono()
+    expect(res.total.faceHeld).toBe(0)
+    expect(res.total.faceFlipPct).toBe(0)
+  })
+})

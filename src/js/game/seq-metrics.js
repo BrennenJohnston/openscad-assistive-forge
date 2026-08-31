@@ -288,6 +288,13 @@ export function createFold(cols, rows, options = {}) {
     classMoveLitEvents: 0,
     classMoveGlyphHeld: 0,
     mismatch: createMismatch(options.vocabularies ?? null, cells),
+    // CW-92 (D-127): the face flip. `faceHeld` counts (cell, frame pair) slots
+    // where the class did NOT move; `faceFlip` counts how many of those took a
+    // different colour index anyway. `prevClass2` is a second copy of the last
+    // frame's classes because `prevClass` is overwritten before this runs.
+    prevClass2: null,
+    faceHeld: new Int32Array(cells),
+    faceFlip: new Int32Array(cells),
   };
 }
 
@@ -385,6 +392,22 @@ export function foldFrame(fold, frame) {
   fold.whiteShare.push(white / n);
   fold.reverseShare.push(reverse / n);
 
+  // ★★★ CW-92: THE FACE FLIP, which is the owner's D-127 made a number. Per
+  // class, the share of cells whose COLOUR INDEX changed in a frame pair whose
+  // CLASS did not. A cell that swept onto a different surface is allowed to
+  // change colour; a cell still looking at the same wall is not, and a whole
+  // face crossing a palette boundary together is what the owner photographed.
+  //
+  // Mono has no colour index, so this row exists only for a palette fold.
+  if (!fold.mono && fold.prevDrive && fold.prevClass2) {
+    for (let i = 0; i < n; i++) {
+      if (cls[i] !== fold.prevClass2[i]) continue;
+      fold.faceHeld[i]++;
+      if (drive[i] !== fold.prevDrive[i]) fold.faceFlip[i]++;
+    }
+  }
+  if (!fold.mono) fold.prevClass2 = Uint8Array.from(cls);
+
   const mm = fold.mismatch;
   if (mm) {
     let frameCount = 0;
@@ -467,6 +490,9 @@ export function foldFrame(fold, frame) {
  * @property {number} mismatch (cell, frame) slots where the drawn glyph was
  *   not in the cell's own class vocabulary (CW-93). Zero in a healthy picture,
  *   and zero when the fold was given no vocabularies.
+ * @property {number} faceFlipPct of the cell-frames where the class stayed put,
+ *   the share that changed COLOUR INDEX anyway (CW-92, D-127). Colour only.
+ * @property {number} faceHeld the denominator of the row above
  * @property {number} meanGlyphPersistenceFrames mean run length in frames
  */
 
@@ -530,6 +556,8 @@ export function finishFold(fold, options = {}) {
     row.reverseOrWhiteToggle += fold.reverseOrWhiteToggle[i];
     if (fold.glyphChange[i] > pairs * 0.5) row.churn++;
     if (fold.mismatch) row.mismatch += fold.mismatch.perCell[i];
+    row.faceHeld += fold.faceHeld[i];
+    row.faceFlip += fold.faceFlip[i];
     row.runSum += fold.runSum[i];
     row.runCount += fold.runCount[i];
   }
@@ -546,6 +574,8 @@ export function finishFold(fold, options = {}) {
     total.reverseOrWhiteToggle += row.reverseOrWhiteToggle;
     total.churn += row.churn;
     total.mismatch += row.mismatch;
+    total.faceHeld += row.faceHeld;
+    total.faceFlip += row.faceFlip;
     total.runSum += row.runSum;
     total.runCount += row.runCount;
   }
@@ -605,6 +635,8 @@ function emptyRow(cls) {
     reverseOrWhiteToggle: 0,
     churn: 0,
     mismatch: 0,
+    faceHeld: 0,
+    faceFlip: 0,
     runSum: 0,
     runCount: 0,
   };
@@ -626,6 +658,10 @@ function summariseRow(row, pairs, triples) {
     // "small" at 0.004 %, and the whole point of this column is that any
     // number above zero is a cell drawing a character it is not allowed.
     mismatch: row.mismatch,
+    // CW-92: of the cell-frames where this class STAYED under the cell, the
+    // share that changed colour anyway. The owner's face flip, as a number.
+    faceFlipPct: pct(row.faceFlip, row.faceHeld),
+    faceHeld: row.faceHeld,
     meanGlyphPersistenceFrames: round2(row.runSum / Math.max(1, row.runCount)),
   };
 }
