@@ -51,6 +51,9 @@ import {
   buildRoadwayIndex,
   isDrawnRoadway,
   rectsOverlap,
+  findRoute,
+  steerHeading,
+  segmentClear,
 } from '../../../src/js/game/walk-controls.js'
 import {
   parseCityExtract,
@@ -322,6 +325,166 @@ describe('stepWalk — collision', () => {
     const out = stepWalk(state, { forward: 1 }, 0.1, grid)
     expect(out.moved).toBe(false)
     expect(state.y).toBe(y0)
+  })
+})
+
+/** Axis-aligned rectangle ring for fixture walls that are not squares. */
+function rectRing(cx, cy, halfX, halfY) {
+  return [
+    pt(cx - halfX, cy - halfY),
+    pt(cx + halfX, cy - halfY),
+    pt(cx + halfX, cy + halfY),
+    pt(cx - halfX, cy + halfY),
+    pt(cx - halfX, cy - halfY),
+  ]
+}
+
+const wall = (id, cx, cy, halfX, halfY) => ({
+  type: 'way',
+  id,
+  tags: { building: 'yes', height: '10' },
+  geometry: rectRing(cx, cy, halfX, halfY),
+})
+
+describe("findRoute — the tour's pathfinding (CW-87)", () => {
+  const legsClear = (grid, route) => {
+    for (let i = 1; i < route.length; i++) {
+      if (
+        !segmentClear(
+          grid,
+          route[i - 1].x,
+          route[i - 1].y,
+          route[i].x,
+          route[i].y
+        )
+      ) {
+        return false
+      }
+    }
+    return true
+  }
+  const length = (route) => {
+    let sum = 0
+    for (let i = 1; i < route.length; i++) {
+      sum += Math.hypot(
+        route[i].x - route[i - 1].x,
+        route[i].y - route[i - 1].y
+      )
+    }
+    return sum
+  }
+
+  it('routes open ground in a near-straight line', () => {
+    const grid = buildCollisionGrid(testModel())
+    const route = findRoute(grid, { x: 0, y: -20 }, { x: 0, y: 20 })
+    expect(route).not.toBeNull()
+    expect(legsClear(grid, route)).toBe(true)
+    expect(length(route)).toBeLessThan(42)
+    const last = route[route.length - 1]
+    expect(Math.hypot(last.x, last.y - 20)).toBeLessThanOrEqual(1.4)
+  })
+
+  it('★★ detours around a wall, every leg body-clear', () => {
+    // The testModel building spans x 15..25, y -5..5: dead across the
+    // straight line from (0,0) to (40,0).
+    const grid = buildCollisionGrid(testModel())
+    const route = findRoute(grid, { x: 0, y: 0 }, { x: 40, y: 0 })
+    expect(route).not.toBeNull()
+    expect(legsClear(grid, route)).toBe(true)
+    // The detour law stated geometrically: the building spans y -5..5, so a
+    // route that honestly goes AROUND it must swing wider than the flank
+    // plus the walker's body. (A length-versus-chord bar was tried first
+    // and measured knife-edge: the goal radius shaves the return leg.)
+    const widest = Math.max(...route.map((p) => Math.abs(p.y)))
+    expect(widest).toBeGreaterThan(5.2)
+    const last = route[route.length - 1]
+    expect(Math.hypot(last.x - 40, last.y)).toBeLessThanOrEqual(1.4)
+    expect(length(route)).toBeGreaterThan(40)
+  })
+
+  it('returns null for a target no route can reach', () => {
+    const grid = buildCollisionGrid(testModel())
+    // The building's own centre, with a goal radius too small to stand
+    // outside it.
+    const route = findRoute(
+      grid,
+      { x: 0, y: 0 },
+      { x: 20, y: 0 },
+      { goalRadiusM: 0.5 }
+    )
+    expect(route).toBeNull()
+  })
+
+  it('returns null past the expansion budget instead of hanging', () => {
+    const grid = buildCollisionGrid(testModel())
+    const route = findRoute(
+      grid,
+      { x: 0, y: -20 },
+      { x: 0, y: 20 },
+      { maxExpandedCells: 5 }
+    )
+    expect(route).toBeNull()
+  })
+
+  it('starts from the nearest walkable cell when pressed against a wall', () => {
+    const grid = buildCollisionGrid(testModel())
+    // 14.5 is inside the body probe's reach of the x=15 face.
+    const route = findRoute(grid, { x: 14.5, y: 0 }, { x: 0, y: 0 })
+    expect(route).not.toBeNull()
+    expect(legsClear(grid, route)).toBe(true)
+  })
+})
+
+describe("steerHeading — street-following's fan (CW-87)", () => {
+  it('holds a clear bearing exactly', () => {
+    const grid = buildCollisionGrid(testModel())
+    expect(steerHeading(grid, 0, -20, 0)).toBe(0)
+  })
+
+  it('★★ steers along a wall instead of into it', () => {
+    // Close to the building face at x=15, facing it square-on: ahead is
+    // short, but the pavement runs on both sides.
+    const grid = buildCollisionGrid(testModel())
+    const h = steerHeading(grid, 13.5, 0, Math.PI / 2)
+    expect(h).not.toBeNull()
+    const away = Math.abs(h - Math.PI / 2)
+    expect(away).toBeGreaterThan(Math.PI / 4)
+    // And the chosen bearing is genuinely walkable for a stretch.
+    const probe = 3
+    expect(
+      segmentClear(
+        grid,
+        13.5,
+        0,
+        13.5 + Math.sin(h) * probe,
+        0 + Math.cos(h) * probe
+      )
+    ).toBe(true)
+  })
+
+  it('★★ returns null in a dead end, which is when auto-walk may stop', () => {
+    // A U of walls 1.4 m out on three sides; the opening is behind, where
+    // the forward fan never looks.
+    const model = parseCityExtract(
+      {
+        elements: [
+          wall(11, 0, 1.9, 8, 0.5),
+          wall(12, 1.9, 0, 0.5, 8),
+          wall(13, -1.9, 0, 0.5, 8),
+        ],
+      },
+      { center: CENTER }
+    )
+    const grid = buildCollisionGrid(model)
+    expect(steerHeading(grid, 0, 0, 0)).toBeNull()
+  })
+})
+
+describe('segmentClear — the body-swept segment probe (CW-87)', () => {
+  it('tells a clear leg from one through a wall', () => {
+    const grid = buildCollisionGrid(testModel())
+    expect(segmentClear(grid, 0, -20, 0, 20)).toBe(true)
+    expect(segmentClear(grid, 0, 0, 40, 0)).toBe(false)
   })
 })
 

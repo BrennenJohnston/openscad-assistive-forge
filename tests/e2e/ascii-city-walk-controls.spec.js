@@ -1896,17 +1896,17 @@ test.describe('ASCII City Walk — look without dragging, walk without holding (
     expect((await gaze(page)).autoWalk).toBe(false)
   })
 
-  test('★★ auto-walk stops at a wall and says so', async ({ page }) => {
+  test('★★ auto-walk follows the street: an obstacle steers it, never stops it (CW-87)', async ({
+    page,
+  }) => {
     test.setTimeout(120000)
     await launchGame(page)
     await enterCity(page)
 
     // Face the nearest obstacle along a CARDINAL bearing, using the game's
-    // own collision grid to find it - no magic coordinates. Cardinal
-    // matters: stepWalk's wall slide is world-axis-aligned, so an oblique
-    // approach glides along a facade with moved: true forever, while a
-    // cardinal bearing has one hop component exactly zero - any block is a
-    // dead stop, which is the condition this case exists to trigger.
+    // own collision grid - the pose that USED to trigger the blocked stop
+    // before street-following (CW-81's original wall case). Now the fan
+    // must steer along the clearest pavement and keep walking.
     const posed = await page.evaluate(() => {
       const g = window.__cityWalkGame
       const st = g.walkState
@@ -1924,6 +1924,66 @@ test.describe('ASCII City Walk — look without dragging, walk without holding (
       return null
     })
     expect(posed).not.toBeNull()
+
+    const start = await gaze(page)
+    await page.keyboard.press('KeyN')
+    await expect(announcer(page)).toContainText('Auto-walk on')
+    // The walker must travel measurably FARTHER than the obstacle it was
+    // aimed at - proof it went around, not into.
+    await expect
+      .poll(
+        async () => {
+          const g = await gaze(page)
+          return Math.hypot(g.x - start.x, g.y - start.y)
+        },
+        { timeout: 90000 }
+      )
+      .toBeGreaterThan(posed.d + 2)
+    const g = await gaze(page)
+    expect(g.autoWalk).toBe(true)
+    await expect(announcer(page)).not.toContainText(
+      'Auto-walk stopped. Something is in the way.'
+    )
+    await page.keyboard.press('KeyN')
+  })
+
+  test('★★ a true dead end still stops auto-walk, and says so (CW-87)', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await launchGame(page)
+    await enterCity(page)
+
+    // Build the dead end with the game's own obstacle stamp: a U of walls
+    // 1.1 m out on three sides, the opening behind, where the forward fan
+    // never looks. This is the one case the blocked sentence is for now.
+    await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const st = g.walkState
+      st.headingRad = 0
+      g.lookTarget.headingRad = 0
+      g.collision.blockRect({
+        x: st.x,
+        y: st.y + 1.6,
+        halfLengthM: 6,
+        halfWidthM: 0.5,
+        rotationRad: Math.PI / 2,
+      })
+      g.collision.blockRect({
+        x: st.x + 1.6,
+        y: st.y,
+        halfLengthM: 6,
+        halfWidthM: 0.5,
+        rotationRad: 0,
+      })
+      g.collision.blockRect({
+        x: st.x - 1.6,
+        y: st.y,
+        halfLengthM: 6,
+        halfWidthM: 0.5,
+        rotationRad: 0,
+      })
+    })
 
     await page.keyboard.press('KeyN')
     await expect(announcer(page)).toContainText('Auto-walk on')
@@ -2045,6 +2105,147 @@ test.describe('ASCII City Walk — look without dragging, walk without holding (
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
       .include('#cityWalkToolbar')
+      .analyze()
+    expectOnlyAllowedViolations(results)
+  })
+})
+
+test.describe('ASCII City Walk — the tour: take me there (CW-87)', () => {
+  const announcer = (page) => page.locator('#cityWalkAnnouncer')
+  const tourState = (page) =>
+    page.evaluate(() => {
+      const g = window.__cityWalkGame
+      return {
+        tour: g.tour ? { name: g.tour.name, at: g.tour.at } : null,
+        x: g.walkState.x,
+        y: g.walkState.y,
+      }
+    })
+
+  test('★★ I walks the player to the Great Wheel, and arrival is the waypoint touch', async ({
+    page,
+  }) => {
+    // T7: the live region is watched over the whole route; the sim-time
+    // window is sized for the software renderer (CW-78's lesson - a
+    // dt-clamped walker covers sim metres at a fraction of real time).
+    test.setTimeout(180000)
+    await launchGame(page)
+    await enterCity(page)
+
+    await page.keyboard.press('KeyI')
+    await expect(announcer(page)).toContainText(
+      'Taking you to Seattle Great Wheel'
+    )
+    await expect(announcer(page)).toContainText(
+      'Waypoint reached: Seattle Great Wheel.',
+      { timeout: 120000 }
+    )
+    const s = await tourState(page)
+    expect(s.tour).toBeNull()
+    // The brief's own acceptance: within 3 m of the waypoint.
+    const d = await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const spot = g.waypointSpots.find((w) => w.name === 'Seattle Great Wheel')
+      return Math.hypot(spot.x - g.walkState.x, spot.y - g.walkState.y)
+    })
+    expect(d).toBeLessThan(3)
+  })
+
+  test('★★ every stop rule stops the tour: I again, Escape, a walk key', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await launchGame(page)
+    await enterCity(page)
+
+    await page.keyboard.press('KeyI')
+    await expect(announcer(page)).toContainText('Taking you to')
+    await page.keyboard.press('KeyI')
+    await expect(announcer(page)).toContainText('Tour stopped.')
+    expect((await tourState(page)).tour).toBeNull()
+
+    await page.keyboard.press('KeyI')
+    await expect(announcer(page)).toContainText('Taking you to')
+    await page.keyboard.press('Escape')
+    await expect(announcer(page)).toContainText('Tour stopped.')
+    expect((await tourState(page)).tour).toBeNull()
+    // And Escape stopped the tour, not the game.
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'street view'
+    )
+
+    await page.keyboard.press('KeyI')
+    await expect(announcer(page)).toContainText('Taking you to')
+    await page.keyboard.press('KeyW')
+    await expect(announcer(page)).toContainText('Tour stopped.')
+    expect((await tourState(page)).tour).toBeNull()
+  })
+
+  test('the legend button starts the tour from the map, closing it', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await launchGame(page)
+    await enterCity(page)
+
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
+    await page.locator('#cityWalkTourBtn').click()
+    await expect(announcer(page)).toContainText('Taking you to')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'street view'
+    )
+    await page.keyboard.press('Escape')
+    await expect(announcer(page)).toContainText('Tour stopped.')
+  })
+
+  test('★★ a real bend on the route is spoken as a turn', async ({ page }) => {
+    test.setTimeout(120000)
+    await launchGame(page)
+    await enterCity(page)
+
+    // A hand-laid two-leg route with a 90-degree bend, injected as the
+    // running tour so the REAL vertex-advance path speaks: leg one 2.5 m
+    // ahead, leg two 6 m to the right of it. Open ground at the spawn.
+    await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const w = g.walkState
+      const h = w.headingRad
+      const ax = w.x + Math.sin(h) * 2.5
+      const ay = w.y + Math.cos(h) * 2.5
+      const bx = ax + Math.sin(h + Math.PI / 2) * 6
+      const by = ay + Math.cos(h + Math.PI / 2) * 6
+      g.tour = {
+        name: 'Test bend',
+        route: [
+          { x: w.x, y: w.y },
+          { x: ax, y: ay },
+          { x: bx, y: by },
+        ],
+        at: 1,
+        holding: false,
+      }
+    })
+    await expect(announcer(page)).toContainText(/Turn right/, {
+      timeout: 60000,
+    })
+  })
+
+  test('axe: the legend with the tour button, and its hit target', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkLegend')).toBeVisible()
+
+    const b = await page.locator('#cityWalkTourBtn').boundingBox()
+    expect(b.height).toBeGreaterThanOrEqual(44)
+    expect(b.width).toBeGreaterThanOrEqual(44)
+
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .include('#cityWalkLegend')
       .analyze()
     expectOnlyAllowedViolations(results)
   })

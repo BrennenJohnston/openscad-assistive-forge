@@ -22,6 +22,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Take me there** (CW-87) - press I and the game walks you to the landmark selected in the
+  legend: a real route over walkable ground, found on the city's own collision map, followed at
+  walking speed with each real bend spoken as a turn onto its street by name. Arriving is the
+  same waypoint touch a walk on foot earns - one arrival, one sentence. I again, Escape, or any
+  walk key hands the wheel straight back, and the legend carries a Take me there button for the
+  mouse. Auto-walk also learned to follow the street: an obstacle ahead steers it along the
+  clearest pavement, and only a true dead end stops it and says so
+
 - **Auto-walk** (CW-81) - press N and the walker walks forward on its own until something stops
   it: N again, Escape, any walk key, or an obstacle in the way - and it says so out loud each
   time. While it walks, Arrow Up and Arrow Down look up and down, and touching W A S D takes the

@@ -810,6 +810,10 @@ export function buildCollisionGrid(model, options = {}) {
     cols,
     rows,
     cellM,
+    // CW-87: the tour's A* needs cell centres in world metres, which needs
+    // the grid's origin - isBlocked alone cannot be inverted.
+    originX,
+    originY,
     isBlocked(x, y) {
       const cx = Math.floor((x - originX) / cellM);
       const cy = Math.floor((y - originY) / cellM);
@@ -1051,6 +1055,236 @@ export function findClearHeading(collision, x, y, options = {}) {
     }
   }
   return bestHeading;
+}
+
+/**
+ * CW-87 street-following: where auto-walk should steer when the way ahead
+ * closes. Probes a fan of bearings within 90 degrees either side of the
+ * current one for clear run (body circle, sampled every stepM out to
+ * lookM); the longest run wins, with a small straightness bias so the walk
+ * hugs its own direction instead of ping-ponging between near-equal
+ * corridors. Returns null when nothing in the fan clears minM - a true
+ * dead end, the one case left for auto-walk's blocked stop.
+ *
+ * @param {{isBlocked: (x:number, y:number) => boolean}} collision
+ * @param {number} x @param {number} y @param {number} headingRad
+ * @returns {number|null} the bearing to steer toward, or null
+ */
+export function steerHeading(collision, x, y, headingRad, options = {}) {
+  const lookM = options.lookM ?? 8;
+  const minM = options.minM ?? 2.2;
+  const stepM = options.stepM ?? 0.4;
+  let best = null;
+  let bestScore = -Infinity;
+  for (let deg = -90; deg <= 90; deg += 15) {
+    const h = headingRad + (deg * Math.PI) / 180;
+    const sin = Math.sin(h);
+    const cos = Math.cos(h);
+    let run = 0;
+    while (run < lookM) {
+      const next = run + stepM;
+      if (isCircleBlocked(collision, x + sin * next, y + cos * next)) break;
+      run = next;
+    }
+    if (run < minM) continue;
+    const score = run - Math.abs(deg) * 0.02;
+    if (score > bestScore) {
+      bestScore = score;
+      best = h;
+    }
+  }
+  return best;
+}
+
+/**
+ * Clear run along one bearing, body circle, sampled every stepM out to
+ * maxM - the "is the way ahead closing" probe street-following gates on,
+ * so it only steers when there is something to steer around and the
+ * player's own turning is never fought over open ground.
+ */
+export function clearRunAhead(collision, x, y, headingRad, maxM, stepM = 0.4) {
+  const sin = Math.sin(headingRad);
+  const cos = Math.cos(headingRad);
+  let run = 0;
+  while (run < maxM) {
+    const next = run + stepM;
+    if (isCircleBlocked(collision, x + sin * next, y + cos * next)) break;
+    run = next;
+  }
+  return run;
+}
+
+/**
+ * True when a walker's body can travel the straight segment without
+ * touching anything - the same circle stepWalk protects, sampled finely
+ * enough that no cell the body would cross is skipped.
+ */
+export function segmentClear(collision, x0, y0, x1, y1) {
+  const dist = Math.hypot(x1 - x0, y1 - y0);
+  const steps = Math.max(1, Math.ceil(dist / (PLAYER_RADIUS_M / 2)));
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    if (isCircleBlocked(collision, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * CW-87: a walkable route from one point to another over the collision
+ * grid - A* on cell centres with the walker's own body probe deciding
+ * walkability, diagonals allowed only when both flanking orthogonal cells
+ * are walkable (a disc cannot cut a corner stepWalk would refuse), then
+ * greedily straightened: each kept waypoint is the farthest path point the
+ * body can reach in a straight line, so the walker walks streets, not
+ * staircases.
+ *
+ * Returns world-space waypoints ending within goalRadiusM of `to`, or
+ * null when no route exists inside the expansion budget - the budget is
+ * what bounds a cross-city search in time, and a null is a sentence to the
+ * player, never a hang.
+ *
+ * @param {{cols:number, rows:number, cellM:number, originX:number,
+ *          originY:number, isBlocked:(x:number,y:number)=>boolean}} collision
+ * @param {{x:number, y:number}} from
+ * @param {{x:number, y:number}} to
+ * @returns {{x:number, y:number}[]|null}
+ */
+export function findRoute(collision, from, to, options = {}) {
+  if (!collision || !Number.isFinite(collision.originX)) return null;
+  const goalM = options.goalRadiusM ?? 1.4;
+  const budget = options.maxExpandedCells ?? 400000;
+  const { cols, rows, cellM, originX, originY } = collision;
+  const wxOf = (c) => originX + (c % cols) * cellM + cellM / 2;
+  const wyOf = (c) => originY + Math.floor(c / cols) * cellM + cellM / 2;
+  const cellOf = (x, y) => {
+    const cx = Math.floor((x - originX) / cellM);
+    const cy = Math.floor((y - originY) / cellM);
+    if (cx < 0 || cy < 0 || cx >= cols || cy >= rows) return -1;
+    return cy * cols + cx;
+  };
+  const walkable = (c) =>
+    c >= 0 && !isCircleBlocked(collision, wxOf(c), wyOf(c));
+
+  // The walker may stand pressed against something (its own cell centre
+  // blocked for the body probe): start from the nearest walkable centre.
+  let start = -1;
+  outer: for (let ring = 0; ring <= 3; ring++) {
+    for (let dy = -ring; dy <= ring; dy++) {
+      for (let dx = -ring; dx <= ring; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== ring) continue;
+        const c = cellOf(from.x + dx * cellM, from.y + dy * cellM);
+        if (walkable(c)) {
+          start = c;
+          break outer;
+        }
+      }
+    }
+  }
+  if (start < 0) return null;
+
+  const g = new Map();
+  const cameFrom = new Map();
+  const heur = (c) => Math.hypot(wxOf(c) - to.x, wyOf(c) - to.y);
+  // Binary heap of [f, cell].
+  const heap = [[heur(start), start]];
+  const push = (entry) => {
+    heap.push(entry);
+    let i = heap.length - 1;
+    while (i > 0) {
+      const p = (i - 1) >> 1;
+      if (heap[p][0] <= heap[i][0]) break;
+      [heap[p], heap[i]] = [heap[i], heap[p]];
+      i = p;
+    }
+  };
+  const pop = () => {
+    const top = heap[0];
+    const last = heap.pop();
+    if (heap.length) {
+      heap[0] = last;
+      let i = 0;
+      for (;;) {
+        const l = i * 2 + 1;
+        const r = l + 1;
+        let m = i;
+        if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
+        if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
+        if (m === i) break;
+        [heap[m], heap[i]] = [heap[i], heap[m]];
+        i = m;
+      }
+    }
+    return top;
+  };
+  g.set(start, 0);
+  const closed = new Set();
+  let goal = -1;
+  let expanded = 0;
+  while (heap.length) {
+    const [, current] = pop();
+    if (closed.has(current)) continue;
+    closed.add(current);
+    if (++expanded > budget) return null;
+    if (Math.hypot(wxOf(current) - to.x, wyOf(current) - to.y) <= goalM) {
+      goal = current;
+      break;
+    }
+    const cx = current % cols;
+    const cy = Math.floor(current / cols);
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        const nx = cx + dx;
+        const ny = cy + dy;
+        if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+        const n = ny * cols + nx;
+        if (closed.has(n) || !walkable(n)) continue;
+        if (dx !== 0 && dy !== 0) {
+          if (!walkable(cy * cols + nx) || !walkable(ny * cols + cx)) continue;
+        }
+        const step = dx !== 0 && dy !== 0 ? cellM * Math.SQRT2 : cellM;
+        const tentative = g.get(current) + step;
+        if (tentative < (g.get(n) ?? Infinity)) {
+          g.set(n, tentative);
+          cameFrom.set(n, current);
+          push([tentative + heur(n), n]);
+        }
+      }
+    }
+  }
+  if (goal < 0) return null;
+
+  const cells = [goal];
+  while (cells[cells.length - 1] !== start) {
+    cells.push(cameFrom.get(cells[cells.length - 1]));
+  }
+  cells.reverse();
+  const points = cells.map((c) => ({ x: wxOf(c), y: wyOf(c) }));
+
+  const route = [points[0]];
+  let at = 0;
+  while (at < points.length - 1) {
+    let far = at + 1;
+    for (let j = points.length - 1; j > at + 1; j--) {
+      if (
+        segmentClear(
+          collision,
+          points[at].x,
+          points[at].y,
+          points[j].x,
+          points[j].y
+        )
+      ) {
+        far = j;
+        break;
+      }
+    }
+    route.push(points[far]);
+    at = far;
+  }
+  return route;
 }
 
 /**

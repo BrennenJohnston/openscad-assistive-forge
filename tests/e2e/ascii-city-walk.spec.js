@@ -1036,7 +1036,11 @@ test.describe('ASCII City Walk — looking around (CW-13)', () => {
       'Drag with the mouse: move the map in map view'
     )
     await expect(page.locator('#cityWalkHelpPanel')).toContainText(
-      'N: auto-walk forward until something stops you'
+      'N: auto-walk forward, following the street, until something stops you'
+    )
+    // CW-87: and the tour's line beside it.
+    await expect(page.locator('#cityWalkHelpPanel')).toContainText(
+      'I: walk to the selected landmark, turn by turn'
     )
     // ★ AND THE MAP LINE TEACHES W A S D, which it always should have. Those
     // keys have panned the map since the map existed - the same actions the
