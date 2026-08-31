@@ -54,7 +54,11 @@ import {
   SPACE_INDEX,
   FIRST_CHAR_CODE,
 } from './_hfm-paint.js';
-import { anchoredGlyph, buildLadders } from './game/city-glyph-field.js';
+import {
+  anchoredGlyph,
+  buildLadders,
+  FIELD_LEVELS,
+} from './game/city-glyph-field.js';
 
 // Tuning knobs
 // _MIN_INTERVAL_MS      — conversion throttle ceiling (~30 fps while dirty)
@@ -909,6 +913,12 @@ function _sampleOnGpu(
     hysteresis: st.hysteresis,
     inkBudget: usePalette ? st.inkBudget : null,
     paletteWhiteIndex: st.paletteWhiteIndex,
+    // CW-91: the anchored ladders, and whether to use them. The field byte the
+    // shader indexes them with is already in the class texture's green channel,
+    // so there is nothing else to send.
+    ladders: st.classLadders?.size ? st.classLadders : null,
+    fieldLevels: FIELD_LEVELS,
+    anchored: Boolean(st.anchoredGlyphs),
   });
 }
 
@@ -1188,16 +1198,16 @@ function _renderFrame(
  */
 function _gpuPathInForce(st) {
   if (!st.gpuSample || st.benchLegacyCpuSample) return false;
-  // CW-86: the anchored pick is an INDEX into a class's ladder from a byte the
-  // shader would also have to be handed, not the nearest-shape search the
-  // shader does - and that byte has no room in the packing the memory already
-  // uses (_hfm-gpu.js). Carrying it means a second class texture, which is a
-  // cost worth paying only once the anchored picture has earned its place.
-  // This is CW-68's own precedent: ship the CPU path first and let the
-  // instrument decide. A bench line taken with anchoring on is therefore a CPU
-  // line, and says so - it is not the price of anchoring, it is the price of
-  // anchoring before the shader learns it.
-  if (st.anchoredGlyphs) return false;
+  // ★★★ CW-91: ANCHORING NO LONGER FORCES THE CPU, AND THE SECOND TEXTURE
+  // CW-86 THOUGHT IT NEEDED DOES NOT EXIST. CW-86 read this line as "the field
+  // byte has no room in the packing the memory already uses", and shipped
+  // anchoring off because forcing the CPU halved the frame rate. But the byte
+  // was never in the memory's packing: the CLASS PASS writes it, into the GREEN
+  // channel of the very texture this path already binds as uClass
+  // (city-class-pass.js's fragment shader writes vec4(id, field, depth, 1)).
+  // The shader simply never read .g. It does now, and the ladder it indexes is
+  // a 16 x 8 byte table - so the whole release is a dependent read and a lookup
+  // where there used to be a nearest-shape search over a few dozen glyphs.
   return st.gpuPass?.available !== false;
 }
 function _probeLumArray(st, cellCount) {
@@ -1345,7 +1355,17 @@ function _convertOnCpu(
             sumG += imgData[pidx + 1];
             sumB += imgData[pidx + 2];
           }
-          if (useIntensity) sumLum += v[i];
+          // ★★★ `wantsLum`, NOT `useIntensity` (CW-91; reported by CW-86 and
+          // not fixed there). The tap-plan branch above asks the right
+          // question and this one asked a narrower one, so in PALETTE mode
+          // with an ink budget - where `useIntensity` is false but the budget
+          // needs the cell's absolute luminance - this branch accumulated
+          // nothing and every cell came out of `cellLum` as ZERO. Latent only
+          // because the shipped floor is 0, so `cellLum < floor` is false for
+          // all of them; raise the floor by any amount and this branch blanks
+          // the entire picture while the other one draws it. The branch is
+          // reached whenever the tap plan is off (`setBenchLegacy({taps})`).
+          if (wantsLum) sumLum += v[i];
         }
       }
       // The cell's brightness BEFORE the contrast curves reshape v for glyph

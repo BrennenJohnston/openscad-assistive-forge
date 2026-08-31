@@ -39,6 +39,9 @@ describe('CW-86 the anchored class set', () => {
     // safe: the test is outside the cycle, so it may import both.
     expect(ANCHORED_CLASSES).toEqual([
       SURFACE_CLASS.GROUND,
+      SURFACE_CLASS.BUILDING_WALL,
+      SURFACE_CLASS.BUILDING_ROOF,
+      SURFACE_CLASS.STOREFRONT,
       SURFACE_CLASS.SIDEWALK,
       SURFACE_CLASS.GREEN,
     ])
@@ -50,13 +53,26 @@ describe('CW-86 the anchored class set', () => {
     expect(ANCHORED_CLASSES).not.toContain(SURFACE_CLASS.SKY)
   })
 
-  it('★★★ leaves the FACADE to the screen pick, which is the release verdict', () => {
-    // Measured: the lattice that holds a wall still is the lattice that erases
-    // its windows, because a window is about one cell across at 30 %. A later
-    // release that re-anchors the facade must move this line AND bring the
-    // table that justifies it.
-    expect(ANCHORED_CLASSES).not.toContain(SURFACE_CLASS.BUILDING_WALL)
-    expect(ANCHORED_CLASSES).not.toContain(SURFACE_CLASS.STOREFRONT)
+  it('★★★ ANCHORS the facade, which the owner chose and which costs steadiness', () => {
+    // CW-86 asserted the opposite here, and said in as many words that a later
+    // release re-anchoring the facade must move this line AND bring the table
+    // that justifies it. Here is the table, measured at the Seattle spawn on a
+    // 24-frame walk, 30 %, mono, GPU path both sides (CW-91):
+    //
+    //   class        screen pick   anchored at 64
+    //   ground       29.98 %       0.60 %
+    //   sidewalk      0.12 %       0.00 %
+    //   storefront    4.84 %       5.14 %
+    //   wall          5.17 %       7.98 %
+    //
+    // The wall is WORSE anchored, exactly as CW-86 measured, and the owner
+    // picked lattice 64 anyway (CW-Q90) because at 64 the windows read. It is
+    // a look decision taken on a photograph, not a steadiness one. Anyone
+    // tempted to coarsen the lattice to win the wall column back is undoing
+    // the choice the owner made with that picture in front of them.
+    expect(ANCHORED_CLASSES).toContain(SURFACE_CLASS.BUILDING_WALL)
+    expect(ANCHORED_CLASSES).toContain(SURFACE_CLASS.BUILDING_ROOF)
+    expect(ANCHORED_CLASSES).toContain(SURFACE_CLASS.STOREFRONT)
   })
 
   it('anchors the dithered surfaces, where there is no structure to lose', () => {
@@ -64,7 +80,10 @@ describe('CW-86 the anchored class set', () => {
     expect(ANCHORED_CLASSES).toContain(SURFACE_CLASS.SIDEWALK)
     expect(ANCHORED_CLASSES).toContain(SURFACE_CLASS.GREEN)
     expect(isAnchoredClass(SURFACE_CLASS.GROUND)).toBe(true)
-    expect(isAnchoredClass(SURFACE_CLASS.BUILDING_WALL)).toBe(false)
+    // The road is the honest negative now: it carries neither a uv attribute
+    // nor a map, so there is no surface coordinate to anchor it in.
+    expect(isAnchoredClass(SURFACE_CLASS.ROAD)).toBe(false)
+    expect(isAnchoredClass(SURFACE_CLASS.TREE)).toBe(false)
   })
 })
 
@@ -164,10 +183,14 @@ describe('CW-86 the ladder', () => {
     const lookups = new Map([
       [SURFACE_CLASS.GROUND, { glyphIds: [0, 3, 5] }],
       [SURFACE_CLASS.BUILDING_WALL, { glyphIds: [0, 3, 5] }],
+      [SURFACE_CLASS.TREE, { glyphIds: [0, 3, 5] }],
     ])
     const ladders = buildLadders(lookups, glyphVectors, 4)
     expect(ladders.has(SURFACE_CLASS.GROUND)).toBe(true)
-    expect(ladders.has(SURFACE_CLASS.BUILDING_WALL)).toBe(false)
+    // The facade joined the set at CW-91; a tree never will - it has no
+    // surface texture worth reading and it is not in the owner's pick.
+    expect(ladders.has(SURFACE_CLASS.BUILDING_WALL)).toBe(true)
+    expect(ladders.has(SURFACE_CLASS.TREE)).toBe(false)
   })
 
   it('an empty vocabulary yields no ladder rather than a broken one', () => {

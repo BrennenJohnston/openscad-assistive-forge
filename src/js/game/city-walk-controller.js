@@ -2211,7 +2211,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       game.classPass?.setFieldClasses?.(ids);
       game.altView.invalidate();
     };
-    game.setAnchoredGlyphs(false);
+    // ★★★ CW-91: ON, and it is the game's default now (CW-Q90). CW-86 built
+    // this and shipped it off for one reason - the anchored pick forced the CPU
+    // converter and halved the frame rate - and that reason is gone: the glyph
+    // shader reads the field byte out of the class texture's green channel and
+    // indexes the ladder itself. The owner picked the facade at lattice 64
+    // knowing it does not steady a wall, because at 64 the windows read.
+    game.setAnchoredGlyphs(true);
 
     // CW-71: colour mode's own bright layer. Per instance; the main app's Alt
     // View is not given one. The thresholds are the owner's (CW-Q79).

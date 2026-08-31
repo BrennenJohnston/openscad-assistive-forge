@@ -8,6 +8,7 @@ import {
   enterCity,
 } from './helpers/city-walk.js'
 import { SURFACE_CLASS } from '../../src/js/game/city-class-pass.js'
+import { ANCHORED_CLASSES } from '../../src/js/game/city-glyph-field.js'
 
 useCityWalkFixtures()
 
@@ -2028,8 +2029,26 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
    * held still: the world's own clock is stopped first, so the only thing
    * that differs between two frames is the pose this sets.
    */
-  async function glyphChangesOverCreep(page, steps = 4) {
-    return page.evaluate(async (n) => {
+  /**
+   * ★★ FOUR CREEPS FROM FOUR PLACES, NOT ONE LONGER CREEP (CW-91). Anchoring
+   * took most of this guard's subject away: with it on the stateless pick
+   * re-rolls 790 lit cells over one creep where it re-rolled 3,881 before,
+   * because an anchored cell does not re-roll at all. Narrowing the population
+   * to the cells the memory still governs is right, and it leaves a few
+   * hundred events - not enough to read a 20 per cent effect off steadily.
+   *
+   * ★★★ AND LENGTHENING THE CREEP IS NOT THE WAY TO FIX THAT, WHICH WAS
+   * MEASURED RATHER THAN ASSUMED. Ten steps instead of four took the reading
+   * from 79.1 % to 92.2 %: the memory has a HOLD EXPIRY, so a longer creep
+   * lets more holds run out and reports a weaker lever. Frame count is part of
+   * the physics this case is about, not a precision knob. So the sample is
+   * made WIDER instead - the same four-step creep, repeated from places a few
+   * metres apart, pooled. Every creep is the identical experiment on a
+   * different piece of city.
+   */
+  async function glyphChangesOverCreep(page, steps = 4, creeps = 4, gapM = 4) {
+    return page.evaluate(async ({ n, anchoredIds, creeps, gapM }) => {
+      const ANCHORED = new Set(anchoredIds)
       const game = window.__cityWalkGame
       const convert = async () => {
         const before = game.altView.getConvertTotals().samples
@@ -2053,10 +2072,33 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
       // the moment CW-89 stopped the trail, which would have looked like a
       // regression and was the guard's population going stale.
       let litChanges = 0
+      // ★★★ CW-91: THE MEMORY'S POPULATION WENT STALE AGAIN, FOR THE SAME
+      // REASON AS AT CW-89 - the guard was measuring more than it means.
+      // Anchored cells take their glyph from the SURFACE and are deliberately
+      // never held (plan §10.3): holding one past the moment its lattice
+      // square slid is exactly the trail CW-84 cut. So they change identically
+      // with the memory on and off, and once the facade joined the anchored
+      // set at CW-91 they are most of the picture - the guard read 13 % of
+      // stateless re-rolls prevented against its own 20 % bar, which looks
+      // like a regression in the memory and is nothing of the kind.
+      //
+      // ★ THE BAR DID NOT MOVE. It has been re-pinned once already (CW-77,
+      // 0.6 -> 0.8) and re-pinning it to match a result would leave it worth
+      // nothing. What moved is WHICH CELLS the question is asked about: the
+      // ones the memory still governs. Both numbers are logged so the
+      // dilution stays visible.
+      let governedChanges = 0
+      let governedCells = 0
       let cells = 0
       let previous = null
-      for (let i = 0; i < n; i++) {
-        const d = 0.02 * i
+      let previousCls = null
+      for (let k = 0; k < creeps; k++) {
+        // Each creep starts its own run: the previous creep's last frame is a
+        // different place, and a pair spanning that jump is not a 2 cm step.
+        previous = null
+        previousCls = null
+        for (let i = 0; i < n; i++) {
+        const d = k * gapM + 0.02 * i
         const s = game.walkState
         s.x = start.x + Math.sin(start.headingRad) * d
         s.y = start.y + Math.cos(start.headingRad) * d
@@ -2069,24 +2111,38 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
         )
         const probe = await convert()
         cells = probe.cols * probe.rows
+        const cls = game.classPass.read(game.fpCamera, probe.cols, probe.rows)
         if (previous) {
           for (let c = 0; c < cells; c++) {
+            // A pair counts as governed only if the cell was unanchored in
+            // BOTH frames: one that crossed the boundary is not evidence
+            // about the memory either way.
+            const governed =
+              !ANCHORED.has(cls[c]) && !ANCHORED.has(previousCls[c])
+            if (governed) governedCells++
             if (probe.glyphs[c] === previous[c]) continue
             changes++
-            if (probe.glyphs[c] !== 0 && previous[c] !== 0) litChanges++
+            if (probe.glyphs[c] !== 0 && previous[c] !== 0) {
+              litChanges++
+              if (governed) governedChanges++
+            }
           }
         }
         previous = Int16Array.from(probe.glyphs)
+        previousCls = Uint8Array.from(cls)
+        }
       }
       Object.assign(game.walkState, start)
       return {
         changes,
         litChanges,
+        governedChanges,
+        governedCells,
         cells,
-        pairs: n - 1,
+        pairs: (n - 1) * creeps,
         usedGpu: game.altView.getConvertStats().usedGpu,
       }
-    }, steps)
+    }, { n: steps, anchoredIds: [...ANCHORED_CLASSES], creeps, gapM })
   }
 
   /**
@@ -2171,19 +2227,27 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
       // BOTH numbers are logged, because the difference between them is the
       // whole of CW-89 and a reader of this line should be able to see it.
       console.log(
-        `[CW-68 memory] ${path}: LIT ${withMemory.litChanges} of ` +
-          `${without.litChanges} stateless re-rolls survive = ` +
+        `[CW-68 memory] ${path}: GOVERNED (unanchored, lit) ` +
+          `${withMemory.governedChanges} of ${without.governedChanges} ` +
+          `stateless re-rolls survive = ` +
+          `${((withMemory.governedChanges / without.governedChanges) * 100).toFixed(1)} % ` +
+          `(bar < ${MUST_PREVENT * 100} %) over ${withMemory.governedCells} ` +
+          `governed cell-frames; every LIT cell including anchored ones ` +
+          `${withMemory.litChanges} of ${without.litChanges} = ` +
           `${((withMemory.litChanges / without.litChanges) * 100).toFixed(1)} % ` +
-          `(bar < ${MUST_PREVENT * 100} %); all cells incl. blanks ` +
-          `${withMemory.changes} of ${without.changes} = ` +
-          `${((withMemory.changes / without.changes) * 100).toFixed(1)} % ` +
           `over ${withMemory.cells * withMemory.pairs} cell-frames`
       )
       expect(without.cells, path).toBe(withMemory.cells)
       expect(
-        without.litChanges,
+        without.governedChanges,
         `${path}: the stateless pick re-rolls glyphs over a 2 cm step`
       ).toBeGreaterThan(100)
+      // The population must not have collapsed to nothing: a guard whose
+      // fixture is empty reads a perfect zero and means nothing.
+      expect(
+        withMemory.governedCells,
+        `${path}: cells the memory still governs`
+      ).toBeGreaterThan(10000)
       // ★★★ SCOPED TO LIT CELLS BY CW-89, AND THE BAR IS UNCHANGED AT 0.8.
       // The memory holds a cell's CHARACTER. Since CW-89 it explicitly does
       // not decide whether a cell HAS one - a blank answer is taken at once,
@@ -2195,11 +2259,12 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
       // move - it has been re-pinned once already (CW-77, 0.6 -> 0.8) and
       // re-pinning it to match a result would leave it worth nothing.
       expect(
-        withMemory.litChanges,
-        `${path}: memory ${withMemory.litChanges} of ${without.litChanges} ` +
-          `stateless changes between two REAL characters over ` +
-          `${withMemory.cells * withMemory.pairs} cell-frames`
-      ).toBeLessThan(without.litChanges * MUST_PREVENT)
+        withMemory.governedChanges,
+        `${path}: memory ${withMemory.governedChanges} of ` +
+          `${without.governedChanges} stateless changes between two REAL ` +
+          `characters, over ${withMemory.governedCells} cell-frames the ` +
+          `memory still governs`
+      ).toBeLessThan(without.governedChanges * MUST_PREVENT)
     }
 
     await page.evaluate(() => {
@@ -2647,7 +2712,7 @@ test.describe('ASCII City Walk — Day and Night (CW-85, CW-Q83)', () => {
   })
 })
 
-test.describe('ASCII City Walk — glyphs anchored to the surface (CW-86)', () => {
+test.describe('ASCII City Walk — glyphs anchored to the surface (CW-86, CW-91)', () => {
   const settle = (page) =>
     page.evaluate(async () => {
       const g = window.__cityWalkGame
@@ -2673,25 +2738,35 @@ test.describe('ASCII City Walk — glyphs anchored to the surface (CW-86)', () =
     await settle(page)
   }
 
-  test('★★★ it is OFF unless something turns it on, so the game is unchanged', async ({
-    page,
-  }) => {
-    // The release ships its prototype switched off (plan §10.3, the ship
-    // rule): anchoring forces the CPU glyph path, and that halves the frame
-    // rate on this laptop - 59.6 fps to 29.6, measured A-B-B-A. The picture it
-    // buys is real and the table is in the record, but a player must not pay
-    // that until the shader can carry the field byte itself.
+  test('★★★ it is ON, and it runs on the GPU path (CW-91)', async ({ page }) => {
+    // CW-86 built this and asserted the OPPOSITE here, because anchoring
+    // forced the CPU glyph path and halved the frame rate - 59.6 fps to 29.6,
+    // measured A-B-B-A. CW-91 taught the shader to read the field byte out of
+    // the class texture's own green channel and index the ladder itself, so
+    // that reason is gone and the owner's pick (CW-Q90) ships.
+    //
+    // The two halves of this case are one claim: anchoring is on AND the
+    // converter is still on the GPU. Either alone would be worthless - a
+    // release that turned anchoring on and quietly fell back to the CPU would
+    // pass "it is on" while giving every player half the frame rate.
     await enter(page)
-    expect(await page.evaluate(() => window.__cityWalkGame.getAnchoredGlyphs())).toBe(
-      false
-    )
     expect(
-      await page.evaluate(() => window.__cityWalkGame.altView.anchoredGlyphsOn())
-    ).toBe(false)
-    // And with it off, the class pass writes no field at all: every cell's
-    // field byte is zero, which is what tells the converter to keep its screen
-    // pick. A field being rendered while the switch says off would be paying
-    // the cost of a feature nobody asked for.
+      await page.evaluate(() => window.__cityWalkGame.getAnchoredGlyphs())
+    ).toBe(true)
+    expect(
+      await page.evaluate(() =>
+        window.__cityWalkGame.altView.anchoredGlyphsOn()
+      )
+    ).toBe(true)
+    expect(
+      await page.evaluate(
+        () => window.__cityWalkGame.altView.getConvertStats().usedGpu
+      ),
+      'anchoring must not force the CPU path any more'
+    ).toBe(true)
+    // And the class pass really is rendering a field: with it on, some cells
+    // carry a non-zero field byte. Zero everywhere is what "off" looks like,
+    // and it would make every assertion above true and meaningless.
     const field = await page.evaluate(() => {
       const g = window.__cityWalkGame
       const probe = g.altView.readCellProbe()
@@ -2702,83 +2777,89 @@ test.describe('ASCII City Walk — glyphs anchored to the surface (CW-86)', () =
       return { cells: f.length, nonZero }
     })
     expect(field.cells).toBeGreaterThan(1000)
-    expect(field.nonZero).toBe(0)
+    expect(field.nonZero).toBeGreaterThan(100)
   })
 
-  test('★★★ turning it on moves the GROUND and leaves the facade alone', async ({
+  test('★★★ it moves the GROUND and the FACADE, and nothing else (CW-91)', async ({
     page,
   }) => {
-    // The release's whole verdict in one case. Anchoring is scoped to the
-    // surfaces whose texture is a dither - ground, paving, greenspace - and
-    // the facade keeps its screen pick, because the lattice that holds a wall
-    // still is the lattice that erases its windows. If a later release widens
-    // the set, this case fails and the record has to be rewritten with it.
+    // The release's whole verdict in one case. CW-86 scoped anchoring to the
+    // surfaces whose texture is a dither and asserted here that the facade did
+    // NOT move; the owner then looked at the lattice photographs and picked 64
+    // for the facade as well (CW-Q90), knowing from CW-86's own table that it
+    // does not steady a wall. So the facade moves now - and the classes that
+    // were never in the set still must not.
     await enter(page)
-    // ★★★ HOLD THE PATH CONSTANT, OR THIS MEASURES TWO CHANGES AT ONCE.
-    // Anchoring forces the CPU glyph path, and the CPU and GPU paths do not
-    // pick identical glyphs for the same frame - written without this line
-    // the case reported 4,701 WALL cells moving, and the wall is not anchored
-    // at all. What moved them was the path. Both sides now run on the CPU
-    // path, so the only difference left between them is the thing named in
-    // the title.
-    await page.evaluate(() =>
-      window.__cityWalkGame.altView.setBenchLegacy({ cpuSample: true })
-    )
-    await settle(page)
+    // ★★★ HOLD THE PATH CONSTANT, OR THIS MEASURES TWO CHANGES AT ONCE. Since
+    // CW-91 both sides are on the GPU by default, which is the whole point;
+    // this line says so rather than assuming it.
+    expect(
+      await page.evaluate(
+        () => window.__cityWalkGame.altView.getConvertStats().usedGpu
+      )
+    ).toBe(true)
 
-    const grab = async () => {
-      const g = await page.evaluate(() => {
+    const grab = async () =>
+      page.evaluate(() => {
         const game = window.__cityWalkGame
         const probe = game.altView.readCellProbe()
         const cls = game.classPass.read(game.fpCamera, probe.cols, probe.rows)
         return { glyphs: Array.from(probe.glyphs), cls: Array.from(cls) }
       })
-      return g
-    }
 
+    // Off first, then on, so "before" is the picture without anchoring.
+    await page.evaluate(() => window.__cityWalkGame.setAnchoredGlyphs(false))
+    await settle(page)
     const before = await grab()
     await page.evaluate(() => window.__cityWalkGame.setAnchoredGlyphs(true))
     await settle(page)
     const after = await grab()
     expect(after.glyphs.length).toBe(before.glyphs.length)
 
-    const moved = { ground: 0, paving: 0, wall: 0, storefront: 0 }
-    const total = { ground: 0, paving: 0, wall: 0, storefront: 0 }
+    const KEYS = {
+      1: 'ground',
+      13: 'paving',
+      4: 'wall',
+      6: 'storefront',
+      2: 'road',
+      9: 'tree',
+    }
+    const moved = {
+      ground: 0,
+      paving: 0,
+      wall: 0,
+      storefront: 0,
+      road: 0,
+      tree: 0,
+    }
+    const total = { ...moved }
     for (let i = 0; i < before.glyphs.length; i++) {
       if (before.cls[i] !== after.cls[i]) continue
-      const key =
-        before.cls[i] === 1
-          ? 'ground'
-          : before.cls[i] === 13
-            ? 'paving'
-            : before.cls[i] === 4
-              ? 'wall'
-              : before.cls[i] === 6
-                ? 'storefront'
-                : null
+      const key = KEYS[before.cls[i]]
       if (!key) continue
       total[key]++
       if (before.glyphs[i] !== after.glyphs[i]) moved[key]++
     }
 
-    // The fixture has to contain the thing it guards - a pose with no ground
-    // and no wall in it would pass every line below while proving nothing.
+    // The fixture has to contain the thing it guards.
     expect(total.ground + total.paving).toBeGreaterThan(200)
     expect(total.wall + total.storefront).toBeGreaterThan(200)
+    expect(total.road + total.tree).toBeGreaterThan(200)
 
-    // The anchored surfaces took their glyphs from somewhere else.
+    // Every anchored surface took its glyphs from somewhere else.
     expect(moved.ground + moved.paving).toBeGreaterThan(0)
-    // And the facade did not move ONE cell: it is not in the set.
     expect(
-      moved.wall,
-      `${moved.wall} wall cells moved, and the wall is not anchored`
+      moved.wall + moved.storefront,
+      'the facade is anchored since CW-91 and must move'
+    ).toBeGreaterThan(0)
+    // And the classes that are NOT in the set did not move one cell. The road
+    // carries neither a uv attribute nor a map, so it could not be anchored
+    // even if somebody added it to the list; a tree is simply not in it.
+    expect(
+      moved.road,
+      `${moved.road} road cells moved, and the road is not anchored`
     ).toBe(0)
-    expect(moved.storefront).toBe(0)
-
-    await page.evaluate(() => {
-      window.__cityWalkGame.setAnchoredGlyphs(false)
-      window.__cityWalkGame.altView.setBenchLegacy({ cpuSample: false })
-    })
+    expect(moved.tree).toBe(0)
   })
 
   test('★★ an anchored surface holds perfectly still while the walker does', async ({

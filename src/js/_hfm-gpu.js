@@ -95,6 +95,17 @@ uniform vec3 uPalette[16];
 uniform float uReverseAt;
 uniform float uSpaceIndex;
 uniform float uSparsestNonSpace;
+// CW-91: anchored glyphs, on the GPU at last. uLadder is one row per class and
+// one texel per field step, holding glyph id + 1 so that 0 can keep meaning
+// "this class has no ladder". The field step itself is NOT a new upload: the
+// class pass has always written it into the GREEN channel of the very texture
+// bound as uClass (city-class-pass.js's fragment shader, gl_FragColor.g), and
+// this pass simply never read it. CW-86 believed the byte could only reach the
+// CPU and forced the CPU path for anchoring, which halved the frame rate and is
+// the only reason anchoring shipped off.
+uniform sampler2D uLadder;
+uniform float uAnchored;
+uniform float uFieldLevels;
 // CW-68 temporal hysteresis. uPrev is the PREVIOUS conversion's own output
 // target, bound as a texture (the two targets ping-pong), so the memory costs
 // no upload and no readback of its own: R the glyph, G the class or palette
@@ -307,11 +318,43 @@ void main() {
   float start = span.x;
   float count = span.y;
 
+  // ★★★ CW-91: THE GLYPH COMES FROM THE SURFACE, THE LIGHT STILL COMES FROM
+  // THE SCREEN. The same contract the CPU path carries (_hfm.js, the anchored
+  // branch), in the same order: everything decided from the lit cell above this
+  // line - the reverse flag, the palette colour, the cell's luminance - stands
+  // untouched, and all that changes is WHICH character carries it.
+  //
+  // A REVERSED CELL IS NEVER ANCHORED, exactly as on the CPU, where the reverse
+  // branch returns before the anchored one is reached: a reverse cell is matched
+  // against an inverted vector over the whole atlas, and a ladder step chosen
+  // from the surface's own tone means nothing there.
+  //
+  // The field byte is step + 1; 0 means this surface has no field and the cell
+  // keeps its screen pick, which is what the sky, the road and every unclassed
+  // mesh read on every frame.
+  float anchored = -1.0;
+  if (uAnchored > 0.5 && uHasClass > 0.5 && !reversed) {
+    float fieldByte = floor(
+      texelFetch(uClass, ivec2(int(col), int(gl_FragCoord.y)), 0).g * 255.0 + 0.5
+    );
+    if (fieldByte > 0.5) {
+      float step = min(fieldByte - 1.0, uFieldLevels - 1.0);
+      float entry = floor(
+        texelFetch(uLadder, ivec2(int(step), int(classId)), 0).r * 255.0 + 0.5
+      );
+      // 0 is "this class has no ladder", which is why the table holds id + 1.
+      if (entry > 0.5) anchored = entry - 1.0;
+    }
+  }
+
   // Nearest glyph, searched exhaustively over that vocabulary. A class list
   // is a few dozen entries at most, which is nothing on a GPU and means no
   // quantized lookup table has to exist or be kept in step.
   int best = 0;
   float bestD = 1e9;
+  if (anchored >= 0.0) {
+    best = int(anchored);
+  } else {
   for (int k = 0; k < 128; k++) {
     if (float(k) >= count) break;
     float slot = start + float(k);
@@ -334,6 +377,7 @@ void main() {
       best = glyph;
     }
   }
+  }
 
   // A reverse cell asks for the SPARSEST glyph it can get - the less is
   // punched out, the brighter the cell - but the painter treats space as a
@@ -355,8 +399,14 @@ void main() {
   // same rule - if the two disagree, a cell is painted with one path's glyph
   // and the other's drive. The memory chooses between CHARACTERS; whether a
   // cell has content at all was decided before it, by the blank floor.
+  // ★ AND AN ANCHORED CELL IS NEVER HELD (CW-86's contract, CW-91 on the GPU).
+  // The memory exists to hide a re-roll; an anchored cell has nothing to hide,
+  // and holding its glyph past the moment its surface slid to the next lattice
+  // square is exactly the trail CW-84 cut. The CPU path expresses this by
+  // skipping _remember entirely and writing hold 0; this is the same rule.
   bool keepable =
     hasPrev &&
+    anchored < 0.0 &&
     uGlyphBand > 0.0 &&
     prevHold < uHoldFrames &&
     reversed == prevReversed &&
@@ -443,6 +493,39 @@ void main() {
 export const MAX_CLASS_SPANS = 16;
 
 /**
+ * CW-91: the anchored ladders, flattened into one row per class id.
+ *
+ * Exported and pure for the same reason `buildVocabSpans` is: the shader
+ * cannot run in the test environment, and this is the arithmetic that decides
+ * which character an anchored cell draws.
+ *
+ * ★ EACH ENTRY IS `glyph id + 1`, so that 0 can mean "this class has no
+ * ladder". A class that HAS one is perfectly entitled to a step whose answer is
+ * the space, and the space is glyph 0 - storing the id raw would make those two
+ * cases the same byte and every ground cell at the darkest step would fall back
+ * to the screen pick instead of drawing the blank the surface asked for.
+ *
+ * @param {Map<number, ArrayLike<number>>|null} ladders class id -> step -> glyph
+ * @param {number} levels how many steps a ladder has
+ * @param {number} rows how many class rows the table carries
+ * @returns {Uint8Array} `rows * levels` bytes, row-major by class id
+ */
+export function buildLadderTable(ladders, levels, rows = MAX_CLASS_SPANS) {
+  const width = Math.max(1, levels);
+  const data = new Uint8Array(width * rows);
+  if (!ladders) return data;
+  for (const [classId, ladder] of ladders) {
+    if (!Number.isInteger(classId) || classId < 0 || classId >= rows) continue;
+    if (!ladder) continue;
+    for (let i = 0; i < width && i < ladder.length; i++) {
+      const glyph = ladder[i];
+      if (glyph >= 0 && glyph < 255) data[classId * width + i] = glyph + 1;
+    }
+  }
+  return data;
+}
+
+/**
  * Flatten the vocabularies into one glyph-id list and the span table over it.
  *
  * Exported so the rule below can be unit-tested: the shader cannot run in the
@@ -524,6 +607,8 @@ export function createGpuGlyphPass(renderer) {
   let vocabTexture = null;
   let vocabKey = '';
   let vocabSpans = null;
+  let ladderTexture = null;
+  let ladderKey = '';
   let pixels = null;
   let indices = null;
   let lumOut = null;
@@ -580,6 +665,9 @@ export function createGpuGlyphPass(renderer) {
       uWhiteLum: { value: 0 },
       uWhiteChroma: { value: 0 },
       uWhiteIndex: { value: -1 },
+      uLadder: { value: null },
+      uAnchored: { value: 0 },
+      uFieldLevels: { value: 1 },
     },
   });
   quadScene.add(new Mesh(new PlaneGeometry(2, 2), material));
@@ -702,6 +790,43 @@ export function createGpuGlyphPass(renderer) {
     vocabKey = key;
   };
 
+  /**
+   * CW-91: the anchored ladders, as one tiny texture the shader can index.
+   *
+   * One ROW per class id, one TEXEL per field step, holding `glyph id + 1` so
+   * that 0 stays free for "this class has no ladder" - a class with a ladder is
+   * perfectly entitled to step 0 being the space, which is glyph 0.
+   *
+   * It is 16 x levels bytes, rebuilt only when the atlas is, and it replaces a
+   * nearest-shape search over a few dozen glyphs with a single dependent read.
+   *
+   * @param {Map<number, Int16Array>|null} ladders class id -> step -> glyph
+   * @param {number} levels
+   * @param {string} key the atlas key the ladders were built from
+   */
+  const ensureLadderTexture = (ladders, levels, key) => {
+    if (ladderTexture && ladderKey === key) return;
+    ladderTexture?.dispose();
+    const width = Math.max(1, levels);
+    const data = buildLadderTable(ladders, width);
+    ladderTexture = new DataTexture(
+      data,
+      width,
+      MAX_CLASS_SPANS,
+      RedFormat,
+      UnsignedByteType
+    );
+    ladderTexture.minFilter = NearestFilter;
+    ladderTexture.magFilter = NearestFilter;
+    ladderTexture.wrapS = ClampToEdgeWrapping;
+    ladderTexture.wrapT = ClampToEdgeWrapping;
+    ladderTexture.colorSpace = NoColorSpace;
+    ladderTexture.generateMipmaps = false;
+    ladderTexture.needsUpdate = true;
+    material.uniforms.uFieldLevels.value = width;
+    ladderKey = key;
+  };
+
   return {
     /** False once anything has failed, so callers stop asking. */
     get available() {
@@ -749,6 +874,9 @@ export function createGpuGlyphPass(renderer) {
       hysteresis,
       inkBudget,
       paletteWhiteIndex,
+      ladders,
+      fieldLevels,
+      anchored,
     }) {
       if (failed) return null;
       try {
@@ -756,6 +884,7 @@ export function createGpuGlyphPass(renderer) {
         ensureOutTarget(cols, rows);
         ensureGlyphTexture(glyphVectors, modelKey);
         ensureVocabTexture(vocabLists, listKey);
+        ensureLadderTexture(ladders ?? null, fieldLevels || 1, listKey);
 
         const prevTarget = renderer.getRenderTarget();
         renderer.setRenderTarget(sceneTarget);
@@ -799,6 +928,12 @@ export function createGpuGlyphPass(renderer) {
         u.uSpaceIndex.value = spaceIndex ?? 0;
         u.uSparsestNonSpace.value = sparsestNonSpace ?? 0;
         u.uVocabSpan.value = vocabSpans;
+        // CW-91: anchoring needs BOTH the ladder table and a class frame to
+        // read the field byte out of, so it asks for both rather than for the
+        // caller's flag alone. A run that turned it on without a class texture
+        // would silently measure the screen pick and report it as anchored.
+        u.uLadder.value = ladderTexture;
+        u.uAnchored.value = anchored && classTexture && ladders ? 1 : 0;
         // CW-68. uPrev is bound to whichever target was written last; when
         // there is nothing to read yet, any texture will do because uHasPrev
         // is zero and the shader never samples it - a null sampler would
@@ -869,6 +1004,7 @@ export function createGpuGlyphPass(renderer) {
       outTargets[1]?.dispose();
       glyphTexture?.dispose();
       vocabTexture?.dispose();
+      ladderTexture?.dispose();
       material.dispose();
       sceneTarget = null;
       outTargets[0] = null;
@@ -876,6 +1012,8 @@ export function createGpuGlyphPass(renderer) {
       historyValid = false;
       glyphTexture = null;
       vocabTexture = null;
+      ladderTexture = null;
+      ladderKey = '';
     },
   };
 }

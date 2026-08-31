@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The ground, the paving and the buildings keep their own characters as you walk** (CW-91) -
+  until now a cell's character was chosen from how bright that patch of SCREEN was, so walking
+  re-rolled it constantly and the ground boiled underfoot. The character is now read off the
+  SURFACE itself, in the surface's own coordinates, so a patch of ground or a piece of wall keeps
+  its character while you walk past instead of being redrawn every frame. Measured walking at the
+  Seattle spawn, the ground went from changing thirty cells in every hundred each frame to under
+  one, and the paving to none at all; a real patch of ground followed across a walk now keeps its
+  character 98 times in 100 against 83 before, and a piece of wall 90 times against 85. This was
+  built and measured a release ago and switched off, because reading the surface forced a slower
+  drawing path that halved the frame rate. The graphics card does the reading itself now, so the
+  frame rate is unchanged - 60 either way - and it is on for everybody
+
+- **Building faces are drawn this way too, and it is a trade** (CW-91) - a wall's characters
+  change slightly MORE often per frame than they used to, not less. They are sliding with the
+  wall rather than being re-rolled in place, which is what movement is supposed to look like, and
+  it is why the windows on a building now read as windows from across the street. The choice
+  between a steadier wall and readable windows was made on the pictures, and this is that choice
+
 - **In color, every surface gets its own characters back** (CW-93) - the game gives each kind of
   surface its own small set of characters, so a road is drawn with characters that lie down, a
   wall with characters that stand up, and foliage with characters that clump. In color that had

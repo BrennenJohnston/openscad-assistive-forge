@@ -77,8 +77,30 @@
  * hc-palettes.js. A unit case asserts every number below IS the class it
  * claims to be, which is where drift would be caught.
  */
+/**
+ * ★★★ CW-91 ADDS THE FACADE, AND IT IS THE OWNER'S CALL, NOT A NEW MEASUREMENT.
+ *
+ * Everything in the block above still holds: at lattice 64 a wall is no
+ * steadier anchored than it is on the screen pick (7.28 % against 6.52 %), and
+ * the lattice that would steady it - 8 - erases its windows. CW-86 therefore
+ * shipped the facade on the screen pick and put the table to the owner.
+ *
+ * They answered (CW-Q90) by picking **lattice 64 for the facade knowing it does
+ * not steady a wall**, because at 64 "the windows read better than anything
+ * this game has drawn". That is a LOOK decision taken on a photograph, and it
+ * outranks the churn column - which is why this list is longer than the
+ * measurement alone would make it. Do not coarsen the lattice to win the churn
+ * number back: that trade is the one the owner looked at and refused.
+ *
+ * Road and curb are still absent, and for the reason that has nothing to do
+ * with taste: `roads`, `curbs` and `road-lines` carry neither a uv attribute
+ * nor a map, so there is no surface coordinate to look anything up in.
+ */
 export const ANCHORED_CLASSES = Object.freeze([
   1, // SURFACE_CLASS.GROUND
+  4, // SURFACE_CLASS.BUILDING_WALL   (CW-91, CW-Q90)
+  5, // SURFACE_CLASS.BUILDING_ROOF   (CW-91, CW-Q90)
+  6, // SURFACE_CLASS.STOREFRONT      (CW-91, CW-Q90)
   13, // SURFACE_CLASS.SIDEWALK
   14, // SURFACE_CLASS.GREEN
 ]);

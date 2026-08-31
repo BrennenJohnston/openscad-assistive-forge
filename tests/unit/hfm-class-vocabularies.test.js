@@ -6,7 +6,11 @@ import {
   removeCanvasMock,
   createMockPreviewManager,
 } from './hfm-convert-fixture.js'
-import { buildVocabSpans, MAX_CLASS_SPANS } from '../../src/js/_hfm-gpu.js'
+import {
+  buildVocabSpans,
+  buildLadderTable,
+  MAX_CLASS_SPANS,
+} from '../../src/js/_hfm-gpu.js'
 import { SPACE_INDEX, FIRST_CHAR_CODE } from '../../src/js/_hfm-paint.js'
 
 /**
@@ -286,5 +290,109 @@ describe('CW-93 — the GPU path is not excused from the vocabularies', () => {
     // vocabulary could not apply even when it is asked for. This is the other
     // half of the same line, and CW-68 already fixed it for the memory.
     expect(cpuCode).not.toMatch(/classTexture:\s*usePalette/)
+  })
+})
+
+describe('CW-91 — the ink budget sees a real luminance on both tap branches', () => {
+  beforeEach(() => installCanvasMock())
+  afterEach(() => {
+    removeCanvasMock()
+    vi.restoreAllMocks()
+  })
+
+  it('does not blank the picture when the tap plan is off (CW-86 reported it)', async () => {
+    // CW-86 found this and left it: the tap-plan branch accumulates the cell's
+    // luminance when `wantsLum` says to, and the fallback branch asked
+    // `useIntensity` instead. In PALETTE mode with an ink budget the two
+    // disagree - `useIntensity` is false, `wantsLum` is true - so the fallback
+    // branch left `cellLum` at ZERO for every cell. Latent only because the
+    // shipped floor is 0; with any real floor that branch blanks the whole
+    // picture while the other one draws it.
+    //
+    // `setBenchLegacy({ taps: true })` is what turns the tap plan off, which
+    // is how this case reaches the branch at all.
+    const draw = async (taps) => {
+      vi.resetModules()
+      const { initAltView } = await import('../../src/js/_hfm.js')
+      const pm = createMockPreviewManager()
+      const api = await initAltView(pm, { allowTinyCells: true })
+      api.setPalette(['#000000', '#ff0000', '#00ff00', '#0000ff', '#ffffff'])
+      api.setPaletteInkBudget({ floor: 0.05, whiteLum: 0, whiteChroma: 1 })
+      api.setBenchLegacy({ taps })
+      api.setCellProbe(true)
+      const nowSpy = vi.spyOn(performance, 'now')
+      api.enable()
+      api.invalidate()
+      nowSpy.mockReturnValue(10000)
+      api.render()
+      const probe = api.readCellProbe()
+      const inked = [...probe.glyphs].filter((g) => g !== SPACE_INDEX).length
+      nowSpy.mockRestore()
+      api.dispose()
+      return { inked, cells: probe.glyphs.length }
+    }
+
+    const planned = await draw(false)
+    const fallback = await draw(true)
+    // The fixture must contain the thing it guards: a frame that was blank
+    // either way would pass the comparison and prove nothing.
+    expect(planned.inked, 'ink on the tap-plan branch').toBeGreaterThan(0)
+    expect(
+      fallback.inked,
+      'the fallback branch blanked the picture: cellLum was 0 for every cell'
+    ).toBeGreaterThan(0)
+  })
+})
+
+describe('CW-91 — the ladder table the shader indexes', () => {
+  it('holds glyph id PLUS ONE, so 0 can mean "no ladder for this class"', () => {
+    // The space is glyph 0, and a ground cell at the darkest step is entitled
+    // to draw it. Storing the id raw would make "draw the space" and "this
+    // class has no ladder" the same byte, and every such cell would silently
+    // fall back to the screen pick - the one thing anchoring exists to stop.
+    const table = buildLadderTable(new Map([[1, [0, 4, 9]]]), 3, 4)
+    expect(Array.from(table.slice(3, 6))).toEqual([1, 5, 10])
+    // Row 0 is a class with no ladder and stays zero.
+    expect(Array.from(table.slice(0, 3))).toEqual([0, 0, 0])
+  })
+
+  it('is one row per class id, so the shader can index it by class', () => {
+    const table = buildLadderTable(
+      new Map([
+        [1, [7, 7]],
+        [3, [2, 2]],
+      ]),
+      2,
+      4
+    )
+    expect(table.length).toBe(8)
+    expect(Array.from(table)).toEqual([0, 0, 8, 8, 0, 0, 3, 3])
+  })
+
+  it('ignores a class the table cannot carry rather than writing past it', () => {
+    const table = buildLadderTable(new Map([[9, [1, 1]]]), 2, 4)
+    expect(table.length).toBe(8)
+    expect(Array.from(table).every((v) => v === 0)).toBe(true)
+  })
+
+  it('answers with an all-zero table when there are no ladders at all', () => {
+    expect(Array.from(buildLadderTable(null, 2, 2))).toEqual([0, 0, 0, 0])
+  })
+})
+
+describe('CW-91 — anchoring no longer forces the CPU converter', () => {
+  it('does not send the glyph path to the CPU when anchoring is on', () => {
+    // CW-86 shipped anchoring OFF for exactly one reason: `_gpuPathInForce`
+    // returned false whenever it was on, so the frame rate halved (59.6 to
+    // 29.6 fps). The shader reads the field byte itself now - out of the class
+    // texture's green channel, which the class pass has always written - so
+    // that line is gone. If it ever comes back, the release's whole premise is
+    // gone with it.
+    const fn = cpuCode.slice(
+      cpuCode.indexOf('function _gpuPathInForce'),
+      cpuCode.indexOf('function _probeLumArray')
+    )
+    expect(fn.length).toBeGreaterThan(50)
+    expect(fn).not.toMatch(/anchoredGlyphs/)
   })
 })
