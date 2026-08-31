@@ -309,24 +309,95 @@ export const BRANCH_SYSTEM = {
 /** The square trunk has four faces, and that is the hard cap the owner set. */
 export const BRANCHES_PER_RING_MAX = 4;
 
-/** Leaf cubes are about twice the branch member's cross-section - drawn a
- * shade over (2.4) so a run reads chunky at 30 % cells, the same kind of
- * drawn-width call the diagrid and the cane made. */
-export const LEAF_CUBE_SHARE = 3;
-export const LEAF_CUBE_MIN_M = 0.45;
 /**
- * Centre-to-centre spacing of successive leaf cubes along a branch, in cube
- * sizes. JUST OVER 1: the cubes of one branch overlap into a single
- * enveloping run - the owner's "foliage wraps the branch, the branch
- * travels inside its leaf run" - photographed at 1.8 first, which read as
- * winter buds dotted along bare wood. The sparseness the reference's look
- * needs (CW94-STEP0-LEAF-TECHNIQUE.md) lives BETWEEN runs: the bare inner
- * share below, the gaps between branches, and the rings' own spacing.
+ * CW-97: the crown-cluster parameters, per the canopy research brief
+ * (Tree Research/canopy-cube-rendering-report.md). CW-94's leaf runs traced
+ * the branches - structure without mass, and the owner judged it did not
+ * read as a tree. The brief names the five cues a crown needs (ragged
+ * outline, sky punctures, clumping, a crown ENVELOPE, a value gradient) and
+ * the assembly that delivers them: a hollow shell of overlapping masses
+ * filling the species' envelope, sparse interior fill, larger masses low,
+ * free rotation. Its alpha-cutout half is deliberately NOT taken: the
+ * converter samples one or two pixels per cell and re-rolls them in motion,
+ * so sub-cell texture holes would flicker leaf/sky per frame - the churn
+ * this round spent itself killing. The punctures live at BOX scale instead,
+ * where a gap is cell-legible and stays put.
  */
-export const LEAF_SPACING_SHARE = 1.15;
-/** The bare inner share of a branch: leaves wrap the outer run only. Part
- * budget, part constraint (e) - the run nearest the trunk stays clear. */
-export const LEAF_BARE_INNER_SHARE = 0.45;
+export const CROWN_CLUSTER = {
+  /** Share of the envelope's surface the shell boxes claim; the remainder
+   * is the sky punctures. The brief's texture recipe wants 35-60%
+   * coverage; geometry reads denser than texture, so the shell sits just
+   * above that band and the punctures stay real. */
+  coverage: 0.62,
+  /** Interior boxes as a share of the shell count. The brief says 20-30%
+   * for depth behind the punctures - written for pixel rendering. At 30%
+   * ASCII cells an interior box shows only through an aligned pair of
+   * punctures, where near-black reads as depth with or without it, so the
+   * share runs at half the brief's: a budget rung the triangle probe
+   * priced (interiors were ~12% of a city's crown triangles). */
+  innerShare: 0.15,
+  /** Box edge as a share of the crown's vertical extent, and its bounds.
+   * A mass, not a bead: the floor keeps a hawthorn's clumps chunky at
+   * 30% cells, the cap keeps an oak from being four giant crates. First
+   * photographed at 0.25 / 3.4 max: a near crown's single face (3.4 x
+   * jitter x low boost = 5.7 m) filled a quarter of the frame as ONE flat
+   * glyph field - an awning, not foliage - while the same crowns at 60 m
+   * read perfectly. The size is the near-field knob. The floor then rose
+   * 0.8 to 1.05 as a second budget rung: count scales with 1/size^2, the
+   * small infill species are most of a city's trees, and a 1.05 m clump
+   * is still chunkier than CW-94's 0.45-0.9 m cubes ever were. */
+  sizeShare: 0.18,
+  sizeMinM: 1.05,
+  sizeMaxM: 2.6,
+  /** Scale jitter (the brief: +/-30-40%), and the larger-low gradient:
+   * bottom boxes larger, top boxes down to 0.75x, so the crown is
+   * bottom-heavy and the top edge is the raggedest. */
+  scaleJitter: 0.3,
+  lowBoost: 1.18,
+  topDrop: 0.75,
+  /** Tilt range in radians (~10 degrees; the brief: 5-10). Yaw is free. */
+  tiltMaxRad: 0.17,
+  /** Shell boxes may sink up to this share of the radius into the
+   * envelope, so the shell is a band rather than a polished skin. */
+  shellSinkShare: 0.15,
+  /** Interior boxes live between these radial shares - deep enough to be
+   * inside, never at the trunk. */
+  innerRadial: [0.3, 0.65],
+  /** Shell floor and cap per tree: a tiny crown is still a cluster, a
+   * giant one still a bounded merge. The cap is the giants' budget rung -
+   * Denver's table is all 15-25 m trees and paid the most triangles - and
+   * a capped giant's coverage thins before its shape goes. */
+  shellMin: 10,
+  shellMax: 80,
+};
+
+/** Conifer whorls (the brief, section 6.7: a conifer is stacked layers,
+ * never a round cluster - drooping rings of masses with sky between the
+ * tiers). Spacing is in box sizes; over 1 keeps the between-tier gaps. */
+export const CONIFER_WHORLS = {
+  sizeShare: 0.13,
+  sizeMinM: 0.7,
+  sizeMaxM: 2.4,
+  tierSpacingShare: 1.35,
+  ringCoverage: 0.75,
+  /** Ring radius tapers to this share of the base by the top tier. */
+  topTaper: 0.08,
+  ringMin: 3,
+  ringMax: 18,
+  droopRad: 0.12,
+};
+
+/** The value gradient (cue five): per-box luminance tier offsets the
+ * caller applies around the tree's own palette tier - top shell lighter,
+ * interior darker, a little per-box jitter so no two neighbours match.
+ * Palette CHOICE stays in city-scene; these are offsets, not colours. */
+export const CROWN_TONE = {
+  heightSpan: 0.16,
+  interiorDrop: 0.12,
+  jitter: 0.03,
+  tierMin: 0.45,
+  tierMax: 0.78,
+};
 
 /** The base flare: species-appropriate on the big trees, skipped on small
  * ones (a hawthorn has no buttress). Sides as a multiple of the trunk's. */
@@ -403,31 +474,188 @@ export function treeBranches(spec, seed) {
   return branches;
 }
 
+/** Knud Thomsen's ellipsoid surface approximation (about 1% error) - the
+ * coverage arithmetic needs an area, not an exact one. */
+function ellipsoidSurfaceM2(a, b, c) {
+  const p = 1.6075;
+  const ap = Math.pow(a, p);
+  const bp = Math.pow(b, p);
+  const cp = Math.pow(c, p);
+  return 4 * Math.PI * Math.pow((ap * bp + ap * cp + bp * cp) / 3, 1 / p);
+}
+
 /**
- * The leaf cubes wrapping one branch: opaque cubes at ~2x the branch's
- * cross-section, spaced with deliberate gaps, enveloping the OUTER run of
- * the member (the branch travels inside its leaf run). Returned in the
- * branch's own frame as distances along it; the caller places them in the
- * world and enforces constraint (e) - no leaf below head height - because
- * only the caller knows the tree's ground.
+ * CW-97: the crown as a cluster of masses - the research brief's assembly,
+ * in the game's own vocabulary of opaque boxes.
  *
- * @param {{lengthM:number,thickM:number}} branch
- * @returns {Array<{alongM:number,sizeM:number}>}
+ * Broadleaf forms fill the species' ellipsoid envelope (the spec's own
+ * radius and crown height, so a vase is still wide and a columnar still
+ * narrow) with a hollow shell of boxes plus sparse interior fill. The
+ * shell is sampled on a Fibonacci spiral - even without being regular,
+ * which is the brief's Poisson ask without a rejection loop - then
+ * jittered, sunk, scaled larger-low, and freely rotated. The cone form is
+ * different in KIND (brief 6.7): stacked whorl rings that taper to a tip,
+ * with sky between the tiers.
+ *
+ * Everything is drawn from one PRIVATE seeded stream (the CW-46 law: the
+ * species and size draws keep their exact bits), so one seed is one crown,
+ * every load. Positions are TREE-LOCAL (trunk axis at 0,0; ground at z 0);
+ * the caller places the tree, clips against buildings, and enforces
+ * constraint (e) - no leaf mass below head height - because only the
+ * caller knows the tree's neighbours.
+ *
+ * @param {ReturnType<typeof treeSpec>} spec
+ * @param {number} seed - the tree's existing integer seed
+ * @returns {Array<{x:number,y:number,z:number,sizeM:number,yawRad:number,
+ *   tiltARad:number,tiltBRad:number,heightFrac:number,interior:boolean,
+ *   toneJitter:number}>}
  */
-export function branchLeafCubes(branch) {
-  const sizeM = Math.max(LEAF_CUBE_MIN_M, branch.thickM * LEAF_CUBE_SHARE);
-  const startM = branch.lengthM * LEAF_BARE_INNER_SHARE;
-  const step = sizeM * LEAF_SPACING_SHARE;
-  const cubes = [];
-  for (let a = startM; a <= branch.lengthM; a += step) {
-    cubes.push({ alongM: a, sizeM });
+export function crownCluster(spec, seed) {
+  const rng = branchLcg((seed ^ 0xc10b5) >>> 0);
+  return spec.form === 'cone'
+    ? coniferWhorls(spec, rng)
+    : broadleafCluster(spec, rng);
+}
+
+function broadleafCluster(spec, rng) {
+  const P = CROWN_CLUSTER;
+  const hr = Math.max(0.6, spec.radiusM);
+  const hz = Math.max(0.5, spec.crownM / 2);
+  const centreZ = spec.baseM + hz;
+  const sizeBase = Math.min(
+    P.sizeMaxM,
+    Math.max(P.sizeMinM, spec.crownM * P.sizeShare)
+  );
+  const surfaceM2 = ellipsoidSurfaceM2(hr, hr, hz);
+  const shellCount = Math.min(
+    P.shellMax,
+    Math.max(P.shellMin, Math.round((surfaceM2 * P.coverage) / sizeBase ** 2))
+  );
+  const innerCount = Math.round(shellCount * P.innerShare);
+  const boxes = [];
+  const golden = Math.PI * (3 - Math.sqrt(5));
+
+  for (let i = 0; i < shellCount; i++) {
+    // Fibonacci latitude, jittered by up to half a step either way so the
+    // spiral never reads as a pattern.
+    const zu = Math.max(
+      -1,
+      Math.min(1, 1 - (2 * (i + 0.5 + (rng() - 0.5))) / shellCount)
+    );
+    const ru = Math.sqrt(Math.max(0, 1 - zu * zu));
+    const theta = golden * i + rng() * 0.9;
+    // Sink into the envelope by a seeded share: a band, not a skin.
+    const sink = 1 - rng() * P.shellSinkShare;
+    boxes.push(
+      crownBox(
+        rng,
+        spec,
+        Math.cos(theta) * ru * hr * sink,
+        Math.sin(theta) * ru * hr * sink,
+        centreZ + zu * hz * sink,
+        sizeBase,
+        (zu + 1) / 2,
+        false
+      )
+    );
   }
-  // The tip always carries one, so no branch ends in a bare spike.
-  const last = cubes[cubes.length - 1];
-  if (!last || branch.lengthM - last.alongM > step * 0.5) {
-    cubes.push({ alongM: branch.lengthM, sizeM });
+
+  for (let i = 0; i < innerCount; i++) {
+    const zu = rng() * 2 - 1;
+    const ru = Math.sqrt(Math.max(0, 1 - zu * zu));
+    const theta = rng() * Math.PI * 2;
+    const radial =
+      P.innerRadial[0] + rng() * (P.innerRadial[1] - P.innerRadial[0]);
+    boxes.push(
+      crownBox(
+        rng,
+        spec,
+        Math.cos(theta) * ru * hr * radial,
+        Math.sin(theta) * ru * hr * radial,
+        centreZ + zu * hz * radial,
+        sizeBase,
+        (zu * radial + 1) / 2,
+        true
+      )
+    );
   }
-  return cubes;
+  return boxes;
+}
+
+function crownBox(rng, spec, x, y, z, sizeBase, heightFrac, interior) {
+  const P = CROWN_CLUSTER;
+  const jitter = 1 - P.scaleJitter + rng() * P.scaleJitter * 2;
+  const lowGrade = P.lowBoost + (P.topDrop - P.lowBoost) * heightFrac;
+  return {
+    x,
+    y,
+    z,
+    sizeM: Math.max(0.4, sizeBase * jitter * lowGrade),
+    yawRad: rng() * Math.PI * 0.5,
+    tiltARad: (rng() * 2 - 1) * P.tiltMaxRad,
+    tiltBRad: (rng() * 2 - 1) * P.tiltMaxRad,
+    heightFrac,
+    interior,
+    toneJitter: (rng() * 2 - 1) * CROWN_TONE.jitter,
+  };
+}
+
+function coniferWhorls(spec, rng) {
+  const W = CONIFER_WHORLS;
+  const hr = Math.max(0.5, spec.radiusM);
+  const sizeBase = Math.min(
+    W.sizeMaxM,
+    Math.max(W.sizeMinM, spec.crownM * W.sizeShare)
+  );
+  const spacing = sizeBase * W.tierSpacingShare;
+  const tiers = Math.max(3, Math.round(spec.crownM / spacing));
+  const boxes = [];
+  for (let t = 0; t < tiers; t++) {
+    const frac = tiers === 1 ? 0 : t / (tiers - 1);
+    const z = spec.baseM + spec.crownM * frac;
+    const ringR = hr * (1 - (1 - W.topTaper) * frac);
+    const size = Math.max(0.4, sizeBase * (1.05 - 0.45 * frac));
+    const count = Math.min(
+      W.ringMax,
+      Math.max(
+        W.ringMin,
+        Math.round((2 * Math.PI * ringR * W.ringCoverage) / size)
+      )
+    );
+    const phase = rng() * Math.PI * 2;
+    for (let b = 0; b < count; b++) {
+      const a = phase + (b / count) * Math.PI * 2 + (rng() - 0.5) * 0.5;
+      const r = ringR * (0.85 + rng() * 0.25);
+      boxes.push({
+        x: Math.cos(a) * r,
+        y: Math.sin(a) * r,
+        z: z + (rng() - 0.5) * size * 0.4,
+        sizeM: size * (0.8 + rng() * 0.4),
+        yawRad: a + (rng() - 0.5) * 0.4,
+        // The droop: the outer edge of a whorl hangs, so each box pitches
+        // outward-down about the axis tangent to its ring.
+        tiltARad: -Math.sin(a) * W.droopRad,
+        tiltBRad: Math.cos(a) * W.droopRad,
+        heightFrac: frac,
+        interior: false,
+        toneJitter: (rng() * 2 - 1) * CROWN_TONE.jitter,
+      });
+    }
+  }
+  // The tip: one apex box, so the tree ends in a point rather than a ring.
+  boxes.push({
+    x: 0,
+    y: 0,
+    z: spec.topM - sizeBase * 0.3,
+    sizeM: Math.max(0.4, sizeBase * 0.7),
+    yawRad: rng() * Math.PI * 0.5,
+    tiltARad: 0,
+    tiltBRad: 0,
+    heightFrac: 1,
+    interior: false,
+    toneJitter: (rng() * 2 - 1) * CROWN_TONE.jitter,
+  });
+  return boxes;
 }
 
 /**

@@ -837,11 +837,30 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     expect(focus.inLayer).toBe(true)
 
     const clickHeading = await hudHeading(page)
+    const h0 = await page.evaluate(
+      () => window.__cityWalkGame.walkState.headingRad
+    )
     await page.keyboard.down('ArrowRight')
-    await page.waitForTimeout(1300)
+    // CW-97: hold until the game has genuinely turned past a compass
+    // sector (>1 rad clears any 45 degree sector from any start), instead
+    // of a wall-clock 1.3 s. Turn rates integrate per FRAME with dt
+    // clamped, so on a frame-starved fresh entry a fixed wall-time hold
+    // undercounts - a measurement artifact the heavier crown build
+    // exposed, not a key-routing failure (the D-59 claim, which the final
+    // assert still makes on the visible HUD).
+    await expect
+      .poll(
+        async () => {
+          const h = await page.evaluate(
+            () => window.__cityWalkGame.walkState.headingRad
+          )
+          const d = Math.abs(h - h0) % (2 * Math.PI)
+          return Math.min(d, 2 * Math.PI - d)
+        },
+        { timeout: 15000 }
+      )
+      .toBeGreaterThan(1.0)
     await page.keyboard.up('ArrowRight')
-    // A ~117 degree turn always leaves a 45 degree compass sector, whatever
-    // the CW-44 spawn heading is.
     await expect.poll(() => hudHeading(page)).not.toBe(clickHeading)
   })
 
@@ -1807,6 +1826,13 @@ test.describe('ASCII City Walk — look without dragging, walk without holding (
     page,
   }) => {
     test.setTimeout(120000)
+    // CW-96: hover-follow is opt-in now (the owner set the default back to
+    // drag after playing it), so this case selects the mode the way a
+    // player would have to - and the WCAG 2.5.7 claim it guards is that
+    // the no-drag path EXISTS and works, which an opt-in satisfies.
+    await page.addInitScript(() =>
+      localStorage.setItem('openscad-forge-city-walk-look', 'follow')
+    )
     await launchGame(page)
     await enterCity(page)
     expect((await gaze(page)).mode).toBe('follow')
@@ -1957,6 +1983,10 @@ test.describe('ASCII City Walk — look without dragging, walk without holding (
     // Build the dead end with the game's own obstacle stamp: a U of walls
     // 1.1 m out on three sides, the opening behind, where the forward fan
     // never looks. This is the one case the blocked sentence is for now.
+    // (A settle first: one observed flake had the pose written before the
+    // spawn finished settling, and street-following then walked the old
+    // bearing out through the U's open side.)
+    await page.waitForTimeout(600)
     await page.evaluate(() => {
       const g = window.__cityWalkGame
       const st = g.walkState
@@ -2023,9 +2053,9 @@ test.describe('ASCII City Walk — look without dragging, walk without holding (
     await launchGame(page)
     await enterCity(page)
 
-    // follow -> drag -> off, through the real toolbar button.
-    await page.locator('#cityWalkLookModeBtn').click()
-    await expect(announcer(page)).toContainText('drag')
+    // CW-96: the default is drag now; one press reaches off, and that
+    // choice must survive the reload.
+    expect((await gaze(page)).mode).toBe('drag')
     await page.locator('#cityWalkLookModeBtn').click()
     await expect(announcer(page)).toContainText('Mouse look off')
 
@@ -2065,6 +2095,10 @@ test.describe('ASCII City Walk — look without dragging, walk without holding (
 
   test('a dialog freezes hover-look until it closes', async ({ page }) => {
     test.setTimeout(120000)
+    // CW-96: hover is opt-in; this case opts in.
+    await page.addInitScript(() =>
+      localStorage.setItem('openscad-forge-city-walk-look', 'follow')
+    )
     await launchGame(page)
     await enterCity(page)
 

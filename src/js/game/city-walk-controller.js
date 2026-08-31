@@ -815,12 +815,12 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       'Arrow Left / Q and Arrow Right / E: turn',
       'R and F: look up and down',
       'V: level the view',
-      // CW-81 (CW-Q72, CW-Q80). FLAGGED STRINGS (D-35). The drag line is
-      // REVISED: dragging is one mode of three now, and the help teaches
-      // the default first.
-      'Move the mouse: the view turns toward the cursor (the Mouse look ' +
-        'button changes this to a held drag, or off)',
-      'Drag with the mouse: move the map in map view',
+      // CW-81/CW-96 (CW-Q72, owner 2026-08-31). FLAGGED STRINGS (D-35).
+      // The help teaches the default first, and the default is DRAG again:
+      // hover-follow stays one press away on the Mouse look button.
+      'Drag with the mouse: look around in street view, move the map in map view',
+      'The Mouse look button can make the view follow the cursor without ' +
+        'dragging, or turn mouse look off',
       'N: auto-walk forward, following the street, until something stops ' +
         'you; while it walks, Arrow Up and Arrow Down look, and W A S D ' +
         'take over',
@@ -2562,16 +2562,21 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     game.motionQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)');
     game.motionReduced = Boolean(game.motionQuery?.matches);
     // CW-81 (CW-Q72): the mouse-look preference. A stored choice always
-    // wins; with nothing stored, reduced motion keeps hover-look OFF by
-    // default (it is continuous camera motion) while leaving every mode
-    // selectable.
+    // wins; with nothing stored, reduced motion keeps mouse look OFF by
+    // default while leaving every mode selectable.
+    //
+    // CW-96 (owner, 2026-08-31, after playing the round): hover-follow is
+    // OFF BY DEFAULT now - "difficult to use, and doesn't easily allow the
+    // user to leave the screen to press the on screen buttons" - but stays
+    // in the cycle for anyone who wants it. The default returns to DRAG,
+    // the look the game had before this round.
     {
       const stored = safeGetItem(STORAGE_KEY_CITY_WALK_LOOK);
       game.lookMode = LOOK_MODES.includes(stored)
         ? stored
         : game.motionReduced
           ? 'off'
-          : 'follow';
+          : 'drag';
     }
     game.onMotionChange = (event) => {
       game.motionReduced = event.matches;

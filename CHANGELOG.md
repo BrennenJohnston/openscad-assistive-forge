@@ -9,16 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Trees are their species now** (CW-94) - a tree used to be a lollipop: one thin stem and one
-  faceted blob, at half its real height. Every tree is built the way trees grow now: a full-height
-  trunk at the species' cited size with a base flare on the big ones, branches leaving the trunk
-  in rings - more, longer, thicker branches low and fewer, shorter ones high - and opaque leaf
-  clumps wrapping the outer run of each branch, with real gaps between clumps so the sky and the
-  street stay visible through the crown. The species tables and their citations are unchanged;
-  the half-height compression they carried is retired, and the sky stays open over a planted
-  street because the crowns are sparse instead of solid. Only the trunk blocks a cane, exactly
-  as before, and no leaf hangs below head height over a pavement. Placement is untouched - the
-  same trees stand in the same places; each simply looks like what it is
+- **Trees are their species now** (CW-94, CW-97) - a tree used to be a lollipop: one thin stem
+  and one faceted blob, at half its real height. Every tree is built the way trees grow now: a
+  full-height trunk at the species' cited size with a base flare on the big ones, branches
+  leaving the trunk in rings - more, longer, thicker branches low and fewer, shorter ones high -
+  and a crown of clustered leaf masses filling the species' own silhouette: a hollow shell of
+  overlapping clumps, larger low and smaller high so the top edge is the ragged one, lighter at
+  the crown's top and darker inside, with real sky showing through the gaps between clumps.
+  Conifers stack drooping rings that taper to a tip instead of wearing a ball. The species
+  tables and their citations are unchanged; the half-height compression they carried is retired.
+  Only the trunk blocks a cane, exactly as before, and no leaf hangs below head height over a
+  pavement. Placement is untouched - the same trees stand in the same places; each simply looks
+  like what it is
 
 ### Added
 
@@ -108,14 +110,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the skyline in close, the ground still vanishes with distance the way it always has, and the
   cost measured on the same machine, same session, was nothing: the frame rate did not move
 
-- **Looking around is hands-free by default** (CW-81) - the view turns toward wherever the
-  cursor points: still in the middle, faster toward the edges, settling the moment the cursor
-  comes back to centre or leaves the picture. A Mouse look button cycles between this, the old
-  hold-and-drag, and off, and the choice is remembered; with reduced motion set it starts off
-  and stays whatever you pick. Underneath, every way of looking - keys, mouse, the camera
-  panel's buttons - now steers one target the camera follows smoothly, and walking builds to
-  full stride over a quarter second instead of starting at it, so a tap of W is a step, not a
-  lurch
+- **Three ways to look around** (CW-81, CW-96) - a Mouse look button cycles between
+  hold-and-drag (the default), hands-free follow, and off, and the choice is remembered; with
+  reduced motion set it starts off and stays whatever you pick. In hands-free follow the view
+  turns toward wherever the cursor points: still in the middle, faster toward the edges,
+  settling the moment the cursor comes back to centre or leaves the picture. It stays a choice
+  rather than the default - it does not yet get along with leaving the picture to press the
+  on-screen buttons. Underneath, every way of looking - keys, mouse, the camera panel's
+  buttons - now steers one target the camera follows smoothly, and walking builds to full
+  stride over a quarter second instead of starting at it, so a tap of W is a step, not a lurch
 
 - **In color, every surface now has a color of its own** (CW-92) - a wall used to change color as
   you walked toward it, sometimes flipping from one color to another all at once across a whole
