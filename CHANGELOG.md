@@ -7,7 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Trees are their species now** (CW-94) - a tree used to be a lollipop: one thin stem and one
+  faceted blob, at half its real height. Every tree is built the way trees grow now: a full-height
+  trunk at the species' cited size with a base flare on the big ones, branches leaving the trunk
+  in rings - more, longer, thicker branches low and fewer, shorter ones high - and opaque leaf
+  clumps wrapping the outer run of each branch, with real gaps between clumps so the sky and the
+  street stay visible through the crown. The species tables and their citations are unchanged;
+  the half-height compression they carried is retired, and the sky stays open over a planted
+  street because the crowns are sparse instead of solid. Only the trunk blocks a cane, exactly
+  as before, and no leaf hangs below head height over a pavement. Placement is untouched - the
+  same trees stand in the same places; each simply looks like what it is
+
 ### Added
+
+- **Take me there** (CW-87) - press I and the game walks you to the landmark selected in the
+  legend: a real route over walkable ground, found on the city's own collision map, followed at
+  walking speed with each real bend spoken as a turn onto its street by name. Arriving is the
+  same waypoint touch a walk on foot earns - one arrival, one sentence. I again, Escape, or any
+  walk key hands the wheel straight back, and the legend carries a Take me there button for the
+  mouse. Auto-walk also learned to follow the street: an obstacle ahead steers it along the
+  clearest pavement, and only a true dead end stops it and says so
+
+- **Auto-walk** (CW-81) - press N and the walker walks forward on its own until something stops
+  it: N again, Escape, any walk key, or an obstacle in the way - and it says so out loud each
+  time. While it walks, Arrow Up and Arrow Down look up and down, and touching W A S D takes the
+  wheel straight back. One press covers the length of a street that used to need a key held the
+  whole way, which matters when holding a key down is the hard part
 
 - **Seven real landmarks per city, chosen by hand** (CW-78) - the landmark list used to be
   arithmetic over map tags, which filled Seattle's legend with hotels and put the Space Needle
@@ -42,11 +69,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A streetcar platform is not a road** (CW-95) - platform, corridor and construction ways used
+  to fall through the road-width table into a five-metre carriageway, which drew a roadway along
+  the South Lake Union streetcar stops and refused to seat anyone on their benches, because the
+  game will not invent a person sitting on the tarmac. All three kinds are walkable open ground
+  at pavement level now - no kerb cut, no carriageway - and the four platform benches seat
+  people again
+
 - **Teleporting to a landmark counts as finding it** (CW-78) - landing beside one seeded the
   "near" state without the visit, so the legend ticked at whatever later step happened to
   re-enter the ring. The landing itself marks it now
 
 ### Changed
+
+- **The skyline is visible from anywhere** (CW-82) - the city used to end 260 metres out: past
+  the fog, a tower was a faint cutout and most of the map simply was not there. The detailed
+  buildings still own the first 260 metres, and beyond them the same volumes are drawn a second
+  time through a windowless material - no facade detail to shimmer at distance, one shared copy
+  of the geometry - fading in distance bands to the edge of the map, so downtown reads from the
+  waterfront and a walk toward it has a destination on the horizon. A murky night still pulls
+  the skyline in close, the ground still vanishes with distance the way it always has, and the
+  cost measured on the same machine, same session, was nothing: the frame rate did not move
+
+- **Looking around is hands-free by default** (CW-81) - the view turns toward wherever the
+  cursor points: still in the middle, faster toward the edges, settling the moment the cursor
+  comes back to centre or leaves the picture. A Mouse look button cycles between this, the old
+  hold-and-drag, and off, and the choice is remembered; with reduced motion set it starts off
+  and stays whatever you pick. Underneath, every way of looking - keys, mouse, the camera
+  panel's buttons - now steers one target the camera follows smoothly, and walking builds to
+  full stride over a quarter second instead of starting at it, so a tap of W is a step, not a
+  lurch
 
 - **In color, every surface now has a color of its own** (CW-92) - a wall used to change color as
   you walked toward it, sometimes flipping from one color to another all at once across a whole

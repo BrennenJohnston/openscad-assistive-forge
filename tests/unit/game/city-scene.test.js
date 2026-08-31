@@ -638,6 +638,29 @@ describe('buildCityGroup — CW-8 distinctness', () => {
     dispose()
   })
 
+  // CW-82: the far skyline. The laws that keep it cheap and honest: it is
+  // the SAME geometry object (one VBO, a second draw - never a copy of the
+  // city), it carries no window texture, and overhead - where the fog its
+  // shader lives in is disabled - it hides.
+  it('★★ builds a windowless far-skyline mesh SHARING the buildings geometry (CW-82)', () => {
+    const { group, setMapView, dispose } = buildCityGroup(model())
+    const near = group.children.filter((c) => c.name === 'buildings')
+    const far = group.children.filter((c) => c.name === 'buildings-far')
+    expect(far.length).toBe(near.length)
+    for (let i = 0; i < far.length; i++) {
+      expect(far[i].geometry).toBe(near[i].geometry)
+      expect(far[i].material.map ?? null).toBeNull()
+      expect(far[i].material).not.toBe(near[i].material)
+    }
+
+    setMapView(true)
+    for (const mesh of far) expect(mesh.visible).toBe(false)
+    setMapView(false)
+    for (const mesh of far) expect(mesh.visible).toBe(true)
+
+    dispose()
+  })
+
   it('setCellRaster biases every textured facade material for the cell grid (CW-41)', () => {
     // The shimmer fix: facade textures are filtered for the CELL raster,
     // so the bias is log2 of the cell height and follows the character
@@ -894,19 +917,22 @@ describe('buildStreetProps (CW-16)', () => {
     props.dispose()
   })
 
-  it('walks under the crown but not through the trunk', () => {
+  it('walks under the leaves but not through the trunk', () => {
+    // CW-94: the blob crown became the ring-branch system, and the law this
+    // case holds did not move - CW-16's walk-under rule now binds the LEAF
+    // CUBES (constraint e): no cube's underside below CANOPY_BASE_MIN_M.
+    // Branches may pass lower, bare - a bare member is not a wall of leaves
+    // at head height - and only the trunk blocks a cane.
     const m = propsModel()
     const props = buildStreetProps(m, buildCollisionGrid(m))
     const trunks = props.group.children.find((c) => c.name === 'tree-trunks')
-    const canopies = props.group.children.find(
-      (c) => c.name === 'tree-canopies'
-    )
+    const leaves = props.group.children.find((c) => c.name === 'tree-leaves')
 
     trunks.geometry.computeBoundingBox()
-    canopies.geometry.computeBoundingBox()
+    leaves.geometry.computeBoundingBox()
     expect(trunks.geometry.boundingBox.min.z).toBeCloseTo(0, 5)
-    // Eye height is 1.7 m: the canopy must start above it.
-    expect(canopies.geometry.boundingBox.min.z).toBeGreaterThan(1.9)
+    // Eye height is 1.7 m: every leaf cube starts above it.
+    expect(leaves.geometry.boundingBox.min.z).toBeGreaterThan(1.9)
 
     props.dispose()
   })
@@ -950,7 +976,9 @@ describe('buildStreetProps (CW-16)', () => {
 
     for (const name of [
       'tree-trunks',
-      'tree-canopies',
+      // CW-94: the blob crown's mesh became the ring system's two kinds.
+      'tree-branches',
+      'tree-leaves',
       'cars',
       'lamp-poles',
       'lamp-heads',

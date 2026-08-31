@@ -74,7 +74,10 @@ import {
   treeTableFor,
   pickSpecies,
   treeSpec,
-  makeCanopyGeoms,
+  treeBranches,
+  branchLeafCubes,
+  trunkFlare,
+  CANOPY_BASE_MIN_M,
 } from './city-trees.js';
 import {
   flowerTableFor,
@@ -3185,6 +3188,20 @@ function antennaHeightCutoff(buildings) {
  */
 const FAR_SILHOUETTE_KEEP = 0.14;
 
+// CW-82: the whole-map draw distance. The detailed buildings own the first
+// DETAIL_FAR_M (the fog's clear far plane, where CW-24's floor used to take
+// over); past it a second, cheaper mesh of the same volumes - no window
+// texture, no facade detail - carries the skyline out to the bake circle's
+// edge in distance BANDS, so depth still reads where one flat floor made a
+// cardboard backdrop. Band 1 equals the near floor exactly, which is what
+// makes the hand-over seam invisible; the scene fog itself stays at 40-260
+// because the GROUND must still vanish (the round-1 "dim carpet" failure,
+// recorded above FAR_SILHOUETTE_KEEP).
+const DETAIL_FAR_M = 260;
+const FAR_BAND_1_END_M = 500;
+const FAR_BAND_2_END_M = 900;
+const FAR_BAND_KEEP = [FAR_SILHOUETTE_KEEP, 0.11, 0.08];
+
 /**
  * Give a material a fog FLOOR: it fogs normally with distance, then stops.
  *
@@ -3193,13 +3210,24 @@ const FAR_SILHOUETTE_KEEP = 0.14;
  * that factor first. Both fog kinds are handled because the chunk is replaced
  * whole and the scene's fog kind is not this function's business to assume.
  *
+ * CW-82: an optional detail cutoff - fragments beyond it are DISCARDED, so
+ * the cheap far mesh behind can show through instead of z-fighting the same
+ * volume drawn twice. Zero means no cutoff (the landmark bodies keep their
+ * floor to any range - they are the skyline's icons).
+ *
  * @param {import('three').Material} material
  * @param {number} [keep] - fraction of the surface that survives at any range
+ * @param {number} [detailFarM] - discard fragments beyond this, 0 = never
  */
-function applyFarSilhouetteFog(material, keep = FAR_SILHOUETTE_KEEP) {
+function applyFarSilhouetteFog(
+  material,
+  keep = FAR_SILHOUETTE_KEEP,
+  detailFarM = 0
+) {
   const maxFactor = Math.max(0, Math.min(1, 1 - keep));
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uMaxFogFactor = { value: maxFactor };
+    shader.uniforms.uDetailFarM = { value: detailFarM };
     // Kept reachable so the floor can be measured and tuned against a live
     // frame: writing the uniform takes effect on the next draw, where
     // changing the constant would mean a rebuild and a different session.
@@ -3207,11 +3235,12 @@ function applyFarSilhouetteFog(material, keep = FAR_SILHOUETTE_KEEP) {
     shader.fragmentShader = shader.fragmentShader
       .replace(
         '#include <fog_pars_fragment>',
-        '#include <fog_pars_fragment>\nuniform float uMaxFogFactor;'
+        '#include <fog_pars_fragment>\nuniform float uMaxFogFactor;\nuniform float uDetailFarM;'
       )
       .replace(
         '#include <fog_fragment>',
         `#ifdef USE_FOG
+          if ( uDetailFarM > 0.0 && vFogDepth > uDetailFarM ) discard;
           #ifdef FOG_EXP2
             float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
           #else
@@ -3223,7 +3252,44 @@ function applyFarSilhouetteFog(material, keep = FAR_SILHOUETTE_KEEP) {
       );
   };
   // Materials that compile differently must not share a cached program.
-  material.customProgramCacheKey = () => `farSilhouette:${maxFactor}`;
+  material.customProgramCacheKey = () =>
+    `farSilhouette:${maxFactor}:${detailFarM}`;
+}
+
+/**
+ * CW-82: the far skyline's own fog - distance bands from the detail
+ * boundary outward, in ABSOLUTE metres so the weather drift cannot move
+ * the hand-over seam. Band 1 holds the near floor's exact value in every
+ * weather; from band 2 out the keep scales with the live fog far plane
+ * (fogFar / DETAIL_FAR_M), so a murky night pulls the skyline closer
+ * instead of ignoring the murk - CW-20's own words for what weather does
+ * to the silhouettes. Fragments inside the detail boundary are discarded
+ * (the near mesh owns them); there is deliberately NO far clamp, because
+ * the bake circle is centred on the CITY, not the camera - from the
+ * circle's edge, real towers stand up to a full diameter away (Seattle
+ * Center to downtown is ~1.49 km, past the 1.3 km radius a first draft
+ * clamped at). The geometry ends at the bake edge; nothing needs help not
+ * drawing past it.
+ *
+ * @param {import('three').Material} material
+ */
+function applyFarBandFog(material) {
+  material.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <fog_fragment>',
+      `#ifdef USE_FOG
+          if ( vFogDepth <= ${DETAIL_FAR_M}.0 ) discard;
+          float weatherK = clamp( fogFar / ${DETAIL_FAR_M}.0, 0.0, 1.0 );
+          float keep = vFogDepth < ${FAR_BAND_1_END_M}.0
+            ? ${FAR_BAND_KEEP[0]}
+            : ( vFogDepth < ${FAR_BAND_2_END_M}.0
+              ? ${FAR_BAND_KEEP[1]} * weatherK
+              : ${FAR_BAND_KEEP[2]} * weatherK );
+          gl_FragColor.rgb = mix( fogColor, gl_FragColor.rgb, keep );
+        #endif`
+    );
+  };
+  material.customProgramCacheKey = () => 'farBand';
 }
 
 /**
@@ -3782,6 +3848,11 @@ export function buildCityGroup(model) {
   // CW-41: every material filtered for the cell raster, so one setter can
   // follow the character size.
   const cellRasterMats = [];
+  // CW-82: the far skyline - the same merged volumes drawn a second time
+  // through a windowless material whose banded fog runs to the bake edge.
+  // Geometry is SHARED (one VBO, a second draw), so the cost is draw calls
+  // and discarded fragments, never a copy of the city.
+  const farMeshes = [];
   buildingGeoms.forEach((geoms, familyIndex) => {
     if (geoms.length === 0) return;
     const merged = mergeGeometries(geoms, false);
@@ -3791,7 +3862,7 @@ export function buildCityGroup(model) {
       map: windowTextures[familyIndex] ?? null,
       vertexColors: true,
     });
-    applyFarSilhouetteFog(material);
+    applyFarSilhouetteFog(material, FAR_SILHOUETTE_KEEP, DETAIL_FAR_M);
     applyCellRasterFiltering(material);
     cellRasterMats.push(material);
     const mesh = new Mesh(merged, material);
@@ -3801,6 +3872,17 @@ export function buildCityGroup(model) {
     buildingMats.push({ material, texture: windowTextures[familyIndex] });
     buildingMeshRefs.push({ mesh, material });
     buildingTriangles += merged.getAttribute('position').count / 3;
+
+    const farMaterial = new MeshLambertMaterial({
+      color: BUILDING_STREET_TINT,
+      vertexColors: true,
+    });
+    applyFarBandFog(farMaterial);
+    const farMesh = new Mesh(merged, farMaterial);
+    farMesh.name = 'buildings-far';
+    group.add(farMesh);
+    disposables.push(farMaterial);
+    farMeshes.push(farMesh);
   });
 
   let storefrontTriangles = 0;
@@ -4286,6 +4368,10 @@ export function buildCityGroup(model) {
       // network, not its markings.
       if (lineMesh) lineMesh.visible = !isMap;
       for (const mesh of dressingMeshes) mesh.visible = !isMap;
+      // CW-82: the far skyline is a street-view idea. Overhead there is no
+      // fog (the controller disables it), so the banded material would draw
+      // the whole city a second time at full brightness over itself.
+      for (const mesh of farMeshes) mesh.visible = !isMap;
       for (const { material, texture } of buildingMats) {
         material.map = isMap ? null : (texture ?? null);
         material.needsUpdate = true;
@@ -5510,6 +5596,28 @@ function makeBox(sizeX, sizeY, sizeZ, x, y, z, rotationRad, tint) {
 }
 
 /**
+ * CW-94: one pitched member between two points, INDEXED like every other
+ * prop box (the props merge among themselves, not with the extruded city).
+ * The rotation composition is memberBox's corrected one - rotateX(-pitch)
+ * then the yaw - because the tripod's original order MIRRORS the horizontal
+ * component, which the Wheel's rim photographed the hard way (CW-78 record).
+ */
+function makePitchedMember(ax, ay, az, bx, by, bz, thickM, tint) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const dz = bz - az;
+  const len = Math.hypot(dx, dy, dz);
+  if (!(len > 0)) return null;
+  const geom = new BoxGeometry(thickM, thickM, len + thickM / 2);
+  const pitch = Math.acos(Math.min(1, Math.max(-1, dz / len)));
+  geom.rotateX(-pitch);
+  geom.rotateZ(-Math.atan2(dx, dy));
+  geom.translate((ax + bx) / 2, (ay + by) / 2, (az + bz) / 2);
+  paintGeometry(geom, tint);
+  return geom;
+}
+
+/**
  * Furnish the streets with trees and parked cars (CW-16) and streetlights
  * (CW-18).
  *
@@ -5541,6 +5649,14 @@ export function buildStreetProps(model, collision = null) {
 
   const trunkGeoms = [];
   const canopyGeoms = [];
+  // CW-94: the ring-branch system's two kinds, merged separately so each
+  // wears its own name in the class pass (both TREE) and its own stated
+  // material colour (branches the trunk's wood, leaves the canopy tint).
+  const branchGeoms = [];
+  const leafGeoms = [];
+  let branchesClipped = 0;
+  let branchesDropped = 0;
+  let leavesHeldUp = 0;
   // CW-56: what actually got planted, per species. A table nobody uses and a
   // table everybody uses look identical in a merged mesh (CW-53's lesson),
   // so the build counts its own.
@@ -5708,6 +5824,23 @@ export function buildStreetProps(model, collision = null) {
   // order, so every other consumer of that stream sees the number it saw
   // before.
   const treeTable = treeTableFor(model.name);
+  /**
+   * ★★ CW-94 (CW-Q94): TREES ARE THEIR SPECIES - the blob crown is replaced
+   * by the owner's ring-branch system at full cited heights. The trunk is
+   * the leader; branch rings climb it under the taper law; opaque leaf
+   * cubes wrap each branch's outer run with deliberate gaps (the
+   * reference's own sparseness, CW94-STEP0-LEAF-TECHNIQUE.md). Every draw
+   * comes from the tree's existing seed through a PRIVATE derived stream,
+   * so no other placement number moves (the CW-46 law) - and the tier /
+   * species / size draws below keep their exact bits.
+   *
+   * Constraint (a): a branch never reaches into a building - probed against
+   * the collision grid, which at planting time holds ONLY buildings; a
+   * blocked branch is halved once, then dropped and counted. Constraint
+   * (e): no leaf cube's underside below CANOPY_BASE_MIN_M - CW-16's law
+   * generalised; the branch itself stays, bare, and ONLY the trunk stamps
+   * collision, exactly as before.
+   */
   const plantTree = (x, y, seed, leafType) => {
     const tier = CANOPY_TIERS[seed % CANOPY_TIERS.length];
     const species = pickSpecies(treeTable, (seed >>> 5) % 997, leafType);
@@ -5725,13 +5858,76 @@ export function buildStreetProps(model, collision = null) {
         TRUNK_TINT
       )
     );
-    // A faceted crown, not a smooth ball: the flat facets give the sampler
-    // the luminance steps it needs to read as leaves rather than a blob. The
-    // cone stacks three of them for the same reason.
+    const flare = trunkFlare(spec);
+    if (flare) {
+      trunkGeoms.push(
+        makeBox(
+          flare.sideM,
+          flare.sideM,
+          flare.heightM,
+          x,
+          y,
+          flare.heightM / 2,
+          0,
+          TRUNK_TINT
+        )
+      );
+    }
+
     const canopyTint = tintOf(tier, CANOPY_HUE_DEG, CANOPY_CHROMA);
-    for (const canopy of makeCanopyGeoms(x, y, spec)) {
-      paintGeometry(canopy, canopyTint);
-      canopyGeoms.push(canopy);
+    const half = spec.trunkSideM / 2;
+    for (const branch of treeBranches(spec, seed)) {
+      const dx = Math.sin(branch.bearingRad) * Math.cos(branch.pitchRad);
+      const dy = Math.cos(branch.bearingRad) * Math.cos(branch.pitchRad);
+      const dz = Math.sin(branch.pitchRad);
+      // Leave from the trunk face, not the axis, so the joint reads solid.
+      const ax = x + Math.sin(branch.bearingRad) * half;
+      const ay = y + Math.cos(branch.bearingRad) * half;
+      const az = branch.z0;
+      // Constraint (a): the tip and the midpoint must not stand in a
+      // building's footprint. Halve once, then drop and count.
+      let lengthM = branch.lengthM;
+      const clear = (m) => !isBlocked(ax + dx * m, ay + dy * m);
+      if (!clear(lengthM) || !clear(lengthM / 2)) {
+        lengthM /= 2;
+        if (!clear(lengthM) || !clear(lengthM / 2)) {
+          branchesDropped++;
+          continue;
+        }
+        branchesClipped++;
+      }
+      branchGeoms.push(
+        makePitchedMember(
+          ax,
+          ay,
+          az,
+          ax + dx * lengthM,
+          ay + dy * lengthM,
+          az + dz * lengthM,
+          branch.thickM,
+          TRUNK_TINT
+        )
+      );
+      for (const cube of branchLeafCubes({ ...branch, lengthM })) {
+        const cz = az + dz * cube.alongM;
+        // Constraint (e): the cube's underside stays above head height.
+        if (cz - cube.sizeM / 2 < CANOPY_BASE_MIN_M) {
+          leavesHeldUp++;
+          continue;
+        }
+        leafGeoms.push(
+          makeBox(
+            cube.sizeM,
+            cube.sizeM,
+            cube.sizeM,
+            ax + dx * cube.alongM,
+            ay + dy * cube.alongM,
+            cz,
+            0,
+            canopyTint
+          )
+        );
+      }
     }
 
     treeSpots.add(x, y);
@@ -6860,6 +7056,10 @@ export function buildStreetProps(model, collision = null) {
     new MeshLambertMaterial({ color: 0xffffff, vertexColors: true });
   addMerged(trunkGeoms, 'tree-trunks', propMaterial());
   addMerged(canopyGeoms, 'tree-canopies', propMaterial());
+  // CW-94: the ring-branch system, one merge per kind (the CW-56 crown
+  // lesson - never one mesh per species).
+  addMerged(branchGeoms, 'tree-branches', propMaterial());
+  addMerged(leafGeoms, 'tree-leaves', propMaterial());
   addMerged(carGeoms, 'cars', propMaterial());
   addMerged(trafficGeoms, 'traffic-cars', propMaterial());
   addMerged(personGeoms, 'people', propMaterial());
@@ -7096,6 +7296,12 @@ export function buildStreetProps(model, collision = null) {
       treeCount: treeSpots.size,
       mappedTreeCount,
       speciesPlanted,
+      // CW-94: what the ring system's two constraints cost, counted rather
+      // than silent - a branch halved at a wall, a branch dropped at one,
+      // a leaf cube held back above head height.
+      branchesClipped,
+      branchesDropped,
+      leavesHeldUp,
       // CW-57: what stands, split so a reader can tell DATA from the
       // fallback - fallbackPlanters is design, everything else is the map.
       plantingPlaced,

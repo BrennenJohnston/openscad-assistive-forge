@@ -106,6 +106,9 @@ const EXPECTED_KEYS = {
   STORAGE_KEY_CITY_WALK_EMPTY_CITY: 'openscad-forge-city-walk-empty-city',
   STORAGE_KEY_CITY_WALK_MAP_STYLE: 'openscad-forge-city-walk-map-style',
   STORAGE_KEY_CITY_WALK_CAMERA_PANEL: 'openscad-drawer-camera-city-walk-state',
+  // CW-81: the mouse-look mode (follow | drag | off); absent means follow,
+  // or off when the machine asks for reduced motion.
+  STORAGE_KEY_CITY_WALK_LOOK: 'openscad-forge-city-walk-look',
 };
 
 describe('storage-keys exported constants', () => {

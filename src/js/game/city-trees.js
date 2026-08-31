@@ -96,14 +96,22 @@ export const CANOPY_BASE_MIN_M = 2;
  * would want: raise SQUASH to 1 and the cited heights are drawn as cited.
  */
 const HEIGHT_FLOOR_M = 4;
-const HEIGHT_SQUASH = 0.5;
+/**
+ * ★★ CW-94 (CW-Q94): THE COMPRESSION IS RETIRED - trees stand at their full
+ * cited heights. The paragraph above records why it existed (full crowns at
+ * this planting density closed the sky), and that reason is not deleted, it
+ * is DECIDED DIFFERENTLY: the crown is no longer a solid blob but a sparse
+ * ring-branch system with real gaps (the reference's own look), so a street
+ * of full-height trees no longer paints a ceiling - and the sky-closure
+ * photograph at a Seattle infill street is in the CW-94 record so the trade
+ * is judged on a picture. One number to reverse, exactly as promised.
+ */
+const HEIGHT_SQUASH = 1;
 
 /** Trunk side length as a fraction of tree height, floored so a young tree
  * still has a stem the sampler can find. */
 const TRUNK_SIDE_SHARE = 0.022;
 const TRUNK_SIDE_MIN_M = 0.28;
-/** The trunk runs a little into the crown so no seam opens between them. */
-const TRUNK_OVERLAP_M = 0.5;
 
 /**
  * The four city tables. `h` is the canopy TOP above the ground, in metres,
@@ -228,8 +236,213 @@ export function treeSpec(species, t) {
     crownM,
     radiusM: (crownM / 2) * form.widthRatio,
     trunkSideM: Math.max(TRUNK_SIDE_MIN_M, topM * TRUNK_SIDE_SHARE),
-    trunkHeightM: baseM + TRUNK_OVERLAP_M,
+    // CW-94: the trunk is the LEADER now - it runs the full height and the
+    // branch rings hang off it. The old baseM + overlap stem belonged to the
+    // blob crown, which the near build no longer draws.
+    trunkHeightM: topM,
     stacks: form.stacks,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// CW-94 (CW-Q94): the ring-branch system - the owner's own specification
+// ---------------------------------------------------------------------------
+
+/**
+ * Per-form ring/branch/leaf parameters. The species tables above already
+ * carry the cited HEIGHTS and the form each species takes; what a form
+ * means in branches is written here, once per form, so a vase-elm and a
+ * vase-honeylocust differ by their cited sizes rather than by two copies of
+ * the same numbers.
+ *
+ * The numbers are design values in the same sense the canopy forms above
+ * are: the cited quantities remain the heights and spreads in CITY_TREES;
+ * ring spacing, branch counts and pitches are the drawn interpretation of
+ * each form's published silhouette (a vase branches upward, an oak spreads,
+ * a conifer whorls and droops at the base). Every law the owner named is a
+ * unit case: counts within range and never above 4, lower rings longer and
+ * thicker, ring budget falling as rings climb.
+ *
+ * `lenShare` is [bottom, top] branch length as a share of the tree's crown
+ * radius; `pitchDeg` is [bottom, top] elevation above horizontal;
+ * `countBudget` is [bottom, top] the per-ring cap the seeded draw picks
+ * under (never above BRANCHES_PER_RING_MAX).
+ */
+export const BRANCH_SYSTEM = {
+  round: {
+    ringSpacingM: 2.8,
+    countBudget: [4, 1],
+    lenShare: [1.0, 0.3],
+    pitchDeg: [15, 45],
+    thickShare: 0.09,
+  },
+  oval: {
+    ringSpacingM: 2.5,
+    countBudget: [3, 1],
+    lenShare: [0.75, 0.3],
+    pitchDeg: [25, 55],
+    thickShare: 0.08,
+  },
+  vase: {
+    ringSpacingM: 2.7,
+    countBudget: [3, 2],
+    lenShare: [0.85, 0.5],
+    pitchDeg: [35, 60],
+    thickShare: 0.08,
+  },
+  columnar: {
+    ringSpacingM: 2.0,
+    countBudget: [3, 1],
+    lenShare: [0.5, 0.2],
+    pitchDeg: [30, 65],
+    thickShare: 0.07,
+  },
+  cone: {
+    ringSpacingM: 1.9,
+    countBudget: [4, 1],
+    lenShare: [1.0, 0.12],
+    pitchDeg: [-10, 8],
+    thickShare: 0.07,
+  },
+};
+
+/** The square trunk has four faces, and that is the hard cap the owner set. */
+export const BRANCHES_PER_RING_MAX = 4;
+
+/** Leaf cubes are about twice the branch member's cross-section - drawn a
+ * shade over (2.4) so a run reads chunky at 30 % cells, the same kind of
+ * drawn-width call the diagrid and the cane made. */
+export const LEAF_CUBE_SHARE = 3;
+export const LEAF_CUBE_MIN_M = 0.45;
+/**
+ * Centre-to-centre spacing of successive leaf cubes along a branch, in cube
+ * sizes. JUST OVER 1: the cubes of one branch overlap into a single
+ * enveloping run - the owner's "foliage wraps the branch, the branch
+ * travels inside its leaf run" - photographed at 1.8 first, which read as
+ * winter buds dotted along bare wood. The sparseness the reference's look
+ * needs (CW94-STEP0-LEAF-TECHNIQUE.md) lives BETWEEN runs: the bare inner
+ * share below, the gaps between branches, and the rings' own spacing.
+ */
+export const LEAF_SPACING_SHARE = 1.15;
+/** The bare inner share of a branch: leaves wrap the outer run only. Part
+ * budget, part constraint (e) - the run nearest the trunk stays clear. */
+export const LEAF_BARE_INNER_SHARE = 0.45;
+
+/** The base flare: species-appropriate on the big trees, skipped on small
+ * ones (a hawthorn has no buttress). Sides as a multiple of the trunk's. */
+const FLARE_SIDE_SHARE = 1.7;
+const FLARE_HEIGHT_M = 0.9;
+const FLARE_MIN_TREE_M = 10;
+
+/** Tiny deterministic LCG over a derived seed - a PRIVATE stream per tree,
+ * so the generator can draw freely without re-dealing anybody else's
+ * randomness (the CW-46 seed law; the species/tier draws above keep their
+ * exact bits). */
+function branchLcg(seed) {
+  let s = (seed ^ 0x5eaf94) >>> 0;
+  return () => {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}
+
+/**
+ * The branch rings for one tree: the owner's system, as data.
+ *
+ * Each branch is a straight member leaving one of the square trunk's four
+ * faces: `bearingRad` (world compass), `pitchRad` above horizontal,
+ * `lengthM`, `thickM`, and `z0` where it leaves the trunk. The TAPER LAW is
+ * in the envelopes: `ringFrac` runs 0 at the lowest ring to 1 at the top,
+ * and length, thickness and the count budget all fall with it. The seeded
+ * jitter varies trees; the envelopes bound every one of them.
+ *
+ * @param {ReturnType<typeof treeSpec>} spec
+ * @param {number} seed - the tree's existing integer seed
+ * @returns {Array<{z0:number,bearingRad:number,pitchRad:number,lengthM:number,thickM:number,ringFrac:number}>}
+ */
+export function treeBranches(spec, seed) {
+  const sys = BRANCH_SYSTEM[spec.form] ?? BRANCH_SYSTEM.round;
+  const rng = branchLcg(seed);
+  const branches = [];
+  const crownBase = spec.baseM;
+  const crownTop = spec.topM - Math.max(0.6, spec.topM * 0.04);
+  const span = crownTop - crownBase;
+  if (span <= 0.5) return branches;
+  const rings = Math.max(2, Math.round(span / sys.ringSpacingM));
+  const maxLenM = Math.max(0.8, spec.radiusM);
+  const thickBase = Math.max(0.12, spec.trunkSideM * 0.55);
+
+  for (let r = 0; r < rings; r++) {
+    const ringFrac = rings === 1 ? 0 : r / (rings - 1);
+    const z0 = crownBase + span * ringFrac;
+    const budget = Math.round(
+      sys.countBudget[0] + (sys.countBudget[1] - sys.countBudget[0]) * ringFrac
+    );
+    const cap = Math.min(BRANCHES_PER_RING_MAX, Math.max(0, budget));
+    // 0..cap, seeded: a ring may honestly carry nothing.
+    const count = Math.min(cap, Math.floor(rng() * (cap + 1)));
+    // The four faces, dealt in seeded order so consecutive rings do not
+    // stripe one side of the tree.
+    const faceOffset = Math.floor(rng() * 4);
+    for (let b = 0; b < count; b++) {
+      const face = (faceOffset + b) % 4;
+      const bearingRad = (face * Math.PI) / 2 + (rng() - 0.5) * (Math.PI / 5);
+      const lenEnvelope =
+        sys.lenShare[0] + (sys.lenShare[1] - sys.lenShare[0]) * ringFrac;
+      const lengthM = Math.max(
+        0.6,
+        maxLenM * lenEnvelope * (0.75 + rng() * 0.35)
+      );
+      const pitchDeg =
+        sys.pitchDeg[0] + (sys.pitchDeg[1] - sys.pitchDeg[0]) * ringFrac;
+      const pitchRad = ((pitchDeg + (rng() - 0.5) * 10) * Math.PI) / 180;
+      const thickM = Math.max(0.1, thickBase * (1 - 0.6 * ringFrac));
+      branches.push({ z0, bearingRad, pitchRad, lengthM, thickM, ringFrac });
+    }
+  }
+  return branches;
+}
+
+/**
+ * The leaf cubes wrapping one branch: opaque cubes at ~2x the branch's
+ * cross-section, spaced with deliberate gaps, enveloping the OUTER run of
+ * the member (the branch travels inside its leaf run). Returned in the
+ * branch's own frame as distances along it; the caller places them in the
+ * world and enforces constraint (e) - no leaf below head height - because
+ * only the caller knows the tree's ground.
+ *
+ * @param {{lengthM:number,thickM:number}} branch
+ * @returns {Array<{alongM:number,sizeM:number}>}
+ */
+export function branchLeafCubes(branch) {
+  const sizeM = Math.max(LEAF_CUBE_MIN_M, branch.thickM * LEAF_CUBE_SHARE);
+  const startM = branch.lengthM * LEAF_BARE_INNER_SHARE;
+  const step = sizeM * LEAF_SPACING_SHARE;
+  const cubes = [];
+  for (let a = startM; a <= branch.lengthM; a += step) {
+    cubes.push({ alongM: a, sizeM });
+  }
+  // The tip always carries one, so no branch ends in a bare spike.
+  const last = cubes[cubes.length - 1];
+  if (!last || branch.lengthM - last.alongM > step * 0.5) {
+    cubes.push({ alongM: branch.lengthM, sizeM });
+  }
+  return cubes;
+}
+
+/**
+ * The base flare, where species-appropriate: a short wider collar at the
+ * foot of a big tree's trunk. Small species return null - a hawthorn has no
+ * buttress and a false one would read as a planter.
+ *
+ * @param {ReturnType<typeof treeSpec>} spec
+ * @returns {{sideM:number,heightM:number}|null}
+ */
+export function trunkFlare(spec) {
+  if (spec.topM < FLARE_MIN_TREE_M) return null;
+  return {
+    sideM: spec.trunkSideM * FLARE_SIDE_SHARE,
+    heightM: FLARE_HEIGHT_M,
   };
 }
 
@@ -238,6 +451,11 @@ export function treeSpec(species, t) {
  * every form but the cone, which is three shrinking ones stacked - a cone
  * built as a smooth cone would lose the facets, and the facets are what read
  * as needles.
+ *
+ * CW-94: the near build no longer calls this - trees are their ring-branch
+ * system now - but the function stays exactly as shipped, because CW-82's
+ * far tier keeps SIMPLE crowns (no branch cubes ride the far mesh) and this
+ * is the crown it will draw.
  *
  * Returned as a list so the caller merges them the way it merges everything
  * else; the caller also owns the tint, because palette CHOICE lives in

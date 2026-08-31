@@ -97,12 +97,20 @@ export const CLASS_BY_MESH_NAME = new Map([
   ['road-lines', SURFACE_CLASS.CURB],
   // buildings splits into wall and roof by normal; see ROOF_SPLIT below.
   ['buildings', SURFACE_CLASS.BUILDING_WALL],
+  // CW-82: the far skyline is the same volumes through a cheaper material -
+  // the same surfaces, so the same voice (and the same roof split).
+  ['buildings-far', SURFACE_CLASS.BUILDING_WALL],
   ['storefronts', SURFACE_CLASS.STOREFRONT],
   ['sign-plates', SURFACE_CLASS.SIGN],
   ['sign-faces', SURFACE_CLASS.SIGN],
   ['antennas', SURFACE_CLASS.MAST],
   ['tree-trunks', SURFACE_CLASS.TREE],
   ['tree-canopies', SURFACE_CLASS.TREE],
+  // CW-94: the ring-branch system's two kinds. TREE, exactly like the trunk
+  // and the crown they replace - a branch and its leaf run are the tree's
+  // own voice, not a new id (the span table stays full at 16).
+  ['tree-branches', SURFACE_CLASS.TREE],
+  ['tree-leaves', SURFACE_CLASS.TREE],
   ['cars', SURFACE_CLASS.CAR],
   ['traffic-cars', SURFACE_CLASS.CAR],
   ['people', SURFACE_CLASS.PERSON],
@@ -200,7 +208,10 @@ export const CLASS_BY_MESH_NAME = new Map([
  * apart by which way they face: the extrusion is along +Z, so a face whose
  * normal points at the sky is a roof and everything else is a wall.
  */
-const ROOF_SPLIT = new Map([['buildings', SURFACE_CLASS.BUILDING_ROOF]]);
+const ROOF_SPLIT = new Map([
+  ['buildings', SURFACE_CLASS.BUILDING_ROOF],
+  ['buildings-far', SURFACE_CLASS.BUILDING_ROOF],
+]);
 
 /** Above this dot product with +Z a face counts as looking at the sky. */
 const ROOF_NORMAL_Z = 0.9;

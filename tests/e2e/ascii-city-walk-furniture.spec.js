@@ -341,7 +341,11 @@ test.describe('ASCII City Walk — plantings (CW-57)', () => {
     // At 18 m Albuquerque has 1,507 lamps and the roadrunner has 23. The bird
     // pin is the thing that caught a misread standard.
     expect(props.birdsPlaced['greater roadrunner']).toBe(23)
-    expect(props.birdsPlaced['rock pigeon']).toBe(105)
+    // ★ CW-95 moved the pigeon by ONE (105 -> 106): Albuquerque's nine
+    // corridor ways stopped being roadways, so one open-ground perch beside
+    // a lamp stopped counting as standing in traffic. The roadrunner - the
+    // number this pin exists for - did not move at all.
+    expect(props.birdsPlaced['rock pigeon']).toBe(106)
     // No crow and no gull on this roster, so none anywhere in the city.
     expect(props.birdsPlaced['american crow']).toBeUndefined()
     expect(props.birdsPlaced.gull).toBeUndefined()

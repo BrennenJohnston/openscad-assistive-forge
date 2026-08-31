@@ -82,6 +82,11 @@ import {
   CHAR_SCALE_MIN,
   CHAR_SCALE_STEP,
   SPEED_LABEL_STEP,
+  TURN_SPEED_RADPS,
+  PITCH_SPEED_RADPS,
+  findRoute,
+  steerHeading,
+  clearRunAhead,
 } from './walk-controls.js';
 import {
   DEFAULT_MAP_STYLE,
@@ -147,6 +152,7 @@ import {
   STORAGE_KEY_CITY_WALK_COLOUR,
   STORAGE_KEY_CITY_WALK_DAYLIGHT,
   STORAGE_KEY_CITY_WALK_EMPTY_CITY,
+  STORAGE_KEY_CITY_WALK_LOOK,
   STORAGE_KEY_CITY_WALK_MAP_STYLE,
   STORAGE_KEY_CITY_WALK_CAMERA_PANEL,
 } from '../storage-keys.js';
@@ -200,6 +206,74 @@ const FIREWORKS_STILL_MS = 3200;
 // leaving the mark's hysteresis ring, so pressing against the plinth is one
 // sentence, not a stream.
 const WAYPOINT_TOUCHED_MESSAGE = (name) => `Waypoint reached: ${name}.`;
+
+// CW-81 (CW-Q72, CW-Q80): looking without a drag, walking without a held
+// key. ACCESSIBILITY-CRITICAL STRINGS (D-35), flagged DOUBLY in the round
+// text pack - auto-walk is the GAG "alternative to held buttons" and these
+// sentences are how a screen-reader user knows the walker started, stopped,
+// and why.
+const AUTO_WALK_ON_MESSAGE =
+  'Auto-walk on. Walking forward. Press N, Escape, or a walk key to stop.';
+const AUTO_WALK_OFF_MESSAGE = 'Auto-walk off.';
+const AUTO_WALK_BLOCKED_MESSAGE = 'Auto-walk stopped. Something is in the way.';
+const LOOK_MODE_MESSAGES = {
+  follow:
+    'Mouse look follows the cursor. The view turns toward wherever you point.',
+  drag: 'Mouse look needs a drag. Hold the mouse button and move to look.',
+  off: 'Mouse look off. The keys and buttons still look around.',
+};
+/** The cycle order the toolbar button steps through. */
+const LOOK_MODES = ['follow', 'drag', 'off'];
+
+// CW-87 (CW-Q84): the tour. ACCESSIBILITY-CRITICAL STRINGS (D-35), flagged
+// DOUBLY in the round text pack - the tour is the GAG "very simple control
+// schemes" route (one key starts, one key stops) and these sentences are the
+// whole of what a blind player hears about a walk the game is doing for them.
+const TOUR_START_MESSAGE = (name) =>
+  `Taking you to ${name}. Press I, Escape, or a walk key to stop.`;
+const TOUR_STOPPED_MESSAGE = 'Tour stopped.';
+const TOUR_BLOCKED_MESSAGE = 'Tour stopped. Something is in the way.';
+const TOUR_NO_ROUTE_MESSAGE = (name) =>
+  `No walkable route to ${name} from here.`;
+const TOUR_TURN_MESSAGE = (dir, street) =>
+  street ? `Turn ${dir} onto ${street}.` : `Turn ${dir}.`;
+/** A bend gentler than this is a drift, not a turn - nothing is spoken. */
+const TOUR_TURN_MIN_RAD = (30 * Math.PI) / 180;
+/** A route waypoint is "reached" inside this - under the cell size, over
+ * the per-frame stride, so a step can neither orbit nor skip it. */
+const TOUR_WAYPOINT_REACH_M = 0.9;
+// Stop-turn-go: with the heading this far off the leg's bearing the walk
+// holds while the camera comes around (a curve cut at full stride could
+// graze the corner the route cleared by inches), and resumes once inside
+// the smaller angle - two thresholds so the boundary cannot chatter.
+const TOUR_HOLD_ANGLE_RAD = (40 * Math.PI) / 180;
+const TOUR_RESUME_ANGLE_RAD = (25 * Math.PI) / 180;
+/** Street-following (CW-87): how short the way ahead must get before
+ * auto-walk starts steering, and the fan it steers with (steerHeading). */
+const AUTO_WALK_STEER_AT_M = 2.2;
+
+// CW-81 hover-look numbers (plan §S 9.7). The dead zone is a share of the
+// viewport half-extent; the rate rises linearly from its edge to the axis
+// maximum at the viewport edge. Yaw reaches the key-turn 90 deg/s; pitch
+// reaches the key-pitch 45 deg/s ("likewise" is the same curve on each
+// axis's own speed) and the gaze clamp still binds.
+const HOVER_DEAD_ZONE = 0.12;
+const HOVER_MAX_YAW_RADPS = (90 * Math.PI) / 180;
+const HOVER_MAX_PITCH_RADPS = (45 * Math.PI) / 180;
+/**
+ * CW-81 (the §10 reading): every look input steers a TARGET the camera
+ * follows critically damped. At the hover edge rate the settled lag is
+ * rate x tau = 9 degrees and the per-frame step at 60 fps is about
+ * 1.4 degrees - under the 1.5 the drift note asks for, with no overshoot
+ * because an exponential follow cannot overshoot.
+ */
+const LOOK_FOLLOW_TAU_S = 0.1;
+/** Snap distance: below this the camera lands ON the target, so the
+ * exponential tail cannot re-convert the frame forever. ~0.03 degrees. */
+const LOOK_SNAP_RAD = 0.0005;
+/** The walk acceleration ramp: rest to full speed, and full speed to rest,
+ * over this many seconds (the §10 reading - no frame starts at 4.8 m/s). */
+const WALK_RAMP_S = 0.25;
 // Thunder no closer together than this, so it stays an event.
 const THUNDER_GAP_MS = 30000;
 
@@ -403,6 +477,9 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     layer.removeEventListener('keydown', handleGameKeyDown);
     layer.removeEventListener('keyup', handleGameKeyUp);
     window.removeEventListener('blur', clearHeldKeys);
+    // CW-81: the hover pause rides window blur too, and the window outlives
+    // the game - the viewport's own listeners die with the layer.
+    window.removeEventListener('blur', handleViewportPointerLeave);
     state.themeUnsub?.();
     state.themeUnsub = null;
 
@@ -454,6 +531,20 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     }
     if (state.helpOpen) {
       toggleHelp(false);
+      return;
+    }
+    // CW-87: a touring player who reaches for Escape wants to STOP the
+    // tour, not to leave the city mid-route - the same layer auto-walk
+    // holds, and the tour is the one that is driving.
+    if (state.game?.tour) {
+      stopTour(TOUR_STOPPED_MESSAGE);
+      return;
+    }
+    // CW-81: an auto-walking player who reaches for Escape wants to STOP,
+    // not to leave the city mid-stride. One Escape, one dismissal - the
+    // auto-walk is the next layer in after the dialogs.
+    if (state.game?.autoWalk) {
+      setAutoWalk(false, AUTO_WALK_OFF_MESSAGE);
       return;
     }
     close();
@@ -703,7 +794,18 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       'Arrow Left / Q and Arrow Right / E: turn',
       'R and F: look up and down',
       'V: level the view',
-      'Drag with the mouse: look around in street view, move the map in map view',
+      // CW-81 (CW-Q72, CW-Q80). FLAGGED STRINGS (D-35). The drag line is
+      // REVISED: dragging is one mode of three now, and the help teaches
+      // the default first.
+      'Move the mouse: the view turns toward the cursor (the Mouse look ' +
+        'button changes this to a held drag, or off)',
+      'Drag with the mouse: move the map in map view',
+      'N: auto-walk forward, following the street, until something stops ' +
+        'you; while it walks, Arrow Up and Arrow Down look, and W A S D ' +
+        'take over',
+      // CW-87 (CW-Q84). FLAGGED STRING (D-35).
+      'I: walk to the selected landmark, turn by turn; I again, Escape, ' +
+        'or a walk key stops the tour',
       'Shift (hold): move faster',
       'Left and Right Bracket: walking speed down or up',
       'M: switch between street view and map view',
@@ -1287,6 +1389,30 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
           toggle: true,
           views: 'street',
         },
+        // CW-81 (CW-Q80): auto-walk, the GAG alternative to held buttons.
+        // Street-only - there is no walker to send anywhere on the map.
+        {
+          id: 'cityWalkAutoWalkBtn',
+          label: 'Auto-walk',
+          keys: 'N',
+          press: () => toggleAutoWalk(),
+          toggle: true,
+          views: 'street',
+        },
+        // CW-81 (CW-Q72): the mouse-look preference. The signed decision
+        // says the camera panel; CW-38's guard says the panel is EXACTLY
+        // full (CW-85's Scene section overflowed it by 92 px and moved to
+        // this toolbar for the same reason), so the preference follows that
+        // precedent. Recorded as a deviation in the release record; the
+        // visible label stays fixed so the zone's widths cannot shift
+        // (CW-60's rule) and the aria-label carries the current mode.
+        {
+          id: 'cityWalkLookModeBtn',
+          label: 'Mouse look',
+          keys: '',
+          press: () => cycleLookMode(),
+          views: 'street',
+        },
         {
           id: 'cityWalkCenterBtn',
           label: 'Center on you',
@@ -1402,8 +1528,9 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     btn.id = spec.id;
     btn.textContent = spec.label;
     // The tooltip teaches the key instead of repeating the visible label,
-    // which stays the accessible name.
-    btn.title = 'Keyboard: ' + spec.keys;
+    // which stays the accessible name. A button with no key of its own
+    // (CW-81's Mouse look) simply teaches nothing.
+    if (spec.keys) btn.title = 'Keyboard: ' + spec.keys;
     if (spec.toggle) btn.setAttribute('aria-pressed', 'false');
 
     if (!spec.hold) {
@@ -1495,6 +1622,24 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     fastBtn?.setAttribute('aria-pressed', state.fastWalk ? 'true' : 'false');
     syncDaylightControls();
 
+    // CW-81: the two new street-only controls carry their state in ARIA -
+    // pressed for auto-walk, the current mode in Mouse look's name - while
+    // the visible labels stay fixed widths (CW-60's rule).
+    const autoWalkBtn = toolbarButtons.find(
+      (b) => b.spec.id === 'cityWalkAutoWalkBtn'
+    )?.btn;
+    autoWalkBtn?.setAttribute(
+      'aria-pressed',
+      state.game?.autoWalk ? 'true' : 'false'
+    );
+    const lookBtn = toolbarButtons.find(
+      (b) => b.spec.id === 'cityWalkLookModeBtn'
+    )?.btn;
+    if (lookBtn && state.game) {
+      lookBtn.setAttribute('aria-label', `Mouse look: ${state.game.lookMode}`);
+      lookBtn.title = `Mouse look: ${state.game.lookMode}`;
+    }
+
     const rainBtn = toolbarButtons.find(
       (b) => b.spec.id === 'cityWalkRainBtn'
     )?.btn;
@@ -1559,9 +1704,26 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     badge.className = 'city-walk-legend-badge';
     legend.appendChild(badge);
 
+    // CW-87: the tour's mouse route. NOT a toolbar button: the strip is one
+    // row by 37 px of slack in high contrast at 1600x900 (measured, CW-81's
+    // record) and one more button wraps it into the Camera panel's space -
+    // the same wall CW-85's panel section and CW-81's signed panel home hit.
+    // The legend is where a landmark is chosen, so the button lives beside
+    // the choice.
+    const go = document.createElement('button');
+    go.type = 'button';
+    go.id = 'cityWalkTourBtn';
+    go.className = 'btn btn-secondary city-walk-btn';
+    // ACCESSIBILITY-CRITICAL STRING (D-35) — flagged for owner review.
+    go.textContent = 'Take me there';
+    go.addEventListener('click', () => startTour());
+    legend.appendChild(go);
+
     const hint = document.createElement('p');
     hint.className = 'city-walk-legend-hint';
-    hint.textContent = 'L cycles landmarks on the map.';
+    // ACCESSIBILITY-CRITICAL STRING (D-35, REVISED) — flagged for review.
+    hint.textContent =
+      'L cycles landmarks on the map. I walks you to the selected one.';
     legend.appendChild(hint);
   }
 
@@ -2021,6 +2183,29 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       waypoints,
       waypointSpots,
       touchedWaypoint: null,
+      // CW-81: the look TARGET the camera follows critically damped. Every
+      // look input - keys, hover, drag, the panel's standard views - writes
+      // here; walkState carries the followed camera. lookMode is set from
+      // storage a few lines down, once reduced motion is known.
+      lookTarget: {
+        headingRad: walkState.headingRad,
+        pitchRad: walkState.pitchRad ?? 0,
+      },
+      // What the follow last wrote. If walkState differs from this at the
+      // top of a frame, something else - a teleport, a standard view, an
+      // instrument script - re-posed the walker directly, and the target
+      // ADOPTS that pose instead of dragging the camera back to a stale one.
+      lookSync: {
+        headingRad: walkState.headingRad,
+        pitchRad: walkState.pitchRad ?? 0,
+      },
+      lookMode: 'follow',
+      hover: { nx: 0, ny: 0, over: false },
+      autoWalk: false,
+      walkRamp: 0,
+      lastMove: { forward: 0, strafe: 0 },
+      // CW-87: the running tour, or null - { name, route, at, holding }.
+      tour: null,
       // CW-27: named road segments, indexed once at city build.
       streetIndex: buildStreetIndex(model.roads),
       streetName: null,
@@ -2352,6 +2537,18 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     game.nextThunderMs = THUNDER_GAP_MS;
     game.motionQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)');
     game.motionReduced = Boolean(game.motionQuery?.matches);
+    // CW-81 (CW-Q72): the mouse-look preference. A stored choice always
+    // wins; with nothing stored, reduced motion keeps hover-look OFF by
+    // default (it is continuous camera motion) while leaving every mode
+    // selectable.
+    {
+      const stored = safeGetItem(STORAGE_KEY_CITY_WALK_LOOK);
+      game.lookMode = LOOK_MODES.includes(stored)
+        ? stored
+        : game.motionReduced
+          ? 'off'
+          : 'follow';
+    }
     game.onMotionChange = (event) => {
       game.motionReduced = event.matches;
       game.altView.setReducedMotion(event.matches);
@@ -2411,6 +2608,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     viewport.addEventListener('pointermove', handleViewportPointerMove);
     viewport.addEventListener('pointerup', handleViewportPointerUp);
     viewport.addEventListener('pointercancel', handleViewportPointerUp);
+    // CW-81: hover-look pauses the moment the cursor leaves the viewport or
+    // the window loses focus - a view that keeps turning while you answer a
+    // chat message is motion nobody asked for.
+    viewport.addEventListener('pointerleave', handleViewportPointerLeave);
+    window.addEventListener('blur', handleViewportPointerLeave);
 
     // Mouse wheel zooms the map view (keyboard stays primary: -/= do the
     // same). preventDefault keeps the page from scrolling behind the layer.
@@ -2665,6 +2867,31 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       return;
     }
 
+    // CW-81 (CW-Q80): N toggles auto-walk - "navigate", answered at G2.
+    // CW-87: while a tour is driving, N is a walk-mode input like the walk
+    // keys - it stops the tour and does nothing else that press, so one
+    // press can never both end a tour and start a walker.
+    if (event.code === 'KeyN') {
+      event.preventDefault();
+      event.stopPropagation();
+      if (state.game.tour) {
+        stopTour(TOUR_STOPPED_MESSAGE);
+        return;
+      }
+      toggleAutoWalk();
+      return;
+    }
+
+    // CW-87 (CW-Q84): I walks you to the selected landmark, turn by turn -
+    // "I" as in "take me there", the free set's own letter. Works from the
+    // map (where landmarks are chosen) by closing it; pressed again, stops.
+    if (event.code === 'KeyI') {
+      event.preventDefault();
+      event.stopPropagation();
+      startTour();
+      return;
+    }
+
     // CW-36 chose J (the only free letter that says anything about jumping);
     // CW-40 keeps it as the one-step keyboard commit at the map's crosshair.
     if (event.code === 'KeyJ') {
@@ -2734,10 +2961,42 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       return;
     }
 
+    // CW-81 arrow-look: while auto-walk carries the walking, the vertical
+    // arrows look instead of driving - WASD still walks (and stops the
+    // auto-walk, in the frame loop). The horizontal arrows already turn.
+    if (
+      (state.game.autoWalk || state.game.tour) &&
+      !state.game.mapView &&
+      (event.code === 'ArrowUp' || event.code === 'ArrowDown')
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      holdAction(
+        state.keyHeld,
+        event.code === 'ArrowUp' ? 'lookUp' : 'lookDown'
+      );
+      return;
+    }
+
     const action = KEY_ACTIONS.get(event.code);
     if (action) {
       event.preventDefault();
       event.stopPropagation();
+      // CW-81: any WALK key takes the wheel back from auto-walk - HERE, on
+      // the keydown, because a tapped key can land its down and its up
+      // between two frames and the frame loop would never see it held.
+      const isWalkKey =
+        action === 'forward' ||
+        action === 'back' ||
+        action === 'strafeLeft' ||
+        action === 'strafeRight';
+      if (state.game?.autoWalk && isWalkKey) {
+        setAutoWalk(false, AUTO_WALK_OFF_MESSAGE);
+      }
+      // CW-87: the same tap law for the tour.
+      if (state.game?.tour && isWalkKey) {
+        stopTour(TOUR_STOPPED_MESSAGE);
+      }
       holdAction(state.keyHeld, action);
     }
   }
@@ -2753,6 +3012,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     if (event.code === 'PageUp') {
       releaseAction(state.keyHeld, 'zoomIn');
     }
+    // CW-81: a vertical arrow may have been held as LOOK (auto-walk's
+    // remap) and auto-walk may have ended in between - release both of the
+    // actions the key could be holding; releasing an unheld one is a no-op.
+    if (event.code === 'ArrowUp') releaseAction(state.keyHeld, 'lookUp');
+    if (event.code === 'ArrowDown') releaseAction(state.keyHeld, 'lookDown');
     const action = KEY_ACTIONS.get(event.code);
     if (action) releaseAction(state.keyHeld, action);
   }
@@ -3001,6 +3265,20 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   function handleViewportPointerMove(event) {
     const drag = state.drag;
     const game = state.game;
+
+    // CW-81 hover-look: every move over the viewport updates where the
+    // cursor stands, drag or no drag. The frame loop turns it into motion;
+    // this only measures. Normalized to the half-extent: -1 at the left
+    // edge, +1 at the right, same for vertical.
+    if (game) {
+      const rect = state.refs.viewport?.getBoundingClientRect();
+      if (rect && rect.width > 0 && rect.height > 0) {
+        game.hover.nx = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        game.hover.ny = ((event.clientY - rect.top) / rect.height) * 2 - 1;
+        game.hover.over = true;
+      }
+    }
+
     if (!drag || drag.pointerId !== event.pointerId) return;
     if (!game) {
       endDrag();
@@ -3021,6 +3299,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       return;
     }
 
+    // CW-81 (CW-Q72): the street drag looks around only in DRAG mode. In
+    // follow mode the moving cursor already steers the view through the
+    // hover path above (a drag that also applied deltas would double every
+    // movement), and in off mode the pointer does not look at all.
+    // CW-87: and never while a tour drives - the route owns the heading.
+    if (game.lookMode !== 'drag' || game.tour) return;
+
     const dx = event.clientX - drag.lastX;
     const dy = event.clientY - drag.lastY;
     drag.lastX = event.clientX;
@@ -3033,17 +3318,24 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     }
 
     // Dragging right turns right and dragging down looks down, matching the
-    // mouselook every first-person game uses.
+    // mouselook every first-person game uses. CW-81: the delta steers the
+    // look TARGET; the frame loop's follow carries the camera, so a drag
+    // and the keys ride one smoothing.
     const { turned, pitched } = applyLookDelta(
-      game.walkState,
+      game.lookTarget,
       dx * DRAG_RAD_PER_PX,
       -dy * DRAG_RAD_PER_PX
     );
     if (!turned && !pitched) return;
 
-    applyFirstPersonCamera();
     game.altView.invalidate();
     updateHud();
+  }
+
+  /** CW-81: the cursor left, or the window did - hover-look stands down. */
+  function handleViewportPointerLeave() {
+    const game = state.game;
+    if (game) game.hover.over = false;
   }
 
   function handleViewportPointerUp(event) {
@@ -3327,6 +3619,117 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     } else if (!touching) {
       game.touchedWaypoint = null;
     }
+  }
+
+  /**
+   * CW-81 (CW-Q80): auto-walk on or off, with its sentence. One function so
+   * the key, the button, Escape, the wall and CW-87's coming tour all stop
+   * it the same way and the announcement can never be forgotten.
+   */
+  function setAutoWalk(on, message) {
+    const game = state.game;
+    if (!game || game.autoWalk === Boolean(on)) return;
+    game.autoWalk = Boolean(on);
+    // ACCESSIBILITY-CRITICAL STRING (D-35) — flagged for owner review.
+    if (message) announceInLayer(message);
+    syncToolbarView();
+  }
+
+  function toggleAutoWalk() {
+    const game = state.game;
+    if (!game || game.mapView) return;
+    setAutoWalk(
+      !game.autoWalk,
+      game.autoWalk ? AUTO_WALK_OFF_MESSAGE : AUTO_WALK_ON_MESSAGE
+    );
+  }
+
+  /** CW-87: end the tour with its sentence. Safe to call when none runs. */
+  function stopTour(message) {
+    const game = state.game;
+    if (!game?.tour) return;
+    game.tour = null;
+    // ACCESSIBILITY-CRITICAL STRING (D-35) — flagged for owner review.
+    if (message) announceInLayer(message);
+  }
+
+  /**
+   * CW-87 (CW-Q84): walk the player to the selected legend landmark. One
+   * key starts and the same key stops (GAG "very simple control schemes");
+   * the route is A* over the game's own collision grid to the landmark's
+   * touchable waypoint, so ARRIVING is the CW-78 touch - the tour ends
+   * silently there and the waypoint speaks, one arrival, one sentence.
+   */
+  function startTour() {
+    const game = state.game;
+    if (!game) return;
+    if (game.tour) {
+      stopTour(TOUR_STOPPED_MESSAGE);
+      return;
+    }
+    if (game.landmarks.length === 0) {
+      announceInLayer('No landmarks in this city.');
+      return;
+    }
+    const index = game.landmarkIndex >= 0 ? game.landmarkIndex : 0;
+    const lm = game.landmarks[index];
+    const spot = (game.waypointSpots ?? []).find((s) => s.name === lm.name);
+    const to = spot ?? lm;
+    const route = findRoute(
+      game.collision,
+      { x: game.walkState.x, y: game.walkState.y },
+      { x: to.x, y: to.y }
+    );
+    if (!route) {
+      // ACCESSIBILITY-CRITICAL STRING (D-35) — flagged for owner review.
+      announceInLayer(TOUR_NO_ROUTE_MESSAGE(lm.name));
+      return;
+    }
+    if (game.mapView) toggleMapView();
+    setAutoWalk(false, null);
+    game.tour = { name: lm.name, route, at: 1, holding: false };
+    // ACCESSIBILITY-CRITICAL STRING (D-35) — flagged for owner review.
+    announceInLayer(TOUR_START_MESSAGE(lm.name));
+  }
+
+  /**
+   * The spoken turn at a route bend: direction from the wrap of the
+   * outgoing bearing against the incoming one (heading grows clockwise, so
+   * a positive wrap is a right turn), the street named from the game's own
+   * street index at the next leg's midpoint - and nothing at all for a
+   * bend gentler than TOUR_TURN_MIN_RAD.
+   */
+  function announceTourTurn(game, fromPt, toPt) {
+    const incoming = game.walkState.headingRad;
+    const outgoing = Math.atan2(toPt.x - fromPt.x, toPt.y - fromPt.y);
+    let delta = outgoing - incoming;
+    while (delta > Math.PI) delta -= 2 * Math.PI;
+    while (delta < -Math.PI) delta += 2 * Math.PI;
+    if (Math.abs(delta) < TOUR_TURN_MIN_RAD) return;
+    const midX = (fromPt.x + toPt.x) / 2;
+    const midY = (fromPt.y + toPt.y) / 2;
+    const street = game.streetIndex.query(midX, midY, STREET_NEAR_M)[0] ?? null;
+    // ACCESSIBILITY-CRITICAL STRING (D-35) — flagged for owner review.
+    announceInLayer(
+      TOUR_TURN_MESSAGE(delta > 0 ? 'right' : 'left', street?.name ?? null)
+    );
+  }
+
+  /**
+   * CW-81 (CW-Q72): step the mouse-look preference follow -> drag -> off.
+   * The choice persists; the announcement says what the mode DOES, because
+   * a mode name alone teaches nothing.
+   */
+  function cycleLookMode() {
+    const game = state.game;
+    if (!game) return;
+    const next =
+      LOOK_MODES[(LOOK_MODES.indexOf(game.lookMode) + 1) % LOOK_MODES.length];
+    game.lookMode = next;
+    safeSetItem(STORAGE_KEY_CITY_WALK_LOOK, next);
+    // ACCESSIBILITY-CRITICAL STRING (D-35) — flagged for owner review.
+    announceInLayer(LOOK_MODE_MESSAGES[next]);
+    syncToolbarView();
   }
   /**
    * Save what the player is looking at as a PNG (CW-20).
@@ -4427,31 +4830,213 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       return;
     }
 
+    // CW-81: raw axes first. Turn and pitch steer the look TARGET below
+    // rather than the camera itself; movement still goes through stepWalk.
+    const turnAxis =
+      (state.keys.has('turnRight') ? 1 : 0) -
+      (state.keys.has('turnLeft') ? 1 : 0);
+    const pitchAxis =
+      (state.keys.has('lookUp') ? 1 : 0) - (state.keys.has('lookDown') ? 1 : 0);
     const input = {
       forward:
         (state.keys.has('forward') ? 1 : 0) - (state.keys.has('back') ? 1 : 0),
       strafe:
         (state.keys.has('strafeRight') ? 1 : 0) -
         (state.keys.has('strafeLeft') ? 1 : 0),
-      turn:
-        (state.keys.has('turnRight') ? 1 : 0) -
-        (state.keys.has('turnLeft') ? 1 : 0),
-      pitch:
-        (state.keys.has('lookUp') ? 1 : 0) -
-        (state.keys.has('lookDown') ? 1 : 0),
+      turn: 0,
+      pitch: 0,
       fast: state.shiftHeld || state.fastWalk,
       speedLabel: game.speedLabel,
     };
 
+    // The clamped dt every look and ramp step uses - the same clamp
+    // stepWalk applies, so a background tab cannot spin the view either.
+    const lookDt = Math.min(Math.max(dtS, 0), 0.1);
+    const target = game.lookTarget;
+
+    // Adopt any external re-pose (teleport, a standard view, a script)
+    // before steering: the target follows the world, never the other way.
+    if (game.lookSync.headingRad !== game.walkState.headingRad) {
+      target.headingRad = game.walkState.headingRad;
+    }
+    if (game.lookSync.pitchRad !== (game.walkState.pitchRad ?? 0)) {
+      target.pitchRad = game.walkState.pitchRad ?? 0;
+    }
+    if (turnAxis !== 0) {
+      target.headingRad = normalizeHeading(
+        target.headingRad + turnAxis * TURN_SPEED_RADPS * lookDt
+      );
+    }
+    if (pitchAxis !== 0) {
+      target.pitchRad = clampPitch(
+        target.pitchRad + pitchAxis * PITCH_SPEED_RADPS * lookDt
+      );
+    }
+
+    // Hover-look (CW-81, CW-Q72): the cursor's offset from the viewport
+    // centre turns the target - dead zone at the middle, rate rising to
+    // the axis maximum at the edge. Paused whenever the cursor is away,
+    // a dialog is up, or the map owns the pointer; a live street drag also
+    // pauses it (the drag would double every movement otherwise).
+    if (
+      game.lookMode === 'follow' &&
+      game.hover.over &&
+      // CW-87: the tour owns the heading while it drives - a parked cursor
+      // must not wrestle the route.
+      !game.tour &&
+      !state.drag &&
+      !state.travel &&
+      !state.helpOpen &&
+      state.refs.found?.hidden !== false
+    ) {
+      const curve = (n) => {
+        const a = Math.min(1, Math.abs(n));
+        if (a <= HOVER_DEAD_ZONE) return 0;
+        return (Math.sign(n) * (a - HOVER_DEAD_ZONE)) / (1 - HOVER_DEAD_ZONE);
+      };
+      const yaw = curve(game.hover.nx);
+      const tilt = curve(game.hover.ny);
+      if (yaw !== 0) {
+        target.headingRad = normalizeHeading(
+          target.headingRad + yaw * HOVER_MAX_YAW_RADPS * lookDt
+        );
+      }
+      if (tilt !== 0) {
+        // Screen y grows downward; pitching up means the cursor is high.
+        target.pitchRad = clampPitch(
+          target.pitchRad - tilt * HOVER_MAX_PITCH_RADPS * lookDt
+        );
+      }
+    }
+
+    // The critically damped follow (the §10 reading): the camera chases the
+    // target and SNAPS the last fraction of a degree, so the exponential
+    // tail cannot keep the converter busy forever.
+    let turned = false;
+    let pitched = false;
+    {
+      const alpha = 1 - Math.exp(-lookDt / LOOK_FOLLOW_TAU_S);
+      let dh = target.headingRad - game.walkState.headingRad;
+      while (dh > Math.PI) dh -= 2 * Math.PI;
+      while (dh < -Math.PI) dh += 2 * Math.PI;
+      if (Math.abs(dh) > LOOK_SNAP_RAD) {
+        game.walkState.headingRad = normalizeHeading(
+          game.walkState.headingRad + dh * alpha
+        );
+        turned = true;
+      } else if (dh !== 0) {
+        game.walkState.headingRad = target.headingRad;
+        turned = true;
+      }
+      const dp = target.pitchRad - (game.walkState.pitchRad ?? 0);
+      if (Math.abs(dp) > LOOK_SNAP_RAD) {
+        game.walkState.pitchRad = clampPitch(
+          (game.walkState.pitchRad ?? 0) + dp * alpha
+        );
+        pitched = true;
+      } else if (dp !== 0) {
+        game.walkState.pitchRad = target.pitchRad;
+        pitched = true;
+      }
+      game.lookSync.headingRad = game.walkState.headingRad;
+      game.lookSync.pitchRad = game.walkState.pitchRad ?? 0;
+    }
+
+    // Auto-walk (CW-81, CW-Q80): any WALK input the player makes takes the
+    // wheel back - and stops the auto-walk, announced.
+    if (game.autoWalk && (input.forward !== 0 || input.strafe !== 0)) {
+      setAutoWalk(false, AUTO_WALK_OFF_MESSAGE);
+    }
+    // CW-87: the same law for the tour - a walk key is the player driving.
+    if (game.tour && (input.forward !== 0 || input.strafe !== 0)) {
+      stopTour(TOUR_STOPPED_MESSAGE);
+    }
+
+    // CW-87: the tour drives exactly like auto-walk - one look target, the
+    // same ramp - with the heading taken from the route. Reached waypoints
+    // advance (several can fall in one frame on a short leg), a real bend
+    // is spoken before the walker turns into it, and arrival is SILENT
+    // here: the route ends inside the waypoint's touch ring, so the CW-78
+    // touch speaks the landmark - one arrival, one sentence.
+    if (game.tour) {
+      const t = game.tour;
+      const w = game.walkState;
+      let wp = t.route[t.at];
+      while (
+        wp &&
+        Math.hypot(wp.x - w.x, wp.y - w.y) <= TOUR_WAYPOINT_REACH_M
+      ) {
+        t.at += 1;
+        const next = t.route[t.at];
+        if (next) announceTourTurn(game, wp, next);
+        wp = next;
+      }
+      if (!wp) {
+        game.tour = null;
+      } else {
+        const bearing = Math.atan2(wp.x - w.x, wp.y - w.y);
+        target.headingRad = bearing;
+        let err = bearing - w.headingRad;
+        while (err > Math.PI) err -= 2 * Math.PI;
+        while (err < -Math.PI) err += 2 * Math.PI;
+        if (t.holding) {
+          if (Math.abs(err) <= TOUR_RESUME_ANGLE_RAD) t.holding = false;
+        } else if (Math.abs(err) >= TOUR_HOLD_ANGLE_RAD) {
+          t.holding = true;
+        }
+        if (t.holding) {
+          // Stop-turn-go must actually STOP: the ramp's release glide
+          // would replay the last stride past the vertex, into the very
+          // corner the hold exists to respect.
+          game.lastMove.forward = 0;
+          game.lastMove.strafe = 0;
+        } else {
+          input.forward = 1;
+        }
+      }
+    }
+
+    if (game.autoWalk) {
+      input.forward = 1;
+      // CW-87 street-following: when the way ahead closes, steer along the
+      // clearest continuing pavement instead of walking into the wall. The
+      // fan only runs once the run ahead is short, so over open ground the
+      // player's own turning is never fought; when the fan finds nothing
+      // (a true dead end) the walker presses on and the blocked stop below
+      // says so - that sentence is now reserved for dead ends.
+      const w = game.walkState;
+      if (
+        clearRunAhead(
+          game.collision,
+          w.x,
+          w.y,
+          w.headingRad,
+          AUTO_WALK_STEER_AT_M
+        ) < AUTO_WALK_STEER_AT_M
+      ) {
+        const steer = steerHeading(game.collision, w.x, w.y, w.headingRad);
+        if (steer !== null) target.headingRad = normalizeHeading(steer);
+      }
+    }
+
+    // The acceleration ramp: no frame starts at full speed from rest, and
+    // releasing the keys glides to a stop over the same quarter second.
+    const wantsMove = input.forward !== 0 || input.strafe !== 0;
+    if (wantsMove) {
+      game.lastMove.forward = input.forward;
+      game.lastMove.strafe = input.strafe;
+      game.walkRamp = Math.min(1, game.walkRamp + lookDt / WALK_RAMP_S);
+    } else if (game.walkRamp > 0) {
+      game.walkRamp = Math.max(0, game.walkRamp - lookDt / WALK_RAMP_S);
+      input.forward = game.lastMove.forward;
+      input.strafe = game.lastMove.strafe;
+    }
+    input.speedScale = game.walkRamp;
+
     const wasX = game.walkState.x;
     const wasY = game.walkState.y;
     const wasGroundZ = game.walkState.groundZ;
-    const { moved, turned, pitched } = stepWalk(
-      game.walkState,
-      input,
-      dtS,
-      game.collision
-    );
+    const { moved } = stepWalk(game.walkState, input, dtS, game.collision);
 
     // CW-50: the eye climbs a curb over GROUND COVERED, not over time, so
     // this is fed the distance actually walked. It keeps re-posing the camera
@@ -4497,6 +5082,19 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       }
       game.altView.invalidate();
       updateHud();
+    }
+
+    // CW-81: auto-walk stops at a wall, and says so. Only once the ramp has
+    // real speed - the first ramp frames legitimately move less than a hop
+    // and must not read as a collision. Since CW-87 steers along the
+    // street, this sentence is reserved for a true dead end.
+    if (game.autoWalk && !moved && game.walkRamp > 0.5) {
+      setAutoWalk(false, AUTO_WALK_BLOCKED_MESSAGE);
+    }
+    // CW-87: the tour's own version - never while deliberately standing to
+    // turn (the hold is not a collision).
+    if (game.tour && !game.tour.holding && !moved && game.walkRamp > 0.5) {
+      stopTour(TOUR_BLOCKED_MESSAGE);
     }
 
     // CW-19: the signals are the one thing in this time-frozen city that

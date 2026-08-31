@@ -612,6 +612,12 @@ test.describe('ASCII City Walk — the view cuts, it does not cross-fade (D-81)'
     await enterCity(page)
     await page.waitForTimeout(1500)
     await page.locator('#cityWalkViewport').click({ position: { x: 5, y: 5 } })
+    // CW-81: that focus click parks the pointer at the viewport's top-left
+    // corner, which hover-look reads as a full-rate turn - the street then
+    // pans forever and immediate-vs-settled measures scenery, not ghosting
+    // (25.73 levels, deterministic). Park the pointer off the viewport so
+    // the camera holds still; the ghost this test guards is unaffected.
+    await page.mouse.move(0, 0)
 
     /** Mean absolute difference in level between two PNG buffers, 0-255. */
     const ghost = (a, b) =>
@@ -905,8 +911,18 @@ test.describe('ASCII City Walk — looking around (CW-13)', () => {
   test('a mouse drag turns and tilts; a plain click does neither', async ({
     page,
   }) => {
+    // CW-81: dragging is the second of three look modes now (hover-look is
+    // the default), so this case opts into DRAG explicitly and keeps
+    // guarding the 0.25 deg/px contract. Shortened from 20 mouse steps to 8
+    // (§6a: the 20-step version hung against the 60 s CI limit).
+    await page.addInitScript(() =>
+      localStorage.setItem('openscad-forge-city-walk-look', 'drag')
+    )
     await launchGame(page)
     await enterCity(page)
+    expect(
+      await page.evaluate(() => window.__cityWalkGame.lookMode)
+    ).toBe('drag')
 
     const before = await gaze(page)
 
@@ -923,7 +939,7 @@ test.describe('ASCII City Walk — looking around (CW-13)', () => {
     // clearest street rather than a fixed north.
     const TAU_DEG = 360
     const startDeg = Math.round(before.heading / DEG)
-    await dragViewport(page, 200, -100)
+    await dragViewport(page, 200, -100, 8)
     await expect
       .poll(async () =>
         (Math.round((await gaze(page)).heading / DEG) - startDeg + TAU_DEG) %
@@ -1010,10 +1026,21 @@ test.describe('ASCII City Walk — looking around (CW-13)', () => {
     await expect(page.locator('#cityWalkHelpPanel')).toContainText(
       'V: level the view'
     )
-    // CW-59: the mouse drags the MAP now as well, so the line that taught
-    // it as street-only was describing half the feature.
+    // CW-81: hover-look is the default now, so the help teaches the mouse
+    // MOVE first and the drag line keeps only its map half (CW-59's lesson
+    // that the map drags too survives in it).
     await expect(page.locator('#cityWalkHelpPanel')).toContainText(
-      'Drag with the mouse: look around in street view, move the map in map view'
+      'Move the mouse: the view turns toward the cursor'
+    )
+    await expect(page.locator('#cityWalkHelpPanel')).toContainText(
+      'Drag with the mouse: move the map in map view'
+    )
+    await expect(page.locator('#cityWalkHelpPanel')).toContainText(
+      'N: auto-walk forward, following the street, until something stops you'
+    )
+    // CW-87: and the tour's line beside it.
+    await expect(page.locator('#cityWalkHelpPanel')).toContainText(
+      'I: walk to the selected landmark, turn by turn'
     )
     // ★ AND THE MAP LINE TEACHES W A S D, which it always should have. Those
     // keys have panned the map since the map existed - the same actions the
@@ -2427,5 +2454,90 @@ test.describe('ASCII City Walk — find the traveler (CW-65, CW-Q60)', () => {
       .include('#cityWalkLayer')
       .analyze()
     expectOnlyAllowedViolations(results)
+  })
+})
+
+test.describe('ASCII City Walk — the whole-map draw distance (CW-82)', () => {
+  test('★★ the far skyline puts real ink where the near mesh ends', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await launchGame(page)
+    await enterCity(page)
+
+    // The waterfront vantage from the release record: open foreground,
+    // First Hill and downtown standing well past the 260 m boundary.
+    await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const st = g.walkState
+      st.x = -157
+      st.y = -629
+      st.headingRad = Math.atan2(900 - st.x, -100 - st.y)
+      st.pitchRad = (6 * Math.PI) / 180
+      st.groundZ = g.surface ? g.surface.heightAt(st.x, st.y) : 0
+      const eyeZ = 1.7 + (st.groundZ ?? 0)
+      g.fpCamera.position.set(st.x, st.y, eyeZ)
+      g.fpCamera.lookAt(
+        st.x + Math.sin(st.headingRad),
+        st.y + Math.cos(st.headingRad),
+        eyeZ + Math.tan(st.pitchRad)
+      )
+      g.altView.invalidate()
+    })
+    await page.waitForTimeout(1500)
+
+    // Same-code control (the round's own law for pixel comparisons): the
+    // ONLY difference between the two frames is the far mesh.
+    await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      g.scene.traverse((o) => {
+        if (o.name === 'buildings-far') o.visible = false
+      })
+      g.altView.invalidate()
+    })
+    await page.waitForTimeout(1200)
+    const off = await page.locator('#cityWalkViewport').screenshot()
+    await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      g.scene.traverse((o) => {
+        if (o.name === 'buildings-far') o.visible = true
+      })
+      g.altView.invalidate()
+    })
+    await page.waitForTimeout(1200)
+    const on = await page.locator('#cityWalkViewport').screenshot()
+
+    const gained = await page.evaluate(
+      async ([a, b]) => {
+        const load = async (u) => {
+          const i = new Image()
+          i.src = u
+          await i.decode()
+          const c = document.createElement('canvas')
+          c.width = i.width
+          c.height = i.height
+          c.getContext('2d').drawImage(i, 0, 0)
+          return c.getContext('2d').getImageData(0, 0, c.width, c.height).data
+        }
+        const [p, q] = [await load(a), await load(b)]
+        // Count pixels that were black without the far mesh and lit with it
+        // - ink the skyline ADDED, not ink that moved.
+        let lit = 0
+        for (let i = 0; i < p.length; i += 4) {
+          const offMax = Math.max(p[i], p[i + 1], p[i + 2])
+          const onMax = Math.max(q[i], q[i + 1], q[i + 2])
+          if (offMax < 8 && onMax > 24) lit++
+        }
+        return lit
+      },
+      [
+        'data:image/png;base64,' + off.toString('base64'),
+        'data:image/png;base64,' + on.toString('base64'),
+      ]
+    )
+    // Measured at this pose: the far towers light tens of thousands of
+    // pixels. The bar is a SHARE-shaped floor well under that but far
+    // above noise (a whole character cell is ~18 px at the default size).
+    expect(gained).toBeGreaterThan(2000)
   })
 })

@@ -569,6 +569,15 @@ export const STORAGE_KEY_CITY_WALK_DAYLIGHT =
   getAppPrefKey('city-walk-daylight');
 
 /**
+ * localStorage key for the City Walk's mouse-look preference (CW-81,
+ * CW-Q72): 'follow' (the view turns toward the cursor - the default),
+ * 'drag' (the pre-CW-81 behaviour, a held-button drag), or 'off'. ABSENT
+ * means follow, except under prefers-reduced-motion where absent means off;
+ * a stored choice always wins over both defaults.
+ */
+export const STORAGE_KEY_CITY_WALK_LOOK = getAppPrefKey('city-walk-look');
+
+/**
  * localStorage key for the City Walk's empty-city choice (CW-85, CW-Q86).
  * 'on' means the streets are empty. ABSENT means the city is populated, which
  * is the shipped state.
