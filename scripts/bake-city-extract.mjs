@@ -38,11 +38,56 @@ import {
   PLANTER_MAN_MADE_VALUES,
   FLOWERBED_VALUES,
   PICNIC_LEISURE_VALUES,
+  LAMP_HIGHWAY_VALUE,
 } from '../src/js/game/city-data.js';
+import {
+  ELEVATION_STEP_M,
+  gridPoints,
+  sourceFor,
+  sampleGrid,
+  elevationBlock,
+  cacheName,
+  readJson,
+} from './city-elevation.mjs';
+import {
+  fetchPoles,
+  polesToElements,
+  CITY_LIGHT_PROVENANCE,
+} from './city-light-poles.mjs';
 
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
+
+/**
+ * ★ THE GATE (the D-97 shape, and D-123's second helping of it). An engine
+ * that says WARNING and a caller that says "converted, 2 shapes" is how this
+ * project shipped a DXF with 31 of 34 entities silently missing. Overpass
+ * reports trouble in a `remark` string and still returns HTTP 200 with a
+ * partial body; the elevation sampler collects its own. Either one stops the
+ * bake, because a bake that half-worked and said nothing is the failure mode
+ * that costs a whole round.
+ */
+function assertNoWarnings(lines, where) {
+  // ★ ANY entry is fatal, not only one that says the word. The first version
+  // of this filtered for /WARNING:|ERROR:/ - and the elevation sampler's own
+  // messages carry neither word, so the gate could not see the thing it was
+  // written to catch: a run that lost points to a 503 would have written the
+  // extract anyway, which is the exact D-97 shape. A list of problems IS the
+  // problem. A unit test asked what the pattern actually matched, and that is
+  // the only reason this was found before a bake ran.
+  const bad = (lines ?? [])
+    .filter(Boolean)
+    .map(String)
+    .filter((line) => line.trim().length > 0);
+  if (bad.length > 0) {
+    throw new Error(
+      `${where} reported ${bad.length} problem(s), refusing to write a ` +
+        `half-baked extract:\n  ${bad.join('\n  ')}`
+    );
+  }
+}
 const USER_AGENT =
   'openscad-assistive-forge bake-city-extract (https://github.com/BrennenJohnston/openscad-assistive-forge)';
+
 // CW-Q9 doubled each city's AREA (bake radius 500 -> 707 m), which roughly
 // doubles every extract. The warning is advisory - it marks a bake that has
 // outgrown the deliberate size, not one that is broken.
@@ -79,6 +124,18 @@ if (centerParts.length !== 2 || centerParts.some((n) => !Number.isFinite(n))) {
 }
 const center = { lat: centerParts[0], lon: centerParts[1] };
 const radiusM = Math.round(parseFloat(args.radius ?? '500'));
+// CW-77. The terrain sampler and the pole register are both OFF unless asked
+// for: a rebake of the geometry alone must stay a cheap, obvious thing.
+const wantElevation = args.elevation !== 'off';
+const elevationStepM = Math.round(
+  parseFloat(args['elevation-step'] ?? String(ELEVATION_STEP_M))
+);
+// Never committed (build/ is gitignored) and shared between runs, so a
+// re-bake of the same circle costs no requests at all.
+const cacheDir = args.cache ?? join(process.cwd(), 'build', 'elevation-cache');
+// Seattle City Light's pole register, authorised at G1 (CW-Q76). Opt-in by
+// name, because it is a Seattle dataset and nothing else has an equivalent.
+const wantPoles = args.poles === 'city-light';
 if (!Number.isFinite(radiusM) || radiusM < 50 || radiusM > 2000) {
   usage('--radius must be between 50 and 2000 meters');
 }
@@ -128,6 +185,7 @@ const query = `[out:json][timeout:90];
   node["amenity"~"^(${STOREFRONT_AMENITY})$"](around:${radiusM},${center.lat},${center.lon});
   node["amenity"~"^(${FURNITURE_AMENITY})$"](around:${radiusM},${center.lat},${center.lon});
   node["highway"~"^(${FURNITURE_HIGHWAY})$"](around:${radiusM},${center.lat},${center.lon});
+  node["highway"="${LAMP_HIGHWAY_VALUE}"](around:${radiusM},${center.lat},${center.lon});
   node["emergency"~"^(${FURNITURE_EMERGENCY})$"](around:${radiusM},${center.lat},${center.lon});
   node["kerb"](around:${radiusM},${center.lat},${center.lon});
   node["tactile_paving"](around:${radiusM},${center.lat},${center.lon});
@@ -175,12 +233,32 @@ console.log(
   `Querying Overpass: ${name} @ ${center.lat},${center.lon} r=${radiusM} m…`
 );
 const raw = await queryOverpass();
+// Overpass answers a query it could not finish with HTTP 200 and a `remark`.
+assertNoWarnings([raw.remark], 'Overpass');
 const rawElements = Array.isArray(raw.elements) ? raw.elements : [];
 
 let droppedTinyParts = 0;
+let droppedUnderground = 0;
 const elements = rawElements
   .map((el) => trimOverpassElement(el))
   .filter(Boolean)
+  .filter((el) => {
+    // CW-77: a building below the street is not part of the street. `layer`
+    // below zero or `location=underground` is how the map says so, and the
+    // game was extruding those from z = 0 like any other - a car park under a
+    // plaza standing up through it. Dropped HERE so the extract is smaller
+    // rather than the game filtering on every load, which is where the
+    // building:part floor already lives.
+    const t = el.tags ?? {};
+    if (typeof t.building === 'string' && t.building !== 'no') {
+      const layer = Number.parseFloat(t.layer);
+      if ((Number.isFinite(layer) && layer < 0) || t.location === 'underground') {
+        droppedUnderground++;
+        return false;
+      }
+    }
+    return true;
+  })
   .filter((el) => {
     // CW-Q31: the part-area floor, applied HERE so the extract itself gets
     // smaller rather than the game filtering on every load. Denver is mapped
@@ -193,8 +271,64 @@ const elements = rawElements
     return false;
   });
 
+// CW-77 (CW-Q76): Seattle City Light's surveyed streetlight register, beside
+// OpenStreetMap's own lamps. Negative ids mark every element that is not from
+// OSM, so the ODbL statement on this file keeps meaning what it says.
+let poleReport = null;
+if (wantPoles) {
+  console.log('Fetching the Seattle City Light pole register…');
+  const { features, pages } = await fetchPoles({
+    center,
+    radiusM,
+    fetchJson: (url) => readJson(url, USER_AGENT),
+  });
+  const poles = polesToElements(features, center, radiusM);
+  elements.push(...poles.elements);
+  poleReport = { ...poles, pages, fetched: features.length };
+  console.log(
+    `  ${features.length} poles over ${pages} page(s) → ${poles.kept} lit ` +
+      `(${poles.notLit} carry no streetlight, ${poles.outside} outside the ` +
+      `circle by measurement, ${poles.withHeight} with a height)`
+  );
+}
+
+// CW-77 (CW-Q77): the terrain, from a national 1 m DEM point service.
+let elevation = null;
+let elevationReport = null;
+if (wantElevation) {
+  const source = sourceFor(center.lat, center.lon);
+  const grid = gridPoints(center, radiusM, elevationStepM);
+  const inCircle = grid.points.filter(Boolean).length;
+  console.log(
+    `Sampling terrain: ${grid.cols}x${grid.rows} grid at ${elevationStepM} m, ` +
+      `${inCircle} points inside the circle, source ${source}…`
+  );
+  const t0 = Date.now();
+  const sampled = await sampleGrid({
+    grid,
+    source,
+    cacheDir,
+    cacheFile: cacheName(name, center, radiusM, elevationStepM),
+    fetchJson: (url) => readJson(url, USER_AGENT),
+    onProgress: (done, total) =>
+      console.log(`  …${done} of ${total} sampled`),
+  });
+  assertNoWarnings(sampled.warnings, 'the elevation sampler');
+  elevation = elevationBlock({ grid, source, samples: sampled.samples });
+  const secs = ((Date.now() - t0) / 1000).toFixed(0);
+  elevationReport = { ...sampled, inCircle, secs, source, grid };
+  console.log(
+    `  ${sampled.filled} of ${inCircle} answered ` +
+      `(${sampled.holes} holes, ${sampled.fromCache} already cached, ` +
+      `${sampled.requested} requested) in ${secs} s`
+  );
+}
+
 const extract = {
-  format: 'ascii-city-extract@1',
+  // CW-77: v2 is ADDITIVE. Everything v1 carried is still here and in the
+  // same shape; a v1 reader ignores `elevation` and the street-lamp nodes and
+  // gets exactly the city it always got.
+  format: 'ascii-city-extract@2',
   name,
   center,
   radiusM,
@@ -202,6 +336,8 @@ const extract = {
   source: 'OpenStreetMap via Overpass API',
   attribution: 'Map data © OpenStreetMap contributors',
   license: 'ODbL 1.0 — https://www.openstreetmap.org/copyright',
+  ...(poleReport ? { poleSource: CITY_LIGHT_PROVENANCE } : {}),
+  ...(elevation ? { elevation } : {}),
   elements,
 };
 
@@ -245,6 +381,16 @@ console.log(
     `  CW-55: ${plantingLine || 'no plantings'};` +
     ` ${model.stats.picnicTableCount} picnic tables;` +
     ` ${model.stats.leafTypedTreeCount} of ${model.stats.treeCount} trees have a leaf_type\n` +
+    `  CW-77: ${model.stats.lampNodeCount} mapped lamps ` +
+    `(${JSON.stringify(model.stats.lampNodesByOperator)});` +
+    ` ${droppedUnderground} underground buildings dropped` +
+    (model.elevation
+      ? `; terrain ${model.elevation.cols}x${model.elevation.rows} @ ` +
+        `${model.elevation.stepM} m, ` +
+        `${(model.elevation.coverage * 100).toFixed(1)} % covered, ` +
+        `${model.elevation.minM.toFixed(1)}..${model.elevation.maxM.toFixed(1)} m`
+      : '; no terrain') +
+    '\n' +
     `  dropped ${model.stats.droppedRings} rings, ${model.stats.droppedElements} elements`
 );
 if (json.length > SIZE_WARN_BYTES) {

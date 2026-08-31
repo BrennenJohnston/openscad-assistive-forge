@@ -23,6 +23,7 @@ import {
   TRAVELER_MIN_FROM_SPAWN_M,
   buildTraveler,
   pickTravelerSpot,
+  lampLayoutFor,
 } from '../../../src/js/game/city-scene.js'
 import {
   pickPaletteIndex,
@@ -40,6 +41,8 @@ import {
 import {
   buildCollisionGrid,
   pointInRing,
+  buildRoadwayIndex,
+  rectsOverlap,
 } from '../../../src/js/game/walk-controls.js'
 
 const CENTER = { lat: 40, lon: -100 }
@@ -75,7 +78,10 @@ function model() {
         {
           type: 'way',
           id: 2,
-          tags: { building: 'yes', height: '10', min_height: '4' },
+          // CW-76: the skybridge this fixture has always meant, tagged the
+          // way all four extracts tag one. As `building=yes` it was a mass
+          // with an empty column under it and is now drawn to the street.
+          tags: { building: 'bridge', height: '10', min_height: '4' },
           geometry: squareRing(30, 0, 5),
         },
         {
@@ -140,6 +146,431 @@ describe('buildCityGroup', () => {
   })
 })
 
+describe('lampLayoutFor (CW-77)', () => {
+  it('★ lights an ordinary street every 18 m, which is HALF A SENTENCE more than 55', () => {
+    // Seattle Streets Illustrated 3.6 in full: "street lights alternating
+    // every 180 ft, PEDESTRIAN LIGHTS BETWEEN THEM AT 60 FT". 55 m is the
+    // interval of one kind of lamp; 18 m is the interval at which a walker
+    // meets one, and this game draws one kind of pole. Both checkable facts
+    // agree: City Light's surveyed register measures a 16.7 m median, and at
+    // 55 m the CW-45 roadrunner pin starves (13 -> 5 against a 40 % lamp
+    // cut, where 18 m gives 23).
+    for (const kind of ['residential', 'tertiary', 'secondary', 'primary']) {
+      const l = lampLayoutFor({ kind, widthM: ROAD_WIDTHS_M[kind] })
+      expect(l).toEqual({ spacingM: 18, paired: false })
+    }
+  })
+
+  it('gives a pedestrian street luminaires every 18 m', () => {
+    // 60 ft, and the reason a shopping street reads as lit.
+    expect(lampLayoutFor({ kind: 'pedestrian', widthM: 8 })).toEqual({
+      spacingM: 18,
+      paired: false,
+    })
+    expect(lampLayoutFor({ kind: 'living_street', widthM: 6 })).toEqual({
+      spacingM: 18,
+      paired: false,
+    })
+  })
+
+  it('★ pairs the sides on a street wider than 15.2 m - a rule NO CITY HERE REACHES', () => {
+    // 250 ft opposite pairs. The widest class this game lights is 14 m, and
+    // the two that would qualify - motorway and trunk - have been unlit since
+    // CW-18. So nothing in the four extracts exercises this, and without a
+    // synthetic road the rule would ship untested (CW-74's lesson: a guard
+    // that cannot fail is not a guard).
+    expect(lampLayoutFor({ kind: 'primary', widthM: 18 })).toEqual({
+      spacingM: 76,
+      paired: true,
+    })
+    expect(
+      Object.entries(ROAD_WIDTHS_M).filter(([, w]) => w > 15.2).map(([k]) => k)
+    ).toEqual(['motorway'])
+  })
+
+  it('reads the WIDTH, not the class name', () => {
+    // So a future width change reaches the rule without anyone remembering.
+    expect(lampLayoutFor({ kind: 'residential', widthM: 20 }).paired).toBe(true)
+    expect(lampLayoutFor({ kind: 'motorway', widthM: 9 }).paired).toBe(false)
+  })
+})
+
+describe('buildStreetProps - mapped lamps (CW-77)', () => {
+  /** A straight secondary street, with mapped lamps placed against it. */
+  function lampModel(lamps) {
+    return parseCityExtract(
+      {
+        elements: [
+          {
+            type: 'way',
+            id: 1,
+            tags: { highway: 'secondary' },
+            geometry: [pt(-200, 0), pt(200, 0)],
+          },
+          // Two far buildings, only to stretch the playable core: prop
+          // placement is clipped to the BUILDING bounds, so a street with no
+          // buildings near it gets no props at all.
+          {
+            type: 'way',
+            id: 2,
+            tags: { building: 'yes', height: '10' },
+            geometry: squareRing(-220, 60, 10),
+          },
+          {
+            type: 'way',
+            id: 3,
+            tags: { building: 'yes', height: '10' },
+            geometry: squareRing(220, -60, 10),
+          },
+          {
+            type: 'way',
+            id: 4,
+            tags: { building: 'yes', height: '10' },
+            geometry: squareRing(0, 120, 20),
+          },
+          ...lamps.map((l, i) => ({
+            type: 'node',
+            id: 1000 + i,
+            tags: { highway: 'street_lamp', ...(l.tags ?? {}) },
+            lat: pt(l.x, l.y).lat,
+            lon: pt(l.x, l.y).lon,
+          })),
+        ],
+      },
+      { center: CENTER }
+    )
+  }
+
+  const propsOf = (model) =>
+    buildStreetProps(model, buildCollisionGrid(model))
+
+  it('parses a mapped lamp into its own stream, not into the furniture', () => {
+    const m = lampModel([{ x: -50, y: 9 }])
+    expect(m.lamps).toHaveLength(1)
+    expect(m.stats.lampNodeCount).toBe(1)
+    // ★ CW-43's furniture counts are e2e-pinned; a lamp must not touch them.
+    expect(m.stats.furnitureByKind.street_lamp).toBeUndefined()
+    expect(m.furniture.some((f) => f.kind === 'street_lamp')).toBe(false)
+  })
+
+  /**
+   * A street with enough perches on it to actually carry birds. The lamp
+   * fixture above carries NONE - 19 lamp heads at a 0.06 rate is a hash that
+   * never fires - and a test written on it passed with the accounting
+   * deliberately broken. Measured on this one: three birds over two perch
+   * kinds, which is what makes the assertions below able to fail.
+   */
+  function perchModel() {
+    const lamps = []
+    for (let x = -180; x <= 180; x += 12) lamps.push(x)
+    return parseCityExtract(
+      {
+        elements: [
+          {
+            type: 'way',
+            id: 1,
+            tags: { highway: 'secondary' },
+            geometry: [pt(-200, 0), pt(200, 0)],
+          },
+          {
+            type: 'way',
+            id: 2,
+            tags: { building: 'yes', height: '10' },
+            geometry: squareRing(-220, 60, 10),
+          },
+          {
+            type: 'way',
+            id: 3,
+            tags: { building: 'yes', height: '10' },
+            geometry: squareRing(220, -60, 10),
+          },
+          {
+            type: 'way',
+            id: 4,
+            tags: { building: 'yes', height: '10' },
+            geometry: squareRing(0, 120, 20),
+          },
+          {
+            type: 'way',
+            id: 5,
+            tags: { leisure: 'park' },
+            geometry: squareRing(0, 60, 35),
+          },
+          ...Array.from({ length: 12 }, (_, i) => ({
+            type: 'node',
+            id: 2000 + i,
+            tags: { amenity: 'bench', backrest: 'yes' },
+            lat: pt(-150 + i * 25, 8).lat,
+            lon: pt(-150 + i * 25, 8).lon,
+          })),
+          ...lamps.map((x, i) => ({
+            type: 'node',
+            id: 1000 + i,
+            tags: { highway: 'street_lamp' },
+            lat: pt(x, 9).lat,
+            lon: pt(x, 9).lon,
+          })),
+        ],
+      },
+      { center: CENTER }
+    )
+  }
+
+  it('★ counts every bird by the perch it took, and the parts sum to the whole', () => {
+    // ★ A TOTAL CANNOT ANSWER A QUESTION ABOUT COMPETITION. Only one perch
+    // kind - a mapped lawn - is open to a goose, while a crow works parapets,
+    // lamp heads and the open ground beside a pole as well. A guard written
+    // on the TOTALS therefore moves with the city's lamp count: CW-77 doubled
+    // Denver's lamps, the crow's total passed the goose's, and the goose had
+    // lost nothing at all (ground perch: goose 51, crow 8). `birdsByPerch` is
+    // what lets that question be asked where it can be answered.
+    //
+    // Nothing here pins a species to a perch - that is `city-birds.js`'s
+    // table and its own tests. This pins the ACCOUNTING: every bird the
+    // builder placed is counted once, under the pass that placed it.
+    const props = propsOf(perchModel())
+    const { birdsByPerch, birdsPlaced } = props.stats
+
+    // Not vacuous: there are birds, and they came from more than one pass.
+    const total = Object.values(birdsPlaced).reduce((a, c) => a + c, 0)
+    expect(total).toBeGreaterThan(0)
+    expect(Object.keys(birdsByPerch).length).toBeGreaterThan(1)
+    // Every bucket is a real perch kind, never the initial placeholder.
+    expect(Object.keys(birdsByPerch)).not.toContain('unknown')
+
+    const summed = {}
+    for (const names of Object.values(birdsByPerch)) {
+      for (const [name, n] of Object.entries(names)) {
+        summed[name] = (summed[name] ?? 0) + n
+      }
+    }
+    expect(summed).toEqual(birdsPlaced)
+
+    props.dispose()
+  })
+
+  it('stands a mapped lamp where the map put it', () => {
+    const { stats } = propsOf(lampModel([{ x: -50, y: 9 }]))
+    expect(stats.lampsMapped).toBe(1)
+    expect(stats.lampsMappedNudged).toBe(0)
+    expect(stats.lampsMappedInRoad).toBe(0)
+  })
+
+  it('★ NUDGES a surveyed pole out of our ribbon rather than deleting it', () => {
+    // A 12 m secondary means a ribbon from -6 to +6. A pole at 5 m is one
+    // metre inside it - which is what 572 of Seattle City Light's 3,679 poles
+    // look like, and City Light does not stand poles in traffic lanes. Our
+    // ribbon is the approximation, so it yields.
+    const { stats } = propsOf(lampModel([{ x: -50, y: 5 }]))
+    expect(stats.lampsMapped).toBe(1)
+    expect(stats.lampsMappedNudged).toBe(1)
+    expect(stats.lampsMappedInRoad).toBe(0)
+  })
+
+  it('...but DROPS one too deep to be a disagreement about a kerb', () => {
+    // A pole on the centre line is 6 m in. On the real freeway that is I-5
+    // running below a flat 16 m band, and moving it 6 m would be inventing a
+    // position, not correcting one.
+    const { stats } = propsOf(lampModel([{ x: -50, y: 0 }]))
+    expect(stats.lampsMappedConsidered).toBe(1)
+    expect(stats.lampsMapped).toBe(0)
+    expect(stats.lampsMappedNudged).toBe(0)
+    expect(stats.lampsMappedInRoad).toBe(1)
+  })
+
+  it('★ a mapped lamp CLAIMS its stretch, so nothing is invented beside it', () => {
+    // Two runs of the same street: one bare, one with lamps mapped every
+    // 25 m along it. The mapped run must not end up with the procedural
+    // lamps as well - that is the whole meaning of "seed".
+    const bare = propsOf(lampModel([]))
+    // Every 25 m: WIDER than the 18 m the stream would use, so the claim has
+    // to reach a full interval to cover the gaps between them. At 0.6 of an
+    // interval it did not, and the stream lit an already-lit street.
+    const mapped = []
+    for (let x = -180; x <= 180; x += 25) mapped.push({ x, y: 8 })
+    const seeded = propsOf(lampModel(mapped))
+    expect(bare.stats.lampsMapped).toBe(0)
+    expect(bare.stats.lampsProcedural).toBeGreaterThan(0)
+    expect(seeded.stats.lampsMapped).toBe(mapped.length)
+    expect(seeded.stats.lampsProcedural).toBe(0)
+  })
+
+  it('fills the gaps where the map is silent', () => {
+    // One lamp at one end leaves the rest of the street to the stream.
+    const { stats } = propsOf(lampModel([{ x: -180, y: 8 }]))
+    expect(stats.lampsMapped).toBe(1)
+    expect(stats.lampsProcedural).toBeGreaterThan(0)
+  })
+
+  it('counts every mapped lamp it could not use, rather than losing it', () => {
+    const { stats } = propsOf(
+      lampModel([
+        { x: -50, y: 9 },
+        // inside the building at (0, 120)
+        { x: 0, y: 120 },
+        // on the centre line
+        { x: 50, y: 0 },
+      ])
+    )
+    // ★ OFFERED is not STOOD. Three lamps were offered, one stood, and the
+    // other two are accounted for by name rather than lost - a counter whose
+    // label does not match what it counts is how a report comes to say "520
+    // stood" beside "36 refused" out of 520 offered.
+    expect(stats.lampsMappedConsidered).toBe(3)
+    expect(stats.lampsMapped).toBe(1)
+    expect(
+      stats.lampsMappedInRoad +
+        stats.lampsMappedBlocked +
+        stats.lampsMappedCrowded
+    ).toBe(2)
+    expect(
+      stats.lampsMapped +
+        stats.lampsMappedInRoad +
+        stats.lampsMappedBlocked +
+        stats.lampsMappedCrowded
+    ).toBe(stats.lampsMappedConsidered)
+  })
+})
+
+describe('buildCityGroup - canopy legs (CW-76)', () => {
+  /** A canopy `cy` metres off an east-west secondary at y = 0. */
+  function canopyModel(cy) {
+    return parseCityExtract(
+      {
+        elements: [
+          {
+            type: 'way',
+            id: 900,
+            tags: { highway: 'secondary' },
+            geometry: [pt(-80, 0), pt(80, 0)],
+          },
+          {
+            type: 'way',
+            id: 901,
+            tags: { building: 'roof' },
+            geometry: squareRing(0, cy, 4),
+          },
+        ],
+      },
+      { center: CENTER }
+    )
+  }
+
+  it('puts legs under a canopy standing on open ground', () => {
+    // 60 m off the centreline of a 12 m secondary is well clear of it.
+    const { stats, dispose } = buildCityGroup(canopyModel(60))
+    expect(stats.canopyColumns).toBe(4)
+    expect(stats.canopyColumnsRefused).toBe(0)
+    expect(stats.canopyUnsupported).toBe(0)
+    dispose()
+  })
+
+  it('refuses every leg that would stand in the road, and says so', () => {
+    // CW-75's law: nothing of the city stands in a roadway. A canopy across
+    // a street gets NO legs rather than a post in a traffic lane, and the
+    // count is the record of it - a canopy quietly left bare and one that
+    // could not legally be supported look identical without it.
+    const { stats, dispose } = buildCityGroup(canopyModel(0))
+    expect(stats.canopyColumns).toBe(0)
+    expect(stats.canopyColumnsRefused).toBe(4)
+    expect(stats.canopyUnsupported).toBe(1)
+    dispose()
+  })
+
+  it('thins the legs to a colonnade, not a fence', () => {
+    // ★ THE RED PROOF SAID THIS GUARD DID NOT EXIST. A four-corner square
+    // places a leg at every vertex with or without the spacing rule, so the
+    // first version of this suite proved nothing about it. A twelve-sided
+    // canopy has vertices 3.1 m apart, which is where the rule bites.
+    const sides = 12
+    const radiusM = 6
+    const ring = []
+    for (let i = 0; i <= sides; i++) {
+      const a = (i / sides) * Math.PI * 2
+      ring.push(pt(Math.cos(a) * radiusM, 60 + Math.sin(a) * radiusM))
+    }
+    const model = parseCityExtract(
+      {
+        elements: [
+          {
+            type: 'way',
+            id: 930,
+            tags: { highway: 'secondary' },
+            geometry: [pt(-80, 0), pt(80, 0)],
+          },
+          { type: 'way', id: 931, tags: { building: 'roof' }, geometry: ring },
+        ],
+      },
+      { center: CENTER }
+    )
+    const { stats, dispose } = buildCityGroup(model)
+    expect(model.buildings[0].outer.length).toBe(sides)
+    expect(stats.canopyColumns).toBe(6)
+    expect(stats.canopyColumnsRefused).toBe(0)
+    dispose()
+  })
+
+  it('gives a canopy sitting on a building no legs at all', () => {
+    // The building under it IS the support; posts through its roof would be
+    // the invention.
+    const model = parseCityExtract(
+      {
+        elements: [
+          {
+            type: 'way',
+            id: 910,
+            tags: { building: 'yes', height: '8' },
+            geometry: squareRing(0, 0, 30),
+          },
+          {
+            type: 'way',
+            id: 911,
+            tags: { building: 'roof' },
+            geometry: squareRing(0, 0, 8),
+          },
+        ],
+      },
+      { center: CENTER }
+    )
+    const { stats, dispose } = buildCityGroup(model)
+    expect(stats.canopyColumns).toBe(0)
+    expect(stats.canopyColumnsRefused).toBe(0)
+    // Not "unsupported": the building holds it.
+    expect(stats.canopyUnsupported).toBe(0)
+    dispose()
+  })
+
+  it('draws the podium CW-76 put under a tower whose parts all float', () => {
+    const model = parseCityExtract(
+      {
+        elements: [
+          {
+            type: 'way',
+            id: 920,
+            tags: { building: 'yes', height: '120' },
+            geometry: squareRing(0, 0, 30),
+          },
+          {
+            type: 'way',
+            id: 921,
+            tags: { 'building:part': 'yes', height: '120', min_height: '45' },
+            geometry: squareRing(0, 0, 29),
+          },
+        ],
+      },
+      { center: CENTER }
+    )
+    const { group, stats, dispose } = buildCityGroup(model)
+    const buildings = group.children.find((c) => c.name === 'buildings')
+    buildings.geometry.computeBoundingBox()
+    // Without the podium the mesh would start at 45 m.
+    expect(buildings.geometry.boundingBox.min.z).toBe(0)
+    expect(buildings.geometry.boundingBox.max.z).toBeCloseTo(120, 5)
+    expect(stats.podiumsDrawn).toBe(1)
+    dispose()
+  })
+})
+
 describe('buildCityGroup — CW-8 distinctness', () => {
   it('buildings carry a per-vertex color attribute and vertex-color material', () => {
     const { group, dispose } = buildCityGroup(model())
@@ -153,7 +584,7 @@ describe('buildCityGroup — CW-8 distinctness', () => {
   })
 
   it('grounded buildings get a storefront strip; elevated parts do not', () => {
-    // model(): one grounded 25 m building, one min_height=4 skybridge part.
+    // model(): one grounded 25 m building, one min_height=4 skybridge.
     const { group, stats, dispose } = buildCityGroup(model())
     const storefronts = group.children.find((c) => c.name === 'storefronts')
 
@@ -169,10 +600,14 @@ describe('buildCityGroup — CW-8 distinctness', () => {
     expect(storefronts.geometry.boundingBox.max.z).toBeGreaterThanOrEqual(3.2)
     expect(storefronts.geometry.boundingBox.max.z).toBeLessThanOrEqual(5.0)
 
-    // Exactly one of the two buildings qualifies (the skybridge is skipped),
-    // so the strip has the same triangle count as one extruded square.
-    const perBuilding = stats.buildingTriangles / 2
-    expect(stats.storefrontTriangles).toBe(perBuilding)
+    // Exactly one of the two buildings qualifies, and WHICH one is the
+    // claim: the grounded building spans x -5..5 and the skybridge 25..35,
+    // so a strip that stopped short of 25 is the grounded one alone. CW-76
+    // put legs under the skybridge, which is why this no longer counts
+    // triangles against a whole-city total.
+    storefronts.geometry.computeBoundingBox()
+    expect(storefronts.geometry.boundingBox.max.x).toBeLessThan(25)
+    expect(stats.canopyColumns).toBeGreaterThan(0)
 
     dispose()
   })
@@ -2341,5 +2776,308 @@ describe('pickTravelerSpot (CW-65)', () => {
   it('has nothing to place in a city with no figures at all', () => {
     expect(pickTravelerSpot([], 'seattle', {})).toBeNull()
     expect(pickTravelerSpot(null, 'seattle', {})).toBeNull()
+  })
+})
+
+describe('nothing stands in the road (CW-75)', () => {
+  // An 8 m residential street east-west along y = 0, crossed by a 12 m
+  // secondary north-south at x = 40, with buildings far enough away that
+  // the collision grid never decides anything on its own.
+  function crossroadsModel(extraElements = []) {
+    return parseCityExtract(
+      {
+        elements: [
+          {
+            type: 'way',
+            id: 1,
+            tags: { building: 'yes', height: '20' },
+            geometry: squareRing(-120, -120, 6),
+          },
+          {
+            type: 'way',
+            id: 2,
+            tags: { building: 'yes', height: '20' },
+            geometry: squareRing(120, 120, 6),
+          },
+          {
+            type: 'way',
+            id: 3,
+            tags: { highway: 'residential' },
+            geometry: [pt(-100, 0), pt(100, 0)],
+          },
+          {
+            type: 'way',
+            id: 4,
+            tags: { highway: 'secondary' },
+            geometry: [pt(40, -100), pt(40, 100)],
+          },
+          ...extraElements,
+        ],
+      },
+      { center: CENTER }
+    )
+  }
+
+  /** Every rectangle a build placed a car in, parked and moving alike. */
+  function overlappingCarPairs(props, wanted) {
+    const cars = props.carFootprints
+    let pairs = 0
+    for (let i = 0; i < cars.length; i++) {
+      for (let j = i + 1; j < cars.length; j++) {
+        if (wanted && !wanted(cars[i], cars[j])) continue
+        if (rectsOverlap(cars[i], cars[j])) pairs++
+      }
+    }
+    return pairs
+  }
+
+  it('steps a mapped tree in the roadway back onto its own pavement', () => {
+    // A tree node the map puts 1 m off the residential centreline - inside
+    // an 8 m ribbon by 3 m, on the north side.
+    const m = crossroadsModel([
+      { type: 'node', id: 90, tags: { natural: 'tree' }, ...pt(-20, 1) },
+    ])
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+
+    expect(props.stats.treesDemoted).toBe(1)
+    expect(props.stats.treesDropped).toBe(0)
+    // It kept the side of the street it was already on, and landed on the
+    // pavement: the kerb is 4 m out, the tree line 1.2 m beyond that.
+    const halfM = ROAD_WIDTHS_M.residential / 2
+    expect(
+      hasVertexNear(props.group, 'tree-trunks', -20, halfM + 1.2, 0.3)
+    ).toBe(true)
+    expect(hasVertexNear(props.group, 'tree-trunks', -20, 1, 0.3)).toBe(false)
+
+    props.dispose()
+  })
+
+  it('drops a mapped tree with no pavement to take it, and counts it', () => {
+    // In the middle of the junction, where stepping out of the residential
+    // ribbon only lands inside the secondary one.
+    const m = crossroadsModel([
+      { type: 'node', id: 91, tags: { natural: 'tree' }, ...pt(40, 0) },
+    ])
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+
+    expect(props.stats.treesDropped).toBe(1)
+    expect(props.stats.treesDemoted).toBe(0)
+    expect(hasVertexNear(props.group, 'tree-trunks', 40, 0, 1)).toBe(false)
+
+    props.dispose()
+  })
+
+  it('plants no trunk and stands no pole on tarmac', () => {
+    const m = crossroadsModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    const roadways = buildRoadwayIndex(m.roads)
+
+    for (const o of props.obstacles) {
+      const side = o.halfLengthM * 2
+      const square = Math.abs(o.halfLengthM - o.halfWidthM) < 1e-6
+      if (!square || side > 0.7) continue
+      expect(roadways.insideRoadway(o.x, o.y, -side / 2)).toBeNull()
+    }
+    // The junction is where the streams cross, so it has to have refused
+    // something - a guard that never fires proves nothing (CW-73).
+    expect(
+      props.stats.treesSkippedInRoad + props.stats.lampsSkippedInRoad
+    ).toBeGreaterThan(0)
+
+    props.dispose()
+  })
+
+  it('never parks a car where a moving one already is', () => {
+    const m = crossroadsModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+
+    expect(props.carFootprints.length).toBeGreaterThan(0)
+    expect(props.carFootprints.some((c) => c.stream === 'traffic')).toBe(true)
+    expect(props.carFootprints.some((c) => c.stream === 'parked')).toBe(true)
+    expect(overlappingCarPairs(props, (a, b) => a.stream !== b.stream)).toBe(0)
+    expect(overlappingCarPairs(props)).toBe(0)
+
+    props.dispose()
+  })
+
+  it('gives an 8 m street one shared lane, clear of the parked rows', () => {
+    const m = crossroadsModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+
+    // Residential traffic runs along y = 0; the road is 8 m, so its free
+    // strip either side of the centreline is 1.5 m - one car wide only.
+    const onResidential = props.carFootprints.filter(
+      (c) => Math.abs(c.y) < ROAD_WIDTHS_M.residential / 2 && c.x < 30
+    )
+    const traffic = onResidential.filter((c) => c.stream === 'traffic')
+    const parked = onResidential.filter((c) => c.stream === 'parked')
+    expect(traffic.length).toBeGreaterThan(0)
+    expect(parked.length).toBeGreaterThan(0)
+    for (const car of traffic) expect(Math.abs(car.y)).toBeCloseTo(0, 6)
+    // ...and the parked rows keep the place they have always had.
+    const parkedOffset = ROAD_WIDTHS_M.residential / 2 - 0.5 - 1
+    for (const car of parked) {
+      expect(Math.abs(car.y)).toBeCloseTo(parkedOffset, 6)
+    }
+    // Which is the whole point: a lane and a bay, not one slot for both.
+    expect(parkedOffset - 1).toBeGreaterThanOrEqual(1)
+
+    props.dispose()
+  })
+
+  it('parks nobody on a 6 m living street, and says how many', () => {
+    const m = parseCityExtract(
+      {
+        elements: [
+          {
+            type: 'way',
+            id: 1,
+            tags: { building: 'yes', height: '20' },
+            geometry: squareRing(-800, -800, 6),
+          },
+          {
+            type: 'way',
+            id: 2,
+            tags: { building: 'yes', height: '20' },
+            geometry: squareRing(800, 800, 6),
+          },
+          {
+            // Long enough that a living street's own 4 cars per kilometre
+            // is a number this road can actually show.
+            type: 'way',
+            id: 3,
+            tags: { highway: 'living_street' },
+            geometry: [pt(-700, 0), pt(700, 0)],
+          },
+        ],
+      },
+      { center: CENTER }
+    )
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+
+    // 6 m leaves 2.5 m of tarmac each side of the centreline once the kerb
+    // is taken off - a parking bay would leave a car half a metre of lane.
+    expect(props.stats.roadsWithoutParking).toBe(1)
+    expect(props.stats.carCount).toBe(0)
+    // It is still a street, so it still carries traffic.
+    expect(props.frozenTrafficCount).toBeGreaterThan(0)
+
+    props.dispose()
+  })
+
+  it('stands nobody in the road unless the map maps a crossing there', () => {
+    const m = crossroadsModel()
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    const roadways = buildRoadwayIndex(m.roads)
+
+    expect(props.figureSpots.length).toBeGreaterThan(0)
+    for (const f of props.figureSpots) {
+      expect(roadways.insideRoadway(f.x, f.y, 0)).toBeNull()
+    }
+    expect(props.stats.peopleSkippedInRoad).toBeGreaterThan(0)
+
+    props.dispose()
+  })
+
+  it('lets somebody stand in the road where a crossing IS mapped', () => {
+    const plain = crossroadsModel()
+    const withCrossing = crossroadsModel([
+      { type: 'node', id: 92, tags: { highway: 'crossing' }, ...pt(40, 0) },
+    ])
+    const before = buildStreetProps(plain, buildCollisionGrid(plain))
+    const after = buildStreetProps(
+      withCrossing,
+      buildCollisionGrid(withCrossing)
+    )
+
+    // One mapped crossing is the only difference, and it buys back people
+    // the junction had been refusing.
+    expect(after.stats.peopleSkippedInRoad).toBeLessThan(
+      before.stats.peopleSkippedInRoad
+    )
+
+    before.dispose()
+    after.dispose()
+  })
+})
+
+describe('a side street sharing a corridor with an arterial (CW-75)', () => {
+  // ★ The shape the census found 373 Seattle lamp poles standing in: two
+  // ways whose ribbons overlap end to end, most of them along the I-5
+  // trench. A lamp planted 0.45 m outside ITS road's kerb is metres inside
+  // the next one's, and a parked slot measured off ITS kerb is somebody
+  // else's travel lane. One crossing at a junction cannot show either; a
+  // shared corridor shows both on every metre of it.
+  function corridorModel(mainTags, sideY) {
+    return parseCityExtract(
+      {
+        elements: [
+          {
+            type: 'way',
+            id: 1,
+            tags: { building: 'yes', height: '20' },
+            geometry: squareRing(-300, -300, 6),
+          },
+          {
+            type: 'way',
+            id: 2,
+            tags: { building: 'yes', height: '20' },
+            geometry: squareRing(300, 300, 6),
+          },
+          {
+            type: 'way',
+            id: 3,
+            tags: mainTags,
+            geometry: [pt(-200, 0), pt(200, 0)],
+          },
+          {
+            type: 'way',
+            id: 4,
+            tags: { highway: 'residential' },
+            geometry: [pt(-200, sideY), pt(200, sideY)],
+          },
+        ],
+      },
+      { center: CENTER }
+    )
+  }
+
+  it('stands no pole in the roadway running alongside', () => {
+    // A residential street 9 m off a 14 m primary: the residential lamp line
+    // at 4.45 m is 4.55 m inside the primary's ribbon.
+    const m = corridorModel({ highway: 'primary' }, 9)
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+    const roadways = buildRoadwayIndex(m.roads)
+
+    expect(props.stats.lampsSkippedInRoad).toBeGreaterThan(0)
+    for (const o of props.obstacles) {
+      const side = o.halfLengthM * 2
+      if (Math.abs(o.halfLengthM - o.halfWidthM) > 1e-6) continue
+      if (Math.abs(side - 0.15) > 0.005) continue
+      expect(roadways.insideRoadway(o.x, o.y, -side / 2)).toBeNull()
+    }
+
+    props.dispose()
+  })
+
+  it('refuses a parked slot a moving car already fills', () => {
+    // The primary's outer travel lane runs at 3.25 m; a residential street
+    // at 5.75 m puts its near parked row on exactly that line. The primary
+    // parks nobody, so nothing but the footprint registry stands between
+    // the two.
+    const m = corridorModel({ highway: 'primary' }, 5.75)
+    const props = buildStreetProps(m, buildCollisionGrid(m))
+
+    expect(props.stats.carsRefusedOverlap).toBeGreaterThan(0)
+    const cars = props.carFootprints
+    let pairs = 0
+    for (let i = 0; i < cars.length; i++) {
+      for (let j = i + 1; j < cars.length; j++) {
+        if (rectsOverlap(cars[i], cars[j])) pairs++
+      }
+    }
+    expect(pairs).toBe(0)
+
+    props.dispose()
   })
 })

@@ -20,7 +20,10 @@
 // - the same module the unit tests pin, imported through the dev server so the
 // code under test is the code that runs. Per cell: glyph change, A-B-A flip,
 // drive change (intensity level in mono, palette index in colour), reverse
-// video / white crossings, mean glyph PERSISTENCE in frames, and whether the
+// video / white crossings, mean glyph PERSISTENCE in frames, the CW-93
+// VOCABULARY MISMATCH count (cells drawing a character their own surface is
+// not allowed to draw - the one column here with a right answer, and it is
+// zero), and whether the
 // cell is a churn cell (changed in more than half the frame pairs). Per class,
 // from the game's own class pass, with every cell whose class MOVED during the
 // sequence split out into its own row: it swept a geometry edge, so its
@@ -112,10 +115,36 @@ const DEFAULTS = {
   // --luminance selects the game's CW-70 treatment of the solid bright layer:
   // stock | calm | off. Empty leaves whatever the game configured for itself.
   luminance: '',
+  // CW-86: --anchored=on takes the glyph for wall, roof, storefront, ground,
+  // sidewalk and green from the SURFACE rather than from the screen. Empty
+  // leaves the game's own setting, which is off.
+  //
+  // It is the third column of this release's table, beside the memory off
+  // and the memory on. Note that it currently forces the CPU glyph path
+  // (_hfm.js says why), so a bench line taken with it on is a CPU line.
+  anchored: '',
   // --scheme=light runs the page in the light theme, which is how the AMBER
   // palette is reached; dark gives the green one. There are TWO palettes of
   // six colours each, not six palettes.
   scheme: 'dark',
+  // CW-85's two toggles, set before the page loads because both are read out
+  // of localStorage rather than off an API. `--day=on` is the backing the
+  // owner had on in every frame of the report CW-93 answers; `--empty=on`
+  // hides the people and the parked cars, which is how those frames were
+  // taken. Empty leaves the shipped default: Night, populated.
+  day: '',
+  empty: '',
+  // CW-93: `--cpu-sample=on` forces the CPU converter path through the same
+  // switch the bench uses. A defect that can land on either implementation
+  // has to be measured on both - the CW-68 lesson, and the reason the two
+  // paths carry the same rules in two languages. Empty leaves the game's own
+  // choice, which is the GPU path wherever it is available.
+  cpuSample: '',
+  // CW-92: `--ink-families=off` reinstates the per-frame nearest-palette match
+  // that D-127 is about, so the face-flip row has a like-for-like BEFORE. Both
+  // arms then read the converter's own colour decision, which the painted-pixel
+  // fallback could not.
+  inkFamilies: '',
   // --ink-budget sets the CW-71 palette ink budget for the run: `off`, or
   // `floor,whiteLum,whiteChroma`. Empty leaves the game's own.
   inkBudget: '',
@@ -276,6 +305,16 @@ async function installProbe(modulePath) {
       return game().altView.getConvertStats()
     },
 
+    /**
+     * CW-93: the per-class glyph ladders the converter is really searching.
+     * Read from the instance rather than from `glyph-vocabularies.js`, so the
+     * mismatch counter cannot be checking a drawn glyph against a table the
+     * converter never used.
+     */
+    vocabularies() {
+      return game().altView.getClassVocabularies?.() ?? null
+    },
+
     /** Open a fold and the contact sheet it will be tiled into. */
     begin(cfg) {
       const g = game()
@@ -301,6 +340,7 @@ async function installProbe(modulePath) {
         whiteIndex: palette
           ? palette.findIndex((hex) => hex.toLowerCase() === '#ffffff')
           : -1,
+        vocabularies: cfg.vocabularies,
       })
       const overlay = document.querySelector('canvas.hfm-overlay-canvas')
       state.scratch = document.createElement('canvas')
@@ -380,6 +420,33 @@ async function installProbe(modulePath) {
       return out
     },
 
+    /**
+     * ★★★ CW-92: THE CONVERTER'S OWN COLOUR DECISION, with blanks marked.
+     *
+     * `readColours()` below recovers the decision by matching painted pixels
+     * back to the palette, which reads the bloom and Day's backing as well as
+     * the cell - so a cell whose palette index never moved could still be
+     * reported as having changed colour, and "did this cell change colour
+     * while its surface did not" is the whole of D-127. Measured: that
+     * fallback reported 3.17 % of wall cell-frames flipping where the
+     * converter had not changed one.
+     *
+     * ★ A CELL DRAWING THE SPACE IS MARKED -1, exactly as the painted-pixel
+     * fallback marked a cell with no opaque pixels. The lit share and the
+     * white share are read off this column and both mean "carries ink"; the
+     * converter assigns every classified cell an index whether it draws
+     * anything or not, so without this line colour mode would report 100 %
+     * lit forever.
+     */
+    colourDecisions(probe) {
+      if (!probe.colour) return api.readColours()
+      const out = Int8Array.from(probe.colour)
+      for (let i = 0; i < out.length; i++) {
+        if (probe.glyphs[i] === 0) out[i] = -1
+      }
+      return out
+    },
+
     /** Fold the frame that is on screen, and tile it into the contact sheet. */
     step() {
       const a = state
@@ -391,7 +458,12 @@ async function installProbe(modulePath) {
         glyphs: probe.glyphs,
         intensity: probe.intensity,
         lum: probe.lum,
-        colour: a.fold.mono ? null : api.readColours(),
+        // ★★★ CW-92: THE CONVERTER'S OWN DECISION WHERE IT IS AVAILABLE. The
+        // painted-pixel fallback below reads the bloom and Day's backing as
+        // well as the cell, so a cell whose palette index never moved could
+        // still be reported as having changed colour - and "did this cell
+        // change colour while its surface did not" is the whole of D-127.
+        colour: a.fold.mono ? null : api.colourDecisions(probe),
         cls,
       })
       const overlay = document.querySelector('canvas.hfm-overlay-canvas')
@@ -755,7 +827,7 @@ function generatePoses(mode, start, frames, opts) {
   return out
 }
 
-async function runSequence(page, opts, out, tag, poses, cell) {
+async function runSequence(page, opts, out, tag, poses, cell, vocabularies) {
   await page.evaluate((p) => window.__seqApi.setPose(p), poses[0])
   await convertOnce(page)
   const grid = await page.evaluate(
@@ -766,6 +838,7 @@ async function runSequence(page, opts, out, tag, poses, cell) {
       frames: opts.frames,
       cellW: cell.w,
       cellH: cell.h,
+      vocabularies,
     }
   )
   const t0 = Date.now()
@@ -817,6 +890,38 @@ async function runSequence(page, opts, out, tag, poses, cell) {
   }
 }
 
+/**
+ * CW-93: the mismatch block. Printed even when it is zero, because a counter
+ * nobody can see reporting nothing is indistinguishable from a counter that
+ * was never wired up - and this round has shipped one of those before.
+ */
+function printMismatch(res) {
+  const mm = res.mismatch
+  if (!mm) {
+    console.log(
+      '  MISMATCH: no vocabularies were handed to the fold - NOT MEASURED'
+    )
+    return
+  }
+  console.log(
+    `  MISMATCH ${mm.total} (cells ${mm.cells}, ${mm.cellsPct}% of the grid) ` +
+      `· per frame ${mm.perFrame.join(' ')} · reverse-video cells exempt ` +
+      `${mm.reverseExempt}`
+  )
+  for (const kind of mm.kinds) {
+    console.log(
+      `    "${kind.char}" (glyph ${kind.glyph}) drawn on ${kind.on} ` +
+        `${kind.count}x - it belongs to ${kind.belongsTo.join(', ') || 'NO class vocabulary'}`
+    )
+  }
+  if (mm.worstCells.length) {
+    console.log(
+      '    worst cells (col,row x frames): ' +
+        mm.worstCells.map((c) => `${c.x},${c.y}x${c.frames}`).join(' ')
+    )
+  }
+}
+
 function printSequence(res, mono) {
   const t = res.total
   console.log(
@@ -847,10 +952,15 @@ function printSequence(res, mono) {
         : '') +
       `  [min ${pc(Math.min(...shares))} max ${pc(Math.max(...shares))}]`
   )
+  printMismatch(res)
   console.log(
-    `  | class | cells | lit | ${mono ? 'solid' : 'white'} | glyph chg% | glyph FLIP% | ${mono ? 'drive' : 'colour'} chg% | flip% | ${mono ? 'rev' : 'white'} tog | churn% | persist |`
+    `  | class | cells | lit | ${mono ? 'solid' : 'white'} | glyph chg% | glyph FLIP% | ${mono ? 'drive' : 'colour'} chg% | flip% | ${mono ? 'rev' : 'white'} tog | churn% | MISMATCH |${mono ? '' : ' FACE-FLIP% |'} persist |`
   )
-  console.log('  |---|---|---|---|---|---|---|---|---|---|---|')
+  console.log(
+    '  |---|---|---|---|---|---|---|---|---|---|---|' +
+      (mono ? '' : '---|') +
+      '---|'
+  )
   for (const row of [...res.perClass, res.edge]) {
     if (row.cells < 40) continue
     console.log(
@@ -858,7 +968,9 @@ function printSequence(res, mono) {
         `${row.glyphChangePct} | ` +
         `${row.glyphFlipPct} | ${row.driveOrColourChangePct} | ` +
         `${row.driveOrColourFlipPct} | ${row.reverseOrWhiteToggles} | ` +
-        `${row.churnCellsPct} | ${row.meanGlyphPersistenceFrames} |`
+        `${row.churnCellsPct} | ${row.mismatch} | ` +
+        (mono ? '' : `${row.faceFlipPct} | `) +
+        `${row.meanGlyphPersistenceFrames} |`
     )
   }
   if (!mono && res.colourHistogram?.length) {
@@ -917,17 +1029,30 @@ async function main() {
   }
   const context = await browser.newContext(contextOptions)
   const colourOn = opts.colour === 'on'
-  await context.addInitScript((on) => {
-    localStorage.setItem('openscad-forge-first-visit-seen', 'true')
-    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
-    localStorage.setItem('openscad-forge-city-walk-colour', on ? 'on' : 'off')
-    // CW-42: the instrument measures the size IT sets. The inert forced-probe
-    // map stops the entry calibration on its first frame and the cleared keys
-    // keep a previous real calibration from seeding the landing.
-    window.__cityWalkCalibrationForce = {}
-    localStorage.removeItem('openscad-forge-city-walk-calibrated-floor')
-    localStorage.removeItem('openscad-forge-city-walk-font-scale')
-  }, colourOn)
+  await context.addInitScript(
+    ({ on, day, empty }) => {
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
+      localStorage.setItem('openscad-forge-city-walk-colour', on ? 'on' : 'off')
+      // CW-85's pair, read out of storage at launch. Left alone when the run
+      // did not ask, so the shipped defaults (Night, populated) stand.
+      if (day) localStorage.setItem('openscad-forge-city-walk-daylight', day)
+      if (empty) {
+        localStorage.setItem('openscad-forge-city-walk-empty-city', empty)
+      }
+      // CW-42: the instrument measures the size IT sets. The inert forced-probe
+      // map stops the entry calibration on its first frame and the cleared keys
+      // keep a previous real calibration from seeding the landing.
+      window.__cityWalkCalibrationForce = {}
+      localStorage.removeItem('openscad-forge-city-walk-calibrated-floor')
+      localStorage.removeItem('openscad-forge-city-walk-font-scale')
+    },
+    {
+      on: colourOn,
+      day: opts.day === 'on' ? 'day' : opts.day === 'off' ? 'night' : '',
+      empty: opts.empty === 'on' ? 'on' : opts.empty === 'off' ? 'off' : '',
+    }
+  )
   const page = await context.newPage()
 
   const results = []
@@ -985,10 +1110,91 @@ async function main() {
       )
     }
     console.log(`luminance layer: ${luminance ?? 'not available on this tree'}`)
+
+    // ★ A COLUMN THAT QUIETLY MEASURED THE OTHER ONE WOULD BE WORSE THAN NO
+    // COLUMN. Anchored glyphs are two switches in two modules, and either
+    // alone does nothing visible - so this asks the game what is actually in
+    // force and refuses the run if it is not what was requested.
+    const anchored = await page.evaluate((want) => {
+      const game = window.__cityWalkGame
+      if (typeof game.setAnchoredGlyphs !== 'function') return null
+      if (want === 'on') return game.setAnchoredGlyphs(true)
+      if (want === 'off') return game.setAnchoredGlyphs(false)
+      return game.getAnchoredGlyphs()
+    }, opts.anchored)
+    if (opts.anchored && anchored !== (opts.anchored === 'on')) {
+      throw new Error(
+        `--anchored=${opts.anchored}: this tree answered "${anchored}"` +
+          ' - either it predates CW-86 or the switch did not take'
+      )
+    }
+    console.log(
+      `anchored glyphs: ${anchored === null ? 'not available on this tree' : anchored}`
+    )
     console.log(
       `hysteresis: ${hysteresis ? JSON.stringify(hysteresis) : 'OFF'}` +
         (opts.hysteresis ? '' : " (the game's own setting, untouched)")
     )
+    // CW-93: the ladders the mismatch counter will judge against. A run that
+    // cannot read them measures nothing about D-128, so it says so loudly
+    // rather than reporting a tidy zero - this project's recorded failure
+    // mode is a guard that was green because its fixture was empty.
+    const vocabularies = await page.evaluate(() =>
+      window.__seqApi.vocabularies()
+    )
+    if (!vocabularies) {
+      throw new Error(
+        'getClassVocabularies() answered null - this tree predates CW-93 or ' +
+          'the atlas has no class ladders, and the mismatch counter would ' +
+          'report zero for the wrong reason'
+      )
+    }
+    console.log(
+      `vocabularies: ${Object.keys(vocabularies).length} class ladders ` +
+        Object.entries(vocabularies)
+          .map(([id, ids]) => `${id}:${ids.length}`)
+          .join(' ')
+    )
+    console.log(
+      `day/night: ${opts.day || "the game's own (night)"} · empty city: ` +
+        `${opts.empty || "the game's own (populated)"}`
+    )
+    if (opts.inkFamilies) {
+      const want = opts.inkFamilies === 'on'
+      const got = await page.evaluate((on) => {
+        const game = window.__cityWalkGame
+        if (typeof game.altView.setInkFamilies !== 'function') return null
+        if (!on) game.altView.setInkFamilies(null)
+        return game.altView.inkFamiliesOn()
+      }, want)
+      if (got !== want) {
+        throw new Error(
+          `--ink-families=${opts.inkFamilies}: the instance answered "${got}"` +
+            ' - either it predates CW-92 or the switch did not take'
+        )
+      }
+      console.log(`ink families: ${want ? 'AUTHORED' : 'off (the screen pick)'}`)
+    }
+
+    // ★ ASK THE GAME WHAT IT IS ACTUALLY DOING, the way --anchored does. A
+    // path switch that quietly did not take would give this release a clean
+    // second column that measured the first one again.
+    if (opts.cpuSample) {
+      const want = opts.cpuSample === 'on'
+      const got = await page.evaluate(
+        (on) =>
+          window.__cityWalkGame.altView.setBenchLegacy?.({ cpuSample: on })
+            ?.cpuSample ?? null,
+        want
+      )
+      if (got !== want) {
+        throw new Error(
+          `--cpu-sample=${opts.cpuSample}: the instance answered "${got}" - ` +
+            'setBenchLegacy() is missing or the switch did not take'
+        )
+      }
+      console.log(`converter path forced: ${want ? 'CPU' : 'GPU'}`)
+    }
     let start = await page.evaluate(() => window.__seqApi.pose())
     if (opts.pose) {
       const [px, py, headingDeg, pitchDeg] = String(opts.pose)
@@ -1051,7 +1257,15 @@ async function main() {
       for (const mode of modes) {
         const poses = generatePoses(mode, start, opts.frames, opts)
         const tag = `${opts.label || 'run'}-${colourOn ? 'colour' : 'mono'}-${size}-${mode}`
-        const res = await runSequence(page, opts, out, tag, poses, cell)
+        const res = await runSequence(
+          page,
+          opts,
+          out,
+          tag,
+          poses,
+          cell,
+          vocabularies
+        )
         results.push({
           ...res,
           size,
@@ -1059,6 +1273,7 @@ async function main() {
           glRenderer: gl.renderer,
           hysteresis,
           luminance,
+          anchored,
           inkBudget,
           sceneExp: opts.sceneExp,
         })
@@ -1085,15 +1300,16 @@ async function main() {
   console.log('\n=== SUMMARY ===')
   console.log(`GL: ${results[0]?.glRenderer ?? 'unknown'}`)
   console.log(
-    '| tag | cell px | glyph chg% | glyph FLIP% | drive/colour chg% | rev/white toggles | churn% | persistence fr | class-moved | GL |'
+    '| tag | cell px | glyph chg% | glyph FLIP% | drive/colour chg% | rev/white toggles | churn% | MISMATCH | persistence fr | class-moved | GL |'
   )
-  console.log('|---|---|---|---|---|---|---|---|---|---|')
+  console.log('|---|---|---|---|---|---|---|---|---|---|---|')
   for (const r of results) {
     const t = r.total
     console.log(
       `| ${r.tag} | ${r.cell.w}x${r.cell.h} | ${t.glyphChangePct} | ` +
         `${t.glyphFlipPct} | ${t.driveOrColourChangePct} | ` +
         `${t.reverseOrWhiteToggles} | ${t.churnCellsPct} | ` +
+        `${r.mismatch ? r.mismatch.total : 'n/a'} | ` +
         `${t.meanGlyphPersistenceFrames} | ${r.classChangedCells} | ${r.glRenderer} |`
     )
   }

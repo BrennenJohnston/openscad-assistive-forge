@@ -485,6 +485,24 @@ export function buildCityCameraPanel(actions) {
   views.appendChild(viewGrid);
   body.appendChild(views);
 
+  // CW-85 HAS NO SECTION HERE, AND THAT IS A MEASUREMENT RATHER THAN AN
+  // OVERSIGHT. Day and the empty city were built as a 'Scene' section right
+  // here, and the CW-38 guard caught it at once: in high contrast at
+  // 1600x900 the body held 775 px of content in a 683 px box, an overflow of
+  // 92 px, which puts Reset View back below the fold behind a scrollbar -
+  // the exact defect CW-38 exists to have fixed.
+  //
+  // There was no room to find. CW-38 already spent every spacing token it
+  // could ('the buttons never shrink - a target is a target'), and measured
+  // section by section the panel was EXACTLY full: 158 + 158 + 66 + 204 + 66
+  // with 2 px gaps. Even the compact form - both buttons side by side in one
+  // row like Zoom, 66 px rather than 112 - still overflowed by 46 px.
+  //
+  // So the two toggles live in the toolbar's own Scene group and on keys B
+  // and U, which already keeps CW-60's promise that every key has a button.
+  // It is also the better home on its own merits: this panel is the CAMERA -
+  // where you look, where you walk, how far you zoom, the standard views -
+  // and neither of those toggles moves the camera.
   // --- Reset ----------------------------------------------------------------
   const resetSection = section('Reset');
   const resetBtn = pressButton({

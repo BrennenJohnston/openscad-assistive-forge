@@ -125,17 +125,23 @@ export const MONO_REVERSE_THRESHOLD = 0.8;
  * block on whatever wall it touches; a lamp post two metres away is a solid bar
  * from the pavement to the top of the frame.
  *
- * Three columns, one row each:
+ * Two columns, one row each:
  *
- *   stock   what the game has always drawn. The comparison, and the default
- *           until the owner chooses.
- *   calm    the solid layer kept, but bounded: the share of solid cells is
- *           held under `reverseShareCap` by lifting the threshold (see
- *           nextReverseLift), and the shopfront bands come down to about 0.87
- *           so they are still lit without being the whitest thing on screen.
- *   off     no solid cells at all in the game - the intensity ladder only -
- *           and the shopfront bands at about 0.78, below the cliff, so they
- *           read as bright characters rather than slabs.
+ *   off     THE GAME'S DEFAULT since CW-72, on the owner's answer to CW-Q74 at
+ *           G1: no solid cells at all - the intensity ladder only - and the
+ *           shopfront bands at about 0.78, below the cliff, so they read as
+ *           bright characters rather than slabs. Measured at a shopfront pose:
+ *           the solid cells go 2,936 to 0 while the shopfronts' LIT cells only
+ *           move 4,162 to 4,042, so it costs three per cent of the ink and all
+ *           of the solidity.
+ *   stock   what the game drew before. Kept as the comparison an instrument
+ *           run can switch back to, not as anything a player can reach.
+ *
+ * A third column, `calm`, was built and measured for this choice and DELETED
+ * here when the owner picked `off`. It bounded the SHARE of solid cells with a
+ * controller instead of removing them; its measurement is in the CW-70 record,
+ * and the one thing worth carrying forward is that a cap on a share must be
+ * bounded below the lit band's headroom or it becomes `off` by a slower route.
  *
  * The band scales are multipliers on the painted shopfront canvas, whose
  * brightest paint is 0xef (0.937): 0.93 puts it at 0.871 and 0.83 at 0.777.
@@ -164,6 +170,18 @@ export const LUMINANCE_LAYER = Object.freeze({
     reverseLiftMax: 0,
     storefrontScale: 1,
   }),
+  // ★★★ CALM IS BACK, AND WHY IT LEFT MATTERS. CW-70 built these three
+  // treatments and photographed them; the owner read the pictures at G1 and
+  // chose `off`, so CW-72 deleted this column. Playing the deployed build,
+  // they said the result was "sad" - and the pictures they chose from were
+  // STILLS. This round wrote down that a still is not a filmstrip (T-CW) and
+  // then let a GATE question be answered from stills anyway.
+  //
+  // `reverseShareCap` bounds how much of the frame may go solid; the LIFT
+  // bound below it is what keeps this from quietly becoming `off` (CW-70
+  // measured an unbounded cap oscillating 10,164 solid crossings over 47
+  // STANDING frames). Measured at the shopfront pose, standing, at the
+  // default size: 2,936 solid cells on `stock`, 2,261 here, 0 on `off`.
   calm: Object.freeze({
     reverseAt: MONO_REVERSE_THRESHOLD,
     reverseShareCap: 0.01,
@@ -174,6 +192,10 @@ export const LUMINANCE_LAYER = Object.freeze({
     reverseAt: null,
     reverseShareCap: null,
     reverseLiftMax: 0,
+    // ★ AND THIS 0.83 IS THE PART NOBODY ASKED FOR. `off` was chosen as "no
+    // solid cells"; it also dims every lit shopfront band by 17 %, because
+    // the three treatments always moved both halves together. Kept here so
+    // the column still means what it meant, but it is no longer the default.
     storefrontScale: 0.83,
   }),
 });
@@ -194,23 +216,304 @@ export const LUMINANCE_LAYER = Object.freeze({
  * `whiteLum` and `whiteChroma` are the gate on the white entry, which is what
  * a low-chroma highlight lands on through the D-112 sRGB match.
  *
- * These three numbers are the owner's at G1 (CW-Q79). Two alternatives were
- * measured beside them and are in the release record.
+ * ★ THE FLOOR IS 0.3, ANSWERED BY THE OWNER AT G1 (CW-Q79), not the 0.5 that
+ * CW-71 shipped. Measured at the Seattle spawn, standing, at the default size:
+ *
+ *   no budget        89.3 % inked, 61.8 % white   flat white fields
+ *   white gate only  89.2 % inked,  0.01 % white  the SAME fields, in teal
+ *   floor 0.3        28.5 % inked,  0.01 % white  a street again  <- chosen
+ *   floor 0.5         3.1 % inked,  0.01 % white  near-black, lights only
+ *
+ * The white gate alone removes every white cell and changes nothing else,
+ * which is how it is known that the flatness was never only about white. 0.3
+ * keeps a street you can read; 0.5 is the monochrome rule and empties it.
  */
 export const CITY_PALETTE_INK_BUDGET = Object.freeze({
-  floor: 0.5,
+  // ★★★ THE FLOOR IS OFF, AND THE WHITE GATE STAYS. Answered by the owner
+  // after playing the deployed build: at 0.3 the screen is 28.5 % inked where
+  // it used to be 89.3 %, and seven cells in ten are simply black. The two
+  // halves of this budget were always separable and the measurement above
+  // says which one did which job - the white gate ALONE takes white from
+  // 61.8 % to 0.01 % and changes nothing else, so it is the gate that killed
+  // the flat white fields and the floor that made the city dark. The gate
+  // stays; the floor goes. `normalizeInkBudget` keeps the gate alive at
+  // floor 0 and only returns null when BOTH are off.
+  floor: 0,
   whiteLum: 0.9,
   whiteChroma: 0.12,
 });
 
-/** The treatment the game starts in. The owner chooses the winner at G1. */
-export const LUMINANCE_LAYER_DEFAULT = 'stock';
+/**
+ * ★★★ CW-92 (D-127, CW-Q96): WHAT COLOUR EACH SURFACE IS.
+ *
+ * THE MEASUREMENT THAT MADE THIS NECESSARY. The city is achromatic end to end.
+ * Over all 60 materials in a Seattle session, almost every `material.color` is
+ * 1,1,1; the per-mesh textures are neutral grey (buildings 0.269, storefronts
+ * 0.309, ground 0.034, sidewalks 0.053, r = g = b); both scene lights are pure
+ * white; the fog is pure black. Fed through `pickPaletteIndex`, 51 of the 60
+ * land on the palette's WHITE entry. So there is no surface colour to read, and
+ * every hue a colour player has ever seen was manufactured by the converter out
+ * of the last digit or two of a grey image - which is why a whole face crossed
+ * a palette boundary together as the camera moved (D-127). The owner asked for
+ * an authored palette instead (CW-Q96).
+ *
+ * ★★ SIX ENTRIES FOR FIFTEEN CLASSES, SO SURFACES SHARE - AND THAT IS SAFE
+ * BECAUSE COLOUR IS NO LONGER CARRYING IDENTITY ON ITS OWN. CW-59 settled that
+ * SHAPE identifies and colour does not, and CW-93 gave every surface its own
+ * character set back in colour mode for the first time since CW-32. A tree and
+ * the building behind it can share the green phosphor here because one is drawn
+ * with `@ v o O` and the other with `| [ ] ( ) { }`.
+ *
+ * ★ NO SURFACE TAKES WHITE, and that is a correctness rule rather than a taste:
+ * CW-71's ink budget gates the white entry on luminance and chroma, and its
+ * guard is written on the assumption that a surface family is never white. A
+ * white family would walk straight past that gate. White is left to the sky and
+ * to anything the class pass could not name, which keep the screen pick.
+ *
+ * THE AMBER SET HAS SEVEN ENTRIES, not six: CW-Q11 added `#39ff5e` because a
+ * tree canopy and a yellow-green building both fell to lime. That entry is used
+ * here for exactly what it was minted for.
+ *
+ * Keyed by `SURFACE_CLASS` id, as literals for the same reason
+ * `CITY_BACKING_EXEMPT_CLASS_IDS` and `ANCHORED_CLASSES` are: importing the
+ * enum here would close a cycle. A unit case asserts every id is the class it
+ * claims to be.
+ */
+export const CITY_INK_FAMILY = Object.freeze({
+  // green: 0 green, 1 cyan, 2 yellow, 3 magenta, 4 red, 5 white
+  green: Object.freeze({
+    1: 2, // GROUND, bare earth, warm
+    2: 1, // ROAD, asphalt, cool
+    3: 1, // CURB, the road's own material
+    4: 0, // BUILDING_WALL, the fabric of the city on a green phosphor
+    5: 0, // BUILDING_ROOF
+    6: 2, // STOREFRONT, lit glass
+    7: 3, // SIGN, the brightest markers on the street
+    8: 1, // MAST, metal
+    9: 0, // TREE, foliage - told from a wall by its characters, not its hue
+    10: 4, // CAR
+    11: 2, // LAMP, warm metal and warm light
+    12: 4, // PERSON, the other moving thing
+    13: 2, // SIDEWALK, concrete, warmer than the carriageway beside it
+    14: 0, // GREEN, planting
+  }),
+  // amber: 0 hot pink, 1 cyan, 2 lime, 3 foliage green, 4 violet,
+  //        5 neon orange, 6 white
+  amber: Object.freeze({
+    1: 5, // GROUND
+    2: 1, // ROAD
+    3: 1, // CURB
+    4: 2, // BUILDING_WALL, the entry CW-Q11 left to the buildings
+    5: 2, // BUILDING_ROOF
+    6: 5, // STOREFRONT
+    7: 0, // SIGN
+    8: 1, // MAST
+    9: 3, // TREE, the entry CW-Q11 minted for foliage
+    10: 4, // CAR
+    11: 5, // LAMP
+    12: 4, // PERSON
+    13: 5, // SIDEWALK
+    14: 3, // GREEN
+  }),
+});
+
+/** The treatment the game draws, answered by the owner at G1 (CW-Q74). */
+// The owner's second answer, given after playing the build rather than
+// reading a photograph of it: solid cells back, but capped.
+export const LUMINANCE_LAYER_DEFAULT = 'calm';
+
+// ---------------------------------------------------------------------------
+// CW-85 - the backing behind the characters ("Day")
+// ---------------------------------------------------------------------------
+//
+// A blank cell in this game is the page's black, and the only solid paint is
+// the BRIGHT reverse-video layer. The reference the owner is working from
+// fills the black gaps on nearby surfaces with a dark, material-coloured
+// backing UNDER the glyphs - road slate, pavement tan, a trunk brown - while
+// the sky stays black and the far skyline stays bare. That is what makes a
+// car read as a solid mass rather than as characters in front of nothing.
+//
+// ★★ THE BACKING TAKES CONTRAST AWAY, AND THAT IS THE ONE DIRECTION THIS
+// PROJECT DOES NOT LET A CHANGE GO. Today every glyph sits on pure black, the
+// most contrast a screen can give. Painting anything behind it lowers the
+// ratio, so every tint below is bounded by MEASUREMENT rather than by taste:
+// the guard in tests/unit/game/city-backing.test.js drives colorjs.io over
+// every palette entry against every tint, at the dimmest drive the mono
+// ladder ships, and holds the 4.5:1 this project holds itself to. A tint that
+// reads nicely and measures 4.3 is not a tint this file may carry.
+//
+// The numbers are deliberately dark for that reason. They say "a surface is
+// here" and must never read as ink.
+
+/** Full-strength backing out to here, in metres. */
+export const CITY_BACKING_NEAR_M = 60;
+
+/**
+ * Gone by here. It is the fog's own far plane (city-scene.js), so the tint
+ * and the fog agree about where the world ends; a backing that outlived the
+ * fog would draw a skyline the scene has already faded to black.
+ */
+export const CITY_BACKING_FAR_M = 260;
+
+/**
+ * Classes that are never backed, by SURFACE_CLASS id.
+ *
+ * Only the sky, for two reasons: it is not a surface, and a cell the city
+ * does not cover reads depth 0, which would otherwise back the entire sky at
+ * full strength as though it were a wall against the lens.
+ *
+ * Numeric rather than imported so this module stays a leaf with no imports at
+ * all - the converter, the controller and eight test files load it. The guard
+ * that every id here is a real class lives in the test, which is free to
+ * import the class list.
+ */
+export const CITY_BACKING_EXEMPT_CLASS_IDS = Object.freeze([0]);
+
+/**
+ * MONOCHROME backing: the phosphor itself, driven down.
+ *
+ * A single-phosphor tube has one colour, so a mono backing cannot be a
+ * material tint - it is the same phosphor at a low drive, which is what a
+ * dark surface looked like on the hardware this game imitates. Values are the
+ * `drive` argument to driveColor(), the same function the renderer paints
+ * with.
+ *
+ * ★★ THE TWO PHOSPHORS CANNOT CARRY THE SAME BACKING, AND AMBER IS THE
+ * BINDING ONE. Measured through driveColor and colorjs.io against the dimmest
+ * ink the ladder ships (drive 0.65): green (#00ff00) holds 4.6:1 up to a
+ * backing drive of **0.180**, amber (#ffb000) only to **0.080** - amber's ink
+ * is itself much darker, so the gap between ink and backing closes more than
+ * twice as fast. A single table would either waste green or fail amber, so
+ * each phosphor gets the brightest backing it can carry and the guard
+ * measures both. The consequence is worth saying out loud: in monochrome the
+ * backing is a good deal fainter in amber than in green, and fainter in both
+ * than in colour. It is a contrast bound, not a taste, and it cannot be
+ * turned up without taking legibility off a player who has no other cue.
+ *
+ * Every value is far below the ladder's dimmest ink level (0.65), so a blank
+ * cell over backing reads as surface and can never be taken for a character
+ * that happens to be dim.
+ *
+ * Keyed by SURFACE_CLASS id; the names are in the comments because this file
+ * has no imports.
+ */
+export const CITY_BACKING_MONO_DRIVE = Object.freeze({
+  green: Object.freeze({
+    0: 0, // SKY - exempt; the row exists so the table is total over the classes
+    1: 0.06, // GROUND
+    2: 0.07, // ROAD
+    3: 0.09, // CURB
+    4: 0.1, // BUILDING_WALL
+    5: 0.08, // BUILDING_ROOF
+    6: 0.12, // STOREFRONT
+    7: 0.12, // SIGN
+    8: 0.08, // MAST
+    9: 0.08, // TREE
+    10: 0.11, // CAR
+    11: 0.09, // LAMP
+    12: 0.11, // PERSON
+    13: 0.09, // SIDEWALK
+    14: 0.07, // GREEN
+  }),
+  // The same shape, scaled to amber's measured ceiling of 0.08. The ORDER is
+  // kept exactly: a road still reads darker than a storefront.
+  amber: Object.freeze({
+    0: 0, // SKY - exempt
+    1: 0.04, // GROUND
+    2: 0.045, // ROAD
+    3: 0.06, // CURB
+    4: 0.065, // BUILDING_WALL
+    5: 0.055, // BUILDING_ROOF
+    6: 0.08, // STOREFRONT
+    7: 0.08, // SIGN
+    8: 0.055, // MAST
+    9: 0.055, // TREE
+    10: 0.075, // CAR
+    11: 0.06, // LAMP
+    12: 0.075, // PERSON
+    13: 0.06, // SIDEWALK
+    14: 0.045, // GREEN
+  }),
+});
+
+/**
+ * COLOUR backing: a dark material tint per class, per palette.
+ *
+ * The reference's own way of doing it - the surface says what it is made of,
+ * not what colour the glyph on it happens to be. The two palettes get their
+ * own rows because a green-phosphor city and a neon-amber one are different
+ * worlds and a slate that sits right in one reads cold in the other. The
+ * tints are NOT palette entries: a backing is painted straight into the frame
+ * buffer and never goes through a glyph atlas.
+ */
+export const CITY_BACKING_COLOUR = Object.freeze({
+  green: Object.freeze({
+    0: '#000000', // SKY - exempt
+    1: '#0d0f0c', // GROUND, dark earth
+    2: '#0e1012', // ROAD, slate
+    3: '#111310', // CURB
+    4: '#101211', // BUILDING_WALL
+    5: '#0c0e0d', // BUILDING_ROOF
+    6: '#12120c', // STOREFRONT, warm
+    7: '#110e12', // SIGN
+    8: '#0e0e0e', // MAST
+    9: '#0a0f0a', // TREE, dark foliage
+    10: '#0f1113', // CAR, body
+    11: '#12110b', // LAMP, warm metal
+    12: '#100e11', // PERSON
+    13: '#12110d', // SIDEWALK, tan
+    14: '#090e09', // GREEN, dark planting
+  }),
+  amber: Object.freeze({
+    0: '#000000', // SKY - exempt
+    1: '#100d0a', // GROUND
+    2: '#0f1013', // ROAD, slate
+    3: '#131110', // CURB
+    4: '#121011', // BUILDING_WALL
+    5: '#0e0c0d', // BUILDING_ROOF
+    6: '#14110b', // STOREFRONT
+    7: '#120d13', // SIGN
+    8: '#0f0e0e', // MAST
+    9: '#0b0f0b', // TREE
+    10: '#101113', // CAR
+    11: '#14110a', // LAMP
+    12: '#110e12', // PERSON
+    13: '#13110c', // SIDEWALK
+    14: '#0a0e0a', // GREEN
+  }),
+});
 
 export const CITY_TEMPORAL_HYSTERESIS = Object.freeze({
-  glyph: 0.4,
-  drive: 0.1,
+  // ★★★ THE MEMORY IS THE TRAIL. CW-68 bought the strobe fix with a smear and
+  // nobody said so out loud, because its own "ghost rate" metric asked a
+  // narrower question - inked cells that changed SURFACE and kept their glyph
+  // - than the one an owner walking through the city was asking. The number
+  // that answers theirs is mean glyph PERSISTENCE while walking, measured at
+  // the spawn, 30 %, mono, 24 frames, on an RTX 3080 Ti:
+  //
+  //   memory off        6.69 frames   glyph flip 1.14 %   churn cells 3.11 %
+  //   0.4 / 30 (was)   13.06          flip 0.17           churn 0
+  //   0.15 / 8         10.86          flip 0.26           churn 0
+  //   0.06 / 5          9.41          flip 0.48           churn 0   <- shipped
+  //
+  // At 0.4 a cell had to see its brightness move 40 % of the whole range
+  // before it was allowed a new glyph - twenty times the module's own default
+  // - and failing that it held for 30 conversions, about ONE SECOND at the
+  // converter's governor. That is frames blending together, and it is what
+  // the owner reported on the deployed build.
+  //
+  // ★ IT CANNOT BE TUNED AWAY, ONLY TRADED: persistence and flicker move
+  // together on this one knob, and the separation experiment says neither
+  // half owns it (holding the band at 0.4 and cutting the hold to 4 gives
+  // 10.98; cutting the band to 0.08 and holding 30 gives 10.24). The real fix
+  // is a THIRD reset - drop the memory when the cell's geometry moves under
+  // it, not only when its surface CLASS changes - which keeps the memory
+  // exactly where the picture is genuinely still. That is follow-up work and
+  // it is written down rather than half-done here.
+  glyph: 0.06,
+  drive: 0.03,
   reverse: 0.02,
-  holdFrames: 30,
+  holdFrames: 5,
 });
 
 /**

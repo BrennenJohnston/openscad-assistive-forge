@@ -9,7 +9,9 @@ import {
   shapeDistance2,
   createHistory,
   ensureHistory,
+  SPACE_GLYPH,
 } from '../../src/js/_hfm-hysteresis.js'
+import { SPACE_INDEX } from '../../src/js/_hfm-paint.js'
 import { pickIntensityIndex } from '../../src/js/_hfm-paint.js'
 import { CITY_TEMPORAL_HYSTERESIS } from '../../src/js/game/hc-palettes.js'
 import { readdirSync, readFileSync } from 'node:fs'
@@ -379,5 +381,104 @@ describe('_hfm-hysteresis: whose converter gets a memory', () => {
     expect(normalizeHysteresis(CITY_TEMPORAL_HYSTERESIS)).toEqual(
       CITY_TEMPORAL_HYSTERESIS
     )
+  })
+})
+
+describe('★★★ CW-89 (D-125): blank is never held, and never blocks ink', () => {
+  // The owner walked past a wall and the ink stayed behind. Measured on a
+  // 24-frame walk at 30 %: 230 cells on the first frame rising to ~500 by the
+  // last were drawing a character where the stateless answer was SPACE, and
+  // 323 of them held the full five frames. The memory chooses between
+  // CHARACTERS; whether a cell has content at all is decided before it.
+  const near = { candidateDist2: 0.10, prevDist2: 0.14 } // inside a 0.06 band
+
+  it('★★ agrees with the painter about which index is empty', () => {
+    // SPACE_GLYPH is declared in the hysteresis module so it stays a leaf the
+    // shader comment can point at. If the painter ever renumbers, this fails
+    // rather than the trail quietly coming back.
+    expect(SPACE_GLYPH).toBe(SPACE_INDEX)
+  })
+
+  it('★★★ a cell whose new answer is BLANK draws nothing, at once', () => {
+    // RED PROOF (run by hand, CW-89): drop `blankNow` from the reset
+    // condition in glyphWithMemory and this case returns glyph 7 with a hold
+    // of 1 - which is the trail, in one assertion.
+    const r = glyphWithMemory({
+      candidate: SPACE_GLYPH,
+      candidateDist2: 0.10,
+      prevGlyph: 7,
+      prevDist2: 0.14,
+      band: 0.06,
+      hold: 0,
+      holdFrames: 5,
+      reset: false,
+    })
+    expect(r).toEqual({ glyph: SPACE_GLYPH, hold: 0 })
+  })
+
+  it('★★ a cell that WAS blank takes its new character, at once', () => {
+    // The same rule the other way round. A dead band holding SPACE would
+    // keep a cell dark after the thing lighting it had arrived - the trail's
+    // mirror image, and just as wrong.
+    const r = glyphWithMemory({
+      candidate: 7,
+      ...near,
+      prevGlyph: SPACE_GLYPH,
+      band: 0.06,
+      hold: 0,
+      holdFrames: 5,
+      reset: false,
+    })
+    expect(r).toEqual({ glyph: 7, hold: 0 })
+  })
+
+  it('★ and it is NOT a fourth dead band - there is no slightly blank', () => {
+    // However far inside the band the blank answer sits, it wins. This is the
+    // case that would pass by accident if the rule were implemented as a
+    // widened band rather than as a short circuit.
+    for (const prevDist2 of [0.1000001, 0.11, 0.159, 9]) {
+      const r = glyphWithMemory({
+        candidate: SPACE_GLYPH,
+        candidateDist2: 0.1,
+        prevGlyph: 7,
+        prevDist2,
+        band: 0.06,
+        hold: 0,
+        holdFrames: 5,
+        reset: false,
+      })
+      expect(r.glyph, `prevDist2 ${prevDist2}`).toBe(SPACE_GLYPH)
+    }
+  })
+
+  it('★★ still holds between two real characters, which is its whole job', () => {
+    // The guard against over-correcting: CW-89 must not turn the memory off.
+    // Two ordinary glyphs, the new one barely better, and the old one stays.
+    const r = glyphWithMemory({
+      candidate: 9,
+      ...near,
+      prevGlyph: 7,
+      band: 0.06,
+      hold: 2,
+      holdFrames: 5,
+      reset: false,
+    })
+    expect(r).toEqual({ glyph: 7, hold: 3 })
+  })
+
+  it('a blank answer also clears a hold that was already running', () => {
+    // Otherwise a cell could go blank, come back, and resume an old count
+    // that no longer means anything.
+    const r = glyphWithMemory({
+      candidate: SPACE_GLYPH,
+      candidateDist2: 0.10,
+      prevGlyph: 7,
+      prevDist2: 0.11,
+      band: 0.06,
+      hold: 4,
+      holdFrames: 5,
+      reset: false,
+    })
+    expect(r.hold).toBe(0)
   })
 })

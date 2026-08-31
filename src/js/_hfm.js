@@ -54,6 +54,11 @@ import {
   SPACE_INDEX,
   FIRST_CHAR_CODE,
 } from './_hfm-paint.js';
+import {
+  anchoredGlyph,
+  buildLadders,
+  FIELD_LEVELS,
+} from './game/city-glyph-field.js';
 
 // Tuning knobs
 // _MIN_INTERVAL_MS      — conversion throttle ceiling (~30 fps while dirty)
@@ -137,6 +142,9 @@ function _createInstanceState() {
     classMapProvider: null,
     classVocabularies: null,
     classLookups: null,
+    // CW-92: class id -> palette index, or null for the screen pick. See
+    // api.setInkFamilies.
+    inkFamilies: null,
 
     // Render-on-demand scheduling
     dirty: true,
@@ -606,6 +614,26 @@ function _ensureGlyphModel(st, { fontFamily, fontSizePx, charW, charH, dpr }) {
     );
     st.atlas = st.paletteAtlases[0];
     st.intensityAtlases = null;
+    // ★★★ AND THE REVERSE ATLAS GOES WITH THEM (CW-93, D-129). This is an
+    // INDEX INTO `intensityAtlases`, and palette mode has none, so leaving it
+    // pointing into an array that no longer exists is a lie about the
+    // instance's state - and one the two converter paths read differently.
+    // The CPU asks `useIntensity ? st.reverseAtlasIndex : -1` and gets -1, so
+    // no palette cell is ever reversed. The GPU's `reverseAt` asked only
+    // whether the index was non-negative, so after a LIVE switch from mono to
+    // colour it kept the mono threshold of 0.80: every palette cell above it
+    // was matched against an INVERTED shape vector and, because a reversed
+    // cell deliberately draws from the whole atlas, without its own surface's
+    // vocabulary.
+    //
+    // Reaching colour from a cold start never showed it - no mono atlas had
+    // been built, so the index was still -1 - and CW-93's own fix is what made
+    // it visible at all: while the vocabularies were switched off in palette
+    // mode there was nothing left for it to break. Measured after that fix, at
+    // the Seattle spawn, 30 %: 119 of 68,666 classified cells, cars and kerbs,
+    // drew characters their surface does not own, and 81 of them were nowhere
+    // near a class edge.
+    st.reverseAtlasIndex = -1;
   } else {
     st.paletteAtlases = null;
     const atlasAt = (tint, reverse = false) =>
@@ -672,6 +700,11 @@ function _ensureGlyphModel(st, { fontFamily, fontSizePx, charW, charH, dpr }) {
   }
   st.sparsestNonSpace = emptiest >= 0 ? emptiest : SPACE_INDEX;
   st.classLookups = _buildClassLookups(st);
+  // CW-86: one ladder per anchored class, from field step to glyph. Built
+  // here and not on demand because it is derived from the atlas - the same
+  // reason the lookups are - and a ladder indexing a stale atlas would draw
+  // characters nobody chose.
+  st.classLadders = buildLadders(st.classLookups, st.glyphVectors);
   st.atlasKey = key;
   // Every setter that changes the palette, the drive levels, the reverse
   // threshold or the vocabularies clears atlasKey to force this rebuild, so
@@ -801,7 +834,7 @@ function _sampleOnGpu(
     usePalette,
   }
 ) {
-  if (!st.gpuSample || st.benchLegacyCpuSample) return null;
+  if (!_gpuPathInForce(st)) return null;
   if (!camera || !st.glyphVectors) return null;
   if (!st.gpuPass) {
     st.gpuPass = createGpuGlyphPass(renderer);
@@ -841,12 +874,28 @@ function _sampleOnGpu(
     glyphKey: st.atlasKey,
     vocabLists: _gpuVocabLists(st),
     vocabKey: st.atlasKey,
-    // CW-68: the class map is bound in palette mode as well, where it is not
-    // a vocabulary but a RESET: a cell whose surface changed must drop the
-    // glyph it was holding, and without the map the shader cannot tell. The
-    // vocabulary is still mono-only, which is what useClassVocabularies says.
+    // CW-68: the class map is bound in palette mode as well, where it is also
+    // a RESET: a cell whose surface changed must drop the glyph it was
+    // holding, and without the map the shader cannot tell.
+    //
+    // ★★★ AND THE VOCABULARY APPLIES IN PALETTE MODE TOO (CW-93, D-128). This
+    // line read `useClassVocabularies: !usePalette` from CW-32 until the owner
+    // photographed what that costs: a building's window pattern drawn onto the
+    // underside of a street tree. With the vocabularies off, EVERY classified
+    // cell searched the full 95-glyph atlas, so a canopy and a facade were
+    // drawn with the same alphabet and there was nothing left to tell them
+    // apart - measured at 69 % of the grid at the owner's own pose, on both
+    // Day and Night, with the memory on AND off. It was never a trail.
+    //
+    // The CPU path has always applied them in both modes (`_convertOnCpu`
+    // guards on `st.classLookups && st.classMapProvider`, never on the
+    // palette), so this was also the two paths disagreeing about what they
+    // draw - the one thing this converter's whole two-implementation design
+    // exists to prevent. CW-32's own commit message says it ported "the same
+    // exhaustive search over the same per-class vocabulary"; the exclusion was
+    // never a decision anybody wrote down a reason for.
     classTexture: st.gpuClassTextureProvider?.(cols, rows) ?? null,
-    useClassVocabularies: !usePalette,
+    useClassVocabularies: true,
     paletteChroma: usePalette ? st.paletteChroma : null,
     chromaBoost: st.paletteChromaBoost,
     contrastExp: st.contrastExp,
@@ -867,6 +916,15 @@ function _sampleOnGpu(
     hysteresis: st.hysteresis,
     inkBudget: usePalette ? st.inkBudget : null,
     paletteWhiteIndex: st.paletteWhiteIndex,
+    // CW-91: the anchored ladders, and whether to use them. The field byte the
+    // shader indexes them with is already in the class texture's green channel,
+    // so there is nothing else to send.
+    ladders: st.classLadders?.size ? st.classLadders : null,
+    fieldLevels: FIELD_LEVELS,
+    anchored: Boolean(st.anchoredGlyphs),
+    // CW-92: the authored per-class palette families, or null for the
+    // per-frame screen pick.
+    inkFamilies: usePalette ? st.inkFamilies : null,
   });
 }
 
@@ -1118,6 +1176,12 @@ function _renderFrame(
     // holding a snapshot must not watch it change under the next frame.
     st.lastGlyphIndices = glyphIndices;
     st.lastProbeIntensity = useIntensity ? st.intensityIndices : null;
+    // CW-92: and the COLOUR decision, which until now the instrument had to
+    // recover by matching painted pixels back to the palette. That reads the
+    // bloom and Day's backing as well as the cell, so a cell whose index never
+    // moved could still be reported as having changed colour - and that is
+    // exactly the question D-127 asks. The decision itself is right here.
+    st.lastProbeColour = usePalette ? st.colorIndices : null;
   }
 }
 
@@ -1127,6 +1191,37 @@ function _renderFrame(
  * @param {number} cellCount
  * @returns {Float32Array}
  */
+/**
+ * Is the GPU glyph path in force for this instance right now?
+ *
+ * ★★★ THERE MUST BE EXACTLY ONE ANSWER TO THIS, AND THIS IS IT. Two places
+ * need it and they MUST agree: the sampler, which decides who converts the
+ * frame, and render(), which skips drawing the scene to the canvas when the
+ * glyph pass is going to render it instead. CW-86 first made the sampler fall
+ * back to the CPU on its own, and the result was not a slower picture but an
+ * EMPTY one - render() still believed the GPU was driving, never drew the
+ * scene, and the CPU sampler read an untouched canvas. Every cell came back
+ * black, and the instrument refused the run with 'not one cell was lit in the
+ * whole sequence'. The symptom looked like a broken glyph decision and was
+ * nothing of the kind.
+ *
+ * @param {Object} st
+ * @returns {boolean}
+ */
+function _gpuPathInForce(st) {
+  if (!st.gpuSample || st.benchLegacyCpuSample) return false;
+  // ★★★ CW-91: ANCHORING NO LONGER FORCES THE CPU, AND THE SECOND TEXTURE
+  // CW-86 THOUGHT IT NEEDED DOES NOT EXIST. CW-86 read this line as "the field
+  // byte has no room in the packing the memory already uses", and shipped
+  // anchoring off because forcing the CPU halved the frame rate. But the byte
+  // was never in the memory's packing: the CLASS PASS writes it, into the GREEN
+  // channel of the very texture this path already binds as uClass
+  // (city-class-pass.js's fragment shader writes vec4(id, field, depth, 1)).
+  // The shader simply never read .g. It does now, and the ladder it indexes is
+  // a 16 x 8 byte table - so the whole release is a dependent read and a lookup
+  // where there used to be a nearest-shape search over a few dozen glyphs.
+  return st.gpuPass?.available !== false;
+}
 function _probeLumArray(st, cellCount) {
   if (st.lastCellLum?.length !== cellCount) {
     st.lastCellLum = new Float32Array(cellCount);
@@ -1173,14 +1268,35 @@ function _convertOnCpu(
   // CW-71: palette mode never needed the cell's ABSOLUTE luminance, because
   // nothing used it. The ink budget does: it is the one thing the cell
   // contrast curve throws away.
+  //
   const wantsLum = useIntensity || Boolean(inkBudget && usePalette);
   // CW-23: what each cell is looking at, if the caller can say. A provider
   // that returns the wrong size is ignored rather than trusted — a stale map
   // would hand cells the vocabulary of whatever used to be there.
   let classMap = null;
-  if (st.classLookups && st.classMapProvider) {
+  // ★ CW-92: the class map is not a VOCABULARY thing. It was fetched only when
+  // there were class vocabularies to pick a glyph from, which was true of every
+  // caller until the ink families arrived - they need the same map to choose a
+  // COLOUR and have nothing to do with glyph lists. Asking the narrower
+  // question made a caller with families and no vocabularies get no colour at
+  // all, silently, which is how a unit case found this.
+  if ((st.classLookups || st.inkFamilies) && st.classMapProvider) {
     const supplied = st.classMapProvider(cols, rows);
     if (supplied && supplied.length === rows * cols) classMap = supplied;
+  }
+  // CW-86: the surface's own tone per cell, read the same guarded way. It is
+  // only fetched when there is a class map to pair it with: the field says
+  // WHICH STEP, the class says which ladder, and one without the other
+  // cannot name a glyph.
+  let fieldMap = null;
+  if (
+    st.anchoredGlyphs &&
+    classMap &&
+    st.classLadders &&
+    st.glyphFieldProvider
+  ) {
+    const supplied = st.glyphFieldProvider(cols, rows);
+    if (supplied && supplied.length === rows * cols) fieldMap = supplied;
   }
   let idx = 0;
 
@@ -1257,7 +1373,17 @@ function _convertOnCpu(
             sumG += imgData[pidx + 1];
             sumB += imgData[pidx + 2];
           }
-          if (useIntensity) sumLum += v[i];
+          // ★★★ `wantsLum`, NOT `useIntensity` (CW-91; reported by CW-86 and
+          // not fixed there). The tap-plan branch above asks the right
+          // question and this one asked a narrower one, so in PALETTE mode
+          // with an ink budget - where `useIntensity` is false but the budget
+          // needs the cell's absolute luminance - this branch accumulated
+          // nothing and every cell came out of `cellLum` as ZERO. Latent only
+          // because the shipped floor is 0, so `cellLum < floor` is false for
+          // all of them; raise the floor by any amount and this branch blanks
+          // the entire picture while the other one draws it. The branch is
+          // reached whenever the tap plan is off (`setBenchLegacy({taps})`).
+          if (wantsLum) sumLum += v[i];
         }
       }
       // The cell's brightness BEFORE the contrast curves reshape v for glyph
@@ -1290,7 +1416,19 @@ function _convertOnCpu(
             : pickIntensityIndex(cellLum, intensityCount);
         if (cellReversed) onReverseCell();
       }
-      if (history) {
+      // ★★★ GUARDED BY useIntensity, THE WAY THE GPU BRANCH ALWAYS HAS BEEN.
+      // `st.intensityIndices` is only allocated when there are drive levels to
+      // hold, and in COLOUR MODE there never are - useIntensity is
+      // `!usePalette && ...`, so it is false for every palette frame. This line
+      // read `st.intensityIndices[cell]` unconditionally and threw
+      // 'Cannot read properties of null' on the first colour frame it ever saw.
+      //
+      // It had never seen one: colour mode has always taken the GPU path, and
+      // the GPU branch guards the identical assignment. CW-86 forces the CPU
+      // path, which is how a crash that has been sitting in this file since the
+      // memory landed finally got to happen. The fix is to ask the same
+      // question the other branch asks.
+      if (history && useIntensity) {
         history.drive[cell] = cellReversed ? -1 : st.intensityIndices[cell];
       }
       let inkBlanked = false;
@@ -1308,14 +1446,25 @@ function _convertOnCpu(
             skip = paletteWhiteIndex;
           }
         }
-        st.colorIndices[idx] = pickPaletteIndex(
-          meanR,
-          meanG,
-          meanB,
-          st.paletteChroma,
-          st.paletteChromaBoost,
-          skip
-        );
+        // ★★★ CW-92: THE FAMILY IS THE SURFACE'S, THE LIGHT IS THE SCREEN'S.
+        // `inkBlanked` and `skip` above are decided from the lit cell and are
+        // untouched; all that changes is which of the palette's entries a
+        // CLASSIFIED cell takes. An unclassified cell - the sky, or anything
+        // the class pass could not name - keeps the per-frame match, because
+        // there is no surface for it to belong to.
+        const family =
+          st.inkFamilies && classMap ? st.inkFamilies[classMap[cell]] : -1;
+        st.colorIndices[idx] =
+          family >= 0
+            ? family
+            : pickPaletteIndex(
+                meanR,
+                meanG,
+                meanB,
+                st.paletteChroma,
+                st.paletteChromaBoost,
+                skip
+              );
       }
 
       // External boundary points for edge detection; out-of-bounds clamp to 0
@@ -1377,9 +1526,42 @@ function _convertOnCpu(
         continue;
       }
 
-      const cellLookup = classMap
-        ? (st.classLookups.get(classMap[cell]) ?? st.lookup)
-        : st.lookup;
+      // CW-86: THE GLYPH COMES FROM THE SURFACE, THE LIGHT STILL COMES FROM
+      // THE SCREEN. Everything above this line - the blank floor, the reverse
+      // decision, the intensity level, the palette colour - has already been
+      // decided from the lit cell and is untouched. All that changes is WHICH
+      // character carries it, and for an anchored cell that is a property of
+      // the wall rather than of where the camera is standing.
+      const anchored = fieldMap
+        ? anchoredGlyph(st.classLadders, cellClass, fieldMap[cell])
+        : -1;
+      if (anchored >= 0) {
+        // ★ AND THE MEMORY IS SKIPPED HERE, DELIBERATELY. The memory exists to
+        // hide a re-roll; an anchored cell has nothing to hide, and holding a
+        // glyph past the moment its surface slid to the next lattice square is
+        // exactly the trail CW-84 cut. The history is still WRITTEN so that a
+        // cell moving between anchored and screen-picked does not read a stale
+        // glyph on the way back.
+        if (history) {
+          history.glyph[cell] = anchored;
+          history.hold[cell] = 0;
+          history.reversed[cell] = 0;
+          history.cls[cell] = cellClass;
+        }
+        glyphIndices[idx++] = anchored;
+        continue;
+      }
+      // ★★ GUARDED ON classLookups, NOT ONLY ON classMap (CW-92). Until this
+      // release the two arrived together - the map was fetched only when there
+      // were vocabularies - so a null check here looked redundant. The ink
+      // families need the map without needing vocabularies, and the moment
+      // that became possible this line threw on its first frame. Exactly the
+      // shape of the crash CW-86 left in the palette branch above: a
+      // dereference that was safe only because of a coupling somewhere else.
+      const cellLookup =
+        classMap && st.classLookups
+          ? (st.classLookups.get(classMap[cell]) ?? st.lookup)
+          : st.lookup;
       const chosen = cellLookup.nearestIndex(v);
       glyphIndices[idx++] = history
         ? _remember(st, history, cell, v, chosen, cellClass, false, hysteresis)
@@ -1449,6 +1631,26 @@ function _paintConverted(
     resizeOverlay(st.overlayCanvas, width, height, dpr, st.persistCanvas);
   }
 
+  // CW-85: a provider that answers with the wrong length is ignored rather
+  // than trusted, the same rule the class map is read under - a half-sized
+  // backing would paint the top of the screen and leave the rest bare, which
+  // reads as a rendering fault rather than as the bug it is.
+  let backing = null;
+  if (st.backingProvider) {
+    const supplied = st.backingProvider(cols, rows, {
+      usePalette,
+      useIntensity,
+      // CW-85 measured TWO tint sources before choosing one, and the second
+      // needed the cell's OWN colour: this is the palette entry the glyph is
+      // about to be drawn in. Handing it over costs nothing (the array
+      // already exists for the paint) and it is the only way a provider
+      // outside the converter can ask what colour a cell came out.
+      colorIndices: usePalette ? st.colorIndices : null,
+      palette: usePalette ? st.palette : null,
+    });
+    if (supplied && supplied.length === rows * cols) backing = supplied;
+  }
+
   paintFrame(
     st.overlayCtx,
     glyphIndices,
@@ -1466,7 +1668,8 @@ function _paintConverted(
         ? { indices: st.intensityIndices, atlases: st.intensityAtlases }
         : undefined,
     st.glowInComposite,
-    st.scanlineDim
+    st.scanlineDim,
+    backing
   );
 }
 
@@ -1499,7 +1702,28 @@ export async function initAltView(previewManager, options = {}) {
     typeof options.classMapProvider === 'function'
       ? options.classMapProvider
       : null;
+
+  // CW-86: the GLYPH FIELD. One byte per cell saying what the SURFACE looks
+  // like there - 0 for "no field, use the screen pick". Opt-in per instance
+  // like the class map, and inert unless anchoredGlyphs is also on, so an
+  // instance that supplies neither behaves exactly as it did.
+  st.glyphFieldProvider =
+    typeof options.glyphFieldProvider === 'function'
+      ? options.glyphFieldProvider
+      : null;
+  st.anchoredGlyphs = options.anchoredGlyphs === true;
   st.classVocabularies = options.glyphVocabularies ?? null;
+  // CW-85: the backing layer ("Day"). Opt-in per instance and asked once per
+  // PAINT, not per rAF. It returns one opaque colour per cell (0 = leave this
+  // cell alone) and CANNOT reach the glyph decision: by the time it is called
+  // the glyphs are already chosen, which is what makes "the backing changes
+  // no decision" a fact about the shape of the code rather than a promise.
+  // An instance that passes nothing behaves exactly as it did before, and
+  // that is every instance but the game's.
+  st.backingProvider =
+    typeof options.backingProvider === 'function'
+      ? options.backingProvider
+      : null;
 
   _ensureOverlay(st, container);
 
@@ -1602,11 +1826,12 @@ export async function initAltView(previewManager, options = {}) {
       // city twice a frame for a canvas nobody can see (enable() sets it to
       // opacity 0). If the pass ever gives up, `available` turns false and
       // the canvas render resumes on the next frame.
+      // CW-86: one question, one answer - see _gpuPathInForce. `available`
+      // must still be strictly true here: before the first conversion there is
+      // no pass at all, and a scene that went undrawn on that frame would be a
+      // blank first paint.
       const gpuWillRender =
-        st.enabled &&
-        st.gpuSample &&
-        !st.benchLegacyCpuSample &&
-        st.gpuPass?.available === true;
+        st.enabled && _gpuPathInForce(st) && st.gpuPass?.available === true;
       if (!gpuWillRender) {
         // Always render the underlying scene so controls + animation stay
         // correct.
@@ -1840,6 +2065,103 @@ export async function initAltView(previewManager, options = {}) {
      */
     getTemporalHysteresis() {
       return st.hysteresis;
+    },
+    /**
+     * CW-85: swap the backing provider at run time, or turn it off with null.
+     *
+     * Setting it marks the frame dirty and nothing else: the backing is read
+     * at PAINT time, after the glyphs are chosen, so there is no remembered
+     * decision to invalidate and no history to forget. That is the same fact
+     * the byte-identical guard rests on.
+     *
+     * @param {((cols: number, rows: number, ctx: {usePalette: boolean,
+     *   useIntensity: boolean}) => Uint32Array|null)|null} provider
+     */
+    setBackingProvider(provider) {
+      st.backingProvider = typeof provider === 'function' ? provider : null;
+      st.dirty = true;
+    },
+    /** @returns {boolean} whether this instance paints a backing at all */
+    hasBackingProvider() {
+      return Boolean(st.backingProvider);
+    },
+    /**
+     * CW-86: take anchored cells' glyphs from the surface, or from the
+     * screen as every cell always has.
+     *
+     * Turning it on or off FORGETS the frame memory, because the two paths
+     * disagree about what the previous frame's glyph meant: a held screen
+     * pick is not a starting point for an anchored cell, and an anchored
+     * glyph is not one the memory ever chose.
+     *
+     * @param {boolean} on
+     */
+    setAnchoredGlyphs(on) {
+      const next = on === true;
+      if (next === st.anchoredGlyphs) return;
+      st.anchoredGlyphs = next;
+      st.hysteresisHistory = null;
+      st.gpuPass?.forget?.();
+      st.dirty = true;
+    },
+    /** @returns {boolean} whether anchored glyphs are on */
+    anchoredGlyphsOn() {
+      return Boolean(st.anchoredGlyphs);
+    },
+    /**
+     * ★★★ CW-92 (D-127): WHAT COLOUR EACH SURFACE IS, decided once and not
+     * re-taken every frame.
+     *
+     * In palette mode a classified cell's colour index comes from this table
+     * rather than from a nearest-palette match on the lit sample. The lit
+     * sample still decides everything it truly owns - whether the cell is
+     * inked at all, its intensity, and CW-71's white gate - and nothing else
+     * about the picture changes.
+     *
+     * WHY A TABLE AND NOT THE SURFACE'S OWN COLOUR, which is what the release
+     * was briefed to use: the city has none. Measured over all 60 materials,
+     * 51 land on the palette's white entry, because every material is white or
+     * neutral grey, both lights are white and the fog is black. Every hue a
+     * colour player has seen was manufactured out of the last digit or two of
+     * a grey image, and that is why a whole face crossed a palette boundary
+     * together when the camera moved.
+     *
+     * Pass null to go back to the per-frame screen pick, which is what the
+     * main app's Alt View does and what the red proof reinstates.
+     *
+     * @param {Record<number, number>|null} table class id -> palette index
+     * @returns {Record<number, number>|null} the table now in force
+     */
+    setInkFamilies(table) {
+      st.inkFamilies = null;
+      if (table && typeof table === 'object') {
+        const out = new Int16Array(16).fill(-1);
+        let any = false;
+        for (const [key, index] of Object.entries(table)) {
+          const cls = Number(key);
+          if (!Number.isInteger(cls) || cls < 0 || cls > 15) continue;
+          if (!Number.isInteger(index) || index < 0) continue;
+          out[cls] = index;
+          any = true;
+        }
+        if (any) st.inkFamilies = out;
+      }
+      st.dirty = true;
+      return st.inkFamilies ? { ...table } : null;
+    },
+    /** @returns {boolean} whether an authored ink table is in force */
+    inkFamiliesOn() {
+      return Boolean(st.inkFamilies);
+    },
+    /**
+     * CW-86: swap the glyph-field provider at run time, or clear it.
+     *
+     * @param {((cols: number, rows: number) => Uint8Array|null)|null} provider
+     */
+    setGlyphFieldProvider(provider) {
+      st.glyphFieldProvider = typeof provider === 'function' ? provider : null;
+      st.hysteresisHistory = null;
+      st.dirty = true;
     },
     /**
      * CW-70: hold the share of solid (reverse-video) cells under `cap`.
@@ -2147,6 +2469,7 @@ export async function initAltView(previewManager, options = {}) {
       if (!st.devCellProbe) {
         st.lastGlyphIndices = null;
         st.lastProbeIntensity = null;
+        st.lastProbeColour = null;
         st.lastCellLum = null;
       }
       st.dirty = true;
@@ -2163,11 +2486,39 @@ export async function initAltView(previewManager, options = {}) {
      * @returns {{cols: number, rows: number, glyphs: Int16Array,
      *   intensity: Int8Array|null, lum: Float32Array|null}|null}
      */
+    /**
+     * CW-93: the per-class glyph ladders THIS INSTANCE is searching.
+     *
+     * The instrument's vocabulary-mismatch counter has to check a drawn glyph
+     * against the list the converter actually used, not against a second copy
+     * derived from `glyph-vocabularies.js`. A copy would answer questions
+     * about itself: it would agree with the art direction while the converter
+     * quietly searched something else - which is exactly the class of defect
+     * CW-93 exists to find. `_buildClassLookups` adds the space character and
+     * drops a row too short to be a vocabulary, and both of those show up
+     * here because this IS that table.
+     *
+     * @returns {Record<number, number[]>|null} class id -> atlas indices, or
+     *   null before the atlas has been built or when no caller supplied any
+     */
+    api.getClassVocabularies = () => {
+      if (!st.classLookups) return null;
+      const out = {};
+      for (const [classId, lookup] of st.classLookups) {
+        if (lookup.glyphIds) out[classId] = [...lookup.glyphIds];
+      }
+      return out;
+    };
+    /**
+     * CW-92: `colour` is the palette index the converter chose, in palette
+     * mode only. Null in mono, where there is no palette to index.
+     */
     api.readCellProbe = () => {
       if (!st.devCellProbe || !st.lastGlyphIndices) return null;
       return {
         cols: st.lastCols,
         rows: st.lastRows,
+        colour: st.lastProbeColour ? Int8Array.from(st.lastProbeColour) : null,
         glyphs: Int16Array.from(st.lastGlyphIndices),
         intensity: st.lastProbeIntensity
           ? Int8Array.from(st.lastProbeIntensity)

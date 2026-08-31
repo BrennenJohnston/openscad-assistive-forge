@@ -675,11 +675,11 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     await btn(page, 'cityWalkSpeedDownBtn').click()
     await expect(announcer(page)).toHaveText(/Walking speed 100 percent/)
 
-    // The game opens at its own 50% default (CW-12), in ten-point steps.
+    // The game opens at the ONE default, 30% (CW-72), in ten-point steps.
     await btn(page, 'cityWalkCharDownBtn').click()
-    await expect(announcer(page)).toHaveText(/Character size 40 percent/)
+    await expect(announcer(page)).toHaveText(/Character size 20 percent/)
     await btn(page, 'cityWalkCharUpBtn').click()
-    await expect(announcer(page)).toHaveText(/Character size 50 percent/)
+    await expect(announcer(page)).toHaveText(/Character size 30 percent/)
 
     await btn(page, 'cityWalkCamReset').click()
     await expect(announcer(page)).toHaveText(/View level/)

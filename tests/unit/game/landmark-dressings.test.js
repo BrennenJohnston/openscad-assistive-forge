@@ -3,6 +3,11 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 import {
   dressingFor,
+  needleFlarePoint,
+  nodeDressingFor,
+  wheelHubHeightM,
+  wheelRimPoint,
+  GREAT_WHEEL,
   LANDMARK_DRESSINGS,
   LIBRARY_DIAGRID,
   LIBRARY_PLATFORMS,
@@ -12,7 +17,10 @@ import {
   needleLegPoint,
   NEEDLE_LEG,
   NEEDLE_LEG_BEARINGS_RAD,
+  NEEDLE_TOP,
   NEEDLE_WAY_ID,
+  NODE_LANDMARK_DRESSINGS,
+  WHEEL_NODE_ID,
 } from '../../../src/js/game/landmark-dressings.js'
 import { parseCityExtract } from '../../../src/js/game/city-data.js'
 import { buildCityGroup } from '../../../src/js/game/city-scene.js'
@@ -164,6 +172,76 @@ describe('the Library platforms', () => {
   })
 })
 
+describe('the node-keyed dressings (CW-78)', () => {
+  it('is one named row, cited, and misses cleanly', () => {
+    expect([...NODE_LANDMARK_DRESSINGS.keys()]).toEqual([WHEEL_NODE_ID])
+    expect(nodeDressingFor(WHEEL_NODE_ID).body).toBe('great-wheel')
+    expect(nodeDressingFor(WHEEL_NODE_ID).source).toContain('published')
+    expect(nodeDressingFor(1)).toBeNull()
+    expect(nodeDressingFor(undefined)).toBeNull()
+  })
+
+  it('draws the Wheel at its cited height with a rim a person clears', () => {
+    // The rim's top is the published 175 ft / 53.3 m; nothing here may
+    // invent a taller wheel.
+    const [topAlong, topZ] = wheelRimPoint(0)
+    expect(topAlong).toBeCloseTo(0, 6)
+    expect(topZ).toBeCloseTo(GREAT_WHEEL.totalHeightM, 6)
+    // The low point clears the boarding platform - a rim buried in the deck
+    // is not a wheel.
+    const [, bottomZ] = wheelRimPoint(0.5)
+    expect(bottomZ).toBeGreaterThan(GREAT_WHEEL.platformThickM + 1)
+    // The hub is the centre the spokes and legs meet.
+    expect(wheelHubHeightM()).toBeCloseTo(
+      GREAT_WHEEL.totalHeightM - GREAT_WHEEL.rimRadiusM,
+      6
+    )
+    // Drawn member widths respect the cell floor the diagrid and the cane
+    // both settled: thinner than ~1 m photographs as nothing.
+    expect(GREAT_WHEEL.rimThickM).toBeGreaterThanOrEqual(1)
+    expect(GREAT_WHEEL.spokeThickM).toBeGreaterThanOrEqual(1)
+  })
+
+  it("stacks the Needle's top at the cited numbers", () => {
+    // Disc 42 m across at the 518-520 ft observation level; spire to the
+    // cited 605 ft total. These are the silhouette sheet's own numbers.
+    expect(NEEDLE_TOP.discRadiusM * 2).toBe(42)
+    expect(NEEDLE_TOP.discBottomM).toBeGreaterThanOrEqual(157)
+    expect(NEEDLE_TOP.discTopM).toBeLessThanOrEqual(161)
+    expect(NEEDLE_TOP.spireTopM).toBeCloseTo(184.4, 6)
+    // The stack is a stack: disc, then halo, then house, each above the
+    // last and each narrower.
+    expect(NEEDLE_TOP.haloBottomM).toBeGreaterThanOrEqual(NEEDLE_TOP.discTopM)
+    expect(NEEDLE_TOP.houseBottomM).toBeGreaterThanOrEqual(NEEDLE_TOP.haloTopM)
+    expect(NEEDLE_TOP.haloRadiusM).toBeLessThan(NEEDLE_TOP.discRadiusM)
+    expect(NEEDLE_TOP.houseRadiusM).toBeLessThan(NEEDLE_TOP.haloRadiusM)
+  })
+
+  it('flares OUT from the waist on the way up - the hourglass completed', () => {
+    for (const bearing of NEEDLE_LEG_BEARINGS_RAD) {
+      const start = needleFlarePoint(bearing, 0)
+      expect(Math.hypot(start[0], start[1])).toBeCloseTo(
+        NEEDLE_LEG.waistRadiusM,
+        6
+      )
+      expect(start[2]).toBeCloseTo(NEEDLE_LEG.waistHeightM, 6)
+      const end = needleFlarePoint(bearing, 1)
+      expect(Math.hypot(end[0], end[1])).toBeCloseTo(
+        NEEDLE_TOP.supportTopRadiusM,
+        6
+      )
+      // Monotonic: the legs drew IN going up; the flare only ever draws OUT.
+      let previous = 0
+      for (let i = 0; i <= NEEDLE_TOP.flareSegments; i++) {
+        const p = needleFlarePoint(bearing, i / NEEDLE_TOP.flareSegments)
+        const radius = Math.hypot(p[0], p[1])
+        expect(radius).toBeGreaterThanOrEqual(previous - 1e-9)
+        previous = radius
+      }
+    }
+  })
+})
+
 describe('the shipped Seattle extract, pinned', () => {
   it('still puts 4th Avenue where the platform offsets say it is', () => {
     // ★ THE OFFSETS ARE MEANINGLESS IF THE BLOCK MOVES. A rebake that shifts
@@ -212,6 +290,16 @@ describe('the shipped Seattle extract, pinned', () => {
     expect(lib.parts).toHaveLength(4)
     expect(lib.partsAreMass).toBe(false)
     for (const part of lib.parts) expect(part.minHeightM).toBe(0)
+  })
+
+  it('still carries the Great Wheel node the CW-78 body is keyed to', () => {
+    // CW-78's extension of the pinned-id law to nodes: a rebake that drops
+    // or renumbers the attraction node fails here, not in a shorter legend.
+    const wheel = seattle().attractions.find((a) => a.id === WHEEL_NODE_ID)
+    expect(wheel).toBeTruthy()
+    expect(wheel.name).toBe('Seattle Great Wheel')
+    expect(wheel.heightM).toBe(53)
+    expect(wheel.wikidata).toBe('Q7442108')
   })
 })
 
@@ -268,6 +356,71 @@ describe('the one hook in the building path', () => {
   it('leaves a building with no row on the generic path', () => {
     // The same outline, the same tags, one digit different in the id.
     expect(buildingTriangles(cityWith(37056443))).toBe(44)
+  })
+
+  it('builds a landmark-mast mesh for a city with the Wheel node, and none without', () => {
+    // The node hook, both ways round: the wheel node produces the mesh, a
+    // node one digit off produces nothing - the same shape as the way-keyed
+    // hook's own test above.
+    const cityWithNode = (id) =>
+      parseCityExtract(
+        {
+          elements: [
+            {
+              type: 'node',
+              id,
+              tags: {
+                name: 'Seattle Great Wheel',
+                tourism: 'attraction',
+                attraction: 'big_wheel',
+                height: '53',
+              },
+              lat: 47.6,
+              lon: -122.34,
+            },
+            {
+              type: 'way',
+              id: 99,
+              tags: { highway: 'residential' },
+              geometry: [
+                { lat: 47.6, lon: -122.35 },
+                { lat: 47.6, lon: -122.33 },
+              ],
+            },
+          ],
+        },
+        { center: CENTER }
+      )
+    const withWheel = buildCityGroup(cityWithNode(1809238334))
+    const masts = withWheel.group.children.filter(
+      (c) => c.name === 'landmark-masts'
+    )
+    expect(masts).toHaveLength(1)
+    // Rim segments + spokes + hub + 4 legs + deck + gondolas, all present:
+    // more triangles than the rim alone could carry.
+    expect(
+      masts[0].geometry.getAttribute('position').count / 3
+    ).toBeGreaterThan(24 * 12)
+    withWheel.dispose()
+
+    const without = buildCityGroup(cityWithNode(1809238335))
+    expect(
+      without.group.children.filter((c) => c.name === 'landmark-masts')
+    ).toHaveLength(0)
+    without.dispose()
+  })
+
+  it("puts the Needle's top in the mast mesh, beside the tripod", () => {
+    // The real Seattle build: the Needle's dressing now feeds two meshes -
+    // the tripod stays in the buildings merge exactly as CW-63 shipped it,
+    // and the flare + saucer stack land in landmark-masts with the Wheel.
+    const { group, dispose } = buildCityGroup(seattle())
+    const masts = group.children.filter((c) => c.name === 'landmark-masts')
+    expect(masts).toHaveLength(1)
+    const tris = masts[0].geometry.getAttribute('position').count / 3
+    // Flare (3 x 6 members) + three drums + spire + the Wheel's own body.
+    expect(tris).toBeGreaterThan(1000)
+    dispose()
   })
 
   it('gives the whole of Seattle exactly one diagrid', () => {

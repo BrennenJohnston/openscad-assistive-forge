@@ -240,7 +240,7 @@ describe('every mesh the city builds has a class (CW-56)', () => {
   it('asks the builders, not a copy of the list', async () => {
     const [
       { CLASS_BY_MESH_NAME },
-      { buildStreetProps, buildFireworks, buildTraveler },
+      { buildStreetProps, buildFireworks, buildTraveler, buildWaypointMarks },
       data,
       walk,
     ] = await Promise.all([
@@ -315,14 +315,22 @@ describe('every mesh the city builds has a class (CW-56)', () => {
     const fireworks = buildFireworks(1000)
     const traveler = buildTraveler('seattle')
     traveler.place(0, 0, 0)
+    // CW-78: the waypoint marks are the third standalone builder to arrive
+    // through the same hole. Asked by name like the other two.
+    const waypoints = buildWaypointMarks([
+      { x: 0, y: 0, facingRad: 0, name: 'guard', placement: 'pavement' },
+    ])
     const standalone = [
       ...fireworks.group.children,
       ...traveler.group.children,
+      ...waypoints.group.children,
     ]
       .filter((c) => c.isMesh)
       .map((c) => c.name)
     expect(standalone).toContain('fireworks')
     expect(standalone).toContain('traveler')
+    expect(standalone).toContain('waypoints')
+    waypoints.dispose()
     built.push(...standalone)
     const orphans = built.filter((n) => !CLASS_BY_MESH_NAME.has(n))
     expect(

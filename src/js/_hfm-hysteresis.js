@@ -43,12 +43,27 @@
 //   * A HOLD EXPIRES. No cell may keep one answer for more than `holdFrames`
 //     conversions. A dead band alone can hold a slowly drifting cell forever;
 //     an expiry bounds the smear at a number somebody chose.
+//   * ★ BLANK IS NEVER HELD, AND NEVER BLOCKS INK (CW-89, D-125). A cell
+//     whose stateless answer is the empty glyph draws nothing, at once, and a
+//     cell that was empty takes its new character at once. This is the guard
+//     the owner asked for after seeing ink left behind on a wall they had
+//     walked past. It is deliberately NOT a fourth dead band: there is no
+//     such thing as being slightly blank.
 //
 // Every rule here is a pure function of the numbers handed to it, because the
 // GPU path evaluates the same rules in a shader and the CPU path evaluates
 // them here: if the two ever disagree, a cell is painted with one decision's
 // glyph and another's drive. The unit tests pin the arithmetic; the shader
 // carries the same expressions in GLSL with a comment pointing here.
+
+/**
+ * The empty glyph, by index.
+ *
+ * Declared here rather than imported from _hfm-paint.js so this module stays
+ * a leaf that the shader's own comment can point at and the unit tests can
+ * load on their own; a guard case asserts it IS that module's SPACE_INDEX.
+ */
+export const SPACE_GLYPH = 0;
 
 /** What the pack of three bands looks like when nobody has chosen one. */
 export const DEFAULT_HYSTERESIS = Object.freeze({
@@ -113,6 +128,10 @@ export function normalizeHysteresis(options) {
  * @param {number} args.holdFrames the expiry
  * @param {boolean} args.reset the cell's surface changed under it: take the
  *   candidate whatever the distances say
+ *
+ * A candidate or a previous glyph of SPACE_GLYPH also takes the candidate
+ * immediately (CW-89): the memory picks between characters and never decides
+ * whether a cell has content.
  * @returns {{glyph: number, hold: number}}
  */
 export function glyphWithMemory({
@@ -129,8 +148,34 @@ export function glyphWithMemory({
   // stateless pick, not how long a glyph has been on screen: a cell the pick
   // agrees with is not being held, so its counter goes back to zero and it can
   // never expire while it is stable.
+  // ★★★ CW-89 (D-125): BLANK IS NEVER HELD, AND BLANK NEVER BLOCKS INK.
+  //
+  // The memory exists to choose between CHARACTERS. Whether a cell has any
+  // content at all is a different question, decided before this one by the
+  // blank floor, and a dead band has no business overruling it. Letting it
+  // do so is what the owner saw as a trail: a cell whose reason for being
+  // lit had gone kept its character for up to `holdFrames` more conversions,
+  // so ink stayed on the screen after the thing that put it there had left.
+  //
+  // MEASURED before the fix, walking 24 frames at 30 % (build\cw89-trail.mjs):
+  // 230 cells on the first frame rising to ~500 by the last were drawing a
+  // character where the stateless answer was SPACE - 0.34 % climbing to
+  // 0.78 % of the grid, and the count GROWS along the walk, which is what
+  // makes it read as something being dragged along rather than as noise.
+  // 323 of them held the full five frames.
+  //
+  // ★ AND THE FIX THIS ROUND HAD WRITTEN DOWN WOULD NOT HAVE WORKED. CW-84's
+  // note proposed "a third reset when the cell's GEOMETRY moves". Measured on
+  // the same walk: of 128,606 cells drawn differently from their stateless
+  // answer, 100.0 % had an UNCHANGED surface class and only 0.1 % had moved
+  // in depth by more than max(2.5 m, 15 %). The trail is not cells looking at
+  // new geometry. It is cells looking at the SAME wall whose light changed.
+  const blankNow = candidate === SPACE_GLYPH;
+  const blankBefore = prevGlyph === SPACE_GLYPH;
   if (
     reset ||
+    blankNow ||
+    blankBefore ||
     prevGlyph < 0 ||
     band <= 0 ||
     hold >= holdFrames ||

@@ -43,10 +43,14 @@ import {
   PITCH_LIMIT_RAD,
   clampCharScale,
   seedCharScale,
+  CITY_DEFAULT_CHAR_SCALE,
   CHAR_SCALE_MIN,
   CHAR_SCALE_MAX,
   CHAR_SCALE_STEP,
   CHAR_SCALE_DEFAULT,
+  buildRoadwayIndex,
+  isDrawnRoadway,
+  rectsOverlap,
 } from '../../../src/js/game/walk-controls.js'
 import {
   parseCityExtract,
@@ -199,6 +203,28 @@ describe('buildCollisionGrid', () => {
   })
 
   it('ignores elevated parts the player can walk under', () => {
+    // CW-76: a skybridge is `building=bridge` in all four shipped extracts,
+    // and a canopy is the one thing allowed to hang over nothing. The old
+    // fixture used `building=yes` with a min_height to stand for one, which
+    // is a shape the extracts only ever carry on TOWERS - Hotel Andra,
+    // Cirrus, Burnaby Center - and those are now drawn down to the street.
+    const model = testModel([
+      {
+        type: 'way',
+        id: 3,
+        tags: { building: 'bridge', height: '20', min_height: '5' },
+        geometry: squareRing(-20, 0, 5),
+      },
+    ])
+    const grid = buildCollisionGrid(model)
+    expect(grid.isBlocked(-20, 0)).toBe(false) // skybridge overhead
+    expect(grid.isBlocked(20, 0)).toBe(true) // grounded building still solid
+  })
+
+  it('blocks a mass that CW-76 drew down to the pavement', () => {
+    // The same footprint tagged as an ordinary building with nothing under
+    // it: city-data closes the empty column, so the walker cannot walk
+    // through what is now drawn from the ground.
     const model = testModel([
       {
         type: 'way',
@@ -207,9 +233,27 @@ describe('buildCollisionGrid', () => {
         geometry: squareRing(-20, 0, 5),
       },
     ])
+    expect(buildCollisionGrid(model).isBlocked(-20, 0)).toBe(true)
+  })
+
+  it('still walks under a part standing on a podium that is really there', () => {
+    const model = testModel([
+      {
+        type: 'way',
+        id: 3,
+        tags: { building: 'yes', height: '5' },
+        geometry: squareRing(-40, 0, 8),
+      },
+      {
+        type: 'way',
+        id: 4,
+        tags: { building: 'yes', height: '20', min_height: '5' },
+        geometry: squareRing(-20, 0, 5),
+      },
+    ])
     const grid = buildCollisionGrid(model)
-    expect(grid.isBlocked(-20, 0)).toBe(false) // skybridge overhead
-    expect(grid.isBlocked(20, 0)).toBe(true) // grounded building still solid
+    expect(grid.isBlocked(-40, 0)).toBe(true) // the podium itself
+    expect(grid.isBlocked(-20, 0)).toBe(true)
   })
 })
 
@@ -836,48 +880,58 @@ describe('character size (CW-12)', () => {
     })
   })
 
-  describe('seed order', () => {
-    it("prefers the game's own saved value", () => {
-      expect(seedCharScale('0.3', '0.9')).toBe(0.3)
+  describe('seed order (CW-72 for CW-Q75, amended CW-88 for CW-Q87)', () => {
+    it("prefers the player's own saved size", () => {
+      expect(seedCharScale('0.7')).toBeCloseTo(0.7, 10)
     })
 
-    it('falls back to the shared Alt View preference, clamped in', () => {
-      expect(seedCharScale(null, '0.9')).toBe(0.9)
-      // 2.5 is legal for the preview slider and far outside the game's range.
-      expect(seedCharScale(null, '2.5')).toBe(CHAR_SCALE_MAX)
+    it('is the ONE default when nothing is saved', () => {
+      expect(seedCharScale(null)).toBeCloseTo(CITY_DEFAULT_CHAR_SCALE, 10)
+      expect(seedCharScale(undefined)).toBeCloseTo(CITY_DEFAULT_CHAR_SCALE, 10)
+      expect(seedCharScale('')).toBeCloseTo(CITY_DEFAULT_CHAR_SCALE, 10)
     })
 
-    it('falls back to the default when neither is usable', () => {
-      expect(seedCharScale(null, null)).toBe(CHAR_SCALE_DEFAULT)
-      expect(seedCharScale(undefined, undefined)).toBe(CHAR_SCALE_DEFAULT)
-      expect(seedCharScale('', '')).toBe(CHAR_SCALE_DEFAULT)
-      expect(seedCharScale('banana', 'nonsense')).toBe(CHAR_SCALE_DEFAULT)
+    it('survives a junk saved value by falling through, not by throwing', () => {
+      expect(seedCharScale('banana')).toBeCloseTo(CITY_DEFAULT_CHAR_SCALE, 10)
     })
 
-    it('survives a junk game value by falling through, not by throwing', () => {
-      expect(seedCharScale('NaN', '0.4')).toBe(0.4)
+    it('★★ HONOURS a saved size below this machine floor (CW-88)', () => {
+      // CW-72 raised it to the floor. The owner reversed that half of CW-Q68:
+      // the floor SEEDS somebody who has never chosen and does not clamp
+      // somebody who has. A player who chose 30% on a fast machine keeps 30%
+      // on a slow one, and is told what it costs rather than overruled.
+      expect(seedCharScale('0.3', 0.5)).toBeCloseTo(0.3, 10)
+      // ...and a saved size ABOVE the floor is still left exactly alone.
+      expect(seedCharScale('0.7', 0.4)).toBeCloseTo(0.7, 10)
     })
 
-    describe('with a stored calibration (CW-42, CW-Q39)', () => {
-      it('the manual choice still wins, even below the calibrated default', () => {
-        expect(seedCharScale('0.1', null, 0.3)).toBe(0.1)
-      })
+    it('★★ a saved choice reaches the bottom of the range (CW-88)', () => {
+      // The oracle for "10 % is reachable again": 10 % is a size a player may
+      // choose and keep, on any floor. The red proof is the Math.max this
+      // replaced - reinstate it and every line here fails.
+      expect(seedCharScale('0.1', 0.3)).toBeCloseTo(CHAR_SCALE_MIN, 10)
+      expect(seedCharScale('0.1', 0.5)).toBeCloseTo(CHAR_SCALE_MIN, 10)
+      expect(seedCharScale('0.2', 0.4)).toBeCloseTo(0.2, 10)
+      // Below the range is still not a size: the bottom is the bottom.
+      expect(seedCharScale('0.02', 0.3)).toBeCloseTo(CHAR_SCALE_MIN, 10)
+    })
 
-      it('the calibrated default replaces the landing default', () => {
-        expect(seedCharScale(null, null, 0.1)).toBe(0.1)
-        expect(seedCharScale(null, null, 0.3)).toBe(0.3)
-      })
+    it('the floor still SEEDS a player who has never chosen', () => {
+      // The DEFAULT half of CW-Q68 stands, and this is the half CW-88 keeps.
+      expect(seedCharScale(null, 0.3)).toBeCloseTo(CITY_DEFAULT_CHAR_SCALE, 10)
+      expect(seedCharScale(null, 0.4)).toBeCloseTo(0.4, 10)
+      expect(seedCharScale(null, 0.5)).toBeCloseTo(0.5, 10)
+      // A floor below the default is not a thing this release can produce -
+      // decodeCalibration migrates CW-42's away - but the seed refuses it
+      // anyway, because ONE default is what CW-72 exists for.
+      expect(seedCharScale(null, 0.1)).toBeCloseTo(CITY_DEFAULT_CHAR_SCALE, 10)
+    })
 
-      it('the calibrated default outranks the Alt View courtesy seed', () => {
-        // Fresh calibration would re-apply over the seed moments after
-        // entry; landing there spares the player the visible jump.
-        expect(seedCharScale(null, '0.9', 0.3)).toBe(0.3)
-      })
-
-      it('a junk calibration falls through to the old order', () => {
-        expect(seedCharScale(null, '0.9', NaN)).toBe(0.9)
-        expect(seedCharScale(null, null, null)).toBe(CHAR_SCALE_DEFAULT)
-      })
+    it('does not read the main app Alt View preference at all', () => {
+      // It used to. A slider in the main app deciding how coarse the city
+      // looks is exactly the second size CW-72 exists to remove, so the
+      // function no longer has a parameter for it.
+      expect(seedCharScale.length).toBeLessThanOrEqual(2)
     })
   })
 })
@@ -1344,5 +1398,131 @@ describe('the ground underfoot (CW-50)', () => {
       ROAD_WIDTHS_M.residential / 2 + PAVEMENT_WIDTH_M
     )
     expect(state.groundZ).toBe(-CURB_HEIGHT_M)
+  })
+})
+
+describe('the road-ribbon index (CW-75)', () => {
+  // An 8 m residential street running east-west along y = 0, and a 12 m
+  // secondary crossing it north-south at x = 40.
+  const roads = [
+    {
+      points: [
+        [-50, 0],
+        [100, 0],
+      ],
+      widthM: ROAD_WIDTHS_M.residential,
+      kind: 'residential',
+      name: 'Main Street',
+    },
+    {
+      points: [
+        [40, -50],
+        [40, 50],
+      ],
+      widthM: ROAD_WIDTHS_M.secondary,
+      kind: 'secondary',
+      name: 'Cross Avenue',
+    },
+  ]
+
+  it('rejects a trunk 0.5 m inside a ribbon and accepts one 0.3 m outside', () => {
+    const index = buildRoadwayIndex(roads)
+    const halfM = ROAD_WIDTHS_M.residential / 2
+
+    // 0.5 m inside the kerb line.
+    const inside = index.insideRoadway(0, halfM - 0.5, 0)
+    expect(inside).not.toBeNull()
+    expect(inside.inside).toBeCloseTo(0.5, 6)
+    expect(inside.kind).toBe('residential')
+    expect(inside.name).toBe('Main Street')
+
+    // 0.3 m outside it.
+    expect(index.insideRoadway(0, halfM + 0.3, 0)).toBeNull()
+  })
+
+  it('answers for a footprint, not only for a centre point', () => {
+    const index = buildRoadwayIndex(roads)
+    const halfM = ROAD_WIDTHS_M.residential / 2
+    // A 0.3 m trunk standing 0.1 m clear of the kerb still has its box on
+    // the tarmac; one standing 0.2 m clear does not.
+    expect(index.insideRoadway(0, halfM + 0.1, -0.15)).not.toBeNull()
+    expect(index.insideRoadway(0, halfM + 0.2, -0.15)).toBeNull()
+  })
+
+  it('reports the ribbon a point is DEEPEST inside where two overlap', () => {
+    const index = buildRoadwayIndex(roads)
+    // In the junction, on the residential centreline and 1 m off the
+    // secondary's: 4 m of residential over it, 5 m of secondary.
+    const hit = index.insideRoadway(39, 0, 0)
+    expect(hit.kind).toBe('secondary')
+    expect(hit.inside).toBeCloseTo(ROAD_WIDTHS_M.secondary / 2 - 1, 6)
+  })
+
+  it('points its normal from the centreline out toward the prop', () => {
+    const index = buildRoadwayIndex(roads)
+    const hit = index.insideRoadway(10, 1.5, 0)
+    expect(hit.cx).toBeCloseTo(10, 6)
+    expect(hit.cy).toBeCloseTo(0, 6)
+    expect(hit.nx).toBeCloseTo(0, 6)
+    expect(hit.ny).toBeCloseTo(1, 6)
+  })
+
+  it('does not call a pedestrianised street or a pavement a roadway', () => {
+    // ★ The premise this release had to correct. The planning census counted
+    // pedestrian ways as roadways and reported 735 Seattle trunks standing in
+    // one; the scene draws a pedestrian street as pavement end to end
+    // (CW-Q64), and under the scene's own rule the count is 474. A third of
+    // the "trees in the road" were street trees on a pedestrian street.
+    expect(isDrawnRoadway({ kind: 'pedestrian', widthM: 8 })).toBe(false)
+    expect(isDrawnRoadway({ kind: 'footway', sidewalk: true, widthM: 1.8 })).toBe(
+      false
+    )
+    expect(isDrawnRoadway({ kind: 'residential', widthM: 8 })).toBe(true)
+
+    const pedestrian = buildRoadwayIndex([
+      {
+        points: [
+          [-50, 0],
+          [50, 0],
+        ],
+        widthM: ROAD_WIDTHS_M.pedestrian,
+        kind: 'pedestrian',
+      },
+    ])
+    expect(pedestrian.count).toBe(0)
+    expect(pedestrian.insideRoadway(0, 0, 0)).toBeNull()
+  })
+
+  it('refuses a margin that reaches past its own slack', () => {
+    const index = buildRoadwayIndex(roads)
+    expect(() => index.insideRoadway(0, 0, -8)).toThrow(RangeError)
+  })
+})
+
+describe('rectsOverlap (CW-75)', () => {
+  const car = (x, y, rot = 0) => ({
+    x,
+    y,
+    halfLengthM: 2.5,
+    halfWidthM: 1,
+    rotationRad: rot,
+  })
+
+  it('is false for cars nose to tail, true once they share ground', () => {
+    expect(rectsOverlap(car(0, 0), car(5, 0))).toBe(false)
+    expect(rectsOverlap(car(0, 0), car(4.9, 0))).toBe(true)
+  })
+
+  it('is false for cars in neighbouring lanes, however close along', () => {
+    // 2 m apart across is exactly touching for two 1 m half-widths.
+    expect(rectsOverlap(car(0, 0), car(0.5, 2))).toBe(false)
+    expect(rectsOverlap(car(0, 0), car(0.5, 1.9))).toBe(true)
+  })
+
+  it('sees a crossing car that no axis-aligned box test would', () => {
+    // Broadside across the first car's nose: neither car's own axes
+    // separate them.
+    expect(rectsOverlap(car(0, 0), car(2, 0, Math.PI / 2))).toBe(true)
+    expect(rectsOverlap(car(0, 0), car(4, 0, Math.PI / 2))).toBe(false)
   })
 })

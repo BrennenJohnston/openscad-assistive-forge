@@ -16,9 +16,36 @@ import { nextReverseLift } from '../../../src/js/_hfm-paint.js'
 /** The brightest paint in the shopfront art direction: #efefef. */
 const BRIGHTEST_PAINT = 0xef / 255
 
-describe('the luminance layer: the three columns', () => {
-  it('starts at stock, so nothing changes until the owner chooses', () => {
-    expect(LUMINANCE_LAYER_DEFAULT).toBe('stock')
+describe('the luminance layer: what the owner chose, twice', () => {
+  it('★ draws CAPPED solid cells by default - the answer after PLAYING it', () => {
+    // CW-Q74 was answered `off` from still photographs at G1, and CW-72
+    // deleted the losing columns. Playing the deployed build, the owner called
+    // the result sad and asked for the solid cells back, capped. This is the
+    // second answer, and the reason it differs from the first is that a still
+    // is not a filmstrip - a lesson this round had already written down and
+    // then let a GATE question be answered from stills anyway.
+    expect(LUMINANCE_LAYER_DEFAULT).toBe('calm')
+    expect(LUMINANCE_LAYER.calm).toEqual({
+      reverseAt: MONO_REVERSE_THRESHOLD,
+      reverseShareCap: 0.01,
+      reverseLiftMax: 0.06,
+      storefrontScale: 0.93,
+    })
+  })
+
+  it('keeps off reachable, dimming and all', () => {
+    expect(LUMINANCE_LAYER.off).toEqual({
+      reverseAt: null,
+      reverseShareCap: null,
+      reverseLiftMax: 0,
+      // ★ THE PART NOBODY ASKED FOR. `off` was chosen as "no solid cells" and
+      // also dims every lit shopfront band by 17 %, because the treatments
+      // always moved both halves together.
+      storefrontScale: 0.83,
+    })
+  })
+
+  it('keeps stock as the comparison, unchanged', () => {
     expect(LUMINANCE_LAYER.stock).toEqual({
       reverseAt: MONO_REVERSE_THRESHOLD,
       reverseShareCap: null,
@@ -27,55 +54,43 @@ describe('the luminance layer: the three columns', () => {
     })
   })
 
-  it('puts a lit shopfront on the right side of the cliff in each treatment', () => {
-    const band = (mode) => BRIGHTEST_PAINT * LUMINANCE_LAYER[mode].storefrontScale
-    // Stock: the brightest thing in the picture, well above the cliff, which
-    // is why a row of shopfronts reads as a row of solid blocks.
+  it('carries all three treatments again, because the choice was reopened', () => {
+    expect(Object.keys(LUMINANCE_LAYER).sort()).toEqual([
+      'calm',
+      'off',
+      'stock',
+    ])
+  })
+
+  it('★ and NONE of them lights a single extra cell', () => {
+    // Measured at the Seattle spawn, standing, 30 %, mono: the lit share is
+    // 4.5 % under `off`, `calm` AND `stock`. This layer only decides whether
+    // an ALREADY-lit cell is drawn as a solid slab or as a character; it can
+    // never lift a dark one. So monochrome's darkness - 95 % of the screen
+    // blank - is structural and older than this round, and CW-Q74 is not what
+    // made the city dark. Colour mode's ink floor is (see hfm-ink-budget).
+    const scales = Object.values(LUMINANCE_LAYER).map((m) => m.storefrontScale)
+    expect(Math.min(...scales)).toBeGreaterThan(0.5)
+  })
+
+  it('puts a lit shopfront either side of the cliff, as the two columns mean', () => {
+    const band = (mode) =>
+      BRIGHTEST_PAINT * LUMINANCE_LAYER[mode].storefrontScale
+    // Stock: the brightest thing in the picture, above the cliff - which is
+    // why a row of shopfronts read as a row of solid blocks.
     expect(band('stock')).toBeGreaterThan(MONO_REVERSE_THRESHOLD)
     expect(band('stock')).toBeCloseTo(0.937, 3)
-    // Calm: still clearly lit, still above the cliff (it is the SHARE that is
-    // bounded there, not the band), but no longer the whitest thing on screen.
-    expect(band('calm')).toBeGreaterThan(MONO_REVERSE_THRESHOLD)
-    expect(band('calm')).toBeLessThan(band('stock'))
-    expect(band('calm')).toBeCloseTo(0.872, 3)
-    // Off: BELOW the cliff by construction, so a shopfront reads as bright
-    // characters rather than a slab even if reverse video came back.
+    // Off: below the cliff by construction, so a shopfront reads as bright
+    // characters even if reverse video came back...
     expect(band('off')).toBeLessThan(MONO_REVERSE_THRESHOLD)
     expect(band('off')).toBeCloseTo(0.778, 3)
-    // ...and still lit: above the converter's blank floor of 0.5.
+    // ...and still lit: above the converter blank floor of 0.5.
     expect(band('off')).toBeGreaterThan(0.5)
-  })
-
-  it('turns reverse video off only in the off treatment', () => {
-    expect(LUMINANCE_LAYER.stock.reverseAt).toBe(MONO_REVERSE_THRESHOLD)
-    expect(LUMINANCE_LAYER.calm.reverseAt).toBe(MONO_REVERSE_THRESHOLD)
-    expect(LUMINANCE_LAYER.off.reverseAt).toBeNull()
-  })
-
-  it('caps the share only in the calm treatment', () => {
-    expect(LUMINANCE_LAYER.stock.reverseShareCap).toBeNull()
-    expect(LUMINANCE_LAYER.off.reverseShareCap).toBeNull()
-    expect(LUMINANCE_LAYER.calm.reverseShareCap).toBe(0.01)
-    // The cap has to sit above what a STANDING street already paints, or the
-    // treatment would suppress the layer everywhere rather than bound a sweep:
-    // the lamp-lit pose measures 0.39 % standing and passes 2 % in a look.
-    expect(LUMINANCE_LAYER.calm.reverseShareCap).toBeGreaterThan(0.004)
-    expect(LUMINANCE_LAYER.calm.reverseShareCap).toBeLessThan(0.02)
-  })
-
-  it('cannot lift the threshold past the lit band, so calm never becomes off', () => {
-    // MEASURED: without this bound, a pose in front of a wall of shopfronts -
-    // where the natural solid share is four times the cap - lifted the
-    // threshold until every band had gone, a slow fade to `off` that then
-    // oscillated (10,164 crossings over 47 standing frames). The bands are all
-    // painted at ONE luminance, so no threshold keeps some and drops the rest.
-    const band = BRIGHTEST_PAINT * LUMINANCE_LAYER.calm.storefrontScale
-    const headroom = band - LUMINANCE_LAYER.calm.reverseAt
-    expect(headroom).toBeGreaterThan(0)
-    expect(LUMINANCE_LAYER.calm.reverseLiftMax).toBeLessThan(headroom)
-    // ...and the lift is still large enough to bound a sweeping lamp cone,
-    // which needed under 0.05 to come back under the cap.
-    expect(LUMINANCE_LAYER.calm.reverseLiftMax).toBeGreaterThanOrEqual(0.05)
+    // Calm: over the cliff like stock, so the band CAN go solid, but the cap
+    // bounds how much of the frame does.
+    expect(band('calm')).toBeGreaterThan(MONO_REVERSE_THRESHOLD)
+    expect(band('calm')).toBeCloseTo(0.8716, 4)
+    expect(band('calm')).toBeLessThan(band('stock'))
   })
 })
 

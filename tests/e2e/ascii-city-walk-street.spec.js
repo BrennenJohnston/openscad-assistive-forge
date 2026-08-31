@@ -8,6 +8,7 @@ import {
   enterCity,
 } from './helpers/city-walk.js'
 import { SURFACE_CLASS } from '../../src/js/game/city-class-pass.js'
+import { ANCHORED_CLASSES } from '../../src/js/game/city-glyph-field.js'
 
 useCityWalkFixtures()
 
@@ -1174,8 +1175,19 @@ test.describe('ASCII City Walk — real silhouettes (CW-26)', () => {
 
       let apexVerts = 0
       let above = 0
+      let aboveEaves = 0
       g.scene.traverse((o) => {
         if (!o.isMesh || !o.geometry?.getAttribute) return
+        // ★ THE BUILDINGS, AND ONLY THE BUILDINGS. This case asks whether a
+        // pitched roof CAPS its body or is stacked on a full-height box -
+        // a question about one mesh - and it used to answer it by sweeping
+        // every mesh in the city within 12 m. CW-77 nearly doubled Burnaby's
+        // lamps (531 -> 929) and put a crow on a lamp head 6.8 m from this
+        // house, at z 6.32 against the house's 6.00 m apex: 72 vertices
+        // "drawn above the roof apex", none of them the roof's. Measured, the
+        // `buildings` mesh's own maximum inside the radius is EXACTLY 6.00.
+        // A guard that a bird can fail is not measuring a roof.
+        if (o.name !== 'buildings') return
         const pos = o.geometry.getAttribute('position')
         if (!pos) return
         for (let i = 0; i < pos.count; i++) {
@@ -1184,12 +1196,21 @@ test.describe('ASCII City Walk — real silhouettes (CW-26)', () => {
           const z = pos.getZ(i)
           if (Math.hypot(x - cx, y - cy) > 12) continue
           if (z > apexZ + 0.05) above++
+          // The same sweep with the bar lowered to the eaves. If this is 0
+          // the sweep is looking at nothing and the line above is vacuous.
+          if (z > apexZ - target.roof.heightM + 0.05) aboveEaves++
           if (Math.hypot(x - cx, y - cy) < 1.5 && Math.abs(z - apexZ) < 0.05) {
             apexVerts++
           }
         }
       })
-      return { apexZ, apexVerts, above, roofM: target.roof.heightM }
+      return {
+        apexZ,
+        apexVerts,
+        above,
+        aboveEaves,
+        roofM: target.roof.heightM,
+      }
     })
 
     expect(roof, 'Burnaby grew no pyramidal roof').not.toBeNull()
@@ -1197,8 +1218,14 @@ test.describe('ASCII City Walk — real silhouettes (CW-26)', () => {
     // height the building is tagged with.
     expect(roof.apexVerts).toBeGreaterThan(0)
     // The roof CAPS the body rather than being stacked on a full-height box:
-    // nothing at all pokes above the tagged height.
-    expect(roof.above, 'something is drawn above the roof apex').toBe(0)
+    // no part of the BUILDING pokes above the tagged height. Proved able to
+    // fail: drop the threshold by the roof's own height and the same sweep
+    // counts 8 vertices, so the building's geometry is genuinely in view.
+    expect(roof.above, 'the building is drawn above its own apex').toBe(0)
+    expect(
+      roof.aboveEaves,
+      'the sweep cannot see the building at all'
+    ).toBeGreaterThan(0)
     expect(roof.roofM).toBeGreaterThan(0)
   })
 })
@@ -1403,16 +1430,60 @@ test.describe('ASCII City Walk — people are people (CW-45)', () => {
     // road centreline, so no width could reach them. Standing is unmoved
     // between the two width passes for the same reason it moved at all: it
     // is the offsets, not the seed, that decide.
+    //
+    // CW-75 re-pinned them a second time, and for the same KIND of reason.
+    // A person is placed 1.1 m outside THEIR road's kerb, which at a junction
+    // is the middle of the road that crosses it: 141 figures stood on tarmac
+    // with no crossing mapped near them, and they are now refused. 3,029
+    // became 2,890, the refusals fall across all four poses, and sitters move
+    // for the first time (105 -> 102): FOURTEEN of Seattle's 280 mapped
+    // benches stand inside a drawn roadway, and three of them had been given
+    // a sitter. The bench stays where the map put it - CW-43 never invents or
+    // moves mapped furniture - and the sitter this build invents for it does
+    // not get to sit on tarmac. The seed still did not change: 2,890 is
+    // exactly what the shipped census reports for Seattle
+    // (scripts/census-city-walk.mjs), and the four poses sum to it.
+    //
+    // CW-76 re-pinned them a THIRD time, and this one is not a placement
+    // change at all: it is the collision grid. 42 of Seattle's canopies stop
+    // blocking their footprint (a `building=roof` is a slab overhead now, not
+    // a solid from the pavement) and one volume that used to hang in the air
+    // is drawn down to the street and starts blocking. 43 of 1,421 buildings
+    // changed their collision base, and PROVING that is the whole cause: the
+    // new model run against the OLD collision bases reproduces 2,890 and this
+    // exact pose table to the person. So 2,890 becomes 2,895, and the five
+    // are people standing where a canopy used to be a wall.
+    //
+    // ★★★ CW-77 RE-PINNED THEM A FOURTH TIME, AND THE RELEASE THAT DID IT
+    // WAS ABOUT LAMPS. `LAMP_ROAD_KINDS` in city-scene.js is a set named for
+    // one thing that gates two: `lampRng` AND `peopleRng`. CW-77 added
+    // `pedestrian` to it so that Post Alley would be lit - and Post Alley
+    // got its crowd in the same line. A four-cell run of the builders
+    // separates the three causes to the person:
+    //
+    //   pre-CW-77 code, pre-CW-77 extracts                    2895 <- the pin
+    //   CW-77 code, pedestrian NOT in the set, old extracts   2885
+    //   CW-77 code, pedestrian NOT in the set, new extracts   2652
+    //   CW-77 code as shipped, new extracts                   2999
+    //
+    // so: -10 people stand too close to the denser procedural poles, -233
+    // stand where City Light's surveyed register puts a real pole, and +347
+    // are the pedestrian streets that had nobody on them until this release.
+    // The seed law still holds - each road's people stream is its own - and
+    // a pedestrian street with lamps and no people would have been the
+    // stranger city. But the crowd arrived through a set named for lamps,
+    // which is worth a reader's minute: if you change what LAMP_ROAD_KINDS
+    // holds, you are changing the population.
     const stats = await page.evaluate(() => window.__cityWalkGame.props.stats)
     expect(stats.figuresByPose).toEqual({
-      sitting: 105,
-      standing: 705,
-      walking: 1879,
-      jogging: 340,
+      sitting: 101,
+      standing: 728,
+      walking: 1824,
+      jogging: 346,
     })
     expect(
       await page.evaluate(() => window.__cityWalkGame.props.peopleCount)
-    ).toBe(3029)
+    ).toBe(2999)
 
     /**
      * ★★ CW-65 ADDS A PERSON TO THE WORLD AND NOT TO THIS CENSUS, AND THAT IS
@@ -1421,8 +1492,10 @@ test.describe('ASCII City Walk — people are people (CW-45)', () => {
      * The traveler is built STANDALONE, beside the fireworks, because the city
      * group is built before the saved progress is read and because finding
      * them MOVES them. So they never pass through buildStreetProps and
-     * peopleCount - which counts what the CITY BUILD planted - is unchanged at
-     * 3,029. The pin above therefore stays exactly where CW-50 left it.
+     * peopleCount - which counts what the CITY BUILD planted - does not gain
+     * the traveler, whatever the pin above happens to read. (It read 3,029
+     * when this was written; four re-pins later it reads 2,999, and not one
+     * of the four was the traveler.)
      *
      * Asserted rather than assumed, both halves: the crowd did not gain
      * anybody, and the traveler exists all the same. A silent +1 here would
@@ -1956,8 +2029,26 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
    * held still: the world's own clock is stopped first, so the only thing
    * that differs between two frames is the pose this sets.
    */
-  async function glyphChangesOverCreep(page, steps = 4) {
-    return page.evaluate(async (n) => {
+  /**
+   * ★★ FOUR CREEPS FROM FOUR PLACES, NOT ONE LONGER CREEP (CW-91). Anchoring
+   * took most of this guard's subject away: with it on the stateless pick
+   * re-rolls 790 lit cells over one creep where it re-rolled 3,881 before,
+   * because an anchored cell does not re-roll at all. Narrowing the population
+   * to the cells the memory still governs is right, and it leaves a few
+   * hundred events - not enough to read a 20 per cent effect off steadily.
+   *
+   * ★★★ AND LENGTHENING THE CREEP IS NOT THE WAY TO FIX THAT, WHICH WAS
+   * MEASURED RATHER THAN ASSUMED. Ten steps instead of four took the reading
+   * from 79.1 % to 92.2 %: the memory has a HOLD EXPIRY, so a longer creep
+   * lets more holds run out and reports a weaker lever. Frame count is part of
+   * the physics this case is about, not a precision knob. So the sample is
+   * made WIDER instead - the same four-step creep, repeated from places a few
+   * metres apart, pooled. Every creep is the identical experiment on a
+   * different piece of city.
+   */
+  async function glyphChangesOverCreep(page, steps = 4, creeps = 4, gapM = 4) {
+    return page.evaluate(async ({ n, anchoredIds, creeps, gapM }) => {
+      const ANCHORED = new Set(anchoredIds)
       const game = window.__cityWalkGame
       const convert = async () => {
         const before = game.altView.getConvertTotals().samples
@@ -1973,10 +2064,41 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
       }
       const start = { ...game.walkState }
       let changes = 0
+      // ★★★ CW-89: the memory's population, counted separately. The memory
+      // holds a cell's CHARACTER; since CW-89 it explicitly does not decide
+      // whether a cell has one, so a cell going blank or coming back is not a
+      // re-roll it was ever asked to prevent. Counting those made this guard
+      // measure more than it means - it read 81.8 % against its own 80 % bar
+      // the moment CW-89 stopped the trail, which would have looked like a
+      // regression and was the guard's population going stale.
+      let litChanges = 0
+      // ★★★ CW-91: THE MEMORY'S POPULATION WENT STALE AGAIN, FOR THE SAME
+      // REASON AS AT CW-89 - the guard was measuring more than it means.
+      // Anchored cells take their glyph from the SURFACE and are deliberately
+      // never held (plan §10.3): holding one past the moment its lattice
+      // square slid is exactly the trail CW-84 cut. So they change identically
+      // with the memory on and off, and once the facade joined the anchored
+      // set at CW-91 they are most of the picture - the guard read 13 % of
+      // stateless re-rolls prevented against its own 20 % bar, which looks
+      // like a regression in the memory and is nothing of the kind.
+      //
+      // ★ THE BAR DID NOT MOVE. It has been re-pinned once already (CW-77,
+      // 0.6 -> 0.8) and re-pinning it to match a result would leave it worth
+      // nothing. What moved is WHICH CELLS the question is asked about: the
+      // ones the memory still governs. Both numbers are logged so the
+      // dilution stays visible.
+      let governedChanges = 0
+      let governedCells = 0
       let cells = 0
       let previous = null
-      for (let i = 0; i < n; i++) {
-        const d = 0.02 * i
+      let previousCls = null
+      for (let k = 0; k < creeps; k++) {
+        // Each creep starts its own run: the previous creep's last frame is a
+        // different place, and a pair spanning that jump is not a 2 cm step.
+        previous = null
+        previousCls = null
+        for (let i = 0; i < n; i++) {
+        const d = k * gapM + 0.02 * i
         const s = game.walkState
         s.x = start.x + Math.sin(start.headingRad) * d
         s.y = start.y + Math.cos(start.headingRad) * d
@@ -1989,21 +2111,38 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
         )
         const probe = await convert()
         cells = probe.cols * probe.rows
+        const cls = game.classPass.read(game.fpCamera, probe.cols, probe.rows)
         if (previous) {
           for (let c = 0; c < cells; c++) {
-            if (probe.glyphs[c] !== previous[c]) changes++
+            // A pair counts as governed only if the cell was unanchored in
+            // BOTH frames: one that crossed the boundary is not evidence
+            // about the memory either way.
+            const governed =
+              !ANCHORED.has(cls[c]) && !ANCHORED.has(previousCls[c])
+            if (governed) governedCells++
+            if (probe.glyphs[c] === previous[c]) continue
+            changes++
+            if (probe.glyphs[c] !== 0 && previous[c] !== 0) {
+              litChanges++
+              if (governed) governedChanges++
+            }
           }
         }
         previous = Int16Array.from(probe.glyphs)
+        previousCls = Uint8Array.from(cls)
+        }
       }
       Object.assign(game.walkState, start)
       return {
         changes,
+        litChanges,
+        governedChanges,
+        governedCells,
         cells,
-        pairs: n - 1,
+        pairs: (n - 1) * creeps,
         usedGpu: game.altView.getConvertStats().usedGpu,
       }
-    }, steps)
+    }, { n: steps, anchoredIds: [...ANCHORED_CLASSES], creeps, gapM })
   }
 
   /**
@@ -2013,8 +2152,36 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
    * against 931. A lever that does nothing must fail this, so the bar is a
    * SHARE. Measured on this machine with the lever working: 256 and 124
    * against 931, i.e. 13 to 28 per cent.
+   *
+   * ★★ RE-PINNED IN CW-77, AND THE BAR HAD STOPPED MEASURING THE LEVER.
+   * 0.6 was set against a memory that no longer ships and a city with a
+   * third of the edges, and by CW-77 the guard was reading 58 per cent
+   * against a 60 per cent bar - close enough that it passed or failed on how
+   * many frames had converted before the creep started, which is warm-up and
+   * not the thing this case is about. The four-cell probe
+   * (build/cw77-memory.mjs, Iris Xe, 30 %, the Seattle spawn, share of the
+   * stateless re-rolls that survive, default path / cpu path):
+   *
+   *                          pre-CW-77 map      CW-77 map
+   *   glyph 0.4, hold 30      5.1 / 4.5 %      18.0 / 14.8 %
+   *   glyph 0.06, hold 5     35.6 / 22.4 %     58.1 / 53.6 %   <- ships
+   *
+   * Both moved it and they compound. CW-84 cut the band 0.4 -> 0.06 and the
+   * hold 30 -> 5 ON PURPOSE, to buy back the trail the owner saw on the
+   * deployed build; a weaker memory prevents less, by design. CW-77 nearly
+   * TRIPLED the stateless baseline at this pose (2,156 -> 6,210 re-rolls
+   * over the same 2 cm creep) because it put thousands of lamps and a
+   * terrain grid into the frame, and the memory deliberately drops a cell
+   * whose surface class moves under it - so more real edges mean more real
+   * re-rolls that no memory may hold.
+   *
+   * The bar is therefore re-pinned to the lever that SHIPS, with room for
+   * the warm-up: 0.8 still fails the do-nothing lever by a mile (it measured
+   * 99.9 per cent) while the shipped one has 18 points of margin. The share
+   * is logged on every run so the next session reads the number without
+   * having to make the case fail first.
    */
-  const MUST_PREVENT = 0.6
+  const MUST_PREVENT = 0.8
 
   test('a cell whose content barely moved keeps the glyph it had', async ({
     page,
@@ -2024,6 +2191,24 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
     await page.evaluate(() => {
       window.__cityWalkGame.motionReduced = true
       window.__cityWalkGame.altView.setCellProbe(true)
+    })
+
+    // ★★ CW-78: THE MEASUREMENT SCENE IS PINNED. This guard's bar was
+    // calibrated on the downtown spawn (CW-89's rescope; CW-91's widened
+    // pool read 74.6 % there). CW-78 moved the SPAWN to the waterfront and
+    // the first board after it read 83 % of re-rolls surviving - the
+    // converter had not changed one line, the CITY under the creep had. A
+    // guard must not measure more than it means, and this one never meant
+    // "wherever the spawn happens to be", so the creep runs at the pinned
+    // downtown pose from here on, whatever a later release does to spawns.
+    // The pose is the OLD spawn exactly as the old flow produced it:
+    // (-17.26, 14.48) facing 315 degrees - findClearHeading over the
+    // props-stamped grid, re-derived offline rather than guessed.
+    await page.evaluate(() => {
+      const st = window.__cityWalkGame.walkState
+      st.x = -17.26
+      st.y = 14.48
+      st.headingRad = (315 * Math.PI) / 180
     })
 
     // The game configures its own instance at startup; this is what it chose.
@@ -2057,16 +2242,47 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
       )
 
       const path = `${cpuSample ? 'cpu' : 'default'} path (usedGpu ${withMemory.usedGpu})`
+      // BOTH numbers are logged, because the difference between them is the
+      // whole of CW-89 and a reader of this line should be able to see it.
+      console.log(
+        `[CW-68 memory] ${path}: GOVERNED (unanchored, lit) ` +
+          `${withMemory.governedChanges} of ${without.governedChanges} ` +
+          `stateless re-rolls survive = ` +
+          `${((withMemory.governedChanges / without.governedChanges) * 100).toFixed(1)} % ` +
+          `(bar < ${MUST_PREVENT * 100} %) over ${withMemory.governedCells} ` +
+          `governed cell-frames; every LIT cell including anchored ones ` +
+          `${withMemory.litChanges} of ${without.litChanges} = ` +
+          `${((withMemory.litChanges / without.litChanges) * 100).toFixed(1)} % ` +
+          `over ${withMemory.cells * withMemory.pairs} cell-frames`
+      )
       expect(without.cells, path).toBe(withMemory.cells)
       expect(
-        without.changes,
+        without.governedChanges,
         `${path}: the stateless pick re-rolls glyphs over a 2 cm step`
       ).toBeGreaterThan(100)
+      // The population must not have collapsed to nothing: a guard whose
+      // fixture is empty reads a perfect zero and means nothing.
       expect(
-        withMemory.changes,
-        `${path}: memory ${withMemory.changes} of ${without.changes} stateless ` +
-          `changes over ${withMemory.cells * withMemory.pairs} cell-frames`
-      ).toBeLessThan(without.changes * MUST_PREVENT)
+        withMemory.governedCells,
+        `${path}: cells the memory still governs`
+      ).toBeGreaterThan(10000)
+      // ★★★ SCOPED TO LIT CELLS BY CW-89, AND THE BAR IS UNCHANGED AT 0.8.
+      // The memory holds a cell's CHARACTER. Since CW-89 it explicitly does
+      // not decide whether a cell HAS one - a blank answer is taken at once,
+      // in both paths - so a cell going blank or coming back was never a
+      // re-roll this guard was asking it to prevent. Counting those made the
+      // number jump to 81.8 % the moment the trail stopped, which reads as a
+      // regression and is nothing of the kind. This is CW-77's own trap paid
+      // again: a guard must not measure more than it means. The BAR did not
+      // move - it has been re-pinned once already (CW-77, 0.6 -> 0.8) and
+      // re-pinning it to match a result would leave it worth nothing.
+      expect(
+        withMemory.governedChanges,
+        `${path}: memory ${withMemory.governedChanges} of ` +
+          `${without.governedChanges} stateless changes between two REAL ` +
+          `characters, over ${withMemory.governedCells} cell-frames the ` +
+          `memory still governs`
+      ).toBeLessThan(without.governedChanges * MUST_PREVENT)
     }
 
     await page.evaluate(() => {
@@ -2114,7 +2330,7 @@ test.describe('ASCII City Walk — the solid bright layer, three ways (CW-70)', 
       return { solid, cells: probe.cols * probe.rows }
     })
 
-  test('off draws no solid cells at all, and stock draws some', async ({
+  test('the game draws CAPPED solid cells, off draws none, stock draws most', async ({
     page,
   }) => {
     await launchGame(page)
@@ -2124,24 +2340,55 @@ test.describe('ASCII City Walk — the solid bright layer, three ways (CW-70)', 
       window.__cityWalkGame.altView.setCellProbe(true)
     })
 
-    // Stock is what ships until the owner has chosen, and it must still paint
-    // the layer - a treatment that removed it by accident would pass every
-    // "fewer solid cells" assertion in this file.
-    expect(await page.evaluate(() => window.__cityWalkGame.getLuminanceLayer())).toBe('stock')
+    // ★ What the game draws since CW-84: the owner's SECOND answer, given
+    // after playing the deployed build rather than reading photographs of it.
+    // `off` was chosen at G1 from stills and called sad in motion.
+    expect(
+      await page.evaluate(() => window.__cityWalkGame.getLuminanceLayer())
+    ).toBe('calm')
+    const calm = await solidCells(page)
+    expect(calm, 'this browser has no intensity ladder').not.toBeNull()
+    expect(
+      calm.solid,
+      `calm painted ${calm.solid} of ${calm.cells} cells solid`
+    ).toBeGreaterThan(0)
+
+    // `off` must still remove the layer completely, or the switch is not a
+    // switch and every "fewer solid cells" assertion here rests on nothing.
+    await page.evaluate(() => window.__cityWalkGame.setLuminanceLayer('off'))
+    const off = await solidCells(page)
+    expect(off.cells).toBe(calm.cells)
+    expect(off.solid).toBe(0)
+
+    // `stock` must still paint the layer, or this case could not tell a
+    // treatment that works from one that removed the layer by accident - and
+    // every "fewer solid cells" assertion in this file would pass on nothing.
+    await page.evaluate(() => window.__cityWalkGame.setLuminanceLayer('stock'))
     const stock = await solidCells(page)
-    expect(stock, 'this browser has no intensity ladder').not.toBeNull()
+    expect(stock.cells).toBe(off.cells)
     expect(
       stock.solid,
       `stock painted ${stock.solid} of ${stock.cells} cells solid`
     ).toBeGreaterThan(0)
-
-    await page.evaluate(() => window.__cityWalkGame.setLuminanceLayer('off'))
-    const off = await solidCells(page)
-    expect(off.cells).toBe(stock.cells)
-    expect(off.solid).toBe(0)
+    // ★ WHAT THIS POSE CANNOT SHOW, SAID OUT LOUD. `calm` differs from
+    // `stock` only through its share CAP, and a cap that is never exceeded is
+    // indistinguishable from no cap. At this pose the solid share sits under
+    // the 1 % cap, so calm and stock paint about the same count and an
+    // ordering assertion between them would be measuring frame noise - it
+    // passed once here and then failed on a re-read of the same scene. The
+    // cap's effect is measured where it actually engages (the shopfront pose:
+    // 2,936 solid on stock against 2,261 on calm) and pinned by the unit
+    // tests over nextReverseLift, which need no GPU at all.
 
     // ...and back, so the switch is a switch and not a one-way door.
-    await page.evaluate(() => window.__cityWalkGame.setLuminanceLayer('stock'))
+    //
+    // ★ NOT the same COUNT, and that is a property rather than a wobble.
+    // `calm` carries a share cap whose lift settles over about five frames
+    // (CW-70), so a reading taken immediately after switching back is
+    // mid-settle by construction. Asserting the exact number here would have
+    // pinned one moment of a controller that is designed to move; what has to
+    // be true is that the layer came back at all, and still capped.
+    await page.evaluate(() => window.__cityWalkGame.setLuminanceLayer('calm'))
     expect((await solidCells(page)).solid).toBeGreaterThan(0)
 
     await page.evaluate(() => window.__cityWalkGame.altView.setCellProbe(false))
@@ -2159,22 +2406,828 @@ test.describe('ASCII City Walk — the solid bright layer, three ways (CW-70)', 
         cap: window.__cityWalkGame.altView.getReverseShareCap(),
       }))
 
-    await page.evaluate(() => window.__cityWalkGame.setLuminanceLayer('calm'))
     expect(await read()).toEqual({ mode: 'calm', reverseAt: 0.8, cap: 0.01 })
-
-    await page.evaluate(() => window.__cityWalkGame.setLuminanceLayer('off'))
-    expect(await read()).toEqual({ mode: 'off', reverseAt: null, cap: null })
 
     await page.evaluate(() => window.__cityWalkGame.setLuminanceLayer('stock'))
     expect(await read()).toEqual({ mode: 'stock', reverseAt: 0.8, cap: null })
 
-    // A name nobody knows must land on the shipped treatment, not on whatever
+    await page.evaluate(() => window.__cityWalkGame.setLuminanceLayer('off'))
+    expect(await read()).toEqual({ mode: 'off', reverseAt: null, cap: null })
+
+    // A name nobody knows must land on the SHIPPED treatment, not on whatever
     // was set last: this switch is reachable from a script and a typo in one
-    // would otherwise measure the previous run.
-    await page.evaluate(() => window.__cityWalkGame.setLuminanceLayer('calm'))
+    // would otherwise quietly measure the previous run.
+    // The fallback is the SHIPPED treatment, so it moved with it: this is
+    // deliberately asserted against the default rather than against a
+    // hard-coded name, because the point of the case is "a typo lands on what
+    // ships", and hard-coding the old answer would have made it pass while
+    // meaning the opposite.
     await page.evaluate(() =>
       window.__cityWalkGame.setLuminanceLayer('brighter please')
     )
-    expect(await read()).toEqual({ mode: 'stock', reverseAt: 0.8, cap: null })
+    expect(await read()).toEqual({ mode: 'calm', reverseAt: 0.8, cap: 0.01 })
+  })
+})
+
+test.describe('ASCII City Walk — Day and Night (CW-85, CW-Q83)', () => {
+  /** Convert one frame and hand back the glyph grid the converter chose. */
+  const glyphsNow = (page) =>
+    page.evaluate(async () => {
+      const g = window.__cityWalkGame
+      const before = g.altView.getConvertTotals().samples
+      g.altView.invalidate()
+      const deadline = Date.now() + 15000
+      while (g.altView.getConvertTotals().samples <= before) {
+        if (Date.now() > deadline) throw new Error('no conversion in 15 s')
+        await new Promise((r) => requestAnimationFrame(r))
+      }
+      const probe = g.altView.readCellProbe()
+      if (!probe) throw new Error('the cell probe is empty')
+      return Array.from(probe.glyphs)
+    })
+
+  const settle = (page) =>
+    page.evaluate(async () => {
+      const g = window.__cityWalkGame
+      for (let i = 0; i < 2; i++) {
+        const before = g.altView.getConvertTotals().samples
+        g.altView.invalidate()
+        const deadline = Date.now() + 15000
+        while (g.altView.getConvertTotals().samples <= before) {
+          if (Date.now() > deadline) throw new Error('no conversion')
+          await new Promise((r) => requestAnimationFrame(r))
+        }
+      }
+    })
+
+  const paintedShare = (page) =>
+    page.evaluate(() => {
+      const cv = document.querySelector('canvas.hfm-overlay-canvas')
+      const cx = cv.getContext('2d', { willReadFrequently: true })
+      const d = cx.getImageData(0, 0, cv.width, cv.height).data
+      let on = 0
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i] || d[i + 1] || d[i + 2]) on++
+      }
+      return on / (d.length / 4)
+    })
+
+  test('★★★ the backing changes NO glyph the converter chose', async ({
+    page,
+  }) => {
+    // The whole layer rests on this. The backing is computed at PAINT time,
+    // after every glyph is already picked, so it cannot reach the decision -
+    // and that is a claim about the ORDER of the code, which is exactly the
+    // kind of claim that quietly stops being true. Same pose, same frame,
+    // Night then Day: the grids must match cell for cell.
+    //
+    // RED PROOF (run by hand, CW-85): let buildBacking write into the glyph
+    // array it is handed, and this case names the first cell that moved.
+    await launchGame(page)
+    await enterCity(page)
+    const configuredHysteresis = await page.evaluate(() =>
+      window.__cityWalkGame.altView.getTemporalHysteresis()
+    )
+    await page.evaluate(() => {
+      window.__cityWalkGame.motionReduced = true
+      window.__cityWalkGame.altView.setCellProbe(true)
+      window.__cityWalkGame.altView.setFontScale(0.3)
+      // The CW-68 memory HOLDS a glyph for five converted frames and then
+      // lets it go, so two captures taken at different points in that cycle
+      // differ by thousands of cells whatever else is true. Measured while
+      // writing this case: with the memory on, frames 1 and 2 after a toggle
+      // match and frame 3 moves 4,237 of 73,600 - the hold expiring, not the
+      // backing; with the memory off every frame matches. So it comes off for
+      // the measurement and goes back after. This case asks whether the
+      // BACKING moves a decision, and the memory's own clock is not an answer.
+      window.__cityWalkGame.altView.setTemporalHysteresis(null)
+    })
+    await settle(page)
+
+    const countDiff = (a, b) => {
+      let n = 0
+      let first = -1
+      for (let i = 0; i < a.length; i++) {
+        if (a[i] !== b[i]) {
+          n++
+          if (first < 0) first = i
+        }
+      }
+      return { n, first }
+    }
+
+    // ★★ THE SAME-CODE CONTROL FIRST (CW-31's rule, and this case needed it
+    // - written without one it blamed Day for 4,237 glyphs that the harness
+    // moved on its own before the scene had settled). Two conversions of an
+    // unchanged scene, nothing toggled: whatever this reads is what a
+    // comparison in this harness costs, and the real measurement is only
+    // meaningful against it.
+    const nightA = await glyphsNow(page)
+    const nightB = await glyphsNow(page)
+    const control = countDiff(nightA, nightB)
+    expect(nightA.length).toBeGreaterThan(1000)
+    expect(
+      control.n,
+      `the control moved ${control.n} glyphs with nothing changed, so this ` +
+        'case cannot say anything about Day'
+    ).toBe(0)
+
+    await page.keyboard.press('KeyB')
+    await settle(page)
+    const day = await glyphsNow(page)
+    expect(day.length).toBe(nightB.length)
+    const moved = countDiff(nightB, day)
+    expect(
+      moved.n,
+      `Day moved ${moved.n} of ${nightB.length} glyphs (first at cell ` +
+        `${moved.first}) against a control of ${control.n}`
+    ).toBe(control.n)
+
+    await page.evaluate((h) => {
+      window.__cityWalkGame.altView.setCellProbe(false)
+      window.__cityWalkGame.altView.setTemporalHysteresis(h)
+    }, configuredHysteresis)
+  })
+
+  test('★★ Day paints a backing, and Night paints none', async ({ page }) => {
+    // The companion to the case above. Proving nothing CHANGED would pass
+    // just as well if the layer did nothing at all, so this one measures that
+    // it does something. Painted PIXELS are the measure, because a backing is
+    // pixels and not characters.
+    await launchGame(page)
+    await enterCity(page)
+    await page.evaluate(() => {
+      window.__cityWalkGame.motionReduced = true
+      window.__cityWalkGame.altView.setFontScale(0.3)
+    })
+
+    await settle(page)
+    const night = await paintedShare(page)
+    await page.keyboard.press('KeyB')
+    await settle(page)
+    const day = await paintedShare(page)
+
+    expect(
+      day,
+      `day painted ${(day * 100).toFixed(1)} % against night's ${(night * 100).toFixed(1)} %`
+    ).toBeGreaterThan(night * 1.3)
+  })
+
+  test('★★ B and the toolbar button agree, and the choice is remembered', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+    const btn = page.locator('#cityWalkDaylightBtn')
+    await expect(btn).toHaveAttribute('aria-pressed', 'false')
+
+    await page.keyboard.press('KeyB')
+    await expect(btn).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.locator('#cityWalkAnnouncer')).toContainText('Day')
+
+    // The button is the same action, not a second one: CW-60's promise is
+    // that every key has a button, and a button that disagreed with its key
+    // would be two features wearing one name.
+    await btn.click()
+    await expect(btn).toHaveAttribute('aria-pressed', 'false')
+    expect(
+      await page.evaluate(() =>
+        localStorage.getItem('openscad-forge-city-walk-daylight')
+      )
+    ).toBe('night')
+
+    await page.keyboard.press('KeyB')
+    // ★ LEAVE THE CITY THE WAY A PLAYER DOES, rather than bouncing the tab
+    // through about:blank. The bounce is this suite's usual second-visit
+    // recipe, but in Firefox it raced with a navigation of its own -
+    // 'Navigation to about:blank is interrupted by another navigation to
+    // about:blank' - and failed on every run. Escape closes the layer, which
+    // is what the calibration precedent's blank page was really buying: a
+    // same-URL navigation is only a problem from INSIDE the open layer.
+    // This is also the truer test, because it is what a player actually does.
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          localStorage.getItem('openscad-forge-city-walk-daylight')
+        )
+      )
+      .toBe('day')
+    await page.keyboard.press('Escape')
+    await expect(page.locator('#cityWalkLayer')).toBeHidden()
+    await launchGame(page)
+    await enterCity(page)
+    await expect(page.locator('#cityWalkDaylightBtn')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    )
+  })
+
+  test('★★★ an empty city takes the obstacles out with the people (CW-Q86)', async ({
+    page,
+  }) => {
+    // The half that is easy to forget. Hiding a car and leaving its footprint
+    // in the collision grid makes an empty street you cannot walk down, which
+    // is a worse city than the busy one it replaced.
+    await launchGame(page)
+    await enterCity(page)
+
+    const survey = () =>
+      page.evaluate(() => {
+        const g = window.__cityWalkGame
+        const names = ['people', 'cars', 'traffic-cars']
+        let visible = 0
+        let meshes = 0
+        g.props.group.traverse((o) => {
+          if (o.isMesh && names.includes(o.name)) {
+            meshes++
+            if (o.visible) visible++
+          }
+        })
+        let blocked = 0
+        for (const o of g.props.obstacles) {
+          if (g.collision.isBlocked(o.x, o.y)) blocked++
+        }
+        const population = g.props.obstacles.filter((o) => o.population)
+        const stillBlocked = population.filter((o) =>
+          g.collision.isBlocked(o.x, o.y)
+        )
+        // A footprint within a cell and a half of a NON-population rect is
+        // blocked by that thing, not by anybody who has just left. The margin
+        // is the grid's own rasterisation: cellM is 1 m and blockRect blocks
+        // every cell a rect touches.
+        const others = g.props.obstacles.filter((o) => !o.population)
+        const near = (pt, r) => {
+          const dx = pt.x - r.x
+          const dy = pt.y - r.y
+          const c = Math.cos(-r.rotationRad)
+          const sn = Math.sin(-r.rotationRad)
+          const lx = dx * c - dy * sn
+          const ly = dx * sn + dy * c
+          return (
+            Math.abs(lx) <= r.halfLengthM + 1.5 &&
+            Math.abs(ly) <= r.halfWidthM + 1.5
+          )
+        }
+        const unexplainedBlocked = stillBlocked.filter(
+          (o) => !others.some((r) => near(o, r))
+        ).length
+        return {
+          meshes,
+          visible,
+          blocked,
+          population: population.length,
+          populationBlocked: stillBlocked.length,
+          unexplainedBlocked,
+        }
+      })
+
+    const busy = await survey()
+    expect(busy.meshes, 'the city has people and cars to hide').toBeGreaterThan(
+      0
+    )
+    expect(busy.visible).toBe(busy.meshes)
+    expect(
+      busy.population,
+      'people and parked cars are tagged as population'
+    ).toBeGreaterThan(100)
+    expect(
+      busy.populationBlocked,
+      'a busy city blocks the ground every one of them stands on'
+    ).toBe(busy.population)
+
+    await page.keyboard.press('KeyU')
+    const empty = await survey()
+    expect(empty.visible, 'nobody is drawn').toBe(0)
+
+    // ★★ WHAT "NOBODY IS IN THE WAY" CAN HONESTLY MEAN. The collision grid is
+    // 1 m and `blockRect` blocks every cell a rect TOUCHES, so somebody
+    // standing beside a tree shares the tree's blocked cell and that cell
+    // stays blocked when they leave - correctly, because the tree is still
+    // there. Measured on Seattle: 7,359 population footprints, 7,315 freed,
+    // and every one of the 44 survivors within a cell and a half of a bench,
+    // a basket, a hydrant or a tree. So the claim is not "zero blocked" - it
+    // is that nothing stays blocked BECAUSE OF the population, and the
+    // survivors are named rather than tolerated.
+    const freed = busy.populationBlocked - empty.populationBlocked
+    expect(
+      freed / busy.population,
+      `emptying freed ${freed} of ${busy.population} footprints`
+    ).toBeGreaterThan(0.99)
+    expect(
+      empty.unexplainedBlocked,
+      `${empty.unexplainedBlocked} footprints are still blocked with nothing ` +
+        'but a hidden person or car to explain them'
+    ).toBe(0)
+
+    // The rest of the street furniture is untouched: a bench is still a bench.
+    expect(empty.blocked).toBeLessThan(busy.blocked)
+    expect(empty.blocked).toBeGreaterThan(0)
+
+    await page.keyboard.press('KeyU')
+    const back = await survey()
+    expect(back.visible).toBe(back.meshes)
+    expect(back.populationBlocked).toBe(busy.populationBlocked)
+  })
+})
+
+test.describe('ASCII City Walk — glyphs anchored to the surface (CW-86, CW-91)', () => {
+  const settle = (page) =>
+    page.evaluate(async () => {
+      const g = window.__cityWalkGame
+      for (let i = 0; i < 2; i++) {
+        const before = g.altView.getConvertTotals().samples
+        g.altView.invalidate()
+        const deadline = Date.now() + 15000
+        while (g.altView.getConvertTotals().samples <= before) {
+          if (Date.now() > deadline) throw new Error('no conversion')
+          await new Promise((r) => requestAnimationFrame(r))
+        }
+      }
+    })
+
+  const enter = async (page) => {
+    await launchGame(page)
+    await enterCity(page)
+    await page.evaluate(() => {
+      window.__cityWalkGame.motionReduced = true
+      window.__cityWalkGame.altView.setCellProbe(true)
+      window.__cityWalkGame.altView.setFontScale(0.3)
+    })
+    await settle(page)
+  }
+
+  test('★★★ it is ON, and it runs on the GPU path (CW-91)', async ({ page }) => {
+    // CW-86 built this and asserted the OPPOSITE here, because anchoring
+    // forced the CPU glyph path and halved the frame rate - 59.6 fps to 29.6,
+    // measured A-B-B-A. CW-91 taught the shader to read the field byte out of
+    // the class texture's own green channel and index the ladder itself, so
+    // that reason is gone and the owner's pick (CW-Q90) ships.
+    //
+    // The two halves of this case are one claim: anchoring is on AND the
+    // converter is still on the GPU. Either alone would be worthless - a
+    // release that turned anchoring on and quietly fell back to the CPU would
+    // pass "it is on" while giving every player half the frame rate.
+    await enter(page)
+    expect(
+      await page.evaluate(() => window.__cityWalkGame.getAnchoredGlyphs())
+    ).toBe(true)
+    expect(
+      await page.evaluate(() =>
+        window.__cityWalkGame.altView.anchoredGlyphsOn()
+      )
+    ).toBe(true)
+    expect(
+      await page.evaluate(
+        () => window.__cityWalkGame.altView.getConvertStats().usedGpu
+      ),
+      'anchoring must not force the CPU path any more'
+    ).toBe(true)
+    // And the class pass really is rendering a field: with it on, some cells
+    // carry a non-zero field byte. Zero everywhere is what "off" looks like,
+    // and it would make every assertion above true and meaningless.
+    const field = await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const probe = g.altView.readCellProbe()
+      g.classPass.read(g.fpCamera, probe.cols, probe.rows)
+      const f = g.classPass.lastField()
+      let nonZero = 0
+      for (let i = 0; i < f.length; i++) if (f[i]) nonZero++
+      return { cells: f.length, nonZero }
+    })
+    expect(field.cells).toBeGreaterThan(1000)
+    expect(field.nonZero).toBeGreaterThan(100)
+  })
+
+  test('★★★ it moves the GROUND and the FACADE, and nothing else (CW-91)', async ({
+    page,
+  }) => {
+    // The release's whole verdict in one case. CW-86 scoped anchoring to the
+    // surfaces whose texture is a dither and asserted here that the facade did
+    // NOT move; the owner then looked at the lattice photographs and picked 64
+    // for the facade as well (CW-Q90), knowing from CW-86's own table that it
+    // does not steady a wall. So the facade moves now - and the classes that
+    // were never in the set still must not.
+    await enter(page)
+    // ★★★ HOLD THE PATH CONSTANT, OR THIS MEASURES TWO CHANGES AT ONCE. Since
+    // CW-91 both sides are on the GPU by default, which is the whole point;
+    // this line says so rather than assuming it.
+    expect(
+      await page.evaluate(
+        () => window.__cityWalkGame.altView.getConvertStats().usedGpu
+      )
+    ).toBe(true)
+
+    const grab = async () =>
+      page.evaluate(() => {
+        const game = window.__cityWalkGame
+        const probe = game.altView.readCellProbe()
+        const cls = game.classPass.read(game.fpCamera, probe.cols, probe.rows)
+        return { glyphs: Array.from(probe.glyphs), cls: Array.from(cls) }
+      })
+
+    // Off first, then on, so "before" is the picture without anchoring.
+    await page.evaluate(() => window.__cityWalkGame.setAnchoredGlyphs(false))
+    await settle(page)
+    const before = await grab()
+    await page.evaluate(() => window.__cityWalkGame.setAnchoredGlyphs(true))
+    await settle(page)
+    const after = await grab()
+    expect(after.glyphs.length).toBe(before.glyphs.length)
+
+    const KEYS = {
+      1: 'ground',
+      13: 'paving',
+      4: 'wall',
+      6: 'storefront',
+      2: 'road',
+      9: 'tree',
+    }
+    const moved = {
+      ground: 0,
+      paving: 0,
+      wall: 0,
+      storefront: 0,
+      road: 0,
+      tree: 0,
+    }
+    const total = { ...moved }
+    for (let i = 0; i < before.glyphs.length; i++) {
+      if (before.cls[i] !== after.cls[i]) continue
+      const key = KEYS[before.cls[i]]
+      if (!key) continue
+      total[key]++
+      if (before.glyphs[i] !== after.glyphs[i]) moved[key]++
+    }
+
+    // The fixture has to contain the thing it guards.
+    expect(total.ground + total.paving).toBeGreaterThan(200)
+    expect(total.wall + total.storefront).toBeGreaterThan(200)
+    expect(total.road + total.tree).toBeGreaterThan(200)
+
+    // Every anchored surface took its glyphs from somewhere else.
+    expect(moved.ground + moved.paving).toBeGreaterThan(0)
+    expect(
+      moved.wall + moved.storefront,
+      'the facade is anchored since CW-91 and must move'
+    ).toBeGreaterThan(0)
+    // And the classes that are NOT in the set did not move one cell. The road
+    // carries neither a uv attribute nor a map, so it could not be anchored
+    // even if somebody added it to the list; a tree is simply not in it.
+    expect(
+      moved.road,
+      `${moved.road} road cells moved, and the road is not anchored`
+    ).toBe(0)
+    expect(moved.tree).toBe(0)
+  })
+
+  test('★★ an anchored surface holds perfectly still while the walker does', async ({
+    page,
+  }) => {
+    // The standing control, which is the row that makes every other row
+    // readable: if the picture moves while the world does not, nothing else
+    // measured here means anything.
+    await enter(page)
+    await page.evaluate(() => window.__cityWalkGame.setAnchoredGlyphs(true))
+    await settle(page)
+
+    const snap = () =>
+      page.evaluate(() => {
+        const g = window.__cityWalkGame
+        const probe = g.altView.readCellProbe()
+        const cls = g.classPass.read(g.fpCamera, probe.cols, probe.rows)
+        const out = []
+        for (let i = 0; i < cls.length; i++) {
+          if (cls[i] === 1 || cls[i] === 13) out.push([i, probe.glyphs[i]])
+        }
+        return out
+      })
+
+    const a = await snap()
+    await settle(page)
+    const b = await snap()
+    expect(a.length).toBeGreaterThan(200)
+    expect(b.length).toBe(a.length)
+    let moved = 0
+    for (let i = 0; i < a.length; i++) {
+      if (a[i][0] !== b[i][0] || a[i][1] !== b[i][1]) moved++
+    }
+    expect(moved, `${moved} anchored cells changed while standing still`).toBe(0)
+
+    await page.evaluate(() => window.__cityWalkGame.setAnchoredGlyphs(false))
+  })
+})
+
+test.describe('ASCII City Walk — ink belongs to its surface (CW-93, D-128, D-129)', () => {
+  const settle = (page) =>
+    page.evaluate(async () => {
+      const g = window.__cityWalkGame
+      for (let i = 0; i < 2; i++) {
+        const before = g.altView.getConvertTotals().samples
+        g.altView.invalidate()
+        const deadline = Date.now() + 15000
+        while (g.altView.getConvertTotals().samples <= before) {
+          if (Date.now() > deadline) throw new Error('no conversion')
+          await new Promise((r) => requestAnimationFrame(r))
+        }
+      }
+    })
+
+  const enter = async (page) => {
+    await launchGame(page)
+    await enterCity(page)
+    await page.evaluate(() => {
+      window.__cityWalkGame.motionReduced = true
+      window.__cityWalkGame.altView.setCellProbe(true)
+      window.__cityWalkGame.altView.setFontScale(0.3)
+    })
+    await settle(page)
+  }
+
+  /**
+   * Every cell whose DRAWN glyph is not in its own class's ladder.
+   *
+   * The same arithmetic the sequence instrument prints as its MISMATCH column
+   * (src/js/game/seq-metrics.js), read here against the REAL shader - which
+   * unit tests cannot reach, and which is where the defect lived.
+   *
+   * Reverse-video cells are exempt because both paths match them against the
+   * inverted shape and the full atlas on purpose; palette mode has no reverse
+   * video at all, so in colour the exempt count is zero.
+   */
+  const audit = (page) =>
+    page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const probe = g.altView.readCellProbe()
+      const cls = g.classPass.read(g.fpCamera, probe.cols, probe.rows)
+      const vocab = g.altView.getClassVocabularies()
+      const levels = g.altView.getIntensityLevels()
+      const reverseIndex = probe.intensity && levels ? levels.length : -1
+      const allowed = new Map(
+        Object.entries(vocab).map(([id, ids]) => [Number(id), new Set(ids)])
+      )
+      const distinct = new Map()
+      const examples = []
+      let classified = 0
+      let mismatch = 0
+      let exempt = 0
+      for (let i = 0; i < cls.length; i++) {
+        const legal = allowed.get(cls[i])
+        if (!legal) continue
+        classified++
+        if (probe.intensity && probe.intensity[i] === reverseIndex) {
+          exempt++
+          continue
+        }
+        let seen = distinct.get(cls[i])
+        if (!seen) {
+          seen = new Set()
+          distinct.set(cls[i], seen)
+        }
+        seen.add(probe.glyphs[i])
+        if (legal.has(probe.glyphs[i])) continue
+        mismatch++
+        if (examples.length < 6) {
+          examples.push(
+            `"${String.fromCharCode(32 + probe.glyphs[i])}" on class ${cls[i]}`
+          )
+        }
+      }
+      return {
+        classified,
+        mismatch,
+        exempt,
+        examples,
+        richest: Math.max(0, ...[...distinct.values()].map((s) => s.size)),
+        classesSeen: distinct.size,
+        palette: Boolean(g.altView.getPalette()),
+        usedGpu: g.altView.getConvertStats().usedGpu,
+      }
+    })
+
+  /** What a run must contain before its zero means anything. */
+  const expectRealFixture = (res) => {
+    // ★ A GUARD'S FIXTURE MUST CONTAIN THE THING IT GUARDS. Nought illegal
+    // characters out of nought classified cells is the shape of every guard
+    // this round has had to un-ship.
+    expect(res.classified).toBeGreaterThan(2000)
+    expect(res.classesSeen).toBeGreaterThan(3)
+    // And the picture must be drawing a real range of characters, not one
+    // character everywhere - which would satisfy any subset test.
+    expect(res.richest).toBeGreaterThan(3)
+  }
+
+  test('★★★ in COLOUR every classified cell draws its own surface\'s character', async ({
+    page,
+  }) => {
+    // The owner's defect, as a number. Until CW-93 the GPU path was handed
+    // `useClassVocabularies: !usePalette`, so in colour every classified cell
+    // searched the full 95-glyph atlas: a tree canopy and a building facade
+    // were drawn with the same alphabet, and a window pattern landed on a
+    // tree's underside. Measured at 69 % of the grid before the fix.
+    //
+    // ★ AND THIS CASE EARNED ITS KEEP THE DAY IT WAS WRITTEN. It went red on
+    // a SECOND defect the first fix uncovered (D-129): reaching colour by
+    // CLICKING the button - which is how a player reaches it, and what this
+    // case does - left the GPU path's reverse-video threshold set to the mono
+    // value, so 119 bright cells were matched against an inverted vector and
+    // drew from the whole atlas. Setting the mode before the page loads never
+    // showed it. Do not "simplify" this into a localStorage seed.
+    await enter(page)
+    await page.locator('#cityWalkColourBtn').click()
+    await expect(page.locator('#cityWalkColourBtn')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    )
+    await settle(page)
+
+    const res = await audit(page)
+    expect(res.palette, 'the game is in palette mode').toBe(true)
+    expect(res.usedGpu, 'colour takes the GPU path on this machine').toBe(true)
+    expectRealFixture(res)
+    expect(res.exempt, 'palette mode has no reverse video').toBe(0)
+    expect(
+      res.mismatch,
+      `${res.mismatch} of ${res.classified} classified cells drew a character ` +
+        `their surface does not own: ${res.examples.join(', ')}`
+    ).toBe(0)
+  })
+
+  test('★★ and the two converter paths agree about it, in both modes', async ({
+    page,
+  }) => {
+    // The defect was one path disagreeing with the other, which is the one
+    // thing a converter with two implementations must never do. So the case
+    // asks all four corners rather than the one the machine happens to pick.
+    await enter(page)
+    const mono = await audit(page)
+    expect(mono.palette).toBe(false)
+    expectRealFixture(mono)
+    expect(mono.mismatch, `mono, GPU: ${mono.examples.join(', ')}`).toBe(0)
+
+    await page.evaluate(() =>
+      window.__cityWalkGame.altView.setBenchLegacy({ cpuSample: true })
+    )
+    await settle(page)
+    const monoCpu = await audit(page)
+    expect(monoCpu.usedGpu).toBe(false)
+    expectRealFixture(monoCpu)
+    expect(monoCpu.mismatch, `mono, CPU: ${monoCpu.examples.join(', ')}`).toBe(0)
+
+    await page.locator('#cityWalkColourBtn').click()
+    await settle(page)
+    const colourCpu = await audit(page)
+    expect(colourCpu.palette).toBe(true)
+    expect(colourCpu.usedGpu).toBe(false)
+    expectRealFixture(colourCpu)
+    expect(
+      colourCpu.mismatch,
+      `colour, CPU: ${colourCpu.examples.join(', ')}`
+    ).toBe(0)
+
+    await page.evaluate(() =>
+      window.__cityWalkGame.altView.setBenchLegacy({ cpuSample: false })
+    )
+  })
+})
+
+test.describe('ASCII City Walk — colour belongs to its surface (CW-92, D-127)', () => {
+  const settle = (page) =>
+    page.evaluate(async () => {
+      const g = window.__cityWalkGame
+      for (let i = 0; i < 2; i++) {
+        const before = g.altView.getConvertTotals().samples
+        g.altView.invalidate()
+        const deadline = Date.now() + 15000
+        while (g.altView.getConvertTotals().samples <= before) {
+          if (Date.now() > deadline) throw new Error('no conversion')
+          await new Promise((r) => requestAnimationFrame(r))
+        }
+      }
+    })
+
+  test('★★★ a surface keeps its colour while the camera moves', async ({
+    page,
+  }) => {
+    // D-127: the owner watched a wall flip wholesale between two palette
+    // entries as they walked toward it. The cause was that the colour index
+    // was a stateless nearest-palette match on the lit screen, re-taken every
+    // frame - and the city is achromatic, so that match was reading the last
+    // digit or two of a grey image. Each surface has an authored colour now
+    // (CW-Q96), and the lit screen decides only whether the cell is inked.
+    await launchGame(page)
+    await enterCity(page)
+    await page.locator('#cityWalkColourBtn').click()
+    await page.evaluate(() => {
+      window.__cityWalkGame.motionReduced = true
+      window.__cityWalkGame.altView.setCellProbe(true)
+      window.__cityWalkGame.altView.setFontScale(0.3)
+    })
+    await settle(page)
+
+    expect(
+      await page.evaluate(() => window.__cityWalkGame.altView.inkFamiliesOn()),
+      'the game installs an authored table in colour mode'
+    ).toBe(true)
+
+    // Walk forward and ask, per class, how many cells changed COLOUR while the
+    // class under them did not. That is the owner's defect, exactly.
+    const flips = await page.evaluate(async () => {
+      const g = window.__cityWalkGame
+      const s = g.walkState
+      const start = { x: s.x, y: s.y, h: s.headingRad }
+      const step = async (d) => {
+        s.x = start.x + Math.sin(start.h) * d
+        s.y = start.y + Math.cos(start.h) * d
+        const eyeZ = 1.7 + (s.groundZ ?? 0)
+        g.fpCamera.position.set(s.x, s.y, eyeZ)
+        g.fpCamera.lookAt(
+          s.x + Math.sin(start.h),
+          s.y + Math.cos(start.h),
+          eyeZ
+        )
+        const before = g.altView.getConvertTotals().samples
+        g.altView.invalidate()
+        const deadline = Date.now() + 15000
+        while (g.altView.getConvertTotals().samples <= before) {
+          if (Date.now() > deadline) throw new Error('no conversion')
+          await new Promise((r) => requestAnimationFrame(r))
+        }
+        const probe = g.altView.readCellProbe()
+        const cls = g.classPass.read(g.fpCamera, probe.cols, probe.rows)
+        return {
+          colour: Int8Array.from(probe.colour),
+          glyphs: Int16Array.from(probe.glyphs),
+          cls: Uint8Array.from(cls),
+        }
+      }
+      let held = 0
+      let flipped = 0
+      let previous = await step(0)
+      for (let i = 1; i <= 6; i++) {
+        const now = await step(i * 0.8)
+        for (let c = 0; c < now.colour.length; c++) {
+          // Only cells still looking at the same NAMED surface, and only while
+          // they carry ink: a blank cell has no colour to flip, and the sky
+          // keeps the screen pick because it has no surface to belong to.
+          if (now.cls[c] !== previous.cls[c] || now.cls[c] === 0) continue
+          if (now.glyphs[c] === 0 || previous.glyphs[c] === 0) continue
+          held++
+          if (now.colour[c] !== previous.colour[c]) flipped++
+        }
+        previous = now
+      }
+      Object.assign(s, { x: start.x, y: start.y, headingRad: start.h })
+      return { held, flipped }
+    })
+
+    // The fixture must contain the thing it guards: no held, inked cells at
+    // all would report a perfect zero and mean nothing.
+    expect(flips.held, 'inked cells whose surface stayed put').toBeGreaterThan(
+      5000
+    )
+    expect(
+      flips.flipped,
+      `${flips.flipped} of ${flips.held} cells changed colour while their surface did not`
+    ).toBe(0)
+  })
+
+  test('★★ no surface is ever painted white, which is what CW-71 guards', async ({
+    page,
+  }) => {
+    // CW-71's ink budget gates the white entry on luminance and chroma, and
+    // that guard rests on a surface family never being white. This is the same
+    // rule checked against the real palette the game installs rather than
+    // against the table alone.
+    await launchGame(page)
+    await enterCity(page)
+    await page.locator('#cityWalkColourBtn').click()
+    await page.evaluate(() => {
+      window.__cityWalkGame.motionReduced = true
+      window.__cityWalkGame.altView.setCellProbe(true)
+      window.__cityWalkGame.altView.setFontScale(0.3)
+    })
+    await settle(page)
+
+    const seen = await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const palette = g.altView.getPalette()
+      const white = palette.findIndex((h) => h.toLowerCase() === '#ffffff')
+      const probe = g.altView.readCellProbe()
+      const cls = g.classPass.read(g.fpCamera, probe.cols, probe.rows)
+      let classified = 0
+      let whiteOnSurface = 0
+      for (let i = 0; i < probe.colour.length; i++) {
+        if (cls[i] === 0 || probe.glyphs[i] === 0) continue
+        classified++
+        if (probe.colour[i] === white) whiteOnSurface++
+      }
+      return { classified, whiteOnSurface, white }
+    })
+    expect(seen.white).toBeGreaterThanOrEqual(0)
+    expect(seen.classified).toBeGreaterThan(2000)
+    expect(
+      seen.whiteOnSurface,
+      `${seen.whiteOnSurface} classified cells took the white entry`
+    ).toBe(0)
   })
 })

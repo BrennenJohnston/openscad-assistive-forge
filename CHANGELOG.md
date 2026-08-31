@@ -9,6 +9,265 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Seven real landmarks per city, chosen by hand** (CW-78) - the landmark list used to be
+  arithmetic over map tags, which filled Seattle's legend with hotels and put the Space Needle
+  eleventh of twelve. Each city now carries seven landmarks drafted from its own landmark
+  register - Seattle's Landmarks Preservation Board list, Denver's landmark register, the
+  Albuquerque Landmarks Commission, Heritage Burnaby - in a fixed order, each row keyed to its
+  map element and cited in `docs/CITY_WALK_LANDMARKS.md`. A row that loses its map element in a
+  rebake fails a test instead of quietly shortening the legend. The old scoring survives for a
+  city without a table, with a mapped wikidata identity now breaking ties
+
+- **The Seattle Great Wheel exists** (CW-78) - the legend's number-two row had no body at all: the
+  wheel is mapped as a point, not a building, and only buildings were drawn. It stands on Pier 57
+  now at its published 175 ft - a closed rim, spokes, a hub, A-frame legs and a boarding platform,
+  the wheel's plane running along the pier so the circle reads from Alaskan Way the way the real
+  one does. The rim's diameter is drawn from the height by a stated ratio, because no primary
+  source publishes it
+
+- **The Space Needle has its saucer** (CW-78) - the map carries the shaft as narrow prisms, so
+  from a distance the Needle read as a radio mast. The published numbers are drawn in above the
+  legs now: the flare from the waist, the 42 m top house at the observation level, the halo ring,
+  and the spire to the full 605 ft
+
+- **A touchable waypoint at every landmark** (CW-78) - each of the seven gets a man-in-circle mark
+  on a plinth, standing on public pavement at the landmark's street face: a bright ring around an
+  exact-black core with the figure inside, at least five character rows tall from 40 m at the
+  default size. Walk into it and the game announces the landmark by name and ticks the legend - a
+  physical thing a cane-line walk runs into, not only a ring on the map
+
+- **Every city starts near its first landmark** (CW-78) - Seattle spawns within 200 m of the Great
+  Wheel, facing it; the other cities spawn near the first row of their table. The walk opens on
+  the thing the legend leads with instead of a generic downtown corner
+
+### Fixed
+
+- **Teleporting to a landmark counts as finding it** (CW-78) - landing beside one seeded the
+  "near" state without the visit, so the legend ticked at whatever later step happened to
+  re-enter the ring. The landing itself marks it now
+
+### Changed
+
+- **In color, every surface now has a color of its own** (CW-92) - a wall used to change color as
+  you walked toward it, sometimes flipping from one color to another all at once across a whole
+  face. The color was being guessed afresh every frame from how the lit screen looked in that
+  cell, and the city itself is drawn in greys, so the guess was reading almost nothing and
+  changing its mind. Each kind of surface has its own color now - foliage, buildings, shop fronts,
+  the roadway, the pavement, signs - and the light on it decides only how bright it is. Walking
+  nineteen metres toward a shop front used to change the color of one cell in nine; it now changes
+  none. The sky is left as it was, because it is not a surface. Nothing about monochrome changes
+
+- **The ground, the paving and the buildings keep their own characters as you walk** (CW-91) -
+  until now a cell's character was chosen from how bright that patch of SCREEN was, so walking
+  re-rolled it constantly and the ground boiled underfoot. The character is now read off the
+  SURFACE itself, in the surface's own coordinates, so a patch of ground or a piece of wall keeps
+  its character while you walk past instead of being redrawn every frame. Measured walking at the
+  Seattle spawn, the ground went from changing thirty cells in every hundred each frame to under
+  one, and the paving to none at all; a real patch of ground followed across a walk now keeps its
+  character 98 times in 100 against 83 before, and a piece of wall 90 times against 85. This was
+  built and measured a release ago and switched off, because reading the surface forced a slower
+  drawing path that halved the frame rate. The graphics card does the reading itself now, so the
+  frame rate is unchanged - 60 either way - and it is on for everybody
+
+- **Building faces are drawn this way too, and it is a trade** (CW-91) - a wall's characters
+  change slightly MORE often per frame than they used to, not less. They are sliding with the
+  wall rather than being re-rolled in place, which is what movement is supposed to look like, and
+  it is why the windows on a building now read as windows from across the street. The choice
+  between a steadier wall and readable windows was made on the pictures, and this is that choice
+
+- **In color, every surface gets its own characters back** (CW-93) - the game gives each kind of
+  surface its own small set of characters, so a road is drawn with characters that lie down, a
+  wall with characters that stand up, and foliage with characters that clump. In color that had
+  never actually happened: every surface was drawn from all ninety-five characters instead, so a
+  tree and the building behind it were made of the same alphabet and a window pattern could run
+  straight across a tree. Trees now look like trees, walls like walls, and paving like paving.
+  Nothing about monochrome changes, and there is nothing new to press. Measured at the spot this
+  was reported from, about seven cells in ten were drawing a character their surface is not
+  allowed; it is now none, and the picture is drawn very slightly faster than before, because each
+  surface has fewer characters to search through
+
+- **Turning color on mid-game now looks the same as starting in it** (CW-93) - switching to color
+  from the toolbar left a monochrome setting behind, and the brightest small things on the street,
+  cars and kerbs, were drawn inside out and from the wrong set of characters because of it.
+  Starting the game already in color never showed this. Both ways in now give the same picture
+
+- **Nothing is left behind when you walk** (CW-89) - characters were staying on screen after the
+  thing that put them there had gone, so walking past a building dragged a faint speckle along the
+  wall behind you. The game holds a character still for a few frames to stop it flickering, and
+  that hold was being applied to cells that had gone dark as well as to cells that had merely
+  changed. It no longer is: a cell the game decides is empty is empty at once, and a cell that
+  lights up takes its character at once. Holding still is for choosing between characters, never
+  for deciding whether there is one. Measured walking, ink left where the game had chosen blank
+  went from about five hundred cells a frame to none
+
+- **Buildings do not hover** (CW-90) - some buildings were drawn starting several storeys above
+  the pavement, so a tower hung in the air with a gap underneath it, and some had an upper half
+  floating clear of their own lower half. Anything that would hover is now built down to whatever
+  is beneath it, or to the ground. The shape above is unchanged; only the hole underneath is
+  filled. Across the four cities this closed seventy-one gaps, including a two hundred metre tower
+  that began eighteen metres up
+
+- **The ground keeps its own characters** (CW-86, groundwork, off by default) - a cell's
+  character has always been chosen by how bright that patch of SCREEN is, so walking re-rolled
+  it constantly and the ground was the worst of it. This adds the other way of choosing: the
+  character is read off the SURFACE itself, in the surface's own coordinates, so a patch of
+  ground keeps its character while you walk past instead of being redrawn every frame. Measured
+  on the ground and the paving it is decisive, and a patch followed across a walk keeps its
+  character 98 per cent of the time against 89. It is switched OFF in this release and nothing
+  you see changes: reading the surface currently forces a slower drawing path that halves the
+  frame rate, which is a price the picture is not worth until the graphics card can do the
+  reading itself. The measurements, and what it looks like, are recorded for review
+
+- **Building faces keep the way they are drawn today, on purpose** (CW-86) - the same technique
+  was measured on walls and shopfronts and cannot be had there yet. A wall only stops being
+  redrawn once the patch of surface behind one character is bigger than the character, and at
+  this size that is also big enough to swallow the windows: the setting that steadies a wall
+  turns it into smooth bands, and the setting that draws the best windows this game has managed
+  steadies nothing. Both were photographed and the pictures are kept
+
+- **Day and Night** (CW-85) - the city has always been characters standing on the page's own
+  black: between one character and the next there was nothing, so a parked car read as a car
+  shape drawn in the air rather than as a solid thing. Day fills those gaps in. Every nearby
+  surface gets a dark tint of its own material painted behind the characters, road slate,
+  pavement tan, a wall the building's own hue, a tree its green, and the picture reads as
+  surfaces you could touch. The sky stays black and the far skyline stays bare, so distance
+  still reads as distance, and the fill fades out over the same range the fog does. It changes
+  no character and no color the game had already chosen: it is paint that goes down first and
+  is covered by them. Press B, or use the Day button in the toolbar. Night
+  is what you get unless you ask, and it is the city exactly as it was
+
+- **An empty city** (CW-85) - press U and the people and the parked cars are gone, so a street,
+  a storefront or a hillside can be looked at on its own. They are taken out of your way as
+  well as out of the picture: the ground they stood on becomes ground you can walk across,
+  rather than leaving you bumping into a car nobody can see
+
+- **Your character size is yours** (CW-88) - the game measures what your machine can hold and used to
+  apply that as a rule: a size you had chosen was raised to the machine's floor when you opened the
+  game, the smaller steps refused to go below it, and the Smaller control switched itself off there.
+  The measurement is now advice. A size you set is remembered and opens where you left it, the size
+  controls reach 10 per cent again, and if the machine measures that it needs a coarser picture than
+  the one you chose it says so and offers the larger size rather than taking the choice away. Stepping
+  below what the machine measured tells you what it costs. 30 per cent is still what you get if you
+  have never chosen, and a machine that cannot hold it still starts you higher
+
+- **A reading taken at 10 per cent no longer decides what 30 per cent can do** (CW-88) - your own size
+  is measured where it stands rather than flipped, so unlocking 10 per cent meant a reading could be
+  taken below the range the game reasons about. A slow reading there was being read as a verdict on
+  the whole range and could store the coarsest floor there is, off one measurement of a size that
+  range does not contain. Smaller cells cost more, not less, so such a pass now decides nothing:
+  nothing is stored and nothing is announced
+
+- **The city is not dark any more** (CW-84) - after playing the deployed build the owner reported the
+  picture was too dark and that frames looked like they were blending together. Three things changed.
+  In colour, the ink floor is gone: it had left 28 per cent of the screen carrying ink where 89 per
+  cent used to, so the sky, the road and the pavement were simply black. The gate that removed the
+  flat white fields stays, so nothing goes back to white. In monochrome the solid bright layer is
+  back, capped, so a lit shopfront reads as a bright block again. And the frame-to-frame memory that
+  stopped the strobing was holding a character on screen for up to a full second, which is what the
+  blending was; it now holds for a sixth of that
+
+
+- **Street lights where the city actually has them** (CW-77) - every lamp in the game was invented,
+  one every 30 metres on every street, because the map's own `highway=street_lamp` nodes were never
+  asked for. They are now: Seattle carries Seattle City Light's surveyed register of 3,679 lit poles
+  and the other three cities carry OpenStreetMap's, and where the map has put a lamp the game no
+  longer invents one beside it. Where the map is silent the spacing follows Seattle's own lighting
+  standard read whole, which is a luminaire every 18 metres on an ordinary street and on a
+  pedestrian street, on alternating sides. Pedestrian streets had no lighting at all before. A
+  street wider than 15 metres carries a facing pair every 76 metres instead
+
+- **The ground under the city, measured** (CW-77) - the extracts now carry a terrain grid sampled
+  from the national 1 metre elevation models (USGS for the three US cities, Natural Resources Canada
+  for Burnaby), so a later release can put Seattle's hills back. Nothing is drawn on it yet. Buildings
+  the map records as being below the street are no longer built up from ground level
+
+- **Roofs are roofs, and nothing floats** (CW-76) - a canopy over a downtown street was built as a
+  solid building from the pavement up, so the roof over 3rd Avenue was a wall across the street, with
+  a lit shop window across its face. 42 of Seattle's 46 roof and bridge ways were built that way, and
+  the same in every other city. A roof is now a thin slab at the height the map gives it, on slim
+  columns where there is room for them, and you can see and walk under it. The Convention Center
+  Arch, whose mapper wrote down both where it starts and where it ends, is unchanged
+
+- **Towers stand on the ground** (CW-76) - Metropolitan Park West Tower began 45 metres in the air,
+  and 32 other buildings in Seattle floated the same way, because the game drew the detailed volumes
+  a mapper had added and stopped drawing the plain outline under them. The outline is now drawn as
+  the podium those volumes stand on. Where a volume genuinely has nothing under it anywhere in the
+  city, it is drawn down to whatever it does stand on
+
+- **Nothing stands in the road** (CW-75) - a tree, a lamp post or a person was placed relative to one
+  street and never asked whether that spot was in the middle of the street it crosses. 474 tree
+  trunks and 373 lamp posts stood on the tarmac in Seattle alone, and hundreds more across the other
+  three cities. Every prop is now tested against every roadway. A tree the map records inside a
+  roadway steps back onto the pavement on its own side of the street, and is only dropped where there
+  is no pavement to take it. Nobody stands in the road unless the map records a crossing there
+
+- **Cars no longer drive through parked cars** (CW-75) - a moving car sat a fixed 1.6 metres in from
+  the kerb and a parked car 1.5 metres, which put the two of them 10 centimetres apart on every kind
+  of street this game parks on: 637 pairs of cars occupied the same ground in Seattle, the nearest of
+  them six metres from where the player starts. The travel lane is now worked out from the road's own
+  width, so a wide street gets a lane each way and a narrow one gets a single shared lane down the
+  middle, with the parked rows left exactly where they were. A street too narrow to hold both a
+  parking bay and a travel lane carries no parked cars
+
+- **A building's ground floor is what the map says it is** (CW-74) - the game decided what kind of
+  shopfront a building had by looking for a cafe or a shop pinned within 35 metres of it, and never
+  looked at the building itself. So the Central Library, which the map plainly labels a library, got
+  its ground floor from a coin toss, along with 130 other buildings in Seattle alone. A building's own
+  label now decides first, the nearest pinned place second, and the coin toss only where nothing at
+  all is known
+
+- **Car parks and churches no longer wear shop windows** (CW-74) - 65 multi-storey car parks, 18 bus
+  shelters and 13 places of worship across the four cities were each given a lit shop window across
+  their base, because the coin toss had no way to say "this building does not have one". They now get
+  a plain wall and no shop sign. Civic buildings - a courthouse, a town hall, a museum - get a lit
+  lobby instead of a shopfront
+
+- **Buildings look like what they are** (CW-73) - a block of flats and an office tower used to have
+  exactly the same chance of every kind of window, because the game picked a facade by hash and never
+  read the one thing the map data actually says. Flats now wear small punched windows in a regular
+  grid, offices wear horizontal bands and glazing bars, shops wear wide letterbox glazing, a church
+  wears one tall slot, and a car park wears open horizontal decks. Where the data says nothing at all
+  - which is most of Albuquerque - the building still chooses from all nine as it always did, so no
+  street becomes uniform
+
+- **Windows fit the wall they are on** (CW-73) - the window grid used to be laid out in world metres,
+  which meant a wall finished halfway through a window and a building finished halfway through a row
+  of them, wherever it happened to stand. Every wall now carries a whole number of windows across and
+  every building a whole number of rows up, the ground floor is kept clear for the shopfront, and a
+  wall too narrow for a single window is left blank instead of being given one wider than itself. A
+  straight wall that the map data happens to have split in the middle is joined back up first, so both
+  halves keep the same rhythm
+
+- **One character size for everyone** (CW-72) - the game used to measure your machine at the door and
+  put you on the size it decided you could hold, so two people playing the same city were not looking
+  at the same picture, and neither was one person on two machines. **Everybody now opens at 30 per
+  cent**, chosen from measured walks rather than from a preference: 45-second walks in heavy rain on a
+  low-end integrated graphics chip, where 30 per cent is the smallest size holding thirty frames a
+  second in both the lightest city and the heaviest. What your machine measures about itself is now
+  only a FLOOR: it can make the picture coarser if it must, never finer, and never a different game
+  from anybody else's. Your own choice of size still wins and is still remembered
+
+- **The floor needs two visits to agree before it moves** (CW-72) - a floor that moved on a single
+  slow reading gave you a different size every time you opened the game on a machine that was
+  sometimes busy. It now takes two consecutive visits that both ask for a coarser picture, one
+  contented visit clears the count, and nothing ever moves the floor down on its own. A size stored by
+  the old calibration that was FINER than the new default is quietly raised to it, because leaving it
+  would have kept that one machine on its own private game
+
+- **The bright layer is gone from the game, and the parks are visible** (CW-72) - the two treatments
+  built and measured in the previous release went to the owner with pictures, and the answer was to
+  remove the solid layer: no cell is painted as a solid block any more, and a lit shopfront is drawn
+  as characters you can see into. Colour mode's ink floor was set to the value that keeps a street
+  readable rather than the one that empties it, and a park's surface was raised out of the near-black
+  it had been sitting in
+
+### Added
+
+- **A placement census you can run** (CW-75) - `node scripts/census-city-walk.mjs` builds all four
+  cities with the real parser and builders and counts what stands where: props per stream, trunks and
+  lamp posts inside a roadway, cars overlapping cars, people in the road away from a crossing,
+  buildings that float and roofs drawn from the ground up
+
 - **Colour mode can say "this cell is dim" for the first time** (CW-71) - monochrome has an intensity
   ladder, so a dim cell is drawn dim and an empty one empty: three to seven per cent of a monochrome
   frame carries ink. Colour had no ladder at all. Every cell was normalised to full brightness before

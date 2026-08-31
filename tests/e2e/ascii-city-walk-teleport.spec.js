@@ -113,10 +113,40 @@ test.describe('ASCII City Walk — teleport (CW-36, CW-40)', () => {
 
     await openMap(page)
 
+    // ★ CW-78 moved the spawn to the waterfront, and the map opens centred
+    // on the player - so a magic viewport fraction that used to land on a
+    // downtown street now lands off it (the first board after the move
+    // landed on unnamed ground and the street-name assertion below went
+    // red). The clicked spot is DERIVED now: centre the map on a real
+    // named-road midpoint at least 100 m away, then click the middle of
+    // the viewport - still the real pointer path this case exists to
+    // exercise, on a spot that names its street wherever the spawn goes.
+    await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const st = g.walkState
+      for (const road of g.model.roads ?? []) {
+        if (typeof road?.name !== 'string' || road.name === '') continue
+        const pts = road.points ?? []
+        for (let i = 1; i < pts.length; i++) {
+          const [ax, ay] = pts[i - 1]
+          const [bx, by] = pts[i]
+          const mx = (ax + bx) / 2
+          const my = (ay + by) / 2
+          if (Math.hypot(mx - st.x, my - st.y) < 100) continue
+          g.mapCam.centerX = mx
+          g.mapCam.centerY = my
+          g.mapCam.follow = false
+          return
+        }
+      }
+      throw new Error('no named road segment 100 m out - the fixture is gone')
+    })
+    await page.waitForTimeout(400)
+
     // The click opens the question and moves NOTHING. That second half is
     // the reversal this release makes, so it is asserted rather than
     // implied by the confirm succeeding afterwards.
-    await clickMap(page, 0.42, 0.34)
+    await clickMap(page, 0.5, 0.5)
     await expect(dialog(page)).toBeVisible()
     expect(dist(await walk(page), start)).toBeLessThan(0.01)
 
@@ -645,6 +675,47 @@ test.describe('ASCII City Walk — teleport (CW-36, CW-40)', () => {
       single,
       'no mid-block spot named a single street - this case measured nothing'
     ).toBeGreaterThanOrEqual(Math.ceil(spots.length / 2))
+  })
+
+  test('★★ landing beside a landmark MARKS it (CW-78) - the tick is the landing, not a later frame', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const before = await page.evaluate(() => [
+      ...window.__cityWalkGame.visited,
+    ])
+
+    await openMap(page)
+    // L centres the crosshair on the first registry landmark; J asks about
+    // the crosshair; Travel goes. The landing snaps to the nearest street,
+    // which for every registry row is inside the 60 m ring.
+    await page.keyboard.press('KeyL')
+    await expect(announcer(page)).toContainText(/Landmark 1 of 7/)
+    await page.keyboard.press('KeyJ')
+    await expect(dialog(page)).toBeVisible()
+    await goBtn(page).click()
+    await expect(dialog(page)).toBeHidden()
+    await expect(announcer(page)).toContainText(/Teleported /)
+
+    const after = await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const wheel = g.landmarks[0]
+      return {
+        visited: [...g.visited],
+        near: g.nearLandmark,
+        distM: Math.hypot(
+          wheel.x - g.walkState.x,
+          wheel.y - g.walkState.y
+        ),
+      }
+    })
+    // The landing itself did the marking - no walking happened in between.
+    expect(before).not.toContain('Seattle Great Wheel')
+    expect(after.distM).toBeLessThan(60)
+    expect(after.near).toBe('Seattle Great Wheel')
+    expect(after.visited).toContain('Seattle Great Wheel')
   })
 
   test('axe: the map view, and the travel dialog open over it (CW-61)', async ({

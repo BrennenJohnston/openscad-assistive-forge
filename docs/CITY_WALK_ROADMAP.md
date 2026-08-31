@@ -189,8 +189,34 @@ to make. Writing the roadmap down is not the same as starting it.
 A picture that stands still and a picture that is being walked through are two
 different things, and only one of them can be judged from a screenshot. Three
 rounds of this game were steered by stills and by a two-centimetre test step,
-and the walk a player actually does is 4.8 m/s. There are now two instruments,
-and they ask different questions.
+and the walk a player actually does is 4.8 m/s. There are now three
+instruments, and they ask different questions.
+
+**`scripts/census-city-walk.mjs`** asks a different kind of question from the
+other two: not what the picture does, but what is IN it. It builds all four
+cities with the real parser and the real builders and counts what stands where.
+
+```
+node scripts/census-city-walk.mjs
+node scripts/census-city-walk.mjs --cities=seattle --samples=6
+node scripts/census-city-walk.mjs --json=build/census.json
+```
+
+It prints one column per city and a sample of coordinates under the table, so a
+row that says 474 can be followed to the street it is on. The rows that matter:
+
+| row | what a non-zero means |
+|---|---|
+| trunks / lamp posts inside a roadway | a prop standing on the tarmac. Both are counted from the obstacle's own square side, never lumped together: a 0.15 m lamp pole is not a tree, and a count that mixes them is a wrong number with a right shape |
+| traffic vs parked, parked vs parked, traffic vs traffic | two cars occupying the same ground, as a true rotated-rectangle overlap rather than a distance |
+| people in a roadway, no crossing | somebody standing in the road where the map records no crossing |
+| floating buildings, roofs solid from the ground | CW-76's subject, measured here so that release inherits a before number it did not take itself |
+
+**It never re-implements a placement.** Every position it judges comes out of
+the builders themselves - `buildStreetProps` writes down every car it places,
+parked and moving alike - and the overlap test is the one the placement streams
+use to refuse a spot. Two copies of a geometry test is how a census comes to
+disagree with the build for a reason that is not a bug.
 
 **`scripts/stability-city-walk.mjs`** asks whether a nearly still picture
 fractures: it scores a 0.05 degree turn and a two-centimetre creep, which is
@@ -444,6 +470,465 @@ because it counted reverse-video cells in the LAST converted frame - a snapshot
 of wherever the walker happened to stop, which swung between 0 and 95,425
 across runs of the same configuration. What the reverse-video layer does over a
 sequence belongs to the sequence instrument, and it is reported per frame pair.
+
+### One size, and a floor
+
+The game used to measure the machine at the door and land it on whichever of
+two sizes it could hold. That made a picture nobody else had: two players of
+the same city were not looking at the same thing, and a screenshot could not be
+compared with anybody's memory of it.
+
+There is one default now - 30 per cent, a 3x6 pixel character cell - and it was
+chosen from the bench rather than from taste. On the signed hardware target, in
+45-second walks in heavy rain, it is the smallest size that holds thirty frames
+a second on a four-times-slower machine in both the lightest city (41.6) and the
+heaviest (43.6); the next size down does not (27 to 30). Ten and twenty per cent
+are the same 2x4 pixel cell here because the font has a three-pixel floor, so
+the ladder is really 10 / 30 / 40 / 50.
+
+What a machine measures about itself is a FLOOR, and the floor SEEDS a player
+who has never chosen a size. It may raise that seed, never lower it, and a
+raise needs two consecutive visits to agree - one slow visit is a busy
+afternoon, two is a machine. A size stored by the old calibration that is finer
+than the default is migrated up to it, or the machine that wrote it would keep
+its private game for ever.
+
+**The floor does not overrule a player who has chosen one.** A size you set is
+yours: it is remembered, the game opens where you left it, and a later
+measurement never moves it. If the machine measures that it needs a coarser
+picture than the one you chose, it says so and offers the larger size instead
+of taking the choice away. Your choice runs the whole range, down to **10 per
+cent** - the same 2x4 pixel cell as 20 per cent, and it costs frames: on the
+four-times-slower proxy 10 per cent measures 26 to 31 frames a second in
+Seattle and 22.8 in Denver, against the thirty the default is chosen to hold.
+That is the trade, and it is yours to make.
+
+One consequence worth writing down: because a chosen size can now sit BELOW the
+30 / 40 / 50 ladder, and because a player's own size is measured where it
+stands rather than flipped, a reading taken at 10 per cent says nothing about
+whether the machine can hold 30. Cost rises as the cells get smaller. Such a
+pass is treated as inconclusive - nothing stored, nothing announced - rather
+than being read as a verdict on a size it never measured.
+
+### What the owner chose when the pictures were on the table
+
+The three treatments of the bright layer, the four settings of the colour ink
+budget and the size were all put to the owner with the measurements and the
+pictures beside each option. The answers:
+
+- **No solid cells at all.** A lit shopfront is drawn as characters. It costs
+  three per cent of the ink in the shopfront band and all of its solidity.
+- **30 per cent**, as above.
+- **Colour's ink floor at 0.3**, which leaves a street you can read, rather
+  than the monochrome rule at 0.5, which empties it to a few lights.
+- **Raise a park's surface above the ink floor**, knowing that puts it brighter
+  than the road. Measured afterwards: the raise takes the share of park cells
+  that draw in colour from 26 to 35 per cent, and then SATURATES - a much
+  brighter tone adds two more points and nothing else. So the tone is set where
+  the gain is, not where the brightness is.
+
+### Facades are a grammar of rows and bays
+
+A facade used to be picked by `hash % 9`, with a mapped `building:material`
+narrowing the choice where there was one, and then laid onto the wall in world
+metres. Two things followed, and CW-73 removes both.
+
+**The map data said which building was which, and nothing read it.** Across the
+four shipped extracts there are 605 `building=apartments`, 266 `commercial`,
+139 `retail`, 91 `office` and 32 `hotel`, and a block of flats had exactly the
+same chance of a curtain wall as an office tower. The type now chooses a
+FAMILY, the material narrows it, and the building's own hash still picks which
+face inside it - so the variety CW-34 bought is kept while the kind of building
+becomes legible.
+
+| family | `building=*` | glazing | storey |
+|---|---|---|---|
+| apartments | apartments, residential, terrace, dormitory | narrow, plain, cross | 3.0 m |
+| house | house, detached, semidetached_house, bungalow, hut, cabin, prefabricated | narrow, blinds | 3.0 m |
+| office | office, commercial, government, public, data_center, bridge | stripes, band, pair | 3.8 m |
+| retail | retail, supermarket, kiosk, shop, mall | wide, band | 4.0 m |
+| hotel | hotel, motel | pair, blinds | 3.2 m |
+| civic | civic, hospital, school, university, college, museum, library, pavilion, fire_station, train_station, transportation, stadium | slot, cross, plain | 4.0 m |
+| church | church, cathedral, chapel, mosque, synagogue, temple | slot | 6.0 m |
+| industrial | industrial, warehouse, shed, service, garage, garages, carport, greenhouse, construction, tower | slot, narrow | 4.5 m |
+| parking | parking | band, stripes | 3.0 m |
+| **mixed (the default)** | `yes`, `roof`, `no`, and anything unlisted | **all nine** | 3.2 m |
+
+The default is deliberately all nine. `building=yes` is the commonest value in
+three of the four cities - 511 of Albuquerque's 640 buildings - so a default
+that named one family would have traded this release's gain for a monoculture
+across most of the city.
+
+**UVs in world metres put a fractional bay at every corner.** The tile started
+wherever the building happened to stand, so a wall of arbitrary width finished
+mid-window and a building of arbitrary height finished mid-row. Now each wall
+run carries a whole number of bays that share it exactly, and the height above
+the reserved ground floor carries a whole number of rows. A wall the data split
+at a node is joined back into one wall first, or the two halves would carry
+different bay widths and the join is where the eye looks. A wall too narrow for
+one bay is left blank rather than given a window wider than itself.
+
+Measured on all four cities, over every fitted volume rather than a sample: the
+worst wall vertex anywhere sits 0.00003 of a row from a row boundary - float
+noise, and the only remaining evidence of the problem. Blank walls are 1.1 to
+2.1 per cent of wall METRES (10.7 to 22.8 per cent of wall COUNT: the blanks
+are short jogs, and counting walls rather than metres overstates them tenfold).
+
+**What it costs.** Nothing per frame and nothing in geometry - the fit is baked
+into the vertex data when the city is built, and the build itself moved from a
+median 207 ms to 210 ms, inside its own spread. What it costs is churn while
+you LOOK: sweeping the view moves the picture horizontally, and the bay rhythm
+is now a different width on every wall instead of one width everywhere, so
+glyph change over a 48-frame yaw sweep rose from 11.75 to 13.18 per cent.
+Walking, where the beat is vertical, improved slightly (2.17 to 2.07), and
+standing is unchanged.
+
+Two ways out were measured and both refused. Rounding the bay count DOWN
+instead of to nearest recovers a fifth of the rise (13.18 to 12.89) and buys
+it with windows up to twice the family's bay width on some walls. And giving
+offices the plain window instead of the curtain wall made it WORSE, not better
+(14.21): a plain pane is one big lit rectangle whose edge sweeps across cells,
+where a striped bay is a dense pattern that looks much the same wherever it
+lands. Fine detail is not automatically the thing that flickers.
+
+### The ground floor reads the building
+
+The storefront picker looked at POI NODES within 35 metres and at nothing else.
+A building carrying `amenity=library` was never asked what it was, so the
+Central Library's ground floor - and 130 other grounded Seattle buildings, and
+27, 44 and 9 in the other three cities - came from a hash of the building's
+index. CW-53 had already carved out one exception, `tourism=hotel`, because a
+hotel is a way in every extract and the POI index only ever sees nodes; that
+exception is now the rule.
+
+The order is the building's OWN TAG, then the nearest POI, then the hash:
+`shop` beats `amenity` beats `tourism`.
+
+★ Only the first half of that order is decided by the data. Exactly three
+buildings in the four extracts carry more than one of the three tags, and only
+one of them resolves differently either way - the Richard Levy Gallery in
+Albuquerque, `shop=art` plus `tourism=gallery`, which gets a shop window rather
+than a gallery lobby. The Central Library carries `amenity=library` AND
+`tourism=attraction` and lands on the same lobby whichever is read first. So
+the amenity-before-tourism half is a stated convention (what a building IS
+beats what it is a destination FOR) with no case in this data to justify it,
+and the unit test that pins it says so rather than pretending otherwise.
+
+**A building with no shopfront now gets no band, and no shop sign either.** The
+biggest single own tag across the four cities is `amenity=parking` with 65
+buildings, followed by `shelter` with 18 and `place_of_worship` with 13. Every
+one of them was taking a hashed shop window across its base - the one answer
+the map data had already ruled out. The values that read as a lit frontage keep
+their band, the civic ones (a courthouse, a town hall, a museum) get the
+library's lobby, and everything else gets a plain wall.
+
+Where every ground floor's answer came from, measured in the running game:
+
+| city | own tag | nearest POI | hash | no band | own tags previously ignored |
+|---|---|---|---|---|---|
+| Seattle | 119 | 591 | 543 | 58 | 131 -> **0** |
+| Denver | 29 | 99 | 148 | 15 | 27 -> **0** |
+| Albuquerque | 27 | 110 | 455 | 22 | 44 -> **0** |
+| Burnaby | 2 | 100 | 321 | 8 | 9 -> **0** |
+
+The hash still decides most ground floors, and that is the right answer where
+the map says nothing at all; what changed is that it no longer decides where
+the map does say something. Seattle loses 2,268 storefront triangles (60,744 to
+58,476) because 58 buildings stopped having a shopfront they never had.
+
+**What it costs.** Nothing measurable. At the spawn's storefront pose, walking,
+glyph change is 7.54 per cent against 7.55 before in monochrome and 9.80
+against 9.79 in colour; the storefront class carries the same 2,193 cells with
+the same 2,156 lit. Standing, the storefront class actually settles better
+(glyph change 0.57 to 0.17, persistence 37.8 to 44.5 frames of 48). The band's
+brightness is untouched - that is the luminance treatment the owner chose at
+G1, and this release does not go near it.
+
+### Lamps where the city has them, and the ground under it
+
+Every street lamp in this game was invented. `highway=street_lamp` was never
+queried, so the 221 lamps OpenStreetMap records inside Seattle's circle, the
+520 in Denver's, the 115 in Albuquerque's and the 142 in Burnaby's were all
+invisible to it, and one procedural lamp stood every 30 metres on every street
+of six road classes - and none at all on a pedestrian street.
+
+Three things changed, and each of them found something.
+
+**The map's own lamps go down first, and claim their stretch.** A procedural
+stream exists to light a street the map is silent about, not to double up on
+one it has already described, so a mapped lamp suppresses the invented ones
+within a share of that street's own interval.
+
+**Seattle carries a surveyed register.** Seattle City Light publishes every
+pole it owns with a "has streetlight" flag, and the owner authorised its use
+(CW-Q76) knowing the publisher states no licence. What it holds inside the
+baked circle:
+
+| | |
+|---|---|
+| poles returned | 4,115 |
+| of them flagged as carrying a streetlight | 3,679 |
+| with a height recorded | 1,366 (the rest record 0, meaning "not surveyed") |
+| nearest-neighbour spacing | p10 8.1 m, **median 16.7 m**, p90 29.1 m |
+
+★ **The service's own count is wrong by five times, and only the geometry says
+so.** `returnCountOnly` and `returnIdsOnly` both report 21,703 poles inside
+that circle. Fetching the features and measuring their distances gives 4,115,
+the furthest at 1,295 m of a 1,300 m radius. The same disagreement holds at
+200 m (1,484 claimed, 170 measured) and 400 m (4,174 claimed, 675 measured).
+The bake believes the features and re-checks every point against the radius
+itself. A count endpoint that cannot be reproduced by the features it counts
+is not evidence.
+
+★ **A surveyed pole register is the first thing able to measure how wide our
+roads really are.** 572 of the 3,679 lit poles stand inside a ribbon this game
+draws - and Seattle City Light does not put poles in traffic lanes, so the
+ribbon is what is wrong. The disagreement splits cleanly by class:
+
+| class | poles inside | median depth | worst |
+|---|---|---|---|
+| primary | 204 | 1.06 m | 6.73 m |
+| secondary | 116 | 0.83 m | 5.36 m |
+| service | 70 | 1.07 m | 1.99 m |
+| residential | 19 | 0.71 m | 2.87 m |
+| **motorway** | **114** | **4.86 m** | **7.89 m** |
+| **trunk** | **9** | **5.53 m** | 6.94 m |
+
+On an ordinary street the two descriptions disagree by about a metre: the game
+ribbon is slightly wider than the real carriageway, and the pole is nudged out
+to the kerb along the ribbon's own outward normal. On the freeway they
+disagree by five, because I-5 runs below grade there and the game draws a flat
+16 metre band across it - those poles are dropped and counted, since moving
+one five metres is inventing a position rather than correcting one.
+
+**Spacing follows the city's own standard.** Seattle Streets Illustrated 3.6:
+a street 50 ft (15.2 m) wide or less takes street lights alternating every
+180 ft (55 m); a wider one takes opposite pairs every 250 ft (76 m); a
+pedestrian street takes luminaires every 60 ft (18 m).
+
+★ **The wide-street rule cannot fire in any of these four cities, and the code
+says so out loud.** Every class this game lights is 14 m or narrower, and the
+only class wider than 15.2 m - motorway - has been deliberately unlit since
+CW-18. The rule is written against the WIDTH rather than the class name so a
+future change reaches it, and a unit test drives it with a synthetic 18 m road,
+because a rule nothing exercises is a rule nobody has tested.
+
+★ **And the standard says one more thing than this release implements.** Its
+full sentence is "street lights alternating every 180 ft, **pedestrian lights
+between them at 60 ft**" - so on a real Seattle street a walker passes a
+luminaire every 18 m, not every 55. That is exactly what City Light's register
+measures: a median of 16.7 m. This release lights ordinary streets at the
+street-light interval only, which is what its plan specified, and the
+consequence is that the three cities with no surveyed register get about half
+the lamps they had. Seattle does not, because its register supplies the real
+ones. The choice between the two readings is an owner question with the
+numbers now attached to it.
+
+**The ground, sampled but not yet drawn.** The extracts also carry a terrain
+grid, so a later release can put Seattle's hills back:
+
+| | |
+|---|---|
+| source | USGS 3DEP (EPQS) for the three US cities; NRCan CDEM/HRDEM for Burnaby |
+| licence | public domain / Open Government Licence - Canada, both written into the file |
+| grid | 30 m, square, centred on the city, clipped to the bake radius |
+
+★ **A burst is not a throughput.** Forty samples measured 21 per second at
+concurrency 8 and 41 at 16. Two hundred sustained samples, same machine, same
+minute, measure 1.2, 1.8 and 4.3 - the first numbers were the connection pool
+warming up. The grid step is 30 m rather than 20 because of the second set:
+5,913 points for Seattle instead of 13,273, for a difference no 3x6 pixel
+character cell can show.
+
+★ **HTTP 200 is not an answer.** EPQS returns 200 with an empty body often
+enough to hit once inside the first 2,000 points of a Seattle bake, and an
+unguarded `await response.json()` threw out of the worker, out of `Promise.all`
+and out of the whole script, twenty minutes in. An unreadable body is now a
+retryable failure like any other, and the sample cache is flushed as it goes
+so a crash costs nothing.
+
+★ **A gate that cannot see its own warnings is not a gate.** The bake refuses
+to write an extract if Overpass or the sampler reported a problem - and the
+first version of that check filtered its input for `/WARNING:|ERROR:/`, which
+none of the sampler's own messages contain. A unit test asked what the pattern
+actually matched and the answer was "not our own warnings". Any reported
+problem is now fatal.
+
+### What is behind the characters
+
+Until CW-85 the answer was: nothing. A cell the converter leaves blank is the
+page's own black, and the only solid paint in the game is the bright
+reverse-video layer. So a parked car was a car-shaped arrangement of characters
+with the void showing between them, and a wall was a hatch you could see
+through. The reference this project works from does the opposite on nearby
+surfaces: it fills those gaps with a dark tint of the material the ray hit,
+road slate, pavement tan, a trunk brown, and leaves the sky and the far skyline
+bare. The owner asked for that as a toggle. It is key **B**, it is called Day,
+and Night is what you get unless you ask for it.
+
+The layer is deliberately not a decision. Everything else the converter does to
+a cell is a CHOICE about that cell - which character, which palette entry,
+solid or not. This is paint that goes down before the character and is covered
+by it. It is computed after every glyph is already chosen and cannot be read by
+anything that chooses one, which is why "Day changes no character" is a fact
+about the shape of the code rather than a promise somebody has to keep. An
+end-to-end case still checks it cell for cell, because claims about the order
+of code are exactly the kind that quietly stop being true.
+
+The distance fade needed a channel. The class pass has always rendered the
+scene's surface classes into a texture's red channel; it now writes linear view
+depth, in metres, into the blue one. Linear rather than the depth buffer it
+already carried: that one is the non-linear curve the GPU needs for occlusion,
+and a tint faded on it would collapse inside the first few metres and then
+barely move for two hundred. Green is left free on purpose for the release
+after this one.
+
+★ **The tint source was decided by steadiness, not by taste.** Two were built
+and photographed against the same scene: a per-class table, and the cell's own
+colour driven down to a low luminance. The pictures were arguable. The numbers
+were not. Over a look of 1.5 degrees per frame, the per-class table changes
+12.23 per cent of its backings per frame and the sampled colour changes 17.06,
+against a floor of 7.12 per cent for the class map itself. The sampled source
+loses because it inherits the converter's per-cell colour decision, and that
+decision re-rolls - which is the churn this whole part of the document is
+about. The class table shipped.
+
+★ **The first version of that comparison measured one thing twice.** It rebuilt
+the backing from the development cell probe, which carries glyphs, intensity
+and luminance but not the palette or the colour indices, so the sampled arm
+silently fell back to the class table and both rows printed 12.23 per cent,
+identical to two decimal places. Two arms agreeing that exactly is the tell.
+The rewrite drives both through the same public entry point the real layer uses
+and asserts they differ before it reports a difference: they differ on 95.6 per
+cent of cells.
+
+★ **Painting behind a character takes contrast away, and amber is the binding
+case.** Today every glyph sits on pure black, which is the most contrast a
+screen can give, so every tint is bounded by measurement rather than by eye. A
+unit guard drives every palette entry against every tint at the dimmest ink the
+monochrome ladder ships and holds 4.5:1. Green carries a backing up to a drive
+of 0.180; amber only to 0.080, because amber's ink is itself much darker and
+the gap between ink and backing closes more than twice as fast. Each phosphor
+therefore gets its own table, and the consequence is worth saying plainly: in
+monochrome the backing is a good deal fainter in amber than in green, and
+fainter in both than in colour. That is a contrast bound, not a preference, and
+it cannot be turned up without taking legibility away from a player who has no
+other cue.
+
+★ **The performance bar was missed, and the release says so.** Filling a cell
+is about 1.1 million pixel writes per conversion at 30 per cent, and it costs
+4.2 milliseconds against a bar of 1.5. Two rewrites were measured and neither
+helped. Filling each row run with the array's own `fill` is five times WORSE,
+because a three-pixel run costs far more to ask for than to write by hand and
+the call happens roughly four hundred thousand times a frame. Sweeping along
+the scanline with the column geometry hoisted out of the inner loop lands
+within a twentieth of a millisecond of where it started. The cost is the memory
+traffic itself. Banding the fill by distance was the planned answer and cannot
+save it either: 79 per cent of the cells on screen are inside 60 metres, so the
+band would have to pull in to 15 or 20 metres, which backs the ground at your
+feet and leaves the street bare.
+
+What makes that acceptable is what the toggle already was. Day is off unless
+asked for, and at Night the layer returns nothing on its first line and the
+painter takes exactly the path it took before, so a player who does not want
+this pays nothing at all for it. A player who turns it on gives up about one
+frame per second. The bar was not moved to fit the result; it is recorded as
+missed.
+
+The same release empties the city, on key **U**. It hides the people and the
+parked cars, and it takes their footprints out of the collision grid at the
+same time. That second half is the one that is easy to forget and worse to get
+wrong: an empty street you cannot walk down, because you are bumping into cars
+nobody can see, would be a broken city rather than a quiet one.
+
+
+### Where a character comes from
+
+Everything above this section measures how much the picture moves. This one is
+about why it moves at all.
+
+A cell's character is chosen by matching the brightness of that patch of SCREEN
+against the shape of every character the cell is allowed. Nothing in that
+sentence mentions the world. Walk 16 centimetres and the patch of screen is
+looking at a slightly different patch of wall, so the match can come out
+differently, and the character changes although nothing in the city did. That
+is the churn this whole part of the document has been circling: 8 per cent of
+facade cells and 23 per cent of ground cells every single frame, at a walking
+pace. The frame-to-frame memory added in CW-68 does not stop it happening; it
+holds the old character over the top, and the hold is what read as a trail.
+
+The reference this project works from never had the problem, because it chooses
+a character by looking up the texture of whatever the ray hit, in the surface's
+own coordinates. Its characters belong to the surface. Ours belong to the
+screen.
+
+So the class pass now renders a second thing beside the surface class: a GLYPH
+FIELD, one value per cell, read from the surface's own texture at the point the
+cell is looking at. The converter can take an anchored cell's character from
+that value instead of from the screen, and still uses the lit cell for
+everything else - whether the cell draws at all, how bright, what colour.
+
+★ **The field is deliberately coarse, and that is the mechanism rather than a
+compromise.** At the texture's own resolution a patch is a few centimetres, a
+cell forty metres away covers hundreds of them, and the smallest camera move
+slides onto a different one - the character would re-roll exactly as before.
+What makes a character belong to a wall is that a patch of wall about the size
+of a cell shares one value.
+
+★ **And that is why the facade cannot have this yet.** The lattice that holds a
+wall still is the lattice that erases its windows, because at this character
+size a window is about one cell across. Measured over a twenty-four frame walk,
+characters changing per frame:
+
+| lattice | wall | shopfront | ground | paving |
+| ------- | ---- | --------- | ------ | ------ |
+| screen (as shipped) | 6.52 % | 2.57 % | 3.12 % | 0.49 % |
+| 64 squares | 7.28 % | 4.25 % | 0.27 % | 0.01 % |
+| 16 squares | 4.77 % | 0.01 % | 0.00 % | 0.01 % |
+| 8 squares | 0.90 % | 0.01 % | 0.00 % | 0.01 % |
+
+At eight the wall is seven times steadier than the memory manages and the
+facade has become smooth diagonal bands with no windows in it. At sixty-four
+the windows read better than anything this game has drawn and the wall is no
+steadier than before. That is not a setting anybody has failed to find. It is
+the reference's character size: theirs is about six times the area of ours, so
+a window spans several of their cells and only a fraction of one of ours.
+
+So the facade keeps the way it is drawn today, and the surfaces whose texture
+is a dither rather than a structure - ground, paving, greenspace - take theirs
+from the world, where there is nothing to lose. Against a control that changes
+the drawing path but not the anchoring, the ground goes from 1.17 to 0.27 per
+cent per frame, the paving from 1.15 to 0.01, and the wall and the shopfront
+come out bit for bit identical, which is how the scoping is checked rather than
+asserted.
+
+★ **A low rate of change is not proof, so it is not what this rests on.** A
+picture frozen to the screen would score just as low while being exactly wrong.
+The claim is checked instead by following real points on the ground: forty-five
+of them, projected into the cell grid every frame as the walker advances. A
+point keeps its character 98.5 per cent of frame pairs with anchoring on,
+against 88.9 per cent without. The character stays with the ground.
+
+★ **It ships switched off, and the reason is not the feature.** The anchored
+choice is an index into a list - cheaper than the nearest-shape search it
+replaces - but the shader that normally does that search is not handed the
+field value, and there is no room beside what it already carries. So anchoring
+currently falls back to the slower path that runs on the processor, and that
+path halves the frame rate: 59.6 to 29.6 frames per second, conversion 25.1 to
+59.8 milliseconds, measured alternating on the same machine in one session.
+None of that is the price of anchoring. It is the price of anchoring before the
+graphics card has been taught it, and teaching it is a piece of work in its own
+right.
+
+Two older faults surfaced while forcing that path, both invisible until
+something did. Converting on the processor crashed on the first colour frame it
+had ever been asked for, because it read a drive-level array that only exists in
+monochrome, where the graphics path had always guarded the same line. And the
+renderer decided the graphics card was drawing the scene while the sampler had
+already fallen back, so the processor read a canvas nothing had been drawn onto
+and every cell came back black. The instrument refused the measurement rather
+than reporting a tidy set of zeroes, which is exactly what it is for.
+
 
 ## What this document is not
 

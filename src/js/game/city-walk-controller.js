@@ -38,10 +38,16 @@ import {
 } from 'three';
 import {
   parseCityExtract,
-  extractLandmarks,
   nearestLandmarkName,
   buildStreetIndex,
 } from './city-data.js';
+import {
+  cityLandmarks,
+  findWaypointSpot,
+  registryFor,
+  WAYPOINT_TOUCH_M,
+  WAYPOINT_LEAVE_M,
+} from './landmark-registry.js';
 import {
   buildCityGroup,
   buildStreetProps,
@@ -87,9 +93,10 @@ import { describeJunction } from './city-junction.js';
 import { readCityProgress, writeCityProgress } from './city-progress.js';
 import { initAltView } from '../_hfm.js';
 import {
-  CALIBRATION_CANDIDATES,
+  CALIBRATION_FLOOR_LADDER,
   CALIBRATION_SAMPLES_PER_SCALE,
   chooseCalibratedSize,
+  raiseFloor,
   createProbePhase,
   decodeCalibration,
   encodeCalibration,
@@ -109,6 +116,7 @@ import {
   LUMINANCE_LAYER,
   LUMINANCE_LAYER_DEFAULT,
   CITY_PALETTE_INK_BUDGET,
+  CITY_INK_FAMILY,
   MONO_BLOOM_PX,
   MONO_GLOW_FADE,
 } from './hc-palettes.js';
@@ -116,21 +124,29 @@ import {
   buildFireworks,
   buildRain,
   buildTraveler,
+  buildWaypointMarks,
   pickTravelerSpot,
   RAIN_LEVEL_COUNT,
   RAIN_LEVEL_NAMES,
 } from './city-scene.js';
 import { buildCityCameraPanel } from './city-camera-panel.js';
 import { createClassPass } from './city-class-pass.js';
+import {
+  backingTable,
+  buildBacking,
+  sampledTable,
+  SAMPLED_BACKING_DRIVE,
+} from './city-backing.js';
 import { GLYPH_VOCABULARIES } from './glyph-vocabularies.js';
 import {
   safeGetItem,
   safeSetItem,
-  STORAGE_KEY_HFM_FONT_SCALE,
   STORAGE_KEY_CITY_WALK_SPEED,
   STORAGE_KEY_CITY_WALK_FONT_SCALE,
   STORAGE_KEY_CITY_WALK_CALIBRATED_FLOOR,
   STORAGE_KEY_CITY_WALK_COLOUR,
+  STORAGE_KEY_CITY_WALK_DAYLIGHT,
+  STORAGE_KEY_CITY_WALK_EMPTY_CITY,
   STORAGE_KEY_CITY_WALK_MAP_STYLE,
   STORAGE_KEY_CITY_WALK_CAMERA_PANEL,
 } from '../storage-keys.js';
@@ -176,6 +192,14 @@ const FIREWORKS_CALM_MESSAGE =
   'Fireworks over the city, held still because reduced motion is on.';
 /** How long the calm celebration stays up. The plan's ~3 s. */
 const FIREWORKS_STILL_MS = 3200;
+
+// CW-78: the waypoint's words. ACCESSIBILITY-CRITICAL (D-35), flagged DOUBLY
+// in the round text pack. For a blind traveler the touch IS the landmark
+// visit: the plinth is a physical thing the cane-line walk runs into, and
+// this sentence says what was just reached by name. It repeats only after
+// leaving the mark's hysteresis ring, so pressing against the plinth is one
+// sentence, not a stream.
+const WAYPOINT_TOUCHED_MESSAGE = (name) => `Waypoint reached: ${name}.`;
 // Thunder no closer together than this, so it stays an event.
 const THUNDER_GAP_MS = 30000;
 
@@ -701,6 +725,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       'C: high contrast on or off',
       'T: change the theme',
       'O: color on or off (off is a single-color retro screen)',
+      // CW-85 (CW-Q83, CW-Q86). FLAGGED STRINGS (D-35). Both name what the
+      // key DOES rather than the state it leaves you in, because the help
+      // is read from either state.
+      'B: day or night (day fills in nearby surfaces behind the characters)',
+      'U: empty the city of people and parked cars, or bring them back',
       'G: rain off, light, heavy (stays off if you use reduced motion)',
       'P: save a picture of what you can see',
       // FLAGGED STRING (D-35). It says "once you have found every landmark"
@@ -972,6 +1001,102 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   }
 
   /**
+   * Is the backing painted right now? (CW-85, CW-Q83.)
+   *
+   * ABSENT means NIGHT, and Night is the city exactly as it has always been
+   * drawn: characters on the page's own black with nothing behind them. Day
+   * fills the black gaps on nearby surfaces with a dark material tint UNDER
+   * the glyphs, which is what makes a car read as a solid mass rather than as
+   * characters in front of nothing. The owner asked for it as a toggle and
+   * chose Night as the default.
+   *
+   * @returns {boolean}
+   */
+  function daylightIsOn() {
+    return safeGetItem(STORAGE_KEY_CITY_WALK_DAYLIGHT) === 'day';
+  }
+
+  /**
+   * The phosphor this theme paints monochrome with, read from the stylesheet
+   * rather than copied - variant.css owns it, and a copy here would drift.
+   */
+  function monoPhosphor() {
+    const value = getComputedStyle(root)
+      .getPropertyValue('--color-accent')
+      .trim();
+    return /^#[0-9a-f]{6}$/i.test(value) ? value : '#00ff00';
+  }
+
+  /** Day/Night, from B and from the toolbar button (CW-85, CW-Q83). */
+  function flipDaylight() {
+    const next = !daylightIsOn();
+    safeSetItem(STORAGE_KEY_CITY_WALK_DAYLIGHT, next ? 'day' : 'night');
+    syncDaylightControls();
+    // The backing is read at paint time, so nothing has to be rebuilt or
+    // forgotten: one dirty frame is the whole of it.
+    if (state.game) state.game.altView.invalidate();
+    announceInLayer(
+      next
+        ? 'Day. Nearby surfaces are filled in behind the characters.'
+        : 'Night. The characters stand on black, with nothing behind them.'
+    );
+  }
+
+  /**
+   * Are the streets empty right now? (CW-85, CW-Q86.)
+   *
+   * ABSENT means the city is populated, which is how it ships. Empty hides
+   * the people and the cars so the buildings and the street can be looked at
+   * on their own.
+   *
+   * @returns {boolean}
+   */
+  function emptyCityIsOn() {
+    return safeGetItem(STORAGE_KEY_CITY_WALK_EMPTY_CITY) === 'on';
+  }
+
+  /** Meshes an empty city hides. Traffic never reached the collision grid. */
+  const POPULATION_MESHES = new Set(['people', 'cars', 'traffic-cars']);
+
+  /**
+   * Put the city's population in or take it out, PICTURE AND GRID TOGETHER.
+   *
+   * ★ The grid is the half that is easy to forget, and forgetting it is worse
+   * than not building the feature: an empty street you cannot walk down,
+   * because you are bumping into cars nobody can see, is a broken city rather
+   * than a quiet one. So the grid is rebuilt from the buildings and re-stamped
+   * with only the footprints that are not population. `stepWalk` reads
+   * `game.collision` through the game object every frame, so the swap lands
+   * without anything having to be told about it.
+   */
+  function applyEmptyCity(game) {
+    const empty = emptyCityIsOn();
+    game.props?.group?.traverse((obj) => {
+      if (obj.isMesh && POPULATION_MESHES.has(obj.name)) obj.visible = !empty;
+    });
+    const obstacles = empty
+      ? (game.props?.obstacles ?? []).filter((o) => !o.population)
+      : (game.props?.obstacles ?? []);
+    const collision = buildCollisionGrid(game.model);
+    stampObstacles(collision, obstacles);
+    game.collision = collision;
+    game.altView?.invalidate();
+  }
+
+  /** Empty city on/off, from U and from the toolbar button (CW-Q86). */
+  function flipEmptyCity() {
+    const next = !emptyCityIsOn();
+    safeSetItem(STORAGE_KEY_CITY_WALK_EMPTY_CITY, next ? 'on' : 'off');
+    syncDaylightControls();
+    if (state.game) applyEmptyCity(state.game);
+    announceInLayer(
+      next
+        ? 'Empty city. The people and the cars are gone, and you can walk where they stood.'
+        : 'The city is busy again. People and parked cars are back.'
+    );
+  }
+
+  /**
    * The toolbar spec (CW-15). A `hold` entry names an action frame()
    * already reads out of state.keys, so a held button reaches street mode
    * and map mode exactly the way its key does; `press` is the same discrete
@@ -1055,6 +1180,30 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       ],
     },
     {
+      // CW-85: both of these are the owner's own asks, and both get a button
+      // as well as a key - CW-60's promise is that every key has one.
+      //
+      // ★★ ONLY THE SHARED ONE IS HERE. Day is street-only (the map is an
+      // overhead plan with its fog nulled, so there is no distance for the
+      // tint to fade over), and CW-59's rule is that EVERY view-only button
+      // lives in the view zone at the far end and nowhere else. Day sat here
+      // first and the CW-59 guard caught it immediately: hiding it on the map
+      // moved Empty city 48 px, because a width change anywhere left of a
+      // shared button moves that button. The two stay together in the Camera
+      // panel, which is where a mouse user browses them.
+      name: 'Scene',
+      buttons: [
+        {
+          id: 'cityWalkEmptyCityBtn',
+          label: 'Empty city',
+          keys: 'U',
+          press: flipEmptyCity,
+          toggle: true,
+          views: 'both',
+        },
+      ],
+    },
+    {
       name: 'Landmarks',
       buttons: [
         {
@@ -1123,6 +1272,18 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
           label: 'Rain',
           keys: 'G',
           press: cycleRain,
+          toggle: true,
+          views: 'street',
+        },
+        // CW-85: Day is street-only, so by CW-59's rule it belongs in this
+        // zone rather than beside its own key's sibling. Its partner, the
+        // empty city, works in both views and stays in the shared Scene
+        // group; the Camera panel keeps the pair together.
+        {
+          id: 'cityWalkDaylightBtn',
+          label: 'Day',
+          keys: 'B',
+          press: flipDaylight,
           toggle: true,
           views: 'street',
         },
@@ -1285,6 +1446,27 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
    * than assumed: the strip is one row on a wide window and two on a narrow
    * one.
    */
+  /**
+   * The pressed state of the two CW-85 toggles.
+   *
+   * Both are ordinary aria-pressed buttons rather than a radio group: Day and
+   * Night are one thing on or off, and so is an empty city, and a two-option
+   * radio group for a binary is a control that reads as a choice between two
+   * unrelated things.
+   */
+  function syncDaylightControls() {
+    const find = (id) =>
+      state.refs.toolbarButtons?.find((b) => b.spec.id === id)?.btn;
+    find('cityWalkDaylightBtn')?.setAttribute(
+      'aria-pressed',
+      daylightIsOn() ? 'true' : 'false'
+    );
+    find('cityWalkEmptyCityBtn')?.setAttribute(
+      'aria-pressed',
+      emptyCityIsOn() ? 'true' : 'false'
+    );
+  }
+
   function measureToolbar() {
     const { toolbar } = state.refs;
     if (!toolbar) return;
@@ -1311,6 +1493,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
 
     mapBtn?.setAttribute('aria-pressed', mapView ? 'true' : 'false');
     fastBtn?.setAttribute('aria-pressed', state.fastWalk ? 'true' : 'false');
+    syncDaylightControls();
 
     const rainBtn = toolbarButtons.find(
       (b) => b.spec.id === 'cityWalkRainBtn'
@@ -1558,6 +1741,16 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     const orthoCamera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 2000);
     orthoCamera.up.set(0, 1, 0);
 
+    // CW-85: the backing's own state, kept beside the cameras because that is
+    // the scope its provider closes over. The lookup table is rebuilt only
+    // when the mode or the phosphor moves - fifteen entries per converted
+    // frame would be work for nothing - and the cell buffer is reused.
+    let backingKey = '';
+    let backingLut = null;
+    let backingBuf = null;
+    let sampledKey = '';
+    let sampledLut = null;
+
     const city3d = buildCityGroup(model);
     scene.add(city3d.group);
     // Streets are visible in both views since CW-8: dim under the fog at
@@ -1565,8 +1758,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // (city3d.setMapView swaps the tone on toggle).
     const lighting = attachCityLighting(scene, fpCamera);
 
-    // Landmarks (CW-10): beacons on the map, a legend, proximity text.
-    const landmarks = extractLandmarks(model);
+    // Landmarks (CW-10, CW-78): the city's curated seven in table order
+    // where a registry table exists, the scorer where none does. Beacons on
+    // the map, a legend, proximity text.
+    const landmarks = cityLandmarks(model, city.slug);
     // Bright beacon marking the player in the top-down map view, sized
     // relative to the city so it stays visible at map scale.
     const spanM = Math.max(
@@ -1736,13 +1931,48 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     scene.add(traveler.group);
     scene.add(props.group);
     stampObstacles(collision, props.obstacles);
-    const spawn = findSpawn(model, collision);
+
+    // CW-78 (CW-Q71): a touchable waypoint mark at each landmark's street
+    // face. Spots need the props' collision stamped (a mark must not stand
+    // in a parked car) and must be stamped themselves BEFORE the spawn
+    // probe, or the player could start the game inside a plinth.
+    const waypointSpots = landmarks
+      .map((lm) => findWaypointSpot(model, collision, surface, lm))
+      .filter(Boolean);
+    const waypoints = buildWaypointMarks(waypointSpots);
+    scene.add(waypoints.group);
+    stampObstacles(collision, waypoints.obstacles);
+
+    // CW-78's spawn rule: a city with a registry spawns within 200 m of its
+    // table's first row (Seattle: the Great Wheel), so the walk begins in
+    // sight of the thing the legend leads with.
+    const registry = registryFor(city.slug);
+    const spawnAnchor = registry ? landmarks[0] : null;
+    const spawn = findSpawn(
+      model,
+      collision,
+      spawnAnchor
+        ? {
+            nearX: spawnAnchor.x,
+            nearY: spawnAnchor.y,
+            withinM: 200,
+            // A facing spawn needs room to SEE the thing it faces: 60 m
+            // keeps the Great Wheel a wheel instead of legs at the lens.
+            minM: registry.spawnFacesFirstRow ? 60 : 0,
+          }
+        : undefined
+    );
     // CW-44: face down the open street, never into whatever happens to
     // stand north - the bigger Seattle's spawn had a storefront 2.5 m that
     // way, and a first frame nose-to-wall walks the player straight into it.
+    // CW-78: Seattle overrides that with the signed rule - it spawns FACING
+    // the Great Wheel; the other cities keep the clear-heading facing.
     const walkState = createWalkState({
       ...spawn,
-      headingRad: findClearHeading(collision, spawn.x, spawn.y),
+      headingRad:
+        registry?.spawnFacesFirstRow && spawnAnchor
+          ? Math.atan2(spawnAnchor.x - spawn.x, spawnAnchor.y - spawn.y)
+          : findClearHeading(collision, spawn.x, spawn.y),
     });
     // CW-50: arriving is not walking, so the ground under a spawn is taken
     // whole rather than climbed up to.
@@ -1787,6 +2017,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       mapCam,
       speedLabel,
       landmarks,
+      // CW-78: the street-level waypoint marks and the touch hysteresis.
+      waypoints,
+      waypointSpots,
+      touchedWaypoint: null,
       // CW-27: named road segments, indexed once at city build.
       streetIndex: buildStreetIndex(model.roads),
       streetName: null,
@@ -1830,12 +2064,26 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       gpuSample: true,
       // The provider is asked once per conversion, not per rAF: the class
       // pass only has to run on the frames the converter actually converts.
-      classMapProvider: (cols, rows) =>
-        game.classPass?.read(
-          game.mapView ? orthoCamera : fpCamera,
-          cols,
-          rows
-        ) ?? null,
+      classMapProvider: (cols, rows) => {
+        const map =
+          game.classPass?.read(
+            game.mapView ? orthoCamera : fpCamera,
+            cols,
+            rows
+          ) ?? null;
+        // CW-85: remembered so the backing can reuse this frame's read rather
+        // than rendering the class pass a second time. On the GPU glyph path
+        // this provider is never called at all and the backing reads for
+        // itself, which is the cost Day carries on that path.
+        game.lastClassMap = map;
+        return map;
+      },
+      // CW-86: the glyph field, read off the SAME class frame the line above
+      // just produced. The converter calls this immediately after
+      // classMapProvider within one conversion, so lastField() is that frame's
+      // G channel and not the previous one's - which is the whole reason the
+      // pass exposes it as an accessor rather than returning it.
+      glyphFieldProvider: () => game.classPass?.lastField() ?? null,
       // The same class frame, handed over as a TEXTURE rather than read back
       // to the CPU — on the GPU path the shader samples it directly, so the
       // class pass's own readback disappears too.
@@ -1846,6 +2094,70 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
           rows
         ) ?? null,
       glyphVocabularies: GLYPH_VOCABULARIES,
+      // CW-85 (CW-Q83): the backing. Asked at PAINT time, after every glyph
+      // is already chosen, which is what makes "Day changes no glyph" a fact
+      // about the order of the code rather than a promise.
+      backingProvider: (cols, rows, ctx) => {
+        const { usePalette } = ctx;
+        if (!daylightIsOn()) return null;
+        // Street only. The map is an overhead plan with its fog nulled, so
+        // there is no distance for the tint to fade over and nothing it would
+        // say that the map's own colours do not already say better.
+        if (game.mapView) return null;
+        const pass = game.classPass;
+        if (!pass) return null;
+
+        const light = root.getAttribute('data-theme') === 'light';
+        const palette = light ? 'amber' : 'green';
+        const mono = !usePalette;
+        const phosphor = monoPhosphor();
+        const key = `${palette}|${mono}|${phosphor}`;
+        if (backingKey !== key) {
+          backingKey = key;
+          backingLut = backingTable({ mono, palette, phosphor });
+        }
+
+        let classMap = game.lastClassMap;
+        if (!classMap || classMap.length !== cols * rows) {
+          classMap = pass.read(fpCamera, cols, rows);
+        }
+        // One conversion, one read: dropping it here means the next frame
+        // fetches its own rather than tinting this frame's classes onto the
+        // next frame's picture.
+        game.lastClassMap = null;
+        const depthMap = pass.lastDepth();
+        if (!classMap || !depthMap || depthMap.length !== classMap.length) {
+          return null;
+        }
+        // CW-85's experiment, DEV-only and off unless a measurement turns it
+        // on: tint from the cell's own colour instead of from its class. It
+        // never reaches a player - the switch is not wired to a control and
+        // production strips import.meta.env.DEV - and it exists so the two
+        // sources could be photographed against ONE scene in one run rather
+        // than argued about.
+        let sampled = null;
+        if (
+          import.meta.env.DEV &&
+          window.__cityWalkBackingSource === 'sampled' &&
+          ctx.palette
+        ) {
+          const skey = `${ctx.palette.join(',')}`;
+          if (sampledKey !== skey) {
+            sampledKey = skey;
+            sampledLut = sampledTable(ctx.palette, SAMPLED_BACKING_DRIVE);
+          }
+          sampled = sampledLut;
+        }
+        backingBuf = buildBacking({
+          classMap,
+          depthMap,
+          table: backingLut,
+          sampled,
+          colorIndices: sampled ? ctx.colorIndices : null,
+          out: backingBuf,
+        });
+        return backingBuf;
+      },
     });
 
     // Character size (CW-Q10, amended CW-Q39): the game's own saved value
@@ -1858,13 +2170,14 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     const storedCalibration = decodeCalibration(
       safeGetItem(STORAGE_KEY_CITY_WALK_CALIBRATED_FLOOR)
     );
+    // CW-72 (CW-Q75): ONE default size for everyone. What a machine can
+    // measure about itself is a FLOOR - it may make the picture coarser, never
+    // finer, and never a different game from anybody else's. A stored CW-42
+    // landing below the default is migrated up by decodeCalibration.
     game.calibratedFloor = storedCalibration?.floorScale ?? null;
+    game.calibrationPending = storedCalibration?.pending ?? 0;
     game.altView.setFontScale(
-      seedCharScale(
-        savedManualScale,
-        safeGetItem(STORAGE_KEY_HFM_FONT_SCALE),
-        storedCalibration?.defaultScale ?? null
-      )
+      seedCharScale(savedManualScale, game.calibratedFloor)
     );
     syncCellRaster(game);
 
@@ -1917,6 +2230,52 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     game.getLuminanceLayer = () => game.luminanceLayer;
     game.setLuminanceLayer(LUMINANCE_LAYER_DEFAULT);
 
+    /**
+     * CW-86: anchored glyphs on or off - BOTH halves, in one call.
+     *
+     * They are two switches in two modules and they have to move together:
+     * the class pass must render the field into its G channel, and the
+     * converter must be willing to read it. Either alone does nothing at all -
+     * a field nobody samples, or a sampler with no field - and "nothing at
+     * all" is the worst possible way for a prototype to fail, because it looks
+     * exactly like a change that did not help.
+     *
+     * Prototype-first (plan §10.3): this is OFF at start, and only the
+     * instrument and the release's own e2e case turn it on until the
+     * three-column table says whether it earns its place.
+     *
+     * @param {boolean} on
+     * @returns {boolean} what is now in force
+     */
+    game.setAnchoredGlyphs = (on) => {
+      const next = on === true;
+      game.classPass?.setGlyphField?.(next);
+      game.altView.setAnchoredGlyphs?.(next);
+      game.anchoredGlyphs = next;
+      game.altView.invalidate();
+      return next;
+    };
+    game.getAnchoredGlyphs = () => Boolean(game.anchoredGlyphs);
+    /** CW-86 P2: the field lattice, for the sweep that chooses it. */
+    game.setFieldMaxSize = (n) => {
+      const size = game.classPass?.setFieldMaxSize?.(n) ?? null;
+      game.altView.invalidate();
+      return size;
+    };
+    game.getFieldMaxSize = () => game.classPass?.fieldMaxSize?.() ?? null;
+    /** CW-86 P2: restrict the field to these classes, or null for all. */
+    game.setFieldClasses = (ids) => {
+      game.classPass?.setFieldClasses?.(ids);
+      game.altView.invalidate();
+    };
+    // ★★★ CW-91: ON, and it is the game's default now (CW-Q90). CW-86 built
+    // this and shipped it off for one reason - the anchored pick forced the CPU
+    // converter and halved the frame rate - and that reason is gone: the glyph
+    // shader reads the field byte out of the class texture's green channel and
+    // indexes the ladder itself. The owner picked the facade at lattice 64
+    // knowing it does not steady a wall, because at 64 the windows read.
+    game.setAnchoredGlyphs(true);
+
     // CW-71: colour mode's own bright layer. Per instance; the main app's Alt
     // View is not given one. The thresholds are the owner's (CW-Q79).
     game.altView.setPaletteInkBudget?.(CITY_PALETTE_INK_BUDGET);
@@ -1926,6 +2285,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // observer follows live theme/contrast flips (e.g. a system
     // prefers-color-scheme change mid-game).
     applyHcPalette(game);
+    // CW-85 (CW-Q86): a stored empty city has to take effect at OPEN, not
+    // only when the key is next pressed - and it moves the collision grid, so
+    // it runs before the first frame rather than after the player has walked
+    // into somebody who is not there.
+    applyEmptyCity(game);
     game.themeObserver = new MutationObserver(() => {
       applyHcPalette(game);
       game.altView.rebuildGlyphs?.();
@@ -2093,6 +2457,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     const root = document.documentElement;
     if (!colourIsOn()) {
       game.altView.setPalette(null);
+      // CW-92: mono has one phosphor, so there is no family to choose. Cleared
+      // rather than left standing, or a return to colour would arrive with the
+      // other theme's table already in force.
+      game.altView.setInkFamilies?.(null);
       return;
     }
     const light = root.getAttribute('data-theme') === 'light';
@@ -2106,6 +2474,15 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     game.altView.setPalette(light ? HC_PALETTE_AMBER : HC_PALETTE_GREEN, {
       chromaBoost: 5,
     });
+    // ★★★ CW-92 (D-127, CW-Q96): and each surface's colour comes from the
+    // authored table, not from a nearest-palette match on the lit screen. The
+    // two palettes get their own rows because they are different sets - amber
+    // has seven entries, green six - and a class must name an entry that
+    // exists. The boost above still governs the sky and anything the class
+    // pass could not name, which keep the screen pick.
+    game.altView.setInkFamilies?.(
+      light ? CITY_INK_FAMILY.amber : CITY_INK_FAMILY.green
+    );
   }
 
   function unloadCity() {
@@ -2130,6 +2507,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     game.beacons?.dispose();
     game.city3d?.dispose();
     game.props?.dispose();
+    game.waypoints?.dispose();
     game.markerGeom?.dispose();
     game.markerMat?.dispose();
     game.markerInnerGeom?.dispose();
@@ -2221,10 +2599,35 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       return;
     }
 
-    // CW-64: replay the show. Y was free - measured across this file and
-    // walk-controls.js, the letters in use are A C D E F G H J K L M O P Q R
-    // S T U V W X, leaving B, I, N, Y and Z. Only once the city has been
-    // finished, so the key cannot conjure a reward nobody earned.
+    // CW-85 (CW-Q83): Day and Night. B was free - the letters in use across
+    // this file are A C D E F G H J K L M O P Q R S T V W X Y, so B, I, N, U
+    // and Z were the free set, N is spoken for by auto-walk (CW-Q80), and
+    // this release spends B and U. I and Z are what is left.
+    if (event.code === 'KeyB') {
+      event.preventDefault();
+      event.stopPropagation();
+      flipDaylight();
+      return;
+    }
+
+    // CW-85 (CW-Q86): the city with nobody in it.
+    if (event.code === 'KeyU') {
+      event.preventDefault();
+      event.stopPropagation();
+      flipEmptyCity();
+      return;
+    }
+
+    // CW-64: replay the show. Only once the city has been finished, so the
+    // key cannot conjure a reward nobody earned.
+    //
+    // ★ This comment used to carry a letter census that was wrong when it was
+    // written - it listed U as taken and Y as free, and Y is the letter this
+    // very block spends. Re-measured at CW-85 by grepping `'Key[A-Z]'` across
+    // src/ (walk-controls.js binds no keys at all): in use are A B C D E F G
+    // H J K L M O P Q R S T U V W X Y, leaving **I, N and Z**, of which N is
+    // spoken for by auto-walk (CW-Q80). A census in prose goes stale the next
+    // time anybody spends a letter; run the grep.
     if (event.code === 'KeyY') {
       event.preventDefault();
       event.stopPropagation();
@@ -2893,6 +3296,38 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       raw: game.progressRaw,
     });
   }
+
+  /**
+   * CW-78: walking into a waypoint's plinth marks and announces its landmark.
+   *
+   * Distance-based against the stamped plinth cell rather than a collision
+   * callback, because stepWalk stops a walker BEFORE a blocked cell - the
+   * reachable minimum is the pressed-against distance WAYPOINT_TOUCH_M
+   * derives in landmark-registry.js. Hysteresis mirrors nearestLandmarkName's:
+   * one touch is one sentence until the player leaves the ring.
+   */
+  function checkWaypointTouch(game) {
+    const spots = game.waypointSpots ?? [];
+    if (spots.length === 0) return;
+    const { x, y } = game.walkState;
+    let touching = null;
+    for (const spot of spots) {
+      const d = Math.hypot(spot.x - x, spot.y - y);
+      const holding = game.touchedWaypoint === spot.name;
+      if (d <= (holding ? WAYPOINT_LEAVE_M : WAYPOINT_TOUCH_M)) {
+        touching = spot.name;
+        break;
+      }
+    }
+    if (touching && touching !== game.touchedWaypoint) {
+      game.touchedWaypoint = touching;
+      // ACCESSIBILITY-CRITICAL STRING (D-35) — flagged for owner review.
+      announceInLayer(WAYPOINT_TOUCHED_MESSAGE(touching));
+      markVisited(game, touching);
+    } else if (!touching) {
+      game.touchedWaypoint = null;
+    }
+  }
   /**
    * Save what the player is looking at as a PNG (CW-20).
    *
@@ -3147,27 +3582,28 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     const current = game.altView.getFontScale();
     const floor = game.calibratedFloor;
     const floorRaised = Number.isFinite(floor) && floor > CHAR_SCALE_MIN + 1e-9;
-    if (delta < 0 && floorRaised && current <= floor + 1e-9) {
-      // The stop is the calibrated floor, and it says why (CW-Q39). Also
-      // true below the floor (a grandfathered manual choice): calibration
-      // found smaller sizes cannot hold the bar on this machine.
-      announceInLayer(
-        `Character size ${Math.round(current * 100)} percent. Smaller ` +
-          'sizes cannot hold 30 frames per second on this machine.'
-      );
-      return;
-    }
-    // Clamp to the GAME's range before the renderer sees it: the renderer
-    // instance itself accepts down to 0.05, which is below the smallest size
-    // that changes anything on screen. The calibrated floor bounds gestures
-    // only - a stored below-floor manual choice was seeded as-is.
-    const next = clampCharScale(current + delta, floor);
+    // CW-88 (CW-Q87): the calibrated floor no longer STOPS the gesture. It is
+    // what this machine measured, not a rule about what a player is allowed
+    // to look at, and the smallest size is theirs to choose again. The
+    // information in the old refusal was its useful half, so it survives as
+    // an advisory on the step that crosses below the floor. Clamping still
+    // happens here, to the GAME's range: the renderer instance accepts down
+    // to 0.05, which is below the smallest size that changes anything.
+    const next = clampCharScale(current + delta);
+    const crossedBelowFloor =
+      floorRaised && current >= floor - 1e-9 && next < floor - 1e-9;
     game.altView.setFontScale(next);
     syncCellRaster(game);
     game.altView.invalidate();
     safeSetItem(STORAGE_KEY_CITY_WALK_FONT_SCALE, String(next));
     syncCharSizeControls();
-    announceInLayer(`Character size ${Math.round(next * 100)} percent.`);
+    announceInLayer(
+      crossedBelowFloor
+        ? `Character size ${Math.round(next * 100)} percent. This machine ` +
+            `measured ${Math.round(floor * 100)} percent as the smallest size ` +
+            'that holds 30 frames per second.'
+        : `Character size ${Math.round(next * 100)} percent.`
+    );
   }
 
   /**
@@ -3212,7 +3648,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     if (
       !measured &&
       cal.readings.length === 0 &&
-      !CALIBRATION_CANDIDATES.some((s) => sameScale(s, current))
+      !CALIBRATION_FLOOR_LADDER.some((s) => sameScale(s, current))
     ) {
       return current;
     }
@@ -3292,28 +3728,64 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       restoreEntryScale(game);
       return;
     }
-    const result = chooseCalibratedSize(cal.readings);
-    cal.result = result;
-    game.calibratedFloor = result.floorScale;
+    const measured = chooseCalibratedSize(cal.readings);
+    // CW-72: a raise needs two passes to agree, so a machine that was busy
+    // once does not get a coarser picture for ever (the R6 floor-flapping
+    // item). Nothing here lowers a floor.
+    const next = raiseFloor(
+      { floorScale: game.calibratedFloor, pending: game.calibrationPending },
+      measured.floorScale
+    );
+    cal.result = { ...measured, ...next };
+    const raised =
+      Number.isFinite(game.calibratedFloor) &&
+      next.floorScale > game.calibratedFloor + 1e-9;
+    game.calibratedFloor = next.floorScale;
+    game.calibrationPending = next.pending;
     safeSetItem(
       STORAGE_KEY_CITY_WALK_CALIBRATED_FLOOR,
-      encodeCalibration(result)
+      encodeCalibration(next)
+    );
+    // CW-88 (CW-Q87): a measurement never overrides a size the player chose.
+    // The manual key's PRESENCE is what says they chose one (storage-keys.js
+    // says so, and the step handler is its only writer), so this needs no new
+    // marker. Without a saved choice the floor still lands, which is the seed
+    // behaviour CW-Q68 asked for and this release keeps.
+    const chosenBySomebody = Number.isFinite(
+      parseFloat(safeGetItem(STORAGE_KEY_CITY_WALK_FONT_SCALE) ?? '')
     );
     if (cal.manual) {
       restoreEntryScale(game);
-    } else if (!sameScale(game.altView.getFontScale(), result.defaultScale)) {
-      // The calibrated default lands through the renderer only - writing
-      // the manual key here would freeze the calibration as a choice.
-      game.altView.setFontScale(result.defaultScale);
+    } else if (
+      !chosenBySomebody &&
+      game.altView.getFontScale() < next.floorScale - 1e-9
+    ) {
+      // The floor lands through the renderer only - writing the manual key
+      // here would freeze a measurement as if it were the player's choice.
+      // `chosenBySomebody` rather than `cal.manual` because a size chosen
+      // DURING this session must block the override too, and cal.manual was
+      // captured at entry.
+      game.altView.setFontScale(next.floorScale);
       syncCellRaster(game);
       game.altView.invalidate();
     }
     syncCharSizeControls();
-    if (result.fallback) {
-      const pct = Math.round(game.altView.getFontScale() * 100);
+    if (raised) {
+      // ★★ CW-88: say what happened, not what the floor wanted. This branch
+      // announced "Character size raised to N percent" for a manual entry as
+      // well, where N was the size it had just RESTORED - a raise that never
+      // happened, announced to a screen reader as if it had. Now the wording
+      // follows the outcome: the size moved, or it did not and a larger one
+      // is on offer.
+      const scaleNow = game.altView.getFontScale();
+      const leftBelowFloor = scaleNow < next.floorScale - 1e-9;
       announceInLayer(
-        'Small character sizes cannot hold 30 frames per second on this ' +
-          `machine. Character size stays at ${pct} percent.`
+        leftBelowFloor
+          ? 'This machine cannot hold 30 frames per second at your character ' +
+              `size. A larger size of ${Math.round(next.floorScale * 100)} ` +
+              'percent is available, and your size is unchanged.'
+          : 'This machine cannot hold 30 frames per second at the usual ' +
+              `character size. Character size raised to ${Math.round(scaleNow * 100)} percent.`
       );
     }
   }
@@ -3347,12 +3819,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
    */
   function syncCharSizeControls() {
     const game = state.game;
-    const floor = game?.calibratedFloor;
+    // CW-88 (CW-Q87): the stop is the range's own bottom, not the machine's
+    // measured floor. A control disabled at the floor is the clamp wearing a
+    // different coat, and the player's choice now reaches 10 per cent.
     const atFloor =
-      Boolean(game) &&
-      Number.isFinite(floor) &&
-      floor > CHAR_SCALE_MIN + 1e-9 &&
-      game.altView.getFontScale() <= floor + 1e-9;
+      Boolean(game) && game.altView.getFontScale() <= CHAR_SCALE_MIN + 1e-9;
     const setDisabled = (btn, disabled) => {
       if (!btn) return;
       if (disabled) btn.setAttribute('aria-disabled', 'true');
@@ -3464,6 +3935,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     }
     game.lighting.setMapBoost(game.mapView);
     game.beacons.group.visible = game.mapView;
+    // CW-78: the waypoints are street furniture; the map has the beacons.
+    if (game.waypoints) game.waypoints.group.visible = !game.mapView;
     state.refs.legend.hidden = !game.mapView;
     if (game.mapView) {
       // The whole map sits ~1 km from the overhead camera — distance fog
@@ -3666,6 +4139,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       game.walkState.y,
       null
     );
+    // CW-78: landing inside a landmark's ring MARKS it. Before this, the
+    // landing seeded nearLandmark without the tick, so the visit fired at
+    // whatever later movement frame happened to re-enter the ring - the
+    // "random time" the round's brief names. markVisited is idempotent and
+    // announces nothing for a single visit, so a landing beside a landmark
+    // ticks the legend without talking over the landing sentence below.
+    if (game.nearLandmark) markVisited(game, game.nearLandmark);
 
     // ★ THE TRAP THIS RELEASE EXISTS INSIDE OF (Round 4, CW-20). The camera
     // is only re-posed inside a movement step, so a teleport that only moved
@@ -4009,6 +4489,11 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
         // triggers it and a single step can never step PAST the radius - the
         // walk is stepped in hops of PLAYER_RADIUS_M / 2 (CW-48).
         checkTravelerFind(game);
+        // CW-78: and whether you have walked INTO a waypoint. The plinth's
+        // cell blocks, so the walk stops pressed against it - the touch
+        // radius is that pressed-against distance, and the leave radius is
+        // the hysteresis that makes one touch one sentence.
+        checkWaypointTouch(game);
       }
       game.altView.invalidate();
       updateHud();

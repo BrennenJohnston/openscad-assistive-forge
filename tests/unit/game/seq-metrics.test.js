@@ -4,9 +4,12 @@ import {
   foldFrame,
   finishFold,
   classLabel,
+  glyphChar,
   EDGE_CLASS,
+  FIRST_GLYPH_CHAR_CODE,
 } from '../../../src/js/game/seq-metrics.js'
 import { SURFACE_CLASS } from '../../../src/js/game/city-class-pass.js'
+import { FIRST_CHAR_CODE } from '../../../src/js/_hfm-paint.js'
 
 /**
  * CW-67. Every Round 8 verdict about motion is read off this arithmetic, so
@@ -247,6 +250,154 @@ describe('seq-metrics: the labels come from the class pass', () => {
   })
 })
 
+describe('seq-metrics: the vocabulary-mismatch counter (CW-93, D-128)', () => {
+  /**
+   * ★ HAND-VERIFIED BEFORE IT IS BELIEVED, which is the release's own first
+   * step: a planted wall glyph on a tree cell MUST count, and a legal tree
+   * glyph MUST NOT. A counter nobody proved both ways is worth nothing - this
+   * round has already shipped a guard that passed with its subject broken
+   * because its fixture was empty.
+   *
+   * Atlas indices are `charCode - 32`. `|` is 92 and lives only in the wall
+   * row; `o` is 79 and lives only in the tree row; `.` is 14 and is in both;
+   * 0 is the space every vocabulary carries.
+   */
+  const TREE = SURFACE_CLASS.TREE
+  const SKY = SURFACE_CLASS.SKY
+  const BAR = '|'.charCodeAt(0) - 32
+  const OH = 'o'.charCodeAt(0) - 32
+  const DOT = '.'.charCodeAt(0) - 32
+  const VOCABULARIES = {
+    [TREE]: [0, DOT, OH],
+    [WALL]: [0, DOT, BAR],
+  }
+
+  /** One frame of four cells, folded with the ladders above. */
+  function foldOne(frame, options = {}) {
+    const fold = createFold(4, 1, {
+      mono: true,
+      reverseIndex: REVERSE_INDEX,
+      vocabularies: VOCABULARIES,
+      ...options,
+    })
+    foldFrame(fold, {
+      intensity: [1, 1, 1, 1],
+      lum: [0.6, 0.6, 0.6, 0.6],
+      ...frame,
+    })
+    return finishFold(fold)
+  }
+
+  it('counts a wall glyph drawn on a tree cell, and names what it is', () => {
+    const res = foldOne({
+      glyphs: [BAR, OH, DOT, 0],
+      cls: [TREE, TREE, TREE, TREE],
+    })
+    expect(res.mismatch.total).toBe(1)
+    expect(res.mismatch.cells).toBe(1)
+    expect(res.mismatch.perFrame).toEqual([1])
+    expect(res.mismatch.worstCells).toEqual([{ x: 0, y: 0, frames: 1 }])
+    expect(res.mismatch.kinds).toEqual([
+      { on: 'tree', glyph: BAR, char: '|', count: 1, belongsTo: ['wall'] },
+    ])
+  })
+
+  it('does not count a legal glyph, a space, or a class with no row', () => {
+    // cell 1 `o` is the tree's own; cell 2 `.` is in both rows; cell 3 is
+    // blank, and every vocabulary carries the space. Cell 0 is a wall glyph
+    // on SKY, which has no vocabulary at all and falls back to the full atlas
+    // by design - there is no rule there to break.
+    const res = foldOne({
+      glyphs: [BAR, OH, DOT, 0],
+      cls: [SKY, TREE, TREE, TREE],
+    })
+    expect(res.mismatch.total).toBe(0)
+    expect(res.mismatch.kinds).toEqual([])
+    expect(res.mismatch.worstCells).toEqual([])
+  })
+
+  it('exempts a reverse-video cell, and says how many it exempted', () => {
+    // A cell above the reverse threshold is matched against the INVERTED
+    // shape and the FULL atlas on purpose, on both converter paths. Counting
+    // those would report the brightest cells of every mono picture as a
+    // defect forever, so they are exempt - and the exemption is reported
+    // rather than hidden.
+    const res = foldOne({
+      glyphs: [BAR, BAR, OH, OH],
+      intensity: [REVERSE_INDEX, 1, 1, 1],
+      cls: [TREE, TREE, TREE, TREE],
+    })
+    expect(res.mismatch.total).toBe(1)
+    expect(res.mismatch.reverseExempt).toBe(1)
+    expect(res.mismatch.worstCells).toEqual([{ x: 1, y: 0, frames: 1 }])
+  })
+
+  it('does not exempt anything in colour mode, which has no reverse video', () => {
+    // `reverseAt` is Infinity whenever a palette is active (_hfm.js), so no
+    // palette cell is ever reversed and the exemption must not follow a drive
+    // index that happens to collide with the mono reverse slot.
+    const fold = createFold(2, 1, {
+      mono: false,
+      whiteIndex: 5,
+      vocabularies: VOCABULARIES,
+    })
+    foldFrame(fold, {
+      glyphs: [BAR, OH],
+      colour: [REVERSE_INDEX, REVERSE_INDEX],
+      cls: [TREE, TREE],
+    })
+    const res = finishFold(fold)
+    expect(res.mismatch.total).toBe(1)
+    expect(res.mismatch.reverseExempt).toBe(0)
+  })
+
+  it('attributes a mismatch to the class row the cell sits in', () => {
+    const fold = createFold(2, 1, {
+      mono: true,
+      reverseIndex: REVERSE_INDEX,
+      vocabularies: VOCABULARIES,
+    })
+    for (let f = 0; f < 3; f++) {
+      foldFrame(fold, {
+        glyphs: [BAR, DOT],
+        intensity: [1, 1],
+        lum: [0.6, 0.6],
+        cls: [TREE, WALL],
+      })
+    }
+    const res = finishFold(fold)
+    // Three frames, one offending cell, so three (cell, frame) slots.
+    expect(res.mismatch.total).toBe(3)
+    expect(res.mismatch.perFrame).toEqual([1, 1, 1])
+    expect(res.mismatch.cells).toBe(1)
+    expect(res.total.mismatch).toBe(3)
+    const tree = res.perClass.find((row) => row.name === 'tree')
+    const wall = res.perClass.find((row) => row.name === 'wall')
+    expect(tree.mismatch).toBe(3)
+    expect(wall.mismatch).toBe(0)
+  })
+
+  it('reports NOT MEASURED rather than a tidy zero with no vocabularies', () => {
+    // The failure this round keeps re-earning: a guard that reads zero because
+    // its fixture was empty. A caller that hands in no ladders gets null, and
+    // the instrument refuses the run rather than printing a clean 0.
+    const res = foldMono()
+    expect(res.mismatch).toBeNull()
+    expect(res.total.mismatch).toBe(0)
+    expect(
+      createFold(1, 1, { mono: true, vocabularies: {} }).mismatch
+    ).toBeNull()
+  })
+
+  it('reads glyph indices as the atlas does', () => {
+    expect(FIRST_GLYPH_CHAR_CODE).toBe(FIRST_CHAR_CODE)
+    expect(glyphChar(0)).toBe(' ')
+    expect(glyphChar(BAR)).toBe('|')
+    expect(glyphChar(94)).toBe('~')
+    expect(glyphChar(-1)).toBe('?')
+  })
+})
+
 describe('seq-metrics: what it refuses', () => {
   it('refuses a fold that does not say which measurement it is', () => {
     expect(() => createFold(4, 1, {})).toThrow(/options.mono/)
@@ -348,5 +499,49 @@ describe('seq-metrics: the red proof', () => {
     // never moved, on top of cell 0, which actually flipped.
     expect(brokenFlips(MONO_FRAMES)).toBe(3)
     expect(foldMono().total.glyphFlipPct).toBe(25)
+  })
+})
+
+describe('seq-metrics: the face-flip row (CW-92, D-127)', () => {
+  /**
+   * The owner's defect as a number: a cell still looking at the SAME surface
+   * that changes colour index anyway. A cell that swept onto a different
+   * surface is allowed to change colour and must not count, which is the whole
+   * reason the row is conditioned on the class holding.
+   */
+  const WHITE = 5
+
+  it('counts a colour change only where the class held', () => {
+    const fold = createFold(3, 1, { mono: false, whiteIndex: WHITE })
+    // cell 0: same class, colour changes  -> a face flip
+    // cell 1: same class, colour holds    -> the control
+    // cell 2: class MOVES and colour with it -> not a flip
+    foldFrame(fold, { glyphs: [1, 1, 1], colour: [0, 2, 3], cls: [WALL, WALL, WALL] })
+    foldFrame(fold, { glyphs: [1, 1, 1], colour: [1, 2, 4], cls: [WALL, WALL, ROAD] })
+    const res = finishFold(fold)
+    const wall = res.perClass.find((r) => r.name === 'wall')
+    // Cells 0 and 1 held their class over the one pair; cell 2 is an EDGE.
+    expect(wall.faceHeld).toBe(2)
+    expect(wall.faceFlip ?? wall.faceHeld).toBeDefined()
+    expect(wall.faceFlipPct).toBe(50)
+    expect(res.edge.faceHeld).toBe(0)
+    expect(res.edge.faceFlipPct).toBe(0)
+  })
+
+  it('reads zero for a picture whose colours never move', () => {
+    const fold = createFold(2, 1, { mono: false, whiteIndex: WHITE })
+    for (let i = 0; i < 3; i++) {
+      foldFrame(fold, { glyphs: [1, 1], colour: [2, 3], cls: [WALL, WALL] })
+    }
+    const res = finishFold(fold)
+    const wall = res.perClass.find((r) => r.name === 'wall')
+    expect(wall.faceHeld).toBe(4)
+    expect(wall.faceFlipPct).toBe(0)
+  })
+
+  it('is not measured in mono, which has no colour index', () => {
+    const res = foldMono()
+    expect(res.total.faceHeld).toBe(0)
+    expect(res.total.faceFlipPct).toBe(0)
   })
 })

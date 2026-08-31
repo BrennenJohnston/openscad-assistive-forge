@@ -104,6 +104,18 @@ const DEFAULTS = {
   // exists there: the CW-71 ink budget is inert in monochrome, so a bench of
   // it without this measures nothing at all.
   colour: 'off',
+  // --daylight=on runs with CW-85's backing painted. It is a per-cell fill
+  // under the glyphs, so it is the one thing in the converter that costs
+  // paint time without changing a single glyph decision - the only way to
+  // price it is to run the same walk twice.
+  daylight: 'off',
+  // CW-86: --anchored=on takes ground, paving and greenspace glyphs from the
+  // surface. It currently forces the CPU glyph path, so this is the flag that
+  // prices that path as much as it prices the anchoring.
+  anchored: 'off',
+  // CW-92: `--ink-families=off` reinstates the per-frame nearest-palette match,
+  // so the authored table has an A-B-B-A of its own. Colour mode only.
+  inkFamilies: '',
   // --ink-budget sets the CW-71 palette ink budget for every run: `off`, or
   // `floor,whiteLum,whiteChroma`. Empty leaves the game's own. Only palette
   // mode is affected, so pair it with a colour run.
@@ -318,6 +330,62 @@ async function benchCity(page, cdp, city, variant, opts, runIndex) {
     )
   }
 
+  // ★ A DAY BENCH THAT QUIETLY RAN AT NIGHT would price nothing and read as
+  // proof the backing is free, so check the PAINT rather than the setting.
+  //
+  // Not hasBackingProvider(): the game installs its provider once and that
+  // provider returns null while Night is on, so it answers true either way
+  // and would have waved a Night run through wearing a Day label. What Day
+  // actually does is fill the blank cells, so the share of the canvas
+  // carrying paint is the thing to ask. Measured at the spawn at 30 %:
+  // 27-57 % at Night against 85-95 % under Day, so 0.7 sits in a 30-point
+  // gap rather than near either side.
+  // CW-86: and the same rule - ask what is IN FORCE, not what was requested.
+  if (opts.inkFamilies) {
+    const want = opts.inkFamilies === 'on'
+    const got = await page.evaluate((on) => {
+      const game = window.__cityWalkGame
+      if (typeof game.altView.setInkFamilies !== 'function') return null
+      if (!on) game.altView.setInkFamilies(null)
+      return game.altView.inkFamiliesOn()
+    }, want)
+    if (got !== want) {
+      throw new Error(
+        `--ink-families=${opts.inkFamilies} but the game answered "${got}"`
+      )
+    }
+    console.log(`ink families: ${want ? 'AUTHORED' : 'off (the screen pick)'}`)
+  }
+
+  const anchored = await page.evaluate((want) => {
+    const g = window.__cityWalkGame
+    if (typeof g.setAnchoredGlyphs !== 'function') return null
+    return g.setAnchoredGlyphs(want === 'on')
+  }, opts.anchored)
+  if (anchored !== null && anchored !== (opts.anchored === 'on')) {
+    throw new Error(
+      `--anchored=${opts.anchored} but the game answered "${anchored}"`
+    )
+  }
+
+  const painted = await page.evaluate(() => {
+    const cv = document.querySelector('canvas.hfm-overlay-canvas')
+    if (!cv) return null
+    const cx = cv.getContext('2d', { willReadFrequently: true })
+    const d = cx.getImageData(0, 0, cv.width, cv.height).data
+    let on = 0
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i] || d[i + 1] || d[i + 2]) on++
+    }
+    return on / (d.length / 4)
+  })
+  if (painted !== null && (opts.daylight === 'on') !== painted > 0.7) {
+    throw new Error(
+      `--daylight=${opts.daylight} but ${(100 * painted).toFixed(1)}% of the ` +
+        'canvas carries paint, which is the wrong side of the Day/Night gap'
+    )
+  }
+
   const inkBudget = await page.evaluate((arg) => {
     const api = window.__cityWalkGame.altView
     if (typeof api.getPaletteInkBudget !== 'function') return undefined
@@ -528,12 +596,17 @@ async function main() {
     deviceScaleFactor: 1,
     viewport: { width: opts.width, height: opts.height },
   })
-  await context.addInitScript((colourOn) => {
+  await context.addInitScript(({ colourOn, dayOn }) => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true')
     localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
     localStorage.setItem(
       'openscad-forge-city-walk-colour',
       colourOn ? 'on' : 'off'
+    )
+    // CW-85: absent means Night, which is the shipped default.
+    localStorage.setItem(
+      'openscad-forge-city-walk-daylight',
+      dayOn ? 'day' : 'night'
     )
     // CW-42: benches measure the size THEY set. The inert forced-probe map
     // stops the entry calibration on its first frame, and clearing the
@@ -543,7 +616,7 @@ async function main() {
     // its config is still a dead bench).
     window.__cityWalkCalibrationForce = {}
     localStorage.removeItem('openscad-forge-city-walk-calibrated-floor')
-  }, opts.colour === 'on')
+  }, { colourOn: opts.colour === 'on', dayOn: opts.daylight === 'on' })
   const page = await context.newPage()
 
   try {

@@ -43,6 +43,10 @@
 //     a ghost. The ink condition is not fussiness: two blank cells of
 //     different classes draw the same nothing, and counting those would bury
 //     the guard under a baseline it can never move.
+//   * ★ MISMATCH (CW-93) is the one column here that has a RIGHT ANSWER. Every
+//     other number is a description; this one is a defect count. See the block
+//     above `createMismatch` for what it means and what it deliberately does
+//     not count.
 //
 // Every count is folded incrementally so a long sequence costs one pass per
 // frame and no per-frame allocation beyond the two copies it must keep.
@@ -71,6 +75,101 @@ const LABEL_BY_ID = new Map(
 export function classLabel(id) {
   if (id === EDGE_CLASS) return 'EDGE(class moved)';
   return LABEL_BY_ID.get(id) ?? `class${id}`;
+}
+
+/**
+ * The character an atlas index stands for.
+ *
+ * Declared here rather than imported from `_hfm-paint.js` so this module stays
+ * the leaf its own header promises - `_hfm-hysteresis.js` declares SPACE_GLYPH
+ * for the same reason. A guard case asserts it IS that module's
+ * FIRST_CHAR_CODE, so the copy cannot drift without a red test.
+ */
+export const FIRST_GLYPH_CHAR_CODE = 32;
+
+/** How many atlas slots a flag table covers. The atlas itself has 95. */
+const GLYPH_SLOTS = 128;
+
+/**
+ * @param {number} glyph an atlas index
+ * @returns {string} the printable character, or `?` for an index off the atlas
+ */
+export function glyphChar(glyph) {
+  if (!Number.isInteger(glyph) || glyph < 0 || glyph >= GLYPH_SLOTS) return '?';
+  return String.fromCharCode(FIRST_GLYPH_CHAR_CODE + glyph);
+}
+
+/**
+ * ★★★ CW-93 (D-128): THE VOCABULARY-MISMATCH COUNTER, and what it means.
+ *
+ * The owner photographed a building's window pattern drawn onto the underside
+ * of a street tree. Every other column in this file describes a picture; this
+ * one asks a question with a right answer: **is this cell drawing a character
+ * its own surface is not allowed to draw?** A wall glyph on a TREE cell is
+ * exactly the reported artefact, and nothing legitimate produces one - the
+ * class pass says TREE, `glyph-vocabularies.js` says a TREE cell may only be
+ * one of ` .,^*oO&%@8wvV`, and both converter paths search that list and
+ * nothing else. So a non-zero count is a defect, not a description, and the
+ * release's bar is zero.
+ *
+ * WHAT IT DELIBERATELY DOES NOT COUNT, because each is the code working:
+ *
+ *   * A REVERSE-VIDEO cell (mono only). A cell above the reverse threshold is
+ *     painted as solid phosphor with its glyph knocked out, and BOTH paths
+ *     match it against the INVERTED shape and the FULL 95-glyph vocabulary on
+ *     purpose (`_hfm.js` `if (cellReversed)`, `_hfm-gpu.js` `spanIndex` is
+ *     left at 0 when `reversed`). Counting those would report the picture's
+ *     brightest cells as a defect forever. The exempted count is reported
+ *     beside the mismatch rather than hidden, so the exemption can be seen.
+ *   * A CELL WHOSE CLASS HAS NO VOCABULARY - SKY, and anything the class pass
+ *     could not name. Those fall back to the full vocabulary by design, so
+ *     there is no rule for them to break.
+ *
+ * The space character is in every vocabulary (`_buildClassLookups` adds it),
+ * so a blank cell never counts either, and it needs no special case here.
+ *
+ * THE TABLE IS BUILT FROM THE CONVERTER'S OWN LADDERS, handed in by the
+ * caller, not re-derived from `glyph-vocabularies.js`. A second copy of the
+ * ladder would answer questions about itself: this one answers questions about
+ * the list the converter actually searched.
+ *
+ * @param {Record<number|string, ArrayLike<number>>|Map<number,
+ *   ArrayLike<number>>|null} vocabularies class id -> the atlas indices that
+ *   class may draw
+ * @returns {{allowed: Map<number, Uint8Array>, perFrame: number[],
+ *   perCell: Int32Array, kinds: Map<string, number>, total: number,
+ *   reverseExempt: number}|null} null when the caller supplied none
+ */
+function createMismatch(vocabularies, cells) {
+  if (!vocabularies) return null;
+  const entries =
+    vocabularies instanceof Map
+      ? [...vocabularies.entries()]
+      : Object.entries(vocabularies);
+  const allowed = new Map();
+  for (const [key, ids] of entries) {
+    const classId = Number(key);
+    if (!Number.isInteger(classId) || !ids || typeof ids.length !== 'number') {
+      continue;
+    }
+    const flags = new Uint8Array(GLYPH_SLOTS);
+    for (let i = 0; i < ids.length; i++) {
+      const glyph = ids[i];
+      if (Number.isInteger(glyph) && glyph >= 0 && glyph < GLYPH_SLOTS) {
+        flags[glyph] = 1;
+      }
+    }
+    allowed.set(classId, flags);
+  }
+  if (allowed.size === 0) return null;
+  return {
+    allowed,
+    perFrame: [],
+    perCell: new Int32Array(cells),
+    kinds: new Map(),
+    total: 0,
+    reverseExempt: 0,
+  };
 }
 
 /**
@@ -121,6 +220,8 @@ export function classLabel(id) {
  *   in the new frame - the ones a person could see a glyph decision in
  * @property {number} classMoveGlyphHeld of the lit ones, where the glyph did
  *   not change with the class
+ * @property {ReturnType<createMismatch>} mismatch CW-93's counter, or null
+ *   when the caller handed in no vocabularies
  */
 
 /**
@@ -129,7 +230,8 @@ export function classLabel(id) {
  * @param {number} cols
  * @param {number} rows
  * @param {{mono: boolean, reverseIndex?: number, whiteIndex?: number,
- *   litLumMin?: number}} options
+ *   litLumMin?: number, vocabularies?: Record<number, ArrayLike<number>>|
+ *   Map<number, ArrayLike<number>>|null}} options
  * @returns {SeqFold}
  */
 export function createFold(cols, rows, options = {}) {
@@ -185,6 +287,14 @@ export function createFold(cols, rows, options = {}) {
     classMoveEvents: 0,
     classMoveLitEvents: 0,
     classMoveGlyphHeld: 0,
+    mismatch: createMismatch(options.vocabularies ?? null, cells),
+    // CW-92 (D-127): the face flip. `faceHeld` counts (cell, frame pair) slots
+    // where the class did NOT move; `faceFlip` counts how many of those took a
+    // different colour index anyway. `prevClass2` is a second copy of the last
+    // frame's classes because `prevClass` is overwritten before this runs.
+    prevClass2: null,
+    faceHeld: new Int32Array(cells),
+    faceFlip: new Int32Array(cells),
   };
 }
 
@@ -282,6 +392,52 @@ export function foldFrame(fold, frame) {
   fold.whiteShare.push(white / n);
   fold.reverseShare.push(reverse / n);
 
+  // ★★★ CW-92: THE FACE FLIP, which is the owner's D-127 made a number. Per
+  // class, the share of cells whose COLOUR INDEX changed in a frame pair whose
+  // CLASS did not. A cell that swept onto a different surface is allowed to
+  // change colour; a cell still looking at the same wall is not, and a whole
+  // face crossing a palette boundary together is what the owner photographed.
+  //
+  // Mono has no colour index, so this row exists only for a palette fold.
+  if (!fold.mono && fold.prevDrive && fold.prevClass2) {
+    for (let i = 0; i < n; i++) {
+      if (cls[i] !== fold.prevClass2[i]) continue;
+      // ★ A BLANK CELL HAS NO COLOUR TO FLIP, and counting a cell lighting up
+      // or going dark as a face flip would bury the row under transitions it
+      // was never asking about. The same distinction CW-89 drew for the glyph
+      // memory: whether a cell has content is a different question from which
+      // colour that content is.
+      if (drive[i] < 0 || fold.prevDrive[i] < 0) continue;
+      fold.faceHeld[i]++;
+      if (drive[i] !== fold.prevDrive[i]) fold.faceFlip[i]++;
+    }
+  }
+  if (!fold.mono) fold.prevClass2 = Uint8Array.from(cls);
+
+  const mm = fold.mismatch;
+  if (mm) {
+    let frameCount = 0;
+    for (let i = 0; i < n; i++) {
+      const flags = mm.allowed.get(cls[i]);
+      // No vocabulary for this class: the cell draws from the full atlas by
+      // design, so there is no rule here to break.
+      if (!flags) continue;
+      // A reverse cell is matched against the whole atlas on purpose.
+      if (fold.mono && drive[i] === fold.reverseIndex) {
+        mm.reverseExempt++;
+        continue;
+      }
+      const glyph = glyphs[i];
+      if (glyph >= 0 && glyph < GLYPH_SLOTS && flags[glyph]) continue;
+      frameCount++;
+      mm.perCell[i]++;
+      const key = `${cls[i]}>${glyph}`;
+      mm.kinds.set(key, (mm.kinds.get(key) ?? 0) + 1);
+    }
+    mm.perFrame.push(frameCount);
+    mm.total += frameCount;
+  }
+
   const prevGlyphs = fold.prevGlyphs;
   if (prevGlyphs) {
     const prevGlyphs2 = fold.prevGlyphs2;
@@ -337,6 +493,12 @@ export function foldFrame(fold, frame) {
  *   video (mono) or white (colour)
  * @property {number} churnCellsPct share of cells that changed in more than
  *   half the frame pairs
+ * @property {number} mismatch (cell, frame) slots where the drawn glyph was
+ *   not in the cell's own class vocabulary (CW-93). Zero in a healthy picture,
+ *   and zero when the fold was given no vocabularies.
+ * @property {number} faceFlipPct of the cell-frames where the class stayed put,
+ *   the share that changed COLOUR INDEX anyway (CW-92, D-127). Colour only.
+ * @property {number} faceHeld the denominator of the row above
  * @property {number} meanGlyphPersistenceFrames mean run length in frames
  */
 
@@ -353,6 +515,10 @@ export function foldFrame(fold, frame) {
  *   number]>, litShareMean: number, whiteShare: number[],
  *   reverseShare: number[], ghostPct: number, classMoveEvents: number,
  *   classMoveLitEvents: number, colourHistogram: number[],
+ *   mismatch: {total: number, perFrame: number[], cells: number,
+ *     cellsPct: number, reverseExempt: number, kinds: Array<{on: string,
+ *     glyph: number, char: string, count: number, belongsTo: string[]}>,
+ *     worstCells: Array<{x: number, y: number, frames: number}>}|null,
  *   total: SeqRow, perClass: SeqRow[], edge: SeqRow}}
  */
 export function finishFold(fold, options = {}) {
@@ -395,6 +561,9 @@ export function finishFold(fold, options = {}) {
     row.driveFlip += fold.driveFlip[i];
     row.reverseOrWhiteToggle += fold.reverseOrWhiteToggle[i];
     if (fold.glyphChange[i] > pairs * 0.5) row.churn++;
+    if (fold.mismatch) row.mismatch += fold.mismatch.perCell[i];
+    row.faceHeld += fold.faceHeld[i];
+    row.faceFlip += fold.faceFlip[i];
     row.runSum += fold.runSum[i];
     row.runCount += fold.runCount[i];
   }
@@ -410,6 +579,9 @@ export function finishFold(fold, options = {}) {
     total.driveFlip += row.driveFlip;
     total.reverseOrWhiteToggle += row.reverseOrWhiteToggle;
     total.churn += row.churn;
+    total.mismatch += row.mismatch;
+    total.faceHeld += row.faceHeld;
+    total.faceFlip += row.faceFlip;
     total.runSum += row.runSum;
     total.runCount += row.runCount;
   }
@@ -447,6 +619,7 @@ export function finishFold(fold, options = {}) {
     classMoveEvents: fold.classMoveEvents,
     classMoveLitEvents: fold.classMoveLitEvents,
     ghostPct: pct(fold.classMoveGlyphHeld, fold.classMoveLitEvents),
+    mismatch: summariseMismatch(fold, top),
     total: { ...summarise(total), name: 'TOTAL' },
     perClass: [...rows.values()]
       .sort((a, b) => b.cells - a.cells)
@@ -467,6 +640,9 @@ function emptyRow(cls) {
     driveFlip: 0,
     reverseOrWhiteToggle: 0,
     churn: 0,
+    mismatch: 0,
+    faceHeld: 0,
+    faceFlip: 0,
     runSum: 0,
     runCount: 0,
   };
@@ -484,7 +660,78 @@ function summariseRow(row, pairs, triples) {
     driveOrColourFlipPct: pct(row.driveFlip, row.cells * triples),
     reverseOrWhiteToggles: row.reverseOrWhiteToggle,
     churnCellsPct: pct(row.churn, row.cells),
+    // A COUNT, not a share. A share of a defect that should be zero reads as
+    // "small" at 0.004 %, and the whole point of this column is that any
+    // number above zero is a cell drawing a character it is not allowed.
+    mismatch: row.mismatch,
+    // CW-92: of the cell-frames where this class STAYED under the cell, the
+    // share that changed colour anyway. The owner's face flip, as a number.
+    faceFlipPct: pct(row.faceFlip, row.faceHeld),
+    faceHeld: row.faceHeld,
     meanGlyphPersistenceFrames: round2(row.runSum / Math.max(1, row.runCount)),
+  };
+}
+
+/**
+ * CW-93: the mismatch counter, closed and named.
+ *
+ * `kinds` is the row that names the artefact in words: which class was under
+ * the cell, which character it drew, and WHICH classes' vocabularies that
+ * character does belong to. "a `|` drawn on a tree cell, and `|` is a wall
+ * character" is the owner's report turned into a line of a table.
+ *
+ * `worstCells` is the cell list the release brief asks for: grid coordinates,
+ * so a mismatch can be found in the flip map and in the contact sheet.
+ *
+ * @param {SeqFold} fold a fold that has just been closed
+ * @param {number} top how many rows of each list to keep
+ */
+function summariseMismatch(fold, top) {
+  const mm = fold.mismatch;
+  if (!mm) return null;
+  // Which vocabularies DO contain a given glyph - computed once, off the same
+  // tables the counting used.
+  const owners = (glyph) => {
+    const out = [];
+    for (const [classId, flags] of mm.allowed) {
+      if (glyph >= 0 && glyph < flags.length && flags[glyph]) {
+        out.push(classLabel(classId));
+      }
+    }
+    return out;
+  };
+  let cells = 0;
+  const worst = [];
+  for (let i = 0; i < mm.perCell.length; i++) {
+    if (!mm.perCell[i]) continue;
+    cells++;
+    worst.push({
+      x: i % fold.cols,
+      y: Math.floor(i / fold.cols),
+      frames: mm.perCell[i],
+    });
+  }
+  worst.sort((a, b) => b.frames - a.frames);
+  return {
+    total: mm.total,
+    perFrame: mm.perFrame.slice(),
+    cells,
+    cellsPct: pct(cells, fold.cells),
+    reverseExempt: mm.reverseExempt,
+    kinds: [...mm.kinds.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, top)
+      .map(([key, count]) => {
+        const [classId, glyph] = key.split('>').map(Number);
+        return {
+          on: classLabel(classId),
+          glyph,
+          char: glyphChar(glyph),
+          count,
+          belongsTo: owners(glyph),
+        };
+      }),
+    worstCells: worst.slice(0, top),
   };
 }
 
@@ -512,4 +759,59 @@ function round2(v) {
 
 function round4(v) {
   return Number(v.toFixed(4));
+}
+
+/**
+ * CW-86: COHERENCE - of the cells that changed, how many took the glyph their
+ * neighbour along the motion had a frame ago.
+ *
+ * ★★ THIS EXISTS BECAUSE A GLYPH-CHANGE RATE CANNOT TELL A SLIDE FROM A
+ * RE-ROLL, AND THE DIFFERENCE IS THE WHOLE SUBJECT OF ROUND 8. A surface whose
+ * characters belong to it and are sliding past the eye changes a lot of cells
+ * per frame - every cell takes the character its neighbour had - and that is
+ * MOTION, which is what a walk is supposed to look like. A surface whose
+ * characters are re-rolled from screen luminance also changes a lot of cells,
+ * and that is CHURN. Both score the same on the glyph-change row. They score
+ * nothing alike here: a slide is near 100 %, a re-roll is at the vocabulary's
+ * chance level.
+ *
+ * The shift is in CELLS and is the caller's to supply, because only the caller
+ * knows which way the picture moved: dx = +1 means the picture slid one cell
+ * to the right between the two frames, so a cell should now hold what the cell
+ * to its LEFT held.
+ *
+ * @param {ArrayLike<number>} prev the previous frame's glyph indices
+ * @param {ArrayLike<number>} next this frame's
+ * @param {number} cols
+ * @param {number} rows
+ * @param {number} dx cells the picture moved right
+ * @param {number} dy cells the picture moved down
+ * @returns {{changed: number, coherent: number, pct: number}}
+ */
+export function coherence(prev, next, cols, rows, dx, dy) {
+  const n = cols * rows;
+  requireLength(prev, n, 'prev');
+  requireLength(next, n, 'next');
+  let changed = 0;
+  let coherent = 0;
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const i = y * cols + x;
+      if (prev[i] === next[i]) continue;
+      // Where this cell's content was a frame ago.
+      const sx = x - dx;
+      const sy = y - dy;
+      // ★ A CELL WHOSE SOURCE IS OFF THE GRID IS NOT EVIDENCE EITHER WAY, so
+      // it is left out of BOTH halves rather than counted as incoherent. Its
+      // content came from outside the picture and there is nothing to compare
+      // it against. Counting it against coherence made a PURE SLIDE score
+      // 87.5 % on an eight-cell row - the whole leading edge - and a metric
+      // whose best possible answer depends on the grid's width cannot be read
+      // beside another column.
+      if (sx < 0 || sy < 0 || sx >= cols || sy >= rows) continue;
+      changed++;
+      if (prev[sy * cols + sx] === next[i]) coherent++;
+    }
+  }
+  return { changed, coherent, pct: pct(coherent, changed) };
 }

@@ -22,7 +22,23 @@
 // renderer's colour management on the way in and the readback would no longer
 // be the number that went in.
 
-import { Color, NoColorSpace, ShaderMaterial, WebGLRenderTarget } from 'three';
+import {
+  Color,
+  DataTexture,
+  NearestFilter,
+  NoColorSpace,
+  RedFormat,
+  RepeatWrapping,
+  ShaderMaterial,
+  UnsignedByteType,
+  WebGLRenderTarget,
+} from 'three';
+
+import {
+  ANCHORED_CLASSES,
+  buildField,
+  FIELD_LEVELS,
+} from './city-glyph-field.js';
 
 /**
  * Surface classes. The values ARE the wire format between the pass and the
@@ -161,6 +177,19 @@ export const CLASS_BY_MESH_NAME = new Map([
   // guard could not see it: that guard enumerates buildStreetProps. It asks the
   // standalone builders too now, so the next one cannot slip through.
   ['traveler', SURFACE_CLASS.PERSON],
+  // CW-78: the node-keyed landmark bodies (the Great Wheel; the Needle's
+  // saucer stack and flare). MAST, stated deliberately: these are open
+  // steel structures read against the sky, which is what the mast voice
+  // draws, and MAST is a non-anchored class - a rim and a spoke must not be
+  // snapped to a facade's lattice. A borrow, not a new id (CW-43's law; the
+  // span table is full at 16).
+  ['landmark-masts', SURFACE_CLASS.MAST],
+  // CW-78: the waypoint marks. SIGN - a small bright plate on a post is
+  // exactly what the sign voice draws, and like the fireworks this is a
+  // LOOK decision: the mark's readability comes from its bright ring around
+  // an exact-black core, not from its vocabulary. Standalone builder, so
+  // the builders guard must ask it by name.
+  ['waypoints', SURFACE_CLASS.SIGN],
 ]);
 
 /**
@@ -176,8 +205,39 @@ const ROOF_SPLIT = new Map([['buildings', SURFACE_CLASS.BUILDING_ROOF]]);
 /** Above this dot product with +Z a face counts as looking at the sky. */
 const ROOF_NORMAL_Z = 0.9;
 
+/**
+ * CW-85: how far the B channel's 255 steps reach, in metres.
+ *
+ * The backing fades out at the fog's own far plane (`Fog(0x000000, 40, 260)`,
+ * city-scene.js), so a byte that ran to a different distance would make the
+ * tint and the fog disagree about where the world ends. One step is 260/255 =
+ * 1.02 m, which is finer than the fade needs and far finer than a 3x6 px cell
+ * can show.
+ */
+export const CLASS_DEPTH_FAR_M = 260;
+
+/**
+ * CW-86: the longest side a glyph field may have, in lattice squares.
+ *
+ * ★ THE FIELD IS COARSE ON PURPOSE. At the source texture's own resolution
+ * a facade texel is about 8 mm of wall, so a cell 40 m away covers hundreds
+ * of them and the smallest camera move slides it onto a different one - the
+ * glyph would re-roll exactly as it does today and the release would have
+ * built nothing. What makes a character belong to a wall is that a patch of
+ * wall about the size of a cell shares ONE value. 64 puts a 512x576 facade
+ * on a 64x72 lattice, roughly 6 cm of wall per square. It is the first
+ * number P2 is allowed to move, and only on the table.
+ */
+export const FIELD_MAX_SIZE = 64;
+
 const VERTEX_SHADER = /* glsl */ `
   varying float vUp;
+  varying float vViewDepth;
+  // CW-86: the surface's own coordinate. Every mesh this pass dresses that
+  // has a glyph field also has a uv attribute - it was checked before the
+  // field was built - and three.js declares the uv attribute for us either way, so a
+  // mesh without one simply carries zeroes into a shader that ignores them.
+  varying vec2 vUv;
   void main() {
     // Object space is world space here: the city group is never rotated, the
     // merged meshes bake their own transforms in at build time, and nothing in
@@ -187,7 +247,14 @@ const VERTEX_SHADER = /* glsl */ `
     // face points relative to the CAMERA, and the roof test below would then
     // fire on whatever the walker happens to be looking straight at (D-73).
     vUp = normalize(normal).z;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    vUv = uv;
+    vec4 viewPos = modelViewMatrix * vec4(position, 1.0);
+    // CW-85: LINEAR view depth, in metres, interpolated across the face. The
+    // depth BUFFER this target already carries is the non-linear one the GPU
+    // needs for occlusion; a tint that faded on that curve would fall off a
+    // cliff in the first few metres and then barely move for two hundred.
+    vViewDepth = -viewPos.z;
+    gl_Position = projectionMatrix * viewPos;
   }
 `;
 
@@ -195,13 +262,42 @@ const FRAGMENT_SHADER = /* glsl */ `
   uniform float uId;
   uniform float uRoofId;
   uniform float uRoofNormalZ;
+  uniform float uDepthFar;
+  // CW-86: the glyph field. uHasField is 0 for every mesh without one,
+  // which is what makes this one shader rather than two.
+  uniform float uHasField;
+  uniform sampler2D uField;
+  uniform vec2 uFieldRepeat;
+  uniform vec2 uFieldOffset;
   varying float vUp;
+  varying float vViewDepth;
+  varying vec2 vUv;
   void main() {
     float id = uId;
     // uRoofId is 0 for every mesh that has no separate top surface, and 0 is
     // the sky class, which no geometry can be.
     if (uRoofId > 0.0 && vUp >= uRoofNormalZ) id = uRoofId;
-    gl_FragColor = vec4(id / 255.0, 0.0, 0.0, 1.0);
+    // CW-86: G is the GLYPH FIELD - the surface's own tone at this cell,
+    // quantised to a ladder step and stored as step + 1 so that 0 keeps
+    // meaning "no field, use the screen pick". The field texture is one this
+    // pass built and owns: NEAREST, no mipmaps, so the value a cell reads is
+    // a property of the WALL and not of how far away the camera happens to
+    // be. Sampling the mesh's own map here instead would have read a mipmap
+    // chosen from this pass's own derivatives - and this pass runs at one
+    // pixel per CELL, so that is a very coarse level and the anchoring would
+    // have dissolved at exactly the distances it is needed.
+    float field = 0.0;
+    if (uHasField > 0.5) {
+      field = texture2D(uField, vUv * uFieldRepeat + uFieldOffset).r;
+    }
+    // R is the class, as it has been since CW-23 and as the GPU glyph path
+    // reads it. B is CW-85's linear depth: nothing samples it but the backing.
+    gl_FragColor = vec4(
+      id / 255.0,
+      field,
+      clamp(vViewDepth / uDepthFar, 0.0, 1.0),
+      1.0
+    );
   }
 `;
 
@@ -223,7 +319,22 @@ export function createClassPass(renderer, root) {
   let target = null;
   let pixels = null;
   let classMap = null;
+  let depthMap = null;
+  let fieldMap = null;
   let disposed = false;
+  // CW-86: source texture uuid -> the field texture built from it, or null
+  // if that texture cannot serve one. Cached because building a field reads
+  // every pixel of a canvas, which is a one-time cost per texture and would
+  // be an unthinkable one per frame.
+  const fields = new Map();
+  let fieldEnabled = false;
+  // CW-86 P2: the lattice a field is reduced to, tunable so the sweep that
+  // chooses it is a measurement rather than an opinion.
+  let fieldMaxSize = FIELD_MAX_SIZE;
+  // CW-86 P2: which classes get a field at all. null means "every class that
+  // has a readable texture", which is where the prototype starts; the sweep
+  // narrows it if the table says a class is better off with the screen pick.
+  let fieldClasses = new Set(ANCHORED_CLASSES);
 
   /**
    * D-110: the class material must carry the mesh's own POLYGON OFFSET.
@@ -247,8 +358,82 @@ export function createClassPass(renderer, root) {
    * different offsets are different materials, and only the combinations that
    * actually occur are ever built.
    */
-  const materialFor = (id, roofId, offsetFactor, offsetUnits) => {
-    const key = `${id}:${roofId}:${offsetFactor}:${offsetUnits}`;
+  /**
+   * The field texture for a mesh's own map, built once and kept.
+   *
+   * ★ IT IS OUR TEXTURE, NOT THEIRS, AND THAT IS THE POINT. The city's own
+   * CanvasTextures are mipmapped and linearly filtered because that is what
+   * makes the 3D picture look right, and they are SHARED with the visible
+   * render - changing a filter here would change the game. So the field is a
+   * separate DataTexture: NEAREST, no mipmaps, one byte per lattice square.
+   * A cell then reads a property of the wall rather than a blend chosen from
+   * this pass's own derivatives, which at one pixel per cell would have been
+   * a very coarse mip and would have dissolved the anchoring at exactly the
+   * distances that need it.
+   *
+   * @param {import('three').Texture|null} map
+   * @returns {import('three').DataTexture|null}
+   */
+  const fieldFor = (map) => {
+    if (!map || !map.image) return null;
+    const key = map.uuid;
+    if (fields.has(key)) return fields.get(key);
+    let built = null;
+    try {
+      const img = map.image;
+      const w = img.width | 0;
+      const h = img.height | 0;
+      // A canvas can be read directly; anything else has to be drawn onto
+      // one first, and a texture whose pixels cannot be reached at all
+      // simply has no field - the cells over it keep the screen pick.
+      let ctx = null;
+      if (typeof img.getContext === 'function') {
+        ctx = img.getContext('2d', { willReadFrequently: true });
+      }
+      if (ctx && w > 0 && h > 0) {
+        const data = ctx.getImageData(0, 0, w, h).data;
+        const field = buildField(data, w, h, fieldMaxSize, FIELD_LEVELS);
+        // The byte the shader hands on is LEVEL + 1: zero has to stay free
+        // for "no field here", which is what the sky and every unclassified
+        // mesh write.
+        const bytes = new Uint8Array(field.levels.length);
+        for (let i = 0; i < bytes.length; i++) bytes[i] = field.levels[i] + 1;
+        built = new DataTexture(
+          bytes,
+          field.w,
+          field.h,
+          RedFormat,
+          UnsignedByteType
+        );
+        built.magFilter = NearestFilter;
+        built.minFilter = NearestFilter;
+        built.generateMipmaps = false;
+        built.wrapS = RepeatWrapping;
+        built.wrapT = RepeatWrapping;
+        // The source canvas is drawn with y down and sampled flipped; the
+        // field is read with the same uv, so it has to be flipped the same
+        // way or every facade's field would be upside down against its own
+        // windows. DataTexture defaults to flipY false, so this is not a
+        // line that can be left out.
+        built.flipY = map.flipY;
+        built.needsUpdate = true;
+      }
+    } catch {
+      // A tainted or unreadable canvas is a field this pass does not get to
+      // have. It is not an error: the cells over that surface keep the
+      // screen pick, which is what every surface did before CW-86.
+      built = null;
+    }
+    fields.set(key, built);
+    return built;
+  };
+  const materialFor = (id, roofId, offsetFactor, offsetUnits, field, map) => {
+    // CW-86: the field is part of the identity of the material, because two
+    // walls with different facade canvases need different samplers. Ten
+    // building meshes each carry their own CanvasTexture, so this is ten
+    // materials rather than one - which is exactly what the cache is for.
+    const fieldKey = field ? field.uuid : '-';
+    const key = `${id}:${roofId}:${offsetFactor}:${offsetUnits}:${fieldKey}`;
     let mat = materials.get(key);
     if (!mat) {
       mat = new ShaderMaterial({
@@ -256,6 +441,19 @@ export function createClassPass(renderer, root) {
           uId: { value: id },
           uRoofId: { value: roofId },
           uRoofNormalZ: { value: ROOF_NORMAL_Z },
+          uDepthFar: { value: CLASS_DEPTH_FAR_M },
+          uHasField: { value: field ? 1 : 0 },
+          uField: { value: field },
+          // The visible material's own repeat and offset, because the field
+          // is sampled with the SAME uv the city is textured with - a facade
+          // canvas is tiled per bay, and a field that ignored that would put
+          // one window's tone across a whole tower.
+          uFieldRepeat: {
+            value: map ? map.repeat.clone() : { x: 1, y: 1 },
+          },
+          uFieldOffset: {
+            value: map ? map.offset.clone() : { x: 0, y: 0 },
+          },
         },
         vertexShader: VERTEX_SHADER,
         fragmentShader: FRAGMENT_SHADER,
@@ -290,6 +488,12 @@ export function createClassPass(renderer, root) {
     target.texture.generateMipmaps = false;
     pixels = new Uint8Array(cols * rows * 4);
     classMap = new Uint8Array(cols * rows);
+    // CW-85: the readback has always moved four bytes per cell and used one.
+    // The depth map costs the same transfer and one more pass over a buffer
+    // that is already in cache. CW-86 takes the third byte the same way, so
+    // all four are now spoken for and the readback still costs what it did.
+    depthMap = new Uint8Array(cols * rows);
+    fieldMap = new Uint8Array(cols * rows);
   };
 
   const clearColor = new Color();
@@ -309,11 +513,31 @@ export function createClassPass(renderer, root) {
       const id = CLASS_BY_MESH_NAME.get(obj.name) ?? SURFACE_CLASS.SKY;
       const [factor, units] = offsetOf(obj.material);
       originals.set(obj, obj.material);
+      // CW-86: a mesh earns a field only if it has BOTH a readable map and a
+      // uv to read it with. Asked at this HEAD, `roads`, `curbs` and
+      // `road-lines` have neither, so they keep the screen pick - and they
+      // are the classes §1.3 measured as already steady, which is why the
+      // set is worth having anyway.
+      let field = null;
+      let map = null;
+      if (
+        fieldEnabled &&
+        obj.geometry?.attributes?.uv &&
+        (!fieldClasses || fieldClasses.has(id))
+      ) {
+        const own = Array.isArray(obj.material)
+          ? obj.material[0]
+          : obj.material;
+        map = own?.map ?? null;
+        field = fieldFor(map);
+      }
       obj.material = materialFor(
         id,
         ROOF_SPLIT.get(obj.name) ?? 0,
         factor,
-        units
+        units,
+        field,
+        field ? map : null
       );
     });
 
@@ -353,9 +577,108 @@ export function createClassPass(renderer, root) {
       for (let y = 0; y < rows; y++) {
         const src = (rows - 1 - y) * cols * 4;
         const dst = y * cols;
-        for (let x = 0; x < cols; x++) classMap[dst + x] = pixels[src + x * 4];
+        for (let x = 0; x < cols; x++) {
+          classMap[dst + x] = pixels[src + x * 4];
+          fieldMap[dst + x] = pixels[src + x * 4 + 1];
+          depthMap[dst + x] = pixels[src + x * 4 + 2];
+        }
       }
       return classMap;
+    },
+
+    /**
+     * The linear view depth of the LAST `read()`, one byte per cell, in the
+     * same row order as the class map (CW-85).
+     *
+     * It is a separate accessor rather than a second return value because
+     * `read()`'s contract is the classMap and every caller since CW-23 uses
+     * it that way; the backing is the only thing that wants this, and only
+     * while Day is on.
+     *
+     * Byte b is `b / 255 * CLASS_DEPTH_FAR_M` metres. A cell the city does
+     * not cover reads 0, which is the sky - and the sky is never backed, so
+     * the ambiguity between "zero metres away" and "nothing there" never has
+     * to be resolved.
+     *
+     * @returns {Uint8Array|null} the last read's depth bytes, or null
+     */
+    lastDepth() {
+      return disposed ? null : depthMap;
+    },
+
+    /**
+     * The GLYPH FIELD of the last `read()`, one byte per cell (CW-86).
+     *
+     * Byte 0 means "this cell has no field" - the sky, an unclassified mesh,
+     * or a surface with no readable texture - and the converter keeps its
+     * screen pick there. Any other byte is `ladder step + 1`.
+     *
+     * @returns {Uint8Array|null}
+     */
+    lastField() {
+      return disposed ? null : fieldMap;
+    },
+
+    /**
+     * Turn the glyph field on or off (CW-86).
+     *
+     * Off by default and off costs nothing: no field texture is built, the
+     * materials carry uHasField 0, and the shader's branch is not taken. The
+     * material cache is cleared because the field is part of a material's
+     * identity, so the same mesh needs a different one on each side of this.
+     *
+     * @param {boolean} on
+     */
+    setGlyphField(on) {
+      const next = Boolean(on);
+      if (next === fieldEnabled) return;
+      fieldEnabled = next;
+      for (const mat of materials.values()) mat.dispose();
+      materials.clear();
+    },
+
+    /** @returns {boolean} whether the field is being rendered */
+    glyphFieldEnabled() {
+      return fieldEnabled;
+    },
+
+    /**
+     * CW-86 P2: how coarse the field lattice is, in squares along its longest
+     * side. Smaller is COARSER: a bigger patch of surface shares one value, so
+     * a cell keeps reading the same value further into a walk.
+     *
+     * Every built field is thrown away, because they were all built at the old
+     * size - a cache that kept them would make the next measurement a mixture
+     * of two settings and read as noise.
+     *
+     * @param {number} n
+     * @returns {number} the size now in force
+     */
+    setFieldMaxSize(n) {
+      const next = Math.max(1, Math.round(Number(n) || 0));
+      if (next === fieldMaxSize) return fieldMaxSize;
+      fieldMaxSize = next;
+      for (const f of fields.values()) f?.dispose();
+      fields.clear();
+      for (const mat of materials.values()) mat.dispose();
+      materials.clear();
+      return fieldMaxSize;
+    },
+
+    /**
+     * CW-86 P2: restrict the field to these class ids, or null for all.
+     *
+     * @param {number[]|null} ids
+     */
+    setFieldClasses(ids) {
+      fieldClasses = Array.isArray(ids) ? new Set(ids) : null;
+      for (const mat of materials.values()) mat.dispose();
+      materials.clear();
+    },
+
+    /** @returns {number} the field lattice size in force */
+    fieldMaxSize() {
+      return fieldMaxSize;
     },
 
     /**
@@ -386,6 +709,10 @@ export function createClassPass(renderer, root) {
       target = null;
       pixels = null;
       classMap = null;
+      depthMap = null;
+      fieldMap = null;
+      for (const f of fields.values()) f?.dispose();
+      fields.clear();
     },
   };
 }
