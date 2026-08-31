@@ -471,17 +471,21 @@ jobs:
   # describes in tests/e2e, so nothing depends on two cases landing on the
   # same machine.
   e2e-tests-edge:
-    name: E2E Tests (Edge ${{ matrix.shard }}/2)
+    name: E2E Tests (Edge ${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
-    # CW-80: 55 so the raised 50-minute Playwright ceiling fits inside it.
-    timeout-minutes: 55
+    timeout-minutes: 45
 
     strategy:
       # A red shard must not cancel its sibling: knowing whether the failure
       # is in one half or both is most of the diagnosis.
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        # CW-83 (G3, 2026-08-31): the owner is editing ruleset 12059827 to
+        # require the three contexts this matrix now produces - the
+        # re-weighted model put two Edge shards at 43.7 projected minutes,
+        # past any honest ceiling, and a third shard is the fix the
+        # Chromium note has prescribed for every lane since UF-27.
+        shard: [1, 2, 3]
 
     steps:
       - name: Checkout code
@@ -522,7 +526,7 @@ jobs:
           fi
           npx playwright install ffmpeg
       
-      - name: Run E2E tests (Edge shard ${{ matrix.shard }} of 2)
+      - name: Run E2E tests (Edge shard ${{ matrix.shard }} of 3)
         # D-72, the same division Chromium uses and for the same reason: this
         # lane is lopsided in the same shape and by the same files, because
         # both inherited it from the alphabet. Measured here: 32m32s against
@@ -531,8 +535,8 @@ jobs:
         # the board, but the packing works off the RATIOS between files, and
         # those are a property of what the tests do rather than of the browser.
         run: |
-          FILES=$(node scripts/e2e-shard.mjs ${{ matrix.shard }} 2)
-          echo "shard ${{ matrix.shard }}/2 runs: $FILES"
+          FILES=$(node scripts/e2e-shard.mjs ${{ matrix.shard }} 3)
+          echo "shard ${{ matrix.shard }}/3 runs: $FILES"
           npx playwright test --project=msedge $FILES
         env:
           # R2a added 17 Classic e2e cases, each booting WASM and loading a
@@ -564,16 +568,12 @@ jobs:
           # minutes. Raising this number is not the answer if a shard ever
           # gets close again; adding a third shard is.
           #
-          # CW-80 (2026-08-31): a third shard is EXACTLY what this lane
-          # needs and exactly what it cannot have from here - each Edge
-          # shard is its own REQUIRED CONTEXT in ruleset 12059827, and only
-          # the owner can edit that. Round 8's re-weighted model projects
-          # this two-shard lane at 43.7 minutes of wall clock, past the old
-          # 35-minute ceiling on arithmetic alone. So the ceiling rises to
-          # 50 minutes (inside the job's 55-minute budget) AS A STATED
-          # STOPGAP, and the proper fix - Edge at three shards, one ruleset
-          # edit - is in the owner's G3 package by name.
-          PW_GLOBAL_TIMEOUT: '3000000'
+          # CW-83 (G3): the third shard landed - the owner signed the
+          # ruleset edit at the gate - so the CW-80 stopgap ceiling (50
+          # minutes for a two-shard lane that projected 43.7) comes back
+          # down. Three shards project ~18 minutes each; 35 keeps the same
+          # starved-runner margin the Chromium lanes hold.
+          PW_GLOBAL_TIMEOUT: '2100000'
 
       # Q-23 (owner, 2026-08-09): a green summary over an incomplete run must
       # fail. UF-27: this lane never had the guard at all - only Chromium did -
@@ -616,7 +616,12 @@ jobs:
       # in one half or both is most of the diagnosis.
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        # CW-83 (G3, 2026-08-31): the owner is editing ruleset 12059827 to
+        # require the three contexts this matrix now produces - the
+        # re-weighted model put two Edge shards at 43.7 projected minutes,
+        # past any honest ceiling, and a third shard is the fix the
+        # Chromium note has prescribed for every lane since UF-27.
+        shard: [1, 2, 3]
     
     steps:
       - name: Checkout code
@@ -664,8 +669,8 @@ jobs:
       
       - name: Run E2E tests (Firefox shard ${{ matrix.shard }} of 2)
         run: |
-          FILES=$(node scripts/e2e-shard.mjs ${{ matrix.shard }} 2)
-          echo "shard ${{ matrix.shard }}/2 runs: $FILES"
+          FILES=$(node scripts/e2e-shard.mjs ${{ matrix.shard }} 3)
+          echo "shard ${{ matrix.shard }}/3 runs: $FILES"
           npx playwright test --project=firefox $FILES
         env:
           # Q-23 (owner, 2026-08-09): the same 25min ceiling Chromium and

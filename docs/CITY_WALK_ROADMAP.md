@@ -167,6 +167,33 @@ matter for tactile work, and one of them is a warning rather than a gain:
 
 It does **not** mean the game should grow an embosser export next.
 
+Round 8 gave the inventory a body to move through. Four additions matter for
+tactile and non-visual work:
+
+- **The landmarks are real, cited, and touchable.** Each city carries seven
+  from its own landmark register, keyed to its map element and cited in
+  `CITY_WALK_LANDMARKS.md`; each one stands a physical waypoint on the
+  pavement at its street face - a thing a cane-line walk runs into, not only
+  a ring on a map. A tactile map's landmark set can be drawn from the same
+  table, with the same citations.
+- **One key travels; every stop explains itself.** Auto-walk follows the
+  street and a tour walks a route to a chosen landmark, each turn spoken
+  onto its street by name, and every stop - the player's, an obstacle's, a
+  dead end's - has its own sentence. This is the GAG "simple control
+  schemes" route: one key starts, one key stops, and nothing depends on
+  holding anything down.
+- **The ground has height, and the words for it.** The cities stand on a
+  surveyed elevation model, and the only sentences that tell a non-visual
+  player what the hills give a sighted one are three: uphill and downhill as
+  a percent, and one word when a grade ends. On a tactile map, relief will
+  face the same question this round answered in audio: the slope IS the
+  information, and it needs its own channel, not a side effect.
+- **A platform is not a road.** Transit platforms, corridors and closed
+  streets are walkable open ground now - the map's own categories carried
+  into what the body can do - and the platform benches seat people again.
+  Any tactile rendering inherits that distinction for free from the shared
+  predicate that decides it.
+
 ### The safety rule, stated once and without exception
 
 When tactile work does begin, every tactile dimension — dot height, dot
