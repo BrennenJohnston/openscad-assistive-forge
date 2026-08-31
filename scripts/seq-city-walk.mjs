@@ -37,7 +37,12 @@
 //              frame. This is the walk a player does.
 //   walkclamp  the dt-clamped worst case, 0.48 m per frame - what a 10 fps
 //              machine steps between two conversions.
-//   look       1.5 deg of yaw per frame, a moderate mouse sweep.
+//   look       1.5 deg of yaw per frame, a moderate mouse sweep. CW-81's
+//              eased camera follow does NOT smooth this: the instrument
+//              writes the pose directly and the game adopts a direct write
+//              verbatim, so the yaw is exactly 1.5 deg per frame either way.
+//              (A player's hover-look lands on the same figure at 60 fps:
+//              90 deg/s eased with tau 0.1 s steps 1.45 deg/frame, measured.)
 //   creep      CW-52's 2 cm step, kept as the comparator to the old verdict.
 //   turn       CW-52's 0.05 deg sub-cell rotation, likewise.
 //

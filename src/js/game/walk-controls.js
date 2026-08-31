@@ -59,6 +59,9 @@ const MAX_STEP_DT_S = 0.1;
 // frame at 0.10-0.14 us, and each extra hop adds about 0.03 us, against a
 // 33 ms frame budget.
 const MAX_SUBSTEP_M = PLAYER_RADIUS_M / 2;
+// Below this a hop component is float dust, not movement (CW-81): a micron
+// per hop even at 30 fps is 30 um/s, four orders under anything visible.
+const MIN_HOP_M = 1e-6;
 
 /**
  * @param {{x: number, y: number, headingRad?: number, pitchRad?: number}} spawn
@@ -182,9 +185,17 @@ export function stepWalk(state, input, dtS, collision) {
   if (forward === 0 && strafe === 0) return { moved: false, turned, pitched };
 
   const walkSpeed = speedForLabel(input.speedLabel);
-  const speed = input.fast
-    ? Math.min(SPRINT_MAX_MPS, walkSpeed * SPRINT_MULTIPLIER)
-    : walkSpeed;
+  // CW-81: the acceleration ramp. `speedScale` (0..1) lets a caller ease the
+  // walker up to speed and back down instead of starting every step at the
+  // full 4.8 m/s from rest; absent, everything behaves exactly as before.
+  const speedScale = Number.isFinite(input.speedScale)
+    ? Math.min(1, Math.max(0, input.speedScale))
+    : 1;
+  const speed =
+    (input.fast
+      ? Math.min(SPRINT_MAX_MPS, walkSpeed * SPRINT_MULTIPLIER)
+      : walkSpeed) * speedScale;
+  if (speed <= 0) return { moved: false, turned, pitched };
   const sin = Math.sin(state.headingRad);
   const cos = Math.cos(state.headingRad);
   // Forward along the bearing; strafe 90° clockwise from it.
@@ -199,8 +210,16 @@ export function stepWalk(state, input, dtS, collision) {
   const hops = collision
     ? Math.max(1, Math.ceil(Math.hypot(dx, dy) / MAX_SUBSTEP_M))
     : 1;
-  const hopX = dx / hops;
-  const hopY = dy / hops;
+  let hopX = dx / hops;
+  let hopY = dy / hops;
+  // A near-cardinal bearing carries float dust in its cross component
+  // (Math.sin(Math.PI) is 1.2e-16, not 0), and dust is enough to arm the
+  // slide branches below: nose to a wall, the walker "slides" 1e-16 m per
+  // frame with moved: true, forever - standing still while claiming to
+  // walk, so auto-walk's blocked stop never fires. A micron per hop is
+  // nothing a player can perceive; a real glide moves millimetres.
+  if (Math.abs(hopX) < MIN_HOP_M) hopX = 0;
+  if (Math.abs(hopY) < MIN_HOP_M) hopY = 0;
 
   let moved = false;
   for (let i = 0; i < hops; i++) {

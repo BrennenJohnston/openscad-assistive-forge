@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Auto-walk** (CW-81) - press N and the walker walks forward on its own until something stops
+  it: N again, Escape, any walk key, or an obstacle in the way - and it says so out loud each
+  time. While it walks, Arrow Up and Arrow Down look up and down, and touching W A S D takes the
+  wheel straight back. One press covers the length of a street that used to need a key held the
+  whole way, which matters when holding a key down is the hard part
+
 - **Seven real landmarks per city, chosen by hand** (CW-78) - the landmark list used to be
   arithmetic over map tags, which filled Seattle's legend with hotels and put the Space Needle
   eleventh of twelve. Each city now carries seven landmarks drafted from its own landmark
@@ -60,6 +66,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   re-enter the ring. The landing itself marks it now
 
 ### Changed
+
+- **Looking around is hands-free by default** (CW-81) - the view turns toward wherever the
+  cursor points: still in the middle, faster toward the edges, settling the moment the cursor
+  comes back to centre or leaves the picture. A Mouse look button cycles between this, the old
+  hold-and-drag, and off, and the choice is remembered; with reduced motion set it starts off
+  and stays whatever you pick. Underneath, every way of looking - keys, mouse, the camera
+  panel's buttons - now steers one target the camera follows smoothly, and walking builds to
+  full stride over a quarter second instead of starting at it, so a tap of W is a step, not a
+  lurch
 
 - **In color, every surface now has a color of its own** (CW-92) - a wall used to change color as
   you walked toward it, sometimes flipping from one color to another all at once across a whole

@@ -612,6 +612,12 @@ test.describe('ASCII City Walk — the view cuts, it does not cross-fade (D-81)'
     await enterCity(page)
     await page.waitForTimeout(1500)
     await page.locator('#cityWalkViewport').click({ position: { x: 5, y: 5 } })
+    // CW-81: that focus click parks the pointer at the viewport's top-left
+    // corner, which hover-look reads as a full-rate turn - the street then
+    // pans forever and immediate-vs-settled measures scenery, not ghosting
+    // (25.73 levels, deterministic). Park the pointer off the viewport so
+    // the camera holds still; the ghost this test guards is unaffected.
+    await page.mouse.move(0, 0)
 
     /** Mean absolute difference in level between two PNG buffers, 0-255. */
     const ghost = (a, b) =>
@@ -905,8 +911,18 @@ test.describe('ASCII City Walk — looking around (CW-13)', () => {
   test('a mouse drag turns and tilts; a plain click does neither', async ({
     page,
   }) => {
+    // CW-81: dragging is the second of three look modes now (hover-look is
+    // the default), so this case opts into DRAG explicitly and keeps
+    // guarding the 0.25 deg/px contract. Shortened from 20 mouse steps to 8
+    // (§6a: the 20-step version hung against the 60 s CI limit).
+    await page.addInitScript(() =>
+      localStorage.setItem('openscad-forge-city-walk-look', 'drag')
+    )
     await launchGame(page)
     await enterCity(page)
+    expect(
+      await page.evaluate(() => window.__cityWalkGame.lookMode)
+    ).toBe('drag')
 
     const before = await gaze(page)
 
@@ -923,7 +939,7 @@ test.describe('ASCII City Walk — looking around (CW-13)', () => {
     // clearest street rather than a fixed north.
     const TAU_DEG = 360
     const startDeg = Math.round(before.heading / DEG)
-    await dragViewport(page, 200, -100)
+    await dragViewport(page, 200, -100, 8)
     await expect
       .poll(async () =>
         (Math.round((await gaze(page)).heading / DEG) - startDeg + TAU_DEG) %
@@ -1010,10 +1026,17 @@ test.describe('ASCII City Walk — looking around (CW-13)', () => {
     await expect(page.locator('#cityWalkHelpPanel')).toContainText(
       'V: level the view'
     )
-    // CW-59: the mouse drags the MAP now as well, so the line that taught
-    // it as street-only was describing half the feature.
+    // CW-81: hover-look is the default now, so the help teaches the mouse
+    // MOVE first and the drag line keeps only its map half (CW-59's lesson
+    // that the map drags too survives in it).
     await expect(page.locator('#cityWalkHelpPanel')).toContainText(
-      'Drag with the mouse: look around in street view, move the map in map view'
+      'Move the mouse: the view turns toward the cursor'
+    )
+    await expect(page.locator('#cityWalkHelpPanel')).toContainText(
+      'Drag with the mouse: move the map in map view'
+    )
+    await expect(page.locator('#cityWalkHelpPanel')).toContainText(
+      'N: auto-walk forward until something stops you'
     )
     // ★ AND THE MAP LINE TEACHES W A S D, which it always should have. Those
     // keys have panned the map since the map existed - the same actions the

@@ -145,6 +145,36 @@ describe('stepWalk — movement math', () => {
     const tau = Math.PI * 2
     expect(state.headingRad).toBeCloseTo(tau - TURN_SPEED_RADPS * 0.1, 6)
   })
+
+  // CW-81: the acceleration ramp rides in through speedScale. Half scale is
+  // half distance; zero scale is a stand-still that reports moved: false
+  // (auto-walk's blocked-stop must not fire while the walker is merely
+  // still ramping up from rest); turning is never scaled.
+  it('speedScale scales the stride linearly and only the stride', () => {
+    const half = createWalkState({ x: 0, y: 0, headingRad: 0 })
+    stepWalk(half, { forward: 1, speedScale: 0.5 }, 0.1)
+    expect(half.y).toBeCloseTo(WALK_SPEED_MPS * 0.05, 5)
+
+    const turned = createWalkState({ x: 0, y: 0, headingRad: 0 })
+    stepWalk(turned, { turn: 1, forward: 1, speedScale: 0.5 }, 0.1)
+    expect(turned.headingRad).toBeCloseTo(TURN_SPEED_RADPS * 0.1, 6)
+  })
+
+  it('speedScale 0 stands still and says moved: false, not blocked', () => {
+    const state = createWalkState({ x: 0, y: 0, headingRad: 0 })
+    const out = stepWalk(state, { forward: 1, speedScale: 0 }, 0.1)
+    expect(state.y).toBe(0)
+    expect(out.moved).toBe(false)
+  })
+
+  it('speedScale is clamped to [0, 1] and absent means full speed', () => {
+    const over = createWalkState({ x: 0, y: 0, headingRad: 0 })
+    stepWalk(over, { forward: 1, speedScale: 7 }, 0.1)
+    const plain = createWalkState({ x: 0, y: 0, headingRad: 0 })
+    stepWalk(plain, { forward: 1 }, 0.1)
+    expect(over.y).toBeCloseTo(plain.y, 6)
+    expect(plain.y).toBeCloseTo(WALK_SPEED_MPS * 0.1, 5)
+  })
 })
 
 describe('firstPersonPose and headingLabel', () => {
@@ -276,6 +306,22 @@ describe('stepWalk — collision', () => {
     const slider = createWalkState({ x: 14.2, y: -2, headingRad: Math.PI / 4 })
     for (let i = 0; i < 40; i++) stepWalk(slider, { forward: 1 }, 0.1, grid)
     expect(slider.y).toBeGreaterThan(2) // slid north past the building corner
+  })
+
+  // CW-81: Math.PI / 2 carries float dust in its cross component
+  // (Math.cos(Math.PI / 2) is 6e-17, not 0), and dust used to arm the slide
+  // branch: pressed against a wall the walker "slid" 1e-17 m per frame with
+  // moved: true, forever - so auto-walk's blocked stop never fired on an
+  // east, south or west bearing. Dust is not movement.
+  it('reports moved: false against a wall on a near-cardinal bearing', () => {
+    const model = testModel()
+    const grid = buildCollisionGrid(model)
+    const state = createWalkState({ x: 13.5, y: 0, headingRad: Math.PI / 2 })
+    for (let i = 0; i < 30; i++) stepWalk(state, { forward: 1 }, 0.1, grid)
+    const y0 = state.y
+    const out = stepWalk(state, { forward: 1 }, 0.1, grid)
+    expect(out.moved).toBe(false)
+    expect(state.y).toBe(y0)
   })
 })
 
