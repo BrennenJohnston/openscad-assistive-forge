@@ -1171,7 +1171,11 @@ test.describe('ASCII City Walk — real silhouettes (CW-26)', () => {
       const ys = target.outer.map((p) => p[1])
       const cx = xs.reduce((a, c) => a + c, 0) / xs.length
       const cy = ys.reduce((a, c) => a + c, 0) / ys.length
-      const apexZ = target.heightM
+      // CW-79: the building stands on its centroid's ground now.
+      const groundZ = g.surface?.terrain
+        ? g.surface.terrain.heightAt(cx, cy)
+        : 0
+      const apexZ = target.heightM + groundZ
 
       let apexVerts = 0
       let above = 0
@@ -1190,11 +1194,34 @@ test.describe('ASCII City Walk — real silhouettes (CW-26)', () => {
         if (o.name !== 'buildings') return
         const pos = o.geometry.getAttribute('position')
         if (!pos) return
+        // CW-79: the sweep is scoped to THIS building's own footprint (a
+        // ray-cast against its outer ring, with a 0.3 m margin). The 12 m
+        // disc was tight enough on flat ground once the birds were
+        // excluded, but the hills put a NEIGHBOUR's ground a metre higher,
+        // and four of its wall vertices rose above this house's apex - the
+        // CW-77 bird lesson again, wearing a hill: a guard a neighbour can
+        // fail is not measuring a roof.
+        const inFootprint = (x, y) => {
+          let inside = false
+          const ring = target.outer
+          for (let a2 = 0, b2 = ring.length - 1; a2 < ring.length; b2 = a2++) {
+            const [xa, ya] = ring[a2]
+            const [xb, yb] = ring[b2]
+            if (
+              ya > y !== yb > y &&
+              x < ((xb - xa) * (y - ya)) / (yb - ya) + xa
+            ) {
+              inside = !inside
+            }
+          }
+          return inside
+        }
         for (let i = 0; i < pos.count; i++) {
           const x = pos.getX(i)
           const y = pos.getY(i)
           const z = pos.getZ(i)
           if (Math.hypot(x - cx, y - cy) > 12) continue
+          if (!inFootprint(x, y)) continue
           if (z > apexZ + 0.05) above++
           // The same sweep with the bar lowered to the eaves. If this is 0
           // the sweep is looking at nothing and the line above is vacuous.
@@ -1780,7 +1807,17 @@ test.describe('ASCII City Walk — the kerb (CW-50)', () => {
           // the record but never used to choose the spot.
           if (g.surface) s.groundZ = g.surface.heightAt(mx, my)
           g.altView.invalidate()
-          return { x: mx, y: my, needM, startGroundZ: s.groundZ ?? null }
+          return {
+            x: mx,
+            y: my,
+            needM,
+            startGroundZ: s.groundZ ?? null,
+            // CW-79: the roadway question BY NAME - under terrain the
+            // roadway's absolute height is the hill's, not a negative.
+            startsOnPavement: g.surface?.isPavement
+              ? g.surface.isPavement(mx, my)
+              : null,
+          }
         }
       }
       return null
@@ -1898,7 +1935,9 @@ test.describe('ASCII City Walk — the kerb (CW-50)', () => {
     )
     // And the walk really did start down in the roadway rather than already
     // up on a pavement, which is what makes the climb above a kerb.
-    expect(setup.startGroundZ).toBeLessThan(0)
+    // CW-79: asked by name - the old 'groundZ < 0' read the kerb cut off an
+    // absolute height, and the hills put the roadway at +79 m here.
+    expect(setup.startsOnPavement).toBe(false)
   })
 })
 

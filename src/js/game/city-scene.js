@@ -62,7 +62,106 @@ import {
   isPavementWay,
   buildRoadwayIndex,
   rectsOverlap,
+  buildTerrain,
 } from './walk-controls.js';
+
+/**
+ * CW-79: lift every vertex of a geometry onto the terrain under it. For a
+ * ribbon this is the drape the release asks for (cross-slope included,
+ * because each edge of the ribbon meets its own ground); for a small prop
+ * it is indistinguishable from standing the prop on its spot; for a parked
+ * car it is the tilt a real car takes from the street it stands on. The
+ * one thing it must NOT touch is a building - a large rigid volume would
+ * have its roof warped to the hill's shape - which is why the buildings
+ * take a per-building lift and skirt instead, in their own loop.
+ *
+ * A tree's crown spread pays a bounded warp (slope x spread, under ~1 m on
+ * the steepest Seattle block); per-prop rigid anchors are the shelf option
+ * if the owner's eye catches it.
+ */
+function drapeGeometry(geometry, terrain) {
+  if (!terrain || !geometry?.getAttribute) return geometry;
+  const pos = geometry.getAttribute('position');
+  for (let i = 0; i < pos.count; i++) {
+    pos.setZ(i, pos.getZ(i) + terrain.heightAt(pos.getX(i), pos.getY(i)));
+  }
+  pos.needsUpdate = true;
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
+/**
+ * CW-79: split triangles until no XY edge exceeds maxEdgeM, so a LARGE
+ * flat polygon (a park) gains the interior vertices a drape needs - a
+ * shape triangulation puts vertices only on the ring, and a 100 m lawn
+ * with none inside would plank across a hill, which is the round-1 carpet
+ * failure wearing grass. Non-indexed out; every attribute the geometry
+ * carries is split by linear interpolation.
+ */
+function subdivideTriangles(geometry, maxEdgeM) {
+  const src = geometry.index ? geometry.toNonIndexed() : geometry;
+  const names = Object.keys(src.attributes);
+  const sizes = {};
+  const out = {};
+  for (const n of names) {
+    sizes[n] = src.attributes[n].itemSize;
+    out[n] = [];
+  }
+  const read = (n, i) => {
+    const a = src.attributes[n];
+    return Array.from(a.array.subarray(i * a.itemSize, (i + 1) * a.itemSize));
+  };
+  const mid = (u, v) => u.map((x, k) => (x + v[k]) / 2);
+  const vert = (tri, i) => Object.fromEntries(names.map((n) => [n, tri[n][i]]));
+  const emit = (tri) => {
+    const [p0, p1, p2] = tri.position;
+    const longest = Math.max(
+      Math.hypot(p1[0] - p0[0], p1[1] - p0[1]),
+      Math.hypot(p2[0] - p1[0], p2[1] - p1[1]),
+      Math.hypot(p0[0] - p2[0], p0[1] - p2[1])
+    );
+    if (longest > maxEdgeM) {
+      const m01 = {};
+      const m12 = {};
+      const m20 = {};
+      for (const n of names) {
+        m01[n] = mid(tri[n][0], tri[n][1]);
+        m12[n] = mid(tri[n][1], tri[n][2]);
+        m20[n] = mid(tri[n][2], tri[n][0]);
+      }
+      const sub = (a, b, c) => {
+        const t = {};
+        for (const n of names) t[n] = [a[n] ?? a, b[n] ?? b, c[n] ?? c];
+        emit(t);
+      };
+      sub(vert(tri, 0), m01, m20);
+      sub(m01, vert(tri, 1), m12);
+      sub(m20, m12, vert(tri, 2));
+      sub(m01, m12, m20);
+      return;
+    }
+    for (const n of names) {
+      for (const v of tri[n]) out[n].push(...v);
+    }
+  };
+  const triCount = src.attributes.position.count / 3;
+  for (let i = 0; i < triCount; i++) {
+    const tri = {};
+    for (const n of names) {
+      tri[n] = [read(n, i * 3), read(n, i * 3 + 1), read(n, i * 3 + 2)];
+    }
+    emit(tri);
+  }
+  const result = new BufferGeometry();
+  for (const n of names) {
+    result.setAttribute(
+      n,
+      new BufferAttribute(new Float32Array(out[n]), sizes[n])
+    );
+  }
+  if (src !== geometry) src.dispose();
+  return result;
+}
 import {
   makeFigureSpec,
   makeFigureGeoms,
@@ -2769,6 +2868,9 @@ function roofGeometry(volume, tint) {
  */
 function appendCurbFace(road, positions, cullBounds, shape) {
   const { offsetM, loZ, hiZ } = shape;
+  // CW-79: same subdivision law as the ribbons - a face that will be
+  // draped must not span a crest in one quad. Unset, byte-identical.
+  const subdivideM = shape.subdivideM ?? Infinity;
   const inBounds = (x, y) =>
     !cullBounds ||
     (x >= cullBounds.minX &&
@@ -2776,39 +2878,47 @@ function appendCurbFace(road, positions, cullBounds, shape) {
       y >= cullBounds.minY &&
       y <= cullBounds.maxY);
   for (let i = 0; i < road.points.length - 1; i++) {
-    const [x1, y1] = road.points[i];
-    const [x2, y2] = road.points[i + 1];
-    if (!inBounds(x1, y1) && !inBounds(x2, y2)) continue;
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    const len = Math.hypot(dx, dy);
-    if (len < 1e-6) continue;
-    const nx = (-dy / len) * offsetM;
-    const ny = (dx / len) * offsetM;
-    const ax = x1 + nx;
-    const ay = y1 + ny;
-    const bx = x2 + nx;
-    const by = y2 + ny;
-    positions.push(
-      ax,
-      ay,
-      loZ,
-      bx,
-      by,
-      loZ,
-      bx,
-      by,
-      hiZ,
-      ax,
-      ay,
-      loZ,
-      bx,
-      by,
-      hiZ,
-      ax,
-      ay,
-      hiZ
-    );
+    const [p1, p2] = [road.points[i], road.points[i + 1]];
+    if (!inBounds(p1[0], p1[1]) && !inBounds(p2[0], p2[1])) continue;
+    const fullLen = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
+    if (fullLen < 1e-6) continue;
+    const subs = Math.max(1, Math.ceil(fullLen / subdivideM));
+    for (let k = 0; k < subs; k++) {
+      const x1 = p1[0] + ((p2[0] - p1[0]) * k) / subs;
+      const y1 = p1[1] + ((p2[1] - p1[1]) * k) / subs;
+      const x2 = p1[0] + ((p2[0] - p1[0]) * (k + 1)) / subs;
+      const y2 = p1[1] + ((p2[1] - p1[1]) * (k + 1)) / subs;
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const len = Math.hypot(dx, dy);
+      if (len < 1e-6) continue;
+      const nx = (-dy / len) * offsetM;
+      const ny = (dx / len) * offsetM;
+      const ax = x1 + nx;
+      const ay = y1 + ny;
+      const bx = x2 + nx;
+      const by = y2 + ny;
+      positions.push(
+        ax,
+        ay,
+        loZ,
+        bx,
+        by,
+        loZ,
+        bx,
+        by,
+        hiZ,
+        ax,
+        ay,
+        loZ,
+        bx,
+        by,
+        hiZ,
+        ax,
+        ay,
+        hiZ
+      );
+    }
   }
 }
 
@@ -2912,6 +3022,11 @@ function appendRoadRibbon(road, positions, cullBounds, shape = {}) {
       x <= cullBounds.maxX &&
       y >= cullBounds.minY &&
       y <= cullBounds.maxY);
+  // CW-79: a ribbon that will be DRAPED must not span a hill in one quad -
+  // a 100 m straight street over a crest would bridge it. `subdivideM`
+  // caps the emitted segment length; unset (every fixture, a flat city) it
+  // emits exactly the geometry it always has, byte for byte.
+  const subdivideM = shape.subdivideM ?? Infinity;
   for (let i = 0; i < road.points.length - 1; i++) {
     const [x1, y1] = road.points[i];
     const [x2, y2] = road.points[i + 1];
@@ -2922,38 +3037,45 @@ function appendRoadRibbon(road, positions, cullBounds, shape = {}) {
     if (len < 1e-6) continue;
     const nx = -dy / len;
     const ny = dx / len;
-    const cx1 = x1 + nx * offset;
-    const cy1 = y1 + ny * offset;
-    const cx2 = x2 + nx * offset;
-    const cy2 = y2 + ny * offset;
     const px = nx * half;
     const py = ny * half;
 
-    const a = [cx1 + px, cy1 + py, lift];
-    const b = [cx1 - px, cy1 - py, lift];
-    const c = [cx2 - px, cy2 - py, lift];
-    const d = [cx2 + px, cy2 + py, lift];
-    // Two CCW triangles (normal +Z): a-b-c, a-c-d
-    positions.push(...a, ...b, ...c, ...a, ...c, ...d);
-    // CW-33: the surface tint rides as a vertex colour so that every ribbon
-    // stays in ONE merged mesh. Splitting by paving material would multiply
-    // the draw calls and, worse, give the class pass a new mesh name to learn
-    // for every value OSM happens to carry.
-    if (shape.colors) {
-      const t = shape.tint ?? 1;
-      for (let v = 0; v < 6; v++) shape.colors.push(t, t, t);
-    }
-    // CW-51: UVs in METRES, so a paving texture keeps one real-world scale
-    // whatever width the ribbon is and however the way is split. v runs
-    // ALONG the ribbon and carries across segments on `shape.uvCursor`,
-    // otherwise the scoring seams would restart at every OSM vertex and
-    // bunch at bends the way the centre-line dashes would have.
-    if (shape.uvs) {
-      const v0 = shape.uvCursor ?? 0;
-      const v1 = v0 + len;
-      const u = half;
-      shape.uvs.push(u, v0, -u, v0, -u, v1, u, v0, -u, v1, u, v1);
-      shape.uvCursor = v1;
+    const subs = Math.max(1, Math.ceil(len / subdivideM));
+    for (let k = 0; k < subs; k++) {
+      const t0 = k / subs;
+      const t1 = (k + 1) / subs;
+      const cx1 = x1 + dx * t0 + nx * offset;
+      const cy1 = y1 + dy * t0 + ny * offset;
+      const cx2 = x1 + dx * t1 + nx * offset;
+      const cy2 = y1 + dy * t1 + ny * offset;
+
+      const a = [cx1 + px, cy1 + py, lift];
+      const b = [cx1 - px, cy1 - py, lift];
+      const c = [cx2 - px, cy2 - py, lift];
+      const d = [cx2 + px, cy2 + py, lift];
+      // Two CCW triangles (normal +Z): a-b-c, a-c-d
+      positions.push(...a, ...b, ...c, ...a, ...c, ...d);
+      // CW-33: the surface tint rides as a vertex colour so that every
+      // ribbon stays in ONE merged mesh. Splitting by paving material would
+      // multiply the draw calls and, worse, give the class pass a new mesh
+      // name to learn for every value OSM happens to carry.
+      if (shape.colors) {
+        const t = shape.tint ?? 1;
+        for (let v = 0; v < 6; v++) shape.colors.push(t, t, t);
+      }
+      // CW-51: UVs in METRES, so a paving texture keeps one real-world
+      // scale whatever width the ribbon is and however the way is split. v
+      // runs ALONG the ribbon and carries across segments on
+      // `shape.uvCursor`, otherwise the scoring seams would restart at
+      // every OSM vertex and bunch at bends the way the centre-line dashes
+      // would have.
+      if (shape.uvs) {
+        const v0 = shape.uvCursor ?? 0;
+        const v1 = v0 + len / subs;
+        const u = half;
+        shape.uvs.push(u, v0, -u, v0, -u, v1, u, v0, -u, v1, u, v1);
+        shape.uvCursor = v1;
+      }
     }
   }
 }
@@ -3372,6 +3494,10 @@ export function buildCityGroup(model) {
   // the CW-18 signs and rooftop masts. One mesh per archetype (CW-25/CW-34):
   // the texture is per-material, so a facade look means a mesh to carry it.
   const buildingGeoms = Array.from({ length: FACADE_COUNT }, () => []);
+  // CW-79: the ground's real height. Null for a fixture or a v1 extract,
+  // and then nothing in this build moves a millimetre.
+  const terrain = buildTerrain(model.elevation);
+  let skirtsAdded = 0;
   const storefrontGeoms = [];
   // CW-78: the node-keyed bodies and the Needle's top, merged into their own
   // 'landmark-masts' mesh so they carry the MAST class rather than a facade's.
@@ -3478,6 +3604,22 @@ export function buildCityGroup(model) {
       dressedFacade >= 0
         ? dressedFacade
         : (ARCHETYPE_INDEX_BY_NAME.get(chosenName) ?? 0);
+
+    // CW-79: everything this iteration pushes - walls, storefront strip,
+    // signs, antennas, a landmark dressing - moves as ONE RIGID BODY onto
+    // the building's ground at the end of the iteration (a per-vertex
+    // drape would warp a large roof to the hill's shape). The tail indexes
+    // are what "everything this iteration pushes" means.
+    const terrainTail = terrain
+      ? {
+          fam: buildingGeoms[archetypeIndex].length,
+          store: storefrontGeoms.length,
+          plates: signOut.plates.length,
+          faces: signOut.faces.length,
+          ant: antennaGeoms.length,
+          masts: landmarkMastGeoms.length,
+        }
+      : null;
 
     // CW-46 rider: the ground floor's HEIGHT is per building (hash within the
     // documented 3.2-5.0 m range). CW-73 hoists it above the volume loop,
@@ -3835,6 +3977,40 @@ export function buildCityGroup(model) {
         )
       );
     }
+
+    // CW-79: the rigid lift, and the skirt that closes the downhill gap.
+    if (terrainTail) {
+      const [bcx, bcy] = ringCentroid(building.outer);
+      const bz = terrain.heightAt(bcx, bcy);
+      let lowZ = bz;
+      for (const [px, py] of building.outer) {
+        const hz = terrain.heightAt(px, py);
+        if (hz < lowZ) lowZ = hz;
+      }
+      const lift = (arr, from) => {
+        for (let i = from; i < arr.length; i++) arr[i].translate(0, 0, bz);
+      };
+      lift(buildingGeoms[archetypeIndex], terrainTail.fam);
+      lift(storefrontGeoms, terrainTail.store);
+      lift(signOut.plates, terrainTail.plates);
+      lift(signOut.faces, terrainTail.faces);
+      lift(antennaGeoms, terrainTail.ant);
+      lift(landmarkMastGeoms, terrainTail.masts);
+      // The base sits at the centroid's ground; downhill of it the wall
+      // would hang in the air. The skirt is the building's own footprint
+      // extruded down past the lowest corner - only where a gap exists,
+      // so a flat city builds not one extra triangle.
+      if (building.minHeightM === 0 && bz - lowZ > 0.05) {
+        const skirt = extrudeBuilding(building, tint, {
+          depthOverride: bz - lowZ + 0.3,
+        });
+        if (skirt) {
+          skirt.translate(0, 0, lowZ - 0.3);
+          buildingGeoms[archetypeIndex].push(skirt);
+          skirtsAdded++;
+        }
+      }
+    }
   });
 
   let buildingTriangles = 0;
@@ -3942,7 +4118,13 @@ export function buildCityGroup(model) {
   // mesh at all.
   for (const node of model.attractions ?? []) {
     if (nodeDressingFor(node.id)?.body === 'great-wheel') {
-      landmarkMastGeoms.push(...greatWheelGeometries(node));
+      const wheelGeoms = greatWheelGeometries(node);
+      // CW-79: a node dressing stands rigidly on its node's own ground.
+      if (terrain) {
+        const nz = terrain.heightAt(node.x, node.y);
+        for (const g of wheelGeoms) g.translate(0, 0, nz);
+      }
+      landmarkMastGeoms.push(...wheelGeoms);
     }
   }
   addDressing(landmarkMastGeoms, 'landmark-masts', { farSilhouette: true });
@@ -3952,7 +4134,40 @@ export function buildCityGroup(model) {
   const b = model.boundsM;
   const width = Math.max(b.maxX - b.minX, 1) + GROUND_MARGIN_M * 2;
   const height = Math.max(b.maxY - b.minY, 1) + GROUND_MARGIN_M * 2;
-  const groundGeom = new PlaneGeometry(width, height);
+  // CW-79: with terrain the plane is subdivided near the DEM's own step and
+  // displaced onto it - the whole floor becomes the hill. Vertices are in
+  // the plane's LOCAL frame (centred on the model), so the world offset the
+  // mesh position adds below is applied before asking the terrain.
+  const groundSegs = terrain
+    ? [Math.ceil(width / 15), Math.ceil(height / 15)]
+    : [1, 1];
+  // The plane's triangles interpolate PLANARLY between vertices while the
+  // ribbons drape by bilinear samples, and inside a curvy DEM cell the two
+  // disagree by decimetres - far more than the 2 cm the roadway floats
+  // over the ground. The backdrop does not need exactness, it needs to
+  // stay UNDER: it sinks a clearance below the surface wherever terrain
+  // exists, and the mismatch drowns in it.
+  const GROUND_TERRAIN_CLEARANCE_M = 0.6;
+  const groundGeom = new PlaneGeometry(
+    width,
+    height,
+    groundSegs[0],
+    groundSegs[1]
+  );
+  if (terrain) {
+    const gcx = (model.boundsM.minX + model.boundsM.maxX) / 2;
+    const gcy = (model.boundsM.minY + model.boundsM.maxY) / 2;
+    const gpos = groundGeom.getAttribute('position');
+    for (let i = 0; i < gpos.count; i++) {
+      gpos.setZ(
+        i,
+        terrain.heightAt(gpos.getX(i) + gcx, gpos.getY(i) + gcy) -
+          GROUND_TERRAIN_CLEARANCE_M
+      );
+    }
+    gpos.needsUpdate = true;
+    groundGeom.computeBoundingSphere();
+  }
   const groundMat = new MeshLambertMaterial({
     color: 0xffffff,
     map: groundTexture ?? null,
@@ -3988,6 +4203,9 @@ export function buildCityGroup(model) {
     maxX: b.maxX + GROUND_MARGIN_M,
     maxY: b.maxY + GROUND_MARGIN_M,
   };
+  // CW-79: cap ribbon segments at half the DEM step when the city has
+  // terrain, so no quad can bridge a crest the drape would have followed.
+  const ribbonSubdivideM = terrain ? 15 : undefined;
   const roadPositions = [];
   const roadColors = [];
   const curbPositions = [];
@@ -4015,6 +4233,7 @@ export function buildCityGroup(model) {
         uvs: sidewalkUvs,
         tint: surfaceTint(road.surface, DEFAULT_SIDEWALK_SURFACE),
         liftM: PAVEMENT_LIFT_M,
+        subdivideM: ribbonSubdivideM,
       });
       continue;
     }
@@ -4024,6 +4243,7 @@ export function buildCityGroup(model) {
       colors: roadColors,
       tint: surfaceTint(road.surface, DEFAULT_ROAD_SURFACE),
       liftM: ROADWAY_LIFT_M,
+      subdivideM: ribbonSubdivideM,
     });
     // Every street gets a pavement, not only the few whose pavements
     // OpenStreetMap maps separately - that patchiness is what left the
@@ -4038,6 +4258,7 @@ export function buildCityGroup(model) {
         uvs: sidewalkUvs,
         tint: surfaceTint(road.surface, DEFAULT_SIDEWALK_SURFACE),
         liftM: PAVEMENT_LIFT_M,
+        subdivideM: ribbonSubdivideM,
       });
     }
     // CW-51: only the arterials are painted, and lanes= refines nothing here
@@ -4059,6 +4280,7 @@ export function buildCityGroup(model) {
         widthM: CURB_WIDTH_M,
         offsetM: side,
         liftM: PAVEMENT_LIFT_M + 0.01,
+        subdivideM: ribbonSubdivideM,
       });
       // ...and its face, so the step down is a surface and not a gap to see
       // under from a low camera.
@@ -4066,12 +4288,22 @@ export function buildCityGroup(model) {
         offsetM: side < 0 ? side - CURB_WIDTH_M / 2 : side + CURB_WIDTH_M / 2,
         loZ: ROADWAY_LIFT_M,
         hiZ: PAVEMENT_LIFT_M + 0.01,
+        subdivideM: ribbonSubdivideM,
       });
     }
   }
 
   const makeFlatMesh = (positions, material, name, colors, uvs) => {
     const geom = new BufferGeometry();
+    // CW-79: the ribbons drape - every vertex onto its own ground, which
+    // is the cross-slope for free (each edge of a ribbon meets the ground
+    // under that edge). Normals stay +z: at street grades the lighting
+    // error is invisible and the converter reads luminance, not normals.
+    if (terrain) {
+      for (let i = 0; i < positions.length; i += 3) {
+        positions[i + 2] += terrain.heightAt(positions[i], positions[i + 1]);
+      }
+    }
     geom.setAttribute(
       'position',
       new BufferAttribute(new Float32Array(positions), 3)
@@ -4186,7 +4418,13 @@ export function buildCityGroup(model) {
     greenGeoms.push(geom);
   }
   if (greenGeoms.length > 0) {
-    const merged = mergeGeometries(greenGeoms, false);
+    let merged = mergeGeometries(greenGeoms, false);
+    if (terrain) {
+      // Interior vertices first (a park is a big flat polygon), then drape.
+      const fine = subdivideTriangles(merged, 20);
+      merged.dispose();
+      merged = drapeGeometry(fine, terrain);
+    }
     for (const g of greenGeoms) g.dispose();
     greenMat = new MeshLambertMaterial({
       color: GREEN_TONES.street,
@@ -4499,6 +4737,10 @@ export function buildCityGroup(model) {
       group.clear();
     },
     stats: {
+      // CW-79: what the hills cost and where they came from, counted.
+      terrainSpanM: terrain ? terrain.spanM : 0,
+      terrainHolesFilled: terrain ? terrain.filledHoles : 0,
+      skirtsAdded,
       buildingTriangles,
       storefrontTriangles,
       storefrontBands,
@@ -5643,6 +5885,8 @@ function makePitchedMember(ax, ay, az, bx, by, bz, thickM, tint) {
  */
 export function buildStreetProps(model, collision = null) {
   const group = new Group();
+  // CW-79: every prop stands on its own ground (null = flat, a fixture).
+  const terrain = buildTerrain(model.elevation);
   group.name = 'street-props';
   const disposables = [];
   const obstacles = [];
@@ -7041,7 +7285,7 @@ export function buildStreetProps(model, collision = null) {
       material.dispose();
       return;
     }
-    const merged = mergeGeometries(geoms, false);
+    const merged = drapeGeometry(mergeGeometries(geoms, false), terrain);
     for (const g of geoms) g.dispose();
     const mesh = new Mesh(merged, material);
     mesh.name = name;
@@ -7088,6 +7332,15 @@ export function buildStreetProps(model, collision = null) {
   // vocabulary (D-110).
   if (bedPositions.length > 0) {
     const bedGeom = new BufferGeometry();
+    // CW-79: a flowerbed is flat ground and drapes like the greens do.
+    if (terrain) {
+      for (let i = 0; i < bedPositions.length; i += 3) {
+        bedPositions[i + 2] += terrain.heightAt(
+          bedPositions[i],
+          bedPositions[i + 1]
+        );
+      }
+    }
     bedGeom.setAttribute(
       'position',
       new BufferAttribute(new Float32Array(bedPositions), 3)
@@ -7203,7 +7456,7 @@ export function buildStreetProps(model, collision = null) {
       const material = new MeshBasicMaterial({
         color: new Color(...LIGHT_TINTS.dark),
       });
-      const merged = mergeGeometries(geoms, false);
+      const merged = drapeGeometry(mergeGeometries(geoms, false), terrain);
       for (const g of geoms) g.dispose();
       const mesh = new Mesh(merged, material);
       mesh.name = 'light-heads';
@@ -8396,7 +8649,7 @@ export function pickTravelerSpot(spots, citySlug, options = {}) {
  * @param {Array<ReturnType<import('./landmark-registry.js').findWaypointSpot>>} spots
  * @returns {{group: Group, obstacles: Array<Object>, dispose: () => void}}
  */
-export function buildWaypointMarks(spots) {
+export function buildWaypointMarks(spots, terrain = null) {
   const group = new Group();
   group.name = 'waypoint-group';
 
@@ -8409,6 +8662,8 @@ export function buildWaypointMarks(spots) {
   const obstacles = [];
   for (const spot of spots) {
     if (!spot) continue;
+    // CW-79: the whole mark stands rigidly on its spot's ground.
+    const spotStart = geoms.length;
     const f = spot.facingRad;
     const centreZ = M.plinthTopM + M.ringOuterM;
     // Local frame: X lateral, Y through the face, Z up; rotateZ(-f) turns
@@ -8458,6 +8713,12 @@ export function buildWaypointMarks(spots) {
     geoms.push(man(0.24, 0.85, -s * 0.55, -0.17, 0.24)); // legs, splayed
     geoms.push(man(0.24, 0.85, -s * 0.55, 0.17, -0.24));
 
+    if (terrain) {
+      const sz = terrain.heightAt(spot.x, spot.y);
+      for (let i = spotStart; i < geoms.length; i++) {
+        geoms[i].translate(0, 0, sz);
+      }
+    }
     obstacles.push({
       x: spot.x,
       y: spot.y,
@@ -8517,7 +8778,7 @@ export function buildWaypointMarks(spots) {
  *            position: () => [number, number]|null,
  *            setMapView: Function, dispose: Function}}
  */
-export function buildTraveler(citySlug) {
+export function buildTraveler(citySlug, groundAt = null) {
   const group = new Group();
   group.name = 'traveler-group';
   group.visible = false;
@@ -8596,6 +8857,9 @@ export function buildTraveler(citySlug) {
     ];
     const merged = mergeGeometries(all, false);
     for (const g of all) g.dispose();
+    // CW-79: the traveler stands on the ground under their feet, wherever
+    // a find or the companion move puts them.
+    if (groundAt) merged.translate(0, 0, groundAt(x, y));
     mesh = new Mesh(merged, material);
     // The name is what the class pass reads; see CLASS_BY_MESH_NAME.
     mesh.name = 'traveler';

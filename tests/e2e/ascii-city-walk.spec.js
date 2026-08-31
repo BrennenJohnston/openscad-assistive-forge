@@ -2541,3 +2541,96 @@ test.describe('ASCII City Walk — the whole-map draw distance (CW-82)', () => {
     expect(gained).toBeGreaterThan(2000)
   })
 })
+
+test.describe('ASCII City Walk — the ground has height (CW-79)', () => {
+  test('★★ walking inland from the waterfront CLIMBS, and the eye rides the ground', async ({
+    page,
+  }) => {
+    test.setTimeout(180000)
+    await launchGame(page)
+    await enterCity(page)
+
+    // The Seattle spawn is on the waterfront (CW-78); everything east goes
+    // up. Face up the grade and hold W - the walker's groundZ and the
+    // camera must rise TOGETHER, smoothly, by metres.
+    const start = await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const st = g.walkState
+      st.x = -120
+      st.y = -580
+      st.headingRad = (78 * Math.PI) / 180
+      g.lookTarget.headingRad = st.headingRad
+      st.groundZ = g.surface.heightAt(st.x, st.y)
+      return { groundZ: st.groundZ }
+    })
+    await page.keyboard.down('KeyW')
+    // Sample as it walks: the climb must be continuous - no single frame
+    // may step the eye more than the kerb-ease law allows.
+    const profile = await page.evaluate(
+      () =>
+        new Promise((resolve) => {
+          const g = window.__cityWalkGame
+          const zs = []
+          const tick = () => {
+            zs.push(g.walkState.groundZ)
+            if (zs.length >= 600) return resolve(zs)
+            requestAnimationFrame(tick)
+          }
+          requestAnimationFrame(tick)
+        })
+    )
+    await page.keyboard.up('KeyW')
+
+    const gained = profile[profile.length - 1] - start.groundZ
+    expect(gained).toBeGreaterThan(3)
+    let worstStep = 0
+    for (let i = 1; i < profile.length; i++) {
+      worstStep = Math.max(worstStep, Math.abs(profile[i] - profile[i - 1]))
+    }
+    // The ease law: ground covered per frame at sprintless walk is ~0.16 m,
+    // and easeGroundZ closes at most CURB_HEIGHT_M per CURB_EASE_M of
+    // travel... a hill's own grade is gentler than a kerb, so half a kerb
+    // per frame is generous headroom against a teleporting eye.
+    expect(worstStep).toBeLessThan(0.15)
+
+    const eye = await page.evaluate(() => ({
+      camZ: window.__cityWalkGame.fpCamera.position.z,
+      groundZ: window.__cityWalkGame.walkState.groundZ,
+    }))
+    expect(eye.camZ).toBeCloseTo(eye.groundZ + 1.7, 1)
+  })
+
+  test('★★ the hills census: a span of real metres, skirts where slopes are, holes only outside the circle', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await launchGame(page)
+    await enterCity(page)
+
+    const census = await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      return {
+        spanM: g.surface.terrain.spanM,
+        holes: g.surface.terrain.filledHoles,
+        skirts: g.city3d.stats.skirtsAdded,
+        waterfront: g.surface.heightAt(-157, -629),
+        firstHillWay: g.surface.heightAt(260, -480),
+        center: g.surface.heightAt(-698, 880),
+      }
+    })
+    // Seattle's bake spans ~105 m of relief; the shoreline sits within a
+    // couple of metres of the datum; 380 m inland the ground stands past
+    // 25 m; Seattle Center past 35. Wide floors, not knife-edges: a rebake
+    // may move each by metres, but a FLAT city or a broken datum cannot
+    // pass any of them.
+    expect(census.spanM).toBeGreaterThan(60)
+    expect(census.waterfront).toBeLessThan(8)
+    expect(census.firstHillWay).toBeGreaterThan(25)
+    expect(census.center).toBeGreaterThan(35)
+    // The DEM answered everywhere inside the circle: the filled holes are
+    // exactly the grid corners the circle never asked for.
+    expect(census.holes).toBe(2012)
+    // Downtown is a hillside: hundreds of buildings need their skirt.
+    expect(census.skirts).toBeGreaterThan(500)
+  })
+})

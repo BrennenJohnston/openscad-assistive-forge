@@ -82,6 +82,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The ground has height** (CW-79) - Seattle stands on its real hills now, from a national 1 m
+  elevation model baked into each city's extract: the streets and pavements drape over the
+  grade with their cross-slope, every tree, lamp, bench and person stands on the ground under
+  it, and each building sits rigidly on its own centroid's ground with a skirt of its own
+  footprint closing the downhill gap - walls stay vertical, roofs stay flat, nothing floats.
+  The walker's eye rides the ground the same way it has ridden kerbs since the kerbs existed,
+  so walking inland from the waterfront is a climb you can watch the city descend behind you
+  from. A city whose extract carries no terrain stays exactly as flat as it was, and the
+  measured cost on the same machine was under a millisecond
+
 - **The skyline is visible from anywhere** (CW-82) - the city used to end 260 metres out: past
   the fog, a tower was a faint cutout and most of the map simply was not there. The detailed
   buildings still own the first 260 metres, and beyond them the same volumes are drawn a second

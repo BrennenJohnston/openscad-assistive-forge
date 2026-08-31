@@ -402,7 +402,7 @@ function nearestOnSegment(px, py, ax, ay, bx, by) {
  * node to its nearest street the same way, so its mark lands on the city
  * pavement that faces it.
  *
- * Pavement is the surface grid's own answer (heightAt == 0 is the apron or a
+ * Pavement is the surface grid's own answer (isPavement - the apron or a
  * mapped pavement; open ground and roadway both read below it), so this
  * cannot disagree with what the scene draws underfoot.
  *
@@ -504,7 +504,9 @@ export function findWaypointSpot(model, collision, surface, landmark) {
     for (let t = 0; t <= total; t += SEARCH_STEP_M) {
       const x = faceX + ux * t;
       const y = faceY + uy * t;
-      if (surface.heightAt(x, y) !== 0) continue;
+      // CW-79: ask the pavement question BY NAME - heightAt carries the
+      // terrain now, and a bare zero-test would refuse every hill.
+      if (!surface.isPavement(x, y)) continue;
       if (!spotClear(collision, x, y)) continue;
       return {
         x,

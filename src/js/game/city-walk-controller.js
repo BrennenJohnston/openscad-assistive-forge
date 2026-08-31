@@ -2089,7 +2089,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // while the saved progress that says whether this city's traveler has been
     // found is not read until much further down. Finding them also MOVES them,
     // and rebuilding a city's props to move one person is absurd.
-    const traveler = buildTraveler(city.slug);
+    const traveler = buildTraveler(city.slug, (x, y) => surface.heightAt(x, y));
     scene.add(traveler.group);
     scene.add(props.group);
     stampObstacles(collision, props.obstacles);
@@ -2101,7 +2101,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     const waypointSpots = landmarks
       .map((lm) => findWaypointSpot(model, collision, surface, lm))
       .filter(Boolean);
-    const waypoints = buildWaypointMarks(waypointSpots);
+    // CW-79: the marks stand on the same ground the walker's eye reads.
+    const waypoints = buildWaypointMarks(waypointSpots, surface.terrain);
     scene.add(waypoints.group);
     stampObstacles(collision, waypoints.obstacles);
 
