@@ -383,10 +383,21 @@ const UNPAVED_FOR_SURFACE = new Set([
 ]);
 
 /**
+ * CW-95 (CW-Q82): ways that are WALKED, never driven - a transit platform,
+ * an indoor corridor, a road closed for rebuilding. Each used to fall
+ * through the width table into a five-metre ROADWAY ribbon, which put a
+ * carriageway on a light-rail platform and parked the bench-sitter law's
+ * "will not invent a person sitting on the tarmac" refusal on top of the
+ * platform benches. They are pavement-family now: walkable open ground.
+ */
+const WALKED_NOT_DRIVEN = new Set(['platform', 'corridor', 'construction']);
+
+/**
  * Whether a way IS pavement rather than a roadway with pavement beside it
  * (CW-50, CW-Q64). A separately-mapped pavement obviously is one; so is a
  * pedestrianised street, which is pavement end to end - cutting a roadway
- * down the middle of one would invent a road that is not there.
+ * down the middle of one would invent a road that is not there. CW-95 adds
+ * the walked-never-driven kinds above.
  *
  * The scene and this grid both read it, so the two cannot drift apart about
  * where the ground is: cross-file disagreement about a shared value is this
@@ -396,7 +407,11 @@ const UNPAVED_FOR_SURFACE = new Set([
  * @returns {boolean}
  */
 export function isPavementWay(road) {
-  return Boolean(road?.sidewalk) || road?.kind === 'pedestrian';
+  return (
+    Boolean(road?.sidewalk) ||
+    road?.kind === 'pedestrian' ||
+    WALKED_NOT_DRIVEN.has(road?.kind)
+  );
 }
 
 /**

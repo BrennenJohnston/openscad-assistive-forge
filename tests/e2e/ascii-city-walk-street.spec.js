@@ -1474,16 +1474,23 @@ test.describe('ASCII City Walk — people are people (CW-45)', () => {
     // stranger city. But the crowd arrived through a set named for lamps,
     // which is worth a reader's minute: if you change what LAMP_ROAD_KINDS
     // holds, you are changing the population.
+    // ★★ CW-95 RE-PINNED THEM A FIFTH TIME, by exactly the four people the
+    // release freed. Platform, corridor and construction ways stopped being
+    // roadways, so Seattle's in-road refusals fell 167 -> 163 - and all
+    // four of the freed spots planted: one sitter (a streetcar-platform
+    // bench), two standing, one jogging. Walking did not move. 2,999
+    // becomes 3,003, and the probe that measured the refusal delta
+    // (167 - 163 = 4) and this census delta (+4) agree to the person.
     const stats = await page.evaluate(() => window.__cityWalkGame.props.stats)
     expect(stats.figuresByPose).toEqual({
-      sitting: 101,
-      standing: 728,
+      sitting: 102,
+      standing: 730,
       walking: 1824,
-      jogging: 346,
+      jogging: 347,
     })
     expect(
       await page.evaluate(() => window.__cityWalkGame.props.peopleCount)
-    ).toBe(2999)
+    ).toBe(3003)
 
     /**
      * ★★ CW-65 ADDS A PERSON TO THE WORLD AND NOT TO THIS CENSUS, AND THAT IS
@@ -1494,8 +1501,8 @@ test.describe('ASCII City Walk — people are people (CW-45)', () => {
      * them MOVES them. So they never pass through buildStreetProps and
      * peopleCount - which counts what the CITY BUILD planted - does not gain
      * the traveler, whatever the pin above happens to read. (It read 3,029
-     * when this was written; four re-pins later it reads 2,999, and not one
-     * of the four was the traveler.)
+     * when this was written; five re-pins later it reads 3,003, and not one
+     * of the five was the traveler.)
      *
      * Asserted rather than assumed, both halves: the crowd did not gain
      * anybody, and the traveler exists all the same. A silent +1 here would

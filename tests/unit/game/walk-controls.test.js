@@ -480,6 +480,20 @@ describe("steerHeading — street-following's fan (CW-87)", () => {
   })
 })
 
+describe('walked, never driven (CW-95, CW-Q82)', () => {
+  it('★★ platform, corridor and construction ways are pavement, not roadways', () => {
+    for (const kind of ['platform', 'corridor', 'construction']) {
+      expect(isPavementWay({ kind }), kind).toBe(true)
+      expect(isDrawnRoadway({ kind }), kind).toBe(false)
+    }
+    // And the ways around them did not move: a street is still a roadway,
+    // a pedestrian street is still pavement.
+    expect(isPavementWay({ kind: 'residential' })).toBe(false)
+    expect(isDrawnRoadway({ kind: 'residential' })).toBe(true)
+    expect(isPavementWay({ kind: 'pedestrian' })).toBe(true)
+  })
+})
+
 describe('segmentClear — the body-swept segment probe (CW-87)', () => {
   it('tells a clear leg from one through a wall', () => {
     const grid = buildCollisionGrid(testModel())

@@ -69,6 +69,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A streetcar platform is not a road** (CW-95) - platform, corridor and construction ways used
+  to fall through the road-width table into a five-metre carriageway, which drew a roadway along
+  the South Lake Union streetcar stops and refused to seat anyone on their benches, because the
+  game will not invent a person sitting on the tarmac. All three kinds are walkable open ground
+  at pavement level now - no kerb cut, no carriageway - and the four platform benches seat
+  people again
+
 - **Teleporting to a landmark counts as finding it** (CW-78) - landing beside one seeded the
   "near" state without the visit, so the legend ticked at whatever later step happened to
   re-enter the ring. The landing itself marks it now
