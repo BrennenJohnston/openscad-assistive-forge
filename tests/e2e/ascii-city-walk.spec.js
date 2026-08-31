@@ -1131,6 +1131,14 @@ test.describe('ASCII City Walk — the curated legend and the waypoints (CW-78)'
   test('★★ walking into a waypoint announces it and ticks the legend (T7)', async ({
     page,
   }) => {
+    // CI renders in software and rides the dt clamp: below ~10 fps the walk
+    // covers a FRACTION of real time, so the 8-14 m approach that takes two
+    // seconds on a real GPU can take twenty-plus there. The first CI run
+    // timed out at 15 s with the touch announcement arriving just after -
+    // the retry's failure snapshot caught "Waypoint reached" already on the
+    // live region. The window is sized for the slowest walker, not the
+    // local one.
+    test.setTimeout(120000)
     await launchGame(page)
     await enterCity(page)
 
@@ -1161,7 +1169,7 @@ test.describe('ASCII City Walk — the curated legend and the waypoints (CW-78)'
     try {
       await expect(announcer(page)).toContainText(
         'Waypoint reached: Seattle Great Wheel.',
-        { timeout: 15000 }
+        { timeout: 60000 }
       )
     } finally {
       await page.keyboard.up('KeyW')
