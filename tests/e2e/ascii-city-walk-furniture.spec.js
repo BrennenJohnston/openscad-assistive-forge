@@ -422,7 +422,7 @@ test.describe('ASCII City Walk — plantings (CW-57)', () => {
     const diagrid = meshes.at(-1)
     // Five platforms and four flowing planes off a 12-point outline: five
     // extrusions of 44 triangles, four lofts of one quad per edge.
-    expect(diagrid.triangles).toBe(316)
+    expect(diagrid.triangles).toBe(360) // CW-79: +44 = the Library's own skirt, its footprint and nobody else's
     // ★ THE SIZE IS NOT DECORATION. The repeat is set as one over the tile's
     // METRE span, so a canvas of a different size would run the lattice at a
     // different scale than the member width was photographed at.

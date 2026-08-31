@@ -267,6 +267,112 @@ export const CURB_HEIGHT_M = 0.15;
 export const CURB_EASE_M = 0.5;
 
 /**
+ * CW-79: the ground's real height, from the extract's terrain block.
+ *
+ * Bilinear over the bake's 30 m DEM grid, expressed RELATIVE to the city's
+ * lowest sampled ground (the datum), so z = 0 stays "the lowest street" and
+ * every number in a log reads as metres of climb. Holes - points the DEM
+ * service had no answer for, kept as NaN by parseElevation on purpose - are
+ * filled once here by flooding outward from the answered cells, because a
+ * height query must never return NaN into camera math; the fill count is
+ * reported so a census can say how much ground is interpolation.
+ *
+ * Returns null when the extract carries no terrain (a v1 extract, every
+ * unit fixture): the city stays flat, which is the additive promise.
+ *
+ * @param {ReturnType<import('./city-data.js').parseElevation>} elevation
+ * @returns {{heightAt:(x:number,y:number)=>number, datumM:number,
+ *            spanM:number, filledHoles:number}|null}
+ */
+export function buildTerrain(elevation) {
+  if (!elevation) return null;
+  const { originX, originY, stepM, cols, rows, samples, minM, maxM } =
+    elevation;
+
+  const filled = Float32Array.from(samples);
+  let filledHoles = 0;
+  // Flood the holes from their answered neighbours, nearest first: a BFS
+  // ring by ring, so an unanswered corner takes the value of the closest
+  // real ground rather than an average across the map.
+  const queue = [];
+  for (let i = 0; i < filled.length; i++) {
+    if (!Number.isNaN(filled[i])) queue.push(i);
+  }
+  for (let head = 0; head < queue.length; head++) {
+    const i = queue[head];
+    const c = i % cols;
+    const r = (i - c) / cols;
+    for (const [dc, dr] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ]) {
+      const nc = c + dc;
+      const nr = r + dr;
+      if (nc < 0 || nr < 0 || nc >= cols || nr >= rows) continue;
+      const n = nr * cols + nc;
+      if (Number.isNaN(filled[n])) {
+        filled[n] = filled[i];
+        filledHoles++;
+        queue.push(n);
+      }
+    }
+  }
+
+  const at = (c, r) =>
+    filled[
+      Math.min(rows - 1, Math.max(0, r)) * cols +
+        Math.min(cols - 1, Math.max(0, c))
+    ];
+
+  return {
+    datumM: minM,
+    spanM: maxM - minM,
+    filledHoles,
+    heightAt(x, y) {
+      const u = (x - originX) / stepM;
+      const v = (y - originY) / stepM;
+      const c0 = Math.floor(u);
+      const r0 = Math.floor(v);
+      const fu = u - c0;
+      const fv = v - r0;
+      const h00 = at(c0, r0);
+      const h10 = at(c0 + 1, r0);
+      const h01 = at(c0, r0 + 1);
+      const h11 = at(c0 + 1, r0 + 1);
+      const h =
+        h00 * (1 - fu) * (1 - fv) +
+        h10 * fu * (1 - fv) +
+        h01 * (1 - fu) * fv +
+        h11 * fu * fv;
+      return h - minM;
+    },
+  };
+}
+
+/**
+ * CW-80: the grade under the walker's next stride, as a signed percent -
+ * positive uphill, negative downhill, null where the city has no terrain.
+ * Measured over probeM along the heading on the TERRAIN, never on the
+ * surface grid: the kerb cut is a step, not a slope, and a sentence that
+ * said "downhill 3 percent" at every kerb would be noise wearing words.
+ *
+ * @param {ReturnType<typeof buildTerrain>|null} terrain
+ * @param {number} x @param {number} y @param {number} headingRad
+ * @param {number} [probeM]
+ * @returns {number|null}
+ */
+export function gradePercent(terrain, x, y, headingRad, probeM = 6) {
+  if (!terrain) return null;
+  const ahead = terrain.heightAt(
+    x + Math.sin(headingRad) * probeM,
+    y + Math.cos(headingRad) * probeM
+  );
+  return ((ahead - terrain.heightAt(x, y)) / probeM) * 100;
+}
+
+/**
  * Rasterize the PAVEMENT into a grid, so the walker's eye knows what is
  * underfoot. Mirrors buildCollisionGrid deliberately: same origin, same cell
  * size, same out-of-bounds convention, so the two can be reasoned about
@@ -353,15 +459,41 @@ export function buildSurfaceGrid(model, options = {}) {
     stampAlong(road.points ?? [], road.widthM / 2, 0);
   }
 
+  // CW-79: the kerb cut rides ON the terrain. With no terrain block (a v1
+  // extract, every hand-built fixture) the city stays flat and this returns
+  // exactly what it always has.
+  const terrain =
+    options.terrain !== undefined
+      ? options.terrain
+      : buildTerrain(model.elevation);
+
   return {
     cols,
     rows,
     cellM,
+    terrain,
+    /**
+     * CW-79: whether (x, y) is PAVEMENT - the question heightAt used to
+     * answer with a bare zero before the ground had height. Every reader
+     * that asked 'heightAt === 0' meant THIS, and the terrain term would
+     * have silently broken each one.
+     */
+    isPavement(x, y) {
+      const cx = Math.floor((x - originX) / cellM);
+      const cy = Math.floor((y - originY) / cellM);
+      if (cx < 0 || cy < 0 || cx >= cols || cy >= rows) return false;
+      return cells[cy * cols + cx] === 1;
+    },
     heightAt(x, y) {
       const cx = Math.floor((x - originX) / cellM);
       const cy = Math.floor((y - originY) / cellM);
-      if (cx < 0 || cy < 0 || cx >= cols || cy >= rows) return 0;
-      return cells[cy * cols + cx] === 1 ? 0 : -CURB_HEIGHT_M;
+      const kerb =
+        cx < 0 || cy < 0 || cx >= cols || cy >= rows
+          ? 0
+          : cells[cy * cols + cx] === 1
+            ? 0
+            : -CURB_HEIGHT_M;
+      return (terrain ? terrain.heightAt(x, y) : 0) + kerb;
     },
   };
 }

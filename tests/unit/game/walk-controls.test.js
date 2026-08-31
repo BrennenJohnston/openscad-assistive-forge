@@ -54,9 +54,12 @@ import {
   findRoute,
   steerHeading,
   segmentClear,
+  buildTerrain,
+  gradePercent,
 } from '../../../src/js/game/walk-controls.js'
 import {
   parseCityExtract,
+  parseElevation,
   ROAD_WIDTHS_M,
 } from '../../../src/js/game/city-data.js'
 
@@ -477,6 +480,106 @@ describe("steerHeading — street-following's fan (CW-87)", () => {
     )
     const grid = buildCollisionGrid(model)
     expect(steerHeading(grid, 0, 0, 0)).toBeNull()
+  })
+})
+
+describe('buildTerrain — the ground has height (CW-79)', () => {
+  const elevationOf = (samples, cols = 3, rows = 3, stepM = 10) =>
+    parseElevation({
+      originX: 0,
+      originY: 0,
+      stepM,
+      cols,
+      rows,
+      inCircle: samples.filter((s) => s !== null).length,
+      samples,
+    })
+
+  it('returns null with no terrain block, which keeps every fixture flat', () => {
+    expect(buildTerrain(null)).toBeNull()
+    const grid = buildSurfaceGrid(testModel())
+    // On the apron beside the road: pavement level, exactly as before.
+    expect(grid.heightAt(5, 0)).toBe(0)
+    // On the roadway: the kerb cut, exactly as before.
+    expect(grid.heightAt(0, 0)).toBe(-CURB_HEIGHT_M)
+  })
+
+  it('★★ reads exact heights at grid points and bilinear between them, datum-zeroed', () => {
+    const t = buildTerrain(
+      elevationOf([10, 20, 30, 10, 20, 30, 10, 20, 30])
+    )
+    expect(t).not.toBeNull()
+    // Grid points, relative to the datum (min 10).
+    expect(t.heightAt(0, 0)).toBeCloseTo(0, 5)
+    expect(t.heightAt(10, 0)).toBeCloseTo(10, 5)
+    expect(t.heightAt(20, 10)).toBeCloseTo(20, 5)
+    // Halfway between two columns: the mean of their heights.
+    expect(t.heightAt(5, 0)).toBeCloseTo(5, 5)
+    expect(t.heightAt(15, 15)).toBeCloseTo(15, 5)
+    expect(t.spanM).toBeCloseTo(20, 5)
+  })
+
+  it('★★ fills a hole from its nearest answered ground, never with NaN or zero', () => {
+    const t = buildTerrain(
+      elevationOf([100, 100, 100, 100, null, 100, 100, 100, 42])
+    )
+    expect(t.filledHoles).toBe(1)
+    // The hole's cell answers with a real neighbouring height - any of its
+    // neighbours is honest; NaN or a datum-zero would be the two failure
+    // modes this exists to prevent.
+    const h = t.heightAt(10, 10)
+    expect(Number.isFinite(h)).toBe(true)
+    expect(h).toBeGreaterThanOrEqual(0)
+  })
+
+  // CW-80: the spoken slope's arithmetic. Heading 90 degrees (east) on a
+  // grid that rises 10 m per 10 m eastward is a 100 percent grade uphill;
+  // about-face is the same figure downhill; a flat grid is zero; no
+  // terrain is null, never zero - a flat city must stay SILENT, and zero
+  // would read as 'Level.'.
+  it('★★ gradePercent signs uphill positive along the heading (CW-80)', () => {
+    const t = buildTerrain(
+      elevationOf([10, 20, 30, 10, 20, 30, 10, 20, 30])
+    )
+    expect(gradePercent(t, 5, 5, Math.PI / 2, 5)).toBeCloseTo(100, 3)
+    expect(gradePercent(t, 15, 5, -Math.PI / 2, 5)).toBeCloseTo(-100, 3)
+    const flat = buildTerrain(elevationOf(Array(9).fill(42)))
+    expect(gradePercent(flat, 5, 5, 1.234, 5)).toBeCloseTo(0, 5)
+    expect(gradePercent(null, 5, 5, 0)).toBeNull()
+  })
+
+  it('clamps beyond the grid edge to the edge rather than inventing a cliff', () => {
+    const t = buildTerrain(
+      elevationOf([10, 20, 30, 10, 20, 30, 10, 20, 30])
+    )
+    expect(t.heightAt(-50, 0)).toBeCloseTo(0, 5)
+    expect(t.heightAt(500, 10)).toBeCloseTo(20, 5)
+  })
+
+  it('★★ the kerb cut rides ON the terrain in buildSurfaceGrid', () => {
+    const model = testModel()
+    model.elevation = elevationOf(
+      Array(9).fill(50),
+      3,
+      3,
+      1000
+    )
+    const grid = buildSurfaceGrid(model)
+    // Every sample is 50, so relative ground is 0 everywhere - the kerb is
+    // the only relief, exactly as on flat ground.
+    expect(grid.heightAt(0, -20)).toBeCloseTo(-CURB_HEIGHT_M, 5)
+    const model2 = testModel()
+    model2.elevation = elevationOf(
+      [50, 90, 90, 50, 90, 90, 50, 90, 90],
+      3,
+      3,
+      1000
+    )
+    const grid2 = buildSurfaceGrid(model2)
+    // On the roadway at x=0 the ground is the datum, kerb below it; the
+    // terrain term and the kerb term compose.
+    expect(grid2.heightAt(0, -20)).toBeCloseTo(-CURB_HEIGHT_M, 5)
+    expect(grid2.heightAt(500, -20)).toBeGreaterThan(15)
   })
 })
 

@@ -22,6 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The street says when it tilts** (CW-80) - walking onto a grade announces it in plain words -
+  uphill or downhill and how steep, as a percent over the next few strides - and the end of a
+  grade announces itself with one word. The sentence repeats only when the slope really
+  changes, standing still says nothing, and Where am I includes the slope underfoot. A city
+  whose map carries no terrain says not a word. These are the only sentences that tell a
+  player who cannot see the horizon what the hills added for everyone else
+
 - **Take me there** (CW-87) - press I and the game walks you to the landmark selected in the
   legend: a real route over walkable ground, found on the city's own collision map, followed at
   walking speed with each real bend spoken as a turn onto its street by name. Arriving is the
@@ -81,6 +88,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   re-enter the ring. The landing itself marks it now
 
 ### Changed
+
+- **The ground has height** (CW-79) - Seattle stands on its real hills now, from a national 1 m
+  elevation model baked into each city's extract: the streets and pavements drape over the
+  grade with their cross-slope, every tree, lamp, bench and person stands on the ground under
+  it, and each building sits rigidly on its own centroid's ground with a skirt of its own
+  footprint closing the downhill gap - walls stay vertical, roofs stay flat, nothing floats.
+  The walker's eye rides the ground the same way it has ridden kerbs since the kerbs existed,
+  so walking inland from the waterfront is a climb you can watch the city descend behind you
+  from. A city whose extract carries no terrain stays exactly as flat as it was, and the
+  measured cost on the same machine was under a millisecond
 
 - **The skyline is visible from anywhere** (CW-82) - the city used to end 260 metres out: past
   the fog, a tower was a faint cutout and most of the map simply was not there. The detailed

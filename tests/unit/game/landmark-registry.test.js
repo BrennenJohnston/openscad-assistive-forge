@@ -188,7 +188,8 @@ describe('the waypoint spots (CW-Q71)', () => {
       expect(spot.placement, lm.name).toBe('pavement')
       // The surface grid's own definition of pavement, and a clear cell -
       // the same two tests the placement makes, re-asked from outside.
-      expect(surface.heightAt(spot.x, spot.y), lm.name).toBe(0)
+      // CW-79: the pavement question by name - heightAt carries terrain now.
+      expect(surface.isPavement(spot.x, spot.y), lm.name).toBe(true)
       expect(collision.isBlocked(spot.x, spot.y), lm.name).toBe(false)
       expect(Math.hypot(spot.x - lm.x, spot.y - lm.y), lm.name).toBeLessThan(120)
     }

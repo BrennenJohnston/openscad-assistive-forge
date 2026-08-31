@@ -2541,3 +2541,196 @@ test.describe('ASCII City Walk — the whole-map draw distance (CW-82)', () => {
     expect(gained).toBeGreaterThan(2000)
   })
 })
+
+test.describe('ASCII City Walk — the ground has height (CW-79)', () => {
+  test('★★ walking inland from the waterfront CLIMBS, and the eye rides the ground', async ({
+    page,
+  }) => {
+    test.setTimeout(180000)
+    await launchGame(page)
+    await enterCity(page)
+
+    // The Seattle spawn is on the waterfront (CW-78); everything east goes
+    // up. Face up the grade and hold W - the walker's groundZ and the
+    // camera must rise TOGETHER, smoothly, by metres.
+    const start = await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const st = g.walkState
+      st.x = -120
+      st.y = -580
+      st.headingRad = (78 * Math.PI) / 180
+      g.lookTarget.headingRad = st.headingRad
+      st.groundZ = g.surface.heightAt(st.x, st.y)
+      return { groundZ: st.groundZ }
+    })
+    await page.keyboard.down('KeyW')
+    // Sample as it walks: the climb must be continuous - no single frame
+    // may step the eye more than the kerb-ease law allows.
+    const profile = await page.evaluate(
+      () =>
+        new Promise((resolve) => {
+          const g = window.__cityWalkGame
+          const zs = []
+          const tick = () => {
+            zs.push(g.walkState.groundZ)
+            if (zs.length >= 600) return resolve(zs)
+            requestAnimationFrame(tick)
+          }
+          requestAnimationFrame(tick)
+        })
+    )
+    await page.keyboard.up('KeyW')
+
+    const gained = profile[profile.length - 1] - start.groundZ
+    expect(gained).toBeGreaterThan(3)
+    let worstStep = 0
+    for (let i = 1; i < profile.length; i++) {
+      worstStep = Math.max(worstStep, Math.abs(profile[i] - profile[i - 1]))
+    }
+    // The ease law: ground covered per frame at sprintless walk is ~0.16 m,
+    // and easeGroundZ closes at most CURB_HEIGHT_M per CURB_EASE_M of
+    // travel... a hill's own grade is gentler than a kerb, so half a kerb
+    // per frame is generous headroom against a teleporting eye.
+    expect(worstStep).toBeLessThan(0.15)
+
+    const eye = await page.evaluate(() => ({
+      camZ: window.__cityWalkGame.fpCamera.position.z,
+      groundZ: window.__cityWalkGame.walkState.groundZ,
+    }))
+    expect(eye.camZ).toBeCloseTo(eye.groundZ + 1.7, 1)
+  })
+
+  test('★★ the hills census: a span of real metres, skirts where slopes are, holes only outside the circle', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await launchGame(page)
+    await enterCity(page)
+
+    const census = await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      return {
+        spanM: g.surface.terrain.spanM,
+        holes: g.surface.terrain.filledHoles,
+        skirts: g.city3d.stats.skirtsAdded,
+        waterfront: g.surface.heightAt(-157, -629),
+        firstHillWay: g.surface.heightAt(260, -480),
+        center: g.surface.heightAt(-698, 880),
+      }
+    })
+    // Seattle's bake spans ~105 m of relief; the shoreline sits within a
+    // couple of metres of the datum; 380 m inland the ground stands past
+    // 25 m; Seattle Center past 35. Wide floors, not knife-edges: a rebake
+    // may move each by metres, but a FLAT city or a broken datum cannot
+    // pass any of them.
+    expect(census.spanM).toBeGreaterThan(60)
+    expect(census.waterfront).toBeLessThan(8)
+    expect(census.firstHillWay).toBeGreaterThan(25)
+    expect(census.center).toBeGreaterThan(35)
+    // The DEM answered everywhere inside the circle: the filled holes are
+    // exactly the grid corners the circle never asked for.
+    expect(census.holes).toBe(2012)
+    // Downtown is a hillside: hundreds of buildings need their skirt.
+    expect(census.skirts).toBeGreaterThan(500)
+  })
+})
+
+test.describe('ASCII City Walk — the spoken slope (CW-80)', () => {
+  const announcer = (page) => page.locator('#cityWalkAnnouncer')
+  const pose = (page, x, y, headingDeg) =>
+    page.evaluate(
+      (q) => {
+        const g = window.__cityWalkGame
+        const st = g.walkState
+        st.x = q.x
+        st.y = q.y
+        st.headingRad = (q.headingDeg * Math.PI) / 180
+        g.lookTarget.headingRad = st.headingRad
+        st.groundZ = g.surface.heightAt(st.x, st.y)
+        // A fresh tracker per pose: the first reading arms silently, which
+        // is the spawn law this suite relies on below.
+        g.slope = { cat: null, pct: null, sinceM: Infinity }
+      },
+      { x, y, headingDeg }
+    )
+
+  test('★★ walking onto a grade says Uphill, about-face says Downhill, and standing says nothing', async ({
+    page,
+  }) => {
+    test.setTimeout(180000)
+    await launchGame(page)
+    await enterCity(page)
+
+    // Start on the flat waterfront strip, facing the First Hill grade.
+    await pose(page, -160, -600, 60)
+    await page.keyboard.down('KeyW')
+    await expect(announcer(page)).toContainText(/Uphill \d+ percent\./, {
+      timeout: 60000,
+    })
+    await page.keyboard.up('KeyW')
+
+    // Standing still on the grade: the sentence does not repeat.
+    const said = await announcer(page).textContent()
+    await page.waitForTimeout(1500)
+    expect(await announcer(page).textContent()).toBe(said)
+
+    // About-face, walk back down: the same street is downhill now.
+    await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      g.walkState.headingRad =
+        (g.walkState.headingRad + Math.PI) % (2 * Math.PI)
+      g.lookTarget.headingRad = g.walkState.headingRad
+    })
+    await page.keyboard.down('KeyW')
+    await expect(announcer(page)).toContainText(/Downhill \d+ percent\./, {
+      timeout: 60000,
+    })
+    await page.keyboard.up('KeyW')
+  })
+
+  test('★★ X names the slope underfoot, and level ground adds no clause', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await launchGame(page)
+    await enterCity(page)
+
+    // On the grade, facing up: the X sentence carries the slope clause.
+    await pose(page, -60, -565, 60)
+    await page.keyboard.press('KeyX')
+    await expect(announcer(page)).toContainText(/Uphill \d+ percent\./)
+
+    // On level ground: the clause is absent - an empty clause is never
+    // spoken (the whereAmI family's standing rule). 'Level' is a bearing
+    // as much as a place (the shore tilts toward the water), so the test
+    // asks the game's own terrain for a bearing under the threshold
+    // rather than trusting a guessed compass point.
+    await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const st = g.walkState
+      st.x = -160
+      st.y = -629
+      for (let deg = 0; deg < 360; deg += 10) {
+        const rad = (deg * Math.PI) / 180
+        const ahead = g.surface.terrain.heightAt(
+          st.x + Math.sin(rad) * 6,
+          st.y + Math.cos(rad) * 6
+        )
+        const here = g.surface.terrain.heightAt(st.x, st.y)
+        if (Math.abs(((ahead - here) / 6) * 100) < 1.4) {
+          st.headingRad = rad
+          g.lookTarget.headingRad = rad
+          break
+        }
+      }
+      st.groundZ = g.surface.heightAt(st.x, st.y)
+      g.slope = { cat: null, pct: null, sinceM: Infinity }
+    })
+    await page.keyboard.press('KeyX')
+    // The live region clears before it speaks; wait for the sentence.
+    await expect(announcer(page)).toContainText('facing', { timeout: 5000 })
+    const text = await announcer(page).textContent()
+    expect(text).not.toContain('percent')
+    expect(text).not.toContain('Level')
+  })
+})

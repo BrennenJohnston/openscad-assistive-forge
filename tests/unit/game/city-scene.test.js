@@ -36,6 +36,7 @@ import {
 } from '../../../src/js/game/hc-palettes.js'
 import {
   parseCityExtract,
+  parseElevation,
   ROAD_WIDTHS_M,
 } from '../../../src/js/game/city-data.js'
 import {
@@ -635,6 +636,86 @@ describe('buildCityGroup — CW-8 distinctness', () => {
     expect(roads.material.color.getHex()).toBe(ROAD_TONES.street)
     expect(curbs.visible).toBe(true)
 
+    dispose()
+  })
+
+  // CW-79: the ground has height. The laws: a flat terrain block moves
+  // nothing and builds no skirt; a sloped one lifts the building rigidly
+  // to its centroid's ground and closes the downhill gap with a skirt of
+  // the building's own footprint; ribbons drape onto the ground under
+  // them; and a fixture with NO terrain is byte-identical to before.
+  it('★★ a sloped city lifts each building rigidly and skirts the downhill gap (CW-79)', () => {
+    const slope = (m) => {
+      m.elevation = parseElevation({
+        originX: -100,
+        originY: -100,
+        stepM: 200,
+        cols: 2,
+        rows: 2,
+        inCircle: 4,
+        // Rising east: x=-100 -> 100m, x=+100 -> 120m. The building at
+        // (20, 0) spans x 15..25, so its ground runs 111.5 to 112.5 and
+        // its centroid sits at 112.
+        samples: [100, 120, 100, 120],
+      })
+      return m
+    }
+    const flatModel = model()
+    const { group: flatGroup, dispose: disposeFlat } =
+      buildCityGroup(flatModel)
+    const flatBuildings = flatGroup.children.find(
+      (c) => c.name === 'buildings'
+    )
+    const flatTris =
+      flatBuildings.geometry.getAttribute('position').count / 3
+    const flatBox = new Box3().setFromObject(flatBuildings)
+
+    const { group, stats, dispose } = buildCityGroup(slope(model()))
+    const buildings = group.children.find((c) => c.name === 'buildings')
+    const box = new Box3().setFromObject(buildings)
+    // Datum is the city's lowest sample (100), so the building's centroid
+    // ground is 12 and its lowest corner's is 11.5. The walls stand on 12;
+    // the skirt reaches at least 0.3 under 11.5; the roof keeps its
+    // height above the new base.
+    expect(stats.skirtsAdded).toBeGreaterThanOrEqual(1)
+    expect(box.min.z).toBeLessThanOrEqual(11.5 - 0.3 + 0.001)
+    // Every roof rises by its own building's centroid ground - the
+    // tallest defines the box, and it must sit clearly above the flat
+    // build's roofline yet no higher than the steepest ground could lift.
+    expect(box.max.z).toBeGreaterThan(flatBox.max.z + 5)
+    expect(box.max.z).toBeLessThanOrEqual(flatBox.max.z + 20 + 0.001)
+    const tris = buildings.geometry.getAttribute('position').count / 3
+    expect(tris).toBeGreaterThan(flatTris)
+
+    // The roads drape: the road runs at x=0 where the ground is 110, so
+    // relative to the datum its ribbon must sit near 10, not 0.
+    const roads = group.children.find((c) => c.name === 'roads')
+    const roadBox = new Box3().setFromObject(roads)
+    expect(roadBox.max.z).toBeGreaterThan(5)
+
+    dispose()
+    disposeFlat()
+  })
+
+  it('a FLAT terrain block builds no skirt and moves nothing (CW-79)', () => {
+    const m = model()
+    m.elevation = parseElevation({
+      originX: -100,
+      originY: -100,
+      stepM: 200,
+      cols: 2,
+      rows: 2,
+      inCircle: 4,
+      samples: [50, 50, 50, 50],
+    })
+    const { group, stats, dispose } = buildCityGroup(m)
+    expect(stats.skirtsAdded).toBe(0)
+    expect(stats.terrainSpanM).toBe(0)
+    const buildings = group.children.find((c) => c.name === 'buildings')
+    const box = new Box3().setFromObject(buildings)
+    // Every sample equal: relative ground 0 everywhere - the building
+    // stands exactly where the flat city put it.
+    expect(box.min.z).toBeCloseTo(0, 3)
     dispose()
   })
 

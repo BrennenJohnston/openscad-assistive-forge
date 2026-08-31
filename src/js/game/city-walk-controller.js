@@ -87,6 +87,7 @@ import {
   findRoute,
   steerHeading,
   clearRunAhead,
+  gradePercent,
 } from './walk-controls.js';
 import {
   DEFAULT_MAP_STYLE,
@@ -224,6 +225,26 @@ const LOOK_MODE_MESSAGES = {
 };
 /** The cycle order the toolbar button steps through. */
 const LOOK_MODES = ['follow', 'drag', 'off'];
+
+// CW-80: the spoken slope. ACCESSIBILITY-CRITICAL STRINGS (D-35), flagged
+// DOUBLY in the round text pack - these sentences are the only place the
+// game tells a player who cannot see the horizon that the street tilts,
+// which is exactly the information CW-79's hills added for everyone else.
+// US English, 'percent' spelled out (row 1's own precedent), no em dashes.
+const SLOPE_MESSAGES = {
+  up: (n) => `Uphill ${n} percent.`,
+  down: (n) => `Downhill ${n} percent.`,
+  level: 'Level.',
+};
+/** Under this magnitude a street is level - a US accessible route's 5 %
+ * ramp threshold halved, so gentle camber never chatters. */
+const SLOPE_LEVEL_MAX_PCT = 2;
+/** Re-announce within one category only when the rounded figure moves
+ * this far - a hill that steepens from 6 to 7 is not news. */
+const SLOPE_RESTEP_PCT = 3;
+/** And only after this much new ground - a boundary stood upon is one
+ * sentence, never a stutter. */
+const SLOPE_MIN_WALK_M = 6;
 
 // CW-87 (CW-Q84): the tour. ACCESSIBILITY-CRITICAL STRINGS (D-35), flagged
 // DOUBLY in the round text pack - the tour is the GAG "very simple control
@@ -2089,7 +2110,7 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // while the saved progress that says whether this city's traveler has been
     // found is not read until much further down. Finding them also MOVES them,
     // and rebuilding a city's props to move one person is absurd.
-    const traveler = buildTraveler(city.slug);
+    const traveler = buildTraveler(city.slug, (x, y) => surface.heightAt(x, y));
     scene.add(traveler.group);
     scene.add(props.group);
     stampObstacles(collision, props.obstacles);
@@ -2101,7 +2122,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     const waypointSpots = landmarks
       .map((lm) => findWaypointSpot(model, collision, surface, lm))
       .filter(Boolean);
-    const waypoints = buildWaypointMarks(waypointSpots);
+    // CW-79: the marks stand on the same ground the walker's eye reads.
+    const waypoints = buildWaypointMarks(waypointSpots, surface.terrain);
     scene.add(waypoints.group);
     stampObstacles(collision, waypoints.obstacles);
 
@@ -2206,6 +2228,8 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
       lastMove: { forward: 0, strafe: 0 },
       // CW-87: the running tour, or null - { name, route, at, holding }.
       tour: null,
+      // CW-80: what the walker was last told about the street's tilt.
+      slope: { cat: null, pct: null, sinceM: Infinity },
       // CW-27: named road segments, indexed once at city build.
       streetIndex: buildStreetIndex(model.roads),
       streetName: null,
@@ -3622,6 +3646,61 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
   }
 
   /**
+   * CW-80: the slope's category and rounded figure at the walker's feet,
+   * along their heading, or null where the city has no terrain.
+   */
+  function slopeReading(game) {
+    const terrain = game.surface?.terrain;
+    if (!terrain) return null;
+    const pct = gradePercent(
+      terrain,
+      game.walkState.x,
+      game.walkState.y,
+      game.walkState.headingRad
+    );
+    if (pct === null) return null;
+    const rounded = Math.round(Math.abs(pct));
+    if (rounded < SLOPE_LEVEL_MAX_PCT) return { cat: 'level', pct: 0 };
+    return { cat: pct > 0 ? 'up' : 'down', pct: rounded };
+  }
+
+  /**
+   * CW-80: speak the street's tilt when it truly changes. The empty-clause
+   * law runs backwards here: LEVEL IS THE ASSUMED STATE, so 'Level.' is
+   * spoken only as the news that a grade ENDED, never as a greeting.
+   */
+  function checkSlope(game, movedM) {
+    const reading = slopeReading(game);
+    if (!reading) return;
+    const s = game.slope;
+    s.sinceM += movedM;
+    if (s.cat === null) {
+      // The first reading arms the tracker silently: spawning on a hill is
+      // scenery, not an event.
+      s.cat = reading.cat;
+      s.pct = reading.pct;
+      s.sinceM = 0;
+      return;
+    }
+    if (s.sinceM < SLOPE_MIN_WALK_M) return;
+    const catChanged = reading.cat !== s.cat;
+    const stepped =
+      !catChanged &&
+      reading.cat !== 'level' &&
+      Math.abs(reading.pct - s.pct) >= SLOPE_RESTEP_PCT;
+    if (!catChanged && !stepped) return;
+    s.cat = reading.cat;
+    s.pct = reading.pct;
+    s.sinceM = 0;
+    // ACCESSIBILITY-CRITICAL STRING (D-35) — flagged for owner review.
+    announceInLayer(
+      reading.cat === 'level'
+        ? SLOPE_MESSAGES.level
+        : SLOPE_MESSAGES[reading.cat](reading.pct)
+    );
+  }
+
+  /**
    * CW-81 (CW-Q80): auto-walk on or off, with its sentence. One function so
    * the key, the button, Escape, the wall and CW-87's coming tour all stop
    * it the same way and the announcement can never be forgotten.
@@ -4703,6 +4782,14 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     // after they are found - which is this function's own standing rule: "an
     // empty clause is never spoken, and a street the player is not on is never
     // claimed."
+    // CW-80: the slope clause, under the same standing rule - level ground
+    // says nothing, a flat city says nothing, and the words are the exact
+    // sentences the walk announces, so X and the walk can never disagree.
+    const slope = slopeReading(game);
+    if (slope && slope.cat !== 'level') {
+      // ACCESSIBILITY-CRITICAL STRING (D-35) — flagged for owner review.
+      where = `${where} ${SLOPE_MESSAGES[slope.cat](slope.pct)}`;
+    }
     const d = travelerDistanceM(game);
     if (d === null) return where;
     const band = TRAVELER_BANDS.find(([limit]) => d < limit);
@@ -5078,7 +5165,13 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
         // cell blocks, so the walk stops pressed against it - the touch
         // radius is that pressed-against distance, and the leave radius is
         // the hysteresis that makes one touch one sentence.
-        checkWaypointTouch(game);
+        checkWaypointTouch(game); // CW-80: and what the street under the next stride does. Spoken
+        // only on a real change, only after real ground covered, and only
+        // where the city HAS terrain - a flat extract never says a word.
+        checkSlope(
+          game,
+          Math.hypot(game.walkState.x - wasX, game.walkState.y - wasY)
+        );
       }
       game.altView.invalidate();
       updateHud();

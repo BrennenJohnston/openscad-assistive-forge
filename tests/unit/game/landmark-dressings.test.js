@@ -438,7 +438,11 @@ describe('the one hook in the building path', () => {
     )
     // The dressing buckets come last, so the diagrid is the final mesh, and
     // it holds the Library's platforms and planes and nothing else.
-    expect(tris.at(-1)).toBe(316)
+    // CW-79 moved this by exactly the Library's own SKIRT: the building
+    // stands on Fifth Avenue's grade now, and the 44 triangles that joined
+    // are its own footprint extruded down to close the downhill gap -
+    // still the Library's and nobody else's, which is this pin's law.
+    expect(tris.at(-1)).toBe(360)
     // Every other family is a real share of the city, not a stray landmark.
     for (const n of tris.slice(0, -1)) expect(n).toBeGreaterThan(1000)
     dispose()
