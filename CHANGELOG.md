@@ -75,6 +75,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The skyline is visible from anywhere** (CW-82) - the city used to end 260 metres out: past
+  the fog, a tower was a faint cutout and most of the map simply was not there. The detailed
+  buildings still own the first 260 metres, and beyond them the same volumes are drawn a second
+  time through a windowless material - no facade detail to shimmer at distance, one shared copy
+  of the geometry - fading in distance bands to the edge of the map, so downtown reads from the
+  waterfront and a walk toward it has a destination on the horizon. A murky night still pulls
+  the skyline in close, the ground still vanishes with distance the way it always has, and the
+  cost measured on the same machine, same session, was nothing: the frame rate did not move
+
 - **Looking around is hands-free by default** (CW-81) - the view turns toward wherever the
   cursor points: still in the middle, faster toward the edges, settling the moment the cursor
   comes back to centre or leaves the picture. A Mouse look button cycles between this, the old

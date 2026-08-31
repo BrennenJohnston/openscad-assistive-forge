@@ -3188,6 +3188,20 @@ function antennaHeightCutoff(buildings) {
  */
 const FAR_SILHOUETTE_KEEP = 0.14;
 
+// CW-82: the whole-map draw distance. The detailed buildings own the first
+// DETAIL_FAR_M (the fog's clear far plane, where CW-24's floor used to take
+// over); past it a second, cheaper mesh of the same volumes - no window
+// texture, no facade detail - carries the skyline out to the bake circle's
+// edge in distance BANDS, so depth still reads where one flat floor made a
+// cardboard backdrop. Band 1 equals the near floor exactly, which is what
+// makes the hand-over seam invisible; the scene fog itself stays at 40-260
+// because the GROUND must still vanish (the round-1 "dim carpet" failure,
+// recorded above FAR_SILHOUETTE_KEEP).
+const DETAIL_FAR_M = 260;
+const FAR_BAND_1_END_M = 500;
+const FAR_BAND_2_END_M = 900;
+const FAR_BAND_KEEP = [FAR_SILHOUETTE_KEEP, 0.11, 0.08];
+
 /**
  * Give a material a fog FLOOR: it fogs normally with distance, then stops.
  *
@@ -3196,13 +3210,24 @@ const FAR_SILHOUETTE_KEEP = 0.14;
  * that factor first. Both fog kinds are handled because the chunk is replaced
  * whole and the scene's fog kind is not this function's business to assume.
  *
+ * CW-82: an optional detail cutoff - fragments beyond it are DISCARDED, so
+ * the cheap far mesh behind can show through instead of z-fighting the same
+ * volume drawn twice. Zero means no cutoff (the landmark bodies keep their
+ * floor to any range - they are the skyline's icons).
+ *
  * @param {import('three').Material} material
  * @param {number} [keep] - fraction of the surface that survives at any range
+ * @param {number} [detailFarM] - discard fragments beyond this, 0 = never
  */
-function applyFarSilhouetteFog(material, keep = FAR_SILHOUETTE_KEEP) {
+function applyFarSilhouetteFog(
+  material,
+  keep = FAR_SILHOUETTE_KEEP,
+  detailFarM = 0
+) {
   const maxFactor = Math.max(0, Math.min(1, 1 - keep));
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uMaxFogFactor = { value: maxFactor };
+    shader.uniforms.uDetailFarM = { value: detailFarM };
     // Kept reachable so the floor can be measured and tuned against a live
     // frame: writing the uniform takes effect on the next draw, where
     // changing the constant would mean a rebuild and a different session.
@@ -3210,11 +3235,12 @@ function applyFarSilhouetteFog(material, keep = FAR_SILHOUETTE_KEEP) {
     shader.fragmentShader = shader.fragmentShader
       .replace(
         '#include <fog_pars_fragment>',
-        '#include <fog_pars_fragment>\nuniform float uMaxFogFactor;'
+        '#include <fog_pars_fragment>\nuniform float uMaxFogFactor;\nuniform float uDetailFarM;'
       )
       .replace(
         '#include <fog_fragment>',
         `#ifdef USE_FOG
+          if ( uDetailFarM > 0.0 && vFogDepth > uDetailFarM ) discard;
           #ifdef FOG_EXP2
             float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
           #else
@@ -3226,7 +3252,44 @@ function applyFarSilhouetteFog(material, keep = FAR_SILHOUETTE_KEEP) {
       );
   };
   // Materials that compile differently must not share a cached program.
-  material.customProgramCacheKey = () => `farSilhouette:${maxFactor}`;
+  material.customProgramCacheKey = () =>
+    `farSilhouette:${maxFactor}:${detailFarM}`;
+}
+
+/**
+ * CW-82: the far skyline's own fog - distance bands from the detail
+ * boundary outward, in ABSOLUTE metres so the weather drift cannot move
+ * the hand-over seam. Band 1 holds the near floor's exact value in every
+ * weather; from band 2 out the keep scales with the live fog far plane
+ * (fogFar / DETAIL_FAR_M), so a murky night pulls the skyline closer
+ * instead of ignoring the murk - CW-20's own words for what weather does
+ * to the silhouettes. Fragments inside the detail boundary are discarded
+ * (the near mesh owns them); there is deliberately NO far clamp, because
+ * the bake circle is centred on the CITY, not the camera - from the
+ * circle's edge, real towers stand up to a full diameter away (Seattle
+ * Center to downtown is ~1.49 km, past the 1.3 km radius a first draft
+ * clamped at). The geometry ends at the bake edge; nothing needs help not
+ * drawing past it.
+ *
+ * @param {import('three').Material} material
+ */
+function applyFarBandFog(material) {
+  material.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <fog_fragment>',
+      `#ifdef USE_FOG
+          if ( vFogDepth <= ${DETAIL_FAR_M}.0 ) discard;
+          float weatherK = clamp( fogFar / ${DETAIL_FAR_M}.0, 0.0, 1.0 );
+          float keep = vFogDepth < ${FAR_BAND_1_END_M}.0
+            ? ${FAR_BAND_KEEP[0]}
+            : ( vFogDepth < ${FAR_BAND_2_END_M}.0
+              ? ${FAR_BAND_KEEP[1]} * weatherK
+              : ${FAR_BAND_KEEP[2]} * weatherK );
+          gl_FragColor.rgb = mix( fogColor, gl_FragColor.rgb, keep );
+        #endif`
+    );
+  };
+  material.customProgramCacheKey = () => 'farBand';
 }
 
 /**
@@ -3785,6 +3848,11 @@ export function buildCityGroup(model) {
   // CW-41: every material filtered for the cell raster, so one setter can
   // follow the character size.
   const cellRasterMats = [];
+  // CW-82: the far skyline - the same merged volumes drawn a second time
+  // through a windowless material whose banded fog runs to the bake edge.
+  // Geometry is SHARED (one VBO, a second draw), so the cost is draw calls
+  // and discarded fragments, never a copy of the city.
+  const farMeshes = [];
   buildingGeoms.forEach((geoms, familyIndex) => {
     if (geoms.length === 0) return;
     const merged = mergeGeometries(geoms, false);
@@ -3794,7 +3862,7 @@ export function buildCityGroup(model) {
       map: windowTextures[familyIndex] ?? null,
       vertexColors: true,
     });
-    applyFarSilhouetteFog(material);
+    applyFarSilhouetteFog(material, FAR_SILHOUETTE_KEEP, DETAIL_FAR_M);
     applyCellRasterFiltering(material);
     cellRasterMats.push(material);
     const mesh = new Mesh(merged, material);
@@ -3804,6 +3872,17 @@ export function buildCityGroup(model) {
     buildingMats.push({ material, texture: windowTextures[familyIndex] });
     buildingMeshRefs.push({ mesh, material });
     buildingTriangles += merged.getAttribute('position').count / 3;
+
+    const farMaterial = new MeshLambertMaterial({
+      color: BUILDING_STREET_TINT,
+      vertexColors: true,
+    });
+    applyFarBandFog(farMaterial);
+    const farMesh = new Mesh(merged, farMaterial);
+    farMesh.name = 'buildings-far';
+    group.add(farMesh);
+    disposables.push(farMaterial);
+    farMeshes.push(farMesh);
   });
 
   let storefrontTriangles = 0;
@@ -4289,6 +4368,10 @@ export function buildCityGroup(model) {
       // network, not its markings.
       if (lineMesh) lineMesh.visible = !isMap;
       for (const mesh of dressingMeshes) mesh.visible = !isMap;
+      // CW-82: the far skyline is a street-view idea. Overhead there is no
+      // fog (the controller disables it), so the banded material would draw
+      // the whole city a second time at full brightness over itself.
+      for (const mesh of farMeshes) mesh.visible = !isMap;
       for (const { material, texture } of buildingMats) {
         material.map = isMap ? null : (texture ?? null);
         material.needsUpdate = true;

@@ -2456,3 +2456,88 @@ test.describe('ASCII City Walk — find the traveler (CW-65, CW-Q60)', () => {
     expectOnlyAllowedViolations(results)
   })
 })
+
+test.describe('ASCII City Walk — the whole-map draw distance (CW-82)', () => {
+  test('★★ the far skyline puts real ink where the near mesh ends', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await launchGame(page)
+    await enterCity(page)
+
+    // The waterfront vantage from the release record: open foreground,
+    // First Hill and downtown standing well past the 260 m boundary.
+    await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const st = g.walkState
+      st.x = -157
+      st.y = -629
+      st.headingRad = Math.atan2(900 - st.x, -100 - st.y)
+      st.pitchRad = (6 * Math.PI) / 180
+      st.groundZ = g.surface ? g.surface.heightAt(st.x, st.y) : 0
+      const eyeZ = 1.7 + (st.groundZ ?? 0)
+      g.fpCamera.position.set(st.x, st.y, eyeZ)
+      g.fpCamera.lookAt(
+        st.x + Math.sin(st.headingRad),
+        st.y + Math.cos(st.headingRad),
+        eyeZ + Math.tan(st.pitchRad)
+      )
+      g.altView.invalidate()
+    })
+    await page.waitForTimeout(1500)
+
+    // Same-code control (the round's own law for pixel comparisons): the
+    // ONLY difference between the two frames is the far mesh.
+    await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      g.scene.traverse((o) => {
+        if (o.name === 'buildings-far') o.visible = false
+      })
+      g.altView.invalidate()
+    })
+    await page.waitForTimeout(1200)
+    const off = await page.locator('#cityWalkViewport').screenshot()
+    await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      g.scene.traverse((o) => {
+        if (o.name === 'buildings-far') o.visible = true
+      })
+      g.altView.invalidate()
+    })
+    await page.waitForTimeout(1200)
+    const on = await page.locator('#cityWalkViewport').screenshot()
+
+    const gained = await page.evaluate(
+      async ([a, b]) => {
+        const load = async (u) => {
+          const i = new Image()
+          i.src = u
+          await i.decode()
+          const c = document.createElement('canvas')
+          c.width = i.width
+          c.height = i.height
+          c.getContext('2d').drawImage(i, 0, 0)
+          return c.getContext('2d').getImageData(0, 0, c.width, c.height).data
+        }
+        const [p, q] = [await load(a), await load(b)]
+        // Count pixels that were black without the far mesh and lit with it
+        // - ink the skyline ADDED, not ink that moved.
+        let lit = 0
+        for (let i = 0; i < p.length; i += 4) {
+          const offMax = Math.max(p[i], p[i + 1], p[i + 2])
+          const onMax = Math.max(q[i], q[i + 1], q[i + 2])
+          if (offMax < 8 && onMax > 24) lit++
+        }
+        return lit
+      },
+      [
+        'data:image/png;base64,' + off.toString('base64'),
+        'data:image/png;base64,' + on.toString('base64'),
+      ]
+    )
+    // Measured at this pose: the far towers light tens of thousands of
+    // pixels. The bar is a SHARE-shaped floor well under that but far
+    // above noise (a whole character cell is ~18 px at the default size).
+    expect(gained).toBeGreaterThan(2000)
+  })
+})

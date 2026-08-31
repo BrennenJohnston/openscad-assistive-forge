@@ -638,6 +638,29 @@ describe('buildCityGroup — CW-8 distinctness', () => {
     dispose()
   })
 
+  // CW-82: the far skyline. The laws that keep it cheap and honest: it is
+  // the SAME geometry object (one VBO, a second draw - never a copy of the
+  // city), it carries no window texture, and overhead - where the fog its
+  // shader lives in is disabled - it hides.
+  it('★★ builds a windowless far-skyline mesh SHARING the buildings geometry (CW-82)', () => {
+    const { group, setMapView, dispose } = buildCityGroup(model())
+    const near = group.children.filter((c) => c.name === 'buildings')
+    const far = group.children.filter((c) => c.name === 'buildings-far')
+    expect(far.length).toBe(near.length)
+    for (let i = 0; i < far.length; i++) {
+      expect(far[i].geometry).toBe(near[i].geometry)
+      expect(far[i].material.map ?? null).toBeNull()
+      expect(far[i].material).not.toBe(near[i].material)
+    }
+
+    setMapView(true)
+    for (const mesh of far) expect(mesh.visible).toBe(false)
+    setMapView(false)
+    for (const mesh of far) expect(mesh.visible).toBe(true)
+
+    dispose()
+  })
+
   it('setCellRaster biases every textured facade material for the cell grid (CW-41)', () => {
     // The shimmer fix: facade textures are filtered for the CELL raster,
     // so the bias is log2 of the cell height and follows the character
