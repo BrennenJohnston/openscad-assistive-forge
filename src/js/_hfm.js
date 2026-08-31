@@ -142,6 +142,9 @@ function _createInstanceState() {
     classMapProvider: null,
     classVocabularies: null,
     classLookups: null,
+    // CW-92: class id -> palette index, or null for the screen pick. See
+    // api.setInkFamilies.
+    inkFamilies: null,
 
     // Render-on-demand scheduling
     dirty: true,
@@ -919,6 +922,9 @@ function _sampleOnGpu(
     ladders: st.classLadders?.size ? st.classLadders : null,
     fieldLevels: FIELD_LEVELS,
     anchored: Boolean(st.anchoredGlyphs),
+    // CW-92: the authored per-class palette families, or null for the
+    // per-frame screen pick.
+    inkFamilies: usePalette ? st.inkFamilies : null,
   });
 }
 
@@ -1170,6 +1176,12 @@ function _renderFrame(
     // holding a snapshot must not watch it change under the next frame.
     st.lastGlyphIndices = glyphIndices;
     st.lastProbeIntensity = useIntensity ? st.intensityIndices : null;
+    // CW-92: and the COLOUR decision, which until now the instrument had to
+    // recover by matching painted pixels back to the palette. That reads the
+    // bloom and Day's backing as well as the cell, so a cell whose index never
+    // moved could still be reported as having changed colour - and that is
+    // exactly the question D-127 asks. The decision itself is right here.
+    st.lastProbeColour = usePalette ? st.colorIndices : null;
   }
 }
 
@@ -1262,7 +1274,13 @@ function _convertOnCpu(
   // that returns the wrong size is ignored rather than trusted — a stale map
   // would hand cells the vocabulary of whatever used to be there.
   let classMap = null;
-  if (st.classLookups && st.classMapProvider) {
+  // ★ CW-92: the class map is not a VOCABULARY thing. It was fetched only when
+  // there were class vocabularies to pick a glyph from, which was true of every
+  // caller until the ink families arrived - they need the same map to choose a
+  // COLOUR and have nothing to do with glyph lists. Asking the narrower
+  // question made a caller with families and no vocabularies get no colour at
+  // all, silently, which is how a unit case found this.
+  if ((st.classLookups || st.inkFamilies) && st.classMapProvider) {
     const supplied = st.classMapProvider(cols, rows);
     if (supplied && supplied.length === rows * cols) classMap = supplied;
   }
@@ -1428,14 +1446,25 @@ function _convertOnCpu(
             skip = paletteWhiteIndex;
           }
         }
-        st.colorIndices[idx] = pickPaletteIndex(
-          meanR,
-          meanG,
-          meanB,
-          st.paletteChroma,
-          st.paletteChromaBoost,
-          skip
-        );
+        // ★★★ CW-92: THE FAMILY IS THE SURFACE'S, THE LIGHT IS THE SCREEN'S.
+        // `inkBlanked` and `skip` above are decided from the lit cell and are
+        // untouched; all that changes is which of the palette's entries a
+        // CLASSIFIED cell takes. An unclassified cell - the sky, or anything
+        // the class pass could not name - keeps the per-frame match, because
+        // there is no surface for it to belong to.
+        const family =
+          st.inkFamilies && classMap ? st.inkFamilies[classMap[cell]] : -1;
+        st.colorIndices[idx] =
+          family >= 0
+            ? family
+            : pickPaletteIndex(
+                meanR,
+                meanG,
+                meanB,
+                st.paletteChroma,
+                st.paletteChromaBoost,
+                skip
+              );
       }
 
       // External boundary points for edge detection; out-of-bounds clamp to 0
@@ -1522,9 +1551,17 @@ function _convertOnCpu(
         glyphIndices[idx++] = anchored;
         continue;
       }
-      const cellLookup = classMap
-        ? (st.classLookups.get(classMap[cell]) ?? st.lookup)
-        : st.lookup;
+      // ★★ GUARDED ON classLookups, NOT ONLY ON classMap (CW-92). Until this
+      // release the two arrived together - the map was fetched only when there
+      // were vocabularies - so a null check here looked redundant. The ink
+      // families need the map without needing vocabularies, and the moment
+      // that became possible this line threw on its first frame. Exactly the
+      // shape of the crash CW-86 left in the palette branch above: a
+      // dereference that was safe only because of a coupling somewhere else.
+      const cellLookup =
+        classMap && st.classLookups
+          ? (st.classLookups.get(classMap[cell]) ?? st.lookup)
+          : st.lookup;
       const chosen = cellLookup.nearestIndex(v);
       glyphIndices[idx++] = history
         ? _remember(st, history, cell, v, chosen, cellClass, false, hysteresis)
@@ -2072,6 +2109,51 @@ export async function initAltView(previewManager, options = {}) {
       return Boolean(st.anchoredGlyphs);
     },
     /**
+     * ★★★ CW-92 (D-127): WHAT COLOUR EACH SURFACE IS, decided once and not
+     * re-taken every frame.
+     *
+     * In palette mode a classified cell's colour index comes from this table
+     * rather than from a nearest-palette match on the lit sample. The lit
+     * sample still decides everything it truly owns - whether the cell is
+     * inked at all, its intensity, and CW-71's white gate - and nothing else
+     * about the picture changes.
+     *
+     * WHY A TABLE AND NOT THE SURFACE'S OWN COLOUR, which is what the release
+     * was briefed to use: the city has none. Measured over all 60 materials,
+     * 51 land on the palette's white entry, because every material is white or
+     * neutral grey, both lights are white and the fog is black. Every hue a
+     * colour player has seen was manufactured out of the last digit or two of
+     * a grey image, and that is why a whole face crossed a palette boundary
+     * together when the camera moved.
+     *
+     * Pass null to go back to the per-frame screen pick, which is what the
+     * main app's Alt View does and what the red proof reinstates.
+     *
+     * @param {Record<number, number>|null} table class id -> palette index
+     * @returns {Record<number, number>|null} the table now in force
+     */
+    setInkFamilies(table) {
+      st.inkFamilies = null;
+      if (table && typeof table === 'object') {
+        const out = new Int16Array(16).fill(-1);
+        let any = false;
+        for (const [key, index] of Object.entries(table)) {
+          const cls = Number(key);
+          if (!Number.isInteger(cls) || cls < 0 || cls > 15) continue;
+          if (!Number.isInteger(index) || index < 0) continue;
+          out[cls] = index;
+          any = true;
+        }
+        if (any) st.inkFamilies = out;
+      }
+      st.dirty = true;
+      return st.inkFamilies ? { ...table } : null;
+    },
+    /** @returns {boolean} whether an authored ink table is in force */
+    inkFamiliesOn() {
+      return Boolean(st.inkFamilies);
+    },
+    /**
      * CW-86: swap the glyph-field provider at run time, or clear it.
      *
      * @param {((cols: number, rows: number) => Uint8Array|null)|null} provider
@@ -2387,6 +2469,7 @@ export async function initAltView(previewManager, options = {}) {
       if (!st.devCellProbe) {
         st.lastGlyphIndices = null;
         st.lastProbeIntensity = null;
+        st.lastProbeColour = null;
         st.lastCellLum = null;
       }
       st.dirty = true;
@@ -2426,11 +2509,16 @@ export async function initAltView(previewManager, options = {}) {
       }
       return out;
     };
+    /**
+     * CW-92: `colour` is the palette index the converter chose, in palette
+     * mode only. Null in mono, where there is no palette to index.
+     */
     api.readCellProbe = () => {
       if (!st.devCellProbe || !st.lastGlyphIndices) return null;
       return {
         cols: st.lastCols,
         rows: st.lastRows,
+        colour: st.lastProbeColour ? Int8Array.from(st.lastProbeColour) : null,
         glyphs: Int16Array.from(st.lastGlyphIndices),
         intensity: st.lastProbeIntensity
           ? Int8Array.from(st.lastProbeIntensity)

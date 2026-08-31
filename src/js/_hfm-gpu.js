@@ -106,6 +106,14 @@ uniform float uSparsestNonSpace;
 uniform sampler2D uLadder;
 uniform float uAnchored;
 uniform float uFieldLevels;
+// CW-92: the authored palette family per surface class, -1 where a class has
+// none. The city is achromatic - every material white or neutral grey, both
+// lights white, the fog black - so there is no surface colour to read and the
+// per-frame nearest-palette match was manufacturing a hue out of the last
+// digit or two of a grey image. That is what flipped a whole face between two
+// entries as the camera moved. See hc-palettes.js CITY_INK_FAMILY.
+uniform float uInkFamily[16];
+uniform float uHasInkFamily;
 // CW-68 temporal hysteresis. uPrev is the PREVIOUS conversion's own output
 // target, bound as a texture (the two targets ping-pong), so the memory costs
 // no upload and no readback of its own: R the glyph, G the class or palette
@@ -457,6 +465,16 @@ void main() {
         bestColour = i;
       }
     }
+    // ★★★ CW-92: THE FAMILY IS THE SURFACE'S, THE LIGHT IS THE SCREEN'S. The
+    // ink budget and the white gate above are decided from the lit cell and
+    // are untouched; all that changes is which entry a CLASSIFIED cell takes.
+    // An unclassified cell - the sky, or anything the class pass could not
+    // name - keeps the per-frame match, because it has no surface to belong
+    // to. The same rule as the CPU path, which reads inkFamilies there.
+    if (uHasInkFamily > 0.5 && uHasClass > 0.5) {
+      float fam = uInkFamily[int(classId)];
+      if (fam >= 0.0) bestColour = int(fam);
+    }
     // Both in one byte: the palette index in the low nibble (at most 16
     // entries) and the surface class in the high one (at most 15). Without
     // this the memory would have no way to know a palette cell's class had
@@ -668,6 +686,8 @@ export function createGpuGlyphPass(renderer) {
       uLadder: { value: null },
       uAnchored: { value: 0 },
       uFieldLevels: { value: 1 },
+      uInkFamily: { value: new Float32Array(16).fill(-1) },
+      uHasInkFamily: { value: 0 },
     },
   });
   quadScene.add(new Mesh(new PlaneGeometry(2, 2), material));
@@ -877,6 +897,7 @@ export function createGpuGlyphPass(renderer) {
       ladders,
       fieldLevels,
       anchored,
+      inkFamilies,
     }) {
       if (failed) return null;
       try {
@@ -934,6 +955,18 @@ export function createGpuGlyphPass(renderer) {
         // would silently measure the screen pick and report it as anchored.
         u.uLadder.value = ladderTexture;
         u.uAnchored.value = anchored && classTexture && ladders ? 1 : 0;
+        // CW-92: like anchoring, this needs a class frame as well as a table -
+        // a run with the table but no classes would silently measure the
+        // screen pick and report it as authored.
+        if (inkFamilies && classTexture) {
+          const dst = u.uInkFamily.value;
+          for (let i = 0; i < 16; i++) {
+            dst[i] = i < inkFamilies.length ? inkFamilies[i] : -1;
+          }
+          u.uHasInkFamily.value = 1;
+        } else {
+          u.uHasInkFamily.value = 0;
+        }
         // CW-68. uPrev is bound to whichever target was written last; when
         // there is nothing to read yet, any texture will do because uHasPrev
         // is zero and the shader never samples it - a null sampler would

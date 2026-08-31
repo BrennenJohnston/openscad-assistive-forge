@@ -243,6 +243,80 @@ export const CITY_PALETTE_INK_BUDGET = Object.freeze({
   whiteChroma: 0.12,
 });
 
+/**
+ * ★★★ CW-92 (D-127, CW-Q96): WHAT COLOUR EACH SURFACE IS.
+ *
+ * THE MEASUREMENT THAT MADE THIS NECESSARY. The city is achromatic end to end.
+ * Over all 60 materials in a Seattle session, almost every `material.color` is
+ * 1,1,1; the per-mesh textures are neutral grey (buildings 0.269, storefronts
+ * 0.309, ground 0.034, sidewalks 0.053, r = g = b); both scene lights are pure
+ * white; the fog is pure black. Fed through `pickPaletteIndex`, 51 of the 60
+ * land on the palette's WHITE entry. So there is no surface colour to read, and
+ * every hue a colour player has ever seen was manufactured by the converter out
+ * of the last digit or two of a grey image - which is why a whole face crossed
+ * a palette boundary together as the camera moved (D-127). The owner asked for
+ * an authored palette instead (CW-Q96).
+ *
+ * ★★ SIX ENTRIES FOR FIFTEEN CLASSES, SO SURFACES SHARE - AND THAT IS SAFE
+ * BECAUSE COLOUR IS NO LONGER CARRYING IDENTITY ON ITS OWN. CW-59 settled that
+ * SHAPE identifies and colour does not, and CW-93 gave every surface its own
+ * character set back in colour mode for the first time since CW-32. A tree and
+ * the building behind it can share the green phosphor here because one is drawn
+ * with `@ v o O` and the other with `| [ ] ( ) { }`.
+ *
+ * ★ NO SURFACE TAKES WHITE, and that is a correctness rule rather than a taste:
+ * CW-71's ink budget gates the white entry on luminance and chroma, and its
+ * guard is written on the assumption that a surface family is never white. A
+ * white family would walk straight past that gate. White is left to the sky and
+ * to anything the class pass could not name, which keep the screen pick.
+ *
+ * THE AMBER SET HAS SEVEN ENTRIES, not six: CW-Q11 added `#39ff5e` because a
+ * tree canopy and a yellow-green building both fell to lime. That entry is used
+ * here for exactly what it was minted for.
+ *
+ * Keyed by `SURFACE_CLASS` id, as literals for the same reason
+ * `CITY_BACKING_EXEMPT_CLASS_IDS` and `ANCHORED_CLASSES` are: importing the
+ * enum here would close a cycle. A unit case asserts every id is the class it
+ * claims to be.
+ */
+export const CITY_INK_FAMILY = Object.freeze({
+  // green: 0 green, 1 cyan, 2 yellow, 3 magenta, 4 red, 5 white
+  green: Object.freeze({
+    1: 2, // GROUND, bare earth, warm
+    2: 1, // ROAD, asphalt, cool
+    3: 1, // CURB, the road's own material
+    4: 0, // BUILDING_WALL, the fabric of the city on a green phosphor
+    5: 0, // BUILDING_ROOF
+    6: 2, // STOREFRONT, lit glass
+    7: 3, // SIGN, the brightest markers on the street
+    8: 1, // MAST, metal
+    9: 0, // TREE, foliage - told from a wall by its characters, not its hue
+    10: 4, // CAR
+    11: 2, // LAMP, warm metal and warm light
+    12: 4, // PERSON, the other moving thing
+    13: 2, // SIDEWALK, concrete, warmer than the carriageway beside it
+    14: 0, // GREEN, planting
+  }),
+  // amber: 0 hot pink, 1 cyan, 2 lime, 3 foliage green, 4 violet,
+  //        5 neon orange, 6 white
+  amber: Object.freeze({
+    1: 5, // GROUND
+    2: 1, // ROAD
+    3: 1, // CURB
+    4: 2, // BUILDING_WALL, the entry CW-Q11 left to the buildings
+    5: 2, // BUILDING_ROOF
+    6: 5, // STOREFRONT
+    7: 0, // SIGN
+    8: 1, // MAST
+    9: 3, // TREE, the entry CW-Q11 minted for foliage
+    10: 4, // CAR
+    11: 5, // LAMP
+    12: 4, // PERSON
+    13: 5, // SIDEWALK
+    14: 3, // GREEN
+  }),
+});
+
 /** The treatment the game draws, answered by the owner at G1 (CW-Q74). */
 // The owner's second answer, given after playing the build rather than
 // reading a photograph of it: solid cells back, but capped.

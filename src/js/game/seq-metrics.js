@@ -402,6 +402,12 @@ export function foldFrame(fold, frame) {
   if (!fold.mono && fold.prevDrive && fold.prevClass2) {
     for (let i = 0; i < n; i++) {
       if (cls[i] !== fold.prevClass2[i]) continue;
+      // ★ A BLANK CELL HAS NO COLOUR TO FLIP, and counting a cell lighting up
+      // or going dark as a face flip would bury the row under transitions it
+      // was never asking about. The same distinction CW-89 drew for the glyph
+      // memory: whether a cell has content is a different question from which
+      // colour that content is.
+      if (drive[i] < 0 || fold.prevDrive[i] < 0) continue;
       fold.faceHeld[i]++;
       if (drive[i] !== fold.prevDrive[i]) fold.faceFlip[i]++;
     }

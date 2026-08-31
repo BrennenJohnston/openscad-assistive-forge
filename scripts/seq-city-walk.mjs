@@ -140,6 +140,11 @@ const DEFAULTS = {
   // paths carry the same rules in two languages. Empty leaves the game's own
   // choice, which is the GPU path wherever it is available.
   cpuSample: '',
+  // CW-92: `--ink-families=off` reinstates the per-frame nearest-palette match
+  // that D-127 is about, so the face-flip row has a like-for-like BEFORE. Both
+  // arms then read the converter's own colour decision, which the painted-pixel
+  // fallback could not.
+  inkFamilies: '',
   // --ink-budget sets the CW-71 palette ink budget for the run: `off`, or
   // `floor,whiteLum,whiteChroma`. Empty leaves the game's own.
   inkBudget: '',
@@ -415,6 +420,33 @@ async function installProbe(modulePath) {
       return out
     },
 
+    /**
+     * ★★★ CW-92: THE CONVERTER'S OWN COLOUR DECISION, with blanks marked.
+     *
+     * `readColours()` below recovers the decision by matching painted pixels
+     * back to the palette, which reads the bloom and Day's backing as well as
+     * the cell - so a cell whose palette index never moved could still be
+     * reported as having changed colour, and "did this cell change colour
+     * while its surface did not" is the whole of D-127. Measured: that
+     * fallback reported 3.17 % of wall cell-frames flipping where the
+     * converter had not changed one.
+     *
+     * ★ A CELL DRAWING THE SPACE IS MARKED -1, exactly as the painted-pixel
+     * fallback marked a cell with no opaque pixels. The lit share and the
+     * white share are read off this column and both mean "carries ink"; the
+     * converter assigns every classified cell an index whether it draws
+     * anything or not, so without this line colour mode would report 100 %
+     * lit forever.
+     */
+    colourDecisions(probe) {
+      if (!probe.colour) return api.readColours()
+      const out = Int8Array.from(probe.colour)
+      for (let i = 0; i < out.length; i++) {
+        if (probe.glyphs[i] === 0) out[i] = -1
+      }
+      return out
+    },
+
     /** Fold the frame that is on screen, and tile it into the contact sheet. */
     step() {
       const a = state
@@ -426,7 +458,12 @@ async function installProbe(modulePath) {
         glyphs: probe.glyphs,
         intensity: probe.intensity,
         lum: probe.lum,
-        colour: a.fold.mono ? null : api.readColours(),
+        // ★★★ CW-92: THE CONVERTER'S OWN DECISION WHERE IT IS AVAILABLE. The
+        // painted-pixel fallback below reads the bloom and Day's backing as
+        // well as the cell, so a cell whose palette index never moved could
+        // still be reported as having changed colour - and "did this cell
+        // change colour while its surface did not" is the whole of D-127.
+        colour: a.fold.mono ? null : api.colourDecisions(probe),
         cls,
       })
       const overlay = document.querySelector('canvas.hfm-overlay-canvas')
@@ -1122,6 +1159,23 @@ async function main() {
       `day/night: ${opts.day || "the game's own (night)"} · empty city: ` +
         `${opts.empty || "the game's own (populated)"}`
     )
+    if (opts.inkFamilies) {
+      const want = opts.inkFamilies === 'on'
+      const got = await page.evaluate((on) => {
+        const game = window.__cityWalkGame
+        if (typeof game.altView.setInkFamilies !== 'function') return null
+        if (!on) game.altView.setInkFamilies(null)
+        return game.altView.inkFamiliesOn()
+      }, want)
+      if (got !== want) {
+        throw new Error(
+          `--ink-families=${opts.inkFamilies}: the instance answered "${got}"` +
+            ' - either it predates CW-92 or the switch did not take'
+        )
+      }
+      console.log(`ink families: ${want ? 'AUTHORED' : 'off (the screen pick)'}`)
+    }
+
     // ★ ASK THE GAME WHAT IT IS ACTUALLY DOING, the way --anchored does. A
     // path switch that quietly did not take would give this release a clean
     // second column that measured the first one again.

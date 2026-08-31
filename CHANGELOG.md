@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **In color, every surface now has a color of its own** (CW-92) - a wall used to change color as
+  you walked toward it, sometimes flipping from one color to another all at once across a whole
+  face. The color was being guessed afresh every frame from how the lit screen looked in that
+  cell, and the city itself is drawn in greys, so the guess was reading almost nothing and
+  changing its mind. Each kind of surface has its own color now - foliage, buildings, shop fronts,
+  the roadway, the pavement, signs - and the light on it decides only how bright it is. Walking
+  nineteen metres toward a shop front used to change the color of one cell in nine; it now changes
+  none. The sky is left as it was, because it is not a surface. Nothing about monochrome changes
+
 - **The ground, the paving and the buildings keep their own characters as you walk** (CW-91) -
   until now a cell's character was chosen from how bright that patch of SCREEN was, so walking
   re-rolled it constantly and the ground boiled underfoot. The character is now read off the

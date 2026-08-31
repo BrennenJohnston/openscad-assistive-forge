@@ -113,6 +113,9 @@ const DEFAULTS = {
   // surface. It currently forces the CPU glyph path, so this is the flag that
   // prices that path as much as it prices the anchoring.
   anchored: 'off',
+  // CW-92: `--ink-families=off` reinstates the per-frame nearest-palette match,
+  // so the authored table has an A-B-B-A of its own. Colour mode only.
+  inkFamilies: '',
   // --ink-budget sets the CW-71 palette ink budget for every run: `off`, or
   // `floor,whiteLum,whiteChroma`. Empty leaves the game's own. Only palette
   // mode is affected, so pair it with a colour run.
@@ -338,6 +341,22 @@ async function benchCity(page, cdp, city, variant, opts, runIndex) {
   // 27-57 % at Night against 85-95 % under Day, so 0.7 sits in a 30-point
   // gap rather than near either side.
   // CW-86: and the same rule - ask what is IN FORCE, not what was requested.
+  if (opts.inkFamilies) {
+    const want = opts.inkFamilies === 'on'
+    const got = await page.evaluate((on) => {
+      const game = window.__cityWalkGame
+      if (typeof game.altView.setInkFamilies !== 'function') return null
+      if (!on) game.altView.setInkFamilies(null)
+      return game.altView.inkFamiliesOn()
+    }, want)
+    if (got !== want) {
+      throw new Error(
+        `--ink-families=${opts.inkFamilies} but the game answered "${got}"`
+      )
+    }
+    console.log(`ink families: ${want ? 'AUTHORED' : 'off (the screen pick)'}`)
+  }
+
   const anchored = await page.evaluate((want) => {
     const g = window.__cityWalkGame
     if (typeof g.setAnchoredGlyphs !== 'function') return null

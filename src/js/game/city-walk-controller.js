@@ -110,6 +110,7 @@ import {
   LUMINANCE_LAYER,
   LUMINANCE_LAYER_DEFAULT,
   CITY_PALETTE_INK_BUDGET,
+  CITY_INK_FAMILY,
   MONO_BLOOM_PX,
   MONO_GLOW_FADE,
 } from './hc-palettes.js';
@@ -2400,6 +2401,10 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     const root = document.documentElement;
     if (!colourIsOn()) {
       game.altView.setPalette(null);
+      // CW-92: mono has one phosphor, so there is no family to choose. Cleared
+      // rather than left standing, or a return to colour would arrive with the
+      // other theme's table already in force.
+      game.altView.setInkFamilies?.(null);
       return;
     }
     const light = root.getAttribute('data-theme') === 'light';
@@ -2413,6 +2418,15 @@ function createSession({ layer, hfmCtrl, triggerEl: providedTrigger }) {
     game.altView.setPalette(light ? HC_PALETTE_AMBER : HC_PALETTE_GREEN, {
       chromaBoost: 5,
     });
+    // ★★★ CW-92 (D-127, CW-Q96): and each surface's colour comes from the
+    // authored table, not from a nearest-palette match on the lit screen. The
+    // two palettes get their own rows because they are different sets - amber
+    // has seven entries, green six - and a class must name an entry that
+    // exists. The boost above still governs the sky and anything the class
+    // pass could not name, which keep the screen pick.
+    game.altView.setInkFamilies?.(
+      light ? CITY_INK_FAMILY.amber : CITY_INK_FAMILY.green
+    );
   }
 
   function unloadCity() {

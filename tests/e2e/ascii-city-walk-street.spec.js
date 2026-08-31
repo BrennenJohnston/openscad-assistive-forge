@@ -3071,3 +3071,145 @@ test.describe('ASCII City Walk — ink belongs to its surface (CW-93, D-128, D-1
     )
   })
 })
+
+test.describe('ASCII City Walk — colour belongs to its surface (CW-92, D-127)', () => {
+  const settle = (page) =>
+    page.evaluate(async () => {
+      const g = window.__cityWalkGame
+      for (let i = 0; i < 2; i++) {
+        const before = g.altView.getConvertTotals().samples
+        g.altView.invalidate()
+        const deadline = Date.now() + 15000
+        while (g.altView.getConvertTotals().samples <= before) {
+          if (Date.now() > deadline) throw new Error('no conversion')
+          await new Promise((r) => requestAnimationFrame(r))
+        }
+      }
+    })
+
+  test('★★★ a surface keeps its colour while the camera moves', async ({
+    page,
+  }) => {
+    // D-127: the owner watched a wall flip wholesale between two palette
+    // entries as they walked toward it. The cause was that the colour index
+    // was a stateless nearest-palette match on the lit screen, re-taken every
+    // frame - and the city is achromatic, so that match was reading the last
+    // digit or two of a grey image. Each surface has an authored colour now
+    // (CW-Q96), and the lit screen decides only whether the cell is inked.
+    await launchGame(page)
+    await enterCity(page)
+    await page.locator('#cityWalkColourBtn').click()
+    await page.evaluate(() => {
+      window.__cityWalkGame.motionReduced = true
+      window.__cityWalkGame.altView.setCellProbe(true)
+      window.__cityWalkGame.altView.setFontScale(0.3)
+    })
+    await settle(page)
+
+    expect(
+      await page.evaluate(() => window.__cityWalkGame.altView.inkFamiliesOn()),
+      'the game installs an authored table in colour mode'
+    ).toBe(true)
+
+    // Walk forward and ask, per class, how many cells changed COLOUR while the
+    // class under them did not. That is the owner's defect, exactly.
+    const flips = await page.evaluate(async () => {
+      const g = window.__cityWalkGame
+      const s = g.walkState
+      const start = { x: s.x, y: s.y, h: s.headingRad }
+      const step = async (d) => {
+        s.x = start.x + Math.sin(start.h) * d
+        s.y = start.y + Math.cos(start.h) * d
+        const eyeZ = 1.7 + (s.groundZ ?? 0)
+        g.fpCamera.position.set(s.x, s.y, eyeZ)
+        g.fpCamera.lookAt(
+          s.x + Math.sin(start.h),
+          s.y + Math.cos(start.h),
+          eyeZ
+        )
+        const before = g.altView.getConvertTotals().samples
+        g.altView.invalidate()
+        const deadline = Date.now() + 15000
+        while (g.altView.getConvertTotals().samples <= before) {
+          if (Date.now() > deadline) throw new Error('no conversion')
+          await new Promise((r) => requestAnimationFrame(r))
+        }
+        const probe = g.altView.readCellProbe()
+        const cls = g.classPass.read(g.fpCamera, probe.cols, probe.rows)
+        return {
+          colour: Int8Array.from(probe.colour),
+          glyphs: Int16Array.from(probe.glyphs),
+          cls: Uint8Array.from(cls),
+        }
+      }
+      let held = 0
+      let flipped = 0
+      let previous = await step(0)
+      for (let i = 1; i <= 6; i++) {
+        const now = await step(i * 0.8)
+        for (let c = 0; c < now.colour.length; c++) {
+          // Only cells still looking at the same NAMED surface, and only while
+          // they carry ink: a blank cell has no colour to flip, and the sky
+          // keeps the screen pick because it has no surface to belong to.
+          if (now.cls[c] !== previous.cls[c] || now.cls[c] === 0) continue
+          if (now.glyphs[c] === 0 || previous.glyphs[c] === 0) continue
+          held++
+          if (now.colour[c] !== previous.colour[c]) flipped++
+        }
+        previous = now
+      }
+      Object.assign(s, { x: start.x, y: start.y, headingRad: start.h })
+      return { held, flipped }
+    })
+
+    // The fixture must contain the thing it guards: no held, inked cells at
+    // all would report a perfect zero and mean nothing.
+    expect(flips.held, 'inked cells whose surface stayed put').toBeGreaterThan(
+      5000
+    )
+    expect(
+      flips.flipped,
+      `${flips.flipped} of ${flips.held} cells changed colour while their surface did not`
+    ).toBe(0)
+  })
+
+  test('★★ no surface is ever painted white, which is what CW-71 guards', async ({
+    page,
+  }) => {
+    // CW-71's ink budget gates the white entry on luminance and chroma, and
+    // that guard rests on a surface family never being white. This is the same
+    // rule checked against the real palette the game installs rather than
+    // against the table alone.
+    await launchGame(page)
+    await enterCity(page)
+    await page.locator('#cityWalkColourBtn').click()
+    await page.evaluate(() => {
+      window.__cityWalkGame.motionReduced = true
+      window.__cityWalkGame.altView.setCellProbe(true)
+      window.__cityWalkGame.altView.setFontScale(0.3)
+    })
+    await settle(page)
+
+    const seen = await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const palette = g.altView.getPalette()
+      const white = palette.findIndex((h) => h.toLowerCase() === '#ffffff')
+      const probe = g.altView.readCellProbe()
+      const cls = g.classPass.read(g.fpCamera, probe.cols, probe.rows)
+      let classified = 0
+      let whiteOnSurface = 0
+      for (let i = 0; i < probe.colour.length; i++) {
+        if (cls[i] === 0 || probe.glyphs[i] === 0) continue
+        classified++
+        if (probe.colour[i] === white) whiteOnSurface++
+      }
+      return { classified, whiteOnSurface, white }
+    })
+    expect(seen.white).toBeGreaterThanOrEqual(0)
+    expect(seen.classified).toBeGreaterThan(2000)
+    expect(
+      seen.whiteOnSurface,
+      `${seen.whiteOnSurface} classified cells took the white entry`
+    ).toBe(0)
+  })
+})
