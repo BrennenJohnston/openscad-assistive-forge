@@ -89,19 +89,17 @@ describe('e2e shard planner (D-72)', () => {
     // required context - so this does not demand the room Chromium has. What
     // it does is refuse to let the lane quietly cross the real ceiling, and
     // name the margin when it is asked.
-    // CW-80: the Edge ceiling in test.yml is 50 minutes now, a STATED
-    // STOPGAP - the re-weighted model projects the two-shard lane at 43.7
-    // minutes, past the old 35 on arithmetic alone, and Edge cannot gain a
-    // shard from here (each Edge shard is a required context in ruleset
-    // 12059827; only the owner edits that). The proper fix - Edge at three
-    // shards - is in the owner's G3 package by name, and when it lands
-    // this constant comes back DOWN with it.
-    const CEILING_MIN = 50
-    for (const shard of planShards(files, MEASURED_SECONDS, 2)) {
+    // CW-83 (G3): the owner signed the ruleset edit and Edge runs THREE
+    // shards now, so the CW-80 stopgap (50) came back down as promised.
+    // Firefox still runs two shards but its lane has never approached the
+    // ceiling; the projection below covers the worst two-shard split so a
+    // regression in EITHER lane's shape still trips here.
+    const CEILING_MIN = 35
+    for (const shard of planShards(files, MEASURED_SECONDS, 3)) {
       const wallMin = projectMin(shard)
       expect(
         wallMin,
-        `a two-shard lane projects to ${wallMin.toFixed(1)} minutes, ` +
+        `an Edge shard projects to ${wallMin.toFixed(1)} minutes, ` +
           `${(CEILING_MIN - wallMin).toFixed(1)} short of the ceiling`
       ).toBeLessThan(CEILING_MIN)
     }
