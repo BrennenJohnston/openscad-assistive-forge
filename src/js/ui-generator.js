@@ -2241,7 +2241,16 @@ function createFileControl(
 
   const fileInfo = document.createElement('div');
   fileInfo.className = 'file-info';
-  fileInfo.textContent = param.default || 'No file selected';
+  // A default can be a string or a file OBJECT (the shape a saved plate
+  // value travels in). The object's name is the honest text; anything
+  // else printed "[object Object]" to the person and the screen reader.
+  const defaultFileLabel =
+    typeof param.default === 'string'
+      ? param.default
+      : typeof param.default?.name === 'string'
+        ? param.default.name
+        : '';
+  fileInfo.textContent = defaultFileLabel || 'No file selected';
   fileInfo.setAttribute('role', 'status');
   fileInfo.setAttribute('aria-live', 'polite');
 

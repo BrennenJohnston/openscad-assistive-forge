@@ -224,17 +224,19 @@ describe('the palette', () => {
     expect(colourLabel('nonsense')).toBe('Colour')
   })
 
-  it('★ calls both of the muted cat colours Gray, which is what the ported table does', () => {
-    // MEASURED, and left alone on purpose. The eighteen anchors this table
-    // carries are all saturated, so the nearest thing to a muted colour is
-    // gray: the cat's sage-green eyes (#8b9770) and its dusty-pink nose
-    // (#b0767d) both come out "Gray", and a person would be told their plate
-    // is the gray one. The table is the owner's own, ported unchanged from
-    // stencil-forge, and a person can rename any swatch; whether to add
-    // anchors is the owner's call, and it is on the ledger. This test pins
-    // the behaviour so the day it changes is a decision and not a surprise.
-    expect(colourLabel('#8b9770')).toBe('Gray')
-    expect(colourLabel('#b0767d')).toBe('Gray')
+  it('★ the muted cat colours get their own honest names now (G0, DP-25)', () => {
+    // The predecessor of this pin held both of these at "Gray" and said the
+    // day that changed would be a decision and not a surprise. The owner
+    // made the decision at G0 on 2026-09-01: add the muted anchors. The
+    // sage-green eyes and the dusty-pink nose stop sharing a name with each
+    // other and with the muzzle, and a true gray still reads Gray.
+    expect(colourLabel('#8b9770')).toBe('Sage')
+    expect(colourLabel('#b0767d')).toBe('Dusty pink')
+    expect(colourLabel('#808080')).toBe('Gray')
+    // The anchors joined a neighbourhood: the saturated names must not be
+    // stolen by the new arrivals.
+    expect(colourLabel('#997048')).toBe('Brown')
+    expect(colourLabel('#fafbf8')).toBe('White')
   })
 
   it('gives a drawing with no colours of its own one base coat', () => {

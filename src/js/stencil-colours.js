@@ -454,6 +454,18 @@ const NAMED_COLOURS = [
   { name: 'Pink', rgb: [240, 140, 190] },
   { name: 'Brown', rgb: [130, 85, 50] },
   { name: 'Tan', rgb: [200, 170, 130] },
+  // ★ The muted anchors, added at the owner's G0 decision (2026-09-01).
+  // The eighteen above are all saturated, so every muted colour in a
+  // traced photograph landed on a gray: the cat's sage-green eyes, its
+  // dusty-pink nose and its gray muzzle were ALL "Gray" - three swatches
+  // sharing one name in a list whose whole job is telling them apart.
+  // Each anchor is placed so it names its own neighbourhood without
+  // stealing from the saturated names (measured: an olive at 128,128,64
+  // took Brown's #997048; at 110,120,45 it does not).
+  { name: 'Olive', rgb: [110, 120, 45] },
+  { name: 'Sage', rgb: [140, 150, 115] },
+  { name: 'Dusty pink', rgb: [180, 120, 125] },
+  { name: 'Cream', rgb: [242, 235, 214] },
 ];
 
 /**
