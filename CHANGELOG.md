@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.0.0] - 2026-09-01
+
+### Three Interfaces, a Design Lane, and One-Link Sharing
+
+The 5.0.0 milestone gathers a year's worth of shape. Since 4.5.0 the app
+grew its three interfaces - Simplified for the person who opened a link,
+Standard for working inside a project, and a Classic layout that rebuilds
+the desktop OpenSCAD experience in the browser - along with a drawing lane
+that opens, cleans and saves SVG and DXF in both directions, a Stencil
+Maker, braille editing refinements across the card, sign and charm tools,
+one-link project sharing with manifests and provenance records, and a long
+accessibility and honesty pass over the whole surface. The complete
+engineering record is below; `docs/updates/WHATS_NEW_v5.md` is the short,
+illustrated version.
+
+### Added
+
+- **One page of verifiable site facts** (DP-29) - `docs/SITE_FACTS.md` states what the deployed
+  site is made of and what it does with your data: the Content Security Policy verbatim with a
+  directive-by-directive table, the data-handling story (nothing leaves the browser), exactly
+  which hosts the site connects to, the supply-chain controls, and the accessibility conformance
+  work. Every claim cites the file that proves it. The old IT approval guide now points here
+- **Golden rules for AI coding agents** (DP-28) - `AGENTS.md` at the repository root carries the
+  rules any AI assistant working on this codebase must follow (protected vendored files, the
+  accessibility bar, commit conventions, quality gates), with the same rules in Cursor's format
+  under `.cursor/rules/` and a pointer in `CLAUDE.md`. A new quick-start guide,
+  `docs/guides/AI_TOOLCHAIN_QUICK_START.md`, covers both doors: pointing a pipeline tool at
+  Forge, and developing this repository with an agent
+- **A photo journal of the release** (DP-30) - `docs/updates/WHATS_NEW_v5.md` walks what changed
+  since 4.5.0 in eight pictures and plain words, linked from the README
+- **What a screen reader actually hears, written down** (DP-32) - `docs/notes/SCREEN_READER_LESSONS.md`
+  records the working rules learned from listening sessions (measured-correct is not
+  heard-correct, one action one announcement, description length ceilings), and
+  `docs/notes/NVDA_LISTENING_PACK.md` scripts a six-station NVDA run so the next listening
+  session is a checklist instead of an improvisation
+
+### Changed
+
+- **Long help texts now deliver their first sentence** (DP-32) - six controls pointed their
+  screen-reader description at a whole paragraph, so NVDA read up to 80 words before letting go.
+  Each description now targets a span around the paragraph's first sentence; the rest of the text
+  stays visible on screen for everyone
+- **One toolchain, npm** (DP-28) - the Pixi environment layer is removed; `package.json` is the
+  task list and `scripts/README.md` the reference. The README's setup section says just that
+
+### Fixed
+
+- **An automatic preview speaks its completion, not its progress** (DP-32) - changing a parameter
+  used to announce "Rendering preview..." on every progress tick - four times in a measured run -
+  before "Preview ready" ever arrived. The progress line still shows in the status bar but no
+  longer interrupts a screen reader mid-edit; the one announcement is the one that matters
+
 ### Changed
 
 - **Trees are their species now** (CW-94, CW-97) - a tree used to be a lollipop: one thin stem
@@ -488,6 +540,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the editor of record for it in this loop. This ships switched OFF and stays off until the folder
   write-back has been tried on a real Chrome or Edge with the watcher running, which is a test only
   a person can do
+
+- **Stencil Maker** (`?example=stencil-maker`) - a new welcome-screen tool that turns a shape or
+  a drawing into printable stencil plates: thin bridges hold the islands so letter centres do not
+  fall out, registration marks in the corners line the plates up, and the plate, bridge and mark
+  dimensions are all parameters. This entry records the tool's arrival; the CHANGELOG missed it
+  at the time
 
 - **Open a DXF, tidy it up, and save a DXF back** (IR-12) - laser and cutting software speaks DXF,
   and so does the tool chain some of this work arrives from. The drawing editor now takes a .dxf
