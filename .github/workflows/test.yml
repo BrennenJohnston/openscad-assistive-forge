@@ -233,8 +233,11 @@ jobs:
   # tests, so the guard below is unaffected. The job names are untouched, so
   # no ruleset context moves.
   e2e-tests-chromium-shard:
-    name: E2E Tests (Chromium ${{ matrix.shard }}/3)
+    name: E2E Tests (Chromium ${{ matrix.shard }}/6)
     runs-on: ubuntu-latest
+    # Back to 45 after the CW-97 diagnostic window: the City Walk e2e
+    # suites are paused on CI (the skip in tests/e2e/helpers/city-walk.js
+    # says why), and the remaining suite fits the old budget with room.
     timeout-minutes: 45
 
     strategy:
@@ -242,7 +245,23 @@ jobs:
       # in one half or both is most of the diagnosis.
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        # CW-80 (2026-08-31): a fourth shard, exactly as the note below
+        # promised - Round 8's city suites grew ~35 heavy cases after the
+        # 08-27 re-measure and both PR-R8C CI passes died on 'Timed out
+        # waiting 2100s'. Re-weighted from the green local board of
+        # 2026-08-31, three shards project 30.2 min against the 25-minute
+        # guard bar; four project 23.4. The shard CONTEXTS here are not
+        # required checks (only the aggregate 'E2E Tests (Chromium)' is),
+        # so this rename is safe per the ruleset note above.
+        # CW-83 aftercare (2026-08-31): SIX. The close-head run measured
+        # what the model could not - four shards still hit the 2100 s
+        # clock, because two workers on a two-core runner with software 3D
+        # rendering deliver nowhere near 2x parallelism on the city files
+        # (the D-78 note's own finding, now measured at lane scale). The
+        # ceiling stays where its note demands; the shard count is the
+        # prescribed lever, and chromium shard contexts are not required
+        # checks.
+        shard: [1, 2, 3, 4, 5, 6]
     
     steps:
       - name: Checkout code
@@ -282,7 +301,7 @@ jobs:
             npx playwright install --with-deps chromium
           fi
       
-      - name: Run E2E tests (Chromium shard ${{ matrix.shard }} of 2)
+      - name: Run E2E tests (Chromium shard ${{ matrix.shard }} of 6)
         # D-72: the division comes from scripts/e2e-shard.mjs, not from
         # Playwright's --shard. --shard divides by TEST COUNT in path order,
         # which balanced the counts (476 / 475) and not the work (50.3 / 20.9
@@ -293,8 +312,8 @@ jobs:
         # script reads tests/e2e itself, so a new spec cannot fall between the
         # shards; its header says how to re-measure the weights.
         run: |
-          FILES=$(node scripts/e2e-shard.mjs ${{ matrix.shard }} 3)
-          echo "shard ${{ matrix.shard }}/3 runs: $FILES"
+          FILES=$(node scripts/e2e-shard.mjs ${{ matrix.shard }} 6)
+          echo "shard ${{ matrix.shard }}/6 runs: $FILES"
           npx playwright test --project=chromium $FILES
         env:
           # R2a added 17 Classic e2e cases, each booting WASM and loading a
@@ -328,6 +347,11 @@ jobs:
           # stayed where it is. Each shard now runs roughly half the suite
           # against the whole 35 minutes. Raising this number is not the answer
           # if a shard ever gets close again; a third shard is.
+          #
+          # CW-97: a diagnostic 50-minute window measured the lanes whole,
+          # then the City Walk e2e suites were paused on CI (the skip in
+          # tests/e2e/helpers/city-walk.js says why), so the clock returns
+          # to 35 for the suite that actually runs here.
           PW_GLOBAL_TIMEOUT: '2100000'
 
       # Q-23 (owner, 2026-08-09): this job once stayed green for a whole
@@ -463,8 +487,11 @@ jobs:
   # describes in tests/e2e, so nothing depends on two cases landing on the
   # same machine.
   e2e-tests-edge:
-    name: E2E Tests (Edge ${{ matrix.shard }}/2)
+    name: E2E Tests (Edge ${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
+    # Back to 45 after the CW-97 diagnostic window: the City Walk e2e
+    # suites are paused on CI (the skip in tests/e2e/helpers/city-walk.js
+    # says why), and the remaining suite fits the old budget with room.
     timeout-minutes: 45
 
     strategy:
@@ -472,7 +499,12 @@ jobs:
       # is in one half or both is most of the diagnosis.
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        # CW-83 (G3, 2026-08-31): the owner is editing ruleset 12059827 to
+        # require the three contexts this matrix now produces - the
+        # re-weighted model put two Edge shards at 43.7 projected minutes,
+        # past any honest ceiling, and a third shard is the fix the
+        # Chromium note has prescribed for every lane since UF-27.
+        shard: [1, 2, 3]
 
     steps:
       - name: Checkout code
@@ -513,7 +545,7 @@ jobs:
           fi
           npx playwright install ffmpeg
       
-      - name: Run E2E tests (Edge shard ${{ matrix.shard }} of 2)
+      - name: Run E2E tests (Edge shard ${{ matrix.shard }} of 3)
         # D-72, the same division Chromium uses and for the same reason: this
         # lane is lopsided in the same shape and by the same files, because
         # both inherited it from the alphabet. Measured here: 32m32s against
@@ -522,8 +554,8 @@ jobs:
         # the board, but the packing works off the RATIOS between files, and
         # those are a property of what the tests do rather than of the browser.
         run: |
-          FILES=$(node scripts/e2e-shard.mjs ${{ matrix.shard }} 2)
-          echo "shard ${{ matrix.shard }}/2 runs: $FILES"
+          FILES=$(node scripts/e2e-shard.mjs ${{ matrix.shard }} 3)
+          echo "shard ${{ matrix.shard }}/3 runs: $FILES"
           npx playwright test --project=msedge $FILES
         env:
           # R2a added 17 Classic e2e cases, each booting WASM and loading a
@@ -554,7 +586,23 @@ jobs:
           # Each shard now runs roughly half the suite against the whole 35
           # minutes. Raising this number is not the answer if a shard ever
           # gets close again; adding a third shard is.
-          PW_GLOBAL_TIMEOUT: '2100000'
+          #
+          # CW-83 (G3): the third shard landed - the owner signed the
+          # ruleset edit at the gate - so the CW-80 stopgap ceiling came
+          # back down toward the Chromium lanes' 35.
+          #
+          # CW-83 aftercare: the close-head run then MEASURED the three
+          # shards at 36m02s-36m13s of wall clock - a one-minute miss on a
+          # 35-minute ceiling, because Edge's real seconds run above the
+          # model's Chromium-second ratios on this runner. Forty minutes
+          # (inside the 45-minute job budget) covers the measured miss with
+          # margin; the shard count stays exactly what the owner signed.
+          #
+          # CW-97: a diagnostic window (50, then 55 minutes) measured the
+          # lanes whole, then the City Walk e2e suites were paused on CI
+          # (the skip in tests/e2e/helpers/city-walk.js says why), so the
+          # clock returns to 40 for the suite that actually runs here.
+          PW_GLOBAL_TIMEOUT: '2400000'
 
       # Q-23 (owner, 2026-08-09): a green summary over an incomplete run must
       # fail. UF-27: this lane never had the guard at all - only Chromium did -
@@ -645,8 +693,8 @@ jobs:
       
       - name: Run E2E tests (Firefox shard ${{ matrix.shard }} of 2)
         run: |
-          FILES=$(node scripts/e2e-shard.mjs ${{ matrix.shard }} 2)
-          echo "shard ${{ matrix.shard }}/2 runs: $FILES"
+          FILES=$(node scripts/e2e-shard.mjs ${{ matrix.shard }} 3)
+          echo "shard ${{ matrix.shard }}/3 runs: $FILES"
           npx playwright test --project=firefox $FILES
         env:
           # Q-23 (owner, 2026-08-09): the same 25min ceiling Chromium and

@@ -43,11 +43,16 @@ test.describe('ASCII City Walk — the acceptance path runs (CW-37)', () => {
       () => window.__cityWalkGame?.altView?.getConvertStats?.() ?? null
     )
 
-  /** Wait until the converter has produced n more frames than it had. */
+  /** Wait until the converter has produced n more frames than it had.
+   * CW-97: the outer bound widened 90 to 150 s - the slowest software
+   * shard measured ~3.1 s per conversion at the floor with heavy rain on
+   * the heavier crown-cluster city, and 30 frames at that pace is ~93 s.
+   * The gate stays frames; only the outer bound moved, exactly as this
+   * file's own header prescribes. */
   async function waitForConversions(page, n) {
     const from = (await stats(page))?.samples ?? 0
     await expect
-      .poll(async () => (await stats(page))?.samples ?? 0, { timeout: 90000 })
+      .poll(async () => (await stats(page))?.samples ?? 0, { timeout: 150000 })
       .toBeGreaterThanOrEqual(from + n)
   }
 
@@ -64,8 +69,10 @@ test.describe('ASCII City Walk — the acceptance path runs (CW-37)', () => {
   }) => {
     // The wall clock here is an OUTER bound only, wide enough that the frame
     // gates decide - the default 60 s killed a green test mid-poll on a
-    // loaded runner that had passed it in 30 s the run before.
-    test.setTimeout(150_000)
+    // loaded runner that had passed it in 30 s the run before. 150 s then
+    // died the same death on the crown-cluster city (29 of 30 conversions
+    // when the poll expired), so the bound follows the measured pace up.
+    test.setTimeout(240_000)
     await launchGame(page)
     await enterCity(page)
 

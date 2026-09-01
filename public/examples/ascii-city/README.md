@@ -18,6 +18,22 @@ since the CW-55 rebake).
 **Map data © OpenStreetMap contributors, available under the Open Database
 License (ODbL 1.0).**
 
+Since CW-77 the files also carry data from two other kinds of source, each
+with its own line in the file itself:
+
+- **Terrain.** USGS 3DEP through the EPQS point service for Seattle, Denver
+  and Albuquerque - public domain, credited as "Map services and data
+  available from U.S. Geological Survey, National Geospatial Program". For
+  Burnaby, Natural Resources Canada's CDEM/HRDEM altitude service under the
+  Open Government Licence - Canada, credited as "Contains information licensed
+  under the Open Government Licence - Canada". Google Maps, Earth and Street
+  View are prohibited as a source for anything here.
+- **Seattle streetlight positions.** Seattle City Light's published pole
+  register (City of Seattle). Its catalog page states no licence; it is used
+  on the project owner's explicit authorisation, and the file's `poleSource`
+  block says so in as many words. Those nodes carry negative ids so nothing
+  from that register can be mistaken for OpenStreetMap data.
+
 - Copyright and license: https://www.openstreetmap.org/copyright
 - ODbL full text: https://opendatacommons.org/licenses/odbl/1-0/
 

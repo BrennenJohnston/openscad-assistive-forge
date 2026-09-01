@@ -82,7 +82,15 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
       const tick = (now) => {
         if (s.stop) return
         const d = Math.hypot(w.x - s.px, w.y - s.py)
-        if (d > 0) {
+        // CW-81: count only STEADY frames. The walk ramp means the first
+        // quarter second moves at a rising fraction of the claimed speed,
+        // and the decel glide after a released hold is still movement - a
+        // leg that starts while the previous leg's glide is dying samples
+        // decaying scales and read a real 1.6x sprint as 1.01x (2.08 vs
+        // 2.10 m/s, one board in two). The toggle's claim is about the
+        // steady stride, so the leg waits for the ramp to be full.
+        const steady = (window.__cityWalkGame.walkRamp ?? 1) >= 1
+        if (d > 0 && steady) {
           if (!s.t0) {
             s.t0 = now
           } else if (s.frames < s.target) {
@@ -99,11 +107,14 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
       window.__cwLegTick = requestAnimationFrame(tick)
     }, sampleFrames)
 
-  /** Settle function: hold until the leg has the sample it asked for. */
+  /** Settle function: hold until the leg has the sample it asked for.
+   * CW-97 batch 3: the bound follows CI software's measured ~2 s frames -
+   * ten sampled frames plus the quarter-second ramp sat exactly at the
+   * old 20 s. The leg is frame-gated either way; hardware ends early. */
   const untilLegFull = (page) => async () => {
     await expect
       .poll(() => page.evaluate(() => window.__cwLeg?.done === true), {
-        timeout: 20000,
+        timeout: 120000,
       })
       .toBe(true)
   }
@@ -208,10 +219,14 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     await waitForFrames(page, 3)
 
     const start = await walkPos(page)
+    // CW-97 batch 3: the poll bounds follow CI software's measured pace
+    // (the city walks at ~0.23 m/s and turns at ~3 deg/s there - a full
+    // sector change can need the better part of a minute). Polls end
+    // early when satisfied, so hardware pays nothing.
     await holdButton(page, 'cityWalkCamPanUp', () =>
       expect
         .poll(async () => distance(start, await walkPos(page)), {
-          timeout: 15000,
+          timeout: 60000,
         })
         .toBeGreaterThan(0.5)
     )
@@ -223,7 +238,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     const restHeading = await hudHeading(page)
     await holdButton(page, 'cityWalkCamRotateRight', () =>
       expect
-        .poll(() => hudHeading(page), { timeout: 15000 })
+        .poll(() => hudHeading(page), { timeout: 60000 })
         .not.toBe(restHeading)
     )
 
@@ -675,11 +690,11 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     await btn(page, 'cityWalkSpeedDownBtn').click()
     await expect(announcer(page)).toHaveText(/Walking speed 100 percent/)
 
-    // The game opens at its own 50% default (CW-12), in ten-point steps.
+    // The game opens at the ONE default, 30% (CW-72), in ten-point steps.
     await btn(page, 'cityWalkCharDownBtn').click()
-    await expect(announcer(page)).toHaveText(/Character size 40 percent/)
+    await expect(announcer(page)).toHaveText(/Character size 20 percent/)
     await btn(page, 'cityWalkCharUpBtn').click()
-    await expect(announcer(page)).toHaveText(/Character size 50 percent/)
+    await expect(announcer(page)).toHaveText(/Character size 30 percent/)
 
     await btn(page, 'cityWalkCamReset').click()
     await expect(announcer(page)).toHaveText(/View level/)
@@ -755,7 +770,31 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     const clearRun = await faceClearRun(page, 24)
     test.skip(clearRun < 12, `spawn has only ${clearRun} m of clear run`)
 
+    // CW-81: a leg is longer than its ten sampled frames now - the ramp
+    // spends a quarter second below full stride before the steady sample
+    // opens, and the released hold glides another quarter second - so two
+    // legs walked end to end can outrun the measured corridor, and the
+    // second one presses the far wall and dribbles (measured 0.43-0.72 m/s
+    // against a 4.80 stroll). Each leg starts from the same corridor mouth.
+    const mouth = await page.evaluate(() => {
+      const w = window.__cityWalkGame.walkState
+      return { x: w.x, y: w.y, headingRad: w.headingRad }
+    })
+    const backToMouth = async () => {
+      await page.evaluate((p) => {
+        const g = window.__cityWalkGame
+        g.walkState.x = p.x
+        g.walkState.y = p.y
+        g.walkState.headingRad = p.headingRad
+        if (g.surface) g.walkState.groundZ = g.surface.heightAt(p.x, p.y)
+      }, mouth)
+      await expect
+        .poll(() => page.evaluate(() => window.__cityWalkGame.walkRamp))
+        .toBe(0)
+    }
+
     const leg = async () => {
+      await backToMouth()
       await watchLeg(page, SAMPLE_FRAMES)
       await holdButton(page, 'cityWalkCamPanUp', untilLegFull(page))
       return readLeg(page)
@@ -805,11 +844,33 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     expect(focus.inLayer).toBe(true)
 
     const clickHeading = await hudHeading(page)
+    const h0 = await page.evaluate(
+      () => window.__cityWalkGame.walkState.headingRad
+    )
     await page.keyboard.down('ArrowRight')
-    await page.waitForTimeout(1300)
+    // CW-97: hold until the game has genuinely turned past a compass
+    // sector (>1 rad clears any 45 degree sector from any start), instead
+    // of a wall-clock 1.3 s. Turn rates integrate per FRAME with dt
+    // clamped, so on a frame-starved fresh entry a fixed wall-time hold
+    // undercounts - a measurement artifact the heavier crown build
+    // exposed, not a key-routing failure (the D-59 claim, which the final
+    // assert still makes on the visible HUD).
+    await expect
+      .poll(
+        async () => {
+          const h = await page.evaluate(
+            () => window.__cityWalkGame.walkState.headingRad
+          )
+          const d = Math.abs(h - h0) % (2 * Math.PI)
+          return Math.min(d, 2 * Math.PI - d)
+        },
+        // CI software turns at ~3 deg/s (measured: 0.56-0.75 rad landed
+        // inside the old 15 s bound) - the radian still decides, the
+        // bound just fits the slowest turner.
+        { timeout: 120000 }
+      )
+      .toBeGreaterThan(1.0)
     await page.keyboard.up('ArrowRight')
-    // A ~117 degree turn always leaves a 45 degree compass sector, whatever
-    // the CW-44 spawn heading is.
     await expect.poll(() => hudHeading(page)).not.toBe(clickHeading)
   })
 
@@ -1755,5 +1816,524 @@ test.describe('ASCII City Walk — four map styles (CW-60)', () => {
     const way = await wayfindDrawn(page)
     expect(way.visible).toBe(way.meshes)
     expect(way.visible).toBeGreaterThan(0)
+  })
+})
+
+test.describe('ASCII City Walk — look without dragging, walk without holding (CW-81)', () => {
+  const DEG = Math.PI / 180
+  const gaze = (page) =>
+    page.evaluate(() => ({
+      heading: window.__cityWalkGame.walkState.headingRad,
+      pitch: window.__cityWalkGame.walkState.pitchRad ?? 0,
+      x: window.__cityWalkGame.walkState.x,
+      y: window.__cityWalkGame.walkState.y,
+      mode: window.__cityWalkGame.lookMode,
+      autoWalk: window.__cityWalkGame.autoWalk,
+    }))
+  const announcer = (page) => page.locator('#cityWalkAnnouncer')
+
+  test('★★ WCAG 2.5.7: a single pointer with NO drag looks in every direction', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    // CW-96: hover-follow is opt-in now (the owner set the default back to
+    // drag after playing it), so this case selects the mode the way a
+    // player would have to - and the WCAG 2.5.7 claim it guards is that
+    // the no-drag path EXISTS and works, which an opt-in satisfies.
+    await page.addInitScript(() =>
+      localStorage.setItem('openscad-forge-city-walk-look', 'follow')
+    )
+    await launchGame(page)
+    await enterCity(page)
+    expect((await gaze(page)).mode).toBe('follow')
+
+    const box = await page.locator('#cityWalkViewport').boundingBox()
+    const cx = box.x + box.width / 2
+    const cy = box.y + box.height / 2
+
+    // Right edge: the heading grows, no button held anywhere.
+    const h0 = (await gaze(page)).heading
+    await page.mouse.move(box.x + box.width * 0.96, cy)
+    await expect
+      .poll(async () => {
+        let d = (await gaze(page)).heading - h0
+        while (d > Math.PI) d -= 2 * Math.PI
+        while (d < -Math.PI) d += 2 * Math.PI
+        return d
+      }, { timeout: 20000 })
+      .toBeGreaterThan(10 * DEG)
+
+    // Top edge: the pitch rises.
+    const p0 = (await gaze(page)).pitch
+    await page.mouse.move(cx, box.y + box.height * 0.04)
+    await expect
+      .poll(async () => (await gaze(page)).pitch - p0, { timeout: 20000 })
+      .toBeGreaterThan(5 * DEG)
+
+    // Dead centre: the view settles and stays put. The camera owes a
+    // damped glide toward wherever the target raced (the CW-81 lag, about
+    // 4.5 degrees off a full-rate edge look), and that tail is exponential
+    // in the game's own integrated time - on a frame-starved renderer it
+    // stretches over wall time, so a fixed wait samples mid-glide (CW-97:
+    // measured 0.53 deg residual on software GL, 3.1 deg early on
+    // hardware). Wait until a PROPERLY SPACED pair of samples agrees -
+    // never a poll whose first pair is milliseconds apart - then prove it
+    // stays.
+    const settleUntilStill = async (label) => {
+      for (let i = 0; i < 60; i++) {
+        const a = await gaze(page)
+        await page.waitForTimeout(300)
+        const b = await gaze(page)
+        const d = Math.max(
+          Math.abs(b.heading - a.heading),
+          Math.abs(b.pitch - a.pitch)
+        )
+        if (d < 0.2 * DEG) return b
+      }
+      throw new Error(`the view never settled: ${label}`)
+    }
+    await page.mouse.move(cx, cy)
+    const settled = await settleUntilStill('dead centre')
+    await page.waitForTimeout(500)
+    const later = await gaze(page)
+    expect(Math.abs(later.heading - settled.heading)).toBeLessThan(0.2 * DEG)
+    expect(Math.abs(later.pitch - settled.pitch)).toBeLessThan(0.2 * DEG)
+
+    // Outside the viewport (the header): frozen, however long we wait. The
+    // TARGET freezes the moment the cursor leaves; the camera still owes
+    // the same damped glide, so settle first, then hold.
+    await page.mouse.move(box.x + box.width * 0.96, cy)
+    await page.waitForTimeout(200)
+    await page.mouse.move(box.x + 10, box.y - 30)
+    const out0 = await settleUntilStill('outside the viewport')
+    await page.waitForTimeout(600)
+    const out1 = await gaze(page)
+    expect(Math.abs(out1.heading - out0.heading)).toBeLessThan(0.2 * DEG)
+  })
+
+  test('★★ auto-walk moves without a held key, and every stop rule stops it', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await launchGame(page)
+    await enterCity(page)
+
+    // On, and moving, hands off.
+    await page.keyboard.press('KeyN')
+    await expect(announcer(page)).toContainText('Auto-walk on')
+    const start = await gaze(page)
+    await expect
+      .poll(async () => {
+        const g = await gaze(page)
+        return Math.hypot(g.x - start.x, g.y - start.y)
+      }, { timeout: 20000 })
+      .toBeGreaterThan(1)
+
+    // The toggle stops it.
+    await page.keyboard.press('KeyN')
+    await expect(announcer(page)).toContainText('Auto-walk off')
+    expect((await gaze(page)).autoWalk).toBe(false)
+
+    // Escape stops it - and stays IN the game.
+    await page.keyboard.press('KeyN')
+    await expect(announcer(page)).toContainText('Auto-walk on')
+    await page.keyboard.press('Escape')
+    await expect(announcer(page)).toContainText('Auto-walk off')
+    expect((await gaze(page)).autoWalk).toBe(false)
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'street view'
+    )
+
+    // A tapped walk key takes the wheel back, even one the frame never
+    // sees held (the down and the up can land between two frames).
+    await page.keyboard.press('KeyN')
+    await expect(announcer(page)).toContainText('Auto-walk on')
+    await page.keyboard.press('KeyS')
+    await expect(announcer(page)).toContainText('Auto-walk off')
+    expect((await gaze(page)).autoWalk).toBe(false)
+  })
+
+  test('★★ auto-walk follows the street: an obstacle steers it, never stops it (CW-87)', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await launchGame(page)
+    await enterCity(page)
+
+    // Face the nearest obstacle along a CARDINAL bearing, using the game's
+    // own collision grid - the pose that USED to trigger the blocked stop
+    // before street-following (CW-81's original wall case). Now the fan
+    // must steer along the clearest pavement and keep walking.
+    const posed = await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const st = g.walkState
+      for (let d = 2; d < 120; d += 1) {
+        for (const rad of [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2]) {
+          const x = st.x + Math.sin(rad) * d
+          const y = st.y + Math.cos(rad) * d
+          if (g.collision.isBlocked(x, y)) {
+            st.headingRad = rad
+            g.lookTarget.headingRad = rad
+            return { rad, d }
+          }
+        }
+      }
+      return null
+    })
+    expect(posed).not.toBeNull()
+
+    const start = await gaze(page)
+    await page.keyboard.press('KeyN')
+    await expect(announcer(page)).toContainText('Auto-walk on')
+    // The walker must keep covering ground past the obstacle it was aimed
+    // at - proof it went around, not into. CW-97: the measure is the PATH
+    // (an odometer over samples), not displacement. Street-following
+    // around downtown blocks can curl or pace: photographed once with the
+    // walker still walking at 90 s, auto on, no stop sentence - the claim
+    // intact - while displacement idled below the bar. A stopped walker
+    // racks up no path, so the odometer still catches walking INTO. The
+    // bar is capped: on a software-GL renderer the walk itself runs at a
+    // tenth speed, and 27 m of path is proof enough of going around.
+    let odoPrev = { x: start.x, y: start.y }
+    let odo = 0
+    await expect
+      .poll(
+        async () => {
+          const g = await gaze(page)
+          odo += Math.hypot(g.x - odoPrev.x, g.y - odoPrev.y)
+          odoPrev = { x: g.x, y: g.y }
+          return odo
+        },
+        // CI software walks at ~0.23 m/s (measured: 20.4 m landed inside
+        // the old 90 s bound) - 27 m of path needs the outer bound to say
+        // four minutes; the odometer still decides.
+        { timeout: 240000 }
+      )
+      .toBeGreaterThan(Math.min(posed.d, 25) + 2)
+    const g = await gaze(page)
+    expect(g.autoWalk).toBe(true)
+    await expect(announcer(page)).not.toContainText(
+      'Auto-walk stopped. Something is in the way.'
+    )
+    await page.keyboard.press('KeyN')
+  })
+
+  test('★★ a true dead end still stops auto-walk, and says so (CW-87)', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await launchGame(page)
+    await enterCity(page)
+
+    // Build the dead end with the game's own obstacle stamp: a U of walls
+    // 1.1 m out on three sides, the opening behind, where the forward fan
+    // never looks. This is the one case the blocked sentence is for now.
+    // (A settle first: one observed flake had the pose written before the
+    // spawn finished settling, and street-following then walked the old
+    // bearing out through the U's open side.)
+    await page.waitForTimeout(600)
+    await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const st = g.walkState
+      st.headingRad = 0
+      g.lookTarget.headingRad = 0
+      g.collision.blockRect({
+        x: st.x,
+        y: st.y + 1.6,
+        halfLengthM: 6,
+        halfWidthM: 0.5,
+        rotationRad: Math.PI / 2,
+      })
+      g.collision.blockRect({
+        x: st.x + 1.6,
+        y: st.y,
+        halfLengthM: 6,
+        halfWidthM: 0.5,
+        rotationRad: 0,
+      })
+      g.collision.blockRect({
+        x: st.x - 1.6,
+        y: st.y,
+        halfLengthM: 6,
+        halfWidthM: 0.5,
+        rotationRad: 0,
+      })
+    })
+
+    await page.keyboard.press('KeyN')
+    await expect(announcer(page)).toContainText('Auto-walk on')
+    await expect(announcer(page)).toContainText(
+      'Auto-walk stopped. Something is in the way.',
+      // The walker crosses the 1.6 m to the U's wall at CI software's
+      // ~0.23 m/s and the fan needs frames to fail - the bound follows.
+      { timeout: 180000 }
+    )
+    expect((await gaze(page)).autoWalk).toBe(false)
+  })
+
+  test('arrow-look: while auto-walk carries the walking, Arrow Up looks', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await launchGame(page)
+    await enterCity(page)
+
+    await page.keyboard.press('KeyN')
+    await expect(announcer(page)).toContainText('Auto-walk on')
+    const p0 = (await gaze(page)).pitch
+    // CW-97: hold the arrow until the GAME's pitch answers, not for a
+    // wall-clock 700 ms - look rates integrate per frame with dt clamped,
+    // and a frame-starved renderer under-delivers a fixed-time hold (the
+    // same measurement law as the D-59 rescope).
+    await page.keyboard.down('ArrowUp')
+    await expect
+      .poll(async () => (await gaze(page)).pitch - p0, { timeout: 20000 })
+      .toBeGreaterThan(5 * (Math.PI / 180))
+    await page.keyboard.up('ArrowUp')
+    // And the walking never stopped: an arrow is a look, not a walk, here.
+    expect((await gaze(page)).autoWalk).toBe(true)
+    await page.keyboard.press('KeyN')
+    await expect(announcer(page)).toContainText('Auto-walk off')
+  })
+
+  test('the preference persists across a reload, and off means neither', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await launchGame(page)
+    await enterCity(page)
+
+    // CW-96: the default is drag now; one press reaches off, and that
+    // choice must survive the reload.
+    expect((await gaze(page)).mode).toBe('drag')
+    await page.locator('#cityWalkLookModeBtn').click()
+    await expect(announcer(page)).toContainText('Mouse look off')
+
+    // A plain reload will not do: the unlock door consumes ?hfm=unlock and
+    // rewrites the URL, so reloading lands on the main page with no card.
+    // launchGame navigates with the query again; localStorage survives the
+    // navigation, which is exactly what this case is here to prove.
+    await launchGame(page)
+    await enterCity(page)
+    expect((await gaze(page)).mode).toBe('off')
+
+    // Off is off: the hover does not look, and neither does a drag.
+    const box = await page.locator('#cityWalkViewport').boundingBox()
+    const before = await gaze(page)
+    await page.mouse.move(box.x + box.width * 0.96, box.y + box.height / 2)
+    await page.waitForTimeout(600)
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width / 2 + 120, box.y + box.height / 2)
+    await page.mouse.up()
+    const after = await gaze(page)
+    expect(after.heading).toBeCloseTo(before.heading, 5)
+    expect(after.pitch).toBeCloseTo(before.pitch, 5)
+  })
+
+  test('reduced motion keeps hover-look off by default, and the choice stays yours', async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await launchGame(page)
+    await enterCity(page)
+    expect((await gaze(page)).mode).toBe('off')
+    // The preference is still the player's to change.
+    await page.locator('#cityWalkLookModeBtn').click()
+    expect((await gaze(page)).mode).toBe('follow')
+  })
+
+  test('a dialog freezes hover-look until it closes', async ({ page }) => {
+    test.setTimeout(120000)
+    // CW-96: hover is opt-in; this case opts in.
+    await page.addInitScript(() =>
+      localStorage.setItem('openscad-forge-city-walk-look', 'follow')
+    )
+    await launchGame(page)
+    await enterCity(page)
+
+    const box = await page.locator('#cityWalkViewport').boundingBox()
+    await page.mouse.move(box.x + box.width * 0.96, box.y + box.height / 2)
+    const h0 = (await gaze(page)).heading
+    await page.waitForTimeout(300)
+    const h1 = (await gaze(page)).heading
+    expect(h1).not.toBe(h0)
+
+    // Opening help freezes the TARGET; the camera still finishes easing the
+    // hover lag out (rate x tau = 9 degrees, tau 0.1 s), so give it 900 ms
+    // to converge and snap before asserting stillness. The tolerance is the
+    // settle check's 0.2 degrees - far under the 45 degrees an unfrozen
+    // hover would cover in the same half second.
+    await page.keyboard.press('KeyH')
+    await expect(page.locator('#cityWalkHelpPanel')).toBeVisible()
+    await page.waitForTimeout(900)
+    const frozen0 = await gaze(page)
+    await page.waitForTimeout(500)
+    const frozen1 = await gaze(page)
+    expect(Math.abs(frozen1.heading - frozen0.heading)).toBeLessThan(0.2 * DEG)
+    await page.keyboard.press('KeyH')
+  })
+
+  test('axe: the toolbar with the CW-81 controls, and their hit targets', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    for (const id of ['#cityWalkAutoWalkBtn', '#cityWalkLookModeBtn']) {
+      const b = await page.locator(id).boundingBox()
+      expect(b.height, id).toBeGreaterThanOrEqual(44)
+      expect(b.width, id).toBeGreaterThanOrEqual(44)
+    }
+
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .include('#cityWalkToolbar')
+      .analyze()
+    expectOnlyAllowedViolations(results)
+  })
+})
+
+test.describe('ASCII City Walk — the tour: take me there (CW-87)', () => {
+  const announcer = (page) => page.locator('#cityWalkAnnouncer')
+  const tourState = (page) =>
+    page.evaluate(() => {
+      const g = window.__cityWalkGame
+      return {
+        tour: g.tour ? { name: g.tour.name, at: g.tour.at } : null,
+        x: g.walkState.x,
+        y: g.walkState.y,
+      }
+    })
+
+  test('★★ I walks the player to the Great Wheel, and arrival is the waypoint touch', async ({
+    page,
+  }) => {
+    // T7: the live region is watched over the whole route; the sim-time
+    // window is sized for the software renderer (CW-78's lesson - a
+    // dt-clamped walker covers sim metres at a fraction of real time).
+    test.setTimeout(180000)
+    await launchGame(page)
+    await enterCity(page)
+
+    await page.keyboard.press('KeyI')
+    await expect(announcer(page)).toContainText(
+      'Taking you to Seattle Great Wheel'
+    )
+    await expect(announcer(page)).toContainText(
+      'Waypoint reached: Seattle Great Wheel.',
+      // The tour route runs tens of metres at CI software's ~0.23 m/s;
+      // the walker stops on arrival so the sentence stands - only the
+      // bound follows the pace.
+      { timeout: 300000 }
+    )
+    const s = await tourState(page)
+    expect(s.tour).toBeNull()
+    // The brief's own acceptance: within 3 m of the waypoint.
+    const d = await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const spot = g.waypointSpots.find((w) => w.name === 'Seattle Great Wheel')
+      return Math.hypot(spot.x - g.walkState.x, spot.y - g.walkState.y)
+    })
+    expect(d).toBeLessThan(3)
+  })
+
+  test('★★ every stop rule stops the tour: I again, Escape, a walk key', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await launchGame(page)
+    await enterCity(page)
+
+    await page.keyboard.press('KeyI')
+    await expect(announcer(page)).toContainText('Taking you to')
+    await page.keyboard.press('KeyI')
+    await expect(announcer(page)).toContainText('Tour stopped.')
+    expect((await tourState(page)).tour).toBeNull()
+
+    await page.keyboard.press('KeyI')
+    await expect(announcer(page)).toContainText('Taking you to')
+    await page.keyboard.press('Escape')
+    await expect(announcer(page)).toContainText('Tour stopped.')
+    expect((await tourState(page)).tour).toBeNull()
+    // And Escape stopped the tour, not the game.
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'street view'
+    )
+
+    await page.keyboard.press('KeyI')
+    await expect(announcer(page)).toContainText('Taking you to')
+    await page.keyboard.press('KeyW')
+    await expect(announcer(page)).toContainText('Tour stopped.')
+    expect((await tourState(page)).tour).toBeNull()
+  })
+
+  test('the legend button starts the tour from the map, closing it', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await launchGame(page)
+    await enterCity(page)
+
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
+    await page.locator('#cityWalkTourBtn').click()
+    await expect(announcer(page)).toContainText('Taking you to')
+    await expect(page.locator('#cityWalkHudStatus')).toContainText(
+      'street view'
+    )
+    await page.keyboard.press('Escape')
+    await expect(announcer(page)).toContainText('Tour stopped.')
+  })
+
+  test('★★ a real bend on the route is spoken as a turn', async ({ page }) => {
+    test.setTimeout(120000)
+    await launchGame(page)
+    await enterCity(page)
+
+    // A hand-laid two-leg route with a 90-degree bend, injected as the
+    // running tour so the REAL vertex-advance path speaks: leg one 2.5 m
+    // ahead, leg two 6 m to the right of it. Open ground at the spawn.
+    await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const w = g.walkState
+      const h = w.headingRad
+      const ax = w.x + Math.sin(h) * 2.5
+      const ay = w.y + Math.cos(h) * 2.5
+      const bx = ax + Math.sin(h + Math.PI / 2) * 6
+      const by = ay + Math.cos(h + Math.PI / 2) * 6
+      g.tour = {
+        name: 'Test bend',
+        route: [
+          { x: w.x, y: w.y },
+          { x: ax, y: ay },
+          { x: bx, y: by },
+        ],
+        at: 1,
+        holding: false,
+      }
+    })
+    await expect(announcer(page)).toContainText(/Turn right/, {
+      timeout: 60000,
+    })
+  })
+
+  test('axe: the legend with the tour button, and its hit target', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+    await page.keyboard.press('KeyM')
+    await expect(page.locator('#cityWalkLegend')).toBeVisible()
+
+    const b = await page.locator('#cityWalkTourBtn').boundingBox()
+    expect(b.height).toBeGreaterThanOrEqual(44)
+    expect(b.width).toBeGreaterThanOrEqual(44)
+
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .include('#cityWalkLegend')
+      .analyze()
+    expectOnlyAllowedViolations(results)
   })
 })
