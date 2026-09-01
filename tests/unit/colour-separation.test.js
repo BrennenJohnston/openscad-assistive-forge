@@ -234,6 +234,24 @@ describe('masksFor and traceMask', () => {
     expect(strict.paths).toHaveLength(0)
     expect(strict.dropped).toBeGreaterThan(0)
   })
+
+  // DP-24 P3: the traced colour masks DID NOT TILE. Each mask is traced on
+  // its own, the tracer pulls every boundary inward, and the hairline gaps
+  // between neighbouring colours became 567 loose pieces on the owner's
+  // cat. Grown under a pixel before tracing, neighbours MEET: together the
+  // traced colours cover at least the whole canvas (overlap is fine - the
+  // paint order paints over it; a gap is a sliver on a plate).
+  it('★ grown masks tile: the traced colours cover the whole picture', () => {
+    const img = threeStripes()
+    const { palette, assignments } = quantise(img, 3)
+    const masks = masksFor(assignments, palette.length)
+    let covered = 0
+    for (const mask of masks) {
+      const { keptArea } = traceMask(mask, img, { areaFloorPx: 4 })
+      covered += keptArea
+    }
+    expect(covered).toBeGreaterThanOrEqual(img.width * img.height)
+  })
 })
 
 describe('separateColours on the owner cat', () => {
@@ -291,9 +309,13 @@ describe('separateColours on the owner cat', () => {
   it('melts the anti-alias slivers rather than shipping them as regions', () => {
     // The planning probe measured 181 paths for brown and 178 for grey with
     // the tracer left to quantise. One colour at a time plus an area floor
-    // brings a whole picture down to tens.
+    // brings a whole picture down to tens. RESCOPED at DP-24 P3 from 80 to
+    // 120: the floor is now applied to the mask's own pixels before the
+    // grow (measured 105 kept) - the old 80 was the tracer's inward pull
+    // accidentally under-measuring marginal four-to-six-pixel pieces and
+    // killing shapes the floor's own definition keeps.
     const shapes = six.colours.reduce((sum, c) => sum + c.shapes, 0)
-    expect(shapes).toBeLessThan(80)
+    expect(shapes).toBeLessThan(120)
     expect(six.droppedTotal).toBeGreaterThan(100)
   })
 

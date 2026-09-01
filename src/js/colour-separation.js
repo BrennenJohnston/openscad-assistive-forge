@@ -514,19 +514,117 @@ const MASK_TRACER = {
 };
 
 /**
+ * Grow a mask by one pixel in the four directions.
+ *
+ * ★ DP-24 P3, THE SLIVER FIX. Each colour is traced as its own mask and the
+ * tracer pulls every boundary inward, so two traced neighbours did not
+ * quite touch: the hairline gaps between them became 567 loose pieces on
+ * the owner's cat (236 on plate 1 alone). Grown under a pixel before
+ * tracing, neighbours MEET - the overlap is harmless because the paint
+ * order paints over it and every region is solid by design, while a gap is
+ * a sliver on a plate that nothing can cut.
+ *
+ * @param {Uint8Array} mask
+ * @param {number} width
+ * @param {number} height
+ * @returns {Uint8Array}
+ */
+export function growMask(mask, width, height) {
+  const grown = new Uint8Array(mask);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = y * width + x;
+      if (mask[i]) continue;
+      if (
+        (x > 0 && mask[i - 1]) ||
+        (x + 1 < width && mask[i + 1]) ||
+        (y > 0 && mask[i - width]) ||
+        (y + 1 < height && mask[i + width])
+      ) {
+        grown[i] = 1;
+      }
+    }
+  }
+  return grown;
+}
+
+/**
+ * Remove connected pieces smaller than the floor, BEFORE the mask grows.
+ *
+ * ★ Growth alone resurrected what the floor exists to drop: a stray
+ * anti-alias pixel grew into a five-pixel cross and sailed over the
+ * four-pixel floor - MEASURED on the owner's cat, the shape count exploded
+ * from under eighty to 1,853. So the too-small pieces leave the MASK first,
+ * counted, and only what was already worth keeping gets to grow.
+ *
+ * @param {Uint8Array} mask - Cleaned in place
+ * @param {number} width
+ * @param {number} height
+ * @param {number} floorPx
+ * @returns {number} How many pieces were removed
+ */
+export function dropSmallPieces(mask, width, height, floorPx) {
+  const seen = new Uint8Array(mask.length);
+  const stack = [];
+  const piece = [];
+  let dropped = 0;
+  for (let start = 0; start < mask.length; start++) {
+    if (!mask[start] || seen[start]) continue;
+    stack.length = 0;
+    piece.length = 0;
+    stack.push(start);
+    seen[start] = 1;
+    while (stack.length) {
+      const i = stack.pop();
+      piece.push(i);
+      const x = i % width;
+      if (x > 0 && mask[i - 1] && !seen[i - 1]) {
+        seen[i - 1] = 1;
+        stack.push(i - 1);
+      }
+      if (x + 1 < width && mask[i + 1] && !seen[i + 1]) {
+        seen[i + 1] = 1;
+        stack.push(i + 1);
+      }
+      if (i >= width && mask[i - width] && !seen[i - width]) {
+        seen[i - width] = 1;
+        stack.push(i - width);
+      }
+      if (i + width < mask.length && mask[i + width] && !seen[i + width]) {
+        seen[i + width] = 1;
+        stack.push(i + width);
+      }
+    }
+    if (piece.length < floorPx) {
+      for (const i of piece) mask[i] = 0;
+      dropped += 1;
+    }
+  }
+  return dropped;
+}
+
+/**
  * Trace one mask, and keep only the shapes that are big enough to make.
  *
  * @param {Uint8Array} mask
  * @param {{width: number, height: number}} size
- * @param {{areaFloorPx?: number, makeImageData?: Function}} [options]
+ * @param {{areaFloorPx?: number, grow?: boolean}} [options] - `grow`
+ *   defaults on (the sliver fix above); pass false to measure the raw mask
  * @returns {{paths: string[], dropped: number, keptArea: number}}
  */
 export function traceMask(mask, size, options = {}) {
   const { width, height } = size;
   const areaFloor = options.areaFloorPx ?? 4;
+  let traced = mask;
+  let droppedPieces = 0;
+  if (options.grow !== false) {
+    traced = new Uint8Array(mask);
+    droppedPieces = dropSmallPieces(traced, width, height, areaFloor);
+    traced = growMask(traced, width, height);
+  }
   const data = new Uint8ClampedArray(width * height * 4);
-  for (let i = 0; i < mask.length; i++) {
-    const v = mask[i] ? 0 : 255;
+  for (let i = 0; i < traced.length; i++) {
+    const v = traced[i] ? 0 : 255;
     data[i * 4] = v;
     data[i * 4 + 1] = v;
     data[i * 4 + 2] = v;
@@ -559,7 +657,7 @@ export function traceMask(mask, size, options = {}) {
   // is where a person moves a colour later, and the island report is where
   // they are told.
   const paths = [];
-  let dropped = 0;
+  let dropped = droppedPieces;
   let keptArea = 0;
   const re = /<path[^>]*fill="rgb\((\d+),(\d+),(\d+)\)"[^>]*\sd="([^"]*)"/g;
   let m;
@@ -645,6 +743,9 @@ export function separateColours(imageData, options = {}) {
       { width, height },
       {
         areaFloorPx,
+        // Instrumentation only: growMasks: false measures the raw masks
+        // the sliver fix exists for. The app never passes it.
+        grow: options.growMasks !== false,
       }
     );
     droppedTotal += dropped;
