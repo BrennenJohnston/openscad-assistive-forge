@@ -1,3 +1,6 @@
+<!-- ARCHIVED 2026-09-01: every phase in this plan's own front matter reads
+     completed, and nothing in the repository references it. Kept as a
+     record of the lighting parity work, moved here from docs/plans/. -->
 ---
 name: Lighting Visual Parity
 overview: >-

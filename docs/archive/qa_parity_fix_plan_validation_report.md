@@ -1,5 +1,9 @@
 # QA Parity Fix Plan Validation Report
 
+> **Archived 2026-09-01:** this report validates a plan file that lives
+> outside the repository, and nothing in the repository references it.
+> Kept as a record, moved here from docs/plans/.
+
 ## Scope
 
 This report validates `C:\Users\WATAP\.cursor\plans\qa_parity_fix_plan_84e638ba.plan.md` against the original request:
