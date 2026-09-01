@@ -235,12 +235,10 @@ jobs:
   e2e-tests-chromium-shard:
     name: E2E Tests (Chromium ${{ matrix.shard }}/6)
     runs-on: ubuntu-latest
-    # DIAGNOSTIC BOUND (CW-97 CI-fix batch 2): shards 1-3 were cut at the
-    # 35-minute Playwright clock 1-2 minutes short on the last two runs, so
-    # their TRUE durations are unknown and nothing can be re-priced from a
-    # cut run. One generous bound lets the next run REPORT; the weights and
-    # this ceiling both come back down from that run's real numbers.
-    timeout-minutes: 60
+    # Back to 45 after the CW-97 diagnostic window: the City Walk e2e
+    # suites are paused on CI (the skip in tests/e2e/helpers/city-walk.js
+    # says why), and the remaining suite fits the old budget with room.
+    timeout-minutes: 45
 
     strategy:
       # A red shard must not cancel its sibling: knowing whether the failure is
@@ -350,13 +348,11 @@ jobs:
           # against the whole 35 minutes. Raising this number is not the answer
           # if a shard ever gets close again; a third shard is.
           #
-          # CW-97 CI-fix batch 2: DIAGNOSTIC, 50 minutes for one reporting
-          # run. Three of six shards were cut at this clock 1-2 minutes
-          # short, so their true cost is unknown and more shards cannot be
-          # priced from a cut run (the note above still holds - capacity is
-          # the durable answer). This bound exists to measure; it comes
-          # back down with the re-pricing.
-          PW_GLOBAL_TIMEOUT: '3000000'
+          # CW-97: a diagnostic 50-minute window measured the lanes whole,
+          # then the City Walk e2e suites were paused on CI (the skip in
+          # tests/e2e/helpers/city-walk.js says why), so the clock returns
+          # to 35 for the suite that actually runs here.
+          PW_GLOBAL_TIMEOUT: '2100000'
 
       # Q-23 (owner, 2026-08-09): this job once stayed green for a whole
       # release while two menu-parity tests were red, because tests the
@@ -493,12 +489,10 @@ jobs:
   e2e-tests-edge:
     name: E2E Tests (Edge ${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
-    # DIAGNOSTIC BOUND (CW-97 CI-fix batch 2): two of three shards were cut
-    # at the 40-minute Playwright clock about a minute short, so their true
-    # durations are unknown. One generous bound lets the next run report;
-    # a fourth shard is the durable answer and its contexts are the
-    # owner's ruleset edit, so nothing here renames a job.
-    timeout-minutes: 60
+    # Back to 45 after the CW-97 diagnostic window: the City Walk e2e
+    # suites are paused on CI (the skip in tests/e2e/helpers/city-walk.js
+    # says why), and the remaining suite fits the old budget with room.
+    timeout-minutes: 45
 
     strategy:
       # A red shard must not cancel its sibling: knowing whether the failure
@@ -604,18 +598,11 @@ jobs:
           # (inside the 45-minute job budget) covers the measured miss with
           # margin; the shard count stays exactly what the owner signed.
           #
-          # CW-97 CI-fix batch 2: DIAGNOSTIC, 50 minutes for one reporting
-          # run - the crown-cluster city pushed two of three shards past
-          # forty and their true cost is unknown from a cut run. Comes back
-          # down with the re-pricing; the shard count still stays what the
-          # owner signed.
-          #
-          # Batch 4: shard 3/3 still consumed the whole 50 (154 tests
-          # through, the classic-mode tail cut) - 55 minutes inside the
-          # 60-minute job, so THIS lane too can report whole once. The
-          # durable answer for Edge is the owner's fourth-shard ruleset
-          # decision, priced from the whole-lane numbers.
-          PW_GLOBAL_TIMEOUT: '3300000'
+          # CW-97: a diagnostic window (50, then 55 minutes) measured the
+          # lanes whole, then the City Walk e2e suites were paused on CI
+          # (the skip in tests/e2e/helpers/city-walk.js says why), so the
+          # clock returns to 40 for the suite that actually runs here.
+          PW_GLOBAL_TIMEOUT: '2400000'
 
       # Q-23 (owner, 2026-08-09): a green summary over an incomplete run must
       # fail. UF-27: this lane never had the guard at all - only Chromium did -
