@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="favicon/OpenSCAD Assistive Web Forge Logo_large.png" alt="OpenSCAD Assistive Web Forge Logo" width="200">
+  <img src="assets/brand/OpenSCAD Assistive Web Forge Logo_large.png" alt="OpenSCAD Assistive Web Forge Logo" width="200">
 </p>
 
 # OpenSCAD Assistive Forge
