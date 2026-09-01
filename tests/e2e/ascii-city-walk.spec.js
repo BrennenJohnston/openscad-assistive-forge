@@ -2732,6 +2732,29 @@ test.describe('ASCII City Walk — the spoken slope (CW-80)', () => {
       // strides the tracker needs past it - the bound follows the pace.
       { timeout: 180000 }
     )
+    // Keep walking PAST the announced ground before turning: the grade is
+    // a six-metre LOOKAHEAD, so the sentence speaks for ground the walker
+    // has not stood on yet - probed at 20x throttle, an about-face taken
+    // at the sentence still stands on the flat toe and honestly reads
+    // "Level." going back. Eight metres clears the probe length wherever
+    // the sentence fired.
+    const atSentence = await page.evaluate(() => ({
+      x: window.__cityWalkGame.walkState.x,
+      y: window.__cityWalkGame.walkState.y,
+    }))
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            (p) => {
+              const w = window.__cityWalkGame.walkState
+              return Math.hypot(w.x - p.x, w.y - p.y)
+            },
+            atSentence
+          ),
+        { timeout: 120000 }
+      )
+      .toBeGreaterThan(8)
     await page.keyboard.up('KeyW')
 
     // Standing still on the grade: the sentence does not repeat.
