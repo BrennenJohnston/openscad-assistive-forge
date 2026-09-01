@@ -1860,21 +1860,42 @@ test.describe('ASCII City Walk — look without dragging, walk without holding (
       .poll(async () => (await gaze(page)).pitch - p0, { timeout: 20000 })
       .toBeGreaterThan(5 * DEG)
 
-    // Dead centre: the view settles and stays put.
+    // Dead centre: the view settles and stays put. The camera owes a
+    // damped glide toward wherever the target raced (the CW-81 lag, about
+    // 4.5 degrees off a full-rate edge look), and that tail is exponential
+    // in the game's own integrated time - on a frame-starved renderer it
+    // stretches over wall time, so a fixed wait samples mid-glide (CW-97:
+    // measured 0.53 deg residual on software GL, 3.1 deg early on
+    // hardware). Wait until a PROPERLY SPACED pair of samples agrees -
+    // never a poll whose first pair is milliseconds apart - then prove it
+    // stays.
+    const settleUntilStill = async (label) => {
+      for (let i = 0; i < 60; i++) {
+        const a = await gaze(page)
+        await page.waitForTimeout(300)
+        const b = await gaze(page)
+        const d = Math.max(
+          Math.abs(b.heading - a.heading),
+          Math.abs(b.pitch - a.pitch)
+        )
+        if (d < 0.2 * DEG) return b
+      }
+      throw new Error(`the view never settled: ${label}`)
+    }
     await page.mouse.move(cx, cy)
-    await page.waitForTimeout(600)
-    const settled = await gaze(page)
+    const settled = await settleUntilStill('dead centre')
     await page.waitForTimeout(500)
     const later = await gaze(page)
     expect(Math.abs(later.heading - settled.heading)).toBeLessThan(0.2 * DEG)
     expect(Math.abs(later.pitch - settled.pitch)).toBeLessThan(0.2 * DEG)
 
-    // Outside the viewport (the header): frozen, however long we wait.
+    // Outside the viewport (the header): frozen, however long we wait. The
+    // TARGET freezes the moment the cursor leaves; the camera still owes
+    // the same damped glide, so settle first, then hold.
     await page.mouse.move(box.x + box.width * 0.96, cy)
     await page.waitForTimeout(200)
     await page.mouse.move(box.x + 10, box.y - 30)
-    await page.waitForTimeout(400)
-    const out0 = await gaze(page)
+    const out0 = await settleUntilStill('outside the viewport')
     await page.waitForTimeout(600)
     const out1 = await gaze(page)
     expect(Math.abs(out1.heading - out0.heading)).toBeLessThan(0.2 * DEG)
@@ -1954,17 +1975,28 @@ test.describe('ASCII City Walk — look without dragging, walk without holding (
     const start = await gaze(page)
     await page.keyboard.press('KeyN')
     await expect(announcer(page)).toContainText('Auto-walk on')
-    // The walker must travel measurably FARTHER than the obstacle it was
-    // aimed at - proof it went around, not into.
+    // The walker must keep covering ground past the obstacle it was aimed
+    // at - proof it went around, not into. CW-97: the measure is the PATH
+    // (an odometer over samples), not displacement. Street-following
+    // around downtown blocks can curl or pace: photographed once with the
+    // walker still walking at 90 s, auto on, no stop sentence - the claim
+    // intact - while displacement idled below the bar. A stopped walker
+    // racks up no path, so the odometer still catches walking INTO. The
+    // bar is capped: on a software-GL renderer the walk itself runs at a
+    // tenth speed, and 27 m of path is proof enough of going around.
+    let odoPrev = { x: start.x, y: start.y }
+    let odo = 0
     await expect
       .poll(
         async () => {
           const g = await gaze(page)
-          return Math.hypot(g.x - start.x, g.y - start.y)
+          odo += Math.hypot(g.x - odoPrev.x, g.y - odoPrev.y)
+          odoPrev = { x: g.x, y: g.y }
+          return odo
         },
         { timeout: 90000 }
       )
-      .toBeGreaterThan(posed.d + 2)
+      .toBeGreaterThan(Math.min(posed.d, 25) + 2)
     const g = await gaze(page)
     expect(g.autoWalk).toBe(true)
     await expect(announcer(page)).not.toContainText(
@@ -2034,12 +2066,15 @@ test.describe('ASCII City Walk — look without dragging, walk without holding (
     await page.keyboard.press('KeyN')
     await expect(announcer(page)).toContainText('Auto-walk on')
     const p0 = (await gaze(page)).pitch
+    // CW-97: hold the arrow until the GAME's pitch answers, not for a
+    // wall-clock 700 ms - look rates integrate per frame with dt clamped,
+    // and a frame-starved renderer under-delivers a fixed-time hold (the
+    // same measurement law as the D-59 rescope).
     await page.keyboard.down('ArrowUp')
-    await page.waitForTimeout(700)
-    await page.keyboard.up('ArrowUp')
     await expect
-      .poll(async () => (await gaze(page)).pitch - p0, { timeout: 10000 })
+      .poll(async () => (await gaze(page)).pitch - p0, { timeout: 20000 })
       .toBeGreaterThan(5 * (Math.PI / 180))
+    await page.keyboard.up('ArrowUp')
     // And the walking never stopped: an arrow is a look, not a walk, here.
     expect((await gaze(page)).autoWalk).toBe(true)
     await page.keyboard.press('KeyN')

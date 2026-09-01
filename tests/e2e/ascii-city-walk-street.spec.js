@@ -2252,6 +2252,13 @@ test.describe('ASCII City Walk — the converter remembers the last frame (CW-68
   test('a cell whose content barely moved keeps the glyph it had', async ({
     page,
   }) => {
+    // CW-97: this instrument takes 128 real conversions (4 runs x 8 creeps
+    // x 4 steps), and a software-GL renderer takes seconds per conversion
+    // on the full city - the default test budget cut the evaluate off
+    // mid-sample. The per-step liveness deadline inside convert() (15 s)
+    // still catches a genuinely stuck converter; this is time to MEASURE,
+    // not permission to hang.
+    test.setTimeout(360000)
     await launchGame(page)
     await enterCity(page)
     await page.evaluate(() => {
@@ -2534,18 +2541,6 @@ test.describe('ASCII City Walk — Day and Night (CW-85, CW-Q83)', () => {
       }
     })
 
-  const paintedShare = (page) =>
-    page.evaluate(() => {
-      const cv = document.querySelector('canvas.hfm-overlay-canvas')
-      const cx = cv.getContext('2d', { willReadFrequently: true })
-      const d = cx.getImageData(0, 0, cv.width, cv.height).data
-      let on = 0
-      for (let i = 0; i < d.length; i += 4) {
-        if (d[i] || d[i + 1] || d[i + 2]) on++
-      }
-      return on / (d.length / 4)
-    })
-
   test('★★★ the backing changes NO glyph the converter chose', async ({
     page,
   }) => {
@@ -2636,15 +2631,49 @@ test.describe('ASCII City Walk — Day and Night (CW-85, CW-Q83)', () => {
     })
 
     await settle(page)
-    const night = await paintedShare(page)
+    // CW-97: the old measure was a RATIO of total painted pixels, which
+    // entangles the backing with the night city's own ink density - a
+    // number that moves with every release and every rasteriser (Edge on
+    // CI's software renderer read 69.9 against a 73.7 bar with the
+    // backing working perfectly). The claim is that DAY paints a backing
+    // and NIGHT paints none, and the sibling case proves the backing
+    // changes no glyph - so with the pose frozen, the pixels painted at
+    // day and black at night ARE the backing, measured directly.
+    await page.evaluate(() => {
+      const cv = document.querySelector('canvas.hfm-overlay-canvas')
+      const cx = cv.getContext('2d', { willReadFrequently: true })
+      window.__nightPixels = cx.getImageData(0, 0, cv.width, cv.height).data
+    })
     await page.keyboard.press('KeyB')
     await settle(page)
-    const day = await paintedShare(page)
+    const shares = await page.evaluate(() => {
+      const cv = document.querySelector('canvas.hfm-overlay-canvas')
+      const cx = cv.getContext('2d', { willReadFrequently: true })
+      const day = cx.getImageData(0, 0, cv.width, cv.height).data
+      const night = window.__nightPixels
+      let dayOnly = 0
+      let nightOnly = 0
+      const total = day.length / 4
+      for (let i = 0; i < day.length; i += 4) {
+        const d = day[i] || day[i + 1] || day[i + 2]
+        const n = night[i] || night[i + 1] || night[i + 2]
+        if (d && !n) dayOnly++
+        if (n && !d) nightOnly++
+      }
+      delete window.__nightPixels
+      return { dayOnly: dayOnly / total, nightOnly: nightOnly / total }
+    })
 
     expect(
-      day,
-      `day painted ${(day * 100).toFixed(1)} % against night's ${(night * 100).toFixed(1)} %`
-    ).toBeGreaterThan(night * 1.3)
+      shares.dayOnly,
+      `the backing (day-only pixels) covers ${(shares.dayOnly * 100).toFixed(1)} % of the canvas`
+    ).toBeGreaterThan(0.08)
+    // And night paints nothing of its own: the glyphs are pinned by the
+    // sibling case, so night-only pixels should be noise at most.
+    expect(
+      shares.nightOnly,
+      `night-only pixels ${(shares.nightOnly * 100).toFixed(1)} %`
+    ).toBeLessThan(0.01)
   })
 
   test('★★ B and the toolbar button agree, and the choice is remembered', async ({

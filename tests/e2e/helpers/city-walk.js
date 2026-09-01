@@ -102,7 +102,15 @@ export async function enterCity(page, cityName = 'Seattle, Washington') {
     !(await webglAvailable(page)),
     'This browser has no WebGL, so the 3D city cannot start.'
   )
-  await page.getByRole('button', { name: cityName }).click()
+  // noWaitAfter: the click handler BUILDS THE CITY, and on CI's two-core
+  // software renderer that synchronous build can outlast the 10 s action
+  // timeout - the click then "fails" while the city is busy being born
+  // (measured at CW-97: Denver's entry, and at its worst even Seattle's).
+  // The viewport wait below is the real post-condition and carries the
+  // budget.
+  await page
+    .getByRole('button', { name: cityName })
+    .click({ noWaitAfter: true })
   await expect(page.locator('#cityWalkViewport')).toBeVisible({
     timeout: 30000,
   })
