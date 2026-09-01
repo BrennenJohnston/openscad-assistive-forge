@@ -194,7 +194,10 @@ test.describe('ASCII City Walk — the colour toggle (CW-Q16)', () => {
    * pressed state actually flipping, which is the real post-condition. */
   const clickColour = async (page) => {
     const before = await colourBtn(page).getAttribute('aria-pressed')
-    await colourBtn(page).click({ noWaitAfter: true })
+    // force: even the dispatch's actionability checks starve when the
+    // PREVIOUS flip's synchronous atlas rebuild stalls the thread (batch
+    // 6, measured at 30 s on Edge). The aria wait below is the claim.
+    await colourBtn(page).click({ force: true, noWaitAfter: true })
     await expect(colourBtn(page)).toHaveAttribute(
       'aria-pressed',
       before === 'true' ? 'false' : 'true',
@@ -2719,9 +2722,14 @@ test.describe('ASCII City Walk — Day and Night (CW-85, CW-Q83)', () => {
 
     // The button is the same action, not a second one: CW-60's promise is
     // that every key has a button, and a button that disagreed with its key
-    // would be two features wearing one name.
-    await btn.click()
-    await expect(btn).toHaveAttribute('aria-pressed', 'false')
+    // would be two features wearing one name. force: the day flip's
+    // repaint from the KeyB above can still be mid-frame on software
+    // rendering, starving the click's actionability checks (batch 6);
+    // the aria wait below is the claim.
+    await btn.click({ force: true, noWaitAfter: true })
+    await expect(btn).toHaveAttribute('aria-pressed', 'false', {
+      timeout: 60000,
+    })
     expect(
       await page.evaluate(() =>
         localStorage.getItem('openscad-forge-city-walk-daylight')
@@ -3168,7 +3176,7 @@ test.describe('ASCII City Walk — ink belongs to its surface (CW-93, D-128, D-1
     // noWaitAfter: the flip's synchronous atlas rebuild can outlive the
     // action budget on CI software; the aria wait below is the real
     // post-condition (batch 5).
-    await page.locator('#cityWalkColourBtn').click({ noWaitAfter: true })
+    await page.locator('#cityWalkColourBtn').click({ force: true, noWaitAfter: true })
     await expect(page.locator('#cityWalkColourBtn')).toHaveAttribute(
       'aria-pressed',
       'true',
@@ -3209,7 +3217,7 @@ test.describe('ASCII City Walk — ink belongs to its surface (CW-93, D-128, D-1
     expectRealFixture(monoCpu)
     expect(monoCpu.mismatch, `mono, CPU: ${monoCpu.examples.join(', ')}`).toBe(0)
 
-    await page.locator('#cityWalkColourBtn').click({ noWaitAfter: true })
+    await page.locator('#cityWalkColourBtn').click({ force: true, noWaitAfter: true })
     await expect(page.locator('#cityWalkColourBtn')).toHaveAttribute(
       'aria-pressed',
       'true',
@@ -3261,7 +3269,7 @@ test.describe('ASCII City Walk — colour belongs to its surface (CW-92, D-127)'
     // and right after entry - the far bake still running - that handler
     // outlived even the 30 s action budget on CI software (batch 4,
     // measured). The aria-pressed wait below is the real post-condition.
-    await page.locator('#cityWalkColourBtn').click({ noWaitAfter: true })
+    await page.locator('#cityWalkColourBtn').click({ force: true, noWaitAfter: true })
     await expect(page.locator('#cityWalkColourBtn')).toHaveAttribute(
       'aria-pressed',
       'true',
@@ -3354,7 +3362,7 @@ test.describe('ASCII City Walk — colour belongs to its surface (CW-92, D-127)'
     // and right after entry - the far bake still running - that handler
     // outlived even the 30 s action budget on CI software (batch 4,
     // measured). The aria-pressed wait below is the real post-condition.
-    await page.locator('#cityWalkColourBtn').click({ noWaitAfter: true })
+    await page.locator('#cityWalkColourBtn').click({ force: true, noWaitAfter: true })
     await expect(page.locator('#cityWalkColourBtn')).toHaveAttribute(
       'aria-pressed',
       'true',

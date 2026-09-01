@@ -111,11 +111,11 @@ export async function enterCity(page, cityName = 'Seattle, Washington') {
     'This browser has no WebGL, so the 3D city cannot start.'
   )
   // Entering a 3D city IS the slow path, and the budget should say so
-  // where the cost lives: slow() triples the calling test's timeout, so a
-  // case that never set its own does not die at the 60 s default while
-  // CI's two-core software renderer is still building the city (measured
-  // at CW-97: the calibration cases died exactly this way).
-  test.slow()
+  // where the cost lives. slow() (which triples) was not enough for the
+  // photography and two-leg cases on CI's software renderer, so the floor
+  // is explicit: seven minutes unless the test already asked for more.
+  // Hardware never uses it - a test ends when it ends.
+  if (test.info().timeout < 420000) test.setTimeout(420000)
   // noWaitAfter: the click handler BUILDS THE CITY, and on CI's two-core
   // software renderer that synchronous build can outlast the 10 s action
   // timeout - the click then "fails" while the city is busy being born
@@ -131,6 +131,21 @@ export async function enterCity(page, cityName = 'Seattle, Washington') {
   })
   await expect(page.locator('#cityWalkHudStatus')).toContainText(
     'street view',
-    { timeout: 15000 }
+    { timeout: 60000 }
   )
+  // Drain the entry stall before handing the page to the test: the far
+  // bake and first uploads land as a few ENORMOUS frames on software
+  // rendering, and any click dispatched into that window starves its
+  // actionability checks however generous the action budget (batch 6,
+  // measured across three runs of one-per-lane click reds). Two full
+  // conversions mean the pipeline has turned over past the entry work.
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () => window.__cityWalkGame?.altView?.getConvertTotals?.().samples ?? 0
+        ),
+      { timeout: 180000 }
+    )
+    .toBeGreaterThanOrEqual(2)
 }

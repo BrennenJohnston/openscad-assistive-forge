@@ -105,9 +105,16 @@ export const MEASURED_SECONDS = {
   // RATIOS, and a same-day same-machine green board is the best ratio
   // data that exists. The next green CI board replaces these.
   'ascii-city-walk.spec.js': 2078,
-  // 289.0 measured, plus ~40 for the two weather describes CW-29 added, which
-  // no CI run has timed yet. The next board replaces this with a measurement.
-  'ascii-city-walk-street.spec.js': 985,
+  // CW-97 CI-fix batch 6 RE-PRICED THIS ONE FILE from whole-lane CI
+  // evidence: across three diagnostic runs the three heavy Chromium lanes
+  // ran nearly EQUAL wall time (34:52 / 35:50 / 37:04 on the last), each
+  // anchored by one of walk/controls/street - so street's true CI cost
+  // stands level with the other two, not at half. The old 985 (a local
+  // hardware ratio) under-priced it ~2x, and the packer answered by
+  // stacking extra co-files onto street's lanes - which is precisely the
+  // lane that kept overflowing its clock on Edge. Priced level with its
+  // peers; the next green CI board replaces all three with measurements.
+  'ascii-city-walk-street.spec.js': 2050,
   // NOT measured on CI - CW-36 is newer than the last board. Estimated from
   // this machine, where the file runs 37.5 s against the controls file's
   // 84 s, and the controls file is 417.4 here: 37.5 / 84 * 417.4 ~= 186,
