@@ -2339,6 +2339,24 @@ test.describe('Classic dock relocation (B6-B8)', () => {
     test.setTimeout(240_000);
     await enterClassicDesktop(page);
 
+    // The merge announcement is transient (announcer auto-clear plus any
+    // later polite chatter overwrites it), so it is RECORDED before the
+    // click and asserted from the record - the file's own
+    // classic-window-announce-once idiom. Polling the live region raced
+    // it on CI's slow lanes.
+    await page.evaluate(() => {
+      window.__said = [];
+      const region = document.getElementById('srAnnouncer');
+      new MutationObserver(() => {
+        const text = region.textContent.trim();
+        if (text) window.__said.push(text);
+      }).observe(region, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+      });
+    });
+
     await page
       .getByRole('button', { name: 'Move Error-Log', exact: true })
       .click();
@@ -2356,9 +2374,11 @@ test.describe('Classic dock relocation (B6-B8)', () => {
     // After a merge focus lands on the newly selected tab (B7)
     await expect(errorTab).toBeFocused();
     await expect(errorTab).toHaveAttribute('aria-selected', 'true');
-    await expect(page.locator('#srAnnouncer')).toContainText(
-      'Error-Log merged with Console, tab 2 of 2'
-    );
+    await expect
+      .poll(async () => page.evaluate(() => (window.__said || []).join(' | ')), {
+        timeout: 15000,
+      })
+      .toContain('Error-Log merged with Console, tab 2 of 2');
 
     // Arrows select, and the group is a single tab stop
     await page.keyboard.press('ArrowLeft');

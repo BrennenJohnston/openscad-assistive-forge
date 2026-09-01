@@ -1593,8 +1593,20 @@ export function createSvgPrepWorkspace(containerEl) {
     // Two frames: one to paint the busy state, one to be sure it was painted
     // before the main thread is taken for the boolean.
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
+      requestAnimationFrame(async () => {
         const started = performance.now();
+        // D-120 aftercare: an on-demand render WAITS for the ring engine
+        // rather than deferring. Deferred, this body became instant and
+        // wrong - the busy window collapsed to two frames and "could not
+        // be built" was announced about a preview that then appeared by
+        // itself moments later.
+        if (!ringEngine && !currentAnalysis?.isCompoundPathOnly) {
+          try {
+            await loadRingEngine();
+          } catch {
+            // updateResultPreview reports the empty result honestly below.
+          }
+        }
         updateResultPreview();
         const seconds = Math.max(
           1,

@@ -338,7 +338,13 @@ test.describe('The drawing editor takes the preview area', () => {
     await expect(rows.nth(0).locator('[data-plate]')).toHaveText('1')
 
     // ── Apply, then reopen: the plan is exactly as left ──────────────────
-    await page.locator('.drawing-editor-apply').click()
+    // CI's software GL starves the default 10 s actionability window while
+    // the page digests the paint work (the 17.8 s single-commit lesson);
+    // the real-click path is still proven, just given the time CI needs.
+    await expect(page.locator('.drawing-editor-apply')).toBeEnabled({
+      timeout: 60000,
+    })
+    await page.locator('.drawing-editor-apply').click({ timeout: 60000 })
     await expect(surface(page)).toBeHidden()
     // The plan rode with the drawing: two plates, and the card says so.
     await expect.poll(() => plateState(page), { timeout: 60000 }).toEqual([
