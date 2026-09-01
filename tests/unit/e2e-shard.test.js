@@ -101,13 +101,16 @@ describe('e2e shard planner (D-72)', () => {
     // regression in EITHER lane's shape still trips here.
     const CEILING_MIN = 35
     // Each lane is booked for what IT runs (DP-19) at the shard count it
-    // actually has: Edge three since the ruleset edit, Firefox two. Firefox
-    // leaves out wasm-smoke, and both leave out the drawing editor's own
-    // walk - that ignore was priced when both lanes ran two shards, and it
-    // is re-visited only from a green CI board, never from a projection.
+    // actually has: Edge three since the ruleset edit, Firefox three since
+    // D-130 (at two it projected to 49.4 of these 35 minutes on the post-R8
+    // weights - hidden until then by a 3-way plan running on a 2-job
+    // matrix). Firefox leaves out wasm-smoke, and both leave out the
+    // drawing editor's own walk - that ignore was priced when the lanes ran
+    // two shards, and it is re-visited only from a green CI board, never
+    // from a projection.
     for (const [project, laneShards] of [
       ['msedge', 3],
-      ['firefox', 2],
+      ['firefox', 3],
     ]) {
       const lane = filesForProject(files, project)
       for (const shard of planShards(lane, MEASURED_SECONDS, laneShards)) {
