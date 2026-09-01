@@ -218,8 +218,25 @@ test.describe('ASCII City Walk — teleport (CW-36, CW-40)', () => {
     // No click and no arming: pan with the arrows the map already had, then
     // J, which lands on the middle of the screen. That is the whole keyboard
     // route, and it needs no key and no mode.
+    //
+    // CW-97: hold the arrow until the MAP has genuinely moved past the
+    // landing assert's 50 m (60 for margin), not for a wall-clock 900 ms -
+    // panning integrates per frame with dt clamped, and a frame-starved
+    // software renderer delivered 20 m where the same hold pans hundreds
+    // on hardware.
     await page.keyboard.down('ArrowRight')
-    await page.waitForTimeout(900)
+    await expect
+      .poll(
+        async () => {
+          const c = await page.evaluate(() => {
+            const m = window.__cityWalkGame.mapCam
+            return { x: m.centerX, y: m.centerY }
+          })
+          return Math.hypot(c.x - start.x, c.y - start.y)
+        },
+        { timeout: 20000 }
+      )
+      .toBeGreaterThan(60)
     await page.keyboard.up('ArrowRight')
     await page.waitForTimeout(300)
 

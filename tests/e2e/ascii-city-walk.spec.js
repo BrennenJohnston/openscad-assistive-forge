@@ -2597,18 +2597,28 @@ test.describe('ASCII City Walk — the ground has height (CW-79)', () => {
     await page.keyboard.down('KeyW')
     // Sample as it walks: the climb must be continuous - no single frame
     // may step the eye more than the kerb-ease law allows.
+    //
+    // CW-97: the profile ends at EITHER 600 frames OR four metres of
+    // proven climb. A software renderer's frames are seconds apart - 600
+    // of them outlive the whole test - while its dt-clamped strides
+    // climb whole decimetres per frame, so the gain arrives in far fewer
+    // samples there. Every sampled pair still answers the smoothness
+    // law; a walker that never climbs still runs the full 600 and fails
+    // the gain honestly.
     const profile = await page.evaluate(
-      () =>
+      (z0) =>
         new Promise((resolve) => {
           const g = window.__cityWalkGame
           const zs = []
           const tick = () => {
             zs.push(g.walkState.groundZ)
-            if (zs.length >= 600) return resolve(zs)
+            if (zs.length >= 600 || zs[zs.length - 1] - z0 > 4)
+              return resolve(zs)
             requestAnimationFrame(tick)
           }
           requestAnimationFrame(tick)
-        })
+        }),
+      start.groundZ
     )
     await page.keyboard.up('KeyW')
 
@@ -2693,13 +2703,14 @@ test.describe('ASCII City Walk — the spoken slope (CW-80)', () => {
     await enterCity(page)
 
     // Start at the toe of the First Hill grade, facing up it. CW-97: the
-    // pose moved 30 m up the walk from the flat strip - the sentence is
-    // the same and so is the silent first arming, but a software-GL
-    // renderer walks at a tenth speed under the dt clamp, and the old
+    // pose moved up the walk from the flat strip - the sentence is the
+    // same and so is the silent first arming, but a software-GL renderer
+    // walks at a tenth speed or worse under the dt clamp, and the old
     // 40 m approach outran the 60 s window there while proving nothing
-    // extra. Measured on this heading: the grade turns over within ~15 m
-    // of here.
-    await pose(page, -135, -586, 60)
+    // extra. First moved to ~15 m out (-135,-586); Edge's software lane
+    // still starved it, so the pose sits ~9 m from the measured turnover
+    // (Uphill announced by about -122,-578 on this heading).
+    await pose(page, -130, -583, 60)
     await page.keyboard.down('KeyW')
     await expect(announcer(page)).toContainText(/Uphill \d+ percent\./, {
       timeout: 60000,
