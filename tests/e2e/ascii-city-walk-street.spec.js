@@ -188,6 +188,20 @@ test.describe('ASCII City Walk — the colour toggle (CW-Q16)', () => {
   const contrastBtn = (page) => page.locator('#cityWalkContrastBtn')
   const announcer = (page) => page.locator('#cityWalkAnnouncer')
 
+  /** CW-97 batch 5: the colour flip rebuilds the glyph atlas
+   * synchronously, and on CI software that handler can outlive even the
+   * 30 s action budget - dispatch without waiting, then wait on the
+   * pressed state actually flipping, which is the real post-condition. */
+  const clickColour = async (page) => {
+    const before = await colourBtn(page).getAttribute('aria-pressed')
+    await colourBtn(page).click({ noWaitAfter: true })
+    await expect(colourBtn(page)).toHaveAttribute(
+      'aria-pressed',
+      before === 'true' ? 'false' : 'true',
+      { timeout: 120000 }
+    )
+  }
+
   /** How many colours the converter is quantizing to, or null for phosphor. */
   const paletteSize = (page) =>
     page.evaluate(
@@ -229,7 +243,7 @@ test.describe('ASCII City Walk — the colour toggle (CW-Q16)', () => {
     await launchGame(page)
     await enterCity(page)
 
-    await colourBtn(page).click()
+    await clickColour(page)
     await expect(colourBtn(page)).toHaveAttribute('aria-pressed', 'true')
     await expect(announcer(page)).toHaveText(
       'Color on. The city is drawn in the retro palette.'
@@ -242,7 +256,7 @@ test.describe('ASCII City Walk — the colour toggle (CW-Q16)', () => {
     )
     expect(await storedChoice(page)).toBe('on')
 
-    await colourBtn(page).click()
+    await clickColour(page)
     await expect(colourBtn(page)).toHaveAttribute('aria-pressed', 'false')
     await expect(announcer(page)).toHaveText(
       'Color off. The city is drawn in a single phosphor.'
@@ -279,8 +293,8 @@ test.describe('ASCII City Walk — the colour toggle (CW-Q16)', () => {
     // phosphor, because the player asked for it. This is the whole point of
     // storing the choice, and it is the case that would silently regress if
     // colourIsOn() ever read the attribute first.
-    await colourBtn(page).click()
-    await colourBtn(page).click()
+    await clickColour(page)
+    await clickColour(page)
     expect(await storedChoice(page)).toBe('off')
 
     await contrastBtn(page).click()
@@ -292,7 +306,7 @@ test.describe('ASCII City Walk — the colour toggle (CW-Q16)', () => {
     await expect.poll(() => paletteSize(page)).toBeNull()
 
     // And the other way: colour ON survives high contrast being turned off.
-    await colourBtn(page).click()
+    await clickColour(page)
     await contrastBtn(page).click()
     await expect(page.locator('html')).not.toHaveAttribute(
       'data-high-contrast',
@@ -3151,10 +3165,14 @@ test.describe('ASCII City Walk — ink belongs to its surface (CW-93, D-128, D-1
     // drew from the whole atlas. Setting the mode before the page loads never
     // showed it. Do not "simplify" this into a localStorage seed.
     await enter(page)
-    await page.locator('#cityWalkColourBtn').click()
+    // noWaitAfter: the flip's synchronous atlas rebuild can outlive the
+    // action budget on CI software; the aria wait below is the real
+    // post-condition (batch 5).
+    await page.locator('#cityWalkColourBtn').click({ noWaitAfter: true })
     await expect(page.locator('#cityWalkColourBtn')).toHaveAttribute(
       'aria-pressed',
-      'true'
+      'true',
+      { timeout: 120000 }
     )
     await settle(page)
 
@@ -3191,7 +3209,12 @@ test.describe('ASCII City Walk — ink belongs to its surface (CW-93, D-128, D-1
     expectRealFixture(monoCpu)
     expect(monoCpu.mismatch, `mono, CPU: ${monoCpu.examples.join(', ')}`).toBe(0)
 
-    await page.locator('#cityWalkColourBtn').click()
+    await page.locator('#cityWalkColourBtn').click({ noWaitAfter: true })
+    await expect(page.locator('#cityWalkColourBtn')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+      { timeout: 120000 }
+    )
     await settle(page)
     const colourCpu = await audit(page)
     expect(colourCpu.palette).toBe(true)
