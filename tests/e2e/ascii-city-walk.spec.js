@@ -2720,11 +2720,18 @@ test.describe('ASCII City Walk — the spoken slope (CW-80)', () => {
     // (Uphill announced by about -122,-578 on this heading).
     await pose(page, -130, -583, 60)
     await page.keyboard.down('KeyW')
-    await expect(announcer(page)).toContainText(/Uphill \d+ percent\./, {
+    // Climb until the grade is at least 4 percent, not merely announced: a
+    // slow walker's FIRST sentence is the 2 percent toe, and 2 percent
+    // reversed sits under the level threshold - probed at 20x throttle,
+    // the about-face then said "Level." and wandered ninety metres before
+    // any true downhill. Four percent reversed is a Downhill sentence
+    // wherever the about-face happens.
+    await expect(announcer(page)).toContainText(
+      /Uphill ([4-9]|[1-9]\d) percent\./,
       // ~9 m to the grade turnover at CI software's ~0.23 m/s, plus the
       // strides the tracker needs past it - the bound follows the pace.
-      timeout: 180000,
-    })
+      { timeout: 180000 }
+    )
     await page.keyboard.up('KeyW')
 
     // Standing still on the grade: the sentence does not repeat.
