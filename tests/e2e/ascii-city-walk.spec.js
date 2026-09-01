@@ -1113,8 +1113,6 @@ test.describe('ASCII City Walk — landmarks (CW-10)', () => {
 })
 
 test.describe('ASCII City Walk — the curated legend and the waypoints (CW-78)', () => {
-  const announcer = (page) => page.locator('#cityWalkAnnouncer')
-
   test('★★ the legend is the curated seven, and Seattle spawns facing the Wheel', async ({
     page,
   }) => {
@@ -1198,12 +1196,39 @@ test.describe('ASCII City Walk — the curated legend and the waypoints (CW-78)'
 
     // The whole approach happens with the live region under watch (T7):
     // the walk is real keys, and the sentence must arrive by itself.
+    //
+    // CW-97: watched by a MutationObserver ACCUMULATOR (the teleport
+    // suite's pattern), not by polling the current text. The arrival
+    // sentence is TRANSIENT now - CW-80's slope sentences replace it
+    // within seconds when the walker presses on past the plinth up a
+    // grade - so a DOM poll can race it and lose while a screen reader,
+    // which hears every change, does not. The observer is armed BEFORE
+    // the walk so nothing can slip between.
+    await page.evaluate(() => {
+      window.__t7Heard = []
+      const node = document.querySelector('#cityWalkAnnouncer')
+      new MutationObserver(() => {
+        const t = node.textContent ?? ''
+        if (t) window.__t7Heard.push(t)
+      }).observe(node, {
+        childList: true,
+        characterData: true,
+        subtree: true,
+      })
+    })
     await page.keyboard.down('KeyW')
     try {
-      await expect(announcer(page)).toContainText(
-        'Waypoint reached: Seattle Great Wheel.',
-        { timeout: 60000 }
-      )
+      await expect
+        .poll(
+          () =>
+            page.evaluate(() =>
+              (window.__t7Heard ?? []).some((t) =>
+                t.includes('Waypoint reached: Seattle Great Wheel.')
+              )
+            ),
+          { timeout: 60000 }
+        )
+        .toBe(true)
     } finally {
       await page.keyboard.up('KeyW')
     }
@@ -2667,8 +2692,14 @@ test.describe('ASCII City Walk — the spoken slope (CW-80)', () => {
     await launchGame(page)
     await enterCity(page)
 
-    // Start on the flat waterfront strip, facing the First Hill grade.
-    await pose(page, -160, -600, 60)
+    // Start at the toe of the First Hill grade, facing up it. CW-97: the
+    // pose moved 30 m up the walk from the flat strip - the sentence is
+    // the same and so is the silent first arming, but a software-GL
+    // renderer walks at a tenth speed under the dt clamp, and the old
+    // 40 m approach outran the 60 s window there while proving nothing
+    // extra. Measured on this heading: the grade turns over within ~15 m
+    // of here.
+    await pose(page, -135, -586, 60)
     await page.keyboard.down('KeyW')
     await expect(announcer(page)).toContainText(/Uphill \d+ percent\./, {
       timeout: 60000,
