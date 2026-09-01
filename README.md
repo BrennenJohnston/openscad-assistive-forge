@@ -95,6 +95,11 @@ npm run dev
 
 Then open `http://localhost:5173`.
 
+## What changed lately?
+
+`docs/updates/WHATS_NEW_v5.md` is a photo journal of everything since
+version 4.5.0 -- the short, illustrated version of the CHANGELOG.
+
 ## Docs (where to start)
 
 - `docs/README.md` (index)
