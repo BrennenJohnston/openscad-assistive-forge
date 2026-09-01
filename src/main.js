@@ -7298,7 +7298,15 @@ async function initApp() {
         onProgress: (percent, message, type) => {
           // Simplified status: just show what's happening, no confusing percentages
           if (type === 'preview') {
-            updateStatus('Rendering preview...');
+            // DP-32 (one action, one announcement): an auto-preview fires on
+            // every parameter change and this progress callback repeats -
+            // measured through the live region, one change spoke "Rendering
+            // preview..." four times before "Preview ready". The progress
+            // line stays visible on the status surfaces; the completion (or
+            // the error) is the news and still speaks.
+            updateStatus('Rendering preview...', 'default', {
+              announce: false,
+            });
           } else {
             // Get current output format from selector for correct progress text
             const outputFormatSelect = document.getElementById('outputFormat');

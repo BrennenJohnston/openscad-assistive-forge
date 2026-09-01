@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.0.0] - 2026-09-01
+
+### Three Interfaces, a Design Lane, and One-Link Sharing
+
+The 5.0.0 milestone gathers a year's worth of shape. Since 4.5.0 the app
+grew its three interfaces - Simplified for the person who opened a link,
+Standard for working inside a project, and a Classic layout that rebuilds
+the desktop OpenSCAD experience in the browser - along with a drawing lane
+that opens, cleans and saves SVG and DXF in both directions, a Stencil
+Maker, braille editing refinements across the card, sign and charm tools,
+one-link project sharing with manifests and provenance records, and a long
+accessibility and honesty pass over the whole surface. The complete
+engineering record is below; `docs/updates/WHATS_NEW_v5.md` is the short,
+illustrated version.
+
+### Added
+
+- **One page of verifiable site facts** (DP-29) - `docs/SITE_FACTS.md` states what the deployed
+  site is made of and what it does with your data: the Content Security Policy verbatim with a
+  directive-by-directive table, the data-handling story (nothing leaves the browser), exactly
+  which hosts the site connects to, the supply-chain controls, and the accessibility conformance
+  work. Every claim cites the file that proves it. The old IT approval guide now points here
+- **Golden rules for AI coding agents** (DP-28) - `AGENTS.md` at the repository root carries the
+  rules any AI assistant working on this codebase must follow (protected vendored files, the
+  accessibility bar, commit conventions, quality gates), with the same rules in Cursor's format
+  under `.cursor/rules/` and a pointer in `CLAUDE.md`. A new quick-start guide,
+  `docs/guides/AI_TOOLCHAIN_QUICK_START.md`, covers both doors: pointing a pipeline tool at
+  Forge, and developing this repository with an agent
+- **A photo journal of the release** (DP-30) - `docs/updates/WHATS_NEW_v5.md` walks what changed
+  since 4.5.0 in eight pictures and plain words, linked from the README
+- **What a screen reader actually hears, written down** (DP-32) - `docs/notes/SCREEN_READER_LESSONS.md`
+  records the working rules learned from listening sessions (measured-correct is not
+  heard-correct, one action one announcement, description length ceilings), and
+  `docs/notes/NVDA_LISTENING_PACK.md` scripts a six-station NVDA run so the next listening
+  session is a checklist instead of an improvisation
+
+### Changed
+
+- **Long help texts now deliver their first sentence** (DP-32) - six controls pointed their
+  screen-reader description at a whole paragraph, so NVDA read up to 80 words before letting go.
+  Each description now targets a span around the paragraph's first sentence; the rest of the text
+  stays visible on screen for everyone
+- **One toolchain, npm** (DP-28) - the Pixi environment layer is removed; `package.json` is the
+  task list and `scripts/README.md` the reference. The README's setup section says just that
+
+### Fixed
+
+- **An automatic preview speaks its completion, not its progress** (DP-32) - changing a parameter
+  used to announce "Rendering preview..." on every progress tick - four times in a measured run -
+  before "Preview ready" ever arrived. The progress line still shows in the status bar but no
+  longer interrupts a screen reader mid-edit; the one announcement is the one that matters
+
 ### Changed
 
 - **The drawing editor is one picture now** (DP-24) - the editor used to spend its width on a
@@ -291,8 +343,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   range does not contain. Smaller cells cost more, not less, so such a pass now decides nothing:
   nothing is stored and nothing is announced
 
-- **The city is not dark any more** (CW-84) - after playing the deployed build the owner reported the
-  picture was too dark and that frames looked like they were blending together. Three things changed.
+- **The city is not dark any more** (CW-84) - playing the deployed build, the picture read too dark
+  and frames looked like they were blending together. Three things changed.
   In colour, the ink floor is gone: it had left 28 per cent of the screen carrying ink where 89 per
   cent used to, so the sky, the road and the pavement were simply black. The gate that removed the
   flat white fields stays, so nothing goes back to white. In monochrome the solid bright layer is
@@ -388,8 +440,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the old calibration that was FINER than the new default is quietly raised to it, because leaving it
   would have kept that one machine on its own private game
 
-- **The bright layer is gone from the game, and the parks are visible** (CW-72) - the two treatments
-  built and measured in the previous release went to the owner with pictures, and the answer was to
+- **The bright layer is gone from the game, and the parks are visible** (CW-72) - I compared the two
+  treatments built and measured in the previous release, pictures side by side, and chose to
   remove the solid layer: no cell is painted as a solid block any more, and a lit shopfront is drawn
   as characters you can see into. Colour mode's ink floor was set to the value that keeps a street
   readable rather than the one that empties it, and a park's surface was raised out of the near-black
@@ -806,6 +858,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   write-back has been tried on a real Chrome or Edge with the watcher running, which is a test only
   a person can do
 
+- **Stencil Maker** (`?example=stencil-maker`) - a new welcome-screen tool that turns a shape or
+  a drawing into printable stencil plates: thin bridges hold the islands so letter centres do not
+  fall out, registration marks in the corners line the plates up, and the plate, bridge and mark
+  dimensions are all parameters. This entry records the tool's arrival; the CHANGELOG missed it
+  at the time
+
 - **Open a DXF, tidy it up, and save a DXF back** (IR-12) - laser and cutting software speaks DXF,
   and so does the tool chain some of this work arrives from. The drawing editor now takes a .dxf
   the same way it takes an SVG or a photo: Forge's own engine converts it, the editor opens on the
@@ -1173,8 +1231,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   frames a second instead of 30. The round took that case from 3 frames a second to 26, and the
   reason it stops there is now measured rather than guessed - between 39 and 49 ms of every frame
   does not depend on the number of characters at all, so no further work on the characters can
-  reach the target. What is left is the painting and the phosphor trail, which are not part of this
-  round's plan and are a question for the owner rather than a decision for it
+  reach the target. What is left is the painting and the phosphor trail, which are outside this
+  round's plan - a question I am leaving open rather than answering in passing
 
 - **The camera controls are the ones you already know** (CW-35) - the game had its own vocabulary
   along the bottom of the screen - Turn left, Look up, Forward, Step left - which is a second thing

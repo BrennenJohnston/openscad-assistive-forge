@@ -1,0 +1,67 @@
+# Golden Rules for AI Agents
+
+These rules match AGENTS.md and CLAUDE.md, formatted for Cursor's .mdc rule files.
+
+## 1. Golden rules (blocking)
+
+NEVER modify protected files: public/wasm/, public/liblouis/, public/libraries/, public/fonts/, LICENSE, any INTEGRITY.json.
+ALL interactive UI MUST have :focus-visible ring, keyboard operability, accessible name.
+Use design tokens for ALL colors, spacing, font sizes, z-index. Never hardcode.
+ALL animations MUST respect prefers-reduced-motion: reduce.
+Semantic HTML before ARIA (button, details/summary, fieldset/legend).
+Search for existing implementations before writing new code or adding dependencies. New dependencies need the maintainer's sign-off.
+Keep PRs small. One feature or fix per PR.
+NEVER delegate source reading, analysis, or summarization to subagents. Primary model must perform all comprehension-critical reasoning.
+Never remove or weaken an existing accessibility feature.
+
+## 2. Protected files
+
+Do NOT edit:
+- public/wasm/openscad-official/ (vendored engine, integrity-pinned; replacing it is an owner-signed operation)
+- public/liblouis/ and the liblouis tables (braille output is accessibility-critical; no table moves without a parity check)
+- public/libraries/, public/fonts/ (vendored third-party assets)
+- public/_headers security headers (never weaken CSP/COOP/COEP)
+
+## 3. Environment tool
+
+npm is the environment tool; package.json is the task list and scripts/README.md the reference:
+- ALL tasks via npm run
+- Never generate standalone scripts when a task exists
+- Read the script reference before constructing commands
+- Suggest adding an npm script rather than writing a loose script
+
+## 4. Commit convention
+
+Use conventional commits: feat:, fix:, docs:, test:, chore:.
+Base branch: develop. Branch naming: feat/short-name, fix/short-name.
+Never git add -A; stage the files you mean. Never rewrite merged history.
+
+## 5. Accessibility requirements
+
+Target: WCAG 2.2 Level AA.
+Touch targets: 44x44px minimum; never shrink an existing target.
+Icon-only buttons: require aria-label.
+Respect: prefers-color-scheme, prefers-reduced-motion, prefers-contrast, forced-colors.
+Accessibility-critical text (alt text, labels, errors, announcements) is flagged for the maintainer's review, never silently finalized.
+
+## 6. Security boundaries
+
+NEVER weaken security headers (COOP/COEP/CORP, CSP).
+NEVER add unsafe-eval or unsafe-inline to CSP.
+NEVER commit secrets or credentials.
+No silent error-swallowing (empty catch, log-and-continue on failure paths).
+
+## 7. Quality gates
+
+Before every PR:
+- npm run lint
+- npm run format:check
+- npm run test:run (check the file count)
+- npm run test:e2e (Windows runs one worker by design)
+- npm run check-bundle (both budget numbers)
+
+## 8. AI code quality gates
+
+A task is not complete until its named verification has run and passed with real output.
+Never describe a check as passed without running it.
+Measure progress by code removed, not just code added.

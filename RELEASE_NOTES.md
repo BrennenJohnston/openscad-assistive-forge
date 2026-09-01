@@ -1,5 +1,61 @@
 # Release Notes
 
+## v5.0.0 (2026-09-01)
+
+The release where the workshop got big enough for everyone I built it for.
+Since 4.5.0 the app grew three switchable interfaces - Simplified, Standard,
+and a Classic layout that rebuilds desktop OpenSCAD in the browser - plus a
+drawing lane that round-trips SVG and DXF, a Stencil Maker, one-link project
+sharing with provenance records, braille editing refinements, and a long
+accessibility pass driven by listening to a screen reader rather than
+measuring one. The illustrated version of this story is
+[docs/updates/WHATS_NEW_v5.md](docs/updates/WHATS_NEW_v5.md).
+
+### Highlights
+
+- **Three interfaces**: **Simplified** (the default - parameters, preview, one
+  Generate button), **Standard** (adds the console, libraries, companion
+  files, reference images and measurement), and **Classic** (the desktop
+  OpenSCAD layout: menu bar, icon toolbar, axis viewport). Switch any time
+  without losing work
+- **A drawing lane**: open a drawing, clean it up, and save it back - as SVG
+  or DXF - even with no 3D design involved; symbols keep their pictures, and
+  opt-in folder write-back can land your edits where a desktop program is
+  watching
+- **Stencil Maker**: a shape or drawing becomes printable stencil plates with
+  bridges, corner registration marks, and parameterized dimensions
+- **One-link sharing**: the Publish dialog writes a `forge-manifest.json`,
+  bundles the whole project as one ZIP, and composes a link that opens Forge
+  pre-loaded - optionally with your current settings; every export carries a
+  `forge-provenance.json` record of where the design came from
+- **A contract for pipelines**: `docs/specs/FORGE_HANDOFF_CONTRACT.md` and
+  `/forge-capabilities.txt` give tool builders one stable page to build
+  against
+- **Braille refinements**: a Unicode braille editor on the Card and Sign,
+  auto-sizing cards, multi-charm printing, and downloads named after what
+  they are
+- **Heard, not just measured**: screen-reader fixes found by listening -
+  descriptions that deliver their first sentence instead of an 80-word
+  paragraph, an auto-preview that announces its completion instead of its
+  progress, a drawing editor that reads correctly
+- **Site facts in one page**: `docs/SITE_FACTS.md` states the Content
+  Security Policy, data handling, connections, and supply-chain controls,
+  every claim citing the file that proves it
+- **Security**: three high-severity transitive advisories patched
+
+### Upgrade Notes
+
+The version number marks the scale of the change, not a compatibility break:
+
+1. Clear browser cache (or accept the update prompt) for best experience
+2. All existing saved projects and presets remain compatible
+3. For contributors: the Pixi environment layer is gone - npm is the one
+   toolchain (`npm ci`, `npm run dev`)
+
+See [CHANGELOG.md](CHANGELOG.md) for the full list of changes.
+
+---
+
 ## v4.5.0 (2026-07-12)
 
 The Braille Card Customizer joins the welcome screen: type plain text and get 3D-printable braille, with translation running entirely on-device. This release also overhauls the SVG import pipeline, reworks the Alt View engine, restores the 3D preview on browsers without WebGL 2, and fixes non-watertight STL exports from the charm generators.

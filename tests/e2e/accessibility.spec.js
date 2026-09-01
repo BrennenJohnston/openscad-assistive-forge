@@ -3055,3 +3055,84 @@ test.describe('Hover contrast (D-57)', () => {
     }
   })
 })
+
+test.describe('One action, one announcement (DP-32)', () => {
+  test('an auto-preview speaks its completion, not its progress', async ({
+    page,
+  }) => {
+    // An auto-preview fires on every parameter change. Announcing the
+    // transient "Rendering preview..." AND "Preview ready" spoke twice per
+    // tweak through the polite live region - a session of thirty changes
+    // was sixty utterances. The progress line stays visible on the status
+    // surfaces; only the completion (or an error) speaks. Watched with an
+    // observer armed BEFORE the change, because the announcer auto-clears
+    // its region and a poll can start after the wipe.
+    test.setTimeout(240_000)
+    await page.goto('/')
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: 120_000,
+    })
+    const fileInput = page.locator('#fileInput')
+    await fileInput.setInputFiles(
+      path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
+    )
+    await expect(page.locator('#welcomeScreen')).toBeHidden({ timeout: 15000 })
+    try {
+      const notNowBtn = page.locator('#saveProjectNotNow')
+      await notNowBtn.waitFor({ state: 'visible', timeout: 3000 })
+      await notNowBtn.click()
+    } catch {
+      // No save-project modal this run.
+    }
+    // Let the LOAD's own preview finish first, so the observer measures
+    // the parameter-change render alone.
+    await expect(page.locator('#previewStatusText')).toContainText(
+      'Preview ready',
+      { timeout: 120_000 }
+    )
+
+    await page.evaluate(() => {
+      window.__dp32Heard = []
+      const node = document.getElementById('srAnnouncer')
+      new MutationObserver(() => {
+        const t = node.textContent.trim()
+        if (t) window.__dp32Heard.push(t)
+      }).observe(node, {
+        childList: true,
+        characterData: true,
+        subtree: true,
+      })
+    })
+
+    const firstGroup = page.locator('details.param-group').first()
+    if (!(await firstGroup.evaluate((el) => el.open))) {
+      await firstGroup.locator('summary').click()
+    }
+    const numericInput = page
+      .locator(
+        '.param-group input[type="number"], .param-group input[type="range"]'
+      )
+      .first()
+    await expect(numericInput).toBeVisible({ timeout: 10000 })
+    await numericInput.fill('42')
+    await numericInput.blur()
+
+    // The completion must be HEARD (the observer, not the status bar).
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() =>
+            (window.__dp32Heard ?? []).some((t) => t.includes('Preview ready'))
+          ),
+        { timeout: 120_000 }
+      )
+      .toBe(true)
+    // And the transient progress line must not have spoken.
+    const heard = await page.evaluate(() => window.__dp32Heard ?? [])
+    expect(
+      heard.filter((t) => t.includes('Rendering preview')),
+      `heard: ${heard.join(' | ')}`
+    ).toEqual([])
+  })
+})

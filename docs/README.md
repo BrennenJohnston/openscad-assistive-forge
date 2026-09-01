@@ -43,7 +43,7 @@ If you're setting up the project for development or thinking about forking:
 
 - [Deployment Guide](./DEPLOYMENT.md) -- Cloudflare Pages, nginx, Apache
 - [Security Admin Guide](./SECURITY_ADMIN_GUIDE.md) -- CSP, headers, compliance
-- [IT Approval Guide](./guides/IT_APPROVAL_GUIDE.md) -- hand to security teams for allowlisting and enterprise deployment
+- [Site Facts](./SITE_FACTS.md) -- how the site approaches safety and privacy, verifiable
 - [Rollback Runbook](./ROLLBACK_RUNBOOK.md) -- production rollback procedures
 
 ---

@@ -17,6 +17,15 @@ listed below.
 | `generate-icons.js` | Generates the PWA icon set | by hand, when the icons change |
 | `parse-off-colors.js` | Reads face colours out of OpenSCAD OFF output; used by the geometry-parity work | by hand |
 | `desktop-audit.ps1` | Runs desktop OpenSCAD (2021.01 CGAL and 2026.01.03 Manifold) over the keyguard fixture or a full preset sweep and captures reference output, geometry stats, face colours and screenshots | by hand, Windows, with desktop OpenSCAD installed |
+| `validate-example.mjs` | Static checks over the shipped example models | `npm run validate:examples`, and in CI |
+| `e2e-shard.mjs` | Packs the e2e suite into CI shards by measured cost | CI only, per browser lane |
+| `bake-city-extract.mjs` | Bakes an OpenStreetMap extract for the Alt View's city scene | by hand |
+| `city-elevation.mjs` | Adds an elevation block to a baked city extract | by hand |
+| `city-light-poles.mjs` | Merges a public street-light register into a baked extract | by hand |
+| `bench-city-walk.mjs` | Frame-time bench for the city scene; refuses headless and software GL | by hand |
+| `census-city-walk.mjs` | Placement census over the shipped extracts and builders | by hand |
+| `seq-city-walk.mjs` | Frame-sequence stability instrument for the city converter | by hand |
+| `stability-city-walk.mjs` | Still-image stability instrument for the city converter | by hand |
 
 The three required CI gates run inside the Unit Tests job. If you add a script,
 add it to this table.
@@ -73,7 +82,7 @@ Exit codes: 0 = passed, 1 = failed, 124 = timeout.
 When adding new scripts:
 
 1. Use ES modules (`.js` with shebang `#!/usr/bin/env node`)
-2. Add an npm script in `package.json`, and a matching task in `pixi.toml`
+2. Add an npm script in `package.json`
 3. Add a row to the table at the top of this file
 4. Test on Windows and Unix
 
