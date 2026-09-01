@@ -71,20 +71,18 @@ More detail lives in `docs/guides/ACCESSIBILITY_GUIDE.md`.
 You don't need to install anything to use this -- but you can. Visit the live
 demo, click your browser's install icon (right side of the address bar in
 Chrome or Edge), and you have a desktop app that lives in your Start menu /
-Applications folder and works fully offline. No installer file, no admin
-rights, no IT executable approval needed.
+Applications folder and works fully offline -- it's just a website your
+browser remembers.
 
 See `docs/guides/RUN_OFFLINE_GUIDE.md` for full instructions, including a
-"before you travel" workshop checklist and a Chrome / Edge group-policy
-snippet for IT-managed devices.
+"before you travel" workshop checklist.
 
-## For organizations and IT teams
+## Curious how it handles safety and privacy?
 
-If your IT or security team needs to evaluate the site before they will
-allowlist it, hand them `docs/guides/IT_APPROVAL_GUIDE.md`. It covers the
-CSP and other response headers verbatim, the (very short) data-handling
-story, exact network requirements, supply-chain controls, accessibility
-conformance, and a copy-paste approval checklist.
+`docs/SITE_FACTS.md` lays it out: the Content Security Policy verbatim,
+the (very short) data-handling story, exactly what the site connects to,
+the supply-chain controls, and the accessibility conformance work. All of
+it is verifiable against the files it cites.
 
 ## Develop locally
 

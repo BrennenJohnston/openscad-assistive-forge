@@ -72,7 +72,7 @@ The copies at the time of writing:
 - `public/_headers` (the one that is actually served)
 - `docs/DEPLOYMENT.md`
 - `docs/SECURITY_ADMIN_GUIDE.md`
-- `docs/guides/IT_APPROVAL_GUIDE.md`
+- `docs/SITE_FACTS.md`
 - `docs/specs/MANIFEST_STABILITY_CONTRACT.md`
 - `RELEASE_NOTES.md`
 

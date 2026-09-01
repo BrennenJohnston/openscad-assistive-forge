@@ -162,7 +162,7 @@ Reference: [Microsoft Learn -- ConfigureList of force-installed web apps](https:
 
 Intune can deploy the same Edge / Chrome policy via the **Settings catalog** (search for `WebAppInstallForceList`) or as an **Administrative template**. Push the JSON above as the policy value.
 
-For a longer security walk-through aimed at IT directors and approvers, see [IT Approval Guide](IT_APPROVAL_GUIDE.md).
+For the site's verifiable safety and privacy facts -- the CSP verbatim, data handling, what it connects to -- see [Site Facts](../SITE_FACTS.md).
 
 ---
 
@@ -195,6 +195,6 @@ For a longer security walk-through aimed at IT directors and approvers, see [IT 
 
 ## Related documentation
 
-- [IT Approval Guide](IT_APPROVAL_GUIDE.md) -- for IT and security teams reviewing the app for allowlisting or enterprise deployment.
+- [Site Facts](../SITE_FACTS.md) -- how the site approaches safety and privacy, verifiable against the files it cites.
 - [Getting Started](GETTING_STARTED.md) -- your first five minutes with the app once it is installed.
 - [Accessibility Guide](ACCESSIBILITY_GUIDE.md) -- keyboard, screen reader, and high contrast notes.
