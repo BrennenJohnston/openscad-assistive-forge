@@ -61,8 +61,10 @@ screenshot-*.png
 # Editor workspace files
 *.code-workspace
 
-# Editor workspace
-.cursor/
+# Editor workspace state stays local, but the agent rules ship with the
+# repository (they are documentation, not workspace state).
+.cursor/*
+!.cursor/rules/
 
 # Local testing reference files
 .volkswitch/
