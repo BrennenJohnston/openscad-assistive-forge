@@ -29,8 +29,20 @@ import {
 import {
   isNonPreviewable,
   RENDER_STATE,
-  resolve2DExportIntent,
+  propose2DExportAdjustments,
 } from '../../src/js/render-intent.js';
+import { getBuiltinManifest } from '../../src/js/project-manifest.js';
+
+// F-4: the deprecated resolve2DExportIntent wrapper was deleted; this
+// local equivalent keeps the proposal-engine assertions exercising the
+// same behavior (unconditional application of the builtin rules).
+const resolve2DExportIntent = (parameters, schema, format) =>
+  propose2DExportAdjustments(
+    parameters,
+    schema,
+    format,
+    getBuiltinManifest().export2D
+  ).resolvedParameters;
 import {
   buildDefineArgs,
   formatScadValue,
@@ -737,35 +749,44 @@ describe('Probe 3: scadUsesDebugModifier() detection accuracy', () => {
 // PROBE 4: Worker Color Serialization
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Hex→vector conversion applies ONLY to params the schema declares as
+// 'color' (// [color] hint). Untyped 6-hex-char strings stay quoted —
+// the old always-on conversion corrupted text params like "decade".
 describe('Probe 4: hex color serialization via buildDefineArgs', () => {
-  it('converts #FF0000 to [255,0,0] (0–255 range)', () => {
-    const args = buildDefineArgs({ keyguard_color: '#FF0000' });
+  const COLOR_TYPES = {
+    keyguard_color: 'color',
+    frame_color: 'color',
+    accent_color: 'color',
+  };
+
+  it('converts #FF0000 to [255,0,0] (0–255 range) for color-typed params', () => {
+    const args = buildDefineArgs({ keyguard_color: '#FF0000' }, COLOR_TYPES);
     expect(args).toContain('-D');
     expect(args).toContain('keyguard_color=[255,0,0]');
   });
 
   it('converts FF0000 (no #) to [255,0,0]', () => {
-    const args = buildDefineArgs({ keyguard_color: 'FF0000' });
+    const args = buildDefineArgs({ keyguard_color: 'FF0000' }, COLOR_TYPES);
     expect(args).toContain('keyguard_color=[255,0,0]');
   });
 
   it('converts #00FF00 to [0,255,0]', () => {
-    const args = buildDefineArgs({ frame_color: '#00FF00' });
+    const args = buildDefineArgs({ frame_color: '#00FF00' }, COLOR_TYPES);
     expect(args).toContain('frame_color=[0,255,0]');
   });
 
   it('converts #0000FF to [0,0,255]', () => {
-    const args = buildDefineArgs({ accent_color: '#0000FF' });
+    const args = buildDefineArgs({ accent_color: '#0000FF' }, COLOR_TYPES);
     expect(args).toContain('accent_color=[0,0,255]');
   });
 
   it('converts lowercase hex ff0000 correctly', () => {
-    const args = buildDefineArgs({ keyguard_color: 'ff0000' });
+    const args = buildDefineArgs({ keyguard_color: 'ff0000' }, COLOR_TYPES);
     expect(args).toContain('keyguard_color=[255,0,0]');
   });
 
   it('converts mixed-case hex #FfAa00 correctly', () => {
-    const args = buildDefineArgs({ keyguard_color: '#FfAa00' });
+    const args = buildDefineArgs({ keyguard_color: '#FfAa00' }, COLOR_TYPES);
     expect(args).toContain('keyguard_color=[255,170,0]');
   });
 
@@ -774,17 +795,26 @@ describe('Probe 4: hex color serialization via buildDefineArgs', () => {
     expect(args).toContain('generate="Customizer Settings"');
   });
 
+  it('preserves UNTYPED hex-shaped strings as quoted strings (no coercion)', () => {
+    const args = buildDefineArgs({ label: 'decade', code: '#FF0000' });
+    expect(args).toContain('label="decade"');
+    expect(args).toContain('code="#FF0000"');
+  });
+
   it('does NOT treat 3-digit hex as color (regex requires 6 digits)', () => {
-    const args = buildDefineArgs({ keyguard_color: '#F00' });
+    const args = buildDefineArgs({ keyguard_color: '#F00' }, COLOR_TYPES);
     // 3-digit hex does NOT match /^#?[0-9A-Fa-f]{6}$/
     expect(args).toContain('keyguard_color="#F00"');
   });
 
   it('serializes multiple color params independently', () => {
-    const args = buildDefineArgs({
-      keyguard_color: '#FF0000',
-      frame_color: '#00FF00',
-    });
+    const args = buildDefineArgs(
+      {
+        keyguard_color: '#FF0000',
+        frame_color: '#00FF00',
+      },
+      COLOR_TYPES
+    );
     expect(args).toContain('keyguard_color=[255,0,0]');
     expect(args).toContain('frame_color=[0,255,0]');
   });

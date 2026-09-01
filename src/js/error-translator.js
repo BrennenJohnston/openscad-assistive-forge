@@ -6,6 +6,90 @@
 
 import { announceError } from './announcer.js';
 import { createFocusTrap } from './focus-trap.js';
+import {
+  MODEL_NOT_2D_SUGGESTION,
+  MODEL_NOT_2D_EXPLANATION,
+} from '../worker/error-translations.js';
+import { libraryManager, LIBRARY_DEFINITIONS } from './library-manager.js';
+
+/**
+ * What OpenSCAD prints when an angle-bracket library id will not resolve:
+ *   WARNING: Can't open include file 'MCAD/boxes.scad', ...
+ *   WARNING: Can't open library 'MCAD/boxes.scad'. in file ...
+ * A path with no folder in it is a companion file, not a library, so the
+ * separator is required.
+ */
+const MISSING_LIBRARY_PATTERN =
+  /Can't open (?:include file|library) '([^'/]+)\/[^']*'/i;
+
+/**
+ * The library id a model asked for and did not get, or null.
+ *
+ * Exported because the failure has to be recognised in two places: here, to
+ * word the message, and in the render error handler, which otherwise reports
+ * the CONSEQUENCE (empty geometry) instead of the cause.
+ *
+ * @param {string} text - Error message or raw OpenSCAD output
+ * @returns {string|null} Library id, e.g. "MCAD"
+ */
+export function findMissingLibrary(text) {
+  const match = MISSING_LIBRARY_PATTERN.exec(String(text || ''));
+  return match ? match[1] : null;
+}
+
+/**
+ * Is this one of the bundles this build ships, and is it currently switched
+ * off? Only then can we honestly tell someone to switch it back on.
+ * @param {string} libraryId - The library id from the failing include path
+ * @returns {boolean}
+ */
+function isKnownLibraryOff(libraryId) {
+  return (
+    Boolean(LIBRARY_DEFINITIONS[libraryId]) &&
+    !libraryManager.isEnabled(libraryId)
+  );
+}
+
+/**
+ * The missing-library translation, kept as its own value because it is used
+ * twice: in the pattern list below, and ahead of the worker's error code,
+ * which classifies this failure by its symptom (an unknown module) rather
+ * than its cause.
+ */
+const MISSING_LIBRARY_TRANSLATION = {
+  pattern: MISSING_LIBRARY_PATTERN,
+  title: 'Missing Library',
+  explanation: (match) =>
+    isKnownLibraryOff(match[1])
+      ? `This model needs the ${match[1]} library, which is switched off.`
+      : `This model needs a library called "${match[1]}" that could not be loaded.`,
+  suggestion: (match) =>
+    isKnownLibraryOff(match[1])
+      ? 'Turn it back on in the Libraries panel.'
+      : "Check the Libraries panel, or put the library's own folder inside your project.",
+};
+
+/**
+ * Resolve one pattern entry against its match into a translation result.
+ * @param {Object} entry - An ERROR_PATTERNS member
+ * @param {RegExpMatchArray} match
+ * @param {string} technicalError - Kept verbatim for the details section
+ * @returns {Object}
+ */
+function applyPattern(entry, match, technicalError) {
+  return {
+    title: entry.title,
+    explanation:
+      typeof entry.explanation === 'function'
+        ? entry.explanation(match)
+        : entry.explanation,
+    suggestion:
+      typeof entry.suggestion === 'function'
+        ? entry.suggestion(match)
+        : entry.suggestion,
+    technical: technicalError,
+  };
+}
 
 /**
  * Common OpenSCAD error patterns and their user-friendly translations
@@ -113,6 +197,21 @@ const ERROR_PATTERNS = [
   },
 
   // Library errors
+  //
+  // This first entry matches what OpenSCAD ACTUALLY prints when an
+  // angle-bracket library id will not resolve:
+  //   WARNING: Can't open include file 'MCAD/boxes.scad', ...
+  //   WARNING: Can't open library 'MCAD/boxes.scad'. in file ...
+  // The two entries below it match `use <Lib/x.scad>` and
+  // `include <Lib/x.scad>`, which is source syntax rather than error text, so
+  // neither has ever fired for this failure and it fell through to the generic
+  // "Something Went Wrong ... try resetting parameters to defaults" — the one
+  // thing that is not the cause (D-42).
+  //
+  // A path with no folder in it is a companion file, not a library, and is
+  // deliberately left to the patterns below: sending someone to the Libraries
+  // panel to find helpers.scad would waste their time.
+  MISSING_LIBRARY_TRANSLATION,
   {
     pattern: /use\s+(?:<([^>]+)>|"([^"]+)")/i,
     title: 'Library Required',
@@ -296,10 +395,8 @@ export const TRANSLATIONS_BY_CODE = {
   },
   MODEL_NOT_2D: {
     title: '2D Output Required',
-    explanation:
-      'Your model produces 3D geometry, but SVG/DXF export requires 2D output.',
-    suggestion:
-      'Enable "use Laser Cutting best practices" or ensure your model uses projection() to produce 2D geometry.',
+    explanation: MODEL_NOT_2D_EXPLANATION,
+    suggestion: MODEL_NOT_2D_SUGGESTION,
   },
   UNSUPPORTED_CONFIG: {
     title: 'Unsupported Option Combination',
@@ -381,7 +478,22 @@ const DEFAULT_ERROR = {
  *   render pipeline)
  * @returns {Object} User-friendly error object with title, explanation, suggestion
  */
-export function translateError(technicalError, { code } = {}) {
+export function translateError(technicalError, { code, details } = {}) {
+  // A named library beats any code the worker assigned. The worker classifies
+  // this failure as "unknown module", which is the symptom; the library that
+  // never loaded is the cause, and only the raw output still names it (D-42).
+  for (const candidate of [technicalError, details]) {
+    if (typeof candidate !== 'string' || !candidate) continue;
+    const libraryMatch = MISSING_LIBRARY_PATTERN.exec(candidate);
+    if (libraryMatch) {
+      return applyPattern(
+        MISSING_LIBRARY_TRANSLATION,
+        libraryMatch,
+        technicalError
+      );
+    }
+  }
+
   if (code && TRANSLATIONS_BY_CODE[code]) {
     return {
       ...TRANSLATIONS_BY_CODE[code],
@@ -399,19 +511,22 @@ export function translateError(technicalError, { code } = {}) {
     };
   }
 
-  // Try to match against known patterns
-  for (const pattern of ERROR_PATTERNS) {
-    const match = technicalError.match(pattern.pattern);
-    if (match) {
-      return {
-        title: pattern.title,
-        explanation:
-          typeof pattern.explanation === 'function'
-            ? pattern.explanation(match)
-            : pattern.explanation,
-        suggestion: pattern.suggestion,
-        technical: technicalError,
-      };
+  // Try to match against known patterns.
+  //
+  // The raw OpenSCAD output is searched as well as the message, because the
+  // worker classifies errors before the main thread ever sees them: a missing
+  // library is reported as "Ignoring unknown module", which the worker turns
+  // into prose that no longer contains the failing path, so the specific
+  // cause was lost before this function could name it (D-42).
+  const haystacks = [technicalError];
+  if (typeof details === 'string' && details) haystacks.push(details);
+
+  for (const haystack of haystacks) {
+    for (const entry of ERROR_PATTERNS) {
+      const match = haystack.match(entry.pattern);
+      if (match) {
+        return applyPattern(entry, match, technicalError);
+      }
     }
   }
 

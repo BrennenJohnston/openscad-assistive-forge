@@ -1,5 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { MeshPhongMaterial, DoubleSide, BufferGeometry, Float32BufferAttribute } from 'three'
+import {
+  MeshPhongMaterial,
+  DoubleSide,
+  BufferGeometry,
+  Float32BufferAttribute,
+  PerspectiveCamera,
+  BoxGeometry,
+  Mesh,
+  Vector3,
+} from 'three'
 import { PreviewManager, isThreeJsLoaded, DESKTOP_SHININESS, CORNFIELD_BACK_COLOR } from '../../src/js/preview.js'
 
 describe('PreviewManager', () => {
@@ -74,6 +83,25 @@ describe('PreviewManager', () => {
       // glMateriali(GL_FRONT_AND_BACK, GL_SHININESS, 64) [OBSERVED]
       expect(DESKTOP_SHININESS).toBe(64)
     })
+
+    it('pins the Q-30 calibrated light intensities (U-14)', async () => {
+      // Ambient 0.2π is the desktop rig π-cancelled; the directional pair
+      // carries the ×1.5 the owner chose from the P4 contact sheet against
+      // OpenSCAD 2021.01 at a pinned pose. A drift here silently un-does a
+      // by-eye calibration no functional test can see.
+      const manager = new PreviewManager(container)
+      await manager.init()
+
+      expect(manager.baseLightIntensities.ambient).toBeCloseTo(0.2 * Math.PI)
+      expect(manager.baseLightIntensities.dir1).toBeCloseTo(1.5 * Math.PI)
+      expect(manager.baseLightIntensities.dir2).toBeCloseTo(1.5 * Math.PI)
+      expect(manager.directionalLight1.intensity).toBeCloseTo(1.5 * Math.PI)
+      expect(manager.directionalLight2.intensity).toBeCloseTo(1.5 * Math.PI)
+
+      // Sliders start neutral: the calibration must not pre-bias them.
+      expect(manager._brightnessScale).toBe(1)
+      expect(manager._contrastFactor).toBe(1)
+    })
   })
 
   describe('Measurement Preferences', () => {
@@ -84,7 +112,7 @@ describe('PreviewManager', () => {
       expect(manager.loadMeasurementPreference()).toBe(true)
 
       manager.saveMeasurementPreference(false)
-      expect(localStorage.getItem('openscad-forge-measurements')).toBe('false')
+      expect(localStorage.getItem('openscad-forge-measurements--forge')).toBe('false')
     })
 
     it('returns false when localStorage is empty', () => {
@@ -131,11 +159,11 @@ describe('PreviewManager', () => {
     it('persists toggle changes to localStorage', () => {
       const manager = new PreviewManager(container)
       manager.toggleZoomToCursor(false)
-      expect(localStorage.getItem('openscad-forge-zoom-to-cursor')).toBe('false')
+      expect(localStorage.getItem('openscad-forge-zoom-to-cursor--forge')).toBe('false')
       expect(manager.zoomToCursorEnabled).toBe(false)
 
       manager.toggleZoomToCursor(true)
-      expect(localStorage.getItem('openscad-forge-zoom-to-cursor')).toBe('true')
+      expect(localStorage.getItem('openscad-forge-zoom-to-cursor--forge')).toBe('true')
       expect(manager.zoomToCursorEnabled).toBe(true)
     })
 
@@ -284,11 +312,11 @@ describe('PreviewManager', () => {
 
       manager.toggleMeasurements(true)
       expect(manager.showMeasurements).toHaveBeenCalled()
-      expect(localStorage.getItem('openscad-forge-measurements')).toBe('true')
+      expect(localStorage.getItem('openscad-forge-measurements--forge')).toBe('true')
 
       manager.toggleMeasurements(false)
       expect(manager.hideMeasurements).toHaveBeenCalled()
-      expect(localStorage.getItem('openscad-forge-measurements')).toBe('false')
+      expect(localStorage.getItem('openscad-forge-measurements--forge')).toBe('false')
     })
 
     it('does not show measurements when no mesh exists', () => {
@@ -699,10 +727,209 @@ describe('PreviewManager', () => {
       const manager = new PreviewManager(container)
       manager.mesh = null
       manager.camera = { position: { set: vi.fn() } }
-      
+
       // Should not throw
       expect(() => manager.fitCameraToModel()).not.toThrow()
       expect(manager.camera.position.set).not.toHaveBeenCalled()
+    })
+  })
+
+  // Center, View All and Reset View are three different commands upstream. They
+  // were two-thirds duplicates here: Center called a method that did not exist
+  // and the other two both fitted the model (G4). These assert what each one
+  // DOES to the camera, not merely that it ran.
+  describe('Camera commands: Center vs View All vs Reset View', () => {
+    // A cube 10mm on a side, sitting 100mm along +X so "centered" is visible.
+    const MODEL_CENTER = new Vector3(100, 0, 0)
+
+    function makeManager() {
+      const manager = new PreviewManager(container)
+      manager.camera = new PerspectiveCamera(45, 4 / 3, 0.1, 10000)
+      manager.camera.position.set(...PreviewManager.DEFAULT_CAMERA_POSITION)
+      manager.projectionMode = 'perspective'
+      manager.controls = { target: new Vector3(0, 0, 0), update: vi.fn() }
+      manager.mesh = new Mesh(new BoxGeometry(10, 10, 10), new MeshPhongMaterial())
+      manager.mesh.position.copy(MODEL_CENTER)
+      manager.mesh.updateMatrixWorld(true)
+      return manager
+    }
+
+    it('resetCamera restores the default pose and needs no model', () => {
+      const manager = new PreviewManager(container)
+      manager.camera = new PerspectiveCamera(45, 4 / 3, 0.1, 10000)
+      manager.camera.position.set(1, 2, 3)
+      manager.controls = { target: new Vector3(9, 9, 9), update: vi.fn() }
+      manager.mesh = null
+
+      manager.resetCamera()
+
+      const [x, y, z] = PreviewManager.DEFAULT_CAMERA_POSITION
+      expect(manager.camera.position.toArray()).toEqual([x, y, z])
+      expect(manager.controls.target.toArray()).toEqual([0, 0, 0])
+      expect(manager.camera.up.toArray()).toEqual([0, 0, 1])
+    })
+
+    it('centerCamera moves the target onto the model, keeping angle and distance', () => {
+      const manager = makeManager()
+      const before = manager.camera.position.clone()
+      const distanceBefore = before.distanceTo(manager.controls.target)
+      const directionBefore = before.clone().sub(manager.controls.target).normalize()
+
+      expect(manager.centerCamera()).toBe(true)
+
+      expect(manager.controls.target.distanceTo(MODEL_CENTER)).toBeLessThan(1e-6)
+      // Same distance and same viewing direction: only the target moved.
+      const after = manager.camera.position
+      expect(after.distanceTo(manager.controls.target)).toBeCloseTo(distanceBefore, 6)
+      const directionAfter = after.clone().sub(manager.controls.target).normalize()
+      expect(directionAfter.angleTo(directionBefore)).toBeLessThan(1e-6)
+      // The camera itself moved, by exactly the target's delta.
+      expect(after.distanceTo(before)).toBeCloseTo(MODEL_CENTER.length(), 6)
+    })
+
+    it('viewAllCamera fits the model WITHOUT changing the viewing angle', () => {
+      const manager = makeManager()
+      // Look from a non-default angle so "kept the angle" means something.
+      manager.camera.position.set(0, 0, 400)
+      manager.controls.target.set(0, 0, 0)
+      const directionBefore = manager.camera.position
+        .clone()
+        .sub(manager.controls.target)
+        .normalize()
+
+      expect(manager.viewAllCamera()).toBe(true)
+
+      expect(manager.controls.target.distanceTo(MODEL_CENTER)).toBeLessThan(1e-6)
+      const directionAfter = manager.camera.position
+        .clone()
+        .sub(manager.controls.target)
+        .normalize()
+      expect(directionAfter.angleTo(directionBefore)).toBeLessThan(1e-6)
+      // A 10mm cube at 45deg fits from ~21mm away, nowhere near 400.
+      expect(manager.camera.position.distanceTo(MODEL_CENTER)).toBeLessThan(60)
+    })
+
+    it('viewAllCamera and resetCamera leave the camera in different places', () => {
+      const fitted = makeManager()
+      fitted.viewAllCamera()
+
+      const reset = makeManager()
+      reset.resetCamera()
+
+      expect(fitted.camera.position.distanceTo(reset.camera.position)).toBeGreaterThan(1)
+      expect(fitted.controls.target.distanceTo(reset.controls.target)).toBeGreaterThan(1)
+    })
+
+    it('centerCamera and viewAllCamera report false with no model', () => {
+      const manager = new PreviewManager(container)
+      manager.camera = new PerspectiveCamera(45, 4 / 3, 0.1, 10000)
+      manager.controls = { target: new Vector3(), update: vi.fn() }
+      manager.mesh = null
+
+      expect(manager.centerCamera()).toBe(false)
+      expect(manager.viewAllCamera()).toBe(false)
+    })
+  })
+
+  // D-48 (U-36). Every face view used to leave its own `camera.up` behind.
+  // OrbitControls reads camera.up ONCE, when it is constructed, so a later up
+  // never reaches the orbit maths — but the lookAt(target) that ends every
+  // frame's update does read it. Top and Bottom therefore left the picture
+  // rolled, and the roll grew with every drag (measured live: 25deg, 40deg,
+  // 45deg over three 25px drags) until the view was un-navigable.
+  //
+  // The invariant that fixes it, asserted here at the source: three's lookAt
+  // builds screen-right as normalize(up x forward), so screen-right is always
+  // perpendicular to camera.up. With Z-up that means screenRight.z === 0 at
+  // every pose — which IS "no roll" in a Z-up world.
+  describe('setCameraView keeps the world Z-up (D-48)', () => {
+    const VIEW_NAMES = Object.keys(PreviewManager.CAMERA_VIEWS)
+
+    function makeViewManager() {
+      const manager = new PreviewManager(container)
+      manager.camera = new PerspectiveCamera(45, 4 / 3, 0.1, 10000)
+      manager.camera.up.set(0, 0, 1)
+      manager.projectionMode = 'perspective'
+      manager.controls = { target: new Vector3(0, 0, 0), update: vi.fn() }
+      manager.mesh = new Mesh(new BoxGeometry(10, 10, 10), new MeshPhongMaterial())
+      manager.mesh.updateMatrixWorld(true)
+      return manager
+    }
+
+    /** The camera's world basis: columns 1 and 2 of its world matrix. */
+    function screenBasis(camera) {
+      camera.updateMatrixWorld(true)
+      const m = camera.matrixWorld.elements
+      return {
+        right: new Vector3(m[0], m[1], m[2]),
+        up: new Vector3(m[4], m[5], m[6]),
+        toEye: new Vector3(m[8], m[9], m[10]),
+      }
+    }
+
+    it('leaves camera.up at world Z for every one of the seven views', () => {
+      expect(VIEW_NAMES).toHaveLength(7)
+      for (const name of VIEW_NAMES) {
+        const manager = makeViewManager()
+        manager.setCameraView(name)
+        expect(manager.camera.up.toArray(), `${name} view`).toEqual([0, 0, 1])
+      }
+    })
+
+    it('no view table entry carries its own up any more', () => {
+      for (const [name, view] of Object.entries(PreviewManager.CAMERA_VIEWS)) {
+        expect(view.up, `${name} view must not define an up`).toBeUndefined()
+      }
+    })
+
+    it('puts no roll in the picture at any of the seven views', () => {
+      for (const name of VIEW_NAMES) {
+        const manager = makeViewManager()
+        manager.setCameraView(name)
+        const { right } = screenBasis(manager.camera)
+        // Rolled by a hair is still rolled; 1e-9 is float noise, not a pose.
+        expect(Math.abs(right.z), `${name} view screen-right tilted`).toBeLessThan(1e-9)
+      }
+    })
+
+    it('keeps the desktop screen orientation at Top and Bottom', () => {
+      const top = makeViewManager()
+      top.setCameraView('top')
+      const topBasis = screenBasis(top.camera)
+      // Desktop Top: looking down -Z with +X across the screen and +Y up it.
+      expect(topBasis.right.x).toBeCloseTo(1, 6)
+      expect(topBasis.up.y).toBeCloseTo(1, 6)
+      expect(topBasis.toEye.z).toBeCloseTo(1, 5)
+
+      const bottom = makeViewManager()
+      bottom.setCameraView('bottom')
+      const bottomBasis = screenBasis(bottom.camera)
+      // Desktop Bottom: looking up +Z, +X still across, +Y DOWN the screen.
+      expect(bottomBasis.right.x).toBeCloseTo(1, 6)
+      expect(bottomBasis.up.y).toBeCloseTo(-1, 6)
+      expect(bottomBasis.toEye.z).toBeCloseTo(-1, 5)
+    })
+
+    it('places Top and Bottom off the pole, but invisibly so', () => {
+      const zAxis = new Vector3(0, 0, 1)
+      for (const [name, sign] of [
+        ['top', 1],
+        ['bottom', -1],
+      ]) {
+        const manager = makeViewManager()
+        manager.setCameraView(name)
+        const toEye = manager.camera.position
+          .clone()
+          .sub(manager.controls.target)
+          .normalize()
+        const polar = toEye.angleTo(zAxis.clone().multiplyScalar(sign))
+        // Clear of OrbitControls' own polar epsilon (1e-6 rad), so the
+        // controls never clamp at the pose itself; and far under a twentieth
+        // of a degree, which is where the Z axis marks start to fan out from
+        // the origin (measured: 7 changed pixels at this angle, 489 at 3e-5).
+        expect(polar, `${name} sits on the pole`).toBeGreaterThan(5e-6)
+        expect(polar, `${name} is visibly off-axis`).toBeLessThan(0.05 * (Math.PI / 180))
+      }
     })
   })
 
@@ -1703,7 +1930,7 @@ describe('PreviewManager', () => {
 
       it('persists the color in localStorage', () => {
         manager.setGridColor('#00ff00')
-        expect(localStorage.getItem('openscad-forge-grid-color')).toBe('#00ff00')
+        expect(localStorage.getItem('openscad-forge-grid-color--forge')).toBe('#00ff00')
       })
 
       it('normalizes hex without hash', () => {
@@ -1737,9 +1964,9 @@ describe('PreviewManager', () => {
       })
 
       it('removes the color from localStorage', () => {
-        localStorage.setItem('openscad-forge-grid-color', '#ff0000')
+        localStorage.setItem('openscad-forge-grid-color--forge', '#ff0000')
         manager.resetGridColor()
-        expect(localStorage.getItem('openscad-forge-grid-color')).toBeNull()
+        expect(localStorage.getItem('openscad-forge-grid-color--forge')).toBeNull()
       })
     })
 
@@ -1780,13 +2007,13 @@ describe('PreviewManager', () => {
     describe('saveGridColorPreference', () => {
       it('saves a valid color', () => {
         manager.saveGridColorPreference('#112233')
-        expect(localStorage.getItem('openscad-forge-grid-color')).toBe('#112233')
+        expect(localStorage.getItem('openscad-forge-grid-color--forge')).toBe('#112233')
       })
 
       it('removes the key when null is passed', () => {
-        localStorage.setItem('openscad-forge-grid-color', '#112233')
+        localStorage.setItem('openscad-forge-grid-color--forge', '#112233')
         manager.saveGridColorPreference(null)
-        expect(localStorage.getItem('openscad-forge-grid-color')).toBeNull()
+        expect(localStorage.getItem('openscad-forge-grid-color--forge')).toBeNull()
       })
 
       it('handles localStorage errors gracefully', () => {
@@ -1876,7 +2103,7 @@ describe('PreviewManager', () => {
 
       it('persists in localStorage', () => {
         manager.setGridOpacity(75)
-        expect(localStorage.getItem('openscad-forge-grid-opacity')).toBe('75')
+        expect(localStorage.getItem('openscad-forge-grid-opacity--forge')).toBe('75')
       })
 
       it('clamps below minimum to 10', () => {
@@ -1925,9 +2152,9 @@ describe('PreviewManager', () => {
       })
 
       it('removes from localStorage', () => {
-        localStorage.setItem('openscad-forge-grid-opacity', '50')
+        localStorage.setItem('openscad-forge-grid-opacity--forge', '50')
         manager.resetGridOpacity()
-        expect(localStorage.getItem('openscad-forge-grid-opacity')).toBeNull()
+        expect(localStorage.getItem('openscad-forge-grid-opacity--forge')).toBeNull()
       })
     })
 
@@ -1962,18 +2189,18 @@ describe('PreviewManager', () => {
     describe('saveGridOpacityPreference', () => {
       it('saves a non-default value', () => {
         manager.saveGridOpacityPreference(70)
-        expect(localStorage.getItem('openscad-forge-grid-opacity')).toBe('70')
+        expect(localStorage.getItem('openscad-forge-grid-opacity--forge')).toBe('70')
       })
 
       it('removes key when null', () => {
-        localStorage.setItem('openscad-forge-grid-opacity', '50')
+        localStorage.setItem('openscad-forge-grid-opacity--forge', '50')
         manager.saveGridOpacityPreference(null)
-        expect(localStorage.getItem('openscad-forge-grid-opacity')).toBeNull()
+        expect(localStorage.getItem('openscad-forge-grid-opacity--forge')).toBeNull()
       })
 
       it('removes key when value is 100 (default)', () => {
         manager.saveGridOpacityPreference(100)
-        expect(localStorage.getItem('openscad-forge-grid-opacity')).toBeNull()
+        expect(localStorage.getItem('openscad-forge-grid-opacity--forge')).toBeNull()
       })
 
       it('handles localStorage errors gracefully', () => {
@@ -2848,8 +3075,12 @@ describe('Visual Parity — desktop OpenSCAD alignment (Phase 5)', () => {
       expect(manager.ambientLight.intensity).toBeCloseTo(expected, 5)
     })
 
-    it('directional intensities are 1.0 * π (OpenGL diffuse {1,1,1,1})', () => {
-      const expected = 1.0 * Math.PI
+    it('directional intensities are 1.5 * π (π-cancel × Q-30 calibration)', () => {
+      // 1.0*π cancels the BRDF_Lambert divisor (OpenGL diffuse {1,1,1,1});
+      // the further ×1.5 is the owner's Q-30 pick from A/B captures against
+      // desktop 2021.01 at a pinned pose (U-14, 2026-08-11) — with π-cancel
+      // alone the same mesh in the same baked colors rendered visibly darker.
+      const expected = 1.5 * Math.PI
       expect(manager.directionalLight1.intensity).toBeCloseTo(expected, 5)
       expect(manager.directionalLight2.intensity).toBeCloseTo(expected, 5)
     })
@@ -2861,8 +3092,8 @@ describe('Visual Parity — desktop OpenSCAD alignment (Phase 5)', () => {
 
     it('base intensities record matches constructed values', () => {
       expect(manager.baseLightIntensities.ambient).toBeCloseTo(0.2 * Math.PI, 5)
-      expect(manager.baseLightIntensities.dir1).toBeCloseTo(1.0 * Math.PI, 5)
-      expect(manager.baseLightIntensities.dir2).toBeCloseTo(1.0 * Math.PI, 5)
+      expect(manager.baseLightIntensities.dir1).toBeCloseTo(1.5 * Math.PI, 5)
+      expect(manager.baseLightIntensities.dir2).toBeCloseTo(1.5 * Math.PI, 5)
     })
   })
 
@@ -3296,4 +3527,88 @@ describe('loadOFF() heuristic skip — CSG color preprocessing', () => {
     const innerAttr = geometry.getAttribute('aIsInner')
     expect(innerAttr).toBeDefined()
   })
+
+  /**
+   * DP-5: which surface the reference overlay sits against.
+   *
+   * The old control surface was a single number, -0.25, which says nothing to
+   * someone who wants to trace onto the top of a charm. These pin the presets
+   * as VALUES, and pin the two things that are easy to get wrong: that
+   * "top of the model" asks the model rather than remembering a height, and
+   * that it does not z-fight the face it is sitting on.
+   */
+  describe('reference overlay Z (DP-5)', () => {
+    it('starts under the plate, where it always was', () => {
+      const manager = new PreviewManager(container)
+      const config = manager.getOverlayConfig()
+      expect(config.zPreset).toBe('under-plate')
+      expect(config.zPosition).toBe(-0.25)
+    })
+
+    it('resolves each preset to its own height', () => {
+      const manager = new PreviewManager(container)
+      expect(manager.resolveOverlayZ('under-plate')).toBe(-0.25)
+      expect(manager.resolveOverlayZ('build-plate')).toBe(0)
+      expect(manager.resolveOverlayZ('custom', 3.5)).toBe(3.5)
+    })
+
+    it('setOverlayZ writes both the preset and the height it resolves to', () => {
+      const manager = new PreviewManager(container)
+      manager.setOverlayZ({ preset: 'build-plate' })
+      expect(manager.getOverlayConfig().zPosition).toBe(0)
+      manager.setOverlayZ({ preset: 'custom', customMm: -2.25 })
+      expect(manager.getOverlayConfig().zPreset).toBe('custom')
+      expect(manager.getOverlayConfig().zPosition).toBe(-2.25)
+    })
+
+    it('falls back to the build plate when there is no model to sit on', () => {
+      // Not to a stale height from a previous object, which is the failure
+      // this is here to prevent.
+      const manager = new PreviewManager(container)
+      expect(manager.mesh).toBeFalsy()
+      manager.setOverlayZ({ preset: 'model-top' })
+      expect(manager.getOverlayConfig().zPosition).toBe(0)
+    })
+
+    it('reads the REAL model height, and sits just above the top face', () => {
+      // Coincident planes z-fight, and the overlay is the thing being traced
+      // against, so it has to win. A real mesh, not a mocked resolver: mocking
+      // the function under test would only prove the mock.
+      const manager = new PreviewManager(container)
+      const box = new Mesh(new BoxGeometry(10, 10, 8), new MeshPhongMaterial())
+      box.position.set(0, 0, 0)
+      manager.mesh = box
+
+      manager.setOverlayZ({ preset: 'model-top' })
+      // A 8mm-tall box centred on the origin tops out at +4.
+      expect(manager.getOverlayConfig().zPosition).toBeCloseTo(4.25, 6)
+      expect(manager.getOverlayConfig().zPosition).toBeGreaterThan(4)
+    })
+
+    it('follows the model when a different one is loaded', () => {
+      const manager = new PreviewManager(container)
+      manager.mesh = new Mesh(new BoxGeometry(10, 10, 8), new MeshPhongMaterial())
+      manager.setOverlayZ({ preset: 'model-top' })
+      expect(manager.getOverlayConfig().zPosition).toBeCloseTo(4.25, 6)
+
+      // A taller object arrives; refreshOverlayZ is what the load path calls.
+      manager.mesh = new Mesh(new BoxGeometry(10, 10, 40), new MeshPhongMaterial())
+      manager.refreshOverlayZ()
+      expect(manager.getOverlayConfig().zPosition).toBeCloseTo(20.25, 6)
+    })
+
+    it('refreshOverlayZ only does work for the preset that depends on a model', () => {
+      const manager = new PreviewManager(container)
+      manager.setOverlayZ({ preset: 'custom', customMm: 7 })
+      manager.refreshOverlayZ()
+      // A constant preset is not recomputed out from under the person.
+      expect(manager.getOverlayConfig().zPosition).toBe(7)
+    })
+
+    it('an unknown preset behaves like the default rather than throwing', () => {
+      const manager = new PreviewManager(container)
+      expect(manager.resolveOverlayZ('something-else')).toBe(-0.25)
+    })
+  })
+
 })

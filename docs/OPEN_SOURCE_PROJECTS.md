@@ -68,17 +68,11 @@ These projects are shipped with the application.
 - **License**: ISC
 - **Usage**: YAML parsing for configuration files
 
-### Chalk
-
-- **Repo**: https://github.com/chalk/chalk
-- **License**: MIT
-- **Usage**: Terminal color output in CLI scripts
-
-### Commander
-
-- **Repo**: https://github.com/tj/commander.js
-- **License**: MIT
-- **Usage**: CLI argument parsing for the `openscad-forge` bin
+> **Removed 2026-08-16.** Chalk and Commander used to be listed here. Both
+> existed only for the `openscad-forge` command-line tool, which was removed
+> from the project on 2026-08-04; neither is in `package.json` any more and
+> neither was ever shipped to the browser. They were not listed in
+> `THIRD_PARTY_NOTICES.md`, so nothing in the licence record changes.
 
 ---
 
@@ -154,7 +148,7 @@ These projects are used during development and testing only.
 
 ### png-to-ico
 
-- **Repo**: https://github.com/nicktindall/png-to-ico
+- **Repo**: https://www.npmjs.com/package/png-to-ico
 - **License**: MIT
 - **Usage**: Converts PNG assets to `.ico` format for favicon generation
 

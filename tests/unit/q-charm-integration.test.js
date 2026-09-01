@@ -391,7 +391,9 @@ describe('Charm Maker program manifests', () => {
     expect(Array.isArray(manifest.svgLibrary)).toBe(true);
     expect(manifest.svgLibrary.length).toBe(2);
 
-    const layer1 = manifest.svgLibrary.find((l) => l.paramName === 'design_file');
+    const layer1 = manifest.svgLibrary.find(
+      (l) => l.paramName === 'design_file'
+    );
     expect(layer1).toBeDefined();
     expect(Array.isArray(layer1.options)).toBe(true);
     expect(layer1.options.length).toBeGreaterThan(0);
@@ -400,7 +402,9 @@ describe('Charm Maker program manifests', () => {
       expect(typeof opt.label).toBe('string');
     }
 
-    const layer2 = manifest.svgLibrary.find((l) => l.paramName === 'design_file_2');
+    const layer2 = manifest.svgLibrary.find(
+      (l) => l.paramName === 'design_file_2'
+    );
     expect(layer2).toBeDefined();
     expect(Array.isArray(layer2.options)).toBe(true);
     expect(layer2.options.length).toBeGreaterThan(0);
@@ -430,13 +434,17 @@ describe('Charm Maker program manifests', () => {
 // ---------------------------------------------------------------------------
 
 describe('EXAMPLE_DEFINITIONS file path resolution', () => {
-  const examplesWithAdditionalFiles = Object.entries(EXAMPLE_DEFINITIONS)
-    .filter(([, def]) => def.additionalFiles?.length > 0);
+  const examplesWithAdditionalFiles = Object.entries(
+    EXAMPLE_DEFINITIONS
+  ).filter(([, def]) => def.additionalFiles?.length > 0);
 
   for (const [key, def] of examplesWithAdditionalFiles) {
     describe(`${key}`, () => {
       it('main scad path resolves to a real file', () => {
-        const filePath = join(PUBLIC_DIR, def.path.replace(/^\/examples\//, 'examples/'));
+        const filePath = join(
+          PUBLIC_DIR,
+          def.path.replace(/^\/examples\//, 'examples/')
+        );
         expect(existsSync(filePath)).toBe(true);
       });
 
@@ -535,5 +543,145 @@ describe('SVG gallery module exports (F-26)', () => {
     const mod = await import('../../src/js/ui-generator.js');
     expect(typeof mod.getGalleryParamNames).toBe('function');
     expect(Array.isArray(mod.getGalleryParamNames())).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DP-8: the layered design surface
+// ---------------------------------------------------------------------------
+
+describe('q-charm layered design (DP-8)', () => {
+  const source = readFileSync(
+    join(PUBLIC_DIR, 'examples/q-charm/q_charm.scad'),
+    'utf8'
+  );
+  const byName = extractParameters(source).parameters;
+
+  it('declares three passes, each with a file, an aspect, a depth and a style', () => {
+    for (let n = 1; n <= 3; n++) {
+      expect(byName[`design_layer_${n}`]).toBeTruthy();
+      expect(byName[`design_layer_${n}`].uiType).toBe('file');
+      expect(byName[`design_layer_${n}_aspect`]).toBeTruthy();
+      expect(byName[`design_layer_${n}_depth`]).toBeTruthy();
+      expect(byName[`design_layer_${n}_style`]).toBeTruthy();
+    }
+    // Three is the prototype's cap. A fourth would need the emitter to change
+    // with it, and src/js/svg-preparer.js is written to three.
+    expect(byName.design_layer_4).toBeUndefined();
+  });
+
+  it('is ADDITIVE: every layer starts empty, so the charm is unchanged', () => {
+    // The signed shape of this feature (DP-Q10): the tiered mode is selected
+    // by filling a layer in, never by default.
+    for (let n = 1; n <= 3; n++) {
+      expect(byName[`design_layer_${n}`].default).toBe('');
+      expect(byName[`design_layer_${n}_aspect`].default).toBe(1);
+      expect(byName[`design_layer_${n}_style`].default).toBe('raised');
+    }
+  });
+
+  it('holds the 0.4 mm floor on every layer depth, in the RANGE and an assert', () => {
+    // A pass thinner than this does not survive a 0.4 mm nozzle. The range
+    // stops the app's slider; the assert stops everything else, including
+    // desktop OpenSCAD and a hand-edited preset.
+    for (let n = 1; n <= 3; n++) {
+      const depth = byName[`design_layer_${n}_depth`];
+      expect(depth.minimum).toBe(0.4);
+      expect(depth.maximum).toBe(3.0);
+      expect(source).toContain(`"design_layer_${n}_depth outside 0.4-3.0 mm"`);
+    }
+    expect(source).toContain('layer_depth_min = 0.4;');
+    expect(source).toContain('layer_depth_max = 3.0;');
+  });
+
+  it('leaves every existing design and text parameter untouched', () => {
+    // The tiered mode sits BESIDE the shipped surfaces. Re-anchoring
+    // design_file_2 to "the previous termination" would silently change a
+    // public parameter's meaning, which is not this release's to do.
+    expect(byName.design_2_thickness.minimum).toBe(-3);
+    expect(byName.design_2_thickness.maximum).toBe(3);
+    expect(byName.design_2_thickness.default).toBe(0);
+    expect(byName.engrave_depth.default).toBe(0.8);
+    expect(byName.design_style.default).toBe('raised');
+    expect(byName.design_scale.default).toBe(60);
+  });
+
+  it('anchors each pass at the one before it, in both directions', () => {
+    // The containment law as arithmetic. Raised travels up, engraved down,
+    // and a layer with no file travels nowhere.
+    expect(source).toContain('layer_base_1 = charm_top_z;');
+    expect(source).toContain('layer_base_2 = layer_base_1 + layer_1_rise;');
+    expect(source).toContain('layer_base_3 = layer_base_2 + layer_2_rise;');
+    for (let n = 1; n <= 3; n++) {
+      expect(source).toMatch(
+        new RegExp(
+          `layer_${n}_rise = layer_${n}_on \\? \\(\\(design_layer_${n}_style == "raised"\\)`
+        )
+      );
+    }
+  });
+
+  it('joins the total-height accounting, so attachments still cut at the true top', () => {
+    // attachment_cutout() measures down from total_top_z. A stack that raised
+    // the charm without telling it would have the lanyard slot cut short.
+    expect(source).toContain('layer_stack_top - charm_top_z');
+    expect(source).toMatch(/total_top_z = charm_top_z[\s\S]*layer_stack_top/);
+  });
+
+  it('overlaps every boolean by the epsilon, never exactly touching', () => {
+    expect(source).toContain('layer_eps = 0.01;');
+    for (let n = 1; n <= 3; n++) {
+      expect(source).toContain(
+        `linear_extrude(height = design_layer_${n}_depth + layer_eps)`
+      );
+    }
+  });
+
+  it('names the canvas span the app writes, as a contract', () => {
+    // src/js/svg-preparer.js normalizes every layer file to this width. The
+    // two numbers are one number; a change to either is a change to both.
+    expect(source).toContain('layer_canvas_span = 100;');
+  });
+
+  it('scales the passes by ONE factor and never resizes them apart', () => {
+    // MEASURED: resize() fits the CONTENT box, so resizing each pass
+    // separately scaled an 8 mm inner square up to the 36 mm outer one.
+    const moduleBody = source.slice(
+      source.indexOf('module design_layer_2d('),
+      source.indexOf('module top_face_2d(')
+    );
+    expect(moduleBody).toContain('scale(fit)');
+    expect(moduleBody).not.toContain('resize(');
+    // center = false keeps the shared coordinate system; center = true would
+    // re-centre each pass on its own bounding box and pull the stack apart.
+    expect(moduleBody).toContain('center = false');
+  });
+
+  it('ships an example pass per layer, and the registry carries them', () => {
+    for (let n = 1; n <= 3; n++) {
+      const file = join(PUBLIC_DIR, `examples/q-charm/design_layer_${n}.svg`);
+      expect(existsSync(file)).toBe(true);
+      const svg = readFileSync(file, 'utf8');
+      // The unit is written: a width with no unit is pixels at 72 dpi.
+      expect(svg).toContain('width="100mm"');
+      expect(svg).toContain('<g transform=');
+    }
+    const q = EXAMPLE_DEFINITIONS['q-charm'];
+    for (let n = 1; n <= 3; n++) {
+      expect(q.additionalFiles).toContain(
+        `/examples/q-charm/design_layer_${n}.svg`
+      );
+    }
+  });
+
+  it('all three example passes share ONE transform, so the stack lines up', () => {
+    const transforms = [1, 2, 3].map((n) => {
+      const svg = readFileSync(
+        join(PUBLIC_DIR, `examples/q-charm/design_layer_${n}.svg`),
+        'utf8'
+      );
+      return /<g transform="([^"]*)"/.exec(svg)[1];
+    });
+    expect(new Set(transforms).size).toBe(1);
   });
 });

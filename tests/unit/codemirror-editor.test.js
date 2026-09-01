@@ -3,7 +3,11 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { CodeMirrorEditor } from '../../src/js/codemirror-editor.js';
+import { undo } from '@codemirror/commands';
+import {
+  CodeMirrorEditor,
+  resolveEditorDarkMode,
+} from '../../src/js/codemirror-editor.js';
 
 describe('CodeMirrorEditor', () => {
   let container;
@@ -105,13 +109,65 @@ describe('CodeMirrorEditor', () => {
       expect(editor.getValue()).toBe(code);
     });
 
-    it('should fire onChange when setValue is called', () => {
+    it('should NOT fire onChange when setValue is called', () => {
       const onChange = vi.fn();
       createEditor({ onChange });
       editor.initialize();
 
       editor.setValue('sphere(5);');
-      expect(onChange).toHaveBeenCalledWith('sphere(5);');
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it('should fire onChange for a user edit', () => {
+      const onChange = vi.fn();
+      createEditor({ onChange });
+      editor.initialize();
+      editor.setValue('sphere(5);');
+      onChange.mockClear();
+
+      editor._view.dispatch({ changes: { from: 0, insert: '// ' } });
+      expect(onChange).toHaveBeenCalledWith('// sphere(5);');
+    });
+
+    it('should resume firing onChange after setValue throws', () => {
+      const onChange = vi.fn();
+      createEditor({ onChange });
+      editor.initialize();
+
+      const realDispatch = editor._view.dispatch.bind(editor._view);
+      editor._view.dispatch = () => {
+        throw new Error('boom');
+      };
+      expect(() => editor.setValue('sphere(5);')).toThrow('boom');
+      editor._view.dispatch = realDispatch;
+
+      editor._view.dispatch({ changes: { from: 0, insert: 'cube();' } });
+      expect(onChange).toHaveBeenCalledWith('cube();');
+    });
+
+    it('should discard undo history so Undo cannot restore the old document', () => {
+      createEditor();
+      editor.initialize();
+
+      editor.setValue('project A');
+      editor._view.dispatch({ changes: { from: 0, insert: 'edited ' } });
+      expect(editor.getValue()).toBe('edited project A');
+
+      editor.setValue('project B');
+      undo(editor._view);
+      expect(editor.getValue()).toBe('project B');
+    });
+
+    it('should still undo user edits made after a setValue', () => {
+      createEditor();
+      editor.initialize();
+
+      editor.setValue('project B');
+      editor._view.dispatch({ changes: { from: 0, insert: 'typed ' } });
+      expect(editor.getValue()).toBe('typed project B');
+
+      undo(editor._view);
+      expect(editor.getValue()).toBe('project B');
     });
   });
 
@@ -184,10 +240,89 @@ describe('CodeMirrorEditor', () => {
     });
   });
 
-  describe('getAction()', () => {
-    it('should return null (Monaco compat shim)', () => {
+  describe('canUndo() / canRedo() / text undo (D3)', () => {
+    it('reports nothing to undo or redo before initialization', () => {
       createEditor();
-      expect(editor.getAction()).toBeNull();
+      expect(editor.canUndo()).toBe(false);
+      expect(editor.canRedo()).toBe(false);
+    });
+
+    it('a loaded document alone is not undoable', () => {
+      createEditor();
+      editor.initialize();
+      editor.setValue('cube(10);');
+
+      // setValue resets history (A1), so the editor toolbar must not offer
+      // an Undo that would wipe the project the user just opened
+      expect(editor.canUndo()).toBe(false);
+      expect(editor.canRedo()).toBe(false);
+    });
+
+    it('a typed edit becomes undoable, and undoing makes it redoable', () => {
+      createEditor();
+      editor.initialize();
+      editor.setValue('cube(10);');
+
+      editor._view.dispatch({ changes: { from: 0, insert: '// ' } });
+      expect(editor.getValue()).toBe('// cube(10);');
+      expect(editor.canUndo()).toBe(true);
+      expect(editor.canRedo()).toBe(false);
+
+      expect(editor.performAction('undo')).toBe(true);
+      expect(editor.getValue()).toBe('cube(10);');
+      expect(editor.canRedo()).toBe(true);
+
+      expect(editor.performAction('redo')).toBe(true);
+      expect(editor.getValue()).toBe('// cube(10);');
+    });
+  });
+
+  describe('supportsAction() / performAction()', () => {
+    it('reports no support before initialization', () => {
+      createEditor();
+      expect(editor.supportsAction('indent')).toBe(false);
+      expect(editor.performAction('indent')).toBe(false);
+    });
+
+    it('supports the named Edit-menu commands after initialization', () => {
+      createEditor();
+      editor.initialize();
+      for (const id of [
+        'undo',
+        'redo',
+        'indent',
+        'unindent',
+        'comment',
+        'uncomment',
+        'find',
+        'findReplace',
+        'findNext',
+        'findPrevious',
+      ]) {
+        expect(editor.supportsAction(id), id).toBe(true);
+      }
+      expect(editor.supportsAction('nonsense')).toBe(false);
+      expect(editor.performAction('nonsense')).toBe(false);
+    });
+
+    it('performs line commenting on the current line', () => {
+      createEditor();
+      editor.initialize();
+      editor.setValue('cube(10);');
+      editor.setSelection(0, 0);
+      expect(editor.performAction('comment')).toBe(true);
+      expect(editor.getValue()).toBe('// cube(10);');
+      expect(editor.performAction('uncomment')).toBe(true);
+      expect(editor.getValue()).toBe('cube(10);');
+    });
+
+    it('replaceSelection inserts at the cursor', () => {
+      createEditor();
+      editor.initialize();
+      editor.setValue('cube();');
+      editor.setSelection(5, 5);
+      editor.replaceSelection('10');
+      expect(editor.getValue()).toBe('cube(10);');
     });
   });
 
@@ -247,6 +382,45 @@ describe('CodeMirrorEditor', () => {
       editor.dispose();
 
       expect(editor.getValue()).toBe('');
+    });
+  });
+
+  describe('resolveEditorDarkMode (U-4)', () => {
+    it('follows the resolved app theme, not the OS: dark app is dark', () => {
+      expect(
+        resolveEditorDarkMode({ uiMode: 'standard', resolvedTheme: 'dark' })
+      ).toBe(true);
+    });
+
+    it('light app stays light — the OS preference is not even an input', () => {
+      expect(
+        resolveEditorDarkMode({ uiMode: 'standard', resolvedTheme: 'light' })
+      ).toBe(false);
+      expect(
+        resolveEditorDarkMode({ uiMode: 'simplified', resolvedTheme: 'light' })
+      ).toBe(false);
+    });
+
+    it('Classic is always light, even when the app theme is dark', () => {
+      expect(
+        resolveEditorDarkMode({ uiMode: 'classic', resolvedTheme: 'dark' })
+      ).toBe(false);
+    });
+
+    it('initialize() wires ui-mode-changed to a theme re-resolve, dispose() unwires it', () => {
+      createEditor();
+      editor.initialize();
+      const spy = vi.spyOn(editor, '_switchTheme');
+
+      document.body.dataset.uiMode = 'classic';
+      document.dispatchEvent(new CustomEvent('ui-mode-changed'));
+      expect(spy).toHaveBeenCalledWith(false);
+
+      spy.mockClear();
+      editor.dispose();
+      document.dispatchEvent(new CustomEvent('ui-mode-changed'));
+      expect(spy).not.toHaveBeenCalled();
+      delete document.body.dataset.uiMode;
     });
   });
 });

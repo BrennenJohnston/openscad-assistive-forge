@@ -2,13 +2,16 @@
  * CodeMirror 6 Editor — CSP-compatible advanced code editor
  *
  * Provides syntax highlighting, autocomplete, and rich editing for OpenSCAD
- * without requiring style-src 'unsafe-inline' (uses constructable stylesheets).
+ * without requiring style-src 'unsafe-inline'. CodeMirror itself injects its
+ * CSS in a <style> element, which a strict style-src discards; the rules are
+ * re-homed into a constructable stylesheet by codemirror-csp-styles.js.
  *
  * Public API matches TextareaEditor for drop-in substitution:
  *   constructor({ container, onChange, onSave, onRun, announce })
  *   initialize(), getValue(), setValue(v), focus(), dispose()
  *   getSelection(), setSelection(s,e), setCursorPosition(l,c), scrollToLine(l)
- *   setErrorLines(lines), clearErrors(), getAction()
+ *   setErrorLines(lines), clearErrors(), supportsAction(id),
+ *   performAction(id), canUndo(), canRedo(), replaceSelection(text)
  *
  * @license GPL-3.0-or-later
  */
@@ -20,22 +23,74 @@ import {
   highlightActiveLine,
   drawSelection,
   Decoration,
+  gutter,
+  GutterMarker,
 } from '@codemirror/view';
 import {
   EditorState,
   Compartment,
   StateEffect,
   StateField,
+  RangeSet,
 } from '@codemirror/state';
 import {
   StreamLanguage,
   syntaxHighlighting,
   HighlightStyle,
+  codeFolding,
+  foldKeymap,
+  foldAll,
+  unfoldAll,
+  foldService,
+  indentUnit,
+  bracketMatching,
 } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
-import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
+import {
+  defaultKeymap,
+  history,
+  historyKeymap,
+  indentMore,
+  indentLess,
+  lineComment,
+  lineUncomment,
+  undo,
+  redo,
+  undoDepth,
+  redoDepth,
+} from '@codemirror/commands';
 import { autocompletion } from '@codemirror/autocomplete';
-import { highlightSelectionMatches, searchKeymap } from '@codemirror/search';
+import {
+  search,
+  highlightSelectionMatches,
+  searchKeymap,
+  openSearchPanel,
+  findNext,
+  findPrevious,
+  setSearchQuery,
+  SearchQuery,
+} from '@codemirror/search';
+import { adoptCodeMirrorStyles } from './codemirror-csp-styles.js';
+import { wrapIndent, wrapReturnArrows } from './editor-wrap-marks.js';
+import { boxedFoldGutter } from './editor-fold-markers.js';
+import { LIGHT_SCHEME, DARK_SCHEME } from './editor-color-scheme.js';
+import { loadEditorPrefs } from './editor-prefs.js';
+import { themeManager } from './theme-manager.js';
+
+/**
+ * Where the editor's dark mode comes from (U-4): the APP, never the OS media
+ * query. Classic is always light — its chrome is the desktop token remap and
+ * the desktop editor is white. Every other mode follows the resolved app
+ * theme; 'auto' keeps data-theme synced to the OS, so auto still works
+ * through this path.
+ *
+ * @param {{ uiMode: string|null, resolvedTheme: string|null }} inputs
+ * @returns {boolean}
+ */
+export function resolveEditorDarkMode({ uiMode, resolvedTheme }) {
+  if (uiMode === 'classic') return false;
+  return resolvedTheme === 'dark';
+}
 
 // ─── OpenSCAD token lists (ported from textarea-editor.js / monaco-editor.js) ──
 
@@ -177,8 +232,31 @@ const openscadStreamLanguage = StreamLanguage.define({
       return 'variable';
     }
 
+    // Operators and punctuation. Added in UF-29: this tokenizer never emitted
+    // them, so they fell through to `null` and painted as plain text — which
+    // is why the palette's `operator` entry had nothing to colour. The desktop
+    // draws them in its operator colour, brackets and semicolons included.
+    if (stream.match(/[+\-*/%=<>!&|?:;,.()[\]{}]/)) {
+      return 'operator';
+    }
+
     stream.next();
     return null;
+  },
+
+  // Without this, four of the tokens above reach no tag at all. MEASURED in
+  // the running editor before it was added: only five token classes were ever
+  // painted (keywords, line comments, block comments, strings, numbers), and
+  // builtins, functions, constants and $-variables all rendered as plain black
+  // text while the highlight style carried entries for tags this tokenizer
+  // never produces. `builtin` is the only one CodeMirror's legacy table knows;
+  // `function`, `constant` and `special` are modifier names rather than tags,
+  // so they resolved to nothing.
+  tokenTable: {
+    builtin: tags.standard(tags.variableName),
+    function: tags.function(tags.variableName),
+    constant: tags.atom,
+    special: tags.special(tags.variableName),
   },
 
   languageData: {
@@ -187,88 +265,135 @@ const openscadStreamLanguage = StreamLanguage.define({
 });
 
 // ─── Highlight styles (light + dark) ────────────────────────────────────────
-// Colors ported from SCAD_THEME / SCAD_DARK_THEME in monaco-editor.js
+//
+// Built from the desktop's own editor schemes (UF-29, Q-60a). The mapping from
+// the scheme file's keys to this tokenizer's tokens, MEASURED against the
+// owner's screenshots rather than assumed:
+//
+//   keyword1  Green      language keywords     `module` renders green
+//   keyword2  Green      constants             true / false / undef / PI
+//   keyword3  DarkBlue   builtins, functions,  `difference` and `union`
+//                        and $-variables       render dark blue
+//   comment   DarkCyan   line + block comments
+//   number    DarkRed
+//   string    DarkMagenta
+//   operator  Blue       brackets and punctuation included
+//
+// $-variables are keyword3 by INFERENCE — no screenshot showed one — and are
+// grouped with the builtins they belong to. Everything else was read off the
+// pixels.
+//
+// Neither bold nor italic is applied: the desktop renders keywords and
+// comments at the same weight and slope as everything else, and the previous
+// VS Code port's bold keywords / italic comments were its own invention.
 
-const lightHighlightStyle = HighlightStyle.define([
-  { tag: tags.keyword, color: '#0000FF', fontWeight: 'bold' },
-  { tag: tags.typeName, color: '#267F99' },
-  { tag: tags.function(tags.variableName), color: '#795E26' },
-  { tag: tags.bool, color: '#0070C1' },
-  { tag: tags.null, color: '#0070C1' },
-  {
-    tag: tags.special(tags.variableName),
-    color: '#001080',
-    fontStyle: 'italic',
-  },
-  { tag: tags.comment, color: '#008000', fontStyle: 'italic' },
-  { tag: tags.blockComment, color: '#008000', fontStyle: 'italic' },
-  { tag: tags.string, color: '#A31515' },
-  { tag: tags.number, color: '#098658' },
-  { tag: tags.operator, color: '#000000' },
-]);
+/**
+ * @param {import('./editor-color-scheme.js').EditorScheme} scheme
+ * @returns {import('@codemirror/language').HighlightStyle}
+ */
+function highlightStyleFor(scheme) {
+  const t = scheme.tokens;
+  return HighlightStyle.define([
+    { tag: tags.keyword, color: t.keyword1 },
+    { tag: tags.atom, color: t.keyword2 },
+    { tag: tags.standard(tags.variableName), color: t.keyword3 },
+    { tag: tags.function(tags.variableName), color: t.keyword3 },
+    { tag: tags.special(tags.variableName), color: t.keyword3 },
+    { tag: tags.lineComment, color: t.comment },
+    { tag: tags.blockComment, color: t.comment },
+    { tag: tags.comment, color: t.comment },
+    { tag: tags.string, color: t.string },
+    { tag: tags.number, color: t.number },
+    { tag: tags.operator, color: t.operator },
+  ]);
+}
 
-const darkHighlightStyle = HighlightStyle.define([
-  { tag: tags.keyword, color: '#569CD6', fontWeight: 'bold' },
-  { tag: tags.typeName, color: '#4EC9B0' },
-  { tag: tags.function(tags.variableName), color: '#DCDCAA' },
-  { tag: tags.bool, color: '#4FC1FF' },
-  { tag: tags.null, color: '#4FC1FF' },
-  {
-    tag: tags.special(tags.variableName),
-    color: '#9CDCFE',
-    fontStyle: 'italic',
-  },
-  { tag: tags.comment, color: '#6A9955', fontStyle: 'italic' },
-  { tag: tags.blockComment, color: '#6A9955', fontStyle: 'italic' },
-  { tag: tags.string, color: '#CE9178' },
-  { tag: tags.number, color: '#B5CEA8' },
-  { tag: tags.operator, color: '#D4D4D4' },
-]);
+const lightHighlightStyle = highlightStyleFor(LIGHT_SCHEME);
+const darkHighlightStyle = highlightStyleFor(DARK_SCHEME);
 
-const lightEditorTheme = EditorView.theme({
-  '&': {
-    backgroundColor: '#FFFFFF',
-    color: '#000000',
-  },
-  '.cm-gutters': {
-    backgroundColor: '#F8F8F8',
-    color: '#237893',
-    borderRight: '1px solid #ddd',
-  },
-  '.cm-activeLineGutter': {
-    color: '#0B216F',
-  },
-  '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': {
-    backgroundColor: '#ADD6FF',
-  },
-  '.cm-activeLine': {
-    backgroundColor: '#F8F8F800',
-  },
-});
+/**
+ * CodeMirror has no font-size facility; a theme is the facility. Set on the
+ * editor root and on .cm-gutters so the line numbers scale with the code —
+ * sizing only the content leaves the gutter behind and the two stop lining
+ * up. Given in px because the control is a px control (Edit ▸ Font Size has
+ * always announced "Font size: 14px").
+ *
+ * The explicit line-height is not decoration. MEASURED: before anything set
+ * a font size on the editor root, rows were 22px against 14px text — 1.57,
+ * inherited by accident from the page. Setting the root to 14px recomputed
+ * that inherited unitless line-height against a smaller number and rows fell
+ * to 20px, i.e. 1.43, under the 1.5 that WCAG 2.2 SC 1.4.12 Text Spacing
+ * asks for. Pinning it here keeps the ratio at every font size the user can
+ * choose, instead of letting it drift out of range whenever the size changes.
+ *
+ * @param {number} px
+ */
+const EDITOR_LINE_HEIGHT = 1.6;
 
-const darkEditorTheme = EditorView.theme(
-  {
-    '&': {
-      backgroundColor: '#1E1E1E',
-      color: '#D4D4D4',
+function fontSizeTheme(px) {
+  return EditorView.theme({
+    '&': { fontSize: `${px}px` },
+    // The row height follows .cm-scroller, which carries CodeMirror's own
+    // line-height: 1.4 — that is where the 1.43 came from, not the root.
+    '.cm-scroller': { lineHeight: String(EDITOR_LINE_HEIGHT) },
+    '.cm-gutters': { fontSize: `${px}px` },
+  });
+}
+
+/**
+ * The editor chrome, from the same scheme file as the syntax colours.
+ *
+ * `.cm-activeLine` takes the scheme's caret-line background verbatim. That is
+ * a visible change from the old themes, whose light active line was fully
+ * transparent (`#F8F8F800`) and whose dark one was barely there — and it is
+ * why every foreground in editor-color-scheme.js is contrast-checked against
+ * the caret line as well as the paper.
+ *
+ * @param {import('./editor-color-scheme.js').EditorScheme} scheme
+ * @param {{dark?: boolean}} [options]
+ */
+function editorThemeFor(scheme, options = {}) {
+  return EditorView.theme(
+    {
+      '&': {
+        backgroundColor: scheme.paper,
+        color: scheme.text,
+      },
+      '.cm-gutters': {
+        backgroundColor: scheme.marginBackground,
+        color: scheme.marginForeground,
+        borderRight: `1px solid ${options.dark ? '#333' : '#ddd'}`,
+      },
+      '.cm-activeLineGutter': {
+        color: scheme.text,
+        backgroundColor: scheme.caretLine,
+      },
+      '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': {
+        backgroundColor: scheme.selectionBackground,
+      },
+      '.cm-selectionMatch': {
+        backgroundColor: scheme.matchedBraceBackground,
+      },
+      '.cm-activeLine': {
+        backgroundColor: scheme.caretLine,
+      },
+      // Brace matching (Q-61). The scheme carries both pairs, so the rider
+      // needed no colour of its own.
+      '.cm-matchingBracket, &.cm-focused .cm-matchingBracket': {
+        backgroundColor: scheme.matchedBraceBackground,
+        color: scheme.matchedBraceForeground,
+      },
+      '.cm-nonmatchingBracket, &.cm-focused .cm-nonmatchingBracket': {
+        backgroundColor: scheme.unmatchedBraceBackground,
+        color: scheme.unmatchedBraceForeground,
+      },
     },
-    '.cm-gutters': {
-      backgroundColor: '#1E1E1E',
-      color: '#858585',
-      borderRight: '1px solid #333',
-    },
-    '.cm-activeLineGutter': {
-      color: '#C6C6C6',
-    },
-    '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': {
-      backgroundColor: '#264F78',
-    },
-    '.cm-activeLine': {
-      backgroundColor: '#ffffff0a',
-    },
-  },
-  { dark: true }
-);
+    options
+  );
+}
+
+const lightEditorTheme = editorThemeFor(LIGHT_SCHEME);
+const darkEditorTheme = editorThemeFor(DARK_SCHEME, { dark: true });
 
 // ─── Autocomplete for OpenSCAD ──────────────────────────────────────────────
 
@@ -320,7 +445,273 @@ const errorLineTheme = EditorView.baseTheme({
   },
 });
 
+// ─── Bookmarks ───────────────────────────────────────────────────────────────
+// CodeMirror has no bookmark feature, so this is a small line-marker extension:
+// a gutter dot per bookmarked line, plus toggle/next/previous commands. The
+// marker is decorative — the state reaches a screen reader through the
+// announcements in performAction(), not through the gutter.
+
+class BookmarkMarker extends GutterMarker {
+  toDOM() {
+    const dot = document.createElement('span');
+    dot.className = 'cm-bookmark-dot';
+    dot.setAttribute('aria-hidden', 'true');
+    dot.textContent = '●';
+    return dot;
+  }
+}
+
+const bookmarkMarker = new BookmarkMarker();
+
+/** @type {StateEffectType<{line: number, on: boolean}>} */
+const toggleBookmarkEffect = StateEffect.define();
+
+const bookmarkField = StateField.define({
+  create() {
+    return RangeSet.empty;
+  },
+  update(marks, tr) {
+    marks = marks.map(tr.changes);
+    for (const effect of tr.effects) {
+      if (!effect.is(toggleBookmarkEffect)) continue;
+      const { doc } = tr.state;
+      const lineNumber = effect.value.line;
+      if (lineNumber < 1 || lineNumber > doc.lines) continue;
+      if (effect.value.on) {
+        marks = marks.update({
+          add: [bookmarkMarker.range(doc.line(lineNumber).from)],
+          sort: true,
+        });
+      } else {
+        marks = marks.update({
+          filter: (from) => lineNumberAt(doc, from) !== lineNumber,
+        });
+      }
+    }
+    return marks;
+  },
+});
+
+function lineNumberAt(doc, pos) {
+  return doc.lineAt(Math.max(0, Math.min(pos, doc.length))).number;
+}
+
+/**
+ * Bookmarked line numbers, ascending. Edits can drag two marks onto the same
+ * line, so the set is de-duplicated on read rather than on every change.
+ * @param {EditorState} state
+ * @returns {number[]}
+ */
+function bookmarkLines(state) {
+  const lines = new Set();
+  const iter = state.field(bookmarkField).iter();
+  while (iter.value) {
+    lines.add(lineNumberAt(state.doc, iter.from));
+    iter.next();
+  }
+  return [...lines].sort((a, b) => a - b);
+}
+
+function cursorLine(state) {
+  return state.doc.lineAt(state.selection.main.head).number;
+}
+
+const toggleBookmark = (view) => {
+  const line = cursorLine(view.state);
+  const on = !bookmarkLines(view.state).includes(line);
+  view.dispatch({ effects: toggleBookmarkEffect.of({ line, on }) });
+  return true;
+};
+
+function gotoBookmark(view, direction) {
+  const lines = bookmarkLines(view.state);
+  if (lines.length === 0) return false;
+  const current = cursorLine(view.state);
+  const target =
+    direction > 0
+      ? (lines.find((line) => line > current) ?? lines[0])
+      : (lines.filter((line) => line < current).pop() ??
+        lines[lines.length - 1]);
+  const line = view.state.doc.line(target);
+  view.dispatch({ selection: { anchor: line.from }, scrollIntoView: true });
+  return true;
+}
+
+const nextBookmark = (view) => gotoBookmark(view, 1);
+const previousBookmark = (view) => gotoBookmark(view, -1);
+
+const bookmarkGutter = gutter({
+  class: 'cm-bookmark-gutter',
+  markers: (view) => view.state.field(bookmarkField),
+  initialSpacer: () => bookmarkMarker,
+});
+
+const bookmarkTheme = EditorView.baseTheme({
+  '.cm-bookmark-gutter': { width: '1em' },
+  '.cm-bookmark-dot': { color: '#0b6bcb', fontSize: '0.7em', lineHeight: 1.6 },
+  '&dark .cm-bookmark-dot': { color: '#78bafc' },
+});
+
+// ─── Code folding ────────────────────────────────────────────────────────────
+// OpenSCAD is tokenized here by a StreamLanguage, which carries no structure —
+// so foldGutter would draw nothing and Fold All would silently do nothing.
+// This supplies the missing fold information: a foldable block is the text
+// between a brace opened on a line and its match, with braces inside strings
+// and comments ignored. Ranges are computed once per document version, since
+// the fold service is asked about every visible line on every repaint.
+
+const foldRangeCache = new WeakMap();
+
+function computeFoldRanges(doc) {
+  const text = doc.toString();
+  const open = [];
+  const pairs = [];
+  let inLineComment = false;
+  let inBlockComment = false;
+  let inString = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const next = text[i + 1];
+
+    if (inLineComment) {
+      if (char === '\n') inLineComment = false;
+      continue;
+    }
+    if (inBlockComment) {
+      if (char === '*' && next === '/') {
+        inBlockComment = false;
+        i++;
+      }
+      continue;
+    }
+    if (inString) {
+      if (char === '\\') i++;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '/' && next === '/') {
+      inLineComment = true;
+      i++;
+    } else if (char === '/' && next === '*') {
+      inBlockComment = true;
+      i++;
+    } else if (char === '"') {
+      inString = true;
+    } else if (char === '{') {
+      open.push(i);
+    } else if (char === '}' && open.length > 0) {
+      pairs.push([open.pop(), i]);
+    }
+  }
+
+  const byLine = new Map();
+  for (const [from, to] of pairs) {
+    const startLine = doc.lineAt(from).number;
+    // A block that opens and closes on one line has nothing to hide.
+    if (doc.lineAt(to).number === startLine) continue;
+    const existing = byLine.get(startLine);
+    if (!existing || to > existing.to) {
+      byLine.set(startLine, { from: from + 1, to });
+    }
+  }
+  return byLine;
+}
+
+function foldRangesFor(doc) {
+  let ranges = foldRangeCache.get(doc);
+  if (!ranges) {
+    ranges = computeFoldRanges(doc);
+    foldRangeCache.set(doc, ranges);
+  }
+  return ranges;
+}
+
+const scadFoldService = foldService.of((state, lineStart) => {
+  const line = state.doc.lineAt(lineStart);
+  return foldRangesFor(state.doc).get(line.number) ?? null;
+});
+
+// ─── Whitespace and search helpers ───────────────────────────────────────────
+
+/**
+ * Expand every tab to the next tab stop, so the visible layout is unchanged.
+ * A flat "one tab becomes N spaces" swap would shift indented code.
+ */
+const convertTabsToSpaces = (view) => {
+  const { state } = view;
+  if (!state.doc.toString().includes('\t')) return false;
+  const tabSize = state.tabSize || 4;
+  const changes = [];
+  for (let n = 1; n <= state.doc.lines; n++) {
+    const line = state.doc.line(n);
+    if (!line.text.includes('\t')) continue;
+    let column = 0;
+    let expanded = '';
+    for (const char of line.text) {
+      if (char === '\t') {
+        const width = tabSize - (column % tabSize);
+        expanded += ' '.repeat(width);
+        column += width;
+      } else {
+        expanded += char;
+        column += 1;
+      }
+    }
+    changes.push({ from: line.from, to: line.to, insert: expanded });
+  }
+  if (changes.length === 0) return false;
+  view.dispatch({ changes });
+  return true;
+};
+
+/**
+ * Seed the search query from the selection and move to the next match, which
+ * is what upstream's Use Selection for Find does. This only works because the
+ * search() extension is installed below: without it CodeMirror adds its
+ * search state field lazily when the panel first opens, so setSearchQuery
+ * would be silently dropped and findNext would just open an empty panel.
+ */
+const useSelectionForFind = (view) => {
+  const range = view.state.selection.main;
+  if (range.empty) return false;
+  view.dispatch({
+    effects: setSearchQuery.of(
+      new SearchQuery({ search: view.state.sliceDoc(range.from, range.to) })
+    ),
+  });
+  return findNext(view);
+};
+
 // ─── CodeMirrorEditor class ─────────────────────────────────────────────────
+
+// Named editor commands exposed to the Edit menu / keyboard shortcuts.
+// All are stock CodeMirror commands; comment syntax comes from the
+// commentTokens languageData on the OpenSCAD stream language above.
+const EDITOR_COMMANDS = {
+  // Text undo/redo, distinct from the app's parameter history. A full-document
+  // programmatic setValue resets this history on purpose (A1), so Undo can
+  // never resurrect a previously loaded project.
+  undo,
+  redo,
+  indent: indentMore,
+  unindent: indentLess,
+  comment: lineComment,
+  uncomment: lineUncomment,
+  find: openSearchPanel,
+  // CodeMirror's search panel includes the replace controls — verified in the
+  // browser at R3b-1, so Find and Replace needs no separate panel.
+  findReplace: openSearchPanel,
+  findNext,
+  findPrevious,
+  useSelectionForFind,
+  convertTabsToSpaces,
+  toggleBookmark,
+  nextBookmark,
+  previousBookmark,
+  foldAll,
+  unfoldAll,
+};
 
 export class CodeMirrorEditor {
   /**
@@ -356,36 +747,124 @@ export class CodeMirrorEditor {
     /** @type {Compartment} */
     this._highlightCompartment = new Compartment();
 
+    /** @type {Compartment} - Holds history() so setValue can reset undo state */
+    this._historyCompartment = new Compartment();
+
+    // Preferences ▸ Editor reconfigures these live. Each is a real CodeMirror
+    // facility: a theme for the font size, the indentUnit and tabSize facets,
+    // the lineWrapping extension and highlightActiveLine. Anything the tab
+    // offers that has no facility behind it ships disabled with a reason
+    // rather than pretending.
+    /** @type {Compartment} */
+    this._fontSizeCompartment = new Compartment();
+    /** @type {Compartment} */
+    this._indentCompartment = new Compartment();
+    /** @type {Compartment} */
+    this._tabSizeCompartment = new Compartment();
+    /** @type {Compartment} */
+    this._wrapCompartment = new Compartment();
+    /** @type {Compartment} */
+    this._wrapIndentCompartment = new Compartment();
+    /** @type {Compartment} */
+    this._wrapArrowCompartment = new Compartment();
+    /** @type {Compartment} */
+    this._braceMatchCompartment = new Compartment();
+    /** @type {Compartment} */
+    this._activeLineCompartment = new Compartment();
+
+    /** @type {import('./editor-prefs.js').EditorPrefs} */
+    this._editorPrefs = loadEditorPrefs();
+
+    /**
+     * True while setValue() replaces the document. A programmatic replace is
+     * not a user edit: it must not reach onChange, or loading a project marks
+     * the buffer dirty before the user has typed anything.
+     * @type {boolean}
+     */
+    this._suppressOnChange = false;
+
     /** @type {Set<number>} */
     this._errorLines = new Set();
 
     /** @type {boolean} */
     this._isInitialized = false;
 
-    /** @type {MediaQueryList|null} */
-    this._darkMediaQuery = null;
+    /** @type {Function|null} Unsubscribe from themeManager's change feed */
+    this._unsubscribeTheme = null;
 
     /** @type {Function|null} */
-    this._mediaListener = null;
+    this._uiModeListener = null;
+
+    /** @type {ResizeObserver|null} */
+    this._resizeObserver = null;
   }
 
   initialize() {
     if (this._isInitialized) return;
 
-    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const isDark = this._resolveIsDark();
 
     const onSave = this.onSave;
     const onRun = this.onRun;
-    const announceRef = this.announce;
+
+    // Re-read on every initialize(): the editor is destroyed and rebuilt on
+    // each mode switch, so settings applied in a previous life have to come
+    // back from storage or they silently reset.
+    this._editorPrefs = loadEditorPrefs();
 
     const startState = EditorState.create({
       doc: '',
       extensions: [
+        // Desktop OpenSCAD wraps at word boundaries by default. Without this
+        // a long line runs off the pane and has to be scrolled to sideways,
+        // which also fails WCAG 1.4.10. CodeMirror keeps one line number per
+        // logical line, against its first visual row, as the desktop does.
+        this._wrapCompartment.of(
+          this._editorPrefs.lineWrapping ? EditorView.lineWrapping : []
+        ),
+        // How a wrapped line tells you it is one: continuation rows hang four
+        // columns in and every row that continues carries a return arrow at
+        // the right border, both from the desktop's own defaults. Neither
+        // mark is made of characters, so the document is untouched. Two
+        // compartments because the desktop keeps them as two settings and
+        // Q-58 chose to mirror that.
+        this._wrapIndentCompartment.of(
+          this._editorPrefs.wrapIndent ? wrapIndent() : []
+        ),
+        this._wrapArrowCompartment.of(
+          this._editorPrefs.wrapArrow ? wrapReturnArrows() : []
+        ),
+        this._fontSizeCompartment.of(fontSizeTheme(this._editorPrefs.fontSize)),
+        this._indentCompartment.of(
+          indentUnit.of(' '.repeat(this._editorPrefs.indentWidth))
+        ),
+        this._tabSizeCompartment.of(
+          EditorState.tabSize.of(this._editorPrefs.tabWidth)
+        ),
         lineNumbers(),
-        history(),
+        bookmarkField,
+        bookmarkGutter,
+        bookmarkTheme,
+        codeFolding(),
+        scadFoldService,
+        boxedFoldGutter(),
+        // Q-61: the desktop highlights the brace matching the one at the
+        // cursor, and its scheme file already carried both colour pairs. It is
+        // a real setting there (settings.cc enableBraceMatching, default true)
+        // sitting beside highlightCurrentLine, so it is a real setting here.
+        this._braceMatchCompartment.of(
+          this._editorPrefs.braceMatching ? bracketMatching() : []
+        ),
+        this._historyCompartment.of(history()),
         drawSelection(),
-        highlightActiveLine(),
+        this._activeLineCompartment.of(
+          this._editorPrefs.highlightActiveLine ? highlightActiveLine() : []
+        ),
         highlightSelectionMatches(),
+        // Installed explicitly so the search state exists from the start.
+        // CodeMirror otherwise adds it only when the panel first opens, and
+        // Use Selection for Find sets its query before that ever happens.
+        search(),
 
         openscadStreamLanguage,
         this._highlightCompartment.of(
@@ -396,11 +875,14 @@ export class CodeMirrorEditor {
         autocompletion({ override: [openscadCompletions] }),
 
         keymap.of([
+          // Neither shortcut announces here: the keymap cannot know the
+          // outcome. Saving announces "Project saved" once it succeeds and
+          // toasts on failure; the preview state indicator is an aria-live
+          // region that reports rendering and readiness on its own.
           {
             key: 'Mod-s',
             run() {
               onSave();
-              announceRef('Saved');
               return true;
             },
           },
@@ -408,17 +890,32 @@ export class CodeMirrorEditor {
             key: 'Mod-Enter',
             run() {
               onRun();
-              announceRef('Generating preview');
               return true;
             },
+          },
+          // Upstream's bookmark keys (MainWindow.ui). They live in the
+          // editor's own keymap rather than the app shortcut registry
+          // because they only mean anything while the editor has focus.
+          {
+            key: 'Mod-F2',
+            run: (view) => this._runAndAnnounce('toggleBookmark', view),
+          },
+          {
+            key: 'F2',
+            run: (view) => this._runAndAnnounce('nextBookmark', view),
+          },
+          {
+            key: 'Shift-F2',
+            run: (view) => this._runAndAnnounce('previousBookmark', view),
           },
           ...defaultKeymap,
           ...historyKeymap,
           ...searchKeymap,
+          ...foldKeymap,
         ]),
 
         EditorView.updateListener.of((update) => {
-          if (update.docChanged) {
+          if (update.docChanged && !this._suppressOnChange) {
             this.onChange(update.state.doc.toString());
           }
         }),
@@ -433,15 +930,72 @@ export class CodeMirrorEditor {
       parent: this.container,
     });
 
+    // The view has mounted its styles by now, so there is something to adopt.
+    adoptCodeMirrorStyles();
+
     const cmContent = this._view.contentDOM;
     cmContent.setAttribute('aria-label', 'OpenSCAD code editor');
 
-    this._darkMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    this._mediaListener = (e) => this._switchTheme(e.matches);
-    this._darkMediaQuery.addEventListener('change', this._mediaListener);
+    this._unsubscribeTheme = themeManager.addListener(() =>
+      this._switchTheme(this._resolveIsDark())
+    );
+    this._uiModeListener = () => this._switchTheme(this._resolveIsDark());
+    document.addEventListener('ui-mode-changed', this._uiModeListener);
+
+    this._observeContainerResize();
 
     this._isInitialized = true;
     console.log('[CodeMirrorEditor] Initialized');
+  }
+
+  /**
+   * Re-measure when the pane changes width (D-53).
+   *
+   * CodeMirror already watches its own scroller, but the handler is guarded:
+   * `if (view.docView.lastUpdate < Date.now() - 75) this.onResize()`
+   * (@codemirror/view, the DOMObserver constructor). A resize that lands
+   * within 75ms of a doc-view update is dropped and never retried, and
+   * Classic's responsive reflow does exactly that — it re-lays the dock and
+   * updates the editor in the same moment. MEASURED: dragging the viewport to
+   * 768 took the editor from 213px to 701px of content while CodeMirror went
+   * on believing the old width for as long as it was left alone, curing only
+   * on the next click or window resize.
+   *
+   * This observer has no such guard, so the cached geometry cannot survive a
+   * resize. `requestMeasure` coalesces into CodeMirror's own measure cycle, so
+   * a drag costs one measure per frame rather than one per pixel.
+   *
+   * A measure on its own is not enough, which cost a while to find: view-level
+   * extensions only recompute inside a ViewUpdate, and re-wrapping is done by
+   * the browser in CSS without the doc view being redrawn, so no update is
+   * produced. The empty transaction makes one. It carries no changes, and the
+   * update listener above reacts only to `docChanged`, so nothing is marked
+   * dirty and the undo history is untouched.
+   *
+   * @private
+   */
+  _observeContainerResize() {
+    if (typeof ResizeObserver !== 'function' || !this.container) return;
+
+    let lastWidth = -1;
+    this._resizeObserver = new ResizeObserver(() => {
+      const view = this._view;
+      if (!view) return;
+      const width = view.contentDOM.clientWidth;
+      if (width === lastWidth) return;
+      lastWidth = width;
+      view.requestMeasure();
+      view.dispatch({});
+    });
+    this._resizeObserver.observe(this.container);
+  }
+
+  /** @private @returns {boolean} */
+  _resolveIsDark() {
+    return resolveEditorDarkMode({
+      uiMode: document.body?.dataset?.uiMode ?? null,
+      resolvedTheme: themeManager.getResolvedTheme(),
+    });
   }
 
   /** @private */
@@ -464,17 +1018,139 @@ export class CodeMirrorEditor {
     return this._view ? this._view.state.doc.toString() : '';
   }
 
-  /** @param {string} value */
+  /**
+   * Replace the whole document programmatically (project load, mode switch).
+   * Not a user edit: onChange stays silent and the undo history is discarded,
+   * so Undo cannot resurrect the previously loaded project — this matches
+   * desktop OpenSCAD's behavior when opening a file.
+   * @param {string} value
+   */
   setValue(value) {
     if (!this._view) return;
+    this._suppressOnChange = true;
+    try {
+      this._view.dispatch({
+        changes: { from: 0, to: this._view.state.doc.length, insert: value },
+      });
+      this._resetHistory();
+    } finally {
+      this._suppressOnChange = false;
+    }
+  }
+
+  /**
+   * Discard undo/redo state by tearing the history field out of the
+   * configuration and putting a fresh one back. Reconfiguring in a single
+   * transaction would keep the existing field, so this needs two dispatches.
+   * @private
+   */
+  _resetHistory() {
+    if (!this._view) return;
+    this._view.dispatch({ effects: this._historyCompartment.reconfigure([]) });
     this._view.dispatch({
-      changes: { from: 0, to: this._view.state.doc.length, insert: value },
+      effects: this._historyCompartment.reconfigure(history()),
     });
   }
 
   focus() {
     if (this._view) {
       this._view.focus();
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Preferences ▸ Editor — live reconfiguration
+  //
+  // Each setter reconfigures one compartment on the running editor, so a
+  // change is visible on the document already open rather than on the next
+  // one. Values are clamped by editor-prefs before they arrive here.
+  // ---------------------------------------------------------------------------
+
+  /** @param {number} px */
+  setFontSize(px) {
+    this._editorPrefs.fontSize = px;
+    this._view?.dispatch({
+      effects: this._fontSizeCompartment.reconfigure(fontSizeTheme(px)),
+    });
+  }
+
+  /** @param {number} width Spaces per indent step. */
+  setIndentWidth(width) {
+    this._editorPrefs.indentWidth = width;
+    this._view?.dispatch({
+      effects: this._indentCompartment.reconfigure(
+        indentUnit.of(' '.repeat(width))
+      ),
+    });
+  }
+
+  /** @param {number} width Columns a literal tab character occupies. */
+  setTabWidth(width) {
+    this._editorPrefs.tabWidth = width;
+    this._view?.dispatch({
+      effects: this._tabSizeCompartment.reconfigure(
+        EditorState.tabSize.of(width)
+      ),
+    });
+  }
+
+  /** @param {boolean} on */
+  setLineWrapping(on) {
+    this._editorPrefs.lineWrapping = on;
+    this._view?.dispatch({
+      effects: this._wrapCompartment.reconfigure(
+        on ? EditorView.lineWrapping : []
+      ),
+    });
+  }
+
+  /** @param {boolean} on Hang continuation rows four columns in. */
+  setWrapIndent(on) {
+    this._editorPrefs.wrapIndent = on;
+    this._view?.dispatch({
+      effects: this._wrapIndentCompartment.reconfigure(on ? wrapIndent() : []),
+    });
+  }
+
+  /** @param {boolean} on Mark every row that continues, at the right border. */
+  setWrapArrow(on) {
+    this._editorPrefs.wrapArrow = on;
+    this._view?.dispatch({
+      effects: this._wrapArrowCompartment.reconfigure(
+        on ? wrapReturnArrows() : []
+      ),
+    });
+  }
+
+  /** @param {boolean} on Highlight the brace matching the one at the cursor. */
+  setBraceMatching(on) {
+    this._editorPrefs.braceMatching = on;
+    this._view?.dispatch({
+      effects: this._braceMatchCompartment.reconfigure(
+        on ? bracketMatching() : []
+      ),
+    });
+  }
+
+  /** @param {boolean} on */
+  setHighlightActiveLine(on) {
+    this._editorPrefs.highlightActiveLine = on;
+    this._view?.dispatch({
+      effects: this._activeLineCompartment.reconfigure(
+        on ? highlightActiveLine() : []
+      ),
+    });
+  }
+
+  /**
+   * Re-measure the editor against its current container. CodeMirror caches
+   * geometry from init time; after the panel is re-parented into a
+   * different-width dock (Classic's editor slot) the cached width paints
+   * wider than the pane until a measure runs.
+   */
+  refreshLayout() {
+    if (this._view) {
+      this._view.requestMeasure();
     }
   }
 
@@ -559,18 +1235,109 @@ export class CodeMirrorEditor {
   }
 
   /**
-   * Shim for Monaco-compatible getAction() — returns null.
-   * @returns {null}
+   * Whether performAction(actionId) can execute in this editor.
+   * Consumed by the Edit menu to disable unsupported items honestly.
+   * @param {string} actionId
+   * @returns {boolean}
    */
-  getAction() {
-    return null;
+  supportsAction(actionId) {
+    return Boolean(this._view) && actionId in EDITOR_COMMANDS;
+  }
+
+  /**
+   * Whether there is a text edit to undo. Lets the editor toolbar disable its
+   * Undo button honestly rather than offering a no-op.
+   * @returns {boolean}
+   */
+  canUndo() {
+    return Boolean(this._view) && undoDepth(this._view.state) > 0;
+  }
+
+  /**
+   * Whether there is an undone text edit to redo.
+   * @returns {boolean}
+   */
+  canRedo() {
+    return Boolean(this._view) && redoDepth(this._view.state) > 0;
+  }
+
+  /**
+   * Run a named editor command (Edit-menu / keyboard-shortcut integration).
+   * @param {string} actionId
+   * @returns {boolean} True when the command executed
+   */
+  performAction(actionId) {
+    const command = EDITOR_COMMANDS[actionId];
+    if (!command || !this._view) return false;
+    this._view.focus();
+    return this._runAndAnnounce(actionId, this._view);
+  }
+
+  /**
+   * Run a command and speak its outcome where the outcome is otherwise
+   * invisible to a screen reader — a gutter dot appearing, or a jump that
+   * looks like any other cursor move.
+   * @private
+   */
+  _runAndAnnounce(actionId, view) {
+    const ran = EDITOR_COMMANDS[actionId](view);
+
+    if (actionId === 'toggleBookmark') {
+      const line = cursorLine(view.state);
+      const on = bookmarkLines(view.state).includes(line);
+      this.announce(
+        on ? `Bookmark added, line ${line}` : `Bookmark removed, line ${line}`
+      );
+    } else if (actionId === 'nextBookmark' || actionId === 'previousBookmark') {
+      if (ran) {
+        const lines = bookmarkLines(view.state);
+        const line = cursorLine(view.state);
+        this.announce(
+          `Line ${line}, bookmark ${lines.indexOf(line) + 1} of ${lines.length}`
+        );
+      } else {
+        this.announce('No bookmarks in this file');
+      }
+    } else if (actionId === 'convertTabsToSpaces' && !ran) {
+      this.announce('No tabs to convert');
+    }
+
+    return ran;
+  }
+
+  /**
+   * Whether the selection covers any text — the Edit menu uses this to keep
+   * Use Selection for Find honest rather than silently doing nothing.
+   * @returns {boolean}
+   */
+  hasSelection() {
+    if (!this._view) return false;
+    return !this._view.state.selection.main.empty;
+  }
+
+  /**
+   * Replace the current selection (or insert at the cursor) with text.
+   * Used by the Edit-menu Paste handler.
+   * @param {string} text
+   */
+  replaceSelection(text) {
+    if (!this._view) return;
+    this._view.dispatch(this._view.state.replaceSelection(text));
+    this._view.focus();
   }
 
   dispose() {
-    if (this._darkMediaQuery && this._mediaListener) {
-      this._darkMediaQuery.removeEventListener('change', this._mediaListener);
-      this._darkMediaQuery = null;
-      this._mediaListener = null;
+    if (this._unsubscribeTheme) {
+      this._unsubscribeTheme();
+      this._unsubscribeTheme = null;
+    }
+    if (this._uiModeListener) {
+      document.removeEventListener('ui-mode-changed', this._uiModeListener);
+      this._uiModeListener = null;
+    }
+    if (this._resizeObserver) {
+      this._resizeObserver.disconnect();
+      this._resizeObserver = null;
     }
     if (this._view) {
       this._view.destroy();

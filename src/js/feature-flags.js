@@ -44,7 +44,7 @@ function cyrb53(str, seed = 0) {
 export const FLAGS = {
   expert_mode: {
     id: 'expert_mode',
-    name: 'Expert Mode',
+    name: 'Code Editor',
     description: 'Code editor with syntax highlighting for OpenSCAD',
     default: true,
     rollout: 100,
@@ -117,8 +117,22 @@ export const FLAGS = {
   },
   basic_advanced_mode: {
     id: 'basic_advanced_mode',
-    name: 'Basic/Advanced Mode',
-    description: 'Toggle between simplified and full interface layouts',
+    name: 'Interface Mode Toggle',
+    description: 'Toggle between Simplified and Standard interface layouts',
+    default: true,
+    rollout: 100,
+    userConfigurable: true,
+    killSwitch: false,
+  },
+  // C4.6: acceptance suite green (classic-mode.spec.js + console-fidelity
+  // .spec.js walk the four-pane contract), so Classic is available to all
+  // users as a View > Interface Mode option. Disable via
+  // ?flag_classic_mode=false or the settings panel.
+  classic_mode: {
+    id: 'classic_mode',
+    name: 'Classic Desktop Layout',
+    description:
+      'Enable the Classic interface mode: a desktop-OpenSCAD-style layout with display, customizer, presets, and console panes',
     default: true,
     rollout: 100,
     userConfigurable: true,
@@ -175,6 +189,11 @@ export const FLAGS = {
     killSwitch: false,
     requires: ['svg_preparer'],
   },
+  // Kept dark on purpose: this working implementation is the foundation
+  // for the Classic-mode preset contract (project = .scad + sidecar
+  // presets + assets) and the local-folder preset sidecars. Now user-
+  // configurable so it is at least reachable for testing; default stays
+  // off until that work lands.
   project_presets: {
     id: 'project_presets',
     name: 'Project-Native Presets',
@@ -184,7 +203,7 @@ export const FLAGS = {
       'and user-saved presets in the dropdown.',
     default: false,
     rollout: 0,
-    userConfigurable: false,
+    userConfigurable: true,
     killSwitch: false,
   },
   // F35 Phase A — persistent two-way sync with a folder on disk via the
@@ -202,10 +221,46 @@ export const FLAGS = {
       'support showDirectoryPicker (Firefox / Safari today). ' +
       'Phase A: connect / disconnect / persist. Phase B (auto-rerun on ' +
       'external edits) and Phase C (write-back) ship behind separate flags.',
+    // C5.1: Phase A surfaced — on by default; the UI still hides itself on
+    // browsers without showDirectoryPicker.
+    default: true,
+    rollout: 100,
+    userConfigurable: true,
+    killSwitch: false,
+  },
+  // C5.2 (Phase B): watch the connected folder for external edits and
+  // re-render automatically — Ken's edit-in-desktop-editor loop.
+  folder_sync_watch: {
+    id: 'folder_sync_watch',
+    name: 'Folder Change Watcher (Chromium only)',
+    description:
+      'When connected to a local folder, poll the project files for external ' +
+      'changes (e.g. edits saved from a desktop editor) and re-render ' +
+      'automatically. Requires Persistent Local Folder Sync.',
+    default: true,
+    rollout: 100,
+    userConfigurable: true,
+    killSwitch: false,
+    requires: ['local_folder_sync'],
+  },
+  // C5.3 (Phase C): write back into the connected folder.
+  //
+  // Dark until tested on real Chrome/Edge with the watcher active - and that
+  // test is the OWNER's to run, because a native folder picker cannot be
+  // driven by a machine. IR-5 built the paths this describes; before it, the
+  // description promised exports that had no write path at all.
+  folder_sync_writeback: {
+    id: 'folder_sync_writeback',
+    name: 'Folder Write-Back (Chromium only)',
+    description:
+      'Let Forge save files back into the connected local folder: exports and ' +
+      'companion files when you ask for them, and preset sidecars as you save ' +
+      'presets. Requires Persistent Local Folder Sync.',
     default: false,
     rollout: 0,
     userConfigurable: true,
     killSwitch: false,
+    requires: ['local_folder_sync'],
   },
 };
 

@@ -36,13 +36,23 @@ rm -rf test-results playwright-report
 
 Error: `Failed to load WASM module` or 404 errors for `.wasm` files.
 
+The WASM binary is **vendored in git**, not downloaded. Check it is there:
+
 ```bash
-npm run setup-wasm
-ls public/wasm/
-# should show: openscad.wasm, openscad.js, openscad.worker.js
+ls public/wasm/openscad-official/
+# should show: openscad.js, openscad.wasm, INTEGRITY.json
 ```
 
-If WASM download times out, check your network. The files are 15-30MB. Clear browser cache and restart the dev server.
+`openscad.wasm` is about 10 MB. If those files are missing, your checkout is
+incomplete rather than your network being slow -- check whether Git LFS or a
+partial clone is involved.
+
+`npm run setup-wasm` does **not** fetch the WASM. Despite the name it downloads
+the Liberation fonts that OpenSCAD's `text()` needs, into `public/fonts/`, with
+a SHA-256 check. Run it if `text()` renders nothing.
+
+If the binary is present and the app still fails, clear the browser cache and
+restart the dev server -- a stale service worker can hold an old response.
 
 ## Build failures
 
@@ -60,11 +70,15 @@ rm -rf node_modules/.vite
 npm run build
 ```
 
-Check Node version (requires 18+):
+Check your Node version:
 
 ```bash
 node --version
 ```
+
+`package.json` declares no `engines` range, so there is no enforced minimum.
+CI builds and tests on **Node 20**, which is the version to match if something
+works locally and fails on the board.
 
 ## Unit tests fail
 

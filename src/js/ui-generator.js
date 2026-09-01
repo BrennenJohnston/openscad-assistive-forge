@@ -4,18 +4,54 @@
  */
 
 import { formatFileSize } from './download.js';
-import { announceChange } from './announcer.js';
+import { announceChange, announceImmediate } from './announcer.js';
 import { reapplyDetailLevel } from './param-detail-controller.js';
 import { isRasterImageFile } from './file-param-resolver.js';
-import { convertPngToSvg, validateImageDimensions } from './image-import.js';
+import {
+  convertImageDataToSvg,
+  loadImageData,
+  validateImageDimensions,
+} from './image-import.js';
 import { isEnabled } from './feature-flags.js';
-import { prepareSvg, needsPreparation, analyzeSvg } from './svg-preparer.js';
-import { createSvgPrepWorkspace } from './svg-preparer-workspace.js';
+import {
+  prepareSvg,
+  needsPreparation,
+  analyzeSvg,
+  measureSvgAspect,
+  parseSvgElements,
+  classifyElements,
+  flattenLayers,
+  flattenSilhouette,
+  flattenToCompoundPath,
+  LAYER_EMIT_CAP,
+} from './svg-preparer.js';
+import {
+  buildNestingTree,
+  suggestLayers,
+  layerLimit,
+  boundsOf,
+} from './svg-nesting.js';
+import {
+  createSvgPrepWorkspace,
+  extractSvgMeta,
+} from './svg-preparer-workspace.js';
+import { checkHolePlacement } from './hole-placement.js';
+import { STENCIL_PLATE_CAP, JIG_DEFAULTS } from './stencil-limits.js';
+import { buildBridges, bridgesToPathData } from './stencil-bridges.js';
 import { svgToDataUrl, dataUrlToText } from './svg-text-encoding.js';
 import {
   loadOpenGroupIds,
   saveOpenGroupIds,
 } from './customizer-group-state.js';
+import {
+  normalizeStarterList,
+  resolveStarterParameters,
+  starterViewApplies,
+  starterAnnouncement,
+  starterHint,
+  SHOW_ALL_LABEL,
+  SHOW_STARTER_LABEL,
+} from './starter-parameters.js';
 
 // Active fileId for the Customizer pane. Set when a project is loaded
 // so subsequent group toggles (including programmatic Expand/Collapse
@@ -39,6 +75,36 @@ export function setCustomizerFileId(fileId) {
  */
 export function getCustomizerFileId() {
   return _activeCustomizerFileId;
+}
+
+// The starter subset a manifest declared, and the project it declared it for.
+// Keyed by file so it cannot survive into the next project somebody opens:
+// a starter list belongs to the design it came with. IR-9.
+let _starterDeclaration = { names: [], fileKey: null };
+
+/**
+ * Tell the Customizer which parameters this project says to show first.
+ *
+ * @param {unknown} names    `defaults.starterParameters` from a manifest
+ * @param {string|null} fileKey  The main file this list belongs to
+ */
+export function setStarterParameters(names, fileKey = null) {
+  _starterDeclaration = {
+    names: normalizeStarterList(names),
+    fileKey: typeof fileKey === 'string' && fileKey ? fileKey : null,
+  };
+}
+
+/**
+ * @returns {{names: string[], fileKey: string|null}}
+ */
+export function getStarterParameters() {
+  return { ..._starterDeclaration, names: [..._starterDeclaration.names] };
+}
+
+/** Forget any declared starter subset. */
+export function clearStarterParameters() {
+  _starterDeclaration = { names: [], fileKey: null };
 }
 
 /**
@@ -184,7 +250,7 @@ export function clearGalleryOptions() {
  * Get stored SVG preparation metadata for a given filename.
  * Returns the metadata object or null if none is stored.
  * @param {string} fileName
- * @returns {{rawSvg: string, preparedSvg: string|null, prepOverrides: string[]|null, prepOffsets: number[]|null, prepAnalysis: Object|null}|null}
+ * @returns {{rawSvg: string, preparedSvg: string|null, prepOverrides: string[]|null, prepOffsets: number[]|null, prepDeleted: number[]|null, prepLayers: number[]|null, prepAnalysis: Object|null}|null}
  */
 export function getSvgPrepMetadata(fileName) {
   return svgPrepMetadataByFile[fileName] || null;
@@ -194,7 +260,7 @@ export function getSvgPrepMetadata(fileName) {
  * Store SVG preparation metadata for a given filename.
  * Pass null to clear metadata for the file.
  * @param {string} fileName
- * @param {{rawSvg: string, preparedSvg: string|null, prepOverrides: string[]|null, prepOffsets: number[]|null}|null} metadata
+ * @param {{rawSvg: string, preparedSvg: string|null, prepOverrides: string[]|null, prepOffsets: number[]|null, prepDeleted: number[]|null, prepLayers: number[]|null}|null} metadata
  */
 export function setSvgPrepMetadata(fileName, metadata) {
   if (metadata) {
@@ -901,6 +967,16 @@ export function initParameterSearch() {
         `.param-group[data-group-id="${groupId}"]`
       );
       if (groupElement) {
+        // IR-9: the jump list offers every group, including ones the starter
+        // wall is hiding. Jumping to one has to bring it back, or the jump
+        // lands on nothing.
+        if (groupElement.classList.contains('starter-empty')) {
+          setStarterViewExpanded(
+            document.getElementById('parametersContainer'),
+            true,
+            { announce: false }
+          );
+        }
         // Expand the group if collapsed
         groupElement.open = true;
         // Scroll into view
@@ -934,6 +1010,17 @@ export function initParameterSearch() {
  * @param {string} query - Search query (lowercase)
  */
 function filterParameters(query) {
+  // IR-9: a search that cannot find a parameter the design HAS is a lie, and
+  // the starter wall would make it one. Searching drops the wall and says so.
+  // It stays down afterwards: raising it again under someone who just went
+  // looking for something would be worse than leaving it open.
+  if (query) {
+    const container = document.getElementById('parametersContainer');
+    if (isStarterViewActive(container)) {
+      setStarterViewExpanded(container, true, { announce: true });
+    }
+  }
+
   const paramControls = document.querySelectorAll(
     '.param-control[data-param-name]'
   );
@@ -1859,7 +1946,264 @@ function createSvgGallery(options, param, onSelect) {
  * @param {Function} onChange - Change handler
  * @returns {HTMLElement} Control element
  */
-function createFileControl(param, onChange) {
+/**
+ * True when a parameter is the auto-measured aspect companion of a file
+ * parameter: named "<file_param>_aspect" where <file_param> exists and is a
+ * file control. Companions carry the uploaded design's width/height ratio
+ * so the model can contain-fit it; they are set by the file control, never
+ * by hand, and are hidden from the generated UI.
+ *
+ * @param {string} name - Parameter name to test
+ * @param {Object} parameters - All extracted parameters, keyed by name
+ * @returns {boolean}
+ */
+export function isAspectCompanionParam(name, parameters) {
+  if (!name.endsWith('_aspect')) return false;
+  const base = parameters[name.slice(0, -'_aspect'.length)];
+  return !!base && base.uiType === 'file';
+}
+
+/**
+ * The per-layer companions a layered tile declares (DP-7).
+ *
+ * A file parameter named `design_file` looks for `design_layer_1`,
+ * `design_layer_2`, `design_layer_3` and their `_aspect` companions - the
+ * names the plan fixed. A tile that declares none is not a layered tile and
+ * nothing below this ever runs for it.
+ *
+ * @param {Object} param - The file parameter
+ * @param {Object} parameters - All extracted parameters, keyed by name
+ * @returns {Array<{file: Object, aspect: Object|null, layer: number}>}
+ */
+/**
+ * The stencil plates a layered tile declares (DP-12).
+ *
+ * A file parameter looks for `stencil_plate_1..3` beside it. A tile that
+ * declares none is not a layered stencil and nothing below this runs for it.
+ *
+ * @param {Object} parameters - All extracted parameters, keyed by name
+ * @returns {Array<{file: Object, plate: number}>}
+ */
+export function findLaserParam(parameters) {
+  const p = parameters && parameters.stencil_laser_file;
+  return p && p.uiType === 'file' ? p : null;
+}
+
+/**
+ * Everything that turns a drawing into stencil plates, loaded on demand.
+ *
+ * ★ IT IS A LAZY CHUNK BECAUSE IT DOES NOT FIT. The colour model, the ring
+ * geometry, the plate builder and the jig come to a little over 4 KB gzipped,
+ * and the core bundle had 704 bytes left. MEASURED: in the core, 516,052 B
+ * against a 512,000 budget; with the colour model alone split out, 513,070,
+ * still over; with the whole engine split out, 511,384 and passing. Most
+ * people never open a stencil, so this is where it belongs anyway.
+ *
+ * The load starts as soon as a tile with plate parameters builds its
+ * controls, which is seconds before anybody can choose a file. If a drawing
+ * somehow arrives first, the plates are emitted again the moment the chunk
+ * lands rather than half-emitted from a module that is not there.
+ */
+let stencilEngine = null;
+let stencilEnginePromise = null;
+
+function loadStencilEngine() {
+  if (!stencilEnginePromise) {
+    stencilEnginePromise = Promise.all([
+      import('./stencil-plates.js'),
+      import('./stencil-colours.js'),
+      import('./stencil-jig.js'),
+    ])
+      .then(([plates, colours, jig]) => {
+        stencilEngine = { ...plates, ...colours, ...jig };
+        return stencilEngine;
+      })
+      .catch((err) => {
+        // Not swallowed: without this chunk the layered mode cannot work, and
+        // saying nothing would leave a person waiting for plates that are
+        // never coming.
+        console.error('The stencil engine could not be loaded:', err);
+        stencilEnginePromise = null;
+        throw err;
+      });
+  }
+  return stencilEnginePromise;
+}
+
+export function findPlateParams(parameters) {
+  if (!parameters) return [];
+  const out = [];
+  // Up to STENCIL_PLATE_CAP, which is NOT the charm engine's LAYER_EMIT_CAP:
+  // one is how many paint colours a stencil may have (eight, the owner's
+  // number) and the other is how many relief passes a tiered charm builds
+  // (three). Walking the wrong one capped a six-colour cat at three plates.
+  for (let n = 1; n <= STENCIL_PLATE_CAP; n++) {
+    const file = parameters[`stencil_plate_${n}`];
+    if (!file || file.uiType !== 'file') break;
+    out.push({ file, plate: n });
+  }
+  return out;
+}
+
+export function findSilhouetteParams(param, parameters) {
+  if (!param || !parameters) return null;
+  const base = param.name.endsWith('_file')
+    ? param.name.slice(0, -'_file'.length)
+    : param.name;
+  const file = parameters[`${base}_silhouette`];
+  if (!file || file.uiType !== 'file') return null;
+  return { file, aspect: parameters[`${base}_silhouette_aspect`] || null };
+}
+
+export function findLayerParams(param, parameters) {
+  if (!param || !parameters) return [];
+  const base = param.name.endsWith('_file')
+    ? param.name.slice(0, -'_file'.length)
+    : param.name;
+  const out = [];
+  for (let n = 1; n <= LAYER_EMIT_CAP; n++) {
+    const file = parameters[`${base}_layer_${n}`];
+    if (!file || file.uiType !== 'file') break;
+    out.push({
+      file,
+      aspect: parameters[`${base}_layer_${n}_aspect`] || null,
+      layer: n,
+    });
+  }
+  return out;
+}
+
+/**
+ * Whether a parameter is a per-layer companion the app writes for itself.
+ *
+ * Like the aspect companions, these get a value but no control: they are
+ * derived from the design and the Layer column, never typed.
+ *
+ * @param {string} name - Parameter name to test
+ * @param {Object} parameters - All extracted parameters, keyed by name
+ * @returns {boolean}
+ */
+export function isLayerCompanionParam(name, parameters) {
+  if (/^stencil_plate_\d+$/.test(name)) return true;
+  const m = /^(.*)_(?:layer_\d+|silhouette)(_aspect)?$/.exec(name);
+  if (!m) return false;
+  const base = parameters[`${m[1]}_file`] || parameters[m[1]];
+  return !!base && base.uiType === 'file';
+}
+
+/**
+ * A file name with its extension removed, for naming layer companions after
+ * the design they were cut from.
+ *
+ * @param {string} name
+ * @returns {string}
+ */
+function layerFileStem(name) {
+  const safe = String(name || 'design');
+  const dot = safe.lastIndexOf('.');
+  return dot > 0 ? safe.slice(0, dot) : safe;
+}
+
+/**
+ * Where the hole warning is shown, if this model can have one (DP-11).
+ *
+ * One region for the whole model rather than one per control: the warning is
+ * about a PLACE, and the three numbers that decide it (across, up, and the
+ * hole's size) each move it. Announcing from three different controls would
+ * say the same sentence three times.
+ */
+let holeWarningEl = null;
+let lastHoleWarning = null;
+
+export function resetHolePlacementRegion() {
+  holeWarningEl = null;
+  lastHoleWarning = null;
+}
+
+function ensureHoleWarningRegion(container) {
+  if (holeWarningEl && holeWarningEl.isConnected) return holeWarningEl;
+  holeWarningEl = document.createElement('p');
+  holeWarningEl.className = 'hole-placement-warning';
+  holeWarningEl.setAttribute('role', 'status');
+  holeWarningEl.setAttribute('aria-live', 'polite');
+  holeWarningEl.hidden = true;
+  container.prepend(holeWarningEl);
+  return holeWarningEl;
+}
+
+/**
+ * Check the hole against the design's outline and say so, once.
+ *
+ * NOTHING IS MOVED and nothing is blocked: the person is told, with the
+ * numbers, and decides. Silently relocating a ring on a pendant shaped like
+ * their own drawing would be a change they never made and never saw.
+ *
+ * @param {Object} values - Current parameter values
+ * @param {Object} parameters - The model's parameter table
+ */
+export function reportHolePlacement(values, parameters) {
+  if (!holeWarningEl || !values || !parameters) return;
+  const outlineParam = Object.keys(parameters).find((n) =>
+    n.endsWith('_silhouette')
+  );
+  if (!outlineParam) return;
+
+  const outline = values[outlineParam];
+  const svgText =
+    outline && typeof outline === 'object' && outline.data
+      ? dataUrlToText(outline.data)
+      : null;
+
+  const result = checkHolePlacement({
+    outlineSvg: svgText,
+    widthMm: Number(values.charm_width) || 0,
+    holeDiameterMm: Number(values.hole_diameter) || 0,
+    offsetXMm: Number(values.attachment_x) || 0,
+    offsetYMm: Number(values.attachment_y) || 0,
+  });
+
+  const attached = values.attachment_type && values.attachment_type !== 'none';
+  const message = attached && !result.ok ? result.message : null;
+  if (message === lastHoleWarning) return;
+  lastHoleWarning = message;
+
+  holeWarningEl.textContent = message || '';
+  holeWarningEl.hidden = !message;
+  if (message) announceChange(message);
+}
+
+/**
+ * The bridge warning: a shape that will fall out when the sheet is cut.
+ *
+ * NOT DISMISSIBLE, on purpose. The failure is invisible until the material is
+ * cut and the piece is on the floor, so there is no moment at which hiding it
+ * helps. It shares the one warning region, because a model is either a pendant
+ * or a stencil and never both.
+ *
+ * @param {string|null} message
+ */
+export function reportBridgeWarning(message) {
+  if (!holeWarningEl) return;
+  if (message === lastHoleWarning) return;
+  lastHoleWarning = message;
+  holeWarningEl.textContent = message || '';
+  holeWarningEl.hidden = !message;
+  if (message) announceChange(message);
+}
+
+function createFileControl(
+  param,
+  onChange,
+  aspectParam = null,
+  layerParams = [],
+  silhouetteParams = null,
+  plateParams = [],
+  laserParam = null
+) {
+  // Start the stencil engine on its way now. A person needs seconds at least
+  // to choose a drawing, and by then the chunk is here.
+  if (plateParams.length > 0) loadStencilEngine().catch(() => {});
+
   const container = document.createElement('div');
   container.className = 'param-control param-control--file';
 
@@ -1897,7 +2241,16 @@ function createFileControl(param, onChange) {
 
   const fileInfo = document.createElement('div');
   fileInfo.className = 'file-info';
-  fileInfo.textContent = param.default || 'No file selected';
+  // A default can be a string or a file OBJECT (the shape a saved plate
+  // value travels in). The object's name is the honest text; anything
+  // else printed "[object Object]" to the person and the screen reader.
+  const defaultFileLabel =
+    typeof param.default === 'string'
+      ? param.default
+      : typeof param.default?.name === 'string'
+        ? param.default.name
+        : '';
+  fileInfo.textContent = defaultFileLabel || 'No file selected';
   fileInfo.setAttribute('role', 'status');
   fileInfo.setAttribute('aria-live', 'polite');
 
@@ -1925,6 +2278,326 @@ function createFileControl(param, onChange) {
 
   const acceptsSvg = param.acceptedExtensions?.includes('svg');
 
+  /**
+   * Every change to this parameter's file value goes through here so the
+   * aspect companion (when the model declares one) always travels in the
+   * SAME state update: the design and its measured width/height ratio can
+   * never be seen apart by the renderer or by undo.
+   * @param {Object|null} value - File object {name, data, ...} or null
+   */
+  /**
+   * The per-layer companion values for one design (DP-7).
+   *
+   * Runs on the RAW svg, because by the time a value reaches emitFileValue it
+   * is a single compound path and the element identities the layers are cut
+   * from are gone.
+   *
+   * Every layer param the model declares gets a value on every emit, INCLUDING
+   * null when there is nothing to build at that depth. Leaving a stale layer
+   * file behind would print the previous design's second pass on top of this
+   * one.
+   *
+   * @param {Object|null} value - The file value being emitted
+   * @param {Array<number>|null} assignments - The editor's Layer column, by
+   *   original index; null means use the depth suggestion
+   * @returns {Object} Parameter names to values, for the SAME state update
+   */
+  function buildLayerCompanions(value, assignments) {
+    const out = {};
+    for (const { file, aspect } of layerParams) {
+      out[file.name] = null;
+      if (aspect) out[aspect.name] = aspect.default ?? 1;
+    }
+    if (!value || !currentRawSvg) return out;
+
+    let svgs = [];
+    try {
+      const elements = classifyElements(parseSvgElements(currentRawSvg));
+      const tree = buildNestingTree(elements);
+      const limit = layerLimit(tree);
+      const layers = Array.isArray(assignments)
+        ? elements.map((_, i) => assignments[i] || 1)
+        : suggestLayers(tree).map((v) => v || 1);
+      const meta = extractSvgMeta(currentRawSvg);
+      svgs = flattenLayers(elements, layers, limit, meta);
+    } catch (err) {
+      // A design the layer analysis cannot read still uploads: the ordinary
+      // single-file path is unaffected, and the layer params stay null rather
+      // than carrying half a stack.
+      console.warn('Per-layer emission failed:', err);
+      return out;
+    }
+
+    layerParams.forEach(({ file, aspect, layer }) => {
+      const svg = svgs[layer - 1];
+      if (!svg) return;
+      const name = `${layerFileStem(value.name)}_layer_${layer}.svg`;
+      out[file.name] = {
+        name,
+        data: svgToDataUrl(svg),
+        type: 'image/svg+xml',
+      };
+      if (aspect) {
+        out[aspect.name] = measureSvgAspect(svg) ?? aspect.default ?? 1;
+      }
+    });
+    return out;
+  }
+
+  /**
+   * The design's outline, for a model that can take its shape from it (DP-11).
+   *
+   * Cut from the RAW svg for the same reason the layers are: by the time a
+   * value reaches emitFileValue it is one compound path. And from the raw
+   * GEOMETRY specifically - an outline drawn as a stroke would otherwise come
+   * back as a thin band and the pendant would print as a hollow ring.
+   *
+   * @param {Object|null} value - The file value being emitted
+   * @returns {Object} Parameter names to values, for the SAME state update
+   */
+  function buildSilhouetteCompanion(value) {
+    const { file, aspect } = silhouetteParams;
+    const out = { [file.name]: null };
+    if (aspect) out[aspect.name] = aspect.default ?? 1;
+    if (!value || !currentRawSvg) return out;
+    try {
+      const raw = parseSvgElements(currentRawSvg);
+      const roles = classifyElements(raw).map((el) => el.role);
+      const svg = flattenSilhouette(raw, roles, extractSvgMeta(currentRawSvg));
+      if (!svg) return out;
+      out[file.name] = {
+        name: `${layerFileStem(value.name)}_outline.svg`,
+        data: svgToDataUrl(svg),
+        type: 'image/svg+xml',
+      };
+      if (aspect)
+        out[aspect.name] = measureSvgAspect(svg) ?? aspect.default ?? 1;
+    } catch (err) {
+      // A design whose outline cannot be read still uploads as an ordinary
+      // design; only the shape-from-design option is unavailable.
+      console.warn('Silhouette emission failed:', err);
+    }
+    return out;
+  }
+
+  /**
+   * The stencil plates, for a tile that builds them (DP-12, DP-17).
+   *
+   * A CONTRACT with public/examples/stencil-maker/stencil_maker.scad: the
+   * plate size is read from `plate_width`, `plate_height` and `margin`, and
+   * the jig from `registration` and its five numbers, because the app writes
+   * plates that are already mm-true and the model is a dumb extruder. Change
+   * those names in the model and change them here.
+   *
+   * ★ A PLATE IS A COLOUR NOW, not a nesting depth (DP-16). The regions of the
+   * drawing are found, given colours, put in a paint order, and each plate
+   * cuts what its rule says. Until the editor exists, a drawing with no
+   * colours of its own gets ONE colour - the base coat - and therefore one
+   * plate cutting the whole silhouette. That is the honest answer to "what
+   * colours does this line drawing have", and it is an answer a person changes
+   * by painting regions rather than one the app guesses from nesting depth.
+   *
+   * @param {Object|null} value - The design being emitted
+   * @param {Object} values - Current parameter values, for the plate size
+   * @returns {Object} Parameter names to values, for the SAME state update
+   */
+  function buildPlateCompanions(value, values) {
+    const out = {};
+    for (const { file } of plateParams) out[file.name] = null;
+    if (laserParam) out[laserParam.name] = null;
+    if (!value || !currentRawSvg) return out;
+
+    if (!stencilEngine) {
+      // The chunk is still on its way. Emit nothing rather than half of it,
+      // and do the whole emission again when it lands, so a plate is never in
+      // a different state update from the design it was cut from (D-108).
+      loadStencilEngine().then(() => {
+        if (currentRawSvg) emitFileValue(value);
+      });
+      return out;
+    }
+    const {
+      buildStencilPlate,
+      buildLaserSheet,
+      fitRingsToPlate,
+      buildRegions,
+      paletteFromFills,
+      autoAssign,
+      defaultOrder,
+      platesFor,
+      jigFits,
+    } = stencilEngine;
+
+    try {
+      const els = classifyElements(parseSvgElements(currentRawSvg));
+      const meta = extractSvgMeta(currentRawSvg);
+
+      const plateW = Number(values.plate_width) || 200;
+      const plateH = Number(values.plate_height) || 200;
+      const marginMm = Number(values.margin) || 15;
+      const scalePercent = Number(values.design_scale) || 100;
+      const registration = String(values.registration || 'crosses');
+      const wantPegs = registration === 'pegs' || registration === 'both';
+      const wantCrosses =
+        values.marks !== 'no' &&
+        (registration === 'crosses' || registration === 'both');
+      const askedPegs = wantPegs
+        ? {
+            pegDiameter:
+              Number(values.peg_diameter) || JIG_DEFAULTS.pegDiameter,
+            keyWidth: Number(values.key_width) || JIG_DEFAULTS.keyWidth,
+            keyDepth: Number(values.key_depth) || JIG_DEFAULTS.keyDepth,
+            featureInset:
+              Number(values.feature_inset) || JIG_DEFAULTS.featureInset,
+            holeClearance:
+              values.hole_clearance === undefined
+                ? JIG_DEFAULTS.holeClearance
+                : Number(values.hole_clearance),
+          }
+        : null;
+      // A jig that would break the plate edge or reach into the design is not
+      // drawn at all: half a registration hole is worse than none. The model
+      // asserts the same thing, so the two cannot disagree about it.
+      const jigOk = askedPegs
+        ? jigFits({ plateW, plateH, marginMm, ...askedPegs })
+        : null;
+      if (jigOk && !jigOk.ok) console.warn('Stencil jig:', jigOk.reason);
+      const pegs = jigOk && jigOk.ok ? askedPegs : null;
+
+      const { regions, silhouette, lineMode } = buildRegions(els);
+      // The person's plan when they have applied one, the automatic first
+      // pass otherwise. Same regions, same keys, either way.
+      const planned = currentPlan
+        ? stencilEngine.applySavedPlan(currentPlan, regions)
+        : null;
+      const palette = planned?.palette || paletteFromFills(regions);
+      const assignment = planned?.assignment || autoAssign(regions, palette);
+      const order = (
+        planned?.order || defaultOrder(regions, assignment, palette)
+      ).slice(0, STENCIL_PLATE_CAP);
+      const plan = {
+        palette,
+        order,
+        assignment,
+        rule: planned?.rule || 'stacked',
+        lineMode,
+      };
+      const cuts = platesFor(plan, regions, silhouette);
+      const names = new Map(palette.map((c) => [c.id, c.name]));
+
+      // ONE content box for every plate and for the laser sheet, so the
+      // colours land on each other, and ONE fit from it onto the plate. That
+      // is the whole of D-122, said in two lines.
+      const contentBox = boundsOf(
+        [...(silhouette || []), ...cuts.flatMap((c) => c.rings)].flat()
+      );
+      if (!contentBox) return out;
+      const plateSpec = { plateW, plateH, marginMm, scalePercent };
+
+      if (laserParam) {
+        const whole = flattenToCompoundPath(els, meta);
+        const wholeD = whole ? (/ d="([^"]*)"/.exec(whole)?.[1] ?? null) : null;
+        let ribD = '';
+        let warning = null;
+        if (values.bridges !== 'no') {
+          const b = buildBridges(els, buildNestingTree(els), {
+            count: Number(values.bridge_count) || 2,
+            widthMm: Number(values.bridge_width) || undefined,
+          });
+          ribD = bridgesToPathData(b.rects);
+          warning = b.message;
+        }
+        const sheet = buildLaserSheet({
+          cutPathData: wholeD,
+          // The whole-design flatten and the bridges are both in the design's
+          // own units, so they take the same move onto the shared box that
+          // the plates take.
+          cutTransform: {
+            scale: 1,
+            dx: -contentBox.minX,
+            dy: -contentBox.minY,
+          },
+          bridgePathData: ribD,
+          canvasSpan: contentBox.maxX - contentBox.minX,
+          canvasHeight: contentBox.maxY - contentBox.minY,
+          plateW,
+          plateH,
+          marginMm,
+          scalePercent,
+          marks: wantCrosses,
+        });
+        out[laserParam.name] = {
+          name: `${layerFileStem(value.name)}_laser.svg`,
+          data: svgToDataUrl(sheet.svg),
+          type: 'image/svg+xml',
+        };
+        reportBridgeWarning(warning);
+      }
+
+      plateParams.forEach(({ file, plate }) => {
+        const cut = cuts[plate - 1];
+        if (!cut) return;
+        const { svg } = buildStencilPlate({
+          rings: fitRingsToPlate(cut.rings, contentBox, plateSpec),
+          plateW,
+          plateH,
+          marginMm,
+          scalePercent,
+          marks: wantCrosses,
+          pegs,
+          layer: plate,
+          layerCount: cuts.length,
+          colourName: names.get(cut.colourId) || null,
+        });
+        out[file.name] = {
+          name: `${layerFileStem(value.name)}_plate_${plate}.svg`,
+          data: svgToDataUrl(svg),
+          type: 'image/svg+xml',
+        };
+      });
+    } catch (err) {
+      // A design the plate builder cannot read still uploads as an ordinary
+      // single-sheet stencil; only the layered mode is unavailable.
+      console.warn('Stencil plate emission failed:', err);
+    }
+    return out;
+  }
+
+  function emitFileValue(value, assignments = null) {
+    let extra = null;
+    if (aspectParam) {
+      let aspect = null;
+      const isSvgValue =
+        value &&
+        typeof value === 'object' &&
+        value.data &&
+        (value.type === 'image/svg+xml' ||
+          (value.name || '').toLowerCase().endsWith('.svg'));
+      if (isSvgValue) {
+        aspect = measureSvgAspect(dataUrlToText(value.data));
+      }
+      // Cleared or unmeasurable: back to the declared default so the
+      // model's fallback stays deterministic.
+      extra = { [aspectParam.name]: aspect ?? aspectParam.default ?? 1 };
+    }
+    // D-108's law generalized: every layer file and every layer aspect rides
+    // in the SAME state update as the design itself, so the renderer and undo
+    // can never see a stack half-changed.
+    if (layerParams.length > 0) {
+      extra = { ...(extra || {}), ...buildLayerCompanions(value, assignments) };
+    }
+    if (silhouetteParams) {
+      extra = { ...(extra || {}), ...buildSilhouetteCompanion(value) };
+    }
+    if (plateParams.length > 0) {
+      extra = {
+        ...(extra || {}),
+        ...buildPlateCompanions(value, currentParameterValues),
+      };
+    }
+    onChange(param.name, value, extra);
+  }
+
   // ── SVG analysis status card ───────────────────────────────────────────
   const statusCard = document.createElement('div');
   statusCard.className = 'svg-prep-status';
@@ -1932,32 +2605,133 @@ function createFileControl(param, onChange) {
   statusCard.setAttribute('role', 'status');
   statusCard.setAttribute('aria-live', 'polite');
 
-  // ── Inline workspace for SVG preparation ───────────────────────────────
+  // ── Ink controls, for a picture that had to be traced ──────────────────
+  // Built only when a raster file arrives, and kept with its pixels so a mode
+  // change re-reads the same picture instead of the file.
+  const inkControlsContainer = document.createElement('div');
+  inkControlsContainer.className = 'ink-controls-container';
+  inkControlsContainer.hidden = true;
+  let inkControls = null;
+  let inkSourceImageData = null;
+  let inkSourceFileName = null;
+  let inkRetraceTimer = null;
+
+  // ── The drawing editor (DP-19) ─────────────────────────────────────────
+  // It lives in the PREVIEW AREA now, not in a block inside this control. The
+  // container below survives for the case where there is no preview area to
+  // take - a unit test mounting this generator on its own - so the editing
+  // still works and nothing has to know which it got.
   const workspaceContainer = document.createElement('div');
   workspaceContainer.className = 'svg-prep-workspace-container';
 
-  const workspace = acceptsSvg
-    ? createSvgPrepWorkspace(workspaceContainer)
-    : null;
+  let workspace = null;
+  // The colour plan the person applied in the editor (stencil purpose), as
+  // `serialisePlan` wrote it. Session only until DP-20 saves it with the
+  // project; null means the plates follow the automatic first pass.
+  let currentPlan = null;
+
+  /**
+   * The editor, built on first use. The surface and everything it pulls in
+   * is a lazy chunk: a person who never opens it never downloads it.
+   */
+  async function getEditor() {
+    if (!acceptsSvg) return null;
+    // The preview rebuilds its container when it re-initialises, and an
+    // editor built inside the old one is a tree nothing is attached to.
+    if (workspace && workspace._root && !workspace._root.isConnected) {
+      workspace.destroy();
+      workspace = null;
+    }
+    if (workspace) return workspace;
+    const surfaceEl = document.getElementById('drawingEditorSurface');
+    if (surfaceEl) {
+      const { createDrawingEditor } =
+        await import('./drawing-editor/surface.js');
+      // Two uploads in quick succession can both be waiting on the chunk.
+      if (workspace) return workspace;
+      workspace = createDrawingEditor({
+        surfaceEl,
+        announce: announceChange,
+        // The preview manager lives in main.js and this module does not
+        // reach for it: the surface says it is opening and whoever owns the
+        // preview decides what that means for the canvas.
+        onOpen: () =>
+          window.dispatchEvent(new CustomEvent('drawing-editor:open')),
+        onClose: () =>
+          window.dispatchEvent(new CustomEvent('drawing-editor:close')),
+      });
+    } else {
+      workspace = createSvgPrepWorkspace(workspaceContainer);
+    }
+    return workspace;
+  }
+
+  /** What the editor needs to reopen the current drawing as it was left. */
+  function editorOptions(extra = {}) {
+    const storedMeta = currentFileName
+      ? getSvgPrepMetadata(currentFileName)
+      : null;
+    return {
+      purpose: plateParams.length > 0 ? 'stencil' : 'relief',
+      onApply: handleEditorApply,
+      onKeepOriginal: handleEditorKeep,
+      sourceName: currentFileName,
+      initialOverrides: storedMeta?.prepOverrides || null,
+      initialOffsets: storedMeta?.prepOffsets || null,
+      // DP-4: restored BEFORE the roles above, because the editor reopens on
+      // the raw SVG and re-analyses it - so everything saved is expressed in
+      // the ORIGINAL element indices, the only numbering a delete leaves
+      // meaningful. Absent in older saved projects, which is exactly right:
+      // nothing was deleted then.
+      initialDeleted: storedMeta?.prepDeleted || null,
+      // DP-7. The column exists only for a tile that declares layer params.
+      layersEnabled: layerParams.length > 0,
+      initialLayers: storedMeta?.prepLayers || null,
+      // DP-20. The colour plan a person applied, keyed by region (a property
+      // of the shape) so it survives the regions being found again. Absent
+      // in older saves and in a drawing nobody has coloured yet, which means
+      // what it always did: the automatic first pass.
+      initialPlan: currentPlan || storedMeta?.prepPlan || null,
+      ...extra,
+    };
+  }
+
+  /** Open the editor on the current drawing; the surface says so itself. */
+  function openEditor(extra = {}) {
+    const svg = currentRawSvg;
+    const analysis = currentSvgAnalysis;
+    if (!svg || !analysis) return Promise.resolve(false);
+    return getEditor().then((editor) => {
+      // The drawing may have been replaced while the chunk was coming.
+      if (!editor || currentRawSvg !== svg) return false;
+      editor.open(svg, analysis, editorOptions(extra));
+      return true;
+    });
+  }
+
+  /**
+   * Does the drawing bring colours of its own? Two distinct fills at least;
+   * a line drawing is all black or all unfilled and brings none.
+   */
+  function hasOwnColours(analysis) {
+    const fills = new Set();
+    for (const el of analysis?.elements || []) {
+      const hex = (el.fill || '').trim().toLowerCase();
+      if (/^#[0-9a-f]{3,8}$/.test(hex)) fills.add(hex);
+    }
+    return fills.size >= 2;
+  }
 
   function createStatusEditButton() {
     const editBtn = document.createElement('button');
     editBtn.type = 'button';
     editBtn.className = 'svg-prep-edit-btn btn btn-ghost';
-    editBtn.textContent = 'Edit';
-    editBtn.setAttribute('aria-label', 'Open SVG preparation editor');
+    // STRINGS: owner review pending (DP-R2 text pack). "Edit" did not say what
+    // it opened, and on a stencil tile what it opens is the whole task.
+    editBtn.textContent = 'Open the drawing editor';
+    editBtn.setAttribute('aria-label', 'Open the drawing editor');
     editBtn.addEventListener('click', () => {
-      if (!currentRawSvg || !workspace || !currentSvgAnalysis) return;
-      const storedMeta = currentFileName
-        ? getSvgPrepMetadata(currentFileName)
-        : null;
-      workspace.open(currentRawSvg, currentSvgAnalysis, {
-        onApply: handleEditorApply,
-        onKeepOriginal: handleEditorKeep,
-        initialOverrides: storedMeta?.prepOverrides || null,
-        initialOffsets: storedMeta?.prepOffsets || null,
-      });
-      announceChange('SVG preparation editor opened');
+      openEditor();
     });
     return editBtn;
   }
@@ -1969,10 +2743,18 @@ function createFileControl(param, onChange) {
     const count = analysis.elements.length;
 
     if (analysis.recommendation === 'pass_through') {
+      // ★ D-124. "Using original, OpenSCAD merges these automatically" is
+      // true for a charm, where a merge is the whole answer, and it is the
+      // wrong sentence entirely for a stencil, where merging every shape into
+      // one is how the owner's cat came out as a single silhouette hole. On a
+      // tile that makes plates, the same drawing gets a sentence that says
+      // there is something to decide and a way to go and decide it.
       badge.textContent =
-        count > 1
-          ? `Using original (${count} shapes) \u2014 OpenSCAD merges these automatically`
-          : 'SVG Ready';
+        plateParams.length > 0
+          ? `${count} shapes, no colours yet. Open the editor to say what each one gets.`
+          : count > 1
+            ? `Using original (${count} shapes) \u2014 OpenSCAD merges these automatically`
+            : 'SVG Ready';
       badge.dataset.level = 'ready';
       statusCard.appendChild(badge);
       statusCard.appendChild(createStatusEditButton());
@@ -2025,18 +2807,50 @@ function createFileControl(param, onChange) {
       });
       statusCard.appendChild(ul);
     }
+
+    // The Design card's summary line: what the plates will be, once a plan
+    // has been applied. A colour can be painted twice, so the two counts are
+    // not the same number.
+    if (currentPlan) {
+      const summary = document.createElement('p');
+      summary.className = 'svg-prep-status-plan';
+      const colours = currentPlan.palette.length;
+      const plates = currentPlan.order.length;
+      // STRINGS: owner review pending (DP-R2 text pack).
+      summary.textContent =
+        `${colours} ${colours === 1 ? 'colour' : 'colours'}, ` +
+        `${plates} ${plates === 1 ? 'plate' : 'plates'}.`;
+      statusCard.appendChild(summary);
+    }
   }
 
   function handleEditorApply(result) {
     if (!result) return;
+    // The stencil purpose's colour plan rides with the drawing, so the
+    // plates that come out follow what the person said and not the automatic
+    // first pass. Null for a relief tile, which has no plan.
+    currentPlan =
+      workspace && typeof workspace.getPlan === 'function'
+        ? workspace.getPlan()
+        : null;
+    if (currentSvgAnalysis) updateStatusCard(currentSvgAnalysis);
     const overrides = workspace ? workspace.getRoleOverrides() : null;
     const offsetOverrides = workspace ? workspace.getOffsetOverrides() : null;
+    const deleted = workspace ? workspace.getDeletedIndices() : null;
+    // DP-7. The Layer column travels with the roles and offsets, in the same
+    // ORIGINAL-index numbering, so reopening the design finds the layers the
+    // person set rather than re-suggesting over the top of them.
+    const layerResult = workspace ? workspace.getLayerAssignments() : null;
+    const prepLayers = layerResult?.limit ? layerResult.layers : null;
     if (currentFileName) {
       setSvgPrepMetadata(currentFileName, {
         rawSvg: currentRawSvg,
         preparedSvg: result,
         prepOverrides: overrides,
         prepOffsets: offsetOverrides,
+        prepDeleted: deleted,
+        prepLayers,
+        prepPlan: currentPlan,
       });
     }
     const svgDataUrl = svgToDataUrl(result);
@@ -2046,19 +2860,24 @@ function createFileControl(param, onChange) {
       type: 'image/svg+xml',
       data: svgDataUrl,
     };
-    onChange(param.name, fileObj);
+    emitFileValue(fileObj, prepLayers);
     if (fileUploadListener) fileUploadListener(param.name, fileObj);
     announceChange('SVG prepared for OpenSCAD');
   }
 
   function handleEditorKeep() {
     if (!currentRawSvg) return;
+    currentPlan = null;
+    if (currentSvgAnalysis) updateStatusCard(currentSvgAnalysis);
     if (currentFileName) {
       setSvgPrepMetadata(currentFileName, {
         rawSvg: currentRawSvg,
         preparedSvg: null,
         prepOverrides: null,
         prepOffsets: null,
+        prepDeleted: null,
+        prepLayers: null,
+        prepPlan: null,
       });
     }
     const svgDataUrl = svgToDataUrl(currentRawSvg);
@@ -2068,7 +2887,7 @@ function createFileControl(param, onChange) {
       type: 'image/svg+xml',
       data: svgDataUrl,
     };
-    onChange(param.name, fileObj);
+    emitFileValue(fileObj);
     if (fileUploadListener) fileUploadListener(param.name, fileObj);
     announceChange('Keeping original SVG');
   }
@@ -2080,8 +2899,109 @@ function createFileControl(param, onChange) {
    * @param {string} rawSvgText
    * @returns {string} SVG text to use (prepared or original)
    */
+  /**
+   * Build the ink-mode panel, once, on the first picture that needs it.
+   * Lazily imported: a project with no image parameter never loads it.
+   */
+  async function ensureInkControls() {
+    if (inkControls) {
+      inkControlsContainer.hidden = false;
+      return inkControls;
+    }
+    const { createInkControls } = await import('./ink-controls.js');
+    inkControls = createInkControls({
+      idPrefix: `ink-${param.name}`,
+      announce: announceChange,
+      onChange: (settings) => {
+        clearTimeout(inkRetraceTimer);
+        inkRetraceTimer = setTimeout(() => {
+          // applyTracedImage re-throws after reporting (D-119), and this call
+          // is a timer callback with nobody to await it. The catch exists only
+          // so a re-trace failure cannot become an unhandled rejection - the
+          // user has already been shown and told, in applyTracedImage itself.
+          applyTracedImage(settings, { announceResult: false }).catch(() => {});
+        }, 180);
+      },
+    });
+    inkControlsContainer.appendChild(inkControls.element);
+    inkControlsContainer.hidden = false;
+    return inkControls;
+  }
+
+  /**
+   * Trace the held pixels with the given ink settings and mount the result as
+   * this parameter's value.
+   *
+   * @param {Object} settings - From the ink panel
+   * @param {Object} [options]
+   * @param {boolean} [options.announceResult]
+   */
+  async function applyTracedImage(settings, { announceResult = false } = {}) {
+    if (!inkSourceImageData) return;
+    if (inkControls) inkControls.setBusy(true);
+    try {
+      const { svg, summary } = await convertImageDataToSvg(inkSourceImageData, {
+        ink: settings,
+      });
+      currentFileName = inkSourceFileName;
+      const processedSvg = processSvgForOpenScad(svg);
+      const svgDataUrl = svgToDataUrl(processedSvg);
+
+      const pathCount = (svg.match(/<path/g) || []).length;
+      if (inkControls) {
+        // The Colours mode has its own sentence: the ink summary is about how
+        // much of a picture counted as a line, which is not a question this
+        // mode asks. It also feeds the wall-colour list, which cannot be
+        // offered until the colours are known.
+        if (summary && summary.mode === 'colours') {
+          inkControls.setColourResult(summary.colours, {
+            factor: summary.downscale ? summary.downscale.factor : null,
+          });
+        } else {
+          inkControls.setSummary(summary, pathCount);
+        }
+      }
+
+      const convertedFile = {
+        name: inkSourceFileName,
+        size: processedSvg.length,
+        type: 'image/svg+xml',
+        data: svgDataUrl,
+      };
+      emitFileValue(convertedFile);
+      if (fileUploadListener) {
+        fileUploadListener(param.name, convertedFile);
+      }
+      if (announceResult) {
+        announceChange(
+          `Image converted to vector format: ${inkSourceFileName}`
+        );
+      }
+    } catch (err) {
+      const shown = `Conversion failed: ${err.message}`;
+      fileInfo.textContent = shown;
+      fileInfo.className = 'file-info file-info--error';
+      // setBusy wrote "Re-reading the picture…" and only setSummary clears it,
+      // so without this the ink panel would still claim work was under way.
+      if (inkControls) inkControls.setFailed(shown);
+      announceChange(`Image conversion failed: ${err.message}`);
+      console.error('[ImageImport] Conversion error:', err);
+      // D-119: this used to swallow the failure and return normally, so the
+      // awaiting caller ran on and OVERWROTE the message above with
+      // "<name>.svg (converted from <name>.png)". MEASURED with a 7.99 MP
+      // file against the 2 MP cap: the control claimed success while wearing
+      // the error class, the model parameter was left empty, the preview
+      // badge said "Preview ready" over the PREVIOUS design, and no visible
+      // alert appeared in 28 samples over 14 seconds. Re-throwing lets the
+      // caller's own catch do its job, which is what it was written for.
+      throw err;
+    }
+  }
+
   function processSvgForOpenScad(rawSvgText) {
     currentRawSvg = rawSvgText;
+    // A new drawing has no plan yet; the plates start from the first pass.
+    currentPlan = null;
 
     // Picking a new design must never leave a stale editor open.
     // dismiss() skips the keep-original callback — the old file is
@@ -2102,6 +3022,10 @@ function createFileControl(param, onChange) {
         // Always re-analyze: persisted analyses lose their DOM references
         // through JSON serialization and crash the editor on restore.
         currentSvgAnalysis = analyzeSvg(rawSvgText);
+        // DP-20. The plan the person applied comes back before the plates
+        // are emitted, so a reopened project cuts what it cut when it was
+        // saved and not the automatic first pass.
+        currentPlan = stored.prepPlan || null;
         updateStatusCard(currentSvgAnalysis);
         statusCard.style.display = '';
         return stored.preparedSvg || rawSvgText;
@@ -2114,6 +3038,19 @@ function createFileControl(param, onChange) {
       statusCard.style.display = '';
 
       if (analysis.recommendation === 'pass_through') {
+        // \u2605 D-124. For a charm there is nothing to decide about a plain
+        // drawing: OpenSCAD fills every shape it is given. On a tile that
+        // makes plates, a drawing with no colours of its own IS the task -
+        // every region is base coat until somebody says otherwise - so the
+        // editor opens on it, saying so. A drawing that brings its colours
+        // (a traced picture, a filled SVG) already has a first pass worth
+        // looking at, and the card's button is the way in.
+        if (plateParams.length > 0 && !hasOwnColours(analysis)) {
+          // The surface says what it found as it opens ("21 regions found,
+          // no colours yet: every one starts as the base coat"), so there is
+          // no second sentence to write here.
+          openEditor();
+        }
         return rawSvgText;
       }
 
@@ -2127,13 +3064,10 @@ function createFileControl(param, onChange) {
       if (analysis.recommendation === 'open_editor') {
         // Keep the original until the user explicitly applies a
         // prepared version from the editor.
-        if (workspace) {
-          workspace.open(rawSvgText, analysis, {
-            onApply: handleEditorApply,
-            onKeepOriginal: handleEditorKeep,
-          });
-          announceChange('SVG needs review \u2014 editor opened');
-        }
+        openEditor({
+          openedSentence:
+            'Drawing editor open. This drawing needs a look before it is used.',
+        });
         return rawSvgText;
       }
 
@@ -2213,30 +3147,20 @@ function createFileControl(param, onChange) {
             announceChange(dimCheck.warning);
           }
 
-          const svgString = await convertPngToSvg(dataUrl);
           const svgName = file.name.replace(/\.[^.]+$/, '.svg');
-          currentFileName = svgName;
-          const processedSvg = processSvgForOpenScad(svgString);
-          const svgDataUrl = svgToDataUrl(processedSvg);
+          inkSourceImageData = await loadImageData(dataUrl);
+          inkSourceFileName = svgName;
+          await ensureInkControls();
+
+          await applyTracedImage(inkControls.getSettings(), {
+            announceResult: true,
+          });
 
           fileInfo.textContent = `${svgName} (converted from ${file.name})`;
           fileInfo.title = svgName;
           fileInfo.removeAttribute('aria-busy');
           fileButton.disabled = false;
           clearButton.style.display = 'inline-block';
-
-          announceChange(`Image converted to vector format: ${svgName}`);
-
-          const convertedFile = {
-            name: svgName,
-            size: processedSvg.length,
-            type: 'image/svg+xml',
-            data: svgDataUrl,
-          };
-          onChange(param.name, convertedFile);
-          if (fileUploadListener) {
-            fileUploadListener(param.name, convertedFile);
-          }
         } catch (err) {
           fileInfo.textContent = `Conversion failed: ${err.message}`;
           fileInfo.className = 'file-info file-info--error';
@@ -2277,7 +3201,7 @@ function createFileControl(param, onChange) {
         currentSvgAnalysis = null;
         statusCard.style.display = 'none';
       }
-      onChange(param.name, uploadedFileObj);
+      emitFileValue(uploadedFileObj);
       if (fileUploadListener && isSvgFile) {
         fileUploadListener(param.name, uploadedFileObj);
       }
@@ -2301,9 +3225,10 @@ function createFileControl(param, onChange) {
     currentRawSvg = null;
     currentFileName = null;
     currentSvgAnalysis = null;
+    currentPlan = null;
     preview.style.display = 'none';
     preview.alt = '';
-    onChange(param.name, null);
+    emitFileValue(null);
   });
 
   // SVG gallery picker (rendered when bundled options are registered)
@@ -2330,7 +3255,7 @@ function createFileControl(param, onChange) {
       clearButton.style.display = 'inline-block';
       preview.style.display = 'none';
       preview.alt = '';
-      onChange(name, fileObj);
+      emitFileValue(fileObj);
     });
     fileContainer.appendChild(gallery);
   }
@@ -2343,7 +3268,10 @@ function createFileControl(param, onChange) {
   fileContainer.appendChild(fileInput);
 
   container.appendChild(fileContainer);
-  if (acceptsSvg) container.appendChild(workspaceContainer);
+  if (acceptsSvg) {
+    container.appendChild(inkControlsContainer);
+    container.appendChild(workspaceContainer);
+  }
 
   return container;
 }
@@ -2665,8 +3593,7 @@ export function renderParameterUI(
   if (openGroupIds instanceof Set) {
     resolvedOpenIds = openGroupIds;
   } else if (useStoredState && _activeCustomizerFileId) {
-    resolvedOpenIds =
-      loadOpenGroupIds(_activeCustomizerFileId) ?? new Set();
+    resolvedOpenIds = loadOpenGroupIds(_activeCustomizerFileId) ?? new Set();
   } else {
     // Preserve the user's current expand/collapse state across an
     // automatic re-render (theme change, preset apply, etc.).
@@ -2675,6 +3602,17 @@ export function renderParameterUI(
   container.innerHTML = '';
 
   const { groups, parameters } = extractedParams;
+
+  // DP-11. One warning region for the model, built only when this model can
+  // take its shape from a design and therefore can have a hole in mid-air.
+  resetHolePlacementRegion();
+  if (
+    Object.keys(parameters).some(
+      (n) => n.endsWith('_silhouette') || n === 'stencil_laser_file'
+    )
+  ) {
+    ensureHoleWarningRegion(container);
+  }
   const currentValues = initialValues ? { ...initialValues } : {};
 
   // Reset stored limits and metadata when re-rendering
@@ -2695,6 +3633,21 @@ export function renderParameterUI(
       initialValues && initialValues[param.name] !== undefined
         ? initialValues[param.name]
         : param.default;
+
+    currentValues[param.name] = effectiveDefault;
+
+    // Store the original default value (from schema, not initialValues)
+    defaultParameterValues[param.name] = param.default;
+
+    // A "<file_param>_aspect" companion is set automatically by its file
+    // control (measured from the uploaded design), so it gets a value but
+    // no control and no search entry.
+    if (isAspectCompanionParam(param.name, parameters)) return;
+
+    // Per-layer design companions are written by the file control from the
+    // Layer column, so they too get a value but no control.
+    if (isLayerCompanionParam(param.name, parameters)) return;
+
     // Create a copy of param with the effective default
     const paramWithValue = { ...param, default: effectiveDefault };
 
@@ -2704,11 +3657,6 @@ export function renderParameterUI(
     } else {
       paramsByGroup[param.group].push(paramWithValue);
     }
-
-    currentValues[param.name] = effectiveDefault;
-
-    // Store the original default value (from schema, not initialValues)
-    defaultParameterValues[param.name] = param.default;
 
     // Store metadata for search functionality
     parameterMetadata[param.name] = {
@@ -2778,6 +3726,18 @@ export function renderParameterUI(
     summaryLabel.textContent = group.label;
     summary.appendChild(summaryLabel);
 
+    // UF-35: the Hide button used to live inside this <summary>, which made
+    // it a control inside the disclosure's own control — axe's
+    // nested-interactive, once per group, so the count grew with the model.
+    // It moves to an actions layer stacked over the header, and a slot of the
+    // same size keeps this row's layout identical. Q-64 (owner, 2026-08-17):
+    // the layer comes first in source order, so Tab reaches Hide one stop
+    // before its header rather than behind every parameter in the group.
+    const hideSlot = document.createElement('span');
+    hideSlot.className = 'param-group-hide-slot';
+    hideSlot.setAttribute('aria-hidden', 'true');
+    summary.appendChild(hideSlot);
+
     // Hide group button — keyboard accessible with aria-pressed
     const hideBtn = document.createElement('button');
     hideBtn.className = 'param-group-hide-btn';
@@ -2787,7 +3747,9 @@ export function renderParameterUI(
     hideBtn.title = 'Hide this group';
     hideBtn.innerHTML = '&#x2715;'; // × character
     hideBtn.addEventListener('click', (e) => {
-      // Prevent the summary toggle from firing
+      // The button sits outside the <summary> now, so it can no longer toggle
+      // the disclosure by bubbling; these keep the click from reaching any
+      // other listener on the way up.
       e.stopPropagation();
       e.preventDefault();
       // Dispatch custom event so main.js can persist the hidden state
@@ -2798,19 +3760,29 @@ export function renderParameterUI(
         })
       );
     });
-    summary.appendChild(hideBtn);
 
     details.appendChild(summary);
 
     allGroupParams.forEach((param) => {
       let control;
 
-      // Create onChange handler that also updates dependent parameters
-      const handleChange = (name, value) => {
+      // Create onChange handler that also updates dependent parameters.
+      // extraValues lets a control commit companion values (e.g. a design's
+      // measured aspect) in the SAME state snapshot as its own change.
+      const handleChange = (name, value, extraValues) => {
         currentValues[name] = value;
         currentParameterValues[name] = value;
+        if (extraValues) {
+          for (const [extraName, extraValue] of Object.entries(extraValues)) {
+            currentValues[extraName] = extraValue;
+            currentParameterValues[extraName] = extraValue;
+          }
+        }
         // Update dependent parameters visibility
         updateDependentParameters(name, value);
+        // DP-11: a hole on a design-shaped body can land on a wingtip or on
+        // nothing at all, and neither shows in a preview.
+        reportHolePlacement(currentValues, parameters);
         // Pass a shallow copy so callers (e.g. stateManager.setState) never
         // hold a reference to our mutable currentValues object — this is
         // critical for undo/redo: recordParameterState() must snapshot the
@@ -2836,7 +3808,15 @@ export function renderParameterUI(
           break;
 
         case 'file':
-          control = createFileControl(param, handleChange);
+          control = createFileControl(
+            param,
+            handleChange,
+            parameters[`${param.name}_aspect`] || null,
+            findLayerParams(param, parameters),
+            findSilhouetteParams(param, parameters),
+            findPlateParams(parameters),
+            findLaserParam(parameters)
+          );
           break;
 
         case 'vector':
@@ -2863,8 +3843,25 @@ export function renderParameterUI(
       details.appendChild(control);
     });
 
-    container.appendChild(details);
+    // Actions layer first, so Tab reaches Hide immediately before the header
+    // it belongs to (Q-64). The row only stacks the two — .param-group keeps
+    // every class, id and attribute the rest of the app matches on.
+    const row = document.createElement('div');
+    row.className = 'forge-disclosure-row';
+    const actions = document.createElement('div');
+    actions.className =
+      'forge-disclosure-actions forge-disclosure-actions--no-chevron';
+    actions.appendChild(hideBtn);
+    row.appendChild(actions);
+    row.appendChild(details);
+
+    container.appendChild(row);
   });
+
+  // IR-9: if this project declared a starter subset, show it and put the rest
+  // one button away. Applied AFTER the groups exist, because it is a decision
+  // about what is on screen, not about what is built.
+  applyStarterView(container, extractedParams);
 
   // Initialize parameter search after rendering
   initParameterSearch();
@@ -2873,4 +3870,157 @@ export function renderParameterUI(
   reapplyDetailLevel();
 
   return { ...currentValues };
+}
+
+/**
+ * Put the starter subset on screen with one control that reveals the rest.
+ *
+ * Nothing is removed. Every control stays in the DOM and comes back on the
+ * reveal; the wall is a class, the same idiom the parameter search already
+ * uses, and it hides things from everybody equally rather than from assistive
+ * technology only.
+ *
+ * @param {HTMLElement} container
+ * @param {Object} extractedParams
+ * @returns {{applied: boolean, shown: number, total: number, unknown: string[]}}
+ */
+function applyStarterView(container, extractedParams) {
+  const declaration = _starterDeclaration;
+  const { known, unknown, groupIds, total } = resolveStarterParameters(
+    extractedParams,
+    declaration.names
+  );
+
+  if (!starterViewApplies(declaration, _activeCustomizerFileId, known.length)) {
+    return { applied: false, shown: 0, total, unknown };
+  }
+
+  if (unknown.length > 0) {
+    console.warn(
+      `[Starter] This project lists ${unknown.length} starting parameter(s) it does not have:`,
+      unknown
+    );
+  }
+
+  const starterSet = new Set(known);
+  const controls = container.querySelectorAll(
+    '.param-control[data-param-name]'
+  );
+  controls.forEach((control) => {
+    const isStarter = starterSet.has(control.dataset.paramName);
+    control.classList.toggle('is-starter', isStarter);
+    control.classList.toggle('starter-hidden', !isStarter);
+  });
+
+  container.querySelectorAll('.param-group').forEach((group) => {
+    const hasStarter = groupIds.has(group.dataset.groupId);
+    group.classList.toggle('starter-empty', !hasStarter);
+    // A starter group collapsed is a starter group nobody can see.
+    if (hasStarter) group.open = true;
+  });
+
+  container.insertBefore(
+    createStarterReveal(container, known.length, total),
+    container.firstChild
+  );
+
+  return { applied: true, shown: known.length, total, unknown };
+}
+
+/**
+ * The reveal control.
+ *
+ * It is a TOGGLE, not a button that vanishes when used. A control that removes
+ * itself takes the keyboard focus with it, and the way back to a shorter
+ * screen should not be "reload the page".
+ *
+ * @param {HTMLElement} container
+ * @param {number} shown
+ * @param {number} total
+ * @returns {HTMLElement}
+ */
+function createStarterReveal(container, shown, total) {
+  const wrap = document.createElement('div');
+  wrap.className = 'starter-reveal';
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'starter-reveal-btn';
+  button.id = 'starterRevealBtn';
+  button.textContent = SHOW_ALL_LABEL;
+  button.setAttribute('aria-expanded', 'false');
+  if (container.id) button.setAttribute('aria-controls', container.id);
+
+  const hint = document.createElement('p');
+  hint.className = 'starter-reveal-hint';
+  hint.id = 'starterRevealHint';
+  hint.textContent = starterHint(shown, total);
+  button.setAttribute('aria-describedby', hint.id);
+
+  button.addEventListener('click', () => {
+    const expanded = button.getAttribute('aria-expanded') === 'true';
+    setStarterViewExpanded(container, !expanded, { announce: true });
+  });
+
+  wrap.appendChild(button);
+  wrap.appendChild(hint);
+  return wrap;
+}
+
+/**
+ * Show every parameter, or go back to the starter subset.
+ *
+ * @param {HTMLElement|null} container
+ * @param {boolean} expanded
+ * @param {{announce?: boolean}} [options]
+ */
+export function setStarterViewExpanded(container, expanded, options = {}) {
+  const root = container || document.getElementById('parametersContainer');
+  if (!root) return;
+  const button = root.querySelector('.starter-reveal-btn');
+  if (!button) return;
+
+  root.classList.toggle('starter-revealed', expanded);
+  root.querySelectorAll('.param-control.starter-hidden').forEach((control) => {
+    control.classList.toggle('starter-wall-open', expanded);
+  });
+  root.querySelectorAll('.param-group.starter-empty').forEach((group) => {
+    group.classList.toggle('starter-wall-open', expanded);
+  });
+
+  button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+  button.textContent = expanded ? SHOW_STARTER_LABEL : SHOW_ALL_LABEL;
+
+  const hint = root.querySelector('.starter-reveal-hint');
+  const shown = root.querySelectorAll('.param-control.is-starter').length;
+  const total = root.querySelectorAll('.param-control[data-param-name]').length;
+  if (hint) {
+    hint.textContent = expanded
+      ? starterHint(total, total)
+      : starterHint(shown, total);
+  }
+
+  if (options.announce) {
+    // announceImmediate, not announceChange. MEASURED: a polite announcement
+    // is debounced 350 ms, and any other polite announcement inside that
+    // window CANCELS it - watching the live region through a reveal showed
+    // "Rendering preview..." arriving at 204 ms and this sentence never
+    // reaching the region at all. Pressing this button is a discrete action
+    // somebody took on purpose, which is exactly what announceImmediate is
+    // for.
+    announceImmediate(starterAnnouncement(expanded, shown, total));
+  }
+}
+
+/**
+ * Is a starter wall currently standing in this container?
+ *
+ * @param {HTMLElement|null} container
+ * @returns {boolean}
+ */
+export function isStarterViewActive(container) {
+  const root = container || document.getElementById('parametersContainer');
+  if (!root) return false;
+  const button = root.querySelector('.starter-reveal-btn');
+  return Boolean(button) && button.getAttribute('aria-expanded') !== 'true';
 }

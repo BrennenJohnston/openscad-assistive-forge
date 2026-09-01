@@ -151,7 +151,7 @@ describe('Camera Panel Controller', () => {
     const previewManager = {
       rotateHorizontal: vi.fn(),
       zoomCamera: vi.fn(),
-      fitCameraToModel: vi.fn(),
+      resetCamera: vi.fn(),
       mesh: { id: 'mesh' },
     }
 
@@ -167,7 +167,7 @@ describe('Camera Panel Controller', () => {
     expect(announcer.textContent).toBe('Zoom in')
 
     document.getElementById('mobileCameraResetView').click()
-    expect(previewManager.fitCameraToModel).toHaveBeenCalled()
+    expect(previewManager.resetCamera).toHaveBeenCalled()
 
     // Wait for clear timeout
     vi.advanceTimersByTime(2000)

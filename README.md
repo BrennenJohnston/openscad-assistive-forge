@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="favicon/OpenSCAD Assistive Web Forge Logo_large.png" alt="OpenSCAD Assistive Web Forge Logo" width="200">
+  <img src="assets/brand/OpenSCAD Assistive Web Forge Logo_large.png" alt="OpenSCAD Assistive Web Forge Logo" width="200">
 </p>
 
 # OpenSCAD Assistive Forge
@@ -21,7 +21,7 @@ So this is my attempt at removing a few of those barriers and hopefully opening 
 - **Runs OpenSCAD in your browser** (WebAssembly in a Web Worker)
 - **Builds a parameter UI** from OpenSCAD Customizer annotations
 - **Previews the model** (Three.js) and lets you orbit/pan/zoom
-- **Exports** STL/OBJ/OFF/AMF/3MF, plus SVG/DXF for laser cutting
+- **Exports** STL/OBJ/OFF/AMF, plus SVG/DXF for laser cutting
 - **Supports multi-file projects** via `.zip` (for `include` / `use`)
 - **Keeps everything local** (no accounts, no uploads, no backend)
 
@@ -29,15 +29,31 @@ So this is my attempt at removing a few of those barriers and hopefully opening 
 
 The welcome screen ships with ready-to-use customizers -- no `.scad` file needed:
 
-- **Braille Card Customizer** -- type plain text and get 3D-printable braille;
+- **Braille Card Designer** -- type plain text and get 3D-printable braille;
   translation (Grade 1 / Grade 2) runs entirely on-device via liblouis compiled
   to WebAssembly. Three variants: a card that prints leaning back at 75° with
   break-away supports, a small charm/pendant/zipper pull, and a two-part
   tactile sign with raised letters and braille (ADA-style defaults). See
   `docs/guides/BRAILLE_CARD_GUIDE.md`.
-- **Charm Customizer** -- design wearable charms, pendants, and logo plates
+- **Charm Designer** -- design wearable charms, pendants, and logo plates
   with engraved or raised icons, including C-clip charms that snap onto
   silicone bracelets. Import your own SVG or pick from the built-in library.
+
+## Two interfaces
+
+The first time you open the app it asks which interface you want, and you can
+switch at any time from the button in the top right:
+
+- **Assistive Forge** -- a guided, parameter-first interface built for screen
+  readers, keyboard use, and people new to OpenSCAD. Light, dark, and high
+  contrast themes.
+- **Classic** -- the layout of the OpenSCAD desktop application: the same menus,
+  toolbar, editor, Customizer, and console. For people who already know the
+  desktop program or are following a tutorial written for it. Desktop widths
+  only, and it keeps the desktop's light appearance.
+
+Both open the same files and produce the same geometry. See
+`docs/guides/CLASSIC_UI_GUIDE.md`.
 
 ## Accessibility notes (the short version)
 
@@ -55,20 +71,18 @@ More detail lives in `docs/guides/ACCESSIBILITY_GUIDE.md`.
 You don't need to install anything to use this -- but you can. Visit the live
 demo, click your browser's install icon (right side of the address bar in
 Chrome or Edge), and you have a desktop app that lives in your Start menu /
-Applications folder and works fully offline. No installer file, no admin
-rights, no IT executable approval needed.
+Applications folder and works fully offline -- it's just a website your
+browser remembers.
 
 See `docs/guides/RUN_OFFLINE_GUIDE.md` for full instructions, including a
-"before you travel" workshop checklist and a Chrome / Edge group-policy
-snippet for IT-managed devices.
+"before you travel" workshop checklist.
 
-## For organizations and IT teams
+## Curious how it handles safety and privacy?
 
-If your IT or security team needs to evaluate the site before they will
-allowlist it, hand them `docs/guides/IT_APPROVAL_GUIDE.md`. It covers the
-CSP and other response headers verbatim, the (very short) data-handling
-story, exact network requirements, supply-chain controls, accessibility
-conformance, and a copy-paste approval checklist.
+`docs/SITE_FACTS.md` lays it out: the Content Security Policy verbatim,
+the (very short) data-handling story, exactly what the site connects to,
+the supply-chain controls, and the accessibility conformance work. All of
+it is verifiable against the files it cites.
 
 ## Develop locally
 
@@ -81,18 +95,10 @@ npm run dev
 
 Then open `http://localhost:5173`.
 
-**Optional:** If you have [Pixi](https://pixi.sh/) installed, `pixi run dev`
-(and all other tasks) work as drop-in replacements for `npm run`. See
-`pixi.toml` for the full task list.
+## What changed lately?
 
-## CLI (developer toolchain)
-
-This repo also has a CLI (`openscad-forge`) for extracting parameters and scaffolding standalone customizers.
-
-```bash
-npm install -g .
-openscad-forge --help
-```
+`docs/updates/WHATS_NEW_v5.md` is a photo journal of everything since
+version 4.5.0 -- the short, illustrated version of the CHANGELOG.
 
 ## Docs (where to start)
 

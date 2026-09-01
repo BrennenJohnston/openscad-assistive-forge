@@ -80,3 +80,38 @@ export function isValidHexColor(value) {
   // Allow both #RRGGBB and RRGGBB formats
   return /^#?[0-9A-Fa-f]{6}$/.test(trimmed);
 }
+
+/**
+ * WCAG relative luminance of a hex colour, 0 (black) to 1 (white).
+ * @param {string} hex - #rgb or #rrggbb
+ * @returns {number|null} Null when the value is not a hex colour
+ */
+export function relativeLuminance(hex) {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return null;
+  const [r, g, b] = rgb;
+  const channel = (v) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+}
+
+/**
+ * WCAG contrast ratio between two hex colours, 1 to 21.
+ *
+ * Added for the drawing editor's highlight (DP-21), whose two strokes have to
+ * read on any region colour: the number this returns is what the record
+ * quotes, so it is the app's own arithmetic and not a test's.
+ *
+ * @param {string} a
+ * @param {string} b
+ * @returns {number|null} Null when either value is not a hex colour
+ */
+export function contrastRatio(a, b) {
+  const la = relativeLuminance(a);
+  const lb = relativeLuminance(b);
+  if (la === null || lb === null) return null;
+  const [light, dark] = la >= lb ? [la, lb] : [lb, la];
+  return (light + 0.05) / (dark + 0.05);
+}

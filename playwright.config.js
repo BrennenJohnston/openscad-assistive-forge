@@ -1,8 +1,23 @@
 import { defineConfig, devices } from '@playwright/test'
+import { PROJECT_IGNORES } from './scripts/e2e-shard.mjs'
+
+/** What a project leaves out, as Playwright wants it; the table says why. */
+const ignores = (project) =>
+  PROJECT_IGNORES[project].map((file) => `**/${file}`)
 
 const isWindows = process.platform === 'win32'
 const isCI = !!process.env.CI
 const baseURL = process.env.PW_BASE_URL || 'http://localhost:5173'
+
+// Local Windows headless Chromium can silently fall back to SwiftShader
+// (software GL) - measured after a reboot: the city ran at about a tenth
+// speed and every frame-bound walking guard starved, while the same tests
+// passed on hardware GL. ANGLE-on-D3D11 pins the real GPU for local runs;
+// CI keeps its own (software) rendering, which the tests must survive on
+// their own terms. Read the GL string before trusting any local timing
+// verdict - this is that lesson, enforced where the boards launch.
+const hardwareGl =
+  isWindows && !isCI ? { args: ['--use-angle=d3d11'] } : {}
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -11,8 +26,16 @@ export default defineConfig({
   retries: isCI ? 2 : 0,
   // Windows: 1 worker (terminal hang avoidance). CI: 2 workers (ubuntu-latest has 2 vCPUs).
   workers: isWindows ? 1 : (isCI ? 2 : undefined),
-  // Use list reporter in CI to prevent HTML reporter hangs, HTML locally
-  reporter: isCI ? [['list'], ['html', { open: 'never' }]] : 'html',
+  // Use list reporter in CI to prevent HTML reporter hangs, HTML locally.
+  // The JSON report feeds scripts/check-e2e-complete.mjs (Q-23): a run the
+  // clock cut short must fail the job, not pass with tests never started.
+  reporter: isCI
+    ? [
+        ['list'],
+        ['html', { open: 'never' }],
+        ['json', { outputFile: 'playwright-results.json' }],
+      ]
+    : 'html',
   
   // Global timeout: 10min CI (2 workers + retries), 30min local (1 worker on Windows)
   // Firefox/WebKit projects override per-test timeout to 90s (see below).
@@ -42,14 +65,22 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: { ...devices['Desktop Chrome'], launchOptions: hardwareGl },
     },
     // Edge - Tier 1 browser (blocking in CI)
     {
       name: 'msedge',
-      use: { ...devices['Desktop Edge'], channel: 'msedge' },
+      use: {
+        ...devices['Desktop Edge'],
+        channel: 'msedge',
+        launchOptions: hardwareGl,
+      },
+      testIgnore: ignores('msedge'),
     },
     // Firefox - Tier 1 browser (extended timeouts for WASM init overhead)
+    // wasm-smoke runs on Chromium-family projects only for now: it performs
+    // real WASM renders with no CI skip, and Firefox/WebKit CI runners are
+    // not yet proven stable for that (see the skip-debt drawdown plan).
     {
       name: 'firefox',
       use: {
@@ -58,6 +89,7 @@ export default defineConfig({
         navigationTimeout: 45000,
       },
       timeout: 90000,
+      testIgnore: ignores('firefox'),
     },
     // Visual regression tests (Milestone 3: Performance & Stability)
     // Run separately with: npm run test:visual
@@ -74,6 +106,24 @@ export default defineConfig({
       testMatch: '**/*.visual.spec.js',
     },
     // WebKit/Safari - Tier 2 browser (requires macOS runners, extended timeouts)
+    //
+    // Q-48 (owner, 2026-08-14): this lane is SCOPED, and the reason is
+    // arithmetic. Running all 782 tests, it reached 177 of them in its
+    // 25-minute budget - 103 passed, 2 failed, 70 skipped, 597 never started -
+    // so it reported the clock rather than the browser. MEASURED cost on the
+    // macOS runner: ~13.5s per executed test in classic-mode, ~7.6s in
+    // accessibility, against ~19 tests/min on the Firefox lane. Finishing the
+    // whole suite needs roughly 100+ minutes, and macOS runners bill at 10x,
+    // so a complete lane was rejected on cost.
+    //
+    // The owner chose coverage weighted toward accessibility, because Safari
+    // is the browser VoiceOver users are on, so that suite buys more here than
+    // anywhere else. The scope is these five files (~176 tests), which fit the
+    // existing budget and still include classic-mode, where this lane's one
+    // reproducible failure lives.
+    //
+    // Anything outside this list is NOT covered on Safari. Widening it means
+    // re-checking the arithmetic above, not just adding a line.
     {
       name: 'webkit',
       use: {
@@ -82,6 +132,13 @@ export default defineConfig({
         navigationTimeout: 45000,
       },
       timeout: 90000,
+      testMatch: [
+        '**/accessibility.spec.js',
+        '**/classic-mode.spec.js',
+        '**/theme-switching.spec.js',
+        '**/first-visit-choice.spec.js',
+        '**/basic-workflow.spec.js',
+      ],
     },
     // Mobile & tablet projects — scoped to responsive audit spec to avoid
     // interference with desktop-only E2E tests.

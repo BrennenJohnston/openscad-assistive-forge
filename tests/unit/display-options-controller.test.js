@@ -36,8 +36,12 @@ import {
   resetDisplayOptionsController,
 } from '../../src/js/display-options-controller.js';
 
-vi.mock('../../src/js/storage-keys.js', () => ({
+vi.mock('../../src/js/storage-keys.js', async (importOriginal) => ({
+  ...(await importOriginal()),
   getAppPrefKey: (key) => `test-${key}`,
+  STORAGE_KEY_GRID: 'test-grid',
+  STORAGE_KEY_UI_MODE: 'test-ui-mode',
+  STORAGE_KEY_SCOPED_PREFS_SEEDED: 'test-scoped-prefs-seeded-v1',
   safeGetItem: (key) => localStorage.getItem(key),
   safeSetItem: (key, value) => {
     localStorage.setItem(key, value);
@@ -73,9 +77,59 @@ function createMockThree() {
       this.position = { copy: vi.fn() };
       this.rotation = { copy: vi.fn() };
       this.scale = { copy: vi.fn() };
+      // Real LineSegments has this; the UF-7 overlay dashes its negative
+      // ticks and calls it on the real class.
+      this.computeLineDistances = vi.fn();
     }),
     AxesHelper: vi.fn(function () {
       this.name = '';
+    }),
+    // The axis lines overlay replaced AxesHelper in P12. These mirror what
+    // getThreeModule() actually hands the controller — a mock that carries
+    // more than production does is how the axis-tick overlay kept 20 green
+    // tests while throwing on every real attempt.
+    Group: vi.fn(function () {
+      this.name = '';
+      this.children = [];
+      this.add = (child) => this.children.push(child);
+    }),
+    BufferGeometry: vi.fn(function () {
+      this.attributes = {};
+      this.setAttribute = (name, attr) => {
+        this.attributes[name] = attr;
+      };
+      this.dispose = vi.fn();
+    }),
+    Float32BufferAttribute: vi.fn(function (array, itemSize) {
+      this.array = array;
+      this.itemSize = itemSize;
+    }),
+    LineDashedMaterial: vi.fn(function (opts = {}) {
+      Object.assign(this, opts, createMockMaterial());
+    }),
+    Line: vi.fn(function (geo, mat) {
+      this.geometry = geo;
+      this.material = mat;
+      this.name = '';
+      this.computeLineDistances = vi.fn();
+    }),
+    // The three sprite classes getThreeModule() gained in PR #59 — the tick
+    // overlay throws without them, which is the transient failure U-3's
+    // non-persisting failure path is tested against (delete one to break).
+    CanvasTexture: vi.fn(function (canvas) {
+      this.canvas = canvas;
+      this.needsUpdate = false;
+      this.dispose = vi.fn();
+    }),
+    SpriteMaterial: vi.fn(function (opts = {}) {
+      Object.assign(this, opts, createMockMaterial());
+    }),
+    Sprite: vi.fn(function (material) {
+      this.material = material;
+      this.name = '';
+      this.userData = {};
+      this.scale = { set: vi.fn() };
+      this.position = { set: vi.fn() };
     }),
   };
 }
@@ -294,9 +348,7 @@ describe('DisplayOptionsController — post-load listener registration', () => {
     ctrl.init();
 
     expect(mockPm.addPostLoadListener).toHaveBeenCalledTimes(1);
-    expect(typeof mockPm.addPostLoadListener.mock.calls[0][0]).toBe(
-      'function'
-    );
+    expect(typeof mockPm.addPostLoadListener.mock.calls[0][0]).toBe('function');
   });
 
   it('post-load listener rebuilds edges overlay when edges are enabled', () => {
@@ -421,6 +473,9 @@ function makeFatThreeMock() {
       this.geometry = geometry;
       this.material = material;
       this.name = '';
+      // Real LineSegments has this; the UF-7 overlay calls it on its
+      // dashed negative ticks.
+      this.computeLineDistances = vi.fn();
     }
   }
   class MockSpriteMaterial {
@@ -531,11 +586,13 @@ describe('DisplayOptionsController — axis distance markings (F20)', () => {
     expect(mockPm.scene.remove).toHaveBeenCalledWith(group);
   });
 
-  it('toggling persists state to localStorage just like the other display options', () => {
+  it('toggling persists state to the active namespace just like the other display options', () => {
     ctrl.set('axisMarks', true);
-    expect(localStorage.getItem('test-display-axisMarks')).toBe('true');
+    expect(localStorage.getItem('test-display-axisMarks--forge')).toBe('true');
     ctrl.set('axisMarks', false);
-    expect(localStorage.getItem('test-display-axisMarks')).toBe('false');
+    expect(localStorage.getItem('test-display-axisMarks--forge')).toBe('false');
+    // The base (pre-split) key is a frozen archive — never written again.
+    expect(localStorage.getItem('test-display-axisMarks')).toBeNull();
   });
 
   it('refreshThemeSensitiveOverlays rebuilds the overlay so labels pick up new theme color', () => {
@@ -725,7 +782,10 @@ describe('DisplayOptionsController — connectPreviewManager()', () => {
     ctrl.connectPreviewManager(pm);
 
     expect(mockThree.EdgesGeometry).toHaveBeenCalledWith(mockMesh.geometry, 15);
-    expect(pm.scene.add).toHaveBeenCalledWith(ctrl._axesHelper);
+    // P12 replaced AxesHelper with the axis-lines overlay, which owns a group
+    // and a dispose() rather than being a bare helper object.
+    expect(pm.scene.add).toHaveBeenCalledWith(ctrl._axesOverlay.group);
+    expect(ctrl._axesOverlay.group.children).toHaveLength(6);
   });
 
   it('a controller initialized before the PreviewManager exists still auto-refreshes (regression)', () => {
@@ -901,7 +961,9 @@ describe('DisplayOptionsController — edge budget', () => {
   it('persists the budget and restores it on the next init', () => {
     const three = makeEdgeBudgetThree(segmentsOfLength(5));
     makeCtrl(three).setEdgeBudget(250000);
-    expect(localStorage.getItem('test-display-edgeBudget')).toBe('250000');
+    expect(localStorage.getItem('test-display-edgeBudget--forge')).toBe(
+      '250000'
+    );
 
     const restored = makeCtrl(makeEdgeBudgetThree(segmentsOfLength(5)));
     restored.init();
@@ -952,5 +1014,153 @@ describe('DisplayOptionsController — edge budget', () => {
     expect(document.getElementById('edgeBudgetStatus').textContent).toBe(
       'Edges hidden'
     );
+  });
+});
+
+describe('DisplayOptionsController — U-3: axis ticks survive failures and heal', () => {
+  let ctrl;
+  let mockThree;
+  let mockPm;
+
+  beforeEach(() => {
+    resetDisplayOptionsController();
+    localStorage.clear();
+    document.body.innerHTML = '';
+    mockThree = createMockThree();
+    mockPm = createMockPreviewManager(createMockMesh());
+    ctrl = new DisplayOptionsController({
+      getPreviewManager: () => mockPm,
+      getThree: () => mockThree,
+    });
+  });
+
+  it('a failed overlay build turns the session state off but NEVER persists it', () => {
+    localStorage.setItem('test-display-axisMarks', 'true');
+    ctrl.state.axisMarks = true;
+    // The transient failure class this guards against: a consumer asking for
+    // a class the module object does not carry. (Was SpriteMaterial before
+    // UF-7 retired the sprite labels; the dashed negative ticks need this.)
+    delete mockThree.LineDashedMaterial;
+
+    ctrl.refreshOverlays();
+
+    expect(ctrl.state.axisMarks).toBe(false);
+    // The poison that kept the owner's ticks off across sessions: the saved
+    // preference must survive the failure so the next session retries.
+    expect(localStorage.getItem('test-display-axisMarks')).toBe('true');
+    expect(localStorage.getItem('test-display-axisMarks--forge')).not.toBe(
+      'false'
+    );
+  });
+
+  it('refreshOverlays() re-applies axes and axis marks after a scene rebuild', () => {
+    ctrl.state.axes = true;
+    ctrl.state.axisMarks = true;
+
+    // First call self-connects (which applies everything once)…
+    ctrl.refreshOverlays();
+    const axesAdds = () =>
+      mockPm.scene.add.mock.calls.filter(
+        ([obj]) => obj === ctrl._axesOverlay?.group
+      ).length;
+    const tickAdds = () =>
+      mockPm.scene.add.mock.calls.filter(
+        ([obj]) => obj === ctrl._axisTickOverlay?.group
+      ).length;
+    const axesBefore = axesAdds();
+    const ticksBefore = tickAdds();
+
+    // …a later post-load refresh must put both back into the scene.
+    ctrl.refreshOverlays();
+
+    expect(axesAdds()).toBeGreaterThan(axesBefore);
+    expect(tickAdds()).toBeGreaterThan(ticksBefore);
+  });
+
+  it('a pre-split poisoned profile heals in Classic through the namespace default (U-3 heir)', () => {
+    // The pre-UF-14 poison: ticks persisted off under the shared key by the
+    // old always-throwing build path. Seeding copies that into the FORGE
+    // namespace (the user's Forge reality) but never into Classic, whose
+    // desktop default turns axes and ticks back on — the healing the v2
+    // stamp used to do, now with nothing left to poison.
+    localStorage.setItem('test-display-axisMarks', 'false');
+
+    document.body.dataset.uiMode = 'classic';
+    ctrl._loadPreferences();
+    expect(ctrl.state.axisMarks).toBe(true);
+    expect(ctrl.state.axes).toBe(true);
+
+    // The same profile back in Forge keeps its own saved reality.
+    document.body.dataset.uiMode = 'standard';
+    ctrl._loadPreferences();
+    expect(ctrl.state.axisMarks).toBe(false);
+    expect(ctrl.state.axes).toBe(false);
+
+    // A Classic choice sticks in Classic without touching Forge.
+    document.body.dataset.uiMode = 'classic';
+    ctrl._loadPreferences();
+    ctrl.set('axisMarks', false, { announce: false });
+    expect(localStorage.getItem('test-display-axisMarks--classic')).toBe(
+      'false'
+    );
+    expect(localStorage.getItem('test-display-axisMarks--forge')).toBe('false');
+    ctrl._loadPreferences();
+    expect(ctrl.state.axisMarks).toBe(false);
+    delete document.body.dataset.uiMode;
+  });
+});
+
+describe('DisplayOptionsController — UF-7 zoom-adaptive distance', () => {
+  beforeEach(() => {
+    resetDisplayOptionsController();
+    localStorage.clear();
+    document.body.innerHTML = '';
+  });
+
+  function makeCameraPm(extra = {}) {
+    const pm = createMockPreviewManager(createMockMesh());
+    pm.camera = {
+      position: {
+        distanceTo: vi.fn(() => 200),
+        length: vi.fn(() => 200),
+      },
+    };
+    pm.controls = { target: {} };
+    return Object.assign(pm, extra);
+  }
+
+  it('feeds the tick overlay the camera-to-target distance', () => {
+    const ctrl = new DisplayOptionsController({
+      getPreviewManager: () => makeCameraPm(),
+      getThree: () => createMockThree(),
+    });
+    expect(ctrl._cameraDistanceMm(ctrl.getPreviewManager())).toBe(200);
+  });
+
+  it('divides by the orthographic zoom (desktop: one viewer_distance drives both projections)', () => {
+    const ctrl = new DisplayOptionsController({
+      getPreviewManager: () =>
+        makeCameraPm({
+          getProjectionMode: () => 'orthographic',
+          orthoCamera: { zoom: 2 },
+        }),
+      getThree: () => createMockThree(),
+    });
+    // Zoom 2 shows half the world — the marks must re-derive as if the
+    // camera stood at half the distance, or ortho zooming would freeze the
+    // tick decades at whatever the perspective camera last saw.
+    expect(ctrl._cameraDistanceMm(ctrl.getPreviewManager())).toBe(100);
+  });
+
+  it('an ortho zoom of 0 cannot divide the distance away', () => {
+    const ctrl = new DisplayOptionsController({
+      getPreviewManager: () =>
+        makeCameraPm({
+          getProjectionMode: () => 'orthographic',
+          orthoCamera: { zoom: 0 },
+        }),
+      getThree: () => createMockThree(),
+    });
+    expect(ctrl._cameraDistanceMm(ctrl.getPreviewManager())).toBe(200);
   });
 });

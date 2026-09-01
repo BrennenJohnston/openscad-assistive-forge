@@ -105,6 +105,11 @@ export function initSearchableCombobox({
   /** @type {ComboboxOption[]} */
   let allOptions = [];
   let selectedId = null;
+  // AF-10: what the closed box shows when NOTHING is selected. The desktop's
+  // resting state is the active "design default values", not a search hint.
+  // Display only - it never occupies selectedId, so open/navigate/Enter
+  // behave exactly as with no selection.
+  let restingLabel = '';
   let isOpen = false;
 
   // ── @github/combobox-nav integration ────────────────────────────────────────
@@ -212,8 +217,8 @@ export function initSearchableCombobox({
     container.classList.remove('is-open');
     comboNav.stop();
     if (!keepFilter) {
-      // Restore the selected label; blank if nothing is selected
-      input.value = getLabelForId(selectedId);
+      // Restore the selected label; the resting label if none is selected
+      input.value = getLabelForId(selectedId) || restingLabel;
     }
     srStatus.textContent = '';
   }
@@ -328,10 +333,26 @@ export function initSearchableCombobox({
   function update(newOptions, newSelectedId) {
     allOptions = Array.isArray(newOptions) ? newOptions : [];
     selectedId = newSelectedId ?? null;
-    const label = getLabelForId(selectedId);
+    if (isOpen) {
+      // AF-10: a rebuild can land while the user is mid-search (the app
+      // refreshes the dropdown on preset events). Writing the selected
+      // label into the input here turned the open list into a one-item
+      // filter of itself; keep whatever the user has typed and re-render
+      // with THAT filter. The label is restored by closeList() as always.
+      renderOptions(input.value);
+      return;
+    }
+    const label = getLabelForId(selectedId) || restingLabel;
     input.value = label;
     if (label) input.placeholder = label;
-    if (isOpen) renderOptions('');
+  }
+
+  function setRestingLabel(label) {
+    restingLabel = label || '';
+    if (!isOpen && selectedId === null) {
+      input.value = restingLabel;
+      if (restingLabel) input.placeholder = restingLabel;
+    }
   }
 
   function getValue() {
@@ -369,5 +390,5 @@ export function initSearchableCombobox({
   update(initialOptions, null);
   setDisabled(disabled);
 
-  return { update, getValue, setValue, setDisabled, destroy };
+  return { update, getValue, setValue, setRestingLabel, setDisabled, destroy };
 }

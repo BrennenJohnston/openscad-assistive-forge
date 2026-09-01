@@ -1,8 +1,15 @@
 # D1: Preset-Specific Companion Files — Architecture Design
 
-**Status:** Design approved, not yet implemented.
-**Priority:** Implement after Phases 1–2 items are stable in production.
-**Risk:** High — touches IndexedDB schema, WASM filesystem, and ZIP project format.
+**Status:** **Built.** Re-checked 2026-08-16: `applyCompanionAliases()` lives in
+`src/js/zip-handler.js`, `buildPresetCompanionMap()` in
+`src/js/file-handler.js`, and `presetCompanion` appears in 22 further places
+across the source. This document is kept as the design record.
+**Risk at the time:** High — touches IndexedDB schema, WASM filesystem, and ZIP project format.
+**Worth knowing:** a bug in exactly this code was the root cause of KI-012.
+`applyCompanionAliases()` originally replaced an existing root-level companion
+file instead of only creating a missing one, which changed what `include`
+resolved to and produced wrong geometry. See
+[`audit/ki-012-investigation/findings-report.md`](./audit/ki-012-investigation/findings-report.md).
 
 ---
 

@@ -10,6 +10,11 @@ import { announceImmediate } from './announcer.js';
 import { escapeHtml } from './html-utils.js';
 import * as SharedImageStore from './shared-image-store.js';
 import { getAppPrefKey, safeGetItem, safeSetItem } from './storage-keys.js';
+import { noteOverlayChanged } from './overlay-settings.js';
+import { createCropDialog } from './crop-dialog.js';
+// UF-14 (U-25): auto-rotate and its speed are PER-UI viewing preferences
+// (signed Q-40 table); the reference-overlay cluster stays app-level.
+import { readScopedPref, writeScopedPref } from './ui-scoped-prefs.js';
 
 const STORAGE_KEY_OVERLAY_ENABLED = getAppPrefKey('overlay-enabled');
 const STORAGE_KEY_OVERLAY_OPACITY = getAppPrefKey('overlay-opacity');
@@ -61,6 +66,17 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
   const overlayOffsetXInput = document.getElementById('overlayOffsetXInput');
   const overlayOffsetYInput = document.getElementById('overlayOffsetYInput');
   const overlayRotationInput = document.getElementById('overlayRotationInput');
+  const overlayZPresetSelect = document.getElementById('overlayZPresetSelect');
+  const overlayZCustomInput = document.getElementById('overlayZCustomInput');
+  const overlayZCustomRow = document.getElementById('overlayZCustomRow');
+  const overlayCropBtn = document.getElementById('overlayCropBtn');
+  const overlayUseRow = document.getElementById('overlayUseRow');
+  const overlayUseTargetSelect = document.getElementById(
+    'overlayUseTargetSelect'
+  );
+  const overlayUseAsDesignBtn = document.getElementById(
+    'overlayUseAsDesignBtn'
+  );
   const overlayRotationValue = document.getElementById('overlayRotationValue');
   const overlayStatus = document.getElementById('overlayStatus');
   const overlayFileInput = document.getElementById('overlayFileInput');
@@ -448,33 +464,73 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       safeSetItem(HIDDEN_KEY, JSON.stringify([...set]));
     }
 
+    /**
+     * UF-35: the ✕ left the group's <summary> — a control inside the
+     * disclosure's own control is axe's nested-interactive — and now sits in
+     * the actions layer beside the <details>. It is no longer a descendant of
+     * the group, so it is reached through the row that stacks the two.
+     */
+    function hideButtonFor(groupEl) {
+      return (
+        groupEl
+          .closest('.forge-disclosure-row')
+          ?.querySelector('.param-group-hide-btn') || null
+      );
+    }
+
     function refreshShowAll() {
-      const existing = container.querySelector('.param-groups-show-all');
+      const existingBar = container.querySelector('.param-groups-hidden-bar');
       const hiddenGroups = container.querySelectorAll('.param-group[hidden]');
       const count = hiddenGroups.length;
       if (count === 0) {
-        existing?.remove();
+        existingBar?.remove();
         return;
       }
-      if (!existing) {
-        const link = document.createElement('button');
-        link.className = 'param-groups-show-all btn btn-sm btn-outline';
-        link.type = 'button';
-        link.setAttribute('aria-live', 'polite');
-        container.appendChild(link);
-        link.addEventListener('click', () => {
-          container.querySelectorAll('.param-group[hidden]').forEach((el) => {
-            el.removeAttribute('hidden');
-            const btn = el.querySelector('.param-group-hide-btn');
-            if (btn) btn.setAttribute('aria-pressed', 'false');
-          });
-          saveHidden(new Set());
-          refreshShowAll();
-          announceImmediate('All parameter groups shown');
-        });
+
+      const bar = existingBar || document.createElement('div');
+      if (!existingBar) {
+        bar.className = 'param-groups-hidden-bar';
+        container.appendChild(bar);
       }
-      container.querySelector('.param-groups-show-all').textContent =
-        `${count} group${count !== 1 ? 's' : ''} hidden — Show all`;
+      bar.textContent = '';
+
+      const showAll = document.createElement('button');
+      showAll.className = 'param-groups-show-all btn btn-sm btn-outline';
+      showAll.type = 'button';
+      showAll.textContent = `${count} group${count !== 1 ? 's' : ''} hidden — Show all`;
+      showAll.addEventListener('click', () => {
+        container.querySelectorAll('.param-group[hidden]').forEach((el) => {
+          el.removeAttribute('hidden');
+          const btn = hideButtonFor(el);
+          if (btn) btn.setAttribute('aria-pressed', 'false');
+        });
+        saveHidden(new Set());
+        refreshShowAll();
+        announceImmediate('All parameter groups shown');
+      });
+      bar.appendChild(showAll);
+
+      // Per-group restore chips (C12): one click brings back just that group
+      hiddenGroups.forEach((groupEl) => {
+        const label =
+          groupEl.querySelector('summary span')?.textContent?.trim() ||
+          groupEl.dataset.groupId;
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'param-group-show-chip btn btn-sm btn-outline';
+        chip.textContent = `Show ${label}`;
+        chip.addEventListener('click', () => {
+          groupEl.removeAttribute('hidden');
+          const btn = hideButtonFor(groupEl);
+          if (btn) btn.setAttribute('aria-pressed', 'false');
+          const hiddenSet = loadHidden();
+          hiddenSet.delete(groupEl.dataset.groupId);
+          saveHidden(hiddenSet);
+          refreshShowAll();
+          announceImmediate(`${label} group shown`);
+        });
+        bar.appendChild(chip);
+      });
     }
 
     const hidden = loadHidden();
@@ -483,7 +539,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       .forEach((details) => {
         if (hidden.has(details.dataset.groupId)) {
           details.setAttribute('hidden', '');
-          const btn = details.querySelector('.param-group-hide-btn');
+          const btn = hideButtonFor(details);
           if (btn) btn.setAttribute('aria-pressed', 'true');
         }
       });
@@ -496,13 +552,20 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       );
       if (!groupEl) return;
       groupEl.setAttribute('hidden', '');
-      const btn = groupEl.querySelector('.param-group-hide-btn');
+      const btn = hideButtonFor(groupEl);
       if (btn) btn.setAttribute('aria-pressed', 'true');
       const hiddenSet = loadHidden();
       hiddenSet.add(groupId);
       saveHidden(hiddenSet);
       refreshShowAll();
-      announceImmediate(`${groupLabel} group hidden`);
+      // The ✕ the user pressed just left the tree — land focus on the
+      // restore bar instead of letting it fall to <body>.
+      container
+        .querySelector('.param-groups-hidden-bar .param-groups-show-all')
+        ?.focus();
+      announceImmediate(
+        `${groupLabel} group hidden — use Show all groups to restore`
+      );
     });
   }
 
@@ -609,6 +672,10 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       overlayDimensionsValue.textContent = `${w} × ${h} mm`;
     }
 
+    syncOverlayZControls();
+    updateCropButton();
+    updateUseAsDesignRow();
+
     updateOverlayStatus();
   }
 
@@ -630,6 +697,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
             if (!overlayToggle?.checked) {
               overlayToggle.checked = true;
               previewManager.setOverlayEnabled(true);
+              noteOverlayChanged();
             }
             updateOverlayUIFromConfig();
             overlaySourceSelect.value = fileName;
@@ -721,6 +789,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       if (!overlayToggle?.checked) {
         overlayToggle.checked = true;
         previewManager.setOverlayEnabled(true);
+        noteOverlayChanged();
       }
 
       updateOverlayUIFromConfig();
@@ -739,6 +808,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       const previewManager = getPreviewManager();
       if (previewManager) {
         previewManager.setOverlayEnabled(enabled);
+        noteOverlayChanged();
         updateOverlayStatus();
         localStorage.setItem(
           STORAGE_KEY_OVERLAY_ENABLED,
@@ -775,6 +845,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       const previewManager = getPreviewManager();
       if (previewManager) {
         previewManager.setOverlayOpacity(opacityPercent / 100);
+        noteOverlayChanged();
         localStorage.setItem(
           STORAGE_KEY_OVERLAY_OPACITY,
           opacityPercent.toString()
@@ -805,6 +876,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
     const previewManager = getPreviewManager();
     if (previewManager) {
       previewManager.setOverlaySvgColor(color);
+      noteOverlayChanged();
     }
     localStorage.setItem(STORAGE_KEY_OVERLAY_SVG_COLOR, color);
     localStorage.setItem(
@@ -913,6 +985,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       const previewManager = getPreviewManager();
       if (previewManager) {
         previewManager.setOverlayTransform({ offsetX: 0, offsetY: 0 });
+        noteOverlayChanged();
         updateOverlayUIFromConfig();
       }
     });
@@ -925,6 +998,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       const previewManager = getPreviewManager();
       if (!isNaN(width) && previewManager) {
         previewManager.setOverlaySize({ width });
+        noteOverlayChanged();
         updateOverlayUIFromConfig();
         localStorage.setItem(STORAGE_KEY_OVERLAY_WIDTH, String(width));
       }
@@ -938,6 +1012,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       const previewManager = getPreviewManager();
       if (!isNaN(height) && previewManager) {
         previewManager.setOverlaySize({ height });
+        noteOverlayChanged();
         updateOverlayUIFromConfig();
         localStorage.setItem(STORAGE_KEY_OVERLAY_HEIGHT, String(height));
       }
@@ -968,6 +1043,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       const previewManager = getPreviewManager();
       if (!isNaN(offsetX) && previewManager) {
         previewManager.setOverlayTransform({ offsetX });
+        noteOverlayChanged();
       }
     });
   }
@@ -979,6 +1055,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       const previewManager = getPreviewManager();
       if (!isNaN(offsetY) && previewManager) {
         previewManager.setOverlayTransform({ offsetY });
+        noteOverlayChanged();
       }
     });
   }
@@ -993,6 +1070,222 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       const previewManager = getPreviewManager();
       if (previewManager) {
         previewManager.setOverlayTransform({ rotationDeg });
+        noteOverlayChanged();
+      }
+    });
+  }
+
+  /**
+   * DP-6: hand the picture you have been tracing against to a design
+   * parameter.
+   *
+   * It goes in through the parameter's OWN file input, as a real File on a
+   * real change event, rather than through a second code path that writes the
+   * value directly. That is deliberate: the upload path already traces a
+   * raster, opens the preparation editor when the drawing needs it, measures
+   * and emits the aspect companion in the same state update (the D-108 law),
+   * appends the gallery entry and persists it with the project. A parallel
+   * path would have to copy all of that and then stay copied.
+   */
+  function fileParamControls() {
+    return Array.from(
+      document.querySelectorAll('.param-control--file input[type="file"]')
+    ).filter((input) => input.id.startsWith('param-'));
+  }
+
+  /** A readable name for a file parameter, taken from its own label. */
+  function fileParamLabel(input) {
+    const wrap = input.closest('.param-control');
+    const label = wrap?.querySelector('label');
+    const text = label?.textContent?.trim();
+    return text || input.id.replace(/^param-/, '').replace(/_/g, ' ');
+  }
+
+  function updateUseAsDesignRow() {
+    if (!overlayUseRow || !overlayUseTargetSelect) return;
+    const inputs = fileParamControls();
+    const rec = currentOverlayImage();
+    // Nothing to hand over, or nowhere to hand it to.
+    overlayUseRow.hidden = inputs.length === 0 || !rec;
+    if (overlayUseRow.hidden) return;
+
+    const previous = overlayUseTargetSelect.value;
+    overlayUseTargetSelect.replaceChildren();
+    for (const input of inputs) {
+      const option = document.createElement('option');
+      option.value = input.id;
+      option.textContent = fileParamLabel(input);
+      overlayUseTargetSelect.appendChild(option);
+    }
+    if (inputs.some((i) => i.id === previous)) {
+      overlayUseTargetSelect.value = previous;
+    }
+    // One choice is not a choice: the select only earns its place when there
+    // is more than one design slot to pick between.
+    overlayUseTargetSelect.hidden = inputs.length < 2;
+  }
+
+  /** The image currently behind the model, whichever lane it came from. */
+  function currentOverlayImage() {
+    const value = overlaySourceSelect?.value || '';
+    if (!value) return null;
+    if (value.startsWith('screenshot:')) {
+      return SharedImageStore.getImageByName(value.slice('screenshot:'.length));
+    }
+    const uploaded = uploadedOverlayFiles.get(value);
+    if (uploaded) {
+      return { name: value, dataUrl: uploaded.content, isSvg: uploaded.isSvg };
+    }
+    return null;
+  }
+
+  async function useOverlayAsDesign() {
+    const rec = currentOverlayImage();
+    const targetId = overlayUseTargetSelect?.value;
+    const input = targetId ? document.getElementById(targetId) : null;
+    if (!rec || !input) return;
+
+    try {
+      const isSvg = rec.isSvg || /^\s*<svg|image\/svg/i.test(rec.dataUrl || '');
+      const blob = isSvg
+        ? new Blob([rec.dataUrl], { type: 'image/svg+xml' })
+        : await (await fetch(rec.dataUrl)).blob();
+      const file = new File([blob], rec.name, {
+        type: blob.type || 'image/png',
+      });
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      input.files = transfer.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      announceImmediate(
+        `${rec.name} sent to ${fileParamLabel(input)}. Forge is preparing it.`
+      );
+    } catch (error) {
+      console.error('[Overlay] Could not use the image as a design:', error);
+      announceImmediate('Could not use that image as a design.');
+    }
+  }
+
+  if (overlayUseAsDesignBtn) {
+    overlayUseAsDesignBtn.addEventListener('click', () => {
+      void useOverlayAsDesign();
+    });
+  }
+
+  /**
+   * DP-5: cropping. Only a raster from the shared image store can be cropped -
+   * an SVG has no pixels to cut - so the button follows the chosen source.
+   */
+  function currentCroppableImage() {
+    const value = overlaySourceSelect?.value || '';
+    if (!value) return null;
+    // Two places a croppable picture can come from: the shared image store
+    // (the Screenshots lane, which knows its own size) and this panel's own
+    // Upload button, which holds only the data URL. An SVG is excluded from
+    // both - there are no pixels in it to cut.
+    if (value.startsWith('screenshot:')) {
+      return SharedImageStore.getImageByName(value.slice('screenshot:'.length));
+    }
+    const uploaded = uploadedOverlayFiles.get(value);
+    if (uploaded && !uploaded.isSvg) {
+      return { name: value, dataUrl: uploaded.content };
+    }
+    return null;
+  }
+
+  function updateCropButton() {
+    if (!overlayCropBtn) return;
+    const rec = currentCroppableImage();
+    overlayCropBtn.disabled = !rec;
+    overlayCropBtn.title = rec
+      ? `Crop ${rec.name} and use the copy`
+      : 'Choose an uploaded picture to crop it';
+  }
+
+  const cropDialog = createCropDialog({
+    saveCopy: (name, dataUrl) =>
+      SharedImageStore.addImageFromDataUrl(name, dataUrl),
+    onCropped: async (record) => {
+      // The copy becomes the overlay straight away: cropping is something you
+      // do IN ORDER to trace, so making the person go and select it again
+      // would be a step with no decision in it.
+      updateOverlaySourceDropdown();
+      const previewManager = getPreviewManager();
+      if (!previewManager || !record?.dataUrl) return;
+      try {
+        await previewManager.setReferenceOverlaySource({
+          kind: 'raster',
+          name: record.name,
+          dataUrlOrText: record.dataUrl,
+        });
+        updateOverlayUIFromConfig();
+        // AFTER the config sync, not before: updateOverlayUIFromConfig writes
+        // config.sourceFileName into this select, and that name has no
+        // "screenshot:" prefix - so setting the value first left the select
+        // matching no option at all, showing blank, and disabling the Crop
+        // button that focus was about to return to.
+        if (overlaySourceSelect) {
+          overlaySourceSelect.value = `screenshot:${record.name}`;
+        }
+        updateCropButton();
+        // DP-26 P3: the Use-as-design row read the select while it was
+        // momentarily blank (the config sync above writes a name with no
+        // "screenshot:" prefix) and hid itself - so a plain upload offered
+        // the hand-over and a CROPPED copy did not, which is backwards:
+        // cropping is what you do on the way to the Colours lane.
+        updateUseAsDesignRow();
+        noteOverlayChanged();
+      } catch (error) {
+        console.error('[Overlay] Could not use the cropped copy:', error);
+      }
+    },
+  });
+
+  if (overlayCropBtn) {
+    overlayCropBtn.addEventListener('click', () => {
+      const rec = currentCroppableImage();
+      if (rec) cropDialog.open(rec, overlayCropBtn);
+    });
+  }
+
+  /**
+   * DP-5: the millimetre field belongs to the "A height I choose" preset, so
+   * it is hidden the rest of the time rather than sitting there inert with a
+   * number that the preset is about to overwrite.
+   */
+  function syncOverlayZControls() {
+    if (!overlayZPresetSelect) return;
+    const previewManager = getPreviewManager();
+    const config = previewManager?.getOverlayConfig?.();
+    const preset = config?.zPreset || 'under-plate';
+    overlayZPresetSelect.value = preset;
+    if (overlayZCustomRow) overlayZCustomRow.hidden = preset !== 'custom';
+    if (overlayZCustomInput && config) {
+      overlayZCustomInput.value = Number.isFinite(config.zCustomMm)
+        ? config.zCustomMm
+        : 0;
+    }
+  }
+
+  if (overlayZPresetSelect) {
+    overlayZPresetSelect.addEventListener('change', () => {
+      const previewManager = getPreviewManager();
+      if (previewManager) {
+        previewManager.setOverlayZ({ preset: overlayZPresetSelect.value });
+        noteOverlayChanged();
+      }
+      syncOverlayZControls();
+    });
+  }
+
+  if (overlayZCustomInput) {
+    overlayZCustomInput.addEventListener('input', () => {
+      const customMm = parseFloat(overlayZCustomInput.value);
+      if (!Number.isFinite(customMm)) return;
+      const previewManager = getPreviewManager();
+      if (previewManager) {
+        previewManager.setOverlayZ({ preset: 'custom', customMm });
+        noteOverlayChanged();
       }
     });
   }
@@ -1025,12 +1318,12 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       previewManager.setAutoRotate(enabled);
     }
     syncAutoRotateToggles(enabled);
-    localStorage.setItem(STORAGE_KEY_AUTO_ROTATE, enabled ? 'true' : 'false');
+    writeScopedPref(STORAGE_KEY_AUTO_ROTATE, enabled ? 'true' : 'false');
     announceImmediate(`Auto-rotation ${enabled ? 'enabled' : 'disabled'}`);
     console.log(`[App] Auto-rotate ${enabled ? 'enabled' : 'disabled'}`);
   }
 
-  const savedRotateSpeed = localStorage.getItem(STORAGE_KEY_ROTATE_SPEED);
+  const savedRotateSpeed = readScopedPref(STORAGE_KEY_ROTATE_SPEED);
 
   function updateRotationSpeedDisplay(speed) {
     if (rotationSpeedValue) {
@@ -1085,7 +1378,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
 
     rotationSpeedInput.addEventListener('change', () => {
       const speed = parseFloat(rotationSpeedInput.value);
-      localStorage.setItem(STORAGE_KEY_ROTATE_SPEED, speed.toString());
+      writeScopedPref(STORAGE_KEY_ROTATE_SPEED, speed.toString());
       console.log(`[App] Auto-rotate speed set to ${speed.toFixed(1)} deg/s`);
     });
   }
@@ -1176,8 +1469,8 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
     }
 
     // Restore auto-rotate settings
-    const savedAutoRotatePref = localStorage.getItem(STORAGE_KEY_AUTO_ROTATE);
-    const savedRotateSpeedPref = localStorage.getItem(STORAGE_KEY_ROTATE_SPEED);
+    const savedAutoRotatePref = readScopedPref(STORAGE_KEY_AUTO_ROTATE);
+    const savedRotateSpeedPref = readScopedPref(STORAGE_KEY_ROTATE_SPEED);
 
     if (savedRotateSpeedPref) {
       const speed = parseFloat(savedRotateSpeedPref);
@@ -1190,6 +1483,32 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       pm.setAutoRotate(true);
       syncAutoRotateToggles(true);
     }
+  }
+
+  /**
+   * The live swap (UF-14 P3): re-read auto-rotate and its speed from the
+   * newly active namespace and re-apply them — rotation state, both
+   * toggle buttons' aria-pressed, and the speed slider readout. Reduced
+   * motion still wins over any saved "on".
+   */
+  function reapplyScopedAutoRotate() {
+    const pm = getPreviewManager();
+
+    let speed = 0.5;
+    const savedSpeed = readScopedPref(STORAGE_KEY_ROTATE_SPEED);
+    if (savedSpeed) {
+      const parsed = parseFloat(savedSpeed);
+      if (!isNaN(parsed) && parsed >= 0.1 && parsed <= 3) speed = parsed;
+    }
+    if (rotationSpeedInput) rotationSpeedInput.value = speed;
+    updateRotationSpeedDisplay(speed);
+    if (pm) pm.setAutoRotateSpeed(speed);
+
+    const enabled =
+      readScopedPref(STORAGE_KEY_AUTO_ROTATE) === 'true' &&
+      !prefersReducedMotion.matches;
+    if (pm) pm.setAutoRotate(enabled);
+    syncAutoRotateToggles(enabled);
   }
 
   // ---- Public API ----
@@ -1205,6 +1524,7 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
     getThemeAwareSvgColor,
     syncAutoRotateToggles,
     setAutoRotation,
+    reapplyScopedAutoRotate,
     connectPreviewManager,
   };
 }

@@ -109,8 +109,20 @@ describe('ConsolePanel.parseLine — DEPRECATED and TRACE', () => {
     expect(result.line).toBe(10);
   });
 
-  it('returns null for plain lines', () => {
-    expect(panel.parseLine('some random output')).toBeNull();
+  it('keeps a plain status line as info (P7)', () => {
+    // Was `toBeNull()`. Dropping unclassified lines is what left the Classic
+    // console reading "No console output yet" after a clean render, while the
+    // desktop console showed nine lines of compile chatter — and it is how the
+    // only visible trace of a healthy render came to be a red Error-Log row.
+    const result = panel.parseLine('Geometries in cache: 41');
+    expect(result).not.toBeNull();
+    expect(result.type).toBe(CONSOLE_ENTRY_TYPE.INFO);
+    expect(result.message).toBe('Geometries in cache: 41');
+  });
+
+  it('still returns null for a blank line', () => {
+    expect(panel.parseLine('   ')).toBeNull();
+    expect(panel.parseLine('')).toBeNull();
   });
 });
 
@@ -368,7 +380,9 @@ describe('ConsolePanel — counts include new types', () => {
   });
 
   it('getCounts includes all types', () => {
-    panel.addOutput('ECHO: "hi"\nWARNING: w\nERROR: e\nDEPRECATED: d\nTRACE: t');
+    panel.addOutput(
+      'ECHO: "hi"\nWARNING: w\nERROR: e\nDEPRECATED: d\nTRACE: t'
+    );
     const counts = panel.getCounts();
     expect(counts.echo).toBe(1);
     expect(counts.warning).toBe(1);

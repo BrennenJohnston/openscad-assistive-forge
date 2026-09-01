@@ -6,13 +6,24 @@
 import './styles/main.css';
 import { extractParameters } from './js/parser.js';
 import {
+  reconcileParameters,
+  collectWithheldDefineKeys,
+} from './js/parameter-reconciler.js';
+import {
   renderParameterUI,
   setLimitsUnlocked,
   getAllDefaults,
   focusParameter,
   locateParameterKey,
   setParameterValue as _setParameterValue,
+  setStarterParameters,
 } from './js/ui-generator.js';
+import {
+  normalizeStarterList,
+  resolveStarterParameters,
+  unknownStarterMessage,
+  describeUnknownStarter,
+} from './js/starter-parameters.js';
 import { stateManager } from './js/state.js';
 import {
   downloadSTL,
@@ -27,11 +38,28 @@ import { getBrailleDownloadName } from './js/braille-panel.js';
 import {
   RenderController,
   RENDER_QUALITY,
+  PREVIEW_QUALITY_DEFAULT,
   estimateRenderTime,
 } from './js/render-controller.js';
+import {
+  loadProjectManifest,
+  getBuiltinManifest,
+  applyPreviewOverrides,
+} from './js/project-manifest.js';
+import { build2DPreviewStyleTag } from './js/state-colors.js';
+import {
+  DROP_KIND,
+  classifyDrop,
+  describeAccepted,
+} from './js/upload-router.js';
+import { setStlViewActive, isStlViewActive } from './js/stl-view-mode.js';
 import { escapeHtml, isValidServiceWorkerMessage } from './js/html-utils.js';
 import { getQualityPreset, COMPLEXITY_TIER } from './js/quality-tiers.js';
-import { getThreeModule } from './js/preview.js';
+import {
+  getThreeModule,
+  CAMERA_ZOOM_STEP,
+  VIEWPORT_SCHEMES,
+} from './js/preview.js';
 import { normalizeHexColor } from './js/color-utils.js';
 import { buildDefineArgs as formatBuildDefineArgs } from './js/scad-param-formatter.js';
 import {
@@ -39,12 +67,22 @@ import {
   PREVIEW_STATE,
 } from './js/auto-preview-controller.js';
 import { isEnabled as isFlagEnabled } from './js/feature-flags.js';
-import { resolve2DExportIntent, isNonPreviewable } from './js/render-intent.js';
+import {
+  propose2DExportAdjustments,
+  strip2DGenerateForFallback,
+  isNonPreviewable,
+} from './js/render-intent.js';
 import {
   applyCompanionAliases,
   getOverlaySvgTarget,
 } from './js/zip-handler.js';
-import { loadManifest, ManifestError } from './js/manifest-loader.js';
+import {
+  loadManifest,
+  ManifestError,
+  validateManifest,
+} from './js/manifest-loader.js';
+import { buildProjectManifest } from './js/publish-manifest.js';
+import { buildProvenance, buildProjectZipEntries } from './js/project-zip.js';
 import { getConsolePanel } from './js/console-panel.js';
 import {
   getErrorLogPanel,
@@ -71,6 +109,7 @@ import {
 } from './js/modal-manager.js';
 import {
   translateError,
+  findMissingLibrary,
   showErrorModal,
   showErrorToast,
 } from './js/error-translator.js';
@@ -90,9 +129,14 @@ import {
   exportProjectsBackup,
   exportSingleProject,
   importProjectsBackup,
+  linkProjectFromFiles,
+  readProjectFilesFromList,
+  findLinkedProjectForHandle,
 } from './js/storage-manager.js';
 // showWorkflowProgress / hideWorkflowProgress moved to hfm-controller.js (applyToolbarModeVisibility)
 import { startTutorial } from './js/tutorial-sandbox.js';
+import { initWelcomeSpotlight } from './js/welcome-spotlight.js';
+import { initTourNudge } from './js/tour-nudge.js';
 import { initDrawerController } from './js/drawer-controller.js';
 import { initPreviewSettingsDrawer } from './js/preview-settings-drawer.js';
 import { initCameraPanelController } from './js/camera-panel-controller.js';
@@ -127,6 +171,9 @@ import {
   STORAGE_KEY_RECOVERY_SOURCE,
   STORAGE_KEY_RECOVERY_TIMESTAMP,
   STORAGE_KEY_STATUS_BAR,
+  STORAGE_KEY_GRID,
+  STORAGE_KEY_GRID_SIZE,
+  STORAGE_KEY_VIEWPORT_SCHEME,
   STORAGE_KEY_MODEL_COLOR,
   STORAGE_KEY_MODEL_COLOR_ENABLED,
   STORAGE_KEY_MODEL_OPACITY,
@@ -140,6 +187,12 @@ import {
   STORAGE_KEY_WASM_INIT_COMPLETED,
   PRESET_SORT_KEY,
 } from './js/storage-keys.js';
+import {
+  ensureScopedPrefsSeeded,
+  readScopedPref,
+  writeScopedPref,
+  removeScopedPref,
+} from './js/ui-scoped-prefs.js';
 import {
   initImageMeasurement,
   openFullscreen as measureOpenFullscreen,
@@ -161,7 +214,10 @@ import {
 
 // Storage keys are centralized in ./js/storage-keys.js (audit Q4)
 import {
-  announce as _announce,
+  initPreferencesDialog,
+  openPreferencesDialog,
+} from './js/preferences-dialog.js';
+import {
   announceImmediate,
   announceCameraAction,
   announceError as _announceError,
@@ -169,19 +225,48 @@ import {
 } from './js/announcer.js';
 // Expert Mode (M2) - Code editor integration
 import { getModeManager } from './js/mode-manager.js';
-// UI Mode Controller - Basic/Advanced interface layout switching
+import { loadEditorPrefs, saveEditorPref } from './js/editor-prefs.js';
+// UI Mode Controller - Simplified/Standard/Classic interface layout switching
 import { getUIModeController } from './js/ui-mode-controller.js';
+// U-10: Classic is desktop-only for now — the viewport half of the gate
+import {
+  isViewportDesktopShaped,
+  subscribeViewportShape,
+} from './js/classic-availability.js';
+// U-46: the four app-chrome controls join the Customizer row on a phone
+import { initMobileToolbar } from './js/mobile-toolbar.js';
+import {
+  initClassicLayoutController,
+  getClassicLayoutController,
+  collapseCustomizerGroups,
+} from './js/classic-layout-controller.js';
+import { tabIdFor, DOCK_PANELS } from './js/classic-dock-model.js';
+import { initFontListPanel } from './js/font-list-panel.js';
+import { initViewportControlPanel } from './js/viewport-control-panel.js';
+import { initAnimatePanel, getAnimatePanel } from './js/animate-panel.js';
+import { initClassicStatusBar } from './js/classic-status-bar.js';
+import {
+  initClassicEditorToolbar,
+  getClassicEditorToolbar,
+  REASON_NEEDS_RENDER as CLASSIC_STL_NEEDS_RENDER_REASON,
+} from './js/classic-editor-toolbar.js';
+import { FolderChangeWatcher } from './js/folder-change-watcher.js';
+import { FolderWriteBack } from './js/folder-write-back.js';
+import { createFolderSaveActions } from './js/folder-save-actions.js';
 // Toolbar Menu Controller - File|Edit|Design|View|Window|Help menu bar
 import {
   getToolbarMenuController,
   applyToolbarModeVisibility,
 } from './js/toolbar-menu-controller.js';
+import { setAppSurface } from './js/app-surface.js';
+import { installBackGuard } from './js/back-guard.js';
 import { initParamDetailController } from './js/param-detail-controller.js';
 import { initOverlayGridController } from './js/overlay-grid-controller.js';
 import { initSavedProjectsUI } from './js/saved-projects-ui.js';
 import {
   getFileActionsController,
   exportFormatFromMenu,
+  setExportDependencies,
 } from './js/file-actions-controller.js';
 import { getEditActionsController } from './js/edit-actions-controller.js';
 import { copyPresetName } from './js/copy-preset-name.js';
@@ -208,6 +293,10 @@ import {
 import {
   initSavedProjectsDB,
   updateProject,
+  touchProject,
+  getProject,
+  listSavedProjects,
+  deleteProject,
   getSavedProjectsSummary as _getSavedProjectsSummary,
   clearAllSavedProjects as _clearAllSavedProjects,
   getStorageDiagnostics,
@@ -215,6 +304,12 @@ import {
   createFolder as _createFolder,
   moveFolder as _moveFolder,
 } from './js/saved-projects-manager.js';
+import {
+  loadFolderHandle,
+  saveFolderHandle,
+  clearFolderHandle,
+} from './js/folder-handle-store.js';
+import { createLinkedFoldersUi } from './js/linked-folders-ui.js';
 import Split from 'split.js';
 
 /**
@@ -230,29 +325,81 @@ import Split from 'split.js';
  * @param {string} format - Output format ('svg' or 'dxf')
  * @returns {Object} Parameter object with 2D-compatible overrides applied
  */
-function resolve2DExportParameters(parameters, schema, format) {
-  const resolved = resolve2DExportIntent(parameters, schema, format);
-
-  if (resolved !== parameters) {
-    const adjustments = Object.entries(resolved).filter(
-      ([k, v]) => parameters[k] !== v
+function propose2DExportChanges(parameters, schema, format, projectFiles) {
+  const manifest = loadProjectManifest(projectFiles) ?? getBuiltinManifest();
+  const proposal = propose2DExportAdjustments(
+    parameters,
+    schema,
+    format,
+    manifest.export2D ?? null
+  );
+  if (proposal.changes.length > 0) {
+    console.debug(
+      '[resolve2D] Proposed 2D-export adjustments (applied only with user consent):',
+      proposal.changes
     );
-    if (adjustments.length > 0) {
-      console.debug(
-        '[resolve2D] Auto-adjusted parameters for 2D export:',
-        adjustments
-      );
-    } else {
-      console.debug(
-        '[resolve2D] No parameter adjustments needed for 2D export'
-      );
-    }
   }
+  return proposal;
+}
 
-  return resolved;
+/**
+ * Whether the user has consented to applying the proposed 2D-export
+ * parameter changes. The checkbox ships checked (the proposals are almost
+ * always what the user wants); unchecking exports with parameters exactly
+ * as configured.
+ */
+function is2DAdjustmentsConsented() {
+  const checkbox = document.getElementById('format2dAutoAdjustApply');
+  return checkbox ? checkbox.checked : true;
+}
+
+/**
+ * Ask the user before running the approximate projection fallback for a
+ * 2D export whose direct render produced 3D geometry (MODEL_NOT_2D).
+ * The fallback is a real geometry approximation, so it never runs
+ * silently.
+ *
+ * @param {string} format - 'svg' or 'dxf'
+ * @returns {Promise<boolean>} True when the user accepts
+ */
+function confirmProjectionFallback(format) {
+  const formatName = format.toUpperCase();
+  return showConfirmDialog(
+    'This model produced 3D geometry instead of a 2D profile. ' +
+      'An approximate outline can be generated by rendering the model in ' +
+      'its default 3D mode and slicing the mesh at its base plane. ' +
+      'Curves become straight line segments — verify all dimensions ' +
+      'before laser cutting.',
+    `Generate approximate ${formatName}?`,
+    `Generate approximate ${formatName}`,
+    'Cancel'
+  );
 }
 
 // EXAMPLE_DEFINITIONS moved to file-handler.js
+
+/**
+ * Detect OFF/COFF geometry bytes masquerading as another format.
+ * Guards the STL download path: OFF starts with an ASCII "OFF"/"COFF"
+ * header line, while binary STL has an arbitrary 80-byte header and
+ * ASCII STL starts with "solid".
+ *
+ * @param {ArrayBuffer|Uint8Array|string} data - Rendered output bytes
+ * @returns {boolean} True if the data looks like an OFF/COFF file
+ */
+function looksLikeOffGeometry(data) {
+  if (!data) return false;
+  if (typeof data === 'string') return /^C?OFF\b/.test(data.slice(0, 5));
+  let bytes;
+  if (data instanceof Uint8Array) {
+    bytes = data.subarray(0, 5);
+  } else if (data instanceof ArrayBuffer) {
+    bytes = new Uint8Array(data, 0, Math.min(5, data.byteLength));
+  } else {
+    return false;
+  }
+  return /^C?OFF\b/.test(String.fromCharCode(...bytes));
+}
 
 // Feature detection
 function checkBrowserSupport() {
@@ -297,6 +444,472 @@ let comparisonController = null;
 let comparisonView = null;
 let renderQueue = null;
 
+/**
+ * Export quality mode. Module-scope like previewManager so the __forgeDebug
+ * hook can read it: File > Export Quality is its only control (UF-11) and
+ * there is no DOM element left to ask. Session-only on purpose - the retired
+ * drawer select also reset to 'model' on every boot.
+ */
+let exportQualityMode = 'model';
+
+/**
+ * The expert block's ▶ Preview handler, published for the Classic editor
+ * toolbar. Null until the expert block initializes.
+ * @type {Function|null}
+ */
+let editorPreviewTrigger = null;
+
+/**
+ * Whether a full-quality STL for the given parameters is available right now —
+ * i.e. Generate has been pressed and the result still matches the parameters.
+ *
+ * This is the single source for render-state enablement. It gates the File
+ * menu's export items, the Generate button's Download state, and the Classic
+ * editor toolbar's Export STL button; the same recipe used to be written out
+ * twice, which is exactly the drift the risk register calls out.
+ *
+ * @param {Object} parameters - current parameter values
+ * @returns {boolean}
+ */
+function hasFullQualitySTLFor(parameters) {
+  return Boolean(
+    autoPreviewController?.getCurrentFullSTL(parameters) &&
+    !autoPreviewController?.needsFullRender(parameters)
+  );
+}
+
+/* ── Error Log: reaching it by keyboard and by menu (F1) ──────────────────────
+ *
+ * The Error-Log lives in two different places depending on the host, so every
+ * entry point below resolves WHERE it is from the DOM rather than from a mode
+ * flag that could disagree with it:
+ *
+ *   Forge    inside the console's Structured tabpanel, behind a tab
+ *   Classic  its own pane in the bottom strip (B2), always on screen
+ *
+ * The two hosts therefore mean different things by "show the Error Log". In
+ * Forge it is genuinely hidden and has to be revealed; in Classic it is
+ * already there and what the user wants is to GET to it. Classic must never
+ * click the Structured tab — that tablist is hidden there (D-9), so it would
+ * be an invisible control changing an invisible selection.
+ */
+
+/** The console <details> was closed and we opened it, so toggling off can undo that. */
+let errorLogOpenedConsole = false;
+
+/** Where focus was before Classic sent it into the Error-Log pane. */
+let errorLogReturnFocus = null;
+
+/**
+ * Which host currently holds the Error-Log, resolved from the element itself.
+ * @returns {'classic'|'forge'|null} null when the markup is not present at all
+ */
+function errorLogHost() {
+  const host = document
+    .getElementById('error-log-output')
+    ?.closest('#classicErrorLogSlot, #console-view-structured');
+  if (!host) return null;
+  return host.id === 'classicErrorLogSlot' ? 'classic' : 'forge';
+}
+
+/**
+ * Whether the Error-Log is on screen right now — what the Window menu item's
+ * tick reports, and what decides which way the shortcut toggles.
+ * @returns {boolean}
+ */
+function isErrorLogShowing() {
+  const host = errorLogHost();
+  if (host === 'forge') {
+    return (
+      Boolean(document.getElementById('consolePanel')?.open) &&
+      document
+        .getElementById('console-tab-structured')
+        ?.getAttribute('aria-selected') === 'true'
+    );
+  }
+  if (host === 'classic') {
+    // Simplified drops the whole bottom strip, and folding takes it with it.
+    if (getUIModeController().getClassicDensity() === 'simplified')
+      return false;
+    if (getClassicLayoutController()?.isConsoleCollapsed()) return false;
+    // Merged into a tab group (B7) and not the selected tab: the model sets
+    // `hidden` on the panels that are not showing.
+    return !document.getElementById('classicErrorLogSlot')?.hidden;
+  }
+  return false;
+}
+
+/**
+ * Forge: open the console if it is closed, select the Structured tab through
+ * the console panel's own wiring (console-panel.js), and put focus on the tab
+ * so the move announces itself.
+ * @returns {boolean}
+ */
+function showErrorLogForge() {
+  const panel = document.getElementById('consolePanel');
+  const tab = document.getElementById('console-tab-structured');
+  if (!panel || !tab) return false;
+
+  if (!panel.open) {
+    panel.open = true;
+    errorLogOpenedConsole = true;
+  }
+  tab.click();
+  tab.focus();
+  return true;
+}
+
+/**
+ * Forge: back to the Log view, and back to a closed console if that is how we
+ * found it — toggling off should leave the panel as it was, not half-open.
+ */
+function hideErrorLogForge() {
+  const logTab = document.getElementById('console-tab-log');
+  logTab?.click();
+  if (errorLogOpenedConsole) {
+    const panel = document.getElementById('consolePanel');
+    if (panel) panel.open = false;
+    errorLogOpenedConsole = false;
+  } else {
+    logTab?.focus();
+  }
+}
+
+/**
+ * Classic: the pane is already in the bottom strip, so this is about reaching
+ * it — unfold the strip if it is folded (D-8), select its tab if it has been
+ * merged into a group (B7), then focus the title bar's menu button, which is
+ * the focusable control the title bar carries (the same contract B8 uses after
+ * a move).
+ * @returns {boolean}
+ */
+function showErrorLogClassic() {
+  const slot = document.getElementById('classicErrorLogSlot');
+  if (!slot) return false;
+
+  if (getUIModeController().getClassicDensity() === 'simplified') {
+    // Nothing else speaks here, so this is the one announcement F1 adds.
+    announceImmediate('Error-Log is not available in the Simplified view');
+    return false;
+  }
+
+  const layout = getClassicLayoutController();
+  if (layout?.isConsoleCollapsed()) layout.setConsoleCollapsed(false);
+
+  const priorFocus = document.activeElement;
+
+  // A merged group's tab lives in the shared bar, outside the panel; a solo
+  // panel keeps its own title bar. tabIdFor comes from the dock model so the
+  // id scheme has one definition (plan §4 rule 5).
+  const tab = document.getElementById(tabIdFor('errorLog'));
+  if (tab) {
+    tab.click();
+    tab.focus();
+  } else {
+    const target =
+      slot.querySelector('.classic-panel-menu-btn') ||
+      slot.querySelector('button');
+    if (!target) return false;
+    target.focus();
+  }
+
+  errorLogReturnFocus = priorFocus;
+  return true;
+}
+
+/** Classic: hand focus back to wherever the user was before. */
+function returnFocusFromErrorLog() {
+  const prior = errorLogReturnFocus;
+  errorLogReturnFocus = null;
+  if (prior?.isConnected && typeof prior.focus === 'function') prior.focus();
+}
+
+/**
+ * Ctrl+Alt+2 / Window > Error-Log. Forge opens and closes the Structured view;
+ * Classic, where the pane cannot be closed, sends focus into it and back out
+ * again — the honest per-host reading of "toggle" for a panel that is always
+ * present in one host and hidden behind a tab in the other.
+ */
+function toggleErrorLog() {
+  const host = errorLogHost();
+
+  if (host === 'forge') {
+    if (isErrorLogShowing()) hideErrorLogForge();
+    else showErrorLogForge();
+    return;
+  }
+
+  if (host === 'classic') {
+    const slot = document.getElementById('classicErrorLogSlot');
+    const active = document.activeElement;
+    const alreadyInside =
+      Boolean(slot?.contains(active)) || active?.id === tabIdFor('errorLog');
+    if (alreadyInside) returnFocusFromErrorLog();
+    else showErrorLogClassic();
+  }
+}
+
+/**
+ * The toolbars Classic can hide, each with the body attribute `classic.css`
+ * keys off and the preference key it persists under.
+ *
+ * Upstream's View menu hides the editor toolbar and the 3D view toolbar
+ * separately (U2), so "Hide Toolbar" splits in two. The icon toolbar is this
+ * app's own third bar; it keeps its item and its stored preference so nothing
+ * on screen becomes unhideable, renamed so a screen reader can tell the three
+ * apart. One table, so the menu and the startup restore cannot drift.
+ */
+const CLASSIC_HIDEABLE_TOOLBARS = {
+  editor: {
+    label: 'Hide Editor toolbar',
+    name: 'Editor toolbar',
+    datasetKey: 'classicEditorToolbarHidden',
+    storageKey: 'openscad-forge-classic-editor-toolbar-hidden',
+  },
+  view: {
+    // E7 already shipped the CSS rule for this attribute; nothing set it until
+    // the menu item existed, so the 3D view toolbar could not be hidden.
+    label: 'Hide 3D View toolbar',
+    name: '3D view toolbar',
+    datasetKey: 'classicCameraBarHidden',
+    storageKey: 'openscad-forge-classic-camera-bar-hidden',
+  },
+  icon: {
+    label: 'Hide Classic Toolbar',
+    name: 'Classic toolbar',
+    datasetKey: 'classicToolbarHidden',
+    storageKey: 'openscad-forge-classic-toolbar-hidden',
+  },
+};
+
+/** @param {keyof CLASSIC_HIDEABLE_TOOLBARS} bar */
+function isClassicToolbarHidden(bar) {
+  return (
+    document.body.dataset[CLASSIC_HIDEABLE_TOOLBARS[bar].datasetKey] === 'true'
+  );
+}
+
+/**
+ * Hide or show one Classic toolbar and remember the choice.
+ * @param {keyof CLASSIC_HIDEABLE_TOOLBARS} bar
+ */
+function toggleClassicToolbar(bar) {
+  const def = CLASSIC_HIDEABLE_TOOLBARS[bar];
+  const hidden = !isClassicToolbarHidden(bar);
+  document.body.dataset[def.datasetKey] = String(hidden);
+  try {
+    localStorage.setItem(def.storageKey, String(hidden));
+  } catch {
+    // Preference persistence is best-effort.
+  }
+  // Same swallow as Jump To: a discrete menu action's only feedback must not
+  // sit in a 350ms debounce that the next announcement cancels.
+  announceImmediate(`${def.name} ${hidden ? 'hidden' : 'shown'}`);
+}
+
+/**
+ * Open the keyboard-shortcuts editor, wiring it on first use.
+ *
+ * This block was copy-pasted at FOUR call sites (Edit ▸ Preferences, Help ▸
+ * Keyboard Shortcuts, the header button, and the Ctrl+Shift+K handler), which
+ * is this project's recorded worst bug shape: a fix applied to three of four
+ * copies looks done and is not. One copy now.
+ */
+function _openShortcutsModal() {
+  const modal = document.getElementById('shortcutsModal');
+  const modalBody = document.getElementById('shortcutsModalBody');
+  if (!modal || !modalBody) return;
+  // Wire once; a second call would stack duplicate listeners.
+  if (!modal.dataset.initialized) {
+    initShortcutsModal(modalBody, () => closeModal(modal));
+    modal.dataset.initialized = 'true';
+  }
+  openModal(modal);
+}
+
+// Edit ▸ Insert Template (G7, D-43). Nothing in Appendix U or this repository
+// transcribes what upstream's template actually inserts, and this round fetches
+// nothing from upstream, so building it would mean inventing it.
+const INSERT_TEMPLATE_REASON =
+  "Insert Template is not built yet: nothing in this project records what the desktop's template inserts, and guessing would put code you did not write into your file.";
+
+// Help ▸ Offline … (G6). Both are disabled with a reason rather than hidden:
+// D-39 defers all offline-documentation bundling out of this plan, so nothing
+// third-party is fetched, pinned or vendored here.
+const OFFLINE_DOCUMENTATION_REASON =
+  'Offline documentation is not bundled yet. Use Documentation, which opens the OpenSCAD manual in a new window while you are online.';
+const OFFLINE_CHEAT_SHEET_REASON =
+  'The offline cheat sheet is not bundled yet. Use Cheat Sheet, which opens it in a new window while you are online.';
+
+/**
+ * Help ▸ About. Stamps the build's version into the dialog before opening it,
+ * so the number can never drift from what was actually shipped.
+ */
+function openAboutModal() {
+  const modal = document.getElementById('aboutModal');
+  if (!modal) return;
+
+  const versionLine = document.getElementById('aboutVersion');
+  if (versionLine) {
+    versionLine.textContent = `OpenSCAD Assistive Forge, version ${__APP_VERSION__}`;
+  }
+
+  openModal(modal, {
+    focusTarget: document.getElementById('aboutModalDone'),
+  });
+}
+
+/** Window ▸ Jump To…, the web reading of upstream's jump-to-dock popup (G5). */
+const JUMP_TO_LABEL = 'Jump To…';
+const JUMP_TO_EMPTY_REASON =
+  'No panels are open, so there is nowhere to jump to. Turn one on from this menu first.';
+const JUMP_TO_UNAVAILABLE_REASON =
+  'Jump To is not available in the Simplified view';
+const CODE_EDITOR_UNAVAILABLE_REASON =
+  'The Code Editor feature is turned off, so there is no editor to open.';
+
+/**
+ * Can a Classic dock panel be reached right now? A merged panel that is not
+ * the selected tab counts — its tab reaches it — but one the Window menu has
+ * hidden, or a whole strip that Simplified drops, does not.
+ * @param {{id: string, elementId: string}} panel
+ */
+function dockPanelReachable(panel) {
+  const el = document.getElementById(panel.elementId);
+  if (!el) return false;
+  if (document.getElementById(tabIdFor(panel.id))) return true;
+  return el.getBoundingClientRect().height > 0;
+}
+
+/**
+ * Put focus on a Classic dock panel: its tab when it is merged into a group
+ * (B7), otherwise its title bar's menu button — the same landing point B8
+ * uses after a move and F1 uses for the Error-Log, so a jump feels like
+ * every other way of arriving at a panel.
+ * @param {string} panelId
+ * @returns {boolean}
+ */
+function focusDockPanel(panelId) {
+  const tab = document.getElementById(tabIdFor(panelId));
+  if (tab) {
+    tab.click();
+    tab.focus();
+    return true;
+  }
+  const panel = DOCK_PANELS.find((p) => p.id === panelId);
+  const el = panel && document.getElementById(panel.elementId);
+  const target =
+    el?.querySelector('.classic-panel-menu-btn') || el?.querySelector('button');
+  if (!target) return false;
+  target.focus();
+  return true;
+}
+
+/**
+ * Where Jump To can send you, per host: Classic's dock panels, or the
+ * disclosure panels Ctrl+Alt+] and Ctrl+Alt+[ already cycle through.
+ * @returns {{label: string, focus: () => boolean}[]}
+ */
+function jumpTargets() {
+  const layout = getClassicLayoutController();
+  if (document.body.dataset.uiMode === 'classic' && layout) {
+    return DOCK_PANELS.filter(dockPanelReachable).map((panel) => ({
+      label: panel.label,
+      focus: () => focusDockPanel(panel.id),
+    }));
+  }
+  return getUIModeController()
+    .listFocusablePanels()
+    .map((panel) => ({
+      label: panel.label,
+      focus: () => {
+        if (!panel.el.open) panel.el.open = true;
+        const summary = panel.el.querySelector('summary');
+        if (!summary) return false;
+        summary.focus();
+        summary.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        return true;
+      },
+    }));
+}
+
+/**
+ * Ctrl+J. Upstream opens the jump-to-dock popup itself, so this opens the
+ * Window menu and expands Jump To… rather than leaving the user to find it.
+ */
+function openJumpToPicker() {
+  const btn = document.getElementById('windowMenuBtn');
+  if (!btn || btn.offsetParent === null) {
+    // Simplified hides the menu bar entirely; nothing else would speak here.
+    announceImmediate(JUMP_TO_UNAVAILABLE_REASON);
+    return;
+  }
+  getToolbarMenuController().openMenu('window');
+  const trigger = [
+    ...document.querySelectorAll('#windowMenuItems .menu-submenu-trigger'),
+  ].find(
+    (el) => el.querySelector('.menu-item-label')?.textContent === JUMP_TO_LABEL
+  );
+  trigger?.click();
+}
+
+/**
+ * Window ▸ Customizer, Ctrl+Alt+4 and Ctrl+B are one command. The two
+ * shortcuts used to toggle a `.sidebar` element that exists nowhere in this
+ * app, so both were silently dead (G5).
+ */
+function toggleCustomizerPanel() {
+  const layout = getClassicLayoutController();
+  if (document.body.dataset.uiMode === 'classic' && layout) {
+    layout.toggleCustomizer(); // announces for itself
+    return;
+  }
+  const btn = document.getElementById('collapseParamPanelBtn');
+  if (!btn) return;
+  btn.click();
+  // announceImmediate, not the debounced announce: every sibling panel toggle
+  // announces immediately, and the debounce CANCELS a pending message, so two
+  // quick presses of this one alone would have spoken once.
+  announceImmediate(
+    btn.getAttribute('aria-expanded') === 'true'
+      ? 'Customizer shown'
+      : 'Customizer hidden'
+  );
+}
+
+/** Window ▸ Editor and Ctrl+Alt+3, likewise one command per host. */
+function toggleEditorPanel() {
+  const layout = getClassicLayoutController();
+  if (document.body.dataset.uiMode === 'classic' && layout) {
+    layout.toggleEditor(); // announces for itself
+    return;
+  }
+  // Forge: open or close the Editor itself — the same command as its
+  // toolbar toggle, announced by the mode manager ("Editor opened…", C-38).
+  // This used to route through togglePanelVisibility('codeEditor'), whose
+  // primary element is the toggle BUTTON: the item hid the editor's entry
+  // point from the toolbar while the editor stayed shut (UF-10). Hiding
+  // the button remains the hidden-panels preference's job.
+  if (!_isEnabled('expert_mode')) {
+    announceImmediate(CODE_EDITOR_UNAVAILABLE_REASON);
+    return;
+  }
+  getModeManager()?.toggleMode?.();
+}
+
+/** Restore the View ▸ Hide … preferences on startup. */
+function restoreClassicToolbarPrefs() {
+  for (const def of Object.values(CLASSIC_HIDEABLE_TOOLBARS)) {
+    try {
+      if (localStorage.getItem(def.storageKey) === 'true') {
+        document.body.dataset[def.datasetKey] = 'true';
+      }
+    } catch {
+      // Preference read is best-effort.
+    }
+  }
+}
+
 // Track which saved project is currently loaded (for auto-saving companion files)
 let currentSavedProjectId = null;
 
@@ -326,6 +939,12 @@ async function initApp() {
   // Storage key migration: One-time migration of localStorage keys to standardized naming
   // Must run before any localStorage reads to ensure consistent key access
   migrateStorageKeys();
+
+  // UF-14: split the PER-UI viewing preferences into per-interface
+  // namespaces (Q-40b seeding). After the migration so it copies migrated
+  // values; before any controller init so every scoped read finds its
+  // namespace ready. Marker-gated — a no-op on every boot after the first.
+  ensureScopedPrefsSeeded();
 
   // Recovery Mode: Detect if we're recovering from a memory-related crash
   const urlParams = new URLSearchParams(window.location.search);
@@ -493,27 +1112,40 @@ async function initApp() {
     });
 
   document.getElementById('memoryBannerSave')?.addEventListener('click', () => {
-    // Trigger project save - dispatch event that saved-projects system listens for
-    document.getElementById('saveProjectBtn')?.click();
+    // This banner tells the user to save immediately, so the button has to
+    // reach a real save. It used to click #saveProjectBtn, which does not
+    // exist in index.html.
+    getFileActionsController().onSave();
   });
 
   document
     .getElementById('memoryBannerReduceFn')
     ?.addEventListener('click', () => {
-      // Reduce quality by switching to low quality mode
-      const qualitySelect = document.getElementById('qualityPreset');
-      if (qualitySelect) {
-        qualitySelect.value = 'low';
-        qualitySelect.dispatchEvent(new Event('change'));
+      // Reduce export quality to low. The mode lives in main.js now
+      // (File > Export Quality) - there is no select to poke (UF-11).
+      setExportQualityMode('low');
+      // Also reduce preview quality to fast. MEASURED: dispatching 'change'
+      // here started four renders, because that handler kicks auto-preview —
+      // and rendering is the memory-hungry operation this banner is warning
+      // about. Do exactly what the handler does, minus the kick.
+      const previewQuality = document.getElementById('previewQualitySelect');
+      if (previewQuality) {
+        previewQuality.value = 'fast';
+        try {
+          localStorage.setItem(STORAGE_KEY_PREVIEW_QUALITY, 'fast');
+        } catch {
+          // Persistence is best-effort; the in-session mode still applies.
+        }
+        applyPreviewQualityMode();
       }
-      // Also reduce auto-preview quality
-      const previewQualitySelect =
-        document.getElementById('previewQualityMode');
-      if (previewQualitySelect) {
-        previewQualitySelect.value = 'fast';
-        previewQualitySelect.dispatchEvent(new Event('change'));
-      }
-      console.log('[Memory] Quality reduced to conserve memory');
+      // Both selects live in panels the user may not have open, so without
+      // this the button changed nothing they could see or hear. updateStatus
+      // already speaks through stateManager.announceChange — pairing it with
+      // announceImmediate says everything twice.
+      updateStatus(
+        'Quality reduced: preview set to Fast, export set to Low.',
+        'info'
+      );
     });
 
   document
@@ -525,41 +1157,52 @@ async function initApp() {
         autoPreviewToggle.checked = false;
         autoPreviewToggle.dispatchEvent(new Event('change'));
       }
-      console.log('[Memory] Auto-preview disabled to conserve memory');
+      updateStatus(
+        'Automatic preview turned off. Use Preview or Render when you are ready.',
+        'info'
+      );
     });
 
   document
     .getElementById('memoryBannerExport')
     ?.addEventListener('click', () => {
-      // Trigger STL export
-      const exportBtn = document.getElementById('renderExportButton');
-      if (exportBtn) {
-        exportBtn.click();
-      }
+      // Downloads the render that already exists, and says so plainly when
+      // there is none. Deliberately does NOT start a fresh render: rendering
+      // is the memory-hungry operation this banner is warning about, which
+      // is why this is the one export path that opts out of G3's
+      // render-on-demand. Previously clicked #renderExportButton, which does
+      // not exist.
+      exportFormatFromMenu('stl', { renderIfNeeded: false });
       console.log('[Memory] STL export triggered for emergency save');
     });
 
   document
     .getElementById('memoryBannerReload')
     ?.addEventListener('click', () => {
-      // Save current state to localStorage before reload
-      const currentCode =
-        document.getElementById('openscadSource')?.value || '';
-      if (currentCode) {
-        safeSetItem(STORAGE_KEY_RECOVERY_SOURCE, currentCode);
-        safeSetItem(STORAGE_KEY_RECOVERY_TIMESTAMP, Date.now().toString());
-      }
-      // Reload in recovery mode
+      // Recovery mode is real — it boots with the code editor disabled to
+      // cut memory. Restoring work across the reload is NOT: the snapshot
+      // this used to write came from #openscadSource, which does not exist,
+      // and the read side sets window._recoverySource, which nothing
+      // consumes. Rather than write data no one reads, the button now only
+      // does what it can do, and its tooltip no longer promises a save.
+      // The beforeunload dirty guard still stops an unsaved buffer here.
       window.location.href = window.location.pathname + '?recovery=true';
     });
 
-  // Listen for storage-quota-exceeded events dispatched by preset-manager
-  // when localStorage is full, so the user gets visible + audible feedback.
+  // Listen for storage-quota-exceeded events dispatched by preset-manager and
+  // saved-projects-manager when persistence fails, so the user gets visible +
+  // audible feedback instead of a console-only error.
   window.addEventListener('storage-quota-exceeded', (e) => {
     const msg =
       e.detail?.message || 'Storage is full. Data could not be saved.';
-    updateStatus(msg, 'error');
-    _announceError(msg);
+    // MEASURED before this change: the same sentence reached a screen reader
+    // three times — politely from updateStatus, assertively from
+    // _announceError, and assertively again from the toast. The toast's is the
+    // one worth keeping: a failed save is an error, so it belongs in the
+    // assertive region, and the toast says "Storage Problem" first so the
+    // announcement names its own subject.
+    updateStatus(msg, 'error', { announce: false });
+    showErrorToast({ title: 'Storage Problem', message: msg });
   });
 
   let statusArea = null;
@@ -577,7 +1220,7 @@ async function initApp() {
   let currentPresetSignature = null;
   let isPresetDirty = false;
   let autoPreviewUserEnabled = true;
-  let previewQuality = RENDER_QUALITY.PREVIEW;
+  let previewQuality = RENDER_QUALITY.DESKTOP_DEFAULT;
 
   // CRITICAL: Declare DOM element variables early to avoid Temporal Dead Zone errors
   // These will be assigned actual values later when DOM queries are performed
@@ -601,6 +1244,44 @@ async function initApp() {
   // File handler controller -- declared early so wrappers can reference it;
   // assigned after all const deps are available (see initFileHandler call below).
   let fileHandler; // eslint-disable-line prefer-const
+  // Built when folder sync initialises; null until then and on browsers with
+  // no File System Access API at all.
+  let folderWriteBack = null;
+
+  // IR-5: explicit saves into the connected folder. Every write is asked for,
+  // goes through FolderWriteBack's self-trigger contract, and is announced.
+  const folderSaveActions = createFolderSaveActions({
+    getWriteBack: () => folderWriteBack,
+    isEnabled: () => isFlagEnabled('folder_sync_writeback'),
+    announce: (message) => announceImmediate(message),
+    onStatus: (message, level) => updateStatus(message, level),
+  });
+
+  /**
+   * Show or hide the folder-saving affordances. Called wherever the answer
+   * could have changed: a folder connects or disconnects, a render finishes,
+   * a project loads.
+   *
+   * The button does not exist unless all three conditions hold, rather than
+   * existing and failing when pressed.
+   */
+  function refreshFolderSaveAffordances() {
+    const state = stateManager.getState();
+    const possible = folderSaveActions.canSave();
+
+    const saveBtn = document.getElementById('saveToFolderBtn');
+    if (saveBtn) {
+      saveBtn.classList.toggle('hidden', !(possible && Boolean(state.stl)));
+    }
+
+    const companionBtn = document.getElementById('companionSaveToFolderBtn');
+    if (companionBtn) {
+      const hasCompanions = Boolean(
+        state.projectFiles && state.projectFiles.size > 1
+      );
+      companionBtn.classList.toggle('hidden', !(possible && hasCompanions));
+    }
+  }
 
   function cloneProjectFiles(files) {
     return files ? new Map(files) : null;
@@ -609,7 +1290,7 @@ async function initApp() {
   function setCanonicalProjectFiles(files) {
     canonicalProjectFiles = cloneProjectFiles(files);
   }
-  let previewQualityMode = 'auto';
+  let previewQualityMode = PREVIEW_QUALITY_DEFAULT;
 
   const AUTO_PREVIEW_FORCE_FAST_MS = 2 * 60 * 1000;
   // MANIFOLD OPTIMIZED: Raised threshold since Manifold renders much faster
@@ -917,6 +1598,14 @@ async function initApp() {
     }
   });
 
+  // U-41 (UF-39): the Back button gets an answer instead of the door. Installed
+  // before any surface can flip, so the very first project opened is guarded.
+  // The comparison view keeps its own popstate consumer, and this hands that
+  // press to it rather than asking on top of it.
+  installBackGuard({
+    isComparisonMode: () => !!stateManager.getState().comparisonMode,
+  });
+
   // Initialize theme (before any UI rendering)
   themeManager.init();
 
@@ -937,6 +1626,9 @@ async function initApp() {
   // updateCompanionSaveButton is wrapped because companionFilesCtrl is
   // created later (after DOM element queries); the wrapper defers safely
   // since savedProjectsUI only invokes it after user interaction.
+  // Set by the folder-sync section when folder_sync_watch is enabled; lets
+  // the folder-link card-load path start watching after it loads state.
+  let resumeFolderWatch = null;
   const savedProjectsUI = initSavedProjectsUI({
     showConfirmDialog,
     showProcessingOverlay,
@@ -947,6 +1639,104 @@ async function initApp() {
     downloadSingleProject,
     setCurrentSavedProjectId: (id) => {
       currentSavedProjectId = id;
+    },
+    // Pointer-model load path: read a folder-link project's contents from
+    // disk via its stored handle. Defined here as a closure because the
+    // folder-sync controller/watcher live later in initApp — they are
+    // initialized long before any card's Load click can invoke this.
+    readLinkedFolder: async (project) => {
+      const syncCtrl = getFolderSyncController();
+      if (!syncCtrl.isSupported()) {
+        return {
+          ok: false,
+          reason: 'no-handle',
+          message: 'This browser cannot access local folders.',
+        };
+      }
+      if (!project.folderRef) {
+        return { ok: false, reason: 'no-handle' };
+      }
+      const handle = await loadFolderHandle({ key: project.folderRef });
+      if (!handle) {
+        return { ok: false, reason: 'no-handle' };
+      }
+      try {
+        let perm =
+          typeof handle.queryPermission === 'function'
+            ? await handle.queryPermission({ mode: 'readwrite' })
+            : 'prompt';
+        if (perm !== 'granted') {
+          if (typeof handle.requestPermission !== 'function') {
+            return { ok: false, reason: 'permission-denied' };
+          }
+          perm = await handle.requestPermission({ mode: 'readwrite' });
+        }
+        if (perm !== 'granted') {
+          return { ok: false, reason: 'permission-denied' };
+        }
+      } catch (permErr) {
+        return {
+          ok: false,
+          reason: 'permission-denied',
+          message: permErr?.message,
+        };
+      }
+      try {
+        const files = [];
+        await fileHandler.collectFilesFromDir(handle, handle.name, files);
+        if (files.length === 0) {
+          return {
+            ok: false,
+            reason: 'read-error',
+            message: 'The linked folder is empty.',
+          };
+        }
+        // The record stores a root-relative main path; disk paths carry the
+        // (possibly renamed) root folder prefix, so match by suffix and fall
+        // back to the selection prompt if the file moved.
+        let mainAbs =
+          files.find((f) =>
+            (f.webkitRelativePath || '').endsWith(`/${project.mainFilePath}`)
+          )?.webkitRelativePath || null;
+        if (!mainAbs) {
+          const selection = await fileHandler.prepareFolderSelection(files);
+          if (!selection) {
+            return {
+              ok: false,
+              reason: 'read-error',
+              message: 'No main .scad file was selected.',
+            };
+          }
+          mainAbs = selection.mainFilePath;
+        }
+        const read = await readProjectFilesFromList(files, mainAbs);
+        const mainRel = read.rootDir
+          ? mainAbs.replace(`${read.rootDir}/`, '')
+          : mainAbs;
+        if (mainRel !== project.mainFilePath) {
+          await updateProject({ id: project.id, mainFilePath: mainRel });
+        }
+        await syncCtrl.adoptHandle(handle);
+        const projectFilesMap = new Map(Object.entries(read.projectFiles));
+        return {
+          ok: true,
+          content: read.mainContent,
+          projectFiles: projectFilesMap.size > 0 ? projectFilesMap : null,
+          mainFilePath: projectFilesMap.size > 0 ? mainRel : null,
+          fileName: read.mainFile.name,
+          // Called by the UI after handleFile so the watcher snapshots the
+          // freshly-loaded state, not the pre-load one.
+          finishConnect: async () => {
+            if (resumeFolderWatch) await resumeFolderWatch();
+          },
+        };
+      } catch (readErr) {
+        return {
+          ok: false,
+          reason: 'read-error',
+          message: readErr?.message ?? String(readErr),
+        };
+      }
     },
   });
 
@@ -1402,6 +2192,14 @@ async function initApp() {
     const importFolderInput = document.getElementById('importFolderInput');
 
     if (importFolderBtn) importFolderBtn.hidden = false;
+
+    // Welcome-zone folder affordance delegates to the same flow.
+    const uploadZoneFolderBtn = document.getElementById('uploadZoneFolderBtn');
+    if (uploadZoneFolderBtn && importFolderBtn) {
+      uploadZoneFolderBtn.addEventListener('click', () =>
+        importFolderBtn.click()
+      );
+    }
     // webkitdirectory is non-standard, so it is applied here (behind the
     // feature detection above) instead of in the static HTML.
     if (importFolderInput) {
@@ -1499,6 +2297,9 @@ async function initApp() {
   // Phase A only adds persistence of the directory handle. Phase B
   // (file-watcher / F14) and Phase C (write-back) build on this.
   const folderSyncCtrl = getFolderSyncController();
+  // Exposed to the File menu (C5.1); stays null on unsupported browsers so
+  // the menu item can render disabled with an honest tooltip.
+  let connectToLocalFolder = null;
   if (_isEnabled('local_folder_sync') && folderSyncCtrl.isSupported()) {
     const connectBtn = document.getElementById('connectFolderBtn');
     const statusEl = document.getElementById('folderSyncStatus');
@@ -1508,9 +2309,127 @@ async function initApp() {
 
     if (connectBtn) connectBtn.hidden = false;
 
+    // ── Sub-plan H: every linked folder listed, one connected ───────────
+    // Created here so the section only ever exists on a browser that can
+    // actually hold folder handles.
+    const linkedFoldersUi = createLinkedFoldersUi({
+      listEl: document.getElementById('linkedFoldersList'),
+      sectionEl: document.getElementById('linkedFolders'),
+      listProjects: listSavedProjects,
+      getActiveHandle: () => folderSyncCtrl.getHandle(),
+      getActiveState: () => folderSyncCtrl.getState(),
+      onOpen: (entry) => _openLinkedFolder(entry),
+      onRemove: (entry) => _removeLinkedFolder(entry),
+      onEmptyFocus: () => connectBtn?.focus(),
+    });
+
+    /**
+     * Open a listed folder. A folder with a project card goes through the
+     * normal card-load path, which already re-grants permission, re-reads
+     * the folder from disk and adopts the handle as the active one.
+     *
+     * A folder with no card (the pre-multi-folder root slot, or one whose
+     * card was deleted) has nothing to load, so it re-grants permission on
+     * ITS OWN handle and goes through the connect-load path, which creates
+     * the card. `restoreFromStored()` cannot serve here: it only ever reads
+     * the root slot, so it would re-grant the wrong folder.
+     */
+    async function _openLinkedFolder(entry) {
+      if (!entry?.handle) return;
+
+      if (entry.projectId) {
+        await savedProjectsUI.loadSavedProject(entry.projectId);
+        return;
+      }
+
+      let granted = false;
+      try {
+        const queried =
+          typeof entry.handle.queryPermission === 'function'
+            ? await entry.handle.queryPermission({ mode: 'readwrite' })
+            : 'prompt';
+        granted =
+          queried === 'granted' ||
+          (typeof entry.handle.requestPermission === 'function' &&
+            (await entry.handle.requestPermission({ mode: 'readwrite' })) ===
+              'granted');
+      } catch (err) {
+        console.warn('[LinkedFolders] Permission request failed:', err);
+        granted = false;
+      }
+      if (!granted) {
+        updateStatus(
+          'Folder connection denied — permission required',
+          'warning'
+        );
+        return;
+      }
+
+      await folderSyncCtrl.adoptHandle(entry.handle);
+      await _loadFromConnectedFolder(entry.handle);
+    }
+
+    /**
+     * Remove a folder's link. Never touches the disk: it drops the stored
+     * handle and the pointer record, which is all this browser holds.
+     *
+     * @returns {Promise<boolean>} True when the row should disappear.
+     */
+    async function _removeLinkedFolder(entry) {
+      if (!entry) return false;
+
+      const confirmed = await showConfirmDialog(
+        `Remove the link to "${entry.name}"?\n\nYour files on disk are not touched. This removes the folder's link and its project card from this browser only.`,
+        'Remove folder link',
+        'Remove link',
+        'Cancel'
+      );
+      if (!confirmed) return false;
+
+      // Deleting the record clears its fh-* handle; a folder with no record
+      // owns nothing but the handle itself.
+      if (entry.projectId) {
+        const result = await deleteProject(entry.projectId);
+        if (!result.success) {
+          showErrorToast({ title: 'Remove Failed', message: result.error });
+          return false;
+        }
+      } else {
+        await clearFolderHandle({ key: entry.key });
+      }
+
+      // The root slot mirrors whichever folder is active, so removing the
+      // active one has to disconnect too — otherwise the next reload
+      // hydrates a folder that is no longer listed.
+      if (entry.activeState) {
+        await folderSyncCtrl.disconnect();
+      }
+
+      announceImmediate(`Removed folder link: ${entry.name}`);
+      updateStatus(`Removed folder link: ${entry.name}`);
+      await savedProjectsUI.renderSavedProjectsList();
+      return true;
+    }
+
+    /** Re-read the store and repaint the list. Safe to call at any time. */
+    function refreshLinkedFolders() {
+      return linkedFoldersUi.refresh();
+    }
+
+    // Deleting a folder-link card also clears that folder's handle, so the
+    // list must follow the project list.
+    document.addEventListener('saved-projects-rendered', () => {
+      void refreshLinkedFolders();
+    });
+
     /**
      * Reflect controller state into the status pill + buttons. Called
      * via `subscribe()` so this stays the single source of truth.
+     *
+     * The pill describes the ONE connected folder (D-33); the linked-folders
+     * list below it shows every folder this browser knows. Connect Folder
+     * therefore stays visible in every state — it is how a second folder
+     * gets linked.
      */
     function _syncFolderUi(state, handle) {
       if (!statusEl || !statusText) return;
@@ -1522,25 +2441,20 @@ async function initApp() {
           statusText.textContent = `Connected to "${name}"`;
           if (restoreBtn) restoreBtn.hidden = true;
           if (disconnectBtn) disconnectBtn.hidden = false;
-          if (connectBtn) connectBtn.hidden = true;
           break;
         case 'pending-restore':
           statusEl.hidden = false;
           statusEl.dataset.state = 'pending-restore';
-          statusText.textContent =
-            `"${name}" — click Reconnect to re-grant permission for this session`;
+          statusText.textContent = `"${name}" — click Reconnect to re-grant permission for this session`;
           if (restoreBtn) restoreBtn.hidden = false;
           if (disconnectBtn) disconnectBtn.hidden = false;
-          if (connectBtn) connectBtn.hidden = true;
           break;
         case 'denied':
           statusEl.hidden = false;
           statusEl.dataset.state = 'denied';
-          statusText.textContent =
-            `"${name}" — permission was denied. Click Reconnect to try again, or Disconnect to forget.`;
+          statusText.textContent = `"${name}" — permission was denied. Click Reconnect to try again, or Disconnect to forget.`;
           if (restoreBtn) restoreBtn.hidden = false;
           if (disconnectBtn) disconnectBtn.hidden = false;
-          if (connectBtn) connectBtn.hidden = true;
           break;
         case 'idle':
         default:
@@ -1549,9 +2463,10 @@ async function initApp() {
           statusText.textContent = '';
           if (restoreBtn) restoreBtn.hidden = true;
           if (disconnectBtn) disconnectBtn.hidden = true;
-          if (connectBtn) connectBtn.hidden = false;
           break;
       }
+      // Which row wears the Connected badge follows the pill.
+      void refreshLinkedFolders();
     }
 
     folderSyncCtrl.subscribe(_syncFolderUi);
@@ -1563,6 +2478,9 @@ async function initApp() {
      * everything downstream (parser, schema, presets, render) is
      * unchanged.
      */
+    // Created below when folder_sync_watch is enabled (C5.2)
+    let folderWatcher = null;
+
     async function _loadFromConnectedFolder(handle) {
       const dismissOverlay = showProcessingOverlay(
         `Reading folder "${handle.name}"\u2026`,
@@ -1581,7 +2499,72 @@ async function initApp() {
           return;
         }
         dismissOverlay();
-        await fileHandler.handleFolderImport(files);
+
+        const selection = await fileHandler.prepareFolderSelection(files);
+        if (!selection) return;
+
+        // Pointer model: persist the handle + a contentless folder-link
+        // record; the disk stays the source of truth (contents are re-read
+        // on every load, so browser storage caps no longer apply).
+        const existing = await findLinkedProjectForHandle(handle);
+        const folderRef =
+          existing?.folderRef ||
+          `fh-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        await saveFolderHandle(handle, { key: folderRef });
+
+        const linkResult = await linkProjectFromFiles(
+          files,
+          selection.mainFilePath,
+          { folderRef, existingId: existing?.id || null }
+        );
+        if (!linkResult.success) {
+          showErrorToast({
+            title: 'Folder Link Failed',
+            message: linkResult.error,
+          });
+          return;
+        }
+
+        await touchProject(linkResult.id);
+        currentSavedProjectId = linkResult.id;
+
+        const projectFilesMap =
+          linkResult.projectFiles &&
+          Object.keys(linkResult.projectFiles).length > 0
+            ? new Map(Object.entries(linkResult.projectFiles))
+            : null;
+        await fileHandler.handleFile(
+          { name: linkResult.originalName },
+          linkResult.mainContent,
+          projectFilesMap,
+          projectFilesMap ? linkResult.mainRelPath : null,
+          'saved',
+          linkResult.projectName
+        );
+
+        // Apply per-project UI preferences from the record (same contract as
+        // loadSavedProject) \u2014 cheap now that folder-link records are tiny.
+        try {
+          const record = await getProject(linkResult.id);
+          if (record?.uiPreferences != null) {
+            getUIModeController().importPreferences(record.uiPreferences, {
+              applyImmediately: true,
+            });
+          }
+        } catch (prefsErr) {
+          console.warn(
+            '[FolderSync] Could not apply project UI preferences:',
+            prefsErr
+          );
+        }
+
+        await savedProjectsUI.renderSavedProjectsList();
+        updateStatus(`Connected folder loaded: ${linkResult.projectName}`);
+
+        if (folderWatcher) {
+          await folderWatcher.primeSnapshot();
+          folderWatcher.start();
+        }
       } catch (err) {
         dismissOverlay();
         showErrorToast({
@@ -1591,7 +2574,7 @@ async function initApp() {
       }
     }
 
-    connectBtn?.addEventListener('click', async () => {
+    connectToLocalFolder = async () => {
       const result = await folderSyncCtrl.connect();
       if (result.ok && result.handle) {
         announceImmediate(`Connected to folder ${result.folderName}`);
@@ -1599,7 +2582,10 @@ async function initApp() {
       } else if (result.reason === 'cancelled') {
         updateStatus('Folder connection cancelled');
       } else if (result.reason === 'permission-denied') {
-        updateStatus('Folder connection denied — permission required', 'warning');
+        updateStatus(
+          'Folder connection denied — permission required',
+          'warning'
+        );
       } else if (result.reason === 'unsupported') {
         // Defensive: should not happen because the button is hidden.
         updateStatus(
@@ -1609,7 +2595,9 @@ async function initApp() {
       } else {
         updateStatus(`Could not connect to folder: ${result.reason}`, 'error');
       }
-    });
+    };
+
+    connectBtn?.addEventListener('click', () => connectToLocalFolder());
 
     restoreBtn?.addEventListener('click', async () => {
       const result = await folderSyncCtrl.restoreFromStored();
@@ -1633,6 +2621,150 @@ async function initApp() {
       announceImmediate('Disconnected from folder');
       updateStatus('Disconnected from folder');
     });
+
+    // ── C5.2 (Phase B): watch the connected folder for external edits ──
+    if (_isEnabled('folder_sync_watch')) {
+      resumeFolderWatch = async () => {
+        if (!folderWatcher) return;
+        await folderWatcher.primeSnapshot();
+        folderWatcher.start();
+      };
+      folderWatcher = new FolderChangeWatcher({
+        getHandle: () => folderSyncCtrl.getHandle(),
+        getWatchPaths: () => {
+          const watchState = stateManager.getState();
+          if (!watchState.projectFiles || watchState.projectFiles.size === 0) {
+            return watchState.mainFilePath ? [watchState.mainFilePath] : [];
+          }
+          return Array.from(watchState.projectFiles.entries())
+            .filter(
+              ([, content]) =>
+                typeof content === 'string' && !content.startsWith('data:')
+            )
+            .map(([path]) => path);
+        },
+        isRenderInFlight: () =>
+          autoPreviewController?.state === PREVIEW_STATE.RENDERING,
+        onPermissionLost: () => {
+          updateStatus(
+            'Lost permission to the connected folder — click Reconnect to re-grant',
+            'warning'
+          );
+          announceImmediate('Lost permission to the connected folder');
+        },
+        onChange: async (changes) => {
+          const changeState = stateManager.getState();
+          if (!changeState.uploadedFile) return;
+
+          const nextProjectFiles = changeState.projectFiles
+            ? new Map(changeState.projectFiles)
+            : new Map();
+          let mainContent = null;
+          const changedPaths = [];
+          for (const { path, file } of changes) {
+            let text;
+            try {
+              text = await file.text();
+            } catch (err) {
+              console.warn('[FolderWatch] Could not read changed file:', err);
+              continue;
+            }
+            nextProjectFiles.set(path, text);
+            changedPaths.push(path);
+            if (path === changeState.mainFilePath) {
+              mainContent = text;
+            }
+            consolePanel.addSystemLine(
+              `Detected change in ${path} — re-rendering`
+            );
+          }
+          if (changedPaths.length === 0) return;
+
+          const statePatch = { projectFiles: nextProjectFiles };
+          if (mainContent !== null) {
+            statePatch.uploadedFile = {
+              ...changeState.uploadedFile,
+              content: mainContent,
+            };
+          }
+          stateManager.setState(statePatch);
+
+          if (autoPreviewController) {
+            if (mainContent !== null) {
+              autoPreviewController.setScadContent(mainContent);
+            }
+            autoPreviewController.setProjectFiles(
+              nextProjectFiles,
+              changeState.mainFilePath
+            );
+            autoPreviewController.clearPreviewCache();
+            autoPreviewController.onParameterChange(
+              stateManager.getState().parameters
+            );
+          }
+
+          announceImmediate(
+            changedPaths.length === 1
+              ? `Detected change in ${changedPaths[0]}, re-rendering`
+              : `Detected changes in ${changedPaths.length} files, re-rendering`
+          );
+        },
+      });
+
+      folderSyncCtrl.subscribe((syncState) => {
+        if (syncState !== 'connected') {
+          folderWatcher.stop();
+        }
+        // Connecting or disconnecting a folder changes whether saving into one
+        // is possible at all.
+        refreshFolderSaveAffordances();
+      });
+    }
+
+    // ── C5.3 (Phase C, default OFF): writing back into the folder ────────
+    //
+    // The instance is built regardless and the FLAG is checked at every use.
+    // IR-5 gave the export and companion paths a way in here, and they live
+    // far from this block; hoisting the object is what lets them share the one
+    // self-trigger contract instead of writing bytes of their own.
+    folderWriteBack = new FolderWriteBack({
+      getHandle: () => folderSyncCtrl.getHandle(),
+      getWatcher: () => folderWatcher,
+    });
+
+    if (_isEnabled('folder_sync_writeback')) {
+      // OpenSCAD desktop convention: presets live in <design>.json next to
+      // the .scad. Case- and space-preserving (raw path, no slugging).
+      presetManager.subscribe((event, _preset, modelName) => {
+        if (!['save', 'delete', 'rename'].includes(event)) return;
+        if (!folderWriteBack.isAvailable()) return;
+        const wbState = stateManager.getState();
+        if (!wbState.uploadedFile || presetModelKey(wbState) !== modelName) {
+          return;
+        }
+        const mainPath = presetModelKey(wbState);
+        const sidecarPath = mainPath.replace(/\.scad$/i, '.json');
+        if (sidecarPath === mainPath) return;
+        const hiddenParams = wbState.schema?.hiddenParameters || {};
+        const json = presetManager.exportOpenSCADNativeFormat(
+          modelName,
+          hiddenParams
+        );
+        if (!json) return;
+        folderWriteBack
+          .writeFile(sidecarPath, json)
+          .then(() => {
+            consolePanel.addSystemLine(`Saved presets to ${sidecarPath}`);
+          })
+          .catch((err) => {
+            console.warn('[FolderWriteBack] Sidecar write failed:', err);
+            updateStatus(
+              `Could not write presets to folder: ${err.message}`,
+              'warning'
+            );
+          });
+      });
+    }
 
     // Probe IDB for a previously-stored handle. Does NOT call
     // requestPermission (no user gesture yet); just transitions to
@@ -1678,13 +2810,23 @@ async function initApp() {
   //   ┌──────────────────────────────────────────────────────────────────┐
   //   │  Z-INDEX STACK (highest on top)                                 │
   //   │                                                                 │
+  //   │  z: 10009  Tour card over the Features Guide                    │
+  //   │  z: 10008  The tour's own dialogs (resume / error / mode)       │
+  //   │  z: 10007  Tutorial panel + pill (--z-index-tutorial-panel)     │
+  //   │  z: 10006  Tutorial veil       (--z-index-tutorial-spotlight)   │
+  //   │  z: 10005  Tutorial overlay    (--z-index-tutorial-backdrop)    │
+  //   │  z: 10001..10004  Tutorial highlight family (D-67 tokens)       │
   //   │  z: 10000  Processing overlay  (.processing-overlay)            │
-  //   │  z: 10000  Tutorial panel      (--z-index-tutorial-panel)       │
-  //   │  z:  9999  Skip-link / Tutorial spotlight                       │
+  //   │  z: 10000  Memory banner / WASM overlay (--z-index-app-overlay) │
+  //   │  z:  9999  Skip-link                                            │
   //   │  z:  1000  Modals              (--z-index-modal)                │
   //   │  z:   950  Modal backdrop      (--z-index-modal-backdrop)       │
   //   │  z:   900  Drawers             (--z-index-drawer)               │
   //   └──────────────────────────────────────────────────────────────────┘
+  //
+  // A tutorial layer above a modal is NOT a licence to paint over one: while
+  // a user-opened dialog is on screen the tour stands down entirely (D-61,
+  // Q-66). See applyDialogStandDown in tutorial-sandbox.js.
   //
   // INVARIANT: The processing overlay (z: 10000) MUST NEVER be shown while
   // the first-visit modal (z: 1000) is open. Because the overlay sits
@@ -1711,6 +2853,10 @@ async function initApp() {
 
   const setFirstVisitBlocking = (blocked) => {
     firstVisitBlocking = blocked;
+    // The legacy keydown listener checked this flag itself. Now that its
+    // shortcuts live in the registry, the guard belongs there — and it covers
+    // every registered shortcut, not only the six that were folded in (G7).
+    keyboardConfig.setEnabled(!blocked);
     if (appRoot) {
       if (blocked) {
         appRoot.setAttribute('aria-hidden', 'true');
@@ -1733,14 +2879,124 @@ async function initApp() {
     });
   };
 
+  // U-10 (UF-5): the modal's Classic card is genuinely disabled while the
+  // viewport is mobile-shaped, with the reason VISIBLE in the card (the
+  // C-15 shape — a real disabled attribute cannot snap back under the
+  // user's hand), and re-enables live if the window turns desktop-shaped
+  // while the modal is open. A checked Classic choice is cleared when the
+  // gate closes over it so it cannot be submitted stale.
+  const updateFirstVisitClassicGate = () => {
+    const radio = document.getElementById('firstVisitChoiceClassic');
+    const note = document.getElementById('firstVisitClassicGate');
+    if (!radio || !note) return;
+    const gated = !isViewportDesktopShaped();
+    radio.disabled = gated;
+    note.classList.toggle('hidden', !gated);
+    radio.setAttribute(
+      'aria-describedby',
+      gated
+        ? 'firstVisitClassicGate firstVisitClassicShotDesc firstVisitClassicGuide'
+        : 'firstVisitClassicShotDesc firstVisitClassicGuide'
+    );
+    if (gated && radio.checked) {
+      radio.checked = false;
+    }
+    // UF-41 (U-39): the modal's mobile layout — stowed concept rows instead
+    // of the four bullets, no screenshots, no desktop-switching line — rides
+    // this same predicate rather than a second breakpoint of its own, so the
+    // pictures disappear exactly where the choice they illustrate is not
+    // offered. A media query cannot express "at least 1024 wide AND not
+    // portrait", and two definitions of "mobile" in one modal is the
+    // cross-file drift this project keeps paying for.
+    document
+      .getElementById('first-visit-modal')
+      ?.classList.toggle('first-visit-mobile-shaped', gated);
+  };
+
   // First-visit modal check
   const firstVisitModal = document.getElementById('first-visit-modal');
   const firstVisitCheck = isFirstVisit();
+
+  // U-21: the Forge card image and the backdrop's Forge half follow the
+  // app's active theme, resolved exactly the way detectTheme() resolves
+  // dark-vs-light outside Classic (data-theme attribute, else the system
+  // preference). High contrast resolves through the same two values
+  // (Q-38); Classic's side stays the light capture always - Classic is
+  // light by design. The backdrop swap rides a class so the image URL
+  // stays in the stylesheet (CSP: no inline styles).
+  const applyFirstVisitThemeAssets = () => {
+    const dataTheme = document.documentElement.getAttribute('data-theme');
+    const dark =
+      dataTheme === 'dark' ||
+      (dataTheme !== 'light' &&
+        window.matchMedia('(prefers-color-scheme: dark)').matches);
+    const forgeShot = document.getElementById('firstVisitForgeShot');
+    if (forgeShot) {
+      forgeShot.src = dark
+        ? '/screenshots/forge-standard-dark.webp'
+        : '/screenshots/forge-standard.webp';
+    }
+    firstVisitModal?.classList.toggle('first-visit-forge-dark', dark);
+  };
+
+  // UF-41 (U-39): the modal's body scrolls on the sizes where the content
+  // still cannot fit (360x640 and 375x667 are arithmetically out of reach —
+  // see the release record's height table), and before this there was no
+  // affordance of any kind: `overflow: auto` with Android's overlay
+  // scrollbars, which fade out on their own. The cue is the fade; the class
+  // is the only thing driving it, so it can never be shown at the scroll end.
+  const firstVisitBody = firstVisitModal?.querySelector('.modal-body');
+  const updateFirstVisitScrollCue = () => {
+    const box = firstVisitModal?.querySelector('.modal-first-visit');
+    if (!box || !firstVisitBody) return;
+    const hidden =
+      firstVisitBody.scrollHeight -
+      firstVisitBody.scrollTop -
+      firstVisitBody.clientHeight;
+    box.classList.toggle('first-visit-has-more', hidden > 2);
+  };
+
   if (firstVisitCheck && firstVisitModal) {
     setFirstVisitBlocking(true);
+    updateFirstVisitClassicGate();
+    subscribeViewportShape(() => {
+      updateFirstVisitClassicGate();
+      updateFirstVisitScrollCue();
+    });
+    firstVisitBody?.addEventListener('scroll', updateFirstVisitScrollCue, {
+      passive: true,
+    });
+    // Opening a note row changes how much is below the fold, and `toggle`
+    // is the only event a native <details> fires for it.
+    firstVisitModal
+      .querySelectorAll('.first-visit-note-row')
+      .forEach((row) =>
+        row.addEventListener('toggle', updateFirstVisitScrollCue)
+      );
+    // subscribeViewportShape only fires when the desktop/mobile ANSWER
+    // changes, so it cannot carry an ordinary resize or an on-screen
+    // keyboard opening. This can.
+    window.addEventListener('resize', updateFirstVisitScrollCue);
+    // And this catches everything neither of those can see: a web font
+    // arriving, high contrast resolving late, a user's own text-size
+    // setting. MEASURED without it — booting into high contrast at
+    // 1280x800 leaves 22px below the fold and no cue at all, because
+    // nothing the other listeners watch for has happened. The scroller
+    // itself is watched for the viewport half; its children are watched
+    // because content growing INSIDE a fixed-height scroller never changes
+    // that scroller's own box.
+    if (typeof ResizeObserver !== 'undefined' && firstVisitBody) {
+      const cueObserver = new ResizeObserver(updateFirstVisitScrollCue);
+      cueObserver.observe(firstVisitBody);
+      [...firstVisitBody.children].forEach((child) =>
+        cueObserver.observe(child)
+      );
+    }
     // Delay slightly to ensure DOM is ready
     setTimeout(() => {
+      applyFirstVisitThemeAssets();
       openModal(firstVisitModal);
+      updateFirstVisitScrollCue();
     }, 500);
   }
 
@@ -1751,12 +3007,68 @@ async function initApp() {
 
   const firstVisitContinue = document.getElementById('first-visit-continue');
 
+  const getFirstVisitChoice = () =>
+    document.querySelector('input[name="first-visit-ui"]:checked')?.value ||
+    null;
+
+  // Visible + announced from inside the modal: #srAnnouncer sits in the
+  // inert, aria-hidden #app subtree while this modal blocks, so the global
+  // announcer cannot speak here.
+  const showFirstVisitChoiceError = () => {
+    const error = document.getElementById('firstVisitChoiceError');
+    if (error) {
+      error.classList.remove('hidden');
+      // Re-insert the text so role="alert" re-announces on repeat presses.
+      error.textContent = '';
+      setTimeout(() => {
+        error.textContent = 'Choose an interface to continue.';
+      }, 50);
+    }
+    document.getElementById('firstVisitChoiceForge')?.focus();
+  };
+
+  document.querySelectorAll('input[name="first-visit-ui"]').forEach((radio) => {
+    radio.addEventListener('change', () => {
+      document.getElementById('firstVisitChoiceError')?.classList.add('hidden');
+    });
+  });
+
   const handleFirstVisitClose = async (_source = 'unknown') => {
+    const uiChoice = getFirstVisitChoice();
+    if (!uiChoice) {
+      showFirstVisitChoiceError();
+      return;
+    }
+    // U-10 belt-and-braces: if the window turned mobile-shaped inside the
+    // gate's debounce window, a checked Classic radio can race the Continue
+    // press. Clear it and fall into the ordinary no-choice flow instead of
+    // silently submitting a gated choice.
+    if (uiChoice === 'classic' && !isViewportDesktopShaped()) {
+      updateFirstVisitClassicGate();
+      showFirstVisitChoiceError();
+      return;
+    }
     hasUserAcceptedDownload = true;
     updateStoragePrefs({ allowLargeDownloads: true, seenDisclosure: true });
-    markFirstVisitComplete();
+    // Unchecked "remember" = proceed this session only; the modal returns
+    // next visit because the first-visit marker is never written.
+    //
+    // Q-21 (2026-08-10) signed "remember checked by default". The owner's
+    // directive of 2026-08-27 (line 2) supersedes it: the box now ships
+    // UNCHECKED, so the test has to be null-safe toward NOT remembering.
+    // `?.checked !== false` would remember whenever the element goes missing,
+    // which is remember-by-default surviving as DOM drift.
+    if (document.getElementById('firstVisitRemember')?.checked === true) {
+      markFirstVisitComplete();
+    }
     closeModal(firstVisitModal);
     setFirstVisitBlocking(false);
+    // After the unblock, so the mode switch's announcement is not silenced
+    // by the aria-hidden #app subtree. The controller persists the choice
+    // through its own preference storage.
+    if (uiChoice === 'classic') {
+      getUIModeController().switchMode('classic');
+    }
     if (firstVisitReadyResolvers.length > 0) {
       const resolvers = firstVisitReadyResolvers.splice(0);
       resolvers.forEach((resolve) => resolve());
@@ -1847,12 +3159,78 @@ async function initApp() {
   // Initialize UI mode controller (Basic/Advanced interface layout)
   getUIModeController().init();
 
+  // U-10 (UF-5 P4+P5): one dismissible banner, two notices. The boot
+  // notice says a saved Classic preference was deferred by the viewport
+  // gate (the preference stays saved — the controller's deferral flag
+  // protects it until an explicit mode switch). The live notice says a
+  // Classic session whose window turned phone-shaped stays alive (Q-24a).
+  const classicGateBanner = document.getElementById('classicGateBanner');
+  const showClassicGateNotice = (kind) => {
+    if (!classicGateBanner) return null;
+    const bootText = document.getElementById('classicGateBannerText');
+    const liveText = document.getElementById('classicGateLiveText');
+    bootText?.classList.toggle('hidden', kind !== 'boot');
+    liveText?.classList.toggle('hidden', kind !== 'live');
+    classicGateBanner.classList.remove('hidden');
+    return kind === 'boot' ? bootText : liveText;
+  };
+  const isClassicLiveNoticeShowing = () => {
+    const liveText = document.getElementById('classicGateLiveText');
+    return Boolean(
+      classicGateBanner &&
+      !classicGateBanner.classList.contains('hidden') &&
+      liveText &&
+      !liveText.classList.contains('hidden')
+    );
+  };
+  document
+    .getElementById('classicGateBannerDismiss')
+    ?.addEventListener('click', () =>
+      classicGateBanner?.classList.add('hidden')
+    );
+
+  if (getUIModeController().isClassicDeferredByViewport()) {
+    const bootText = showClassicGateNotice('boot');
+    if (bootText) {
+      announceImmediate(bootText.textContent.replace(/\s+/g, ' ').trim());
+    }
+  }
+
+  // The live notice shows on each crossing into narrowed Classic and
+  // heals itself when the window widens again; the announcement fires
+  // once per session so repeated resizes cannot nag a screen reader.
+  let classicNarrowAnnounced = false;
+  subscribeViewportShape((desktopShaped) => {
+    if (!desktopShaped && getUIModeController().getMode() === 'classic') {
+      const liveText = showClassicGateNotice('live');
+      if (liveText && !classicNarrowAnnounced) {
+        classicNarrowAnnounced = true;
+        announceImmediate(liveText.textContent.replace(/\s+/g, ' ').trim());
+      }
+    } else if (isClassicLiveNoticeShowing()) {
+      classicGateBanner?.classList.add('hidden');
+    }
+  });
+
+  // Any real mode switch ends the state either notice describes: an
+  // explicit switch retires the boot deferral, and leaving Classic
+  // retires the live notice.
+  getUIModeController().subscribe(() => {
+    classicGateBanner?.classList.add('hidden');
+  });
+
   // Initialize toolbar menu bar (File|Edit|Design|View|Window|Help)
   getToolbarMenuController().init();
   applyToolbarModeVisibility(getUIModeController().getMode());
   getUIModeController().subscribe((newMode) => {
     applyToolbarModeVisibility(newMode);
   });
+
+  // U-46 (Q-73a): on a mobile-shaped project surface the four app-chrome
+  // controls move out of their own row and into the Customizer row. Wired
+  // after applyToolbarModeVisibility so the row it collapses has already
+  // settled into the density it is going to hold.
+  initMobileToolbar();
 
   // Initialize HFM/Alt View controller (hidden feature mode)
   const hfmCtrl = initHfmController({
@@ -1864,6 +3242,9 @@ async function initApp() {
   initParamDetailController();
 
   async function _saveCurrentProject(successMessage) {
+    // Save what the user can see. Without this, saving inside the editor's
+    // write-back window persists the pre-edit source and then reports success.
+    publishEditorEdits();
     const state = stateManager.getState();
     if (!state.uploadedFile?.content) return;
     if (currentSavedProjectId) {
@@ -1880,6 +3261,9 @@ async function initApp() {
             : undefined,
       });
       if (result.success) {
+        // The dirty flag means "differs from the saved project" (D-10), so
+        // saving — and only saving — clears it.
+        getEditorStateManager().markClean();
         companionFilesCtrl.updateCompanionSaveButton();
         stateManager.announceChange(successMessage);
         updateStatus(successMessage);
@@ -1905,6 +3289,10 @@ async function initApp() {
    * @param {string} format - 'svg' or 'dxf'
    */
   async function _export2DOneClick(format) {
+    // D-29, same as the 3D export path: this is reached both through
+    // _renderForExport and directly from the Classic toolbar's DXF button,
+    // so it publishes on its own account rather than trusting its caller.
+    publishEditorEdits();
     const state = stateManager.getState();
     if (!state.uploadedFile) {
       showErrorToast({
@@ -1932,11 +3320,18 @@ async function initApp() {
 
     getToolbarMenuController().closeAll();
 
-    const renderParameters = resolve2DExportParameters(
+    // The format change above populated the consent panel; honor its
+    // checkbox (checked by default) rather than applying silently.
+    const proposal = propose2DExportChanges(
       state.parameters,
       state.schema,
-      format
+      format,
+      state.projectFiles
     );
+    const renderParameters =
+      proposal.changes.length > 0 && is2DAdjustmentsConsented()
+        ? proposal.resolvedParameters
+        : state.parameters;
 
     updateStatus(`Generating ${formatName}\u2026`);
 
@@ -1965,12 +3360,15 @@ async function initApp() {
         );
       } catch (renderErr) {
         if (renderErr.code === 'MODEL_NOT_2D') {
-          updateStatus(
-            `Model produces 3D geometry — projecting to ${formatName}...`
-          );
+          const proceed = await confirmProjectionFallback(format);
+          if (!proceed) {
+            updateStatus(`${formatName} export cancelled`);
+            return;
+          }
+          updateStatus(`Projecting 3D mesh to approximate ${formatName}...`);
           result = await renderController.render2DFallback(
             state.uploadedFile.content,
-            renderParameters,
+            strip2DGenerateForFallback(renderParameters),
             oneClickOpts
           );
         } else {
@@ -2001,12 +3399,10 @@ async function initApp() {
           let svgText =
             typeof data === 'string' ? data : new TextDecoder().decode(data);
 
-          const renderStyle =
-            '<style data-forge-preview="true">' +
-            'path,polygon,polyline,circle,ellipse,rect{fill:#07D0A7;stroke:#FF0603;stroke-width:0.5;fill-opacity:1}' +
-            'line{stroke:#FF0603;stroke-width:0.5}' +
-            '</style>';
-          svgText = svgText.replace(/(<svg[^>]*>)/i, '$1' + renderStyle);
+          svgText = svgText.replace(
+            /(<svg[^>]*>)/i,
+            '$1' + build2DPreviewStyleTag('rendered')
+          );
 
           if (typeof previewManager.show2DPreviewAs3DPlane === 'function') {
             await previewManager.show2DPreviewAs3DPlane(svgText, {
@@ -2034,6 +3430,118 @@ async function initApp() {
       announceImmediate(`${formatName} export failed.`);
     }
   }
+
+  /**
+   * Whether the render already in hand is this exact format, for these exact
+   * parameters — the one question that decides whether an export downloads
+   * immediately or has to render first. STL additionally consults the app's
+   * shared render-state function rather than repeating its recipe.
+   *
+   * @param {string} format
+   * @param {Object} parameters
+   * @param {Object} [options]
+   * @param {boolean} [options.stlBinary=true]
+   * @returns {boolean}
+   */
+  function hasCurrentRenderFor(format, parameters, { stlBinary = true } = {}) {
+    const output = stateManager.getState().generatedOutput;
+    const matches = Boolean(
+      output?.data &&
+      (output.format || 'stl').toLowerCase() === format &&
+      output.paramsHash === hashParams(parameters)
+    );
+    if (!matches) return false;
+    if (format !== 'stl') return true;
+    // ascii and binary are different bytes, so asking for the other encoding
+    // is a different render even when the geometry is unchanged.
+    if ((output.stlBinary ?? true) !== stlBinary) return false;
+    return hasFullQualitySTLFor(parameters);
+  }
+
+  /**
+   * Render the model in the requested format so an export can proceed.
+   * @returns {Promise<'ready'|'downloaded'|false>}
+   */
+  async function _renderForExport(format, { stlBinary = true } = {}) {
+    // D-29: File > Export renders straight from state, so it needs the
+    // editor published first for the same reason Render does.
+    publishEditorEdits();
+
+    // SVG and DXF keep the one-click path: it asks consent for the 2D
+    // parameter changes and handles the projection fallback, neither of
+    // which a plain render in that format would do.
+    if (format === 'svg' || format === 'dxf') {
+      await _export2DOneClick(format);
+      return 'downloaded';
+    }
+
+    const state = stateManager.getState();
+    if (!renderController) {
+      showErrorToast({
+        title: 'Engine Not Ready',
+        message:
+          'The OpenSCAD engine has not initialized yet. Please wait or refresh the page.',
+      });
+      return false;
+    }
+
+    const formatName = OUTPUT_FORMATS[format]?.name || format.toUpperCase();
+    getToolbarMenuController().closeAll();
+    updateStatus(`Generating ${formatName}\u2026`);
+    announceImmediate(`Generating ${formatName}. This may take a moment.`);
+    autoPreviewController?.cancelPending();
+
+    try {
+      const startTime = Date.now();
+      const result = await renderController.renderFull(
+        state.uploadedFile.content,
+        state.parameters,
+        {
+          outputFormat: format,
+          stlBinary,
+          paramTypes: state.paramTypes || {},
+          files: state.projectFiles,
+          mainFile: state.mainFilePath,
+          libraries: getEnabledLibrariesForRender(),
+          onProgress: () => updateStatus(`Generating ${formatName}\u2026`),
+        }
+      );
+      const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+      const data = result.data || result.stl;
+      const resolvedFormat = (result.format || format).toLowerCase();
+
+      stateManager.setState({
+        generatedOutput: {
+          data,
+          format: resolvedFormat,
+          stats: result.stats,
+          paramsHash: hashParams(state.parameters),
+          stlBinary: resolvedFormat === 'stl' ? stlBinary : undefined,
+        },
+        stl: data,
+        outputFormat: resolvedFormat,
+        stlStats: result.stats,
+        lastRenderTime: duration,
+      });
+      updateStatus(`${formatName} ready (${duration}s)`);
+      return 'ready';
+    } catch (error) {
+      console.error(`[Export] ${formatName} render failed:`, error);
+      updateStatus(`${formatName} export failed: ${error.message || error}`);
+      showErrorToast({
+        title: `${formatName} Export Failed`,
+        message: error.message || String(error),
+      });
+      announceImmediate(`${formatName} export failed.`);
+      return false;
+    }
+  }
+
+  setExportDependencies({
+    hasCurrentRender: (format, options) =>
+      hasCurrentRenderFor(format, stateManager.getState().parameters, options),
+    renderForExport: _renderForExport,
+  });
 
   // Initialize file actions controller (New, Reload, Save, Save As, Export Image, Recent)
   const fileActionsController = getFileActionsController({
@@ -2080,93 +3588,213 @@ async function initApp() {
       document.body.removeChild(link);
     },
     onExport2D: (format) => _export2DOneClick(format),
+    onOpenRecent: (entry) => _openRecentEntry(entry),
   });
   fileActionsController.init();
 
+  const THREEMF_UNAVAILABLE_REASON =
+    '3MF export is not available in this browser build. Export as STL or OBJ instead \u2014 most slicers accept both.';
+  const RECENT_UNAVAILABLE_REASON =
+    'Not saved in this browser — open the file again to reload it';
+  const OPEN_IN_NEW_WINDOW_REASON =
+    'A new browser tab cannot be handed a file from this one. Use New Window, then open the file there.';
+
+  // A recent entry is only a file name, so re-opening works when this browser
+  // still holds the content: a saved project, or a bundled example. A one-off
+  // upload leaves nothing behind, and that entry renders disabled with a
+  // reason rather than failing on click (D-28). Menu builders are synchronous,
+  // so the lookup is cached and rebuilt whenever the project list changes.
+  const recentResolution = new Map();
+
+  async function refreshRecentResolution() {
+    const projects = await listSavedProjects();
+    const resolved = new Map();
+    for (const project of projects) {
+      if (project.originalName && !resolved.has(project.originalName)) {
+        resolved.set(project.originalName, { kind: 'project', id: project.id });
+      }
+    }
+    for (const project of projects) {
+      if (project.name && !resolved.has(project.name)) {
+        resolved.set(project.name, { kind: 'project', id: project.id });
+      }
+    }
+    for (const [key, def] of Object.entries(EXAMPLE_DEFINITIONS)) {
+      if (def.name && !resolved.has(def.name)) {
+        resolved.set(def.name, { kind: 'example', key });
+      }
+    }
+    recentResolution.clear();
+    for (const [name, target] of resolved) recentResolution.set(name, target);
+  }
+
+  function _openRecentEntry(entry) {
+    const target = recentResolution.get(entry?.name);
+    if (!target) return;
+    if (target.kind === 'project') {
+      void savedProjectsUI.loadSavedProject(target.id);
+    } else {
+      void fileHandler.loadExampleByKey(target.key);
+    }
+  }
+
+  document.addEventListener('saved-projects-rendered', () => {
+    void refreshRecentResolution();
+  });
+  void refreshRecentResolution();
+
+  /**
+   * Save a Copy: the open document stays attached to the project it came
+   * from, so a later Save still overwrites the original rather than the copy.
+   */
+  async function _saveProjectCopy() {
+    publishEditorEdits();
+    const state = stateManager.getState();
+    if (!state.uploadedFile?.content) return;
+    const previousProjectId = currentSavedProjectId;
+    await savedProjectsUI.showSaveProjectPrompt(state, { preSave: true });
+    currentSavedProjectId = previousProjectId;
+  }
+
+  /**
+   * File > Close Project. The Back button asks its own question, so a dirty
+   * editor is warned here and then closed directly — two dialogs in a row
+   * would be worse than one.
+   */
+  async function _closeProjectFromMenu() {
+    if (getEditorStateManager().getIsDirty()) {
+      const confirmed = await showConfirmDialog(
+        'You have unsaved edits in the code editor. Closing this project will discard them.',
+        'Unsaved code edits',
+        'Discard edits and close',
+        'Keep editing',
+        { destructive: true }
+      );
+      if (!confirmed) return;
+      await closeProjectToWelcome();
+      return;
+    }
+    document.getElementById('clearFileBtn')?.click();
+  }
+
+  /**
+   * File > Show Library Folder…: a browser has no library folder on disk, so
+   * this reveals the library bundles this build actually mounts.
+   */
+  function _showLibraryBundles() {
+    const controls = document.getElementById('libraryControls');
+    if (!controls) return;
+    controls.classList.remove('hidden');
+    // Simplified hides this panel through the mode controller's own class, so
+    // clearing `hidden` alone left the command doing nothing at all — and a
+    // display:none summary cannot take focus, which dropped focus on <body>
+    // as the menu closed. Route through the controller so its class and the
+    // Window menu's tick keep reading one state (D-41).
+    const uiCtrl = getUIModeController();
+    if (uiCtrl && !uiCtrl.isPanelShowing('libraries')) {
+      uiCtrl.togglePanelVisibility('libraries');
+    }
+    const details = controls.querySelector('.library-details');
+    if (details) details.open = true;
+    controls.scrollIntoView({ block: 'nearest' });
+    controls.querySelector('.library-summary')?.focus();
+  }
+
   // ── Toolbar: File menu ──────────────────────────────────────────────────
+  // Order, labels and separators transcribed from upstream MainWindow.ui at
+  // tag openscad-2026.01.01-TEST2 (Appendix U2). Omitted and documented:
+  // Save All and the Python submenu (D-24 — one document, no Python in the
+  // WASM build). Quit has no browser meaning, so its slot is dropped and the
+  // single Close carries the clearer name "Close Project" (D-27, owner
+  // 2026-08-08). "Open Local Folder…" is a Forge extra, kept beside Open File.
   getToolbarMenuController().registerMenuBuilder('file', () => {
     const state = stateManager.getState();
     const hasFile = Boolean(state.uploadedFile);
     const hasRender = Boolean(state.stl);
-    // Full render = Generate button has been pressed and output matches current params
-    const stateOutputFormat = (state.outputFormat || '').toLowerCase();
-    const selectedFormat = (
-      document.getElementById('outputFormat')?.value || 'stl'
-    ).toLowerCase();
-    const hasNonSTLRender =
-      hasRender &&
-      stateOutputFormat === selectedFormat &&
-      stateOutputFormat !== 'stl';
-    const hasFullRender =
-      hasNonSTLRender ||
-      Boolean(
-        autoPreviewController?.getCurrentFullSTL(state.parameters) &&
-        !autoPreviewController?.needsFullRender(state.parameters)
-      );
+    // state.stl is only set by a full Generate. Commands that act on WHAT IS
+    // ON SCREEN are available as soon as a preview has put a mesh there (P10).
+    const hasViewportModel = hasRender || Boolean(previewManager?.mesh);
 
-    // Recent Files submenu items (filenames only; actual re-open via onOpenRecent callback)
-    const recentItems =
-      fileActionsController.recentFiles.length > 0
-        ? fileActionsController.recentFiles.map((entry) => ({
-            type: 'action',
-            label: entry.name,
-            handler: () => fileActionsController.onOpenRecent(entry),
-          }))
-        : [{ type: 'action', label: 'No recent files', disabled: true }];
-
-    // Export submenu: one-click 2D exports + re-download of current render + Export as Image
-    const exportItems = [
-      // One-click 2D exports (auto-adjust params, render, download)
-      {
-        type: 'action',
-        label: 'Export as SVG\u2026',
-        enabled: hasFile,
-        tooltip: hasFile
-          ? 'One-click: auto-adjusts parameters, generates 2D geometry, and downloads SVG'
-          : 'Open a file first',
-        handler: () => fileActionsController.onExport2D('svg'),
-      },
-      {
-        type: 'action',
-        label: 'Export as DXF\u2026',
-        enabled: hasFile,
-        tooltip: hasFile
-          ? 'One-click: auto-adjusts parameters, generates 2D geometry, and downloads DXF'
-          : 'Open a file first',
-        handler: () => fileActionsController.onExport2D('dxf'),
-      },
-      { type: 'separator' },
-      // Re-download current render in its original format
-      ...(!hasFullRender
-        ? [
-            {
+    // Recent Files submenu: entries this browser can still re-open, then
+    // Clear Recent. Unreachable entries stay listed but disabled (D-28).
+    const hasRecent = fileActionsController.recentFiles.length > 0;
+    const recentItems = [
+      ...(hasRecent
+        ? fileActionsController.recentFiles.map((entry) => {
+            const resolvable = recentResolution.has(entry.name);
+            return {
               type: 'action',
-              label: '\u24D8  Press Generate to enable file exports',
-              disabled: true,
-              tooltip:
-                'Use the Generate button to fully render the model, then file export options will become available.',
-            },
-            { type: 'separator' },
-          ]
-        : []),
-      ...Object.entries(OUTPUT_FORMATS).map(([key, fmt]) => ({
+              label: entry.name,
+              disabled: !resolvable,
+              tooltip: resolvable ? undefined : RECENT_UNAVAILABLE_REASON,
+              handler: resolvable
+                ? () => fileActionsController.onOpenRecent(entry)
+                : undefined,
+            };
+          })
+        : [{ type: 'action', label: 'No recent files', disabled: true }]),
+      { type: 'separator' },
+      {
         type: 'action',
-        label: fmt.name,
-        enabled: hasFullRender,
-        tooltip: hasFullRender
-          ? fmt.description
-          : 'Press Generate first to enable this export',
-        handler: () => exportFormatFromMenu(key),
+        label: 'Clear Recent',
+        disabled: !hasRecent,
+        tooltip: hasRecent ? undefined : 'The recent files list is empty',
+        handler: hasRecent
+          ? () => {
+              fileActionsController.clearRecent();
+              announceImmediate('Recent files list cleared');
+            }
+          : undefined,
+      },
+    ];
+
+    // Export submenu, in upstream order (U2). POV is omitted and documented
+    // (D-24 -- the WASM build has no POV writer). Every entry renders on
+    // demand when the render in hand is not already that format, so no export
+    // is a dead end any more.
+    const exportFormats = [
+      ['stl', 'Export as STL (ascii)\u2026', { stlBinary: false }],
+      ['stl', 'Export as STL (binary)\u2026', { stlBinary: true }],
+      ['obj', 'Export as OBJ\u2026', {}],
+      ['off', 'Export as OFF\u2026', {}],
+      ['wrl', 'Export as WRL\u2026', {}],
+      ['amf', 'Export as AMF\u2026', {}],
+      // Measured 2026-08-08: this build's renderer traps on 3MF with
+      // "function signature mismatch", so the item says so instead of
+      // failing every time it is pressed.
+      ['3mf', 'Export as 3MF\u2026', {}, THREEMF_UNAVAILABLE_REASON],
+      ['dxf', 'Export as DXF\u2026', {}],
+      ['svg', 'Export as SVG\u2026', {}],
+      ['csg', 'Export as CSG\u2026', {}],
+      ['pdf', 'Export as PDF\u2026', {}],
+    ];
+
+    const exportItems = [
+      ...exportFormats.map(([format, label, options, unavailableReason]) => ({
+        type: 'action',
+        label,
+        enabled: hasFile && !unavailableReason,
+        tooltip: unavailableReason
+          ? unavailableReason
+          : hasFile
+            ? OUTPUT_FORMATS[format]?.description
+            : 'Open a file first',
+        handler: unavailableReason
+          ? undefined
+          : () => void exportFormatFromMenu(format, options),
       })),
       { type: 'separator' },
       {
         type: 'action',
         label: 'Export as Image\u2026',
         shortcutAction: 'exportImage',
-        enabled: hasRender,
-        tooltip: hasRender
+        // It photographs the canvas, so it needs something on screen and
+        // nothing else. It used to demand a full render while telling the
+        // user to "Load and preview a file first" -- which they had (P10).
+        enabled: hasViewportModel,
+        tooltip: hasViewportModel
           ? 'Save the current viewport as a PNG image'
-          : 'Load and preview a file first',
+          : 'Preview or render a model first',
         handler: () => fileActionsController.onExportImage(),
       },
     ];
@@ -2185,13 +3813,14 @@ async function initApp() {
       },
       {
         type: 'action',
-        label: 'Recent File',
-        disabled: true,
-        tooltip:
-          'Previously opened files appear in the Recent Files submenu below',
+        label: 'Open Local Folder\u2026',
+        enabled: Boolean(connectToLocalFolder),
+        tooltip: connectToLocalFolder
+          ? 'Connect to a folder on disk; the connection persists across visits'
+          : 'Persistent folder access requires Chrome or Edge',
+        handler: () => connectToLocalFolder?.(),
       },
       { type: 'submenu', label: 'Recent Files', items: recentItems },
-      { type: 'separator' },
       {
         type: 'submenu',
         label: 'Examples',
@@ -2244,8 +3873,29 @@ async function initApp() {
       { type: 'separator' },
       {
         type: 'action',
-        label: 'Close',
-        handler: () => document.getElementById('clearFileBtn')?.click(),
+        label: 'New Window',
+        tooltip: 'Opens a second copy of the app in a new browser tab',
+        handler: () =>
+          window.open(
+            window.location.origin + window.location.pathname,
+            '_blank',
+            'noopener,noreferrer'
+          ),
+      },
+      {
+        type: 'action',
+        label: 'Open in New Window',
+        disabled: true,
+        tooltip: OPEN_IN_NEW_WINDOW_REASON,
+      },
+      {
+        type: 'action',
+        label: 'Close Project',
+        enabled: hasFile,
+        tooltip: hasFile
+          ? 'Close the project and return to the start screen'
+          : 'Open a file first',
+        handler: () => void _closeProjectFromMenu(),
       },
       { type: 'separator' },
       {
@@ -2266,25 +3916,64 @@ async function initApp() {
       },
       {
         type: 'action',
-        label: 'Save All',
+        label: 'Save a Copy',
         enabled: hasFile,
         tooltip: hasFile
-          ? 'Save all changes to current project'
+          ? 'Save another copy, leaving this file attached to the project it came from'
           : 'Open a file first',
-        handler: () => fileActionsController.onSaveAll(),
+        handler: () => void _saveProjectCopy(),
       },
       { type: 'separator' },
       { type: 'submenu', label: 'Export', items: exportItems },
+      // UF-11: proxies the export-quality mode whose drawer select was
+      // retired; these labels are the retired select's options and this list
+      // is the setting's one home. Forge-only, like the other UF-11 menu
+      // homes - Classic's File menu keeps its audited upstream shape.
+      ...(document.body.dataset.uiMode !== 'classic'
+        ? [
+            {
+              type: 'submenu',
+              label: 'Export Quality',
+              items: [
+                { label: 'Model default', value: 'model' },
+                { label: 'Low (fast)', value: 'low' },
+                { label: 'Medium (balanced)', value: 'medium' },
+                { label: 'High (smooth)', value: 'high' },
+              ].map((opt) => ({
+                type: 'radio',
+                label: opt.label,
+                group: 'exportQuality',
+                value: opt.value,
+                checked: exportQualityMode === opt.value,
+                onChange: () => setExportQualityMode(opt.value),
+              })),
+            },
+          ]
+        : []),
       { type: 'separator' },
       {
         type: 'action',
-        label: 'Show Library Folder',
-        disabled: true,
-        tooltip:
-          'Libraries are managed in-browser \u2014 use the Libraries panel (Window menu) to add or remove libraries',
+        label: 'Show Library Folder\u2026',
+        tooltip: 'Shows the library bundles this app can mount',
+        handler: () => _showLibraryBundles(),
       },
     ];
   });
+
+  /**
+   * Is there a code editor the user can see right now? ModeManager's expert
+   * flag stays false in Classic even while the dock's Editor pane is mounted
+   * and visible (R3b-1), so the mode alone cannot answer this. The Edit-menu
+   * gates, the live font-size apply and jump-to-line all ask this one
+   * question — asking it three different ways is how the two below stayed
+   * dead in Classic while the menu items enabled (UF-10).
+   */
+  function isEditorOnScreen() {
+    const box = document
+      .getElementById('expertModePanel')
+      ?.getBoundingClientRect();
+    return Boolean(box && box.width > 0 && box.height > 0);
+  }
 
   // Initialize edit actions controller (Copy viewport, camera values, error nav, font size)
   const editActionsController = getEditActionsController({
@@ -2292,8 +3981,8 @@ async function initApp() {
     getErrorLogPanel: () => errorLogPanel,
     onJumpToLine: (file, line) => {
       const modeManager = getModeManager();
-      if (modeManager?.isExpertMode?.() && modeManager.getEditorInstance?.()) {
-        const editor = modeManager.getEditorInstance();
+      const editor = modeManager?.getEditorInstance?.();
+      if (editor && (modeManager.isExpertMode?.() || isEditorOnScreen())) {
         if (editor.revealLineInCenter) editor.revealLineInCenter(line);
         if (editor.setPosition)
           editor.setPosition({ lineNumber: line, column: 1 });
@@ -2302,39 +3991,77 @@ async function initApp() {
     },
     onFontSizeChange: (size) => {
       const modeManager = getModeManager();
-      if (modeManager?.isExpertMode?.() && modeManager.getEditorInstance?.()) {
-        const editor = modeManager.getEditorInstance();
-        if (editor.updateOptions) editor.updateOptions({ fontSize: size });
+      const editor = modeManager?.getEditorInstance?.();
+      if (editor && (modeManager.isExpertMode?.() || isEditorOnScreen())) {
+        // setFontSize, not updateOptions: the latter never existed on either
+        // editor, which is how this control once saved and announced sizes
+        // without changing anything on screen (R-IV).
+        editor.setFontSize?.(size);
       }
     },
   });
   editActionsController.init();
 
-  // ── Toolbar: Edit menu ──────────────────────────────────────────────────
+  // -- Toolbar: Edit menu --------------------------------------------------
+  // Order and labels transcribed from upstream MainWindow.ui (Appendix U2).
+  // Omitted and documented: Show Next/Previous Tab (D-24 -- one document, no
+  // editor tabs). Preferences is relabelled honestly (D-29). Jump to previous
+  // error is a Forge extra, kept beside its upstream sibling.
   getToolbarMenuController().registerMenuBuilder('edit', () => {
     const state = stateManager.getState();
     const hasFile = Boolean(state.uploadedFile);
-    const canUndo = stateManager.canUndo();
-    const canRedo = stateManager.canRedo();
 
     const modeManager = getModeManager();
     const editor = modeManager?.getEditorInstance?.();
     const expertMode = modeManager?.isExpertMode?.();
-    const canEdit = expertMode && editor;
-    const editorTip = 'Available in Expert Mode with Code Editor';
+    const canEdit = Boolean(editor) && (expertMode || isEditorOnScreen());
+    const editorTip = 'Available when the Editor is open';
 
-    function editorAction(label, monacoActionId) {
+    // Undo and Redo follow the focus the menu bar just took: from the code
+    // editor they undo text, from anywhere else a parameter change. The
+    // parameter history keeps its own toolbar buttons, which say so by name.
+    const focusInEditor = Boolean(
+      getToolbarMenuController()
+        .getLastExternalFocus()
+        ?.closest?.('#expertModePanel')
+    );
+    const undoTargetsEditor = Boolean(canEdit && focusInEditor);
+    const canUndo = undoTargetsEditor
+      ? Boolean(editor.canUndo?.())
+      : stateManager.canUndo();
+    const canRedo = undoTargetsEditor
+      ? Boolean(editor.canRedo?.())
+      : stateManager.canRedo();
+
+    function historyTooltip(verb, available) {
+      const what = undoTargetsEditor
+        ? 'change in the code editor'
+        : 'parameter change';
+      return available
+        ? `${verb}es the last ${what}`
+        : `Nothing to ${verb.toLowerCase()}: no ${what} yet`;
+    }
+
+    /**
+     * @param {string} label
+     * @param {string} actionId
+     * @param {true|string} [gate] True when allowed, or the reason it is not.
+     */
+    function editorAction(label, actionId, gate = true) {
+      const supported = canEdit && editor.supportsAction?.(actionId) === true;
+      const available = supported && gate === true;
       return {
         type: 'action',
         label,
-        disabled: !canEdit,
-        tooltip: canEdit ? undefined : editorTip,
-        handler: canEdit
-          ? () => {
-              const action = editor.getAction(monacoActionId);
-              if (action) action.run();
-            }
-          : undefined,
+        disabled: !available,
+        tooltip: available
+          ? undefined
+          : !canEdit
+            ? editorTip
+            : !supported
+              ? 'Not available in the basic text editor'
+              : gate,
+        handler: available ? () => editor.performAction(actionId) : undefined,
       };
     }
 
@@ -2343,15 +4070,19 @@ async function initApp() {
         type: 'action',
         label: 'Undo',
         enabled: canUndo,
-        tooltip: canUndo ? undefined : 'Nothing to undo',
-        handler: () => performUndo(),
+        tooltip: historyTooltip('Undo', canUndo),
+        restoreFocus: true,
+        handler: () =>
+          undoTargetsEditor ? editor.performAction('undo') : performUndo(),
       },
       {
         type: 'action',
         label: 'Redo',
         enabled: canRedo,
-        tooltip: canRedo ? undefined : 'Nothing to redo',
-        handler: () => performRedo(),
+        tooltip: historyTooltip('Redo', canRedo),
+        restoreFocus: true,
+        handler: () =>
+          undoTargetsEditor ? editor.performAction('redo') : performRedo(),
       },
       { type: 'separator' },
       {
@@ -2359,6 +4090,9 @@ async function initApp() {
         label: 'Cut',
         disabled: !canEdit,
         tooltip: canEdit ? undefined : editorTip,
+        // Opening the menu bar takes focus, which collapses the editor's
+        // selection. restoreFocus puts it back before the command runs.
+        restoreFocus: true,
         handler: canEdit ? () => document.execCommand('cut') : undefined,
       },
       {
@@ -2366,6 +4100,7 @@ async function initApp() {
         label: 'Copy',
         disabled: !canEdit,
         tooltip: canEdit ? undefined : editorTip,
+        restoreFocus: true,
         handler: canEdit ? () => document.execCommand('copy') : undefined,
       },
       {
@@ -2373,21 +4108,47 @@ async function initApp() {
         label: 'Paste',
         disabled: !canEdit,
         tooltip: canEdit ? undefined : editorTip,
-        handler: canEdit ? () => document.execCommand('paste') : undefined,
+        restoreFocus: true,
+        // execCommand('paste') is blocked by every modern browser; read
+        // the async Clipboard API instead, with an honest fallback.
+        handler: canEdit
+          ? async () => {
+              try {
+                const text = await navigator.clipboard.readText();
+                editor.replaceSelection?.(text);
+              } catch {
+                updateStatus(
+                  'Clipboard access was blocked — press Ctrl+V in the editor to paste'
+                );
+                announceImmediate(
+                  'Clipboard access was blocked. Press Control V in the editor to paste.'
+                );
+              }
+            }
+          : undefined,
       },
       { type: 'separator' },
-      editorAction('Indent', 'editor.action.indentLines'),
-      editorAction('Unindent', 'editor.action.outdentLines'),
-      editorAction('Comment', 'editor.action.commentLine'),
-      editorAction('Uncomment', 'editor.action.removeCommentLine'),
-      editorAction(
-        'Convert Tabs to Spaces',
-        'editor.action.indentationToSpaces'
-      ),
+      editorAction('Indent', 'indent'),
+      editorAction('Unindent', 'unindent'),
+      editorAction('Comment', 'comment'),
+      editorAction('Uncomment', 'uncomment'),
+      editorAction('Convert Tabs to Spaces', 'convertTabsToSpaces'),
+      {
+        // Upstream has no menu entry for this — it is Alt+Ins only — but a
+        // keyboard-only action that does nothing tells the user nothing.
+        // Disabled here so it can at least say why (D-43).
+        type: 'action',
+        label: 'Insert Template',
+        disabled: true,
+        tooltip: INSERT_TEMPLATE_REASON,
+      },
+      editorAction('Toggle Bookmark', 'toggleBookmark'),
+      editorAction('Jump to next bookmark', 'nextBookmark'),
+      editorAction('Jump to previous bookmark', 'previousBookmark'),
       { type: 'separator' },
       {
         type: 'action',
-        label: 'Copy Viewport Image',
+        label: 'Copy viewport image',
         shortcutAction: 'copyViewportImage',
         enabled: hasFile,
         tooltip: hasFile ? undefined : 'Open a file first',
@@ -2395,52 +4156,55 @@ async function initApp() {
       },
       {
         type: 'action',
-        label: 'Copy Viewport Translation',
+        label: 'Copy viewport translation',
         enabled: hasFile,
         tooltip: hasFile ? undefined : 'Open a file first',
         handler: () => editActionsController.copyTranslation(),
       },
       {
         type: 'action',
-        label: 'Copy Viewport Rotation',
+        label: 'Copy viewport rotation',
         enabled: hasFile,
         tooltip: hasFile ? undefined : 'Open a file first',
         handler: () => editActionsController.copyRotation(),
       },
       {
         type: 'action',
-        label: 'Copy Viewport Distance',
+        label: 'Copy viewport distance',
         enabled: hasFile,
         tooltip: hasFile ? undefined : 'Open a file first',
         handler: () => editActionsController.copyDistance(),
       },
       {
         type: 'action',
-        label: 'Copy Viewport FOV',
+        label: 'Copy viewport field of view',
         enabled: hasFile,
         tooltip: hasFile ? undefined : 'Open a file first',
         handler: () => editActionsController.copyFov(),
       },
       { type: 'separator' },
-      editorAction('Find\u2026', 'actions.find'),
+      editorAction('Find…', 'find'),
+      editorAction('Find and Replace…', 'findReplace'),
+      editorAction('Find Next', 'findNext'),
+      editorAction('Find Previous', 'findPrevious'),
       editorAction(
-        'Find and Replace\u2026',
-        'editor.action.startFindReplaceAction'
+        'Use Selection for Find',
+        'useSelectionForFind',
+        canEdit && editor.hasSelection?.()
+          ? true
+          : 'Select some text in the code editor first'
       ),
-      editorAction('Find Next', 'editor.action.nextMatchFindAction'),
-      editorAction('Find Previous', 'editor.action.previousMatchFindAction'),
-      {
-        type: 'action',
-        label: 'Use Selection for Find',
-        disabled: !canEdit,
-        tooltip: canEdit ? undefined : editorTip,
-      },
       { type: 'separator' },
       {
         type: 'action',
-        label: 'Jump to Next Error',
+        label: 'Jump to next error',
         shortcutAction: 'jumpNextError',
         handler: () => editActionsController.jumpToNextError(),
+      },
+      {
+        type: 'action',
+        label: 'Jump to previous error',
+        handler: () => editActionsController.jumpToPrevError(),
       },
       { type: 'separator' },
       {
@@ -2457,17 +4221,153 @@ async function initApp() {
       },
       {
         type: 'action',
-        label: 'Preferences\u2026',
+        label: 'Preferences…',
         handler: () => {
-          const modal = document.getElementById('shortcutsModal');
-          const modalBody = document.getElementById('shortcutsModalBody');
-          if (modal && modalBody) {
-            if (!modal.dataset.initialized) {
-              initShortcutsModal(modalBody, () => closeModal(modal));
-              modal.dataset.initialized = 'true';
-            }
-            openModal(modal);
-          }
+          initPreferencesDialog({
+            onOpenShortcuts: _openShortcutsModal,
+            getColorScheme: () => {
+              if (previewManager) return previewManager.getViewportScheme();
+              // Before the first preview the manager does not exist, but a
+              // saved choice does — the dialog must show it, not the default
+              // (the multi-copy rule: control and effect must not disagree).
+              const saved = readScopedPref(STORAGE_KEY_VIEWPORT_SCHEME);
+              return VIEWPORT_SCHEMES.some((s) => s.id === saved)
+                ? saved
+                : 'cornfield';
+            },
+            onColorSchemeChange: (id) => {
+              if (previewManager) {
+                if (!previewManager.setViewportScheme(id)) return;
+              } else {
+                // No preview yet (the manager is created by the first
+                // geometry): persist the choice so the first paint honors
+                // it instead of silently dropping it (UF-15 P2).
+                if (!VIEWPORT_SCHEMES.some((s) => s.id === id)) return;
+                writeScopedPref(STORAGE_KEY_VIEWPORT_SCHEME, id);
+              }
+              const label =
+                VIEWPORT_SCHEMES.find((s) => s.id === id)?.label ?? id;
+              // Instant-apply is silent for a screen-reader user otherwise:
+              // the only feedback is a repaint they cannot see.
+              announceImmediate(`Color scheme ${label}`);
+            },
+            getGamepadStatus: () => ({
+              supported: !!gamepadController,
+              // The same display-name trim the connection status line uses,
+              // so the two surfaces name one device the same way.
+              padName:
+                gamepadController?.getGamepadInfo?.()?.id?.split(' (')[0] ??
+                null,
+              deadZone: gamepadController?.deadzone ?? null,
+            }),
+            getEditorPrefs: () => loadEditorPrefs(),
+            onEditorPrefChange: (name, value) => {
+              // The preference owner clamps and persists; whatever it stored
+              // is what gets applied, so the control cannot show one number
+              // while the editor uses another.
+              const stored = saveEditorPref(name, value);
+              const editor = getModeManager()?.getEditorInstance?.();
+              const apply = {
+                fontSize: () => editor?.setFontSize?.(stored),
+                indentWidth: () => editor?.setIndentWidth?.(stored),
+                tabWidth: () => editor?.setTabWidth?.(stored),
+                lineWrapping: () => editor?.setLineWrapping?.(stored),
+                highlightActiveLine: () =>
+                  editor?.setHighlightActiveLine?.(stored),
+                wrapIndent: () => editor?.setWrapIndent?.(stored),
+                wrapArrow: () => editor?.setWrapArrow?.(stored),
+                braceMatching: () => editor?.setBraceMatching?.(stored),
+              };
+              apply[name]?.();
+
+              const spoken = {
+                fontSize: `Font size: ${stored}px`,
+                indentWidth: `Indentation width: ${stored} spaces`,
+                tabWidth: `Tab width: ${stored} columns`,
+                lineWrapping: `Wrap long lines, ${stored ? 'on' : 'off'}`,
+                highlightActiveLine: `Highlight the current line, ${
+                  stored ? 'on' : 'off'
+                }`,
+                wrapIndent: `Indent wrapped continuation lines, ${
+                  stored ? 'on' : 'off'
+                }`,
+                wrapArrow: `Mark where a wrapped line continues, ${
+                  stored ? 'on' : 'off'
+                }`,
+                braceMatching: `Highlight the matching bracket, ${
+                  stored ? 'on' : 'off'
+                }`,
+              };
+              if (spoken[name]) announceImmediate(spoken[name]);
+              return stored;
+            },
+            getZoomToCursor: () => previewManager?.zoomToCursorEnabled ?? true,
+            onZoomToCursorChange: (enabled) => {
+              previewManager?.toggleZoomToCursor(enabled);
+              announceImmediate(
+                enabled
+                  ? 'Zoom toward the mouse pointer, on'
+                  : 'Zoom toward the mouse pointer, off'
+              );
+            },
+            // UF-14 (Q-40c): the grid is per-interface now, and Preferences
+            // is Classic's home for its own copy. Reads fall back to the
+            // scoped preference before any model exists (the facade's
+            // Classic default is grid-off).
+            getShowGrid: () =>
+              previewManager
+                ? previewManager.gridEnabled
+                : readScopedPref(STORAGE_KEY_GRID) !== 'false',
+            onShowGridChange: (enabled) => {
+              if (previewManager) previewManager.toggleGrid(enabled);
+              else {
+                writeScopedPref(STORAGE_KEY_GRID, enabled ? 'true' : 'false');
+              }
+              announceImmediate(enabled ? 'Grid shown' : 'Grid hidden');
+            },
+            getGridSizeOptions: () => {
+              // The drawer select is the canonical preset list (built-ins
+              // plus the user's saved presets); mirror it minus the
+              // custom-size editor, which stays the drawer's job.
+              const drawer = document.getElementById('gridPresetSelect');
+              const options = drawer
+                ? Array.from(drawer.querySelectorAll('option'))
+                    .filter((o) => o.value !== 'custom')
+                    .map((o) => ({
+                      value: o.value,
+                      label: o.textContent.trim(),
+                    }))
+                : [];
+              let size = previewManager?.getGridSize?.() ?? null;
+              if (!size) {
+                try {
+                  size = JSON.parse(readScopedPref(STORAGE_KEY_GRID_SIZE));
+                } catch {
+                  size = null;
+                }
+              }
+              const current = size ? `${size.widthMm}x${size.heightMm}` : null;
+              return {
+                options,
+                current,
+                currentLabel: size
+                  ? `Current (${size.widthMm} × ${size.heightMm} mm)`
+                  : null,
+              };
+            },
+            onGridSizeChange: (value) => {
+              // Drive the canonical control so the drawer's handler applies,
+              // persists and reports the change exactly once — two controls,
+              // one code path (the D-24 lesson).
+              const drawer = document.getElementById('gridPresetSelect');
+              if (!drawer) return;
+              drawer.value = value;
+              drawer.dispatchEvent(new Event('change', { bubbles: true }));
+            },
+          });
+          openPreferencesDialog({
+            returnFocusTo: document.getElementById('editMenuBtn'),
+          });
         },
       },
     ];
@@ -2487,16 +4387,44 @@ async function initApp() {
   });
   designPanelController.init();
 
-  // ── Toolbar: Design menu ─────────────────────────────────────────────────
+  const PRINT_UNAVAILABLE_REASON =
+    'Sending a model straight to a printer is not built yet. Export the model and open it in your slicer.';
+  const MEASURE_UNAVAILABLE_REASON =
+    'Measuring on the model is not built yet. Show measurements reports the overall size.';
+  const AST_UNAVAILABLE_REASON =
+    'The syntax tree is not available in this browser build. Display Parameters shows what the file declares.';
+  const CSG_UNAVAILABLE_REASON =
+    'The CSG tree is not available in this browser build. Export as CSG saves the flattened CSG source instead.';
+
+  // -- Toolbar: Design menu -------------------------------------------------
+  // Order and labels transcribed from upstream MainWindow.ui (Appendix U2).
+  // Four items ship visibly disabled with a reason rather than absent, so the
+  // menu still tells the truth about what desktop OpenSCAD offers: 3D Print
+  // (D-26), Measure Distance / Angle (D-15) and the two CSG dumps (D-38).
+  // Cancel Render is a Forge extra, kept next to the render it cancels.
   getToolbarMenuController().registerMenuBuilder('design', () => {
     const state = stateManager.getState();
     const hasFile = Boolean(state.uploadedFile);
+
+    /** An upstream action this build genuinely cannot perform yet. */
+    function unavailable(label, reason) {
+      return { type: 'action', label, disabled: true, tooltip: reason };
+    }
+
     return [
       {
         type: 'toggle',
         label: 'Automatic Reload and Preview',
-        disabled: true,
-        tooltip: 'Planned for future release',
+        checked: Boolean(document.getElementById('autoPreviewToggle')?.checked),
+        handler: () => {
+          // Single source: the existing auto-preview checkbox drives the
+          // controller; this item (and the Classic Customizer checkbox)
+          // proxy it so all three stay in sync.
+          const toggle = document.getElementById('autoPreviewToggle');
+          if (!toggle) return;
+          toggle.checked = !toggle.checked;
+          toggle.dispatchEvent(new Event('change'));
+        },
       },
       {
         type: 'action',
@@ -2533,8 +4461,10 @@ async function initApp() {
         enabled: hasFile,
         tooltip: hasFile ? undefined : 'Open a file first',
         handler: () => {
+          // Never the transformer button: with a cached full render its
+          // action is 'download', and Render must not mean download (U-8a).
           const btn = document.getElementById('primaryActionBtn');
-          if (btn && !btn.disabled) btn.click();
+          if (btn && !btn.disabled) runFullRender();
         },
       },
       {
@@ -2549,33 +4479,30 @@ async function initApp() {
           if (renderController?.isBusy?.()) renderController.cancel();
         },
       },
-      {
-        type: 'action',
-        label: '3D Print',
-        disabled: true,
-        tooltip:
-          'Not available in browser \u2014 export the model as STL and open it in your slicer application (e.g. PrusaSlicer, Cura)',
-      },
+      unavailable('3D Print', PRINT_UNAVAILABLE_REASON),
+      unavailable('Measure Distance', MEASURE_UNAVAILABLE_REASON),
+      unavailable('Measure Angle', MEASURE_UNAVAILABLE_REASON),
       { type: 'separator' },
       {
         type: 'action',
         label: 'Check Validity',
-        disabled: true,
-        tooltip: 'Planned for future release',
-      },
-      {
-        type: 'action',
-        label: 'Display Parameters\u2026',
-        shortcutAction: 'showAST',
+        shortcutAction: 'checkValidity',
         enabled: hasFile,
         tooltip: hasFile ? undefined : 'Open a file first',
-        handler: () => designPanelController.showAST(),
+        handler: () => designPanelController.checkValidity(),
       },
+      unavailable('Display AST…', AST_UNAVAILABLE_REASON),
+      unavailable('Display CSG Tree…', CSG_UNAVAILABLE_REASON),
+      unavailable('Display CSG Products…', CSG_UNAVAILABLE_REASON),
       {
         type: 'action',
-        label: 'Geometry Info',
-        disabled: true,
-        tooltip: 'Planned for future release',
+        label: 'Display Parameters…',
+        shortcutAction: 'showAST',
+        enabled: hasFile,
+        tooltip: hasFile
+          ? 'Shows the customizer parameters this file declares'
+          : 'Open a file first',
+        handler: () => designPanelController.showAST(),
       },
       { type: 'separator' },
       {
@@ -2597,8 +4524,28 @@ async function initApp() {
   // ── Toolbar: View menu ───────────────────────────────────────────────────
   getToolbarMenuController().registerMenuBuilder('view', () => {
     const state = stateManager.getState();
-    const hasRender = Boolean(state.stl);
+    // Center and View All fit the camera to previewManager.mesh, which a
+    // preview already provides; state.stl needs a full Generate (P10).
+    const hasViewportModel =
+      Boolean(state.stl) || Boolean(previewManager?.mesh);
     const projMode = previewManager?.getProjectionMode?.() ?? 'perspective';
+    const uiCtrl = getUIModeController();
+    const uiModeNow = uiCtrl.getMode();
+
+    function interfaceModeRadio(label, value) {
+      return {
+        type: 'radio',
+        label,
+        group: 'interfaceMode',
+        value,
+        checked: uiModeNow === value,
+        onChange: () => {
+          if (uiModeNow !== value) {
+            uiCtrl.switchMode(value);
+          }
+        },
+      };
+    }
 
     function cameraViewHandler(view) {
       return () => {
@@ -2626,17 +4573,71 @@ async function initApp() {
         handler: () => displayOptionsController.toggle('axes'),
       },
       {
+        // Upstream label (U2). This app's mm tick overlay IS the scale-marker
+        // overlay; E3 already named the toolbar button the same way.
         type: 'toggle',
-        label: 'Show Axis Markings (mm)',
+        label: 'Show Scale Markers',
         checked: displayOptionsController.get('axisMarks'),
         handler: () => displayOptionsController.toggle('axisMarks'),
       },
       {
         type: 'toggle',
         label: 'Show Crosshairs',
+        shortcutAction: 'toggleCrosshairs',
         checked: displayOptionsController.get('crosshairs'),
         handler: () => displayOptionsController.toggle('crosshairs'),
       },
+      // UF-11: the grid, measurements and status-bar toggles moved here from
+      // the Preview Settings drawer. Forge-only: Classic's View menu keeps
+      // its audited desktop shape, and Classic never showed the drawer these
+      // came from.
+      ...(document.body.dataset.uiMode !== 'classic'
+        ? [
+            {
+              type: 'toggle',
+              label: 'Show Grid',
+              checked: Boolean(previewManager?.gridEnabled),
+              enabled: Boolean(previewManager),
+              tooltip: previewManager
+                ? undefined
+                : 'Preview or render a model first',
+              handler: () => {
+                if (!previewManager) return;
+                const next = !previewManager.gridEnabled;
+                previewManager.toggleGrid(next);
+                announceImmediate(`Grid ${next ? 'shown' : 'hidden'}`);
+              },
+            },
+            {
+              type: 'toggle',
+              label: 'Show Measurements',
+              checked: Boolean(previewManager?.measurementsEnabled),
+              enabled: Boolean(previewManager),
+              tooltip: previewManager
+                ? undefined
+                : 'Preview or render a model first',
+              handler: () => {
+                if (!previewManager) return;
+                const next = !previewManager.measurementsEnabled;
+                previewManager.toggleMeasurements(next);
+                updateDimensionsDisplay();
+                announceImmediate(`Measurements ${next ? 'shown' : 'hidden'}`);
+              },
+            },
+            {
+              type: 'toggle',
+              label: 'Show Status Bar',
+              checked: !document
+                .getElementById('previewStatusBar')
+                ?.classList.contains('user-hidden'),
+              handler: () => {
+                const bar = document.getElementById('previewStatusBar');
+                if (!bar) return;
+                setPreviewStatusBarShown(bar.classList.contains('user-hidden'));
+              },
+            },
+          ]
+        : []),
       { type: 'separator' },
       // -- Camera Views --
       {
@@ -2681,16 +4682,21 @@ async function initApp() {
         shortcutAction: 'viewDiagonal',
         handler: cameraViewHandler('diagonal'),
       },
+      // Center, View All and Reset View are three different commands upstream
+      // and were two-thirds duplicates here: Center called a method that did
+      // not exist, and View All and Reset View both fitted the model (G4).
       {
         type: 'action',
         label: 'Center',
         shortcutAction: 'viewCenter',
-        enabled: hasRender,
-        tooltip: hasRender ? undefined : 'Render a model first',
+        enabled: hasViewportModel,
+        tooltip: hasViewportModel
+          ? undefined
+          : 'Preview or render a model first',
         handler: () => {
           if (previewManager) {
-            previewManager.resetCamera();
-            announceCameraAction('View centered');
+            previewManager.centerCamera();
+            announceCameraAction('View centered on the model');
           }
         },
       },
@@ -2698,24 +4704,26 @@ async function initApp() {
         type: 'action',
         label: 'View All',
         shortcutAction: 'viewAll',
-        enabled: hasRender,
-        tooltip: hasRender ? undefined : 'Render a model first',
+        enabled: hasViewportModel,
+        tooltip: hasViewportModel
+          ? undefined
+          : 'Preview or render a model first',
         handler: () => {
           if (previewManager) {
-            previewManager.fitCameraToModel();
+            previewManager.viewAllCamera();
             announceCameraAction('View fitted to model');
           }
         },
       },
       {
+        // No render needed: this one restores the default pose rather than
+        // framing anything, so it is the way back from a lost camera.
         type: 'action',
         label: 'Reset View',
         shortcutAction: 'resetView',
-        enabled: hasRender,
-        tooltip: hasRender ? undefined : 'Render a model first',
         handler: () => {
           if (previewManager) {
-            previewManager.fitCameraToModel();
+            previewManager.resetCamera();
             announceCameraAction('reset');
           }
         },
@@ -2725,9 +4733,10 @@ async function initApp() {
       {
         type: 'action',
         label: 'Zoom In',
+        shortcutAction: 'zoomIn',
         handler: () => {
           if (previewManager) {
-            previewManager.zoomCamera(1);
+            previewManager.zoomCamera(CAMERA_ZOOM_STEP);
             announceCameraAction('zoom-in');
           }
         },
@@ -2735,9 +4744,10 @@ async function initApp() {
       {
         type: 'action',
         label: 'Zoom Out',
+        shortcutAction: 'zoomOut',
         handler: () => {
           if (previewManager) {
-            previewManager.zoomCamera(-1);
+            previewManager.zoomCamera(-CAMERA_ZOOM_STEP);
             announceCameraAction('zoom-out');
           }
         },
@@ -2768,73 +4778,327 @@ async function initApp() {
           }
         },
       },
+      // -- Per-toolbar hide toggles (U2's tail; Classic-only markup) --
+      ...(document.body.dataset.uiMode === 'classic'
+        ? [
+            { type: 'separator' },
+            ...Object.entries(CLASSIC_HIDEABLE_TOOLBARS).map(([bar, def]) => ({
+              type: 'toggle',
+              label: def.label,
+              checked: isClassicToolbarHidden(bar),
+              handler: () => toggleClassicToolbar(bar),
+            })),
+          ]
+        : []),
+      { type: 'separator' },
+      // -- Preview Quality (proxies #previewQualitySelect, C4) --
+      (() => {
+        const select = document.getElementById('previewQualitySelect');
+        const options = select ? Array.from(select.options) : [];
+        return {
+          type: 'submenu',
+          label: 'Preview Quality',
+          items: options.map((opt) => ({
+            type: 'radio',
+            label: opt.textContent.trim(),
+            group: 'previewQuality',
+            value: opt.value,
+            checked: select?.value === opt.value,
+            onChange: () => {
+              if (!select) return;
+              select.value = opt.value;
+              select.dispatchEvent(new Event('change'));
+            },
+          })),
+        };
+      })(),
+      // UF-11: the edge budget moved here from the drawer select; the values
+      // are the retired select's options and this list is now their one home.
+      // setEdgeBudget persists, rebuilds the overlay and announces the stats.
+      ...(document.body.dataset.uiMode !== 'classic'
+        ? [
+            (() => {
+              const EDGE_DETAIL_OPTIONS = [
+                { label: 'Low — 25,000 edges', value: 25000 },
+                { label: 'Balanced — 75,000 edges', value: 75000 },
+                { label: 'High — 250,000 edges', value: 250000 },
+                { label: 'Unlimited', value: 0 },
+              ];
+              const current = displayOptionsController.getEdgeBudget();
+              return {
+                type: 'submenu',
+                label: 'Edge Detail Limit',
+                items: EDGE_DETAIL_OPTIONS.map((opt) => ({
+                  type: 'radio',
+                  label: opt.label,
+                  group: 'edgeDetail',
+                  value: String(opt.value),
+                  checked: current === opt.value,
+                  onChange: () =>
+                    displayOptionsController.setEdgeBudget(opt.value),
+                })),
+              };
+            })(),
+          ]
+        : []),
+      ...(document.body.dataset.uiMode === 'classic'
+        ? [
+            {
+              // Keyboard/menu home for the header Simplified/Standard switch
+              type: 'toggle',
+              label: 'Simplified view',
+              checked:
+                getUIModeController().getClassicDensity() === 'simplified',
+              handler: () => {
+                getUIModeController().toggleClassicDensity();
+              },
+            },
+            {
+              // The way back from any arrangement the title-bar menus can
+              // produce (B9). Label owner-approved 2026-08-07.
+              label: 'Reset Panel Layout',
+              handler: () => {
+                getClassicLayoutController()?.resetPanelLayout();
+              },
+            },
+          ]
+        : []),
+      { type: 'separator' },
+      // -- Interface Mode Radio Group (Classic gated on classic_mode flag) --
+      interfaceModeRadio('Simplified', 'simplified'),
+      interfaceModeRadio('Standard', 'standard'),
+      ...(_isEnabled('classic_mode')
+        ? [interfaceModeRadio('Classic (Desktop Layout)', 'classic')]
+        : []),
     ];
   });
 
   // ── Toolbar: Window menu ─────────────────────────────────────────────────
   getToolbarMenuController().registerMenuBuilder('window', () => {
     const uiCtrl = getUIModeController();
-    const hidden = new Set(
-      uiCtrl.getPreferencesForExport().hiddenPanelsInBasic
-    );
-
     /**
+     * The tick reads the DOM, not the Simplified-view preference: Classic's
+     * dock adopts the Console and shows it whatever that preference says, so
+     * the menu claimed the Console was off while it sat on screen. And
+     * togglePanelVisibility announces the change itself, so announcing here
+     * too said it twice.
+     *
      * @param {string} panelId
      * @param {string} label
      * @param {string|undefined} shortcutAction
      */
     function panelToggle(panelId, label, shortcutAction) {
-      const isVisible = !hidden.has(panelId);
       return {
         type: 'toggle',
         label,
-        checked: isVisible,
+        checked: uiCtrl.isPanelShowing(panelId),
         ...(shortcutAction ? { shortcutAction } : {}),
+        handler: () => uiCtrl.togglePanelVisibility(panelId),
+      };
+    }
+
+    const classicLayout = getClassicLayoutController();
+    const inClassic =
+      document.body.dataset.uiMode === 'classic' && Boolean(classicLayout);
+
+    /**
+     * A Forge panel that Classic keeps out of the Customizer column (P6, owner
+     * Q-4). classic.css hides the row while its <details> is closed, so `open`
+     * is both the visibility and the tick — one state, so the two cannot
+     * disagree.
+     *
+     * Not panelToggle() for these, even though four of them are in
+     * PANEL_REGISTRY: for Libraries and Companion Files the registry names the
+     * WRAPPER div, so its tick would report a closed panel as showing and its
+     * handler would flip a class the Classic rule does not read. Rather than
+     * two helpers in one list for reasons a reader cannot see, all five of the
+     * Q-4 set go through this one.
+     *
+     * @param {string} selector - the row's <details>
+     * @param {string} label - the panel's name, as the Window menu lists it
+     */
+    function forgeExtraToggle(selector, label) {
+      const row = document.querySelector(selector);
+      return {
+        type: 'toggle',
+        label,
+        checked: Boolean(row?.open),
         handler: () => {
-          uiCtrl.togglePanelVisibility(panelId);
-          _announce(isVisible ? `${label} hidden` : `${label} shown`);
+          const el = document.querySelector(selector);
+          if (!el) return;
+          el.open = !el.open;
+          // Same sentence as UIModeController.togglePanelVisibility uses for
+          // every other disclosure, and once per toggle.
+          announceImmediate(`${label} ${el.open ? 'opened' : 'closed'}`, {
+            clearDelayMs: 1500,
+          });
+          if (el.open) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
         },
       };
     }
 
+    // Upstream builds this menu from the docks themselves, so its order is the
+    // dock order: Editor, Console, Customizer, Error-Log, Animate, Font List,
+    // Viewport-Control (U2). Next/Previous Window are omitted — one window
+    // (D-24).
+    const editorAvailable = _isEnabled('expert_mode');
+
     return [
-      // -- Desktop-parity panel toggles --
-      panelToggle('codeEditor', 'Editor', 'toggleCodeEditor'),
+      {
+        // Forge's tick asks the toggle button's own pressed state — the DOM
+        // truth for "is the editor open". The registry's codeEditor entry
+        // tracks whether the BUTTON is shown, which is a different question
+        // and the one this tick wrongly answered before (UF-10).
+        type: 'toggle',
+        label: 'Editor',
+        shortcutAction: 'toggleCodeEditor',
+        checked: inClassic
+          ? classicLayout.isEditorVisible()
+          : editorAvailable &&
+            document
+              .getElementById('expertModeToggle')
+              ?.getAttribute('aria-pressed') === 'true',
+        enabled: inClassic || editorAvailable,
+        tooltip:
+          inClassic || editorAvailable
+            ? undefined
+            : CODE_EDITOR_UNAVAILABLE_REASON,
+        handler: () => toggleEditorPanel(),
+      },
       panelToggle('consoleOutput', 'Console', 'toggleConsole'),
       {
         type: 'toggle',
         label: 'Customizer',
-        disabled: true,
-        tooltip:
-          'Planned for future release \u2014 use the collapse button on the parameters panel instead',
+        shortcutAction: 'toggleCustomizer',
+        checked: inClassic
+          ? classicLayout.isCustomizerVisible()
+          : !document
+              .getElementById('paramPanel')
+              ?.classList.contains('collapsed'),
+        handler: () => toggleCustomizerPanel(),
       },
-      { type: 'separator' },
+      // Error-Log gets a custom handler rather than a panelToggle: it is a
+      // console tab in Forge and an always-present strip pane in Classic, so
+      // PANEL_REGISTRY's show/hide semantics fit neither host (F1).
       {
-        type: 'action',
-        label: 'Font List',
-        disabled: true,
-        tooltip:
-          'Not available in browser \u2014 see openscad.org/documentation.html for font information',
+        type: 'toggle',
+        label: 'Error-Log',
+        shortcutAction: 'toggleErrorLog',
+        checked: isErrorLogShowing(),
+        handler: () => toggleErrorLog(),
       },
-      {
-        type: 'action',
-        label: 'Viewport-Control',
-        handler: () => {
-          const panel = document.getElementById('cameraPanel');
-          if (panel) {
-            panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            const focusable = panel.querySelector('button, input, select');
-            if (focusable) focusable.focus();
-          }
-        },
-      },
+      // The three panels sub-plan F builds are Classic-only this round (D-32),
+      // so each is a real dock toggle in Classic and keeps its previous Forge
+      // behaviour outside it. Viewport-Control used to be disabled in Classic
+      // with an apologetic tooltip; it is a real panel now (F4/F6).
+      ...(inClassic
+        ? [
+            {
+              type: 'toggle',
+              label: 'Animate',
+              checked: classicLayout.isAnimateVisible(),
+              handler: () => classicLayout.toggleAnimate(),
+            },
+            {
+              type: 'toggle',
+              label: 'Font List',
+              checked: classicLayout.isFontListVisible(),
+              handler: () => classicLayout.toggleFontList(),
+            },
+            {
+              type: 'toggle',
+              label: 'Viewport-Control',
+              checked: classicLayout.isViewportControlVisible(),
+              handler: () => classicLayout.toggleViewportControl(),
+            },
+            // The five Forge panels Classic keeps out of the Customizer column
+            // (P6, Q-4). Listed after the dock panels and in the column order
+            // they had, so a user who knows where they used to be finds them
+            // in that order here. Outside Classic these stay where they were,
+            // in the web-only group at the foot of this menu.
+            { type: 'separator' },
+            forgeExtraToggle('#measureSection', 'Image Measurement'),
+            forgeExtraToggle('#overlaySection', 'Reference Image'),
+            forgeExtraToggle('#libraryControls > details', 'Libraries'),
+            // UF-35 put a .forge-disclosure-row between the two, so this can
+            // no longer be a direct-child selector; the class is unique
+            // inside the wrapper either way.
+            forgeExtraToggle(
+              '#projectFilesControls .project-files-details',
+              'Companion Files'
+            ),
+            forgeExtraToggle('#advancedMenu', 'Advanced'),
+          ]
+        : [
+            {
+              type: 'action',
+              label: 'Viewport-Control',
+              handler: () => {
+                const panel = document.getElementById('cameraPanel');
+                if (panel) {
+                  panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  const focusable = panel.querySelector(
+                    'button, input, select'
+                  );
+                  if (focusable) focusable.focus();
+                }
+              },
+            },
+          ]),
       { type: 'separator' },
+      // Upstream's Ctrl+J opens a jump-to-dock popup. The web reading is a
+      // picker of the panels that are on screen right now; choosing one moves
+      // focus into it.
+      (() => {
+        const targets = jumpTargets();
+        if (targets.length === 0) {
+          return {
+            type: 'action',
+            label: JUMP_TO_LABEL,
+            disabled: true,
+            tooltip: JUMP_TO_EMPTY_REASON,
+          };
+        }
+        return {
+          type: 'submenu',
+          label: JUMP_TO_LABEL,
+          shortcutAction: 'jumpToPanel',
+          items: targets.map((target) => ({
+            type: 'action',
+            label: target.label,
+            handler: () => {
+              // Immediate, not debounced: MEASURED, a render reporting in
+              // within 350ms cancels a pending announcement outright, so the
+              // user hears nothing about the jump they just made.
+              if (target.focus())
+                announceImmediate(`Jumped to ${target.label}`);
+            },
+          })),
+        };
+      })(),
       // -- Web-only panel toggles --
       // fileActions, editTools, designTools, displayOptions removed — now in toolbar menus
-      panelToggle('libraries', 'Libraries'),
-      panelToggle('companionFileManagement', 'Companion Files'),
-      panelToggle('imageMeasurement', 'Image Measurement'),
-      panelToggle('referenceOverlay', 'Reference Image'),
+      //
+      // Classic lists these above instead, as the Q-4 set keyed on each row's
+      // own [open]. Listing them here as well would put two items with the
+      // same name in one menu, which is what happened when P6 first added them.
+      ...(inClassic
+        ? []
+        : [
+            { type: 'separator' },
+            panelToggle('libraries', 'Libraries'),
+            panelToggle('companionFileManagement', 'Companion Files'),
+            panelToggle('imageMeasurement', 'Image Measurement'),
+            panelToggle('referenceOverlay', 'Reference Image'),
+            // Classic's Window menu has carried this since the Q-4 set; the
+            // Forge list simply never gained it although the section and its
+            // registry entry exist here too (UF-10). Same tail slot as
+            // Classic's; the announcement uses the registry label
+            // "Advanced Menu", the C-38 shape.
+            panelToggle('advancedMenu', 'Advanced'),
+          ]),
     ];
   });
 
@@ -2852,7 +5116,7 @@ async function initApp() {
       {
         type: 'action',
         label: 'About',
-        handler: () => _openFeaturesTab('tab-accessibility'),
+        handler: () => openAboutModal(),
       },
       {
         type: 'action',
@@ -2872,6 +5136,15 @@ async function initApp() {
             'noopener,noreferrer'
           ),
       },
+      // Both offline items keep U2's position and say why they cannot work
+      // rather than being hidden. Bundling either one is deferred out of this
+      // plan entirely (D-39) — nothing third-party is fetched or vendored here.
+      {
+        type: 'action',
+        label: 'Offline Documentation',
+        disabled: true,
+        tooltip: OFFLINE_DOCUMENTATION_REASON,
+      },
       {
         type: 'action',
         label: 'Cheat Sheet',
@@ -2885,38 +5158,30 @@ async function initApp() {
       },
       {
         type: 'action',
-        label: 'Library Info',
-        handler: () => _openFeaturesTab('tab-libraries'),
+        label: 'Offline Cheat Sheet',
+        disabled: true,
+        tooltip: OFFLINE_CHEAT_SHEET_REASON,
       },
       {
+        // U2's sentence case. It opens the guide's Libraries page; the live
+        // list of what is mounted is File > Show Library Folder.
         type: 'action',
-        label: 'Font List',
-        disabled: true,
-        tooltip:
-          'Not available in browser \u2014 see openscad.org/documentation.html for font information',
+        label: 'Library info',
+        handler: () => _openFeaturesTab('tab-libraries'),
       },
       { type: 'separator' },
       {
+        // Was the same target as Library info — the duplicate R11 exists to
+        // remove. It opens the guide at its Workflow page instead.
         type: 'action',
         label: 'Features Guide',
-        shortcutAction: 'showHelp',
-        handler: () => _openFeaturesTab('tab-libraries'),
+        handler: () => _openFeaturesTab('tab-workflow'),
       },
       {
         type: 'action',
         label: 'Keyboard Shortcuts\u2026',
         shortcutAction: 'showShortcutsModal',
-        handler: () => {
-          const modal = document.getElementById('shortcutsModal');
-          const modalBody = document.getElementById('shortcutsModalBody');
-          if (modal && modalBody) {
-            if (!modal.dataset.initialized) {
-              initShortcutsModal(modalBody, () => closeModal(modal));
-              modal.dataset.initialized = 'true';
-            }
-            openModal(modal);
-          }
-        },
+        handler: _openShortcutsModal,
       },
       {
         type: 'action',
@@ -3039,17 +5304,23 @@ async function initApp() {
   // Initialize high contrast toggle button
   const contrastBtn = document.getElementById('contrastToggle');
   if (contrastBtn) {
+    // D-60, the same defect as the theme button's: the label was written
+    // only inside this handler, so Ctrl+H and the City Walk's in-game
+    // toggle left it saying the opposite of the truth to the one group of
+    // people who cannot see the button change.
+    const syncContrastLabel = () => {
+      const on = themeManager.highContrast;
+      contrastBtn.setAttribute(
+        'aria-label',
+        `High contrast mode: ${on ? 'ON' : 'OFF'}. Click to ${on ? 'disable' : 'enable'}.`
+      );
+    };
+
     contrastBtn.addEventListener('click', () => {
       const enabled = themeManager.toggleHighContrast();
       const message = enabled ? 'High Contrast: ON' : 'High Contrast: OFF';
       console.log(`[App] ${message}`);
       updateStatus(message);
-
-      // Update ARIA label
-      contrastBtn.setAttribute(
-        'aria-label',
-        `High contrast mode: ${enabled ? 'ON' : 'OFF'}. Click to ${enabled ? 'disable' : 'enable'}.`
-      );
 
       setTimeout(() => {
         const state = stateManager.getState();
@@ -3059,33 +5330,155 @@ async function initApp() {
       }, 2000);
     });
 
-    // Set initial ARIA label
-    const initialState = themeManager.highContrast;
-    contrastBtn.setAttribute(
-      'aria-label',
-      `High contrast mode: ${initialState ? 'ON' : 'OFF'}. Click to ${initialState ? 'disable' : 'enable'}.`
-    );
+    themeManager.addListener(syncContrastLabel);
+    syncContrastLabel();
   }
 
   // Initialize keyboard shortcuts toggle button
   const shortcutsBtn = document.getElementById('shortcutsToggle');
   if (shortcutsBtn) {
-    shortcutsBtn.addEventListener('click', () => {
-      const modal = document.getElementById('shortcutsModal');
-      const modalBody = document.getElementById('shortcutsModalBody');
-      if (modal && modalBody) {
-        // Initialize modal wiring once to avoid duplicate listeners.
-        if (!modal.dataset.initialized) {
-          initShortcutsModal(modalBody, () => closeModal(modal));
-          modal.dataset.initialized = 'true';
-        }
-        openModal(modal);
-      }
-    });
+    shortcutsBtn.addEventListener('click', _openShortcutsModal);
   }
+
+  // ── The drawing editor takes the preview area (DP-19) ─────────────────
+  // The editor says it is opening; what that means for the 3D canvas is the
+  // preview's business, and this is the one place that knows both.
+  // Looked up at the moment, not at boot: the preview's init() rebuilds its
+  // container, and the element that was there before it is not the one that
+  // is there after.
+  const drawingEditorSurface = () =>
+    document.getElementById('drawingEditorSurface');
+  window.addEventListener('drawing-editor:open', () => {
+    previewManager?.showEditorSurface?.(drawingEditorSurface());
+  });
+  window.addEventListener('drawing-editor:close', () => {
+    previewManager?.hideEditorSurface?.(drawingEditorSurface());
+  });
 
   // Declare format selector elements
   const outputFormatSelect = document.getElementById('outputFormat');
+
+  // ── Export the whole stencil set (DP-17) ──────────────────────────────
+  // A six-colour stencil is seven printed parts, and the one thing that must
+  // not go wrong is which plate is which. The button renders them in order and
+  // hands back a zip whose names say what each file is.
+  const stencilSetExport = document.getElementById('stencilSetExport');
+  const exportStencilSetBtn = document.getElementById('exportStencilSetBtn');
+  const stencilSetExportInfo = document.getElementById('stencilSetExportInfo');
+
+  /** How many plates the app has actually written for the current design. */
+  function stencilPlateCount(parameters) {
+    let n = 0;
+    for (let i = 1; i <= 8; i++) {
+      const v = parameters?.[`stencil_plate_${i}`];
+      const has = v && (typeof v === 'string' ? v !== '' : !!v.data);
+      if (!has) break;
+      n += 1;
+    }
+    return n;
+  }
+
+  function updateStencilSetExport() {
+    if (!stencilSetExport) return;
+    const state = stateManager.getState();
+    const params = state.parameters || {};
+    const isStencil = 'stencil_plate_1' in params && 'plate_number' in params;
+    const count = isStencil ? stencilPlateCount(params) : 0;
+    const show = isStencil && params.stencil_mode === 'layered' && count > 0;
+    stencilSetExport.hidden = !show;
+    if (!show) return;
+    const pegs =
+      params.registration === 'pegs' || params.registration === 'both';
+    const parts = count + (pegs ? 1 : 0);
+    // STRINGS: owner review pending (DP-R2 text pack).
+    stencilSetExportInfo.textContent = pegs
+      ? `${count} plates and the jig base, plus the paint order.`
+      : `${count} plates, plus the paint order.`;
+    exportStencilSetBtn.setAttribute(
+      'aria-label',
+      `Export all plates: ${parts} files as a zip`
+    );
+  }
+
+  // Which plates exist changes when the design changes and when the plate
+  // params are rewritten, both of which land as a parameters update.
+  stateManager.subscribe((state, prevState) => {
+    if (state.parameters !== prevState.parameters) updateStencilSetExport();
+  });
+  updateStencilSetExport();
+
+  exportStencilSetBtn?.addEventListener('click', async () => {
+    const state = stateManager.getState();
+    const params = state.parameters || {};
+    const count = stencilPlateCount(params);
+    const pegs =
+      params.registration === 'pegs' || params.registration === 'both';
+    const format = outputFormatSelect ? outputFormatSelect.value : 'stl';
+    const designName = String(params.design_file?.name || 'stencil').replace(
+      /\.[^.]+$/,
+      ''
+    );
+    const { stencilSetJobs, exportStencilSet, EXPORT_STRINGS } =
+      await import('./js/stencil-export.js');
+    const colourNames = Array.isArray(state.stencilColourNames)
+      ? state.stencilColourNames
+      : [];
+    const jobs = stencilSetJobs({
+      parameters: params,
+      plateCount: count,
+      colourNames,
+      includeJig: pegs,
+      format,
+    });
+
+    exportStencilSetBtn.disabled = true;
+    const restore = exportStencilSetBtn.textContent;
+    exportStencilSetBtn.textContent = EXPORT_STRINGS.busy;
+    announceImmediate(EXPORT_STRINGS.start(jobs.length + 1));
+    try {
+      const libsForRender = getEnabledLibrariesForRender();
+      const { blob, filename, files } = await exportStencilSet({
+        jobs,
+        designName,
+        colourNames,
+        onProgress: (done, total, label) => {
+          if (!label) return;
+          const line = EXPORT_STRINGS.step(done, total, label);
+          updateStatus(line);
+          announceImmediate(line);
+        },
+        render: (parameters) =>
+          renderController.renderFull(state.uploadedFile.content, parameters, {
+            outputFormat: format,
+            paramTypes: state.paramTypes || {},
+            files: state.projectFiles,
+            mainFile: state.mainFilePath,
+            libraries: libsForRender,
+          }),
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      const done = EXPORT_STRINGS.done(files.length, filename);
+      updateStatus(done);
+      announceImmediate(done);
+    } catch (error) {
+      console.error('Stencil set export failed:', error);
+      const said = EXPORT_STRINGS.failed(error.message);
+      updateStatus(said);
+      announceImmediate(said);
+      showErrorToast({ title: 'Export stopped', message: error.message });
+    } finally {
+      exportStencilSetBtn.disabled = false;
+      exportStencilSetBtn.textContent = restore;
+    }
+  });
+
   const formatInfo = document.getElementById('formatInfo');
   const format2dGuidance = document.getElementById('format2dGuidance');
 
@@ -3144,21 +5537,25 @@ async function initApp() {
               state?.parameters &&
               state?.schema
             ) {
-              const resolved = resolve2DExportParameters(
+              const proposal = propose2DExportChanges(
                 state.parameters,
                 state.schema,
-                format
+                format,
+                state.projectFiles
               );
-              const adjustments = Object.entries(resolved).filter(
-                ([k, v]) => state.parameters[k] !== v
-              );
-              if (adjustments.length > 0) {
-                autoAdjustList.innerHTML = adjustments
+              if (proposal.changes.length > 0) {
+                autoAdjustList.innerHTML = proposal.changes
                   .map(
-                    ([k, v]) =>
-                      `<li><code>${escapeHtml(k)}</code>: currently <em>${escapeHtml(String(state.parameters[k]))}</em> → will use <strong>${escapeHtml(String(v))}</strong></li>`
+                    (c) =>
+                      `<li><code>${escapeHtml(c.name)}</code>: currently <em>${escapeHtml(String(c.from))}</em> → will use <strong>${escapeHtml(String(c.to))}</strong></li>`
                   )
                   .join('');
+                // Fresh consent per export intent: re-check the box each
+                // time the proposal list is (re)shown.
+                const applyCheckbox = document.getElementById(
+                  'format2dAutoAdjustApply'
+                );
+                if (applyCheckbox) applyCheckbox.checked = true;
                 autoAdjustDiv.classList.remove('hidden');
               } else {
                 autoAdjustDiv.classList.add('hidden');
@@ -3229,6 +5626,18 @@ async function initApp() {
     // Initialize if not yet done
     if (!renderController) {
       renderController = new RenderController();
+
+      // Q-45a: only parameters the user actually changed travel as -D.
+      // Everything else follows the SCAD source's own declarations, which is
+      // what lets an edited default take effect at all (U-30).
+      renderController.setWithheldDefineKeyResolver(() => {
+        const defineState = stateManager.getState();
+        return collectWithheldDefineKeys({
+          parameters: defineState.parameters || {},
+          defaults: defineState.defaults || {},
+          schemaNames: Object.keys(defineState.schema?.parameters || {}),
+        });
+      });
 
       // Set up memory warning callback
       renderController.setMemoryWarningCallback((memoryInfo) => {
@@ -3512,12 +5921,8 @@ async function initApp() {
           updateStatus('Preview quality set to Fast', 'success');
         }
       } else if (action === 'export-low') {
-        const select = document.getElementById('exportQualitySelect');
-        if (select) {
-          select.value = 'low';
-          select.dispatchEvent(new Event('change', { bubbles: true }));
-          updateStatus('Export quality set to Low', 'success');
-        }
+        setExportQualityMode('low');
+        updateStatus('Export quality set to Low', 'success');
       } else if (action === 'focus-resolution') {
         const candidates = [
           '$fn',
@@ -3685,6 +6090,20 @@ async function initApp() {
       return true;
     }
 
+    // A library the model needs did not resolve. Say that, because the empty
+    // geometry handled below is its CONSEQUENCE: the old guidance sent the
+    // user hunting through parameters for a cause that was a checkbox (D-42).
+    if (findMissingLibrary(`${msg}\n${detailsStr}`)) {
+      if (previewManager) {
+        previewManager.clear();
+      }
+      const friendly = translateError(detailsStr || msg);
+      const sentence = `${friendly.explanation} ${friendly.suggestion}`;
+      updateStatus(sentence, 'error');
+      _announceError(sentence);
+      return true;
+    }
+
     const hasDependencyHint =
       /'[^']+?'\s+is set to\s+'(no|off)'/i.test(detailsStr) ||
       /Current top[ -]?level object is empty|top-level object is empty/i.test(
@@ -3761,7 +6180,7 @@ async function initApp() {
       : 'Look for a required option (often “enable/show/include/has…”) and try again.';
 
     const findHint = label
-      ? `Tip: use the “Search parameters” box and type "${label}".`
+      ? `Tip: use the “Search the Customizer” box and type "${label}".`
       : '';
 
     updateStatus(`${headline} ${nextStep} ${findHint}`.trim(), 'error');
@@ -3924,11 +6343,7 @@ async function initApp() {
   const previewContainer = document.getElementById('previewContainer');
   const autoPreviewToggle = document.getElementById('autoPreviewToggle');
   const previewQualitySelect = document.getElementById('previewQualitySelect');
-  const exportQualitySelect = document.getElementById('exportQualitySelect');
-  const measurementsToggle = document.getElementById('measurementsToggle');
-  const gridToggle = document.getElementById('gridToggle');
   const autoBedToggle = document.getElementById('autoBedToggle');
-  const zoomToCursorToggle = document.getElementById('zoomToCursorToggle');
   const dimensionsDisplay = document.getElementById('dimensionsDisplay');
   // Note: outputFormatSelect and formatInfo already declared above
 
@@ -3953,12 +6368,16 @@ async function initApp() {
 
   // Auto-preview enabled by default (values initialized earlier)
   const getSelectedPreviewQualityMode = () => {
-    return previewQualitySelect?.value || 'balanced';
+    return previewQualitySelect?.value || PREVIEW_QUALITY_DEFAULT;
   };
 
-  const getSelectedExportQualityMode = () => {
-    return exportQualitySelect?.value || 'model';
-  };
+  // A function declaration so the File-menu builder, the memory banner and
+  // the error-recovery action can all reach it regardless of where they sit
+  // in this scope; the mode itself is module-scope for the debug hook.
+  function setExportQualityMode(mode) {
+    exportQualityMode = mode;
+    exportQualityPreset = getExportQualityPreset(mode);
+  }
 
   const getManualPreviewQuality = (mode) => {
     switch (mode) {
@@ -4071,20 +6490,12 @@ async function initApp() {
       return parameters;
     }
 
-    const adjusted = { ...parameters };
-    if (Object.prototype.hasOwnProperty.call(adjusted, 'render_quality')) {
-      adjusted.render_quality = 'Low';
-    }
-    if (Object.prototype.hasOwnProperty.call(adjusted, 'cone_segments')) {
-      const raw = Number(adjusted.cone_segments);
-      if (Number.isFinite(raw)) {
-        adjusted.cone_segments = Math.max(8, Math.min(12, raw));
-      } else {
-        adjusted.cone_segments = 12;
-      }
-    }
-
-    return adjusted;
+    // Per-project forge.project.json wins; projects without one get the
+    // historical builtin keyguard/braille overrides (identical behavior).
+    const manifest =
+      loadProjectManifest(stateManager.getState()?.projectFiles) ??
+      getBuiltinManifest();
+    return applyPreviewOverrides(manifest, parameters, qualityKey);
   };
 
   const resolveAdaptiveQuality = (parameters) =>
@@ -4122,13 +6533,7 @@ async function initApp() {
     }
   };
 
-  let exportQualityMode = getSelectedExportQualityMode();
   let exportQualityPreset = getExportQualityPreset(exportQualityMode);
-
-  const applyExportQualityMode = () => {
-    exportQualityMode = getSelectedExportQualityMode();
-    exportQualityPreset = getExportQualityPreset(exportQualityMode);
-  };
 
   // Wire preview settings UI
   if (autoPreviewToggle) {
@@ -4146,11 +6551,36 @@ async function initApp() {
   }
 
   if (previewQualitySelect) {
-    if (previewQualitySelect.querySelector('option[value="auto"]')) {
-      previewQualitySelect.value = 'auto';
+    // Restore the persisted choice; fall back to the shared default
+    // (PREVIEW_QUALITY_DEFAULT is the single source; index.html's `selected`
+    // only covers pre-JS paint). Recovery mode writes 'fast' to this key so a
+    // crashed session reboots at low cost — honoring it here is intended.
+    let savedQualityMode = null;
+    try {
+      savedQualityMode = localStorage.getItem(STORAGE_KEY_PREVIEW_QUALITY);
+    } catch {
+      // Private browsing / storage disabled — use the default.
+    }
+    const validQualityMode =
+      savedQualityMode &&
+      previewQualitySelect.querySelector(`option[value="${savedQualityMode}"]`)
+        ? savedQualityMode
+        : PREVIEW_QUALITY_DEFAULT;
+    if (
+      previewQualitySelect.querySelector(`option[value="${validQualityMode}"]`)
+    ) {
+      previewQualitySelect.value = validQualityMode;
     }
     applyPreviewQualityMode();
     previewQualitySelect.addEventListener('change', () => {
+      try {
+        localStorage.setItem(
+          STORAGE_KEY_PREVIEW_QUALITY,
+          previewQualitySelect.value
+        );
+      } catch {
+        // Persistence is best-effort; the in-session mode still applies.
+      }
       applyPreviewQualityMode();
       if (autoPreviewController) {
         const state = stateManager.getState();
@@ -4161,41 +6591,39 @@ async function initApp() {
     });
   }
 
-  if (exportQualitySelect) {
-    if (exportQualitySelect.querySelector('option[value="model"]')) {
-      exportQualitySelect.value = 'model';
+  // Advisory instead of a silent downgrade: with the desktop-fidelity default,
+  // heavy models preview at full model quality — surface a one-shot hint that
+  // Performance (auto) exists. Auto mode adapts on its own and needs none.
+  let lastComplexityAdvisedFile = null;
+  function maybeShowComplexityAdvisory(state) {
+    if (previewQualityMode === 'auto') return;
+    const fileName = state.uploadedFile?.name || null;
+    if (!fileName || fileName === lastComplexityAdvisedFile) return;
+    const isComplex =
+      state.complexityTier === COMPLEXITY_TIER.COMPLEX ||
+      (state.complexityAnalysis?.warnings?.length ?? 0) > 0;
+    if (!isComplex) return;
+    lastComplexityAdvisedFile = fileName;
+    const advisoryMsg =
+      'This model is complex — Desktop-quality previews may be slow. ' +
+      'Switch Preview quality to "Performance (auto)" for faster previews.';
+    // updateStatus announces on its own; a second call here said the whole
+    // advisory twice.
+    updateStatus(advisoryMsg, 'info');
+  }
+
+  // A fresh complexityAnalysis lands once per file load (file-handler sets it
+  // after the file is in state), so keying on it avoids advising a new file
+  // from the previous file's stale analysis.
+  stateManager.subscribe((state, prevState) => {
+    if (
+      state.uploadedFile &&
+      state.complexityAnalysis &&
+      state.complexityAnalysis !== prevState.complexityAnalysis
+    ) {
+      maybeShowComplexityAdvisory(state);
     }
-    applyExportQualityMode();
-    exportQualitySelect.addEventListener('change', () => {
-      applyExportQualityMode();
-    });
-  }
-
-  // Wire measurements toggle
-  if (measurementsToggle) {
-    // Initialize from localStorage (after preview manager is created)
-    // The checkbox will be set when preview manager is initialized
-
-    measurementsToggle.addEventListener('change', () => {
-      const enabled = measurementsToggle.checked;
-      if (previewManager) {
-        previewManager.toggleMeasurements(enabled);
-        updateDimensionsDisplay();
-      }
-      console.log(`[App] Measurements ${enabled ? 'enabled' : 'disabled'}`);
-    });
-  }
-
-  // Wire grid toggle
-  if (gridToggle) {
-    gridToggle.addEventListener('change', () => {
-      const enabled = gridToggle.checked;
-      if (previewManager) {
-        previewManager.toggleGrid(enabled);
-      }
-      console.log(`[App] Grid ${enabled ? 'enabled' : 'disabled'}`);
-    });
-  }
+  });
 
   // Initialize overlay/grid/auto-rotate controller (extracted module)
   const overlayGridCtrl = initOverlayGridController({
@@ -4232,42 +6660,21 @@ async function initApp() {
     });
   }
 
-  // Wire zoom-to-cursor toggle (F17): mouse-wheel zoom focal point
-  if (zoomToCursorToggle) {
-    zoomToCursorToggle.addEventListener('change', () => {
-      const enabled = zoomToCursorToggle.checked;
-      if (previewManager) {
-        previewManager.toggleZoomToCursor(enabled);
-      }
-      announceImmediate(
-        enabled
-          ? 'Mouse-wheel zoom now follows the cursor'
-          : 'Mouse-wheel zoom now centres on the orbit target'
-      );
-    });
+  // Status bar visibility. The control is View > Show Status Bar (UF-11);
+  // boot only restores the persisted choice here.
+  function setPreviewStatusBarShown(shown) {
+    const bar = document.getElementById('previewStatusBar');
+    if (!bar) return;
+    bar.classList.toggle('user-hidden', !shown);
+    writeScopedPref(STORAGE_KEY_STATUS_BAR, shown ? 'true' : 'false');
+    announceImmediate(`Status bar ${shown ? 'shown' : 'hidden'}`);
+    console.log(`[App] Status bar ${shown ? 'shown' : 'hidden'}`);
   }
-
-  // Wire status bar toggle
-  const statusBarToggle = document.getElementById('statusBarToggle');
-  if (statusBarToggle && previewStatusBar) {
-    // Initialize from localStorage
-    const savedStatusBarPref = localStorage.getItem(STORAGE_KEY_STATUS_BAR);
-    const statusBarEnabled = savedStatusBarPref !== 'false'; // Default to true
-    statusBarToggle.checked = statusBarEnabled;
-    if (!statusBarEnabled) {
+  if (previewStatusBar) {
+    const savedStatusBarPref = readScopedPref(STORAGE_KEY_STATUS_BAR);
+    if (savedStatusBarPref === 'false') {
       previewStatusBar.classList.add('user-hidden');
     }
-
-    statusBarToggle.addEventListener('change', () => {
-      const enabled = statusBarToggle.checked;
-      if (enabled) {
-        previewStatusBar.classList.remove('user-hidden');
-      } else {
-        previewStatusBar.classList.add('user-hidden');
-      }
-      localStorage.setItem(STORAGE_KEY_STATUS_BAR, enabled ? 'true' : 'false');
-      console.log(`[App] Status bar ${enabled ? 'shown' : 'hidden'}`);
-    });
   }
 
   // ============================================================================
@@ -4336,9 +6743,9 @@ async function initApp() {
   );
 
   // Load saved state
-  const savedModelColor = localStorage.getItem(STORAGE_KEY_MODEL_COLOR);
+  const savedModelColor = readScopedPref(STORAGE_KEY_MODEL_COLOR);
   const savedColorEnabled =
-    localStorage.getItem(STORAGE_KEY_MODEL_COLOR_ENABLED) === 'true';
+    readScopedPref(STORAGE_KEY_MODEL_COLOR_ENABLED) === 'true';
 
   if (savedModelColor && modelColorPicker) {
     modelColorPicker.value = savedModelColor;
@@ -4352,7 +6759,7 @@ async function initApp() {
 
   const getSelectedModelColor = () =>
     modelColorPicker?.value ||
-    localStorage.getItem(STORAGE_KEY_MODEL_COLOR) ||
+    readScopedPref(STORAGE_KEY_MODEL_COLOR) ||
     getThemeDefaultColor();
 
   const syncPreviewModelColorOverride = () => {
@@ -4379,7 +6786,7 @@ async function initApp() {
 
     modelColorEnabled.addEventListener('change', () => {
       const enabled = modelColorEnabled.checked;
-      localStorage.setItem(STORAGE_KEY_MODEL_COLOR_ENABLED, String(enabled));
+      writeScopedPref(STORAGE_KEY_MODEL_COLOR_ENABLED, String(enabled));
       updatePickerDisabledState(enabled);
       if (previewManager) {
         syncPreviewModelColorOverride();
@@ -4401,7 +6808,7 @@ async function initApp() {
         if (previewManager && modelColorEnabled?.checked) {
           previewManager.setColorOverride(color);
         }
-        localStorage.setItem(STORAGE_KEY_MODEL_COLOR, color);
+        writeScopedPref(STORAGE_KEY_MODEL_COLOR, color);
         console.log(`[App] Model color changed to ${color}`);
       }, 150);
     });
@@ -4416,7 +6823,7 @@ async function initApp() {
         const themeDefault = getThemeDefaultColor();
         modelColorPicker.value = themeDefault;
       }
-      localStorage.removeItem(STORAGE_KEY_MODEL_COLOR);
+      removeScopedPref(STORAGE_KEY_MODEL_COLOR);
       console.log('[App] Model color reset to theme default');
     });
   }
@@ -4437,11 +6844,11 @@ async function initApp() {
   );
 
   // Restore persisted values
-  const savedOpacity = localStorage.getItem(STORAGE_KEY_MODEL_OPACITY);
-  const savedBrightness = localStorage.getItem(STORAGE_KEY_BRIGHTNESS);
-  const savedContrast = localStorage.getItem(STORAGE_KEY_CONTRAST);
+  const savedOpacity = readScopedPref(STORAGE_KEY_MODEL_OPACITY);
+  const savedBrightness = readScopedPref(STORAGE_KEY_BRIGHTNESS);
+  const savedContrast = readScopedPref(STORAGE_KEY_CONTRAST);
   const savedAppearanceEnabled =
-    localStorage.getItem(STORAGE_KEY_MODEL_APPEARANCE_ENABLED) === 'true';
+    readScopedPref(STORAGE_KEY_MODEL_APPEARANCE_ENABLED) === 'true';
   if (savedOpacity && modelOpacityInput) {
     modelOpacityInput.value = savedOpacity;
     if (modelOpacityValue) modelOpacityValue.textContent = `${savedOpacity}%`;
@@ -4489,10 +6896,7 @@ async function initApp() {
 
     modelAppearanceEnabled.addEventListener('change', () => {
       const enabled = modelAppearanceEnabled.checked;
-      localStorage.setItem(
-        STORAGE_KEY_MODEL_APPEARANCE_ENABLED,
-        String(enabled)
-      );
+      writeScopedPref(STORAGE_KEY_MODEL_APPEARANCE_ENABLED, String(enabled));
       updateAppearanceSlidersDisabledState(enabled);
       syncPreviewAppearanceOverride();
     });
@@ -4502,7 +6906,7 @@ async function initApp() {
     modelOpacityInput.addEventListener('input', () => {
       const v = modelOpacityInput.value;
       if (modelOpacityValue) modelOpacityValue.textContent = `${v}%`;
-      localStorage.setItem(STORAGE_KEY_MODEL_OPACITY, v);
+      writeScopedPref(STORAGE_KEY_MODEL_OPACITY, v);
       if (previewManager && modelAppearanceEnabled?.checked) {
         previewManager.setModelOpacity(parseInt(v, 10));
       }
@@ -4512,7 +6916,7 @@ async function initApp() {
     brightnessInput.addEventListener('input', () => {
       const v = brightnessInput.value;
       if (brightnessValue) brightnessValue.textContent = `${v}%`;
-      localStorage.setItem(STORAGE_KEY_BRIGHTNESS, v);
+      writeScopedPref(STORAGE_KEY_BRIGHTNESS, v);
       if (previewManager && modelAppearanceEnabled?.checked) {
         previewManager.setBrightness(parseInt(v, 10));
       }
@@ -4522,7 +6926,7 @@ async function initApp() {
     contrastInput.addEventListener('input', () => {
       const v = contrastInput.value;
       if (contrastValue) contrastValue.textContent = `${v}%`;
-      localStorage.setItem(STORAGE_KEY_CONTRAST, v);
+      writeScopedPref(STORAGE_KEY_CONTRAST, v);
       if (previewManager && modelAppearanceEnabled?.checked) {
         previewManager.setContrast(parseInt(v, 10));
       }
@@ -4542,13 +6946,67 @@ async function initApp() {
         contrastInput.value = '100';
         if (contrastValue) contrastValue.textContent = '100%';
       }
-      localStorage.removeItem(STORAGE_KEY_MODEL_OPACITY);
-      localStorage.removeItem(STORAGE_KEY_BRIGHTNESS);
-      localStorage.removeItem(STORAGE_KEY_CONTRAST);
+      removeScopedPref(STORAGE_KEY_MODEL_OPACITY);
+      removeScopedPref(STORAGE_KEY_BRIGHTNESS);
+      removeScopedPref(STORAGE_KEY_CONTRAST);
       if (previewManager && modelAppearanceEnabled?.checked) {
         previewManager.resetAppearance();
       }
     });
+  }
+
+  /**
+   * The live swap (UF-14 P3): re-read the main.js-owned PER-UI surfaces
+   * from the newly active namespace and re-apply them — status-bar
+   * visibility, model color override, the appearance sliders, and
+   * auto-rotate (via the overlay/grid controller). Runs on every
+   * Forge<->Classic flip through syncPreviewSceneToMode; no announcements,
+   * the mode switch already speaks.
+   */
+  function reloadScopedUiSurfaces() {
+    const statusBarNode = document.getElementById('previewStatusBar');
+    if (statusBarNode) {
+      statusBarNode.classList.toggle(
+        'user-hidden',
+        readScopedPref(STORAGE_KEY_STATUS_BAR) === 'false'
+      );
+    }
+
+    const scopedColor = readScopedPref(STORAGE_KEY_MODEL_COLOR);
+    if (modelColorPicker) {
+      modelColorPicker.value = scopedColor || getThemeDefaultColor();
+    }
+    const scopedColorEnabled =
+      readScopedPref(STORAGE_KEY_MODEL_COLOR_ENABLED) === 'true';
+    if (modelColorEnabled) modelColorEnabled.checked = scopedColorEnabled;
+    updatePickerDisabledState(scopedColorEnabled);
+    syncPreviewModelColorOverride();
+
+    const scopedOpacity = readScopedPref(STORAGE_KEY_MODEL_OPACITY) || '100';
+    const scopedBrightness = readScopedPref(STORAGE_KEY_BRIGHTNESS) || '100';
+    const scopedContrast = readScopedPref(STORAGE_KEY_CONTRAST) || '100';
+    if (modelOpacityInput) {
+      modelOpacityInput.value = scopedOpacity;
+      if (modelOpacityValue)
+        modelOpacityValue.textContent = `${scopedOpacity}%`;
+    }
+    if (brightnessInput) {
+      brightnessInput.value = scopedBrightness;
+      if (brightnessValue) brightnessValue.textContent = `${scopedBrightness}%`;
+    }
+    if (contrastInput) {
+      contrastInput.value = scopedContrast;
+      if (contrastValue) contrastValue.textContent = `${scopedContrast}%`;
+    }
+    const scopedAppearanceEnabled =
+      readScopedPref(STORAGE_KEY_MODEL_APPEARANCE_ENABLED) === 'true';
+    if (modelAppearanceEnabled) {
+      modelAppearanceEnabled.checked = scopedAppearanceEnabled;
+    }
+    updateAppearanceSlidersDisabledState(scopedAppearanceEnabled);
+    syncPreviewAppearanceOverride();
+
+    overlayGridCtrl.reapplyScopedAutoRotate();
   }
 
   /**
@@ -4557,7 +7015,11 @@ async function initApp() {
   function getThemeDefaultColor() {
     const root = document.documentElement;
     const uiVariant = root.getAttribute('data-ui-variant');
-    const highContrast = themeManager.isHighContrastEnabled();
+    // themeManager exposes highContrast as a property; the method call this
+    // used to make (isHighContrastEnabled) never existed and threw the
+    // moment UF-14's live swap became the first caller to actually reach
+    // this line (every older path short-circuited on the picker's value).
+    const highContrast = themeManager.highContrast === true;
 
     // Check for mono variant first
     if (uiVariant === 'mono') {
@@ -4588,7 +7050,7 @@ async function initApp() {
 
     const dimensions = previewManager.calculateDimensions();
 
-    if (dimensions && measurementsToggle?.checked) {
+    if (dimensions && previewManager.measurementsEnabled) {
       // Show dimensions panel
       dimensionsDisplay.classList.remove('hidden');
 
@@ -4781,11 +7243,21 @@ async function initApp() {
           previewQualityMode === 'auto' ? resolveAdaptiveCacheKey : null,
         resolvePreviewParameters:
           previewQualityMode === 'auto' ? resolveAdaptiveParameters : null,
+        // Render / Generate / export. Playback stops and stays stopped (F5):
+        // two render requests would queue behind each other on the one
+        // blocking worker and make both slow.
+        onFullRenderStart: () => getAnimatePanel()?.pauseForExternalRender(),
         onStateChange: (newState, prevState, extra) => {
           console.log(
             `[AutoPreview] State: ${prevState} -> ${newState}`,
             extra
           );
+          // The other half of the same rule: a preview render started by
+          // something other than the animation. Animation frames never reach
+          // here — renderAnimationFrame sets no preview state.
+          if (newState === PREVIEW_STATE.RENDERING) {
+            getAnimatePanel()?.pauseForExternalRender();
+          }
           if (newState === PREVIEW_STATE.CURRENT) {
             if (typeof extra?.renderDurationMs === 'number') {
               autoPreviewHints.lastPreviewDurationMs = extra.renderDurationMs;
@@ -4799,7 +7271,14 @@ async function initApp() {
           }
           updatePreviewStateUI(newState, extra);
         },
-        onPreviewReady: (stl, stats, cached) => {
+        onPreviewReady: (
+          stl,
+          stats,
+          cached,
+          _durationMs,
+          _timing,
+          consoleOutput
+        ) => {
           console.log('[AutoPreview] Preview ready, cached:', cached);
           // Update status to ready (use 'success' type to keep visible)
           updateStatus('Preview ready', 'success');
@@ -4807,11 +7286,27 @@ async function initApp() {
           updatePrimaryActionButton();
           // Update dimensions display
           updateDimensionsDisplay();
+          // Console fidelity: preview runs surface their echo()/WARNING
+          // output too, not just full renders (cache hits carry none)
+          if (
+            consoleOutput &&
+            typeof window.updateConsoleOutput === 'function'
+          ) {
+            window.updateConsoleOutput(consoleOutput);
+          }
         },
         onProgress: (percent, message, type) => {
           // Simplified status: just show what's happening, no confusing percentages
           if (type === 'preview') {
-            updateStatus('Rendering preview...');
+            // DP-32 (one action, one announcement): an auto-preview fires on
+            // every parameter change and this progress callback repeats -
+            // measured through the live region, one change spoke "Rendering
+            // preview..." four times before "Preview ready". The progress
+            // line stays visible on the status surfaces; the completion (or
+            // the error) is the news and still speaks.
+            updateStatus('Rendering preview...', 'default', {
+              announce: false,
+            });
           } else {
             // Get current output format from selector for correct progress text
             const outputFormatSelect = document.getElementById('outputFormat');
@@ -4862,6 +7357,25 @@ async function initApp() {
    * Also shows/hides the fallback download link.
    */
   function updatePrimaryActionButton() {
+    // STL view-only mode: nothing is renderable, so Generate must not
+    // present itself as available.
+    if (isStlViewActive()) {
+      primaryActionBtn.textContent = 'Generate';
+      primaryActionBtn.dataset.action = 'generate';
+      primaryActionBtn.disabled = true;
+      primaryActionBtn.dataset.stlViewDisabled = 'true';
+      primaryActionBtn.setAttribute(
+        'aria-label',
+        'Generate is unavailable while viewing an STL file. Open a .scad model to generate designs.'
+      );
+      downloadFallbackLink.classList.add('hidden');
+      _dispatchRenderStateChange(false);
+      return;
+    }
+    if (primaryActionBtn.dataset.stlViewDisabled) {
+      delete primaryActionBtn.dataset.stlViewDisabled;
+      primaryActionBtn.disabled = false;
+    }
     const state = stateManager.getState();
     const hasGeneratedFile = !!state.stl;
     const currentParamsHash = hashParams(state.parameters);
@@ -4878,13 +7392,10 @@ async function initApp() {
     const isStlFormat = selectedFormat === 'stl';
 
     // Check auto-preview controller state (works for any 3D format routed
-    // through the controller; 2D formats bypass it)
-    const hasFullQualitySTL = autoPreviewController?.getCurrentFullSTL(
-      state.parameters
-    );
-    const needsFullRender =
-      !hasFullQualitySTL ||
-      autoPreviewController?.needsFullRender(state.parameters);
+    // through the controller; 2D formats bypass it). Same shared helper the
+    // File menu and the Classic editor toolbar consult, so the three cannot
+    // disagree about whether a full render exists.
+    const hasFullQualityStl = hasFullQualitySTLFor(state.parameters);
 
     const stateOutputFormat = (state.outputFormat || '').toLowerCase();
     const hasMatchingOutput =
@@ -4892,7 +7403,7 @@ async function initApp() {
       stateOutputFormat === selectedFormat &&
       !paramsChanged;
 
-    if (isStlFormat && hasFullQualitySTL && !needsFullRender) {
+    if (isStlFormat && hasFullQualityStl) {
       primaryActionBtn.textContent = '📥 Download';
       primaryActionBtn.dataset.action = 'download';
       primaryActionBtn.classList.remove('btn-primary');
@@ -4928,6 +7439,21 @@ async function initApp() {
         downloadFallbackLink.classList.add('hidden');
       }
     }
+
+    _dispatchRenderStateChange(isStlFormat && hasFullQualityStl);
+  }
+
+  /**
+   * Announce render-state transitions to every surface that gates on them
+   * (the Classic STL buttons, U-8b). Dispatched from inside
+   * updatePrimaryActionButton() — the one place that computes the state —
+   * so the event can never drift from what the transformer shows.
+   * @param {boolean} hasFullRender
+   */
+  function _dispatchRenderStateChange(hasFullRender) {
+    document.dispatchEvent(
+      new CustomEvent('render-state-change', { detail: { hasFullRender } })
+    );
   }
 
   // Import shared validation schemas (FILE_SIZE_LIMITS is now imported at top of initApp() to avoid TDZ)
@@ -5191,8 +7717,24 @@ async function initApp() {
     previewManager.showColorLegend(entries);
   }
 
-  // Update status
-  function updateStatus(message, statusType = 'default') {
+  /**
+   * Update the visible status surfaces and, by default, announce the message.
+   *
+   * `announce: false` is for the callers that already announce the same thing
+   * themselves — an error toast, say, which speaks assertively with its title
+   * attached. Without the opt-out those callers say everything to a
+   * screen-reader user twice, because this function is not a silent setter:
+   * it routes through stateManager.announceChange.
+   *
+   * @param {string} message
+   * @param {string} [statusType] 'default' | 'info' | 'success' | 'error' | 'warning'
+   * @param {{announce?: boolean}} [options]
+   */
+  function updateStatus(
+    message,
+    statusType = 'default',
+    { announce = true } = {}
+  ) {
     // Update the drawer status area (hidden but kept for screen readers)
     if (statusArea) {
       statusArea.textContent = message;
@@ -5240,8 +7782,10 @@ async function initApp() {
 
     // Announce status changes via dedicated SR live region.
     // Debounce progress-style updates (percent text) to avoid announcement spam.
-    const shouldDebounce = /\d+%/.test(message);
-    stateManager.announceChange(message, shouldDebounce);
+    if (announce) {
+      const shouldDebounce = /\d+%/.test(message);
+      stateManager.announceChange(message, shouldDebounce);
+    }
   }
 
   /**
@@ -5263,13 +7807,139 @@ async function initApp() {
 
   // handleFile moved to file-handler.js
 
+  // ── Unified upload routing (welcome zone + file picker) ─────────────────
+
+  function withRelativePath(file, relPath) {
+    if (file.webkitRelativePath) return file;
+    try {
+      Object.defineProperty(file, 'webkitRelativePath', { value: relPath });
+    } catch (defineErr) {
+      // Instance property was non-configurable in this browser; the folder
+      // import falls back to file.name-based paths for this file.
+      console.warn(
+        `[Upload] Could not attach relative path to ${file.name}:`,
+        defineErr
+      );
+    }
+    return file;
+  }
+
+  function readAllDirectoryEntries(reader) {
+    return new Promise((resolve, reject) => {
+      const all = [];
+      const readBatch = () =>
+        reader.readEntries((batch) => {
+          if (batch.length === 0) return resolve(all);
+          all.push(...batch);
+          readBatch();
+        }, reject);
+      readBatch();
+    });
+  }
+
+  async function collectFilesFromDirectoryEntry(dirEntry, basePath, out) {
+    const entries = await readAllDirectoryEntries(dirEntry.createReader());
+    for (const entry of entries) {
+      if (entry.isFile) {
+        const file = await new Promise((resolve, reject) =>
+          entry.file(resolve, reject)
+        );
+        out.push(withRelativePath(file, `${basePath}/${entry.name}`));
+      } else if (entry.isDirectory) {
+        await collectFilesFromDirectoryEntry(
+          entry,
+          `${basePath}/${entry.name}`,
+          out
+        );
+      }
+    }
+  }
+
+  async function routeUploadSelection(selection) {
+    switch (selection.kind) {
+      case DROP_KIND.SCAD:
+      case DROP_KIND.ZIP:
+        fileHandler.handleFile(selection.files[0]);
+        break;
+
+      case DROP_KIND.FOLDER: {
+        try {
+          const files = [];
+          for (const entry of selection.directoryEntries) {
+            await collectFilesFromDirectoryEntry(entry, entry.name, files);
+          }
+          if (files.length === 0) {
+            showErrorToast({
+              title: 'Empty Folder',
+              message: 'No files found in the dropped folder.',
+            });
+            return;
+          }
+          await fileHandler.handleFolderImport(files);
+        } catch (err) {
+          showErrorToast({
+            title: 'Folder Import Error',
+            message: err.message,
+          });
+        }
+        break;
+      }
+
+      case DROP_KIND.MULTI: {
+        // Loose files with a .scad among them behave like a flat folder:
+        // the folder import prompts for the main file and keeps the rest
+        // as companions.
+        const files = selection.files.map((f) => withRelativePath(f, f.name));
+        await fileHandler.handleFolderImport(files);
+        break;
+      }
+
+      case DROP_KIND.STL:
+        await fileHandler.handleStlView(selection.files[0]);
+        break;
+
+      case DROP_KIND.PRESET_JSON: {
+        const currentState = stateManager.getState();
+        if (!currentState.uploadedFile) {
+          // Never guess which model a preset belongs to.
+          showErrorToast({
+            title: 'Open a Model First',
+            message:
+              'This looks like a preset file. Open the matching .scad model first, then drop the preset file again to import it.',
+          });
+          return;
+        }
+        try {
+          const fileText = await selection.files[0].text();
+          // Merge without overwriting: duplicates by name are skipped, so
+          // a stray drop can never clobber existing designs.
+          const result = presetManager.importAndMergePresets(
+            [fileText],
+            currentState.uploadedFile?.name || null,
+            currentState.schema?.parameters || {},
+            'keep'
+          );
+          _handleImportResult(result, currentState.uploadedFile?.name || null);
+        } catch (error) {
+          showErrorToast({ title: 'Import Failed', message: error.message });
+        }
+        break;
+      }
+
+      default:
+        showErrorToast({
+          title: 'Unsupported File Type',
+          message: `Supported: ${describeAccepted()}.`,
+        });
+    }
+  }
+
   // File input change
-  fileInput.addEventListener('change', (e) => {
-    const selectedFile = e.target.files[0];
-    if (!selectedFile) return;
-    fileHandler.handleFile(selectedFile);
+  fileInput.addEventListener('change', async (e) => {
+    const selection = classifyDrop(e.target.files);
     // Allow re-selecting the same file if needed
     e.target.value = '';
+    await routeUploadSelection(selection);
   });
 
   // Companion file input (Project Files Manager)
@@ -5319,6 +7989,24 @@ async function initApp() {
     });
   }
 
+  const companionSaveToFolderBtn = document.getElementById(
+    'companionSaveToFolderBtn'
+  );
+  if (companionSaveToFolderBtn) {
+    companionSaveToFolderBtn.addEventListener('click', async () => {
+      const state = stateManager.getState();
+      companionSaveToFolderBtn.disabled = true;
+      try {
+        await folderSaveActions.saveCompanions({
+          projectFiles: state.projectFiles,
+          mainFilePath: state.mainFilePath,
+        });
+      } finally {
+        companionSaveToFolderBtn.disabled = false;
+      }
+    });
+  }
+
   // Text File Editor Modal handlers
   const textFileEditorModal = document.getElementById('textFileEditorModal');
   const textFileEditorApply = document.getElementById('textFileEditorApply');
@@ -5345,7 +8033,14 @@ async function initApp() {
         e.preventDefault();
         companionFilesCtrl.applyTextFileEditorChanges();
       }
-      // Escape to cancel
+    });
+  }
+
+  // Escape belongs to the dialog, not to the textarea. Bound to the textarea it
+  // died the moment a keyboard user tabbed to Cancel or the X, which is exactly
+  // the path they take (UF-23, U-32).
+  if (textFileEditorModal) {
+    textFileEditorModal.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         e.preventDefault();
         closeModal(textFileEditorModal);
@@ -5371,117 +8066,129 @@ async function initApp() {
     );
   }
 
+  // Close the project and return to the welcome screen. Split out of the Back
+  // button's listener so File > Close Project can ask its own dirty-aware
+  // question and still reach this one path without a second dialog.
+  async function closeProjectToWelcome() {
+    // Reset file input
+    fileInput.value = '';
+
+    // Leave STL view-only mode if it was active
+    setStlViewActive(false);
+    document
+      .getElementById('parametersContainer')
+      ?.querySelector('.stl-view-notice')
+      ?.remove();
+
+    // Clear state (including preset selection so it doesn't survive reload)
+    stateManager.setState({
+      uploadedFile: null,
+      projectFiles: null,
+      mainFilePath: null,
+      schema: null,
+      parameters: {},
+      defaults: {},
+      stl: null,
+      outputFormat: 'stl',
+      stlStats: null,
+      detectedLibraries: [],
+      currentPresetId: null,
+      currentPresetName: null,
+    });
+
+    // Sync the dropdown element and fire change so the format info panel,
+    // 2D guidance, and button labels all reset to their STL defaults.
+    if (outputFormatSelect) {
+      outputFormatSelect.value = 'stl';
+      outputFormatSelect.dispatchEvent(new Event('change'));
+    }
+
+    // Clear history
+    stateManager.clearHistory();
+
+    // Hide main interface, show welcome screen
+    mainInterface.classList.add('hidden');
+    welcomeScreen.classList.remove('hidden');
+    setAppSurface('welcome');
+    updateStorageDisplay();
+
+    // Refresh saved projects list when returning to welcome screen
+    await savedProjectsUI.renderSavedProjectsList();
+
+    // Reset workflow step state, then re-apply slot visibility.
+    // applyToolbarModeVisibility sees mainInterface.hidden=true and hides both
+    // the toolbar and the workflow progress (welcome-screen branch).
+    applyToolbarModeVisibility(getUIModeController().getMode());
+
+    // Exit focus mode if active
+    const focusModeBtn = document.getElementById('focusModeBtn');
+    if (
+      focusModeBtn &&
+      mainInterface &&
+      mainInterface.classList.contains('focus-mode')
+    ) {
+      mainInterface.classList.remove('focus-mode');
+      focusModeBtn.setAttribute('aria-pressed', 'false');
+    }
+
+    // Close Features Guide modal if open
+    const featuresGuideModal = document.getElementById('featuresGuideModal');
+    if (
+      featuresGuideModal &&
+      !featuresGuideModal.classList.contains('hidden')
+    ) {
+      closeFeaturesGuide();
+    }
+
+    // Clear preview and remove any loaded overlay from the previous project
+    if (previewManager) {
+      previewManager.clear();
+      previewManager.setReferenceOverlaySource({
+        kind: null,
+        name: null,
+        dataUrlOrText: null,
+      });
+      previewManager.setOverlayEnabled(false);
+    }
+
+    // Reset overlay UI controls so the previous project's state doesn't linger
+    if (overlayToggle) overlayToggle.checked = false;
+    if (overlaySourceSelect) overlaySourceSelect.value = '';
+    overlayGridCtrl.updateOverlaySourceDropdown();
+    overlayGridCtrl.updateOverlayStatus();
+
+    // Reset echo drawer so stale warnings don't persist into the
+    // next project load (prevents layout shift from expanded drawer).
+    updatePreviewDrawer([]);
+    if (typeof window.clearConsoleState === 'function') {
+      window.clearConsoleState();
+    }
+
+    // Reset status
+    updateStatus('Ready');
+    statsArea.textContent = '';
+    clearPreviewStats();
+
+    // Remove compact header
+    const appHeader = document.querySelector('.app-header');
+    if (appHeader) {
+      appHeader.classList.remove('compact');
+    }
+
+    console.log('[App] File cleared, returned to welcome screen');
+  }
+
   // Back button - returns to welcome screen
   if (clearFileBtn) {
     clearFileBtn.addEventListener('click', async () => {
       // Confirm before going back - warn about unsaved changes
       const confirmed = await showConfirmDialog(
         'Any unsaved changes to your current project will be lost.',
-        'Go back to welcome screen?',
+        'Go back to the Main Page?',
         'Confirm',
         'Cancel'
       );
-      if (confirmed) {
-        // Reset file input
-        fileInput.value = '';
-
-        // Clear state (including preset selection so it doesn't survive reload)
-        stateManager.setState({
-          uploadedFile: null,
-          projectFiles: null,
-          mainFilePath: null,
-          schema: null,
-          parameters: {},
-          defaults: {},
-          stl: null,
-          outputFormat: 'stl',
-          stlStats: null,
-          detectedLibraries: [],
-          currentPresetId: null,
-          currentPresetName: null,
-        });
-
-        // Sync the dropdown element and fire change so the format info panel,
-        // 2D guidance, and button labels all reset to their STL defaults.
-        if (outputFormatSelect) {
-          outputFormatSelect.value = 'stl';
-          outputFormatSelect.dispatchEvent(new Event('change'));
-        }
-
-        // Clear history
-        stateManager.clearHistory();
-
-        // Hide main interface, show welcome screen
-        mainInterface.classList.add('hidden');
-        welcomeScreen.classList.remove('hidden');
-        updateStorageDisplay();
-
-        // Refresh saved projects list when returning to welcome screen
-        await savedProjectsUI.renderSavedProjectsList();
-
-        // Reset workflow step state, then re-apply slot visibility.
-        // applyToolbarModeVisibility sees mainInterface.hidden=true and hides both
-        // the toolbar and the workflow progress (welcome-screen branch).
-        applyToolbarModeVisibility(getUIModeController().getMode());
-
-        // Exit focus mode if active
-        const focusModeBtn = document.getElementById('focusModeBtn');
-        if (
-          focusModeBtn &&
-          mainInterface &&
-          mainInterface.classList.contains('focus-mode')
-        ) {
-          mainInterface.classList.remove('focus-mode');
-          focusModeBtn.setAttribute('aria-pressed', 'false');
-        }
-
-        // Close Features Guide modal if open
-        const featuresGuideModal =
-          document.getElementById('featuresGuideModal');
-        if (
-          featuresGuideModal &&
-          !featuresGuideModal.classList.contains('hidden')
-        ) {
-          closeFeaturesGuide();
-        }
-
-        // Clear preview and remove any loaded overlay from the previous project
-        if (previewManager) {
-          previewManager.clear();
-          previewManager.setReferenceOverlaySource({
-            kind: null,
-            name: null,
-            dataUrlOrText: null,
-          });
-          previewManager.setOverlayEnabled(false);
-        }
-
-        // Reset overlay UI controls so the previous project's state doesn't linger
-        if (overlayToggle) overlayToggle.checked = false;
-        if (overlaySourceSelect) overlaySourceSelect.value = '';
-        overlayGridCtrl.updateOverlaySourceDropdown();
-        overlayGridCtrl.updateOverlayStatus();
-
-        // Reset echo drawer so stale warnings don't persist into the
-        // next project load (prevents layout shift from expanded drawer).
-        updatePreviewDrawer([]);
-        if (typeof window.clearConsoleState === 'function') {
-          window.clearConsoleState();
-        }
-
-        // Reset status
-        updateStatus('Ready');
-        statsArea.textContent = '';
-        clearPreviewStats();
-
-        // Remove compact header
-        const appHeader = document.querySelector('.app-header');
-        if (appHeader) {
-          appHeader.classList.remove('compact');
-        }
-
-        console.log('[App] File cleared, returned to welcome screen');
-      }
+      if (confirmed) await closeProjectToWelcome();
     });
   }
 
@@ -5495,10 +8202,15 @@ async function initApp() {
     uploadZone.classList.remove('drag-over');
   });
 
-  uploadZone.addEventListener('drop', (e) => {
+  uploadZone.addEventListener('drop', async (e) => {
     e.preventDefault();
     uploadZone.classList.remove('drag-over');
-    fileHandler.handleFile(e.dataTransfer.files[0]);
+    // Prefer items (enables folder detection); fall back to plain files.
+    const input =
+      e.dataTransfer.items?.length > 0
+        ? e.dataTransfer.items
+        : e.dataTransfer.files;
+    await routeUploadSelection(classifyDrop(input));
   });
 
   // Click to upload is handled by the label wrapping the input.
@@ -5612,6 +8324,31 @@ if (rounded) {
     });
   });
 
+  // U-24 (UF-17): the welcome-tour card starts a tour of the surface it
+  // sits on. No example loads, so the unified [data-example] handler
+  // above never sees this button.
+  const welcomeTourBtn = document.getElementById('startWelcomeTourBtn');
+  if (welcomeTourBtn) {
+    welcomeTourBtn.addEventListener('click', () => {
+      startTutorial('welcome', { triggerEl: welcomeTourBtn });
+    });
+  }
+
+  // U-27 (UF-22): ask about the welcome tour once per load, after the gate.
+  const tourNudgeSettled = initTourNudge({
+    waitForFirstVisitAcceptance,
+    startTutorial,
+  });
+
+  // U-23 (UF-16): the Beginners-card spotlight waits for the first-visit
+  // gate — inside the inert #app it would be unreachable and unannounced.
+  // Q-52c: it now also waits for the nudge, so the card's tip takes over
+  // when the dialog is answered instead of competing with it.
+  void initWelcomeSpotlight({
+    waitForFirstVisitAcceptance,
+    waitForTourNudge: () => tourNudgeSettled,
+  });
+
   // Wire charm variant selector to update the single Open button
   const charmVariantSelect = document.getElementById('charmVariantSelect');
   const openCharmMakerBtn = document.getElementById('openCharmMakerBtn');
@@ -5637,6 +8374,17 @@ if (rounded) {
   // Note: ?load= is an alias for ?example= (for website embedding convenience)
   // =========================================
   const initUrlParams = new URLSearchParams(window.location.search);
+  /**
+   * Compose the post-load URL from the surviving query parameters. The
+   * fragment is carried over untouched: it holds the shared parameter payload
+   * (`#v=1&params=`, state.js) and anything else the sender put there, and a
+   * cleanup that drops it destroys the link it just opened.
+   * @returns {string}
+   */
+  const cleanUrlKeepingFragment = () =>
+    initUrlParams.toString()
+      ? `${window.location.pathname}?${initUrlParams}${window.location.hash}`
+      : `${window.location.pathname}${window.location.hash}`;
   // Support both ?example= and ?load= (alias for website embedding)
   const exampleParam =
     initUrlParams.get('example') || initUrlParams.get('load');
@@ -5654,9 +8402,7 @@ if (rounded) {
           // Clean up URL to avoid reloading on refresh
           initUrlParams.delete('example');
           initUrlParams.delete('load'); // Also remove ?load= alias
-          const cleanUrl = initUrlParams.toString()
-            ? `${window.location.pathname}?${initUrlParams}`
-            : window.location.pathname;
+          const cleanUrl = cleanUrlKeepingFragment();
           history.replaceState(null, '', cleanUrl);
 
           console.log(`[DeepLink] Successfully loaded: ${exampleParam}`);
@@ -6002,6 +8748,7 @@ if (rounded) {
       // Hide welcome screen early so the user sees a loading state, not the landing page
       welcomeScreen.classList.add('hidden');
       mainInterface.classList.remove('hidden');
+      setAppSurface('project');
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -6076,6 +8823,12 @@ if (rounded) {
         );
         announceImmediate(`Loading project: ${projectName}`);
 
+        // IR-9: a manifest can name the handful of parameters a beginner should
+        // meet first. Set BEFORE handleFile, because handleFile is what
+        // renders - setting it afterwards would show every control once and
+        // then take most of them away again, which is worse than either state.
+        setStarterParameters(defaults?.starterParameters);
+
         // Step 4 — PROCESS: parse and load the project into the editor
         await fileHandler.handleFile(
           null,
@@ -6085,6 +8838,30 @@ if (rounded) {
           'manifest',
           projectName
         );
+
+        // A name in that list this design does not have is worth saying out
+        // loud - to the person, once, and to the console for the author. It is
+        // never fatal: the rest of the list still works.
+        const starterNames = normalizeStarterList(defaults?.starterParameters);
+        if (starterNames.length > 0) {
+          const { unknown } = resolveStarterParameters(
+            stateManager.getState().schema,
+            starterNames
+          );
+          const message = unknownStarterMessage(unknown);
+          if (message) {
+            console.warn(`[DeepLink] ${message}`);
+            // The notice, not the status line. IR-13 measured a status
+            // message standing for about 660 ms before the render replaced
+            // it - long enough to exist, not long enough to read.
+            const { createParameterNotices } =
+              await import('./js/parameter-notices.js');
+            createParameterNotices(
+              document.getElementById('parameterNotices'),
+              { announce: (text) => announceImmediate(text) }
+            ).show(describeUnknownStarter(unknown));
+          }
+        }
 
         // Step 5 — DISMISS OVERLAY before showing the save-copy modal
         if (dismissOverlay) dismissOverlay();
@@ -6122,7 +8899,7 @@ if (rounded) {
           // After handleFile, presets have been auto-imported from JSON files.
           // Find the matching preset by name and programmatically select it.
           const state = stateManager.getState();
-          const modelName = state.uploadedFile?.name;
+          const modelName = state.uploadedFile ? presetModelKey(state) : null;
           if (modelName) {
             const presets = presetManager.getPresetsForModel(modelName);
             const match = presets.find(
@@ -6202,9 +8979,7 @@ if (rounded) {
         initUrlParams.delete('preset');
         initUrlParams.delete('skipWelcome');
         initUrlParams.delete('skipwelcome');
-        const cleanUrl = initUrlParams.toString()
-          ? `${window.location.pathname}?${initUrlParams}`
-          : window.location.pathname;
+        const cleanUrl = cleanUrlKeepingFragment();
         history.replaceState(null, '', cleanUrl);
 
         console.log(`[DeepLink] Manifest load complete: ${projectName}`);
@@ -6221,6 +8996,9 @@ if (rounded) {
         // ERROR PATH: dismiss overlay if it was shown (it's null if the
         // error occurred before step 2, e.g. during first-visit wait)
         if (dismissOverlay) dismissOverlay();
+        // A starter list armed for a load that never happened must not be
+        // waiting for whatever project this person opens next (IR-9).
+        setStarterParameters(null);
         console.error('[DeepLink] Manifest load failed:', error);
 
         let friendlyMsg;
@@ -6263,14 +9041,13 @@ if (rounded) {
         initUrlParams.delete('preset');
         initUrlParams.delete('skipWelcome');
         initUrlParams.delete('skipwelcome');
-        const failCleanUrl = initUrlParams.toString()
-          ? `${window.location.pathname}?${initUrlParams}`
-          : window.location.pathname;
+        const failCleanUrl = cleanUrlKeepingFragment();
         history.replaceState(null, '', failCleanUrl);
 
         // Show welcome screen again on failure so the user isn't stuck
         welcomeScreen.classList.remove('hidden');
         mainInterface.classList.add('hidden');
+        setAppSurface('welcome');
       }
     }, 500);
   }
@@ -6328,9 +9105,7 @@ if (rounded) {
         // Clean up URL after loading
         initUrlParams.delete('project');
         initUrlParams.delete('scad');
-        const cleanUrl = initUrlParams.toString()
-          ? `${window.location.pathname}?${initUrlParams}`
-          : window.location.pathname;
+        const cleanUrl = cleanUrlKeepingFragment();
         history.replaceState(null, '', cleanUrl);
 
         console.log(`[DeepLink] Successfully loaded project: ${urlFileName}`);
@@ -6473,7 +9248,7 @@ if (rounded) {
         autoPreviewController.onParameterChange(state.defaults);
       }
 
-      updateStatus('Parameters reset to defaults');
+      updateStatus('Customizer reset to defaults');
       // Update button state after reset
       updatePrimaryActionButton();
     }
@@ -6494,7 +9269,7 @@ if (rounded) {
       // Show confirmation dialog for COGA compliance
       const confirmed = await showConfirmDialog(
         'This will reset all parameters to their default values. Any unsaved changes will be lost. You can undo this action.',
-        'Reset All Parameters?',
+        'Reset the Customizer?',
         'Reset',
         'Keep Changes'
       );
@@ -6531,7 +9306,7 @@ if (rounded) {
       collapseParamPanelBtn.setAttribute('aria-expanded', 'false');
       collapseParamPanelBtn.setAttribute(
         'aria-label',
-        'Expand parameters panel'
+        'Expand customizer panel'
       );
       collapseParamPanelBtn.title = 'Expand panel';
     }
@@ -6555,7 +9330,7 @@ if (rounded) {
         collapseParamPanelBtn.setAttribute('aria-expanded', 'false');
         collapseParamPanelBtn.setAttribute(
           'aria-label',
-          'Expand parameters panel'
+          'Expand customizer panel'
         );
         collapseParamPanelBtn.title = 'Expand panel';
 
@@ -6569,7 +9344,7 @@ if (rounded) {
         collapseParamPanelBtn.setAttribute('aria-expanded', 'true');
         collapseParamPanelBtn.setAttribute(
           'aria-label',
-          'Collapse parameters panel'
+          'Collapse customizer panel'
         );
         collapseParamPanelBtn.title = 'Collapse panel';
       }
@@ -6600,7 +9375,7 @@ if (rounded) {
           collapseParamPanelBtn.setAttribute('aria-expanded', 'true');
           collapseParamPanelBtn.setAttribute(
             'aria-label',
-            'Collapse parameters panel'
+            'Collapse customizer panel'
           );
           collapseParamPanelBtn.title = 'Collapse panel';
         }
@@ -6623,6 +9398,225 @@ if (rounded) {
   let currentEditor = null;
   let modeManager = null;
   let editorStateManager = null;
+  /** Pending "focus the editor" timer, so a later claim on focus can win (D-15). */
+  let editorFocusTimer;
+
+  // True while an editor edit is being written into stateManager. The push
+  // channel below subscribes to the same store, so without this it would
+  // echo the edit straight back into the buffer the user is typing in.
+  let isApplyingEditorEdit = false;
+
+  /** @type {ReturnType<typeof setTimeout>|null} */
+  let editorWriteBackTimer = null;
+
+  /**
+   * Drop a queued write-back. Called before the push channel replaces the
+   * buffer: a timer armed against the previous project must never fire
+   * afterwards, or it would write the old project's text back over the new
+   * one while the editor already shows the new file.
+   */
+  function cancelEditorWriteBack() {
+    if (editorWriteBackTimer) {
+      clearTimeout(editorWriteBackTimer);
+      editorWriteBackTimer = null;
+    }
+  }
+
+  // Long enough that a burst of typing writes back once, short enough that
+  // Export/Generate right after a pause still sees the edit.
+  const EDITOR_WRITE_BACK_DELAY_MS = 500;
+
+  // Owner-approved wording (UF-18, Q-45). Names the control and its shortcut
+  // so the next step is not left to be guessed.
+  const EDITED_PENDING_PREVIEW_MESSAGE =
+    'Edited. Press Preview (F5) to update the model.';
+
+  /**
+   * Publish an editor edit into the app's single source of truth, so render,
+   * export and save all see it. Mirrors the folder-watch writer
+   * (`main.js` folder-change handler) minus its re-render: typing must not
+   * start a render (D-12) — Preview/F5 does that.
+   * @param {string} code
+   * @param {Object} [options]
+   * @param {boolean} [options.announcePending=true] - False when something is
+   *   about to render or save anyway, so the pending-edit line is neither
+   *   shown for a frame nor spoken over the action the user just took.
+   */
+  function applyEditorEdit(code, { announcePending = true } = {}) {
+    const state = stateManager.getState();
+    if (!state?.uploadedFile) return;
+    if (state.uploadedFile.content === code) return;
+
+    isApplyingEditorEdit = true;
+    try {
+      stateManager.setState({
+        uploadedFile: { ...state.uploadedFile, content: code },
+        // The generated output belongs to the source it was rendered from.
+        // Keeping it would let Download and the Export menu hand back the
+        // pre-edit model, since their staleness check keys on parameters.
+        stl: null,
+      });
+    } finally {
+      isApplyingEditorEdit = false;
+    }
+
+    if (autoPreviewController) {
+      const cameraSettled = autoPreviewController.initialPreviewDone;
+      autoPreviewController.setScadContent(code);
+      // D-11: an edit is not a new file — keep the user's viewpoint instead
+      // of re-fitting to the model. setScadContent clears the preview cache
+      // (which is keyed on parameters, not source) but also resets the
+      // camera-settled flag, which would snap a zoomed-in user back out.
+      autoPreviewController.initialPreviewDone = cameraSettled;
+    }
+
+    // Typing deliberately does not render (D-12, desktop parity), and until
+    // now nothing said so: P0 measured zero renders after an edit with no
+    // affordance anywhere on screen, which is half of why U-30 read as
+    // "completely useless". Fires once per edit burst, not per keystroke,
+    // and the next render's own status replaces it.
+    if (announcePending) updateStatus(EDITED_PENDING_PREVIEW_MESSAGE);
+
+    updatePrimaryActionButton();
+  }
+
+  /** Queue a write-back for the current edit burst. */
+  function scheduleEditorWriteBack() {
+    cancelEditorWriteBack();
+    editorWriteBackTimer = setTimeout(() => {
+      editorWriteBackTimer = null;
+      // Read the buffer at fire time. A snapshot captured when the timer was
+      // armed could belong to a project the user has since navigated away
+      // from, and would be written back over the current one.
+      const code = currentEditor?.getValue?.();
+      if (typeof code === 'string') applyEditorEdit(code);
+    }, EDITOR_WRITE_BACK_DELAY_MS);
+  }
+
+  /** Write a queued edit through immediately (save, preview, mode switch). */
+  function flushEditorWriteBack() {
+    if (!editorWriteBackTimer) return;
+    cancelEditorWriteBack();
+    const code = currentEditor?.getValue?.();
+    // Every caller is on its way to render, export, save or leave the editor,
+    // so telling the user to press Preview here would speak over the action
+    // they just took.
+    if (typeof code === 'string')
+      applyEditorEdit(code, { announcePending: false });
+  }
+
+  // Reconciliation bookkeeping (UF-18, Q-45a). `retiredParameterValues` holds
+  // values the user had set on parameters the code has since removed, so
+  // editing a declaration away and back does not reset their choice.
+  let lastReconciledSource = null;
+  let lastReconciledFileName = null;
+  let retiredParameterValues = {};
+
+  /**
+   * Re-read the parameter schema from the edited source and fold it into the
+   * live values (Q-45a).
+   *
+   * The schema used to be parsed once, when the file loaded, and every render
+   * then passed `-D` for every parameter in it — so an edited default reached
+   * the worker but the stale `-D` overrode it and the model never moved
+   * (U-30). This runs on Preview, Render and Save: the owner chose those
+   * moments over a typing-pause timer so the Customizer is never rebuilt
+   * under a user's hand or mid-sentence for a screen reader.
+   *
+   * @returns {{added: string[], removed: string[]}|null} null when nothing moved
+   */
+  function reconcileEditedParameters() {
+    const state = stateManager.getState();
+    const source = state?.uploadedFile?.content;
+    if (typeof source !== 'string' || !state.schema) return null;
+
+    if (state.uploadedFile.name !== lastReconciledFileName) {
+      lastReconciledFileName = state.uploadedFile.name;
+      lastReconciledSource = null;
+      retiredParameterValues = {};
+    }
+    if (source === lastReconciledSource) return null;
+    lastReconciledSource = source;
+
+    let nextSchema;
+    try {
+      nextSchema = extractParameters(source);
+    } catch (error) {
+      console.warn(
+        '[Reconcile] Could not re-read parameters from the edited code:',
+        error
+      );
+      return null;
+    }
+
+    const result = reconcileParameters({
+      nextSchema,
+      previousSchema: state.schema,
+      parameters: state.parameters || {},
+      defaults: state.defaults || {},
+      retiredValues: retiredParameterValues,
+    });
+
+    if (!result.ok) {
+      console.warn(
+        `[Reconcile] Skipped: ${result.reason}. Keeping the parameters already on screen.`
+      );
+      return null;
+    }
+    retiredParameterValues = result.retiredValues;
+
+    const paramTypes = {};
+    for (const [name, def] of Object.entries(nextSchema.parameters || {})) {
+      paramTypes[name] = def.type || 'string';
+    }
+
+    // Ranges, groups and descriptions can move without any value moving, and
+    // the panel has to follow those too.
+    const schemaMoved =
+      JSON.stringify(state.schema?.parameters || {}) !==
+      JSON.stringify(nextSchema.parameters || {});
+
+    stateManager.setState({
+      schema: nextSchema,
+      paramTypes,
+      parameters: result.parameters,
+      defaults: result.defaults,
+    });
+
+    if (!result.changed && !schemaMoved) return null;
+
+    const parametersContainer = document.getElementById('parametersContainer');
+    if (parametersContainer) {
+      renderParameterUI(
+        nextSchema,
+        parametersContainer,
+        (values) => {
+          stateManager.recordParameterState();
+          stateManager.setState({ parameters: values });
+          clearPresetSelection(values);
+          if (autoPreviewController) {
+            autoPreviewController.onParameterChange(values);
+          }
+          updatePrimaryActionButton();
+          companionFilesCtrl?.syncOverlayWithScreenshotParam?.(values);
+        },
+        result.parameters
+      );
+    }
+
+    return { added: result.added, removed: result.removed };
+  }
+
+  /**
+   * Publish what the editor holds before something reads the model: flush the
+   * pending write-back, then reconcile the schema. Every path that renders,
+   * exports or saves goes through here, so none of them can act on a source
+   * the user has already changed.
+   */
+  function publishEditorEdits() {
+    flushEditorWriteBack();
+    return reconcileEditedParameters();
+  }
 
   if (
     isExpertModeEnabled &&
@@ -6645,6 +9639,53 @@ if (rounded) {
     // Expose modeManager globally for keyboard shortcut handler
     window._modeManager = modeManager;
 
+    // Classic-mode editor co-existence (C5): the desktop shell shows the
+    // editor pane ALONGSIDE the customizer, so entering classic must never
+    // route through modeManager's exclusive expert view (which hides
+    // #paramPanelBody). If expert mode was active, unwind it first so the
+    // param body is restored, then light the editor up inside its slot.
+    document.addEventListener('classic-editor-activate', () => {
+      // Reloading straight into Classic fires this from the controller's
+      // init while the welcome screen is up — there is no project and
+      // #mainInterface is display:none. Creating CodeMirror there produces
+      // a zero-size, empty instance whose '' value then poisons the
+      // editor-state capture on exit. Wait for a real project: the
+      // file-handler re-fires via syncEditorPane() after every load.
+      if (
+        document.getElementById('mainInterface')?.classList.contains('hidden')
+      ) {
+        return;
+      }
+      if (
+        modeManager?.isExpertMode?.() &&
+        typeof modeManager.toggleMode === 'function'
+      ) {
+        modeManager.toggleMode();
+      }
+      if (!currentEditor) {
+        initExpertEditor();
+      } else if (currentEditor.setValue) {
+        const code = resolveEditorSource();
+        // Only write when it actually differs — setValue resets the caret.
+        // Unsaved edits win: re-entering Classic must never discard them.
+        if (
+          code &&
+          !editorStateManager.getIsDirty() &&
+          currentEditor.getValue?.() !== code
+        ) {
+          currentEditor.setValue(code);
+        }
+      }
+      expertModePanel.classList.add('classic-editor-active');
+      // The slot is a different width than the custom-mode panel; CodeMirror
+      // paints with its cached geometry until told to re-measure.
+      currentEditor?.refreshLayout?.();
+    });
+
+    document.addEventListener('classic-editor-deactivate', () => {
+      expertModePanel.classList.remove('classic-editor-active');
+    });
+
     /**
      * Handle mode change between Standard and Expert
      * @param {string} newMode - 'standard' or 'expert'
@@ -6663,16 +9704,43 @@ if (rounded) {
         if (!currentEditor) {
           initExpertEditor();
         } else {
-          // Sync code from state to editor
-          const currentCode = editorStateManager.getSource();
-          if (currentCode) {
+          // Re-sync from the loaded project, unless the user has unsaved
+          // edits in the buffer — those are newer than anything in state
+          // that has not been written back yet.
+          const currentCode = resolveEditorSource();
+          if (
+            currentCode &&
+            !editorStateManager.getIsDirty() &&
+            currentEditor.getValue() !== currentCode
+          ) {
             currentEditor.setValue(currentCode);
           }
+          currentEditor.refreshLayout?.();
         }
 
-        // Focus the editor
+        // Focus the editor. Partial mitigation for D-15, NOT a fix for it:
+        // 100ms is long enough for the user to have opened a menu, tabbed
+        // onward or clicked something else, and this used to take focus
+        // regardless. It now declines when something else has claimed focus,
+        // which can only ever mean one fewer steal.
+        //
+        // It does not close D-15. Measured 2026-08-08: with this guard in
+        // place, pressing the toggle and moving focus in the same task still
+        // ends with the editor focused, so at least one other path focuses it —
+        // most likely initExpertEditor's own first-run focus. Finding that path
+        // is its own piece of work and is not attempted here.
         if (currentEditor && currentEditor.focus) {
-          setTimeout(() => currentEditor.focus(), 100);
+          clearTimeout(editorFocusTimer);
+          editorFocusTimer = setTimeout(() => {
+            editorFocusTimer = undefined;
+            const active = document.activeElement;
+            const unclaimed =
+              !active ||
+              active === document.body ||
+              active === document.documentElement ||
+              active === expertModeToggle;
+            if (unclaimed) currentEditor.focus();
+          }, 100);
         }
       } else {
         // Hide Expert Mode panel, show standard param body
@@ -6680,15 +9748,33 @@ if (rounded) {
         if (paramPanelBody) paramPanelBody.classList.remove('hidden');
         expertModeToggle.setAttribute('aria-pressed', 'false');
 
-        // Capture state from editor before switching
+        // Capture state from editor before switching. An empty value from a
+        // never-shown editor must not overwrite a real stored source —
+        // capturing '' here is only meaningful when the user actually
+        // cleared the document (the buffer is dirty then).
+        flushEditorWriteBack();
         if (currentEditor) {
           const code = currentEditor.getValue();
-          editorStateManager.setSource(code, { markDirty: false });
+          if (code !== '' || editorStateManager.getIsDirty()) {
+            editorStateManager.setSource(code, { markDirty: false });
+          }
         }
 
         // Clear editor instance so Edit menu items disable in Standard Mode
         modeManager.setEditorInstance(null);
       }
+    }
+
+    /**
+     * The source the editor should show. `uploadedFile.content` is the single
+     * source of truth — it is what render, export, save and auto-preview all
+     * read, and what every loader writes. Reading anything else first (as this
+     * used to) lets a stale cache win forever, so a second project load could
+     * never reach the editor.
+     * @returns {string}
+     */
+    function resolveEditorSource() {
+      return stateManager.getState()?.uploadedFile?.content || '';
     }
 
     /**
@@ -6703,10 +9789,16 @@ if (rounded) {
         onChange: (code) => {
           editorStateManager.setSource(code, { markDirty: true });
           updateDirtyIndicator();
+          scheduleEditorWriteBack();
+          // The first keystroke is what makes Undo available, and nothing
+          // else re-checks the editor toolbar's enablement.
+          getClassicEditorToolbar()?.refresh();
         },
         onSave: () => {
-          const saveBtn = document.getElementById('saveProjectBtn');
-          if (saveBtn) saveBtn.click();
+          // #saveProjectBtn does not exist in index.html, so the editor's
+          // Ctrl+S was a no-op that still announced "Saved". Route it to the
+          // same handler the File menu uses; it flushes the write-back first.
+          fileActionsController.onSave();
         },
         onRun: () => {
           triggerPreviewFromEditor();
@@ -6722,8 +9814,7 @@ if (rounded) {
 
       currentEditor.initialize();
 
-      const initialCode =
-        editorStateManager.getSource() || window._currentSCADCode || '';
+      const initialCode = resolveEditorSource();
       if (initialCode) {
         currentEditor.setValue(initialCode);
       }
@@ -6752,7 +9843,9 @@ if (rounded) {
     }
 
     /**
-     * Trigger preview render from editor code
+     * Render a preview of the editor's current code. Explicit user action
+     * (▶ Preview, Ctrl+Enter) — typing alone never renders (D-12). The
+     * dirty flag is untouched: only saving clears it (D-10).
      */
     function triggerPreviewFromEditor() {
       if (!currentEditor) return;
@@ -6763,21 +9856,34 @@ if (rounded) {
         return;
       }
 
-      // Update global code variable
-      window._currentSCADCode = code;
+      // Publish the edit before rendering — forcePreview renders whatever
+      // content the controller was last given, not the editor buffer — and
+      // reconcile, so an edited default is not overridden by a stale -D.
+      publishEditorEdits();
 
-      // Trigger preview update
-      if (typeof triggerPreviewFromEditor === 'function') {
-        triggerPreviewFromEditor();
-      } else if (previewManager) {
-        previewManager.render(code);
+      if (!autoPreviewController) {
+        announceToScreenReader('Preview is not ready yet');
+        return;
       }
 
-      // Mark as clean after preview
-      editorStateManager.markClean();
-      updateDirtyIndicator();
-      announceToScreenReader('Preview update triggered');
+      autoPreviewController
+        .forcePreview(stateManager.getState().parameters)
+        .catch((error) => {
+          console.error('[Expert Mode] Preview failed:', error);
+          showErrorToast({
+            title: 'Preview Failed',
+            message: error.message,
+          });
+          announceToScreenReader('Preview failed. See the error message.');
+        });
     }
+
+    // The Classic editor toolbar's Preview must be this exact handler — it
+    // flushes the pending write-back first, so it previews what is typed
+    // rather than the last published content. It is a closure in this block,
+    // so it is published here rather than reached by clicking a hidden
+    // button, which is the element-to-element side channel this file avoids.
+    editorPreviewTrigger = triggerPreviewFromEditor;
 
     // Toggle button click handler
     expertModeToggle.addEventListener('click', () => {
@@ -6898,18 +10004,41 @@ if (rounded) {
 
     // Keyboard shortcut: Ctrl+E to toggle Expert Mode (registered via keyboard config below)
 
-    // Sync code changes from parameter panel to editor state
-    // This happens when parameters are modified in Standard mode
-    window.addEventListener('scadCodeUpdated', (e) => {
-      const newCode = e.detail?.code || window._currentSCADCode;
-      if (newCode && editorStateManager) {
-        editorStateManager.setSource(newCode, { markDirty: false });
+    // Push channel: loaded source → editor. Every writer of
+    // uploadedFile.content (the load funnel, folder-watch, back-to-welcome)
+    // reaches the editor through this one subscription, so Standard,
+    // Simplified and Classic all refill from the same place. Replaces a
+    // 'scadCodeUpdated' event that had a listener and no dispatchers.
+    stateManager.subscribe((newState, prevState) => {
+      if (isApplyingEditorEdit) return;
+      const nextFile = newState?.uploadedFile;
+      if (nextFile === prevState?.uploadedFile) return;
 
-        // Update editor if in Expert Mode
-        if (modeManager.getMode() === 'expert' && currentEditor) {
-          currentEditor.setValue(newCode);
-        }
+      const code = nextFile?.content || '';
+
+      cancelEditorWriteBack();
+
+      if (currentEditor?.setValue && currentEditor.getValue?.() !== code) {
+        currentEditor.setValue(code);
       }
+      editorStateManager.setSource(code, { markDirty: false });
+      editorStateManager.markClean();
+      updateDirtyIndicator();
+    });
+
+    // The dot also has to react to markClean() calls made outside this block
+    // — saving a project clears the flag from the save routine.
+    editorStateManager.subscribe((_snapshot, change) => {
+      if (change?.type === 'dirty') updateDirtyIndicator();
+    });
+
+    // Unsaved editor text is not persisted anywhere the user can get it back
+    // from, so leaving the page with a dirty buffer asks first. Separate
+    // listener from the worker-termination one above; both run.
+    window.addEventListener('beforeunload', (event) => {
+      if (!editorStateManager.getIsDirty()) return;
+      event.preventDefault();
+      event.returnValue = '';
     });
 
     console.log('[Expert Mode] Initialization complete');
@@ -6948,6 +10077,11 @@ if (rounded) {
     const initSplit = function () {
       // Don't initialize on mobile (drawer pattern is used instead)
       if (window.innerWidth < 768) {
+        return;
+      }
+
+      // Classic mode uses a CSS grid; Split.js inline styles would fight it
+      if (document.body.dataset.uiMode === 'classic') {
         return;
       }
 
@@ -7038,7 +10172,7 @@ if (rounded) {
             gutter.setAttribute('aria-valuemax', String(max));
             gutter.setAttribute(
               'aria-valuetext',
-              `Parameters: ${Math.round(sizes[0])}%, Preview: ${Math.round(sizes[1])}%`
+              `Customizer: ${Math.round(sizes[0])}%, Preview: ${Math.round(sizes[1])}%`
             );
           };
 
@@ -7129,6 +10263,469 @@ if (rounded) {
     // Initialize if not collapsed
     if (!paramPanel.classList.contains('collapsed')) {
       initSplit();
+    }
+
+    // The Classic dock resizers change the 3D view's box without a window
+    // resize, so the canvas would keep its old backing store and letterbox
+    // or stretch. Same contract Split.js's onDrag fulfils above, same rAF
+    // throttle — a keyboard repeat or a drag fires this continuously.
+    let classicResizePending = false;
+    document.addEventListener('classic-layout-resize', () => {
+      if (!previewManager || classicResizePending) return;
+      classicResizePending = true;
+      requestAnimationFrame(() => {
+        classicResizePending = false;
+        previewManager.handleResize();
+      });
+    });
+
+    // Classic desktop-shell layout (moves console/editor into grid slots,
+    // presets into the Customizer dock)
+    // Classic swaps the WebGL scene to the desktop Cornfield colors, so the
+    // viewport re-detects on every entry and exit (detectTheme() returns
+    // 'classic' while the mode is active).
+    const syncPreviewSceneToMode = () => {
+      // UF-14 P3: the flip crosses a preference-namespace boundary, so the
+      // target interface's own saved viewing state is re-applied in one
+      // pass. The DOM surfaces swap even before any model exists...
+      reloadScopedUiSurfaces();
+      if (!previewManager) return;
+      // ...and the scene picks up its grid/measurements/scheme state, then
+      // re-detects colors (grid rebuilds resolve them from currentTheme,
+      // which updateTheme refreshes right here).
+      previewManager.reloadScopedViewPreferences();
+      previewManager.updateTheme(
+        previewManager.detectTheme(),
+        document.documentElement.getAttribute('data-high-contrast') === 'true'
+      );
+    };
+
+    initClassicLayoutController({
+      onEnter: () => {
+        destroySplit();
+        syncPreviewSceneToMode();
+        // Startup contract: collapsed customizer groups, and a first
+        // preview with current values if nothing has rendered yet
+        collapseCustomizerGroups();
+        // Mirror the auto-preview state into the dock checkbox on entry
+        const classicAutoCheck = document.getElementById(
+          'classicAutoPreviewCheck'
+        );
+        if (classicAutoCheck && autoPreviewToggle) {
+          classicAutoCheck.checked = autoPreviewToggle.checked;
+        }
+        const classicState = stateManager.getState();
+        if (
+          classicState?.uploadedFile &&
+          !classicState.stl &&
+          autoPreviewController
+        ) {
+          autoPreviewController.onParameterChange(classicState.parameters);
+        }
+        requestAnimationFrame(() => previewManager?.handleResize?.());
+      },
+      onExit: () => {
+        if (!paramPanel.classList.contains('collapsed')) {
+          initSplit();
+        }
+        syncPreviewSceneToMode();
+        requestAnimationFrame(() => previewManager?.handleResize?.());
+      },
+    });
+
+    // Classic window-bottom status bar (C8): mirrors the viewport overlay
+    initClassicStatusBar();
+
+    // Classic editor toolbar (D4). Dependencies are injected because they are
+    // closures in here; the toolbar owns wiring and enablement only, never a
+    // second implementation of any action.
+    // The workflow buttons (Preview/Render/STL/DXF) left this toolbar for
+    // the top Classic toolbar (U-5/Q-18a), taking their render-state deps
+    // with them.
+    initClassicEditorToolbar({
+      fileActionsController,
+      getEditor: () => getModeManager()?.getEditorInstance?.() || null,
+      getState: () => stateManager.getState(),
+    });
+
+    // Classic Font List panel (F3). Registering the sample faces costs no new
+    // bandwidth: the worker fetches these same four files from the same URLs
+    // to mount them for text(), so the browser serves these from cache.
+    {
+      const fontListPanel = initFontListPanel({
+        assetBaseUrl: new URL(import.meta.env.BASE_URL, window.location.origin)
+          .toString()
+          .replace(/\/$/, ''),
+      });
+      fontListPanel.loadSampleFaces();
+    }
+
+    // Classic Viewport-Control panel (F4). The PreviewManager is built lazily
+    // once WASM is ready, so the panel binds to its camera later, the same way
+    // the display-options and overlay-grid controllers do.
+    initViewportControlPanel({ getPreviewManager: () => previewManager });
+
+    // Classic Animate panel (F5). Playback drives real renders through the
+    // auto-preview controller's -D $t path.
+    initAnimatePanel({
+      getAutoPreviewController: () => autoPreviewController,
+      getParameters: () => stateManager.getState().parameters || {},
+    });
+
+    // Classic Customizer bar (C7): titlebar ✕ + the Automatic Preview mirror.
+    // All state flows through the real controls (#autoPreviewToggle), never
+    // element-to-element side channels.
+    document
+      .getElementById('classicCustomizerCloseBtn')
+      ?.addEventListener('click', () => {
+        getClassicLayoutController()?.toggleCustomizer();
+      });
+    {
+      const classicAutoCheck = document.getElementById(
+        'classicAutoPreviewCheck'
+      );
+      if (classicAutoCheck && autoPreviewToggle) {
+        classicAutoCheck.checked = autoPreviewToggle.checked;
+        classicAutoCheck.addEventListener('change', () => {
+          if (autoPreviewToggle.checked !== classicAutoCheck.checked) {
+            autoPreviewToggle.checked = classicAutoCheck.checked;
+            autoPreviewToggle.dispatchEvent(new Event('change'));
+          }
+        });
+        autoPreviewToggle.addEventListener('change', () => {
+          classicAutoCheck.checked = autoPreviewToggle.checked;
+        });
+      }
+    }
+
+    // Classic display strip (C4.5): snap views, axes/grid overlays, bed
+    // size, Preview/Render — thin wrappers over the existing actions
+    // Classic icon toolbar (C6): thin wrappers over the same actions the
+    // menus drive — no new state anywhere.
+    const classicToolbar = document.getElementById('classicToolbar');
+    if (classicToolbar) {
+      restoreClassicToolbarPrefs();
+      // E3 moved the snap-view buttons to the 3D view toolbar. Scoping this
+      // to #classicToolbar would silently leave every one of them dead, so it
+      // queries the document — both bars are Classic-only markup.
+      document.querySelectorAll('[data-classic-view]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          if (!previewManager) return;
+          previewManager.setCameraView(btn.dataset.classicView);
+          announceCameraAction(`${btn.dataset.classicView} view`);
+        });
+      });
+
+      // The bar's View All and Reset View carry the same labels as the View
+      // menu's items, so they run the same commands (G4). Reset View used to
+      // be a third behaviour again — a snap to the diagonal view.
+      document
+        .getElementById('classicViewHomeBtn')
+        ?.addEventListener('click', () => {
+          if (!previewManager) return;
+          previewManager.viewAllCamera();
+          announceCameraAction('View fitted to model');
+        });
+
+      document
+        .getElementById('classicResetViewBtn')
+        ?.addEventListener('click', () => {
+          if (!previewManager) return;
+          previewManager.resetCamera();
+          announceCameraAction('reset');
+        });
+
+      // File / Edit / Render groups proxy the same handlers as the menus
+      document
+        .getElementById('classicTbNewBtn')
+        ?.addEventListener('click', () => fileActionsController.onNew());
+      document
+        .getElementById('classicTbOpenBtn')
+        ?.addEventListener('click', () =>
+          document.getElementById('fileInput')?.click()
+        );
+      document
+        .getElementById('classicTbSaveBtn')
+        ?.addEventListener('click', () => fileActionsController.onSave());
+      document
+        .getElementById('classicTbUndoBtn')
+        ?.addEventListener('click', () =>
+          document.getElementById('undoBtn')?.click()
+        );
+      document
+        .getElementById('classicTbRedoBtn')
+        ?.addEventListener('click', () =>
+          document.getElementById('redoBtn')?.click()
+        );
+      // U-8b: the desktop's Export STL exports a render that exists; ours
+      // gates the same way. aria-disabled + reason rather than disabled, so
+      // keyboard and screen-reader users can find the button and hear why
+      // (the editor toolbar's pattern). Enabled, it downloads the existing
+      // full render — never starts a fresh one.
+      const classicTbStlBtn = document.getElementById('classicTbExportStlBtn');
+      if (classicTbStlBtn) {
+        const reasonId = 'classicTbExportStlReason';
+        const reasonSpan = document.createElement('span');
+        reasonSpan.id = reasonId;
+        reasonSpan.className = 'sr-only';
+        reasonSpan.textContent = CLASSIC_STL_NEEDS_RENDER_REASON;
+        classicTbStlBtn.insertAdjacentElement('afterend', reasonSpan);
+
+        const refreshClassicTbStl = () => {
+          const armed = hasFullQualitySTLFor(
+            stateManager.getState().parameters
+          );
+          if (armed) {
+            classicTbStlBtn.removeAttribute('aria-disabled');
+            classicTbStlBtn.removeAttribute('aria-describedby');
+          } else {
+            classicTbStlBtn.setAttribute('aria-disabled', 'true');
+            classicTbStlBtn.setAttribute('aria-describedby', reasonId);
+          }
+        };
+        refreshClassicTbStl();
+        document.addEventListener('render-state-change', refreshClassicTbStl);
+
+        classicTbStlBtn.addEventListener('click', (event) => {
+          if (classicTbStlBtn.getAttribute('aria-disabled') === 'true') {
+            event.preventDefault();
+            announceImmediate(
+              `Export as STL unavailable. ${CLASSIC_STL_NEEDS_RENDER_REASON}`
+            );
+            return;
+          }
+          exportFormatFromMenu('stl', { renderIfNeeded: false });
+        });
+      }
+
+      // The workflow triad's other members (U-5, Q-18a).
+      document
+        .getElementById('classicTbPreviewBtn')
+        ?.addEventListener('click', () => {
+          const tbState = stateManager.getState();
+          if (!tbState.uploadedFile) return;
+          // Prefer the editor's own trigger: it flushes the pending
+          // write-back first, so Preview shows what is typed rather than
+          // the last published content — the reason the editor toolbar's
+          // Preview used it. Null until the expert block initializes
+          // (a Simplified-only session), where the plain path is right.
+          if (editorPreviewTrigger) {
+            editorPreviewTrigger();
+          } else if (autoPreviewController) {
+            autoPreviewController.onParameterChange(tbState.parameters);
+          }
+        });
+      document
+        .getElementById('classicTbRenderBtn')
+        ?.addEventListener('click', () => {
+          if (primaryActionBtn && !primaryActionBtn.disabled) {
+            runFullRender();
+          }
+        });
+      document
+        .getElementById('classicTbExportDxfBtn')
+        ?.addEventListener('click', () =>
+          fileActionsController.onExport2D?.('dxf')
+        );
+
+      // Projection pair mirrors the preview manager's actual mode
+      const perspBtn = document.getElementById('classicTbPerspectiveBtn');
+      const orthoBtn = document.getElementById('classicTbOrthogonalBtn');
+      const syncProjectionButtons = () => {
+        const mode = previewManager?.getProjectionMode?.() || 'perspective';
+        perspBtn?.setAttribute('aria-pressed', String(mode === 'perspective'));
+        orthoBtn?.setAttribute('aria-pressed', String(mode === 'orthographic'));
+      };
+      // These used to update only inside their own click handlers, so changing
+      // projection from the View menu or the P shortcut left the pair claiming
+      // the wrong state (D-10). R3a's event reaches every mirror.
+      syncProjectionButtons();
+      document.addEventListener(
+        'preview-projection-change',
+        syncProjectionButtons
+      );
+      perspBtn?.addEventListener('click', () => {
+        if (
+          previewManager &&
+          previewManager.getProjectionMode?.() !== 'perspective'
+        ) {
+          previewManager.toggleProjection();
+        }
+        syncProjectionButtons();
+      });
+      orthoBtn?.addEventListener('click', () => {
+        if (
+          previewManager &&
+          previewManager.getProjectionMode?.() !== 'orthographic'
+        ) {
+          previewManager.toggleProjection();
+        }
+        syncProjectionButtons();
+      });
+
+      // Overlay toggles share displayOptionsController state. They listen for
+      // display-option-change rather than only updating on their own click,
+      // so toggling the same flag from the View menu or the camera panel
+      // keeps this button's aria-pressed truthful.
+      const wireOverlayToggle = (btnId, option) => {
+        const btn = document.getElementById(btnId);
+        if (!btn) return;
+        const syncPressed = () =>
+          btn.setAttribute(
+            'aria-pressed',
+            String(displayOptionsController.get(option))
+          );
+        syncPressed();
+        btn.addEventListener('click', () => {
+          displayOptionsController.toggle(option);
+        });
+        document.addEventListener('display-option-change', (event) => {
+          if (event.detail?.option === option) syncPressed();
+        });
+      };
+      wireOverlayToggle('classicEdgesToggle', 'edges');
+      // Honest split per D-16: the combined "Axes (mm)" button drove two
+      // separate display flags at once, so the View menu and the toolbar
+      // could disagree about either. Each now drives exactly its own flag,
+      // and axisMarks IS this app's scale-marker overlay.
+      wireOverlayToggle('classicAxesToggle', 'axes');
+      wireOverlayToggle('classicScaleMarkersToggle', 'axisMarks');
+
+      // Bed grid and its size select are dropped from Classic entirely
+      // (D-18); both remain in Simplified and Standard, where the preview
+      // settings drawer owns them.
+
+      // Zoom uses the one shared step so the bar, the View menu and the
+      // camera panel all move the camera by the same amount (D-19).
+      const wireZoom = (btnId, direction) => {
+        document.getElementById(btnId)?.addEventListener('click', () => {
+          if (!previewManager) return;
+          previewManager.zoomCamera(direction * CAMERA_ZOOM_STEP);
+          announceCameraAction(direction > 0 ? 'Zoomed in' : 'Zoomed out');
+        });
+      };
+      wireZoom('classicZoomInBtn', 1);
+      wireZoom('classicZoomOutBtn', -1);
+
+      // Measurement has no engine yet (D-15). The buttons are aria-disabled
+      // rather than disabled so they stay discoverable; activating one says
+      // why instead of doing nothing.
+      for (const id of ['classicMeasureDistBtn', 'classicMeasureAngleBtn']) {
+        const btn = document.getElementById(id);
+        btn?.addEventListener('click', (event) => {
+          if (btn.getAttribute('aria-disabled') !== 'true') return;
+          event.preventDefault();
+          const name = btn.querySelector('.sr-only')?.textContent.trim() || '';
+          const reason = document
+            .getElementById('classicMeasureReason')
+            ?.textContent.trim();
+          announceImmediate(`${name} unavailable. ${reason}`);
+        });
+      }
+
+      document
+        .getElementById('classicPreviewBtn')
+        ?.addEventListener('click', () => {
+          const stripState = stateManager.getState();
+          if (!stripState.uploadedFile) return;
+          // The same flushing trigger the top toolbar's Preview uses (E3-era
+          // defect, re-reported UF-1 §L): the plain path re-serves the cached
+          // preview of the last PUBLISHED content, so an edit typed within
+          // the write-back debounce was invisible to exactly this button.
+          // Null until the expert block initializes (a Simplified-only
+          // session), where the plain path is right.
+          if (editorPreviewTrigger) {
+            editorPreviewTrigger();
+          } else if (autoPreviewController) {
+            autoPreviewController.onParameterChange(stripState.parameters);
+          }
+        });
+
+      document
+        .getElementById('classicRenderBtn')
+        ?.addEventListener('click', () => {
+          if (primaryActionBtn && !primaryActionBtn.disabled) {
+            runFullRender();
+          }
+        });
+
+      const classicTbCustomizerBtn = document.getElementById(
+        'classicTbCustomizerBtn'
+      );
+      classicTbCustomizerBtn?.addEventListener('click', () => {
+        const layout = getClassicLayoutController();
+        if (!layout) return;
+        const visible = layout.toggleCustomizer();
+        classicTbCustomizerBtn.setAttribute('aria-pressed', String(visible));
+      });
+
+      // APG toolbar keyboard pattern: each toolbar's buttons form ONE tab
+      // stop and Arrow keys move within it — Tab-through would cost two dozen
+      // presses to cross. Applied to both the top toolbar and the 3D view
+      // toolbar from one implementation, so the two cannot drift apart. Any
+      // <select> keeps its own tab stop, because Arrow keys change a select's
+      // value and hijacking them there would break the control.
+      const wireRovingToolbar = (toolbarEl) => {
+        if (!toolbarEl) return;
+        const buttons = Array.from(toolbarEl.querySelectorAll('button'));
+        if (buttons.length === 0) return;
+
+        // aria-disabled buttons stay in the ring on purpose: that is how a
+        // keyboard user discovers them and hears why they are unavailable.
+        const visible = () =>
+          buttons.filter((b) => b.offsetParent !== null && !b.disabled);
+        const setStop = (target) => {
+          for (const b of buttons) b.tabIndex = b === target ? 0 : -1;
+        };
+        // The single tab stop must always be a VISIBLE button — if the stop
+        // is hidden (Simplified density, phone-width trims), Tab skips it and
+        // the whole toolbar drops out of the keyboard order. Re-pick whenever
+        // visibility can change.
+        const refreshStop = () => {
+          const list = visible();
+          if (list.length === 0) return;
+          const current = buttons.find((b) => b.tabIndex === 0);
+          setStop(list.includes(current) ? current : list[0]);
+        };
+
+        setStop(buttons[0]);
+        refreshStop();
+        document.addEventListener('ui-mode-changed', refreshStop);
+        document.addEventListener('classic-density-change', refreshStop);
+        let resizeTimer;
+        window.addEventListener('resize', () => {
+          clearTimeout(resizeTimer);
+          resizeTimer = setTimeout(refreshStop, 200);
+        });
+
+        toolbarEl.addEventListener('focusin', (event) => {
+          const btn = event.target.closest('button');
+          if (btn && buttons.includes(btn)) setStop(btn);
+        });
+        toolbarEl.addEventListener('keydown', (event) => {
+          const { key } = event;
+          if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key)) return;
+          const btn = event.target.closest('button');
+          if (!btn || !buttons.includes(btn)) return;
+
+          const list = visible();
+          if (list.length === 0) return;
+          const current = list.indexOf(btn);
+          let next;
+          if (key === 'Home') next = list[0];
+          else if (key === 'End') next = list[list.length - 1];
+          else {
+            const delta = key === 'ArrowRight' ? 1 : -1;
+            next = list[(current + delta + list.length) % list.length];
+          }
+          event.preventDefault();
+          setStop(next);
+          next.focus();
+        });
+      };
+
+      wireRovingToolbar(classicToolbar);
+      wireRovingToolbar(document.getElementById('classicCameraBar'));
     }
 
     // Initialize mobile drawer controller
@@ -7487,9 +11084,27 @@ if (rounded) {
     if (urlUnlock) {
       // Strip param to avoid accidental sharing
       urlParams.delete('hfm');
+      /**
+       * CW-66: ...and KEEP THE FRAGMENT. This cleanup composed the new URL
+       * from pathname and query alone, so a link of the form
+       * `/?hfm=unlock#v=1&params=...` lost its payload the moment it opened -
+       * the door destroyed the very thing the link was carrying.
+       *
+       * ★ THE MERGED HELPER `cleanUrlKeepingFragment()` IS NOT A DROP-IN
+       * HERE, WHICH IS WHY THIS IS A LINE RATHER THAN A CALL. That helper
+       * closes over `initUrlParams`, a DIFFERENT URLSearchParams built at
+       * module start; this block deletes `hfm` from its own local copy. Calling
+       * the helper would compose from a copy that still HAS `hfm` and put the
+       * parameter straight back, which is exactly what the comment above is
+       * preventing. Making the helper usable would mean mutating a
+       * module-level object other code reads afterwards - a bigger and less
+       * reversible change than the round's closing release should make.
+       *
+       * The arithmetic now lives in two places, and that is the stated cost.
+       */
       const newUrl = urlParams.toString()
-        ? `${window.location.pathname}?${urlParams}`
-        : window.location.pathname;
+        ? `${window.location.pathname}?${urlParams}${window.location.hash}`
+        : `${window.location.pathname}${window.location.hash}`;
       history.replaceState(null, '', newUrl);
     }
 
@@ -7506,6 +11121,77 @@ if (rounded) {
       hfmCtrl.handleUnlock();
       return 'Alt View unlocked. Refresh to persist.';
     };
+
+    // ASCII City Walk (CW-4): the gated welcome card's launch button. The
+    // game module is lazy-loaded on first press so it costs nothing until
+    // someone who found the unlock actually plays.
+    const cityWalkLaunchBtn = document.getElementById('cityWalkLaunchBtn');
+    if (cityWalkLaunchBtn) {
+      // CW-11: the game is desktop-only, gated on the same viewport shape as
+      // Classic (U-10/Q-24a). ENTRY only — a session already running survives
+      // any resize, and Escape always leaves.
+      const cityWalkGateReason = () =>
+        document
+          .getElementById('cityWalkGateReason')
+          ?.textContent.replace(/\s+/g, ' ')
+          .trim();
+
+      const updateCityWalkGate = () => {
+        const gated = !isViewportDesktopShaped();
+        const reasonEl = document.getElementById('cityWalkGateReason');
+        // Shown, not sr-only: on a phone there is no hover tooltip, so the
+        // reason has to be on the card for a sighted player to read.
+        if (reasonEl) reasonEl.hidden = !gated;
+        if (gated) {
+          cityWalkLaunchBtn.setAttribute('aria-disabled', 'true');
+          cityWalkLaunchBtn.setAttribute(
+            'aria-describedby',
+            'cityWalkGateReason'
+          );
+          const reason = cityWalkGateReason();
+          if (reason) {
+            cityWalkLaunchBtn.setAttribute(
+              'title',
+              `Enter the City. ${reason}`
+            );
+          }
+        } else {
+          cityWalkLaunchBtn.removeAttribute('aria-disabled');
+          cityWalkLaunchBtn.removeAttribute('aria-describedby');
+          cityWalkLaunchBtn.removeAttribute('title');
+        }
+      };
+      updateCityWalkGate();
+      subscribeViewportShape(updateCityWalkGate);
+
+      cityWalkLaunchBtn.addEventListener('click', async (event) => {
+        // Gated means aria-disabled, not disabled: the click still arrives, so
+        // say why rather than doing nothing (the Classic toggle's pattern).
+        if (cityWalkLaunchBtn.getAttribute('aria-disabled') === 'true') {
+          event.preventDefault();
+          const reason = cityWalkGateReason();
+          announceImmediate(
+            reason
+              ? `ASCII City Walk unavailable. ${reason}`
+              : 'ASCII City Walk unavailable.'
+          );
+          return;
+        }
+        // No disabled toggle here: disabling the button would blur it, and
+        // the controller restores focus to this trigger on exit. Re-entry is
+        // already guarded by the controller's session singleton.
+        try {
+          const mod = await import('./js/game/city-walk-controller.js');
+          await mod.launchCityWalk({
+            hfmCtrl,
+            triggerEl: cityWalkLaunchBtn,
+          });
+        } catch (error) {
+          console.error('[CityWalk] Failed to launch:', error);
+          _announceError('The game could not be started. Please try again.');
+        }
+      });
+    }
 
     // Expose startTutorial globally for E2E test automation
     window.startTutorial = (tutorialId) => startTutorial(tutorialId);
@@ -7923,10 +11609,31 @@ if (rounded) {
 
       downloadFile(state.stl, filename, outputFormat);
       updateStatus(`Downloaded: ${filename}`);
+      refreshFolderSaveAffordances();
       return;
     }
 
-    // Generate action - perform full quality render for download
+    await runFullRender();
+    refreshFolderSaveAffordances();
+  });
+
+  /**
+   * The full-quality render with all of its UI side effects and NO download
+   * side effect (U-8a). Extracted from the generate branch of the
+   * primaryActionBtn handler so every Render surface — Design ▸ Render, the
+   * rebindable `render` shortcut, and both Classic Render buttons — can
+   * render without going through the Generate↔Download transformer, whose
+   * meaning depends on state the user cannot see. Pressing Render used to
+   * trigger an STL save prompt whenever a full render was already cached.
+   */
+  async function runFullRender() {
+    // D-29: this read used to happen with a write-back still queued, so
+    // pressing Render within 500 ms of typing was a race — measured at P0,
+    // the Classic toolbar's Render carried the edit only 1 time in 5. Every
+    // Preview button already published first; Render never did.
+    publishEditorEdits();
+    const state = stateManager.getState();
+
     if (!state.uploadedFile) {
       showErrorToast({
         title: 'No File Uploaded',
@@ -8019,13 +11726,19 @@ if (rounded) {
         // Direct render with specified format
         // Pass files/mainFile/libraries for multi-file projects
         const libsForRender = getEnabledLibrariesForRender();
-        // For 2D formats, use schema-aware parameter resolution so models that
-        // require a specific 'generate' (or equivalent) value produce 2D geometry.
-        const renderParameters = resolve2DExportParameters(
+        // For 2D formats, propose schema-aware parameter changes so models
+        // that require a specific 'generate' (or equivalent) value produce
+        // 2D geometry — applied only with the consent checkbox checked.
+        const proposal = propose2DExportChanges(
           state.parameters,
           state.schema,
-          outputFormat
+          outputFormat,
+          state.projectFiles
         );
+        const renderParameters =
+          proposal.changes.length > 0 && is2DAdjustmentsConsented()
+            ? proposal.resolvedParameters
+            : state.parameters;
         const renderOptions = {
           outputFormat,
           paramTypes: state.paramTypes || {},
@@ -8047,12 +11760,18 @@ if (rounded) {
           );
         } catch (renderErr) {
           if (renderErr.code === 'MODEL_NOT_2D') {
+            const proceed = await confirmProjectionFallback(outputFormat);
+            if (!proceed) {
+              updateStatus(`${formatName} export cancelled`);
+              updatePreviewStateUI(PREVIEW_STATE.STALE);
+              return;
+            }
             updateStatus(
-              `Model produces 3D geometry — projecting to ${outputFormat.toUpperCase()}...`
+              `Projecting 3D mesh to approximate ${outputFormat.toUpperCase()}...`
             );
             result = await renderController.render2DFallback(
               state.uploadedFile.content,
-              renderParameters,
+              strip2DGenerateForFallback(renderParameters),
               renderOptions
             );
           } else {
@@ -8068,6 +11787,11 @@ if (rounded) {
 
       const outputData = result.data || result.stl;
       const resolvedFormat = result.format || outputFormat;
+      if (resolvedFormat === 'stl' && looksLikeOffGeometry(outputData)) {
+        throw new Error(
+          'Internal error: the renderer returned OFF geometry where STL was expected. Please try generating again.'
+        );
+      }
       stateManager.setState({
         generatedOutput: {
           data: outputData,
@@ -8092,13 +11816,11 @@ if (rounded) {
               ? outputData
               : new TextDecoder().decode(outputData);
 
-          // Pre-inject F6-render parity styling: #07D0A7 teal fill, #FF0603 red outlines.
-          const renderStyle =
-            '<style data-forge-preview="true">' +
-            'path,polygon,polyline,circle,ellipse,rect{fill:#07D0A7;stroke:#FF0603;stroke-width:0.5;fill-opacity:1}' +
-            'line{stroke:#FF0603;stroke-width:0.5}' +
-            '</style>';
-          svgText = svgText.replace(/(<svg[^>]*>)/i, '$1' + renderStyle);
+          // Pre-inject F6-render parity styling (see state-colors.js).
+          svgText = svgText.replace(
+            /(<svg[^>]*>)/i,
+            '$1' + build2DPreviewStyleTag('rendered')
+          );
 
           if (typeof previewManager.show2DPreviewAs3DPlane === 'function') {
             await previewManager.show2DPreviewAs3DPlane(svgText, {
@@ -8284,6 +12006,7 @@ if (rounded) {
       // Use COGA-compliant friendly error translation (code-first, BR-5)
       const friendlyError = translateError(error.message, {
         code: error.code,
+        details: error.details,
       });
       updateStatus(`Error: ${friendlyError.title}`);
       _announceError(
@@ -8305,7 +12028,7 @@ if (rounded) {
       // Always restore button to correct state based on current conditions
       updatePrimaryActionButton();
     }
-  });
+  }
 
   // Cancel render button
   cancelRenderBtn.addEventListener('click', () => {
@@ -8372,7 +12095,7 @@ if (rounded) {
       a.click();
 
       URL.revokeObjectURL(url);
-      updateStatus(`Parameters exported to JSON`);
+      updateStatus(`Customizer settings exported to JSON`);
     });
   }
 
@@ -8399,73 +12122,226 @@ if (rounded) {
    */
   function generateManifestFromProject() {
     const state = stateManager.getState();
-    const fileName = state.uploadedFile?.name || 'design.scad';
+    const uiModeController = getUIModeController();
+    return buildProjectManifest({
+      uploadName: state.uploadedFile?.name || 'design.scad',
+      mainFilePath: state.mainFilePath,
+      projectFiles: state.projectFiles,
+      presetName: state.currentPresetName,
+      uiModePrefs: uiModeController.getPreferencesForExport(),
+      registryHiddenDefaults: uiModeController
+        .getRegistry()
+        .filter((p) => p.defaultHiddenInBasic)
+        .map((p) => p.id),
+    });
+  }
 
-    const manifest = {
-      forgeManifest: '1.0',
-      name: fileName.replace(/\.scad$/i, ''),
-      files: {
-        main: fileName,
+  const publishIncludeSettings = document.getElementById(
+    'publishIncludeSettings'
+  );
+  const downloadProjectZipBtn = document.getElementById(
+    'downloadProjectZipBtn'
+  );
+  const copySettingsLinkBtn = document.getElementById('copySettingsLinkBtn');
+
+  // ── The drawing editor's own door (IR-4) ────────────────────────────────
+  //
+  // Two triggers, one picker, one lazily-built editor. The module is imported
+  // on first use: nobody pays for it until they open it, and the core bundle
+  // has about 20 KB of gzip headroom left.
+  const svgEditFileInput = document.getElementById('svgEditFileInput');
+  const editDrawingSpotlightBtn = document.getElementById(
+    'editDrawingSpotlightBtn'
+  );
+  const editDrawingActionBtn = document.getElementById('editDrawingActionBtn');
+  let svgEditEntry = null;
+
+  async function getSvgEditEntry() {
+    if (svgEditEntry) return svgEditEntry;
+    const { createSvgEditEntry } = await import('./js/svg-edit-entry.js');
+    svgEditEntry = createSvgEditEntry({
+      announce: (message) => announceImmediate(message),
+      onError: (message) =>
+        showErrorToast({ title: 'Cannot Edit That File', message }),
+      // The DXF lane uses the app's own engine as its converter. Calls
+      // serialize behind the controller's queue, so a conversion cannot
+      // collide with a model render already in flight.
+      render: renderController
+        ? (scad, params, options) =>
+            renderController.render(scad, params, options)
+        : null,
+    });
+    return svgEditEntry;
+  }
+
+  // "Open with Forge" (IR-10). An installed app can be registered with the
+  // operating system for a set of file types, and the files then arrive here.
+  //
+  // WIRED BUT INERT ON PURPOSE. The registration lives in the web app
+  // manifest's `file_handlers` member, and that member is NOT in
+  // public/manifest.json - it stays out until somebody has installed Forge on
+  // a real machine and watched an "Open with" actually work. Registering file
+  // types with an operating system is not something to ship on a code read.
+  // The exact block to add is in the release record, and this consumer is
+  // ready for it: one JSON edit and the path below runs.
+  //
+  // Feature-detected, so this does nothing at all in Firefox or Safari, and
+  // nothing in Chrome or Edge until the app is installed.
+  (async () => {
+    const { initLaunchFiles } = await import('./js/launch-files.js');
+    initLaunchFiles({
+      // A launched file takes exactly the path an uploaded one takes.
+      openDesign: (file) => fileHandler.handleFile(file),
+      openDrawing: async (file) => {
+        announceImmediate(`Opening ${file.name} in the drawing editor.`);
+        const entry = await getSvgEditEntry();
+        await entry.openFile(file);
       },
-    };
+      // A launched file arrives earlier than any upload can - the launch IS
+      // the page load - so wait for the engine the same way the deep-link
+      // lifecycle does.
+      waitUntilReady: () =>
+        new Promise((resolve) => {
+          if (document.body.getAttribute('data-wasm-ready') === 'true') {
+            resolve();
+            return;
+          }
+          const observer = new MutationObserver(() => {
+            if (document.body.getAttribute('data-wasm-ready') === 'true') {
+              observer.disconnect();
+              resolve();
+            }
+          });
+          observer.observe(document.body, {
+            attributes: true,
+            attributeFilter: ['data-wasm-ready'],
+          });
+        }),
+      onUnsupported: (name) =>
+        showErrorToast({
+          title: 'Cannot Open That File',
+          message: `Forge cannot open ${name}. It works with .scad, .zip, .svg and .dxf files.`,
+        }),
+    });
+  })();
 
-    // Add companion files from the project
-    if (state.projectFiles && state.projectFiles.size > 0) {
-      const companions = [];
-      const presets = [];
+  if (svgEditFileInput) {
+    svgEditFileInput.addEventListener('change', async (event) => {
+      const file = event.target.files?.[0];
+      // Chosen and then chosen again: the input must not remember the last
+      // file, or picking the same one twice is silently ignored.
+      event.target.value = '';
+      if (!file) return;
+      announceImmediate(`Opening ${file.name} in the drawing editor.`);
+      const entry = await getSvgEditEntry();
+      await entry.openFile(file);
+    });
 
-      for (const filePath of state.projectFiles.keys()) {
-        // Skip the main .scad file
-        if (filePath === fileName) continue;
+    const openPicker = () => svgEditFileInput.click();
+    if (editDrawingSpotlightBtn) {
+      editDrawingSpotlightBtn.addEventListener('click', openPicker);
+    }
+    if (editDrawingActionBtn) {
+      editDrawingActionBtn.addEventListener('click', openPicker);
+    }
+  }
 
-        if (filePath.toLowerCase().endsWith('.json')) {
-          presets.push(filePath);
-        } else if (!filePath.toLowerCase().endsWith('.scad')) {
-          companions.push(filePath);
-        } else {
-          // Secondary .scad files are companions (included via use/include)
-          companions.push(filePath);
-        }
+  /**
+   * The address that reopens the loaded project, without any settings.
+   * A design opened from a local file has no such address: nothing on the web
+   * can fetch it, and saying so is better than composing a link that 404s.
+   * @returns {string|null}
+   */
+  function projectReopenUrl() {
+    const state = stateManager.getState();
+    const forgeBase = window.location.origin + window.location.pathname;
+    const manifestUrl = state.manifestOrigin?.url;
+    if (manifestUrl) {
+      return `${forgeBase}?manifest=${encodeURIComponent(manifestUrl)}`;
+    }
+    const exampleKey = fileHandler.getCurrentExampleKey?.();
+    if (exampleKey) {
+      return `${forgeBase}?example=${encodeURIComponent(exampleKey)}`;
+    }
+    return null;
+  }
+
+  async function copyTextWithFallback(text, promptLabel) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (_err) {
+      prompt(promptLabel, text);
+      return false;
+    }
+  }
+
+  const saveToFolderBtn = document.getElementById('saveToFolderBtn');
+  if (saveToFolderBtn) {
+    saveToFolderBtn.addEventListener('click', async () => {
+      const state = stateManager.getState();
+      if (!state.stl || !state.uploadedFile) {
+        showErrorToast({
+          title: 'Nothing to Save',
+          message: 'No file has been generated yet. Click Generate first.',
+        });
+        return;
+      }
+      const outputFormat =
+        document.getElementById('outputFormat')?.value ||
+        state.outputFormat ||
+        'stl';
+      // The same bytes the Download button would hand over. Saving to the
+      // folder must never mean rendering the model a second time.
+      const fileName = resolveDownloadFilename(
+        state.uploadedFile.name,
+        state.parameters,
+        outputFormat,
+        getBrailleDownloadName()
+      );
+      saveToFolderBtn.disabled = true;
+      try {
+        await folderSaveActions.saveExport({
+          fileName,
+          data: state.stl,
+          mainFilePath: state.mainFilePath,
+        });
+      } finally {
+        saveToFolderBtn.disabled = false;
+      }
+    });
+  }
+
+  if (copySettingsLinkBtn) {
+    copySettingsLinkBtn.addEventListener('click', async () => {
+      const state = stateManager.getState();
+      if (!state.uploadedFile) {
+        showErrorToast({
+          title: 'No File Loaded',
+          message: 'Upload a .scad or .zip file first.',
+        });
+        return;
       }
 
-      if (companions.length > 0) {
-        manifest.files.companions = companions;
+      const fragment = stateManager.getShareFragment();
+      const base = projectReopenUrl();
+      const link = `${base || window.location.origin + window.location.pathname}${fragment}`;
+      await copyTextWithFallback(link, 'Copy this link:');
+
+      if (!base) {
+        updateStatus(
+          'Link copied. It carries your settings only, so whoever opens it ' +
+            'needs to load this design first.'
+        );
+      } else if (!fragment) {
+        updateStatus(
+          'Link copied. Everything is at its default value, so it opens the ' +
+            'design as its author left it.'
+        );
+      } else {
+        updateStatus('Link copied. It opens this design with your settings.');
       }
-      if (presets.length > 0) {
-        manifest.files.presets = presets.length === 1 ? presets[0] : presets;
-      }
-    }
-
-    // Add defaults
-    manifest.defaults = {
-      autoPreview: true,
-    };
-
-    // If a preset is currently selected, include it as the default
-    if (
-      state.currentPresetName &&
-      state.currentPresetName !== 'design default values'
-    ) {
-      manifest.defaults.preset = state.currentPresetName;
-    }
-
-    // Include UI mode preferences so shared links apply the same panel visibility
-    const uiModePrefs = getUIModeController().getPreferencesForExport();
-    if (uiModePrefs.defaultMode !== 'advanced') {
-      manifest.defaults.uiMode = uiModePrefs.defaultMode;
-    }
-    const registryDefaults = getUIModeController()
-      .getRegistry()
-      .filter((p) => p.defaultHiddenInBasic)
-      .map((p) => p.id);
-    const prefsChanged =
-      JSON.stringify(uiModePrefs.hiddenPanelsInBasic.sort()) !==
-      JSON.stringify(registryDefaults.sort());
-    if (prefsChanged) {
-      manifest.defaults.hiddenPanels = uiModePrefs.hiddenPanelsInBasic;
-    }
-
-    return manifest;
+    });
   }
 
   if (publishProjectBtn && publishProjectModal) {
@@ -8480,6 +12356,22 @@ if (rounded) {
       }
 
       const manifest = generateManifestFromProject();
+
+      // The dialog used to hand out manifests its own loader refuses (D-95).
+      // Checking the emission against the same validator the loader runs makes
+      // that class of defect impossible to ship again.
+      const validation = validateManifest(manifest);
+      if (!validation.valid) {
+        showErrorToast({
+          title: 'Manifest Not Generated',
+          message:
+            `This project produced a manifest the loader would refuse: ` +
+            `${validation.errors.join(' ')} Nothing was copied. Please report ` +
+            `this so it can be fixed.`,
+        });
+        return;
+      }
+
       const manifestJson = JSON.stringify(manifest, null, 2);
 
       if (publishManifestOutput) {
@@ -8492,6 +12384,9 @@ if (rounded) {
       }
       if (publishRepoUrl) {
         publishRepoUrl.value = '';
+      }
+      if (publishIncludeSettings) {
+        publishIncludeSettings.checked = false;
       }
 
       openModal(publishProjectModal);
@@ -8532,7 +12427,7 @@ if (rounded) {
 
     // Generate shareable link when repo URL changes
     if (publishRepoUrl && publishShareLink && publishShareLinkContainer) {
-      publishRepoUrl.addEventListener('input', () => {
+      const composeShareLink = () => {
         let baseUrl = publishRepoUrl.value.trim();
         if (!baseUrl) {
           publishShareLinkContainer.classList.add('hidden');
@@ -8546,10 +12441,93 @@ if (rounded) {
 
         const manifestUrl = `${baseUrl}forge-manifest.json`;
         const forgeBase = window.location.origin + window.location.pathname;
-        const shareUrl = `${forgeBase}?manifest=${encodeURIComponent(manifestUrl)}`;
+        // The same serializer the address bar uses, so a copied link and the
+        // address bar can never mean different things.
+        const fragment = publishIncludeSettings?.checked
+          ? stateManager.getShareFragment()
+          : '';
+        const shareUrl = `${forgeBase}?manifest=${encodeURIComponent(manifestUrl)}${fragment}`;
 
         publishShareLink.value = shareUrl;
         publishShareLinkContainer.classList.remove('hidden');
+      };
+
+      publishRepoUrl.addEventListener('input', composeShareLink);
+      if (publishIncludeSettings) {
+        publishIncludeSettings.addEventListener('change', composeShareLink);
+      }
+    }
+
+    // Download the whole project as one archive
+    if (downloadProjectZipBtn) {
+      downloadProjectZipBtn.addEventListener('click', async () => {
+        const state = stateManager.getState();
+        if (!state.uploadedFile) {
+          showErrorToast({
+            title: 'No File Loaded',
+            message: 'Upload a .scad or .zip file first.',
+          });
+          return;
+        }
+
+        try {
+          const uiModeController = getUIModeController();
+          // asBundle: false - the archive ships the project UNPACKED beside
+          // its manifest, so the manifest has to name loose files even when
+          // the project itself arrived as a ZIP.
+          const manifest = buildProjectManifest({
+            uploadName: state.uploadedFile?.name || 'design.scad',
+            mainFilePath: state.mainFilePath,
+            projectFiles: state.projectFiles,
+            presetName: state.currentPresetName,
+            uiModePrefs: uiModeController.getPreferencesForExport(),
+            registryHiddenDefaults: uiModeController
+              .getRegistry()
+              .filter((panel) => panel.defaultHiddenInBasic)
+              .map((panel) => panel.id),
+            asBundle: false,
+          });
+
+          const provenance = buildProvenance({
+            manifestUrl: state.manifestOrigin?.url || null,
+            projectName: manifest.name,
+            author: state.manifestOrigin?.author || null,
+            appVersion: __APP_VERSION__,
+            presetName: state.currentPresetName,
+            parameters: stateManager.collectNonDefaultParameters() || {},
+            generatedAt: new Date().toISOString(),
+          });
+
+          const entries = buildProjectZipEntries({
+            projectFiles: state.projectFiles,
+            mainFilePath: manifest.files.main,
+            mainContent: state.uploadedFile?.content ?? state.scadContent,
+            manifest,
+            provenance,
+          });
+
+          const { default: JSZip } = await import('jszip');
+          const zip = new JSZip();
+          for (const entry of entries) {
+            zip.file(entry.path, entry.content, { base64: entry.base64 });
+          }
+          const blob = await zip.generateAsync({ type: 'blob' });
+
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `${manifest.name || 'project'}.zip`;
+          link.click();
+          URL.revokeObjectURL(url);
+
+          updateStatus(`Project archive downloaded, ${entries.length} files.`);
+        } catch (error) {
+          console.error('[Publish] Project ZIP failed:', error);
+          showErrorToast({
+            title: 'Download Failed',
+            message: `Could not build the project archive: ${error.message}`,
+          });
+        }
       });
     }
 
@@ -8725,6 +12703,10 @@ if (rounded) {
 
   // Add to Queue button
   addToQueueBtn?.addEventListener('click', () => {
+    // D-29's sibling (AF-5): a queued job snapshots the project's content at
+    // this moment, so an edit still inside the write-back window would be
+    // left behind for every render the job ever does.
+    publishEditorEdits();
     const state = stateManager.getState();
 
     if (!state.uploadedFile) {
@@ -8989,6 +12971,9 @@ if (rounded) {
   // Add to Comparison button
   const addToComparisonBtn = document.getElementById('addToComparisonBtn');
   addToComparisonBtn?.addEventListener('click', () => {
+    // D-29's sibling (AF-5): comparison variants render from the content
+    // captured here, same exposure as the queue.
+    publishEditorEdits();
     const state = stateManager.getState();
 
     if (!state.uploadedFile) {
@@ -9133,10 +13118,12 @@ if (rounded) {
       // File is loaded - show main interface, hide welcome screen
       mainInterface.classList.remove('hidden');
       welcomeScreen.classList.add('hidden');
+      setAppSurface('project');
     } else {
       // No file loaded - show welcome screen, hide main interface
       mainInterface.classList.add('hidden');
       welcomeScreen.classList.remove('hidden');
+      setAppSurface('welcome');
     }
 
     // Optionally clear variants or keep them
@@ -9299,6 +13286,16 @@ if (rounded) {
         : hasPresetSelected
           ? 'Delete current preset'
           : 'Select a preset first to delete';
+    }
+
+    // Copy Preset button (C4.4): duplicates any selection, including design
+    // defaults (that copies the schema defaults into a new preset)
+    const copyPresetBtn = document.getElementById('copyPresetBtn');
+    if (copyPresetBtn) {
+      copyPresetBtn.disabled = !hasPresetSelected || !hasModel;
+      copyPresetBtn.title = hasPresetSelected
+        ? 'Copy Preset — duplicate the current preset'
+        : 'Select a preset first to copy it';
     }
 
     // Copy preset name button (F30): enabled whenever something is selected,
@@ -9561,6 +13558,14 @@ if (rounded) {
     updatePresetControlStates();
   }
 
+  // D-47: user presets are keyed by the PROJECT's main file, not the archive
+  // that delivered it. A ZIP's filename changes when someone renames or
+  // re-downloads it; the main .scad path inside it does not. The desktop keys
+  // presets the same way (the sidecar .json sits beside the .scad).
+  function presetModelKey(state) {
+    return state.mainFilePath || state.uploadedFile?.name;
+  }
+
   // Update preset dropdown based on current model
   // Preserves current selection if the preset still exists
   // Applies the user's saved sort preference (shared with Import/Export modal)
@@ -9582,7 +13587,10 @@ if (rounded) {
       return;
     }
 
-    const modelName = state.uploadedFile.name;
+    const modelName = presetModelKey(state);
+    // Presets saved before D-47 sit under the archive's name; move them to
+    // the stable key once. No-op on every later call.
+    presetManager.adoptLegacyModelKey(state.uploadedFile.name, modelName);
     const currentSortOrder =
       localStorage.getItem(PRESET_SORT_KEY) || 'name-asc';
     const presets = presetManager.getSortedPresets(modelName, currentSortOrder);
@@ -9681,6 +13689,9 @@ if (rounded) {
         ];
       }
       _presetCombobox.update(comboOptions, currentPresetId || null);
+      // AF-10 (R-II P5b): at rest the desktop shows the active
+      // "design default values", not a search hint. Display only.
+      _presetCombobox.setRestingLabel('design default values');
       _presetCombobox.setDisabled(false);
     }
 
@@ -9795,7 +13806,7 @@ if (rounded) {
 
       // Auto-rename duplicates: "test1" → "test1 (1)" → "test1 (2)" etc.
       const existingPresets = presetManager.getPresetsForModel(
-        state.uploadedFile.name
+        presetModelKey(state)
       );
       let finalName = name;
       const existingNames = new Set(existingPresets.map((p) => p.name));
@@ -9824,7 +13835,7 @@ if (rounded) {
 
         // Save preset and capture returned object (contains id and name)
         const savedPreset = presetManager.savePreset(
-          state.uploadedFile.name,
+          presetModelKey(state),
           finalName,
           state.parameters,
           {
@@ -9938,7 +13949,7 @@ if (rounded) {
       return;
     }
 
-    const modelName = state.uploadedFile.name;
+    const modelName = presetModelKey(state);
     let currentSortOrder = localStorage.getItem(PRESET_SORT_KEY) || 'name-asc';
     const presets = presetManager.getSortedPresets(modelName, currentSortOrder);
 
@@ -10226,7 +14237,8 @@ if (rounded) {
 
             // Replace mode: confirm and clear existing presets first
             if (importMode === 'replace' && currentModelName) {
-              const existing = presetManager.getPresets(currentModelName) || [];
+              const existing =
+                presetManager.getPresetsForModel(currentModelName) || [];
               const realCount = existing.filter(
                 (p) => p.id !== 'design-defaults'
               ).length;
@@ -10313,25 +14325,30 @@ if (rounded) {
   // Save: update selected preset, Add: create new, Delete: remove selected
   const savePresetBtn = document.getElementById('savePresetBtn');
   const addPresetBtn = document.getElementById('addPresetBtn');
+  const copyPresetBtn = document.getElementById('copyPresetBtn');
   const deletePresetBtn = document.getElementById('deletePresetBtn');
   const managePresetsBtn = document.getElementById('managePresetsBtn');
   const presetSelect = document.getElementById('presetSelect');
 
-  // Save button: Update currently selected preset (not create new)
-  // "Pressing 'Save Preset' creates a new preset. It should simply save any parameter changes to the current preset"
-  savePresetBtn.addEventListener('click', () => {
+  /**
+   * Overwrite the currently selected preset with the current parameter
+   * values. Shared by the Save button and the unsaved-changes prompt when
+   * switching presets (C4.4).
+   * @returns {boolean} True if the preset was saved
+   */
+  function overwriteCurrentPreset() {
     const state = stateManager.getState();
-    const selectedPresetId = presetSelect?.value;
+    const selectedPresetId = presetSelect?.value || state.currentPresetId;
 
     if (!state.uploadedFile) {
       updateStatus('No model loaded', 'error');
-      return;
+      return false;
     }
 
     if (!selectedPresetId) {
       // Fallback: if no preset selected, show dialog (shouldn't happen if button is disabled)
       updateStatus('Select a preset first, or use + to create new', 'warning');
-      return;
+      return false;
     }
 
     // Block saving over "design default values" (immutable, desktop parity)
@@ -10340,17 +14357,17 @@ if (rounded) {
         'Design default values cannot be overwritten. Use + to create a new preset.',
         'warning'
       );
-      return;
+      return false;
     }
 
     // Get the preset to update
     const preset = presetManager.loadPreset(
-      state.uploadedFile.name,
+      presetModelKey(state),
       selectedPresetId
     );
     if (!preset) {
       updateStatus('Preset not found', 'error');
-      return;
+      return false;
     }
 
     try {
@@ -10370,7 +14387,7 @@ if (rounded) {
 
       // Save/overwrite the current preset with current parameters
       const savedPreset = presetManager.savePreset(
-        state.uploadedFile.name,
+        presetModelKey(state),
         preset.name, // Use existing name - this will overwrite
         state.parameters,
         {
@@ -10384,20 +14401,81 @@ if (rounded) {
 
       updateStatus(`Preset "${preset.name}" saved`, 'success');
       setCurrentPresetSelection(savedPreset);
+      return true;
+    } catch (error) {
+      updateStatus(`Failed to save preset: ${error.message}`, 'error');
+      return false;
+    }
+  }
 
+  // Save button: Update currently selected preset (not create new)
+  // "Pressing 'Save Preset' creates a new preset. It should simply save any parameter changes to the current preset"
+  savePresetBtn.addEventListener('click', () => {
+    if (overwriteCurrentPreset()) {
       // Brief visual feedback on button
       savePresetBtn.textContent = '✓';
       setTimeout(() => {
         savePresetBtn.textContent = '💾';
       }, 1500);
-    } catch (error) {
-      updateStatus(`Failed to save preset: ${error.message}`, 'error');
     }
   });
 
   // Add button: Create new preset (shows dialog)
   // "You use the '+' button to create a new preset based on the current customizer parameter settings"
   addPresetBtn.addEventListener('click', showSavePresetModal);
+
+  // Copy button (C4.4): duplicate the selected preset's SAVED values into a
+  // new preset named "<name> (copy)" and select it. Copying design defaults
+  // creates a preset from the schema defaults.
+  copyPresetBtn?.addEventListener('click', () => {
+    const state = stateManager.getState();
+    const selectedPresetId = presetSelect?.value;
+    if (!state.uploadedFile || !selectedPresetId) return;
+
+    let baseName;
+    let params;
+    let description;
+    if (selectedPresetId === DESIGN_DEFAULTS_ID) {
+      baseName = 'design default values';
+      params = { ...state.defaults };
+    } else {
+      const preset = presetManager.loadPreset(
+        presetModelKey(state),
+        selectedPresetId
+      );
+      if (!preset) {
+        updateStatus('Preset not found', 'error');
+        return;
+      }
+      baseName = preset.name;
+      params = { ...preset.parameters };
+      description = preset.description;
+    }
+
+    const existingNames = new Set(
+      (presetManager.getPresetsForModel(presetModelKey(state)) || []).map(
+        (p) => p.name
+      )
+    );
+    let copyName = `${baseName} (copy)`;
+    for (let i = 2; existingNames.has(copyName); i++) {
+      copyName = `${baseName} (copy ${i})`;
+    }
+
+    try {
+      const savedPreset = presetManager.savePreset(
+        presetModelKey(state),
+        copyName,
+        params,
+        { description }
+      );
+      updatePresetDropdown();
+      setCurrentPresetSelection(savedPreset);
+      updateStatus(`Preset copied to "${copyName}"`, 'success');
+    } catch (error) {
+      updateStatus(`Failed to copy preset: ${error.message}`, 'error');
+    }
+  });
 
   // Delete button: Delete currently selected preset
   deletePresetBtn.addEventListener('click', async () => {
@@ -10416,7 +14494,7 @@ if (rounded) {
 
     // Get preset info for confirmation
     const preset = presetManager.loadPreset(
-      state.uploadedFile.name,
+      presetModelKey(state),
       selectedPresetId
     );
     if (!preset) {
@@ -10439,7 +14517,7 @@ if (rounded) {
 
     try {
       const deleted = presetManager.deletePreset(
-        state.uploadedFile.name,
+        presetModelKey(state),
         selectedPresetId
       );
       if (deleted) {
@@ -10625,12 +14703,82 @@ if (rounded) {
     });
   });
 
+  /**
+   * Three-way unsaved-changes prompt shown when switching away from a
+   * preset with unsaved parameter changes (C4.4, Ken's preset contract).
+   * @param {string} presetName - Name of the preset with unsaved changes
+   * @returns {Promise<'save'|'discard'|'cancel'>}
+   */
+  function showUnsavedPresetDialog(presetName) {
+    return new Promise((resolve) => {
+      const dialog = document.createElement('dialog');
+      dialog.className = 'preset-import-mode-dialog';
+      dialog.setAttribute('aria-labelledby', 'unsavedPresetTitle');
+      dialog.innerHTML = `
+        <form method="dialog" class="import-mode-form">
+          <h3 id="unsavedPresetTitle" class="import-mode-title">Unsaved preset changes</h3>
+          <p class="import-mode-desc">The preset &ldquo;${escapeHtml(presetName)}&rdquo; has parameter changes that have not been saved.</p>
+          <div class="import-mode-actions">
+            <button type="submit" value="save" class="btn btn-primary">Save changes</button>
+            <button type="submit" value="discard" class="btn btn-outline">Discard changes</button>
+            <button type="submit" value="cancel" class="btn btn-outline">Cancel</button>
+          </div>
+        </form>`;
+      document.body.appendChild(dialog);
+      dialog.showModal();
+      dialog.addEventListener(
+        'close',
+        () => {
+          const choice = dialog.returnValue;
+          document.body.removeChild(dialog);
+          resolve(
+            choice === 'save' || choice === 'discard' ? choice : 'cancel'
+          );
+        },
+        { once: true }
+      );
+    });
+  }
+
   // Handle preset selection
   presetSelect.addEventListener('change', async (e) => {
     const presetId = e.target.value;
     if (!presetId) return;
 
     const state = stateManager.getState();
+
+    // Unsaved-changes guard (C4.4): switching away from a dirty user preset
+    // offers Save / Discard / Cancel instead of silently dropping edits
+    const previousPresetId = state.currentPresetId;
+    if (
+      isPresetDirty &&
+      previousPresetId &&
+      previousPresetId !== presetId &&
+      previousPresetId !== DESIGN_DEFAULTS_ID
+    ) {
+      const choice = await showUnsavedPresetDialog(
+        state.currentPresetName || 'current preset'
+      );
+      if (choice === 'cancel') {
+        presetSelect.value = previousPresetId;
+        _presetCombobox?.setValue(previousPresetId);
+        updatePresetControlStates();
+        return;
+      }
+      if (choice === 'save') {
+        const prevSelectValue = presetSelect.value;
+        presetSelect.value = previousPresetId;
+        const saved = overwriteCurrentPreset();
+        presetSelect.value = prevSelectValue;
+        if (!saved) {
+          _presetCombobox?.setValue(previousPresetId);
+          presetSelect.value = previousPresetId;
+          updatePresetControlStates();
+          return;
+        }
+      }
+      // 'discard' falls through and loads the newly selected preset
+    }
 
     // Handle "design default values" virtual preset (desktop OpenSCAD parity)
     if (presetId === DESIGN_DEFAULTS_ID) {
@@ -10705,7 +14853,7 @@ if (rounded) {
       return;
     }
 
-    const preset = presetManager.loadPreset(state.uploadedFile.name, presetId);
+    const preset = presetManager.loadPreset(presetModelKey(state), presetId);
 
     if (preset) {
       // Log compatibility info (desktop OpenSCAD parity: silently skip extras)
@@ -11009,7 +15157,11 @@ if (rounded) {
     const normalizedOutput = normalizeOpenSCADConsoleOutput(output);
 
     if (!append) {
-      consolePanel.clear();
+      // Append-only log (desktop parity): mark a new render section instead
+      // of wiping the log. The structured error table still reflects only
+      // the latest render so click-to-line never targets stale errors.
+      consolePanel.beginRenderSection();
+      errorLogPanel.clear();
     }
 
     if (!normalizedOutput || normalizedOutput.trim() === '') {
@@ -11104,6 +15256,11 @@ if (rounded) {
       .filter(Boolean);
   }
 
+  // Echo drawer fold state (C9): a fold the user chose survives re-renders
+  // with the same problems; only NEW warnings/errors force it back open.
+  let echoDrawerUserCollapsed = false;
+  let lastEchoImportantCount = 0;
+
   /**
    * Update the preview drawer to show ECHO, WARNING, and ERROR messages.
    * @param {{ type: 'echo'|'warning'|'error', text: string }[]} messages
@@ -11124,6 +15281,11 @@ if (rounded) {
       echoDrawer.classList.add('collapsed');
       echoDrawerLabel.textContent = 'No messages';
       echoMessagesEl.innerHTML = '';
+      echoDrawerUserCollapsed = false;
+      lastEchoImportantCount = 0;
+      document
+        .getElementById('echoDrawerToggle')
+        ?.setAttribute('aria-expanded', 'false');
       return;
     }
 
@@ -11160,18 +15322,36 @@ if (rounded) {
       })
       .join('\n');
 
-    // Show the drawer: always mark it visible so the badge/label appears,
-    // but only auto-expand (remove 'collapsed') when there are warnings or errors
-    echoDrawer.classList.add('visible');
-    if (warnCount > 0 || errorCount > 0) {
-      echoDrawer.classList.remove('collapsed');
-    }
+    // The drawer is 120px tall and holds one render's messages, so without
+    // this a design that echoes more than about six lines showed only its
+    // first few, every time (U-31). Same reasoning as the console modal: the
+    // content is replaced wholesale each render, so there is no reader
+    // position worth preserving and no scrolled-up pause.
+    echoMessagesEl.scrollTop = echoMessagesEl.scrollHeight;
 
-    const toggleBtn = document.getElementById('echoDrawerToggle');
-    if (toggleBtn) {
-      const isExpanded = warnCount > 0 || errorCount > 0;
-      toggleBtn.setAttribute('aria-expanded', String(isExpanded));
+    // Show the drawer: always mark it visible so the badge/label appears.
+    // Auto-expand only when problems are present AND either the user has
+    // not folded it, or NEW problems arrived since their fold.
+    echoDrawer.classList.add('visible');
+    const importantCount = warnCount + errorCount;
+    if (
+      importantCount > 0 &&
+      (!echoDrawerUserCollapsed || importantCount > lastEchoImportantCount)
+    ) {
+      echoDrawer.classList.remove('collapsed');
+      echoDrawerUserCollapsed = false;
     }
+    lastEchoImportantCount = importantCount;
+
+    // aria mirrors the REAL state — the class and attribute are never
+    // written from different truths (the old code marked echo-only output
+    // aria-expanded=false while the content stayed visible).
+    document
+      .getElementById('echoDrawerToggle')
+      ?.setAttribute(
+        'aria-expanded',
+        String(!echoDrawer.classList.contains('collapsed'))
+      );
 
     // Build accessible announcement
     const summary = [];
@@ -11207,6 +15387,12 @@ if (rounded) {
     });
 
     consoleOutput.innerHTML = highlightedLines.join('\n');
+
+    // Land on the newest output, like the desktop console (U-31). No
+    // scrolled-up pause here, unlike the Log view: this pane shows only the
+    // LATEST render's output rather than a running log, so when it is
+    // re-rendered the text a reader was holding their place in is gone.
+    consoleOutput.scrollTop = consoleOutput.scrollHeight;
   }
 
   // Open console modal
@@ -11224,6 +15410,13 @@ if (rounded) {
     // Show modal
     consoleOutputModal.classList.remove('hidden');
 
+    // renderConsoleOutput's scroll-to-newest ran against a hidden modal, where
+    // scrollHeight is 0, so it did nothing. Now that the modal has layout, put
+    // it on the newest output the way the desktop console does (U-31).
+    if (consoleOutput) {
+      consoleOutput.scrollTop = consoleOutput.scrollHeight;
+    }
+
     // Announce to screen readers
     announceImmediate('Console output panel opened');
   };
@@ -11236,12 +15429,17 @@ if (rounded) {
 
   echoDrawerToggleBtn?.addEventListener('click', () => {
     if (!echoDrawerEl) return;
-    const isCollapsed = echoDrawerEl.classList.contains('collapsed');
-    echoDrawerEl.classList.toggle('collapsed');
-    echoDrawerToggleBtn.setAttribute(
-      'aria-expanded',
-      isCollapsed ? 'true' : 'false'
-    );
+    const collapsed = echoDrawerEl.classList.toggle('collapsed');
+    echoDrawerUserCollapsed = collapsed;
+    echoDrawerToggleBtn.setAttribute('aria-expanded', String(!collapsed));
+
+    // A collapsed drawer has no layout, so the scroll-to-newest that ran when
+    // its messages arrived was a no-op against a scrollHeight of 0. Opening it
+    // is the first moment the write can land (U-31).
+    if (!collapsed) {
+      const messages = document.getElementById('echoMessages');
+      if (messages) messages.scrollTop = messages.scrollHeight;
+    }
   });
 
   // Echo drawer "View Full Console" button
@@ -11391,8 +15589,7 @@ if (rounded) {
   const collapseAllGroupsBtn = document.getElementById('collapseAllGroupsBtn');
   /** @param {boolean} open */
   const setAllParamGroupsOpen = (open) => {
-    const parametersContainer =
-      document.getElementById('parametersContainer');
+    const parametersContainer = document.getElementById('parametersContainer');
     if (!parametersContainer) return;
     const groups = parametersContainer.querySelectorAll('details.param-group');
     if (groups.length === 0) {
@@ -11406,12 +15603,11 @@ if (rounded) {
       // Per F5 acceptance criteria: focus the first parameter when
       // Expand-all is activated to give keyboard users a clear next
       // landing spot.
-      const firstControl =
-        /** @type {HTMLElement|null} */ (
-          parametersContainer.querySelector(
-            '.param-control input, .param-control select, .param-control textarea, .param-control button'
-          )
-        );
+      const firstControl = /** @type {HTMLElement|null} */ (
+        parametersContainer.querySelector(
+          '.param-control input, .param-control select, .param-control textarea, .param-control button'
+        )
+      );
       if (firstControl && typeof firstControl.focus === 'function') {
         firstControl.focus();
       }
@@ -11543,7 +15739,7 @@ if (rounded) {
     try {
       await navigator.clipboard.writeText(paramsJsonContent.value);
       paramsJsonCopy.textContent = '✅ Copied!';
-      updateStatus('Parameters JSON copied to clipboard');
+      updateStatus('Customizer JSON copied to clipboard');
       setTimeout(() => {
         paramsJsonCopy.textContent = '📋 Copy';
       }, 2000);
@@ -11768,6 +15964,54 @@ if (rounded) {
   keyboardConfig.on('render', () => {
     const state = stateManager.getState();
     if (state.uploadedFile && !primaryActionBtn.disabled) {
+      runFullRender();
+    }
+  });
+
+  // Folded out of the legacy keydown listener (G7). Each of these was a second
+  // document-level path this registry knew nothing about: invisible in the
+  // shortcuts modal, impossible to rebind, and — for Ctrl+Z — firing the
+  // parameter undo even while the user was typing in the code editor, because
+  // that listener had no text-entry guard. The registry skips every non-global
+  // shortcut inside an input or a contenteditable, so the editor keeps its own
+  // undo and nothing fires twice.
+  keyboardConfig.on('undo', () => {
+    const state = stateManager.getState();
+    if (state.uploadedFile && stateManager.canUndo()) {
+      performUndo();
+    }
+  });
+
+  const redoParameterChange = () => {
+    const state = stateManager.getState();
+    if (state.uploadedFile && stateManager.canRedo()) {
+      performRedo();
+    }
+  };
+  keyboardConfig.on('redo', redoParameterChange);
+  keyboardConfig.on('redoAlt', redoParameterChange);
+
+  keyboardConfig.on('renderAlt', () => {
+    const state = stateManager.getState();
+    if (state.uploadedFile && !primaryActionBtn.disabled) {
+      primaryActionBtn.click();
+    }
+  });
+
+  keyboardConfig.on('generateShortcut', () => {
+    const state = stateManager.getState();
+    if (
+      state.uploadedFile &&
+      primaryActionBtn.dataset.action === 'generate' &&
+      !primaryActionBtn.disabled
+    ) {
+      primaryActionBtn.click();
+    }
+  });
+
+  keyboardConfig.on('downloadShortcut', () => {
+    const state = stateManager.getState();
+    if (state.stl && primaryActionBtn.dataset.action === 'download') {
       primaryActionBtn.click();
     }
   });
@@ -11809,16 +16053,15 @@ if (rounded) {
     focusModeBtn?.click();
   });
 
-  keyboardConfig.on('toggleParameters', () => {
-    const sidebar = document.querySelector('.sidebar');
-    if (sidebar) {
-      sidebar.classList.toggle('collapsed');
-    }
-  });
+  // Ctrl+B and Ctrl+Alt+4 are both described as "Toggle Customizer panel" in
+  // the shortcuts modal, and both toggled the same non-existent `.sidebar`.
+  // They now do what they say; the duplicate binding is reported, not removed.
+  keyboardConfig.on('toggleParameters', () => toggleCustomizerPanel());
 
   keyboardConfig.on('resetView', () => {
     if (previewManager) {
       previewManager.resetCamera();
+      announceImmediate('View reset to default');
     }
   });
 
@@ -11853,8 +16096,8 @@ if (rounded) {
 
   keyboardConfig.on('viewCenter', () => {
     if (previewManager) {
-      previewManager.resetCamera();
-      announceImmediate('View centered');
+      previewManager.centerCamera();
+      announceImmediate('View centered on the model');
     }
   });
 
@@ -11936,22 +16179,37 @@ if (rounded) {
     }
   });
 
+  // Classic renders one fixed desktop appearance, so these shortcuts would
+  // flip a setting with no visible effect. Say so instead of no-opping.
+  const APPEARANCE_UNAVAILABLE_IN_CLASSIC =
+    'Not available in Classic mode. Classic uses the desktop light appearance — leave Classic to change the theme or high contrast.';
+
+  keyboardConfig.on('toggleHighContrast', () => {
+    if (document.body.dataset.uiMode === 'classic') {
+      announceImmediate(APPEARANCE_UNAVAILABLE_IN_CLASSIC);
+      updateStatus('High contrast is not available in Classic mode');
+      return;
+    }
+    const enabled = themeManager.toggleHighContrast();
+    announceImmediate(`High contrast mode ${enabled ? 'enabled' : 'disabled'}`);
+  });
+  keyboardConfig.on('searchParams', () => {
+    const searchInput = document.getElementById('paramSearchInput');
+    if (searchInput) {
+      searchInput.scrollIntoView({ block: 'nearest' });
+      searchInput.focus();
+    }
+  });
   keyboardConfig.on('toggleTheme', () => {
+    if (document.body.dataset.uiMode === 'classic') {
+      announceImmediate(APPEARANCE_UNAVAILABLE_IN_CLASSIC);
+      updateStatus('Theme switching is not available in Classic mode');
+      return;
+    }
     themeManager.cycleTheme();
   });
 
-  keyboardConfig.on('showShortcutsModal', () => {
-    const modal = document.getElementById('shortcutsModal');
-    const modalBody = document.getElementById('shortcutsModalBody');
-    if (modal && modalBody) {
-      // Initialize modal wiring once to avoid duplicate listeners.
-      if (!modal.dataset.initialized) {
-        initShortcutsModal(modalBody, () => closeModal(modal));
-        modal.dataset.initialized = 'true';
-      }
-      openModal(modal);
-    }
-  });
+  keyboardConfig.on('showShortcutsModal', _openShortcutsModal);
 
   // File action shortcuts
   keyboardConfig.on('newFile', () => fileActionsController.onNew());
@@ -11986,8 +16244,22 @@ if (rounded) {
   // Display action shortcuts
   keyboardConfig.on('viewAll', () => {
     if (previewManager?.mesh) {
-      previewManager.fitCameraToModel();
+      previewManager.viewAllCamera();
       announceImmediate('View fitted to model');
+    }
+  });
+  // Ctrl+] / Ctrl+[ (U2). The menu, the camera bar and these share one step
+  // (D-19), so every surface moves the camera by the same amount.
+  keyboardConfig.on('zoomIn', () => {
+    if (previewManager) {
+      previewManager.zoomCamera(CAMERA_ZOOM_STEP);
+      announceCameraAction('zoom-in');
+    }
+  });
+  keyboardConfig.on('zoomOut', () => {
+    if (previewManager) {
+      previewManager.zoomCamera(-CAMERA_ZOOM_STEP);
+      announceCameraAction('zoom-out');
     }
   });
   keyboardConfig.on('toggleAxes', () =>
@@ -12002,71 +16274,38 @@ if (rounded) {
   keyboardConfig.on('toggleConsole', () =>
     getUIModeController().togglePanelVisibility('consoleOutput')
   );
-  keyboardConfig.on('toggleErrorLog', () =>
-    getUIModeController().togglePanelVisibility('errorLog')
-  );
-  keyboardConfig.on('toggleCodeEditor', () =>
-    getUIModeController().togglePanelVisibility('codeEditor')
-  );
-  keyboardConfig.on('toggleCustomizer', () => {
-    const sidebar = document.querySelector('.sidebar');
-    if (sidebar) sidebar.classList.toggle('collapsed');
-  });
+  // 'errorLog' is not in PANEL_REGISTRY, so togglePanelVisibility used to
+  // early-return here and Ctrl+Alt+2 did nothing at all (F1). The Error-Log is
+  // a console tab in Forge and a strip pane in Classic; registry semantics fit
+  // neither, so it gets its own per-host handler.
+  keyboardConfig.on('toggleErrorLog', () => toggleErrorLog());
+  // These two now run the same command as their Window-menu items. Ctrl+Alt+4
+  // used to toggle a `.sidebar` element that exists nowhere in this app, so it
+  // was silently dead — and in Classic the Editor lives in the dock, which the
+  // panel registry cannot reach (G5).
+  keyboardConfig.on('toggleCodeEditor', () => toggleEditorPanel());
+  keyboardConfig.on('toggleCustomizer', () => toggleCustomizerPanel());
+  keyboardConfig.on('jumpToPanel', () => openJumpToPicker());
   keyboardConfig.on('nextPanel', () => getUIModeController().cyclePanel(1));
   keyboardConfig.on('prevPanel', () => getUIModeController().cyclePanel(-1));
 
-  keyboardConfig.on('find', () => {
+  const runEditorAction = (actionId) => {
     const modeManager = getModeManager();
     if (modeManager?.isExpertMode?.() && modeManager.getEditorInstance?.()) {
-      const editor = modeManager.getEditorInstance();
-      if (editor.getAction) {
-        const action = editor.getAction('actions.find');
-        if (action) action.run();
-      }
+      modeManager.getEditorInstance().performAction?.(actionId);
     }
-  });
+  };
+  keyboardConfig.on('find', () => runEditorAction('find'));
+  keyboardConfig.on('findNext', () => runEditorAction('findNext'));
+  keyboardConfig.on('findPrevious', () => runEditorAction('findPrevious'));
+  keyboardConfig.on('findReplace', () => runEditorAction('findReplace'));
 
-  keyboardConfig.on('findNext', () => {
-    const modeManager = getModeManager();
-    if (modeManager?.isExpertMode?.() && modeManager.getEditorInstance?.()) {
-      const editor = modeManager.getEditorInstance();
-      if (editor.getAction) {
-        const action = editor.getAction('editor.action.nextMatchFindAction');
-        if (action) action.run();
-      }
-    }
-  });
-
-  keyboardConfig.on('findPrevious', () => {
-    const modeManager = getModeManager();
-    if (modeManager?.isExpertMode?.() && modeManager.getEditorInstance?.()) {
-      const editor = modeManager.getEditorInstance();
-      if (editor.getAction) {
-        const action = editor.getAction(
-          'editor.action.previousMatchFindAction'
-        );
-        if (action) action.run();
-      }
-    }
-  });
-
-  keyboardConfig.on('findReplace', () => {
-    const modeManager = getModeManager();
-    if (modeManager?.isExpertMode?.() && modeManager.getEditorInstance?.()) {
-      const editor = modeManager.getEditorInstance();
-      if (editor.getAction) {
-        const action = editor.getAction('editor.action.startFindReplaceAction');
-        if (action) action.run();
-      }
-    }
-  });
-
-  // Expert Mode toggle (Ctrl+E) -- only in Advanced UI mode per COGA principle
+  // Code Editor toggle (Ctrl+E) -- not in Simplified UI mode per COGA principle
   keyboardConfig.on('toggleExpertMode', () => {
     if (
       _isEnabled('expert_mode') &&
       window._modeManager &&
-      getUIModeController()?.getMode() === 'advanced'
+      getUIModeController()?.getMode() !== 'simplified'
     ) {
       window._modeManager.toggleMode();
     }
@@ -12124,90 +16363,6 @@ if (rounded) {
       updateStatus('Gamepad disconnected');
     });
   }
-
-  // Global keyboard shortcuts (legacy - kept for backward compatibility)
-  document.addEventListener('keydown', (e) => {
-    const state = stateManager.getState();
-    if (firstVisitBlocking) {
-      return;
-    }
-
-    // Ctrl/Cmd + Z: Undo
-    if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-      if (state.uploadedFile && stateManager.canUndo()) {
-        e.preventDefault();
-        performUndo();
-      }
-    }
-
-    // Ctrl/Cmd + Shift + Z: Redo (also Ctrl/Cmd + Y)
-    if (
-      (e.ctrlKey || e.metaKey) &&
-      ((e.key === 'z' && e.shiftKey) || e.key === 'y')
-    ) {
-      if (state.uploadedFile && stateManager.canRedo()) {
-        e.preventDefault();
-        performRedo();
-      }
-    }
-
-    // Ctrl/Cmd + Enter: Trigger primary action (generate or download)
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-      if (state.uploadedFile && !primaryActionBtn.disabled) {
-        e.preventDefault();
-        primaryActionBtn.click();
-      }
-    }
-
-    // R key: Reset parameters (when not in input field)
-    if (e.key === 'r' && !e.ctrlKey && !e.metaKey) {
-      const target = e.target;
-      if (
-        target.tagName !== 'INPUT' &&
-        target.tagName !== 'TEXTAREA' &&
-        target.tagName !== 'SELECT'
-      ) {
-        if (state.uploadedFile) {
-          e.preventDefault();
-          resetBtn.click();
-        }
-      }
-    }
-
-    // D key: Download (when button is in download mode)
-    if (e.key === 'd' && !e.ctrlKey && !e.metaKey) {
-      const target = e.target;
-      if (
-        target.tagName !== 'INPUT' &&
-        target.tagName !== 'TEXTAREA' &&
-        target.tagName !== 'SELECT'
-      ) {
-        if (state.stl && primaryActionBtn.dataset.action === 'download') {
-          e.preventDefault();
-          primaryActionBtn.click();
-        }
-      }
-    }
-
-    // G key: Generate (when button is in generate mode)
-    if (e.key === 'g' && !e.ctrlKey && !e.metaKey) {
-      const target = e.target;
-      if (
-        target.tagName !== 'INPUT' &&
-        target.tagName !== 'TEXTAREA' &&
-        target.tagName !== 'SELECT'
-      ) {
-        if (
-          state.uploadedFile &&
-          primaryActionBtn.dataset.action === 'generate' &&
-          !primaryActionBtn.disabled
-        ) {
-          e.preventDefault();
-          primaryActionBtn.click();
-        }
-      }
-    }
-  });
 
   updateStatus('Ready - Upload a file to begin');
 }
@@ -12307,6 +16462,7 @@ function renderLibraryUI(detectedLibraries) {
 
     // Add event listener
     checkbox.addEventListener('change', () => {
+      if (checkbox.disabled) return;
       if (checkbox.checked) {
         libraryManager.enable(lib.id);
       } else {
@@ -12318,6 +16474,40 @@ function renderLibraryUI(detectedLibraries) {
       if (statusArea) {
         statusArea.textContent = `${lib.name} ${checkbox.checked ? 'enabled' : 'disabled'}`;
       }
+      // A library is a render input: re-preview so a model that needs a
+      // switched-off library says so instead of rendering from leftovers
+      // (D-42). The libraryManager subscription set up alongside the
+      // controller already refreshes its enabled-libraries snapshot.
+      autoPreviewController.onLibrariesChange(
+        stateManager.getState().parameters || {}
+      );
+    });
+  });
+
+  // AF-4: the list always showed the same four names whether or not this
+  // copy of the app can actually serve their files. Probe reality (each
+  // library's own manifest, the file the worker mounts from) and say so on
+  // the row. An ENABLED library stays operable even when unreachable, so it
+  // can still be switched off.
+  libraryManager.checkAvailability().then((availability) => {
+    allLibraries.forEach((lib) => {
+      if (availability[lib.id] !== false) return;
+      const checkbox = libraryList.querySelector(
+        `input[data-library-id="${lib.id}"]`
+      );
+      if (!checkbox) return; // list re-rendered since the probe started
+      const row = checkbox.closest('.library-item');
+      if (!row || row.querySelector('.library-unavailable-note')) return;
+      if (!checkbox.checked) {
+        checkbox.disabled = true;
+      }
+      row.classList.add('library-unavailable');
+      const note = document.createElement('span');
+      note.className = 'library-unavailable-note';
+      // D-35: new string, flagged in the ledger for owner review.
+      note.textContent =
+        'Not available right now: the library’s files could not be reached.';
+      row.querySelector('.library-info')?.appendChild(note);
     });
   });
 }
@@ -12330,6 +16520,14 @@ function getEnabledLibrariesForRender() {
 
 // Desktop reference geometry from CLI extracts (OpenSCAD 2026.01.03 Nightly, Manifold backend).
 // Source: docs/audit/testing-round-7/reference-data/cli-extracts/nightly/
+//
+// Facet counts here are ENGINE-VERSION-SPECIFIC tessellation bookkeeping;
+// the parity suite measured identical volume/bbox across engines while
+// facet counts differ by up to ~9% (see desktop-comparison-results.md
+// resolution addendum). Authoritative parity checking lives in
+// `npm run parity` (scripts/parity/), which compares dimensional metrics
+// with tolerances — this debug helper's ±10% triangle comparison remains
+// only as a quick in-browser sanity probe.
 const DESKTOP_REFERENCE_GEOMETRY = {
   '3d-printed-keyguard': {
     scenarioId: '3d-printed-keyguard',
@@ -12381,6 +16579,167 @@ if (typeof window !== 'undefined') {
   window.libraryManager = libraryManager;
 
   window.__forgeDebug = {
+    /**
+     * Current 3D viewport color-scheme key (a PREVIEW_COLORS name). Classic
+     * mode reports 'classic' — the desktop Cornfield scheme.
+     * @returns {string|null}
+     */
+    previewColorScheme() {
+      return previewManager?.currentTheme ?? null;
+    },
+
+    /**
+     * Where the active camera is (DP-19). A spec has to be able to prove
+     * that a key pressed inside the drawing editor did NOT move the model
+     * behind it, and a screenshot of a hidden canvas cannot say so.
+     * @returns {{x: number, y: number, z: number}|null}
+     */
+    cameraPosition() {
+      const camera = previewManager?.getActiveCamera?.();
+      if (!camera?.position) return null;
+      const { x, y, z } = camera.position;
+      return { x, y, z };
+    },
+
+    /**
+     * The reference overlay's live placement (DP-5). Where the image SITS is
+     * saved per project, and a spec has to be able to prove the numbers came
+     * back rather than infer it from a picture.
+     * @returns {Object|null}
+     */
+    overlayPlacement() {
+      const c = previewManager?.overlayConfig;
+      if (!c) return null;
+      return {
+        enabled: c.enabled,
+        offsetX: c.offsetX,
+        offsetY: c.offsetY,
+        rotationDeg: c.rotationDeg,
+        width: c.width,
+        height: c.height,
+        lockAspect: c.lockAspect,
+        zPreset: c.zPreset,
+        zCustomMm: c.zCustomMm,
+        zPosition: c.zPosition,
+      };
+    },
+
+    /**
+     * Mouse-wheel zoom focal point (UF-11). The Preferences checkbox became
+     * this setting's only control, so specs prove a change against the
+     * manager's state rather than a second checkbox.
+     * @returns {boolean|null}
+     */
+    zoomToCursor() {
+      return previewManager?.zoomToCursorEnabled ?? null;
+    },
+
+    /**
+     * Grid scene truth (UF-14). `visible` reads the helper actually in the
+     * scene, not the preference — the preference matrix asserts what is
+     * painted, exactly as axisTickOverlay() does for ticks.
+     * @returns {{enabled: boolean, visible: boolean|null, size: {widthMm: number, heightMm: number}|null}|null}
+     */
+    grid() {
+      if (!previewManager) return null;
+      return {
+        enabled: Boolean(previewManager.gridEnabled),
+        visible: previewManager.gridHelper?.visible ?? null,
+        size: previewManager.getGridSize?.() ?? null,
+      };
+    },
+
+    /**
+     * Export quality mode (UF-11). File > Export Quality became this
+     * setting's only control and it has no DOM element to read, so the
+     * memory-banner and recovery specs prove changes here.
+     * @returns {string}
+     */
+    exportQuality() {
+      return exportQualityMode;
+    },
+
+    /**
+     * Camera projection scene truth (UF-15). Projection is live camera
+     * state shared across the interfaces by order — never persisted — so
+     * the preference matrix proves flip continuity here rather than
+     * through either interface's own toggle button.
+     * @returns {string|null}
+     */
+    projection() {
+      return previewManager?.projectionMode ?? null;
+    },
+
+    /**
+     * What the axis-tick overlay actually put in the scene.
+     *
+     * `inScene` is read from the scene graph, not from the preference: the
+     * defect this exists to catch was the option reading as ON while the
+     * overlay had thrown and nothing was drawn. Asserting the toggle's own
+     * state would have reported success throughout.
+     *
+     * `colorHex` is the color the overlay actually baked at build time —
+     * the only way a spec can prove the U-13 theme bleed stays fixed
+     * (screenshots can't read a material). Null until a build succeeded.
+     *
+     * `distanceMm`/`tickStepMm` expose the UF-7 zoom-adaptive scale so a
+     * spec can prove the overlay re-derived itself after a zoom, and
+     * `nodes` names the depth-honest children (ticks, dashed negatives,
+     * line-glyph digits) actually present under the group.
+     *
+     * @returns {{enabled: boolean, inScene: boolean, ticks: number, labels: number, colorHex: number|null, distanceMm: number|null, tickStepMm: number|null, nodes: string[]}|null}
+     */
+    axisTickOverlay() {
+      const controller = getDisplayOptionsController();
+      const scene = previewManager?.scene;
+      if (!controller || !scene) return null;
+      const group = scene.getObjectByName('__axisTickOverlay');
+      return {
+        enabled: controller.get('axisMarks'),
+        inScene: Boolean(group),
+        ticks: controller._axisTickOverlay?.tickCount ?? 0,
+        labels: controller._axisTickOverlay?.labelCount ?? 0,
+        colorHex: controller._axisTickOverlay?.colorHex ?? null,
+        distanceMm: controller._axisTickOverlay?.distanceMm ?? null,
+        tickStepMm: controller._axisTickOverlay?.tickStepMm ?? null,
+        nodes: group ? group.children.map((c) => c.name).sort() : [],
+      };
+    },
+
+    /**
+     * The corner XYZ triad's live state (UF-7 P3). `present` reads the
+     * PreviewManager's own reference — the render pass draws exactly when
+     * that reference exists, so a spec asserting on it is asserting on what
+     * the second pass will actually paint. `letterColorHex` is the
+     * scheme-resolved color the letters were built with.
+     * @returns {{enabled: boolean, present: boolean, letterColorHex: number|null}|null}
+     */
+    axisTriad() {
+      const controller = getDisplayOptionsController();
+      if (!controller || !previewManager) return null;
+      return {
+        enabled: controller.get('axes'),
+        present: Boolean(previewManager._axisTriad),
+        letterColorHex: previewManager._axisTriad?.letterColorHex ?? null,
+      };
+    },
+
+    /**
+     * Where the camera is and what it orbits. Read-only, and the only way a
+     * parity test can prove that Center, View All and Reset View each moved
+     * the view differently rather than merely that the item was clickable.
+     * `target` is null when the browser has no WebGL, so there are no controls.
+     * @returns {{position: number[], target: number[]|null}|null}
+     */
+    cameraPose() {
+      const camera = previewManager?.getActiveCamera?.();
+      if (!camera) return null;
+      return {
+        position: camera.position.toArray(),
+        target: previewManager.controls?.target?.toArray() ?? null,
+      };
+    },
+
     async compareGeometry() {
       if (!renderController || !renderController.ready) {
         console.error(
@@ -12504,6 +16863,63 @@ if (typeof window !== 'undefined') {
       return { ...DESKTOP_REFERENCE_GEOMETRY };
     },
 
+    /**
+     * Headless render hook for the desktop-parity harness
+     * (scripts/parity/render-wasm.mjs). Renders arbitrary SCAD at FULL
+     * quality to binary STL without touching UI state — no project needs
+     * to be loaded.
+     *
+     * @param {Object} job
+     * @param {string} job.scadText - Main SCAD source
+     * @param {Object} [job.params] - Parameter values
+     * @param {Object} [job.paramTypes] - Schema types for formatting
+     * @param {Object} [job.files] - Companion files as { path: content }
+     * @param {string} [job.mainFile] - Main file path within files
+     * @returns {Promise<{base64Stl: string, stats: Object, consoleOutput: string}|{error: string}>}
+     */
+    async parityRender({
+      scadText,
+      params = {},
+      paramTypes = {},
+      files = null,
+      mainFile = null,
+    } = {}) {
+      if (!renderController || !renderController.ready) {
+        return { error: 'Render controller not ready. Initialize WASM first.' };
+      }
+      if (typeof scadText !== 'string' || scadText.length === 0) {
+        return { error: 'parityRender requires scadText' };
+      }
+      try {
+        const filesMap = files ? new Map(Object.entries(files)) : undefined;
+        const result = await renderController.renderFull(scadText, params, {
+          quality: RENDER_QUALITY.FULL,
+          outputFormat: 'stl',
+          paramTypes,
+          ...(filesMap ? { files: filesMap, mainFile } : {}),
+          libraries: [],
+        });
+
+        const bytes =
+          result.stl instanceof ArrayBuffer
+            ? new Uint8Array(result.stl)
+            : result.stl;
+        let binary = '';
+        const CHUNK = 0x8000;
+        for (let i = 0; i < bytes.length; i += CHUNK) {
+          binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+        }
+
+        return {
+          base64Stl: btoa(binary),
+          stats: result.stats || null,
+          consoleOutput: result.consoleOutput || '',
+        };
+      } catch (err) {
+        return { error: err?.message || String(err) };
+      }
+    },
+
     toggleCsgBypass(enable) {
       const key = DEBUG_PREFS.noCsgColors;
       const wasEnabled = isDebugPrefEnabled('noCsgColors');
@@ -12602,29 +17018,18 @@ if (typeof window !== 'undefined') {
      * @returns {string|null} The SCAD source text, or null if no model is loaded
      */
     exportScadSource(options = {}) {
-      const { injected = false, download = false } = options;
+      const { download = false } = options;
       const state = stateManager.getState();
       if (!state.uploadedFile?.content) {
         console.error('[ExportDiag] No model loaded.');
         return null;
       }
 
-      const rawSource =
+      // Renders always use unmodified source (KI-012); the old
+      // `injected` diagnostic mode died with injectCsgColors (F-4).
+      const source =
         autoPreviewController?.currentScadContent || state.uploadedFile.content;
-
-      let source;
-      let label;
-      if (injected) {
-        const hasColorCalls = AutoPreviewController.scadUsesColor(rawSource);
-        const cleaned = hasColorCalls
-          ? AutoPreviewController.stripColorCalls(rawSource)
-          : rawSource;
-        source = AutoPreviewController.injectCsgColors(cleaned);
-        label = 'csg-injected';
-      } else {
-        source = rawSource;
-        label = 'original';
-      }
+      const label = 'original';
 
       const csgBypass = isDebugPrefEnabled('noCsgColors');
 

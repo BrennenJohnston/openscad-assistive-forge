@@ -533,6 +533,120 @@ export function getTierPresets(tier) {
   return QUALITY_TIERS[tier] || QUALITY_TIERS[COMPLEXITY_TIER.STANDARD];
 }
 
+/** STANDARD-tier presets that several RENDER_QUALITY entries mirror. */
+const STANDARD_TIER = QUALITY_TIERS[COMPLEXITY_TIER.STANDARD];
+
+/**
+ * Legacy render quality presets (for backwards compatibility)
+ *
+ * Single source of truth for tessellation defaults — moved here verbatim
+ * from render-controller.js so the same numbers cannot drift between files
+ * (cross-file default drift is this project's #1 historical bug source).
+ * render-controller.js re-exports this for its existing import sites.
+ *
+ * NOTE: New code should use the adaptive quality tier system above.
+ * These presets are based on community standards for STANDARD complexity models.
+ *
+ * MANIFOLD OPTIMIZED: These values have been recalibrated for the Manifold
+ * rendering backend, which is 10-100x faster than CGAL for boolean operations.
+ *
+ * For adaptive quality based on model complexity and hardware, use:
+ * - getAdaptiveQualityConfig(scadContent, parameters)
+ * - getQualityPreset(tier, hardwareLevel, qualityLevel, mode)
+ */
+export const RENDER_QUALITY = {
+  /**
+   * Draft quality - very fast preview for any model.
+   * Numbers mirror STANDARD preview-low exactly, so derive them.
+   */
+  DRAFT: {
+    ...STANDARD_TIER.preview.low,
+    name: 'draft',
+  },
+  /**
+   * Low quality - fast exports, coarse tessellation.
+   * No exact QUALITY_TIERS counterpart (minFa 10 / 15s timeout are unique
+   * to this preset) — keep literal.
+   */
+  LOW: {
+    name: 'low',
+    maxFn: 48,
+    forceFn: false,
+    minFa: 10,
+    minFs: 2,
+    timeoutMs: 15000, // Reduced from 45s
+  },
+  /**
+   * Preview quality - balanced for interactive use (~50% of full quality)
+   * Targets approximately 50% triangle count vs full render:
+   * - For STANDARD models (export-medium $fn=192): $fn=96 gives ~50%
+   * - For COMPLEX models: $fn=96 capped by their lower limits, still rounded
+   * Close to STANDARD export-low but with a tighter 12s timeout — keep literal.
+   */
+  PREVIEW: {
+    name: 'preview',
+    maxFn: 96, // ~50% of STANDARD export-medium ($fn=192)
+    forceFn: false,
+    minFa: 8,
+    minFs: 1.5,
+    timeoutMs: 12000,
+  },
+  /**
+   * Medium quality - community standard (STANDARD tier export-medium).
+   */
+  MEDIUM: {
+    ...STANDARD_TIER.export.medium,
+    name: 'medium',
+  },
+  /**
+   * High quality - community high standard (STANDARD tier export-high).
+   */
+  HIGH: {
+    ...STANDARD_TIER.export.high,
+    name: 'high',
+  },
+  /**
+   * Desktop-equivalent - respects model's settings (OpenSCAD defaults)
+   * Matches native OpenSCAD behavior: $fn, $fa, $fs from model.
+   * maxFn: null has no QUALITY_TIERS counterpart — keep literal.
+   */
+  DESKTOP_DEFAULT: {
+    name: 'desktop',
+    maxFn: null,
+    forceFn: false,
+    minFa: 12,
+    minFs: 2,
+    timeoutMs: 30000, // Reduced from 60s
+  },
+  /**
+   * Full quality - for final export (respects model's settings)
+   */
+  FULL: {
+    name: 'full',
+    maxFn: null,
+    forceFn: false,
+    minFa: 12,
+    minFs: 2,
+    timeoutMs: 30000, // Reduced from 60s
+  },
+};
+
+/**
+ * Default preview-quality mode for the UI select (#previewQualitySelect).
+ *
+ * Single source of truth (index.html's `selected` attribute only covers
+ * pre-JS paint; main.js re-asserts this on boot).
+ *
+ * 'fidelity' maps to RENDER_QUALITY.DESKTOP_DEFAULT (maxFn: null): the
+ * model's own $fn/$fa/$fs are honored exactly like desktop OpenSCAD's F5,
+ * with OpenSCAD's stock $fa=12/$fs=2 only when the model declares neither.
+ * The previous 'auto' default silently downgraded complex models to
+ * complex-preview-low (forced $fn=10), which rendered curved designs as
+ * faceted blocks on first load — owner-reported against the keyguard.
+ * 'auto' remains available as the opt-in performance mode.
+ */
+export const PREVIEW_QUALITY_DEFAULT = 'fidelity';
+
 /**
  * Format quality preset for display
  * @param {Object} preset - Quality preset

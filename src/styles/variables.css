@@ -59,6 +59,23 @@
   --size-icon-lg: 24px;
   --size-icon-xl: 32px;
 
+  /* Tutorial card sizing (UF-38, D-65)
+     The card's body is a flex item with `flex: 1`, so it takes whatever the
+     header and footer leave. MEASURED at 412x810 on Firefox, the height a
+     phone actually has: the dock cap clipped 47px off the "Preview Settings
+     & Info" step with no affordance at all. The floor keeps the step title
+     (27px) and one line of body text visible whatever the arithmetic says;
+     the cue height is the fade that admits the rest is below the fold. */
+  --tutorial-body-min-height: 72px;
+
+  /* The fold cue's fade height, shared by every scroller that admits it has
+     more below: the tutorial card (UF-38) and the first-visit modal body
+     (UF-41). One value, so the two folds cannot start looking different from
+     each other. The tutorial's own name is kept as an alias — it is spelled
+     that way at six call sites and renaming them is not this release's job. */
+  --scroll-cue-height: 32px;
+  --tutorial-scroll-cue-height: var(--scroll-cue-height);
+
   /* Border Widths */
   --border-width-thin: 1px;
   --border-width-base: 2px;
@@ -92,22 +109,58 @@
 
   /* Z-Index Scale
    * CAUTION: The processing overlay (.processing-overlay) uses a hardcoded
-   * z-index: 10000 in components.css, placing it at the same level as the
-   * tutorial panel. Because modals sit at z: 1000, any overlay shown while
-   * a modal is open will cover the modal's buttons. Always gate overlay
-   * display behind waitForFirstVisitAcceptance() in JS. See the
-   * "FIRST-VISIT GATE" comment block in src/main.js. */
+   * z-index: 10000 in components.css, level with --z-index-app-overlay.
+   * Because modals sit at z: 1000, any overlay shown while a modal is open
+   * will cover the modal's buttons. Always gate overlay display behind
+   * waitForFirstVisitAcceptance() in JS. See the "FIRST-VISIT GATE" comment
+   * block in src/main.js. The tutorial family sits above all of this, and
+   * stands down rather than paint over a dialog - see D-67 below. */
   --z-index-base: 1;
   --z-index-sticky: 10;
   --z-index-dropdown: 100;
   --z-index-drawer: 900;
   --z-index-modal-backdrop: 950;
+  /* UF-22: the tutorial menu stays lit while the nudge dims the rest of the
+     page, so it sits between that backdrop and the dialog itself. */
+  --z-index-nudge-spotlight: 960;
   --z-index-modal: 1000;
   --z-index-skip-link: 9999;
-  --z-index-tutorial-backdrop: 9998;
-  --z-index-tutorial-spotlight: 9999;
-  --z-index-tutorial-panel: 10000;
-  --z-index-tutorial-minimized: 10000;
+  /* Full-screen app states that are not the tutorial but used to borrow its
+     panel token: the memory banner and the WASM loading overlay. The same
+     value they have always had; they simply stopped riding a name that is
+     about to mean something else. */
+  --z-index-app-overlay: 10000;
+  /* D-67 (UF-36). The tutorial family, in the order it paints.
+   *
+   * The elevations from --z-index-tutorial-highlight down were bare numbers in
+   * components.css and in tutorial-sandbox.js, against the house
+   * no-hardcoded-z-index rule.
+   *
+   * The overlay's own backdrop token moved from 9998 to 10005, and that is the
+   * substance of D-67 rather than a renumbering. `.tutorial-overlay` is a
+   * stacking context, so the value on IT - not the panel's inner z - is what
+   * decides whether the tour card can be reached over a highlighted target
+   * sitting at 10001 in the root context. At 9998 it could not, and the engine
+   * papered over that at runtime: adjustTutorialZIndex read the highlight z
+   * back off its own target and re-raised the whole overlay above it on EVERY
+   * step. That is how the veil arrived at 10003, painting over dialogs at
+   * --z-index-modal. Stating the floor here means the escalation is left to do
+   * only its real job - genuinely high-z ancestors in the page - and the
+   * painted order is unchanged.
+   *
+   * MEASURED before and after on the welcome tour: veil above the ring, card
+   * above both, the tour's own dialogs above the card, the Features Guide step
+   * identical. */
+  --z-index-tutorial-highlight: 10001;
+  --z-index-tutorial-highlight-modal: 10002;
+  --z-index-tutorial-guide-modal: 10003;
+  --z-index-tutorial-guide-content: 10004;
+  --z-index-tutorial-backdrop: 10005;
+  --z-index-tutorial-spotlight: 10006;
+  --z-index-tutorial-panel: 10007;
+  --z-index-tutorial-minimized: 10007;
+  --z-index-tutorial-dialog: 10008;
+  --z-index-tutorial-panel-over-modal: 10009;
 
   /* Drawer Dimensions */
   --drawer-collapsed-width: 48px;
@@ -236,6 +289,7 @@
   --color-accent-text: #ffffff;
   --color-accent-subtle: #e6f0ff;
   --color-accent-fg: #003d99; /* Same as accent: solid dark blue already passes AAA */
+  --color-on-accent-subtle: var(--color-accent-fg); /* 8.59:1 on #e6f0ff */
 
   /* Text on Solid Semantic Surfaces */
   --color-on-accent: #ffffff;
@@ -246,6 +300,10 @@
 
   /* Success - Darker green for 7:1 */
   --color-success: #08651a;
+  /* D-46 (UF-25): every block that overrides --color-success must also
+     override the solid-fill pair, or a component reading it falls back to
+     the default theme's green and high contrast is quietly lost. */
+  --color-success-solid: #08651a;
   --color-success-hover: #054d14;
   --color-success-text: #08651a;
   --color-success-bg: #c8e6c9;
@@ -280,6 +338,7 @@
 
   /* Interactive States */
   --color-hover-bg: #e8e8e8;
+  --color-hover-bg-strong: var(--color-hover-bg);
 
   /* Focus - Brand-neutral blue with 3:1 contrast */
   --color-focus: var(--color-accent);
@@ -309,6 +368,7 @@
   --color-accent-text: #000000;
   --color-accent-subtle: #003d66;
   --color-accent-fg: #66b3ff; /* Same as accent: light blue already passes on black */
+  --color-on-accent-subtle: var(--color-accent-fg); /* 5.09:1 on #003d66 */
 
   /* Text on Solid Semantic Surfaces */
   --color-on-accent: #000000;
@@ -319,6 +379,8 @@
 
   /* Success - Bright green for 7:1 */
   --color-success: #66ff66;
+  /* D-46: keep the high-contrast green for solid fills too. */
+  --color-success-solid: #66ff66;
   --color-success-hover: #7fff7f;
   --color-success-text: #66ff66;
   --color-success-bg: #0d3d0d;
@@ -353,6 +415,7 @@
 
   /* Interactive States */
   --color-hover-bg: #333333;
+  --color-hover-bg-strong: var(--color-hover-bg);
 
   /* Focus - Brand-neutral light blue with 3:1 contrast */
   --color-focus: #66b3ff;
@@ -381,6 +444,8 @@
     --color-accent-subtle: #003d66;
 
     --color-success: #66ff66;
+    /* D-46: keep the high-contrast green for solid fills too. */
+    --color-success-solid: #66ff66;
     --color-success-hover: #7fff7f;
     --color-success-text: #66ff66;
     --color-success-bg: #0d3d0d;
@@ -409,6 +474,7 @@
     --color-input-border-focus: #66b3ff;
 
     --color-hover-bg: #333333;
+    --color-hover-bg-strong: var(--color-hover-bg);
 
     --color-focus: #66b3ff;
     --focus-ring: 0 0 0 4px #66b3ff;
@@ -468,6 +534,7 @@
     --color-accent-hover: LinkText;
     --color-accent-text: Canvas;
     --color-accent-subtle: Canvas;
+    --color-on-accent-subtle: CanvasText;
 
     /* Text on Solid Semantic Surfaces */
     --color-on-accent: Canvas;
@@ -477,6 +544,8 @@
     --color-on-error: Canvas;
 
     --color-success: LinkText;
+    /* D-46: forced colours keep the system colour for solid fills. */
+    --color-success-solid: LinkText;
     --color-success-hover: LinkText;
     --color-success-text: CanvasText;
     --color-success-bg: Canvas;
@@ -505,6 +574,7 @@
     --color-input-border-focus: Highlight;
 
     --color-hover-bg: Canvas;
+    --color-hover-bg-strong: var(--color-hover-bg);
 
     --color-focus: Highlight;
 
@@ -579,9 +649,14 @@
     --color-text-primary: #000000;
     --color-text-secondary: #1a1a1a;
     --color-border: #000000;
+    --color-hover-bg-strong: var(--color-hover-bg);
     --color-border-light: #333333;
 
-    /* Stronger focus indicators */
+    /* Stronger focus indicators. The width token is what the global focus
+       rule reads; `--focus-ring` is the box-shadow form used elsewhere.
+       Both are needed - a mode that asks for more contrast and then draws
+       the same ring as everyone else has answered nobody. */
+    --focus-ring-width: 4px;
     --focus-ring: 0 0 0 4px rgba(0, 82, 204, 0.5);
   }
 
@@ -590,6 +665,7 @@
     --color-text-primary: #ffffff;
     --color-text-secondary: #f0f0f0;
     --color-border: #ffffff;
+    --color-hover-bg-strong: var(--color-hover-bg);
     --color-border-light: #cccccc;
     --focus-ring: 0 0 0 4px rgba(102, 179, 255, 0.6);
   }
@@ -600,6 +676,7 @@
       --color-text-primary: #ffffff;
       --color-text-secondary: #f0f0f0;
       --color-border: #ffffff;
+      --color-hover-bg-strong: var(--color-hover-bg);
       --color-border-light: #cccccc;
       --focus-ring: 0 0 0 4px rgba(102, 179, 255, 0.6);
     }

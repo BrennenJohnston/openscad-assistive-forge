@@ -21,6 +21,7 @@ const isCI = !!process.env.CI
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
   })
 })
 
@@ -72,6 +73,26 @@ const getColorDebugFixturePath = () =>
 const getSimple2dFixturePath = () =>
   path.join(process.cwd(), 'tests', 'fixtures', 'simple-2d.scad')
 
+// UF-9 P1: parameter groups render as <details> collapsed by default
+// (F5, owner decision 2026-05-15), and single-file uploads can raise the
+// save-project prompt whose dialog intercepts clicks. Clear the prompt,
+// then expand the groups so the typed group-scoped control assertions
+// below still prove the parameter UI rendered.
+async function expandParamGroups(page) {
+  await expect(page.locator('.param-group').first()).toBeAttached({
+    timeout: 10_000,
+  })
+  const notNow = page.locator('#saveProjectNotNow')
+  try {
+    await notNow.waitFor({ state: 'visible', timeout: 2000 })
+    await notNow.click()
+    await notNow.waitFor({ state: 'hidden', timeout: 3000 })
+  } catch {
+    // Save prompt did not appear (or was already dismissed)
+  }
+  await page.locator('#expandAllGroupsBtn').click()
+}
+
 test.describe('Generic Project Baseline', () => {
   test.describe.configure({ timeout: 150_000 })
 
@@ -111,6 +132,7 @@ test.describe('Generic Project Baseline', () => {
     }
 
     // Parameter controls should render — generic project has numeric params
+    await expandParamGroups(page)
     await expect(
       page
         .locator(
@@ -148,6 +170,7 @@ test.describe('Generic Project Baseline', () => {
     })
 
     // Should show generic param controls (width, height, shape_type)
+    await expandParamGroups(page)
     await expect(
       page
         .locator(
@@ -181,6 +204,7 @@ test.describe('Generic Project Baseline', () => {
     })
 
     // Should show param controls including color-related params
+    await expandParamGroups(page)
     await expect(
       page.locator('.param-group .param-control').first()
     ).toBeVisible({ timeout: 10_000 })

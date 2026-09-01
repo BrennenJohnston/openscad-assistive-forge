@@ -109,6 +109,7 @@ test.describe('COFF Color Probe', () => {
     await page.addInitScript(() => {
       localStorage.clear();
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
     });
   });
 

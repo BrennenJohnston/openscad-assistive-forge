@@ -4,22 +4,38 @@ Notes on keeping the app fast.
 
 ## Bundle size
 
-Current bundle (v4.3.0):
-- `index.js` ~231.8KB gzipped (main), ~187KB gzipped (Three.js chunk)
-- Three.js lazy-loaded via code splitting
-- OpenSCAD WASM vendored in `public/wasm/` (~2MB, loaded on first render)
+Measured 2026-08-16 with `npm run build && npm run check-bundle`, all figures
+gzipped:
 
-Lighthouse performance score: 100
+| Chunk | Size | Budget |
+|---|---|---|
+| Core app (`index-*.js`) | 475 KB | 500 KB |
+| Main CSS | 58 KB | 150 KB |
+| Three.js chunk | 122 KB | -- |
+| `index.html` | 58 KB | -- |
+| ajv | 37 KB | -- |
+| jszip | 29 KB | -- |
+| **All assets together** | **844 KB** | 1 MB |
 
-To analyze the bundle:
+**The core app is at 95% of its budget.** Adding a dependency is a real
+decision, not a formality -- `npm run check-bundle` fails the required Unit
+Tests job when a budget is exceeded.
+
+`index.html` is large because the entire UI markup lives in it.
+
+The OpenSCAD WASM binary is separate from all of this: about 10 MB, vendored in
+`public/wasm/openscad-official/`, fetched on first render and then cached by the
+service worker.
+
+To look at what is in the bundle:
 
 ```bash
 npm run build
-du -sh dist/
+npm run check-bundle
 npx vite-bundle-visualizer
 ```
 
-Keep Three.js lazy-loaded. Import only what you need from large libraries.
+Keep Three.js in its own chunk. Import only what you need from large libraries.
 
 ## Worker architecture
 
@@ -134,7 +150,18 @@ The memory monitoring feature is controlled by the `memory_monitoring` feature f
 
 ## Browser differences
 
-The current WASM build (`openscad-wasm-prebuilt@1.2.0`) is single-threaded and does not use `SharedArrayBuffer` for threading. COOP/COEP headers are still served for cross-origin isolation.
+The WASM build is the **official OpenSCAD 2026.04.03 web build with Manifold**,
+vendored in `public/wasm/openscad-official/`. It replaced the
+`openscad-wasm-prebuilt@1.2.0` npm package, which had no Manifold and was slow
+on complex models; `public/wasm/README.txt` records the swap and why.
+
+It is single-threaded and does not use `SharedArrayBuffer` for threading.
+COOP/COEP headers are still served for cross-origin isolation, which costs
+nothing and keeps the door open if a threaded build ever lands.
+
+> The threading analysis in `docs/research/WASM_THREADING_ANALYSIS.md` was
+> carried out against the **old** package. Its conclusion is believed to hold
+> for the current binary but has not been re-tested against it.
 
 Safari: generally slower WASM execution than Chrome. Test iOS Safari separately for memory constraints.
 

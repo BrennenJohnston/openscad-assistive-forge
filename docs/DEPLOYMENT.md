@@ -6,9 +6,9 @@ This guide covers deploying OpenSCAD Assistive Forge to various hosting platform
 
 OpenSCAD Assistive Forge is a static Vite site with special requirements:
 
-- **Cross-Origin Isolation**: Required for SharedArrayBuffer (WASM threading)
+- **Cross-Origin Isolation**: recommended, not required -- see below
 - **Security Headers**: CSP, HSTS, and other protective headers
-- **Large Assets**: ~15-30 MB WASM files need proper caching
+- **Large Assets**: the OpenSCAD WASM binary is about 10 MB and needs proper caching
 
 ---
 
@@ -89,7 +89,23 @@ These headers are configured in `public/_headers` and copied to `dist/` during b
   Cross-Origin-Resource-Policy: cross-origin
 ```
 
-**Why needed:** OpenSCAD WASM uses SharedArrayBuffer for performance. Without these headers, `window.crossOriginIsolated` is `false` and WASM fails.
+**Why we send them:** they enable `SharedArrayBuffer`, which a future threaded
+OpenSCAD build could use. They cost nothing to send and keep that door open.
+
+**They are not required.** MEASURED on 2026-08-04 against a static server
+sending no COOP or COEP headers at all: `crossOriginIsolated` was `false` and
+`SharedArrayBuffer` was unavailable, and the WASM engine still initialised, the
+preview still rendered real geometry, and there were no console errors -- both
+on a cold visit and on an offline reload afterwards. The full record is in
+[`audit/offline-pwa-spike-results.md`](./audit/offline-pwa-spike-results.md).
+
+This matters for anyone hosting on an intranet share or a locked-down file
+server that cannot set headers: **that works.** Serve the contents of `dist/`
+over plain HTTP with correct MIME types, have the user open it once while
+connected, and the service worker takes care of the rest.
+
+(`file://` is a different matter and is out of scope -- browsers refuse ES
+modules from it.)
 
 ### Security Headers (Recommended)
 
@@ -103,7 +119,7 @@ The CSP is in **enforcing mode**. See `public/_headers` for the full policy. Key
   Referrer-Policy: strict-origin-when-cross-origin
 ```
 
-`X-Frame-Options: SAMEORIGIN` allows same-origin iframe embedding (vs `DENY` which blocks all). CodeMirror 6 uses constructable stylesheets, so `style-src` does not need `'unsafe-inline'`.
+`X-Frame-Options: SAMEORIGIN` allows same-origin iframe embedding (vs `DENY` which blocks all). `style-src` does not need `'unsafe-inline'`: CodeMirror injects its CSS in a `<style>` element that this policy blocks, and the app re-homes those rules into a constructable stylesheet, which CSP does not govern. Expect exactly one `style-src-elem` console violation, from that blocked element.
 
 ### SPA Routing
 
@@ -413,6 +429,34 @@ Keep a ZIP of the last known-good `dist/` folder. In emergency:
    - `LiberationSans-Bold.ttf`
    - `LiberationSans-Italic.ttf`
    - `LiberationMono-Regular.ttf`
+
+### Cloudflare Web Analytics beacon blocked (expected)
+
+The deployed console may show a CSP violation for
+`https://static.cloudflareinsights.com/beacon.min.js`. Cloudflare Pages
+auto-injects its Web Analytics beacon into served pages; our CSP
+(`public/_headers`) blocks third-party scripts **by design** and must not be
+loosened for it (project security rule).
+
+**Owner decision (2026-08-05): Web Analytics stays DISABLED for now.**
+To turn off the injection (dashboard, not repo — no rebuild needed):
+either *Workers & Pages → this project → Metrics tab → Web Analytics →
+Disable*, or *account sidebar → Analytics & Logs → Web Analytics →
+Manage site (openscad-assistive-forge.pages.dev) → Remove site / turn off
+Automatic setup*. Verify with a hard refresh: the beacon CSP violation
+disappears. `wrangler.toml` carries no analytics config.
+
+**Future work — privacy-first usage telemetry (planned, not started):**
+a FIRST-PARTY anonymous ping instead of any third-party script: a
+same-origin Pages Function feeding Workers Analytics Engine with a small
+owner-approved event set (`app_loaded`, `wasm_ready`, `wasm_failed`,
+`render_ok`, `render_failed` + coarse browser family / error category).
+No cookies, no identifiers, no IPs stored, no CSP change (same-origin
+`connect-src 'self'` already covers it). Counts app loads and
+success/failure rates — not distinct individuals (deduplicating people
+would require an identifier, which we deliberately do not use). Ship
+with a one-line transparency note in the use statement, text
+owner-approved before release.
 
 ### CSP Violations
 

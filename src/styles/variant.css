@@ -58,12 +58,14 @@
   --color-accent-text: #000000;
   --color-accent-subtle: #001a00;
   --color-accent-fg: #00ff00;
+  --color-on-accent-subtle: var(--color-accent-fg); /* 13.33:1 on #001a00 */
   --color-on-accent: #000000;
 
   --color-border: #00ff00;
   --color-border-light: #009900;
   --color-border-hover: #00ff00;
   --color-hover-bg: #1a4d1a;
+  --color-hover-bg-strong: var(--color-hover-bg);
   --color-focus: #00ff00;
 
   /* Error/Warning/Success in monochrome green (all use green tints) */
@@ -78,6 +80,8 @@
   --color-warning-text: var(--color-text-primary);
   --color-on-warning: var(--color-accent-text);
   --color-success: #00ff00;
+  /* D-46 (UF-25): mono keeps its phosphor green for solid success fills. */
+  --color-success-solid: #00ff00;
   --color-success-bg: #001a00;
   --color-success-hover: var(--color-accent-hover);
   --color-success-text: var(--color-text-primary);
@@ -136,6 +140,7 @@
   --color-accent-text: #000000;
   --color-accent-subtle: #1a0800;
   --color-accent-fg: #ffb000;
+  --color-on-accent-subtle: var(--color-accent-fg); /* 10.63:1 on #1a0800 */
   --color-on-accent: #000000;
   --color-on-success: #000000;
   --color-on-warning: #000000;
@@ -147,6 +152,7 @@
   --color-border-light: #997200;
   --color-border-hover: #ffb000;
   --color-hover-bg: #1a1000;
+  --color-hover-bg-strong: var(--color-hover-bg);
   --color-focus: #ffb000;
 
   /* Error/Warning/Success in monochrome amber */
@@ -155,6 +161,7 @@
   --color-warning: #ffb000;
   --color-warning-bg: #1a1000;
   --color-success: #ffb000;
+  --color-success-solid: #ffb000;
   --color-success-bg: #0a0800;
 }
 
@@ -194,6 +201,18 @@
   background: var(--color-accent);
   color: var(--color-accent-text);
   border-color: var(--color-accent);
+}
+
+/* D-55 pattern: the generic mono hover above repaints every button's
+ * surface with --color-hover-bg and nothing else. Under a primary's
+ * accent-text (black) label that pair measures 1.11:1 — the label
+ * vanishes the moment a mouse touches it (found by the City Walk axe
+ * scan, which hovers a real button). Completing the pair flips the
+ * label to the accent, the same hover-bg/accent pairing the header
+ * toggles measure at 14.41:1 (green) and 7.79:1 (amber); icons follow
+ * via currentColor. */
+:root[data-ui-variant='mono'] .btn-primary:hover:not(:disabled) {
+  color: var(--color-accent);
 }
 
 :root[data-ui-variant='mono'] .btn-icon-svg {
@@ -629,7 +648,6 @@
     border: 1px solid var(--color-border) !important;
     border-radius: 0 !important;
   }
-
 }
 
 /* Preview status bar */
@@ -707,7 +725,7 @@
 }
 
 /* Console echo line styling for mono variant */
-:root[data-ui-variant='mono'] .console-output .echo-line {
+:root[data-ui-variant='mono'] .console-modal-output .echo-line {
   background: transparent;
   border-left: 2px solid var(--color-accent);
   color: var(--color-accent);

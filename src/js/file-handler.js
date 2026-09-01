@@ -10,6 +10,10 @@
 import { stateManager } from './state.js';
 import { extractParameters } from './parser.js';
 import {
+  FOLDER_IMPORT_LIMITS,
+  FILE_SIZE_LIMITS,
+} from './validation-constants.js';
+import {
   renderParameterUI,
   setGalleryOptions,
   clearGalleryOptions,
@@ -35,12 +39,17 @@ import {
   getAdaptiveQualityConfig,
 } from './quality-tiers.js';
 import { PreviewManager } from './preview.js';
+import { getViewportControlPanel } from './viewport-control-panel.js';
 import { PREVIEW_STATE } from './auto-preview-controller.js';
 import { LIBRARY_DEFINITIONS } from './library-manager.js';
 import { presetManager } from './preset-manager.js';
 import { closeModal } from './modal-manager.js';
 import { themeManager } from './theme-manager.js';
 import { getUIModeController } from './ui-mode-controller.js';
+import {
+  collapseCustomizerGroups,
+  getClassicLayoutController,
+} from './classic-layout-controller.js';
 import {
   detectIncludeUse,
   detectRequiredCompanionFiles,
@@ -49,17 +58,32 @@ import { getErrorLogPanel, ERROR_LOG_TYPE } from './error-log-panel.js';
 import * as SharedImageStore from './shared-image-store.js';
 import { importProjectFromFiles } from './storage-manager.js';
 import { addProjectFile, getProjectFiles } from './saved-projects-manager.js';
+import {
+  applyOverlaySettings,
+  readOverlaySettings,
+  registerOverlaySettingsHost,
+} from './overlay-settings.js';
+import { getScaleFactor } from './unit-sync.js';
 import { showMissingDependenciesDialog, showConfirmDialog } from './dialogs.js';
+import { getEditorStateManager } from './editor-state-manager.js';
 import { escapeHtml } from './html-utils.js';
-import { announceError as _announceError } from './announcer.js';
+import {
+  announceError as _announceError,
+  announceImmediate,
+} from './announcer.js';
+import { setStlViewActive } from './stl-view-mode.js';
+import { showWorkflowProgress } from './workflow-progress.js';
 import { showErrorModal, showErrorToast } from './error-translator.js';
 import { closeTutorial } from './tutorial-sandbox.js';
 import { sanitizeUrlParams } from './file-param-resolver.js';
 import { applyToolbarModeVisibility } from './toolbar-menu-controller.js';
+import { setAppSurface } from './app-surface.js';
 import { isEnabled } from './feature-flags.js';
+import { exampleDefinitions, programDefinitions } from './tile-registry.js';
 import { prepareSvg, needsPreparation } from './svg-preparer.js';
 import { svgToDataUrl, dataUrlToText } from './svg-text-encoding.js';
 import { STORAGE_KEY_MODEL_COLOR } from './storage-keys.js';
+import { readScopedPref } from './ui-scoped-prefs.js';
 import { initBraillePanel, destroyBraillePanel } from './braille-panel.js';
 
 let currentExampleKey = null;
@@ -145,121 +169,9 @@ async function restoreGalleryFromManifest(exampleKey) {
 // Example definitions
 // ---------------------------------------------------------------------------
 
-export const EXAMPLE_DEFINITIONS = {
-  'simple-box': {
-    path: '/examples/simple-box/simple_box.scad',
-    name: 'simple_box.scad',
-  },
-  cylinder: {
-    path: '/examples/parametric-cylinder/parametric_cylinder.scad',
-    name: 'parametric_cylinder.scad',
-  },
-  'library-test': {
-    path: '/examples/library-test/library_test.scad',
-    name: 'library_test.scad',
-  },
-  'colored-box': {
-    path: '/examples/colored-box/colored_box.scad',
-    name: 'colored_box.scad',
-  },
-  'multi-file-box': {
-    path: '/examples/multi-file-box.zip',
-    name: 'multi-file-box.zip',
-  },
-  'cable-organizer': {
-    path: '/examples/cable-organizer/cable_organizer.scad',
-    name: 'cable_organizer.scad',
-  },
-  'honeycomb-grid': {
-    path: '/examples/honeycomb-grid/honeycomb_grid.scad',
-    name: 'honeycomb_grid.scad',
-  },
-  'logo-plate': {
-    path: '/examples/logo-plate/logo_plate.scad',
-    name: 'logo_plate.scad',
-    description: 'Logo Plate (SVG Import)',
-  },
-  'nasif-charm-maker': {
-    path: '/examples/nasif-charm-maker/nasif_charm_maker.scad',
-    name: 'nasif_charm_maker.scad',
-    description: 'Charm Customizer',
-    manifest: '/examples/nasif-charm-maker/manifest.json',
-    additionalFiles: [
-      '/examples/nasif-charm-maker/svg-library/heart.svg',
-      '/examples/nasif-charm-maker/svg-library/star.svg',
-      '/examples/nasif-charm-maker/svg-library/paw.svg',
-      '/examples/nasif-charm-maker/svg-library/lightning.svg',
-      '/examples/nasif-charm-maker/svg-library/music-note.svg',
-      '/examples/nasif-charm-maker/svg-library/smiley.svg',
-      '/examples/nasif-charm-maker/svg-library/moon.svg',
-      '/examples/nasif-charm-maker/svg-library/flower.svg',
-      '/examples/nasif-charm-maker/svg-library/diamond.svg',
-      '/examples/nasif-charm-maker/svg-library/crown.svg',
-      '/examples/nasif-charm-maker/svg-library/leaf.svg',
-      '/examples/nasif-charm-maker/svg-library/sun.svg',
-    ],
-  },
-  'braille-wedge-card': {
-    path: '/examples/braille-wedge-card/braille_wedge_card.scad',
-    name: 'braille_wedge_card.scad',
-    description: 'Braille Card Customizer',
-    manifest: '/examples/braille-wedge-card/manifest.json',
-  },
-  'braille-charm': {
-    path: '/examples/braille-charm/braille_charm.scad',
-    name: 'braille_charm.scad',
-    description: 'Braille Charm',
-    manifest: '/examples/braille-charm/manifest.json',
-    additionalFiles: [
-      '/examples/braille-charm/presets/large-charm.json',
-      '/examples/braille-charm/presets/small-charm.json',
-    ],
-  },
-  'braille-sign': {
-    path: '/examples/braille-sign/braille_sign.scad',
-    name: 'braille_sign.scad',
-    description: 'Braille Sign',
-    manifest: '/examples/braille-sign/manifest.json',
-  },
-  'q-charm': {
-    path: '/examples/q-charm/q_charm.scad',
-    name: 'q_charm.scad',
-    description: 'Bracelet Clip Charm',
-    manifest: '/examples/q-charm/manifest.json',
-    additionalFiles: [
-      '/examples/q-charm/q_Charm_L.dxf',
-      '/examples/q-charm/presets/large-charm.json',
-      '/examples/q-charm/presets/small-charm.json',
-      '/examples/nasif-charm-maker/svg-library/smiley.svg',
-      '/examples/nasif-charm-maker/svg-library/heart.svg',
-      '/examples/nasif-charm-maker/svg-library/star.svg',
-      '/examples/nasif-charm-maker/svg-library/paw.svg',
-      '/examples/nasif-charm-maker/svg-library/lightning.svg',
-      '/examples/nasif-charm-maker/svg-library/music-note.svg',
-      '/examples/nasif-charm-maker/svg-library/moon.svg',
-      '/examples/nasif-charm-maker/svg-library/flower.svg',
-      '/examples/nasif-charm-maker/svg-library/diamond.svg',
-      '/examples/nasif-charm-maker/svg-library/crown.svg',
-      '/examples/nasif-charm-maker/svg-library/leaf.svg',
-      '/examples/nasif-charm-maker/svg-library/sun.svg',
-    ],
-  },
-};
+export const EXAMPLE_DEFINITIONS = exampleDefinitions();
 
-// ---------------------------------------------------------------------------
-// Program definitions — group related examples under a single umbrella
-// ---------------------------------------------------------------------------
-
-export const PROGRAM_DEFINITIONS = {
-  'charm-customizer': {
-    label: 'Charm Customizer',
-    examples: ['nasif-charm-maker', 'q-charm', 'logo-plate'],
-  },
-  'braille-card-customizer': {
-    label: 'Braille Card Customizer',
-    examples: ['braille-wedge-card', 'braille-charm', 'braille-sign'],
-  },
-};
+export const PROGRAM_DEFINITIONS = programDefinitions();
 
 // ---------------------------------------------------------------------------
 // Standalone utility: processing overlay
@@ -498,23 +410,34 @@ export function initFileHandler({
   }
 
   /**
-   * Handle a folder selection from the webkitdirectory input or showDirectoryPicker.
+   * Validate a folder selection and resolve its main .scad file.
+   * Shared by the copy-import path (handleFolderImport) and the
+   * connected-folder link path (main.js _loadFromConnectedFolder).
+   * Shows its own processing overlay and dismisses it on every exit.
+   *
    * @param {FileList|File[]} files - FileList or array of Files with webkitRelativePath
+   * @returns {Promise<{fileArr: File[], mainFilePath: string, rootDir: string, totalBytes: number}|null>}
+   *   null when the selection was rejected (a toast was shown) or the user
+   *   cancelled the main-file prompt.
    */
-  async function handleFolderImport(files) {
+  async function prepareFolderSelection(files) {
     const fileArr = Array.from(files);
-    let dismissOverlay = () => {};
-
-    dismissOverlay = showProcessingOverlay(
+    const dismissOverlay = showProcessingOverlay(
       `Processing ${fileArr.length} files from folder\u2026`,
       'Analyzing project structure. Please do not close or refresh the page.'
     );
 
-    const MAX_FILES = 500;
-    const MAX_BYTES = 100 * 1024 * 1024; // 100 MB
-    const WARN_FILES = 200;
+    const { MAX_FILES, MAX_BYTES, WARN_FILES, WARN_BYTES } =
+      FOLDER_IMPORT_LIMITS;
 
     const totalBytes = fileArr.reduce((sum, f) => sum + f.size, 0);
+
+    if (totalBytes > WARN_BYTES && totalBytes <= MAX_BYTES) {
+      console.warn(
+        `[FolderImport] Large project: ${(totalBytes / 1024 / 1024).toFixed(1)} MB — ` +
+          'stored locally in full; renders mount only what the model references.'
+      );
+    }
 
     if (fileArr.length > MAX_FILES) {
       dismissOverlay();
@@ -522,17 +445,18 @@ export function initFileHandler({
         title: 'Too Many Files',
         message: `The selected folder contains ${fileArr.length} files (limit: ${MAX_FILES}). Please select a smaller project folder.`,
       });
-      return;
+      return null;
     }
 
     if (totalBytes > MAX_BYTES) {
       dismissOverlay();
       const mb = (totalBytes / 1024 / 1024).toFixed(1);
+      const limitMb = (MAX_BYTES / 1024 / 1024).toFixed(0);
       showErrorToast({
         title: 'Folder Too Large',
-        message: `The selected folder is ${mb} MB (limit: 100 MB). Please select a smaller project folder.`,
+        message: `The selected folder is ${mb} MB (limit: ${limitMb} MB). Please select a smaller project folder.`,
       });
-      return;
+      return null;
     }
 
     if (fileArr.length > WARN_FILES) {
@@ -575,13 +499,26 @@ export function initFileHandler({
         title: 'No .scad Files',
         message: 'No OpenSCAD (.scad) files found in the selected folder.',
       });
-      return;
+      return null;
     }
 
-    if (!mainFilePath) return;
+    dismissOverlay();
+    if (!mainFilePath) return null;
+
+    return { fileArr, mainFilePath, rootDir, totalBytes };
+  }
+
+  /**
+   * Handle a folder selection from the webkitdirectory input or showDirectoryPicker.
+   * @param {FileList|File[]} files - FileList or array of Files with webkitRelativePath
+   */
+  async function handleFolderImport(files) {
+    const selection = await prepareFolderSelection(files);
+    if (!selection) return;
+    const { fileArr, mainFilePath, rootDir, totalBytes } = selection;
 
     const totalMB = (totalBytes / (1024 * 1024)).toFixed(1);
-    dismissOverlay = showProcessingOverlay(
+    const dismissOverlay = showProcessingOverlay(
       `Importing folder "${rootDir}" (${fileArr.length} files, ${totalMB} MB)\u2026`,
       'This may take a moment for large projects. Please do not close or refresh the page.'
     );
@@ -826,6 +763,30 @@ export function initFileHandler({
       return;
     }
 
+    // Unsaved editor text lives only in the buffer, and the load below
+    // replaces it. Examples ask their own question before reaching here
+    // (loadExampleByKey), so they must not ask a second time.
+    const priorState = stateManager.getState();
+    const isConfirmedExampleLoad =
+      source === 'example' || source === 'program-example';
+    if (
+      priorState.uploadedFile &&
+      !isConfirmedExampleLoad &&
+      getEditorStateManager().getIsDirty()
+    ) {
+      const confirmed = await showConfirmDialog(
+        'You have unsaved edits in the code editor. Loading another file will discard them.',
+        'Unsaved code edits',
+        'Discard edits and load',
+        'Keep editing',
+        { destructive: true }
+      );
+      if (!confirmed) {
+        updateStatus('Load cancelled');
+        return;
+      }
+    }
+
     console.log('File loaded:', fileName, fileContent.length, 'bytes');
 
     if (!extractedFiles) {
@@ -947,6 +908,7 @@ export function initFileHandler({
       const mainInterface = document.getElementById('mainInterface');
       welcomeScreen.classList.add('hidden');
       mainInterface.classList.remove('hidden');
+      setAppSurface('project');
 
       updatePreviewDrawer([]);
       if (typeof window.clearConsoleState === 'function') {
@@ -1095,6 +1057,10 @@ export function initFileHandler({
         getUIModeController().setProjectHiddenPanels(null);
       }
       getUIModeController().applyCurrentMode();
+      if (getUIModeController().getMode() === 'classic') {
+        collapseCustomizerGroups();
+        getClassicLayoutController()?.syncEditorPane();
+      }
 
       getFileActionsController().trackOpen(fileName);
 
@@ -1273,8 +1239,9 @@ export function initFileHandler({
             );
             updatePresetDropdown();
 
-            const importedPresets =
-              presetManager.getPresetsForModel(originalFileName);
+            const importedPresets = presetManager.getPresetsForModel(
+              mainFilePath || fileName
+            );
             if (importedPresets.length > 0) {
               const parameterSetsForMap = Object.fromEntries(
                 importedPresets.map((p) => [p.name, p.parameters])
@@ -1314,7 +1281,7 @@ export function initFileHandler({
         }
       }
 
-      const urlParams = stateManager.loadFromURL();
+      const urlParams = await stateManager.loadFromURL();
       if (urlParams && Object.keys(urlParams).length > 0) {
         console.log('Loaded parameters from URL:', urlParams);
 
@@ -1340,12 +1307,6 @@ export function initFileHandler({
 
         stateManager.setState({ parameters: updatedValues });
 
-        if (Object.keys(adjustments).length > 0) {
-          updateStatus(
-            'Some URL parameters were adjusted to fit allowed ranges.'
-          );
-        }
-
         if (getAutoPreviewController()) {
           getAutoPreviewController().onParameterChange(updatedValues);
         }
@@ -1353,6 +1314,20 @@ export function initFileHandler({
         updateStatus(
           `Ready - ${paramCount} parameters loaded (${Object.keys(urlParams).length} from URL)`
         );
+
+        // A NOTICE, not a status (IR-Q16). D-98 made this sentence reachable;
+        // measured, it then stood for about 660 ms before the render replaced
+        // it, so someone who looked up late never learned their number had
+        // changed. The notice stays until dismissed.
+        if (Object.keys(adjustments).length > 0) {
+          const { createParameterNotices, describeAdjustments } =
+            await import('./parameter-notices.js');
+          const notices = createParameterNotices(
+            document.getElementById('parameterNotices'),
+            { announce: (message) => announceImmediate(message) }
+          );
+          notices.show(describeAdjustments(adjustments, updatedValues));
+        }
       } else {
         updateStatus(`Ready - ${paramCount} parameters loaded`);
       }
@@ -1371,110 +1346,7 @@ export function initFileHandler({
         }
       });
 
-      previewManager = getPreviewManager();
-      if (!previewManager) {
-        const previewContainer = getPreviewContainer();
-        previewManager = new PreviewManager(previewContainer);
-        setPreviewManager(previewManager);
-        await previewManager.init();
-
-        if (!document.getElementById('rendered2dPreview')) {
-          const preview2d = document.createElement('div');
-          preview2d.id = 'rendered2dPreview';
-          preview2d.className = 'rendered-2d-preview hidden';
-          preview2d.setAttribute('role', 'img');
-          preview2d.setAttribute('aria-label', 'Rendered 2D SVG preview');
-          previewContainer.appendChild(preview2d);
-        }
-
-        previewContainer.style.position = 'relative';
-        previewContainer.appendChild(getPreviewStateIndicator());
-        previewContainer.appendChild(getRenderingOverlay());
-
-        syncPreviewModelColorOverride();
-        syncPreviewAppearanceOverride();
-
-        const measurementsToggle =
-          document.getElementById('measurementsToggle');
-        if (measurementsToggle) {
-          measurementsToggle.checked = previewManager.measurementsEnabled;
-        }
-
-        const gridToggle = document.getElementById('gridToggle');
-        if (gridToggle) {
-          gridToggle.checked = previewManager.gridEnabled;
-        }
-
-        getOverlayGridCtrl().connectPreviewManager(previewManager);
-        getDisplayOptionsCtrl().connectPreviewManager(previewManager);
-
-        const autoBedToggle = document.getElementById('autoBedToggle');
-        if (autoBedToggle) {
-          autoBedToggle.checked = previewManager.autoBedEnabled;
-        }
-
-        const zoomToCursorToggle =
-          document.getElementById('zoomToCursorToggle');
-        if (zoomToCursorToggle) {
-          zoomToCursorToggle.checked = previewManager.zoomToCursorEnabled;
-        }
-
-        syncPreviewAppearanceOverride();
-
-        const cameraPanelController = getCameraPanelController();
-        if (cameraPanelController) {
-          cameraPanelController.setPreviewManager(previewManager);
-        }
-
-        const hfmCtrl = getHfmCtrl();
-        if (hfmCtrl.isUnlocked() && !document.getElementById('_hfmToggle')) {
-          hfmCtrl.injectAltToggle();
-        }
-
-        if (hfmCtrl.isPendingEnable()) {
-          const toggleBtn = document.getElementById('_hfmToggle');
-          if (toggleBtn) {
-            await hfmCtrl.enableAltViewWithPreview(toggleBtn);
-          }
-        }
-
-        syncPreviewModelColorOverride();
-        syncPreviewAppearanceOverride();
-
-        themeManager.addListener((theme, activeTheme, highContrast) => {
-          const pm = getPreviewManager();
-          if (pm) {
-            // detectTheme() returns mono-aware keys, keeping the WebGL scene
-            // black while Alt View is active (activeTheme is only light/dark).
-            pm.updateTheme(pm.detectTheme(), highContrast);
-
-            const modelColorPicker =
-              document.getElementById('modelColorPicker');
-            const hasSavedColor = localStorage.getItem(STORAGE_KEY_MODEL_COLOR);
-            if (modelColorPicker && !hasSavedColor) {
-              const themeKey = highContrast ? `${activeTheme}-hc` : activeTheme;
-              // Match PREVIEW_COLORS from preview.js (Cornfield gold [OBSERVED])
-              const PREVIEW_COLORS = {
-                light: 0xf9d72c,
-                dark: 0x4d9fff,
-                'light-hc': 0x0052cc,
-                'dark-hc': 0x66b3ff,
-              };
-              const colorHex = PREVIEW_COLORS[themeKey] || PREVIEW_COLORS.light;
-              modelColorPicker.value =
-                '#' + colorHex.toString(16).padStart(6, '0');
-            }
-          }
-
-          getOverlayGridCtrl().syncGridColorPicker();
-
-          const root = document.documentElement;
-          if (root.getAttribute('data-ui-variant') === 'mono') {
-            getHfmCtrl().refreshVariantAssets();
-            getHfmCtrl().onThemeChanged();
-          }
-        });
-      }
+      previewManager = await ensurePreviewManagerBootstrap();
 
       let autoPreviewController = getAutoPreviewController();
       if (!autoPreviewController) {
@@ -1541,6 +1413,7 @@ export function initFileHandler({
         const savedProjectId = getCurrentSavedProjectId?.();
         if (savedProjectId) {
           try {
+            await restoreOverlaySettings(savedProjectId);
             await loadUserSvgsIntoGallery(savedProjectId);
           } catch (error) {
             console.warn(
@@ -1771,6 +1644,28 @@ export function initFileHandler({
   });
 
   /**
+   * Put a project's saved reference-overlay placement back (DP-5).
+   *
+   * A project with no settings file is the ordinary case and is left alone:
+   * the app-level overlay preferences still apply, exactly as before.
+   *
+   * @param {string} projectId
+   */
+  async function restoreOverlaySettings(projectId) {
+    try {
+      const previewManager = getPreviewManager?.();
+      if (!previewManager) return;
+      const files = await getProjectFiles(projectId);
+      const settings = readOverlaySettings(files);
+      if (!settings) return;
+      applyOverlaySettings(previewManager, settings);
+      console.log(`[Overlay settings] Restored for project ${projectId}`);
+    } catch (err) {
+      console.warn('[Overlay settings] Could not restore:', err);
+    }
+  }
+
+  /**
    * Load user-uploaded SVGs from a project's file store into the gallery.
    * @param {string} projectId
    */
@@ -1827,13 +1722,201 @@ export function initFileHandler({
     }
   }
 
+  /**
+   * Open an .stl straight into the three.js preview — view-only mode.
+   * No WASM render, no parameters, nothing to generate: the camera,
+   * measurement, and grid tools work on the loaded mesh, and the
+   * customizer panel shows an explanatory notice instead of controls.
+   *
+   * @param {File} file - The .stl file to view
+   */
+  async function handleStlView(file) {
+    if (file.size > FILE_SIZE_LIMITS.STL_VIEW_FILE) {
+      const limitMB = FILE_SIZE_LIMITS.STL_VIEW_FILE / (1024 * 1024);
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+      showErrorToast({
+        title: 'STL Too Large',
+        message: `"${file.name}" is ${sizeMB} MB — the viewing limit is ${limitMB} MB.`,
+      });
+      return;
+    }
+
+    let dismissOverlay = () => {};
+    try {
+      dismissOverlay = showProcessingOverlay(
+        `Loading ${file.name}…`,
+        'Preparing the 3D viewer.'
+      );
+      const buffer = await file.arrayBuffer();
+
+      const welcomeScreen = document.getElementById('welcomeScreen');
+      const mainInterface = document.getElementById('mainInterface');
+      welcomeScreen?.classList.add('hidden');
+      mainInterface?.classList.remove('hidden');
+      setAppSurface('project');
+      // The workflow toolbar carries the Back button — required to leave
+      // view mode again.
+      showWorkflowProgress();
+
+      const previewManager = await ensurePreviewManagerBootstrap();
+      await previewManager.loadSTL(buffer, { preserveCamera: false });
+      setStlViewActive(true, file.name);
+      // Reflect view-only mode on the primary action (Generate disabled).
+      updatePrimaryActionButton();
+
+      // View-only notice replaces the parameter controls. state.uploadedFile
+      // stays null, so Generate/Export stay disabled through the existing
+      // button-state logic — nothing renderable is loaded.
+      const parametersContainer = document.getElementById(
+        'parametersContainer'
+      );
+      if (parametersContainer) {
+        parametersContainer.textContent = '';
+        const notice = document.createElement('p');
+        notice.className = 'stl-view-notice';
+        notice.textContent =
+          `Viewing ${file.name} — STL files have no editable parameters. ` +
+          'Open a .scad model to customize a design.';
+        parametersContainer.appendChild(notice);
+      }
+
+      const triangles =
+        (previewManager._getPrimaryGeometry?.()?.attributes?.position?.count ??
+          0) / 3;
+      updateStatus(`Viewing STL: ${file.name}`);
+      announceImmediate(
+        `STL loaded for viewing: ${file.name}.` +
+          (triangles > 0 ? ` ${Math.round(triangles)} triangles.` : '') +
+          ' Customization is unavailable for STL files.'
+      );
+    } catch (err) {
+      setStlViewActive(false);
+      showErrorToast({ title: 'STL Load Failed', message: err.message });
+    } finally {
+      dismissOverlay();
+    }
+  }
+
+  /**
+   * Create and wire the PreviewManager on first use. Shared by the SCAD
+   * flow (handleFile) and STL view-only mode; returns the existing
+   * instance on subsequent calls.
+   */
+  async function ensurePreviewManagerBootstrap() {
+    let previewManager = getPreviewManager();
+    if (!previewManager) {
+      const previewContainer = getPreviewContainer();
+      previewManager = new PreviewManager(previewContainer);
+      setPreviewManager(previewManager);
+      await previewManager.init();
+
+      if (!document.getElementById('rendered2dPreview')) {
+        const preview2d = document.createElement('div');
+        preview2d.id = 'rendered2dPreview';
+        preview2d.className = 'rendered-2d-preview hidden';
+        preview2d.setAttribute('role', 'img');
+        preview2d.setAttribute('aria-label', 'Rendered 2D SVG preview');
+        previewContainer.appendChild(preview2d);
+      }
+
+      previewContainer.style.position = 'relative';
+      previewContainer.appendChild(getPreviewStateIndicator());
+      previewContainer.appendChild(getRenderingOverlay());
+
+      syncPreviewModelColorOverride();
+      syncPreviewAppearanceOverride();
+
+      getOverlayGridCtrl().connectPreviewManager(previewManager);
+      getDisplayOptionsCtrl().connectPreviewManager(previewManager);
+      // Classic's Viewport-Control panel reads and writes this camera (F4).
+      getViewportControlPanel()?.connectPreviewManager(previewManager);
+
+      const autoBedToggle = document.getElementById('autoBedToggle');
+      if (autoBedToggle) {
+        autoBedToggle.checked = previewManager.autoBedEnabled;
+      }
+
+      syncPreviewAppearanceOverride();
+
+      const cameraPanelController = getCameraPanelController();
+      if (cameraPanelController) {
+        cameraPanelController.setPreviewManager(previewManager);
+      }
+
+      const hfmCtrl = getHfmCtrl();
+      if (hfmCtrl.isUnlocked() && !document.getElementById('_hfmToggle')) {
+        hfmCtrl.injectAltToggle();
+      }
+
+      if (hfmCtrl.isPendingEnable()) {
+        const toggleBtn = document.getElementById('_hfmToggle');
+        if (toggleBtn) {
+          await hfmCtrl.enableAltViewWithPreview(toggleBtn);
+        }
+      }
+
+      syncPreviewModelColorOverride();
+      syncPreviewAppearanceOverride();
+
+      themeManager.addListener((theme, activeTheme, highContrast) => {
+        const pm = getPreviewManager();
+        if (pm) {
+          // detectTheme() returns mono-aware keys, keeping the WebGL scene
+          // black while Alt View is active (activeTheme is only light/dark).
+          pm.updateTheme(pm.detectTheme(), highContrast);
+
+          const modelColorPicker = document.getElementById('modelColorPicker');
+          const hasSavedColor = readScopedPref(STORAGE_KEY_MODEL_COLOR);
+          if (modelColorPicker && !hasSavedColor) {
+            const themeKey = highContrast ? `${activeTheme}-hc` : activeTheme;
+            // Match PREVIEW_COLORS from preview.js (Cornfield gold [OBSERVED])
+            const PREVIEW_COLORS = {
+              light: 0xf9d72c,
+              dark: 0x4d9fff,
+              'light-hc': 0x0052cc,
+              'dark-hc': 0x66b3ff,
+            };
+            const colorHex = PREVIEW_COLORS[themeKey] || PREVIEW_COLORS.light;
+            modelColorPicker.value =
+              '#' + colorHex.toString(16).padStart(6, '0');
+          }
+        }
+
+        getOverlayGridCtrl().syncGridColorPicker();
+
+        const root = document.documentElement;
+        if (root.getAttribute('data-ui-variant') === 'mono') {
+          getHfmCtrl().refreshVariantAssets();
+          getHfmCtrl().onThemeChanged();
+        }
+      });
+    }
+    return previewManager;
+  }
+
   // ------------------------------------------------------------------
   // Public API
   // ------------------------------------------------------------------
 
+  // DP-5: this module is the layer that knows which project is open, so it is
+  // the one that tells overlay-settings where to write. Registering here
+  // rather than importing file-handler from the overlay controller keeps the
+  // two from depending on each other.
+  registerOverlaySettingsHost({
+    getProjectId: () => getCurrentSavedProjectId?.() ?? null,
+    getConfig: () => getPreviewManager()?.getOverlayConfig?.() ?? null,
+    getCalibration: () => {
+      const pxPerMm = getScaleFactor();
+      return Number.isFinite(pxPerMm) && pxPerMm > 0 ? 1 / pxPerMm : null;
+    },
+    writeFile: addProjectFile,
+  });
+
   return {
     handleFile,
     handleFolderImport,
+    prepareFolderSelection,
+    handleStlView,
     loadExampleByKey,
     /** @internal Exposed for folder picker wiring in main.js */
     collectFilesFromDir: _collectFilesFromDir,

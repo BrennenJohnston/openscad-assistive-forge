@@ -82,6 +82,54 @@ Some OpenSCAD parameters contain expressions that cannot be parsed:
 - **Mitigation**: Falls back to text input (raw mode)
 - **Status**: Preserves original value exactly
 
+### Console output is offered to a screen reader more than once
+
+When the OpenSCAD engine produces a message, the same text is currently
+offered by more than one route, and the behaviour is identical in both
+interfaces (measured 2026-08-14, Assistive Forge and Classic):
+
+- The console message list is itself a live region
+  (`role="log"`, `aria-live="polite"`, `aria-relevant="additions"`).
+- The app also announces the message through its status announcer, as
+  "Message: <the text>", rate limited to one announcement per half second.
+
+There is a second effect in the same place. The list is rebuilt from scratch
+whenever a message arrives, so every message already in it is removed and
+added back: one new line replaced 31 nodes and added 35. Because the region
+announces additions, a screen reader may treat the whole log as new.
+
+- **Status**: Recorded, not yet changed. Which route should speak, and
+  whether the list should update in place instead of being rebuilt, is a
+  decision for the project owner, and it needs a listening test with a real
+  screen reader rather than an automated check. Both are on the pending
+  review list.
+- **Not affected**: the region is genuinely reachable by assistive
+  technology in both interfaces. No ancestor hides it, and the list can be
+  focused and scrolled from the keyboard, which matters in Classic where the
+  pane is short.
+
+### Classic mode has one fixed appearance
+
+Classic mode reproduces the desktop OpenSCAD window, which means a single
+light desktop appearance. Dark theme and high contrast do **not** apply
+there, and their buttons are not shown in Classic.
+
+- **Decision**: Owner, 2026-08-05, for visual fidelity with the desktop
+  application. Recorded here because it withholds an accessibility feature
+  in one mode.
+- **Mitigation**: Dark theme and high contrast remain fully available in
+  Simplified and Standard modes, one click from the Classic toggle.
+- **Mitigation**: The Classic palette itself is high contrast — body text
+  measures 17.4:1 on pane surfaces and 15.3:1 on window chrome, and every
+  control border clears the 3:1 non-text threshold (SC 1.4.11).
+- **Mitigation**: Entering Classic with dark or high contrast active
+  announces that the setting is paused until you leave Classic. The
+  keyboard shortcuts say the same thing rather than silently doing nothing.
+- **Not affected**: Operating-system high contrast (`forced-colors`) still
+  applies in Classic — the app never overrides it.
+- **Status**: Under review. A desktop-flavoured dark and high-contrast
+  Classic appearance remains the preferred long-term answer.
+
 ---
 
 ## Testing Methodology

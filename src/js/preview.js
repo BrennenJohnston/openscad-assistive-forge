@@ -20,6 +20,7 @@ import {
   Group,
   Line,
   LineBasicMaterial,
+  LineDashedMaterial,
   LineSegments,
   LinearSRGBColorSpace,
   Mesh,
@@ -32,12 +33,15 @@ import {
   Sprite,
   SpriteMaterial,
   Texture,
+  Vector2,
   Vector3,
   WebGLRenderer,
 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
+import { buildAxisTriadOverlay } from './axis-triad-overlay.js';
 import { normalizeHexColor } from './color-utils.js';
+import { get2DStylePalette } from './state-colors.js';
 import {
   announceCameraAction as announceCamera,
   announceImmediate,
@@ -51,13 +55,21 @@ import {
   STORAGE_KEY_GRID_OPACITY,
   STORAGE_KEY_AUTO_BED,
   STORAGE_KEY_ZOOM_TO_CURSOR,
-  STORAGE_KEY_CAMERA_COLLAPSED,
-  STORAGE_KEY_CAMERA_POSITION,
+  STORAGE_KEY_VIEWPORT_SCHEME,
   STORAGE_KEY_LOD_WARNING_DISMISSED,
   safeGetItem,
   safeSetItem,
   safeRemoveItem,
 } from './storage-keys.js';
+// UF-14 (U-25): the viewing preferences the signed Q-40 table marks PER-UI
+// read and write through the scoped facade — one saved copy per interface.
+// Camera pose stays live shared state, and custom grid PRESETS stay
+// app-level (a saved library, not a viewing state).
+import {
+  readScopedPref,
+  writeScopedPref,
+  removeScopedPref,
+} from './ui-scoped-prefs.js';
 
 // Disable Three.js color management to match desktop OpenSCAD's
 // non-linear-aware OpenGL pipeline. OpenSCAD passes sRGB colors
@@ -66,6 +78,16 @@ ColorManagement.enabled = false;
 
 /** Default grid config — 220×220mm matches popular mid-range FDM printers (Creality K1C, FlashForge Adventurer 5M Pro) */
 const DEFAULT_GRID_CONFIG = { widthMm: 220, heightMm: 220 };
+
+/**
+ * How far above a face the reference overlay sits when it is placed ON that
+ * face (DP-5). Exactly coincident planes z-fight, and the overlay is meant to
+ * be traced against the surface, so it has to win.
+ */
+const OVERLAY_SURFACE_EPSILON_MM = 0.25;
+
+/** Scratch target for renderer.getSize() in the triad pass (r162 requires one). */
+const _triadSizeScratch = new Vector2();
 
 export function isThreeJsLoaded() {
   return true;
@@ -86,8 +108,22 @@ export function getThreeModule() {
     Group,
     Line,
     LineBasicMaterial,
+    // The dashed negative axis halves. Added here at the same time as the
+    // overlay that needs it — the axis-tick defect was exactly this class of
+    // omission, a consumer asking for a class this object does not carry.
+    LineDashedMaterial,
     LineSegments,
     Vector3,
+    // The axis-tick overlay rasterises its distance labels onto a canvas and
+    // hangs them in the scene as sprites. Without these three it threw
+    // "three.CanvasTexture is not a constructor" on every attempt and the
+    // whole overlay — tick lines included — was lost, because the throw
+    // happens before the group is returned. Its unit tests inject a mock
+    // module that DOES define them, which is why 20 of them passed against
+    // geometry the app could never build.
+    CanvasTexture,
+    Sprite,
+    SpriteMaterial,
   };
 }
 
@@ -120,6 +156,18 @@ export const CORNFIELD_BACK_COLOR = 0x9dcb51;
 // Specular is black (0,0,0) so shininess has no visible effect, but aligning
 // for forward compatibility if specular is ever enabled.
 export const DESKTOP_SHININESS = 64;
+
+/**
+ * How far one discrete zoom activation moves the camera, in the units
+ * zoomCamera() takes — roughly 30% per press.
+ *
+ * The single source for every button, menu item and keyboard shortcut that
+ * zooms by a fixed step (D-19). The View menu previously used 1, a ~2% step
+ * that is effectively imperceptible and punishing for switch users, while the
+ * camera panel used 15; they are now the same number in one place.
+ * Continuous inputs such as the gamepad axis scale their own delta instead.
+ */
+export const CAMERA_ZOOM_STEP = 15;
 
 // The model is a non-text graphical object, so `model`/`modelBack` must
 // reach 3:1 against `background` (WCAG 2.2 SC 1.4.11). The `edges`
@@ -210,7 +258,192 @@ export const PREVIEW_COLORS = {
     edges: 0x261a00, // 10.6:1 vs model
     ambientLight: 0xffb000,
   },
+  // Classic mode: the desktop's Cornfield viewport background
+  // (#FFFFE5 — OpenSCAD src/glview/ColorMap.cc BACKGROUND_COLOR [OBSERVED]).
+  // The model pair stays the accessibility-tuned one; on cornfield it
+  // measures BETTER than on the light theme's #f5f5f5 (3.7:1 / 4.1:1 vs
+  // 3.5:1 / 3.8:1), so fidelity and contrast agree here. Classic ignores
+  // theme and high contrast entirely, so it has no -hc sibling.
+  classic: {
+    background: 0xffffe5,
+    gridPrimary: 0xb9b9a1,
+    gridSecondary: 0xd6d6bf,
+    model: 0x9a8200,
+    modelBack: 0x5a8a22,
+    edges: 0x020617,
+    // Upstream AXES_COLOR, verbatim: Cornfield is hardcoded in
+    // src/colormap.cc line 40 at tag openscad-2021.01 (no cornfield.json
+    // exists). 20.69:1 vs background — passes SC 1.4.11 untouched.
+    axes: 0x000000,
+    ambientLight: 0xffffff,
+  },
+
+  // --- Desktop viewport colour schemes (Preferences ▸ 3D View) ---
+  //
+  // Transcribed from OpenSCAD at tag `openscad-2021.01`: Cornfield is the
+  // hardcoded default in `src/colormap.cc` (lines 39-47, no JSON exists for
+  // it) and ships above as `classic`; the rest are
+  // `color-schemes/render/<name>.json`. `monotone.json` is deliberately
+  // absent — it carries `"show-in-gui": false`, which is why the desktop's
+  // own list shows nine JSON schemes plus the built-in Cornfield.
+  //
+  // Backgrounds are VERBATIM. Model and edge colours are tuned the minimum
+  // distance along lightness — hue and saturation untouched, so a scheme
+  // still reads as itself — until `model`/`modelBack` reach 3:1 against the
+  // background (SC 1.4.11) and `edges` reaches 4.5:1 against the model.
+  // MEASURED verbatim, only Starnight and DeepOcean already passed; upstream
+  // Cornfield is 1.40:1 and 1.86:1. Every ratio below is asserted by
+  // tests/unit/preview-colors-contrast.test.js, so a hand edit that breaks
+  // one fails the suite.
+  //
+  // `axes` is each scheme's `axes-color`, verbatim from the same upstream
+  // files (U-13): the axis lines and tick labels paint with it instead of
+  // the app's text token, so a Forge dark theme can no longer bleed a light
+  // foreground into a light scheme. All ten upstream values already pass
+  // SC 1.4.11's 3:1 against their own backgrounds (sunset is the narrowest
+  // at 3.20:1), so none needed tuning. Also asserted by the contrast suite.
+  //
+  // Where a comment says "unchanged" the value IS upstream's.
+  metallic: {
+    background: 0xaaaaff, // upstream, verbatim
+    gridPrimary: 0x7c7cd1,
+    gridSecondary: 0x9393e8,
+    model: 0x3c3cff, // 3.02:1 vs background (upstream #ddddff, lightness -31.5%)
+    modelBack: 0xa519a5, // 3.02:1 (upstream #dd22dd, lightness -12.6%)
+    edges: 0xffcdcd, // 4.53:1 vs model (upstream #ff0000, lightness +40.1%)
+    axes: 0x222233, // upstream axes-color, verbatim (7.36:1 vs background)
+    ambientLight: 0xffffff,
+  },
+  sunset: {
+    background: 0xaa4444, // upstream, verbatim
+    gridPrimary: 0xd87272,
+    gridSecondary: 0xc15b5b,
+    model: 0xffaaaa, // 3.20:1 vs background (upstream, unchanged)
+    modelBack: 0x320d13, // 3.01:1 (upstream #882233, lightness -21%)
+    edges: 0xa30000, // 4.53:1 vs model (upstream #ff0000, lightness -18%)
+    axes: 0x220d0d, // upstream axes-color, verbatim (3.20:1 vs background)
+    ambientLight: 0xffffff,
+  },
+  starnight: {
+    background: 0x000000, // upstream, verbatim
+    gridPrimary: 0x2e2e2e,
+    gridSecondary: 0x171717,
+    model: 0xffffe0, // 20.63:1 vs background (upstream, unchanged)
+    modelBack: 0x00ffff, // 16.75:1 (upstream, unchanged)
+    edges: 0x0000ff, // 8.44:1 vs model (upstream, unchanged)
+    axes: 0xe5e5e5, // upstream axes-color, verbatim (16.67:1 vs background)
+    ambientLight: 0xffffff,
+  },
+  beforedawn: {
+    background: 0x333333, // upstream, verbatim
+    gridPrimary: 0x616161,
+    gridSecondary: 0x4a4a4a,
+    model: 0xcccccc, // 7.87:1 vs background (upstream, unchanged)
+    modelBack: 0x6571e0, // 3.00:1 (upstream #5563dd, lightness +3.7%)
+    edges: 0xb20000, // 4.52:1 vs model (upstream #ff0000, lightness -15.1%)
+    axes: 0xc1c1c1, // upstream axes-color, verbatim (7.02:1 vs background)
+    ambientLight: 0xffffff,
+  },
+  nature: {
+    background: 0xfafafa, // upstream, verbatim
+    gridPrimary: 0xcccccc,
+    gridSecondary: 0xe3e3e3,
+    model: 0x16a085, // 3.14:1 vs background (upstream, unchanged)
+    modelBack: 0x36a631, // 3.02:1 (upstream #dbf4da, lightness -48.3%)
+    edges: 0x580000, // 4.52:1 vs model (upstream #ff0000, lightness -32.7%)
+    axes: 0x323232, // upstream axes-color, verbatim (12.28:1 vs background)
+    ambientLight: 0xffffff,
+  },
+  deepocean: {
+    background: 0x333333, // upstream, verbatim
+    gridPrimary: 0x616161,
+    gridSecondary: 0x4a4a4a,
+    model: 0xeeeeee, // 10.89:1 vs background (upstream, unchanged)
+    modelBack: 0x0babc8, // 4.62:1 (upstream, unchanged)
+    edges: 0x0000ff, // 7.41:1 vs model (upstream, unchanged)
+    axes: 0xc1c1c1, // upstream axes-color, verbatim (7.02:1 vs background)
+    ambientLight: 0xffffff,
+  },
+  solarized: {
+    background: 0xfdf6e3, // upstream, verbatim
+    gridPrimary: 0xcfc8b5,
+    gridSecondary: 0xe6dfcc,
+    model: 0xb58800, // 3.00:1 vs background (upstream, unchanged)
+    modelBack: 0x882233, // 8.38:1 (upstream, unchanged)
+    edges: 0x342700, // 4.52:1 vs model (upstream #b58800, lightness -25.2%)
+    axes: 0x191816, // upstream axes-color, verbatim (16.45:1 vs background)
+    ambientLight: 0xffffff,
+  },
+  tomorrow: {
+    background: 0xf8f8f8, // upstream, verbatim
+    gridPrimary: 0xcacaca,
+    gridSecondary: 0xe1e1e1,
+    model: 0x4271ae, // 4.70:1 vs background (upstream, unchanged)
+    modelBack: 0xe0720a, // 3.00:1 (upstream #f5871f, lightness -8.2%)
+    // Lightened, not darkened: against this mid-tone model even pure black
+    // only reaches ~4.2:1, so no dark edge can satisfy the thin-stroke
+    // threshold here.
+    edges: 0xf3f3f3, // 4.50:1 vs model (upstream #4d4d4c, lightness +65.2%)
+    axes: 0x181818, // upstream axes-color, verbatim (16.72:1 vs background)
+    ambientLight: 0xffffff,
+  },
+  'tomorrow-night': {
+    background: 0x1d1f21, // upstream, verbatim
+    gridPrimary: 0x4b4d4f,
+    gridSecondary: 0x343638,
+    model: 0x81a2be, // 6.18:1 vs background (upstream, unchanged)
+    modelBack: 0xde935f, // 6.65:1 (upstream, unchanged)
+    edges: 0x333634, // 4.57:1 vs model (upstream #c5c8c6, lightness -57.1%)
+    axes: 0xe8e8e8, // upstream axes-color, verbatim (13.49:1 vs background)
+    ambientLight: 0xffffff,
+  },
 };
+
+/**
+ * The desktop's 3D View colour-scheme list, in its own order (the JSON
+ * `index` field, which is the order OpenSCAD_2.png shows).
+ *
+ * `colors` names the PREVIEW_COLORS entry each one paints with. Cornfield
+ * maps to `classic` rather than a tenth near-duplicate: `classic` already IS
+ * the Cornfield background with an accessibility-tuned model pair, shipped
+ * and asserted since R-II, and it holds more contrast headroom (3.72:1 /
+ * 4.06:1) than a fresh minimum-distance tune would have produced.
+ */
+export const VIEWPORT_SCHEMES = Object.freeze([
+  { id: 'cornfield', label: 'Cornfield', colors: 'classic' },
+  { id: 'metallic', label: 'Metallic', colors: 'metallic' },
+  { id: 'sunset', label: 'Sunset', colors: 'sunset' },
+  { id: 'starnight', label: 'Starnight', colors: 'starnight' },
+  { id: 'beforedawn', label: 'BeforeDawn', colors: 'beforedawn' },
+  { id: 'nature', label: 'Nature', colors: 'nature' },
+  { id: 'deepocean', label: 'DeepOcean', colors: 'deepocean' },
+  { id: 'solarized', label: 'Solarized', colors: 'solarized' },
+  { id: 'tomorrow', label: 'Tomorrow', colors: 'tomorrow' },
+  { id: 'tomorrow-night', label: 'Tomorrow Night', colors: 'tomorrow-night' },
+]);
+
+/** The scheme Classic opens with — the desktop's own default. */
+export const DEFAULT_VIEWPORT_SCHEME = 'cornfield';
+
+/** @param {string} id @returns {string} PREVIEW_COLORS key for that scheme */
+export function schemeColorsKey(id) {
+  return (
+    VIEWPORT_SCHEMES.find((s) => s.id === id)?.colors ??
+    VIEWPORT_SCHEMES.find((s) => s.id === DEFAULT_VIEWPORT_SCHEME).colors
+  );
+}
+
+const VIEWPORT_SCHEME_KEYS = new Set(VIEWPORT_SCHEMES.map((s) => s.colors));
+
+/**
+ * Whether a PREVIEW_COLORS key is a Classic viewport scheme rather than an
+ * app theme. These have no `-hc` siblings, so nothing may suffix them.
+ * @param {string} key
+ * @returns {boolean}
+ */
+export function isViewportSchemeKey(key) {
+  return VIEWPORT_SCHEME_KEYS.has(key);
+}
 
 // RENDER_STATE_COLORS was removed: it applied fabricated amber/red tints
 // that do not correspond to any desktop OpenSCAD behavior. Desktop OpenSCAD
@@ -263,6 +496,11 @@ export class PreviewManager {
     // true matches stakeholder expectation (F17, "zoom toward cursor").
     this.zoomToCursorEnabled = this.loadZoomToCursorPreference();
 
+    // Chosen desktop viewport colour scheme (Preferences ▸ 3D View). Read
+    // before the first detectTheme() so Classic opens on the saved choice
+    // rather than flashing Cornfield and correcting itself.
+    this.viewportScheme = this.loadViewportScheme();
+
     // Rotation centering: temporarily center object at origin for better rotation
     this.autoBedOffset = 0; // Z offset applied by auto-bed
     this.rotationCenteringEnabled = false; // Whether rotation centering is active
@@ -273,6 +511,10 @@ export class PreviewManager {
     // Render hooks for extensibility
     this._renderOverride = null;
     this._resizeHook = null;
+    // Corner XYZ triad (UF-7): a second render pass in the default branch
+    // of animate(). Follows the Axes display option (desktop: showSmallaxes
+    // runs iff showaxes).
+    this._axisTriad = null;
     this._postLoadHook = null; // Called after STL is loaded
     this._postLoadListeners = []; // Multi-listener post-load event
     this._themeChangeListeners = []; // Multi-listener theme-change event (F20)
@@ -288,7 +530,16 @@ export class PreviewManager {
       rotationDeg: 0,
       width: 200, // mm (default; replaced by SVG physical size or explicit sizing)
       height: 150, // mm
+      // DP-5: the effective Z, in mm. Derived from zPreset except when the
+      // preset is 'custom', where the person typed it.
       zPosition: -0.25, // Slightly below Z=0 build plate (avoid z-fighting with grid)
+      // Which surface the overlay is meant to sit against. A raw number is a
+      // poor control here: -0.25 means nothing to someone deciding "I want to
+      // trace onto the top of the charm". 'model-top' is recomputed whenever
+      // the model changes, so it follows the object rather than freezing at
+      // whatever the height happened to be when it was chosen.
+      zPreset: 'under-plate',
+      zCustomMm: 0,
       lockAspect: true,
       intrinsicAspect: null, // Width/height ratio from source image
       sourceFileName: null, // Name of the file used as overlay source
@@ -334,6 +585,19 @@ export class PreviewManager {
       this.container.appendChild(preview2d);
     }
 
+    // And the drawing editor's surface (DP-19), for the same reason: the
+    // markup in index.html is the honest picture of the container, and the
+    // wipe above takes it with everything else.
+    if (!document.getElementById('drawingEditorSurface')) {
+      const surface = document.createElement('div');
+      surface.id = 'drawingEditorSurface';
+      surface.className = 'drawing-editor-surface hidden';
+      surface.setAttribute('role', 'region');
+      surface.setAttribute('aria-label', 'Drawing editor');
+      surface.hidden = true;
+      this.container.appendChild(surface);
+    }
+
     // Detect initial theme
     this.currentTheme = this.detectTheme();
     const colors = PREVIEW_COLORS[this.currentTheme];
@@ -352,12 +616,14 @@ export class PreviewManager {
     this._lastContainerWidth = width;
     this._lastContainerHeight = height;
 
-    // Set Z as the up axis (OpenSCAD uses Z-up, Three.js defaults to Y-up)
-    this.camera.up.set(0, 0, 1);
+    // Set Z as the up axis (OpenSCAD uses Z-up, Three.js defaults to Y-up).
+    // This must run BEFORE OrbitControls is constructed below: the controls
+    // capture their orbit frame from camera.up once and never re-read it.
+    this.camera.up.set(...PreviewManager.WORLD_UP);
 
     // Position camera for OpenSCAD-style diagonal view (looking at origin from front-right-above)
     // This mimics OpenSCAD's default "Diagonal" view orientation
-    this.camera.position.set(150, -150, 100);
+    this.camera.position.set(...PreviewManager.DEFAULT_CAMERA_POSITION);
 
     // Create renderer — WebGL may be unavailable in headless browsers.
     // When that happens, geometry parsing (loadOFF / loadSTL) still works;
@@ -395,10 +661,17 @@ export class PreviewManager {
     //
     // Three.js MeshPhongMaterial uses BRDF_Lambert which divides diffuse by π.
     // OpenSCAD's OpenGL pipeline has no such divisor (simple color * NdotL).
-    // All intensities are scaled by π to cancel the BRDF divisor and match
-    // desktop brightness: ambient 0.2*π ≈ 0.628, directional 1.0*π ≈ 3.14.
+    // All intensities are scaled by π to cancel the BRDF divisor: ambient
+    // 0.2*π ≈ 0.628. The directional pair carries a further ×1.5 measured
+    // against the desktop itself (U-14, Q-30 2026-08-11): with the π-cancel
+    // alone, A/B captures of the owner's fixture at a pinned desktop pose
+    // rendered visibly darker than OpenSCAD 2021.01 even though the preview
+    // mesh wears the WASM-baked upstream colors verbatim — the remaining
+    // gap is three's lighting evaluation, not color handling, so the level
+    // is calibrated here and nowhere else. The user brightness/contrast
+    // sliders stay neutral multipliers on top of these bases.
     const piAmbient = 0.2 * Math.PI;
-    const piDirectional = 1.0 * Math.PI;
+    const piDirectional = 1.5 * Math.PI;
 
     this.ambientLight = new AmbientLight(colors.ambientLight, piAmbient);
     this.scene.add(this.ambientLight);
@@ -447,7 +720,7 @@ export class PreviewManager {
       this.controls.zoomToCursor = this.zoomToCursorEnabled;
 
       this.setupKeyboardControls();
-      this.setupCameraControls();
+      this._setupPoleCrossing();
     }
 
     // Handle window resize with view preservation
@@ -553,13 +826,20 @@ export class PreviewManager {
     notice.className = 'preview-webgl-error';
     notice.setAttribute('role', 'alert');
 
-    const heading = document.createElement('h3');
+    // Defect D-30: this was an h3. In Forge it sits under the "Preview
+    // Settings & Info" h2 and the order was fine, but Classic does not carry
+    // those Forge panel headings, so the page ran h1 straight to h3 and a
+    // reader navigating by heading level hit a skipped one - on the very
+    // notice written for people whose browser blocks WebGL. h2 is correct in
+    // both: it follows the h1 in Classic and sits beside the panel headings in
+    // Forge. The wording is unchanged.
+    const heading = document.createElement('h2');
     heading.textContent = '3D preview unavailable';
 
     const reason = document.createElement('p');
     reason.textContent =
       'Your browser blocked WebGL, which is required to display the 3D model. ' +
-      'Rendering and exporting (STL, 3MF, etc.) still work normally.';
+      'Rendering and exporting (STL, OBJ, etc.) still work normally.';
 
     const howToFix = document.createElement('p');
     howToFix.textContent = 'To enable the 3D preview:';
@@ -590,6 +870,15 @@ export class PreviewManager {
    */
   detectTheme() {
     const root = document.documentElement;
+
+    // Classic renders one fixed desktop appearance, so it outranks the
+    // theme, high-contrast and Alt View settings (see classic.css). Which
+    // appearance is the user's own choice from Preferences ▸ 3D View;
+    // 'cornfield' resolves to the 'classic' palette, the historical default.
+    if (document.body?.dataset.uiMode === 'classic') {
+      return schemeColorsKey(this.viewportScheme ?? DEFAULT_VIEWPORT_SCHEME);
+    }
+
     const highContrast = root.getAttribute('data-high-contrast') === 'true';
     const dataTheme = root.getAttribute('data-theme');
 
@@ -630,9 +919,13 @@ export class PreviewManager {
    * @param {boolean} highContrast - High contrast mode enabled
    */
   updateTheme(theme, highContrast = false) {
-    // Determine theme key
+    // Determine theme key. The Classic viewport schemes have no -hc siblings
+    // by design: Classic renders one fixed desktop appearance and ignores
+    // high contrast entirely. Suffixing one would look up a key that does not
+    // exist and silently fall back to the light theme, so the user's chosen
+    // scheme would vanish the moment high contrast was on.
     let themeKey = theme;
-    if (highContrast && !theme.endsWith('-hc')) {
+    if (highContrast && !isViewportSchemeKey(theme) && !theme.endsWith('-hc')) {
       themeKey = `${theme}-hc`;
     }
 
@@ -1096,9 +1389,62 @@ export class PreviewManager {
     if (this.controls) this.controls.update();
     if (!this.renderer) return;
     if (this._renderOverride) {
+      // The HFM alternative view replaces the whole pass, triad included.
       this._renderOverride();
     } else {
       this.renderer.render(this.scene, this.getActiveCamera());
+      this._renderAxisTriadPass();
+    }
+  }
+
+  /**
+   * The corner triad's second pass (UF-7 P3): a scissored viewport in the
+   * lower-left (Q-26), depth cleared so the triad draws over whatever sits
+   * in its corner — the desktop renders its smallaxes with GL_ALWAYS. The
+   * triad camera copies only the main camera's rotation, so pan and zoom
+   * leave it untouched.
+   */
+  _renderAxisTriadPass() {
+    const triad = this._axisTriad;
+    if (!triad || !this.renderer) return;
+
+    const size = this.renderer.getSize(_triadSizeScratch);
+    const box = triad.layout(size.x, size.y);
+    if (!box) return;
+
+    triad.syncTo(this.getActiveCamera());
+
+    const renderer = this.renderer;
+    renderer.autoClear = false;
+    renderer.setScissorTest(true);
+    renderer.setViewport(box.x, box.y, box.size, box.size);
+    renderer.setScissor(box.x, box.y, box.size, box.size);
+    renderer.clearDepth();
+    renderer.render(triad.scene, triad.camera);
+    renderer.setScissorTest(false);
+    renderer.setViewport(0, 0, size.x, size.y);
+    renderer.autoClear = true;
+  }
+
+  /**
+   * Show, hide or recolor the corner triad. Called by the display-options
+   * controller wherever the Axes overlay is applied, with the same
+   * resolveAxisMarkColor() result the axis lines use for the letters.
+   *
+   * @param {{visible: boolean, letterColorHex?: number}} opts
+   */
+  setAxisTriad({ visible, letterColorHex }) {
+    if (!visible) {
+      this._axisTriad?.dispose();
+      this._axisTriad = null;
+      return;
+    }
+    if (this._axisTriad && this._axisTriad.letterColorHex !== letterColorHex) {
+      this._axisTriad.dispose();
+      this._axisTriad = null;
+    }
+    if (!this._axisTriad) {
+      this._axisTriad = buildAxisTriadOverlay({ letterColorHex });
     }
   }
 
@@ -1112,6 +1458,12 @@ export class PreviewManager {
     const zoomSpeed = 10;
 
     this.keyboardHandler = (event) => {
+      // ★ The drawing editor lives in this container, and every key it uses -
+      // arrows between regions, Escape to leave - is a key this handler would
+      // otherwise spend on the camera. A button or a table row is not an INPUT,
+      // so the guard below does not cover it.
+      if (this._isEditorSurfaceActive) return;
+
       // Ignore if focus is in an input field
       if (
         event.target.tagName === 'INPUT' ||
@@ -1209,266 +1561,15 @@ export class PreviewManager {
    * On mobile, the camera drawer in the actions bar handles controls.
    * Floating controls are only created as a fallback if neither exists.
    */
-  setupCameraControls() {
-    // Check if the camera panel drawer exists (desktop view)
-    // If it does, skip creating floating controls as they're redundant
-    const cameraPanelDrawer = document.getElementById('cameraPanel');
-    if (cameraPanelDrawer && window.innerWidth >= 768) {
-      console.log(
-        '[Preview] Camera panel drawer exists - skipping floating controls'
-      );
-      return;
-    }
-
-    // Check if the mobile camera drawer exists (mobile view)
-    // If it does, skip creating floating controls
-    const mobileCameraDrawer = document.getElementById('cameraDrawer');
-    if (mobileCameraDrawer && window.innerWidth < 768) {
-      console.log(
-        '[Preview] Mobile camera drawer exists - skipping floating controls'
-      );
-      return;
-    }
-
-    // Create control panel (for mobile or when drawer doesn't exist)
-    const controlPanel = document.createElement('div');
-    controlPanel.className = 'camera-controls';
-    controlPanel.setAttribute('role', 'group');
-    controlPanel.setAttribute('aria-label', 'Camera controls');
-
-    // Persisted preferences: collapsed + position (keyboard-accessible “move”)
-    const isCollapsed =
-      localStorage.getItem(STORAGE_KEY_CAMERA_COLLAPSED) === 'true';
-    const position =
-      localStorage.getItem(STORAGE_KEY_CAMERA_POSITION) || 'bottom-right'; // bottom-right | bottom-left | top-right | top-left
-    controlPanel.dataset.collapsed = isCollapsed ? 'true' : 'false';
-    controlPanel.dataset.position = position;
-
-    // Header with collapse + move controls (a11y: clear labels, aria-expanded)
-    const header = document.createElement('div');
-    header.className = 'camera-controls-header';
-
-    const toggleBtn = document.createElement('button');
-    toggleBtn.type = 'button';
-    toggleBtn.className = 'camera-controls-toggle';
-    toggleBtn.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
-    toggleBtn.setAttribute('aria-controls', 'cameraControlsBody');
-    toggleBtn.setAttribute(
-      'aria-label',
-      isCollapsed ? 'Expand camera controls' : 'Collapse camera controls'
-    );
-    toggleBtn.title = isCollapsed
-      ? 'Show camera controls'
-      : 'Hide camera controls';
-    toggleBtn.textContent = 'Camera controls';
-
-    const moveBtn = document.createElement('button');
-    moveBtn.type = 'button';
-    moveBtn.className = 'camera-controls-move';
-    moveBtn.setAttribute(
-      'aria-label',
-      'Move camera controls to a different corner'
-    );
-    moveBtn.title = 'Move camera controls';
-    moveBtn.textContent = 'Move';
-
-    header.appendChild(toggleBtn);
-    header.appendChild(moveBtn);
-    controlPanel.appendChild(header);
-
-    const body = document.createElement('div');
-    body.className = 'camera-controls-body';
-    body.id = 'cameraControlsBody';
-
-    // Rotation controls
-    const rotateGroup = document.createElement('div');
-    rotateGroup.className = 'camera-control-group';
-    rotateGroup.innerHTML = `
-      <button type="button" class="camera-control-btn" id="cameraRotateLeft" aria-label="Rotate view left" title="Rotate left (Arrow Left)">
-        ◀
-      </button>
-      <button type="button" class="camera-control-btn" id="cameraRotateUp" aria-label="Rotate view up" title="Rotate up (Arrow Up)">
-        ▲
-      </button>
-      <button type="button" class="camera-control-btn" id="cameraRotateDown" aria-label="Rotate view down" title="Rotate down (Arrow Down)">
-        ▼
-      </button>
-      <button type="button" class="camera-control-btn" id="cameraRotateRight" aria-label="Rotate view right" title="Rotate right (Arrow Right)">
-        ▶
-      </button>
-    `;
-
-    // Pan controls
-    const panGroup = document.createElement('div');
-    panGroup.className = 'camera-control-group camera-pan-group';
-    panGroup.innerHTML = `
-      <button type="button" class="camera-control-btn" id="cameraPanLeft" aria-label="Pan view left" title="Pan left (Shift + Arrow Left)">
-        ⟵
-      </button>
-      <button type="button" class="camera-control-btn" id="cameraPanUp" aria-label="Pan view up" title="Pan up (Shift + Arrow Up)">
-        ⟰
-      </button>
-      <button type="button" class="camera-control-btn" id="cameraPanDown" aria-label="Pan view down" title="Pan down (Shift + Arrow Down)">
-        ⟱
-      </button>
-      <button type="button" class="camera-control-btn" id="cameraPanRight" aria-label="Pan view right" title="Pan right (Shift + Arrow Right)">
-        ⟶
-      </button>
-    `;
-
-    // Zoom controls
-    const zoomGroup = document.createElement('div');
-    zoomGroup.className = 'camera-control-group camera-zoom-group';
-    zoomGroup.innerHTML = `
-      <button type="button" class="camera-control-btn" id="cameraZoomIn" aria-label="Zoom in" title="Zoom in (+)">
-        +
-      </button>
-      <button type="button" class="camera-control-btn" id="cameraZoomOut" aria-label="Zoom out" title="Zoom out (-)">
-        −
-      </button>
-      <button type="button" class="camera-control-btn" id="cameraResetView" aria-label="Reset camera to default view" title="Reset view (Home)">
-        ⌂
-      </button>
-    `;
-
-    body.appendChild(rotateGroup);
-    body.appendChild(panGroup);
-    body.appendChild(zoomGroup);
-    controlPanel.appendChild(body);
-    this.container.appendChild(controlPanel);
-
-    // Apply initial collapsed state (hide body if collapsed)
-    if (isCollapsed) {
-      body.hidden = true;
-    }
-
-    const setCollapsed = (nextCollapsed) => {
-      controlPanel.dataset.collapsed = nextCollapsed ? 'true' : 'false';
-      body.hidden = !!nextCollapsed;
-      toggleBtn.setAttribute('aria-expanded', nextCollapsed ? 'false' : 'true');
-      toggleBtn.setAttribute(
-        'aria-label',
-        nextCollapsed ? 'Expand camera controls' : 'Collapse camera controls'
-      );
-      toggleBtn.title = nextCollapsed
-        ? 'Show camera controls'
-        : 'Hide camera controls';
-      localStorage.setItem(
-        STORAGE_KEY_CAMERA_COLLAPSED,
-        nextCollapsed ? 'true' : 'false'
-      );
-    };
-
-    const positions = ['bottom-right', 'bottom-left', 'top-right', 'top-left'];
-    const cyclePosition = () => {
-      const current = controlPanel.dataset.position || 'bottom-right';
-      const idx = positions.indexOf(current);
-      const next = positions[(idx + 1 + positions.length) % positions.length];
-      controlPanel.dataset.position = next;
-      localStorage.setItem(STORAGE_KEY_CAMERA_POSITION, next);
-    };
-
-    toggleBtn.addEventListener('click', () => {
-      setCollapsed(controlPanel.dataset.collapsed !== 'true' ? true : false);
-    });
-    moveBtn.addEventListener('click', () => {
-      cyclePosition();
-    });
-
-    // Wire up button events
-    this.setupCameraControlButtons();
-  }
-
   /**
-   * Setup camera control button event handlers
+   * Camera controls live in the #cameraPanel drawer (>=768px) and the
+   * #cameraDrawer actions bar (<768px), both always present in index.html.
+   * The floating-fallback builder that used to follow the old guards here
+   * was therefore unreachable at every width - proven with a throw at its
+   * head across the desktop, Classic and mobile camera suites (36 cases, 0
+   * reached) - and was deleted with its second set of view-button bindings
+   * (AF-8, owner-approved 2026-08-19; the UF-26/UF-30 reports).
    */
-  setupCameraControlButtons() {
-    const rotationSpeed = 0.1;
-    const panSpeed = 6;
-    const zoomSpeed = 15;
-
-    // Rotation buttons — delegate to shared methods that correctly
-    // orbit around controls.target and work with both camera types.
-    document
-      .getElementById('cameraRotateLeft')
-      ?.addEventListener('click', () => {
-        this.rotateHorizontal(rotationSpeed);
-        this.announceCameraAction('Rotate left');
-      });
-
-    document
-      .getElementById('cameraRotateRight')
-      ?.addEventListener('click', () => {
-        this.rotateHorizontal(-rotationSpeed);
-        this.announceCameraAction('Rotate right');
-      });
-
-    document.getElementById('cameraRotateUp')?.addEventListener('click', () => {
-      this.rotateVertical(rotationSpeed);
-      this.announceCameraAction('Rotate up');
-    });
-
-    document
-      .getElementById('cameraRotateDown')
-      ?.addEventListener('click', () => {
-        this.rotateVertical(-rotationSpeed);
-        this.announceCameraAction('Rotate down');
-      });
-
-    // Pan buttons
-    document.getElementById('cameraPanLeft')?.addEventListener('click', () => {
-      this.panCamera(-panSpeed, 0);
-      this.announceCameraAction('Pan left');
-    });
-
-    document.getElementById('cameraPanRight')?.addEventListener('click', () => {
-      this.panCamera(panSpeed, 0);
-      this.announceCameraAction('Pan right');
-    });
-
-    document.getElementById('cameraPanUp')?.addEventListener('click', () => {
-      this.panCamera(0, panSpeed);
-      this.announceCameraAction('Pan up');
-    });
-
-    document.getElementById('cameraPanDown')?.addEventListener('click', () => {
-      this.panCamera(0, -panSpeed);
-      this.announceCameraAction('Pan down');
-    });
-
-    // Zoom buttons — delegate to shared zoomCamera() which handles
-    // both perspective (translate) and orthographic (adjust zoom property).
-    document.getElementById('cameraZoomIn')?.addEventListener('click', () => {
-      this.zoomCamera(zoomSpeed);
-      this.announceCameraAction('Zoom in');
-    });
-
-    document.getElementById('cameraZoomOut')?.addEventListener('click', () => {
-      this.zoomCamera(-zoomSpeed);
-      this.announceCameraAction('Zoom out');
-    });
-
-    // Reset view button
-    document
-      .getElementById('cameraResetView')
-      ?.addEventListener('click', () => {
-        if (this.mesh) {
-          this.fitCameraToModel();
-          this.announceCameraAction('Reset view');
-        }
-      });
-
-    // Standard view buttons for consistent viewing angles
-    const viewButtons = document.querySelectorAll('.camera-view-btn');
-    viewButtons.forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const viewName = btn.dataset.view;
-        if (viewName) {
-          this.setCameraView(viewName);
-        }
-      });
-    });
-  }
 
   /**
    * Announce camera actions to screen readers
@@ -1597,6 +1698,10 @@ export class PreviewManager {
           this._postLoadHook();
         }
         this._firePostLoadListeners();
+        // DP-5: "Top of the model" is a promise about THIS model, so it is
+        // re-resolved whenever one arrives. Any other preset is a constant and
+        // this returns immediately.
+        this.refreshOverlayZ();
 
         if (this.measurementsEnabled) {
           this.showMeasurements();
@@ -1755,6 +1860,28 @@ export class PreviewManager {
           }
         }
         if (hasColors && rawColors.length > 0) {
+          // Uniform inline colors carry no visual information (e.g. a
+          // colorless model rendered with --enable=render-colors, or a
+          // model wrapped in a single color() call). Drop them so the
+          // cavity classifier below can tint inner faces instead — this
+          // replaces the old strip-and-re-render fallback, which mutated
+          // the user's source and cost a second render.
+          const uniqueFaceColors = new Set();
+          for (let i = 0; i < rawColors.length; i += 9) {
+            uniqueFaceColors.add(
+              `${rawColors[i]},${rawColors[i + 1]},${rawColors[i + 2]}`
+            );
+            if (uniqueFaceColors.size > 1) break;
+          }
+          if (uniqueFaceColors.size <= 1) {
+            console.log(
+              '[Preview] OFF colors are uniform — using viewer-side cavity tinting'
+            );
+            hasColors = false;
+            rawColors.length = 0;
+          }
+        }
+        if (hasColors && rawColors.length > 0) {
           // Use global max across all inline colors to avoid first-face-black misdetection.
           colorScale = rawColorMax > 1 ? 1 / 255 : 1;
           for (let i = 0; i < rawColors.length; i += 3) {
@@ -1898,6 +2025,10 @@ export class PreviewManager {
           this._postLoadHook();
         }
         this._firePostLoadListeners();
+        // DP-5: "Top of the model" is a promise about THIS model, so it is
+        // re-resolved whenever one arrives. Any other preset is a constant and
+        // this returns immediately.
+        this.refreshOverlayZ();
         if (this.measurementsEnabled) {
           this.showMeasurements();
         }
@@ -2053,11 +2184,11 @@ export class PreviewManager {
     panel.id = 'colorLegend';
     panel.className = 'color-legend';
     panel.setAttribute('role', 'status');
-    panel.setAttribute('aria-label', 'Model color parameters');
+    panel.setAttribute('aria-label', 'Model color settings');
 
     const heading = document.createElement('span');
     heading.className = 'color-legend-title';
-    heading.textContent = 'Color parameters';
+    heading.textContent = 'Color Settings';
     panel.appendChild(heading);
 
     for (const { name, value } of colorParams) {
@@ -2098,8 +2229,7 @@ export class PreviewManager {
    *   elevation = 35° above the XY plane
    *
    * Works correctly in both perspective and orthographic projection modes.
-   * Also resets the camera up vector to Z-up (important after standard views
-   * like Top/Bottom which change the up vector).
+   * Also re-asserts Z-up, so a camera that somehow lost it comes back sane.
    */
   fitCameraToModel() {
     if (!this.mesh) return;
@@ -2124,8 +2254,7 @@ export class PreviewManager {
 
     const camera = this.getActiveCamera();
 
-    // Reset up vector to Z-up (standard views like Top change this)
-    camera.up.set(0, 0, 1);
+    camera.up.set(...PreviewManager.WORLD_UP);
 
     camera.position.set(
       center.x + horizontalDist * Math.sin(azimuth), // X: slightly right
@@ -2163,10 +2292,289 @@ export class PreviewManager {
   }
 
   /**
+   * Set the orthographic frustum from a visible height, keeping the container's
+   * aspect ratio and clearing any accumulated zoom.
+   *
+   * @param {number} frustumHeight - World-space height the frustum should show
+   * @private
+   */
+  _applyOrthoFrustum(frustumHeight) {
+    if (!this.orthoCamera) return;
+
+    const width = this.container?.clientWidth || 0;
+    const height = this.container?.clientHeight || 0;
+    const aspect = height > 0 ? width / height : this.camera?.aspect || 1;
+
+    this.orthoCamera.left = (frustumHeight * aspect) / -2;
+    this.orthoCamera.right = (frustumHeight * aspect) / 2;
+    this.orthoCamera.top = frustumHeight / 2;
+    this.orthoCamera.bottom = frustumHeight / -2;
+    this.orthoCamera.zoom = 1;
+    this.orthoCamera.updateProjectionMatrix();
+  }
+
+  /**
+   * Restore the startup camera pose, whatever is or is not loaded.
+   *
+   * This is View ▸ Reset View. It ignores the model on purpose: upstream's
+   * Reset View returns the camera to its default angle, distance and target,
+   * which is what separates it from View All (fit the model, keep the angle)
+   * and Center (keep the angle and distance, re-centre on the model). Called
+   * from the View menu, the `resetView` shortcut and the camera bar, all of
+   * which used to reach a method that did not exist.
+   */
+  resetCamera() {
+    if (!this.camera) return;
+
+    const camera = this.getActiveCamera();
+    const [x, y, z] = PreviewManager.DEFAULT_CAMERA_POSITION;
+
+    camera.up.set(...PreviewManager.WORLD_UP);
+    camera.position.set(x, y, z);
+    camera.lookAt(0, 0, 0);
+
+    if (this.controls) this.controls.target.set(0, 0, 0);
+
+    if (this.projectionMode === 'orthographic' && this.orthoCamera) {
+      // The frustum-from-distance relationship toggleProjection() keeps, so a
+      // reset shows the same area in orthographic as it does in perspective.
+      const distance = Math.sqrt(x * x + y * y + z * z);
+      const fovRad = this.camera.fov * (Math.PI / 180);
+      this._applyOrthoFrustum(2 * distance * Math.tan(fovRad / 2));
+    }
+
+    if (this.controls) this.controls.update();
+
+    console.log('[Preview] Camera reset to default pose');
+  }
+
+  /**
+   * Re-centre the view on the model without changing the angle or distance.
+   *
+   * This is View ▸ Center: the desktop clears the pan offset, so the object
+   * returns to the middle of the viewport and nothing else moves.
+   *
+   * @returns {boolean} true when the view moved
+   */
+  centerCamera() {
+    if (!this.camera || !this.mesh) return false;
+
+    const center = new Box3().setFromObject(this.mesh).getCenter(new Vector3());
+    const camera = this.getActiveCamera();
+    const target = this.controls ? this.controls.target : new Vector3();
+
+    camera.position.add(center.clone().sub(target));
+    if (this.controls) this.controls.target.copy(center);
+    camera.lookAt(center);
+
+    if (this.controls) this.controls.update();
+
+    return true;
+  }
+
+  /**
+   * Fit the whole model in view WITHOUT changing the viewing angle.
+   *
+   * This is View ▸ View All. `fitCameraToModel()` also snaps back to the
+   * default diagonal, which is what a freshly loaded model wants but would
+   * make View All and Reset View the same command.
+   *
+   * @returns {boolean} true when the view moved
+   */
+  /**
+   * AF-11 (UF-26's recorded stop): OrbitControls clamps the polar angle at
+   * the poles, so from Top only an upward drag tilted away - the downward
+   * one pressed a dead clamp - where the desktop rolls straight over. This
+   * carries the camera OVER the pole when a gesture keeps pushing against
+   * the clamp: azimuth flips half a turn and the camera lands a real tilt
+   * past the pole, exactly the far side of the roll-over. One crossing per
+   * gesture, so a single pull cannot ping-pong across.
+   *
+   * D-48's invariant holds by construction: pure vector geometry on
+   * camera.position - camera.up is never read or written.
+   */
+  _setupPoleCrossing() {
+    const el = this.renderer?.domElement;
+    if (!el) return;
+    this._poleGesture = { active: false, lastY: 0, acc: 0, crossed: false };
+
+    el.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      this._poleGesture.active = true;
+      this._poleGesture.lastY = e.clientY;
+      this._poleGesture.acc = 0;
+      this._poleGesture.crossed = false;
+      this._poleGesture.pointerId = e.pointerId;
+    });
+    window.addEventListener('pointerup', () => {
+      this._poleGesture.active = false;
+      this._poleGesture.acc = 0;
+    });
+    el.addEventListener('pointermove', (e) => {
+      const g = this._poleGesture;
+      if (!g.active || g.crossed || !this.controls?.enabled) return;
+      const dy = e.clientY - g.lastY;
+      g.lastY = e.clientY;
+
+      const polar = this.controls.getPolarAngle();
+      const NEAR = 0.02; // ~1.1 degrees - inside this, the clamp is what stops you
+      const atTop = polar < NEAR;
+      const atBottom = polar > Math.PI - NEAR;
+      // At Top the DOWNWARD drag (dy > 0) presses the clamp; at Bottom the
+      // upward one. Any other motion resets the intent.
+      if (atTop && dy > 0) g.acc += dy;
+      else if (atBottom && dy < 0) g.acc += dy;
+      else g.acc = 0;
+
+      const THRESHOLD_PX = 14;
+      let side = null;
+      if (g.acc > THRESHOLD_PX) side = 'top';
+      else if (g.acc < -THRESHOLD_PX) side = 'bottom';
+      if (side) {
+        g.acc = 0;
+        g.crossed = this._crossPole(side);
+        if (g.crossed) {
+          // The rest of THIS gesture still belongs to OrbitControls, and it
+          // would rotate straight back into the pole from the far side
+          // (measured: the crossing fired, then eight remaining moves undid
+          // it). End the library's drag at the moment of crossing; the next
+          // grab starts on the far side.
+          g.active = false;
+          el.dispatchEvent(
+            new PointerEvent('pointercancel', {
+              pointerId: g.pointerId,
+              bubbles: true,
+            })
+          );
+        }
+      }
+    });
+  }
+
+  /**
+   * Carry the camera over the given pole: same distance, azimuth + half a
+   * turn, landing CROSS_LANDING off the pole on the far side.
+   * @param {'top'|'bottom'} side
+   * @returns {boolean} true when the camera moved
+   */
+  _crossPole(side) {
+    if (!this.controls) return false;
+    const camera = this.getActiveCamera();
+    const target = this.controls.target;
+
+    // Damping keeps a residue of the gesture's rotation and would decay it
+    // AGAINST the landing (measured: ~7 degrees clawed back toward the
+    // pole). One undamped update consumes the pending delta into the clamp,
+    // where it can do nothing, so the landing below is exact.
+    const wasDamping = this.controls.enableDamping;
+    this.controls.enableDamping = false;
+    this.controls.update();
+    this.controls.enableDamping = wasDamping;
+    const offset = camera.position.clone().sub(target);
+    const dist = offset.length();
+    if (dist < 1e-6) return false;
+
+    // The horizontal heading we arrived on; at the pole it is tiny but real
+    // (the face views sit POLE_EPSILON off the pole, aimed a hair toward -Y).
+    const h = new Vector3(offset.x, offset.y, 0);
+    if (h.lengthSq() < 1e-12) h.set(0, -1, 0);
+    h.normalize().negate(); // azimuth + PI: out the other side
+
+    const CROSS_LANDING = (12 * Math.PI) / 180; // a real, visible tilt past
+    const sin = Math.sin(CROSS_LANDING);
+    const cos =
+      side === 'top' ? Math.cos(CROSS_LANDING) : -Math.cos(CROSS_LANDING);
+
+    camera.position
+      .copy(target)
+      .addScaledVector(h, dist * sin)
+      .add(new Vector3(0, 0, dist * cos));
+    camera.lookAt(target);
+    this.controls.update();
+    return true;
+  }
+
+  viewAllCamera() {
+    if (!this.camera || !this.mesh) return false;
+
+    const box = new Box3().setFromObject(this.mesh);
+    const center = box.getCenter(new Vector3());
+    const size = box.getSize(new Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+
+    const camera = this.getActiveCamera();
+    const target = this.controls ? this.controls.target : new Vector3();
+
+    // Keep the direction the user is already looking from; fall back to the
+    // default diagonal when the camera sits exactly on its own target.
+    const direction = camera.position.clone().sub(target);
+    if (direction.lengthSq() < 1e-6) {
+      direction.set(...PreviewManager.CAMERA_VIEWS.diagonal.direction);
+    }
+    direction.normalize();
+
+    const fovRad = this.camera.fov * (Math.PI / 180);
+    const distance = Math.abs(maxDim / 2 / Math.tan(fovRad / 2)) * 1.8; // Padding
+
+    camera.position.copy(center).addScaledVector(direction, distance);
+    camera.lookAt(center);
+    if (this.controls) this.controls.target.copy(center);
+
+    if (this.projectionMode === 'orthographic' && this.orthoCamera) {
+      this._applyOrthoFrustum(maxDim * 1.8);
+    }
+
+    if (this.controls) this.controls.update();
+
+    return true;
+  }
+
+  /**
+   * The pose the camera starts in — OpenSCAD's diagonal view of the origin.
+   * Defined once so `init()` and `resetCamera()` cannot drift apart.
+   */
+  static DEFAULT_CAMERA_POSITION = [150, -150, 100];
+
+  /**
+   * The world's up axis. OpenSCAD is Z-up, and this app has exactly one up:
+   * OrbitControls captures its orbit frame from `camera.up` ONCE, inside the
+   * IIFE that builds `update()`, so a later write never reaches the orbit
+   * maths — but the `lookAt(target)` at the end of every frame's update DOES
+   * read it. Leaving a different up behind therefore cannot re-aim the
+   * turntable; it only rolls the picture, and the roll grows with every drag
+   * until the view is un-navigable (D-48). Nothing may set a different one.
+   */
+  static WORLD_UP = [0, 0, 1];
+
+  /**
+   * How far off the pole the Top and Bottom views sit.
+   *
+   * `lookAt` cannot build a camera frame when the view direction is parallel
+   * to `up` — three falls back to nudging the direction by 0.0001, which lands
+   * Top with +Y across the screen instead of up it — and OrbitControls clamps
+   * the polar angle of a camera sitting exactly on a pole. Both views are
+   * therefore aimed a hair toward -Y, which is also what puts +Y up the screen
+   * for Top and down it for Bottom, matching the desktop.
+   *
+   * The size is MEASURED, not guessed. Looking straight down, the Z axis and
+   * its scale marks lie in a plane that contains the view direction, so they
+   * collapse to a line — and the ones nearest the camera blow up under
+   * perspective the instant that plane opens even slightly. Comparing renders
+   * of the Top and Bottom views against the exactly-on-pole ones, the strongly
+   * changed pixels run 2890 at 1e-3, 948 at 1e-4, 489 at 3e-5 and 7 at 1e-5,
+   * where what is left is one antialiased axis line landing on a different
+   * row. 1e-5 is 0.00057°, and still ten times OrbitControls' polar epsilon.
+   */
+  static POLE_EPSILON = 0.00001;
+
+  /**
    * Standard camera views for OpenSCAD-style viewing (Z-up coordinate system)
    *
    * direction: unit-ish vector FROM the model center TOWARD the camera.
-   * up:        which direction is "up" on screen.
+   *
+   * There is deliberately no per-view up: screen orientation follows from the
+   * direction and WORLD_UP alone, which is what keeps the orbit a turntable
+   * around global Z after every one of these (D-48).
    *
    * The diagonal view matches OpenSCAD's default $vpr = [55, 0, 25]:
    *   azimuth 25° from front (-Y) toward right (+X), elevation 35° above XY plane.
@@ -2174,17 +2582,16 @@ export class PreviewManager {
    *            ≈ [0.346, -0.742, 0.574]
    */
   static CAMERA_VIEWS = {
-    top: { name: 'Top', direction: [0, 0, 1], up: [0, 1, 0] },
-    bottom: { name: 'Bottom', direction: [0, 0, -1], up: [0, -1, 0] },
-    front: { name: 'Front', direction: [0, -1, 0], up: [0, 0, 1] },
-    back: { name: 'Back', direction: [0, 1, 0], up: [0, 0, 1] },
-    left: { name: 'Left', direction: [-1, 0, 0], up: [0, 0, 1] },
-    right: { name: 'Right', direction: [1, 0, 0], up: [0, 0, 1] },
-    diagonal: {
-      name: 'Diagonal',
-      direction: [0.346, -0.742, 0.574],
-      up: [0, 0, 1],
+    top: { name: 'Top', direction: [0, -PreviewManager.POLE_EPSILON, 1] },
+    bottom: {
+      name: 'Bottom',
+      direction: [0, -PreviewManager.POLE_EPSILON, -1],
     },
+    front: { name: 'Front', direction: [0, -1, 0] },
+    back: { name: 'Back', direction: [0, 1, 0] },
+    left: { name: 'Left', direction: [-1, 0, 0] },
+    right: { name: 'Right', direction: [1, 0, 0] },
+    diagonal: { name: 'Diagonal', direction: [0.346, -0.742, 0.574] },
   };
 
   /**
@@ -2223,8 +2630,9 @@ export class PreviewManager {
     // Position camera along the direction vector from center
     camera.position.copy(center).addScaledVector(direction, cameraDistance);
 
-    // Set up vector for the active camera
-    camera.up.set(...view.up);
+    // Z-up, always — see WORLD_UP. The pose itself carries the screen
+    // orientation, so nothing here needs its own up.
+    camera.up.set(...PreviewManager.WORLD_UP);
 
     // Look at center
     camera.lookAt(center);
@@ -2286,7 +2694,7 @@ export class PreviewManager {
           0.1,
           10000
         );
-        this.orthoCamera.up.set(0, 0, 1);
+        this.orthoCamera.up.set(...PreviewManager.WORLD_UP);
       } else {
         this.orthoCamera.left = (frustumHeight * aspect) / -2;
         this.orthoCamera.right = (frustumHeight * aspect) / 2;
@@ -2326,6 +2734,16 @@ export class PreviewManager {
     const modeName =
       this.projectionMode === 'perspective' ? 'Perspective' : 'Orthographic';
     this.announceCameraAction(`${modeName} projection`);
+
+    // Switching projection need not move the camera, so OrbitControls emits no
+    // 'change' — anything mirroring the projection has nothing to listen to.
+    // Announced here so every caller (camera bar, View menu, the P shortcut)
+    // reaches every mirror, the same shape as display-option-change (E4).
+    document.dispatchEvent(
+      new CustomEvent('preview-projection-change', {
+        detail: { mode: this.projectionMode },
+      })
+    );
 
     console.log(`[Preview] Switched to ${this.projectionMode} projection`);
     return this.projectionMode;
@@ -2578,6 +2996,12 @@ export class PreviewManager {
       this.orthoCamera.zoom *= amount > 0 ? factor : 1 / factor;
       this.orthoCamera.zoom = Math.max(0.01, this.orthoCamera.zoom);
       this.orthoCamera.updateProjectionMatrix();
+      // controls.update() below only dispatches 'change' when the camera
+      // POSITION moved; an ortho zoom moves nothing, so the axis overlays'
+      // zoom-rebuild listener (UF-7) would never hear it. The wheel path
+      // through OrbitControls sets its own zoomChanged flag; this keyboard/
+      // button path has to say so itself.
+      this.controls.dispatchEvent?.({ type: 'change' });
     } else {
       // Perspective: translate camera along view direction
       const camera = this.getActiveCamera();
@@ -2763,7 +3187,7 @@ export class PreviewManager {
    * @returns {boolean} Preference value
    */
   loadMeasurementPreference() {
-    return safeGetItem(STORAGE_KEY_MEASUREMENTS) === 'true';
+    return readScopedPref(STORAGE_KEY_MEASUREMENTS) === 'true';
   }
 
   /**
@@ -2771,7 +3195,7 @@ export class PreviewManager {
    * @param {boolean} enabled - Measurement enabled state
    */
   saveMeasurementPreference(enabled) {
-    safeSetItem(STORAGE_KEY_MEASUREMENTS, enabled ? 'true' : 'false');
+    writeScopedPref(STORAGE_KEY_MEASUREMENTS, enabled ? 'true' : 'false');
   }
 
   /**
@@ -2794,8 +3218,10 @@ export class PreviewManager {
    * @returns {boolean} Preference value (defaults to true)
    */
   loadGridPreference() {
-    const pref = safeGetItem(STORAGE_KEY_GRID);
-    // Default to true (grid visible) if not set
+    // The Classic namespace's default is false (ui-scoped-prefs
+    // NAMESPACE_DEFAULTS — the desktop shows no bed grid); a null read
+    // only happens in Forge, where the grid defaults on.
+    const pref = readScopedPref(STORAGE_KEY_GRID);
     return pref === null ? true : pref === 'true';
   }
 
@@ -2804,7 +3230,7 @@ export class PreviewManager {
    * @param {boolean} enabled - Grid enabled state
    */
   saveGridPreference(enabled) {
-    safeSetItem(STORAGE_KEY_GRID, enabled ? 'true' : 'false');
+    writeScopedPref(STORAGE_KEY_GRID, enabled ? 'true' : 'false');
   }
 
   /**
@@ -2883,7 +3309,7 @@ export class PreviewManager {
    * @returns {string|null}
    */
   loadGridColorPreference() {
-    const raw = safeGetItem(STORAGE_KEY_GRID_COLOR);
+    const raw = readScopedPref(STORAGE_KEY_GRID_COLOR);
     if (raw && /^#[0-9a-f]{6}$/i.test(raw)) return raw;
     return null;
   }
@@ -2894,9 +3320,9 @@ export class PreviewManager {
    */
   saveGridColorPreference(hex) {
     if (hex) {
-      safeSetItem(STORAGE_KEY_GRID_COLOR, hex);
+      writeScopedPref(STORAGE_KEY_GRID_COLOR, hex);
     } else {
-      safeRemoveItem(STORAGE_KEY_GRID_COLOR);
+      removeScopedPref(STORAGE_KEY_GRID_COLOR);
     }
   }
 
@@ -2933,7 +3359,7 @@ export class PreviewManager {
    * @returns {number} 10–100 (default 100)
    */
   loadGridOpacityPreference() {
-    const raw = safeGetItem(STORAGE_KEY_GRID_OPACITY);
+    const raw = readScopedPref(STORAGE_KEY_GRID_OPACITY);
     if (raw !== null) {
       const val = parseInt(raw, 10);
       if (!Number.isNaN(val) && val >= 10 && val <= 100) return val;
@@ -2947,9 +3373,9 @@ export class PreviewManager {
    */
   saveGridOpacityPreference(value) {
     if (value !== null && value !== undefined && value !== 100) {
-      safeSetItem(STORAGE_KEY_GRID_OPACITY, String(value));
+      writeScopedPref(STORAGE_KEY_GRID_OPACITY, String(value));
     } else {
-      safeRemoveItem(STORAGE_KEY_GRID_OPACITY);
+      removeScopedPref(STORAGE_KEY_GRID_OPACITY);
     }
   }
 
@@ -3027,7 +3453,7 @@ export class PreviewManager {
   loadGridSizePreference() {
     try {
       // try/catch retained for JSON.parse of possibly-corrupt values
-      const raw = safeGetItem(STORAGE_KEY_GRID_SIZE);
+      const raw = readScopedPref(STORAGE_KEY_GRID_SIZE);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (
@@ -3049,7 +3475,7 @@ export class PreviewManager {
    * @param {{ widthMm: number, heightMm: number }} config
    */
   saveGridSizePreference(config) {
-    safeSetItem(STORAGE_KEY_GRID_SIZE, JSON.stringify(config));
+    writeScopedPref(STORAGE_KEY_GRID_SIZE, JSON.stringify(config));
   }
 
   /**
@@ -3198,7 +3624,7 @@ export class PreviewManager {
    * @returns {boolean} Preference value (defaults to true - most users want this)
    */
   loadAutoBedPreference() {
-    const pref = safeGetItem(STORAGE_KEY_AUTO_BED);
+    const pref = readScopedPref(STORAGE_KEY_AUTO_BED);
     // Default to true (auto-bed enabled) if not set
     return pref === null ? true : pref === 'true';
   }
@@ -3208,7 +3634,7 @@ export class PreviewManager {
    * @param {boolean} enabled - Auto-bed enabled state
    */
   saveAutoBedPreference(enabled) {
-    safeSetItem(STORAGE_KEY_AUTO_BED, enabled ? 'true' : 'false');
+    writeScopedPref(STORAGE_KEY_AUTO_BED, enabled ? 'true' : 'false');
   }
 
   /**
@@ -3234,32 +3660,96 @@ export class PreviewManager {
    * @returns {boolean}
    */
   loadZoomToCursorPreference() {
-    try {
-      const pref = localStorage.getItem(STORAGE_KEY_ZOOM_TO_CURSOR);
-      return pref === null ? true : pref === 'true';
-    } catch (error) {
-      console.warn(
-        '[Preview] Could not load zoom-to-cursor preference:',
-        error
+    const pref = readScopedPref(STORAGE_KEY_ZOOM_TO_CURSOR);
+    return pref === null ? true : pref === 'true';
+  }
+
+  /**
+   * The saved viewport colour scheme id, falling back to the desktop default.
+   * @returns {string}
+   */
+  loadViewportScheme() {
+    const saved = readScopedPref(STORAGE_KEY_VIEWPORT_SCHEME);
+    return VIEWPORT_SCHEMES.some((s) => s.id === saved)
+      ? saved
+      : DEFAULT_VIEWPORT_SCHEME;
+  }
+
+  /** @returns {string} */
+  getViewportScheme() {
+    return this.viewportScheme;
+  }
+
+  /**
+   * Choose a desktop viewport colour scheme and apply it now.
+   *
+   * Instant-apply, like the desktop: there is no OK/Cancel row in upstream's
+   * dialog (OpenSCAD_2/3.png), so picking a name IS the action.
+   *
+   * The scheme governs the Classic viewport. Outside Classic the app theme
+   * drives these colours and keeps doing so, because overriding it would
+   * also override the high-contrast and mono variants, which are
+   * accessibility features rather than decoration. The tab says this in its
+   * own text rather than leaving it as a silent divergence.
+   *
+   * @param {string} id
+   * @returns {boolean} True when the id was known and stored
+   */
+  setViewportScheme(id) {
+    if (!VIEWPORT_SCHEMES.some((s) => s.id === id)) return false;
+    this.viewportScheme = id;
+    writeScopedPref(STORAGE_KEY_VIEWPORT_SCHEME, id);
+
+    // updateTheme() early-returns when the key is unchanged, so a repaint has
+    // to go through detectTheme()'s fresh answer.
+    const next = this.detectTheme();
+    if (next !== this.currentTheme) {
+      this.updateTheme(
+        next,
+        document.documentElement.getAttribute('data-high-contrast') === 'true'
       );
-      return true;
     }
+    return true;
   }
 
   /**
    * @param {boolean} enabled
    */
   saveZoomToCursorPreference(enabled) {
-    try {
-      localStorage.setItem(
-        STORAGE_KEY_ZOOM_TO_CURSOR,
-        enabled ? 'true' : 'false'
-      );
-    } catch (error) {
-      console.warn(
-        '[Preview] Could not save zoom-to-cursor preference:',
-        error
-      );
+    writeScopedPref(STORAGE_KEY_ZOOM_TO_CURSOR, enabled ? 'true' : 'false');
+  }
+
+  /**
+   * The live swap (UF-14 P3): re-read every PER-UI preview preference from
+   * the newly active namespace and re-apply it to the running scene in one
+   * pass — grid visibility, size, color and opacity, measurements,
+   * zoom-to-cursor and the viewport scheme. Camera pose, mesh and
+   * parameters are untouched (SHARED BY ORDER). Auto-bed's new value
+   * governs the next geometry load; the placed mesh is not re-transformed
+   * mid-flip. Colors follow separately via updateTheme(detectTheme()) —
+   * the caller (syncPreviewSceneToMode) runs that right after.
+   */
+  reloadScopedViewPreferences() {
+    this.measurementsEnabled = this.loadMeasurementPreference();
+    this.gridEnabled = this.loadGridPreference();
+    this.gridConfig = this.loadGridSizePreference();
+    this.gridColorOverride = this.loadGridColorPreference();
+    this.gridOpacity = this.loadGridOpacityPreference();
+    this.autoBedEnabled = this.loadAutoBedPreference();
+    this.zoomToCursorEnabled = this.loadZoomToCursorPreference();
+    if (this.controls) {
+      this.controls.zoomToCursor = this.zoomToCursorEnabled;
+    }
+    this.viewportScheme = this.loadViewportScheme();
+
+    // One rebuild covers size, color, opacity AND visibility; a no-op
+    // before the first model (no scene yet — the constructor reads fresh).
+    this._rebuildGrid();
+
+    if (this.measurementsEnabled && this.mesh) {
+      this.showMeasurements();
+    } else {
+      this.hideMeasurements();
     }
   }
 
@@ -3972,6 +4462,67 @@ export class PreviewManager {
   }
 
   /**
+   * The Z a preset resolves to, in mm, for the model currently loaded.
+   *
+   * 'model-top' asks the mesh, so it is only meaningful while there is one;
+   * with no model it falls back to the build plate rather than to a stale
+   * height from a previous object.
+   *
+   * @param {string} preset
+   * @param {number} customMm - Used only by the 'custom' preset
+   * @returns {number} Z in mm
+   */
+  resolveOverlayZ(preset, customMm) {
+    switch (preset) {
+      case 'build-plate':
+        return 0;
+      case 'model-top': {
+        if (!this.mesh) return 0;
+        const box = new Box3().setFromObject(this.mesh);
+        if (!Number.isFinite(box.max.z)) return 0;
+        // A hair above the face, or it z-fights the surface it is tracing.
+        return box.max.z + OVERLAY_SURFACE_EPSILON_MM;
+      }
+      case 'custom':
+        return Number.isFinite(customMm) ? customMm : 0;
+      case 'under-plate':
+      default:
+        return -0.25;
+    }
+  }
+
+  /**
+   * Choose which surface the overlay sits against (DP-5).
+   *
+   * @param {Object} options
+   * @param {string} [options.preset] - under-plate | build-plate | model-top | custom
+   * @param {number} [options.customMm] - Z in mm, used by the custom preset
+   */
+  setOverlayZ({ preset, customMm } = {}) {
+    if (typeof preset === 'string') this.overlayConfig.zPreset = preset;
+    if (Number.isFinite(customMm)) this.overlayConfig.zCustomMm = customMm;
+    this.overlayConfig.zPosition = this.resolveOverlayZ(
+      this.overlayConfig.zPreset,
+      this.overlayConfig.zCustomMm
+    );
+    if (this.overlayConfig.enabled) {
+      this.createOrUpdateReferenceOverlay();
+      if (this.overlayMeasurementsEnabled) {
+        this.showOverlayMeasurements();
+      }
+    }
+  }
+
+  /**
+   * Re-resolve the overlay Z against whatever model is loaded now.
+   * Called after a render, so 'Top of model' follows the object.
+   */
+  refreshOverlayZ() {
+    if (this.overlayConfig.zPreset !== 'model-top') return;
+    this.setOverlayZ({});
+  }
+
+  /**
    * Set the overlay size
    * @param {Object} size - Size configuration
    * @param {number} [size.width] - Width in mm
@@ -4368,6 +4919,8 @@ export class PreviewManager {
     // Clear any render/resize hooks
     this._renderOverride = null;
     this._resizeHook = null;
+    this._axisTriad?.dispose();
+    this._axisTriad = null;
 
     // Clear resize tracking state
     this._lastAspect = null;
@@ -4709,6 +5262,11 @@ export class PreviewManager {
   _set2DPreviewActive(is2D) {
     this._is2DPreviewActive = is2D;
 
+    // While the drawing editor owns the area, a render behind it must not
+    // put the canvas or the label back: what it asked for is remembered
+    // above and honoured when the editor gives the area back.
+    if (this._isEditorSurfaceActive) return;
+
     // Hide 3D canvas when 2D is active, show when 3D
     if (this.renderer?.domElement) {
       this.renderer.domElement.style.display = is2D ? 'none' : '';
@@ -4727,6 +5285,78 @@ export class PreviewManager {
         is2D ? 'Rendered 2D SVG preview' : '3D model preview and controls'
       );
     }
+  }
+
+  /**
+   * Give the preview area over to the drawing editor (DP-19).
+   *
+   * The editor goes WHERE THE 3D VIEW IS, not in a panel beside it and not in
+   * a block inside the customizer, because it is the biggest surface on the
+   * page and on a phone it is the whole of it. Same shape as the 2D preview's
+   * takeover: hide the canvas, hide the placeholder, say what the region is
+   * now.
+   *
+   * ★ AND STAND THE CAMERA KEYS DOWN. `keyboardHandler` fires for any keydown
+   * while focus is inside #previewContainer unless the target is an INPUT,
+   * TEXTAREA, SELECT or contentEditable - so a focused table row or a button
+   * inside the editor would rotate the model behind it while a person thought
+   * they were moving between regions.
+   *
+   * @param {HTMLElement} el - The editor's own root, already in the container
+   */
+  showEditorSurface(el) {
+    if (!el) return;
+    this._isEditorSurfaceActive = true;
+    el.hidden = false;
+    el.classList.remove('hidden');
+    // The render-state pills (the ready badge, the generating pill, the
+    // status bar) float over this area and, MEASURED at 412 px wide, over
+    // the editor's own title. They fade while the editor has the area; they
+    // stay in the accessibility tree, so what they announce is still heard.
+    this.container
+      ?.closest('.preview-canvas-section')
+      ?.classList.add('has-drawing-editor');
+    if (this.renderer?.domElement) {
+      this.renderer.domElement.style.display = 'none';
+    }
+    const placeholder = this.container?.querySelector('.preview-placeholder');
+    if (placeholder) placeholder.style.display = 'none';
+    const twoD = document.getElementById('rendered2dPreview');
+    if (twoD) twoD.classList.add('hidden');
+    if (this.container) {
+      this.container.setAttribute('aria-label', 'Drawing editor');
+      // The container's own tabindex would put an extra stop in front of the
+      // editor's toolbar for no reason: inside the editor, the editor's
+      // controls are the tab stops.
+      this.container.removeAttribute('tabindex');
+    }
+  }
+
+  /**
+   * Give the preview area back, and put the camera keys back with it.
+   *
+   * @param {HTMLElement} el - The editor's own root
+   */
+  hideEditorSurface(el) {
+    this._isEditorSurfaceActive = false;
+    if (el) {
+      el.hidden = true;
+      el.classList.add('hidden');
+    }
+    this.container
+      ?.closest('.preview-canvas-section')
+      ?.classList.remove('has-drawing-editor');
+    // Whatever was asked for while the editor had the area - a 2D preview,
+    // a mesh, nothing yet - is what comes back.
+    const twoD = document.getElementById('rendered2dPreview');
+    if (twoD) twoD.classList.toggle('hidden', !this._is2DPreviewActive);
+    if (this.container) this.container.setAttribute('tabindex', '0');
+    this._set2DPreviewActive(this._is2DPreviewActive === true);
+  }
+
+  /** Whether the drawing editor currently owns the preview area. */
+  isEditorSurfaceActive() {
+    return this._isEditorSurfaceActive === true;
   }
 
   /**
@@ -4827,20 +5457,7 @@ export class PreviewManager {
     const existing = svgEl.querySelector('style[data-forge-preview]');
     if (existing) return;
 
-    const palette =
-      mode === 'rendered'
-        ? {
-            fill: '#07D0A7',
-            stroke: '#FF0603',
-            strokeWidth: '0.5',
-            fillOpacity: '1',
-          }
-        : {
-            fill: '#7A9F7A',
-            stroke: '#7A9F7A',
-            strokeWidth: '0.25',
-            fillOpacity: '0.9',
-          };
+    const palette = get2DStylePalette(mode);
 
     const styleEl = document.createElementNS(ns, 'style');
     styleEl.setAttribute('data-forge-preview', 'true');

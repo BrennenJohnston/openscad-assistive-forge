@@ -2,16 +2,17 @@
  * Camera Panel Controller
  * Right-side collapsible drawer for camera controls (desktop).
  * Mobile camera drawer for portrait/mobile view.
- * Mirrors the Parameters panel behavior on the left side.
+ * Mirrors the Customizer panel behavior on the left side.
  *
  * STATE CONVENTION: Additive close — `collapsed` class = closed.
- * This is the opposite of the Parameters drawer which uses
+ * This is the opposite of the Customizer drawer which uses
  * additive open (`drawer-open` class = open). See UI_STANDARDS.md.
  * @license GPL-3.0-or-later
  */
 
 import { announceImmediate } from './announcer.js';
 import { getDrawerStateKey, safeGetItem, safeSetItem } from './storage-keys.js';
+import { CAMERA_ZOOM_STEP } from './preview.js';
 
 // Storage keys using standardized naming convention
 const STORAGE_KEY_COLLAPSED = getDrawerStateKey('camera');
@@ -109,7 +110,8 @@ export function initCameraPanelController(options = {}) {
   function setupCameraControlButtons() {
     const rotationSpeed = 0.1;
     const panSpeed = 6;
-    const zoomSpeed = 15;
+    // Same step as the 3D view toolbar and the View menu (D-19)
+    const zoomSpeed = CAMERA_ZOOM_STEP;
 
     // Helper to get the current preview manager
     const getPM = () => options.previewManager;
@@ -235,13 +237,15 @@ export function initCameraPanelController(options = {}) {
       }
     });
 
-    // Desktop reset view button
+    // Desktop reset view button. Restores the default pose rather than fitting
+    // the model, so the announcement it already made is now true and the
+    // control means the same thing as View ▸ Reset View everywhere (G4).
     document
       .getElementById('cameraResetView')
       ?.addEventListener('click', () => {
         const pm = getPM();
-        if (pm?.fitCameraToModel && pm?.mesh) {
-          pm.fitCameraToModel();
+        if (pm?.resetCamera) {
+          pm.resetCamera();
           announceAction('View reset to default');
         } else {
           announceAction('Load a model first');
@@ -457,13 +461,13 @@ export function initCameraPanelController(options = {}) {
         }
       });
 
-    // Mobile reset view button
+    // Mobile reset view button — same command as its desktop twin
     document
       .getElementById('mobileCameraResetView')
       ?.addEventListener('click', () => {
         const pm = getPM();
-        if (pm?.fitCameraToModel && pm?.mesh) {
-          pm.fitCameraToModel();
+        if (pm?.resetCamera) {
+          pm.resetCamera();
           announceAction('View reset to default');
         } else {
           announceAction('Load a model first');

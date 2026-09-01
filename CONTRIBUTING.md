@@ -13,21 +13,14 @@ npm run dev
 
 Open `http://localhost:5173`.
 
-**Alternative (Pixi):** If you have [Pixi](https://pixi.sh/) installed, you can
-use `pixi run` instead of `npm run` for any task. Pixi provides a reproducible
-environment with Node.js pinned via conda-forge. See `pixi.toml` for all
-available tasks and their descriptions.
-
-```bash
-pixi install
-pixi run dev
-```
-
 ## What’s helpful
 
 - Fixes for accessibility issues (keyboard traps, focus order, labeling, contrast, motion)
 - Better error messages for common OpenSCAD / CGAL failures
-- Example models in `public/examples/`
+- Example models in `public/examples/`. There is a walkthrough in
+  [docs/guides/TILE_AUTHOR_GUIDE.md](docs/guides/TILE_AUTHOR_GUIDE.md) and a
+  template to copy in `public/examples/_template/`. You do not need to know the
+  app's code to add one.
 - Docs that help real people use the app
 - Tests for bug fixes and new behavior
 
@@ -45,6 +38,7 @@ There’s a longer writeup in `docs/DEVELOPMENT_WORKFLOW.md`. The short version:
 - Lint: `npm run lint`
 - Unit tests: `npm run test:run`
 - E2E tests: `npm run test:e2e`
+- Example models: `npm run validate:example public/examples/<your-folder>`
 
 On Windows, see `docs/TROUBLESHOOTING.md#playwright-terminal-hangs-windows` if Playwright gets stuck.
 

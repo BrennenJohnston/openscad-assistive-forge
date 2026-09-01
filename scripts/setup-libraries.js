@@ -2,7 +2,7 @@
 /**
  * Download OpenSCAD Library Bundles
  * @license GPL-3.0-or-later
- * 
+ *
  * This script downloads popular OpenSCAD libraries for use in the web customizer.
  */
 
@@ -31,8 +31,8 @@ const LIBRARIES = {
     name: 'MCAD',
     repo: 'https://github.com/openscad/MCAD.git',
     branch: 'master',
-    // MCAD has no tagged releases; pin to a known-good commit
-    pin: null, // null = use branch HEAD (MCAD is stable/low-churn)
+    // MCAD has no tagged releases; pinned to the verified 2026-07-11 clone
+    pin: 'bd0a7ba3f042bfbced5ca1894b236cea08904e26', // 2021-10-25
     license: 'LGPL-2.1',
     description: 'Mechanical CAD library',
   },
@@ -40,8 +40,8 @@ const LIBRARIES = {
     name: 'BOSL2',
     repo: 'https://github.com/BelfrySCAD/BOSL2.git',
     branch: 'master',
-    // BOSL2 is actively evolving; pin to a known-good commit
-    pin: null, // TODO: pin to specific commit after first verified clone
+    // BOSL2 is actively evolving; pinned to the verified 2026-07-11 clone
+    pin: 'fbcdfdd511b6abfde93c43c8f85c2bd24ee7a02d', // 2026-06-29
     license: 'BSD-2-Clause',
     description: 'Belfry OpenSCAD Library v2',
   },
@@ -49,8 +49,9 @@ const LIBRARIES = {
     name: 'NopSCADlib',
     repo: 'https://github.com/nophead/NopSCADlib.git',
     branch: 'master',
-    // NopSCADlib has tagged releases — prefer tags when updating
-    pin: null, // TODO: pin to specific tag after first verified clone
+    // NopSCADlib has tagged releases — prefer tags when updating.
+    // Pinned to the verified 2026-07-11 clone commit.
+    pin: 'c9baa0ed0faa23e849141c3d8c6728545d6af910', // 2025-10-08
     license: 'GPL-3.0',
     description: 'Parts library for 3D printers',
   },
@@ -58,7 +59,7 @@ const LIBRARIES = {
     name: 'dotSCAD',
     repo: 'https://github.com/JustinSDK/dotSCAD.git',
     branch: 'master',
-    pin: null, // Low churn, low risk
+    pin: 'bb33edfd75cba0edbb7971606a077b9c69d0b7d2', // 2022-10-11, verified 2026-07-11 clone
     license: 'LGPL-3.0',
     description: 'Artistic patterns library',
   },
@@ -93,7 +94,7 @@ async function checkGit() {
  */
 async function setupLibrary(libConfig) {
   const libPath = path.join(LIBRARIES_DIR, libConfig.name);
-  
+
   try {
     if (fs.existsSync(libPath)) {
       if (libConfig.pin) {
@@ -102,12 +103,18 @@ async function setupLibrary(libConfig) {
         try {
           const { stdout: currentHash } = await execAsync('git rev-parse HEAD');
           if (currentHash.trim().startsWith(libConfig.pin.substring(0, 7))) {
-            console.log(`\n📦 ${libConfig.name} already at pinned commit ${libConfig.pin.substring(0, 8)}...`);
+            console.log(
+              `\n📦 ${libConfig.name} already at pinned commit ${libConfig.pin.substring(0, 8)}...`
+            );
           } else {
-            console.log(`\n📦 Updating ${libConfig.name} to pinned commit ${libConfig.pin.substring(0, 8)}...`);
+            console.log(
+              `\n📦 Updating ${libConfig.name} to pinned commit ${libConfig.pin.substring(0, 8)}...`
+            );
             await execAsync(`git fetch origin`);
             await execAsync(`git checkout ${libConfig.pin}`);
-            console.log(`✓ ${libConfig.name} checked out to ${libConfig.pin.substring(0, 8)}`);
+            console.log(
+              `✓ ${libConfig.name} checked out to ${libConfig.pin.substring(0, 8)}`
+            );
           }
         } catch (_e) {
           console.log(`\n📦 Updating ${libConfig.name}...`);
@@ -115,7 +122,9 @@ async function setupLibrary(libConfig) {
           console.log(`✓ ${libConfig.name} updated`);
         }
       } else {
-        console.log(`\n📦 Updating ${libConfig.name} (unpinned — using branch HEAD)...`);
+        console.log(
+          `\n📦 Updating ${libConfig.name} (unpinned — using branch HEAD)...`
+        );
         process.chdir(libPath);
         await execAsync('git pull');
         console.log(`✓ ${libConfig.name} updated`);
@@ -124,7 +133,7 @@ async function setupLibrary(libConfig) {
       console.log(`\n📦 Downloading ${libConfig.name}...`);
       console.log(`   ${libConfig.description}`);
       console.log(`   License: ${libConfig.license}`);
-      
+
       if (libConfig.pin) {
         // Clone full history (needed for checkout of specific commit)
         await execAsync(
@@ -132,7 +141,9 @@ async function setupLibrary(libConfig) {
         );
         process.chdir(libPath);
         await execAsync(`git checkout ${libConfig.pin}`);
-        console.log(`✓ ${libConfig.name} downloaded and pinned to ${libConfig.pin.substring(0, 8)}`);
+        console.log(
+          `✓ ${libConfig.name} downloaded and pinned to ${libConfig.pin.substring(0, 8)}`
+        );
       } else {
         // Shallow clone of branch HEAD (unpinned)
         await execAsync(
@@ -141,12 +152,14 @@ async function setupLibrary(libConfig) {
         console.log(`✓ ${libConfig.name} downloaded (unpinned — branch HEAD)`);
       }
     }
-    
+
     // Get commit info
     process.chdir(libPath);
-    const { stdout: commitInfo } = await execAsync('git log -1 --format="%H %ci"');
+    const { stdout: commitInfo } = await execAsync(
+      'git log -1 --format="%H %ci"'
+    );
     const [hash, date] = commitInfo.trim().split(' ');
-    
+
     // Write metadata (includes pin status for audit trail)
     const metadata = {
       name: libConfig.name,
@@ -160,12 +173,12 @@ async function setupLibrary(libConfig) {
       date: date,
       downloaded: new Date().toISOString(),
     };
-    
+
     fs.writeFileSync(
       path.join(libPath, '.library-metadata.json'),
       JSON.stringify(metadata, null, 2)
     );
-    
+
     return true;
   } catch (error) {
     console.error(`✗ Failed to setup ${libConfig.name}: ${error.message}`);
@@ -204,32 +217,84 @@ function collectScadFiles(dir, prefix = '') {
  * web worker's mountLibraries() expects.  Without this file the worker skips
  * the library with "No manifest found … skipping".
  */
-function generatePerLibraryManifest(libName) {
+async function generatePerLibraryManifest(libName) {
   const libPath = path.join(LIBRARIES_DIR, libName);
   if (!fs.existsSync(libPath)) return null;
 
   const files = collectScadFiles(libPath);
-  const manifest = { name: libName, files, generated: new Date().toISOString() };
+
+  // AF-12: one archive per library, so the worker fetches ONE file instead
+  // of one request per entry (695 for dotSCAD). Fixed entry dates keep the
+  // zip byte-stable across runs, so an unchanged library does not dirty
+  // anything.
+  const { default: JSZip } = await import('jszip');
+  const zip = new JSZip();
+  const epoch = new Date(0);
+  for (const rel of files) {
+    zip.file(rel, fs.readFileSync(path.join(libPath, rel), 'utf-8'), {
+      date: epoch,
+    });
+  }
+  const archiveName = 'archive.zip';
+  const bytes = await zip.generateAsync({
+    type: 'nodebuffer',
+    compression: 'DEFLATE',
+    compressionOptions: { level: 9 },
+  });
+  fs.writeFileSync(path.join(libPath, archiveName), bytes);
+  console.log(
+    `  ✓ Archive: ${libName}/${archiveName} (${files.length} files, ${(bytes.length / 1024).toFixed(0)} KB)`
+  );
+
+  const manifest = {
+    name: libName,
+    files,
+    archive: archiveName,
+    generated: new Date().toISOString(),
+  };
 
   const manifestPath = path.join(libPath, 'manifest.json');
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
-  console.log(`  ✓ Per-library manifest: ${libName} (${files.length} .scad files)`);
+  console.log(
+    `  ✓ Per-library manifest: ${libName} (${files.length} .scad files)`
+  );
   return manifest;
+}
+
+/**
+ * Compare two manifests ignoring the fields that churn on every run
+ * (top-level `generated`, per-library `downloaded` timestamps). The
+ * tracked public/libraries/manifest.json must not be rewritten — and
+ * dirty the working tree — when nothing meaningful changed.
+ */
+function manifestsEquivalent(a, b) {
+  if (!a || !b) return false;
+  const strip = (manifest) => ({
+    ...manifest,
+    generated: undefined,
+    libraries: Object.fromEntries(
+      Object.entries(manifest.libraries || {}).map(([name, lib]) => [
+        name,
+        { ...lib, downloaded: undefined },
+      ])
+    ),
+  });
+  return JSON.stringify(strip(a)) === JSON.stringify(strip(b));
 }
 
 /**
  * Generate library manifest
  */
-function generateManifest() {
+async function generateManifest() {
   const manifest = {
     generated: new Date().toISOString(),
     libraries: {},
   };
-  
+
   for (const libName of Object.keys(LIBRARIES)) {
     const libPath = path.join(LIBRARIES_DIR, libName);
     const metadataPath = path.join(libPath, '.library-metadata.json');
-    
+
     if (fs.existsSync(metadataPath)) {
       const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
       manifest.libraries[libName] = {
@@ -244,13 +309,23 @@ function generateManifest() {
       };
     }
 
-    generatePerLibraryManifest(libName);
+    await generatePerLibraryManifest(libName);
   }
-  
+
   const manifestPath = path.join(LIBRARIES_DIR, 'manifest.json');
+  let existing = null;
+  try {
+    existing = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+  } catch {
+    // Missing or unparsable — write fresh below.
+  }
+  if (manifestsEquivalent(existing, manifest)) {
+    console.log(`\n✓ Manifest unchanged — not rewritten: ${manifestPath}`);
+    return existing;
+  }
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
   console.log(`\n✓ Generated manifest: ${manifestPath}`);
-  
+
   return manifest;
 }
 
@@ -261,28 +336,34 @@ function printSummary(manifest) {
   console.log('\n' + '='.repeat(60));
   console.log('Library Bundle Summary');
   console.log('='.repeat(60));
-  
-  const available = Object.values(manifest.libraries).filter(lib => lib.available);
-  const unavailable = Object.values(manifest.libraries).filter(lib => !lib.available);
-  
+
+  const available = Object.values(manifest.libraries).filter(
+    (lib) => lib.available
+  );
+  const unavailable = Object.values(manifest.libraries).filter(
+    (lib) => !lib.available
+  );
+
   if (available.length > 0) {
     console.log('\n✓ Available Libraries:');
-    available.forEach(lib => {
+    available.forEach((lib) => {
       console.log(`  - ${lib.name}: ${lib.description}`);
       console.log(`    License: ${lib.license}`);
       console.log(`    Updated: ${new Date(lib.date).toLocaleDateString()}`);
     });
   }
-  
+
   if (unavailable.length > 0) {
     console.log('\n✗ Unavailable Libraries:');
-    unavailable.forEach(lib => {
+    unavailable.forEach((lib) => {
       console.log(`  - ${lib.name}: ${lib.description}`);
     });
   }
-  
+
   console.log('\n' + '='.repeat(60));
-  console.log(`Total: ${available.length}/${Object.keys(manifest.libraries).length} libraries available`);
+  console.log(
+    `Total: ${available.length}/${Object.keys(manifest.libraries).length} libraries available`
+  );
   console.log('='.repeat(60));
 }
 
@@ -292,29 +373,29 @@ function printSummary(manifest) {
 async function main() {
   console.log('OpenSCAD Library Bundle Setup');
   console.log('='.repeat(60));
-  
+
   // Check prerequisites
-  if (!await checkGit()) {
+  if (!(await checkGit())) {
     process.exit(1);
   }
-  
+
   // Setup directory
   ensureLibrariesDir();
-  
+
   const originalDir = process.cwd();
-  
+
   // Download each library
   for (const libConfig of Object.values(LIBRARIES)) {
     await setupLibrary(libConfig);
     process.chdir(originalDir);
   }
-  
+
   // Generate manifest
-  const manifest = generateManifest();
-  
+  const manifest = await generateManifest();
+
   // Print summary
   printSummary(manifest);
-  
+
   console.log('\n✓ Library setup complete!');
   console.log('\nNext steps:');
   console.log('  1. Restart the dev server (npm run dev)');
@@ -325,10 +406,16 @@ async function main() {
 // Run if called directly (cross-platform: normalize both sides)
 const __filename = fileURLToPath(import.meta.url);
 if (path.resolve(process.argv[1]) === __filename) {
-  main().catch(error => {
+  main().catch((error) => {
     console.error('Fatal error:', error);
     process.exit(1);
   });
 }
 
-export { setupLibrary, generateManifest, collectScadFiles, generatePerLibraryManifest };
+export {
+  setupLibrary,
+  generateManifest,
+  collectScadFiles,
+  generatePerLibraryManifest,
+  manifestsEquivalent,
+};

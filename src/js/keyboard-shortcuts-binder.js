@@ -28,6 +28,12 @@ const ACTION_TARGETS = {
   focusMode: '#focusModeBtn',
   toggleExpertMode: '#expertModeToggle',
   toggleTheme: '#themeToggle',
+  // Its twin in the same row has been annotated since this map was written;
+  // high contrast was left out (the PR #121 leftover). Generated here rather
+  // than written into index.html so the attribute follows a re-mapped chord
+  // and the OpenSCAD preset's Ctrl+H, instead of going stale at the first
+  // preference change.
+  toggleHighContrast: '#contrastToggle',
   resetAllParams: '#resetAllBtn',
   searchParams: '#paramSearchInput',
   showShortcutsModal: '#shortcutsToggle',

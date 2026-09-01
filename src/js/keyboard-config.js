@@ -34,23 +34,30 @@ export const DEFAULT_SHORTCUTS = {
     description: 'Cancel current render',
   },
 
+  renderAlt: {
+    key: 'Enter',
+    ctrl: true,
+    description: 'Render or download (alternative key)',
+  },
+  generateShortcut: {
+    key: 'g',
+    description: 'Generate the model',
+  },
+
   // Downloads
   download: {
     key: 'F7',
     description: 'Export STL / download rendered model',
   },
-  exportParams: {
-    key: 'e',
-    ctrl: true,
-    shift: true,
-    description: 'Export parameters as JSON',
+  downloadShortcut: {
+    key: 'd',
+    description: 'Download the rendered model',
   },
-
-  // Expert Mode
+  // Editor (C-38)
   toggleExpertMode: {
     key: 'e',
     ctrl: true,
-    description: 'Toggle Expert Mode (code editor)',
+    description: 'Toggle Editor',
   },
 
   // View controls
@@ -61,7 +68,7 @@ export const DEFAULT_SHORTCUTS = {
   toggleParameters: {
     key: 'b',
     ctrl: true,
-    description: 'Toggle parameter panel',
+    description: 'Toggle Customizer panel',
   },
   resetView: {
     key: 'r',
@@ -116,6 +123,27 @@ export const DEFAULT_SHORTCUTS = {
   },
 
   // Parameter controls
+  //
+  // Undo/redo and the three below used to live in a separate keydown listener
+  // in main.js that this registry knew nothing about, so they could not be
+  // seen in the shortcuts modal, could not be rebound, and Ctrl+Z fired the
+  // parameter undo even while the user was typing in the code editor (G7).
+  undo: {
+    key: 'z',
+    ctrl: true,
+    description: 'Undo the last parameter change',
+  },
+  redo: {
+    key: 'z',
+    ctrl: true,
+    shift: true,
+    description: 'Redo the last parameter change',
+  },
+  redoAlt: {
+    key: 'y',
+    ctrl: true,
+    description: 'Redo the last parameter change (alternative key)',
+  },
   resetAllParams: {
     key: 'r',
     ctrl: true,
@@ -144,11 +172,6 @@ export const DEFAULT_SHORTCUTS = {
   },
 
   // Help
-  showHelp: {
-    key: '?',
-    shift: true,
-    description: 'Show keyboard shortcuts help',
-  },
   showShortcutsModal: {
     key: 'k',
     ctrl: true,
@@ -191,30 +214,6 @@ export const DEFAULT_SHORTCUTS = {
     ctrl: true,
     shift: true,
     description: 'Export preview as image',
-  },
-
-  // Navigation
-  nextParameter: {
-    key: 'ArrowDown',
-    alt: true,
-    description: 'Focus next parameter',
-  },
-  prevParameter: {
-    key: 'ArrowUp',
-    alt: true,
-    description: 'Focus previous parameter',
-  },
-  nextGroup: {
-    key: 'ArrowDown',
-    ctrl: true,
-    alt: true,
-    description: 'Jump to next parameter group',
-  },
-  prevGroup: {
-    key: 'ArrowUp',
-    ctrl: true,
-    alt: true,
-    description: 'Jump to previous parameter group',
   },
 
   // Edit actions
@@ -309,9 +308,16 @@ export const DEFAULT_SHORTCUTS = {
     ctrl: true,
     description: 'Toggle crosshairs overlay',
   },
-  // toggleAnimate: removed from UI pending full debug; key binding preserved here for future re-integration
-  // toggleAnimate: { key: 'm', ctrl: true, alt: true, description: 'Toggle animation playback' },
-
+  zoomIn: {
+    key: ']',
+    ctrl: true,
+    description: 'Zoom in',
+  },
+  zoomOut: {
+    key: '[',
+    ctrl: true,
+    description: 'Zoom out',
+  },
   // Panel controls
   toggleConsole: {
     key: '1',
@@ -329,13 +335,18 @@ export const DEFAULT_SHORTCUTS = {
     key: '3',
     ctrl: true,
     alt: true,
-    description: 'Toggle Code Editor panel',
+    description: 'Toggle Editor panel',
   },
   toggleCustomizer: {
     key: '4',
     ctrl: true,
     alt: true,
     description: 'Toggle Customizer panel',
+  },
+  jumpToPanel: {
+    key: 'j',
+    ctrl: true,
+    description: 'Jump to a panel',
   },
   nextPanel: {
     key: ']',
@@ -376,6 +387,12 @@ export const LEGACY_FORGE_SHORTCUTS = {
   toggleEdges: { key: 'g', ctrl: true, alt: true },
   nextPanel: { key: ']', ctrl: true },
   prevPanel: { key: '[', ctrl: true },
+  // This preset already spends Ctrl+] / Ctrl+[ on panel navigation, so zoom
+  // takes the chords the panels vacate. Without this the two pairs would
+  // collide and _handleKeydown, which stops at its first match, would leave
+  // Next/Previous Panel silently dead for anyone on the legacy preset.
+  zoomIn: { key: ']', ctrl: true, alt: true },
+  zoomOut: { key: '[', ctrl: true, alt: true },
 };
 
 /**
@@ -384,11 +401,18 @@ export const LEGACY_FORGE_SHORTCUTS = {
 export const SHORTCUT_CATEGORIES = {
   rendering: {
     label: 'Rendering',
-    actions: ['render', 'preview', 'reloadAndPreview', 'cancelRender'],
+    actions: [
+      'render',
+      'renderAlt',
+      'generateShortcut',
+      'preview',
+      'reloadAndPreview',
+      'cancelRender',
+    ],
   },
   downloads: {
     label: 'Downloads & Export',
-    actions: ['download', 'exportParams'],
+    actions: ['download', 'downloadShortcut'],
   },
   view: {
     label: 'View Controls',
@@ -409,8 +433,8 @@ export const SHORTCUT_CATEGORIES = {
     ],
   },
   parameters: {
-    label: 'Parameters',
-    actions: ['resetAllParams', 'searchParams'],
+    label: 'Customizer',
+    actions: ['undo', 'redo', 'redoAlt', 'resetAllParams', 'searchParams'],
   },
   theme: {
     label: 'Theme',
@@ -418,15 +442,11 @@ export const SHORTCUT_CATEGORIES = {
   },
   help: {
     label: 'Help',
-    actions: ['showHelp', 'showShortcutsModal'],
+    actions: ['showShortcutsModal'],
   },
   file: {
     label: 'File',
     actions: ['newFile', 'saveFile', 'saveFileAs', 'reloadFile', 'exportImage'],
-  },
-  navigation: {
-    label: 'Navigation',
-    actions: ['nextParameter', 'prevParameter', 'nextGroup', 'prevGroup'],
   },
   editing: {
     label: 'Editing',
@@ -448,7 +468,14 @@ export const SHORTCUT_CATEGORIES = {
   },
   display: {
     label: 'Display',
-    actions: ['viewAll', 'toggleEdges', 'toggleAxes', 'toggleCrosshairs'],
+    actions: [
+      'viewAll',
+      'zoomIn',
+      'zoomOut',
+      'toggleEdges',
+      'toggleAxes',
+      'toggleCrosshairs',
+    ],
   },
   panels: {
     label: 'Panels',
@@ -457,6 +484,7 @@ export const SHORTCUT_CATEGORIES = {
       'toggleErrorLog',
       'toggleCodeEditor',
       'toggleCustomizer',
+      'jumpToPanel',
       'nextPanel',
       'prevPanel',
     ],

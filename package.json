@@ -1,7 +1,7 @@
 {
   "name": "openscad-assistive-forge",
-  "version": "4.5.0",
-  "description": "Accessibility-first web-based OpenSCAD customizer with client-side WASM rendering and developer toolchain",
+  "version": "5.0.0",
+  "description": "Accessibility-first web-based OpenSCAD customizer with client-side WASM rendering",
   "type": "module",
   "author": "Brennen Johnston <https://github.com/BrennenJohnston>",
   "repository": {
@@ -12,9 +12,6 @@
   "bugs": {
     "url": "https://github.com/BrennenJohnston/openscad-assistive-forge/issues"
   },
-  "bin": {
-    "openscad-forge": "./bin/openscad-forge.js"
-  },
   "scripts": {
     "dev": "vite",
     "prebuild": "node scripts/download-wasm.js --strict && node scripts/setup-libraries.js && node scripts/setup-liblouis.js",
@@ -24,8 +21,8 @@
     "setup-libraries": "node scripts/setup-libraries.js",
     "setup-liblouis": "node scripts/setup-liblouis.js",
     "lint": "eslint src/",
-    "format": "prettier --write src/",
-    "format:check": "prettier --check src/",
+    "format": "prettier --write src/ index.html",
+    "format:check": "prettier --check src/ index.html",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
@@ -36,15 +33,21 @@
     "test:e2e:headed": "node scripts/run-e2e-safe.js --headed",
     "test:e2e:debug": "node scripts/run-e2e-safe.js --debug",
     "test:e2e:direct": "playwright test",
+    "test:e2e:prod": "npm run build && playwright test --config=playwright.prod.config.js",
     "test:e2e:report": "playwright show-report",
     "test:all": "npm run test:run && npm run test:e2e",
     "test:visual": "playwright test --project=visual-regression",
     "test:visual:update": "playwright test --project=visual-regression --update-snapshots",
     "check-a11y": "lighthouse http://localhost:5173 --only-categories=accessibility --quiet",
+    "parity": "node scripts/parity/run-parity.mjs --all --profile cross-version",
+    "parity:wasm": "node scripts/parity/run-parity.mjs --wasm",
+    "parity:desktop": "node scripts/parity/run-parity.mjs --desktop",
+    "parity:compare": "node scripts/parity/run-parity.mjs --compare --profile cross-version",
+    "parity:ci": "node scripts/parity/run-parity.mjs --wasm --compare --profile golden --ci-only",
     "check-bundle": "node scripts/check-bundle-budget.js dist",
     "validate:html": "vnu --also-check-css --also-check-svg index.html",
     "validate:html:built": "vnu --also-check-css --also-check-svg dist/index.html",
-    "bloat-scan": "node scripts/bloat-scanner.js src/",
+    "validate:example": "node scripts/validate-example.mjs",
     "import-check": "node scripts/import-check.js src/",
     "css-variable-audit": "node scripts/css-variable-audit.js"
   },
@@ -70,15 +73,13 @@
     "@playwright/test": "^1.57.0",
     "@vitest/coverage-v8": "^4.0.17",
     "@vitest/ui": "^4.0.17",
-    "chalk": "^5.3.0",
     "colorjs.io": "^0.6.1",
-    "commander": "^14.0.2",
     "eslint": "^10.0.1",
     "globals": "^17.1.0",
     "happy-dom": "^20.3.0",
     "jsdom": "^27.4.0",
     "liblouis": "^0.4.0",
-    "lighthouse": "^12.8.2",
+    "lighthouse": "^13.4.1",
     "png-to-ico": "^3.0.1",
     "prettier": "^3.1.1",
     "vite": "^7.3.1",
@@ -110,8 +111,8 @@
   },
   "overrides": {
     "minimatch": "^10.2.1",
-    "@angular/common": "20.3.25",
-    "@angular/core": "20.3.25",
+    "@angular/common": "20.3.27",
+    "@angular/core": "20.3.27",
     "basic-ftp": "^5.3.0"
   }
 }

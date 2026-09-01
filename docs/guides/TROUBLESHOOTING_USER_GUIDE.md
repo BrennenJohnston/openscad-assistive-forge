@@ -22,7 +22,9 @@ Before diving into specific issues, try these common solutions:
 **Solutions:**
 
 1. **Check file format**: Only `.scad`, `.zip`, and `.json` files are supported
-2. **Check file size**: Maximum 5 MB for single files, 20 MB for ZIP
+2. **Check file size**: 5 MB for a single `.scad` file, 250 MB for a `.zip`. If
+   you open a whole folder instead, the caps are 2,000 files and 500 MB, with a
+   warning above 200 files or 150 MB because big projects render slowly
 3. **Check ZIP structure**: If using includes, ensure file paths in code match ZIP structure
 4. **Try the example models**: If examples work, the issue is with your file
 
@@ -199,12 +201,15 @@ Before diving into specific issues, try these common solutions:
 
 **Symptoms:** Switched to Expert Mode but no editor appears.
 
+The editor ships with the app and is not downloaded from anywhere, so this is
+not a network problem.
+
 **Solutions:**
 
-1. **Check internet**: Monaco Editor loads from CDN
-2. **Try textarea editor**: Settings → Editor → Textarea
-3. **Check browser extensions**: Ad blockers may block CDN
-4. **Clear cache**: Cached Monaco may be corrupted
+1. **Reload the page**
+2. **Check the console** (`F12` → Console) and include any error if you report it
+3. **Not a fault:** if your system's "increase contrast" setting is on, you get
+   the plain text editor instead of the coloured one. That is deliberate
 
 ### Code Changes Not Syncing to Parameters
 
@@ -223,9 +228,10 @@ Before diving into specific issues, try these common solutions:
 
 **Solutions:**
 
-1. **Wait for Monaco**: Highlighting loads asynchronously
-2. **Try textarea editor**: Has simpler highlighting
-3. **Check file type**: Only `.scad` files get highlighting
+1. **Check the file type**: only `.scad` content is coloured
+2. **Check which editor you have**: with your system's increase-contrast setting
+   on you get the plain text editor, whose colouring is lighter by design
+3. **Reload the page** if the text was pasted in and never coloured
 
 ---
 

@@ -486,75 +486,6 @@ export class EditorStateManager {
   }
 
   /**
-   * Inject parameter value into SCAD code
-   * Finds the parameter assignment and updates the value
-   * @param {string} paramName
-   * @param {*} newValue
-   * @returns {boolean} True if injection was successful
-   */
-  injectParameterValue(paramName, newValue) {
-    // Pattern to find: paramName = oldValue; with optional comment
-    const pattern = new RegExp(
-      `^(\\s*)(${this._escapeRegex(paramName)})\\s*=\\s*([^;]+)(;.*)$`,
-      'm'
-    );
-
-    const formattedValue = this._formatValue(newValue);
-    const match = this.source.match(pattern);
-
-    if (match) {
-      const newSource = this.source.replace(
-        pattern,
-        `$1$2 = ${formattedValue}$4`
-      );
-      this.setSource(newSource, { origin: 'standard' });
-      return true;
-    }
-
-    console.warn(`[EditorStateManager] Could not find parameter: ${paramName}`);
-    return false;
-  }
-
-  /**
-   * Format a value for SCAD code
-   * @param {*} value
-   * @returns {string}
-   * @private
-   */
-  _formatValue(value) {
-    if (typeof value === 'string') {
-      // Check if it's a "yes"/"no" boolean string
-      if (value === 'yes' || value === 'no') {
-        return value === 'yes' ? 'true' : 'false';
-      }
-      // String value - quote it
-      return `"${value.replace(/"/g, '\\"')}"`;
-    }
-
-    if (Array.isArray(value)) {
-      // Vector value
-      return `[${value.map((v) => this._formatValue(v)).join(', ')}]`;
-    }
-
-    if (typeof value === 'boolean') {
-      return value ? 'true' : 'false';
-    }
-
-    // Number or other
-    return String(value);
-  }
-
-  /**
-   * Escape string for regex
-   * @param {string} str
-   * @returns {string}
-   * @private
-   */
-  _escapeRegex(str) {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  }
-
-  /**
    * Compare parameters to detect structural changes
    * @param {Object} oldParams
    * @param {Object} newParams
@@ -576,19 +507,6 @@ export class EditorStateManager {
       changed,
       structuralChange: added.length > 0 || removed.length > 0,
     };
-  }
-
-  /**
-   * Reset to initial state
-   */
-  reset() {
-    this.source = '';
-    this.parameters = {};
-    this.cursor = { line: 1, column: 1 };
-    this.selection = null;
-    this.scrollLine = 1;
-    this.isDirty = false;
-    this.errors = [];
   }
 }
 

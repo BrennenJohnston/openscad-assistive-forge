@@ -16,7 +16,7 @@ const isCI = !!process.env.CI
 // URL query param that enables the searchable_combobox feature flag
 const COMBOBOX_FLAG_PARAM = 'flag_searchable_combobox=true'
 
-const loadSimpleBoxExample = async (page) => {
+const loadSimpleBoxExample = async (page, { expandGroups = false } = {}) => {
   // There are multiple "Start Tutorial" CTAs with the same example dataset.
   // In strict mode, Playwright requires a unique match, so pick a stable one.
   const exampleButton = page.locator(
@@ -39,14 +39,66 @@ const loadSimpleBoxExample = async (page) => {
   }
 
   await page.waitForSelector('.param-control', { state: 'attached', timeout: 20000 })
+
+  // F5 (owner, 2026-05-15): parameter groups load collapsed, so controls are
+  // attached long before they are visible. Tests that reach for a slider ask
+  // for this; the rest are left with the app's own default state (UF-9
+  // established the idiom, UF-25 applies it here).
+  if (expandGroups) {
+    const expandAll = page.locator('#expandAllGroupsBtn')
+    if (await expandAll.isVisible().catch(() => false)) {
+      await expandAll.click()
+      await expect(page.locator('.param-control').first()).toBeVisible({
+        timeout: 10000,
+      })
+    }
+  }
+}
+
+/**
+ * UF-25: seven tests in this file looked for the Save Preset control with
+ * `button:has-text("Save Preset"), button[aria-label*="Save preset"]`, and that
+ * matches nothing. #savePresetBtn is icon-only, so it carries no such text, and
+ * its aria-label reads "Save Preset - overwrites current preset" - CSS
+ * attribute matching is case-sensitive, so the lowercase "preset" in the old
+ * selector missed it too. It is also disabled until a preset is selected, since
+ * it OVERWRITES. Each of those tests then hit `if (!visible) test.skip()` and
+ * stopped running, reporting skipped rather than red.
+ *
+ * Creating a new named preset is the "+" button, which is what the two tests
+ * that kept working already used. This helper is that flow, asserted rather
+ * than guarded.
+ */
+const createPreset = async (page, name) => {
+  const addPresetBtn = page.locator('#addPresetBtn')
+  await expect(addPresetBtn).toBeVisible()
+  await addPresetBtn.click()
+
+  const modal = page.locator('.preset-modal')
+  await modal.waitFor({ state: 'visible', timeout: 5000 })
+  const nameInput = modal.locator('#presetName').first()
+  await expect(nameInput).toBeVisible()
+  await nameInput.fill(name)
+  await modal.locator('button[type="submit"]').first().click()
+  await modal.waitFor({ state: 'detached', timeout: 5000 })
 }
 
 test.describe('Preset Workflow', () => {
   test.beforeEach(async ({ page }) => {
-    // Clear localStorage before each test, but preserve first-visit-seen to avoid blocking modal
+    // Clear localStorage before each test, but preserve first-visit-seen to avoid blocking modal.
+    // UF-25: the clear is ONE-SHOT. addInitScript runs before EVERY document
+    // load, including page.reload(), so an unguarded clear wiped the saved
+    // presets that the reload-persistence test then went looking for - the
+    // test destroyed its own subject and the failure read like a lost-data
+    // bug in the app. sessionStorage survives a reload in the same tab, so it
+    // is what remembers that this context has already been cleared.
     await page.addInitScript(() => {
-      localStorage.clear()
+      if (!sessionStorage.getItem('pw-storage-cleared')) {
+        localStorage.clear()
+        sessionStorage.setItem('pw-storage-cleared', '1')
+      }
       localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
     })
     await page.goto('/')
   })
@@ -55,150 +107,61 @@ test.describe('Preset Workflow', () => {
     // Skip in CI - requires WASM to process example files
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
-    try {
-      await loadSimpleBoxExample(page)
-    } catch (error) {
-      console.log('Could not load preset fixture:', error.message)
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page, { expandGroups: true })
 
     // Verify parameters are loaded
-    const paramControls = page.locator('.param-control')
-    if ((await paramControls.count()) === 0) {
-      test.skip()
-      return
-    }
+    await expect(page.locator('.param-control').first()).toBeAttached()
 
     // Change a parameter value
-    const firstSlider = page.locator('input[type="range"]').first()
-    if (await firstSlider.isVisible()) {
-      await firstSlider.fill('75')
-      await page.waitForTimeout(500)
-    }
+    const firstSlider = page.locator('.param-control input[type="range"]').first()
+    await expect(firstSlider).toBeVisible()
+    await firstSlider.fill('75')
+    await page.waitForTimeout(500)
 
-    // Find and click Save Preset button
-    const saveButton = page.locator('button:has-text("Save Preset"), button[aria-label*="Save preset"]')
-    if (!(await saveButton.isVisible())) {
-      test.skip()
-      return
-    }
+    await createPreset(page, 'My Test Preset')
 
-    await saveButton.click()
+    const options = await getPresetOptions(page)
+    const hasSavedPreset = options.some(opt => opt.includes('My Test Preset'))
+    expect(hasSavedPreset).toBe(true)
 
-    // Fill in preset name
-    const nameInput = page.locator('input[type="text"][placeholder*="Preset name"], input[type="text"][placeholder*="preset"]')
-    if (await nameInput.isVisible()) {
-      await nameInput.fill('My Test Preset')
-      
-      // Click Save/OK button in modal
-      const confirmButton = page.locator('button:has-text("Save"), button:has-text("OK")')
-      await confirmButton.click()
-      
-      await page.waitForTimeout(500)
-
-      // Verify success message or feedback
-      const successIndicator = page.locator('[role="status"]:has-text("Saved"), [role="alert"]:has-text("Saved"), .success-message')
-      
-      // Success indicator might appear and disappear, so we check if preset appears in list
-      const options = await getPresetOptions(page)
-      const hasSavedPreset = options.some(opt => opt.includes('My Test Preset'))
-      expect(hasSavedPreset).toBe(true)
-
-      // OpenSCAD Customizer behavior: newly saved preset should be auto-selected
-      const selectedLabel = await getSelectedPresetLabel(page)
-      expect(selectedLabel).toContain('My Test Preset')
-    }
+    // OpenSCAD Customizer behavior: newly saved preset should be auto-selected
+    const selectedLabel = await getSelectedPresetLabel(page)
+    expect(selectedLabel).toContain('My Test Preset')
   })
 
   test('should auto-select newly saved preset (OpenSCAD Customizer behavior)', async ({ page }) => {
     // Skip in CI - requires WASM to process example files
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
-    try {
-      await loadSimpleBoxExample(page)
-    } catch (error) {
-      console.log('Could not load preset fixture:', error.message)
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page)
 
-    // Find the Add Preset button ("+") to create a new preset
-    const addPresetBtn = page.locator('#addPresetBtn, button[aria-label*="Add preset"]')
-    if (!(await addPresetBtn.isVisible())) {
-      test.skip()
-      return
-    }
+    await createPreset(page, 'Auto-Select Test Preset')
+    await page.waitForTimeout(500)
 
-    await addPresetBtn.click()
+    // Verify the newly saved preset is automatically selected in the dropdown.
+    // This matches OpenSCAD Customizer behavior where "+" creates and selects it.
+    const selectedLabel = await getSelectedPresetLabel(page)
+    expect(selectedLabel).toContain('Auto-Select Test Preset')
 
-    // Fill in preset name in modal (scope to modal to avoid matching combobox search)
-    const modal1 = page.locator('.preset-modal')
-    await modal1.waitFor({ state: 'visible', timeout: 5000 })
-    const nameInput = modal1.locator('#presetName, input[placeholder*="preset"]').first()
-    if (await nameInput.isVisible()) {
-      await nameInput.fill('Auto-Select Test Preset')
-      
-      // Click Save button in modal
-      const confirmButton = page.locator('button[type="submit"]:has-text("Save")').first()
-      await confirmButton.click()
-      
-      // Wait for modal to close
-      await page.waitForSelector('.preset-modal', { state: 'detached', timeout: 5000 })
-      await page.waitForTimeout(500)
-
-      // Verify the newly saved preset is automatically selected in the dropdown
-      // This matches OpenSCAD Customizer behavior where "+" creates and selects the preset
-      const selectedLabel = await getSelectedPresetLabel(page)
-      expect(selectedLabel).toContain('Auto-Select Test Preset')
-
-      // The Save Preset button should now be enabled (can update this preset)
-      const savePresetBtn = page.locator('#savePresetBtn')
-      if (await savePresetBtn.isVisible()) {
-        const isDisabled = await savePresetBtn.isDisabled()
-        expect(isDisabled).toBe(false)
-      }
-    }
+    // The Save Preset button (overwrite) should now be usable
+    const savePresetBtn = page.locator('#savePresetBtn')
+    await expect(savePresetBtn).toBeVisible()
+    await expect(savePresetBtn).toBeEnabled()
   })
 
   test('should keep preset selected after loading (selection persistence)', async ({ page }) => {
     // Skip in CI - requires WASM to process example files
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
-    try {
-      await loadSimpleBoxExample(page)
-    } catch (error) {
-      console.log('Could not load preset fixture:', error.message)
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page)
 
     // First, save a preset
-    const addPresetBtn = page.locator('#addPresetBtn, button[aria-label*="Add preset"]')
-    if (!(await addPresetBtn.isVisible())) {
-      test.skip()
-      return
-    }
-
-    await addPresetBtn.click()
-
-    const modal2 = page.locator('.preset-modal')
-    await modal2.waitFor({ state: 'visible', timeout: 5000 })
-    const nameInput = modal2.locator('#presetName, input[placeholder*="preset"]').first()
-    if (await nameInput.isVisible()) {
-      await nameInput.fill('Persistence Test Preset')
-      const confirmButton = page.locator('button[type="submit"]:has-text("Save")').first()
-      await confirmButton.click()
-      await page.waitForSelector('.preset-modal', { state: 'detached', timeout: 5000 })
-      await page.waitForTimeout(500)
-    }
+    await createPreset(page, 'Persistence Test Preset')
+    await page.waitForTimeout(500)
 
     // Now select the preset from the dropdown
     const selected = await selectPreset(page, 'Persistence Test Preset')
-    if (!selected) {
-      test.skip()
-      return
-    }
+    expect(selected, 'saved preset must be selectable').toBe(true)
     await page.waitForTimeout(1000)
 
     // Verify the preset is selected
@@ -217,99 +180,42 @@ test.describe('Preset Workflow', () => {
   test('should load a saved preset', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
-    try {
-      await loadSimpleBoxExample(page)
-    } catch (error) {
-      console.log('Could not load preset fixture:', error.message)
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page, { expandGroups: true })
 
     // Get initial parameter value
-    const firstSlider = page.locator('input[type="range"]').first()
-    if (!(await firstSlider.isVisible())) {
-      test.skip()
-      return
-    }
+    const firstSlider = page.locator('.param-control input[type="range"]').first()
+    await expect(firstSlider).toBeVisible()
 
     const initialValue = await firstSlider.inputValue()
     const newValue = '80'
 
-    // Change parameter
+    // Change parameter, then capture it in a preset
     await firstSlider.fill(newValue)
     await page.waitForTimeout(500)
+    await createPreset(page, 'Load Test Preset')
 
-    // Save preset
-    const saveButton = page.locator('button:has-text("Save Preset")')
-    if (!(await saveButton.isVisible())) {
-      test.skip()
-      return
-    }
-
-    await saveButton.click()
-
-    const nameInput = page.locator('input[type="text"][placeholder*="Preset name"]')
-    if (await nameInput.isVisible()) {
-      await nameInput.fill('Load Test Preset')
-      const confirmButton = page.locator('button:has-text("Save"), button:has-text("OK")')
-      await confirmButton.click()
-      await page.waitForTimeout(500)
-    }
-
-    // Change parameter to different value
+    // Change parameter to a different value
     await firstSlider.fill(initialValue)
     await page.waitForTimeout(500)
-
-    // Verify parameter changed
     expect(await firstSlider.inputValue()).toBe(initialValue)
 
-    // Load the saved preset
+    // Load the saved preset: the value must come back
     const selected = await selectPreset(page, 'Load Test Preset')
-    if (selected) {
-      await page.waitForTimeout(500)
-
-      // Verify parameter value restored
-      const restoredValue = await firstSlider.inputValue()
-      expect(restoredValue).toBe(newValue)
-    }
+    expect(selected, 'saved preset must be selectable').toBe(true)
+    await page.waitForTimeout(500)
+    expect(await firstSlider.inputValue()).toBe(newValue)
   })
 
   test('should export preset as JSON', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
-    try {
-      await loadSimpleBoxExample(page)
-    } catch (error) {
-      console.log('Could not load preset fixture:', error.message)
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page)
 
     // Save a preset first
-    const saveButton = page.locator('button:has-text("Save Preset")')
-    if (!(await saveButton.isVisible())) {
-      test.skip()
-      return
-    }
+    await createPreset(page, 'Export Test')
 
-    await saveButton.click()
-    const modal = page.locator('.preset-modal')
-    if (!(await modal.isVisible({ timeout: 2000 }).catch(() => false))) {
-      test.skip()
-      return
-    }
-
-    const nameInput = modal.locator('input[type="text"][placeholder*="Preset name"]')
-    await nameInput.fill('Export Test')
-    const confirmButton = modal.locator('button[type="submit"]')
-    await confirmButton.click()
-    await modal.waitFor({ state: 'detached', timeout: 5000 })
-
-    const manageButton = page.locator('#managePresetsBtn, button[aria-label*="Manage presets"]')
-    if (!(await manageButton.isVisible())) {
-      test.skip()
-      return
-    }
+    const manageButton = page.locator('#managePresetsBtn')
+    await expect(manageButton).toBeVisible()
 
     const lingeringModal = page.locator('.preset-modal')
     if (await lingeringModal.isVisible({ timeout: 1000 }).catch(() => false)) {
@@ -322,101 +228,124 @@ test.describe('Preset Workflow', () => {
 
     await manageButton.click()
 
+    // The per-preset rows live inside a collapsed "Individual presets"
+    // disclosure, so the export button is present but not visible until it is
+    // opened (UF-25; same shape as the collapsed parameter groups).
+    const listDetails = page.locator('details.preset-list-details')
+    await expect(listDetails).toBeVisible()
+    await listDetails.locator('summary').click()
+    await expect(listDetails).toHaveJSProperty('open', true)
+
     const presetItem = page.locator('.preset-item', { hasText: 'Export Test' })
     const exportButton = presetItem.locator('button[data-action="export"]')
-    if (!(await exportButton.isVisible())) {
-      test.skip()
-      return
-    }
+    await expect(exportButton).toBeVisible()
 
     // Setup download listener
-    const downloadPromise = page.waitForEvent('download', { timeout: 5000 }).catch(() => null)
-    
+    const downloadPromise = page.waitForEvent('download', { timeout: 10000 })
+
     await exportButton.click()
-    
+
     const download = await downloadPromise
-    if (download) {
-      // Verify download occurred
-      const filename = download.suggestedFilename()
-      expect(filename).toMatch(/\.json$/i)
-    }
+    expect(download.suggestedFilename()).toMatch(/\.json$/i)
   })
 
   test('should import preset from JSON', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
-    try {
-      await loadSimpleBoxExample(page)
-    } catch (error) {
-      console.log('Could not load preset fixture:', error.message)
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page)
 
-    // Find import button (more specific - only buttons)
-    const importButton = page.locator('button[aria-label*="Import preset"]').first()
-    
-    if (!(await importButton.isVisible({ timeout: 2000 }).catch(() => false))) {
-      test.skip()
-      return
-    }
+    // Import lives inside the Manage Presets modal, as data-action="import".
+    // The old `button[aria-label*="Import preset"]` matched nothing on the
+    // page, so this test skipped itself rather than checking anything (UF-25).
+    const manageBtn = page.locator('#managePresetsBtn')
+    await expect(manageBtn).toBeVisible()
+    await manageBtn.click()
 
-    // Note: Actually importing a file requires file system access
-    // This test verifies the button exists and is clickable
-    // Full import testing is better done in unit tests
-    expect(await importButton.isEnabled()).toBe(true)
+    const importAction = page.locator('button[data-action="import"]')
+    await expect(importAction).toBeVisible({ timeout: 5000 })
+    await expect(importAction).toBeEnabled()
+  })
+
+  test('Replace-mode import runs without TypeError and imports designs (F-5 regression)', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await loadSimpleBoxExample(page)
+
+    const pageErrors = []
+    page.on('pageerror', (err) => pageErrors.push(err.message))
+    // Replace mode uses a native confirm() when user presets exist.
+    page.on('dialog', (dialog) => dialog.accept())
+
+    const manageBtn = page.locator('#managePresetsBtn')
+    await expect(manageBtn).toBeVisible({ timeout: 3000 })
+    await manageBtn.click()
+
+    const importAction = page.locator('button[data-action="import"]')
+    await expect(importAction).toBeVisible({ timeout: 5000 })
+
+    const chooserPromise = page.waitForEvent('filechooser')
+    await importAction.click()
+
+    const modeDialog = page.locator('dialog.preset-import-mode-dialog')
+    await expect(modeDialog).toBeVisible({ timeout: 5000 })
+    // The Replace branch is the one that called the nonexistent
+    // presetManager.getPresets() and threw before ever importing.
+    await modeDialog.locator('input[name="importMode"][value="replace"]').check()
+    await modeDialog.locator('button[value="ok"]').click()
+
+    const chooser = await chooserPromise
+    await chooser.setFiles({
+      name: 'imported-presets.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(
+        JSON.stringify({
+          parameterSets: { 'Imported Preset': {} },
+          fileFormatVersion: '1',
+        })
+      ),
+    })
+
+    // Give the import handler time to parse and apply
+    await page.waitForTimeout(1500)
+
+    const getPresetsErrors = pageErrors.filter((m) => m.includes('getPresets'))
+    expect(
+      getPresetsErrors,
+      `Replace-mode import must not throw (was: TypeError presetManager.getPresets is not a function)`
+    ).toHaveLength(0)
+
+    const optionLabels = await page
+      .locator('#presetSelect')
+      .evaluate((el) => Array.from(el.options).map((o) => o.textContent.trim()))
+    expect(optionLabels.join('\n')).toContain('Imported Preset')
   })
 
   test('should delete a preset', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
-    try {
-      await loadSimpleBoxExample(page)
-    } catch (error) {
-      console.log('Could not load preset fixture:', error.message)
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page)
 
-    // Save preset
-    const saveButton = page.locator('button:has-text("Save Preset")')
-    if (!(await saveButton.isVisible())) {
-      test.skip()
-      return
-    }
-
-    await saveButton.click()
-
-    const nameInput = page.locator('input[type="text"][placeholder*="Preset name"]')
-    if (await nameInput.isVisible()) {
-      await nameInput.fill('Delete Test')
-      const confirmButton = page.locator('button:has-text("Save")')
-      await confirmButton.click()
-      await page.waitForTimeout(500)
-    }
+    await createPreset(page, 'Delete Test')
 
     // Select the preset
     const selected = await selectPreset(page, 'Delete Test')
-    if (!selected) {
-      test.skip()
-      return
-    }
+    expect(selected, 'saved preset must be selectable').toBe(true)
     await page.waitForTimeout(300)
 
-    // Find and click delete button
-    const deleteButton = page.locator('button:has-text("Delete Preset"), button[aria-label*="Delete preset"], button[title*="Delete"]')
-    if (!(await deleteButton.isVisible())) {
-      test.skip()
-      return
-    }
+    // #deletePresetBtn is icon-only and enables once a deletable preset is
+    // selected. The old text/aria selectors matched nothing (UF-25).
+    const deleteButton = page.locator('#deletePresetBtn')
+    await expect(deleteButton).toBeVisible()
+    await expect(deleteButton).toBeEnabled()
 
+    // Deletion asks for confirmation through the app's own dialog
+    // (dialogs.js builds .confirm-modal with data-action="confirm"), not a
+    // native confirm().
     await deleteButton.click()
-
-    // Confirm deletion if confirmation dialog appears
-    const confirmDelete = page.locator('button:has-text("Delete"), button:has-text("Yes"), button:has-text("OK")')
-    if (await confirmDelete.isVisible({ timeout: 1000 })) {
-      await confirmDelete.click()
-    }
+    const confirmModal = page.locator('.confirm-modal')
+    await expect(confirmModal).toBeVisible({ timeout: 5000 })
+    await confirmModal.locator('button[data-action="confirm"]').click()
+    await confirmModal.waitFor({ state: 'detached', timeout: 5000 })
 
     await page.waitForTimeout(500)
 
@@ -429,71 +358,40 @@ test.describe('Preset Workflow', () => {
   test('should show preset count in UI', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
-    try {
-      await loadSimpleBoxExample(page)
-    } catch (error) {
-      console.log('Could not load preset fixture:', error.message)
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page)
 
     // Count initial options
     const initialOptions = await getPresetOptions(page)
     const initialCount = initialOptions.length
     expect(initialCount).toBeGreaterThanOrEqual(1)
 
-    // Save a preset
-    const saveButton = page.locator('button:has-text("Save Preset")')
-    if (await saveButton.isVisible()) {
-      await saveButton.click()
+    // Save a preset. This block used to sit inside `if (saveButton.isVisible())`
+    // against a selector that matched nothing, so the test passed having
+    // asserted only the initial count (UF-25).
+    await createPreset(page, 'Count Test')
 
-      const nameInput = page.locator('input[type="text"][placeholder*="Preset name"]')
-      if (await nameInput.isVisible()) {
-        await nameInput.fill('Count Test')
-        const confirmButton = page.locator('button:has-text("Save")')
-        await confirmButton.click()
-        await page.waitForTimeout(500)
-
-        // Verify count increased
-        const newOptions = await getPresetOptions(page)
-        expect(newOptions.length).toBeGreaterThan(initialCount)
-      }
-    }
+    const newOptions = await getPresetOptions(page)
+    expect(newOptions.length).toBeGreaterThan(initialCount)
   })
 
   test('should handle preset names with special characters', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
-    try {
-      await loadSimpleBoxExample(page)
-    } catch (error) {
-      console.log('Could not load preset fixture:', error.message)
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page)
 
-    const saveButton = page.locator('button:has-text("Save Preset")')
-    if (!(await saveButton.isVisible())) {
-      test.skip()
-      return
-    }
+    // UF-25: this used to accept any outcome ("either the preset exists or
+    // validation prevented it, both are acceptable") and assert only that at
+    // least one option existed, which is true before the test does anything.
+    // A name with quotes and brackets has to round-trip intact - that is the
+    // property worth guarding, and it is where an escaping bug would show.
+    const trickyName = 'Test "Preset" (v1.0) & <b>'
+    await createPreset(page, trickyName)
 
-    await saveButton.click()
+    const options = await getPresetOptions(page)
+    expect(options.some((opt) => opt.includes(trickyName))).toBe(true)
 
-    const nameInput = page.locator('input[type="text"][placeholder*="Preset name"]')
-    if (await nameInput.isVisible()) {
-      // Try saving with special characters
-      await nameInput.fill('Test "Preset" (v1.0)')
-      const confirmButton = page.locator('button:has-text("Save")')
-      await confirmButton.click()
-      await page.waitForTimeout(500)
-
-      // Verify it was saved (should either work or show validation error)
-      const options = await getPresetOptions(page)
-      // Either preset exists with cleaned name, or validation prevented save
-      // Both behaviors are acceptable
-      expect(options.length).toBeGreaterThanOrEqual(1)
-    }
+    const selectedLabel = await getSelectedPresetLabel(page)
+    expect(selectedLabel).toContain(trickyName)
   })
 
   test('should persist presets across page reloads', async ({ page }) => {
@@ -505,19 +403,7 @@ test.describe('Preset Workflow', () => {
       consoleMessages.push(`[${msg.type()}] ${msg.text()}`)
     })
 
-    try {
-      await loadSimpleBoxExample(page)
-    } catch (error) {
-      console.log('Could not load preset fixture:', error.message)
-      test.skip()
-      return
-    }
-
-    const saveButton = page.locator('button:has-text("Save Preset")')
-    if (!(await saveButton.isVisible())) {
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page)
 
     // Check if presetManager exists before saving
     const presetManagerExists = await page.evaluate(() => {
@@ -528,30 +414,7 @@ test.describe('Preset Workflow', () => {
     })
     console.log('PresetManager status:', presetManagerExists)
 
-    await saveButton.click()
-
-    // Wait for modal to appear
-    const modal = page.locator('.preset-modal')
-    await modal.waitFor({ state: 'visible', timeout: 5000 })
-    console.log('Modal appeared')
-
-    // Scope to modal to avoid matching combobox search input
-    const nameInput = modal.locator('#presetName, input[placeholder*="preset"], input[placeholder*="Preset"]').first()
-    await nameInput.waitFor({ state: 'visible', timeout: 5000 })
-    console.log('Name input found')
-    
-    await nameInput.fill('Persistence Test')
-    console.log('Filled preset name')
-    
-    const confirmButton = page.locator('button[type="submit"]:has-text("Save")').first()
-    console.log('Confirm button visible:', await confirmButton.isVisible())
-    
-    await confirmButton.click()
-    console.log('Clicked save button')
-    
-    // Wait for modal to close
-    await page.waitForSelector('.preset-modal', { state: 'detached', timeout: 5000 })
-    console.log('Modal closed')
+    await createPreset(page, 'Persistence Test')
     await page.waitForTimeout(1000)
 
     // Check localStorage before reload
@@ -571,16 +434,10 @@ test.describe('Preset Workflow', () => {
     await page.waitForLoadState('domcontentloaded')
     await page.waitForTimeout(1000)
 
-    try {
-      await loadSimpleBoxExample(page)
-    } catch (error) {
-      console.log('Could not load preset fixture after reload:', error.message)
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page, { expandGroups: true })
 
     // Wait for parameters to load
-    const firstParam = page.locator('input[type="range"]').first()
+    const firstParam = page.locator('.param-control input[type="range"]').first()
     await firstParam.waitFor({ state: 'visible', timeout: 5000 })
     await page.waitForTimeout(1000)
 
@@ -680,6 +537,7 @@ test.describe('Project-Native Presets (project_presets flag)', () => {
     await page.addInitScript(() => {
       localStorage.clear()
       localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
     })
     await page.goto(`/?${PROJECT_PRESETS_FLAG}`)
     await page.waitForSelector('body[data-wasm-ready="true"]', {
@@ -802,10 +660,7 @@ test.describe('Project-Native Presets (project_presets flag)', () => {
     await page.waitForTimeout(500)
 
     const selected = await selectPreset(page, 'Selection Test')
-    if (!selected) {
-      test.skip()
-      return
-    }
+    expect(selected).toBe(true)
 
     await page.waitForTimeout(1000)
 
@@ -813,6 +668,25 @@ test.describe('Project-Native Presets (project_presets flag)', () => {
     expect(label).toContain('Selection Test')
   })
 
+  /*
+   * KNOWN RED, and deliberately left red: defect D-47, reported to the owner
+   * on 2026-08-15 and not fixed here.
+   *
+   * User-saved presets are filed under state.uploadedFile.name, and for a ZIP
+   * that is the ARCHIVE's filename - file-handler.js passes `file.name` as
+   * originalFileName on the ZIP path. This test opens the same project from
+   * two differently named archives, so the second upload looks up a different
+   * key and cannot see the preset saved under the first. The presets are not
+   * lost; they are filed elsewhere.
+   *
+   * The sibling case above proves project-NATIVE presets (from the sidecar
+   * JSON) DO follow the project across a rename, so the two kinds of preset
+   * behave differently. Whether a user's own presets should follow a project
+   * across a rename is a product decision about how people organise their
+   * work, and it needs a storage migration, so it is the owner's call and its
+   * own release. This test states the behaviour it expects; when D-47 is
+   * settled it either goes green or is rewritten to the decision.
+   */
   test('user-saved presets in localStorage survive project reload', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
@@ -832,10 +706,7 @@ test.describe('Project-Native Presets (project_presets flag)', () => {
     await page.waitForTimeout(500)
 
     const addBtn = page.locator('#addPresetBtn, button[aria-label*="Add preset"]')
-    if (!(await addBtn.isVisible({ timeout: 5000 }).catch(() => false))) {
-      test.skip()
-      return
-    }
+    await expect(addBtn).toBeVisible({ timeout: 5000 })
 
     await addBtn.click()
     const modal = page.locator('.preset-modal')
@@ -876,19 +747,41 @@ test.describe('Preset Workflow — Searchable Combobox variant', () => {
     await page.addInitScript(() => {
       localStorage.clear()
       localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
     })
     await page.goto(`/?${COMBOBOX_FLAG_PARAM}`)
+  })
+
+  test('AF-10: the resting selection is design default values, like the desktop', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await loadSimpleBoxExample(page)
+
+    // R-II P5b: before any choice, the desktop's combobox shows the active
+    // "design default values" - not a search placeholder. Display parity
+    // only: nothing is applied, and Save stays disabled (defaults are
+    // immutable, desktop-correct).
+    await expect(page.locator('#presetComboboxInput')).toHaveValue(
+      'design default values'
+    )
+    await expect(page.locator('#savePresetBtn')).toBeDisabled()
+  })
+
+  test('AF-10: the save control is a text button, like the desktop', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await loadSimpleBoxExample(page)
+
+    // R-II P10: the desktop has a text "save preset" button where we shipped
+    // a floppy icon. The accessible name never changed; the VISIBLE label is
+    // the parity subject.
+    await expect(page.locator('#savePresetBtn')).toHaveText('Save Preset')
   })
 
   test('combobox is shown and native select is hidden when flag is enabled', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
-    try {
-      await loadSimpleBoxExample(page)
-    } catch {
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page)
 
     const comboboxInput = page.locator('#presetComboboxContainer .preset-combobox-input')
     const nativeSelect = page.locator('select#presetSelect')
@@ -901,18 +794,10 @@ test.describe('Preset Workflow — Searchable Combobox variant', () => {
   test('combobox shows "design default values" as the first option', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
-    try {
-      await loadSimpleBoxExample(page)
-    } catch {
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page)
 
     const comboboxInput = page.locator('#presetComboboxContainer .preset-combobox-input')
-    if (!(await comboboxInput.isVisible({ timeout: 5000 }).catch(() => false))) {
-      test.skip()
-      return
-    }
+    await expect(comboboxInput).toBeVisible({ timeout: 5000 })
 
     // Open the combobox
     await comboboxInput.click()
@@ -929,19 +814,11 @@ test.describe('Preset Workflow — Searchable Combobox variant', () => {
   test('combobox filters options by text input', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
-    try {
-      await loadSimpleBoxExample(page)
-    } catch {
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page)
 
     // Save two presets so there's something to filter
     const addBtn = page.locator('#addPresetBtn, button[aria-label*="Add preset"]')
-    if (!(await addBtn.isVisible({ timeout: 5000 }).catch(() => false))) {
-      test.skip()
-      return
-    }
+    await expect(addBtn).toBeVisible({ timeout: 5000 })
 
     for (const name of ['Alpha Preset', 'Beta Preset']) {
       await addBtn.click()
@@ -956,10 +833,7 @@ test.describe('Preset Workflow — Searchable Combobox variant', () => {
     }
 
     const comboboxInput = page.locator('#presetComboboxContainer .preset-combobox-input')
-    if (!(await comboboxInput.isVisible().catch(() => false))) {
-      test.skip()
-      return
-    }
+    await expect(comboboxInput).toBeVisible()
 
     // Type to filter — only "Alpha Preset" should remain
     await comboboxInput.fill('Alpha')
@@ -981,18 +855,10 @@ test.describe('Preset Workflow — Searchable Combobox variant', () => {
   test('combobox shows "No presets match" when filter has no results', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
-    try {
-      await loadSimpleBoxExample(page)
-    } catch {
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page)
 
     const comboboxInput = page.locator('#presetComboboxContainer .preset-combobox-input')
-    if (!(await comboboxInput.isVisible({ timeout: 5000 }).catch(() => false))) {
-      test.skip()
-      return
-    }
+    await expect(comboboxInput).toBeVisible({ timeout: 5000 })
 
     await comboboxInput.fill('xyzzy_no_match_at_all')
     await page.waitForTimeout(200)
@@ -1004,18 +870,10 @@ test.describe('Preset Workflow — Searchable Combobox variant', () => {
   test('combobox closes on Escape and sets aria-expanded="false"', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
-    try {
-      await loadSimpleBoxExample(page)
-    } catch {
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page)
 
     const comboboxInput = page.locator('#presetComboboxContainer .preset-combobox-input')
-    if (!(await comboboxInput.isVisible({ timeout: 5000 }).catch(() => false))) {
-      test.skip()
-      return
-    }
+    await expect(comboboxInput).toBeVisible({ timeout: 5000 })
 
     // Open
     await comboboxInput.click()
@@ -1032,19 +890,11 @@ test.describe('Preset Workflow — Searchable Combobox variant', () => {
   test('combobox selects a preset on click and fires change', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
-    try {
-      await loadSimpleBoxExample(page)
-    } catch {
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page)
 
     // Save a preset to have something to select
     const addBtn = page.locator('#addPresetBtn, button[aria-label*="Add preset"]')
-    if (!(await addBtn.isVisible({ timeout: 5000 }).catch(() => false))) {
-      test.skip()
-      return
-    }
+    await expect(addBtn).toBeVisible({ timeout: 5000 })
 
     await addBtn.click()
     const clickModal = page.locator('.preset-modal')
@@ -1057,10 +907,7 @@ test.describe('Preset Workflow — Searchable Combobox variant', () => {
     await page.waitForTimeout(300)
 
     const comboboxInput = page.locator('#presetComboboxContainer .preset-combobox-input')
-    if (!(await comboboxInput.isVisible().catch(() => false))) {
-      test.skip()
-      return
-    }
+    await expect(comboboxInput).toBeVisible()
 
     // Open and click the saved preset
     await comboboxInput.click()
@@ -1071,10 +918,7 @@ test.describe('Preset Workflow — Searchable Combobox variant', () => {
       '.preset-combobox-option:not(.preset-combobox-empty)',
       { hasText: 'Click Select Test' }
     )
-    if (!(await targetOption.isVisible().catch(() => false))) {
-      test.skip()
-      return
-    }
+    await expect(targetOption).toBeVisible()
 
     await targetOption.click()
 
@@ -1086,19 +930,11 @@ test.describe('Preset Workflow — Searchable Combobox variant', () => {
   test('combobox selection syncs to the hidden native select', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
-    try {
-      await loadSimpleBoxExample(page)
-    } catch {
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page)
 
     // Save a preset so there's something to select
     const addBtn = page.locator('#addPresetBtn, button[aria-label*="Add preset"]')
-    if (!(await addBtn.isVisible({ timeout: 5000 }).catch(() => false))) {
-      test.skip()
-      return
-    }
+    await expect(addBtn).toBeVisible({ timeout: 5000 })
 
     await addBtn.click()
     const syncModal = page.locator('.preset-modal')
@@ -1112,10 +948,7 @@ test.describe('Preset Workflow — Searchable Combobox variant', () => {
 
     // Select via the combobox
     const comboboxInput = page.locator('#presetComboboxContainer .preset-combobox-input')
-    if (!(await comboboxInput.isVisible().catch(() => false))) {
-      test.skip()
-      return
-    }
+    await expect(comboboxInput).toBeVisible()
 
     await comboboxInput.click()
     const listbox = page.locator('#presetComboboxContainer .preset-combobox-list')
@@ -1137,20 +970,12 @@ test.describe('Preset Workflow — Searchable Combobox variant', () => {
   test('shared selectPreset() helper works with combobox widget', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
-    try {
-      await loadSimpleBoxExample(page)
-    } catch {
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page)
 
     // The shared helper should auto-detect the combobox and select "design default values"
     const options = await getPresetOptions(page)
     const designDefault = options.find(o => o.toLowerCase().includes('design default'))
-    if (!designDefault) {
-      test.skip()
-      return
-    }
+    expect(designDefault).toBeTruthy()
 
     const result = await selectPreset(page, designDefault)
     expect(result).toBe(true)
@@ -1162,18 +987,10 @@ test.describe('Preset Workflow — Searchable Combobox variant', () => {
   test('combobox selects a preset via keyboard Enter', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
-    try {
-      await loadSimpleBoxExample(page)
-    } catch {
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page)
 
     const comboboxInput = page.locator('#presetComboboxContainer .preset-combobox-input')
-    if (!(await comboboxInput.isVisible({ timeout: 5000 }).catch(() => false))) {
-      test.skip()
-      return
-    }
+    await expect(comboboxInput).toBeVisible({ timeout: 5000 })
 
     // Open the combobox and navigate with Arrow Down + Enter
     await comboboxInput.click()

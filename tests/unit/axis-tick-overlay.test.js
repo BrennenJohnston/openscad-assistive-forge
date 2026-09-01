@@ -1,17 +1,24 @@
 /**
- * Unit tests for the F20 axis tick overlay.
+ * Unit tests for the axis tick + numeral overlay (UF-7 desktop
+ * transcription).
  *
- * The module is wrapped around a small Three.js stub so we can
- * exercise tick / label generation, color resolution, and disposal
- * without spinning up WebGL.
+ * The mock deliberately mirrors what getThreeModule() actually hands out —
+ * never more. The pre-UF-7 suite injected Sprite/CanvasTexture classes the
+ * app did not export, which is how 20 green tests sat on top of an overlay
+ * that threw on every real attempt (the R-IV lesson).
+ *
+ * Expected numbers are pinned at the two desktop reference poses
+ * (distance 140 and 263.43, both `fov = 22.50` screenshots) so a drifted
+ * formula fails loudly against the same ground truth the owner approved.
  *
  * @license GPL-3.0-or-later
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   buildAxisTickOverlay,
   resolveAxisMarkColor,
+  computeScale,
   __test,
 } from '../../src/js/axis-tick-overlay.js';
 
@@ -20,23 +27,22 @@ function makeMockThree() {
     constructor() {
       this.children = [];
       this.name = '';
-      this.userData = {};
       this.renderOrder = 0;
     }
     add(o) {
       this.children.push(o);
     }
-    remove(o) {
-      this.children = this.children.filter((c) => c !== o);
-    }
   }
   class MockBufferGeometry {
     constructor() {
       this.attributes = {};
-      this.dispose = vi.fn();
+      this.disposed = false;
     }
     setAttribute(name, attr) {
       this.attributes[name] = attr;
+    }
+    dispose() {
+      this.disposed = true;
     }
   }
   class MockFloat32BufferAttribute {
@@ -49,7 +55,17 @@ function makeMockThree() {
   class MockLineBasicMaterial {
     constructor(opts = {}) {
       Object.assign(this, opts);
-      this.dispose = vi.fn();
+      this.dashed = false;
+      this.disposed = false;
+    }
+    dispose() {
+      this.disposed = true;
+    }
+  }
+  class MockLineDashedMaterial extends MockLineBasicMaterial {
+    constructor(opts = {}) {
+      super(opts);
+      this.dashed = true;
     }
   }
   class MockLineSegments {
@@ -57,46 +73,10 @@ function makeMockThree() {
       this.geometry = geometry;
       this.material = material;
       this.name = '';
+      this.lineDistancesComputed = false;
     }
-  }
-  class MockSpriteMaterial {
-    constructor(opts = {}) {
-      Object.assign(this, opts);
-      this.dispose = vi.fn();
-    }
-  }
-  class MockSprite {
-    constructor(material) {
-      this.material = material;
-      this.position = {
-        x: 0,
-        y: 0,
-        z: 0,
-        set(x, y, z) {
-          this.x = x;
-          this.y = y;
-          this.z = z;
-        },
-      };
-      this.scale = {
-        x: 1,
-        y: 1,
-        z: 1,
-        set(x, y, z) {
-          this.x = x;
-          this.y = y;
-          this.z = z;
-        },
-      };
-      this.userData = {};
-      this.geometry = { dispose: vi.fn() };
-    }
-  }
-  class MockCanvasTexture {
-    constructor(canvas) {
-      this.image = canvas;
-      this.needsUpdate = false;
-      this.dispose = vi.fn();
+    computeLineDistances() {
+      this.lineDistancesComputed = true;
     }
   }
   return {
@@ -104,20 +84,12 @@ function makeMockThree() {
     BufferGeometry: MockBufferGeometry,
     Float32BufferAttribute: MockFloat32BufferAttribute,
     LineBasicMaterial: MockLineBasicMaterial,
+    LineDashedMaterial: MockLineDashedMaterial,
     LineSegments: MockLineSegments,
-    SpriteMaterial: MockSpriteMaterial,
-    Sprite: MockSprite,
-    CanvasTexture: MockCanvasTexture,
   };
 }
 
-describe('axis-tick-overlay (F20)', () => {
-  let mockThree;
-
-  beforeEach(() => {
-    mockThree = makeMockThree();
-  });
-
+describe('axis-tick-overlay (UF-7 transcription)', () => {
   describe('parseCssColorToHex', () => {
     it('parses #rrggbb', () => {
       expect(__test.parseCssColorToHex('#abcdef')).toBe(0xabcdef);
@@ -163,65 +135,243 @@ describe('axis-tick-overlay (F20)', () => {
       expect(result.hex).toBe(0x222222);
     });
 
-    it('reads --color-text-primary when present', () => {
-      document.documentElement.style.setProperty(
-        '--color-text-primary',
-        '#ff5733'
-      );
+    it('reads --color-text-primary from body when present', () => {
+      // The token is read off <body> (not <html>): Classic's remap is
+      // body-scoped, and jsdom does not inherit custom properties, so
+      // setting it here also proves which element the resolver queries.
+      document.body.style.setProperty('--color-text-primary', '#ff5733');
       const result = resolveAxisMarkColor('light', document);
       expect(result.hex).toBe(0xff5733);
-      document.documentElement.style.removeProperty('--color-text-primary');
+      document.body.style.removeProperty('--color-text-primary');
     });
 
     it('handles a forced-colors / system color fallback gracefully', () => {
       // CanvasText / WindowText etc. can't be parsed; the helper must
       // still return a usable fallback rather than throwing.
-      document.documentElement.style.setProperty(
-        '--color-text-primary',
-        'CanvasText'
-      );
+      document.body.style.setProperty('--color-text-primary', 'CanvasText');
       const result = resolveAxisMarkColor('light-hc', document);
       expect(typeof result.hex).toBe('number');
       expect(result.css).toMatch(/^#[0-9a-f]{6}$/);
+      document.body.style.removeProperty('--color-text-primary');
+    });
+
+    it('classic resolves the transcribed Cornfield axes color, scheme-first', () => {
+      // Even with a token present the scheme wins: the marks belong to the
+      // viewport scheme, not to the app theme underneath (U-13).
+      document.body.style.setProperty('--color-text-primary', '#ff5733');
+      const result = resolveAxisMarkColor('classic', document);
+      expect(result.hex).toBe(0x000000);
+      expect(result.css).toBe('#000000');
+      document.body.style.removeProperty('--color-text-primary');
+    });
+
+    it('a dark scheme keeps its own light axes without consulting tokens', () => {
+      const result = resolveAxisMarkColor('starnight', document);
+      expect(result.hex).toBe(0xe5e5e5);
+    });
+
+    it('prefers the body-scoped token over the html one (the U-13 shape)', () => {
+      // The dark theme writes its token on <html>; Classic's remap lives
+      // on <body>. Reading html is exactly the defect this fix removed.
+      document.documentElement.style.setProperty(
+        '--color-text-primary',
+        '#edeef0'
+      );
+      document.body.style.setProperty('--color-text-primary', '#1a1a1a');
+      const result = resolveAxisMarkColor('light', document);
+      expect(result.hex).toBe(0x1a1a1a);
       document.documentElement.style.removeProperty('--color-text-primary');
+      document.body.style.removeProperty('--color-text-primary');
     });
   });
 
-  describe('collectTickPositions', () => {
-    it('produces 6 floats per tick segment', () => {
-      const flat = __test.collectTickPositions({
-        rangeMm: 30,
+  describe('computeScale (showScalemarkers step function)', () => {
+    it('pins the close-up reference pose: distance 140', () => {
+      expect(computeScale(140)).toEqual({
+        distanceMm: 140,
+        lAdjusted: 100,
         tickStepMm: 10,
-        labelStepMm: 50,
+        extraLabels: true,
       });
-      // Three ticks per direction (10, 20, 30) × 2 signs × 3 axes = 18 segments.
-      // 18 * 6 floats = 108 entries.
-      expect(flat.length).toBe(18 * 6);
     });
 
-    it('uses longer ticks at labelled positions', () => {
-      const flat = __test.collectTickPositions({
-        rangeMm: 50,
-        tickStepMm: 10,
-        labelStepMm: 50,
-      });
-      // The labelled tick at mm=50 should be longer than at mm=10.
-      // Find any X-axis tick at +10 (small) and +50 (long).
-      const findHalf = (axisIndex, mm) => {
-        for (let i = 0; i < flat.length; i += 6) {
-          const v = flat[i + axisIndex];
-          if (v === mm) {
-            // Y-extent for X-axis ticks is at index 1 / 4
-            const a = flat[i + 1];
-            const b = flat[i + 4];
-            return Math.abs(b - a) / 2;
-          }
-        }
-        return null;
-      };
-      const small = findHalf(0, 10);
-      const labelled = findHalf(0, 50);
-      expect(labelled).toBeGreaterThan(small);
+    it('pins the wide reference pose: distance 263.43 (numbers every 20 mm)', () => {
+      const s = computeScale(263.43);
+      expect(s.tickStepMm).toBe(10);
+      // 263.43 / 100 = 2.6343 < 3 → extra numbers every 2nd tick.
+      expect(s.extraLabels).toBe(true);
+    });
+
+    it('turns the extra labels off once three majors fit (distance 500)', () => {
+      const s = computeScale(500);
+      expect(s.tickStepMm).toBe(10);
+      expect(s.extraLabels).toBe(false);
+    });
+
+    it('changes decade exactly at powers of ten', () => {
+      expect(computeScale(99).tickStepMm).toBe(1);
+      expect(computeScale(100).tickStepMm).toBe(10);
+      expect(computeScale(999).tickStepMm).toBe(10);
+      expect(computeScale(1000).tickStepMm).toBe(100);
+    });
+
+    it('absorbs the camera round-trip epsilon at a decade boundary', () => {
+      // MEASURED: typing 1000 into the Viewport-Control distance field lands
+      // the camera at this value after the rotation-matrix round trip. A bare
+      // floor(log10) read it as the 100 decade → 600 ticks instead of 60.
+      expect(computeScale(999.9999999999992).tickStepMm).toBe(100);
+      // A genuinely-below value keeps the lower decade.
+      expect(computeScale(999.99).tickStepMm).toBe(10);
+    });
+
+    it('keeps working below 10 mm (sub-decade zooms label fractions)', () => {
+      const s = computeScale(9.5);
+      expect(s.tickStepMm).toBeCloseTo(0.1, 10);
+      expect(s.extraLabels).toBe(false);
+    });
+
+    it('falls back to the default distance on nonsense', () => {
+      for (const bad of [0, -5, NaN, Infinity, undefined, 'far']) {
+        expect(computeScale(bad).distanceMm).toBe(__test.DEFAULT_DISTANCE_MM);
+      }
+    });
+  });
+
+  describe('formatMarkerNumber (C++ STR parity)', () => {
+    it('never leaks float accumulation noise', () => {
+      expect(__test.formatMarkerNumber(30.000000000000004)).toBe('30');
+      expect(__test.formatMarkerNumber(0.30000000000000004)).toBe('0.3');
+    });
+
+    it('passes plain values through', () => {
+      expect(__test.formatMarkerNumber(100)).toBe('100');
+      expect(__test.formatMarkerNumber(0.5)).toBe('0.5');
+    });
+  });
+
+  describe('buildMarkerGeometry', () => {
+    it('pins tick and label counts at the wide reference pose (263.43)', () => {
+      const g = __test.buildMarkerGeometry(263.43);
+      // Ticks at k=0..26 (k·10 < 263.43): 27 positions × 6 half-axes.
+      expect(g.tickCount).toBe(27 * 6);
+      // Numbers: majors at 100 and 200, plus every 2nd tick because
+      // 263.43/100 < 3 → labelled k = {2,4,…,26} = 13 positions × 6 axes.
+      expect(g.labelCount).toBe(13 * 6);
+      expect(g.solidTicks.length).toBe(27 * 3 * 6);
+      expect(g.dashedTicks.length).toBe(27 * 3 * 6);
+    });
+
+    it('labels only every 10th tick when zoomed past the threshold (500)', () => {
+      const g = __test.buildMarkerGeometry(500);
+      // k·10 < 500 → k=0..49; majors at k=10,20,30,40 → 4 positions.
+      expect(g.labelCount).toBe(4 * 6);
+    });
+
+    it('draws one-sided arms: X ticks toward −Y, Y and Z ticks toward −X', () => {
+      const l = 263.43;
+      const g = __test.buildMarkerGeometry(l);
+      const minor = l / __test.SIZE_DIV_SM;
+      const lift = __test.XY_LIFT_MM;
+      // k=1 trio starts at float offset 1 × 3 segments × 6 floats.
+      const at = (i) => Array.from(g.solidTicks.slice(i, i + 6));
+      expect(at(18)).toEqual([10, 0, lift, 10, -minor, lift]);
+      expect(at(24)).toEqual([0, 10, lift, -minor, 10, lift]);
+      expect(at(30)).toEqual([0, 0, 10, -minor, 0, 10]);
+    });
+
+    it('doubles the arm length on every 10th tick (major = l/30)', () => {
+      const l = 263.43;
+      const g = __test.buildMarkerGeometry(l);
+      const major = l / (__test.SIZE_DIV_SM / 2);
+      // k=10 (i=100): trio at offset 10 × 18 floats; X segment end y = −major.
+      const seg = Array.from(g.solidTicks.slice(180, 186));
+      expect(seg[0]).toBe(100);
+      expect(seg[4]).toBeCloseTo(-major, 10);
+    });
+
+    it('mirrors the negative ticks into the dashed buffer', () => {
+      const g = __test.buildMarkerGeometry(263.43);
+      const lift = __test.XY_LIFT_MM;
+      const minor = 263.43 / __test.SIZE_DIV_SM;
+      expect(Array.from(g.dashedTicks.slice(18, 24))).toEqual([
+        -10,
+        0,
+        lift,
+        -10,
+        -minor,
+        lift,
+      ]);
+    });
+
+    it('keeps the Z axis content in the XZ plane with no grid lift', () => {
+      const g = __test.buildMarkerGeometry(263.43);
+      // Every 3rd solid segment is the Z tick: indices 12..17 within each 18.
+      for (let base = 12; base < g.solidTicks.length; base += 18) {
+        expect(g.solidTicks[base + 1]).toBe(0);
+        expect(g.solidTicks[base + 4]).toBe(0);
+      }
+    });
+  });
+
+  describe('emitMarkerNumber (decodeMarkerValue transcription)', () => {
+    const unit = 1; // buf=0.25, w=0.5, h=1.25, pitch=0.75
+
+    it('draws "1" on +X as one vertical stroke in the XY plane', () => {
+      const out = [];
+      __test.emitMarkerNumber(out, '1', 20, 0, unit);
+      const lift = __test.XY_LIFT_MM;
+      // '1' is A→E on the box left edge: (cx−w/2, h) → (cx−w/2, buf).
+      expect(out).toEqual([19.75, 1.25, lift, 19.75, 0.25, lift]);
+    });
+
+    it('closes "0" into a four-segment loop', () => {
+      const out = [];
+      __test.emitMarkerNumber(out, '0', 20, 0, unit);
+      expect(out.length).toBe(4 * 6);
+      // The loop's last segment returns to its first vertex.
+      expect(out.slice(-3)).toEqual(out.slice(0, 3));
+    });
+
+    it('prefixes the minus and walks outward on the negative X axis', () => {
+      const out = [];
+      __test.emitMarkerNumber(out, '20', 100, 3, unit);
+      // di=3 reverses "-20" to "02-": the minus is the farthest char, so
+      // reading in +X order gives "-", "2", "0". All along-coords negative.
+      const xs = out.filter((_, i) => i % 3 === 0);
+      expect(Math.max(...xs)).toBeLessThan(0);
+      // 3 chars: '0' loop (4 segs) + '2' strip (5 segs) + '-' (1 seg).
+      expect(out.length).toBe((4 + 5 + 1) * 6);
+    });
+
+    it('stacks Z-axis digits along the axis in the XZ plane', () => {
+      const out = [];
+      __test.emitMarkerNumber(out, '20', 100, 2, unit);
+      // Every vertex sits at y=0 (XZ plane, no grid lift on Z content).
+      const ys = out.filter((_, i) => i % 3 === 1);
+      expect(ys.every((y) => y === 0)).toBe(true);
+      // The along-axis values land in Z; the glyph box height lands in X.
+      const zs = out.filter((_, i) => i % 3 === 2);
+      const xs = out.filter((_, i) => i % 3 === 0);
+      expect(Math.min(...zs)).toBeGreaterThanOrEqual(100 - 0.5);
+      expect(Math.max(...xs)).toBeLessThanOrEqual(1.25);
+    });
+
+    it('mirrors +Y glyph walks relative to +X (the or-table rows differ)', () => {
+      const outX = [];
+      const outY = [];
+      __test.emitMarkerNumber(outX, '7', 20, 0, unit);
+      __test.emitMarkerNumber(outY, '7', 20, 1, unit);
+      // '7' on +X: A→B→E. On +Y the walk is B→A→F (mirrored). Compare the
+      // along-axis coordinate of the first vertex: left edge vs right edge.
+      expect(outX[0]).toBeCloseTo(19.75, 10); // x of A (left)
+      expect(outY[1]).toBeCloseTo(20.25, 10); // y (along) of B (right)
+    });
+
+    it('skips characters the desktop font does not define', () => {
+      const out = [];
+      __test.emitMarkerNumber(out, '1+1', 20, 0, unit);
+      // '+' has no glyph (desktop switch has no default): two "1" strokes.
+      expect(out.length).toBe(2 * 6);
     });
   });
 
@@ -230,116 +380,86 @@ describe('axis-tick-overlay (F20)', () => {
       expect(() => buildAxisTickOverlay(null)).toThrow(/Three\.js/);
     });
 
-    it('builds a Group named __axisTickOverlay with line segments + sprite labels', () => {
-      const result = buildAxisTickOverlay(mockThree, {
+    it('builds the three named depth-honest nodes', () => {
+      const result = buildAxisTickOverlay(makeMockThree(), {
         themeKey: 'light',
-        rangeMm: 100,
-        tickStepMm: 10,
-        labelStepMm: 50,
+        distanceMm: 263.43,
       });
-
       expect(result.group.name).toBe('__axisTickOverlay');
-      expect(result.group.children.length).toBeGreaterThanOrEqual(1);
+      const names = result.group.children.map((c) => c.name).sort();
+      expect(names).toEqual([
+        '__axisTickDigits',
+        '__axisTickLines',
+        '__axisTickLinesNeg',
+      ]);
+      // The pre-UF-7 overlay forced renderOrder=10 and killed depthTest on
+      // its labels; both were the U-11 defect. Nothing may reintroduce them.
+      expect(result.group.renderOrder).toBe(0);
+      for (const child of result.group.children) {
+        expect(child.material.depthTest).toBeUndefined();
+        expect(child.material.transparent).toBeUndefined();
+      }
+    });
 
-      const lineSegments = result.group.children.find(
-        (c) => c.name === '__axisTickLines'
+    it('dashes only the negative tick buffer, with zoom-scaled dashes', () => {
+      const l = 263.43;
+      const result = buildAxisTickOverlay(makeMockThree(), {
+        distanceMm: l,
+      });
+      const dashed = result.group.children.filter((c) => c.material.dashed);
+      expect(dashed.map((c) => c.name)).toEqual(['__axisTickLinesNeg']);
+      expect(dashed[0].lineDistancesComputed).toBe(true);
+      expect(dashed[0].material.dashSize).toBeCloseTo(
+        l / __test.DASH_DIVISOR,
+        10
       );
-      expect(lineSegments).toBeDefined();
-
-      // 50 + 100 mm labelled, 3 axes, 2 signs, prominent flag for both → 12 sprites.
-      expect(result.labelCount).toBe(12);
-    });
-
-    it('places sprites at the correct mm offset along each axis', () => {
-      const result = buildAxisTickOverlay(mockThree, {
-        rangeMm: 100,
-        tickStepMm: 10,
-        labelStepMm: 50,
-      });
-      const sprites = result.group.children.filter((c) => c.userData?.axisMark);
-      const positionsByAxis = {
-        x: new Set(),
-        y: new Set(),
-        z: new Set(),
-      };
-      for (const s of sprites) {
-        positionsByAxis[s.userData.axisMark.axis].add(
-          s.userData.axisMark.mm
-        );
-      }
-      for (const axis of ['x', 'y', 'z']) {
-        expect([...positionsByAxis[axis]].sort((a, b) => a - b)).toEqual([
-          -100, -50, 50, 100,
-        ]);
+      const solid = result.group.children.filter((c) => !c.material.dashed);
+      for (const node of solid) {
+        expect(node.lineDistancesComputed).toBe(false);
       }
     });
 
-    it('marks the 50/100 mm labels as prominent', () => {
-      const result = buildAxisTickOverlay(mockThree, {
-        rangeMm: 200,
-        tickStepMm: 10,
-        labelStepMm: 50,
+    it('reports the adaptive scale on its contract', () => {
+      const result = buildAxisTickOverlay(makeMockThree(), {
+        distanceMm: 263.43,
       });
-      const sprites = result.group.children.filter((c) => c.userData?.axisMark);
-      for (const s of sprites) {
-        const expected = Math.abs(s.userData.axisMark.mm) <= 100;
-        expect(s.userData.axisMark.isProminent).toBe(expected);
-      }
+      expect(result.distanceMm).toBe(263.43);
+      expect(result.tickStepMm).toBe(10);
+      expect(result.tickCount).toBe(27 * 6);
+      expect(result.labelCount).toBe(13 * 6);
     });
 
-    it('respects custom rangeMm and labelStepMm', () => {
-      const result = buildAxisTickOverlay(mockThree, {
-        rangeMm: 50,
-        tickStepMm: 10,
-        labelStepMm: 50,
-      });
-      // Only 50 mm labelled in each direction × 3 axes × 2 signs = 6 sprites.
-      expect(result.labelCount).toBe(6);
-    });
-
-    it('clamps invalid sizing options to sensible defaults', () => {
-      const result = buildAxisTickOverlay(mockThree, {
-        rangeMm: -1,
-        tickStepMm: 0,
-        labelStepMm: NaN,
-      });
-      // Defaults: range=200, label step=50 → 4 labels per axis × 3 axes × 2 signs = 24
-      expect(result.labelCount).toBe(24);
-    });
-
-    it('disposes line geometry, line material, sprite materials and textures', () => {
-      const result = buildAxisTickOverlay(mockThree, {
-        rangeMm: 50,
-        tickStepMm: 10,
-        labelStepMm: 50,
-      });
-      const lineSegments = result.group.children.find(
-        (c) => c.name === '__axisTickLines'
-      );
-      const tickGeometry = lineSegments.geometry;
-      const lineMaterial = lineSegments.material;
-      const sprites = result.group.children.filter((c) => c.userData?.axisMark);
-
-      result.dispose();
-
-      expect(tickGeometry.dispose).toHaveBeenCalled();
-      expect(lineMaterial.dispose).toHaveBeenCalled();
-      // Each sprite material is a Mock with a vi.fn() dispose.
-      sprites.forEach((s) => {
-        expect(s.material.dispose).toHaveBeenCalled();
-      });
+    it('uses the default distance when none is supplied', () => {
+      const result = buildAxisTickOverlay(makeMockThree(), {});
+      expect(result.distanceMm).toBe(__test.DEFAULT_DISTANCE_MM);
+      expect(result.tickStepMm).toBe(10);
     });
 
     it('records the resolved color hex on the result', () => {
-      document.documentElement.style.setProperty(
-        '--color-text-primary',
-        '#112233'
-      );
-      const result = buildAxisTickOverlay(mockThree, {
+      document.body.style.setProperty('--color-text-primary', '#112233');
+      const result = buildAxisTickOverlay(makeMockThree(), {
         themeKey: 'light',
       });
       expect(result.colorHex).toBe(0x112233);
-      document.documentElement.style.removeProperty('--color-text-primary');
+      document.body.style.removeProperty('--color-text-primary');
+    });
+
+    it('shares one solid material between ticks and digits, and disposes everything', () => {
+      const result = buildAxisTickOverlay(makeMockThree(), {
+        distanceMm: 263.43,
+      });
+      const byName = (n) => result.group.children.find((c) => c.name === n);
+      const ticks = byName('__axisTickLines');
+      const digits = byName('__axisTickDigits');
+      const dashed = byName('__axisTickLinesNeg');
+      expect(digits.material).toBe(ticks.material);
+
+      result.dispose();
+      expect(ticks.geometry.disposed).toBe(true);
+      expect(dashed.geometry.disposed).toBe(true);
+      expect(digits.geometry.disposed).toBe(true);
+      expect(ticks.material.disposed).toBe(true);
+      expect(dashed.material.disposed).toBe(true);
     });
   });
 });

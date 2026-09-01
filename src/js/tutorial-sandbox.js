@@ -15,6 +15,12 @@
 import { createFocusTrap } from './focus-trap.js';
 import { getUIModeController } from './ui-mode-controller.js';
 import { announceImmediate, announceError } from './announcer.js';
+import { backGuardAnsweredPop } from './back-guard.js';
+import {
+  STORAGE_KEY_TUTORIAL_STATE,
+  safeGetItem,
+  safeSetItem,
+} from './storage-keys.js';
 
 /**
  * Tutorial step definition
@@ -41,6 +47,10 @@ let tutorialOverlay = null;
 let triggerElement = null;
 let previousFocus = null; // Store focus to restore on close
 let preTutorialMode = null; // Store UI mode to restore on close
+let preTutorialDensity = null; // Classic density to hand back after a forced switch
+let tutorialForcedMode = false; // True while the tutorial itself switched the interface
+let modeChangeUnsubscribe = null; // ui-mode subscription active while a tutorial runs
+let densityChangeListener = null; // Classic density listener active while a tutorial runs
 let completionListeners = [];
 let stepCompleted = true;
 let resizeObserver = null;
@@ -51,6 +61,10 @@ let consecutiveFailures = 0; // Track consecutive step failures
 let isNavigating = false; // Debounce navigation clicks
 let isPaused = false; // Pause state for visibility changes
 let targetRemovalObserver = null; // Watch for target removal
+let surfaceObserver = null; // Watch for welcome -> project while a welcome-surface tour runs
+let dialogObserver = null; // Watch for a user-opened dialog while a tutorial runs
+let escapeOwnedElsewhere = false; // Did a dialog or the drawer own this Escape?
+let dialogStandDown = null; // What the stand-down took away, so it can give it back
 let currentTarget = null; // Currently highlighted target
 let scrollYBeforeLock = 0; // Store scroll position for body lock
 let didLockBodyScroll = false; // Avoid fighting other scroll locks (e.g. mobile drawer)
@@ -99,6 +113,78 @@ function findScrollableParent(element) {
   }
 
   return null;
+}
+
+/**
+ * The highest point on screen where this element can actually be seen.
+ *
+ * The nearest SCROLLABLE ancestor is not the right answer: an ancestor whose
+ * content happens to fit still clips with `overflow: auto`, and the scrollable
+ * one may be further out and start at the top of the window. MEASURED on the
+ * CI Firefox runner, where wider fonts make `#welcomeScreen`'s content fit so
+ * it is not scrollable: aligning to the scrollable ancestor put the target at
+ * y=48 under an 86px header, while `#welcomeScreen` itself was still clipping
+ * at ~145. So take the lowest top edge of every CLIPPING ancestor.
+ *
+ * @param {HTMLElement} el
+ * @returns {number} Viewport y below which the element is not clipped
+ */
+function visibleTopBoundFor(el) {
+  let bound = 0;
+  let parent = el.parentElement;
+
+  while (parent && parent !== document.documentElement) {
+    const style = getComputedStyle(parent);
+    if (style.overflowY !== 'visible' || style.overflowX !== 'visible') {
+      bound = Math.max(bound, parent.getBoundingClientRect().top);
+    }
+    parent = parent.parentElement;
+  }
+
+  return bound;
+}
+
+/**
+ * Bring a target into view inside its own scroll container, leaving room for
+ * the halo.
+ *
+ * Triage Table 1 #5 (reported at UF-17): on the welcome tour's Open-or-start
+ * step the halo's top edge, and the panel's own heading with it, disappeared
+ * under the header. MEASURED at the base: #welcomeScreen is the scroll
+ * container and its visible box starts 124px down, but scrollIntoView with
+ * block:'center' centres against the WINDOW, so it parked the 476px panel at
+ * y=13 and the container clipped its first 111px. The halo's top edge sat 66px
+ * above the header's bottom edge.
+ *
+ * Centring inside the container's own client box instead keeps the whole
+ * target, halo included, where it can be seen. A target too tall for the box
+ * shows its top rather than its middle, since that is where a tour's subject
+ * usually begins.
+ *
+ * @param {HTMLElement} el - The step's target
+ */
+function scrollTargetIntoContainerView(el) {
+  const margin = SPOTLIGHT_PADDING + 8;
+  const container = findScrollableParent(el);
+  if (!container) {
+    el.scrollIntoView({ behavior: 'auto', block: 'center' });
+    return;
+  }
+
+  const containerRect = container.getBoundingClientRect();
+  const elRect = el.getBoundingClientRect();
+  const view = container.clientHeight;
+  const elTopInContent = elRect.top - containerRect.top + container.scrollTop;
+
+  const next =
+    elRect.height + margin * 2 >= view
+      ? elTopInContent - margin
+      : elTopInContent - (view - elRect.height) / 2;
+
+  container.scrollTop = Math.max(
+    0,
+    Math.min(next, container.scrollHeight - view)
+  );
 }
 
 /**
@@ -697,29 +783,62 @@ function handleDrawerStateChange(isNowOpen) {
     // @mobile-drawer-toggle when closed)
     const newTarget = resolveStepTarget(step, { requireVisible: true });
 
-    if (newTarget && newTarget !== currentTarget) {
-      // Update to the new visible target and reposition spotlight
-      currentTarget = newTarget;
-      updateSpotlightAndPosition();
-    } else if (!newTarget && !stepCompleted) {
-      // All targets are hidden - check if any are inside the closed drawer
-      const hasTargetInsideDrawer = checkIfAnyTargetInsideDrawer(step);
-      if (hasTargetInsideDrawer && !isNowOpen) {
-        // Automatically reopen the panel - user closed it but tutorial needs it
-        openParamPanel();
-        // Wait for animation
-        await waitForTransition(document.getElementById('paramPanel'), 400);
-        // Re-resolve target after panel is open
-        const reopenedTarget = resolveStepTarget(step, {
-          requireVisible: true,
-        });
-        if (reopenedTarget) {
-          currentTarget = reopenedTarget;
-          updateSpotlightAndPosition();
-        }
+    if (newTarget) {
+      if (newTarget !== currentTarget) {
+        // Update to the new visible target and reposition spotlight
+        currentTarget = newTarget;
+        updateSpotlightAndPosition();
       }
+      resetStepRequirement(step);
+    } else if (
+      !stepCompleted &&
+      !isNowOpen &&
+      checkIfAnyTargetInsideDrawer(step)
+    ) {
+      // D-63 (U-42, owner's phone). This branch used to call openParamPanel()
+      // and drag the panel back open, on the grounds that the tutorial needed
+      // it. MEASURED at the release base, 412x915, intro step 4: the user
+      // pressed Close, the observer reopened the drawer inside 500ms, and at
+      // 2000ms it was still open - the close never took. Together with D-62
+      // that is what made Restore look dead: close, reopen, re-minimize, back
+      // to the pill, "no input or button pressing registers".
+      //
+      // The user's close wins now. The tour points at the way back in, says
+      // so, and waits.
+      showDrawerRequirement();
     }
   }, 100); // Debounce for 100ms
+}
+
+/**
+ * Every element a step could point at, visible or not: its targetKey first,
+ * then each entry of its highlightSelector list, in the order the resolver
+ * would try them.
+ * @param {Object} step - Tutorial step
+ * @returns {HTMLElement[]}
+ */
+function stepTargetCandidates(step) {
+  const found = [];
+  const add = (el) => {
+    if (el && !found.includes(el)) found.push(el);
+  };
+
+  if (step.targetKey) {
+    add(document.querySelector(`[data-tutorial-target="${step.targetKey}"]`));
+  }
+  if (step.highlightSelector) {
+    for (const selector of step.highlightSelector.split(',')) {
+      const trimmed = selector.trim();
+      add(
+        document.querySelector(
+          trimmed.startsWith('@')
+            ? `[data-tutorial-target="${trimmed.slice(1)}"]`
+            : trimmed
+        )
+      );
+    }
+  }
+  return found;
 }
 
 /**
@@ -728,70 +847,96 @@ function handleDrawerStateChange(isNowOpen) {
  * @returns {boolean}
  */
 function checkIfAnyTargetInsideDrawer(step) {
-  if (!step.highlightSelector) return false;
-
-  const selectors = step.highlightSelector.split(',').map((s) => s.trim());
-
-  for (const selector of selectors) {
-    let el;
-    if (selector.startsWith('@')) {
-      el = document.querySelector(
-        `[data-tutorial-target="${selector.slice(1)}"]`
-      );
-    } else {
-      el = document.querySelector(selector);
-    }
-    if (el && isInsideParamPanel(el)) {
-      return true;
-    }
-  }
-  return false;
+  return stepTargetCandidates(step).some(isInsideParamPanel);
 }
 
 /**
- * Show a prompt in the tutorial panel to reopen/expand the param panel
- * Works for both mobile drawer and desktop collapsed panel
+ * Does this step need the Customizer panel opened before it can be shown?
+ *
+ * U-42 (owner's phone, 2026-08-21): "step 3 does not highlight anything for
+ * the user to interact with". The old answer was "does ANY target live inside
+ * the panel", and step 3 - the step that TEACHES opening the panel - lists
+ * `@mobile-drawer-close` first. That resolves in the DOM while the drawer is
+ * shut, so the engine opened the drawer for it and then ringed the Close
+ * button, teaching the opposite of what the card said.
+ *
+ * The honest question is whether the step can be shown at all without opening
+ * it. If some target is inside the panel but another one outside is already on
+ * screen, the step has something to point at and the panel stays as the user
+ * left it. Step 3 then arrives with the drawer shut and the ring on the
+ * Customizer button, and the drawer observer moves the ring to the Close
+ * button when the user opens it - the step follows the user through both
+ * halves of what it is teaching.
+ *
+ * A collapsed desktop panel still expands: there the only visible candidate
+ * IS inside the panel.
+ * @param {Object} step - Tutorial step
+ * @returns {boolean}
  */
-function _showDrawerReopenPrompt() {
+function stepNeedsParamPanelOpen(step) {
+  const candidates = stepTargetCandidates(step);
+  if (!candidates.some(isInsideParamPanel)) return false;
+  return !candidates.some(
+    (el) => !isInsideParamPanel(el) && isElementVisible(el)
+  );
+}
+
+/** What the requirement line says while a step's action is still outstanding. */
+const REQUIREMENT_PENDING_TEXT = '↑ Complete the action above to continue';
+
+/**
+ * Q-74 + Q-76 (owner, 2026-08-22): the requirement names the control by the
+ * label it wears on the surface the reader is looking at. On a phone the panel
+ * is a drawer you OPEN with a button marked Customizer; on a desktop it is a
+ * panel you EXPAND. Both labels renamed by UF-40 (Q-70).
+ */
+const DRAWER_REQUIREMENT_TEXT = {
+  mobile: 'Open the Customizer to continue.',
+  desktop: 'Expand the Customizer to continue.',
+};
+
+/**
+ * The user closed the Customizer while a step still points inside it (D-63).
+ * Ring the control that opens it again and say what is needed, instead of
+ * reopening the panel against them.
+ *
+ * The ring only moves if that control is genuinely on screen: a collapsed
+ * desktop panel keeps its expand button inside the panel, where the engine's
+ * own visibility rule counts it as hidden. The line is shown either way.
+ */
+function showDrawerRequirement() {
   if (!tutorialOverlay) return;
 
-  const requirementEl = tutorialOverlay.querySelector('#tutorialRequirement');
-  if (!requirementEl) return;
+  const onMobile = isMobileViewport();
+  const opener = onMobile
+    ? document.getElementById('mobileDrawerToggle')
+    : document.getElementById('collapseParamPanelBtn');
 
-  // Determine the appropriate message based on viewport
-  const isMobile = isMobileViewport();
-  const actionText = isMobile ? 'Reopen Parameters' : 'Expand Parameters';
-  const statusText = isMobile ? 'Panel closed.' : 'Panel collapsed.';
-
-  // Create or update the reopen prompt
-  requirementEl.innerHTML = `
-    <span class="tutorial-drawer-prompt">
-      <span>${statusText} </span>
-      <button class="tutorial-reopen-drawer-btn" type="button">
-        ${actionText}
-      </button>
-      <span> to continue.</span>
-    </span>
-  `;
-  requirementEl.classList.add('tutorial-requirement-action');
-
-  // Wire up the reopen button
-  const reopenBtn = requirementEl.querySelector('.tutorial-reopen-drawer-btn');
-  if (reopenBtn) {
-    reopenBtn.addEventListener('click', () => {
-      openParamPanel();
-      // Reset the requirement text after a short delay
-      setTimeout(() => {
-        if (requirementEl && !stepCompleted) {
-          requirementEl.textContent = '↑ Complete the action above to continue';
-          requirementEl.classList.remove('tutorial-requirement-action');
-        }
-      }, 400);
-    });
-  }
-
-  // Update spotlight to show centered panel
+  currentTarget = opener && isElementVisible(opener) ? opener : null;
   updateSpotlightAndPosition();
+
+  const wanted = DRAWER_REQUIREMENT_TEXT[onMobile ? 'mobile' : 'desktop'];
+  const requirementEl = tutorialOverlay.querySelector('#tutorialRequirement');
+  // #tutorialRequirement is role="status" aria-live="polite": writing it IS
+  // the announcement, so announcing again would say it twice.
+  if (requirementEl && requirementEl.textContent !== wanted) {
+    requirementEl.textContent = wanted;
+    requirementEl.classList.remove('tutorial-requirement-done');
+  }
+}
+
+/**
+ * Put the requirement line back to whatever this step normally says, after the
+ * drawer requirement has been standing in for it.
+ * @param {Object} step - Tutorial step
+ */
+function resetStepRequirement(step) {
+  const requirementEl = tutorialOverlay?.querySelector('#tutorialRequirement');
+  if (!requirementEl || stepCompleted) return;
+  const normal = step.completion ? REQUIREMENT_PENDING_TEXT : '';
+  if (requirementEl.textContent !== normal) {
+    requirementEl.textContent = normal;
+  }
 }
 
 /**
@@ -822,12 +967,25 @@ function getStepContent(step) {
 }
 
 /**
+ * Modes a tutorial runs in when it does not declare its own homeModes.
+ * Tutorials whose targets are Forge chrome break over the Classic DOM
+ * (U-12), so cross-interface launches go through the consent dialog.
+ */
+const FORGE_HOME_MODES = ['simplified', 'standard'];
+
+/** Standard-density Classic shows the editor, console and Edit menu. */
+const isClassicStandardDensity = () =>
+  document.body?.dataset?.classicDensity === 'standard';
+
+/**
  * Tutorial step definitions
  */
 const TUTORIALS = {
   intro: {
     id: 'intro',
     title: 'Getting Started',
+    forceMode: 'simplified',
+    modeVariants: { classic: 'classic-intro' },
     steps: [
       {
         title: 'Welcome!',
@@ -846,7 +1004,7 @@ const TUTORIALS = {
           <details class="tutorial-more">
             <summary>What you'll learn</summary>
             <ul>
-              <li>Find Parameters, Preview, Actions</li>
+              <li>Find the Customizer, Preview, Actions</li>
               <li>Change a parameter</li>
               <li>Generate &amp; download</li>
             </ul>
@@ -860,31 +1018,29 @@ const TUTORIALS = {
         content: `
           <p>The app is organized into three areas:</p>
           <ul>
-            <li><strong>Parameters</strong> — change your model’s settings</li>
-            <li><strong>Preview</strong> — see the 3D model update</li>
-            <li><strong>Actions</strong> — export, share, and other tools</li>
+            <li><strong>Customizer</strong> - change your model’s settings</li>
+            <li><strong>Preview</strong> - see the 3D model update</li>
+            <li><strong>Actions</strong> - export, share, and other tools</li>
           </ul>
           <p class="tutorial-hint">Next, we’ll find each area in your layout.</p>
         `,
         contentCompact: `
-          <p><strong>Parameters</strong> (settings) · <strong>Preview</strong> (3D) · <strong>Actions</strong> (export)</p>
+          <p><strong>Customizer</strong> (settings) · <strong>Preview</strong> (3D) · <strong>Actions</strong> (export)</p>
           <p class="tutorial-hint">Next: find each area.</p>
         `,
         position: 'center',
       },
       {
-        title: 'Open and close Parameters',
+        title: 'Open and close the Customizer',
         content: `
-          <p><strong>Parameters</strong> is where you customize the model.</p>
+          <p><strong>Customizer</strong> is where you change the model.</p>
           <ul>
-            <li><strong>Small screens:</strong> use the <strong>Params</strong> button to open the panel. When it’s open, use the <strong>Close</strong> (X) button or tap outside the panel.</li>
-            <li><strong>Wide screens:</strong> the Parameters panel is on the left. Use the edge <strong>collapse</strong> button to shrink/expand it.</li>
+            <li><strong>Small screens:</strong> press the highlighted <strong>Customizer</strong> button to open the panel. When it is open, the highlight moves to the <strong>Close</strong> (X) button so you can close it again.</li>
+            <li><strong>Wide screens:</strong> the Customizer panel is on the left. Use the edge <strong>collapse</strong> button to shrink or expand it.</li>
           </ul>
-          <p class="tutorial-hint">Tip: if you rotate your phone and the layout changes, look for whichever control is visible.</p>
         `,
         contentCompact: `
-          <p>Tap the highlighted button to open/close <strong>Parameters</strong>.</p>
-          <p class="tutorial-hint">Button changes based on screen size.</p>
+          <p>Press the highlighted <strong>Customizer</strong> button to open the panel. The highlight then moves to <strong>Close</strong>.</p>
         `,
         highlightSelector:
           '@mobile-drawer-close, @mobile-drawer-toggle, @collapse-param-panel',
@@ -893,7 +1049,7 @@ const TUTORIALS = {
       {
         title: 'Expand a parameter group',
         content: `
-          <p>Parameters are organized into <strong>collapsible groups</strong>.</p>
+          <p>Your model’s parameters are organized into <strong>collapsible groups</strong>.</p>
           <p><strong>Try it:</strong> click the <strong>Dimensions</strong> group header to expand it and reveal the sliders inside.</p>
           <p class="tutorial-hint">Each group can be expanded or collapsed independently.</p>
         `,
@@ -976,7 +1132,7 @@ const TUTORIALS = {
           <ul>
             <li>Status and progress</li>
             <li>Model dimensions</li>
-            <li>Preview/export quality</li>
+            <li>Preview quality</li>
             <li><strong>Grid size</strong> — set the grid to match your printer bed. <strong>Try it:</strong> change the width to match your printer.</li>
           </ul>
           <p class="tutorial-hint">You can resize this drawer using the handle. With keyboard: focus the handle, then use arrow keys.</p>
@@ -993,9 +1149,9 @@ const TUTORIALS = {
         content: `
           <p>Open the <strong>Actions</strong> drawer for extra tools:</p>
           <ul>
-            <li><strong>Export Params</strong> — download your settings as JSON</li>
-            <li><strong>Compare</strong> — track changes</li>
-            <li><strong>Queue</strong> — batch multiple renders</li>
+            <li><strong>Export Customizer Settings</strong> - download your settings as JSON</li>
+            <li><strong>Compare</strong> - track changes</li>
+            <li><strong>Queue</strong> - batch multiple renders</li>
           </ul>
           <p class="tutorial-hint">On mobile it expands upward from the bottom bar. On desktop it opens from the Actions section next to the main button.</p>
         `,
@@ -1018,8 +1174,8 @@ const TUTORIALS = {
       {
         title: 'Generate and download your file',
         content: `
-          <p>Click <strong>Generate</strong> to create your output file (STL/OBJ/3MF, etc.).</p>
-          <p class="tutorial-hint">The button text updates based on the selected output format in the Parameters panel.</p>
+          <p>Press the highlighted button to build your file. It says <strong>Generate</strong> the first time, and <strong>Download</strong> once a file is ready.</p>
+          <p class="tutorial-hint">The button text also changes with the output format you pick in the Customizer panel.</p>
         `,
         highlightSelector: '@primary-action',
         position: 'top',
@@ -1047,9 +1203,9 @@ const TUTORIALS = {
         },
       },
       {
-        title: 'Close Parameters (mobile)',
+        title: 'Close the Customizer (mobile)',
         content: `
-          <p>On mobile, the <strong>Parameters</strong> drawer sits on top of the app.</p>
+          <p>On mobile, the <strong>Customizer</strong> drawer sits on top of the app.</p>
           <p class="tutorial-hint">Close it now so you can reach the top buttons like <strong>Help</strong>.</p>
         `,
         highlightSelector: '@mobile-drawer-close, @collapse-param-panel',
@@ -1085,13 +1241,33 @@ const TUTORIALS = {
         position: 'bottom',
         completion: { type: 'modalClose', selector: '#featuresGuideModal' },
       },
+      // U-29 / Q-51b (owner, 2026-08-14): the Simplified/Standard teaching
+      // moved here from the welcome tour, near the end so nothing the tour
+      // shows depends on the choice made in it. Q-51c: the step INVITES the
+      // press and never requires it, so no completion gate. The tour survives
+      // the press (U-28), which is what makes teaching it by pressing safe.
+      {
+        title: 'Simplified or Standard',
+        content: `
+          <p>This switch controls how much of the interface is shown. <strong>Simplified</strong> keeps the essentials. <strong>Standard</strong> shows more tools. Press it now to see the difference. The tour stays open, and nothing is lost when you switch.</p>
+        `,
+        highlightSelector: '#uiModeToggle',
+        position: 'bottom',
+        showWhen: {
+          condition: () => {
+            const el = document.getElementById('uiModeToggle');
+            return !!el && !el.classList.contains('hidden');
+          },
+        },
+        skipReason: 'not available right now',
+      },
       {
         title: "You're ready!",
         content: `
           <p>You now know where the main controls are and how to complete the basic workflow.</p>
           <p><strong>Next steps:</strong></p>
           <ul>
-            <li>Try a different example from the Welcome screen</li>
+            <li>Try a different example from the Main Page</li>
             <li>Upload your own <code>.scad</code> or <code>.zip</code> project</li>
             <li>Save designs and use Import / Export to share your work</li>
             <li>Set the grid to match your printer bed in Preview Settings</li>
@@ -1099,6 +1275,472 @@ const TUTORIALS = {
           </ul>
         `,
         position: 'center',
+      },
+      // U-45 (UF-39): the tour ends by naming the way back, because the way
+      // back people reached for was the browser's Back button, and it closed
+      // the app.
+      {
+        title: 'Back to the Main Page',
+        content: `
+          <p>You are done here. The <strong>Main Page</strong> button in the top left corner takes you back to your projects. Use it instead of the browser's Back button, which closes the app. If you press that by accident, the app asks first.</p>
+          <p class="tutorial-hint">Press <strong>Finish</strong> to end this tour.</p>
+        `,
+        highlightSelector: '@clear-file',
+        position: 'bottom',
+      },
+    ],
+  },
+  'classic-intro': {
+    id: 'classic-intro',
+    title: 'Classic Getting Started',
+    homeModes: ['classic'],
+    steps: [
+      {
+        title: 'Welcome to Classic!',
+        content: `
+          <p>This quick tour shows you around the Classic interface, which looks and works like the OpenSCAD desktop app.</p>
+          <ul>
+            <li>See where menus, tools, and parameters live</li>
+            <li>Change a parameter and watch the 3D view update</li>
+            <li>Render your model and export a file</li>
+          </ul>
+          <p class="tutorial-hint">Press <kbd>Esc</kbd> to exit at any time.</p>
+        `,
+        position: 'center',
+      },
+      {
+        title: 'The Classic layout',
+        content: `
+          <p>Classic puts everything in a fixed place, like the desktop app:</p>
+          <ul>
+            <li><strong>Menu bar</strong> and <strong>toolbar</strong> along the top</li>
+            <li><strong>3D view</strong> in the middle</li>
+            <li><strong>Customizer</strong> with your parameters on the right</li>
+            <li><strong>Status bar</strong> along the bottom</li>
+          </ul>
+          <p class="tutorial-hint">The Standard view also shows the code editor and console on the left.</p>
+        `,
+        position: 'center',
+      },
+      {
+        title: 'The menu bar',
+        content: `
+          <p>The menus group every command: <strong>File</strong>, <strong>Design</strong>, <strong>View</strong>, and <strong>Help</strong>. The Standard view adds <strong>Edit</strong> and <strong>Window</strong>.</p>
+          <p class="tutorial-hint">Keyboard: press <kbd>Alt</kbd> plus the underlined letter to open a menu.</p>
+        `,
+        highlightSelector: '#toolbarMenuBar',
+        position: 'bottom',
+      },
+      {
+        title: 'The toolbar',
+        content: `
+          <p>The toolbar holds the everyday buttons: <strong>Preview</strong> (F5), <strong>Render</strong> (F6), and export to <strong>STL</strong> or <strong>DXF</strong>. The gear button shows or hides the Customizer.</p>
+          <p class="tutorial-hint">The Standard view adds New, Open, and Save.</p>
+        `,
+        highlightSelector: '#classicToolbar',
+        position: 'bottom',
+      },
+      {
+        title: 'The Customizer',
+        content: `
+          <p>The <strong>Customizer</strong> holds your model's parameters, organized into groups. This is where most customizing happens.</p>
+          <p class="tutorial-hint">Automatic Preview is on by default, so changes show up in the 3D view right away.</p>
+        `,
+        highlightSelector: '#paramPanel',
+        position: 'left',
+      },
+      {
+        title: 'Expand a parameter group',
+        content: `
+          <p>Your model’s parameters are organized into <strong>collapsible groups</strong>.</p>
+          <p><strong>Try it:</strong> click the <strong>Dimensions</strong> group header to open it and see the sliders inside.</p>
+        `,
+        highlightSelector:
+          '.param-group[data-group-id="Dimensions"] summary, .param-group summary',
+        position: 'left',
+        lockScroll: true,
+        completion: {
+          type: 'detailsOpen',
+          selector:
+            '.param-group[data-group-id="Dimensions"], .param-group:first-of-type',
+        },
+      },
+      {
+        title: 'Adjust a parameter',
+        content: `
+          <p><strong>Try it:</strong> change <strong>Width</strong> and watch the 3D view update.</p>
+          <p class="tutorial-hint">You can drag the slider or type a number.</p>
+        `,
+        highlightSelector:
+          '#param-width, .param-control[data-param-name="width"] input, .param-control[data-param-name="width"]',
+        position: 'left',
+        lockScroll: true,
+        completion: {
+          type: 'domEvent',
+          selector:
+            '#param-width, #param-width input, .param-control[data-param-name="width"] input[type="range"], .param-control[data-param-name="width"] input',
+          event: 'input',
+        },
+      },
+      {
+        title: 'The 3D view',
+        content: `
+          <p>The 3D view shows your model with the same colors and axes as the desktop app. Drag to rotate, scroll to zoom.</p>
+          <p class="tutorial-hint">The view updates automatically after each parameter change.</p>
+        `,
+        highlightSelector: '@preview-container',
+        position: 'auto',
+      },
+      {
+        title: 'Designs (presets)',
+        content: `
+          <p>The <strong>Designs</strong> row saves your favorite parameter setups. Pick one from the list, or use the plus button to save the current settings as a new design.</p>
+          <p class="tutorial-hint">Designs are stored in your browser for this model.</p>
+        `,
+        highlightSelector: '#classicPresetRow',
+        position: 'left',
+      },
+      {
+        title: 'Render and export',
+        content: `
+          <p><strong>Preview</strong> (F5) is fast and approximate. <strong>Render</strong> (F6) builds the exact solid, ready to export.</p>
+          <p><strong>Try it:</strong> click <strong>Render</strong> in the toolbar.</p>
+          <p class="tutorial-hint">When it finishes, Export as STL or Export as DXF saves your file.</p>
+        `,
+        highlightSelector: '#classicTbRenderBtn',
+        position: 'bottom',
+        completion: {
+          type: 'domEvent',
+          selector: '#classicTbRenderBtn',
+          event: 'click',
+        },
+      },
+      {
+        title: 'Camera controls',
+        content: `
+          <p>The <strong>camera bar</strong> rotates, zooms, and resets the view with buttons. No dragging needed.</p>
+          <p class="tutorial-hint">A connected gamepad also steers the camera.</p>
+        `,
+        highlightSelector: '#classicCameraBar',
+        position: 'top',
+      },
+      {
+        title: 'Stow panels for space',
+        content: `
+          <p>The <strong>double-arrow</strong> buttons stow a panel onto the edge of the window. Click the tab on the rail to bring it back.</p>
+          <p class="tutorial-hint">Try stowing the Customizer when you want a bigger 3D view.</p>
+        `,
+        highlightSelector: '[data-classic-stow-field="right-top"]',
+        position: 'left',
+      },
+      {
+        title: 'The editor',
+        content: `
+          <p>The <strong>editor</strong> shows your model's OpenSCAD code. Your edits flow into the next Preview or Render.</p>
+          <p class="tutorial-hint">The editor toolbar has file and text tools, plus 3D Print.</p>
+        `,
+        highlightSelector: '#classicEditorSlot',
+        position: 'right',
+        showWhen: isClassicStandardDensity,
+        skipReason: 'not available in this view',
+      },
+      {
+        title: 'Console and Error-Log',
+        content: `
+          <p>Render messages appear in the <strong>Console</strong>. Problems show up in the <strong>Error-Log</strong> beside it, with the line number when known.</p>
+        `,
+        highlightSelector: '#classicConsoleSlot',
+        position: 'top',
+        showWhen: isClassicStandardDensity,
+        skipReason: 'not available in this view',
+      },
+      {
+        title: 'Preferences',
+        content: `
+          <p>Open <strong>Edit</strong>, then <strong>Preferences</strong> to tune Classic: color schemes for the 3D view, editor settings, and more.</p>
+          <p class="tutorial-hint">Color schemes preview live in the 3D view while the dialog is open.</p>
+        `,
+        highlightSelector: '#toolbarMenuBar',
+        position: 'bottom',
+        showWhen: isClassicStandardDensity,
+        skipReason: 'not available in this view',
+      },
+      // U-29 / Q-51b: the Classic half of the moved teaching. It sits after
+      // the editor, console and Preferences steps deliberately: those three
+      // only appear in the Standard view, so a user who chooses Simplified
+      // here has already been shown what the extra panes hold.
+      {
+        title: 'Simplified or Standard',
+        content: `
+          <p>This switch controls the Classic view. <strong>Simplified</strong> shows the Customizer and the 3D view. <strong>Standard</strong> adds the code editor and console, like the desktop app. Press it now to see the difference. The tour stays open, and you can switch back at any time.</p>
+        `,
+        highlightSelector: '#classicDensityToggle',
+        position: 'bottom',
+      },
+      {
+        title: "You're ready!",
+        content: `
+          <p>That's the Classic tour.</p>
+          <ul>
+            <li>The <strong>A. Forge</strong> button returns you to the Assistive Forge interface</li>
+            <li>Run this tour again anytime from the Main Page</li>
+          </ul>
+          <p class="tutorial-hint">Happy modeling!</p>
+        `,
+        position: 'center',
+      },
+      // U-45 (UF-39): the Classic half of the same ending. One DOM node carries
+      // the Main Page button in both interfaces, so both tours point at it.
+      {
+        title: 'Back to the Main Page',
+        content: `
+          <p>You are done here. The <strong>Main Page</strong> button in the top left corner takes you back to your projects. Use it instead of the browser's Back button, which closes the app. If you press that by accident, the app asks first.</p>
+          <p class="tutorial-hint">Press <strong>Finish</strong> to end this tour.</p>
+        `,
+        highlightSelector: '@clear-file',
+        position: 'bottom',
+      },
+    ],
+  },
+  // U-24 (UF-17): the welcome-page tour. No project loads, no mode is
+  // forced; the Classic variant resolves through modeVariants exactly the
+  // way intro/classic-intro pair up, so the registry records both as the
+  // 'welcome' family. surface: 'welcome' arms the surface-flip close guard.
+  // All strings are the Q-44-approved D-35 pack, verbatim.
+  welcome: {
+    id: 'welcome',
+    title: 'Main Page Tour',
+    surface: 'welcome',
+    modeVariants: { classic: 'welcome-classic' },
+    steps: [
+      {
+        title: 'Welcome to the Forge!',
+        content: `
+          <p>This short tour shows you what each part of this Main Page does. Everything runs in your browser. There is nothing to install, and your designs stay on your device.</p>
+          <p class="tutorial-hint">About 2 minutes. Press <kbd>Esc</kbd> to exit at any time.</p>
+        `,
+        position: 'center',
+      },
+      {
+        title: 'Keyboard shortcuts',
+        content: `
+          <p>The <strong>Keys</strong> button lists every keyboard shortcut. The whole app works without a mouse, and this list is the fastest way to learn the keys.</p>
+        `,
+        highlightSelector: '#shortcutsToggle',
+        position: 'bottom',
+      },
+      // U-29 / Q-51a (owner, 2026-08-14): the Simplified/Standard step used to
+      // sit here. It moved to the box tour, where pressing the switch does
+      // something; on the welcome surface it changes nothing a user can see.
+      // This SUPERSEDES that part of the Q-44 welcome pack. 14 steps -> 13.
+      {
+        title: 'High contrast',
+        content: `
+          <p>The <strong>HC</strong> button turns on a high-contrast look that keeps text, borders, and focus rings easy to see. It applies everywhere in the app, including this page.</p>
+        `,
+        highlightSelector: '@contrast-toggle',
+        position: 'bottom',
+      },
+      {
+        title: 'Light or dark',
+        content: `
+          <p>This button switches between the light and dark themes. Your choice is remembered for next time.</p>
+        `,
+        highlightSelector: '@theme-toggle',
+        position: 'bottom',
+      },
+      {
+        title: 'Help and examples',
+        content: `
+          <p><strong>Help</strong> opens the Features Guide with built-in documentation and examples. If you are ever stuck, start there.</p>
+        `,
+        highlightSelector: '@features-guide',
+        position: 'bottom',
+      },
+      {
+        title: 'Open or start a project',
+        content: `
+          <p>Projects begin here. Drop a <code>.scad</code> model, a <code>.zip</code> project, or a project folder onto the drop zone, or click it to browse. Below it, <strong>Open Project Folder</strong> opens a folder from your computer, and <strong>Start New Project</strong> begins a blank project.</p>
+          <p class="tutorial-hint">Different from desktop OpenSCAD: the app loads a copy into the browser, and your original files stay untouched.</p>
+        `,
+        highlightSelector: '@welcome-open-panel',
+        position: 'right',
+      },
+      {
+        title: 'Saved Projects',
+        content: `
+          <p>Projects you save appear here, organized into folders. Different from desktop OpenSCAD: saved projects live in this browser's storage, not as files on your disk. Clearing browser data can remove them, so use <strong>Export</strong> to download a backup file of every project. <strong>Import</strong> restores from a backup.</p>
+        `,
+        highlightSelector: '#savedProjectsPanel',
+        position: 'left',
+      },
+      {
+        title: 'Import Folder',
+        content: `
+          <p><strong>Import Folder</strong> copies a whole project folder from your computer into Saved Projects, including the extra files a model includes or uses.</p>
+        `,
+        highlightSelector: '#importFolderBtn',
+        position: 'left',
+        showWhen: {
+          condition: () => {
+            const el = document.getElementById('importFolderBtn');
+            return !!el && !el.hidden;
+          },
+        },
+        skipReason: 'not available in this browser',
+      },
+      {
+        title: 'Connect Folder',
+        content: `
+          <p><strong>Connect Folder</strong> links a folder on your disk to the app, so changes flow both ways while it is connected. This is the closest match to how desktop OpenSCAD works with files. It is available in Chromium browsers such as Chrome and Edge.</p>
+        `,
+        highlightSelector: '#connectFolderBtn',
+        position: 'left',
+        showWhen: {
+          condition: () => {
+            const el = document.getElementById('connectFolderBtn');
+            return !!el && !el.hidden;
+          },
+        },
+        skipReason: 'not available in this browser',
+      },
+      {
+        title: 'Charm Designer',
+        content: `
+          <p>This card holds a ready-made creative project: wearable charms, pendants, and logo plates with raised or engraved icons. Pick a shape from the <strong>Shape</strong> menu, and the button opens it as a full project. This tour stays on the Main Page, so we will not open it now.</p>
+        `,
+        highlightSelector: '@charm-card',
+        position: 'top',
+      },
+      {
+        title: 'Braille Card Designer',
+        content: `
+          <p>This card makes 3D-printable braille. Type text and get cards, charms, or two-part tactile signs. Braille translation runs on your device, so nothing you type leaves it. When you are ready, the <strong>Open Braille Card Designer</strong> button starts it.</p>
+        `,
+        highlightSelector: '@braille-card',
+        position: 'top',
+      },
+      {
+        title: 'Clear Cache',
+        content: `
+          <p>This button opens a dialog that frees the browser storage the app uses. Take care: by default it also deletes your saved projects. The dialog has a checkbox to keep them, and exporting a backup first is always the safe move. You do not need it now. If you open it to look, press <strong>Cancel</strong> to come back to this tour.</p>
+        `,
+        highlightSelector: '#clearStorageBtn',
+        position: 'top',
+      },
+      {
+        title: 'Your next step',
+        content: `
+          <p>That is the whole Main Page. When you are ready to build something, the <strong>Beginners Start Here</strong> card loads a simple example and walks you through changing parameters and generating your first file. The <strong>Main Page</strong> button in the top left corner brings you back here from a project. Press <strong>Finish</strong> to end this tour.</p>
+        `,
+        highlightSelector: '@beginners-card',
+        position: 'top',
+      },
+    ],
+  },
+  'welcome-classic': {
+    id: 'welcome-classic',
+    title: 'Classic Main Page Tour',
+    surface: 'welcome',
+    homeModes: ['classic'],
+    steps: [
+      {
+        title: 'Welcome to Classic!',
+        content: `
+          <p>This short tour shows you what each part of the Main Page does. You are in the Classic layout, which looks and works like the OpenSCAD desktop app once a project is open. Everything runs in your browser, and there is nothing to install.</p>
+          <p class="tutorial-hint">About 2 minutes. Press <kbd>Esc</kbd> to exit at any time.</p>
+        `,
+        position: 'center',
+      },
+      {
+        title: 'Keyboard shortcuts',
+        content: `
+          <p>The <strong>Keys</strong> button lists every keyboard shortcut. The whole app works without a mouse, and this list is the fastest way to learn the keys.</p>
+        `,
+        highlightSelector: '#shortcutsToggle',
+        position: 'bottom',
+      },
+      // U-29 / Q-51a: moved to the Classic box tour, same reasoning as the
+      // Forge welcome tour above. SUPERSEDES that part of the Q-44 pack.
+      // 11 steps -> 10.
+      {
+        title: 'Open or start a project',
+        content: `
+          <p>Projects begin here. Drop a <code>.scad</code> model, a <code>.zip</code> project, or a project folder onto the drop zone, or click it to browse. Below it, <strong>Open Project Folder</strong> opens a folder from your computer, and <strong>Start New Project</strong> begins a blank project.</p>
+          <p class="tutorial-hint">Different from desktop OpenSCAD: the app loads a copy into the browser, and your original files stay untouched.</p>
+        `,
+        highlightSelector: '@welcome-open-panel',
+        position: 'right',
+      },
+      {
+        title: 'Saved Projects',
+        content: `
+          <p>Projects you save appear here, organized into folders. Different from desktop OpenSCAD: saved projects live in this browser's storage, not as files on your disk. Clearing browser data can remove them, so use <strong>Export</strong> to download a backup file of every project. <strong>Import</strong> restores from a backup.</p>
+        `,
+        highlightSelector: '#savedProjectsPanel',
+        position: 'left',
+      },
+      {
+        title: 'Import Folder',
+        content: `
+          <p><strong>Import Folder</strong> copies a whole project folder from your computer into Saved Projects, including the extra files a model includes or uses.</p>
+        `,
+        highlightSelector: '#importFolderBtn',
+        position: 'left',
+        showWhen: {
+          condition: () => {
+            const el = document.getElementById('importFolderBtn');
+            return !!el && !el.hidden;
+          },
+        },
+        skipReason: 'not available in this browser',
+      },
+      {
+        title: 'Connect Folder',
+        content: `
+          <p><strong>Connect Folder</strong> links a folder on your disk to the app, so changes flow both ways while it is connected. This is the closest match to how desktop OpenSCAD works with files. It is available in Chromium browsers such as Chrome and Edge.</p>
+        `,
+        highlightSelector: '#connectFolderBtn',
+        position: 'left',
+        showWhen: {
+          condition: () => {
+            const el = document.getElementById('connectFolderBtn');
+            return !!el && !el.hidden;
+          },
+        },
+        skipReason: 'not available in this browser',
+      },
+      {
+        title: 'Charm Designer',
+        content: `
+          <p>This card holds a ready-made creative project: wearable charms, pendants, and logo plates with raised or engraved icons. Pick a shape from the <strong>Shape</strong> menu, and the button opens it as a full project. This tour stays on the Main Page, so we will not open it now.</p>
+        `,
+        highlightSelector: '@charm-card',
+        position: 'top',
+      },
+      {
+        title: 'Braille Card Designer',
+        content: `
+          <p>This card makes 3D-printable braille. Type text and get cards, charms, or two-part tactile signs. Braille translation runs on your device, so nothing you type leaves it. When you are ready, the <strong>Open Braille Card Designer</strong> button starts it.</p>
+        `,
+        highlightSelector: '@braille-card',
+        position: 'top',
+      },
+      {
+        title: 'Clear Cache',
+        content: `
+          <p>This button opens a dialog that frees the browser storage the app uses. Take care: by default it also deletes your saved projects. The dialog has a checkbox to keep them, and exporting a backup first is always the safe move. You do not need it now. If you open it to look, press <strong>Cancel</strong> to come back to this tour.</p>
+        `,
+        highlightSelector: '#clearStorageBtn',
+        position: 'top',
+      },
+      {
+        title: 'Your next step',
+        content: `
+          <p>That is the whole Main Page. When you are ready to build something, the <strong>Beginners Start Here</strong> card loads a simple example and starts the Classic tour of the project screen. The <strong>Main Page</strong> button in the top left corner brings you back here from a project. Press <strong>Finish</strong> to end this tour.</p>
+        `,
+        highlightSelector: '@beginners-card',
+        position: 'top',
       },
     ],
   },
@@ -1147,7 +1789,7 @@ const TUTORIALS = {
           <p><strong>Try it:</strong> Select a different output format.</p>
           <ul>
             <li><strong>STL</strong> - 3D printing</li>
-            <li><strong>3MF</strong> - Modern with color</li>
+            <li><strong>AMF</strong> - Multi-material, carries colour</li>
             <li><strong>OBJ</strong> - Rendering/animation</li>
           </ul>
         `,
@@ -1211,7 +1853,7 @@ const TUTORIALS = {
         position: 'bottom',
       },
       {
-        title: 'Navigate Parameters',
+        title: 'Navigate the Customizer',
         content: `
           <p><strong>Try it:</strong> Press <kbd>Tab</kbd> to reach a parameter, then use <kbd>Arrow keys</kbd> to adjust.</p>
           <p class="tutorial-hint"><kbd>Ctrl+Z</kbd> to undo, <kbd>Ctrl+Shift+Z</kbd> to redo.</p>
@@ -1394,7 +2036,7 @@ const TUTORIALS = {
       {
         title: 'Expand Parameter Groups',
         content: `
-          <p>Parameters are in collapsible <strong>disclosure widgets</strong> (details/summary).</p>
+          <p>Your model’s parameters are in collapsible <strong>disclosure widgets</strong> (details/summary).</p>
           <p><strong>Try it:</strong> Navigate to <strong>Dimensions</strong> and activate it to expand.</p>
           <p class="tutorial-hint">Press Enter or Space on the group header to toggle.</p>
         `,
@@ -1431,7 +2073,7 @@ const TUTORIALS = {
           <p>Navigate quickly with landmarks:</p>
           <ul>
             <li><strong>Main</strong> - Main content</li>
-            <li><strong>Region</strong> - Parameters, Preview</li>
+            <li><strong>Region</strong> - Customizer, Preview</li>
           </ul>
           <p class="tutorial-hint">NVDA: D key, VoiceOver: VO+U</p>
         `,
@@ -1448,7 +2090,7 @@ const TUTORIALS = {
       {
         title: 'Console Warnings',
         content: `
-          <p>When a model references a missing file (e.g. <code>include &lt;missing.txt&gt;</code>), the <strong>Console</strong> panel in the Parameters area announces the warning.</p>
+          <p>When a model references a missing file (e.g. <code>include &lt;missing.txt&gt;</code>), the <strong>Console</strong> panel in the Customizer area announces the warning.</p>
           <ul>
             <li>A badge count appears on the Console button</li>
             <li>The live region announces the warning to your screen reader</li>
@@ -1530,6 +2172,145 @@ function clearTutorialProgress() {
   }
 }
 
+// ============================================================================
+// Persistent tutorial registry (UF-16)
+// ============================================================================
+// localStorage, unlike the sessionStorage step progress above: completing a
+// tutorial ERASES its progress record, so "was this ever opened/completed?"
+// needs its own persistent answer. The welcome spotlight (U-23) and the
+// welcome tour's chaining (UF-17) both read it.
+//
+// Shape under STORAGE_KEY_TUTORIAL_STATE:
+//   { [familyId]: { opened?: ms, completed?: ms, dismissed?: ms } }
+
+/** Fired on document whenever a registry field is written. */
+export const TUTORIAL_STATE_EVENT = 'forge:tutorial-state-change';
+
+/**
+ * Fired on document when a tour appears or leaves. `detail.running` is true
+ * while the overlay is on screen. Consumed by the mobile drawer, which must
+ * not claim `aria-modal` over a tour card sitting outside it (D-70).
+ */
+export const TUTORIAL_RUN_EVENT = 'forge:tutorial-run-change';
+
+// A mode variant is the same tutorial wearing the current interface — one
+// welcome card, one family record ('classic-intro' counts as 'intro').
+const TUTORIAL_FAMILY_OF = (() => {
+  const map = {};
+  for (const [familyId, tutorial] of Object.entries(TUTORIALS)) {
+    for (const variantId of Object.values(tutorial.modeVariants || {})) {
+      map[variantId] = familyId;
+    }
+  }
+  return map;
+})();
+
+/**
+ * Resolve a tutorial id to its family id.
+ * @param {string} tutorialId - Requested or resolved tutorial id
+ * @returns {string} The family id ('classic-intro' -> 'intro')
+ */
+export function getTutorialFamilyId(tutorialId) {
+  return TUTORIAL_FAMILY_OF[tutorialId] || tutorialId;
+}
+
+function readTutorialRegistry() {
+  const raw = safeGetItem(STORAGE_KEY_TUTORIAL_STATE);
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed;
+    }
+  } catch (e) {
+    console.warn('[Tutorial] Ignoring corrupt tutorial-state value:', e);
+  }
+  return {};
+}
+
+function writeTutorialRegistryField(tutorialId, field) {
+  const familyId = getTutorialFamilyId(tutorialId);
+  const registry = readTutorialRegistry();
+  const existing = registry[familyId];
+  const entry =
+    existing && typeof existing === 'object' && !Array.isArray(existing)
+      ? { ...existing }
+      : {};
+  entry[field] = Date.now();
+  registry[familyId] = entry;
+  safeSetItem(STORAGE_KEY_TUTORIAL_STATE, JSON.stringify(registry));
+  document.dispatchEvent(
+    new CustomEvent(TUTORIAL_STATE_EVENT, { detail: { familyId, field } })
+  );
+}
+
+/**
+ * Read a family's persistent record.
+ * @param {string} tutorialId - Any id in the family
+ * @returns {{opened?: number, completed?: number, dismissed?: number}}
+ */
+export function getTutorialFamilyState(tutorialId) {
+  const entry = readTutorialRegistry()[getTutorialFamilyId(tutorialId)];
+  return entry && typeof entry === 'object' && !Array.isArray(entry)
+    ? entry
+    : {};
+}
+
+/** @param {string} tutorialId - The RESOLVED id of the tutorial that opened */
+export function recordTutorialOpened(tutorialId) {
+  writeTutorialRegistryField(tutorialId, 'opened');
+}
+
+/** @param {string} tutorialId - The RESOLVED id of the completed tutorial */
+export function recordTutorialCompleted(tutorialId) {
+  writeTutorialRegistryField(tutorialId, 'completed');
+}
+
+/** @param {string} tutorialId - The family whose spotlight was dismissed (Q-43a: permanent) */
+export function recordTutorialSpotlightDismissed(tutorialId) {
+  writeTutorialRegistryField(tutorialId, 'dismissed');
+}
+
+/**
+ * Keep the promise `aria-modal` makes. Each of these dialogs is two buttons,
+ * so the trap is a Tab cycle over them plus an Escape answer.
+ *
+ * UF-8 reported that the resume and error dialogs claimed aria-modal without
+ * any trap while only the mode-choice dialog implemented one; this is that
+ * single implementation, used by all three.
+ *
+ * @param {HTMLElement} modal - The dialog element
+ * @param {() => void} onEscape - What Escape answers
+ * @returns {(e: KeyboardEvent) => void} The handler, so callers can remove it
+ */
+function trapTwoButtonDialog(modal, onEscape) {
+  const onKeydown = (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      // The tutorial's own document-level Escape handler must not also fire
+      e.stopPropagation();
+      onEscape();
+      return;
+    }
+    if (e.key !== 'Tab') return;
+
+    const buttons = modal.querySelectorAll('button[data-action]');
+    if (buttons.length === 0) return;
+    const first = buttons[0];
+    const last = buttons[buttons.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
+
+  modal.addEventListener('keydown', onKeydown);
+  return onKeydown;
+}
+
 /**
  * Show a resume dialog when progress exists
  * @param {number} stepIndex - Saved step index
@@ -1545,7 +2326,7 @@ function showTutorialResumeDialog(stepIndex, totalSteps) {
     modal.setAttribute('aria-labelledby', 'tutorialResumeTitle');
     modal.setAttribute('aria-describedby', 'tutorialResumeMessage');
     modal.dataset.testid = 'tutorial-resume-dialog';
-    modal.style.zIndex = '10005';
+    modal.style.setProperty('z-index', 'var(--z-index-tutorial-dialog)');
 
     modal.innerHTML = `
       <div class="preset-modal-content confirm-modal-content">
@@ -1565,9 +2346,13 @@ function showTutorialResumeDialog(stepIndex, totalSteps) {
     document.body.appendChild(modal);
 
     const cleanup = (shouldResume) => {
+      modal.removeEventListener('keydown', onKeydown);
       modal.remove();
       resolve(shouldResume);
     };
+
+    // Escape answers the same way clicking outside already does: start over
+    const onKeydown = trapTwoButtonDialog(modal, () => cleanup(false));
 
     modal.addEventListener('click', (e) => {
       const btn = e.target.closest('button[data-action]');
@@ -1600,7 +2385,7 @@ function showTutorialErrorDialog(message) {
     modal.setAttribute('aria-labelledby', 'tutorialErrorTitle');
     modal.setAttribute('aria-describedby', 'tutorialErrorMessage');
     modal.dataset.testid = 'tutorial-error-dialog';
-    modal.style.zIndex = '10005';
+    modal.style.setProperty('z-index', 'var(--z-index-tutorial-dialog)');
 
     modal.innerHTML = `
       <div class="preset-modal-content confirm-modal-content">
@@ -1620,9 +2405,13 @@ function showTutorialErrorDialog(message) {
     document.body.appendChild(modal);
 
     const cleanup = (shouldRestart) => {
+      modal.removeEventListener('keydown', onKeydown);
       modal.remove();
       resolve(shouldRestart);
     };
+
+    // Escape answers the same way clicking outside already does: exit
+    const onKeydown = trapTwoButtonDialog(modal, () => cleanup(false));
 
     modal.addEventListener('click', (e) => {
       const btn = e.target.closest('button[data-action]');
@@ -1641,6 +2430,73 @@ function showTutorialErrorDialog(message) {
   });
 }
 
+/**
+ * Ask before a tutorial switches the interface (U-12). Wording is
+ * owner-approved (D-35, 2026-08-11) with the interface names filled per
+ * direction. Resolves true to switch.
+ * @param {Object} tutorial - Entry from TUTORIALS
+ * @returns {Promise<boolean>}
+ */
+function showTutorialModeChoiceDialog(tutorial) {
+  return new Promise((resolve) => {
+    const classicHome = (tutorial.homeModes || FORGE_HOME_MODES).includes(
+      'classic'
+    );
+    const homeName = classicHome ? 'Classic' : 'Assistive Forge';
+    const stayName = classicHome ? 'Assistive Forge' : 'Classic';
+
+    const modal = document.createElement('div');
+    modal.className = 'preset-modal confirm-modal tutorial-mode-choice-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', 'tutorialModeChoiceTitle');
+    modal.setAttribute('aria-describedby', 'tutorialModeChoiceMessage');
+    modal.dataset.testid = 'tutorial-mode-choice-dialog';
+    modal.style.setProperty('z-index', 'var(--z-index-tutorial-dialog)');
+
+    modal.innerHTML = `
+      <div class="preset-modal-content confirm-modal-content">
+        <div class="preset-modal-header">
+          <h3 id="tutorialModeChoiceTitle" class="preset-modal-title">This tour runs in ${homeName}</h3>
+        </div>
+        <div class="confirm-modal-body">
+          <p id="tutorialModeChoiceMessage">The ${tutorial.title} tour is designed for the ${homeName} interface. To follow it, switch to ${homeName}. Your loaded file stays open.</p>
+        </div>
+        <div class="preset-form-actions">
+          <button type="button" class="btn btn-primary" data-action="switch">Switch and start the tour</button>
+          <button type="button" class="btn btn-secondary" data-action="stay">Stay in ${stayName}</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const cleanup = (shouldSwitch) => {
+      modal.removeEventListener('keydown', onKeydown);
+      modal.remove();
+      resolve(shouldSwitch);
+    };
+
+    // aria-modal promises focus stays inside: cycle the two buttons on Tab
+    const onKeydown = trapTwoButtonDialog(modal, () => cleanup(false));
+
+    modal.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-action]');
+      if (!btn) return;
+      cleanup(btn.dataset.action === 'switch');
+    });
+
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        cleanup(false);
+      }
+    });
+
+    const switchBtn = modal.querySelector('button[data-action="switch"]');
+    switchBtn?.focus();
+  });
+}
+
 // ============================================================================
 // Body Scroll Locking
 // ============================================================================
@@ -1649,11 +2505,20 @@ function showTutorialErrorDialog(message) {
  * Lock body scrolling while tutorial is active
  */
 function lockBodyScroll() {
-  // The mobile Parameters drawer already locks body scroll and sets body.top.
+  // The mobile Customizer drawer already locks body scroll and sets body.top.
   // Locking again here can create weird fixed-position offsets on mobile.
   if (document.body.classList.contains('drawer-open')) {
     didLockBodyScroll = false;
     return;
+  }
+  // U-24: a welcome-surface tour spans the header AND the welcome column.
+  // Reaching its start card means the document may be scrolled, and the
+  // body lock freezes that offset into body.top — pinning the header
+  // permanently off-view, where every header step fails (D-23 cascade).
+  // Zero the document first; the welcome column keeps its own scroll for
+  // the per-step reveals lower down.
+  if (activeTutorial?.surface === 'welcome' && window.scrollY > 0) {
+    window.scrollTo(0, 0);
   }
   scrollYBeforeLock = window.scrollY;
   document.body.classList.add('tutorial-body-locked');
@@ -1732,11 +2597,20 @@ function findNextValidStepIndex(startIndex, direction) {
  * @param {number} direction - Direction to move
  * @param {string} reason - Skip reason
  */
-async function skipToNextValidStep(stepIndex, direction, reason) {
+async function skipToNextValidStep(
+  stepIndex,
+  direction,
+  reason,
+  { completedIfPastEnd = true } = {}
+) {
   announceToScreenReader(`Step skipped: ${reason}`);
   const nextIndex = findNextValidStepIndex(stepIndex + direction, direction);
   if (nextIndex === null) {
-    closeTutorial(true);
+    // Defect D-28: skipping past the end because the remaining steps do not
+    // apply to this layout is a finish; skipping past it because a step
+    // FAILED taught nothing, so it must not be recorded as one. The caller
+    // says which it is.
+    closeTutorial(completedIfPastEnd);
     return;
   }
   await showStep(nextIndex);
@@ -1770,7 +2644,9 @@ async function handleStepFailure(reason, stepIndex, direction) {
     return;
   }
 
-  await skipToNextValidStep(stepIndex, direction, reason);
+  await skipToNextValidStep(stepIndex, direction, reason, {
+    completedIfPastEnd: false,
+  });
 }
 
 // ============================================================================
@@ -1810,6 +2686,81 @@ function watchTargetRemoval(targetElement, onRemoved) {
   });
 
   return targetRemovalObserver;
+}
+
+/**
+ * Watch the step's target and survive a re-render.
+ *
+ * U-28 anchor resilience: a mode or density change rebuilds panels, which
+ * removes the highlighted node and puts an equivalent one back a moment
+ * later. Look for that replacement once before treating the removal as a
+ * failure, so an interface change costs the user nothing.
+ *
+ * @param {HTMLElement} target - Element to watch
+ * @param {number} stepIndex - The step this watch belongs to
+ */
+function armTargetRemovalWatch(target, stepIndex) {
+  watchTargetRemoval(target, () => {
+    if (!activeTutorial || currentStepIndex !== stepIndex) return;
+    void (async () => {
+      const step = activeTutorial?.steps?.[stepIndex];
+      const replacement = step ? await resolveTargetWithRetry(step, 600) : null;
+      if (!activeTutorial || currentStepIndex !== stepIndex) return;
+
+      if (replacement) {
+        currentTarget = replacement;
+        armTargetRemovalWatch(replacement, stepIndex);
+        updateSpotlightAndPosition();
+        return;
+      }
+
+      announceToScreenReader(
+        'Tutorial step interrupted: element no longer available.'
+      );
+      currentTarget = null;
+      void handleStepFailure('target removed', stepIndex, 1);
+    })();
+  });
+}
+
+/**
+ * Re-settle the current step after the interface changed under it.
+ *
+ * U-28 / Q-50a (owner, 2026-08-14): a layout change the tour can live with
+ * must not end it. If the step's subject left the screen it skips forward
+ * with the reason it already carries; otherwise the spotlight simply follows
+ * the element to wherever it now is. The completion gate is deliberately NOT
+ * rebuilt, so a step whose action the user has already done does not ask for
+ * it a second time.
+ *
+ * @param {string} reason - Skip reason to speak if the step no longer applies
+ */
+async function reResolveStepAfterLayoutChange(reason) {
+  if (!activeTutorial || !tutorialOverlay) return;
+  const stepIndex = currentStepIndex;
+  const step = activeTutorial.steps[stepIndex];
+  if (!step) return;
+
+  if (step.showWhen && !evaluateShowWhenCondition(step.showWhen)) {
+    await skipToNextValidStep(stepIndex, 1, step.skipReason || reason);
+    return;
+  }
+
+  if (!step.highlightSelector && !step.targetKey) {
+    updateSpotlightAndPosition();
+    return;
+  }
+
+  const target = await resolveTargetWithRetry(step);
+  if (!activeTutorial || currentStepIndex !== stepIndex) return;
+  if (!target) {
+    await handleStepFailure('target unavailable', stepIndex, 1);
+    return;
+  }
+
+  currentTarget = target;
+  armTargetRemovalWatch(target, stepIndex);
+  updateSpotlightAndPosition();
 }
 
 // ============================================================================
@@ -1859,12 +2810,18 @@ function handleBeforeUnload() {
 
 /**
  * Handle browser back/forward navigation during tutorial
+ *
+ * Q-86 (owner, 2026-08-22): a Back press used to mean the document was on its
+ * way out, so ending the tour was the only honest thing to do with it. Since
+ * UF-39 the app answers that press with a dialog, and the person who chose
+ * "Stay in the app" is standing on the step they were on. Progress is still
+ * saved either way, so a tour that does end here can be resumed.
  */
 function handlePopState() {
-  if (activeTutorial) {
-    saveTutorialProgress(currentStepIndex);
-    closeTutorial();
-  }
+  if (!activeTutorial) return;
+  saveTutorialProgress(currentStepIndex);
+  if (backGuardAnsweredPop()) return;
+  closeTutorial();
 }
 
 // ============================================================================
@@ -1989,10 +2946,38 @@ function setBackgroundInert(makeInert) {
  * @param {HTMLElement} [options.triggerEl] - Element that triggered the tutorial
  */
 export async function startTutorial(tutorialId, { triggerEl } = {}) {
-  const tutorial = TUTORIALS[tutorialId];
+  let tutorial = TUTORIALS[tutorialId];
   if (!tutorial) {
     console.warn(`Tutorial "${tutorialId}" not found`);
     return;
+  }
+
+  // U-12 (Q-29 entry decision): a tutorial may name a sibling built for
+  // the current interface - the welcome card's intro launches the Classic
+  // tour inside Classic, directly and in place. Resolve before any gating.
+  const modeCtrl = getUIModeController();
+  const variantId = tutorial.modeVariants?.[modeCtrl.getMode()];
+  if (variantId && TUTORIALS[variantId]) {
+    tutorialId = variantId;
+    tutorial = TUTORIALS[variantId];
+  }
+
+  // U-12: tutorials declare the interface they are built for (homeModes;
+  // Forge chrome by default). A cross-interface launch asks first
+  // (owner-approved wording, D-35); cancel stays put.
+  const homeModes = tutorial.homeModes || FORGE_HOME_MODES;
+  if (!homeModes.includes(modeCtrl.getMode())) {
+    const proceed = await showTutorialModeChoiceDialog(tutorial);
+    if (!proceed) {
+      // The welcome card that triggered us may be gone (loading the example
+      // dismissed the welcome screen), so fall back like closeTutorial does.
+      if (triggerEl && document.contains(triggerEl) && triggerEl.offsetParent) {
+        triggerEl.focus();
+      } else {
+        document.getElementById('main-content')?.focus?.();
+      }
+      return;
+    }
   }
 
   let startIndex = 0;
@@ -2015,6 +3000,16 @@ export async function startTutorial(tutorialId, { triggerEl } = {}) {
     }
   }
 
+  // Defect D-33: a tour already on screen has to be closed BEFORE this run
+  // captures any state. closeTutorial resets the module's globals, so doing
+  // it later (as createTutorialOverlay did) wiped the incoming tutorial and
+  // threw on activeTutorial.title, leaving no tour at all. Every abort path
+  // above has already returned, so nothing is destroyed for a tour that then
+  // fails to open.
+  if (tutorialOverlay) {
+    closeTutorial(false, { skipAnnouncement: true });
+  }
+
   // Store current focus to restore on close
   previousFocus = document.activeElement;
   triggerElement = triggerEl || previousFocus;
@@ -2022,14 +3017,67 @@ export async function startTutorial(tutorialId, { triggerEl } = {}) {
   currentStepIndex = startIndex;
   isMinimized = false;
 
-  // Switch to Basic mode for intro tutorial so the UI is simplified
-  const modeCtrl = getUIModeController();
+  // Move to the tutorial's home interface (consented above) or its declared
+  // forceMode (the intro tour runs in Simplified). Capture the pre-tutorial
+  // state first: the forced switch must never leave its mode behind as the
+  // user's density or saved preference (U-12).
   preTutorialMode = modeCtrl.getMode();
-  if (tutorialId === 'intro' && preTutorialMode !== 'basic') {
-    modeCtrl.switchMode('basic', { skipAnnouncement: true, skipFocus: true });
+  preTutorialDensity = modeCtrl.getClassicDensity();
+  tutorialForcedMode = false;
+  const forcedTarget = !homeModes.includes(preTutorialMode)
+    ? tutorial.forceMode ||
+      (homeModes.includes(preTutorialDensity)
+        ? preTutorialDensity
+        : homeModes[0])
+    : tutorial.forceMode && tutorial.forceMode !== preTutorialMode
+      ? tutorial.forceMode
+      : null;
+  if (forcedTarget) {
+    tutorialForcedMode =
+      modeCtrl.switchMode(forcedTarget, {
+        skipAnnouncement: true,
+        skipFocus: true,
+      }) === true;
+    if (!tutorialForcedMode && !homeModes.includes(modeCtrl.getMode())) {
+      // The consented switch was refused (UF-5's viewport gate): never
+      // start a tour whose interface is absent.
+      announceToScreenReader(
+        'Classic needs a wider window right now, so the tour cannot start. Your file stays open.',
+        'assertive'
+      );
+      preTutorialMode = null;
+      preTutorialDensity = null;
+      return;
+    }
   }
 
+  // The tutorial is now committed to open: every abort path (missing id,
+  // declined consent, refused viewport switch) has already returned.
+  recordTutorialOpened(tutorialId);
+
   createTutorialOverlay();
+
+  // Q-28a, as revised by Q-50a: a user interface switch is handled here
+  modeChangeUnsubscribe = modeCtrl.subscribe((newMode) =>
+    handleModeChangeDuringTutorial(newMode)
+  );
+  // U-28: the Classic density switch never reaches those subscribers
+  // (setClassicDensity dispatches this event instead), so the tour listens
+  // for it directly and re-settles the same way.
+  densityChangeListener = () => {
+    void reResolveStepAfterLayoutChange('the Classic view changed');
+  };
+  document.addEventListener('classic-density-change', densityChangeListener);
+  // U-24: spotlight cutouts stay clickable, so a user can open a project
+  // in the middle of a welcome-surface tour. That action wins the same way
+  // a mode switch does; the tour closes with its surface. U-45 (UF-39) makes
+  // it symmetrical: a project tour now ends on a step that invites a press of
+  // the Main Page button, and its steps point at chrome the welcome screen
+  // does not have.
+  watchSurfaceChangeDuringTutorial(
+    tutorial.surface === 'welcome' ? 'welcome' : 'project'
+  );
+  watchDialogsDuringTutorial();
   await showStep(startIndex);
   announceToScreenReader(
     `${tutorial.title} started. Step ${startIndex + 1} of ${tutorial.steps.length}. Press Escape to exit at any time.`,
@@ -2041,8 +3089,13 @@ export async function startTutorial(tutorialId, { triggerEl } = {}) {
  * Create the tutorial overlay DOM structure
  */
 function createTutorialOverlay() {
+  // startTutorial closes a running tour before it captures state (D-33), so
+  // this is only a stale-node guard and must NOT reset the module's state:
+  // closeTutorial would null the activeTutorial this overlay is being built
+  // for.
   if (tutorialOverlay) {
-    closeTutorial();
+    tutorialOverlay.remove();
+    tutorialOverlay = null;
   }
 
   const overlay = document.createElement('div');
@@ -2091,7 +3144,13 @@ function createTutorialOverlay() {
         <div id="tutorial-panel-content" class="tutorial-content"></div>
         <div class="tutorial-requirement" id="tutorialRequirement" role="status" aria-live="polite"></div>
       </div>
-      
+
+      <div class="tutorial-scroll-cue" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </div>
+
       <div class="tutorial-footer">
         <div class="tutorial-progress" aria-live="polite">
           Step <span id="tutorial-step-current">1</span> of <span id="tutorial-step-total">${activeTutorial.steps.length}</span>
@@ -2156,6 +3215,23 @@ function createTutorialOverlay() {
 
   // Handle browser navigation (back/forward) during tutorial
   window.addEventListener('popstate', handlePopState);
+
+  announceTutorialRunState(true);
+}
+
+/**
+ * Tell the rest of the app that a tour is or is not on screen (D-70).
+ *
+ * A document event rather than an import, for the reason the drawer's own
+ * `ui-mode-changed` listener already gives: the drawer must not depend on the
+ * tutorial module, and the tutorial must not reach into the drawer.
+ *
+ * @param {boolean} running
+ */
+function announceTutorialRunState(running) {
+  document.dispatchEvent(
+    new CustomEvent(TUTORIAL_RUN_EVENT, { detail: { running } })
+  );
 }
 
 /**
@@ -2168,19 +3244,44 @@ function setupTutorialListeners() {
   const backBtn = tutorialOverlay.querySelector('#tutorialBackBtn');
   const nextBtn = tutorialOverlay.querySelector('#tutorialNextBtn');
 
-  closeBtn?.addEventListener('click', closeTutorial);
+  // Defect D-32: passing closeTutorial straight to addEventListener handed
+  // the click event to its `completed` parameter, so the X recorded the tour
+  // as finished and threw the saved progress away.
+  closeBtn?.addEventListener('click', () => closeTutorial(false));
   minimizeBtn?.addEventListener('click', toggleMinimize);
-  restoreBtn?.addEventListener('click', toggleMinimize);
+  restoreBtn?.addEventListener('click', restoreFromBar);
 
   backBtn?.addEventListener('click', () =>
     navigateToStep(currentStepIndex - 1)
   );
   nextBtn?.addEventListener('click', handleNextClick);
 
+  // The cue has to retire as the reader reaches the end, not just appear.
+  tutorialOverlay
+    .querySelector('.tutorial-body')
+    ?.addEventListener('scroll', updateScrollCue, { passive: true });
+
   // Click outside panel to focus target (if there is one)
   tutorialOverlay.addEventListener('click', handleOverlayClick);
 
+  document.addEventListener('keydown', noteDialogBeforeKeydown, true);
   document.addEventListener('keydown', handleKeydown);
+}
+
+/**
+ * Record, before anyone has had a chance to close it, whether something else
+ * owned this Escape (Q-50c). Capture phase, so this runs ahead of the dialog's
+ * own handler.
+ *
+ * The open Customizer drawer counts here even though D-62 stopped it counting
+ * as a dialog anywhere else: its focus trap answers Escape by closing itself
+ * and does not stop the event, so without this the one press would close the
+ * drawer AND end the tour. One Escape, one surface; the next Escape exits.
+ */
+function noteDialogBeforeKeydown(e) {
+  if (e.key === 'Escape') {
+    escapeOwnedElsewhere = isAppDialogOpen() || isMobileDrawerOpen();
+  }
 }
 
 /**
@@ -2198,6 +3299,15 @@ function handleKeydown(e) {
       activeElement.isContentEditable);
 
   if (e.key === 'Escape') {
+    // Q-50c: while a dialog the user opened from a spotlight is on screen,
+    // Escape belongs to that dialog. Stand aside and let the app's own
+    // handler close it; the next Escape exits the tour.
+    //
+    // The dialog's own handler usually runs FIRST and removes the dialog, so
+    // by the time this one is reached there is nothing left to see. That is
+    // what noteDialogBeforeKeydown records, on the capture phase.
+    if (escapeOwnedElsewhere || isAppDialogOpen() || isMobileDrawerOpen())
+      return;
     e.preventDefault();
     closeTutorial();
   } else if (
@@ -2312,6 +3422,9 @@ function scheduleReposition() {
   }
   repositionTimeout = requestAnimationFrame(() => {
     updateSpotlightAndPosition();
+    // A dialog that resizes (orientation, on-screen keyboard) moves the gap
+    // the pill was parked in.
+    syncDialogStandDown();
     repositionTimeout = null;
   });
 }
@@ -2374,6 +3487,24 @@ function toggleMinimize() {
 }
 
 /**
+ * D-44 (UF-25, owner 2026-08-15) is SUPERSEDED here, not re-fixed.
+ *
+ * Its symptom was that Restore did nothing on a phone while the drawer was
+ * open: the watcher re-minimized the tour in the same frame, so the button was
+ * visible, labelled, and inert. The patch was to make Restore close the drawer
+ * first - the move a person had to make by hand to get the tour back.
+ *
+ * That was a patch over D-62. With the drawer no longer counted as a dialog
+ * there is nothing to re-minimize the tour, so Restore is a plain restore
+ * again, and the tour comes back over the drawer the user is working in
+ * instead of shutting it. UF-37's suite re-proves the dead-Restore scenario
+ * impossible rather than trusting this comment.
+ */
+function restoreFromBar() {
+  toggleMinimize();
+}
+
+/**
  * Set minimized state (supports auto-minimize).
  * @param {boolean} minimized
  * @param {{auto?: boolean}} opts
@@ -2398,6 +3529,10 @@ function setMinimized(minimized, { auto = false } = {}) {
     minimizedEl.classList.add('hidden');
     svg.style.opacity = '1';
     updateSpotlightAndPosition();
+    // A restore while a dialog is still up re-applies the very ring the
+    // stand-down removed (showStep restores unconditionally). Stand it back
+    // down in the same frame rather than letting it paint over the dialog.
+    syncDialogStandDown();
   }
 
   announceToScreenReader(
@@ -2410,6 +3545,262 @@ function restoreIfAutoMinimized() {
   if (isMinimized && wasAutoMinimized) {
     setMinimized(false, { auto: true });
   }
+}
+
+/**
+ * Every surface the app opens as a dialog. The tour's own panel carries
+ * role="dialog" and its own choice dialogs are .preset-modal, so both are
+ * excluded by isAppDialogOpen.
+ */
+const APP_DIALOG_SELECTOR =
+  '.modal-overlay, .preset-modal, [role="dialog"], [role="alertdialog"], dialog[open]';
+const TUTORIAL_OWN_DIALOGS =
+  '.tutorial-resume-modal, .tutorial-error-modal, .tutorial-mode-choice-modal';
+
+/**
+ * D-62 (U-42, owner's phone, 2026-08-21). The Customizer drawer wears
+ * role="dialog" for as long as it is open (drawer-controller.js), because on a
+ * phone it covers the screen and holds focus. To the dialog watcher that read
+ * as "the user opened a dialog over the tour", so the tour stood down on EVERY
+ * drawer step on a phone - and the drawer steps are most of the tour.
+ * MEASURED at the release base, 412x915, steps 3 and 4 of the intro tour: card
+ * hidden, veil at 0.3, nothing on screen but a "Tutorial 3/17" pill.
+ *
+ * The drawer is the app's own chrome and usually the very thing a step is
+ * teaching, so it is not a dialog the tour has to get out of the way of. A real
+ * dialog rendered INSIDE the drawer still counts: only the panel itself is
+ * skipped, never its contents.
+ */
+const APP_CHROME_DIALOG_SELECTOR = '#paramPanel';
+
+const isRendered = (el) =>
+  typeof el.checkVisibility === 'function'
+    ? el.checkVisibility()
+    : getComputedStyle(el).display !== 'none';
+
+/**
+ * Every dialog the USER has open, outermost only. Document order puts an
+ * ancestor before its own `.modal-overlay` child, so the first match of a
+ * nested pair is the one worth measuring.
+ * @returns {HTMLElement[]}
+ */
+function findOpenAppDialogs() {
+  const open = [];
+  for (const el of document.querySelectorAll(APP_DIALOG_SELECTOR)) {
+    if (tutorialOverlay?.contains(el)) continue;
+    if (el.closest(TUTORIAL_OWN_DIALOGS)) continue;
+    if (el.matches(APP_CHROME_DIALOG_SELECTOR)) continue;
+    if (!isRendered(el)) continue;
+    if (open.some((outer) => outer.contains(el))) continue;
+    open.push(el);
+  }
+  return open;
+}
+
+/**
+ * Is a dialog the USER opened currently on screen?
+ * @returns {boolean}
+ */
+function isAppDialogOpen() {
+  return findOpenAppDialogs().length > 0;
+}
+
+/** The box a dialog actually paints, not its full-viewport scrim. */
+function dialogContentBox(dialog) {
+  const content =
+    dialog.querySelector('.preset-modal-content, .modal-content') || dialog;
+  const rect = content.getBoundingClientRect();
+  return rect.height > 0 && rect.width > 0 ? rect : null;
+}
+
+/**
+ * D-61 / Q-66 (owner, 2026-08-21). A dialog opened from a spotlighted control
+ * has to be the topmost thing on screen, and Q-50c's minimize alone never made
+ * it one: the veil kept painting over the dialog at 0.3, the target kept the
+ * elevation and ring the highlight class gives it, and the pill kept its
+ * bottom-right corner. MEASURED at 412x730 - the owner's phone once its
+ * browser chrome is taken off the height - `document.elementFromPoint` at the
+ * Clear Cache dialog's Cancel AND its red confirm both returned
+ * `#clearStorageBtn`, and pressing that ringed button again stacked a second
+ * dialog on the first. That is the loop the owner hit.
+ *
+ * So while a user-opened dialog is up the tour stands down completely. The one
+ * exception is a step whose own target lives inside that dialog - the Features
+ * Guide steps, where the dialog IS the subject and its deliberate
+ * lit-through-the-cutout presentation is the step.
+ */
+function applyDialogStandDown(dialogs) {
+  if (!tutorialOverlay) return;
+
+  // The dialog is the thing the step is teaching: leave the spotlight alone.
+  if (currentTarget && dialogs.some((d) => d.contains(currentTarget))) {
+    releaseDialogStandDown();
+    return;
+  }
+
+  const svg = tutorialOverlay.querySelector('.tutorial-spotlight-svg');
+  const pill = tutorialOverlay.querySelector('.tutorial-minimized');
+
+  if (!dialogStandDown) {
+    dialogStandDown = {
+      svgDisplay: svg ? svg.style.display : '',
+      pillTop: pill ? pill.style.top : '',
+      pillBottom: pill ? pill.style.bottom : '',
+      pillDisplay: pill ? pill.style.display : '',
+    };
+  }
+
+  // Every pass, not just the first: a restore re-applies the ring underneath
+  // us, and showStep restores unconditionally.
+  document.querySelectorAll('.tutorial-target-highlight').forEach((el) => {
+    el.classList.remove('tutorial-target-highlight');
+  });
+  if (svg) svg.style.display = 'none';
+  keepPillClearOfDialogs(pill, dialogs);
+}
+
+/**
+ * Keep the pill off the dialog's own box - and otherwise leave it exactly where
+ * it lives.
+ *
+ * The first cut of this measured only the vertical gaps a dialog left, and CI
+ * Firefox caught what that costs: the keyboard-shortcuts dialog paints
+ * x 290-990 while the pill sits at x 1152, so it could never have been covered,
+ * yet a 51px vertical gap was enough to make this function hide it. MEASURED at
+ * 1280x600. A dialog the pill does not touch is a dialog it does not need to
+ * dodge.
+ *
+ * So: only act on a real intersection. Then prefer a gap above, then below, and
+ * only when neither can hold it does the pill go - because covering a dialog's
+ * controls is the defect being fixed, and a focusable control outside an
+ * `aria-modal` dialog is a focus-trap leak besides. Closing the dialog restores
+ * it, and the tour with it.
+ */
+function keepPillClearOfDialogs(pill, dialogs) {
+  if (!pill) return;
+
+  const boxes = dialogs.map(dialogContentBox).filter(Boolean);
+  if (!boxes.length) return;
+
+  // Always decide from the pill's resting corner, never from wherever an
+  // earlier pass parked it.
+  pill.style.top = dialogStandDown?.pillTop ?? '';
+  pill.style.bottom = dialogStandDown?.pillBottom ?? '';
+  pill.style.display = dialogStandDown?.pillDisplay ?? '';
+
+  const resting = pill.getBoundingClientRect();
+  const overlaps = (box) =>
+    !(
+      resting.right <= box.left ||
+      resting.left >= box.right ||
+      resting.bottom <= box.top ||
+      resting.top >= box.bottom
+    );
+  if (!boxes.some(overlaps)) return;
+
+  const pillHeight = resting.height || 44;
+  const needed = pillHeight + 16;
+  const above = Math.min(...boxes.map((b) => b.top));
+  const below = window.innerHeight - Math.max(...boxes.map((b) => b.bottom));
+
+  if (above >= needed) {
+    pill.style.top = `${Math.max(8, Math.round((above - pillHeight) / 2))}px`;
+    pill.style.bottom = 'auto';
+    return;
+  }
+
+  if (below >= needed) {
+    pill.style.top = 'auto';
+    pill.style.bottom = `${Math.max(8, Math.round((below - pillHeight) / 2))}px`;
+    return;
+  }
+
+  pill.style.display = 'none';
+}
+
+/**
+ * Give back everything the stand-down took. The ring goes back on whatever the
+ * step points at NOW, never on whoever happened to be wearing it when the
+ * dialog opened: on the Features Guide steps the modal opens while the ring is
+ * still on the Help button, and handing that button its ring back leaves a
+ * blue orphan burning behind the modal.
+ */
+function releaseDialogStandDown() {
+  if (!dialogStandDown) return;
+
+  const { svgDisplay, pillTop, pillBottom, pillDisplay } = dialogStandDown;
+  dialogStandDown = null;
+
+  if (currentTarget?.isConnected) {
+    currentTarget.classList.add('tutorial-target-highlight');
+  }
+
+  const svg = tutorialOverlay?.querySelector('.tutorial-spotlight-svg');
+  if (svg) svg.style.display = svgDisplay;
+
+  const pill = tutorialOverlay?.querySelector('.tutorial-minimized');
+  if (pill) {
+    pill.style.top = pillTop;
+    pill.style.bottom = pillBottom;
+    pill.style.display = pillDisplay;
+  }
+}
+
+/**
+ * Re-decide the stand-down against whatever is on screen right now. Called by
+ * the dialog watcher, by every restore, and by the reposition scheduler, so a
+ * dialog that resizes or a ring re-applied underneath us cannot leave the tour
+ * painting over it.
+ */
+function syncDialogStandDown() {
+  if (!activeTutorial || !tutorialOverlay) return;
+  const dialogs = findOpenAppDialogs();
+  if (dialogs.length) applyDialogStandDown(dialogs);
+  else releaseDialogStandDown();
+}
+
+/**
+ * Q-50c (owner, 2026-08-14): pressing a spotlighted control that opens a
+ * dialog must not leave the dialog stranded under the veil. MEASURED at the
+ * base: the Clear Cache dialog computes z-index 1000 against the veil's
+ * 10003, so it opened dimmed with the tour panel lying across it and focus on
+ * a button the user could barely see. While any dialog is up the tour shrinks
+ * to its bar and the veil fades; when the dialog goes, the tour comes back.
+ */
+function watchDialogsDuringTutorial() {
+  let scheduled = false;
+
+  const sync = () => {
+    if (!activeTutorial || !tutorialOverlay) return;
+    const dialogs = findOpenAppDialogs();
+    const dialogUp = dialogs.length > 0;
+    if (dialogUp && !isMinimized) {
+      setMinimized(true, { auto: true });
+    } else if (!dialogUp && isMinimized && wasAutoMinimized) {
+      // Give the ring and the veil back before the panel returns, so the
+      // restore recomputes from a whole spotlight rather than a stripped one.
+      releaseDialogStandDown();
+      setMinimized(false, { auto: true });
+    }
+    if (dialogUp) applyDialogStandDown(dialogs);
+    else releaseDialogStandDown();
+  };
+
+  dialogObserver = new MutationObserver(() => {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(() => {
+      scheduled = false;
+      sync();
+    });
+  });
+
+  dialogObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['class', 'open', 'hidden', 'style'],
+  });
 }
 
 /**
@@ -2437,9 +3828,11 @@ async function showStep(stepIndex) {
   if (step.showWhen) {
     const shouldShow = evaluateShowWhenCondition(step.showWhen);
     if (!shouldShow) {
-      const reason = isMobileViewport()
-        ? 'not applicable on mobile'
-        : 'not applicable on desktop';
+      const reason =
+        step.skipReason ||
+        (isMobileViewport()
+          ? 'not applicable on mobile'
+          : 'not applicable on desktop');
       await skipToNextValidStep(stepIndex, direction, reason);
       return;
     }
@@ -2460,29 +3853,16 @@ async function showStep(stepIndex) {
     // Set guard flag to prevent drawer observer from interfering during setup
     isSettingUpStep = true;
 
-    // First try to resolve the target (even if not yet visible)
-    const target = resolveStepTarget(step, { requireVisible: false });
-    let needsDrawerOpen = target ? isInsideParamPanel(target) : false;
-
-    // If no target yet but we have selectors, check if any would be inside drawer
-    if (!target && step.highlightSelector) {
-      const selectors = step.highlightSelector.split(',').map((s) => s.trim());
-      for (const selector of selectors) {
-        const query = selector.startsWith('@')
-          ? `[data-tutorial-target="${selector.slice(1)}"]`
-          : selector;
-        const el = document.querySelector(query);
-        if (el && isInsideParamPanel(el)) {
-          needsDrawerOpen = true;
-          break;
-        }
-      }
-    }
-
-    if (needsDrawerOpen) {
+    // Watch the panel whenever the step has anything inside it to point at,
+    // not only when the step opens it. Step 3 teaches BOTH halves - press
+    // Customizer to open, press Close to shut - and it now arrives with the panel
+    // shut (P2), so without this the ring could not follow the user in.
+    if (checkIfAnyTargetInsideDrawer(step)) {
       // Set up observer to detect drawer/panel state changes (mobile + desktop)
       setupDrawerObserver();
+    }
 
+    if (stepNeedsParamPanelOpen(step)) {
       // CRITICAL: Automatically open/expand the panel on BOTH mobile AND desktop
       // The tutorial CANNOT proceed if the target element is hidden in a collapsed panel
       if (!isParamPanelOpen()) {
@@ -2490,19 +3870,29 @@ async function showStep(stepIndex) {
         // Wait for animation to complete
         await waitForTransition(document.getElementById('paramPanel'), 400);
       }
-    } else {
-      // Target is NOT inside the param panel, so close the drawer on mobile
-      // to ensure the target element is visible (not hidden behind drawer)
-      if (isMobileViewport() && isMobileDrawerOpen()) {
-        closeMobileDrawer();
-        await waitForTransition(document.getElementById('paramPanel'), 400);
-      }
+    } else if (isMobileViewport() && isMobileDrawerOpen()) {
+      // Nothing here needs the drawer, so close it on mobile: it covers the
+      // screen, and whatever this step points at is behind it.
+      closeMobileDrawer();
+      await waitForTransition(document.getElementById('paramPanel'), 400);
     }
   }
 
   // Resolve target with retry (late DOM availability + visibility)
   let resolvedTarget = null;
   if (step.highlightSelector || step.targetKey) {
+    // U-24: welcome-surface targets live down one long scrolling column,
+    // the resolver demands viewport intersection, and the engine's own
+    // scroll runs only after resolution — so an off-screen target could
+    // never resolve. Bring the candidate on screen first (instant, so the
+    // rect is correct immediately); the project tours keep their existing
+    // drawer-driven path untouched.
+    if (activeTutorial.surface === 'welcome') {
+      const candidate = resolveStepTarget(step, { requireVisible: false });
+      if (candidate && !isElementVisible(candidate)) {
+        scrollTargetIntoContainerView(candidate);
+      }
+    }
     resolvedTarget = await resolveTargetWithRetry(step);
     if (!resolvedTarget) {
       isSettingUpStep = false; // Clear flag before early return
@@ -2512,15 +3902,7 @@ async function showStep(stepIndex) {
   }
   currentTarget = resolvedTarget;
   if (currentTarget) {
-    const observedStepIndex = stepIndex;
-    watchTargetRemoval(currentTarget, () => {
-      if (!activeTutorial || currentStepIndex !== observedStepIndex) return;
-      announceToScreenReader(
-        'Tutorial step interrupted: element no longer available.'
-      );
-      currentTarget = null;
-      void handleStepFailure('target removed', observedStepIndex, 1);
-    });
+    armTargetRemovalWatch(currentTarget, stepIndex);
   }
 
   // Update content (use compact content if viewport is small/zoomed)
@@ -2531,6 +3913,13 @@ async function showStep(stepIndex) {
       <div class="tutorial-step-content">${getStepContent(step)}</div>
     `;
   }
+
+  // D-65 (UF-38). The body is a scroll container and it keeps its offset
+  // across an innerHTML swap, so a reader who scrolled the previous step to
+  // the bottom arrived at the next one with its title already scrolled off the
+  // top. MEASURED at 412x810 while checking the new cue.
+  const bodyEl = tutorialOverlay.querySelector('.tutorial-body');
+  if (bodyEl) bodyEl.scrollTop = 0;
 
   // Update progress
   const stepCurrentEl = tutorialOverlay.querySelector('#tutorial-step-current');
@@ -2587,10 +3976,58 @@ async function showStep(stepIndex) {
 }
 
 /**
+ * Park the card in the middle of the screen: the step asked for `center`, or
+ * its target could not be resolved.
+ *
+ * D-65 (UF-38). Both callers used to do this by hand, and both left `dock()`'s
+ * inline `width` and `maxHeight` behind while dropping the class that keeps
+ * the mobile bottom-sheet rule away - so a centred card was sized by one
+ * step's dock arithmetic and padded by another rule's safe-area inset.
+ * `tutorial-panel-centered` says which of the two un-docked states this is.
+ *
+ * @param {HTMLElement} panel
+ * @param {HTMLElement} arrow
+ */
+function centerPanel(panel, arrow) {
+  panel.style.position = 'fixed';
+  panel.style.top = '50%';
+  panel.style.left = '50%';
+  panel.style.right = '';
+  panel.style.bottom = '';
+  panel.style.width = '';
+  panel.style.maxHeight = '';
+  panel.style.transform = 'translate(-50%, -50%)';
+  panel.classList.remove('tutorial-panel-positioned');
+  panel.classList.add('tutorial-panel-centered');
+  if (arrow) arrow.style.display = 'none';
+}
+
+/**
+ * Say out loud that the card's body has more text below the fold (D-65).
+ *
+ * The body is a scroll container with two independent caps above it, and until
+ * now it clipped mid-sentence in silence. Presentation only: the cue element
+ * is `aria-hidden`, takes no tab stop, and adds nothing to the live regions -
+ * a screen-reader user reaches the rest through the scroll container itself.
+ */
+function updateScrollCue() {
+  if (!tutorialOverlay) return;
+  const panel = tutorialOverlay.querySelector('.tutorial-panel');
+  const body = tutorialOverlay.querySelector('.tutorial-body');
+  if (!panel || !body) return;
+  const hidden = body.scrollHeight - body.scrollTop - body.clientHeight;
+  panel.classList.toggle('tutorial-has-more', hidden > 2);
+}
+
+/**
  * Update spotlight cutout and panel position
  */
 function updateSpotlightAndPosition() {
   if (!tutorialOverlay || isMinimized) return;
+
+  // Every branch below can change the card's height, and several return early.
+  // One frame later the layout has settled whichever way it went.
+  requestAnimationFrame(updateScrollCue);
 
   const step = activeTutorial.steps[currentStepIndex];
   const panel = tutorialOverlay.querySelector('.tutorial-panel');
@@ -2614,15 +4051,7 @@ function updateSpotlightAndPosition() {
     // No highlight - center the panel, hide spotlight
     cutout.setAttribute('width', '0');
     cutout.setAttribute('height', '0');
-    panel.style.position = 'fixed';
-    panel.style.top = '50%';
-    panel.style.left = '50%';
-    // Clear any docked constraints from mobile CSS so centering is reliable
-    panel.style.right = '';
-    panel.style.bottom = '';
-    panel.style.transform = 'translate(-50%, -50%)';
-    panel.classList.remove('tutorial-panel-positioned');
-    arrow.style.display = 'none';
+    centerPanel(panel, arrow);
     currentTarget = null;
     return;
   }
@@ -2639,12 +4068,7 @@ function updateSpotlightAndPosition() {
     // Target not found - center panel
     cutout.setAttribute('width', '0');
     cutout.setAttribute('height', '0');
-    panel.style.position = 'fixed';
-    panel.style.top = '50%';
-    panel.style.left = '50%';
-    panel.style.transform = 'translate(-50%, -50%)';
-    panel.classList.remove('tutorial-panel-positioned');
-    arrow.style.display = 'none';
+    centerPanel(panel, arrow);
     return;
   }
 
@@ -2660,14 +4084,14 @@ function updateSpotlightAndPosition() {
 
   /**
    * On mobile, the bottom actions/camera bar is fixed and can cover content
-   * (including elements inside the Parameters drawer). Treat that area as
+   * (including elements inside the Customizer drawer). Treat that area as
    * "not visible" for spotlight interactions.
    */
   const getEffectiveViewportBottom = () => {
     // Default: use visualViewport height for zoom-safe calculations
     let bottom = viewport.height;
 
-    // Mobile actions bar is fixed at the bottom and can overlap the Parameters drawer.
+    // Mobile actions bar is fixed at the bottom and can overlap the Customizer drawer.
     const actionsBar = document.getElementById('actionsBar');
     if (actionsBar) {
       // If the highlighted element is *inside* the fixed actions bar (e.g. Actions/Camera
@@ -2707,17 +4131,34 @@ function updateSpotlightAndPosition() {
     const deltaDown = targetRect.bottom - effectiveBottom;
     const topPadding = 16;
 
+    // Triage Table 1 #5. Two rules, and the order between them is the whole
+    // fix:
+    //
+    // `wanted` is where the target's top belongs. Aligning it to the WINDOW's
+    // top buries it under whatever chrome sits above its clipping box - on the
+    // welcome tour's Open-or-start step #welcomeScreen's box starts 124px down
+    // here and 148px down on the CI Firefox runner, and the panel's first
+    // hundred-odd pixels, halo and heading included, were simply clipped away.
+    //
+    // `fits` decides whether showing the BOTTOM is even sensible. MEASURED on
+    // that runner, where wider fonts wrap the same panel to 648px inside a
+    // 572px box: the two rules fought, the bottom-first rule won, and it
+    // dragged the top back up to y=48 under an 86px header. A target too tall
+    // to fit has to show its top, because that is where its heading is.
+    const wanted = visibleTopBoundFor(target) + topPadding + SPOTLIGHT_PADDING;
+    const fits = targetRect.height <= effectiveBottom - wanted;
+
     // Prefer adjusting the nearest scrollable parent so we can account for
     // fixed UI overlays (like the mobile actions bar).
     if (scrollableParent && typeof scrollableParent.scrollBy === 'function') {
-      if (deltaDown > 0) {
+      if (deltaDown > 0 && fits) {
         scrollableParent.scrollBy({
           top: deltaDown + topPadding,
           behavior: 'smooth',
         });
-      } else if (targetRect.top < topPadding) {
+      } else if (targetRect.top < wanted) {
         scrollableParent.scrollBy({
-          top: targetRect.top - topPadding,
+          top: targetRect.top - wanted,
           behavior: 'smooth',
         });
       } else {
@@ -2728,11 +4169,11 @@ function updateSpotlightAndPosition() {
         });
       }
     } else if (typeof window.scrollBy === 'function') {
-      if (deltaDown > 0) {
+      if (deltaDown > 0 && fits) {
         window.scrollBy({ top: deltaDown + topPadding, behavior: 'smooth' });
-      } else if (targetRect.top < topPadding) {
+      } else if (targetRect.top < wanted) {
         window.scrollBy({
-          top: targetRect.top - topPadding,
+          top: targetRect.top - wanted,
           behavior: 'smooth',
         });
       } else {
@@ -2791,7 +4232,47 @@ function updateSpotlightAndPosition() {
         ? Math.max(0, actionsBarRect.height || 0)
         : 0;
 
-    const topOffset = Math.max(8, safeAreas.top + 8);
+    // UF-37: since D-62 the card stays up over the open Customizer drawer
+    // instead of collapsing to a pill, so a top dock now has something to
+    // respect. The drawer's title row carries its only Close button; a card
+    // starting at the viewport top lands squarely on it. MEASURED at 412x915
+    // on step 4 of the intro tour: the card covered y 8-348 and Playwright
+    // could not reach #drawerCloseBtn at all. Start below that row instead.
+    const drawerTitleRow = isMobileDrawerOpen()
+      ? document.querySelector('#paramPanel .panel-header-title-row')
+      : null;
+    const drawerHeaderBottom =
+      drawerTitleRow && isRendered(drawerTitleRow)
+        ? drawerTitleRow.getBoundingClientRect().bottom + 8
+        : 0;
+
+    // D-77: the top dock starts below the app's own top chrome. A card
+    // pointing at something low on the screen docks upward, and at 412x810 a
+    // card starting at y 8 buried the header row and the Customizer row on
+    // its way past — measured on the intro tour's "Generate and download your
+    // file" step, where elementFromPoint at #uiModeToggle's centre returned
+    // the card. Docking clear of the chrome is better than disqualifying the
+    // dock, which would cost the card its visibility on those steps.
+    // A bar the target itself lives in is not counted: the spotlight elevates
+    // that on purpose.
+    const topChromeBottom = [
+      '.app-header',
+      '#workflowProgress',
+      '.preview-drawer-header',
+    ]
+      .map((selector) => document.querySelector(selector))
+      .filter((el) => el && isRendered(el) && !el.contains(target))
+      .reduce(
+        (lowest, el) => Math.max(lowest, el.getBoundingClientRect().bottom),
+        0
+      );
+
+    const topOffset = Math.max(
+      8,
+      safeAreas.top + 8,
+      drawerHeaderBottom,
+      topChromeBottom + 8
+    );
     const bottomOffset = Math.max(8, safeAreas.bottom + actionsBarHeight + 8);
 
     const intersects = (a, b, pad = 6) => {
@@ -2820,6 +4301,42 @@ function updateSpotlightAndPosition() {
       return !!topEl && (panel.contains(topEl) || topEl === panel);
     };
 
+    // D-77: a docked card must not sit on a control it is not pointing at.
+    // Both tests above ask only about the step's OWN target, so a card that
+    // cleared its target could still bury the rest of the chrome — measured
+    // at 412x810 on the intro tour's "Generate and download your file" step,
+    // where the top-docked card covered #uiModeToggle and elementFromPoint
+    // at that button's centre returned the card.
+    const clearanceRects = () => {
+      const out = [];
+      const selector = [
+        '.app-header button',
+        '.app-header a',
+        '#workflowProgress button',
+        '.preview-drawer-header button',
+        '#actionsBar button',
+      ].join(', ');
+      for (const el of document.querySelectorAll(selector)) {
+        // The step's own target is what the spotlight elevates on purpose,
+        // and the panel's own controls travel with it.
+        if (panel.contains(el)) continue;
+        if (el === target || el.contains(target) || target.contains(el))
+          continue;
+        if (!isRendered(el)) continue;
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) out.push(r);
+      }
+      return out;
+    };
+
+    const clearanceOverlap = (pr) =>
+      clearanceRects().reduce((sum, c) => sum + overlapArea(pr, c), 0);
+
+    // The clearance figure is wanted twice per dock — once to disqualify and
+    // once to rank — and it walks the DOM, so it is measured once and passed.
+    const blocks = (pr, clearance) =>
+      intersects(pr, rect) || isBlockedAtCenter() || clearance > 0;
+
     const dock = (side) => {
       // Compact floating bubble (not full-width sheet) for portrait usability.
       panel.style.position = 'fixed';
@@ -2845,6 +4362,7 @@ function updateSpotlightAndPosition() {
       panel.style.maxHeight = `${Math.min(available, viewport.height * 0.45)}px`;
 
       panel.classList.add('tutorial-panel-positioned');
+      panel.classList.remove('tutorial-panel-centered');
       arrow.style.display = 'none';
     };
 
@@ -2855,10 +4373,12 @@ function updateSpotlightAndPosition() {
 
     dock(first);
     const pr1 = panel.getBoundingClientRect();
-    if (intersects(pr1, rect) || isBlockedAtCenter()) {
+    const c1 = clearanceOverlap(pr1);
+    if (blocks(pr1, c1)) {
       dock(second);
       const pr2 = panel.getBoundingClientRect();
-      if (intersects(pr2, rect) || isBlockedAtCenter()) {
+      const c2 = clearanceOverlap(pr2);
+      if (blocks(pr2, c2)) {
         // If the highlighted target is a large region (e.g. preview container),
         // it may be impossible to avoid overlap. Only auto-minimize when the
         // current step is gating progress on a required interaction.
@@ -2869,9 +4389,10 @@ function updateSpotlightAndPosition() {
         }
 
         // Non-interactive step: keep the panel visible, choosing the docked
-        // side that minimizes overlap with the target.
-        const a1 = overlapArea(pr1, rect);
-        const a2 = overlapArea(pr2, rect);
+        // side that buries the least — the target it points at plus (D-77)
+        // the chrome it does not.
+        const a1 = overlapArea(pr1, rect) + c1;
+        const a2 = overlapArea(pr2, rect) + c2;
         if (a1 < a2) {
           dock(first);
         }
@@ -2897,6 +4418,7 @@ function updateSpotlightAndPosition() {
   const position = calculateBestPosition(rect, step.position, panelRect);
   positionPanel(panel, arrow, rect, position);
   panel.classList.add('tutorial-panel-positioned');
+  panel.classList.remove('tutorial-panel-centered');
 
   // Desktop/tablet: keep arrow enabled as-is (no further changes).
 }
@@ -3156,10 +4678,21 @@ function adjustTutorialZIndex(targetElement) {
   const rootStyles = getComputedStyle(document.documentElement);
   const baseBackdrop =
     parseInt(rootStyles.getPropertyValue('--z-index-tutorial-backdrop'), 10) ||
-    9998;
+    10005;
 
   let maxZ = 0;
   const collectZ = (el) => {
+    // D-67 (UF-36). The caller adds .tutorial-target-highlight one line before
+    // calling this, and that class elevates the target to
+    // --z-index-tutorial-highlight. Reading it back made the overlay measure
+    // its own work and climb above its own head on EVERY highlighted step, not
+    // just the awkward ones: MEASURED on the Clear Cache step before the fix,
+    // backdrop 10002 / spotlight 10003 / panel 10004 on a page whose real
+    // ancestors all sit below 950 - and a veil at 10003 is what buried the
+    // dialog at --z-index-modal. The overlay now starts above the whole
+    // highlight family by token, so this function is left with the job it was
+    // named for: genuinely high-z ancestors in the page.
+    if (el.classList.contains('tutorial-target-highlight')) return;
     const zIndex = parseInt(getComputedStyle(el).zIndex, 10);
     if (!Number.isNaN(zIndex)) {
       maxZ = Math.max(maxZ, zIndex);
@@ -3211,7 +4744,7 @@ function setupCompletion(step) {
   stepCompleted = !step.completion;
 
   if (step.completion) {
-    requirementEl.textContent = '↑ Complete the action above to continue';
+    requirementEl.textContent = REQUIREMENT_PENDING_TEXT;
     requirementEl.classList.remove('tutorial-requirement-done');
   } else {
     requirementEl.textContent = '';
@@ -3459,11 +4992,122 @@ function clearCompletionListeners() {
 }
 
 /**
+ * Q-28a (owner, 2026-08-11): a user interface switch wins over a running
+ * tutorial. Close cleanly with progress saved and one announcement, never
+ * switch the user back, and hand back any Classic density the tutorial's
+ * own forced switch planted (U-12's empty-Classic poisoning).
+ * @param {string} newMode - Mode the user switched into
+ */
+/**
+ * U-24: close a tour when the app surface it belongs to goes away. A welcome
+ * tour ends when a project opens through a spotlight cutout; a project tour
+ * ends when the Main Page comes back (U-45, UF-39, where the last step points
+ * at the button that does exactly that).
+ *
+ * Mirrors handleModeChangeDuringTutorial: the user's action wins, progress
+ * is saved past step one, and the close announces its own reason.
+ *
+ * @param {'welcome'|'project'} homeSurface The surface this tour is built for
+ */
+function watchSurfaceChangeDuringTutorial(homeSurface) {
+  surfaceObserver = new MutationObserver(() => {
+    if (!activeTutorial) return;
+    if (document.body.dataset.appSurface === homeSurface) return;
+
+    const title = activeTutorial.title;
+    const progressSaved = currentStepIndex > 0;
+    if (progressSaved) {
+      saveTutorialProgress(currentStepIndex);
+    }
+
+    closeTutorial(false, { skipModeRestore: true, skipAnnouncement: true });
+
+    // Q-50d (owner, 2026-08-14): approved as drafted, in its final context.
+    // The D-35 review flag this line carried since UF-17 is retired. The
+    // Main Page half is UF-39's, and carries its own flag until signed.
+    const reason =
+      homeSurface === 'welcome'
+        ? 'a project opened'
+        : 'you went back to the Main Page';
+    announceToScreenReader(
+      `${title} closed because ${reason}.${progressSaved ? ' Progress saved.' : ''}`,
+      'assertive'
+    );
+  });
+  surfaceObserver.observe(document.body, {
+    attributes: true,
+    attributeFilter: ['data-app-surface'],
+  });
+}
+
+function handleModeChangeDuringTutorial(newMode) {
+  if (!activeTutorial) return;
+
+  // U-28 / Q-50a (owner, 2026-08-14) REVISES Q-28a: a switch inside the
+  // interface family this tour was built for is the user exploring, not the
+  // user leaving, so the tour stays and the step re-settles. Crossing between
+  // Forge and Classic still ends it, because the steps point at chrome the
+  // other layout does not have.
+  const homeModes = activeTutorial.homeModes || FORGE_HOME_MODES;
+  if (homeModes.includes(newMode)) {
+    // The user's own choice outlives the tour: closeTutorial must not switch
+    // them back to where the tour found them.
+    tutorialForcedMode = false;
+    preTutorialMode = null;
+    preTutorialDensity = null;
+    void reResolveStepAfterLayoutChange('the interface changed');
+    return;
+  }
+
+  const title = activeTutorial.title;
+  const stepsTotal = activeTutorial.steps?.length || 0;
+  const stepCurrent = currentStepIndex + 1;
+
+  const progressSaved = currentStepIndex > 0;
+  if (progressSaved) {
+    saveTutorialProgress(currentStepIndex);
+  }
+
+  const densityToRepair =
+    tutorialForcedMode && newMode === 'classic' ? preTutorialDensity : null;
+
+  closeTutorial(false, { skipModeRestore: true, skipAnnouncement: true });
+
+  if (densityToRepair) {
+    getUIModeController().setClassicDensity(densityToRepair, {
+      skipAnnouncement: true,
+    });
+  }
+
+  announceToScreenReader(
+    `${title} tutorial closed at step ${stepCurrent} of ${stepsTotal} because the interface changed.${progressSaved ? ' Progress saved.' : ''}`,
+    'assertive'
+  );
+}
+
+/**
  * Close the tutorial and clean up
  * @param {boolean} completed - Whether tutorial was completed (vs cancelled)
+ * @param {Object} [options]
+ * @param {boolean} [options.skipModeRestore] - Do not switch back to the
+ *   pre-tutorial mode (the close was caused by the user's own mode switch)
+ * @param {boolean} [options.skipAnnouncement] - Caller announces instead
  */
-export function closeTutorial(completed = false) {
+export function closeTutorial(completed = false, options = {}) {
   if (!tutorialOverlay) return;
+
+  if (modeChangeUnsubscribe) {
+    modeChangeUnsubscribe();
+    modeChangeUnsubscribe = null;
+  }
+
+  if (densityChangeListener) {
+    document.removeEventListener(
+      'classic-density-change',
+      densityChangeListener
+    );
+    densityChangeListener = null;
+  }
 
   clearCompletionListeners();
   clearDrawerObserver();
@@ -3479,6 +5123,22 @@ export function closeTutorial(completed = false) {
     targetRemovalObserver.disconnect();
     targetRemovalObserver = null;
   }
+
+  // Clean up the welcome-surface flip observer
+  if (surfaceObserver) {
+    surfaceObserver.disconnect();
+    surfaceObserver = null;
+  }
+
+  // Clean up the dialog watcher (Q-50c)
+  if (dialogObserver) {
+    dialogObserver.disconnect();
+    dialogObserver = null;
+  }
+
+  // Drop what the stand-down was holding without restoring it - the sweep
+  // below strips every highlight anyway, and the overlay is about to go.
+  dialogStandDown = null;
 
   // Remove highlight from any targeted elements
   document.querySelectorAll('.tutorial-target-highlight').forEach((el) => {
@@ -3520,47 +5180,68 @@ export function closeTutorial(completed = false) {
     screen.orientation.removeEventListener('change', handleOrientationChange);
   }
 
+  document.removeEventListener('keydown', noteDialogBeforeKeydown, true);
   document.removeEventListener('keydown', handleKeydown);
+  escapeOwnedElsewhere = false;
 
   tutorialOverlay.remove();
   tutorialOverlay = null;
+  announceTutorialRunState(false);
 
   // Store step info for announcement before clearing
   const stepsTotal = activeTutorial?.steps?.length || 0;
   const currentStep = currentStepIndex + 1;
 
-  // Clear or keep progress based on completion
+  // Clear or keep progress based on completion. The persistent registry
+  // record is written FIRST — clearTutorialProgress erases the only other
+  // evidence this run happened.
   if (completed) {
+    if (activeTutorial?.id) {
+      recordTutorialCompleted(activeTutorial.id);
+    }
     clearTutorialProgress();
   }
+
+  // Defect D-43 (UF-25). Two faults lived here and both silently dropped
+  // focus onto <body>, which drops a keyboard or screen-reader user at the
+  // top of the document every time they leave a tour.
+  //
+  // 1. previousFocus and triggerElement are module-level and were cleared
+  //    immediately after this callback was SCHEDULED, so by the time the
+  //    frame ran both read null and neither restore target was ever tried.
+  //    They are captured into locals here instead.
+  // 2. The old guard asked the element about its own display/visibility.
+  //    Neither reports 'none'/'hidden' for an element whose ANCESTOR is
+  //    hidden, so on the welcome screen the loop chose #primaryActionBtn
+  //    inside #mainInterface.hidden and .focus() was a no-op. isRendered()
+  //    uses checkVisibility(), which accounts for hidden ancestors.
+  const restoreTo = previousFocus;
+  const restoreFallback = triggerElement;
+
+  const canTakeFocus = (el) =>
+    el &&
+    typeof el.focus === 'function' &&
+    document.contains(el) &&
+    isRendered(el);
 
   // Restore focus to the element that had focus before tutorial started
   // Use requestAnimationFrame to ensure DOM has settled after overlay removal
   requestAnimationFrame(() => {
     let focusRestored = false;
 
-    // First try: previousFocus (the element that had focus when tutorial started)
-    if (previousFocus && document.contains(previousFocus)) {
-      const style = window.getComputedStyle(previousFocus);
-      if (style.display !== 'none' && style.visibility !== 'hidden') {
-        previousFocus.focus();
-        focusRestored = true;
-      }
+    // First try: the element that had focus when the tutorial started
+    if (canTakeFocus(restoreTo)) {
+      restoreTo.focus();
+      focusRestored = document.activeElement === restoreTo;
     }
 
-    // Second try: triggerElement (the element that triggered the tutorial)
-    if (!focusRestored && triggerElement && document.contains(triggerElement)) {
-      const triggerStyle = window.getComputedStyle(triggerElement);
-      if (
-        triggerStyle.display !== 'none' &&
-        triggerStyle.visibility !== 'hidden'
-      ) {
-        triggerElement.focus();
-        focusRestored = true;
-      }
+    // Second try: the element that triggered the tutorial
+    if (!focusRestored && canTakeFocus(restoreFallback)) {
+      restoreFallback.focus();
+      focusRestored = document.activeElement === restoreFallback;
     }
 
-    // Fallback: focus a visible, focusable element
+    // Fallback: focus a rendered, focusable element
     if (!focusRestored) {
       const fallbackTargets = [
         '#primaryActionBtn:not([disabled])',
@@ -3575,10 +5256,9 @@ export function closeTutorial(completed = false) {
 
       for (const selector of fallbackTargets) {
         const el = document.querySelector(selector);
-        if (el && typeof el.focus === 'function') {
-          const style = window.getComputedStyle(el);
-          if (style.display !== 'none' && style.visibility !== 'hidden') {
-            el.focus();
+        if (canTakeFocus(el)) {
+          el.focus();
+          if (document.activeElement === el) {
             focusRestored = true;
             break;
           }
@@ -3595,17 +5275,39 @@ export function closeTutorial(completed = false) {
   previousFocus = null;
   triggerElement = null;
 
-  // Restore pre-tutorial UI mode if the tutorial changed it
-  if (preTutorialMode) {
+  // Restore pre-tutorial UI mode if the tutorial changed it - unless the
+  // close was caused by the user's own switch, which must stand (Q-28a).
+  if (preTutorialMode && !options.skipModeRestore) {
     const modeCtrl = getUIModeController();
     if (modeCtrl.getMode() !== preTutorialMode) {
-      modeCtrl.switchMode(preTutorialMode, {
+      const restored = modeCtrl.switchMode(preTutorialMode, {
         skipAnnouncement: true,
         skipFocus: true,
       });
+      if (
+        restored &&
+        tutorialForcedMode &&
+        preTutorialMode === 'classic' &&
+        preTutorialDensity
+      ) {
+        // The restore switch itself records the tutorial's forced mode as
+        // the Classic density; hand the user's real density back (U-12).
+        modeCtrl.setClassicDensity(preTutorialDensity, {
+          skipAnnouncement: true,
+        });
+      }
+      if (!restored && preTutorialMode === 'classic') {
+        // UF-5's viewport gate refused Classic (window too small). Never
+        // strand the user silently in a mode they did not choose.
+        announceToScreenReader(
+          'Classic needs a wider window right now, so you are staying in Assistive Forge. Your file stays open.'
+        );
+      }
     }
   }
   preTutorialMode = null;
+  preTutorialDensity = null;
+  tutorialForcedMode = false;
 
   activeTutorial = null;
   currentStepIndex = 0;
@@ -3613,9 +5315,11 @@ export function closeTutorial(completed = false) {
   currentTarget = null;
   consecutiveFailures = 0;
 
-  announceToScreenReader(
-    `Tutorial closed at step ${currentStep} of ${stepsTotal}.`
-  );
+  if (!options.skipAnnouncement) {
+    announceToScreenReader(
+      `Tutorial closed at step ${currentStep} of ${stepsTotal}.`
+    );
+  }
 }
 
 /**

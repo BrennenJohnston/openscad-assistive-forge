@@ -1,6 +1,15 @@
 # Render Trigger Map
 
-**Purpose:** Single-source-of-truth document mapping every code path that can trigger an OpenSCAD render (preview or full). Used as the ground-truth reference for investigating BUG-B (unexpected display content in Customizer Settings mode) and BUG-C (spontaneous renders).
+**Purpose:** Maps every code path that could trigger an OpenSCAD render (preview
+or full). Written as the ground-truth reference for investigating BUG-B
+(unexpected display content in Customizer Settings mode) and BUG-C (spontaneous
+renders), both of which were subsequently fixed — see `KNOWN_ISSUES.md`, S-007
+and S-008.
+
+> **Read the audit date below before trusting this.** It has not been re-audited
+> since 2026-03-03, and several releases have touched rendering since. It is
+> still the best starting map of the render paths; it is no longer a guarantee
+> that the list is complete.
 
 **Architecture layer:** Layer 3 (frontend) → Layer 2 (worker bridge) → Layer 1 (WASM binary, frozen).
 
@@ -30,6 +39,36 @@ Before executing any `renderPreview()` call, `AutoPreviewController` checks `isN
 - `code: 'NO_GEOMETRY'` for `generate` values containing `"customizer"` keywords
 
 `isNonPreviewable()` returns `true` only for generate values containing "customizer" keywords. 2D-producing modes (SVG, DXF, first layer) are classified as previewable and proceed to render; if the WASM worker returns `MODEL_IS_2D`, the catch block in `renderPreview()` triggers a draft SVG fallback via `renderDraft2DPreview()`.
+
+---
+
+## Publish-Before-Render Contract (UF-18)
+
+**Added 2026-08-13. Audited against `src/main.js`, `src/js/parameter-reconciler.js`, `src/js/render-controller.js`.**
+
+Editor edits reach the app through a 500 ms debounced write-back, and the parameter schema is parsed from the source. Any path that renders, exports or saves must therefore **publish** first, or it acts on text the user has already changed.
+
+`publishEditorEdits()` (`main.js`, declared beside `flushEditorWriteBack`) does both halves:
+
+1. `flushEditorWriteBack()` — writes a queued edit through immediately.
+2. `reconcileEditedParameters()` — re-parses the schema from the edited source and folds it into the live values.
+
+**Call it from any new render, export or save path.** Current callers: `triggerPreviewFromEditor`, `runFullRender`, `_renderForExport`, `_saveCurrentProject`, `_saveProjectCopy`.
+
+Reconciliation runs at these three moments only — Preview, Render, Save — never on a typing-pause timer. Rebuilding the Customizer while someone is still typing moves controls under their hand and interrupts a screen reader mid-sentence.
+
+### What travels as `-D`
+
+`RenderController` withholds schema parameters the user never touched (`setWithheldDefineKeyResolver`), so the SCAD source's own declarations decide their values. Passing `-D` for *every* parameter is what made an edited default invisible in the render (U-30): the edited source reached the worker and the stale `-D` overrode it.
+
+Two rules that are easy to break:
+
+- **Engine variables (`$`-prefixed) are never withheld**, and the withhold filter runs **after** `applyQualitySettings`. The quality preset caps `$fn` before a preview; dropping it would hand the preview the model's full-resolution value.
+- **The modified-ness primitive is `parameters` vs `defaults`.** Any path that writes `parameters` must **not** also write `defaults`, or the user's value silently stops counting as theirs and a later code edit will overwrite it. Preset application and URL parameters already get this right.
+
+### Known gaps
+
+The render queue (`renderQueue.setProject`) and comparison mode (`comparisonController.setProject`) read `uploadedFile.content` without publishing first — the same defect class as D-29, which UF-18 fixed for Render and Export.
 
 ---
 

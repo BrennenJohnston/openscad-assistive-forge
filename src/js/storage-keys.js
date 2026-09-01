@@ -309,6 +309,32 @@ export const STORAGE_KEY_GRID_COLOR = getAppPrefKey('grid-color');
 export const STORAGE_KEY_GRID_OPACITY = getAppPrefKey('grid-opacity');
 export const STORAGE_KEY_AUTO_BED = getAppPrefKey('auto-bed');
 export const STORAGE_KEY_ZOOM_TO_CURSOR = getAppPrefKey('zoom-to-cursor');
+export const STORAGE_KEY_VIEWPORT_SCHEME = getAppPrefKey('viewport-scheme');
+
+// --- Code editor settings (editor-prefs.js, Preferences ▸ Editor) ---
+// The font-size key predates the dialog: edit-actions-controller has always
+// used it for Edit ▸ Increase/Decrease Font Size. Both import it from here
+// so the menu and the dialog cannot drift onto separate values.
+export const STORAGE_KEY_EDITOR_FONT_SIZE = getAppPrefKey('editor-font-size');
+export const STORAGE_KEY_EDITOR_INDENT_WIDTH = getAppPrefKey(
+  'editor-indent-width'
+);
+export const STORAGE_KEY_EDITOR_TAB_WIDTH = getAppPrefKey('editor-tab-width');
+export const STORAGE_KEY_EDITOR_LINE_WRAP = getAppPrefKey('editor-line-wrap');
+export const STORAGE_KEY_EDITOR_HIGHLIGHT_LINE = getAppPrefKey(
+  'editor-highlight-line'
+);
+// The two wrap marks are separate keys because the desktop keeps them as two
+// settings and Q-58 chose to mirror that (lineWrapIndentationStyle and
+// lineWrapVisualizationEnd, settings.cc).
+export const STORAGE_KEY_EDITOR_WRAP_INDENT =
+  getAppPrefKey('editor-wrap-indent');
+export const STORAGE_KEY_EDITOR_WRAP_ARROW = getAppPrefKey('editor-wrap-arrow');
+// settings.cc: Settings::enableBraceMatching, default true, sitting beside
+// highlightCurrentLine — which this app already exposes as a live toggle.
+export const STORAGE_KEY_EDITOR_BRACE_MATCHING = getAppPrefKey(
+  'editor-brace-matching'
+);
 export const STORAGE_KEY_CAMERA_COLLAPSED = getAppPrefKey(
   'camera-controls-collapsed'
 );
@@ -324,6 +350,35 @@ export const STORAGE_KEY_PERF_METRICS = getAppPrefKey('perf-metrics');
 export const STORAGE_KEY_METRICS_LOG = getAppPrefKey('metrics-log');
 export const STORAGE_KEY_LAZY_UNION = getAppPrefKey('lazy-union');
 export const STORAGE_KEY_MANIFOLD_ENGINE = getAppPrefKey('manifold-engine');
+
+// --- UI mode (ui-mode-controller.js) ---
+// The controller has always persisted under this name; centralized here so
+// ui-scoped-prefs.js can resolve the active interface without importing the
+// controller. The string itself is unchanged.
+export const STORAGE_KEY_UI_MODE = 'openscad-forge-ui-mode';
+
+// --- UI-scoped preference split marker (ui-scoped-prefs.js, UF-14) ---
+// Gates the one-time Q-40b seeding of the per-interface namespaces.
+export const STORAGE_KEY_SCOPED_PREFS_SEEDED = getAppPrefKey(
+  'scoped-prefs-seeded-v1'
+);
+
+// --- Persistent tutorial registry (tutorial-sandbox.js, UF-16) ---
+// APP-LEVEL per the signed Q-40 table: which tutorial families were ever
+// opened/completed/dismissed. Distinct from the sessionStorage step
+// progress ('tutorialProgress'), which stays session-scoped by design.
+export const STORAGE_KEY_TUTORIAL_STATE = getAppPrefKey('tutorial-state');
+
+// --- Welcome tour nudge, permanent suppression (tour-nudge.js, UF-22) ---
+// APP-LEVEL for the same reason as the registry above: whether someone wants
+// to be offered the welcome tour is a fact about the person, not about which
+// interface they happen to be in, and the tour itself is one family across
+// Forge and Classic. Written only by the modal's "Do not show this again"
+// checkbox (Q-52d); the card tip's own dismissal is recorded in the registry
+// instead, so the two controls keep separate scopes.
+export const STORAGE_KEY_TOUR_NUDGE_SUPPRESSED = getAppPrefKey(
+  'tour-nudge-suppressed'
+);
 
 // --- Preset dropdown sort order ---
 export const PRESET_SORT_KEY = 'openscad-forge-preset-sort';
@@ -459,3 +514,133 @@ export const STORAGE_KEY_HFM_FONT_SCALE = 'openscad-forge-hfm-font-scale';
  * Value is a decimal string in [0, 1] matching _HFM_PERSIST_FADE_RANGE in main.js.
  */
 export const STORAGE_KEY_HFM_PERSIST_FADE = 'openscad-forge-hfm-persist-fade';
+
+/**
+ * localStorage key for the City Walk game's walking-speed multiplier
+ * (CW-Q8). Decimal string in [0.5, 3]; a comfort/accessibility preference,
+ * so it persists across sessions.
+ */
+export const STORAGE_KEY_CITY_WALK_SPEED = getAppPrefKey('city-walk-speed');
+
+/**
+ * localStorage key for the City Walk game's ASCII character scale (CW-Q10).
+ * Decimal string on the game's own 10-point grid in [0.1, 1]; kept separate
+ * from STORAGE_KEY_HFM_FONT_SCALE because the game's range goes far smaller
+ * than the preview Alt View slider's 0.5 floor. A comfort/accessibility
+ * preference, so it persists across sessions.
+ */
+export const STORAGE_KEY_CITY_WALK_FONT_SCALE = getAppPrefKey(
+  'city-walk-font-scale'
+);
+
+/**
+ * localStorage key for the City Walk game's calibrated character-size floor
+ * (CW-42, CW-Q39). The LAST entry calibration on this machine: a candidate
+ * scale ('0.1' or '0.3', floor and landing default alike) or 'fallback'
+ * (nothing in range held 30 fps — floor 0.3, default stays 0.5). Written by
+ * calibration only, never by the player; the player's own choice lives in
+ * STORAGE_KEY_CITY_WALK_FONT_SCALE, whose presence means a manual choice
+ * that calibration must never override.
+ */
+export const STORAGE_KEY_CITY_WALK_CALIBRATED_FLOOR = getAppPrefKey(
+  'city-walk-calibrated-floor'
+);
+
+/**
+ * localStorage key for the City Walk game's colour/monochrome choice
+ * (CW-Q16). 'on' or 'off'. ABSENT is meaningful and is the shipped state:
+ * with no stored value colour follows high contrast, exactly as it did when
+ * the palettes were HC-only. The key is written only when the player works
+ * the Colour toggle themselves, and from then on their choice wins.
+ */
+export const STORAGE_KEY_CITY_WALK_COLOUR = getAppPrefKey('city-walk-colour');
+
+/**
+ * localStorage key for the City Walk's Day/Night choice (CW-85, CW-Q83).
+ * 'day' or 'night'. ABSENT means NIGHT, which is the city as it has always
+ * been drawn: characters on the page's own black, and nothing behind them.
+ *
+ * Day fills the black gaps on nearby surfaces with a dark material tint under
+ * the glyphs. It changes no glyph and no colour decision - only what is
+ * behind them - and it is the owner's own ask, taken from the reference the
+ * project is working from.
+ */
+export const STORAGE_KEY_CITY_WALK_DAYLIGHT =
+  getAppPrefKey('city-walk-daylight');
+
+/**
+ * localStorage key for the City Walk's mouse-look preference (CW-81,
+ * CW-Q72): 'follow' (the view turns toward the cursor - the default),
+ * 'drag' (the pre-CW-81 behaviour, a held-button drag), or 'off'. ABSENT
+ * means follow, except under prefers-reduced-motion where absent means off;
+ * a stored choice always wins over both defaults.
+ */
+export const STORAGE_KEY_CITY_WALK_LOOK = getAppPrefKey('city-walk-look');
+
+/**
+ * localStorage key for the City Walk's empty-city choice (CW-85, CW-Q86).
+ * 'on' means the streets are empty. ABSENT means the city is populated, which
+ * is the shipped state.
+ *
+ * It hides the people and the cars AND takes their obstacles out of the
+ * collision grid, because a city you can walk through has to be a city you
+ * can walk through: an invisible car you bump into is worse than a visible
+ * one.
+ */
+export const STORAGE_KEY_CITY_WALK_EMPTY_CITY = getAppPrefKey(
+  'city-walk-empty-city'
+);
+
+/**
+ * localStorage key for whether the City Walk's Camera panel is collapsed
+ * (CW-35). 'true' or 'false'.
+ *
+ * It is a DRAWER key rather than an app preference because that is what it
+ * is, and it is scoped to the game rather than sharing the preview's
+ * 'camera' drawer: the two panels look alike and do the same job, but one is
+ * beside a model and the other beside a city, and someone who keeps the
+ * preview's collapsed has said nothing about the game's.
+ */
+export const STORAGE_KEY_CITY_WALK_CAMERA_PANEL =
+  getDrawerStateKey('camera-city-walk');
+
+/**
+ * localStorage key for the City Walk map's drawing style (CW-60, CW-Q57).
+ * One of 'standard', 'roads', 'buildings', 'wayfinding'.
+ *
+ * ABSENT means Standard, which is the map as it has always been drawn, so a
+ * player who never touches this sees no change at all. An unrecognised value
+ * also falls back to Standard rather than to nothing: a style is how the map
+ * is DRAWN, and a map that failed to draw would be a worse answer than a
+ * plain one.
+ */
+export const STORAGE_KEY_CITY_WALK_MAP_STYLE = getAppPrefKey(
+  'city-walk-map-style'
+);
+
+/**
+ * What a player has found in ONE city (CW-62, CW-Q56).
+ *
+ * ★ A KEY PER CITY, because progress is per city: Seattle's landmarks say
+ * nothing about Denver's, and a single key would either mix them or need a
+ * shape that is a per-city map wearing one name.
+ *
+ * ★★ AND THE VALUE IS A JSON OBJECT ON PURPOSE, not a bare list. CW-64 wants
+ * to remember that the fireworks have been unlocked and CW-65 wants to
+ * remember a traveler; both should EXTEND this object rather than mint sibling
+ * keys beside it, because three keys per city is three chances for them to
+ * disagree about the same visit. Unknown fields are preserved on write for the
+ * same reason: an older build must not eat a newer one's progress.
+ *
+ * ★ THE STORE'S KNOWN LIMIT, said here rather than buried in a record:
+ * landmark NAMES are the identity. A rebake that renames a landmark orphans
+ * its tick, and the player is silently un-visited there. CW-55 was this
+ * round's rebake and there will be others. Names were chosen anyway because
+ * the alternative - an index into the landmark list - breaks on any rebake
+ * that adds or drops one, which is far more common.
+ *
+ * @param {string} citySlug the city's own slug, e.g. 'seattle'
+ */
+export function getCityWalkProgressKey(citySlug) {
+  return getAppPrefKey(`city-walk-progress-${citySlug}`);
+}

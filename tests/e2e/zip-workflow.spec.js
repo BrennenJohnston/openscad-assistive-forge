@@ -16,6 +16,7 @@ const isCI = !!process.env.CI
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
   })
 })
 
@@ -49,7 +50,11 @@ const uploadZipProject = async (page) => {
   await fileInput.setInputFiles(zipPath)
 
   await page.locator('#mainInterface').waitFor({ state: 'visible', timeout: 30000 })
-  await page.waitForSelector('#fileInfo .file-tree, .project-files', { timeout: 20000 })
+  // Companion Files section renders .project-file-item rows (collapsed details)
+  await page.waitForSelector('#projectFilesList .project-file-item', {
+    state: 'attached',
+    timeout: 20000,
+  })
 
   // Dismiss save-project modal if it appears
   try {
@@ -62,6 +67,24 @@ const uploadZipProject = async (page) => {
   }
 }
 
+const openProjectFiles = async (page) => {
+  // Companion Files is registry-hidden in Simplified mode — switch to
+  // Standard before interacting with it.
+  const uiModeToggle = page.locator('#uiModeToggle')
+  if ((await uiModeToggle.getAttribute('aria-checked')) === 'false') {
+    await uiModeToggle.click()
+    await page.waitForSelector('body[data-ui-mode="standard"]', {
+      state: 'attached',
+      timeout: 5000,
+    })
+  }
+  const details = page.locator('.project-files-details')
+  if (!(await details.getAttribute('open').then((v) => v !== null))) {
+    await details.locator('summary').click()
+  }
+  await page.locator('#projectFilesList').waitFor({ state: 'visible', timeout: 5000 })
+}
+
 test.describe('ZIP Upload Workflow', () => {
   test.describe.configure({ timeout: 150_000 }) // WASM init may need ~120s
   test('should upload and process a ZIP file with multiple SCAD files', async ({ page }) => {
@@ -69,13 +92,14 @@ test.describe('ZIP Upload Workflow', () => {
     
     await uploadZipProject(page)
 
-    // Verify multiple files are listed
-    const fileItems = page.locator('.file-item, .file-tree-item')
+    // Verify multiple files are listed in the Companion Files section
+    await openProjectFiles(page)
+    const fileItems = page.locator('#projectFilesList .project-file-item')
     const count = await fileItems.count()
     expect(count).toBeGreaterThan(1)
 
-    // Verify main file is marked or selected
-    const mainFile = page.locator('.file-item.main, .file-tree-item.main')
+    // Verify main file is marked
+    const mainFile = page.locator('#projectFilesList .project-file-item.main-file')
     await expect(mainFile).toBeVisible()
 
     // Verify the main interface loaded (the ZIP fixture's cube() has no
@@ -97,8 +121,10 @@ test.describe('ZIP Upload Workflow', () => {
       expect(errorText).not.toContain('use')
     }
 
-    // Verify project loaded successfully
-    await expect(page.locator('.file-tree, .project-files')).toBeVisible()
+    // Verify the project-files section exists for the loaded ZIP
+    // (registry-hidden in Simplified mode, so switch + open first)
+    await openProjectFiles(page)
+    await expect(page.locator('#projectFilesControls')).toBeVisible()
   })
 
   test('should show file tree with correct structure', async ({ page }) => {
@@ -106,12 +132,13 @@ test.describe('ZIP Upload Workflow', () => {
     
     await uploadZipProject(page)
 
-    // Check file tree structure
-    const fileTree = page.locator('.file-tree, .project-files')
-    await expect(fileTree).toBeVisible()
+    // Check the project files listing
+    await openProjectFiles(page)
 
     // Verify we can see file names
-    const fileNames = await page.locator('.file-name, .file-tree-item').allTextContents()
+    const fileNames = await page
+      .locator('#projectFilesList .project-file-item')
+      .allTextContents()
     expect(fileNames.length).toBeGreaterThan(0)
     
     // At least one should be a .scad file
@@ -125,14 +152,14 @@ test.describe('ZIP Upload Workflow', () => {
     await uploadZipProject(page)
 
     // Get all clickable file items
-    const fileItems = page.locator('.file-item, .file-tree-item')
+    await openProjectFiles(page)
+    const fileItems = page.locator('#projectFilesList .project-file-item')
     const count = await fileItems.count()
 
-    if (count < 2) {
-      // Need at least 2 files to test switching
-      test.skip()
-      return
-    }
+    // UF-27: this needs at least 2 files to have anything to switch between,
+    // and the fixture provides them. It used to skip in silence instead, so a
+    // fixture that quietly lost a file would have read as a pass.
+    expect(count).toBeGreaterThanOrEqual(2)
 
     // Click on second file
     const secondFile = fileItems.nth(1)
@@ -151,22 +178,25 @@ test.describe('ZIP Upload Workflow', () => {
     
     await uploadZipProject(page)
 
-    // Verify parameters are available
-    const paramControls = page.locator('.param-control')
-    if ((await paramControls.count()) === 0) {
-      test.skip()
-      return
-    }
+    // UF-27: there used to be a "verify parameters are available" check here
+    // that skipped the test when it found none. It always found none, so this
+    // case never ran. MEASURED, and it is not a defect: createZipFixture above
+    // builds main.scad + parts/part.scad with no customizable variable in
+    // either, so there is nothing for the Customizer to render. Rendering an
+    // STL does not need parameters, and that is what this case is about, so
+    // the precondition is gone rather than propped up.
 
     // Wait for any auto-preview to complete
     await page.waitForTimeout(3000)
 
-    // Find and click Generate/Download button
-    const generateButton = page.locator('button:has-text("Generate"), button:has-text("Download")')
-    if (!(await generateButton.isVisible())) {
-      test.skip()
-      return
-    }
+    // Find and click Generate/Download button. UF-27: .first() is not
+    // cosmetic - that selector resolves to THREE buttons, so the bare click
+    // was a strict-mode violation that would have failed this case every time
+    // it ran. It never ran, so nobody found out.
+    const generateButton = page
+      .locator('button:has-text("Generate"), button:has-text("Download")')
+      .first()
+    await expect(generateButton).toBeVisible()
 
     await generateButton.click()
 
@@ -174,7 +204,9 @@ test.describe('ZIP Upload Workflow', () => {
     await page.waitForTimeout(15000)
 
     // Check that no critical errors occurred
-    const criticalError = page.locator('[role="alert"]:has-text("Error"), [role="alert"]:has-text("Failed")')
+    const criticalError = page
+      .locator('[role="alert"]:has-text("Error"), [role="alert"]:has-text("Failed")')
+      .first()
     const hasCriticalError = await criticalError.isVisible()
     
     // Test passes if either:
@@ -189,18 +221,28 @@ test.describe('ZIP Upload Workflow', () => {
     }
   })
 
-  test('should show appropriate error for ZIP > 20MB', async ({ page }) => {
-    // This test would require creating a large ZIP file
-    // Skip for now as it's covered by unit tests
-    test.skip()
+  /*
+   * UF-27: these two have never run and never will as written - each is a
+   * title with a bare test.skip() under it. The reason was in a comment,
+   * where no report could show it, so the board counted two silent skips it
+   * could not explain. The reason is now in the skip itself.
+   *
+   * The claim that unit tests cover both paths is the original author's and
+   * is carried forward verbatim rather than verified here; whoever takes
+   * these should check it before deleting them.
+   */
+  test('should show appropriate error for ZIP > 20MB', async () => {
+    test.skip(
+      true,
+      'never written: needs a >20MB ZIP fixture to be generated; recorded by its author as covered by unit tests'
+    )
   })
 
-  test('should handle invalid ZIP files gracefully', async ({ page }) => {
-    await page.goto('/')
-
-    // Would need to upload an invalid ZIP
-    // This is better tested in unit tests
-    test.skip()
+  test('should handle invalid ZIP files gracefully', async () => {
+    test.skip(
+      true,
+      'never written: needs a deliberately corrupt ZIP fixture; recorded by its author as better tested in unit tests'
+    )
   })
 
   test('should be accessible with keyboard navigation for file tree', async ({ page }) => {
@@ -208,27 +250,23 @@ test.describe('ZIP Upload Workflow', () => {
     
     await uploadZipProject(page)
 
-    const fileTree = page.locator('.file-tree, .project-files')
-    if (!(await fileTree.isVisible())) {
-      test.skip()
-      return
-    }
+    // Collect page errors from the start so interactions are covered
+    const errors = []
+    page.on('pageerror', (error) => errors.push(error))
 
-    // Focus on file tree
-    await fileTree.press('Tab')
+    await openProjectFiles(page)
+    const firstItem = page
+      .locator('#projectFilesList .project-file-item')
+      .first()
+    await firstItem.focus()
 
-    // Should be able to navigate with arrow keys
+    // Keyboard interaction over the listing must not throw
     await page.keyboard.press('ArrowDown')
     await page.waitForTimeout(100)
     await page.keyboard.press('ArrowUp')
-
-    // Should be able to select with Enter
     await page.keyboard.press('Enter')
     await page.waitForTimeout(500)
 
-    // Verify no JavaScript errors
-    const errors = []
-    page.on('pageerror', error => errors.push(error))
     expect(errors.length).toBe(0)
   })
 
@@ -237,9 +275,8 @@ test.describe('ZIP Upload Workflow', () => {
     
     await uploadZipProject(page)
 
-    // Look for project info/stats display. Stats are optional UI — skip
-    // honestly when absent rather than fake-passing.
-    const statsArea = page.locator('.project-stats, .project-info, .file-tree-header')
+    // The Companion Files summary badge carries the file count
+    const statsArea = page.locator('.project-files-summary')
     test.skip(
       !(await statsArea.first().isVisible()),
       'Stats display is optional UI and not present'

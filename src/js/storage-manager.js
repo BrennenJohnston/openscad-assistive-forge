@@ -6,6 +6,7 @@
 
 import { isValidServiceWorkerMessage } from './html-utils.js';
 import { getAppPrefKey } from './storage-keys.js';
+import { loadFolderHandle } from './folder-handle-store.js';
 import {
   listSavedProjects,
   listFolders,
@@ -623,17 +624,93 @@ export async function getDetailedStorageInfo() {
 // Folder Import (webkitdirectory)
 // ============================================================================
 
-/** Companion file extensions accepted alongside .scad source */
-const FOLDER_IMPORT_COMPANION_EXTS = new Set([
-  '.stl',
+// Companion handling mirrors zip-handler.js so every import path stores
+// one shape: text formats as strings, images as base64 data URLs, and
+// binary formats the renderer cannot use (e.g. .stl) skipped with a log.
+// File.text() never throws on binary input — it lossily decodes as UTF-8 —
+// so the old read-as-text-with-empty-catch approach silently CORRUPTED
+// every imported .png and .stl companion.
+
+/** Companion extensions stored as text (matches zip-handler's text path) */
+const FOLDER_IMPORT_TEXT_EXTS = new Set([
+  '.scad',
   '.dxf',
   '.svg',
   '.dat',
   '.csv',
-  '.png',
   '.json',
   '.txt',
 ]);
+
+/** Image extensions stored as data URLs (matches zip-handler IMAGE_EXTS) */
+const FOLDER_IMPORT_IMAGE_EXTS = new Set([
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.webp',
+]);
+
+function bufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
+}
+
+/**
+ * Read a folder FileList into the canonical projectFiles shape.
+ * Pure (no persistence) so the binary-safety contract is unit-testable.
+ *
+ * @param {FileList|File[]} fileList - Files from the folder selection
+ * @param {string} mainFilePath - Relative path of the primary .scad file
+ * @returns {Promise<{mainFile: File, mainContent: string, rootDir: string, projectFiles: Object}>}
+ * @throws {Error} When the main file is missing from the list
+ */
+export async function readProjectFilesFromList(fileList, mainFilePath) {
+  const files = Array.from(fileList);
+  const mainFile = files.find((f) => f.webkitRelativePath === mainFilePath);
+  if (!mainFile) {
+    throw new Error(`Main file not found: ${mainFilePath}`);
+  }
+
+  const mainContent = await mainFile.text();
+  const rootDir = mainFilePath.includes('/') ? mainFilePath.split('/')[0] : '';
+
+  const projectFiles = {};
+  projectFiles[mainFilePath.replace(`${rootDir}/`, '') || mainFilePath] =
+    mainContent;
+
+  for (const f of files) {
+    if (f === mainFile) continue;
+    const rel = f.webkitRelativePath || f.name;
+    const baseName = rel.split('/').pop();
+
+    if (baseName.startsWith('.')) continue; // hidden file
+
+    const ext = baseName.includes('.')
+      ? `.${baseName.split('.').pop().toLowerCase()}`
+      : '';
+    const relPath = rootDir ? rel.replace(`${rootDir}/`, '') : rel;
+
+    if (FOLDER_IMPORT_TEXT_EXTS.has(ext)) {
+      projectFiles[relPath] = await f.text();
+    } else if (FOLDER_IMPORT_IMAGE_EXTS.has(ext)) {
+      const mime = ext === '.jpg' ? 'jpeg' : ext.slice(1);
+      projectFiles[relPath] =
+        `data:image/${mime};base64,${bufferToBase64(await f.arrayBuffer())}`;
+    } else {
+      console.log(
+        `[FolderImport] Skipping companion (not usable by the renderer): ${rel}`
+      );
+    }
+  }
+
+  return { mainFile, mainContent, rootDir, projectFiles };
+}
 
 /**
  * Import a project from a FileList produced by an `<input webkitdirectory>`.
@@ -645,43 +722,8 @@ const FOLDER_IMPORT_COMPANION_EXTS = new Set([
  */
 export async function importProjectFromFiles(fileList, mainFilePath) {
   try {
-    const files = Array.from(fileList);
-    const mainFile = files.find((f) => f.webkitRelativePath === mainFilePath);
-    if (!mainFile) {
-      return { success: false, error: `Main file not found: ${mainFilePath}` };
-    }
-
-    const mainContent = await mainFile.text();
-    const rootDir = mainFilePath.includes('/')
-      ? mainFilePath.split('/')[0]
-      : '';
-
-    // Collect companion files (non-hidden, allowed extensions)
-    const projectFiles = {};
-    projectFiles[mainFilePath.replace(`${rootDir}/`, '') || mainFilePath] =
-      mainContent;
-
-    for (const f of files) {
-      if (f === mainFile) continue;
-      const rel = f.webkitRelativePath || f.name;
-      const baseName = rel.split('/').pop();
-
-      if (baseName.startsWith('.')) continue; // hidden file
-
-      const ext = baseName.includes('.')
-        ? `.${baseName.split('.').pop().toLowerCase()}`
-        : '';
-
-      if (!FOLDER_IMPORT_COMPANION_EXTS.has(ext) && ext !== '.scad') continue;
-
-      try {
-        const content = await f.text();
-        const relPath = rootDir ? rel.replace(`${rootDir}/`, '') : rel;
-        projectFiles[relPath] = content;
-      } catch {
-        // Binary files (e.g. PNG) — skip text reading for now
-      }
-    }
+    const { mainFile, mainContent, rootDir, projectFiles } =
+      await readProjectFilesFromList(fileList, mainFilePath);
 
     const projectName = rootDir || mainFile.name.replace('.scad', '');
     const mainRelPath = rootDir
@@ -699,6 +741,111 @@ export async function importProjectFromFiles(fileList, mainFilePath) {
     });
 
     return result;
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Find the folder-link project whose stored handle points at the same disk
+ * folder, so reconnecting a folder never duplicates saved-project cards.
+ *
+ * @param {FileSystemDirectoryHandle} handle - Freshly connected handle
+ * @param {Object} [deps]
+ * @param {(folderRef: string) => Promise<FileSystemDirectoryHandle|null>} [deps.loadHandle]
+ * @returns {Promise<{id: string, folderRef: string}|null>}
+ */
+export async function findLinkedProjectForHandle(handle, deps = {}) {
+  const load = deps.loadHandle ?? ((key) => loadFolderHandle({ key }));
+  try {
+    const projects = await listSavedProjects();
+    for (const p of projects) {
+      if (p.kind !== 'folder-link' || !p.folderRef) continue;
+      const stored = await load(p.folderRef);
+      if (!stored) continue;
+      try {
+        if (
+          typeof stored.isSameEntry === 'function' &&
+          (await stored.isSameEntry(handle))
+        ) {
+          return { id: p.id, folderRef: p.folderRef };
+        }
+      } catch {
+        // isSameEntry can reject on revoked handles — treat as no match.
+      }
+    }
+  } catch (err) {
+    console.warn('[FolderSync] Linked-project lookup failed:', err);
+  }
+  return null;
+}
+
+/**
+ * Create or refresh a folder-link saved project: a pointer record holding
+ * only metadata — contents stay on disk behind the directory handle stored
+ * under `folderRef` in the folder-sync DB. Returns the freshly-read contents
+ * so the caller can load them into the app without a second disk pass.
+ *
+ * @param {FileList|File[]} fileList - Files from the connected folder walk
+ * @param {string} mainFilePath - webkitRelativePath of the primary .scad file
+ * @param {Object} options
+ * @param {string} options.folderRef - Handle-store key for this folder
+ * @param {string|null} [options.existingId] - Refresh this record instead of creating one
+ * @returns {Promise<{success: boolean, id?: string, error?: string,
+ *   mainContent?: string, projectFiles?: Object, mainRelPath?: string,
+ *   projectName?: string}>}
+ */
+export async function linkProjectFromFiles(
+  fileList,
+  mainFilePath,
+  { folderRef, existingId = null } = {}
+) {
+  try {
+    const { mainFile, mainContent, rootDir, projectFiles } =
+      await readProjectFilesFromList(fileList, mainFilePath);
+
+    const projectName = rootDir || mainFile.name.replace('.scad', '');
+    const mainRelPath = rootDir
+      ? mainFilePath.replace(`${rootDir}/`, '')
+      : mainFilePath;
+    const fileArr = Array.from(fileList);
+    const fileSummary = {
+      fileCount: fileArr.length,
+      totalBytes: fileArr.reduce((sum, f) => sum + (f.size || 0), 0),
+    };
+
+    let result;
+    if (existingId) {
+      const update = await updateProject({
+        id: existingId,
+        mainFilePath: mainRelPath,
+        folderRef,
+        fileSummary,
+      });
+      result = update.success ? { success: true, id: existingId } : update;
+    } else {
+      result = await saveProject({
+        name: projectName,
+        originalName: mainFile.name,
+        kind: 'folder-link',
+        mainFilePath: mainRelPath,
+        content: '',
+        projectFiles: null,
+        notes: '',
+        folderRef,
+        fileSummary,
+      });
+    }
+
+    if (!result.success) return result;
+    return {
+      ...result,
+      mainContent,
+      projectFiles,
+      mainRelPath,
+      projectName,
+      originalName: mainFile.name,
+    };
   } catch (error) {
     return { success: false, error: error.message };
   }

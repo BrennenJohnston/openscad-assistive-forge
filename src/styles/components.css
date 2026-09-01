@@ -23,7 +23,17 @@
   outline-offset: 2px;
 }
 
-/* Global focus ring for interactive elements that are not `.btn` */
+/* Global focus ring for interactive elements that are not `.btn`.
+ *
+ * The width and offset come from the tokens, not from numbers written here.
+ * They used to be hardcoded 3px/2px, and because this rule carries
+ * `!important` it beat every attempt to thicken them: `--focus-ring-width`
+ * is already raised to 4px by `:root[data-high-contrast='true']` and now by
+ * the `prefers-contrast: more` block, and neither reached a single button or
+ * link. That media query's own `*:focus-visible { outline-width: 4px
+ * !important }` lost the same way — it sits at (0,1,0) and
+ * `button:focus-visible` here is (0,1,1). MEASURED on WebKit before the
+ * change: a focused button under `prefers-contrast: more` reported 3px. */
 a:focus,
 button:focus,
 summary:focus,
@@ -34,8 +44,8 @@ button:focus-visible,
 summary:focus-visible,
 [role='button']:focus-visible,
 [tabindex]:focus-visible {
-  outline: 3px solid var(--color-focus) !important;
-  outline-offset: 2px !important;
+  outline: var(--focus-ring-width, 3px) solid var(--color-focus) !important;
+  outline-offset: var(--focus-ring-offset, 2px) !important;
 }
 
 /* ============================================================================
@@ -101,30 +111,48 @@ summary:focus-visible,
   min-width: 0;
 }
 
-/* Hide button on each group header */
+/* Hide button on each group header (C12): full touch target anchored at the
+   far right, well clear of the disclosure chevron (which param groups move
+   to the LEFT of the label) — the old 24px ✕ sat 4px from the chevron and
+   was constantly mis-pressed.
+
+   UF-35: it no longer sits inside the <summary>. It is painted into the
+   header by .forge-disclosure-actions and .param-group-hide-slot holds its
+   place in the real header row — see the disclosure-header actions block
+   below. Its own box is unchanged. */
 .param-group-hide-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
+  width: var(--size-touch-target);
+  height: var(--size-touch-target);
   padding: 0;
-  margin-right: var(--space-xs);
+  margin-left: var(--space-lg);
+  margin-right: 0;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-text-secondary);
-  font-size: 0.75rem;
+  font-size: 1rem;
   line-height: 1;
   cursor: pointer;
   opacity: 0;
+  flex-shrink: 0;
   transition:
     opacity var(--motion-base) ease,
     background-color var(--motion-base) ease;
 }
 
-.forge-disclosure summary:hover .param-group-hide-btn,
-.forge-disclosure summary:focus-within .param-group-hide-btn {
+/* The button is outside the summary now, and the actions layer sits over the
+   header, so hovering the button itself is NOT hovering the summary — it
+   needs its own :hover here or the control vanishes as the pointer lands on
+   it. */
+.forge-disclosure-row:has(> .forge-disclosure > summary:hover)
+  .param-group-hide-btn,
+.forge-disclosure-row:has(> .forge-disclosure > summary:focus-within)
+  .param-group-hide-btn,
+.forge-disclosure-actions .param-group-hide-btn:hover,
+.forge-disclosure-actions .param-group-hide-btn:focus-visible {
   opacity: 1;
 }
 
@@ -170,6 +198,43 @@ summary:focus-visible,
   transform: rotate(45deg);
 }
 
+/* C12: param groups carry the chevron LEFT of the label (desktop Customizer
+   look); other .forge-disclosure users keep the shared right chevron. */
+details.param-group.forge-disclosure > summary::after {
+  display: none;
+}
+
+details.param-group.forge-disclosure > summary::before {
+  content: '';
+  display: inline-block;
+  width: 0.5em;
+  height: 0.5em;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--motion-base) ease;
+  margin-right: var(--space-sm);
+  flex-shrink: 0;
+}
+
+details.param-group.forge-disclosure[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+/* Per-group restore chips in the hidden-groups bar (C12) */
+.param-groups-hidden-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-top: var(--space-sm);
+}
+
+.param-group-show-chip {
+  min-height: var(--size-touch-target);
+  font-size: var(--font-size-sm);
+}
+
 .forge-disclosure-icon {
   width: 1em;
   height: 1em;
@@ -188,6 +253,108 @@ summary:focus-visible,
   .forge-disclosure summary::after {
     transition: none;
   }
+}
+
+/* ============================================================================
+   Disclosure header actions (UF-35)
+   ============================================================================
+   A <summary> IS the disclosure's button, so a control placed inside it is a
+   control inside a control: axe's nested-interactive, and a node screen
+   readers are not required to expose. Nor is there a half-step — a <details>
+   whose first child is not a <summary> gets a UA-generated "Details" marker
+   in its place, measured.
+
+   So the control moves out to a sibling layer stacked over the header, and a
+   slot of the same size holds its place in the real header row. Q-64 (owner,
+   2026-08-17): the layer goes BEFORE the <details> in source order, so the
+   control is reached one Tab stop early rather than behind the whole panel —
+   which measured 2 stops on Companion Files, 5 on Presets, 11 on the Console
+   and 12 on the Dimensions group.
+
+   The layer repeats the summary's padding, min-height, gap, border and font
+   size rather than carrying an offset of its own, so it tracks all three
+   space-token breakpoints and the high-contrast font bump without arithmetic.
+   ============================================================================ */
+/* position:relative, NOT grid or flex. The row must let the disclosure's own
+   margins collapse straight through it, or it contains them and every panel
+   below shifts — MEASURED at 4 to 8px with a grid row, and the param groups'
+   own margin-bottom: var(--space-lg) collapsed to var(--space-xs) when a rule
+   here tried to normalise it. A relative block establishes no formatting
+   context, so the disclosure keeps whatever margins it already had. */
+.forge-disclosure-row {
+  position: relative;
+}
+
+/* A row whose disclosure is gone or hidden must go with it, or the actions
+   layer is left painting a control over nothing — MEASURED: without this, a
+   help button that has never been visible in Classic or Simplified appears in
+   both. The disclosure can leave in five ways, and this is every one the app
+   uses: Classic relocates whole panels between docks with appendChild, which
+   moves the <details> and leaves the row behind; Simplified adds
+   .ui-mode-hidden; C12 hides a group with [hidden]; the parameter search adds
+   .search-empty; the starter subset adds .starter-empty (IR-9); and .hidden is
+   the shared utility. A seventh idiom would need a line here, so add one with
+   any new way of hiding a disclosure. */
+.forge-disclosure-row:not(:has(> .forge-disclosure)),
+.forge-disclosure-row:has(> .forge-disclosure[hidden]),
+.forge-disclosure-row:has(> .forge-disclosure.hidden),
+.forge-disclosure-row:has(> .forge-disclosure.ui-mode-hidden),
+.forge-disclosure-row:has(> .forge-disclosure.search-empty),
+.forge-disclosure-row:has(
+  > .forge-disclosure.starter-empty:not(.starter-wall-open)
+) {
+  display: none;
+}
+
+.forge-disclosure-actions {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  min-height: var(--size-touch-target);
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+  border: 1px solid transparent;
+  /* The header underneath must stay clickable everywhere the control is not. */
+  pointer-events: none;
+}
+
+.forge-disclosure-actions > * {
+  pointer-events: auto;
+}
+
+/* Reproduces the shared chevron's width from the same declaration that draws
+   it, so the control lands exactly where it sat as a flex child. */
+.forge-disclosure-actions::after {
+  content: '';
+  width: 0.5em;
+  height: 0.5em;
+  border-right: 2px solid transparent;
+  border-bottom: 2px solid transparent;
+  flex-shrink: 0;
+}
+
+/* Param groups carry their chevron on ::before, so nothing trails the slot. */
+.forge-disclosure-actions--no-chevron::after {
+  display: none;
+}
+
+.panel-help-slot {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.param-group-hide-slot {
+  width: var(--size-touch-target);
+  height: var(--size-touch-target);
+  margin-left: var(--space-lg);
+  flex-shrink: 0;
 }
 
 /* Buttons */
@@ -273,8 +440,13 @@ summary:focus-visible,
   border: 1px solid var(--color-border);
 }
 
+/* D-57: --color-hover-bg-strong, not --color-border. This rule sets a
+   background and nothing else, so whatever text colour another rule chose has
+   to stay legible on it - and against --color-border it did not: 4.33:1 in
+   Forge light and 3.65:1 in dark. The token is one step along the same scale
+   and is defined per theme in semantic-tokens.css. */
 .btn-secondary:hover:not(:disabled) {
-  background-color: var(--color-border);
+  background-color: var(--color-hover-bg-strong);
 }
 
 .btn-sm {
@@ -455,6 +627,79 @@ summary:focus-visible,
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ============================================================================
+   U-46 / Q-73a: the workflow row's four controls join this one
+   ============================================================================
+   mobile-toolbar.js owns the decision — mobile-shaped viewport AND an open
+   project — and writes body[data-mobile-toolbar]. Everything below follows
+   from that one attribute so the predicate is never restated.
+
+   The four controls arrive inside their own .workflow-actions container, so
+   they keep the 44px minimum and the icon-only treatment that container's
+   rules give them. Nothing here shrinks a hit area.
+   ============================================================================ */
+
+body[data-mobile-toolbar='relocated'] .preview-drawer-header-right {
+  gap: var(--space-xs);
+}
+
+/* The branding is already squeezed to zero width on this surface — the Main
+   Page button and the interface switch take the row — so all it contributes
+   is the two 4px gaps around an invisible box. Measured at 412px: the header
+   controls need 289.6px, and the row offers 287.2px with the branding in the
+   flow and 291.2px without it. Those 8px are the whole difference between one
+   line and two, and 1.6px is all the margin there is — which is why the row
+   is also given permission to wrap rather than clip (see layout.css). Nothing
+   leaves the screen that was on it; the logo and title were not rendering
+   here before this rule.
+
+   Taken out of the FLOW, not out of the accessibility tree. `display: none`
+   was tried first and measured to remove the document's only <h1> — 0px wide
+   on the base but still announced, gone entirely with display:none. A page
+   losing its main heading on a phone is not a trade this release gets to
+   make, so this is the sr-only treatment instead: no layout cost, same
+   heading. `.header-content` carries position: relative for it, which is the
+   R2a/UF-5 lesson — an absolute box in a static container resolves against
+   <html> and adds phantom page scroll.
+
+   Scoped to the relocated (mobile + project) state, because the welcome
+   surface has no Main Page button and the branding really does show there. */
+body[data-mobile-toolbar='relocated'] .header-content {
+  position: relative;
+}
+
+body[data-mobile-toolbar='relocated'] .header-branding {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* The heading goes sr-only (mobile-toolbar.js adds the class) and it is what
+   pays for the four controls: 148px of text in a 376px row. It keeps naming
+   #previewInfoContent through aria-labelledby, so no accessible name is lost.
+   position: relative here is the R2a/UF-5 lesson: an absolute sr-only box in
+   a static container resolves against <html> and adds phantom page scroll. */
+body[data-mobile-toolbar='relocated'] .preview-drawer-header-left {
+  position: relative;
+  flex: 0 1 auto;
+}
+
+/* The row the controls left. In Standard the menu bar still lives there and
+   the row stays; in Simplified nothing visible remains, and a 54px band of
+   padding around nothing is exactly what U-46 asked us to give back. Keyed on
+   the menu bar's real state rather than on the density, because Simplified
+   can show menus too when the panel registry says so. */
+body[data-mobile-toolbar='relocated']
+  #workflowProgress:not(:has(#toolbarMenuBar:not(.hidden))) {
+  display: none;
 }
 
 /* Match Camera/Parameters collapse toggle button styling */
@@ -824,6 +1069,19 @@ summary:focus-visible,
   gap: var(--space-xs);
 }
 
+/* Folder-link cards: contents live on disk, the record is a pointer */
+.saved-project-badge {
+  display: inline-block;
+  align-self: flex-start;
+  padding: 0 var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+}
+
 .saved-project-notes-preview {
   margin: var(--space-sm) 0;
   padding: var(--space-sm);
@@ -886,6 +1144,38 @@ summary:focus-visible,
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
+}
+
+.save-project-intro {
+  margin-bottom: var(--space-md);
+  color: var(--color-text-secondary);
+}
+
+/* Hidden until a name collision is found; the dialog reveals it by setting
+   display directly, which is CSSOM and so unaffected by style-src. */
+.save-project-duplicate-warning {
+  display: none;
+  margin-top: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  background: color-mix(
+    in srgb,
+    var(--color-warning, #f59e0b) 15%,
+    transparent
+  );
+  border: 1px solid var(--color-warning, #f59e0b);
+}
+
+.save-project-duplicate-title {
+  margin: 0 0 var(--space-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.save-project-duplicate-text {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
 }
 
 .save-project-checkbox-wrapper {
@@ -1104,6 +1394,105 @@ summary:focus-visible,
 
 .folder-sync-status .btn {
   flex: 0 0 auto;
+}
+
+/* Sub-plan H — linked folders on the welcome screen.
+   Rows read name → state → actions. The surrounding column centres its
+   text; a list of rows with trailing buttons is far easier to scan left
+   aligned, so this block opts out. */
+.linked-folders {
+  margin-top: var(--space-sm);
+  text-align: left;
+}
+
+.linked-folders-title {
+  margin: 0 0 var(--space-xs);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.linked-folders-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.linked-folder {
+  /* Each button carries an sr-only span, which is absolutely positioned.
+     Without a positioned ancestor those resolve against <html> and push
+     the page sideways — the phantom-scroll trap R2a hit at 375px. */
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-secondary);
+}
+
+.linked-folder-name {
+  flex: 1 1 8em;
+  min-width: 0;
+  /* A long folder name wraps rather than shoving the buttons off-row. */
+  overflow-wrap: anywhere;
+  font-weight: var(--font-weight-medium);
+}
+
+/* The state is TEXT first; the border colour only decorates it, so the
+   badge still reads correctly in greyscale and high contrast. */
+.linked-folder-badge {
+  flex: 0 0 auto;
+  padding: 0 var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-sm);
+}
+
+.linked-folder[data-active-state='connected'] .linked-folder-badge {
+  border-color: var(--color-success);
+}
+
+.linked-folder[data-active-state='pending-restore'] .linked-folder-badge,
+.linked-folder[data-active-state='denied'] .linked-folder-badge {
+  border-color: var(--color-warning);
+}
+
+/* Words, not an icon or a colour — a folder with no project card yet. */
+.linked-folder-hint {
+  flex: 0 0 auto;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.linked-folder-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--space-xs);
+  margin-left: auto;
+}
+
+/* .btn-sm alone is --size-touch-target-sm; these are new targets, so they
+   take the full touch token (44px touch / 36px fine pointer). */
+.linked-folder-actions .btn {
+  min-height: var(--size-touch-target);
+}
+
+@media (max-width: 480px) {
+  /* Below this the name and two buttons stop fitting one line; let the
+     actions drop to their own row rather than squeezing the targets. */
+  .linked-folder-actions {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .linked-folder-actions .btn {
+    flex: 1 1 auto;
+  }
 }
 
 /* Folder Breadcrumbs */
@@ -1351,11 +1740,25 @@ summary:focus-visible,
 }
 
 /* Smart Cache Clear Dialog Styles */
-.cache-clear-dialog {
+/* D-69 (found by UF-36, fixed here). `.cache-clear-dialog` is on the
+   `.preset-modal` SCRIM (main.js:1795 sets both classes), not on the box, so
+   this max-width was shrinking the full-screen flex centring container.
+   MEASURED at b4e55bd: at 800px and 1280px the scrim rendered w=500 pinned to
+   the left edge, taking the dark backdrop and the centring with it; only
+   phones were unaffected, because there the max-width never binds. Size the
+   content box, which is what every other dialog here does. */
+.cache-clear-dialog .preset-modal-content {
   max-width: 500px;
 }
 
+/* reset.css's `* { margin: 0 }` destroys the UA's `dialog { margin: auto }`,
+   so every native <dialog> opened with showModal() rendered top-left (U-1). */
+dialog:modal {
+  margin: auto;
+}
+
 /* Import mode dialog — three import strategies (merge / replace / copies) */
+.folder-scad-select-dialog,
 .preset-import-mode-dialog,
 .import-mode-dialog {
   max-width: 440px;
@@ -1367,6 +1770,7 @@ summary:focus-visible,
   box-shadow: var(--shadow-lg);
 }
 
+.folder-scad-select-dialog::backdrop,
 .preset-import-mode-dialog::backdrop,
 .import-mode-dialog::backdrop {
   background: rgba(0, 0, 0, 0.5);
@@ -1446,6 +1850,7 @@ summary:focus-visible,
 
 /* Forced colors (Windows High Contrast) */
 @media (forced-colors: active) {
+  .folder-scad-select-dialog,
   .preset-import-mode-dialog,
   .import-mode-dialog {
     border: 1px solid ButtonText;
@@ -2476,6 +2881,128 @@ summary:focus-visible,
   display: flex;
   gap: var(--space-xs);
   align-items: stretch;
+}
+
+/* DP-6: handing the reference image to a design parameter. */
+.overlay-use-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+  margin-top: var(--space-xs);
+}
+
+.overlay-use-row[hidden] {
+  display: none;
+}
+
+#overlayUseTargetSelect[hidden] {
+  display: none;
+}
+
+/* DP-5: the crop dialog. The picture is a read-only illustration of what the
+   numeric fields say, so it carries no controls of its own. */
+.crop-modal-help {
+  margin: 0 0 var(--space-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.crop-modal-layout {
+  display: flex;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.crop-preview {
+  position: relative;
+  flex: 1 1 18rem;
+  min-width: 12rem;
+  max-width: 100%;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+}
+
+.crop-preview img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.crop-preview-rect {
+  position: absolute;
+  border: 2px solid var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 18%, transparent);
+  pointer-events: none;
+}
+
+.crop-fields {
+  flex: 1 1 12rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.crop-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.crop-field input {
+  width: 7rem;
+  min-height: 44px;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-input-bg);
+  color: var(--color-text-primary);
+}
+
+.crop-field-note {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+#cropSelectAllBtn,
+#cropApplyBtn,
+#cropCancelBtn {
+  min-height: 44px;
+}
+
+/* DP-5: which surface the reference image sits against. The millimetre field
+   belongs to the "A height I choose" preset and is hidden otherwise, so the
+   panel never shows a number the preset is about to overwrite. */
+.overlay-z-control {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.overlay-z-custom {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.overlay-z-custom[hidden] {
+  display: none;
+}
+
+.overlay-number-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-input-bg);
+  color: var(--color-text-primary);
 }
 
 .overlay-source-help-text {
@@ -3963,9 +4490,12 @@ select:focus-visible {
   color: var(--color-text-secondary);
 }
 
-/* State: Current - preview matches parameters */
+/* State: Current - preview matches parameters.
+   Defect D-46 (UF-25, owner 2026-08-15): this pill carries 14px text ON the
+   success fill, so it needs the 4.5:1 text pair, not the 3:1 solid-UI pair.
+   MEASURED on --color-success in the light theme: 3.07:1. */
 .preview-state-indicator.state-current {
-  background-color: var(--color-success);
+  background-color: var(--color-success-solid);
   color: var(--color-on-success);
 }
 
@@ -4381,6 +4911,25 @@ select:focus-visible {
 }
 
 /* Output Format Section (Left Panel) */
+/* The whole stencil set in one download (DP-17). Sits above the output format
+   because it is a different question: which parts, not which file type. */
+.stencil-set-export {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  margin-bottom: var(--space-md);
+}
+
+.stencil-set-export-info {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
 .output-format-section {
   padding: var(--space-md);
   background: var(--color-bg-secondary);
@@ -4559,6 +5108,32 @@ select:focus-visible {
 
 .format-2d-auto-adjust .auto-adjust-list li {
   margin-bottom: var(--space-xs);
+}
+
+/* STL view-only mode: notice shown in place of parameter controls */
+.stl-view-notice {
+  margin: var(--space-md) 0;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-bg-secondary, rgba(0, 0, 0, 0.03));
+  border-left: var(--space-xxs, 3px) solid var(--color-border, currentColor);
+  border-radius: var(--border-radius-xs);
+  color: var(--color-text-secondary);
+}
+
+.format-2d-auto-adjust .auto-adjust-consent {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin: 0 0 var(--space-xs) 0;
+  min-height: var(--size-touch-target);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.format-2d-auto-adjust .auto-adjust-consent input[type='checkbox'] {
+  width: var(--space-md);
+  height: var(--space-md);
+  flex-shrink: 0;
 }
 
 .format-2d-auto-adjust .auto-adjust-note {
@@ -5033,6 +5608,641 @@ body.first-visit-blocking #app {
   user-select: none;
 }
 
+/* =========================================
+   First-visit interface choice (U-9)
+   ========================================= */
+
+/* The overlay shows both interfaces as a split, lightly blurred preview:
+   Forge left, Classic right, matching the side each choice card sits on.
+   If an image fails to load, the existing dim + blurred #app show through. */
+.first-visit-overlay {
+  display: flex;
+  overflow: hidden;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.first-visit-backdrop-half {
+  flex: 1 1 50%;
+  background-size: cover;
+  /* Blur kept low on purpose: the owner wants the layouts discernable
+     behind the modal, with the modal still carrying the focus. */
+  filter: blur(4px);
+  transform: scale(1.04);
+}
+
+/* Each half shows its own side of its full-page screenshot, so together
+   they read as the screen split between the two interfaces. */
+.first-visit-backdrop-forge {
+  background-image: url('/screenshots/forge-standard.webp');
+  background-position: left center;
+}
+
+/* U-21: in dark theme the Forge half shows the dark capture, so the
+   backdrop's contrast matches the choice being offered. The class is set
+   at modal open from the resolved theme (see applyFirstVisitThemeAssets
+   in main.js). */
+#first-visit-modal.first-visit-forge-dark .first-visit-backdrop-forge {
+  background-image: url('/screenshots/forge-standard-dark.webp');
+}
+
+.first-visit-backdrop-classic {
+  background-image: url('/screenshots/classic-standard.webp');
+  background-position: right center;
+}
+
+.first-visit-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(12, 12, 12, 0.35);
+}
+
+.modal-first-visit {
+  max-width: 1160px;
+  width: min(94vw, 1160px);
+  /* U-19: the note list and card links made the modal taller than the
+     shared 90vh cap; at 900px-tall desktops that pushed Download &
+     Continue below the modal's internal scroll fold. A slimmer margin
+     keeps the primary action on screen without scrolling.
+
+     UF-41 (U-39): that was not enough — Download & Continue sat below an
+     UNMARKED internal fold at all six sizes measured, 1366x768 included,
+     because the whole box scrolled as one. It is now a column: the title
+     row and the footer are fixed, and only the body between them scrolls.
+     Wherever the content still overflows, the primary action is on screen
+     anyway, which is the half of the owner's directive that survives a
+     360x640 viewport.
+
+     max-height was calc(100vh - 40px). 100vh is the LARGE viewport height —
+     the height a phone has with its browser chrome hidden — so on a phone
+     showing its chrome the box was taller than the space it is centred in,
+     and align-items:center cuts an overflowing item off at BOTH ends. That
+     is the title disappearing under the browser chrome (164304), and it is
+     why it never reproduced in emulation, where there is no chrome and
+     100vh equals the visible height. 100% is measured against .modal's own
+     content box, which is the space that actually exists and already has
+     the safe-area insets taken out of it by .modal's padding. */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-height: 100%;
+}
+
+.modal-first-visit .modal-header,
+.modal-first-visit .modal-footer {
+  flex: 0 0 auto;
+}
+
+.modal-first-visit .modal-body {
+  flex: 1 1 auto;
+  /* Without this a flex item refuses to shrink below its content height and
+     the box grows past the viewport instead of scrolling inside it. */
+  min-height: 0;
+  overflow-y: auto;
+  /* A SUPPLEMENT, never the affordance: Android's overlay scrollbars fade
+     out on their own, so a styled scrollbar cannot be the thing that tells
+     a phone user there is more below. The gutter is here so the text does
+     not reflow at the moment a scrollbar appears. */
+  scrollbar-gutter: stable;
+}
+
+/* U-20: reset.css strips colour and underline from every anchor, and no
+   scoped rule ever put them back here, so the modal's links read as body
+   text in every theme. Same shape as .role-path-meta a — the house link
+   convention. */
+.modal-first-visit a {
+  color: var(--color-accent-fg);
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 2px;
+  transition:
+    color var(--motion-base),
+    text-decoration-color var(--motion-base);
+}
+
+.modal-first-visit a:hover {
+  color: var(--color-accent-hover);
+  text-decoration-thickness: 2.5px;
+}
+
+.modal-first-visit a:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+@supports not selector(:focus-visible) {
+  .modal-first-visit a:focus {
+    outline: 3px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+}
+
+.modal-first-visit a[target='_blank']::after {
+  content: '\2009\2197';
+  font-size: 0.85em;
+}
+
+/* U-19: the intro is a heading + four bullets. Desktop lays the list as
+   two columns of two via grid COLUMN flow - DOM order 1-4 fills the left
+   column top to bottom, then the right, so the virtual cursor still reads
+   1-2-3-4. Narrow viewports stack (see the 900px block below). */
+.first-visit-note-title {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-xs);
+}
+
+.first-visit-note-list {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: repeat(2, auto);
+  gap: var(--space-xs) var(--space-lg);
+  margin: 0;
+  padding-left: var(--space-lg);
+}
+
+/* UF-41 (U-39): the mobile half of the intro. Native details/summary — the
+   summary IS the button, so there is no ARIA here and no tabindex, and
+   Enter/Space/click all work without a line of JavaScript. Hidden outright
+   on desktop-shaped viewports, where the four bullets above stay (Q-69). */
+.first-visit-note-rows {
+  display: none;
+  margin-top: var(--space-xs);
+}
+
+.first-visit-note-row {
+  border: var(--border-width-thin) solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  margin-bottom: var(--space-2xs);
+  background: var(--color-bg-primary);
+}
+
+.first-visit-note-row > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  /* 44px hit target: the row is the control, and it is the only way into
+     the sentence behind it. */
+  min-height: var(--size-touch-target);
+  padding: var(--space-xs) var(--space-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  list-style: none;
+}
+
+.first-visit-note-row > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* The house chevron, copied from `.forge-disclosure summary::after` rather
+   than re-invented: same 0.5em box so it scales with the user's text size,
+   same border technique, and the same direction convention the app's other
+   disclosures use (points right when closed, down when open). Drawn from the
+   summary itself so it cannot become a second control inside the control
+   (UF-35's nested-interactive rule). */
+.first-visit-note-row > summary::after {
+  content: '';
+  flex-shrink: 0;
+  margin-left: auto;
+  width: 0.5em;
+  height: 0.5em;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--motion-base) ease;
+}
+
+.first-visit-note-row[open] > summary::after {
+  transform: rotate(45deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .first-visit-note-row > summary::after {
+    transition: none;
+  }
+}
+
+.first-visit-note-row > summary:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: -3px;
+}
+
+@supports not selector(:focus-visible) {
+  .first-visit-note-row > summary:focus {
+    outline: 3px solid var(--color-focus);
+    outline-offset: -3px;
+  }
+}
+
+.first-visit-note-row > p {
+  margin: 0;
+  padding: 0 var(--space-sm) var(--space-sm);
+  color: var(--color-text-primary);
+}
+
+.first-visit-choice {
+  border: 0;
+  padding: 0;
+  margin: var(--space-sm) 0;
+}
+
+.first-visit-choice legend {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  padding: 0;
+  margin-bottom: var(--space-xs);
+}
+
+.first-visit-options {
+  display: flex;
+  gap: var(--space-md);
+}
+
+/* U-19: the card box is the CELL (label + sibling learn-more link). The
+   label inside remains the radio's whole click surface; the link row is
+   part of the visual card but cannot toggle the radio. */
+.first-visit-option-cell {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  border: 2px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  padding: var(--space-sm);
+  background: var(--color-bg-primary);
+}
+
+.first-visit-option {
+  display: block;
+  flex: 1 1 auto;
+  cursor: pointer;
+}
+
+/* Border highlight only while hovering the actual toggle surface, so the
+   link row does not pretend to be part of the radio's click target. */
+.first-visit-option-cell:has(.first-visit-option:hover) {
+  border-color: var(--color-border-hover);
+}
+
+.first-visit-option-cell:has(input:checked) {
+  border-color: var(--color-accent);
+  background: var(--color-accent-subtle);
+}
+
+/* DP-1 put a card in the checked state on first paint, which is the first
+   time this modal's accent-coloured text has ever sat on the subtle accent
+   fill. MEASURED: --color-accent-fg (#a35e00) is 4.44:1 on yellow-4, just
+   under AA - it was only ever validated against white and slate-2. The
+   selected-card tint stays (a yellow-9 border alone is ~1.3:1 on white, so
+   dropping it would weaken the selected affordance); the foreground moves to
+   the token for this surface instead. */
+.first-visit-option-cell:has(input:checked) .first-visit-badge,
+.first-visit-option-cell:has(input:checked) .first-visit-option-more a {
+  color: var(--color-on-accent-subtle);
+}
+
+.first-visit-option-cell:has(input:focus-visible) {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.first-visit-option-more {
+  margin: var(--space-xs) 0 0;
+  font-size: var(--font-size-sm);
+}
+
+.first-visit-option-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-sm);
+  margin-bottom: var(--space-xs);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.first-visit-option-head input[type='radio'] {
+  flex-shrink: 0;
+  accent-color: var(--color-accent);
+}
+
+.first-visit-badge {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-accent-fg);
+  border: 1px solid currentColor;
+  border-radius: var(--border-radius-md);
+  padding: 0 var(--space-sm);
+}
+
+/* U-10 gate note: the visible reason inside the Classic card while its
+   radio is genuinely disabled (C-15 shape). Warning tokens, not literals;
+   readable in both themes and high contrast. */
+.first-visit-gate-note {
+  display: block;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-warning-text);
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--border-radius-sm);
+  padding: var(--space-xs) var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+
+/* The gated card reads as unavailable without relying on colour alone:
+   the screenshot dims and the pointer affordance goes away. The note
+   itself stays at full strength — it is the explanation. */
+.first-visit-option:has(input:disabled) {
+  cursor: default;
+}
+
+.first-visit-option-cell:has(input:disabled) {
+  border-color: var(--color-border);
+}
+
+.first-visit-option:has(input:disabled) .first-visit-shot,
+.first-visit-option:has(input:disabled) .first-visit-option-head {
+  opacity: 0.5;
+}
+
+/* UF-41 (Q-68b): the same two 1400x900 captures, rendered as small
+   side-by-side thumbnails instead of full-width. At 353px each they were
+   the single biggest reason a 1366x768 laptop could not see Download &
+   Continue; at 176px the whole layout of each interface still reads — one
+   panel and a big preview against four panes and a code editor, which is
+   the thing that actually tells them apart at a glance — and the desktop
+   budget closes with room to spare. No new asset, so nothing to keep in
+   step with the UI and no new bytes in the bundle. */
+.first-visit-shot {
+  display: block;
+  width: auto;
+  height: 176px;
+  max-width: 100%;
+  margin: 0 auto var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+}
+
+.first-visit-guidance {
+  display: block;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+}
+
+.first-visit-compromise {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: var(--space-xs) 0;
+}
+
+.first-visit-choice-error {
+  color: var(--color-error-text);
+  font-weight: 600;
+  margin: var(--space-sm) 0;
+}
+
+.first-visit-remember {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  padding-top: var(--space-xs);
+  border-top: 1px solid var(--color-border);
+  cursor: pointer;
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.first-visit-remember input[type='checkbox'] {
+  flex-shrink: 0;
+  margin-top: 3px;
+  accent-color: var(--color-accent);
+}
+
+/* UF-41 (U-39): the same shape UF-38 reviewed for the tutorial card. Height
+   zero and overflow visible, so the cue paints UPWARD over the last line of
+   the body and can never be the reason something is cut off. */
+.first-visit-scroll-cue {
+  position: relative;
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
+  opacity: 0;
+  color: var(--color-text-secondary);
+  transition: opacity var(--motion-base) ease;
+}
+
+.first-visit-has-more .first-visit-scroll-cue {
+  opacity: 1;
+}
+
+.first-visit-scroll-cue::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--scroll-cue-height);
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    var(--color-bg-primary) 85%
+  );
+}
+
+.first-visit-scroll-cue svg {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .first-visit-scroll-cue {
+    transition: none;
+  }
+}
+
+/* A soft fade is the wrong instrument at high contrast, and gradients do not
+   render in forced colours at all: draw the fold as a hard edge instead, so
+   "there is more below" survives the theme. */
+[data-high-contrast='true'] .first-visit-scroll-cue,
+[data-high-contrast='true'] .first-visit-scroll-cue::before {
+  color: var(--color-text-primary);
+}
+
+[data-high-contrast='true'] .first-visit-scroll-cue::before {
+  background: var(--color-bg-primary);
+  border-top: var(--border-width-base) solid var(--color-border);
+}
+
+@media (prefers-contrast: more) {
+  .first-visit-scroll-cue::before {
+    background: var(--color-bg-primary);
+    border-top: var(--border-width-base) solid var(--color-border);
+  }
+}
+
+@media (forced-colors: active) {
+  .first-visit-scroll-cue::before {
+    background: Canvas;
+    border-top: 1px solid CanvasText;
+  }
+
+  .first-visit-scroll-cue svg {
+    forced-color-adjust: none;
+    stroke: CanvasText;
+  }
+}
+
+#first-visit-modal .modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-xs);
+}
+
+#first-visit-modal .first-visit-learn-more {
+  margin-top: var(--space-xs);
+}
+
+:root[data-high-contrast='true'] .first-visit-option input[type='radio'],
+:root[data-high-contrast='true'] .first-visit-remember input[type='checkbox'] {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+:root[data-high-contrast='true'] .modal-first-visit a {
+  text-decoration-thickness: 2px;
+}
+
+:root[data-high-contrast='true'] .modal-first-visit a:hover {
+  text-decoration-thickness: 3px;
+}
+
+@media (forced-colors: active) {
+  .first-visit-option-cell {
+    border: 1px solid ButtonText;
+  }
+
+  .first-visit-option input[type='radio']:checked {
+    forced-color-adjust: none;
+    outline: 2px solid Highlight;
+  }
+
+  .modal-first-visit a {
+    color: LinkText;
+    text-decoration: underline;
+    forced-color-adjust: none;
+  }
+
+  .modal-first-visit a:hover {
+    color: ActiveText;
+  }
+}
+
+/* ── UF-41 (U-39): the mobile-shaped modal ────────────────────────────────
+   The class is set by updateFirstVisitClassicGate() from the same
+   isViewportDesktopShaped() predicate that disables the Classic card, so
+   the pictures go exactly where the choice they illustrate is not offered.
+   A media query cannot say "at least 1024 wide AND not portrait", and a
+   second definition of "mobile" inside one modal is the cross-file drift
+   this project keeps paying for. */
+
+/* The four bullets become the four stowed rows. Exactly one list is in the
+   layout at a time, so a screen reader is never offered both. */
+.first-visit-mobile-shaped .first-visit-note-list {
+  display: none;
+}
+
+.first-visit-mobile-shaped .first-visit-note-rows {
+  display: block;
+}
+
+/* Q-68a: no screenshots on a phone. The layout description they carried is
+   not lost — it moved to the always-present sr-only span each radio is
+   described by, so a screen-reader user hears exactly what they heard
+   before. (Both files are fetched regardless: the split backdrop behind
+   this modal paints from the same two URLs.) */
+.first-visit-mobile-shaped .first-visit-shot {
+  display: none;
+}
+
+/* Names a capability that does not exist on the surface it is being read
+   on: the button it describes lives in a desktop-only header row, and the
+   Classic card immediately above already says Classic is desktop-only. */
+.first-visit-mobile-shaped .first-visit-compromise {
+  display: none;
+}
+
+/* The remaining gap is spacing, not words. Every trim below tightens
+   padding or margins; nothing a first-time user reads is removed. */
+.first-visit-mobile-shaped .modal-first-visit {
+  padding: var(--space-md);
+}
+
+.first-visit-mobile-shaped .modal-header {
+  margin-bottom: var(--space-sm);
+  padding-bottom: var(--space-xs);
+}
+
+.first-visit-mobile-shaped #first-visit-title {
+  font-size: var(--font-size-xl);
+}
+
+.first-visit-mobile-shaped .first-visit-choice {
+  margin: var(--space-xs) 0 0;
+}
+
+.first-visit-mobile-shaped .first-visit-options {
+  gap: var(--space-sm);
+}
+
+.first-visit-mobile-shaped .first-visit-option-cell {
+  padding: var(--space-xs);
+}
+
+.first-visit-mobile-shaped .first-visit-option-head {
+  margin-bottom: var(--space-2xs);
+}
+
+.first-visit-mobile-shaped .first-visit-gate-note {
+  margin-bottom: var(--space-xs);
+}
+
+.first-visit-mobile-shaped .first-visit-learn-more {
+  margin-bottom: 0;
+}
+
+@media (max-width: 900px) {
+  .first-visit-options {
+    flex-direction: column;
+  }
+
+  /* U-19: the four bullets stack single-column, still DOM order 1-4. */
+  .first-visit-note-list {
+    grid-auto-flow: row;
+    grid-template-columns: none;
+    grid-template-rows: none;
+  }
+
+  /* Stacked: Forge stays on top, Classic below, matching the card order. */
+  .first-visit-overlay {
+    flex-direction: column;
+  }
+
+  .first-visit-backdrop-forge {
+    background-position: center top;
+  }
+
+  .first-visit-backdrop-classic {
+    background-position: center bottom;
+  }
+}
+
 .preset-modal-content {
   background: var(--color-bg-primary);
   border-radius: var(--border-radius-lg);
@@ -5372,13 +6582,21 @@ body.first-visit-blocking #app {
   flex: 1;
 }
 
-/* Help icon button inside panel summary rows */
+/* Help icon button inside panel summary rows.
+   Defect D-45 (UF-25, owner 2026-08-15): sized 1.25em against --font-size-xs
+   this measured 16.3 x 16.3 px, under WCAG 2.2 AA's 24 x 24 minimum, and axe
+   also reported target-offset because it sits close to its neighbour. Pinned
+   to 24px rather than left in em so a font-size preference cannot shrink it
+   back under the minimum. The owner chose the WCAG floor over this project's
+   own 44px touch-target guidance for this inline affordance. */
 .panel-help-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.25em;
-  height: 1.25em;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
   padding: 0;
   border: 1px solid currentColor;
   border-radius: 50%;
@@ -5522,8 +6740,12 @@ body.first-visit-blocking #app {
   margin-left: auto;
 }
 
+/* The Log view's message list. 400px, not the 200px this block declared for
+   years: the modal's block was overriding it to 400 the whole time, so 400 is
+   the height the Forge console actually has today and the collision fix is not
+   the place to change it. */
 .console-output {
-  max-height: 200px;
+  max-height: 400px;
   overflow-y: auto;
   font-family: var(--font-family-mono, monospace);
   font-size: var(--font-size-sm);
@@ -5578,6 +6800,13 @@ body.first-visit-blocking #app {
 
 .console-entry--info .console-type {
   color: var(--color-text-secondary);
+}
+
+/* Render-run separator in the append-only log */
+.console-entry--separator {
+  justify-content: center;
+  color: var(--color-text-secondary);
+  user-select: none;
 }
 
 .console-entry--deprecated .console-type {
@@ -5677,12 +6906,65 @@ body.first-visit-blocking #app {
 
 .error-log-output {
   max-height: 250px;
-  overflow-y: auto;
+  /* A column so the Show row stays put and only the entries scroll. The scroll
+     itself moved to .error-log-entries with it. */
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   font-family: var(--font-family-mono, monospace);
   font-size: var(--font-size-sm);
   background: var(--color-bg-primary);
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius-sm);
+}
+
+/* The live region (role="log"). Holds the table and nothing else, so the Show
+   select above it is never read out when a render replaces the rows. */
+.error-log-entries {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Upstream's "&Show [All ▾]" row above the table (U6b). */
+.error-log-show-row {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-2xs) var(--space-sm);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+}
+
+.error-log-show-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+}
+
+.error-log-show-select {
+  min-height: var(--size-touch-target);
+  /* Compact like the desktop's combo rather than filling the row, but still
+     shrinkable so a narrow strip pane does not overflow. */
+  flex: 0 1 auto;
+  max-width: 14em;
+  font: inherit;
+  color: var(--color-text-primary);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  padding: 0 var(--space-xs);
+}
+
+.error-log-show-select:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* The group name sits after the severity badge in the Group cell. */
+.error-log-group-name {
+  margin-left: var(--space-xs);
+  color: var(--color-text-secondary);
 }
 
 .error-log-empty {
@@ -5713,8 +6995,11 @@ body.first-visit-blocking #app {
   font-weight: 600;
 }
 
+/* Group: wider than the old Type column, because the cell now carries the
+   severity badge AND the group name. Kept as tight as that allows — every em
+   here comes off Info, which is the column worth reading. */
 .error-log-table th:nth-child(1) {
-  width: 5.5em;
+  width: 9.5em;
 }
 .error-log-table th:nth-child(2) {
   width: 8em;
@@ -5800,6 +7085,16 @@ body.first-visit-blocking #app {
 
 .error-log-cell--message {
   word-break: break-word;
+}
+
+/* table-layout is fixed, but a cell with no overflow rule still paints past its
+   column: a /tmp/input.scad path ran straight through the Line number beside it
+   (measured, P7b). Truncated with an ellipsis instead — the full path is in the
+   Info cell on the same row, so nothing is lost. */
+.error-log-cell--file {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .error-log-line-link {
@@ -6526,6 +7821,14 @@ body.first-visit-blocking #app {
   line-height: 1.3;
 }
 
+/* AF-4: a library whose files this copy cannot reach says so on its row. */
+.library-unavailable-note {
+  display: block;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin-top: var(--space-xs);
+}
+
 .library-footer {
   padding-top: var(--space-sm);
   border-top: 1px solid var(--color-border);
@@ -6695,27 +7998,53 @@ body.first-visit-blocking #app {
 }
 
 /* File list */
+/* The box grows with the tree and stops at six rows, counted in the same
+   token the rows are sized from: 236px on a mouse, 284px on a phone. A flat
+   200px ceiling showed five rows before UF-31 made the rows one target tall
+   and four after. */
 .project-files-list {
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
   margin-bottom: var(--space-sm);
-  max-height: 200px;
+  max-height: calc(var(--size-touch-target) * 6 + var(--space-xs) * 5);
   overflow-y: auto;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: var(--color-border) transparent;
 }
 
+/* Every row is one touch target tall (D-37). The vertical padding is gone
+   because min-height now sets the height: with both, a row carrying buttons
+   would stand taller than a row without and the tree would read ragged. */
 .project-file-item {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  padding: var(--space-xs) var(--space-sm);
+  padding: 0 var(--space-sm);
+  min-height: var(--size-touch-target);
   background: var(--color-bg-primary);
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius-md);
   font-size: var(--font-size-sm);
+}
+
+/* A file row is focusable only so a navigation can land on it (D-54), and the
+   global ring fires on [tabindex]:focus rather than :focus-visible, so a mouse
+   click into a folder would leave a ring sitting on the first row. Keyboard
+   focus still matches :focus-visible and keeps its ring; only the pointer case
+   is silenced. */
+.project-file-item[tabindex]:focus:not(:focus-visible) {
+  outline: none !important;
+}
+
+/* MEASURED: a row sits flush with the list's left, top and bottom edges, and
+   the list is a scroll container in both axes, so the default 2px-offset ring
+   is clipped on three sides — for the folder buttons too, which is why this is
+   not scoped to the new file rows. Drawing it inside the row keeps the whole
+   3px visible without moving anything. */
+.project-file-item:focus-visible {
+  outline-offset: -3px !important;
 }
 
 .project-file-item.main-file {
@@ -6758,9 +8087,17 @@ body.first-visit-blocking #app {
   flex-shrink: 0;
 }
 
+/* Edit and remove measured 26.5x24 and 19.8x24 before UF-31 — the two
+   smallest controls in the panel. Sized by the token, never a literal 44:
+   --size-touch-target resolves to 36px on a fine pointer and 44px otherwise. */
 .project-file-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--size-touch-target);
+  min-height: var(--size-touch-target);
   padding: var(--space-2xs) var(--space-xs);
-  font-size: var(--font-size-2xs);
+  font-size: var(--font-size-sm);
   background: transparent;
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius-sm);
@@ -6794,11 +8131,13 @@ body.first-visit-blocking #app {
 /* and the file-manager modal                                          */
 /* ------------------------------------------------------------------ */
 
-/* Breadcrumb bar — compact to fit in the constrained companion panel */
+/* Breadcrumb bar — compact to fit in the constrained companion panel. Its own
+   vertical padding is 0 so the bar is exactly one touch target tall: the
+   crumbs inside it carry the height (D-37). */
 .file-nav-breadcrumbs {
   display: flex;
   align-items: center;
-  padding: var(--space-2xs) var(--space-xs);
+  padding: 0 var(--space-xs);
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius-sm);
@@ -6843,10 +8182,15 @@ body.first-visit-blocking #app {
   flex-shrink: 0;
 }
 
+/* The home crumb measured 24.5x22 and a folder crumb 30.8x22 before UF-31,
+   and these are the controls that ARE the way back through the tree. */
 .file-nav-breadcrumb-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-2xs);
+  min-width: var(--size-touch-target);
+  min-height: var(--size-touch-target);
   padding: var(--space-2xs) var(--space-xs);
   background: transparent;
   border: none;
@@ -6889,6 +8233,16 @@ body.first-visit-blocking #app {
 .file-nav-folder-row {
   cursor: pointer;
   background: var(--color-bg-secondary);
+}
+
+/* In the companion panel the row is a real <button> (D-38), which needs the
+   inherited type and alignment back. The file-manager modal still renders it
+   as a div, so this is scoped to the element rather than the class. */
+button.file-nav-folder-row {
+  width: 100%;
+  font-family: inherit;
+  color: inherit;
+  text-align: left;
 }
 
 .file-nav-folder-row:hover {
@@ -7019,6 +8373,15 @@ body.first-visit-blocking #app {
 .companion-save-btn {
   margin-top: var(--space-xs);
   width: 100%;
+}
+
+/* AF-4 (C-20): .btn-sm alone resolves to 32px on desktop; Add File and
+   Save as Project are real targets, so they take the full touch token
+   (44px touch / 36px fine pointer) - the UF-31 rule, same as the
+   linked-folder actions. */
+.project-files-actions .btn,
+.companion-save-btn {
+  min-height: var(--size-touch-target);
 }
 
 /* High Contrast Mode */
@@ -8297,7 +9660,7 @@ body.first-visit-blocking #app {
   top: 0;
   left: 0;
   right: 0;
-  z-index: var(--z-index-tutorial-panel);
+  z-index: var(--z-index-app-overlay);
   padding: var(--space-sm) var(--space-md);
   display: flex;
   align-items: center;
@@ -8737,7 +10100,12 @@ body.first-visit-blocking #app {
   border-radius: var(--border-radius-sm);
 }
 
-.console-output {
+/* The console modal's <pre>. Named for the modal because it used to be called
+   .console-output, the same class the Log view's #console-output div carries,
+   and being the later block it won on both — handing a div full of generated
+   <div> rows a pre-wrap that rendered the generator's own indentation as blank
+   lines. Keep this selector element-specific to the modal. */
+.console-modal-output {
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
   font-size: var(--font-size-sm);
   line-height: 1.5;
@@ -8753,7 +10121,7 @@ body.first-visit-blocking #app {
 }
 
 /* Highlight ECHO: lines for visibility */
-.console-output .echo-line {
+.console-modal-output .echo-line {
   color: var(--color-info-text, #17a2b8);
   font-weight: 600;
   background: var(--color-info-bg, rgba(23, 162, 184, 0.15));
@@ -8823,7 +10191,7 @@ body.first-visit-blocking #app {
 .wasm-loading-overlay {
   position: fixed;
   inset: 0;
-  z-index: var(--z-index-tutorial-panel);
+  z-index: var(--z-index-app-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -9265,10 +10633,16 @@ body.first-visit-blocking #app {
   position: relative;
 }
 
+/* One source for the hint's words, used by both the wide and the narrow
+   placement below, so the two can never drift apart. */
+#featuresGuideModal .modal-content.tutorial-target-highlight {
+  --features-guide-close-hint: 'Close to continue';
+}
+
 #featuresGuideModal
   .modal-content.tutorial-target-highlight
   .modal-close::after {
-  content: 'Close to continue';
+  content: var(--features-guide-close-hint);
   position: absolute;
   right: 100%;
   top: 50%;
@@ -9279,6 +10653,37 @@ body.first-visit-blocking #app {
   font-weight: 500;
   opacity: 0.9;
   pointer-events: none;
+}
+
+/* D-66 (UF-38). `right: 100%` anchors the hint to the X and lets it run
+   leftward across whatever is there. On a phone the title, the hint and the X
+   share one row, so it printed straight over "Features Guide" - the owner
+   photographed it (164657). Give the hint its own row inside the header bar
+   instead: `flex-wrap` plus a full-basis pseudo-element reserves real space,
+   so it cannot overlap anything rather than merely being aimed elsewhere.
+   The close button's pulse is untouched. */
+@media (max-width: 600px) {
+  #featuresGuideModal
+    .modal-content.tutorial-target-highlight
+    .modal-close::after {
+    content: none;
+  }
+
+  #featuresGuideModal .modal-content.tutorial-target-highlight .modal-header {
+    flex-wrap: wrap;
+  }
+
+  #featuresGuideModal
+    .modal-content.tutorial-target-highlight
+    .modal-header::after {
+    content: var(--features-guide-close-hint);
+    flex: 0 0 100%;
+    margin-top: var(--space-2xs);
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    opacity: 0.9;
+    pointer-events: none;
+  }
 }
 
 @keyframes closeButtonHint {
@@ -9369,7 +10774,7 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-panel {
   top: auto !important;
   transform: translateX(-50%) !important;
   max-width: min(400px, calc(100vw - var(--space-lg) * 2)) !important;
-  z-index: 10006 !important;
+  z-index: var(--z-index-tutorial-panel-over-modal) !important;
   box-shadow:
     0 -4px 20px rgba(0, 0, 0, 0.3),
     0 0 0 3px var(--color-accent) !important;
@@ -9414,251 +10819,6 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 
   .features-panel {
     padding: var(--space-md);
-  }
-}
-
-/* =========================================
-   Camera Controls (WCAG 2.2 SC 2.5.7)
-   Non-drag alternatives for 3D preview
-   ========================================= */
-
-.camera-controls {
-  position: absolute;
-  bottom: var(--space-md);
-  right: var(--space-md);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
-  z-index: 50;
-  background: var(--color-bg-primary);
-  padding: var(--space-sm);
-  border-radius: var(--border-radius-md);
-  border: 1px solid var(--color-border);
-  box-shadow: var(--shadow-md);
-  /* Prevent the panel from exceeding the preview area */
-  max-height: calc(100% - (var(--space-md) * 2));
-  overflow: auto;
-}
-
-.camera-controls-header {
-  display: flex;
-  gap: var(--space-xs);
-  align-items: center;
-  justify-content: space-between;
-}
-
-.camera-controls-toggle,
-.camera-controls-move {
-  min-height: 44px;
-  padding: 0 var(--space-sm);
-  border-radius: var(--border-radius-sm);
-  border: 2px solid var(--color-border);
-  background: var(--color-bg-secondary);
-  color: var(--color-text-primary);
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.camera-controls-toggle {
-  flex: 1;
-  text-align: left;
-}
-
-.camera-controls-toggle:hover,
-.camera-controls-move:hover {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-  color: var(--color-accent-text);
-}
-
-.camera-controls-toggle:focus,
-.camera-controls-move:focus {
-  outline: 3px solid var(--color-focus);
-  outline-offset: 2px;
-}
-
-.camera-controls-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
-}
-
-/* Collapsed state: keep a small, movable header only */
-.camera-controls[data-collapsed='true'] {
-  padding: var(--space-xs);
-}
-
-/* Position variants (keyboard-accessible “Move” cycles corners) */
-.camera-controls[data-position='bottom-right'] {
-  bottom: var(--space-md);
-  right: var(--space-md);
-  top: auto;
-  left: auto;
-}
-
-.camera-controls[data-position='bottom-left'] {
-  bottom: var(--space-md);
-  left: var(--space-md);
-  top: auto;
-  right: auto;
-}
-
-.camera-controls[data-position='top-right'] {
-  top: var(--space-md);
-  right: var(--space-md);
-  bottom: auto;
-  left: auto;
-}
-
-.camera-controls[data-position='top-left'] {
-  top: var(--space-md);
-  left: var(--space-md);
-  bottom: auto;
-  right: auto;
-}
-
-.camera-control-group {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-xs);
-}
-
-.camera-zoom-group {
-  grid-template-columns: repeat(3, 1fr);
-  padding-top: var(--space-xs);
-  border-top: 1px solid var(--color-border);
-  margin-top: var(--space-xs);
-}
-
-.camera-control-btn {
-  width: 44px;
-  height: 44px;
-  min-width: 44px;
-  min-height: 44px;
-  padding: 0;
-  background: var(--color-bg-secondary);
-  border: 2px solid var(--color-border);
-  border-radius: var(--border-radius-sm);
-  color: var(--color-text-primary);
-  font-size: var(--font-size-lg);
-  font-weight: 700;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all var(--motion-base);
-}
-
-.camera-control-btn:hover {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-  color: var(--color-accent-text);
-  transform: scale(1.05);
-}
-
-.camera-control-btn:focus {
-  outline: 3px solid var(--color-focus);
-  outline-offset: 2px;
-}
-
-.camera-control-btn:active {
-  transform: scale(0.95);
-}
-
-/* Arrange rotation buttons in cross pattern */
-.camera-control-group:first-child {
-  grid-template-areas:
-    '. up .'
-    'left . right'
-    '. down .';
-}
-
-.camera-control-group:first-child button:nth-child(1) {
-  grid-area: left;
-}
-
-.camera-control-group:first-child button:nth-child(2) {
-  grid-area: up;
-}
-
-.camera-control-group:first-child button:nth-child(3) {
-  grid-area: down;
-}
-
-.camera-control-group:first-child button:nth-child(4) {
-  grid-area: right;
-}
-
-/* Arrange pan buttons in cross pattern */
-.camera-pan-group {
-  grid-template-areas:
-    '. up .'
-    'left . right'
-    '. down .';
-}
-
-.camera-pan-group button:nth-child(1) {
-  grid-area: left;
-}
-
-.camera-pan-group button:nth-child(2) {
-  grid-area: up;
-}
-
-.camera-pan-group button:nth-child(3) {
-  grid-area: down;
-}
-
-.camera-pan-group button:nth-child(4) {
-  grid-area: right;
-}
-
-/* High Contrast Mode */
-[data-high-contrast='true'] .camera-controls {
-  border-width: 3px;
-}
-
-[data-high-contrast='true'] .camera-control-btn {
-  border-width: 3px;
-  font-weight: 900;
-}
-
-/* Mobile Responsive */
-@media (max-width: 767px) {
-  .camera-controls {
-    bottom: calc(var(--space-sm) + env(safe-area-inset-bottom, 0px));
-    right: var(--space-sm);
-    padding: var(--space-xs);
-  }
-
-  .camera-control-btn {
-    width: 40px;
-    height: 40px;
-    min-width: 40px;
-    min-height: 40px;
-    font-size: var(--font-size-base);
-  }
-}
-
-/* Hide camera controls in focus mode to avoid clutter */
-.main-interface.focus-mode .camera-controls {
-  bottom: calc(var(--space-lg) + env(safe-area-inset-bottom, 0px));
-  right: var(--space-lg);
-}
-
-/* Reduced Motion */
-@media (prefers-reduced-motion: reduce) {
-  .camera-control-btn {
-    transition: none;
-  }
-
-  .camera-control-btn:hover {
-    transform: none;
-  }
-
-  .camera-control-btn:active {
-    transform: none;
   }
 }
 
@@ -9841,6 +11001,35 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   margin-bottom: 0;
 }
 
+/* W3: single-surface welcome — start actions and saved projects side by
+   side under one Get Started heading; stacks on narrow viewports */
+.welcome-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-lg);
+  align-items: start;
+  margin-bottom: var(--space-lg);
+}
+
+@media (max-width: 900px) {
+  .welcome-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Demoted guide cards: tighter padding, side-by-side on wide screens —
+   every control stays, targets stay token-sized */
+.role-paths-grid--compact {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+}
+
+.role-paths-grid--compact .role-path-card {
+  padding: var(--space-md);
+  gap: var(--space-sm);
+}
+
 .role-path-card {
   padding: var(--space-lg);
   background: var(--color-bg-secondary);
@@ -9857,6 +11046,201 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 .role-path-card:focus-within {
   border-color: var(--color-accent);
   box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+}
+
+/* U-23 (UF-16): the Beginners-card spotlight — a passive attention
+   affordance borrowing the tutorial highlight's visual language. The halo
+   and the tag strip are the whole treatment: no veil, no focus trap. */
+.role-path-card.welcome-spotlight {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 4px;
+  animation: welcomeSpotlightPulse 2s ease-in-out infinite;
+}
+
+@keyframes welcomeSpotlightPulse {
+  0%,
+  100% {
+    outline-offset: 4px;
+  }
+  50% {
+    outline-offset: 6px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .role-path-card.welcome-spotlight {
+    animation: none;
+  }
+}
+
+[data-high-contrast='true'] .role-path-card.welcome-spotlight {
+  outline-width: 4px;
+}
+
+.welcome-spotlight-tag {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-focus);
+  border-radius: var(--border-radius-md);
+}
+
+.welcome-spotlight-tag-text {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.welcome-spotlight-dismiss {
+  min-height: 44px;
+  min-width: 44px;
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-size-sm);
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.welcome-spotlight-dismiss:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+@media (forced-colors: active) {
+  .role-path-card.welcome-spotlight {
+    outline-color: Highlight;
+  }
+
+  .welcome-spotlight-dismiss {
+    border: 2px solid ButtonText;
+  }
+}
+
+/* U-27 (UF-22): the welcome tour nudge. The dim matches every other modal in
+   the app (.modal-overlay); what is new is that the tutorial menu stays lit
+   above it, so the dialog's words have something to point at. The lit region
+   is decoration only — pointer-events:none, and the dialog is aria-modal. */
+.tour-nudge-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(12, 12, 12, 0.55);
+  z-index: var(--z-index-modal-backdrop);
+}
+
+.role-paths-grid.tour-nudge-lit {
+  position: relative;
+  z-index: var(--z-index-nudge-spotlight);
+  pointer-events: none;
+  background: var(--color-bg-primary);
+  border-radius: var(--border-radius-md);
+  outline: 3px solid var(--color-focus);
+  outline-offset: 8px;
+}
+
+.tour-nudge-target {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 4px;
+  animation: tourNudgePulse 2s ease-in-out infinite;
+}
+
+@keyframes tourNudgePulse {
+  0%,
+  100% {
+    outline-offset: 4px;
+  }
+  50% {
+    outline-offset: 7px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-nudge-target {
+    animation: none;
+  }
+}
+
+.tour-nudge-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: var(--z-index-modal);
+  width: min(28rem, calc(100vw - 2 * var(--space-md)));
+  max-height: calc(100vh - 2 * var(--space-md));
+  overflow-y: auto;
+  padding: var(--space-lg);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  border: 2px solid var(--color-border);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+
+.tour-nudge-title {
+  margin: 0 0 var(--space-sm);
+  font-size: var(--font-size-xl);
+  color: var(--color-text-primary);
+}
+
+.tour-nudge-body {
+  margin: 0 0 var(--space-md);
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+}
+
+.tour-nudge-never {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: 44px;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.tour-nudge-never input {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+}
+
+.tour-nudge-never:focus-within {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+  border-radius: var(--border-radius-md);
+}
+
+.tour-nudge-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+}
+
+.tour-nudge-actions .btn {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+[data-high-contrast='true'] .role-paths-grid.tour-nudge-lit,
+[data-high-contrast='true'] .tour-nudge-target {
+  outline-width: 4px;
+}
+
+@media (forced-colors: active) {
+  .role-paths-grid.tour-nudge-lit,
+  .tour-nudge-target {
+    outline-color: Highlight;
+  }
+
+  .tour-nudge-modal {
+    border: 2px solid CanvasText;
+  }
 }
 
 .role-path-title {
@@ -10024,7 +11408,11 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   margin: 0;
 }
 
-.spotlight-link {
+/* The four documentation links and the one action share this look. They do
+   NOT share a class: `.spotlight-link` means "a link to a document, with an
+   href", and an accessibility test asserts exactly that about all four. */
+.spotlight-link,
+.spotlight-action {
   display: block;
   padding: var(--space-sm) var(--space-md);
   background: var(--color-bg-primary);
@@ -10045,6 +11433,15 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
     border-color var(--motion-base);
 }
 
+/* A real button among links: the shared rule above supplies the look, these
+   four lines undo the user-agent button defaults so it reads identically. */
+.spotlight-action {
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+}
+
 .spotlight-title {
   font-weight: 600;
 }
@@ -10055,18 +11452,21 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   line-height: 1.5;
 }
 
-.spotlight-link:hover {
+.spotlight-link:hover,
+.spotlight-action:hover {
   background: var(--color-bg-secondary);
   border-color: var(--color-accent);
 }
 
-.spotlight-link:focus-visible {
+.spotlight-link:focus-visible,
+.spotlight-action:focus-visible {
   outline: 3px solid var(--color-focus);
   outline-offset: 2px;
 }
 
 @supports not selector(:focus-visible) {
-  .spotlight-link:focus {
+  .spotlight-link:focus,
+  .spotlight-action:focus {
     outline: 3px solid var(--color-focus);
     outline-offset: 2px;
   }
@@ -10247,15 +11647,62 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   outline-offset: 1px;
 }
 
-/* Body content area */
+/* Body content area.
+   D-65 (UF-38): `flex: 1` means the body is whatever the header and footer
+   leave, and two separate rules cap the card - the JS dock cap
+   (viewport.height * 0.45) and the `50dvh` further down this file. Neither
+   left the body a floor, so on a phone-height viewport the instructions were
+   the only part of the card that could vanish. */
 .tutorial-body {
   flex: 1;
+  min-height: var(--tutorial-body-min-height);
   overflow-y: auto;
   padding: 0 var(--space-md) var(--space-md);
 }
 
 .tutorial-content {
   color: var(--color-text-primary);
+}
+
+/* The cue that admits there is more below the fold (D-65).
+   A zero-height flex item between the body and the footer: it cannot take
+   space from the body it is reporting on, and being positioned it paints over
+   the body's last, half-cut line. Decorative throughout - `aria-hidden` on the
+   element, no tab stop, and the scroll position it describes is already
+   available to assistive tech through the scroll container itself. */
+.tutorial-scroll-cue {
+  position: relative;
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
+  opacity: 0;
+  color: var(--color-text-secondary);
+  transition: opacity var(--motion-base) ease;
+}
+
+.tutorial-panel.tutorial-has-more .tutorial-scroll-cue {
+  opacity: 1;
+}
+
+.tutorial-scroll-cue::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--tutorial-scroll-cue-height);
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    var(--color-bg-primary) 85%
+  );
+}
+
+.tutorial-scroll-cue svg {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .tutorial-step-title {
@@ -10457,43 +11904,6 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 
 .tutorial-requirement-pulse {
   animation: requirementPulse 0.5s ease;
-}
-
-/* Drawer reopen prompt styling */
-.tutorial-requirement-action {
-  background: var(--color-info-bg, rgba(23, 162, 184, 0.1));
-  border-left-color: var(--color-info, #17a2b8);
-}
-
-.tutorial-drawer-prompt {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2xs);
-}
-
-.tutorial-reopen-drawer-btn {
-  display: inline-flex;
-  align-items: center;
-  padding: var(--space-2xs) var(--space-xs);
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  background: var(--color-accent);
-  color: var(--color-on-accent);
-  border: none;
-  border-radius: var(--border-radius-sm);
-  cursor: pointer;
-  transition: background-color var(--motion-fast) ease;
-}
-
-.tutorial-reopen-drawer-btn:hover,
-.tutorial-reopen-drawer-btn:focus {
-  background: var(--color-accent-hover);
-  outline: none;
-}
-
-.tutorial-reopen-drawer-btn:focus-visible {
-  box-shadow: 0 0 0 2px var(--color-focus);
 }
 
 /* Footer with navigation */
@@ -10720,7 +12130,7 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   outline: 3px solid var(--color-focus) !important;
   outline-offset: 4px !important;
   position: relative;
-  z-index: 10001;
+  z-index: var(--z-index-tutorial-highlight);
   animation: tutorialTargetPulse 2s ease-in-out infinite;
 }
 
@@ -10731,7 +12141,7 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 
 /* Ensure modals can appear above tutorial overlay when spotlighted */
 .tutorial-target-highlight.modal {
-  z-index: 10002 !important;
+  z-index: var(--z-index-tutorial-highlight-modal) !important;
 }
 
 /* Features Guide Modal base styles */
@@ -10750,12 +12160,12 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 
 /* When Features Guide modal is open during tutorial, bring it above the overlay */
 #featuresGuideModal:not(.hidden) {
-  z-index: 10003;
+  z-index: var(--z-index-tutorial-guide-modal);
 }
 
 /* When the Features Guide content is highlighted by tutorial */
 #featuresGuideModal .modal-content.tutorial-target-highlight {
-  z-index: 10004 !important;
+  z-index: var(--z-index-tutorial-guide-content) !important;
   opacity: 1 !important;
   background: var(--color-bg-primary) !important;
   box-shadow:
@@ -10880,6 +12290,17 @@ body:has(#featuresGuideModal .modal-content.tutorial-target-highlight)
   outline-width: 4px !important;
 }
 
+/* A soft fade is the wrong instrument at high contrast: draw the fold as a
+   hard edge instead, so "there is more below" survives the theme. */
+[data-high-contrast='true'] .tutorial-scroll-cue {
+  color: var(--color-text-primary);
+}
+
+[data-high-contrast='true'] .tutorial-scroll-cue::before {
+  background: var(--color-bg-primary);
+  border-top: var(--border-width-base) solid var(--color-border);
+}
+
 /* High Contrast Mode - Tutorial buttons */
 [data-high-contrast='true'] .tutorial-btn-back {
   background: var(--color-bg-tertiary);
@@ -10924,6 +12345,18 @@ body:has(#featuresGuideModal .modal-content.tutorial-target-highlight)
     stroke: Highlight;
     stroke-width: 3px;
   }
+
+  /* Gradients do not render in forced colors, so the fade would simply be
+     absent. The fold has to be a drawn edge. */
+  .tutorial-scroll-cue::before {
+    background: Canvas;
+    border-top: 1px solid CanvasText;
+    forced-color-adjust: none;
+  }
+
+  .tutorial-scroll-cue {
+    color: CanvasText;
+  }
 }
 
 /* Enhanced Contrast Mode (prefers-contrast: more) - Tutorial */
@@ -10950,6 +12383,15 @@ body:has(#featuresGuideModal .modal-content.tutorial-target-highlight)
 
   .tutorial-target-highlight {
     outline-width: 4px !important;
+  }
+
+  .tutorial-scroll-cue {
+    color: var(--color-text-primary);
+  }
+
+  .tutorial-scroll-cue::before {
+    background: var(--color-bg-primary);
+    border-top: var(--border-width-thin) solid var(--color-border);
   }
 }
 
@@ -10980,6 +12422,7 @@ body:has(#featuresGuideModal .modal-content.tutorial-target-highlight)
     -webkit-backdrop-filter: none !important;
   }
 
+  .folder-scad-select-dialog::backdrop,
   .preset-import-mode-dialog::backdrop,
   .import-mode-dialog::backdrop {
     background: var(--color-overlay-solid, rgba(0, 0, 0, 0.85)) !important;
@@ -11007,6 +12450,7 @@ body:has(#featuresGuideModal .modal-content.tutorial-target-highlight)
   .tutorial-panel,
   .tutorial-spotlight-cutout,
   .tutorial-requirement,
+  .tutorial-scroll-cue,
   .tutorial-target-highlight {
     animation: none !important;
     transition: none !important;
@@ -11026,7 +12470,16 @@ body:has(#featuresGuideModal .modal-content.tutorial-target-highlight)
    When a target is highlighted, allow JS positioning so the panel can move
    out of the way instead of covering the control. */
 @media (max-width: 600px) {
-  .tutorial-panel:not(.tutorial-panel-positioned) {
+  /* D-65 (UF-38): `:not(.tutorial-panel-positioned)` was also catching the
+     two branches that CENTRE the card - "position: center" steps and the
+     target-not-found fallback - which set `top: 50%` and a centring transform
+     in JS. Those cards then inherited bottom-sheet geometry they never asked
+     for, including the safe-area `padding-bottom` below: MEASURED at 412x810,
+     16px of dead band under the footer taken straight out of the body, and
+     ~48px on a real gesture-nav phone. A centred card is not a sheet. */
+  .tutorial-panel:not(.tutorial-panel-positioned):not(
+      .tutorial-panel-centered
+    ) {
     position: fixed;
     bottom: 0;
     left: 0;
@@ -11350,6 +12803,60 @@ body.tutorial-body-locked {
   display: none !important;
 }
 
+/* IR-9 — the starter subset. A manifest can say which handful of parameters a
+   beginner should meet first; everything else waits behind one button. The
+   wall is display:none, which hides a control from EVERYBODY: a screen reader
+   never reaches a control a sighted person cannot see either, which is the
+   only honest form of progressive disclosure. .starter-wall-open is what the
+   reveal adds, and it puts everything back.
+   Every token below is one this project DEFINES - checked, not assumed. */
+.param-control.starter-hidden:not(.starter-wall-open) {
+  display: none !important;
+}
+
+.param-group.starter-empty:not(.starter-wall-open) {
+  display: none !important;
+}
+
+.starter-reveal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-sm);
+  margin-bottom: var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-secondary);
+}
+
+.starter-reveal-btn {
+  align-self: flex-start;
+  min-height: var(--size-touch-target);
+  padding: var(--space-xs) var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.starter-reveal-btn:hover {
+  background: var(--color-hover-bg);
+}
+
+.starter-reveal-btn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.starter-reveal-hint {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
 /* Default value display */
 .param-default-value {
   font-size: var(--font-size-xs);
@@ -11390,6 +12897,22 @@ body.tutorial-body-locked {
   gap: var(--space-md);
 }
 
+/* Owner order 2026-08-09 moved the theme + high-contrast controls into
+   this row (beside Full Screen and Help). Their old header home was
+   always visible, so the row now shows on the welcome screen too — with
+   only the controls that do something before a file is open. Relocating
+   them must not make high contrast unreachable on the first screen a
+   low-vision user meets. */
+#app:has(#welcomeScreen:not(.hidden)) #workflowProgress.hidden {
+  display: flex !important;
+}
+
+#app:has(#welcomeScreen:not(.hidden)) #workflowProgress .workflow-steps,
+#app:has(#welcomeScreen:not(.hidden)) #workflowProgress #toolbarMenuBar,
+#app:has(#welcomeScreen:not(.hidden)) #workflowProgress #focusModeBtn {
+  display: none !important;
+}
+
 /* Workflow action buttons container — always pinned to the right */
 .workflow-actions {
   display: flex;
@@ -11399,10 +12922,15 @@ body.tutorial-body-locked {
   margin-left: auto;
 }
 
+/* One control height across the row (U-16): the HC and theme toggles
+   already stand at --size-touch-target, and the old literal 32px held
+   Full Screen and Help visibly shorter beside them — and under the 44px
+   touch minimum on phones. The token is pointer-aware, so the row is
+   uniform in every regime instead of only the one it was tuned in. */
 .workflow-actions .btn {
   padding: var(--space-xs) var(--space-sm);
   font-size: var(--font-size-xs);
-  min-height: 32px;
+  min-height: var(--size-touch-target);
 }
 
 .workflow-actions .btn-text {
@@ -11416,7 +12944,7 @@ body.tutorial-body-locked {
   }
 
   .workflow-actions .btn {
-    min-width: 32px;
+    min-width: var(--size-touch-target);
     padding: var(--space-xs);
   }
 }
@@ -11804,7 +13332,7 @@ body.tutorial-body-locked {
   }
 
   .workflow-actions .btn {
-    min-width: 32px;
+    min-width: var(--size-touch-target);
     padding: var(--space-xs);
   }
 }
@@ -12429,6 +13957,29 @@ body.tutorial-body-locked {
 /* ===================================================
    Keyboard Shortcuts Editor
    =================================================== */
+
+/* About dialog (G6). Small like upstream's, and it inherits every modal
+   behaviour from .modal / .modal-content. */
+.about-modal-content {
+  max-width: 34rem;
+}
+
+.about-modal-body p {
+  margin-bottom: var(--space-sm);
+}
+
+.about-version {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.about-links {
+  margin: 0 0 var(--space-sm) var(--space-md);
+}
+
+.about-links li + li {
+  margin-top: var(--space-2xs);
+}
 
 .shortcuts-modal-content {
   max-width: 700px;
@@ -13233,22 +14784,219 @@ body.tutorial-body-locked {
 }
 
 /* ============================================================
+   Parameter notices (things that happened to your values)
+   ============================================================ */
+
+.parameter-notices {
+  margin-bottom: var(--space-sm);
+}
+
+.parameter-notice {
+  padding: var(--space-md);
+  border: 2px solid var(--color-warning, var(--color-border));
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+}
+
+.parameter-notice-title {
+  margin: 0 0 var(--space-xs);
+  font-weight: 600;
+}
+
+.parameter-notice-list {
+  margin: 0 0 var(--space-sm);
+  padding-left: 1.2em;
+  line-height: 1.5;
+}
+
+.parameter-notice-list li {
+  margin-bottom: var(--space-xs);
+}
+
+.parameter-notice-dismiss {
+  min-height: var(--size-touch-target);
+}
+
+/* ============================================================
+   Ink controls (what to keep from a picture)
+   ============================================================ */
+
+.svg-prep-tools-slot {
+  margin-bottom: var(--space-md);
+}
+
+.ink-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+}
+
+.ink-controls-modes {
+  border: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.ink-controls-modes legend {
+  font-weight: 600;
+  padding: 0;
+  margin-bottom: var(--space-xs);
+}
+
+.ink-mode-row {
+  display: grid;
+  grid-template-columns: auto minmax(7rem, auto) 1fr;
+  align-items: center;
+  gap: var(--space-sm);
+  /* The label carries the row: a 24px radio alone is under the target size,
+     and `for=` makes the whole label part of the same hit area. */
+  min-height: var(--size-touch-target);
+}
+
+.ink-mode-row input[type='radio'] {
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+}
+
+.ink-mode-label {
+  display: flex;
+  align-items: center;
+  min-height: var(--size-touch-target);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ink-mode-description {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+}
+
+.ink-controls-sliders {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.ink-slider-row {
+  display: grid;
+  grid-template-columns: minmax(10rem, auto) minmax(6rem, 1fr) 5rem;
+  grid-template-areas:
+    'label slider number'
+    'help help help';
+  align-items: center;
+  gap: var(--space-xs) var(--space-sm);
+  min-height: var(--size-touch-target);
+}
+
+.ink-slider-label {
+  grid-area: label;
+  font-weight: 600;
+}
+
+.ink-slider {
+  grid-area: slider;
+  min-height: var(--size-touch-target);
+}
+
+.ink-slider-number {
+  grid-area: number;
+  min-height: var(--size-touch-target);
+  padding: var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+
+.ink-slider-help {
+  grid-area: help;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1.4;
+}
+
+.ink-slider:disabled,
+.ink-slider-number:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+}
+
+.ink-controls-summary {
+  margin: 0;
+  font-weight: 600;
+  min-height: 1.4em;
+}
+
+.ink-controls-warnings {
+  margin: 0;
+  padding-left: 1.2em;
+  color: var(--color-text-primary);
+}
+
+.ink-controls-warnings li {
+  margin-bottom: var(--space-xs);
+}
+
+.ink-controls-notice,
+.ink-controls-signpost {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+}
+
+@media (max-width: 720px) {
+  .ink-mode-row {
+    grid-template-columns: auto 1fr;
+  }
+
+  .ink-mode-description {
+    grid-column: 1 / -1;
+  }
+
+  .ink-slider-row {
+    grid-template-columns: 1fr 5rem;
+    grid-template-areas:
+      'label label'
+      'slider number'
+      'help help';
+  }
+}
+
+/* ============================================================
    Publish / Share Project Modal
    ============================================================ */
 
+/* D-99: this block was written against token names this project does not
+   define (--color-surface-raised, --spacing-*, --radius-*), each with a
+   Catppuccin dark value as its fallback. In the light theme that painted a
+   dark box under dark text: the generated manifest and the URL field both
+   measured about 1.03:1 against WCAG's 4.5:1. Every value here now comes from
+   the project's own tokens, so the dialog follows the theme. */
+
 .publish-manifest-container {
   position: relative;
-  margin-bottom: var(--spacing-md, 1rem);
+  margin-bottom: var(--space-md);
 }
 
 .publish-manifest-code {
-  background: var(--color-surface-raised, #1e1e2e);
-  color: var(--color-text-primary, #cdd6f4);
-  border: 1px solid var(--color-border, #45475a);
-  border-radius: var(--radius-md, 8px);
-  padding: var(--spacing-md, 1rem);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  padding: var(--space-md);
   font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
-  font-size: var(--font-size-sm, 0.875rem);
+  font-size: var(--font-size-sm);
   line-height: 1.5;
   overflow-x: auto;
   white-space: pre;
@@ -13258,80 +15006,104 @@ body.tutorial-body-locked {
 
 .publish-copy-btn {
   position: absolute;
-  top: var(--spacing-sm, 0.5rem);
-  right: var(--spacing-sm, 0.5rem);
+  top: var(--space-sm);
+  right: var(--space-sm);
 }
 
 .publish-instructions {
   padding-left: 1.5em;
-  margin-bottom: var(--spacing-md, 1rem);
+  margin-bottom: var(--space-md);
   line-height: 1.7;
 }
 
 .publish-instructions li {
-  margin-bottom: var(--spacing-xs, 0.25rem);
+  margin-bottom: var(--space-xs);
 }
 
 .publish-instructions code {
-  background: var(--color-surface-raised, #1e1e2e);
+  background: var(--color-bg-tertiary);
   padding: 0.1em 0.4em;
-  border-radius: var(--radius-sm, 4px);
-  font-size: var(--font-size-sm, 0.875rem);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-sm);
 }
 
 .publish-label {
   display: block;
   font-weight: 600;
-  margin-bottom: var(--spacing-xs, 0.25rem);
+  margin-bottom: var(--space-xs);
 }
 
 .publish-input {
   width: 100%;
-  padding: var(--spacing-sm, 0.5rem);
-  border: 1px solid var(--color-border, #45475a);
-  border-radius: var(--radius-md, 8px);
-  background: var(--color-surface, #181825);
-  color: var(--color-text-primary, #cdd6f4);
+  padding: var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
   font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
-  font-size: var(--font-size-sm, 0.875rem);
+  font-size: var(--font-size-sm);
   box-sizing: border-box;
 }
 
 .publish-input:focus {
-  outline: 2px solid var(--color-accent, #89b4fa);
+  outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
 
 .publish-help-text {
-  font-size: var(--font-size-xs, 0.75rem);
-  color: var(--color-text-secondary, #a6adc8);
-  margin-top: var(--spacing-xs, 0.25rem);
-  margin-bottom: var(--spacing-md, 1rem);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  margin-top: var(--space-xs);
+  margin-bottom: var(--space-md);
 }
 
 .publish-help-text code {
-  background: var(--color-surface-raised, #1e1e2e);
+  background: var(--color-bg-tertiary);
   padding: 0.1em 0.3em;
-  border-radius: var(--radius-sm, 4px);
+  border-radius: var(--border-radius-sm);
   font-size: inherit;
 }
 
 .publish-share-link-container {
-  margin-top: var(--spacing-md, 1rem);
-  padding: var(--spacing-md, 1rem);
-  background: var(--color-surface-raised, #1e1e2e);
-  border: 1px solid var(--color-border, #45475a);
-  border-radius: var(--radius-md, 8px);
+  margin-top: var(--space-md);
+  padding: var(--space-md);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
 }
 
 .publish-share-link-row {
   display: flex;
-  gap: var(--spacing-sm, 0.5rem);
+  gap: var(--space-sm);
   align-items: center;
 }
 
 .publish-share-link-row .publish-input {
   flex: 1;
+}
+
+.publish-setting-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: var(--size-touch-target);
+}
+
+.publish-setting-row input[type='checkbox'] {
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  flex: none;
+}
+
+/* The label carries the rest of the touch target: a 24px box alone is under
+   the 44px minimum, and `for=` makes the text part of the same hit area. */
+.publish-checkbox-label {
+  display: flex;
+  align-items: center;
+  min-height: var(--size-touch-target);
+  cursor: pointer;
+  font-weight: 600;
 }
 
 /* Reduced Motion */
@@ -13810,6 +15582,73 @@ body.tutorial-body-locked {
   cursor: not-allowed;
 }
 
+/* ── Hole placement warning (DP-11) ─────────────────────────────────────── */
+.hole-placement-warning {
+  margin: 0 0 var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  border-inline-start: var(--border-width-thick, 3px) solid var(--color-warning);
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  font-size: var(--font-size-sm);
+}
+
+.hole-placement-warning[hidden] {
+  display: none;
+}
+
+@media (forced-colors: active) {
+  .hole-placement-warning {
+    border-inline-start: 3px solid Highlight;
+    background: Canvas;
+    color: CanvasText;
+  }
+}
+
+/* ── Layer column (DP-7, shown only for a tile that opts in) ────────────── */
+.svg-prep-object .svg-prep-layer-select {
+  flex-shrink: 0;
+  padding: var(--space-2xs) var(--space-xs);
+  font-size: var(--font-size-sm);
+  min-height: var(--size-touch-target);
+}
+
+.svg-prep-layer-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* The row keeps its shape and the note wraps under it, so a warning never
+   squeezes the controls a person is reaching for. */
+.svg-prep-layer-note {
+  flex-basis: 100%;
+  font-size: var(--font-size-sm);
+  color: var(--color-warning-text);
+}
+
+.svg-prep-layer-note[hidden] {
+  display: none;
+}
+
+/* Colour is not the only signal: the border carries it too, for anyone who
+   cannot separate these two hues. */
+.svg-prep-object.svg-prep-layer-problem {
+  border-inline-start: var(--border-width-thick, 3px) solid var(--color-warning);
+}
+
+.svg-prep-layer-summary {
+  margin: var(--space-xs) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.svg-prep-layer-summary[hidden] {
+  display: none;
+}
+
+.svg-prep-layer-summary-problem {
+  color: var(--color-warning-text);
+}
+
 /* ── Design width input (header) ────────────────────────────────────────── */
 .svg-prep-design-width {
   display: flex;
@@ -13870,6 +15709,97 @@ body.tutorial-body-locked {
 
 .svg-prep-apply-hint[hidden] {
   display: none;
+}
+
+/* DP-4: removing shapes from the list, not just from the output. The bar sits
+   outside the role="list" container because that list takes listitem children
+   only (D-101). */
+.svg-prep-bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  padding: var(--space-xs) 0;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.svg-prep-bulk-count {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.svg-prep-bulk-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  /* Keep "Smaller than" and "Keep largest" on one line. The bar itself wraps,
+     so a long label moves to its own row rather than being clipped - the
+     nowrap-plus-flex-end trap from UF-40 needs a NON-wrapping container. */
+  white-space: nowrap;
+}
+
+.svg-prep-bulk-input {
+  width: 5rem;
+  min-height: 44px;
+}
+
+.svg-prep-bulk-btn {
+  min-height: 44px;
+}
+
+.svg-prep-bulk-help {
+  margin: 0;
+  flex: 1 1 100%;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.svg-prep-object-delete {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.svg-prep-object-delete:hover {
+  border-color: var(--color-border-hover);
+}
+
+/* DP-3: the on-demand render control under the result pane. Only present
+   above tier A, where the boolean is too slow to run on its own. */
+.svg-prep-render-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  margin-top: var(--space-xs);
+}
+
+.svg-prep-render-row[hidden] {
+  display: none;
+}
+
+.svg-prep-render-note {
+  margin: 0;
+  flex: 1 1 12rem;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.svg-prep-render-btn {
+  /* 44px target floor, same as every other control in this editor. */
+  min-height: 44px;
+  min-width: 44px;
+  flex: 0 0 auto;
 }
 
 .svg-prep-footer button[data-action='apply']:disabled {
@@ -13956,6 +15886,15 @@ body.tutorial-body-locked {
   max-height: 45vh;
   min-height: 120px;
   overflow: hidden;
+}
+
+/* One picture by default (G0, DP-24): with the original waiting behind
+   Compare, the edited drawing is the subject and takes the height the pair
+   used to split. */
+.svg-prep-workspace.svg-prep-fullscreen .svg-prep-previews--single {
+  flex: 0 0 50vh;
+  flex: 0 0 50dvh;
+  max-height: 60vh;
 }
 
 .svg-prep-workspace.svg-prep-fullscreen .svg-prep-source-pane,
@@ -14189,6 +16128,23 @@ body.tutorial-body-locked {
 
   .svg-prep-swatch {
     border: 2px solid ButtonText;
+  }
+
+  /* The row carries a written note as well, so nothing here is the only way
+     to learn a shape breaks the law - this just keeps the marker visible. */
+  .svg-prep-object.svg-prep-layer-problem {
+    border-inline-start: 3px solid Highlight;
+  }
+
+  .svg-prep-layer-note,
+  .svg-prep-layer-summary-problem {
+    color: CanvasText;
+  }
+
+  .svg-prep-layer-select {
+    border: 1px solid ButtonText;
+    background: ButtonFace;
+    color: ButtonText;
   }
 
   .svg-prep-source-pane,
@@ -14559,12 +16515,12 @@ body.tutorial-body-locked {
 }
 
 /* High contrast */
-:root[data-high-contrast="true"] .braille-panel {
+:root[data-high-contrast='true'] .braille-panel {
   border-width: 2px;
 }
 
-:root[data-high-contrast="true"] .braille-messages,
-:root[data-high-contrast="true"] .braille-multi-card-notice {
+:root[data-high-contrast='true'] .braille-messages,
+:root[data-high-contrast='true'] .braille-multi-card-notice {
   border-width: 2px;
 }
 
@@ -14597,4 +16553,1028 @@ body.tutorial-body-locked {
     background: Canvas;
     color: CanvasText;
   }
+}
+
+/* ── Preferences dialog (P11a shell) ──────────────────────────────────────
+   A six-tab dialog mirroring desktop OpenSCAD's Preferences. Tabs whose
+   engine this browser build does not have are visibly disabled and name
+   their reason, so a user is never left guessing why a section is empty. */
+.preferences-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs);
+  padding: 0 var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-primary);
+}
+
+.preferences-tab {
+  /* Never below the touch-target token, even though the desktop's tabs are
+     smaller: shrinking a hit area is not a parity decision we get to make. */
+  min-height: var(--size-touch-target);
+  padding: var(--space-xs) var(--space-md);
+  border: none;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.preferences-tab.active {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+}
+
+.preferences-tab:hover:not([aria-disabled='true']) {
+  background: var(--color-hover-bg);
+}
+
+.preferences-tab[aria-disabled='true'] {
+  color: var(--color-text-tertiary);
+  cursor: not-allowed;
+}
+
+/* No :focus-visible rule here on purpose. The shared contract at the top of
+   this file already rings every button and every [tabindex] with
+   !important, so a local rule could only duplicate it or fight it — and a
+   disabled tab, which stays focusable so its reason can be read out, gets
+   the same ring from that contract. */
+
+.preferences-modal-body {
+  min-height: 12rem;
+}
+
+.preferences-panel-reason {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  max-width: 60ch;
+}
+
+/* 3D View tab.
+
+   The scheme picker is a real radio group, not an ARIA listbox: it is a
+   pick-one-of-ten, which is what radios are for, and it follows the Font
+   List panel's existing pattern. Arrow keys move and select natively, which
+   is also the instant-apply behaviour the desktop dialog has, so there is no
+   keyboard code here to get wrong. */
+.preferences-fieldset {
+  border: none;
+  margin: 0 0 var(--space-md);
+  padding: 0;
+  min-width: 0;
+}
+
+.preferences-legend {
+  padding: 0;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.preferences-field-note {
+  margin: var(--space-2xs) 0 var(--space-xs);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  max-width: 60ch;
+}
+
+/* Q-41 (UF-15): the scheme governs only the Classic viewport; outside
+   Classic the app theme paints it so high contrast keeps working. The
+   radios used to sit in Forge looking live while repainting nothing —
+   owner decision: the group exists only where it works. display:none is
+   the honest hide (out of the accessibility tree, not merely invisible). */
+body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
+  display: none;
+}
+
+/* No max-height here on purpose. .modal-content already scrolls at
+   min(90vh, 900px), so capping the list too would nest a second scroll
+   region inside it and hide three of the ten schemes on a screen with room
+   for all of them. */
+.preferences-scheme-list {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-primary);
+}
+
+.preferences-scheme-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 0 var(--space-sm);
+  /* Never below the touch-target token, even though the desktop's list rows
+     are far shorter: shrinking a hit area is not a parity decision. */
+  min-height: var(--size-touch-target);
+}
+
+.preferences-scheme-row + .preferences-scheme-row {
+  border-top: 1px solid var(--color-border);
+}
+
+.preferences-scheme-row label {
+  flex: 1;
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+}
+
+.preferences-grid-size-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) 0;
+  min-height: var(--size-touch-target);
+}
+
+.preferences-grid-size-row .grid-preset-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.preferences-check-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: var(--size-touch-target);
+}
+
+.preferences-check-row label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+}
+
+.preferences-check-row input:disabled + label {
+  color: var(--color-text-tertiary);
+}
+
+/* Editor tab: label, number field, unit. The unit is a visible word rather
+   than a suffix inside the field, so it is read as part of the row and not
+   swallowed by the input's value. */
+.preferences-number-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: var(--size-touch-target);
+}
+
+.preferences-number-row label {
+  flex: 1;
+  max-width: 22ch;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+}
+
+.preferences-number-row input {
+  width: 5rem;
+  min-height: var(--size-touch-target);
+  padding: 0 var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.preferences-unit {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* ── The drawing editor surface (DP-19) ─────────────────────────────────────
+   It takes the preview area, so it is sized to fill whatever that is rather
+   than to a height of its own. Tokens only: every colour, space and radius
+   here is the same one the rest of the app uses, so a theme change reaches it
+   without anybody remembering to come back. */
+.drawing-editor-surface {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  background: var(--color-bg-primary);
+  overflow: hidden;
+  z-index: 1;
+  /* The layout below asks how wide the SURFACE is, not the window: at 768
+     the window is wide and the preview area beside the customizer is not
+     (MEASURED: a 135 px drawing next to a 245 px panel). */
+  container-type: inline-size;
+}
+
+.drawing-editor-surface.hidden,
+.drawing-editor-surface[hidden] {
+  display: none;
+}
+
+.drawing-editor {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+}
+
+/* The skip links are visible on focus and out of the way otherwise: a
+   sighted keyboard user needs to SEE where the jump goes. */
+.drawing-editor-skip {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  z-index: 2;
+}
+
+.drawing-editor-skip:focus,
+.drawing-editor-skip:focus-visible {
+  left: var(--space-sm);
+}
+
+/* Two rows at desktop width (G0 named the four-row wrap at 1280): the
+   actions row and the working-tools row. Each row may still wrap on a
+   phone, where rows are expected. */
+.drawing-editor-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  padding-bottom: var(--space-xs);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.drawing-editor-toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+/* A row whose groups are all hidden (the other purpose's row) leaves no
+   gap behind. */
+.drawing-editor-toolbar-row:not(:has(> :not([hidden]))) {
+  display: none;
+}
+
+.drawing-editor-title {
+  margin: 0;
+  margin-right: auto;
+  font-size: var(--font-size-md);
+  color: var(--color-text-primary);
+}
+
+.drawing-editor-title:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.drawing-editor-body {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: var(--space-sm);
+}
+
+.drawing-editor-stage {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* G0 (DP-24): the picture is the editor. The panel is a DRAWER laid over
+   the drawing's right edge, not a column that squeezes it - the drawing
+   keeps the full width whether the drawer is open or shut. */
+.drawing-editor-panel {
+  position: absolute;
+  inset-block: 0;
+  right: 0;
+  width: clamp(280px, 44%, 460px);
+  overflow: auto;
+  background: var(--color-bg-elevated, var(--color-bg-secondary));
+  border-left: 1px solid var(--color-border);
+  padding-left: var(--space-sm);
+  padding-right: var(--space-2xs);
+  z-index: var(--z-index-drawer);
+  /* The table below asks how wide the PANEL is. */
+  container-type: inline-size;
+  container-name: panel;
+}
+
+/* In a narrow side panel the Share column steps aside so the Remove button
+   is not the thing that scrolls out of sight: MEASURED at 1280, five
+   columns clipped it in a 310 px panel. Stacked below the drawing the panel
+   is the full width and every column shows. */
+@container panel (max-width: 360px) {
+  .drawing-editor-regions-table th:nth-child(4),
+  .drawing-editor-regions-table td:nth-child(4) {
+    display: none;
+  }
+}
+
+/* Narrow surface: the drawer takes the whole body instead of a 44% strip
+   nobody can read at 412 wide. The drawing underneath keeps its full size;
+   closing the drawer is one press. (The old stacked-columns answer here is
+   retired with the drawer - MEASURED before it: at 412 wide the panel grew
+   to 1,674 px and the stage was squeezed to 0.) */
+@container (max-width: 640px) {
+  .drawing-editor-panel {
+    width: 100%;
+    border-left: none;
+    padding-left: var(--space-2xs);
+  }
+}
+
+.drawing-editor-section + .drawing-editor-section {
+  margin-top: var(--space-xs);
+}
+
+.drawing-editor-section-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xs);
+  /* 44 px, the touch-target floor, without a fixed height that would clip a
+     wrapped name at a large text size. */
+  min-height: var(--size-touch-target);
+  padding: var(--space-xs) var(--space-sm);
+  cursor: pointer;
+  color: var(--color-text-primary);
+  background: var(--color-bg-secondary);
+  border-radius: var(--border-radius-sm);
+  font-weight: 600;
+}
+
+.drawing-editor-section-summary:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.drawing-editor-section-count {
+  color: var(--color-text-secondary);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.drawing-editor-section-body {
+  padding: var(--space-xs) var(--space-sm);
+}
+
+.drawing-editor-status {
+  margin: 0;
+  min-height: 1.4em;
+  /* The status is a flex child of the surface column and the body's flex:1
+     was shrinking it mid-line at narrow widths (MEASURED at 768 and 412:
+     the sentence's last line half-clipped). It says its piece in full. */
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* The workspace's own pieces, re-homed. Its footer is the action row and
+   sits in the toolbar; its shape list and warnings sit in the panel; what
+   stays in the stage loses the box it used to draw around itself, because
+   the surface is the box now. */
+.drawing-editor-toolbar .svg-prep-footer {
+  border-top: 0;
+  padding-top: 0;
+  margin-left: auto;
+}
+
+.drawing-editor-view-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.drawing-editor-view-controls:empty {
+  display: none;
+}
+
+.drawing-editor-stage .svg-prep-workspace {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.drawing-editor-stage .svg-prep-header {
+  display: none;
+}
+
+.drawing-editor-shapes[hidden],
+.drawing-editor-regions[hidden] {
+  display: none;
+}
+
+/* Five columns are wider than the side panel at 1280 (MEASURED: the Remove
+   button was clipped), so the table scrolls inside its own box rather than
+   the page or the panel ever scrolling sideways. */
+.drawing-editor-regions {
+  overflow-x: auto;
+}
+
+/* ── The stencil purpose: regions, colours, plates ─────────────────────── */
+.drawing-editor-regions-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.drawing-editor-regions-table caption {
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  padding-bottom: var(--space-xs);
+}
+
+.drawing-editor-regions-table th,
+.drawing-editor-regions-table td {
+  text-align: left;
+  vertical-align: middle;
+  padding: var(--space-xs) var(--space-xs);
+  border-bottom: 1px solid var(--color-border-light);
+  color: var(--color-text-primary);
+}
+
+.drawing-editor-regions-table thead th {
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+
+.drawing-editor-regions-table tbody th {
+  font-weight: 400;
+}
+
+.drawing-editor-regions-table td[data-plate] {
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+/* 44 px, the touch-target floor, on the one control the column has. */
+.drawing-editor-colour-select {
+  min-height: var(--size-touch-target);
+  max-width: 100%;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.drawing-editor-colour-select:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.drawing-editor-swatches {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.drawing-editor-swatch-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: var(--size-touch-target-sm);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
+/* The colour itself, beside its name: the name carries the meaning, the
+   chip is the picture of it. */
+.drawing-editor-swatch {
+  flex: 0 0 auto;
+  width: 1.25em;
+  height: 1.25em;
+  border-radius: var(--border-radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--swatch, transparent);
+}
+
+.drawing-editor-add-colour fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-sm);
+  margin: var(--space-sm) 0 0;
+  padding: var(--space-sm);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--border-radius-sm);
+}
+
+.drawing-editor-add-colour legend {
+  padding: 0 var(--space-xs);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.drawing-editor-add-colour label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.drawing-editor-add-colour input[type='text'] {
+  min-height: var(--size-touch-target);
+  min-width: 8em;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+
+.drawing-editor-add-colour input[type='color'] {
+  min-height: var(--size-touch-target);
+  min-width: var(--size-touch-target);
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-primary);
+}
+
+.drawing-editor-add-colour input:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.drawing-editor-plates,
+.drawing-editor-islands {
+  margin: 0;
+  padding-left: var(--space-md);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.drawing-editor-plates li + li,
+.drawing-editor-islands li + li {
+  margin-top: var(--space-xs);
+}
+
+.drawing-editor-islands ul {
+  margin: var(--space-xs) 0 0;
+  padding-left: var(--space-md);
+  color: var(--color-text-secondary);
+}
+
+/* ── DP-20: the tools, the canvas, the table's checkboxes and actions ──── */
+.drawing-editor-stencil-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  /* xs, not sm: the hands row's fit at the editor's 692 px is a matter of
+     sixteen pixels. */
+  gap: var(--space-xs);
+}
+
+.drawing-editor-stencil-tools[hidden] {
+  display: none;
+}
+
+/* Each group wraps on its own: MEASURED at 412 px wide, five tool buttons
+   in one unwrapping row ran off the edge. */
+.drawing-editor-tools,
+.drawing-editor-paint,
+.drawing-editor-history,
+.drawing-editor-zoom {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+/* The paint pair (the colour and its one button) moves as a unit instead of
+   wrapping inside itself: a nested wrap container reports a broken
+   intrinsic width (MEASURED: the group told its row 224 px while its
+   content needed 281), which wrapped the button under the select at every
+   width. The pair fits even a 412 screen. */
+.drawing-editor-paint {
+  flex-wrap: nowrap;
+}
+
+.drawing-editor-paint .btn {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.drawing-editor-tool[aria-pressed='true'] {
+  background: var(--color-hover-bg);
+  border-color: var(--color-accent);
+  box-shadow: inset 0 0 0 1px var(--color-accent);
+}
+
+.drawing-editor-paint-select,
+.drawing-editor-merge-select {
+  min-height: var(--size-touch-target);
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  /* Capped so the hands row (tools + paint) fits the editor's real 692 px
+     at a 1280 window; a long colour name ellipsizes here and reads in full
+     in the open list. */
+  max-width: 8rem;
+}
+
+.drawing-editor-paint-select:focus-visible,
+.drawing-editor-merge-select:focus-visible,
+.drawing-editor-rename-input:focus-visible,
+.drawing-editor-region-check:focus-visible,
+.drawing-editor-canvas-svg:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* The canvas fills the stage; the drawing keeps its aspect inside it. */
+.drawing-editor-canvas {
+  width: 100%;
+  height: 100%;
+  min-height: 240px;
+  display: flex;
+}
+
+.drawing-editor-canvas[hidden] {
+  display: none;
+}
+
+.drawing-editor-canvas-svg {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-height: 240px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  touch-action: none;
+}
+
+.drawing-editor-canvas-svg[data-tool='hand'] {
+  cursor: grab;
+}
+
+.drawing-editor-canvas-svg[data-tool='marquee'] {
+  cursor: crosshair;
+}
+
+/* The original art underneath, dimmed so the regions read over it. */
+.drawing-editor-canvas-svg [data-layer='art'] {
+  opacity: var(--drawing-editor-art-opacity, 0.35);
+  pointer-events: none;
+}
+
+/* One path per region: its colour at FULL contrast (DP-21), a selection as
+   a thick outline, hover as a steady outline. Colour is never the only
+   signal: the table says the same thing in words, and the legend names the
+   four looks. */
+.drawing-editor-region {
+  fill: var(--region-fill, transparent);
+  fill-opacity: 1;
+  stroke: var(--color-border);
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+  cursor: pointer;
+}
+
+/* Removed: hatched at low contrast, the fill attribute pointing at the
+   pattern in defs; the pattern's line takes the token below. */
+.drawing-editor-region.is-removed {
+  fill-opacity: 1;
+  stroke-dasharray: 4 3;
+}
+
+.drawing-editor-hatch-line {
+  stroke: var(--color-text-secondary);
+  stroke-width: 1px;
+  stroke-opacity: 0.45;
+}
+
+.drawing-editor-region.is-selected {
+  stroke: var(--color-focus);
+  stroke-width: 3px;
+}
+
+.drawing-editor-region.is-hover {
+  stroke: var(--color-text-primary);
+  stroke-width: 2px;
+}
+
+/* ★ The keyboard highlight: two strokes drawn over the regions, the outer in
+   the page's TEXT colour and the inner in its BACKGROUND colour. That pair is
+   black and white in the light theme and white and black in the dark one,
+   and for any region colour at least one of black and white contrasts with
+   it at 4.58:1 or better (the geometric mean of 21:1), which is the
+   guarantee "reads on any region colour" needs. The plan's page-background
+   halo under a --color-focus stroke was MEASURED first: the focus blue on a
+   white region is 2.2:1. */
+.drawing-editor-highlight-halo,
+.drawing-editor-highlight-stroke {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.drawing-editor-highlight-halo {
+  stroke: var(--color-text-primary);
+  stroke-width: 7px;
+}
+
+.drawing-editor-highlight-stroke {
+  stroke: var(--color-bg-primary);
+  stroke-width: 3px;
+}
+
+/* Three beats, then it settles. The pulse is on the inner stroke's width and
+   opacity only, so the outline never leaves and never moves. */
+@keyframes drawing-editor-pulse {
+  0%,
+  100% {
+    stroke-width: 3px;
+    stroke-opacity: 1;
+  }
+  50% {
+    stroke-width: 6px;
+    stroke-opacity: 0.45;
+  }
+}
+
+[data-layer='highlight'].is-pulsing .drawing-editor-highlight-stroke {
+  animation: drawing-editor-pulse calc(var(--motion-slow) * 4) ease-in-out 3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-layer='highlight'].is-pulsing .drawing-editor-highlight-stroke {
+    animation: none;
+  }
+}
+
+/* One plate at a time (the stepper): the plan dims, the plate's cut is drawn
+   in the accent over it. */
+.drawing-editor-canvas-svg[data-plate='true'] [data-layer='regions'] {
+  opacity: 0.25;
+}
+
+.drawing-editor-plate-cut {
+  fill: var(--color-accent);
+  fill-opacity: 0.55;
+  stroke: var(--color-text-primary);
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+/* "Show original": the art at full strength and nothing drawn over it. */
+.drawing-editor-canvas-svg[data-view='original'] [data-layer='art'] {
+  opacity: 1;
+}
+
+.drawing-editor-canvas-svg[data-view='original'] [data-layer='regions'],
+.drawing-editor-canvas-svg[data-view='original'] [data-layer='plate'],
+.drawing-editor-canvas-svg[data-view='original'] [data-layer='highlight'],
+.drawing-editor-canvas-svg[data-view='original'] [data-layer='marquee'] {
+  display: none;
+}
+
+.drawing-editor-show-original[aria-pressed='true'] {
+  background: var(--color-hover-bg);
+  border-color: var(--color-accent);
+  box-shadow: inset 0 0 0 1px var(--color-accent);
+}
+
+.drawing-editor-view {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.drawing-editor-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.drawing-editor-stepper-text {
+  min-width: 8em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The legend under the drawing: a chip in each look, and its words. */
+.drawing-editor-legend {
+  list-style: none;
+  margin: var(--space-xs) 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-md);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.drawing-editor-legend[hidden] {
+  display: none;
+}
+
+.drawing-editor-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.drawing-editor-legend-chip {
+  width: 1.1em;
+  height: 1.1em;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-secondary);
+}
+
+.drawing-editor-legend [data-kind='painted'] .drawing-editor-legend-chip {
+  background: linear-gradient(135deg, #997048 50%, #8b9770 50%);
+}
+
+.drawing-editor-legend [data-kind='base'] .drawing-editor-legend-chip {
+  background: var(--drawing-editor-base-tint);
+}
+
+.drawing-editor-legend [data-kind='removed'] .drawing-editor-legend-chip {
+  background: repeating-linear-gradient(
+    45deg,
+    transparent 0 3px,
+    var(--color-text-secondary) 3px 4px
+  );
+}
+
+.drawing-editor-legend [data-kind='plate'] .drawing-editor-legend-chip {
+  background: var(--color-accent);
+}
+
+.drawing-editor-marquee {
+  fill: var(--color-focus);
+  fill-opacity: 0.12;
+  stroke: var(--color-focus);
+  stroke-width: 1.5px;
+  stroke-dasharray: 5 4;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+/* A neutral tint for the base coat, so "base" reads as painted and differs
+   from "unpainted" (nothing) at a glance. */
+:root {
+  --drawing-editor-base-tint: var(--color-text-secondary);
+}
+
+.drawing-editor-region-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  cursor: pointer;
+}
+
+.drawing-editor-region-check {
+  width: 1.25em;
+  height: 1.25em;
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.drawing-editor-regions-table tr.is-removed th,
+.drawing-editor-regions-table tr.is-removed td {
+  color: var(--color-text-secondary);
+  text-decoration: line-through;
+}
+
+.drawing-editor-regions-table tr.is-removed td:last-child {
+  text-decoration: none;
+}
+
+.drawing-editor-region-remove {
+  min-height: var(--size-touch-target);
+}
+
+.drawing-editor-table-actions {
+  margin-top: var(--space-sm);
+}
+
+.drawing-editor-swatch-row {
+  flex-wrap: wrap;
+}
+
+.drawing-editor-swatch-text {
+  flex: 1 1 8em;
+}
+
+.drawing-editor-swatch-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+
+.drawing-editor-rename-input {
+  flex: 1 1 8em;
+  min-height: var(--size-touch-target);
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+
+.drawing-editor-plates li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.drawing-editor-plate-actions {
+  display: inline-flex;
+  gap: var(--space-xs);
+  margin-left: auto;
+}
+
+.drawing-editor-rule {
+  margin-top: var(--space-sm);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.drawing-editor-rule label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: var(--size-touch-target);
+  cursor: pointer;
+}
+
+.drawing-editor-rule-help {
+  margin: var(--space-xs) 0 0;
+  color: var(--color-text-secondary);
+}
+
+/* While the editor owns the area, the preview's floating pills fade: they
+   are about the model behind the editor, and at 412 px wide one of them sat
+   on the editor's title. Opacity, not display, so their live regions still
+   speak. Reverse: delete this block. */
+.preview-canvas-section.has-drawing-editor .preview-state-indicator,
+.preview-canvas-section.has-drawing-editor .preview-rendering-overlay,
+.preview-canvas-section.has-drawing-editor .preview-status-bar {
+  opacity: 0;
+  pointer-events: none;
+  /* The ready badge pulses its opacity while a render runs, and an
+     animation outranks the cascade: MEASURED, it stayed on screen. */
+  animation: none;
+}
+
+/* ── The no-model door: the surface is the screen ─────────────────────── */
+.drawing-editor-host {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-index-modal, 1000);
+  display: flex;
+  background: var(--color-bg-primary);
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.drawing-editor-host.hidden,
+.drawing-editor-host[hidden] {
+  display: none;
+}
+
+/* The status line sits under the toolbar rather than at the foot: the
+   preview's own "Rendering preview" pill overlays the foot of this area, and
+   a live region nobody can read is not a live region. */
+.drawing-editor-status {
+  order: 1;
+}
+
+.drawing-editor-body {
+  order: 2;
+}
+
+/* The one control in the colour column gets the room the column has. */
+.drawing-editor-regions-table .drawing-editor-colour-cell {
+  width: 40%;
+}
+
+.drawing-editor-colour-select {
+  width: 100%;
+  min-width: 6em;
 }

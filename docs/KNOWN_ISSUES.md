@@ -34,14 +34,24 @@ Things we know about but haven't fixed yet, along with workarounds you can use i
 **Affected**: Expert Mode with screen readers  
 **Severity**: Medium
 
-**Description**: The CodeMirror 6 code editor has some limitations with certain assistive technology configurations, particularly with JAWS in some browser combinations.
+**Description**: The CodeMirror 6 code editor builds its own DOM rather than
+using a plain `<textarea>`, which can interfere with some assistive-technology
+navigation patterns.
 
-**Workaround**:
-1. Enable "Use accessible text editor" in Settings
-2. The textarea fallback provides full AT compatibility
-3. All editing features remain available
+**Workaround**: turn on your operating system's "increase contrast" setting.
+The app reads that at startup and gives you the plain text editor instead — a
+real `<textarea>`, with your browser's own text handling, find, undo and redo.
 
-**Root Cause**: CodeMirror's complex DOM structure can interfere with some AT navigation patterns.
+**Note, 2026-08-16**: this entry used to say "Enable 'Use accessible text
+editor' in Settings". **There is no such setting.** The code has a
+`setPreferredEditor()` function whose only callers are unit tests; no control
+for it has ever been on screen. Whether to build one is an open question — the
+system-setting route works, but it means a user cannot choose the plain editor
+without changing an OS-wide preference.
+
+**Root Cause**: CodeMirror's DOM structure can interfere with some AT navigation
+patterns. **Not yet confirmed by ear** — no screen-reader session has been run
+against either editor.
 
 ---
 
@@ -156,7 +166,7 @@ Things we know about but haven't fixed yet, along with workarounds you can use i
 **Description**: Phase 9 of the parity remediation fixed a Layer 2 bug where image companion files were mounted to the Emscripten virtual FS as data-URL strings instead of binary `Uint8Array` data. Whether the current WASM build includes `libpng` for `surface()` image rendering is unknown.
 
 **How to verify (manual, requires a browser)**:
-1. Start the dev server: `pixi run dev`
+1. Start the dev server: `npm run dev`
 2. Open http://localhost:5173 and upload `tests/fixtures/surface-image-test.scad` together with a PNG companion file (use the folder-import or ZIP path so both files mount)
 3. Open the browser console (F12) and trigger a render
 4. If the console shows `Can't open` errors for the PNG, the WASM build lacks `libpng`; if the surface renders with height variation, image support works
@@ -212,13 +222,13 @@ All 16 desktop parity scenarios audited; 14 fully resolved, 1 partially resolved
 ### Before Reporting
 
 1. Check this document for known issues
-2. Search [existing GitHub issues](https://github.com/openscad/openscad-assistive-forge/issues)
+2. Search [existing GitHub issues](https://github.com/BrennenJohnston/openscad-assistive-forge/issues)
 3. Try the issue in a Tier 1 browser (Chrome or Edge)
 4. Clear browser cache and try again
 
 ### How to Report
 
-Create a [new GitHub issue](https://github.com/openscad/openscad-assistive-forge/issues/new) with:
+Create a [new GitHub issue](https://github.com/BrennenJohnston/openscad-assistive-forge/issues/new) with:
 
 1. **Browser**: Name, version, operating system
 2. **Steps to reproduce**: Numbered list of actions

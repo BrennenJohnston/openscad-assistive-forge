@@ -1,7 +1,7 @@
 # Browser Support Statement
 
-**Version**: 4.3.0  
-**Effective Date**: 2026-03-20  
+**App version**: 4.5.0  
+**Last reviewed**: 2026-08-16  
 **Status**: Production
 
 ---
@@ -112,11 +112,12 @@ All supported browsers work with the following assistive technologies:
 
 ### Accessibility Fallback
 
-If you experience issues with the Monaco code editor and assistive technology:
+If the code editor gets in the way of your assistive technology, turn on your
+operating system's "increase contrast" setting. The app reads it at startup and
+gives you a plain `<textarea>` editor instead of the coloured one.
 
-1. Open Settings (gear icon)
-2. Enable "Use accessible text editor"
-3. This provides a native textarea with full AT compatibility
+There is no in-app setting for this. The **HC** button in the header changes the
+theme only; it does not swap the editor.
 
 ---
 
@@ -145,7 +146,7 @@ If you experience browser-specific issues:
 
 1. Check this support statement for your browser version
 2. Try the application in a Tier 1 browser (Chrome or Edge)
-3. Report issues on [GitHub Issues](https://github.com/openscad/openscad-assistive-forge/issues)
+3. Report issues on [GitHub Issues](https://github.com/BrennenJohnston/openscad-assistive-forge/issues)
 
 When reporting, please include:
 - Browser name and version

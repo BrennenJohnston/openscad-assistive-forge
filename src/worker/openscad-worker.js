@@ -25,15 +25,27 @@
 
 import { resolveFileParams } from '../js/file-param-resolver.js';
 import {
+  FONT_ASSET_DIR,
+  FONT_FILES,
+  FONT_MOUNT_DIR,
+} from '../js/font-manifest.js';
+import {
   escapeRegExp,
   formatScadValue,
   buildDefineArgs,
 } from '../js/scad-param-formatter.js';
 import { validateSVGOutput } from './svg-validation.js';
 import { postProcessDXF } from './dxf-postprocess.js';
+import { parseOffTriangleCount } from './mesh-stats.js';
 import { generateMissingFileWarnings } from './missing-file-warnings.js';
 import { resolveMountContent } from './mount-content.js';
-import { translateWorkerError } from './error-translations.js';
+import { ensureLibraryDir, writeLibraryFile } from './library-fs.js';
+import { unpackLibraryArchive } from './lib-archive.js';
+import {
+  translateWorkerError,
+  MODEL_NOT_2D_SUGGESTION,
+  MODEL_NOT_2D_EXPLANATION,
+} from './error-translations.js';
 
 // Official WASM is loaded dynamically in initWASM() from /wasm/openscad-official/
 
@@ -44,11 +56,20 @@ let initialized = false;
 let currentRenderTimeout = null;
 const mountedFiles = new Map(); // Track files in virtual filesystem
 const mountedLibraries = new Set(); // Track mounted library IDs
+// Libraries unmounted by the last reconcile, so the render path can also
+// remove their include-resolution symlinks (whose directory only the render
+// path knows). See mountLibraries.
+const staleLibraryIds = new Set();
 let assetBaseUrl = ''; // Base URL for fetching assets (fonts, libraries, etc.)
 let wasmAssetLogShown = false;
 let openscadConsoleOutput = ''; // Accumulated console output from OpenSCAD
 let openscadCapabilities = null;
 let _callMainInvoked = false;
+// Mutes console mirroring inside the Module print/printErr closures while the
+// --help capability probe runs (its ~200-line usage block otherwise floods the
+// page console as [OpenSCAD ERR] on every cold start). Output still accumulates
+// in openscadConsoleOutput for the capability parser.
+let capabilityProbeActive = false;
 
 function isAbsoluteUrl(value) {
   return /^[a-z]+:\/\//i.test(value);
@@ -136,9 +157,12 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
     if (import.meta.env.DEV)
       console.log('[Worker] Loading official OpenSCAD from:', wasmJsUrl);
 
-    // Integrity check: verify WASM artifacts match expected manifest.
-    // Guards against corrupted or tampered files before they produce silent wrong results.
-    // Checks both openscad.js and openscad.wasm sizes; optionally verifies SHA-256.
+    // Integrity check: verify WASM artifacts match the vendored manifest.
+    // Guards against corrupted or tampered files before they produce silent
+    // wrong results. Verifies byte size AND the SHA-256 recorded in
+    // INTEGRITY.json (previously only content-length was compared, which
+    // cannot detect same-size tampering). The fetch hits the HTTP/SW cache
+    // and the 10.7 MB digest takes milliseconds.
     let integrityData = null;
     try {
       const integrityUrl = `${wasmBasePath}/INTEGRITY.json`;
@@ -154,7 +178,7 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
           }
         }
 
-        // Verify sizes of both JS loader and WASM binary
+        // Verify size and SHA-256 of both the JS loader and the WASM binary
         const filesToCheck = [
           { name: 'openscad.js', url: wasmJsUrl },
           { name: 'openscad.wasm', url: `${wasmBasePath}/openscad.wasm` },
@@ -163,36 +187,49 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
 
         for (const { name, url } of filesToCheck) {
           const expected = integrityData.files?.[name];
-          if (!expected?.size) continue;
+          if (!expected?.size && !expected?.sha256) continue;
 
           try {
-            const headResp = await fetch(url, { method: 'HEAD' });
-            const actualSize = parseInt(
-              headResp.headers.get('content-length'),
-              10
-            );
-            if (actualSize && actualSize !== expected.size) {
+            const resp = await fetch(url);
+            if (!resp.ok) continue;
+            const buffer = await resp.arrayBuffer();
+
+            if (expected.size && buffer.byteLength !== expected.size) {
               mismatches.push(
-                `${name}: expected ${expected.size} bytes, got ${actualSize}`
+                `${name}: expected ${expected.size} bytes, got ${buffer.byteLength}`
               );
+              continue;
             }
-          } catch (_headErr) {
-            // HEAD may fail on some CDN configs; skip this file's check
+            if (expected.sha256 && crypto?.subtle) {
+              const digest = await crypto.subtle.digest('SHA-256', buffer);
+              const hex = Array.from(new Uint8Array(digest))
+                .map((b) => b.toString(16).padStart(2, '0'))
+                .join('');
+              if (hex !== expected.sha256) {
+                mismatches.push(
+                  `${name}: SHA-256 mismatch (expected ${expected.sha256.slice(0, 16)}…, got ${hex.slice(0, 16)}…)`
+                );
+              }
+            }
+          } catch (_fetchErr) {
+            // Fetch may fail on some CDN configs; skip this file's check
           }
         }
 
         if (mismatches.length > 0) {
-          const msg = `[Worker] WASM integrity warning: size mismatch — ${mismatches.join('; ')}. Files may be corrupted or outdated.`;
+          const msg = `[Worker] WASM integrity check FAILED — ${mismatches.join('; ')}. Files may be corrupted or tampered with; re-run npm run setup-wasm.`;
           console.warn(msg);
           self.postMessage({
             type: 'WARNING',
             payload: {
               code: 'WASM_INTEGRITY',
               message:
-                'WASM file integrity check detected a size mismatch. Files may need re-downloading.',
+                'WASM engine files failed integrity verification (size or SHA-256 mismatch). Re-download them with "npm run setup-wasm".',
               severity: 'warning',
             },
           });
+        } else if (import.meta.env.DEV) {
+          console.log('[Worker] WASM integrity verified (size + SHA-256)');
         }
       }
     } catch (integrityErr) {
@@ -235,11 +272,11 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
       },
       print: (text) => {
         openscadConsoleOutput += text + '\n';
-        console.log('[OpenSCAD]', text);
+        if (!capabilityProbeActive) console.log('[OpenSCAD]', text);
       },
       printErr: (text) => {
         openscadConsoleOutput += '[ERR] ' + text + '\n';
-        console.error('[OpenSCAD ERR]', text);
+        if (!capabilityProbeActive) console.error('[OpenSCAD ERR]', text);
         // Detecting GUI mode or abort errors is done via console output inspection
       },
     });
@@ -351,41 +388,22 @@ async function mountFonts() {
 
   const FS = module.FS;
 
-  // Create font directory structure
-  const fontPath = '/usr/share/fonts/truetype/liberation';
-  try {
-    FS.mkdir('/usr');
-  } catch (_e) {
-    /* may exist */
-  }
-  try {
-    FS.mkdir('/usr/share');
-  } catch (_e) {
-    /* may exist */
-  }
-  try {
-    FS.mkdir('/usr/share/fonts');
-  } catch (_e) {
-    /* may exist */
-  }
-  try {
-    FS.mkdir('/usr/share/fonts/truetype');
-  } catch (_e) {
-    /* may exist */
-  }
-  try {
-    FS.mkdir('/usr/share/fonts/truetype/liberation');
-  } catch (_e) {
-    /* may exist */
+  // Create the font directory structure, one level at a time. Derived from the
+  // manifest's mount path so the directory the fonts land in and the path the
+  // UI reports cannot drift apart (F2).
+  const fontPath = FONT_MOUNT_DIR;
+  let built = '';
+  for (const segment of fontPath.split('/').filter(Boolean)) {
+    built += `/${segment}`;
+    try {
+      FS.mkdir(built);
+    } catch (_e) {
+      /* may exist */
+    }
   }
 
-  // List of fonts to load
-  const fonts = [
-    'LiberationSans-Regular.ttf',
-    'LiberationSans-Bold.ttf',
-    'LiberationSans-Italic.ttf',
-    'LiberationMono-Regular.ttf',
-  ];
+  // The fonts to load — one source of truth, shared with the Font List panel.
+  const fonts = FONT_FILES;
 
   // Valid TrueType fonts start with these 4 magic bytes (scalar type = 0x00010000).
   // If the server returns HTML (e.g. SPA _redirects masking a 404), the first bytes
@@ -398,7 +416,7 @@ async function mountFonts() {
 
   for (const fontFile of fonts) {
     try {
-      const fontUrl = `${assetBaseUrl}/fonts/${fontFile}`;
+      const fontUrl = `${assetBaseUrl}/${FONT_ASSET_DIR}/${fontFile}`;
       const response = await fetch(fontUrl);
 
       if (!response.ok) {
@@ -482,19 +500,22 @@ async function checkCapabilities() {
       return capabilities;
     }
 
-    // Capture --help output
-    const helpOutput = [];
-    const originalPrint = module.print;
-    const originalPrintErr = module.printErr;
-    module.print = (text) => helpOutput.push(String(text));
-    module.printErr = (text) => helpOutput.push(String(text));
+    // OpenSCAD writes the --help usage block to stderr. The Emscripten glue
+    // binds out/err to the Module print/printErr closures once at creation, so
+    // reassigning module.printErr here can never intercept it — instead the
+    // worker-scope capabilityProbeActive flag mutes the console mirroring in
+    // those closures and the help text is read back from the
+    // openscadConsoleOutput delta they still accumulate.
     const consoleOutputBeforeHelp = openscadConsoleOutput.length;
 
     try {
+      capabilityProbeActive = true;
       _callMainInvoked = true;
       await module.callMain(['--help']);
     } catch (_error) {
       // --help might exit with non-zero, that's okay
+    } finally {
+      capabilityProbeActive = false;
     }
 
     // Reset the guard after the non-destructive --help probe.
@@ -502,18 +523,7 @@ async function checkCapabilities() {
     // geometry; --help does not modify geometry state.
     _callMainInvoked = false;
 
-    module.print = originalPrint;
-    module.printErr = originalPrintErr;
-    // Some OpenSCAD WASM builds keep internal print callbacks and do not honor
-    // runtime reassignment of module.print/module.printErr. In that case,
-    // helpOutput stays empty while output still lands in openscadConsoleOutput.
-    let helpText = helpOutput.join('\n');
-    if (helpText.trim().length === 0) {
-      const consoleDelta = openscadConsoleOutput.slice(consoleOutputBeforeHelp);
-      if (consoleDelta.trim().length > 0) {
-        helpText = consoleDelta;
-      }
-    }
+    const helpText = openscadConsoleOutput.slice(consoleOutputBeforeHelp);
 
     // Parse capabilities from help text
     // Note: Modern OpenSCAD uses --backend=Manifold instead of --enable=manifold
@@ -717,6 +727,35 @@ async function mountFiles(files, options = {}) {
 // with unit tests).
 
 /**
+ * Recursively remove a directory tree from the virtual filesystem.
+ * Missing paths and undeletable entries are expected states, not errors.
+ * @param {Object} FS - Emscripten filesystem
+ * @param {string} path - Directory to remove
+ */
+function rmTreeRecursive(FS, path) {
+  try {
+    const entries = FS.readdir(path);
+    for (const entry of entries) {
+      if (entry === '.' || entry === '..') continue;
+      const fullPath = `${path}/${entry}`;
+      try {
+        const stat = FS.stat(fullPath);
+        if (FS.isDir(stat.mode)) {
+          rmTreeRecursive(FS, fullPath);
+        } else {
+          FS.unlink(fullPath);
+        }
+      } catch (_e) {
+        // Ignore errors for individual entries
+      }
+    }
+    FS.rmdir(path);
+  } catch (_e) {
+    // Directory may not exist or be already removed
+  }
+}
+
+/**
  * Clear all mounted files from virtual filesystem
  * Also cleans up the /work/ directory for design packages
  */
@@ -737,34 +776,10 @@ function clearMountedFiles() {
     }
   }
 
-  // Recursively remove the work directory and all its contents
-  function rmRecursive(path) {
-    try {
-      const entries = FS.readdir(path);
-      for (const entry of entries) {
-        if (entry === '.' || entry === '..') continue;
-        const fullPath = `${path}/${entry}`;
-        try {
-          const stat = FS.stat(fullPath);
-          if (FS.isDir(stat.mode)) {
-            rmRecursive(fullPath);
-          } else {
-            FS.unlink(fullPath);
-          }
-        } catch (_e) {
-          // Ignore errors for individual entries
-        }
-      }
-      FS.rmdir(path);
-    } catch (_e) {
-      // Directory may not exist or be already removed
-    }
-  }
-
   try {
     const workDirAnalysis = FS.analyzePath(WORK_DIR);
     if (workDirAnalysis.exists) {
-      rmRecursive(WORK_DIR);
+      rmTreeRecursive(FS, WORK_DIR);
     }
   } catch (_error) {
     // Work directory may not exist, ignore
@@ -789,36 +804,31 @@ async function mountLibraries(libraries) {
   let totalMounted = 0;
   const baseRoot = '/libraries';
 
-  const ensureDir = (dirPath) => {
-    const parts = dirPath.split('/').filter(Boolean);
-    let current = '';
-    for (const part of parts) {
-      current += `/${part}`;
-
-      // Check if path exists and what type it is
-      const analyzed = FS.analyzePath(current);
-
-      // If exists and is a directory, skip
-      if (analyzed.exists && analyzed.object?.isFolder) {
-        continue;
-      }
-
-      // If exists but NOT a directory, we have a problem
-      if (analyzed.exists && !analyzed.object?.isFolder) {
-        throw new Error(`Path exists as file, not directory: ${current}`);
-      }
-
-      try {
-        FS.mkdir(current);
-      } catch (error) {
-        if (error.code !== 'EEXIST') {
-          throw error;
-        }
-      }
-    }
-  };
+  const ensureDir = (dirPath) => ensureLibraryDir(FS, dirPath);
 
   ensureDir(baseRoot);
+
+  // D-42 leftovers: this module lives for the whole page, so a library
+  // mounted for an earlier render stays in the filesystem after the user
+  // switches it off - and the next render would resolve its includes from
+  // the leftovers and silently succeed instead of naming the cause. Remove
+  // whatever this render did not ask for. The ids are also queued for the
+  // render path to unlink their include-resolution symlinks, whose
+  // directory depends on where the input file sits.
+  const requestedIds = new Set(libraries.map((lib) => lib.id));
+  for (const mountedId of [...mountedLibraries]) {
+    if (requestedIds.has(mountedId)) continue;
+    rmTreeRecursive(FS, `${baseRoot}/${mountedId}`);
+    try {
+      FS.unlink(`/tmp/${mountedId}`);
+    } catch (_e) {
+      // No symlink at the default input location
+    }
+    mountedLibraries.delete(mountedId);
+    staleLibraryIds.add(mountedId);
+    if (import.meta.env.DEV)
+      console.log(`[Worker FS] Unmounted switched-off library: ${mountedId}`);
+  }
 
   for (const lib of libraries) {
     const libRoot = lib.path.startsWith('/') ? lib.path : `/${lib.path}`;
@@ -861,29 +871,47 @@ async function mountLibraries(libraries) {
 
         ensureDir(libRoot);
 
+        // AF-12: one archive instead of one request per file (695 for
+        // dotSCAD). Anything wrong on this path - missing archive, corrupt
+        // bytes - is SAID and then the per-file loop below takes over, so
+        // an old deployment without archives keeps working.
+        let mountedFromArchive = false;
+        if (manifest.archive) {
+          try {
+            const zipResponse = await fetch(
+              `${assetBaseUrl}${lib.path}/${manifest.archive}`
+            );
+            if (!zipResponse.ok) {
+              throw new Error(`HTTP ${zipResponse.status}`);
+            }
+            const entries = await unpackLibraryArchive(
+              await zipResponse.arrayBuffer()
+            );
+            for (const entry of entries) {
+              writeLibraryFile(FS, libRoot, entry.path, entry.text);
+              totalMounted++;
+            }
+            mountedFromArchive = true;
+            if (import.meta.env.DEV)
+              console.log(
+                `[Worker FS] Mounted ${lib.id} from ${manifest.archive} (${entries.length} files)`
+              );
+          } catch (error) {
+            console.warn(
+              `[Worker FS] Archive mount failed for ${lib.id} (${error.message}); falling back to per-file fetches`
+            );
+          }
+        }
+
         // Fetch and mount each file
-        for (const file of files) {
+        for (const file of mountedFromArchive ? [] : files) {
           try {
             const fileResponse = await fetch(
               `${assetBaseUrl}${lib.path}/${file}`
             );
             if (fileResponse.ok) {
               const content = await fileResponse.text();
-              const filePath = `${libRoot}/${file}`;
-
-              // Create subdirectories if needed
-              const parts = file.split('/');
-              let currentPath = libRoot;
-              for (let i = 0; i < parts.length - 1; i++) {
-                currentPath += '/' + parts[i];
-                try {
-                  FS.mkdir(currentPath);
-                } catch (error) {
-                  if (error.code !== 'EEXIST') throw error;
-                }
-              }
-
-              FS.writeFile(filePath, content);
+              writeLibraryFile(FS, libRoot, file, content);
               totalMounted++;
             }
           } catch (error) {
@@ -1062,7 +1090,14 @@ async function renderWithCallMain(
     performanceFlags.push('--enable=lazy-union');
   }
   const exportFlags = [];
-  if (format === 'stl' && supportsBinarySTL) {
+  // Upstream's File > Export offers STL as ascii or binary. Binary is the
+  // default here because it is ~18x faster; asking for ascii simply leaves
+  // the flag off, which is OpenSCAD's own default for a .stl target.
+  if (
+    format === 'stl' &&
+    supportsBinarySTL &&
+    renderOptions?.stlBinary !== false
+  ) {
     exportFlags.push('--export-format=binstl');
   }
   try {
@@ -1122,6 +1157,21 @@ async function renderWithCallMain(
     // before OPENSCADPATH. Create symlinks so that search succeeds.
     const symlinkInputDir =
       inputFile.substring(0, inputFile.lastIndexOf('/')) || '/tmp';
+    // A library unmounted by the reconcile in mountLibraries may have left
+    // its symlink beside a previous input file; resolved through it, the
+    // include would find nothing (the target is gone) but a fresh mount at
+    // the same id would be shadowed. Remove them here, where the input
+    // directory is known.
+    if (symlinkInputDir && staleLibraryIds.size > 0) {
+      for (const staleId of staleLibraryIds) {
+        try {
+          module.FS.unlink(`${symlinkInputDir}/${staleId}`);
+        } catch (_e) {
+          // No symlink for this id beside this input file
+        }
+      }
+      staleLibraryIds.clear();
+    }
     if (symlinkInputDir && mountedLibraries.size > 0) {
       for (const libId of mountedLibraries) {
         const libPath = `/libraries/${libId}`;
@@ -1584,28 +1634,34 @@ async function render(payload) {
       payload: { requestId, percent: 10, message: 'Preparing model...' },
     });
 
-    // Mount libraries if provided
-    if (libraries && libraries.length > 0) {
-      self.postMessage({
-        type: 'PROGRESS',
-        payload: {
-          requestId,
-          percent: 12,
-          message: `Mounting ${libraries.length} libraries...`,
-        },
-      });
-
-      try {
-        await mountLibraries(libraries);
-
+    // Mount libraries if provided. An EMPTY list still goes through:
+    // mountLibraries also unmounts leftovers from earlier renders, and a
+    // render with every library switched off needs that cleanup most (D-42).
+    if (Array.isArray(libraries)) {
+      if (libraries.length > 0) {
         self.postMessage({
           type: 'PROGRESS',
           payload: {
             requestId,
-            percent: 15,
-            message: 'Libraries mounted successfully',
+            percent: 12,
+            message: `Mounting ${libraries.length} libraries...`,
           },
         });
+      }
+
+      try {
+        await mountLibraries(libraries);
+
+        if (libraries.length > 0) {
+          self.postMessage({
+            type: 'PROGRESS',
+            payload: {
+              requestId,
+              percent: 15,
+              message: 'Libraries mounted successfully',
+            },
+          });
+        }
       } catch (error) {
         console.warn('[Worker] Library mounting failed:', error);
         // Continue rendering - libraries might not be strictly required
@@ -1838,10 +1894,7 @@ async function render(payload) {
       } else if (resultFormat === 'obj') {
         triangleCount = (outputData.match(/^f /gm) || []).length;
       } else if (resultFormat === 'off') {
-        const match =
-          outputData.match(/^C?OFF\s+\d+\s+(\d+)/m) ||
-          outputData.match(/^C?OFF\b[^\n]*\n\s*\d+\s+(\d+)/m);
-        if (match) triangleCount = parseInt(match[1]);
+        triangleCount = parseOffTriangleCount(outputData);
       }
     } else if (outputData instanceof Uint8Array) {
       // CRITICAL FIX: Uint8Array's .buffer property returns the underlying ArrayBuffer
@@ -1853,6 +1906,13 @@ async function render(payload) {
       );
     } else {
       throw new Error(`Unknown ${resultFormat.toUpperCase()} data format`);
+    }
+
+    // OFF delivered as a buffer (the render-colors default path) skipped the
+    // string-branch counting above and left the status bar at "0 triangles" —
+    // the header parse works on raw bytes, so recover the count here.
+    if (resultFormat === 'off' && triangleCount === 0 && outputBuffer) {
+      triangleCount = parseOffTriangleCount(outputBuffer);
     }
 
     // Validate 2D format outputs (SVG/DXF) - they may be "valid" but empty
@@ -2020,9 +2080,7 @@ async function render(payload) {
 
     if (confirmedNot2D) {
       code = 'MODEL_NOT_2D';
-      message =
-        'Your model produces 3D geometry but SVG/DXF export requires 2D output. ' +
-        'Enable "use Laser Cutting best practices" or ensure your model uses projection() to produce 2D geometry.';
+      message = MODEL_NOT_2D_EXPLANATION + ' ' + MODEL_NOT_2D_SUGGESTION;
     }
 
     // Signal that the WASM module needs a restart before the next render.

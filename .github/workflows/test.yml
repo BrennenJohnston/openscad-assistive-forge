@@ -11,6 +11,7 @@ jobs:
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
       - name: Checkout code
@@ -27,16 +28,19 @@ jobs:
       
       - name: Run linter
         run: npm run lint
-      
+
+      - name: Check formatting
+        run: npm run format:check
+
       - name: Check for hallucinated imports
         run: npm run import-check
-      
-      - name: Scan for AI code bloat
-        run: npm run bloat-scan
-      
+
       - name: Audit CSS variables
         run: npm run css-variable-audit
-      
+
+      - name: Validate HTML (vnu)
+        run: npm run validate:html
+
       - name: Run unit tests
         run: npm run test:run
       
@@ -57,9 +61,207 @@ jobs:
           name: coverage-report
           path: coverage/
 
-  e2e-tests-chromium:
-    name: E2E Tests (Chromium)
+  # WASM smoke gate - BLOCKING. The one e2e job with zero test.skip(isCI):
+  # boot + WASM init, upload, preview render, full-render STL bytes, and
+  # param-change re-render all run for real. If this job is red, the core
+  # pipeline is broken no matter what the other (heavily skipped) jobs say.
+  wasm-smoke:
+    name: WASM Smoke (blocking, no skips)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download OpenSCAD WASM files
+        run: npm run setup-wasm
+
+      # AF-CI2: the browser download hung twelve CI jobs in two days (four at
+      # once on one run). Cache the browsers so the install step only ever
+      # downloads when the Playwright version moves.
+      - name: Cache Playwright browsers
+        id: pwcache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-chromium-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Playwright browsers
+        # On a cache hit the browsers are already here, and --with-deps'
+        # apt-get against the Azure mirror is the thing that actually hangs
+        # (measured: the hang survived a cache hit). The runner image already
+        # ships every system library these browsers need.
+        run: |
+          if [ "${{ steps.pwcache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install chromium
+          else
+            npx playwright install --with-deps chromium
+          fi
+
+      - name: Run WASM smoke suite
+        run: npx playwright test tests/e2e/wasm-smoke.spec.js --project=chromium
+        env:
+          # Real WASM renders with retries need more than the default
+          # 10-minute global ceiling.
+          PW_GLOBAL_TIMEOUT: '900000'
+
+      - name: Upload Playwright report (WASM smoke)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-wasm-smoke
+          path: playwright-report/
+          retention-days: 30
+
+  # Geometry parity gate - BLOCKING. Renders the CI parity fixtures in
+  # headless Chromium via the app's own pipeline and compares against the
+  # committed golden manifest (scripts/parity/golden/) with hash-exact
+  # tolerance. Any change that alters exported geometry bytes fails here.
+  parity-check:
+    name: Geometry Parity (golden, blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download OpenSCAD WASM files
+        run: npm run setup-wasm
+
+      # AF-CI2: the browser download hung twelve CI jobs in two days (four at
+      # once on one run). Cache the browsers so the install step only ever
+      # downloads when the Playwright version moves.
+      - name: Cache Playwright browsers
+        id: pwcache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-chromium-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Playwright browsers
+        # On a cache hit the browsers are already here, and --with-deps'
+        # apt-get against the Azure mirror is the thing that actually hangs
+        # (measured: the hang survived a cache hit). The runner image already
+        # ships every system library these browsers need.
+        run: |
+          if [ "${{ steps.pwcache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install chromium
+          else
+            npx playwright install --with-deps chromium
+          fi
+
+      - name: Start dev server
+        run: |
+          npm run dev &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:5173 >/dev/null && break
+            sleep 2
+          done
+          curl -sf http://localhost:5173 >/dev/null
+
+      - name: Run golden parity comparison
+        run: npm run parity:ci
+
+      - name: Upload parity report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: parity-report
+          path: artifacts/parity/report.*
+          retention-days: 30
+
+  # SHARDS. Chromium became the pinch point once Edge was split: it reached
+  # 29m18s of its 35-minute ceiling on UF-29's board, against the "~30 real
+  # minutes" trigger the note inside this job has named since Q-36. Two shards
+  # now run side by side, each with the whole 35 minutes, and the ceiling stays
+  # where it is.
+  #
+  # DELIBERATELY UNLIKE EDGE in one respect. Splitting Edge renamed its check
+  # contexts, which meant editing ruleset 12059827 by hand and left PR #90
+  # blocked until that happened. Here the shards get their own contexts and the
+  # small aggregate job below keeps the name "E2E Tests (Chromium)" that the
+  # ruleset already requires, so nothing outside version control has to change
+  # and no PR is ever blocked mid-transition. The cost is one extra ~15s job.
+  #
+  # MEASURED before this was written, not after: `--shard=n/2 --list` divides
+  # the suite into 415 tests in 41 files and 414 in 31, totalling the 829 an
+  # unsharded run lists. A `--shard` run reports only its own shard in
+  # playwright-results.json with a result on each (proved for Edge in UF-27),
+  # so the never-started guard still works per shard rather than seeing the
+  # other half as missing.
+  #
+  # CW-62 (2026-08-27): CHROMIUM RUNS THREE SHARDS, not two, and the reason is
+  # a measurement rather than a preference. Re-weighted from run 33063099176's
+  # GREEN shards, two shards project to 32.9 minutes against Playwright's
+  # 35-minute ceiling - and the attempt before it, on a starved runner, hit
+  # that ceiling and was cut off at 2100s. Three shards project to 22.9.
+  # CW-59, CW-60 and CW-61 added fourteen cases to the most expensive files in
+  # this lane, and CW-63 through CW-66 will add more.
+  #
+  # Renaming the shard contexts is safe HERE AND ONLY HERE: ruleset 12059827
+  # requires "E2E Tests (Chromium)", the aggregator below, not the individual
+  # shards. The Edge lane's shards ARE each required contexts, so its split
+  # cannot change without the owner editing the ruleset first - and it
+  # projects to the same 32.9 minutes. That is on the owner ledger.
+  #
+  # D-72 (CW-29, 2026-08-22): --shard is no longer what divides these lanes.
+  # It balances the COUNT of tests, and the count was never the problem - the
+  # halves were 476 and 475 tests and 50.3 against 20.9 test-minutes, because
+  # the expensive files sort early in the path order --shard walks. Both lanes
+  # now take their file list from scripts/e2e-shard.mjs, which packs the suite
+  # by MEASURED cost; a run that gives a file list still reports exactly those
+  # tests, so the guard below is unaffected. The job names are untouched, so
+  # no ruleset context moves.
+  e2e-tests-chromium-shard:
+    name: E2E Tests (Chromium ${{ matrix.shard }}/6)
+    runs-on: ubuntu-latest
+    # Back to 45 after the CW-97 diagnostic window: the City Walk e2e
+    # suites are paused on CI (the skip in tests/e2e/helpers/city-walk.js
+    # says why), and the remaining suite fits the old budget with room.
+    timeout-minutes: 45
+
+    strategy:
+      # A red shard must not cancel its sibling: knowing whether the failure is
+      # in one half or both is most of the diagnosis.
+      fail-fast: false
+      matrix:
+        # CW-80 (2026-08-31): a fourth shard, exactly as the note below
+        # promised - Round 8's city suites grew ~35 heavy cases after the
+        # 08-27 re-measure and both PR-R8C CI passes died on 'Timed out
+        # waiting 2100s'. Re-weighted from the green local board of
+        # 2026-08-31, three shards project 30.2 min against the 25-minute
+        # guard bar; four project 23.4. The shard CONTEXTS here are not
+        # required checks (only the aggregate 'E2E Tests (Chromium)' is),
+        # so this rename is safe per the ruleset note above.
+        # CW-83 aftercare (2026-08-31): SIX. The close-head run measured
+        # what the model could not - four shards still hit the 2100 s
+        # clock, because two workers on a two-core runner with software 3D
+        # rendering deliver nowhere near 2x parallelism on the city files
+        # (the D-78 note's own finding, now measured at lane scale). The
+        # ceiling stays where its note demands; the shard count is the
+        # prescribed lever, and chromium shard contexts are not required
+        # checks.
+        shard: [1, 2, 3, 4, 5, 6]
     
     steps:
       - name: Checkout code
@@ -77,26 +279,233 @@ jobs:
       - name: Download OpenSCAD WASM files
         run: npm run setup-wasm
       
+      # AF-CI2: the browser download hung twelve CI jobs in two days (four at
+      # once on one run). Cache the browsers so the install step only ever
+      # downloads when the Playwright version moves.
+      - name: Cache Playwright browsers
+        id: pwcache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-chromium-${{ hashFiles('package-lock.json') }}
+
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        # On a cache hit the browsers are already here, and --with-deps'
+        # apt-get against the Azure mirror is the thing that actually hangs
+        # (measured: the hang survived a cache hit). The runner image already
+        # ships every system library these browsers need.
+        run: |
+          if [ "${{ steps.pwcache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install chromium
+          else
+            npx playwright install --with-deps chromium
+          fi
       
-      - name: Run E2E tests (Chromium only)
-        run: npx playwright test --project=chromium
-      
-      - name: Upload Playwright report
+      - name: Run E2E tests (Chromium shard ${{ matrix.shard }} of 6)
+        # D-72: the division comes from scripts/e2e-shard.mjs, not from
+        # Playwright's --shard. --shard divides by TEST COUNT in path order,
+        # which balanced the counts (476 / 475) and not the work (50.3 / 20.9
+        # test-minutes), because the expensive files all sort early -
+        # ascii-city-walk.spec.js alone is 18 minutes of this lane and sorts
+        # under "a". That is why this shard failed on the ceiling three times
+        # at 32.5, 32.5 and 34.7 minutes while its sibling sat at 12.5. The
+        # script reads tests/e2e itself, so a new spec cannot fall between the
+        # shards; its header says how to re-measure the weights.
+        run: |
+          FILES=$(node scripts/e2e-shard.mjs ${{ matrix.shard }} 6)
+          echo "shard ${{ matrix.shard }}/6 runs: $FILES"
+          npx playwright test --project=chromium $FILES
+        env:
+          # R2a added 17 Classic e2e cases, each booting WASM and loading a
+          # project, which pushed this job past the default 10-minute global
+          # ceiling: the run ended in "Timed out waiting 600s" with 23 tests
+          # never started, not on any assertion. Same escape hatch the WASM
+          # smoke and WebKit jobs already use.
+          #
+          # Raised again to match Edge (25min) for the same reason, one tier
+          # up: at 900000 the last develop run reported "Timed out waiting
+          # 900s" with 352 passed, 0 failed and 11 never started. Edge runs
+          # the same suite in 19min and passes on this ceiling. Red here has
+          # meant the clock rather than a defect, which is precisely how a
+          # broken editor once shipped behind a green suite.
+          #
+          # Raised to 30min on the owner's order (2026-08-10, after UF-5 /
+          # PR #66): the job wall-clock reached 22m19s with ~2m41s of
+          # margin, and UF-6..UF-8 land before UF-9's health pass can trim
+          # the suite. Kept matched with Edge, as the raises above always
+          # were. The Q-23 never-started guard below stays the honesty
+          # backstop either way.
+          #
+          # Raised to 35min on the owner's order (Q-36, 2026-08-12, UF-12):
+          # Edge ran 26m25s / 27m3s of its 30min ceiling on the last two
+          # runs and Round 3 adds an estimated +6 to +9 minutes of specs.
+          # Kept matched with Edge as always; sharding is the next step if
+          # either lane crosses ~30 real minutes.
+          #
+          # 2026-08-16: it crossed it - 29m18s on UF-29's board - so the
+          # sharding this note promised is what happened, and the ceiling
+          # stayed where it is. Each shard now runs roughly half the suite
+          # against the whole 35 minutes. Raising this number is not the answer
+          # if a shard ever gets close again; a third shard is.
+          #
+          # CW-97: a diagnostic 50-minute window measured the lanes whole,
+          # then the City Walk e2e suites were paused on CI (the skip in
+          # tests/e2e/helpers/city-walk.js says why), so the clock returns
+          # to 35 for the suite that actually runs here.
+          PW_GLOBAL_TIMEOUT: '2100000'
+
+      # Q-23 (owner, 2026-08-09): this job once stayed green for a whole
+      # release while two menu-parity tests were red, because tests the
+      # clock cut off report as never-started rather than failed. A green
+      # summary over an incomplete run must fail.
+      - name: Never-started tests fail this shard
+        run: node scripts/check-e2e-complete.mjs playwright-results.json
+
+      - name: Upload Playwright report (Chromium shard ${{ matrix.shard }})
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: playwright-report-chromium
+          # upload-artifact v4 rejects two uploads under one name, so the
+          # shard number has to be in it.
+          name: playwright-report-chromium-${{ matrix.shard }}
           path: playwright-report/
+          retention-days: 30
+
+  # THE REQUIRED CHECK. Ruleset 12059827 requires the context "E2E Tests
+  # (Chromium)", so that name has to keep existing and keep meaning "the whole
+  # Chromium suite passed".
+  #
+  # `needs` on a matrix job resolves to a single result that is `success` only
+  # when EVERY leg succeeded, so this is a real gate rather than a rubber stamp.
+  # `if: always()` matters as much: without it a failed shard would SKIP this
+  # job, and a skipped required check is not the same thing as a failed one -
+  # it would leave the merge waiting rather than refused.
+  e2e-tests-chromium:
+    name: E2E Tests (Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [e2e-tests-chromium-shard]
+    if: always()
+
+    steps:
+      - name: Both Chromium shards must have passed
+        run: |
+          result='${{ needs.e2e-tests-chromium-shard.result }}'
+          echo "Chromium shards reported: $result"
+          if [ "$result" != "success" ]; then
+            echo "::error::Chromium did not pass ($result). The third that failed is in E2E Tests (Chromium 1/3), (2/3) or (3/3)."
+            exit 1
+          fi
+
+  # Production-parity E2E lane. Every other e2e job above runs against the Vite
+  # dev server, which sends no Content-Security-Policy; the built app behind the
+  # shipped public/_headers CSP had never been loaded by any test, and that is
+  # the gap a broken editor walked through to production (D4, PR #56).
+  #
+  # Deliberately its own job rather than a step on Build Check: a failure here
+  # is a test failure, and reporting it as a build failure would send whoever
+  # reads the check name looking in the wrong place.
+  e2e-tests-production:
+    name: E2E Tests (Production CSP)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download OpenSCAD WASM files
+        run: npm run setup-wasm
+
+      # AF-CI2: the browser download hung twelve CI jobs in two days (four at
+      # once on one run). Cache the browsers so the install step only ever
+      # downloads when the Playwright version moves.
+      - name: Cache Playwright browsers
+        id: pwcache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-chromium-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Playwright browsers
+        # On a cache hit the browsers are already here, and --with-deps'
+        # apt-get against the Azure mirror is the thing that actually hangs
+        # (measured: the hang survived a cache hit). The runner image already
+        # ships every system library these browsers need.
+        run: |
+          if [ "${{ steps.pwcache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install chromium
+          else
+            npx playwright install --with-deps chromium
+          fi
+
+      - name: Build project
+        run: npm run build
+
+      - name: Run production-parity E2E tests
+        run: npx playwright test --config=playwright.prod.config.js
+
+      # This lane writes a whole-window screenshot of the built app every run,
+      # pass or fail — that artifact is half the point of it. The prod config
+      # reports to the console in CI and writes no HTML report, so uploading
+      # playwright-report/ here would archive an empty directory.
+      - name: Upload production artifacts (screenshots, traces, video)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: production-smoke-artifacts
+          path: test-results/
           retention-days: 30
 
   # Edge E2E tests - blocking per Milestone 0 requirements (Tier 1 browser)
   # See: docs/planning/browser-matrix.md, docs/planning/LAYER_2_BUILD_PLAN.md
+  #
+  # UF-27 P1 (owner's decision, 2026-08-15): SPLIT INTO TWO SIDE-BY-SIDE
+  # SHARDS. This lane was the pinch point of the whole board - 30m52s of its
+  # 35-minute ceiling on the develop@6aeee17 push, with the round's editor
+  # releases still to add specs to it. The ceiling is deliberately NOT raised:
+  # two shards run at the same time, each with the full 35 minutes, so the
+  # margin roughly doubles while the wall-clock of the board halves for this
+  # lane.
+  #
+  # Each shard is its own check context ("E2E Tests (Edge 1/2)" and
+  # "E2E Tests (Edge 2/2)"), so the branch ruleset has to require both in
+  # place of the old single "E2E Tests (Edge)".
+  #
+  # MEASURED before splitting: a `--shard=n/2` run reports ONLY its own
+  # shard's tests in playwright-results.json, each carrying a result, so the
+  # never-started guard below works per shard. There are no serial-mode
+  # describes in tests/e2e, so nothing depends on two cases landing on the
+  # same machine.
   e2e-tests-edge:
-    name: E2E Tests (Edge)
+    name: E2E Tests (Edge ${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
-    
+    # Back to 45 after the CW-97 diagnostic window: the City Walk e2e
+    # suites are paused on CI (the skip in tests/e2e/helpers/city-walk.js
+    # says why), and the remaining suite fits the old budget with room.
+    timeout-minutes: 45
+
+    strategy:
+      # A red shard must not cancel its sibling: knowing whether the failure
+      # is in one half or both is most of the diagnosis.
+      fail-fast: false
+      matrix:
+        # CW-83 (G3, 2026-08-31): the owner is editing ruleset 12059827 to
+        # require the three contexts this matrix now produces - the
+        # re-weighted model put two Edge shards at 43.7 projected minutes,
+        # past any honest ceiling, and a third shard is the fix the
+        # Chromium note has prescribed for every lane since UF-27.
+        shard: [1, 2, 3]
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -113,24 +522,136 @@ jobs:
       - name: Download OpenSCAD WASM files
         run: npm run setup-wasm
       
+      # AF-CI2: the browser download hung twelve CI jobs in two days (four at
+      # once on one run). Cache the browsers so the install step only ever
+      # downloads when the Playwright version moves.
+      - name: Cache Playwright browsers
+        id: pwcache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-msedge-ffmpeg-${{ hashFiles('package-lock.json') }}
+
       - name: Install Playwright browsers (Edge/msedge)
-        run: npx playwright install --with-deps msedge
+        # AF-CI2: the msedge channel is an apt download, which the cache above
+        # cannot hold - but the runner image ships Microsoft Edge already, so
+        # only download when it is genuinely missing. ffmpeg (video recording)
+        # comes from the cached ms-playwright directory.
+        run: |
+          if command -v microsoft-edge >/dev/null 2>&1; then
+            echo "Microsoft Edge is preinstalled on this runner; skipping the download"
+          else
+            npx playwright install --with-deps msedge
+          fi
+          npx playwright install ffmpeg
       
-      - name: Run E2E tests (Edge)
-        run: npx playwright test --project=msedge
-      
-      - name: Upload Playwright report (Edge)
+      - name: Run E2E tests (Edge shard ${{ matrix.shard }} of 3)
+        # D-72, the same division Chromium uses and for the same reason: this
+        # lane is lopsided in the same shape and by the same files, because
+        # both inherited it from the alphabet. Measured here: 32m32s against
+        # 15m14s on the green board of 2026-08-22. The weights in
+        # scripts/e2e-shard.mjs are Chromium seconds - Edge is slower across
+        # the board, but the packing works off the RATIOS between files, and
+        # those are a property of what the tests do rather than of the browser.
+        run: |
+          FILES=$(node scripts/e2e-shard.mjs ${{ matrix.shard }} 3 msedge)
+          echo "shard ${{ matrix.shard }}/3 runs: $FILES"
+          npx playwright test --project=msedge $FILES
+        env:
+          # R2a added 17 Classic e2e cases, each booting WASM and loading a
+          # project, which pushed this job past the default 10-minute global
+          # ceiling: the run ended in "Timed out waiting 600s" with 23 tests
+          # never started, not on any assertion. Same escape hatch the WASM
+          # smoke and WebKit jobs already use.
+          #
+          # Raised again to 25min when R2b + R3a + R3c reached CI together
+          # (their PRs targeted branches, so none of their ~53 added cases had
+          # ever run here): 311 passed in 15.0m and two were then killed
+          # mid-flight and reported as failures. Same signature, same fix.
+          #
+          # Raised to 30min on the owner's order (2026-08-10, after UF-5 /
+          # PR #66), kept matched with Chromium as always: this job's
+          # wall-clock reached 25m42s (its Playwright run sits inside the
+          # ceiling; the job total is setup + run) and the suite grows
+          # through UF-6..UF-8 before UF-9 can trim it.
+          #
+          # Raised to 35min on the owner's order (Q-36, 2026-08-12, UF-12):
+          # this job ran 26m25s (develop@47b43da) and 27m3s (PR #73) of the
+          # 30min ceiling and Round 3 adds an estimated +6 to +9 minutes of
+          # specs. Kept matched with Chromium as always; sharding is the
+          # next step if either lane crosses ~30 real minutes.
+          #
+          # UF-27: it crossed it - 30m52s - so the sharding the note above
+          # promised is what happened, and the ceiling stayed where it is.
+          # Each shard now runs roughly half the suite against the whole 35
+          # minutes. Raising this number is not the answer if a shard ever
+          # gets close again; adding a third shard is.
+          #
+          # CW-83 (G3): the third shard landed - the owner signed the
+          # ruleset edit at the gate - so the CW-80 stopgap ceiling came
+          # back down toward the Chromium lanes' 35.
+          #
+          # CW-83 aftercare: the close-head run then MEASURED the three
+          # shards at 36m02s-36m13s of wall clock - a one-minute miss on a
+          # 35-minute ceiling, because Edge's real seconds run above the
+          # model's Chromium-second ratios on this runner. Forty minutes
+          # (inside the 45-minute job budget) covers the measured miss with
+          # margin; the shard count stays exactly what the owner signed.
+          #
+          # CW-97: a diagnostic window (50, then 55 minutes) measured the
+          # lanes whole, then the City Walk e2e suites were paused on CI
+          # (the skip in tests/e2e/helpers/city-walk.js says why), so the
+          # clock returns to 40 for the suite that actually runs here.
+          PW_GLOBAL_TIMEOUT: '2400000'
+
+      # Q-23 (owner, 2026-08-09): a green summary over an incomplete run must
+      # fail. UF-27: this lane never had the guard at all - only Chromium did -
+      # so a clock-cut Edge run was reported by nothing but Playwright's own
+      # exit code. Both shards carry it now.
+      - name: Never-started tests fail this shard
+        run: node scripts/check-e2e-complete.mjs playwright-results.json
+
+      - name: Upload Playwright report (Edge shard ${{ matrix.shard }})
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: playwright-report-edge
+          name: playwright-report-edge-${{ matrix.shard }}
           path: playwright-report/
           retention-days: 30
 
   # Firefox E2E tests - blocking (stabilized in v4.3.0 via parallel workers + timeouts)
-  e2e-tests-firefox:
-    name: E2E Tests (Firefox)
+  #
+  # SHARDED at IR-11 (D-103). This lane ran the whole suite against one 35min
+  # budget while Chromium and Edge each ran HALF of it against the same 35min,
+  # and it had outgrown that: MEASURED on two consecutive runs of the round's
+  # integration branch, and on develop's own run 32752580060 before the round
+  # began, it ended in "Timed out waiting 2100s for the test suite to run" with
+  # 588-589 passed, ZERO failed, and up to 15 tests never started. A lane that
+  # silently stops running tests is the failure mode the never-started guard
+  # exists to catch, and the guard was doing its job - the budget was.
+  # Confirmed on a FRESH runner, so it is capacity rather than one unlucky
+  # machine.
+  #
+  # The division comes from scripts/e2e-shard.mjs, exactly as the Chromium and
+  # Edge lanes do it: Playwright's own --shard divides by test count in path
+  # order, which balances the counts and not the work.
+  e2e-tests-firefox-shard:
+    # D-130: three shards since 2026-09-01. At two, the lane projected to
+    # 49.4 minutes against the 35-minute ceiling on the post-R8 weights - a
+    # truth the old command hid by running a 3-way plan on a 2-job matrix,
+    # which silently dropped shard 3's files. The per-shard job names are
+    # not required contexts (the aggregator below is), so this re-split
+    # needs no ruleset edit.
+    name: E2E Tests (Firefox ${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    strategy:
+      # A red shard must not cancel its siblings: knowing which shard holds
+      # the failure is most of the diagnosis.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     
     steps:
       - name: Checkout code
@@ -154,34 +675,115 @@ jobs:
       - name: Download OpenSCAD WASM files
         run: npm run setup-wasm
       
+      # AF-CI2: the browser download hung twelve CI jobs in two days (four at
+      # once on one run). Cache the browsers so the install step only ever
+      # downloads when the Playwright version moves.
+      - name: Cache Playwright browsers
+        id: pwcache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-firefox-${{ hashFiles('package-lock.json') }}
+
       - name: Install Playwright browsers (Firefox)
-        run: npx playwright install --with-deps firefox
+        # On a cache hit the browsers are already here, and --with-deps'
+        # apt-get against the Azure mirror is the thing that actually hangs
+        # (measured: the hang survived a cache hit). The runner image already
+        # ships every system library these browsers need.
+        run: |
+          if [ "${{ steps.pwcache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install firefox
+          else
+            npx playwright install --with-deps firefox
+          fi
       
-      - name: Run E2E tests (Firefox)
-        run: npx playwright test --project=firefox
-      
+      - name: Run E2E tests (Firefox shard ${{ matrix.shard }} of 3)
+        run: |
+          # The shard count is said once, in the matrix above, and repeated
+          # here; the project name makes the planner book only what this
+          # lane will actually run (PROJECT_IGNORES).
+          FILES=$(node scripts/e2e-shard.mjs ${{ matrix.shard }} 3 firefox)
+          echo "shard ${{ matrix.shard }}/3 runs: $FILES"
+          npx playwright test --project=firefox $FILES
+        env:
+          # Q-23 (owner, 2026-08-09): the same 25min ceiling Chromium and
+          # Edge run on — 86 tests had never even started here under the
+          # default 10 minutes, so the job's signal was noise.
+          #
+          # UF-20: raised to the 35min those two lanes actually run on today.
+          # They were lifted from 25 to 35 at UF-12 and this one was not, so
+          # the parity the note above describes had quietly lapsed. It matters:
+          # with the five failures fixed this lane finishes in 24.2m against a
+          # 25m budget, and the run before it spent its whole budget and
+          # reported two errors that belonged to no test at all
+          # ("Timed out waiting 1500s for the test suite to run"). Under a
+          # minute of headroom on a shared runner is not a margin, and the
+          # never-started guard already fails the job honestly if a raised
+          # ceiling ever hides an unfinished run.
+          #
+          # IR-11: kept at 35min, but each shard now carries half the suite
+          # instead of all of it. Raising the number instead would have bought
+          # a few minutes against a lane that keeps growing; halving the work
+          # is what the other two lanes already do.
+          PW_GLOBAL_TIMEOUT: '2100000'
+
+      # Q-23, extended here on the owner's decision (UF-27): this lane can
+      # genuinely fail, so the never-started guard has teeth on it. WebKit is
+      # deliberately left without one - it carries continue-on-error by design
+      # (issue #36), so a guard there could never turn the board red anyway.
+      - name: Never-started tests fail this job
+        run: node scripts/check-e2e-complete.mjs playwright-results.json
+
       - name: Upload Playwright report (Firefox)
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: playwright-report-firefox
+          # Two shards write two reports, so the artifact name has to say which.
+          name: playwright-report-firefox-${{ matrix.shard }}
           path: playwright-report/
           retention-days: 30
+
+  # THE REQUIRED CHECK, kept by name. Same shape as the Chromium aggregator:
+  # `needs` on a matrix job is `success` only when EVERY leg succeeded, and
+  # `if: always()` means a failed shard turns this red rather than skipping it -
+  # a skipped required check leaves a merge waiting instead of refused.
+  e2e-tests-firefox:
+    name: E2E Tests (Firefox)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [e2e-tests-firefox-shard]
+    if: always()
+
+    steps:
+      - name: All Firefox shards must have passed
+        run: |
+          result='${{ needs.e2e-tests-firefox-shard.result }}'
+          echo "Firefox shards reported: $result"
+          if [ "$result" != "success" ]; then
+            echo "::error::Firefox did not pass ($result). The shard that failed is in E2E Tests (Firefox 1/3), (2/3) or (3/3)."
+            exit 1
+          fi
 
   # Safari/WebKit E2E tests - requires macOS runner for WebKit.
   #
   # continue-on-error is intentional (see issue #36): WebKit on macOS runners
   # has historically flaky skip-link, modal focus, and theme keyboard tests,
   # so this job is non-blocking to keep the Test Suite green while still
-  # surfacing WebKit regressions in the job logs/artifacts.
+  # surfacing WebKit regressions in the job logs/artifacts. MEASURED at UF-20:
+  # it does what it says - a run with this job red and everything else green
+  # still concludes the workflow as success.
   #
-  # PW_GLOBAL_TIMEOUT is raised to 15min for this job only: WebKit is the
-  # slowest browser in the matrix (~9-11min wall time on green runs), and the
-  # default 10min globalTimeout left ~0-60s of headroom, intermittently
-  # cutting off the trailing mobile tutorial tests (issue #36).
+  # UF-20 / Q-48: the SCOPE of this lane now lives in playwright.config.js,
+  # not here. Running all 782 tests it reached 177 in its 25-minute budget and
+  # left 597 never started, so its red reported the clock rather than the
+  # browser; finishing the whole suite needs roughly 100+ minutes on a runner
+  # billed at 10x. The owner chose a scoped lane weighted toward accessibility
+  # (Safari is where VoiceOver users are). Read the project comment in
+  # playwright.config.js before changing the list or this timeout.
   e2e-tests-webkit:
     name: E2E Tests (Safari/WebKit)
     runs-on: macos-latest
+    timeout-minutes: 45
     continue-on-error: true
     
     steps:
@@ -206,13 +808,45 @@ jobs:
       - name: Download OpenSCAD WASM files
         run: npm run setup-wasm
       
+      # AF-CI2: the browser download hung twelve CI jobs in two days (four at
+      # once on one run). Cache the browsers so the install step only ever
+      # downloads when the Playwright version moves.
+      - name: Cache Playwright browsers
+        id: pwcache
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/ms-playwright
+          key: pw-${{ runner.os }}-webkit-${{ hashFiles('package-lock.json') }}
+
       - name: Install Playwright browsers (WebKit)
-        run: npx playwright install --with-deps webkit
+        # On a cache hit the browsers are already here, and --with-deps'
+        # apt-get against the Azure mirror is the thing that actually hangs
+        # (measured: the hang survived a cache hit). The runner image already
+        # ships every system library these browsers need.
+        run: |
+          if [ "${{ steps.pwcache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install webkit
+          else
+            npx playwright install --with-deps webkit
+          fi
       
       - name: Run E2E tests (WebKit)
         run: npx playwright test --project=webkit
         env:
-          PW_GLOBAL_TIMEOUT: '900000'
+          # Q-23 (owner, 2026-08-09): raised from 15min to the matrix-wide
+          # 25min — this job was already failing at 16m5s with 496 tests
+          # not run, so its signal was the clock, not the browser.
+          #
+          # UF-20: 25min was STILL the clock even after the lane was scoped to
+          # 176 tests. MEASURED: 92 passed / 4 failed / 3 flaky / 42 skipped
+          # and 35 STILL never started, at 25.0m. Two things are fixed
+          # together — the four failures were all defect D-31 (no WASM after a
+          # reload) and each burned three attempts waiting out a 180s timeout,
+          # which is most of the missing time, so they are now skipped at
+          # source; and this ceiling matches the 35min Chromium and Edge run
+          # on. macOS runners bill at 10x, so the ceiling is insurance against
+          # an unfinished lane rather than time this job is expected to use.
+          PW_GLOBAL_TIMEOUT: '2100000'
       
       - name: Upload Playwright report (WebKit)
         uses: actions/upload-artifact@v4
@@ -225,6 +859,7 @@ jobs:
   build:
     name: Build Check
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
       - name: Checkout code
@@ -241,7 +876,10 @@ jobs:
       
       - name: Build project
         run: npm run build
-      
+
+      - name: Validate built HTML (vnu)
+        run: npm run validate:html:built
+
       - name: Check bundle size (raw)
         run: |
           echo "Checking dist/ directory size..."
@@ -262,6 +900,7 @@ jobs:
   security-checks:
     name: Security Checks
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
       - name: Checkout code
@@ -298,11 +937,27 @@ jobs:
           path: sbom-generated.json
           retention-days: 90
 
+  # Q-57 (owner, 2026-08-16): this job used to be vacuous twice over.
+  # tests/visual/baselines/linux/ held nothing but .gitkeep, so the
+  # generate-on-first-run branch below fired on EVERY run: it made fresh
+  # baselines, compared them against nothing, and passed. And it carried
+  # continue-on-error, so even a real failure could not have shown.
+  #
+  # UF-27 seeds a real Linux baseline set, captured on this runner and looked
+  # at image by image, so the comparison branch is the one that runs. The
+  # continue-on-error is gone: this job can now fail, honestly. It stays
+  # NON-required, so a red here reports a visual change without blocking a
+  # merge - which satisfies the Q-55(i) clause that no required lane may carry
+  # continue-on-error, from the other direction.
+  #
+  # The generate branch is kept, because bootstrapping a new platform needs it,
+  # but it now FAILS the job afterwards. A run that generated baselines
+  # compared nothing, and must never again be able to report that as green.
   visual-regression:
     name: Visual Regression (Linux)
     runs-on: ubuntu-latest
-    continue-on-error: true
-    
+    timeout-minutes: 45
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -319,8 +974,27 @@ jobs:
       - name: Download OpenSCAD WASM files
         run: npm run setup-wasm
       
+      # AF-CI2: the browser download hung twelve CI jobs in two days (four at
+      # once on one run). Cache the browsers so the install step only ever
+      # downloads when the Playwright version moves.
+      - name: Cache Playwright browsers
+        id: pwcache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-chromium-${{ hashFiles('package-lock.json') }}
+
       - name: Install Playwright browsers (Chromium)
-        run: npx playwright install --with-deps chromium
+        # On a cache hit the browsers are already here, and --with-deps'
+        # apt-get against the Azure mirror is the thing that actually hangs
+        # (measured: the hang survived a cache hit). The runner image already
+        # ships every system library these browsers need.
+        run: |
+          if [ "${{ steps.pwcache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install chromium
+          else
+            npx playwright install --with-deps chromium
+          fi
       
       - name: Check for existing baselines
         id: check-baselines
@@ -348,6 +1022,19 @@ jobs:
           name: visual-baselines-linux
           path: tests/visual/baselines/linux/
           retention-days: 30
+
+      # Q-57: a run that GENERATED baselines compared nothing. That is how this
+      # job passed every run for its whole life. The artifact above is the
+      # useful part - download it, look at every image, commit the ones that
+      # are right - but the run itself must not report green.
+      - name: A generating run has not checked anything
+        if: steps.check-baselines.outputs.baseline_count == '0'
+        run: |
+          echo "This run found no Linux baselines and generated them instead of"
+          echo "comparing against them, so it verified nothing."
+          echo "Download the visual-baselines-linux artifact, LOOK at every"
+          echo "image, and commit the ones that show what their name says."
+          exit 1
       
       - name: Upload visual diff artifacts
         uses: actions/upload-artifact@v4
@@ -357,16 +1044,127 @@ jobs:
           path: test-results/
           retention-days: 14
 
-  lint-markdown:
-    name: Lint Markdown
+  # Q-55 (owner, 2026-08-15): a REQUIRED check must be capable of failing.
+  # This job carried continue-on-error on its only real step, so "Lint
+  # Markdown" reported success no matter what markdownlint found - a green
+  # gate that could not go red. MEASURED before removing it: markdownlint-cli2
+  # reports 3 issues locally and all three live in .cursor/, which is
+  # gitignored and never checked out, so CI sees a clean tree.
+  #
+  # Verified before the change that passing `globs` here does NOT discard the
+  # ignore list in .markdownlint-cli2.jsonc: cli2 appends the config's ignores
+  # to the command-line globs, so node_modules and the vendored folders stay
+  # out either way. The input is kept as it was; only the gate changed.
+  # AF-8 (the UF-30 finding: three dead links survived years of green boards).
+  # NON-required by design - a flaky external site must never block a merge -
+  # and no continue-on-error: when it is red, it is honestly red (Q-55).
+  #
+  # SCOPE, declared: the LIVING documentation - README, docs top level and
+  # docs/guides. The records trees (docs/audit, docs/research, docs/vpat
+  # evidence) are point-in-time documents, and OPENSCAD_LANGUAGE_REFERENCE.md
+  # mirrors upstream, whose link rot is not ours to chase. 403 is accepted
+  # because every one the first sweep found was a bot-wall on a LIVE site
+  # (w3.org's WCAG page included); two shop hosts that reject CI outright are
+  # excluded by name.
+  link-check:
+    name: Docs Link Check
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 15
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
+      - name: Check documentation links
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --no-progress
+            --max-retries 2
+            --timeout 20
+            --accept 200..=204,403,429
+            --exclude '^https?://(localhost|127\.0\.0\.1)'
+            --exclude '^https://www\.bestbuy\.com'
+            --exclude '^https://www\.sovol\.tech'
+            --exclude-path docs/OPENSCAD_LANGUAGE_REFERENCE.md
+            'README.md'
+            'docs/*.md'
+            'docs/guides/**/*.md'
+            'docs/specs/FORGE_HANDOFF_CONTRACT.md'
+          fail: true
+
+  lint-markdown:
+    name: Lint Markdown
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Lint markdown files
         uses: DavidAnson/markdownlint-cli2-action@v16
         with:
           globs: '**/*.md'
-        continue-on-error: true
+
+  # Tile validator - ADDITIVE and NOT a required check. It runs
+  # scripts/validate-example.mjs over the example folders a PR actually
+  # touched, so a contributed tile is checked before a human reads it.
+  #
+  # Deliberately not required: promoting it is the owner's call, and a check
+  # that starts out required is a check nobody can ever adjust. It also has a
+  # known pre-existing finding (q-charm's manifest lists six SVGs that live in
+  # a sibling tile's folder), so a PR touching that tile would go red for
+  # something it did not cause.
+  validate-examples:
+    name: Validate Examples (changed)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # Need enough history to diff against the base branch.
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Validate the example folders this change touches
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "${BASE_REF:-}" ]; then
+            git fetch --no-tags --depth=50 origin "$BASE_REF"
+            RANGE="origin/$BASE_REF...HEAD"
+          elif [ -n "${BEFORE_SHA:-}" ] && [ "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]; then
+            RANGE="$BEFORE_SHA...HEAD"
+          else
+            RANGE=""
+          fi
+
+          CHANGED=""
+          if [ -n "$RANGE" ]; then
+            CHANGED=$(git diff --name-only "$RANGE" -- 'public/examples/**' || true)
+          fi
+
+          # The template is checked on every run whatever changed: it is the
+          # file every new tile is copied from, and a broken template teaches
+          # the break to everyone who copies it.
+          FOLDERS="public/examples/_template"
+          for file in $CHANGED; do
+            dir=$(echo "$file" | cut -d/ -f1-3)
+            if [ -f "$dir/manifest.json" ]; then
+              FOLDERS="$FOLDERS $dir"
+            fi
+          done
+          FOLDERS=$(echo "$FOLDERS" | tr ' ' '\n' | sort -u | tr '\n' ' ')
+
+          echo "Checking: $FOLDERS"
+          node scripts/validate-example.mjs $FOLDERS

@@ -28,20 +28,19 @@ Tradeoffs:
 
 Best fit when you want:
 
-- **Customizer-first workflow**: upload a Customizer-enabled `.scad` and get a **ready-to-use parameter UI**.
-- **A toolchain**: CLI workflows to **extract parameters**, **scaffold** apps (multiple templates), and keep projects consistent.
-- **Product features out of the box** (relative to an editor-centric playground):
-  - Shareable URL parameters
-  - Parameter presets
-  - ZIP multi-file projects
-  - Library bundles / library manager UI
-  - Accessible UI patterns and keyboard-first interaction
-  - Theme/high-contrast options and PWA/offline behavior (where applicable)
+- **A parameter UI without writing one**: open a Customizer-enabled `.scad` and the sliders, dropdowns and checkboxes are built for you.
+- **Accessibility as the point, not a feature**: keyboard-first interaction, screen-reader support, high contrast, and 44px touch targets throughout.
+- **A desktop-style option**: the Classic interface reproduces the OpenSCAD desktop window for people following tutorials written for it.
+- Things an editor-first playground does not set out to do:
+  - Share a configuration as a link, or save it as a named preset
+  - Multi-file projects from a ZIP or a folder
+  - Four bundled libraries (MCAD, BOSL2, NopSCADlib, dotSCAD) that switch on when your model asks for them
+  - Install as a desktop app and work offline
 
 Tradeoffs:
 
-- **More surface area**: more features means more maintenance and more edge cases to handle.
-- **Less “official”**: it’s not the canonical OpenSCAD web app, so you own more responsibility for long-term support and version drift.
+- **More to go wrong**: more features means more edge cases, and one maintainer.
+- **Not the official one**: if you need the canonical OpenSCAD web app, that is the Playground.
 
 ## Decision Guide
 
@@ -49,7 +48,7 @@ Use this as a quick checklist:
 
 - **I want people to write OpenSCAD code in a browser editor** → OpenSCAD Playground
 - **I want non-coders to customize a model via controls** → OpenSCAD Assistive Forge
-- **I need many dedicated, deployable customizers generated from models/schemas** → OpenSCAD Assistive Forge
+- **Someone in my group uses a screen reader, a keyboard only, or needs high contrast** → OpenSCAD Assistive Forge
 - **I want the most “official” upstream-aligned web app** → OpenSCAD Playground
 
 ## Links

@@ -50,6 +50,7 @@ test.beforeEach(async ({ page }) => {
     if (!sessionStorage.getItem('__test_initialized')) {
       localStorage.clear();
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true');
       sessionStorage.setItem('__test_initialized', 'true');
     }
   });
@@ -78,10 +79,22 @@ async function uploadFile(page, filePath) {
 }
 
 async function uploadMultipleFiles(page, filePaths) {
+  // #fileInput is single-file since the unified upload surface (C1.2) —
+  // multi-file projects go in as a zip, matching the real user flow.
+  const zip = new JSZip();
+  for (const filePath of filePaths) {
+    zip.file(path.basename(filePath), fs.readFileSync(filePath));
+  }
+  const buffer = await zip.generateAsync({ type: 'nodebuffer' });
+
   await waitForWasm(page);
   const fileInput = page.locator('#fileInput');
   await fileInput.waitFor({ state: 'attached', timeout: 10_000 });
-  await fileInput.setInputFiles(filePaths);
+  await fileInput.setInputFiles({
+    name: 'companion-project.zip',
+    mimeType: 'application/zip',
+    buffer,
+  });
   await page.locator('#mainInterface').waitFor({ state: 'visible', timeout: 30_000 });
   try {
     const notNowBtn = page.locator('#saveProjectNotNow');
@@ -172,8 +185,14 @@ async function sampleCanvasColorGroups(page) {
 // ─── S-001 through S-004, S-006: COFF Color Passthrough ──────────────────────
 
 test.describe('Parity — Color Passthrough (S-001–004, S-006)', () => {
-  test('WASM emits per-face colors with 2+ distinct face-color groups', async ({ page }) => {
-    test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
+  test('WASM emits per-face colors with 2+ distinct face-color groups', async ({ page, browserName }) => {
+    // Un-skipped for Chromium-family CI (skip-debt drawdown); Firefox/WebKit
+    // CI workers are not yet proven stable for real WASM renders.
+    test.skip(
+      isCI && browserName !== 'chromium',
+      'Non-Chromium CI workers cannot complete WASM renders reliably'
+    );
+    test.setTimeout(240_000);
 
     const consoleMessages = [];
     page.on('console', (msg) => consoleMessages.push(msg.text()));
@@ -218,8 +237,14 @@ test.describe('Parity — Color Passthrough (S-001–004, S-006)', () => {
 // ─── S-005: Debug Modifier Dual-Render ────────────────────────────────────────
 
 test.describe('Parity — Debug Modifier Dual-Render (S-005)', () => {
-  test('# modifier geometry renders as THREE.Group with two children', async ({ page }) => {
-    test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
+  test('# modifier geometry renders as THREE.Group with two children', async ({ page, browserName }) => {
+    // Un-skipped for Chromium-family CI (skip-debt drawdown); Firefox/WebKit
+    // CI workers are not yet proven stable for real WASM renders.
+    test.skip(
+      isCI && browserName !== 'chromium',
+      'Non-Chromium CI workers cannot complete WASM renders reliably'
+    );
+    test.setTimeout(240_000);
 
     const consoleMessages = [];
     page.on('console', (msg) => consoleMessages.push(msg.text()));
@@ -261,21 +286,32 @@ test.describe('Parity — Blank Display (S-007)', () => {
     const generateParam = page
       .locator('.param-control')
       .filter({ hasText: /^generate/i });
-    if ((await generateParam.count()) === 0) {
-      test.skip();
-      return;
-    }
+    // UF-27: both of these used to skip in silence. The keyguard fixture DOES
+    // carry a `generate` parameter with a Customizer option - that is the whole
+    // premise of S-007 - so a fixture that lost either one would have reported
+    // a pass rather than the regression it is.
+    expect(await generateParam.count()).toBeGreaterThan(0);
 
     const generateSelect = generateParam.locator('select').first();
     const customizerOption = generateSelect
       .locator('option')
       .filter({ hasText: /customizer/i });
-    if ((await customizerOption.count()) === 0) {
-      test.skip();
-      return;
+    expect(await customizerOption.count()).toBeGreaterThan(0);
+
+    // The control lives inside a collapsed <details> group — open it first
+    const generateGroup = page
+      .locator('details.param-group')
+      .filter({ has: generateSelect })
+      .first();
+    if (!(await generateGroup.evaluate((el) => el.open))) {
+      await generateGroup.locator('summary').click();
     }
 
-    await generateSelect.selectOption({ label: /customizer/i });
+    // selectOption() takes a string label, not a regex — resolve it first
+    const customizerLabel = (
+      await customizerOption.first().textContent()
+    ).trim();
+    await generateSelect.selectOption({ label: customizerLabel });
     await page.waitForTimeout(2_000);
 
     const meshPresent = await hasMesh(page);
@@ -300,6 +336,18 @@ test.describe('Parity — No Spontaneous Geometry (S-008)', () => {
     await page.goto('/?example=simple-box');
     await page.locator('#mainInterface').waitFor({ state: 'visible', timeout: 30_000 });
     await waitForPreviewIdle(page, { timeout: 60_000 });
+
+    // The console panel is registry-hidden in Simplified mode — switch to
+    // Standard so its summary is interactable, THEN take the baseline (a
+    // mode switch must not count against the console interactions).
+    const uiModeToggle = page.locator('#uiModeToggle');
+    if ((await uiModeToggle.getAttribute('aria-checked')) === 'false') {
+      await uiModeToggle.click();
+      await page.waitForSelector('body[data-ui-mode="standard"]', {
+        state: 'attached',
+        timeout: 5_000,
+      });
+    }
     await page.waitForTimeout(1_000);
 
     const renderCountBefore = consoleMessages.filter((message) =>
@@ -310,9 +358,9 @@ test.describe('Parity — No Spontaneous Geometry (S-008)', () => {
       '#consolePanel > summary, details#consolePanel > summary',
     );
     if ((await consoleSummary.count()) > 0) {
-      await consoleSummary.click();
+      await consoleSummary.first().click();
       await page.waitForTimeout(500);
-      await consoleSummary.click();
+      await consoleSummary.first().click();
       await page.waitForTimeout(500);
     }
 
@@ -474,10 +522,21 @@ test.describe('Parity — Preset Cycling Stability (S-014)', () => {
     const options = await getPresetOptions(page);
     const presets = options.slice(0, Math.min(4, options.length));
 
-    if (presets.length < 3) {
-      test.skip();
-      return;
-    }
+    /*
+     * UF-27: this used to skip in silence here, so the case reported a clean
+     * skip rather than the coverage gap it is. MEASURED: the keyguard fixture
+     * offers 2 presets and this case needs 3 to be what its name says, so it
+     * has never once exercised "3+ sequential preset switches".
+     *
+     * The fix, when someone takes it: add a third preset to the keyguard
+     * fixture. It was not taken here because that fixture is shared with the
+     * golden geometry manifest, so changing it is a geometry-parity decision
+     * rather than a test-hygiene one.
+     */
+    test.skip(
+      presets.length < 3,
+      `needs 3 presets to cycle and the keyguard fixture offers ${presets.length} (see the note above)`
+    );
 
     const results = [];
     for (const presetName of presets) {
@@ -532,11 +591,15 @@ test.describe('Parity — Grid Opacity Control (S-016)', () => {
     await expect(slider).toBeAttached({ timeout: 30_000 });
 
     if (!(await slider.isVisible().catch(() => false))) {
-      const drawerToggle = page.locator('#previewDrawerToggle');
-      if ((await drawerToggle.count()) > 0) {
-        await drawerToggle.click();
-        await page.waitForTimeout(500);
-      }
+      // UF-11: the slider lives in Edit ▸ Preferences ▸ 3D View now, and the
+      // menu bar is hidden in Simplified — switch to Standard first.
+      await page.locator('#uiModeToggle').click();
+      await page.locator('#editMenuBtn').click();
+      await page
+        .locator('#editMenuItems')
+        .getByText('Preferences…', { exact: true })
+        .click();
+      await page.locator('#prefs-tab-3dview').click();
     }
 
     await expect(slider).toBeVisible({ timeout: 10_000 });

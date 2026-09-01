@@ -20,11 +20,37 @@ public/liblouis/
 coverage/
 test-results/
 playwright-report/
+# Written at the repo root by any CI-mode Playwright run; it is the input to
+# scripts/check-e2e-complete.mjs, never something to commit.
+playwright-results.json
+
+# Review screenshots and OpenSCAD check output (D-7, Q-39b): these travel in
+# PR descriptions now. Files committed before this rule stay tracked.
+build/
+
+# The frame-sequence instrument's own output (CW-67): filmstrips, contact
+# sheets, class maps and WebMs. Kept out for the same reason build/ is - it
+# is measurement, not source. The ones a release RECORD cites are copied into
+# the research folder's R8-filmstrips\ instead.
+seq-out/
+
+# Parity harness output (generated; goldens live in scripts/parity/golden/)
+artifacts/
+
+# Local scratch/experiment dirs and debug dumps (never commit)
+_em_temp/
+.tmp-scad-check/
+forge-cad-to-parametric/
+webkit-logs.txt
 
 # Lighthouse reports
 localhost_*.report.html
 .lighthouseci/
 lighthouse-*.json
+
+# CI generates a fresh SBOM every run and uploads it as an artifact; a
+# tracked copy goes stale by construction, so none is kept.
+sbom.json
 
 # Local debug screenshots
 screenshot-*.png
@@ -35,11 +61,10 @@ screenshot-*.png
 # Editor workspace files
 *.code-workspace
 
-# Pixi (optional environment manager)
-.pixi/
-
-# Editor workspace
-.cursor/
+# Editor workspace state stays local, but the agent rules ship with the
+# repository (they are documentation, not workspace state).
+.cursor/*
+!.cursor/rules/
 
 # Local testing reference files
 .volkswitch/

@@ -16,11 +16,90 @@ async function waitForWasmReady(page) {
   })
 }
 
+/**
+ * THE LIST IS EMPTY, AND THAT IS THE POINT.
+ *
+ * UF-25 put `nested-interactive` here with its reasoning written out, beside
+ * a warning that an entry buys green and hides a defect. UF-35 paid that back
+ * by fixing what it covered rather than explaining it again: the help control
+ * in three panel headers and the Hide button on every parameter group each
+ * sat inside a <summary>, which IS the disclosure's own button, so each was a
+ * control inside a control. The group family scaled with the model - three
+ * groups measured three violations, eleven measured eleven - and the cost was
+ * concrete: the Console header's accessible name was the word "Console"
+ * followed by the help button's entire 180-character sentence.
+ *
+ * Two other violations surfaced at UF-25 and were fixed the same way rather
+ * than allowed: D-45 (the panel help button measured 16.3px against WCAG 2.2
+ * AA's 24px floor, and failed target-offset) and D-46 (the green "Preview
+ * ready" pill measured 3.07:1 where 14px text needs 4.5:1).
+ *
+ * Anything added here needs a measurement and a reason, not a shrug - and an
+ * empty list is what lets this board fail on a real regression.
+ */
+const ALLOWED_AXE_VIOLATIONS = []
+
+function expectOnlyAllowedViolations(results) {
+  const unexpected = results.violations.filter(
+    (v) => !ALLOWED_AXE_VIOLATIONS.includes(v.id)
+  )
+  // Name the element and say why. A bare rule id sends the next person
+  // hunting; axe already knows the selector and the measured contrast.
+  const detail = unexpected
+    .flatMap((v) =>
+      v.nodes.map(
+        (n) =>
+          `${v.id} @ ${n.target.join(' ')} :: ${n.failureSummary.replace(/\s+/g, ' ')}`
+      )
+    )
+    .join('\n')
+  expect(
+    unexpected.map((v) => v.id),
+    `unexpected axe violations:\n${detail}`
+  ).toEqual([])
+}
+
+/**
+ * UF-25: the app has no #fileInfo element. It carries #fileInfoSummary, an
+ * sr-only live region holding the file NAME only, so the old
+ * `#fileInfo:has-text("parameters")` wait could never match. Twelve waits in
+ * this file still asked for it and ten of them sat inside a catch that turned
+ * the timeout into test.skip(), so ten tests - two of them axe scans -
+ * reported "skipped" instead of running. Wait for what actually proves a
+ * model loaded: the parameter controls the app generated from it.
+ */
+async function waitForModelLoaded(page, { expandGroups = true, timeout = 30000 } = {}) {
+  await expect(page.locator('#mainInterface')).toBeVisible({ timeout })
+  await expect(page.locator('.param-control').first()).toBeAttached({ timeout })
+  // Loading a model raises the Save Project prompt, whose dialog intercepts
+  // pointer events. Same idiom as examples.spec.js's expectParamsLoaded.
+  const notNow = page.locator('#saveProjectNotNow')
+  try {
+    await notNow.waitFor({ state: 'visible', timeout: 2000 })
+    await notNow.click()
+    await notNow.waitFor({ state: 'hidden', timeout: 3000 })
+  } catch {
+    // Save prompt did not appear for this source
+  }
+  if (expandGroups) {
+    // F5 (owner, 2026-05-15): parameter groups load collapsed, so a control is
+    // attached long before it is visible.
+    const expandAll = page.locator('#expandAllGroupsBtn')
+    if (await expandAll.isVisible().catch(() => false)) {
+      await expandAll.click()
+      await expect(page.locator('.param-control').first()).toBeVisible({
+        timeout: 10000,
+      })
+    }
+  }
+}
+
 // Most tests assume the welcome UI is interactable (no blocking first-visit modal).
 // Ensure a consistent baseline by marking first-visit as already seen.
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
   })
 })
 
@@ -60,34 +139,28 @@ test.describe('Accessibility Compliance (WCAG 2.2 AA)', () => {
     const fileInput = page.locator('#fileInput')
     const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
     
-    try {
-      await fileInput.setInputFiles(fixturePath)
-      
-      // Wait for parameters UI to render - file info shows parameter count
-      await page.waitForSelector('#fileInfo:has-text("parameters")', {
-        timeout: 15000
-      })
-      
-      // Run accessibility scan on parameter UI
-      const results = await new AxeBuilder({ page })
-        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-        .analyze()
-      
-      if (results.violations.length > 0) {
-        console.log('Violations in parameter UI:')
-        results.violations.forEach(v => {
-          console.log(`- ${v.id}: ${v.description}`)
-        })
-      }
-      
-      expect(results.violations).toEqual([])
-    } catch (error) {
-      console.log('Could not complete file upload test:', error.message)
-      // Don't fail test if fixture is missing
-      test.skip()
-    }
+    await fileInput.setInputFiles(fixturePath)
+    await waitForModelLoaded(page)
+
+    // UF-25: the preview state pill carries `transition: all 240ms`, so a scan
+    // that arrives while it is still moving from the rendering colour to the
+    // ready colour measures a BLEND of the two and reports a contrast figure
+    // belonging to neither. MEASURED: #f8f8f9 on #258557 at 4.32:1, where the
+    // resting pair is --slate-1 on --color-success-solid at 4.67:1. Let it
+    // land before scanning.
+    await expect(page.locator('.preview-state-indicator.state-current')).toBeVisible({
+      timeout: 90_000,
+    })
+    await page.waitForTimeout(500)
+
+    // Run accessibility scan on parameter UI
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .analyze()
+
+    expectOnlyAllowedViolations(results)
   })
-  
+
   test('should have proper heading hierarchy', async ({ page }) => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')
@@ -170,59 +243,60 @@ test.describe('Accessibility Compliance (WCAG 2.2 AA)', () => {
     const fileInput = page.locator('#fileInput')
     const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
     
-    try {
-      await fileInput.setInputFiles(fixturePath)
-      await page.waitForSelector('#fileInfo:has-text("parameters")', { timeout: 15000 })
-      
-      // Check all form inputs have labels
-      const unlabeledInputs = await page.locator('input:not([type="file"])').evaluateAll(inputs => {
-        return inputs.filter(input => {
-          const hasLabel = input.labels?.length > 0
-          const hasAriaLabel = input.getAttribute('aria-label')
-          const hasAriaLabelledby = input.getAttribute('aria-labelledby')
-          return !hasLabel && !hasAriaLabel && !hasAriaLabelledby
-        }).map(input => ({
-          type: input.type,
-          name: input.name,
-          id: input.id
-        }))
-      })
-      
-      console.log('Unlabeled inputs:', unlabeledInputs)
-      expect(unlabeledInputs.length).toBe(0)
-    } catch (error) {
-      console.log('Could not test form labels:', error.message)
-      test.skip()
-    }
+    await fileInput.setInputFiles(fixturePath)
+    await waitForModelLoaded(page)
+    
+    // Check all form inputs have labels
+    const unlabeledInputs = await page.locator('input:not([type="file"])').evaluateAll(inputs => {
+      return inputs.filter(input => {
+        const hasLabel = input.labels?.length > 0
+        const hasAriaLabel = input.getAttribute('aria-label')
+        const hasAriaLabelledby = input.getAttribute('aria-labelledby')
+        return !hasLabel && !hasAriaLabel && !hasAriaLabelledby
+      }).map(input => ({
+        type: input.type,
+        name: input.name,
+        id: input.id
+      }))
+    })
+    
+    console.log('Unlabeled inputs:', unlabeledInputs)
+    expect(unlabeledInputs.length).toBe(0)
   })
   
   test('should show library controls after upload even when no libraries detected', async ({ page }) => {
     // Skip in CI - requires WASM to process uploaded file
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
-    
+
+    // #libraryControls is defaultHiddenInBasic, and Simplified is the default
+    // mode, so this test has to ask for Standard or it measures a panel the
+    // mode controller has deliberately hidden (UF-25; same shape as UF-23's
+    // project-files finding).
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        'openscad-forge-ui-mode',
+        JSON.stringify({ mode: 'standard', lastCustomMode: 'standard' })
+      )
+    })
+
     await page.goto('/')
     await waitForWasmReady(page)
-    
+
     const fileInput = page.locator('#fileInput')
     const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
     
-    try {
-      await fileInput.setInputFiles(fixturePath)
-      await page.waitForSelector('#fileInfo:has-text("parameters")', { timeout: 15000 })
-      
-      // Library controls should be visible (not hidden)
-      const libraryControls = page.locator('#libraryControls')
-      await expect(libraryControls).toBeVisible()
-      
-      // Library details should exist (may be closed)
-      const libraryDetails = page.locator('.library-details')
-      await expect(libraryDetails).toBeVisible()
-      
-      console.log('Library controls are visible after upload')
-    } catch (error) {
-      console.log('Could not test library controls visibility:', error.message)
-      test.skip()
-    }
+    await fileInput.setInputFiles(fixturePath)
+    await waitForModelLoaded(page)
+    
+    // Library controls should be visible (not hidden)
+    const libraryControls = page.locator('#libraryControls')
+    await expect(libraryControls).toBeVisible()
+    
+    // Library details should exist (may be closed)
+    const libraryDetails = page.locator('.library-details')
+    await expect(libraryDetails).toBeVisible()
+    
+    console.log('Library controls are visible after upload')
   })
 
   // BR-4: the memory indicator no longer announces a fictional percentage.
@@ -262,32 +336,27 @@ test.describe('New Accessibility Features (WCAG 2.2)', () => {
     const fileInput = page.locator('#fileInput')
     const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
     
-    try {
-      await fileInput.setInputFiles(fixturePath)
-      await page.waitForSelector('#fileInfo:has-text("parameters")', { timeout: 15000 })
+    await fileInput.setInputFiles(fixturePath)
+    await waitForModelLoaded(page)
+    
+    // Check that help buttons have aria-describedby pointing to tooltip
+    const helpButtons = await page.locator('.param-help-button').all()
+    
+    for (const button of helpButtons) {
+      const describedBy = await button.getAttribute('aria-describedby')
       
-      // Check that help buttons have aria-describedby pointing to tooltip
-      const helpButtons = await page.locator('.param-help-button').all()
-      
-      for (const button of helpButtons) {
-        const describedBy = await button.getAttribute('aria-describedby')
+      if (describedBy) {
+        // Verify the tooltip element exists
+        const tooltip = page.locator(`#${describedBy}`)
+        await expect(tooltip).toBeAttached()
         
-        if (describedBy) {
-          // Verify the tooltip element exists
-          const tooltip = page.locator(`#${describedBy}`)
-          await expect(tooltip).toBeAttached()
-          
-          // Verify tooltip has role="tooltip"
-          const role = await tooltip.getAttribute('role')
-          expect(role).toBe('tooltip')
-        }
+        // Verify tooltip has role="tooltip"
+        const role = await tooltip.getAttribute('role')
+        expect(role).toBe('tooltip')
       }
-      
-      console.log(`Verified ${helpButtons.length} help buttons have proper aria-describedby`)
-    } catch (error) {
-      console.log('Could not complete tooltip test:', error.message)
-      test.skip()
     }
+    
+    console.log(`Verified ${helpButtons.length} help buttons have proper aria-describedby`)
   })
 
   test('should have keyboard shortcuts for 3D preview controls', async ({ page }) => {
@@ -345,32 +414,27 @@ test.describe('New Accessibility Features (WCAG 2.2)', () => {
     const fileInput = page.locator('#fileInput')
     const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
     
-    try {
-      await fileInput.setInputFiles(fixturePath)
-      await page.waitForSelector('#fileInfo:has-text("parameters")', { timeout: 15000 })
-      
-      // Check search input exists and has proper attributes
-      const searchInput = page.locator('#paramSearchInput')
-      await expect(searchInput).toBeVisible()
-      
-      const ariaLabel = await searchInput.getAttribute('aria-label')
-      expect(ariaLabel).toBeTruthy()
-      
-      const type = await searchInput.getAttribute('type')
-      expect(type).toBe('search')
-      
-      // Check jump-to-group dropdown
-      const jumpSelect = page.locator('#paramJumpSelect')
-      await expect(jumpSelect).toBeVisible()
-      
-      const jumpLabel = await jumpSelect.getAttribute('aria-label')
-      expect(jumpLabel).toBeTruthy()
-      
-      console.log('Parameter search has proper accessibility attributes')
-    } catch (error) {
-      console.log('Could not complete search test:', error.message)
-      test.skip()
-    }
+    await fileInput.setInputFiles(fixturePath)
+    await waitForModelLoaded(page)
+    
+    // Check search input exists and has proper attributes
+    const searchInput = page.locator('#paramSearchInput')
+    await expect(searchInput).toBeVisible()
+    
+    const ariaLabel = await searchInput.getAttribute('aria-label')
+    expect(ariaLabel).toBeTruthy()
+    
+    const type = await searchInput.getAttribute('type')
+    expect(type).toBe('search')
+    
+    // Check jump-to-group dropdown
+    const jumpSelect = page.locator('#paramJumpSelect')
+    await expect(jumpSelect).toBeVisible()
+    
+    const jumpLabel = await jumpSelect.getAttribute('aria-label')
+    expect(jumpLabel).toBeTruthy()
+    
+    console.log('Parameter search has proper accessibility attributes')
   })
 
   test('should filter parameters when searching', async ({ page }) => {
@@ -383,36 +447,31 @@ test.describe('New Accessibility Features (WCAG 2.2)', () => {
     const fileInput = page.locator('#fileInput')
     const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
     
-    try {
-      await fileInput.setInputFiles(fixturePath)
-      await page.waitForSelector('#fileInfo:has-text("parameters")', { timeout: 15000 })
+    await fileInput.setInputFiles(fixturePath)
+    await waitForModelLoaded(page)
+    
+    // Get initial parameter count
+    const initialCount = await page.locator('.param-control:not(.search-hidden)').count()
+    
+    // Type in search
+    const searchInput = page.locator('#paramSearchInput')
+    await searchInput.fill('width')
+    
+    // Wait for filtering
+    await page.waitForTimeout(100)
+    
+    // Check that some parameters are now hidden
+    const filteredCount = await page.locator('.param-control:not(.search-hidden)').count()
+    
+    console.log(`Before search: ${initialCount} params, after: ${filteredCount}`)
+    
+    // Clear search
+    const clearBtn = page.locator('#clearParamSearchBtn')
+    if (await clearBtn.isVisible()) {
+      await clearBtn.click()
       
-      // Get initial parameter count
-      const initialCount = await page.locator('.param-control:not(.search-hidden)').count()
-      
-      // Type in search
-      const searchInput = page.locator('#paramSearchInput')
-      await searchInput.fill('width')
-      
-      // Wait for filtering
-      await page.waitForTimeout(100)
-      
-      // Check that some parameters are now hidden
-      const filteredCount = await page.locator('.param-control:not(.search-hidden)').count()
-      
-      console.log(`Before search: ${initialCount} params, after: ${filteredCount}`)
-      
-      // Clear search
-      const clearBtn = page.locator('#clearParamSearchBtn')
-      if (await clearBtn.isVisible()) {
-        await clearBtn.click()
-        
-        const restoredCount = await page.locator('.param-control:not(.search-hidden)').count()
-        expect(restoredCount).toBe(initialCount)
-      }
-    } catch (error) {
-      console.log('Could not complete filter test:', error.message)
-      test.skip()
+      const restoredCount = await page.locator('.param-control:not(.search-hidden)').count()
+      expect(restoredCount).toBe(initialCount)
     }
   })
 
@@ -518,30 +577,25 @@ test.describe('Default Value Display (COGA)', () => {
     const fileInput = page.locator('#fileInput')
     const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
     
-    try {
-      await fileInput.setInputFiles(fixturePath)
-      await page.waitForSelector('#fileInfo:has-text("parameters")', { timeout: 15000 })
+    await fileInput.setInputFiles(fixturePath)
+    await waitForModelLoaded(page)
+    
+    // Check for default value hints on slider controls
+    const defaultHints = await page.locator('.param-default-value').all()
+    
+    console.log(`Found ${defaultHints.length} default value hints`)
+    
+    // There should be at least some default hints for numeric parameters
+    if (defaultHints.length > 0) {
+      // Verify the hints have content and title attributes
+      const firstHint = defaultHints[0]
+      const content = await firstHint.textContent()
+      const title = await firstHint.getAttribute('title')
       
-      // Check for default value hints on slider controls
-      const defaultHints = await page.locator('.param-default-value').all()
+      expect(content).toBeTruthy()
+      expect(title).toContain('Default')
       
-      console.log(`Found ${defaultHints.length} default value hints`)
-      
-      // There should be at least some default hints for numeric parameters
-      if (defaultHints.length > 0) {
-        // Verify the hints have content and title attributes
-        const firstHint = defaultHints[0]
-        const content = await firstHint.textContent()
-        const title = await firstHint.getAttribute('title')
-        
-        expect(content).toBeTruthy()
-        expect(title).toContain('Default')
-        
-        console.log(`Default hint example: "${content}" with title "${title}"`)
-      }
-    } catch (error) {
-      console.log('Could not complete default value test:', error.message)
-      test.skip()
+      console.log(`Default hint example: "${content}" with title "${title}"`)
     }
   })
 })
@@ -620,19 +674,14 @@ test.describe('Workflow Progress Toolbar', () => {
     const fileInput = page.locator('#fileInput')
     const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
     
-    try {
-      await fileInput.setInputFiles(fixturePath)
-      await page.waitForSelector('#fileInfo:has-text("parameters")', { timeout: 15000 })
-      
-      // Check that workflow progress container is visible
-      const workflowProgress = page.locator('#workflowProgress')
-      await expect(workflowProgress).toBeVisible()
-      
-      console.log('Workflow progress toolbar visible after file upload')
-    } catch (error) {
-      console.log('Could not complete workflow progress test:', error.message)
-      test.skip()
-    }
+    await fileInput.setInputFiles(fixturePath)
+    await waitForModelLoaded(page)
+    
+    // Check that workflow progress container is visible
+    const workflowProgress = page.locator('#workflowProgress')
+    await expect(workflowProgress).toBeVisible()
+    
+    console.log('Workflow progress toolbar visible after file upload')
   })
 })
 
@@ -687,12 +736,61 @@ test.describe('Screen Reader Support', () => {
     // Skip these tests in CI - they require the first-visit modal to be visible
     // which conflicts with other tests that need it dismissed
     test.skip(({ }, testInfo) => isCI, 'First-visit modal tests conflict with other E2E tests in CI')
-    
+
+    // UF-25: these tests are about the BEGINNER path. The welcome grid is
+    // ordered by product decision and has changed twice, so every locator
+    // here names the beginner card explicitly. `.btn-role-try` first() is
+    // the Welcome Page Tour button (UF-17), which starts a tour of the
+    // welcome page and loads no example - a test that used it silently
+    // measured the wrong tour.
+    const BEGINNER_CARD = '.role-path-card[data-tutorial-target="beginners-card"]'
+    const BEGINNER_TRY_BTN = `${BEGINNER_CARD} .btn-role-try`
+    // The spotlights section contains cards that carry their own <details>,
+    // so a descendant `summary` locator matches seven elements. Its own
+    // summary is the direct child.
+    const SPOTLIGHTS_SUMMARY = '#accessibilitySpotlights > summary'
+
+    // Q-50c (owner, 2026-08-14): while any app dialog is up the tour shrinks
+    // to its bar. On a phone viewport the parameter drawer IS a dialog
+    // (#paramPanel carries role="dialog" when open), so the tour minimizes
+    // itself as soon as a drawer step opens it, and the Next button goes with
+    // it. Pressing Restore is how a person gets it back - and until defect
+    // D-44 was fixed here, that button did nothing at all while the drawer
+    // was open, so this walk is also D-44's regression guard.
+    async function bringTourBack(page) {
+      const bar = page.locator('.tutorial-minimized:not(.hidden) .tutorial-restore')
+      if ((await bar.count()) === 0) return
+      await bar.click()
+      await expect(page.locator('.tutorial-panel')).toBeVisible({ timeout: 10000 })
+    }
+
+    async function openDrawer(page) {
+      const drawer = page.locator('#paramPanel.drawer-open')
+      if ((await drawer.count()) === 0) {
+        await page.locator('#mobileDrawerToggle').click()
+        await expect(page.locator('#paramPanel')).toHaveClass(/drawer-open/, {
+          timeout: 10000,
+        })
+      }
+    }
+
+    // Walk one step and confirm where we landed. Same idiom as
+    // classic-tutorial.spec.js: never advance by a count, because a tour that
+    // gains or loses a step then lands on a real step with the wrong subject.
+    async function nextTo(page, title) {
+      await bringTourBack(page)
+      await page.locator('#tutorialNextBtn').click()
+      await expect(page.locator('.tutorial-step-title')).toHaveText(title, {
+        timeout: 60000,
+      })
+    }
+
     // These tests need the first-visit modal to be visible, so override the global beforeEach
     // After the first-visit modal appears, we dismiss it to test the welcome screen
     test.beforeEach(async ({ page }) => {
       await page.addInitScript(() => {
         localStorage.removeItem('openscad-forge-first-visit-seen')
+        localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
       })
     })
     
@@ -706,8 +804,12 @@ test.describe('Screen Reader Support', () => {
         // Modal never appeared, nothing to dismiss
         return
       }
-      // Programmatically click the continue button (bypasses overlay pointer-events)
+      // Programmatically click the continue button (bypasses overlay pointer-events).
+      // UF-3: the modal now requires an interface choice before Continue works,
+      // so pick the default recommendation first.
       await page.evaluate(() => {
+        const forge = document.getElementById('firstVisitChoiceForge')
+        if (forge) forge.click()
         const btn = document.getElementById('first-visit-continue')
         if (btn) btn.click()
       })
@@ -723,27 +825,29 @@ test.describe('Screen Reader Support', () => {
     test('should display beginner tutorial card with keyboard-accessible CTAs', async ({ page }) => {
       await page.goto('/')
       await dismissFirstVisitModal(page)
-      
-      // Check that role path cards are present (2 visible: Beginners Start Here + Charm Customizer)
-      const roleCards = page.locator('.role-path-card:visible')
-      const cardCount = await roleCards.count()
-      expect(cardCount).toBe(2)
-      
+
+      // UF-25: address the beginner card by its own attribute, never by
+      // position or by a card count. The grid has gained cards twice (the
+      // welcome-tour card at UF-17, the braille card earlier) and a
+      // positional locator silently retargets when that happens.
+      const beginnerCard = page.locator(BEGINNER_CARD)
+      await expect(beginnerCard).toBeVisible()
+
       // Check that at least one card has a "Try" button
       const tryButtons = page.locator('.btn-role-try:visible')
       const tryCount = await tryButtons.count()
       expect(tryCount).toBeGreaterThanOrEqual(1)
-      
-      // Check that all Try buttons are keyboard accessible
-      const firstTryButton = tryButtons.first()
-      await firstTryButton.focus()
-      const isFocused = await firstTryButton.evaluate(el => el === document.activeElement)
+
+      // Check the beginner card's CTA is keyboard accessible
+      const beginnerTryButton = page.locator(BEGINNER_TRY_BTN)
+      await beginnerTryButton.focus()
+      const isFocused = await beginnerTryButton.evaluate(el => el === document.activeElement)
       expect(isFocused).toBe(true)
-      
+
       // Check that buttons have proper ARIA labels or text
-      const firstButtonText = await firstTryButton.textContent()
-      expect(firstButtonText).toBeTruthy()
-      expect(firstButtonText.length).toBeGreaterThan(0)
+      const buttonText = await beginnerTryButton.textContent()
+      expect(buttonText).toBeTruthy()
+      expect(buttonText.length).toBeGreaterThan(0)
     })
     
     test('should load example when role Try button is clicked', async ({ page }) => {
@@ -754,14 +858,11 @@ test.describe('Screen Reader Support', () => {
       await dismissFirstVisitModal(page)
       await waitForWasmReady(page)
       
-      // Click the first "Try" button (Educators path -> Simple Box, as of v2.0 reordering)
-      const firstTryButton = page.locator('.btn-role-try').first()
-      await firstTryButton.click()
-      
+      // Click the beginner card's Try button (loads Simple Box)
+      await page.locator(BEGINNER_TRY_BTN).click()
+
       // Wait for example to load - file info shows loaded file name and parameter count
-      await page.waitForSelector('#fileInfo:has-text("parameters")', {
-        timeout: 30000
-      })
+      await waitForModelLoaded(page)
       
       // Check that welcome screen is hidden
       const welcomeScreen = page.locator('#welcomeScreen')
@@ -805,7 +906,7 @@ test.describe('Screen Reader Support', () => {
       
       // Expand the (collapsible) Accessibility Highlights section
       const spotlightsDetails = page.locator('#accessibilitySpotlights')
-      const spotlightsSummary = spotlightsDetails.locator('summary')
+      const spotlightsSummary = page.locator(SPOTLIGHTS_SUMMARY)
       await expect(spotlightsSummary).toBeVisible()
       await spotlightsSummary.click()
       await expect(spotlightsDetails).toHaveJSProperty('open', true)
@@ -832,27 +933,34 @@ test.describe('Screen Reader Support', () => {
       await page.goto('/')
       await dismissFirstVisitModal(page)
       
-      // Check role path Try buttons
-      const tryButtons = page.locator('.btn-role-try')
-      const firstButton = tryButtons.first()
-      const buttonBox = await firstButton.boundingBox()
-      
-      expect(buttonBox).not.toBeNull()
-      expect(buttonBox.height).toBeGreaterThanOrEqual(44)
-      expect(buttonBox.width).toBeGreaterThan(0) // Full width in card, so just check it exists
-      
+      // Check EVERY visible role path Try button, not just whichever card
+      // happens to lead the grid: a positional check let three of the four
+      // go unmeasured (UF-25).
+      const tryButtons = page.locator('.btn-role-try:visible')
+      const tryCount = await tryButtons.count()
+      expect(tryCount).toBeGreaterThan(0)
+      for (let i = 0; i < tryCount; i++) {
+        const buttonBox = await tryButtons.nth(i).boundingBox()
+        expect(buttonBox).not.toBeNull()
+        expect(buttonBox.height).toBeGreaterThanOrEqual(44)
+        expect(buttonBox.width).toBeGreaterThan(0) // Full width in card, so just check it exists
+      }
+
       // Check spotlight links
-      const spotlightsSummary = page.locator('#accessibilitySpotlights summary')
+      const spotlightsSummary = page.locator(SPOTLIGHTS_SUMMARY)
       await expect(spotlightsSummary).toBeVisible()
       await spotlightsSummary.click()
 
       const spotlightLinks = page.locator('.spotlight-link')
-      const firstLink = spotlightLinks.first()
-      await expect(firstLink).toBeVisible()
-      const linkBox = await firstLink.boundingBox()
-      
-      expect(linkBox).not.toBeNull()
-      expect(linkBox.height).toBeGreaterThanOrEqual(44)
+      const linkCount = await spotlightLinks.count()
+      expect(linkCount).toBeGreaterThan(0)
+      for (let i = 0; i < linkCount; i++) {
+        const link = spotlightLinks.nth(i)
+        await expect(link).toBeVisible()
+        const linkBox = await link.boundingBox()
+        expect(linkBox).not.toBeNull()
+        expect(linkBox.height).toBeGreaterThanOrEqual(44)
+      }
     })
     
     test('should have proper focus indicators on role cards', async ({ page }) => {
@@ -881,14 +989,14 @@ test.describe('Screen Reader Support', () => {
       await page.goto('/')
       await dismissFirstVisitModal(page)
       
-      // Get all visible role path cards (Beginners Start Here + Charm Customizer)
-      const roleCards = page.locator('.role-path-card:visible')
-      const cardCount = await roleCards.count()
-      expect(cardCount).toBe(2)
-      
-      // Check first card is Beginner
-      const firstCardTitle = await roleCards.nth(0).locator('.role-path-title').textContent()
-      expect(firstCardTitle.toLowerCase()).toContain('beginner')
+      // The beginner card is present, visible, and says so. Its position in
+      // the grid is a product decision that has moved twice, so it is not
+      // asserted here (UF-25).
+      const beginnerCard = page.locator(BEGINNER_CARD)
+      await expect(beginnerCard).toBeVisible()
+
+      const cardTitle = await beginnerCard.locator('.role-path-title').textContent()
+      expect(cardTitle.toLowerCase()).toContain('beginner')
     })
     
     test('should show tutorial tips on the beginner card', async ({ page }) => {
@@ -922,14 +1030,11 @@ test.describe('Screen Reader Support', () => {
       await dismissFirstVisitModal(page)
       await waitForWasmReady(page)
       
-      // Click a "Start Tutorial" button
-      const firstTryButton = page.locator('.btn-role-try').first()
-      await firstTryButton.click()
-      
+      // Click the beginner card's "Start Tutorial" button
+      await page.locator(BEGINNER_TRY_BTN).click()
+
       // Wait for example to load - file info shows loaded file name and parameter count
-      await page.waitForSelector('#fileInfo:has-text("parameters")', {
-        timeout: 60000
-      })
+      await waitForModelLoaded(page)
       
       // Tutorial overlay should appear after a short delay
       await page.waitForTimeout(1000)
@@ -951,15 +1056,14 @@ test.describe('Screen Reader Support', () => {
       await dismissFirstVisitModal(page)
       await waitForWasmReady(page)
       
-      // Click a "Start Tutorial" button
-      const firstTryButton = page.locator('.btn-role-try').first()
-      await firstTryButton.click()
-      
+      // Click the beginner card's "Start Tutorial" button
+      await page.locator(BEGINNER_TRY_BTN).click()
+
       // Wait for tutorial to appear
       await page.waitForSelector('.tutorial-overlay', {
         timeout: 60000
       })
-      
+
       // Check that tutorial has navigation buttons
       const backBtn = page.locator('#tutorialBackBtn')
       const nextBtn = page.locator('#tutorialNextBtn')
@@ -989,26 +1093,30 @@ test.describe('Screen Reader Support', () => {
       await dismissFirstVisitModal(page)
       await waitForWasmReady(page)
       
-      // Click a "Start Tutorial" button
-      const firstTryButton = page.locator('.btn-role-try').first()
-      await firstTryButton.click()
-      
+      // Start the welcome-page tour from its own card button, and remember
+      // the trigger: closing a tour must hand focus back to it.
+      const triggerBtn = page.locator('#startWelcomeTourBtn')
+      await triggerBtn.click()
+
       // Wait for tutorial to appear
       await page.waitForSelector('.tutorial-overlay', {
         timeout: 60000
       })
-      
+
       // Press Escape to close
       await page.keyboard.press('Escape')
       await page.waitForTimeout(300)
-      
+
       // Tutorial should be closed
       const tutorialOverlay = page.locator('.tutorial-overlay')
       await expect(tutorialOverlay).not.toBeVisible()
-      
-      // Focus should be restored (check that body or a button has focus)
-      const focusedElement = page.locator(':focus')
-      await expect(focusedElement).toBeVisible()
+
+      // Focus must return to the control that opened the tour. A keyboard
+      // or screen-reader user who presses Escape has to land where they
+      // were, not at the top of the document. The old assertion here only
+      // asked that SOMETHING was focused, which is why defect D-43 - focus
+      // falling to <body> on every tour close - survived under it.
+      await expect(triggerBtn).toBeFocused()
     })
     
     test('should have close button with proper ARIA label', async ({ page }) => {
@@ -1019,15 +1127,14 @@ test.describe('Screen Reader Support', () => {
       await dismissFirstVisitModal(page)
       await waitForWasmReady(page)
       
-      // Click a "Start Tutorial" button
-      const firstTryButton = page.locator('.btn-role-try').first()
-      await firstTryButton.click()
-      
+      // Click the beginner card's "Start Tutorial" button
+      await page.locator(BEGINNER_TRY_BTN).click()
+
       // Wait for tutorial to appear
       await page.waitForSelector('.tutorial-overlay', {
         timeout: 60000
       })
-      
+
       // Check close button
       const closeBtn = page.locator('.tutorial-close')
       await expect(closeBtn).toBeVisible()
@@ -1052,15 +1159,14 @@ test.describe('Screen Reader Support', () => {
       await dismissFirstVisitModal(page)
       await waitForWasmReady(page)
       
-      // Click a "Start Tutorial" button
-      const firstTryButton = page.locator('.btn-role-try').first()
-      await firstTryButton.click()
-      
+      // Click the beginner card's "Start Tutorial" button
+      await page.locator(BEGINNER_TRY_BTN).click()
+
       // Wait for tutorial to appear
       await page.waitForSelector('.tutorial-overlay', {
         timeout: 60000
       })
-      
+
       // Check progress indicator
       const progressIndicator = page.locator('.tutorial-progress')
       await expect(progressIndicator).toBeVisible()
@@ -1069,7 +1175,9 @@ test.describe('Screen Reader Support', () => {
       expect(progressText).toMatch(/Step \d+ of \d+/)
     })
 
-    test('should spotlight Actions drawer toggle (mobile tutorial step 10)', async ({ page }) => {
+    // Named for the step, not its number: the intro tour has gained and lost
+    // steps twice, and 'Actions menu' is step 9 today (UF-25).
+    test('should spotlight Actions drawer toggle on the Actions menu step (mobile)', async ({ page }) => {
       // Skip in CI - requires WASM for example loading
       test.skip(isCI, 'WASM example loading is slow/unreliable in CI')
 
@@ -1080,38 +1188,31 @@ test.describe('Screen Reader Support', () => {
       await dismissFirstVisitModal(page)
       await waitForWasmReady(page)
       
-      // Click a "Start Tutorial" button
-      const firstTryButton = page.locator('.btn-role-try').first()
-      await firstTryButton.click()
-      
+      // Click the beginner card's "Start Tutorial" button. This case walks
+      // the intro tour by step title, so it must start the intro tour: the
+      // grid's first button starts the welcome-page tour, whose step 2 is
+      // "Keyboard shortcuts" (UF-25).
+      await page.locator(BEGINNER_TRY_BTN).click()
+
       // Wait for tutorial to appear
       await page.waitForSelector('.tutorial-overlay', {
         timeout: 60000
       })
-      
+
       const nextBtn = page.locator('#tutorialNextBtn')
       const stepTitle = page.locator('.tutorial-step-title')
 
-      // Step 1 -> Step 2
-      await nextBtn.click()
-      await expect(stepTitle).toHaveText('The 3 main areas', { timeout: 60000 })
+      await nextTo(page, 'The 3 main areas')
+      await nextTo(page, 'Open and close the Customizer')
+      await nextTo(page, 'Expand a parameter group')
 
-      // Step 2 -> Step 3
-      await nextBtn.click()
-      await expect(stepTitle).toHaveText('Open and close Parameters', { timeout: 60000 })
-
-      // Step 3 -> Step 4 (expand parameter group)
-      await nextBtn.click()
-      await expect(stepTitle).toHaveText('Expand a parameter group', { timeout: 60000 })
-
-      // Complete step 4 by expanding the Dimensions group
+      // This step is gated: expand the Dimensions group to enable Next.
+      await openDrawer(page)
       const dimensionsGroup = page.locator('.param-group[data-group-id="Dimensions"]')
       await dimensionsGroup.locator('summary').click()
       await expect(nextBtn).not.toBeDisabled({ timeout: 20000 })
 
-      // Step 4 -> Step 5 (requires width input)
-      await nextBtn.click()
-      await expect(stepTitle).toHaveText('Adjust a parameter', { timeout: 60000 })
+      await nextTo(page, 'Adjust a parameter')
 
       // Complete step 5 to enable Next.
       // On mobile the parameter drawer may have closed between steps.
@@ -1156,31 +1257,19 @@ test.describe('Screen Reader Support', () => {
       await widthInput.dispatchEvent('input')
       await expect(nextBtn).not.toBeDisabled()
 
-      // Step 5 -> Step 6
-      await nextBtn.click()
-      await expect(stepTitle).toHaveText('See the preview update')
+      await nextTo(page, 'See the preview update')
+      await nextTo(page, 'Save a design (preset)')
 
-      // Step 6 -> Step 7 (requires opening Presets details)
-      await nextBtn.click()
-      await expect(stepTitle).toHaveText('Save a design (preset)')
-
+      // This step is gated: open the Presets disclosure to enable Next.
+      await openDrawer(page)
       const presets = page.locator('#presetControls')
-      // With mobile docking/auto-minimize, this should now be a real, tappable interaction.
       await presets.locator('summary').click()
       // Toggle event can be delayed by animations/layout; give it a moment.
       await expect(nextBtn).not.toBeDisabled({ timeout: 20000 })
 
-      // Step 7 -> Step 8 (Settings Level - new step)
-      await nextBtn.click()
-      await expect(stepTitle).toHaveText('Settings Level')
-
-      // Step 8 -> Step 9
-      await nextBtn.click()
-      await expect(stepTitle).toHaveText('Preview Settings & Info')
-
-      // Step 9 -> Step 10 (Actions menu)
-      await nextBtn.click()
-      await expect(stepTitle).toHaveText('Actions menu')
+      await nextTo(page, 'Preview Settings & Info')
+      await nextTo(page, 'Actions menu')
+      await bringTourBack(page)
 
       const actionsToggle = page.locator('#actionsDrawerToggle')
       const previewToggle = page.locator('#previewDrawerToggle')
@@ -1239,18 +1328,33 @@ test.describe('Screen Reader Support', () => {
   })
 })
 
+// UF-9 P2: on CI Firefox, axe sometimes evaluated color-contrast before the
+// app stylesheets were applied — ~187 nodes failing at ratio 1.17, a
+// different theme pair on each of three otherwise-identical runs. Block
+// until the design tokens actually resolve on <body> so every axe scan in
+// this describe sees painted styles.
+async function waitForStylesApplied(page) {
+  await page.waitForFunction(
+    () =>
+      getComputedStyle(document.body)
+        .getPropertyValue('--color-text-primary')
+        .trim().length > 0
+  );
+}
+
 test.describe('Color System and Theme Accessibility', () => {
   test('should support light theme without violations', async ({ page }) => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')
-    
+
     // Explicitly set light theme
     await page.evaluate(() => {
       document.documentElement.setAttribute('data-theme', 'light');
     });
-    
+
+    await waitForStylesApplied(page);
     await page.waitForTimeout(100);
-    
+
     // Run accessibility scan
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
@@ -1268,9 +1372,10 @@ test.describe('Color System and Theme Accessibility', () => {
     await page.evaluate(() => {
       document.documentElement.setAttribute('data-theme', 'dark');
     });
-    
+
+    await waitForStylesApplied(page);
     await page.waitForTimeout(100);
-    
+
     // Run accessibility scan
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
@@ -1289,9 +1394,10 @@ test.describe('Color System and Theme Accessibility', () => {
       document.documentElement.setAttribute('data-theme', 'light');
       document.documentElement.setAttribute('data-high-contrast', 'true');
     });
-    
+
+    await waitForStylesApplied(page);
     await page.waitForTimeout(100);
-    
+
     // Run accessibility scan
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'wcag2aaa'])
@@ -1310,9 +1416,10 @@ test.describe('Color System and Theme Accessibility', () => {
       document.documentElement.setAttribute('data-theme', 'dark');
       document.documentElement.setAttribute('data-high-contrast', 'true');
     });
-    
+
+    await waitForStylesApplied(page);
     await page.waitForTimeout(100);
-    
+
     // Run accessibility scan
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'wcag2aaa'])
@@ -1425,16 +1532,17 @@ test.describe('Color System and Theme Accessibility', () => {
       // Allow one animation frame for style recalculation + MutationObserver
       await page.evaluate(() => new Promise((r) => requestAnimationFrame(r)))
 
-      const result = await page.evaluate(() => {
-        const input = document.querySelector('#_test-toggle-wrapper input')
-        const trackStyle = getComputedStyle(input)
-        const thumbStyle = getComputedStyle(input, '::before')
+      const readColors = () =>
+        page.evaluate(() => {
+          const input = document.querySelector('#_test-toggle-wrapper input')
+          const trackStyle = getComputedStyle(input)
+          const thumbStyle = getComputedStyle(input, '::before')
 
-        return {
-          trackBg: trackStyle.backgroundColor,
-          thumbBg: thumbStyle.backgroundColor,
-        }
-      })
+          return {
+            trackBg: trackStyle.backgroundColor,
+            thumbBg: thumbStyle.backgroundColor,
+          }
+        })
 
       const parseRgb = (str) => {
         const m = str.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/)
@@ -1444,22 +1552,32 @@ test.describe('Color System and Theme Accessibility', () => {
         return [Number(m[1]), Number(m[2]), Number(m[3])]
       }
 
-      const trackRgb = parseRgb(result.trackBg)
-      const thumbRgb = parseRgb(result.thumbBg)
-
-      expect(trackRgb, `${state.name}: track bg parseable`).not.toBeNull()
-      expect(thumbRgb, `${state.name}: thumb bg parseable`).not.toBeNull()
-
-      if (trackRgb && thumbRgb) {
-        const diff =
-          Math.abs(trackRgb[0] - thumbRgb[0]) +
-          Math.abs(trackRgb[1] - thumbRgb[1]) +
-          Math.abs(trackRgb[2] - thumbRgb[2])
-        expect(
-          diff,
-          `${state.name}: track (${result.trackBg}) vs thumb (${result.thumbBg}) channel diff=${diff} must be ≥30`,
-        ).toBeGreaterThanOrEqual(30)
+      const channelDiff = (r) => {
+        const track = parseRgb(r.trackBg)
+        const thumb = parseRgb(r.thumbBg)
+        if (!track || !thumb) return -1
+        return (
+          Math.abs(track[0] - thumb[0]) +
+          Math.abs(track[1] - thumb[1]) +
+          Math.abs(track[2] - thumb[2])
+        )
       }
+
+      // One read raced the Radix color-scale sync on CI Firefox: the HC
+      // Dark state came back as near-black-on-black (diff 12) while the
+      // same build on the same browser locally read the real tokens. The
+      // variables land a beat after the attribute flip, so the read polls
+      // until they have.
+      let result = await readColors()
+      await expect
+        .poll(
+          async () => {
+            result = await readColors()
+            return channelDiff(result)
+          },
+          { timeout: 10000 },
+        )
+        .toBeGreaterThanOrEqual(30)
 
       console.log(
         `${state.name}: track=${result.trackBg}, thumb=${result.thumbBg}`,
@@ -1706,26 +1824,75 @@ test.describe('Enhanced Contrast Preference (prefers-contrast)', () => {
     console.log('prefers-contrast: more - No violations, borders enhanced');
   });
 
-  test('should handle prefers-contrast: more in dark mode', async ({ page }) => {
+  test('should handle prefers-contrast: more in dark mode', async ({
+    page,
+    browserName,
+  }) => {
+    // Same limitation the sibling case above records: Playwright Firefox
+    // does not emulate the contrast media feature, so the preference never
+    // reaches the page and the ring stays at its ordinary width. The app
+    // high-contrast case below needs no emulation, so Firefox still guards
+    // this rule through the mode more people actually use.
+    test.skip(
+      browserName === 'firefox',
+      'Firefox does not support contrast media emulation in Playwright'
+    );
+
     await page.emulateMedia({ colorScheme: 'dark', contrast: 'more' });
     await page.goto('/')
     await page.waitForLoadState('networkidle')
-    
-    // Check focus indicator width
-    await page.keyboard.press('Tab');
-    
-    const focusInfo = await page.evaluate(() => {
-      const el = document.activeElement;
-      const styles = window.getComputedStyle(el);
-      return {
-        outlineWidth: styles.outlineWidth
-      };
-    });
-    
-    const outlineWidthPx = parseFloat(focusInfo.outlineWidth);
-    expect(outlineWidthPx).toBeGreaterThanOrEqual(3);
-    
+
+    // Focus a KNOWN control rather than whatever one Tab happens to reach.
+    // The old version pressed Tab and measured document.activeElement, which
+    // depends on how much of the page has been built: on a loaded CI runner
+    // it landed on a control the app does not style and read the browser's
+    // own 1px ring, which is how this case went red on WebKit while passing
+    // six times over locally.
+    //
+    // It also asserted only ">= 3px", which the ORDINARY ring already
+    // satisfies - so it could never have noticed the enhancement failing,
+    // and the enhancement WAS failing. --focus-ring-width is raised to 4px
+    // both here and by :root[data-high-contrast='true'], but the global
+    // focus rule hardcoded 3px behind !important and beat both. Asserting
+    // the exact width, and then that it drops back without the preference,
+    // is what makes this case able to fail.
+    const focusWidth = () =>
+      page.evaluate(() => {
+        const el = document.getElementById('themeToggle');
+        el.focus();
+        return window.getComputedStyle(el).outlineWidth;
+      });
+
+    expect(await focusWidth()).toBe('4px');
+
+    await page.emulateMedia({ colorScheme: 'dark', contrast: 'no-preference' });
+    expect(await focusWidth()).toBe('3px');
+
     console.log('prefers-contrast: more (dark) - Enhanced focus indicators');
+  });
+
+  test('the app own high contrast mode thickens the focus ring too', async ({
+    page,
+  }) => {
+    // The same token, the same rule, the mode far more people actually use:
+    // :root[data-high-contrast='true'] raises --focus-ring-width to 4px and
+    // it never reached a button either.
+    await page.goto('/')
+    await page.waitForLoadState('networkidle')
+
+    const focusWidth = () =>
+      page.evaluate(() => {
+        const el = document.getElementById('themeToggle');
+        el.focus();
+        return window.getComputedStyle(el).outlineWidth;
+      });
+
+    expect(await focusWidth()).toBe('3px');
+
+    await page.evaluate(() =>
+      document.documentElement.setAttribute('data-high-contrast', 'true')
+    );
+    expect(await focusWidth()).toBe('4px');
   });
 });
 
@@ -2072,19 +2239,17 @@ test.describe('Drawer Accessibility', () => {
     await waitForWasmReady(page);
     const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
     
-    try {
-      await page.setInputFiles('#fileInput', fixturePath);
-      await page.waitForSelector('#fileInfo:has-text("parameters")', { timeout: 30000 });
-      
-      await page.locator('#mobileDrawerToggle').click();
-      
-      const drawer = page.locator('#paramPanel');
-      await expect(drawer).toHaveAttribute('role', 'dialog');
-      await expect(drawer).toHaveAttribute('aria-modal', 'true');
-    } catch (error) {
-      console.log('Could not complete drawer ARIA test:', error.message);
-      test.skip();
-    }
+    await page.setInputFiles('#fileInput', fixturePath);
+    // The drawer is what this describe tests, so the parameter groups stay as
+    // the app leaves them: at 375px wide, Expand all sits inside the closed
+    // drawer and is outside the viewport.
+    await waitForModelLoaded(page, { expandGroups: false });
+    
+    await page.locator('#mobileDrawerToggle').click();
+    
+    const drawer = page.locator('#paramPanel');
+    await expect(drawer).toHaveAttribute('role', 'dialog');
+    await expect(drawer).toHaveAttribute('aria-modal', 'true');
   });
   
   test('drawer passes axe accessibility scan', async ({ page }) => {
@@ -2093,20 +2258,18 @@ test.describe('Drawer Accessibility', () => {
     await waitForWasmReady(page);
     const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
     
-    try {
-      await page.setInputFiles('#fileInput', fixturePath);
-      await page.waitForSelector('#fileInfo:has-text("parameters")', { timeout: 30000 });
-      await page.locator('#mobileDrawerToggle').click();
-      
-      const results = await new AxeBuilder({ page })
-        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-        .analyze();
-      
-      expect(results.violations).toEqual([]);
-    } catch (error) {
-      console.log('Could not complete drawer axe test:', error.message);
-      test.skip();
-    }
+    await page.setInputFiles('#fileInput', fixturePath);
+    // The drawer is what this describe tests, so the parameter groups stay as
+    // the app leaves them: at 375px wide, Expand all sits inside the closed
+    // drawer and is outside the viewport.
+    await waitForModelLoaded(page, { expandGroups: false });
+    await page.locator('#mobileDrawerToggle').click();
+    
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .analyze();
+
+    expectOnlyAllowedViolations(results);
   });
 });
 
@@ -2313,7 +2476,7 @@ test.describe('Tutorial CSS and Styling - Phase 6.4', () => {
 });
 
 test.describe('UI Mode Toggle & Disclosure Section Accessibility', () => {
-  test('UI mode toggle exists and defaults to Basic mode', async ({ page }) => {
+  test('UI mode toggle exists and defaults to Simplified mode', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
 
     await page.goto('/');
@@ -2321,7 +2484,14 @@ test.describe('UI Mode Toggle & Disclosure Section Accessibility', () => {
 
     const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
     await page.setInputFiles('#fileInput', fixturePath);
-    await page.waitForSelector('.param-control', { timeout: 30_000 });
+    await page.waitForSelector('.param-control', { state: 'attached', timeout: 30_000 });
+    try {
+      const notNow = page.locator('#saveProjectNotNow');
+      await notNow.waitFor({ state: 'visible', timeout: 3000 });
+      await notNow.click();
+    } catch {
+      // Save-project modal did not appear; nothing to dismiss.
+    }
 
     // Legacy toggle must not exist
     const legacyToggle = page.locator('#settingsLevelToggle');
@@ -2336,16 +2506,22 @@ test.describe('UI Mode Toggle & Disclosure Section Accessibility', () => {
     await expect(uiModeToggle).toHaveCount(1);
     await expect(uiModeToggle).toBeVisible();
 
-    // Toggle must have role="switch" and correct initial ARIA state (Basic = false)
+    // Toggle must have role="switch" and correct initial ARIA state (Simplified = false)
     await expect(uiModeToggle).toHaveAttribute('role', 'switch');
     await expect(uiModeToggle).toHaveAttribute('aria-checked', 'false');
+
+    // The three-mode controller stamps the layout mode on <body>
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'simplified'
+    );
 
     // Toggle must be keyboard-operable (focusable)
     await uiModeToggle.focus();
     await expect(uiModeToggle).toBeFocused();
   });
 
-  test('UI mode toggle switches to Advanced mode and shows all panels', async ({ page }) => {
+  test('UI mode toggle switches to Standard mode and shows all panels', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
 
     await page.goto('/');
@@ -2353,18 +2529,25 @@ test.describe('UI Mode Toggle & Disclosure Section Accessibility', () => {
 
     const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
     await page.setInputFiles('#fileInput', fixturePath);
-    await page.waitForSelector('.param-control', { timeout: 30_000 });
+    await page.waitForSelector('.param-control', { state: 'attached', timeout: 30_000 });
+    try {
+      const notNow = page.locator('#saveProjectNotNow');
+      await notNow.waitFor({ state: 'visible', timeout: 3000 });
+      await notNow.click();
+    } catch {
+      // Save-project modal did not appear; nothing to dismiss.
+    }
 
     const uiModeToggle = page.locator('#uiModeToggle');
 
-    // Default is Basic mode (aria-checked="false")
+    // Default is Simplified mode (aria-checked="false")
     await expect(uiModeToggle).toHaveAttribute('aria-checked', 'false');
 
-    // Click to switch to Advanced mode
+    // Click to switch to Standard mode
     await uiModeToggle.click();
     await expect(uiModeToggle).toHaveAttribute('aria-checked', 'true');
 
-    // In Advanced mode, no panels should have ui-mode-hidden class
+    // In Standard mode, no panels should have ui-mode-hidden class
     const hiddenPanels = await page.locator('.ui-mode-hidden').count();
     expect(hiddenPanels).toBe(0);
 
@@ -2373,7 +2556,7 @@ test.describe('UI Mode Toggle & Disclosure Section Accessibility', () => {
     const paramCount = await paramControls.count();
     expect(paramCount).toBeGreaterThan(0);
 
-    // Click again to switch back to Basic mode
+    // Click again to switch back to Simplified mode
     await uiModeToggle.click();
     await expect(uiModeToggle).toHaveAttribute('aria-checked', 'false');
   });
@@ -2386,7 +2569,14 @@ test.describe('UI Mode Toggle & Disclosure Section Accessibility', () => {
 
     const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
     await page.setInputFiles('#fileInput', fixturePath);
-    await page.waitForSelector('.param-control', { timeout: 30_000 });
+    await page.waitForSelector('.param-control', { state: 'attached', timeout: 30_000 });
+    try {
+      const notNow = page.locator('#saveProjectNotNow');
+      await notNow.waitFor({ state: 'visible', timeout: 3000 });
+      await notNow.click();
+    } catch {
+      // Save-project modal did not appear; nothing to dismiss.
+    }
 
     // Test that forge-disclosure details can be toggled with keyboard
     const disclosures = page.locator('.forge-disclosure');
@@ -2589,18 +2779,9 @@ test.describe('UI Uniformity Regression', () => {
   });
 });
 
+// UF-25: this describe used to carry its own dismissSaveProjectModal helper.
+// waitForModelLoaded does that step now, so the duplicate is gone.
 test.describe('Axe-Core Scans for Missing Views (REC-002)', () => {
-  async function dismissSaveProjectModal(page) {
-    const notNowBtn = page.locator('#saveProjectNotNow')
-    try {
-      await notNowBtn.waitFor({ state: 'visible', timeout: 3000 })
-      await notNowBtn.click()
-      await page.waitForTimeout(300)
-    } catch {
-      // Modal did not appear — nothing to dismiss
-    }
-  }
-
   test('should run axe scan with Expert Mode active', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
@@ -2609,46 +2790,44 @@ test.describe('Axe-Core Scans for Missing Views (REC-002)', () => {
 
     const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
 
-    try {
-      await page.setInputFiles('#fileInput', fixturePath)
-      await page.waitForSelector('.param-control', { timeout: 30_000 })
-      await dismissSaveProjectModal(page)
+    await page.setInputFiles('#fileInput', fixturePath)
+    // UF-25: this waited for `.param-control` to be VISIBLE, and F5 loads the
+    // parameter groups collapsed, so it timed out at 30s on a control that
+    // was present and correct. The catch that used to wrap this test turned
+    // that into a skip.
+    await waitForModelLoaded(page)
 
-      const uiModeToggle = page.locator('#uiModeToggle')
-      await uiModeToggle.click()
-      await expect(uiModeToggle).toHaveAttribute('aria-checked', 'true')
+    const uiModeToggle = page.locator('#uiModeToggle')
+    await uiModeToggle.click()
+    await expect(uiModeToggle).toHaveAttribute('aria-checked', 'true')
 
-      const expertToggle = page.locator('#expertModeToggle')
-      const isExpertVisible = await expertToggle.isVisible().catch(() => false)
+    const expertToggle = page.locator('#expertModeToggle')
+    const isExpertVisible = await expertToggle.isVisible().catch(() => false)
 
-      if (!isExpertVisible) {
-        console.log('Expert Mode toggle not visible — activating via Ctrl+E')
-        await page.keyboard.press('Control+e')
-      } else {
-        await expertToggle.click()
-      }
-
-      const expertPanel = page.locator('#expertModePanel')
-      await expect(expertPanel).toBeVisible({ timeout: 10_000 })
-
-      const results = await new AxeBuilder({ page })
-        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-        .analyze()
-
-      console.log(`Expert Mode axe scan complete: ${results.violations.length} violations, ${results.passes.length} passes`)
-      if (results.violations.length > 0) {
-        console.log('Expert Mode axe violations (file as issues):')
-        results.violations.forEach(v => {
-          console.log(`- ${v.id}: ${v.description} (impact: ${v.impact})`)
-          console.log(`  Help: ${v.helpUrl}`)
-        })
-      }
-
-      expect(results.passes.length).toBeGreaterThan(0)
-    } catch (error) {
-      console.log('Could not complete Expert Mode axe scan:', error.message)
-      test.skip()
+    if (!isExpertVisible) {
+      console.log('Expert Mode toggle not visible — activating via Ctrl+E')
+      await page.keyboard.press('Control+e')
+    } else {
+      await expertToggle.click()
     }
+
+    const expertPanel = page.locator('#expertModePanel')
+    await expect(expertPanel).toBeVisible({ timeout: 10_000 })
+
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .analyze()
+
+    console.log(`Expert Mode axe scan complete: ${results.violations.length} violations, ${results.passes.length} passes`)
+    if (results.violations.length > 0) {
+      console.log('Expert Mode axe violations (file as issues):')
+      results.violations.forEach(v => {
+        console.log(`- ${v.id}: ${v.description} (impact: ${v.impact})`)
+        console.log(`  Help: ${v.helpUrl}`)
+      })
+    }
+
+    expect(results.passes.length).toBeGreaterThan(0)
   })
 
   test('should have no violations with Features Guide modal open', async ({ page }) => {
@@ -2681,6 +2860,71 @@ test.describe('Axe-Core Scans for Missing Views (REC-002)', () => {
     await expect(modal).toBeHidden()
   })
 
+  /**
+   * D-38 (UF-31). Diagnosed in UF-23 and measured again on this release's
+   * base: axe reports aria-required-children (CRITICAL) on #projectFilesList
+   * in BOTH interfaces —
+   *
+   *   "Element has children which are not allowed: nav[aria-label], [role=list]"
+   *
+   * index.html declares the container a list; the renderer then writes a <nav>
+   * breadcrumb bar and a second role="list" into it. A list may own only
+   * listitems.
+   *
+   * The "?" help link that used to sit inside this clickable <summary> and
+   * reported nested-interactive moved out at UF-35; ALLOWED_AXE_VIOLATIONS is
+   * empty now.
+   */
+  test('companion files panel has no aria-required-children violation', async ({ page }) => {
+    test.skip(isCI, 'Needs a real multi-file project, so needs WASM')
+
+    // Companion Files is defaultHiddenInBasic and Simplified is the default
+    // mode, so the panel is not in the page at all until Standard is asked
+    // for. Confirmed by eye on the first run's failure screenshot.
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        'openscad-forge-ui-mode',
+        JSON.stringify({ mode: 'standard', lastCustomMode: 'standard' })
+      )
+    })
+
+    await page.goto('/?example=multi-file-box')
+    await waitForWasmReady(page)
+    await page.waitForFunction(
+      () => document.querySelectorAll('#projectFilesList *').length > 0,
+      { timeout: 30_000 }
+    )
+
+    // The panel ships with its disclosure closed; opening it directly is
+    // setup, not the behaviour under test.
+    await page.evaluate(() => {
+      const d = document.querySelector('#projectFilesControls details')
+      if (d && !d.open) d.open = true
+    })
+    // UF-25: an axe scan taken during the disclosure's transition measures a
+    // blend of two states. Let it settle before scanning.
+    await expect(page.locator('#projectFilesList')).toBeVisible()
+    await page.waitForTimeout(700)
+
+    const atRoot = await new AxeBuilder({ page })
+      .include('#projectFilesControls')
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .analyze()
+    expectOnlyAllowedViolations(atRoot)
+
+    // Inside a folder the breadcrumb bar exists, which is the other half of
+    // the violation. Both states must be clean.
+    await page.locator('#projectFilesList [data-folder-enter="utils"]').click()
+    await expect(page.locator('#projectFilesList [data-action="edit"]').first()).toBeVisible()
+    await page.waitForTimeout(300)
+
+    const inFolder = await new AxeBuilder({ page })
+      .include('#projectFilesControls')
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .analyze()
+    expectOnlyAllowedViolations(inFolder)
+  })
+
   test('should run axe scan in error state after invalid .scad', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
@@ -2689,42 +2933,206 @@ test.describe('Axe-Core Scans for Missing Views (REC-002)', () => {
 
     const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'invalid-syntax.scad')
 
-    try {
-      await page.setInputFiles('#fileInput', fixturePath)
+    await page.setInputFiles('#fileInput', fixturePath)
 
-      await page.waitForFunction(
-        () => {
-          const statusArea = document.getElementById('statusArea')
-          const consoleOutput = document.getElementById('console-output')
-          const hasStatusContent = statusArea && statusArea.textContent.trim().length > 0
-          const hasConsoleContent = consoleOutput && consoleOutput.textContent.trim().length > 0
-          return hasStatusContent || hasConsoleContent
-        },
-        { timeout: 30_000 }
-      )
+    await page.waitForFunction(
+      () => {
+        const statusArea = document.getElementById('statusArea')
+        const consoleOutput = document.getElementById('console-output')
+        const hasStatusContent = statusArea && statusArea.textContent.trim().length > 0
+        const hasConsoleContent = consoleOutput && consoleOutput.textContent.trim().length > 0
+        return hasStatusContent || hasConsoleContent
+      },
+      { timeout: 30_000 }
+    )
 
-      await page.waitForTimeout(2000)
+    await page.waitForTimeout(2000)
 
-      const results = await new AxeBuilder({ page })
-        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-        .analyze()
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .analyze()
 
-      console.log(`Error state axe scan complete: ${results.violations.length} violations, ${results.passes.length} passes`)
-      if (results.violations.length > 0) {
-        console.log('Error state axe violations (file as issues):')
-        results.violations.forEach(v => {
-          console.log(`- ${v.id}: ${v.description} (impact: ${v.impact})`)
-          console.log(`  Help: ${v.helpUrl}`)
-          v.nodes.forEach(node => {
-            console.log(`  Element: ${node.html.substring(0, 120)}`)
-          })
+    console.log(`Error state axe scan complete: ${results.violations.length} violations, ${results.passes.length} passes`)
+    if (results.violations.length > 0) {
+      console.log('Error state axe violations (file as issues):')
+      results.violations.forEach(v => {
+        console.log(`- ${v.id}: ${v.description} (impact: ${v.impact})`)
+        console.log(`  Help: ${v.helpUrl}`)
+        v.nodes.forEach(node => {
+          console.log(`  Element: ${node.html.substring(0, 120)}`)
         })
-      }
-
-      expect(results.passes.length).toBeGreaterThan(0)
-    } catch (error) {
-      console.log('Could not complete error state axe scan:', error.message)
-      test.skip()
+      })
     }
+
+    expect(results.passes.length).toBeGreaterThan(0)
+  })
+})
+
+/**
+ * D-57: a hover rule that repaints the background and nothing else.
+ *
+ * `.btn-secondary:hover` set `background-color: var(--color-border)` — a BORDER
+ * colour used as a SURFACE — and left whatever text colour was already there.
+ * MEASURED before the fix, on a real hover of a real button:
+ *
+ *   Forge light          #1c2024 on #80838d    4.33:1   fail
+ *   Forge dark           #edeef0 on #777b84    3.65:1   fail
+ *   High contrast light  #000000 on #000000    1.00:1   THE LABEL VANISHED
+ *   High contrast dark   #ffffff on #ffffff    1.00:1   THE LABEL VANISHED
+ *
+ * High contrast was the worst of it, and it is the mode people turn on
+ * *because* they need contrast: `--color-border` there is pure black or pure
+ * white, which is exactly the button's text colour, so hovering erased the
+ * label completely. That had never been measured because nothing in the suite
+ * hovered anything.
+ *
+ * This runs on the welcome screen and needs no WASM, so unlike most of this
+ * file it executes on every CI lane rather than being skipped.
+ */
+test.describe('Hover contrast (D-57)', () => {
+  const THEMES = [
+    ['Forge light', { theme: 'light' }],
+    ['Forge dark', { theme: 'dark' }],
+    ['High contrast light', { theme: 'light', hc: true }],
+    ['High contrast dark', { theme: 'dark', hc: true }],
+    ['Mono dark', { theme: 'dark', variant: 'mono' }],
+    ['Mono light', { theme: 'light', variant: 'mono' }],
+  ]
+
+  test('secondary buttons keep a legible label while hovered, in every theme', async ({
+    page,
+  }) => {
+    await page.goto('/')
+    await page.waitForLoadState('networkidle')
+
+    const button = page.locator('.btn-secondary:visible').first()
+    await expect(button).toBeVisible({ timeout: 15000 })
+
+    for (const [label, cfg] of THEMES) {
+      await page.evaluate((c) => {
+        const r = document.documentElement
+        r.dataset.theme = c.theme
+        if (c.hc) r.dataset.highContrast = 'true'
+        else delete r.dataset.highContrast
+        if (c.variant) r.dataset.uiVariant = c.variant
+        else delete r.dataset.uiVariant
+      }, cfg)
+      await page.waitForTimeout(300)
+
+      await button.hover()
+      await page.waitForTimeout(300)
+
+      const measured = await button.evaluate((el) => {
+        const cs = getComputedStyle(el)
+        const read = (css) =>
+          (css.match(/\d+(\.\d+)?/g) || []).slice(0, 3).map(Number)
+        const luminance = (rgb) =>
+          rgb
+            .map((v) => {
+              const s = v / 255
+              return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4)
+            })
+            .reduce((sum, c, i) => sum + [0.2126, 0.7152, 0.0722][i] * c, 0)
+        const l1 = luminance(read(cs.color))
+        const l2 = luminance(read(cs.backgroundColor))
+        return {
+          color: cs.color,
+          background: cs.backgroundColor,
+          ratio:
+            Math.round(
+              ((Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)) * 100
+            ) / 100,
+        }
+      })
+
+      console.log(
+        `[d57] ${label}: ${measured.color} on ${measured.background} = ${measured.ratio}:1`
+      )
+      expect(
+        measured.ratio,
+        `${label} hover is ${measured.color} on ${measured.background} = ${measured.ratio}:1`
+      ).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+})
+
+test.describe('One action, one announcement (DP-32)', () => {
+  test('an auto-preview speaks its completion, not its progress', async ({
+    page,
+  }) => {
+    // An auto-preview fires on every parameter change. Announcing the
+    // transient "Rendering preview..." AND "Preview ready" spoke twice per
+    // tweak through the polite live region - a session of thirty changes
+    // was sixty utterances. The progress line stays visible on the status
+    // surfaces; only the completion (or an error) speaks. Watched with an
+    // observer armed BEFORE the change, because the announcer auto-clears
+    // its region and a poll can start after the wipe.
+    test.setTimeout(240_000)
+    await page.goto('/')
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: 120_000,
+    })
+    const fileInput = page.locator('#fileInput')
+    await fileInput.setInputFiles(
+      path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
+    )
+    await expect(page.locator('#welcomeScreen')).toBeHidden({ timeout: 15000 })
+    try {
+      const notNowBtn = page.locator('#saveProjectNotNow')
+      await notNowBtn.waitFor({ state: 'visible', timeout: 3000 })
+      await notNowBtn.click()
+    } catch {
+      // No save-project modal this run.
+    }
+    // Let the LOAD's own preview finish first, so the observer measures
+    // the parameter-change render alone.
+    await expect(page.locator('#previewStatusText')).toContainText(
+      'Preview ready',
+      { timeout: 120_000 }
+    )
+
+    await page.evaluate(() => {
+      window.__dp32Heard = []
+      const node = document.getElementById('srAnnouncer')
+      new MutationObserver(() => {
+        const t = node.textContent.trim()
+        if (t) window.__dp32Heard.push(t)
+      }).observe(node, {
+        childList: true,
+        characterData: true,
+        subtree: true,
+      })
+    })
+
+    const firstGroup = page.locator('details.param-group').first()
+    if (!(await firstGroup.evaluate((el) => el.open))) {
+      await firstGroup.locator('summary').click()
+    }
+    const numericInput = page
+      .locator(
+        '.param-group input[type="number"], .param-group input[type="range"]'
+      )
+      .first()
+    await expect(numericInput).toBeVisible({ timeout: 10000 })
+    await numericInput.fill('42')
+    await numericInput.blur()
+
+    // The completion must be HEARD (the observer, not the status bar).
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() =>
+            (window.__dp32Heard ?? []).some((t) => t.includes('Preview ready'))
+          ),
+        { timeout: 120_000 }
+      )
+      .toBe(true)
+    // And the transient progress line must not have spoken.
+    const heard = await page.evaluate(() => window.__dp32Heard ?? [])
+    expect(
+      heard.filter((t) => t.includes('Rendering preview')),
+      `heard: ${heard.join(' | ')}`
+    ).toEqual([])
   })
 })

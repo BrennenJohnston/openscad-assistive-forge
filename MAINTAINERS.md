@@ -60,7 +60,7 @@ When opening a pull request:
 
 ## Release Process
 
-1. Bump `version` in `package.json` and `pixi.toml`
+1. Bump `version` in `package.json`
 2. Update `CHANGELOG.md` (if present) with a summary of changes
 3. Create an annotated git tag: `git tag -a vX.Y.Z -m "Release vX.Y.Z"`
 4. Push the tag: `git push origin vX.Y.Z`
@@ -106,4 +106,4 @@ All participants are expected to uphold it.
 | UI | Vanilla JS, CSS custom properties |
 | Testing | Vitest (unit), Playwright (E2E) |
 | Accessibility | WCAG 2.2, axe-core, Lighthouse |
-| Environment | pixi (optional), npm |
+| Environment | npm |

@@ -7,7 +7,1968 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.0.0] - 2026-09-01
+
+### Three Interfaces, a Design Lane, and One-Link Sharing
+
+The 5.0.0 milestone gathers a year's worth of shape. Since 4.5.0 the app
+grew its three interfaces - Simplified for the person who opened a link,
+Standard for working inside a project, and a Classic layout that rebuilds
+the desktop OpenSCAD experience in the browser - along with a drawing lane
+that opens, cleans and saves SVG and DXF in both directions, a Stencil
+Maker, braille editing refinements across the card, sign and charm tools,
+one-link project sharing with manifests and provenance records, and a long
+accessibility and honesty pass over the whole surface. The complete
+engineering record is below; `docs/updates/WHATS_NEW_v5.md` is the short,
+illustrated version.
+
 ### Added
+
+- **One page of verifiable site facts** (DP-29) - `docs/SITE_FACTS.md` states what the deployed
+  site is made of and what it does with your data: the Content Security Policy verbatim with a
+  directive-by-directive table, the data-handling story (nothing leaves the browser), exactly
+  which hosts the site connects to, the supply-chain controls, and the accessibility conformance
+  work. Every claim cites the file that proves it. The old IT approval guide now points here
+- **Golden rules for AI coding agents** (DP-28) - `AGENTS.md` at the repository root carries the
+  rules any AI assistant working on this codebase must follow (protected vendored files, the
+  accessibility bar, commit conventions, quality gates), with the same rules in Cursor's format
+  under `.cursor/rules/` and a pointer in `CLAUDE.md`. A new quick-start guide,
+  `docs/guides/AI_TOOLCHAIN_QUICK_START.md`, covers both doors: pointing a pipeline tool at
+  Forge, and developing this repository with an agent
+- **A photo journal of the release** (DP-30) - `docs/updates/WHATS_NEW_v5.md` walks what changed
+  since 4.5.0 in eight pictures and plain words, linked from the README
+- **What a screen reader actually hears, written down** (DP-32) - `docs/notes/SCREEN_READER_LESSONS.md`
+  records the working rules learned from listening sessions (measured-correct is not
+  heard-correct, one action one announcement, description length ceilings), and
+  `docs/notes/NVDA_LISTENING_PACK.md` scripts a six-station NVDA run so the next listening
+  session is a checklist instead of an improvisation
+
+### Changed
+
+- **Long help texts now deliver their first sentence** (DP-32) - six controls pointed their
+  screen-reader description at a whole paragraph, so NVDA read up to 80 words before letting go.
+  Each description now targets a span around the paragraph's first sentence; the rest of the text
+  stays visible on screen for everyone
+- **One toolchain, npm** (DP-28) - the Pixi environment layer is removed; `package.json` is the
+  task list and `scripts/README.md` the reference. The README's setup section says just that
+
+### Fixed
+
+- **An automatic preview speaks its completion, not its progress** (DP-32) - changing a parameter
+  used to announce "Rendering preview..." on every progress tick - four times in a measured run -
+  before "Preview ready" ever arrived. The progress line still shows in the status bar but no
+  longer interrupts a screen reader mid-edit; the one announcement is the one that matters
+
+### Changed
+
+- **The drawing editor is one picture now** (DP-24) - the editor used to spend its width on a
+  before-and-after pair, and the drawing you were actually editing got what was left. The edited
+  drawing is the editor now: it takes the full width, and toggling a shape on or off shows in
+  that one picture. **Compare with original** is a button beside Show roles that brings the pair
+  back while it is pressed; every fresh open returns to the one picture
+- **The editor's side panel is a drawer over the drawing** (DP-24) - the regions, colours,
+  plates and warnings used to be a column that squeezed the drawing to less than half its space
+  (and at phone width grew to four screens tall while the drawing shrank to nothing). The panel
+  lays OVER the drawing's right edge now, from a Regions toggle in the toolbar: closed by
+  default on the stencil tile, where pointing at the picture carries the task, open on the
+  drawing-cleanup door, where the shape list is the hands. The skip link still lands on the
+  regions table - it opens the drawer on its way there
+- **The editor toolbar is three named rows** (DP-24) - it used to be one long line that wrapped
+  wherever it ran out, four rows deep. Now it is the actions row, the view row and the hands
+  row, and none of them wraps at a desktop window. Getting the hands row to hold took a shorter
+  word: **Paint selection**, the Paint tool's own verb, where "Colour the selection" wrapped the
+  row at every width
+- **The two ready-made cards are Designers now** - the parameter panel is called the Customizer,
+  and two welcome cards were called Customizers too, which put one word on two different things
+  on the same screen. The cards are the **Charm Designer** and the **Braille Card Designer**
+  now: a design you customize, in the panel that kept the name
+
+### Added
+
+- **Muted colour names** (DP-25) - the automatic colour namer knew eighteen saturated anchors,
+  so every muted colour in a traced photograph landed on a gray: sage-green eyes, a dusty-pink
+  nose and a gray muzzle were all called "Gray", three swatches sharing one name in a list whose
+  whole job is telling them apart. Olive, Sage, Dusty pink and Cream join the table, each placed
+  so it does not steal a saturated name
+- **A cropped photo can be the design** (DP-26) - colour from the photo itself: crop a reference
+  photo down to its subject and press Use as design, and the cropped copy enters the colours
+  flow with the editor open on it. The hand-over row used to hide itself after a crop - a plain
+  upload offered it and a cropped copy did not, which was backwards, because cropping is what
+  you do on the way to the colours
+
+### Fixed
+
+- **The relief flatten survives real drawings** (DP-26, D-120) - the editor's combined preview
+  was built by merging shapes two at a time under even-odd rules, which is order-dependent once
+  shapes overlap: converted strokes could corrupt, and on this app's own logo (139 stroke bands)
+  the chain exhausted the browser's memory outright. Shapes are now read on their own terms and
+  folded together with true unions, one region at a time - order cannot change the picture, the
+  logo flattens in seconds, and a cut-out that would erase the whole drawing is treated as the
+  paper it is, with a warning that says so
+- **A DXF's curves arrive** (DP-26, D-123) - OpenSCAD's importer reads line geometry, not
+  splines or ellipses, and this door said nothing about the difference: a Fusion sketch of 34
+  entities opened as two shapes with the rest silently gone. Every spline is now evaluated with
+  the curve's own arithmetic and every ellipse parametrically before the engine sees the file -
+  the same sketch opens whole - and the engine's warning lines ride into the editor's warnings
+  list instead of being swallowed at the door
+- **The traced colour masks tile** (DP-24) - each colour of a separated picture is traced on its
+  own, and the tracer pulls every boundary inward, so neighbouring colours never quite touched:
+  the hairline gaps between them became hundreds of loose pieces on the plates. Grown under a
+  pixel before tracing (after the too-small specks are dropped, counted, so growth cannot
+  resurrect them), neighbours meet: the owner's cat went from 997 loose pieces to 64, and the
+  survivors are true paint-order islands the report should name
+- **A file control never says [object Object]** (DP-25) - a rebuilt file control whose saved
+  value is a file object printed its type instead of its name, to the person and to the screen
+  reader. It shows the file's name now, or says no file is selected
+
+### Changed
+
+- **Trees are their species now** (CW-94, CW-97) - a tree used to be a lollipop: one thin stem
+  and one faceted blob, at half its real height. Every tree is built the way trees grow now: a
+  full-height trunk at the species' cited size with a base flare on the big ones, branches
+  leaving the trunk in rings - more, longer, thicker branches low and fewer, shorter ones high -
+  and a crown of clustered leaf masses filling the species' own silhouette: a hollow shell of
+  overlapping clumps, larger low and smaller high so the top edge is the ragged one, lighter at
+  the crown's top and darker inside, with real sky showing through the gaps between clumps.
+  Conifers stack drooping rings that taper to a tip instead of wearing a ball. The species
+  tables and their citations are unchanged; the half-height compression they carried is retired.
+  Only the trunk blocks a cane, exactly as before, and no leaf hangs below head height over a
+  pavement. Placement is untouched - the same trees stand in the same places; each simply looks
+  like what it is
+
+### Added
+
+- **The street says when it tilts** (CW-80) - walking onto a grade announces it in plain words -
+  uphill or downhill and how steep, as a percent over the next few strides - and the end of a
+  grade announces itself with one word. The sentence repeats only when the slope really
+  changes, standing still says nothing, and Where am I includes the slope underfoot. A city
+  whose map carries no terrain says not a word. These are the only sentences that tell a
+  player who cannot see the horizon what the hills added for everyone else
+
+- **Take me there** (CW-87) - press I and the game walks you to the landmark selected in the
+  legend: a real route over walkable ground, found on the city's own collision map, followed at
+  walking speed with each real bend spoken as a turn onto its street by name. Arriving is the
+  same waypoint touch a walk on foot earns - one arrival, one sentence. I again, Escape, or any
+  walk key hands the wheel straight back, and the legend carries a Take me there button for the
+  mouse. Auto-walk also learned to follow the street: an obstacle ahead steers it along the
+  clearest pavement, and only a true dead end stops it and says so
+
+- **Auto-walk** (CW-81) - press N and the walker walks forward on its own until something stops
+  it: N again, Escape, any walk key, or an obstacle in the way - and it says so out loud each
+  time. While it walks, Arrow Up and Arrow Down look up and down, and touching W A S D takes the
+  wheel straight back. One press covers the length of a street that used to need a key held the
+  whole way, which matters when holding a key down is the hard part
+
+- **Seven real landmarks per city, chosen by hand** (CW-78) - the landmark list used to be
+  arithmetic over map tags, which filled Seattle's legend with hotels and put the Space Needle
+  eleventh of twelve. Each city now carries seven landmarks drafted from its own landmark
+  register - Seattle's Landmarks Preservation Board list, Denver's landmark register, the
+  Albuquerque Landmarks Commission, Heritage Burnaby - in a fixed order, each row keyed to its
+  map element and cited in `docs/CITY_WALK_LANDMARKS.md`. A row that loses its map element in a
+  rebake fails a test instead of quietly shortening the legend. The old scoring survives for a
+  city without a table, with a mapped wikidata identity now breaking ties
+
+- **The Seattle Great Wheel exists** (CW-78) - the legend's number-two row had no body at all: the
+  wheel is mapped as a point, not a building, and only buildings were drawn. It stands on Pier 57
+  now at its published 175 ft - a closed rim, spokes, a hub, A-frame legs and a boarding platform,
+  the wheel's plane running along the pier so the circle reads from Alaskan Way the way the real
+  one does. The rim's diameter is drawn from the height by a stated ratio, because no primary
+  source publishes it
+
+- **The Space Needle has its saucer** (CW-78) - the map carries the shaft as narrow prisms, so
+  from a distance the Needle read as a radio mast. The published numbers are drawn in above the
+  legs now: the flare from the waist, the 42 m top house at the observation level, the halo ring,
+  and the spire to the full 605 ft
+
+- **A touchable waypoint at every landmark** (CW-78) - each of the seven gets a man-in-circle mark
+  on a plinth, standing on public pavement at the landmark's street face: a bright ring around an
+  exact-black core with the figure inside, at least five character rows tall from 40 m at the
+  default size. Walk into it and the game announces the landmark by name and ticks the legend - a
+  physical thing a cane-line walk runs into, not only a ring on the map
+
+- **Every city starts near its first landmark** (CW-78) - Seattle spawns within 200 m of the Great
+  Wheel, facing it; the other cities spawn near the first row of their table. The walk opens on
+  the thing the legend leads with instead of a generic downtown corner
+
+### Fixed
+
+- **A streetcar platform is not a road** (CW-95) - platform, corridor and construction ways used
+  to fall through the road-width table into a five-metre carriageway, which drew a roadway along
+  the South Lake Union streetcar stops and refused to seat anyone on their benches, because the
+  game will not invent a person sitting on the tarmac. All three kinds are walkable open ground
+  at pavement level now - no kerb cut, no carriageway - and the four platform benches seat
+  people again
+
+- **Teleporting to a landmark counts as finding it** (CW-78) - landing beside one seeded the
+  "near" state without the visit, so the legend ticked at whatever later step happened to
+  re-enter the ring. The landing itself marks it now
+
+### Changed
+
+- **The ground has height** (CW-79) - Seattle stands on its real hills now, from a national 1 m
+  elevation model baked into each city's extract: the streets and pavements drape over the
+  grade with their cross-slope, every tree, lamp, bench and person stands on the ground under
+  it, and each building sits rigidly on its own centroid's ground with a skirt of its own
+  footprint closing the downhill gap - walls stay vertical, roofs stay flat, nothing floats.
+  The walker's eye rides the ground the same way it has ridden kerbs since the kerbs existed,
+  so walking inland from the waterfront is a climb you can watch the city descend behind you
+  from. A city whose extract carries no terrain stays exactly as flat as it was, and the
+  measured cost on the same machine was under a millisecond
+
+- **The skyline is visible from anywhere** (CW-82) - the city used to end 260 metres out: past
+  the fog, a tower was a faint cutout and most of the map simply was not there. The detailed
+  buildings still own the first 260 metres, and beyond them the same volumes are drawn a second
+  time through a windowless material - no facade detail to shimmer at distance, one shared copy
+  of the geometry - fading in distance bands to the edge of the map, so downtown reads from the
+  waterfront and a walk toward it has a destination on the horizon. A murky night still pulls
+  the skyline in close, the ground still vanishes with distance the way it always has, and the
+  cost measured on the same machine, same session, was nothing: the frame rate did not move
+
+- **Three ways to look around** (CW-81, CW-96) - a Mouse look button cycles between
+  hold-and-drag (the default), hands-free follow, and off, and the choice is remembered; with
+  reduced motion set it starts off and stays whatever you pick. In hands-free follow the view
+  turns toward wherever the cursor points: still in the middle, faster toward the edges,
+  settling the moment the cursor comes back to centre or leaves the picture. It stays a choice
+  rather than the default - it does not yet get along with leaving the picture to press the
+  on-screen buttons. Underneath, every way of looking - keys, mouse, the camera panel's
+  buttons - now steers one target the camera follows smoothly, and walking builds to full
+  stride over a quarter second instead of starting at it, so a tap of W is a step, not a lurch
+
+- **In color, every surface now has a color of its own** (CW-92) - a wall used to change color as
+  you walked toward it, sometimes flipping from one color to another all at once across a whole
+  face. The color was being guessed afresh every frame from how the lit screen looked in that
+  cell, and the city itself is drawn in greys, so the guess was reading almost nothing and
+  changing its mind. Each kind of surface has its own color now - foliage, buildings, shop fronts,
+  the roadway, the pavement, signs - and the light on it decides only how bright it is. Walking
+  nineteen metres toward a shop front used to change the color of one cell in nine; it now changes
+  none. The sky is left as it was, because it is not a surface. Nothing about monochrome changes
+
+- **The ground, the paving and the buildings keep their own characters as you walk** (CW-91) -
+  until now a cell's character was chosen from how bright that patch of SCREEN was, so walking
+  re-rolled it constantly and the ground boiled underfoot. The character is now read off the
+  SURFACE itself, in the surface's own coordinates, so a patch of ground or a piece of wall keeps
+  its character while you walk past instead of being redrawn every frame. Measured walking at the
+  Seattle spawn, the ground went from changing thirty cells in every hundred each frame to under
+  one, and the paving to none at all; a real patch of ground followed across a walk now keeps its
+  character 98 times in 100 against 83 before, and a piece of wall 90 times against 85. This was
+  built and measured a release ago and switched off, because reading the surface forced a slower
+  drawing path that halved the frame rate. The graphics card does the reading itself now, so the
+  frame rate is unchanged - 60 either way - and it is on for everybody
+
+- **Building faces are drawn this way too, and it is a trade** (CW-91) - a wall's characters
+  change slightly MORE often per frame than they used to, not less. They are sliding with the
+  wall rather than being re-rolled in place, which is what movement is supposed to look like, and
+  it is why the windows on a building now read as windows from across the street. The choice
+  between a steadier wall and readable windows was made on the pictures, and this is that choice
+
+- **In color, every surface gets its own characters back** (CW-93) - the game gives each kind of
+  surface its own small set of characters, so a road is drawn with characters that lie down, a
+  wall with characters that stand up, and foliage with characters that clump. In color that had
+  never actually happened: every surface was drawn from all ninety-five characters instead, so a
+  tree and the building behind it were made of the same alphabet and a window pattern could run
+  straight across a tree. Trees now look like trees, walls like walls, and paving like paving.
+  Nothing about monochrome changes, and there is nothing new to press. Measured at the spot this
+  was reported from, about seven cells in ten were drawing a character their surface is not
+  allowed; it is now none, and the picture is drawn very slightly faster than before, because each
+  surface has fewer characters to search through
+
+- **Turning color on mid-game now looks the same as starting in it** (CW-93) - switching to color
+  from the toolbar left a monochrome setting behind, and the brightest small things on the street,
+  cars and kerbs, were drawn inside out and from the wrong set of characters because of it.
+  Starting the game already in color never showed this. Both ways in now give the same picture
+
+- **Nothing is left behind when you walk** (CW-89) - characters were staying on screen after the
+  thing that put them there had gone, so walking past a building dragged a faint speckle along the
+  wall behind you. The game holds a character still for a few frames to stop it flickering, and
+  that hold was being applied to cells that had gone dark as well as to cells that had merely
+  changed. It no longer is: a cell the game decides is empty is empty at once, and a cell that
+  lights up takes its character at once. Holding still is for choosing between characters, never
+  for deciding whether there is one. Measured walking, ink left where the game had chosen blank
+  went from about five hundred cells a frame to none
+
+- **Buildings do not hover** (CW-90) - some buildings were drawn starting several storeys above
+  the pavement, so a tower hung in the air with a gap underneath it, and some had an upper half
+  floating clear of their own lower half. Anything that would hover is now built down to whatever
+  is beneath it, or to the ground. The shape above is unchanged; only the hole underneath is
+  filled. Across the four cities this closed seventy-one gaps, including a two hundred metre tower
+  that began eighteen metres up
+
+- **The ground keeps its own characters** (CW-86, groundwork, off by default) - a cell's
+  character has always been chosen by how bright that patch of SCREEN is, so walking re-rolled
+  it constantly and the ground was the worst of it. This adds the other way of choosing: the
+  character is read off the SURFACE itself, in the surface's own coordinates, so a patch of
+  ground keeps its character while you walk past instead of being redrawn every frame. Measured
+  on the ground and the paving it is decisive, and a patch followed across a walk keeps its
+  character 98 per cent of the time against 89. It is switched OFF in this release and nothing
+  you see changes: reading the surface currently forces a slower drawing path that halves the
+  frame rate, which is a price the picture is not worth until the graphics card can do the
+  reading itself. The measurements, and what it looks like, are recorded for review
+
+- **Building faces keep the way they are drawn today, on purpose** (CW-86) - the same technique
+  was measured on walls and shopfronts and cannot be had there yet. A wall only stops being
+  redrawn once the patch of surface behind one character is bigger than the character, and at
+  this size that is also big enough to swallow the windows: the setting that steadies a wall
+  turns it into smooth bands, and the setting that draws the best windows this game has managed
+  steadies nothing. Both were photographed and the pictures are kept
+
+- **Day and Night** (CW-85) - the city has always been characters standing on the page's own
+  black: between one character and the next there was nothing, so a parked car read as a car
+  shape drawn in the air rather than as a solid thing. Day fills those gaps in. Every nearby
+  surface gets a dark tint of its own material painted behind the characters, road slate,
+  pavement tan, a wall the building's own hue, a tree its green, and the picture reads as
+  surfaces you could touch. The sky stays black and the far skyline stays bare, so distance
+  still reads as distance, and the fill fades out over the same range the fog does. It changes
+  no character and no color the game had already chosen: it is paint that goes down first and
+  is covered by them. Press B, or use the Day button in the toolbar. Night
+  is what you get unless you ask, and it is the city exactly as it was
+
+- **An empty city** (CW-85) - press U and the people and the parked cars are gone, so a street,
+  a storefront or a hillside can be looked at on its own. They are taken out of your way as
+  well as out of the picture: the ground they stood on becomes ground you can walk across,
+  rather than leaving you bumping into a car nobody can see
+
+- **Your character size is yours** (CW-88) - the game measures what your machine can hold and used to
+  apply that as a rule: a size you had chosen was raised to the machine's floor when you opened the
+  game, the smaller steps refused to go below it, and the Smaller control switched itself off there.
+  The measurement is now advice. A size you set is remembered and opens where you left it, the size
+  controls reach 10 per cent again, and if the machine measures that it needs a coarser picture than
+  the one you chose it says so and offers the larger size rather than taking the choice away. Stepping
+  below what the machine measured tells you what it costs. 30 per cent is still what you get if you
+  have never chosen, and a machine that cannot hold it still starts you higher
+
+- **A reading taken at 10 per cent no longer decides what 30 per cent can do** (CW-88) - your own size
+  is measured where it stands rather than flipped, so unlocking 10 per cent meant a reading could be
+  taken below the range the game reasons about. A slow reading there was being read as a verdict on
+  the whole range and could store the coarsest floor there is, off one measurement of a size that
+  range does not contain. Smaller cells cost more, not less, so such a pass now decides nothing:
+  nothing is stored and nothing is announced
+
+- **The city is not dark any more** (CW-84) - playing the deployed build, the picture read too dark
+  and frames looked like they were blending together. Three things changed.
+  In colour, the ink floor is gone: it had left 28 per cent of the screen carrying ink where 89 per
+  cent used to, so the sky, the road and the pavement were simply black. The gate that removed the
+  flat white fields stays, so nothing goes back to white. In monochrome the solid bright layer is
+  back, capped, so a lit shopfront reads as a bright block again. And the frame-to-frame memory that
+  stopped the strobing was holding a character on screen for up to a full second, which is what the
+  blending was; it now holds for a sixth of that
+
+
+- **Street lights where the city actually has them** (CW-77) - every lamp in the game was invented,
+  one every 30 metres on every street, because the map's own `highway=street_lamp` nodes were never
+  asked for. They are now: Seattle carries Seattle City Light's surveyed register of 3,679 lit poles
+  and the other three cities carry OpenStreetMap's, and where the map has put a lamp the game no
+  longer invents one beside it. Where the map is silent the spacing follows Seattle's own lighting
+  standard read whole, which is a luminaire every 18 metres on an ordinary street and on a
+  pedestrian street, on alternating sides. Pedestrian streets had no lighting at all before. A
+  street wider than 15 metres carries a facing pair every 76 metres instead
+
+- **The ground under the city, measured** (CW-77) - the extracts now carry a terrain grid sampled
+  from the national 1 metre elevation models (USGS for the three US cities, Natural Resources Canada
+  for Burnaby), so a later release can put Seattle's hills back. Nothing is drawn on it yet. Buildings
+  the map records as being below the street are no longer built up from ground level
+
+- **Roofs are roofs, and nothing floats** (CW-76) - a canopy over a downtown street was built as a
+  solid building from the pavement up, so the roof over 3rd Avenue was a wall across the street, with
+  a lit shop window across its face. 42 of Seattle's 46 roof and bridge ways were built that way, and
+  the same in every other city. A roof is now a thin slab at the height the map gives it, on slim
+  columns where there is room for them, and you can see and walk under it. The Convention Center
+  Arch, whose mapper wrote down both where it starts and where it ends, is unchanged
+
+- **Towers stand on the ground** (CW-76) - Metropolitan Park West Tower began 45 metres in the air,
+  and 32 other buildings in Seattle floated the same way, because the game drew the detailed volumes
+  a mapper had added and stopped drawing the plain outline under them. The outline is now drawn as
+  the podium those volumes stand on. Where a volume genuinely has nothing under it anywhere in the
+  city, it is drawn down to whatever it does stand on
+
+- **Nothing stands in the road** (CW-75) - a tree, a lamp post or a person was placed relative to one
+  street and never asked whether that spot was in the middle of the street it crosses. 474 tree
+  trunks and 373 lamp posts stood on the tarmac in Seattle alone, and hundreds more across the other
+  three cities. Every prop is now tested against every roadway. A tree the map records inside a
+  roadway steps back onto the pavement on its own side of the street, and is only dropped where there
+  is no pavement to take it. Nobody stands in the road unless the map records a crossing there
+
+- **Cars no longer drive through parked cars** (CW-75) - a moving car sat a fixed 1.6 metres in from
+  the kerb and a parked car 1.5 metres, which put the two of them 10 centimetres apart on every kind
+  of street this game parks on: 637 pairs of cars occupied the same ground in Seattle, the nearest of
+  them six metres from where the player starts. The travel lane is now worked out from the road's own
+  width, so a wide street gets a lane each way and a narrow one gets a single shared lane down the
+  middle, with the parked rows left exactly where they were. A street too narrow to hold both a
+  parking bay and a travel lane carries no parked cars
+
+- **A building's ground floor is what the map says it is** (CW-74) - the game decided what kind of
+  shopfront a building had by looking for a cafe or a shop pinned within 35 metres of it, and never
+  looked at the building itself. So the Central Library, which the map plainly labels a library, got
+  its ground floor from a coin toss, along with 130 other buildings in Seattle alone. A building's own
+  label now decides first, the nearest pinned place second, and the coin toss only where nothing at
+  all is known
+
+- **Car parks and churches no longer wear shop windows** (CW-74) - 65 multi-storey car parks, 18 bus
+  shelters and 13 places of worship across the four cities were each given a lit shop window across
+  their base, because the coin toss had no way to say "this building does not have one". They now get
+  a plain wall and no shop sign. Civic buildings - a courthouse, a town hall, a museum - get a lit
+  lobby instead of a shopfront
+
+- **Buildings look like what they are** (CW-73) - a block of flats and an office tower used to have
+  exactly the same chance of every kind of window, because the game picked a facade by hash and never
+  read the one thing the map data actually says. Flats now wear small punched windows in a regular
+  grid, offices wear horizontal bands and glazing bars, shops wear wide letterbox glazing, a church
+  wears one tall slot, and a car park wears open horizontal decks. Where the data says nothing at all
+  - which is most of Albuquerque - the building still chooses from all nine as it always did, so no
+  street becomes uniform
+
+- **Windows fit the wall they are on** (CW-73) - the window grid used to be laid out in world metres,
+  which meant a wall finished halfway through a window and a building finished halfway through a row
+  of them, wherever it happened to stand. Every wall now carries a whole number of windows across and
+  every building a whole number of rows up, the ground floor is kept clear for the shopfront, and a
+  wall too narrow for a single window is left blank instead of being given one wider than itself. A
+  straight wall that the map data happens to have split in the middle is joined back up first, so both
+  halves keep the same rhythm
+
+- **One character size for everyone** (CW-72) - the game used to measure your machine at the door and
+  put you on the size it decided you could hold, so two people playing the same city were not looking
+  at the same picture, and neither was one person on two machines. **Everybody now opens at 30 per
+  cent**, chosen from measured walks rather than from a preference: 45-second walks in heavy rain on a
+  low-end integrated graphics chip, where 30 per cent is the smallest size holding thirty frames a
+  second in both the lightest city and the heaviest. What your machine measures about itself is now
+  only a FLOOR: it can make the picture coarser if it must, never finer, and never a different game
+  from anybody else's. Your own choice of size still wins and is still remembered
+
+- **The floor needs two visits to agree before it moves** (CW-72) - a floor that moved on a single
+  slow reading gave you a different size every time you opened the game on a machine that was
+  sometimes busy. It now takes two consecutive visits that both ask for a coarser picture, one
+  contented visit clears the count, and nothing ever moves the floor down on its own. A size stored by
+  the old calibration that was FINER than the new default is quietly raised to it, because leaving it
+  would have kept that one machine on its own private game
+
+- **The bright layer is gone from the game, and the parks are visible** (CW-72) - I compared the two
+  treatments built and measured in the previous release, pictures side by side, and chose to
+  remove the solid layer: no cell is painted as a solid block any more, and a lit shopfront is drawn
+  as characters you can see into. Colour mode's ink floor was set to the value that keeps a street
+  readable rather than the one that empties it, and a park's surface was raised out of the near-black
+  it had been sitting in
+
+### Added
+
+- **A placement census you can run** (CW-75) - `node scripts/census-city-walk.mjs` builds all four
+  cities with the real parser and builders and counts what stands where: props per stream, trunks and
+  lamp posts inside a roadway, cars overlapping cars, people in the road away from a crossing,
+  buildings that float and roofs drawn from the ground up
+
+- **Colour mode can say "this cell is dim" for the first time** (CW-71) - monochrome has an intensity
+  ladder, so a dim cell is drawn dim and an empty one empty: three to seven per cent of a monochrome
+  frame carries ink. Colour had no ladder at all. Every cell was normalised to full brightness before
+  its character was chosen and then had a colour put on it, so **seventy to eighty-nine per cent of
+  every colour frame carried ink and about sixty per cent of all cells were white** - six colours in
+  the palette, and one of them was most of the screen. There is now an ink budget: a floor below which
+  a cell draws nothing, and a gate that lets a cell take white only if it is both bright enough and
+  colourless enough. Measured at the Seattle spawn: ink from 89.3 to 3.1 per cent, white from 61.8 to
+  0.01, and the colour flicker while walking from 15,677 changes over 24 frames to 171. Both palettes
+  still use all of their colours; nothing collapses
+
+- **The white and the ink turned out to be two problems, not one** (CW-71) - turning on the white gate
+  alone, with no floor, removes every white cell and changes nothing else: the same large flat fields
+  are still there, in teal instead of white. That says plainly that the flatness was never only about
+  white. Three settings are measured and photographed side by side in `docs/CITY_WALK_ROADMAP.md`, so
+  the choice of how empty colour mode should be is made from pictures rather than from a hunch
+
+- **Three selectable treatments of the solid bright layer, measured side by side** (CW-70) - the
+  brightest cells are not drawn as characters at all: at or above a luminance of 0.80 the whole cell
+  is painted in phosphor with the character knocked out, and shopfront bands are painted brighter than
+  anything else in the city, so a row of shops reads as a row of solid blocks. The game can now be put
+  into any of three treatments - `stock` (unchanged), `calm` (the blocks stay but the share of them is
+  bounded, and the bands come down a little) and `off` (no solid cells at all; a lit shopfront is
+  drawn as characters) - so the three can be compared against one scene in one session. Nothing
+  changes by default: `stock` is what ships until the choice is made. Measured at a shopfront pose:
+  solid cells 2,936 / 2,261 / 0, while the shopfront's LIT cells only move 4,162 / 4,097 / 4,042, so
+  turning the layer off costs three per cent of the ink and all of the solidity
+
+- **A share cap has to be bounded, or it quietly becomes the other option** (CW-70) - the cap works by
+  raising the threshold in response to the previous frame, because the decision is made before the
+  character is chosen and no cell can know the whole frame's total. Standing in front of a wall of
+  shopfronts, where four times the allowed share is lit, the first version raised the threshold until
+  every band had gone and then oscillated: 10,164 solid crossings over 47 standing frames, where the
+  uncapped picture produced none. Shopfronts are all painted at ONE brightness, so no threshold keeps
+  some and drops the rest. The lift is now bounded below the gap between the threshold and the lit
+  band, and the same pose settles in five frames and then holds perfectly still
+
+- **A way to ask the city which part of it is moving** (CW-69) - the pavement had been photographed
+  crawling underfoot, and the explanation on file was that the ground texture's mip-level rings were
+  riding along with the walker. The motion instrument gained `--scene-exp`, which takes one thing away
+  from the scene and measures again. The answer: the filtering was worth three to sixteen points of a
+  thirty-eight to sixty-four per cent churn, the mip chain and the blur are the same intervention, and
+  spreading the ground pattern over eight times the ground still left eight to twenty-one per cent.
+  Only removing the pattern entirely reached zero. **So the ground was left exactly as it is**: what
+  looked like a filtering bug is what a fine pattern does when you walk through it, and the
+  frame-to-frame memory added in the previous release already takes it to zero, including on a
+  ten-frames-a-second machine. The whole table is in `docs/CITY_WALK_ROADMAP.md`, so the next person
+  to look at the pavement starts from a measurement instead of a hypothesis
+
+- **Walking through the city no longer re-rolls the picture underneath you** (CW-68) - the converter
+  decided every character, every brightness level and every solid cell from ONE frame, with no memory
+  of the frame before, so a texture sliding a single pixel was enough to choose a different character.
+  Measured on a Seattle street at real walking speed: nine to eleven per cent of the characters on a
+  building face changed every frame, and a character lasted six to eight frames. Each of those
+  decisions now has a dead band, and a cell keeps what it had unless the new answer is better by more
+  than that band. Measured after: **one to two per cent per frame, and a character lasts fifteen to
+  sixteen frames**; the ground underfoot, which used to boil in rings as you walked, now holds
+  completely still. A standing picture is still perfectly still, on both graphics cards
+
+- **The memory forgets the instant the thing under it changes** (CW-68) - holding a character is only
+  safe if it is dropped when it becomes wrong, and an earlier attempt at this was abandoned for
+  exactly that reason: cells kept the character of the surface they had just left. A cell now forgets
+  everything the moment its surface class changes under it or its solid-cell state flips, and no cell
+  may override the fresh answer for more than a second in a row. Measured: the share of surface
+  changes where the character failed to follow went DOWN, not up. In colour mode that reset was
+  missing at first because the surface map was never sent to the graphics card there, and the smear it
+  allowed was visible in the numbers (87 per cent of surface changes kept a stale character, against
+  44 with no memory at all); packing the palette colour and the surface into one byte fixed it, and
+  colour mode now measures better than it did with no memory at all. Nothing outside the game gets
+  any of this: the same converter draws the main app's alternate view, which converts one still frame
+
+- **An instrument that photographs the City Walk in motion** (CW-67) - every judgement this game has
+  made about whether its picture holds still was read off a screenshot or off a two-centimetre test
+  step, and the walk a player actually does is 4.8 metres a second. `scripts/seq-city-walk.mjs` runs
+  a scripted walk, a scripted look and a standing control, waits for one converted frame per step,
+  and scores the converter's own decisions cell by cell: how often a character changes, how often it
+  comes back to what it was two frames ago, how many frames a character survives on average, and
+  which surfaces those numbers belong to. It writes a contact sheet of every frame, a map of what
+  changed where, a map of which surface each cell was, a machine-readable summary and a video of the
+  run, so the next release can be compared with this one rather than remembered. The scoring is a
+  separate module with unit tests whose answers were worked out by hand, and the instrument loads
+  that same module, so the tested code is the code that produces the numbers. Nothing a player sees
+  changes
+
+- **Both City Walk instruments now say which graphics card measured the number** (CW-67) - Windows
+  gives a windowed browser the power-saving graphics chip, so on a laptop with two of them the
+  default is the integrated one, and every performance table this project has produced without a
+  card named on it was an integrated-chip table. The renderer string is now printed on every row of
+  every table, and `--gpu-luid` selects the other card when a comparison needs one. Measured on both:
+  two drivers rendering one identical scene disagree about roughly one per cent of the character
+  choices, while the surface-class pass agrees exactly - so the churn is a decision the converter
+  makes, not something the graphics card does. The frame-time bench also gained a character-size
+  sweep inside one browser session, and lost its "reverse" column, which counted solid cells in the
+  last frame of a run and swung between 0 and 95,425 between two runs of the same configuration
+
+### Changed
+
+- **The Stencil Maker's designs are this project's own now** (DP-14) - the gallery used to offer
+  six icons copied out of the charm tool's library: a smiley, a heart, a star, a bolt, a crown
+  and a sun, none of which had anything to do with stencils. They are gone. In their place is the
+  Forge logo, beside the ring that was already there. Getting the logo in took some doing, and it
+  is the same thing that happens to any drawing exported from a CAD program: the logo is drawn in
+  lines with nothing filled in, and OpenSCAD fills in every shape it is given, so the file as it
+  stood came out as one solid blob. The app's own preparer turns the lines into thin filled
+  ribbons, which is what a stencil of a line drawing should be, and that is what ships. The ring
+  is still the design you start with, because the logo's ellipses and figure close into pieces
+  the default single support bar does not reach, and the ring is there to show a bar doing its
+  job. The Stencil Maker card still credits the Stencil Forge project by name, but no longer
+  links to it: that repository is private, so the link was a dead end for everybody who followed
+  it. The same credit is now in CREDITS.md, saying which parts were carried over and under what
+  licence. Behind the scenes, the Bracelet Clip Charm stopped borrowing its six gallery icons
+  from a neighbouring tool's folder and uses its own copies, which have been sitting there unused
+  since they were added
+
+- **A pendant can take the shape of your own drawing** (DP-11) - the Flat Pendant gains a shape
+  called "design": instead of a circle or a square, the outline of your drawing becomes the
+  pendant itself, and everything inside it stands up on the surface as raised detail. A traced
+  bird becomes a bird-shaped pendant. Two things this needed getting right, neither of which
+  would have looked wrong on screen. An outline that was DRAWN as a line, rather than filled in,
+  used to come out as a hollow ring with the details floating in the middle; it is now filled.
+  And a traced photograph's outermost shape is almost always the paper it was drawn on, which
+  would have made every traced photo a rectangle; the background is now stepped over. The
+  keychain hole gains position controls, and because the pendant is now whatever shape you drew,
+  the app checks that the hole is actually inside it with at least 1.2 mm of material around it.
+  If it is not, it says so in plain words with both measurements, and leaves the hole exactly
+  where you put it
+
+- **The Flat Pendant and the Logo Plate caught up with the Bracelet Clip Charm** (DP-9, DP-10) -
+  three models share the charm program and features kept being added to one and forgotten on the
+  others. All three now offer the same things: move, rotate and resize your design, thicken its
+  lines for printing, two lines of text, an icon gallery, and large and small presets. Three
+  older faults are fixed with them. The Flat Pendant's design ratio was being written into a
+  setting the model never read, so a tall design was squeezed as though it were square. Its
+  default heart could not be found by desktop OpenSCAD at all, which said so and then quietly
+  built a blank pendant anyway. And text could run off the edge of a charm and print standing on
+  nothing; text is now cut off at the edge of the face on every model. The guide gains a table
+  saying which model has which feature, and the tests read that table, so a promise it makes
+  that stops being true now fails the build instead of quietly ageing
+
+- **A drawing can be built as a stack of layers, not just one flat shape** (DP-7, DP-8) - if the
+  shapes in your drawing sit inside one another, the app can now work that out and build them as
+  separate passes, each standing on the one before it. Three nested squares come out as a stepped
+  pyramid instead of a single flat square. In the drawing editor each shape gets a Layer control,
+  suggested from how deeply it is nested and yours to change. If you put a shape on a layer with
+  nothing under it, the row says so in plain words and explains what to do, and nothing is moved
+  for you: the choice stays yours. The Bracelet Clip Charm is the first model that can build
+  them, with its own depth and raised-or-engraved choice per pass, and it is entirely optional -
+  leave the layer files empty and the charm is exactly what it was. Measured: a simple drawing in
+  three passes renders in 0.34 seconds against 0.31 for one; a very detailed one takes about ten
+  seconds against three and a half, so a complicated drawing built in three passes is a
+  ten-second render
+
+- **Shapes can be deleted from the editor's list, not just left out of the result** (DP-4) -
+  marking a shape "Ignore" kept it out of what gets printed but left it in the list, which is no
+  help when a drawing has hundreds of them. Every row now has a Delete button, and above the list
+  there are two ways to clear out a lot at once: remove everything smaller than a size you give,
+  or keep only the largest few and remove the rest. Sizes are in square millimetres measured
+  against the design width, so they are the size the shape will really print. One step of undo is
+  available while you are working, and what you removed is remembered with the project, so
+  reopening it shows the list you left behind. Removing enough shapes to get under fifty brings
+  the automatic preview back
+
+- **Drawings with more than fifty shapes can be opened and edited now** (DP-3) - the editor used
+  to refuse any drawing with more than fifty shapes outright, showing no list at all, which was
+  precisely backwards: the list is what you would use to delete the shapes you do not want. The
+  limit turned out to be guarding one particular step, combining the shapes into a single
+  outline, and not the list. So the list is now shown for drawings up to a thousand shapes, and
+  the combining step waits until you press Render preview, telling you it is working and how
+  long it took. Measured on a real 831-shape drawing: it used to be refused outright, then took
+  64 seconds to open once the refusal was lifted, and now opens in about 2 seconds. Drawings of
+  fifty shapes or fewer behave exactly as before
+
+- **Saying "Not now" to the tour puts you back at the top of the Main Page** (DP-2) - the tour
+  question scrolls the tour cards up so it can point at the button it is asking about, and until
+  now answering "no" left you there, with "Open or start a project" and Saved Projects scrolled
+  off the top. Answering no now takes you back to the top of the page and lands you on the Main
+  Page heading, so a keyboard or screen-reader user carries on from the beginning of the page
+  rather than from the middle. The Not now button, the Escape key and clicking outside the
+  question all do the same thing, and the tip on the tour card still appears exactly as before.
+  Choosing to start the tour is unchanged
+
+- **The first screen makes the recommendation instead of asking you to** (DP-1) - the welcome
+  modal now opens with Assistive Forge already chosen, and "Remember my choice on this device"
+  now starts UNCHECKED. A first-time visitor can press Download & Continue once and be in the
+  recommended interface, without that one press deciding anything permanent for the device: the
+  choice is remembered only if you tick the box. Everything else about the modal is unchanged,
+  including the wording, the mobile layout, and the notice that Classic is desktop-only
+
+### Fixed
+
+- **A stencil plate no longer comes out several times the size of the plate it is cut from**
+  (DP-15) - a drawing is put on a shared canvas before the plates are cut from it, so that every
+  plate lines up with every other one, and that canvas is reached by a transform stored beside
+  the drawing. The plate builder read the canvas but not the transform, so it sized the drawing
+  as if it were already on the canvas. A drawing 119.81 units wide came out a fifth too big and
+  ran off the bottom of the plate; a drawing traced from a photograph, whose units are pixels,
+  came out five times over - a 100 mm plate with a 285 mm cat hanging off the corner of it, which
+  is exactly what one owner's export looked like. The transform is now applied, once, and a cut
+  lands inside the plate's margin on both axes. The design's own proportions did not change: the
+  cat that used to overflow a 70 mm design box now fills it exactly. The laser sheet was reading
+  the same drawing the same wrong way, and is fixed with it
+
+- **Drawings that declare their colours in a style block are no longer read as solid black**
+  (DP-3) - drawings exported from CAD and illustration programs usually set "no fill, black
+  outline" once at the top of the file and refer to it by name from every shape. Forge was not
+  reading that, so it assumed every shape was filled in, and a line drawing became a page of
+  solid blocks. On a stencil that meant the whole picture came out as one hole the shape of its
+  outer edge, with none of the artwork in it. Forge now reads those rules, and such a drawing
+  opens as the line art it is
+
+- **The editor said the wrong thing about drawings it could not open** (DP-3) - a drawing with
+  too many shapes was turned away with "has no shapes Forge can work with. A photo needs dark
+  lines on a light background to trace." That is advice about photographs, given about a
+  drawing, and it named a cause that was not the cause. It now says how many shapes the drawing
+  has and how many Forge can work with
+
+- **A picture that was too large to convert no longer reports that it worked** (DP-3) - when a
+  photograph was too big to trace, the message saying so was immediately overwritten by one
+  saying the file had been converted. The model got nothing, the preview said it was ready, and
+  the only place the truth appeared was a message that scrolled past. The failure now stands
+
+- **Two pieces of text on the chosen card were just under the contrast minimum** (DP-1) - putting
+  a card in the chosen state on first paint was the first time the modal's amber text had ever sat
+  on the pale yellow chosen fill, and there it measured 4.44 to 1 where the standard asks for 4.5.
+  The badge and the Accessibility highlights link now use a foreground colour picked for that
+  fill, measured at 5.78 to 1. The colour was missing from the design system rather than wrong in
+  the modal, so it is added there and every theme states its own value; nothing that was already
+  correct changed. Anyone who clicked a card before this release met the same problem
+
+### Added
+
+- **You can see what you did** (DP-21) - the drawing editor's canvas is one picture now. The
+  original drawing sits underneath, dimmed; every region is painted in its colour at full
+  strength, the base coat in a neutral grey so it reads differently from "unpainted"; a removed
+  region is hatched; a selected one has a thick outline. "Show original" is a button you press
+  to see the untouched drawing alone and press again to see your edits, and it says which. When
+  you move through the regions table, the drawing draws a two-stroke outline around the region
+  you are on - dark outside, light inside, so it reads on any colour - that pulses three times
+  and then settles; if your system asks for less motion, it settles at once. The plate stepper
+  in the toolbar walks the plates one at a time, drawing that plate's cut over the dimmed plan
+  and saying the same paint sentence the export writes, so you can see what plate 2 will cut
+  before anything is printed. A legend under the drawing names the five looks
+
+- **You can point at a region and say brown** (DP-20) - the drawing editor on the Stencil Maker
+  gains its tools. The drawing is one canvas you work on directly: Select a region by clicking it
+  (Shift adds another), drag a Marquee around several, Paint one with the current colour, Remove
+  one, or drag with the Hand to move around; the wheel zooms. Every one of those has a keyboard
+  equivalent: the regions table has a checkbox on each row, Up and Down walk the rows in the same
+  column while the drawing highlights the region you are on, Space ticks, Ctrl+A ticks them all,
+  the number keys 1 to 8 give the ticked regions the matching colour and 0 the base coat, Delete
+  removes them and "Put back" restores them. Everything you do is an Undo away - Ctrl+Z, Ctrl+Y,
+  the Undo button in the toolbar or the one under the table - and every undo says what came back,
+  in words. Colours can be renamed, merged into another, or removed (their regions go back to the
+  base coat), and the paint order has "Paint earlier" and "Paint later" buttons on each plate. One
+  checkbox decides the plate rule: on, later colours also cut through each plate so nothing can
+  fall out; off, each plate cuts its own colour only, the way a hand-cut set does. The plan you
+  apply is saved with the drawing and comes back when the drawing does, so a project reopened
+  cuts what it cut when it was saved. Walked through with one user's own cat: their six plates,
+  applied by hand through the interface, come out as six plates
+
+- **The drawing editor now lives where the 3D preview is** (DP-19) - it used to be a block nested
+  inside the customizer's file control, a long flat list with a before-and-after pair above it.
+  Now it takes the preview area, the biggest surface on the page and on a phone the whole of it:
+  a toolbar across the top, the drawing in the middle, and a side panel of collapsible sections
+  beside it (Colours, Regions, Plates and paint order, Warnings), each a native disclosure that
+  opens from the keyboard. The customizer stays one Tab away, the arrow keys you use inside the
+  editor no longer turn the model behind it, and Escape gives the area back. On the Stencil
+  Maker the editor reads a drawing into REGIONS, the faces between the lines, one row each with
+  a colour to choose, the plate that paints it and its share of the drawing; you can add a
+  colour, give it to a region, and when you apply, that colour comes out as a plate. A drawing
+  with no colours of its own, like a line drawing from a CAD program, used to be waved through
+  with "OpenSCAD merges these automatically", which is how one user's cat came out as a single
+  silhouette hole; on a stencil tile it now opens the editor by itself and says what it found:
+  "21 regions found, no colours yet: every one starts as the base coat." The editor's own door
+  on the welcome screen hosts the same surface over the whole page. The editing itself - roles,
+  layers, deleting shapes and undoing it, the render tiers - is the same tested code as before,
+  mounted inside the new surface rather than rewritten. Behind the scenes the editor is loaded
+  the first time it opens, so a project that never opens it never downloads it, and the tests
+  for the editor's own walk run on Chromium only, because the Edge and Firefox lanes were
+  within a third of a minute of their time ceiling before this release existed
+
+- **A set of real stencil plates to check Forge's own against** (DP-15) - one of this project's
+  users made a six-plate spray stencil of their cat by hand, drawing it in Illustrator, cutting
+  the plates in Fusion 360 and painting the result, and has contributed the drawing and the seven
+  printed pieces to the project as test fixtures. They live in `tests/fixtures/harley/`, with the
+  colour plan measured out of the plates themselves rather than typed from a description, and a
+  new tool, `scripts/stencil-golden.mjs`, sets a plate Forge makes beside the plate the owner made
+  and reports how much of the two cuts is the same shape. That number is what the stencil work in
+  this round is judged by. The photograph the drawing was traced from is deliberately not included
+
+- **A photo or a coloured drawing can become the colours of a stencil, by itself** (DP-18) - the
+  picture panel gains a fourth choice, **Colours**. Instead of deciding what counts as a line, it
+  separates the picture into flat colours, one region per colour, and hands them straight to the
+  plate maker: choose a photo, choose how many colours, and a set of plates comes out with nobody
+  having to point at anything. It also names the wall, which is the colour that is the surface
+  behind the stencil rather than paint on it, and gets no plate; Forge guesses by looking at the
+  edges of the picture, where a wall shows, and you can override it. The summary line names every
+  colour and how much of the picture it covers, so a colour you wanted and did not get is visible
+  rather than merely absent, and the answer is to ask for one more. Two things are worth knowing.
+  A colour that covers about one per cent of a picture is genuinely hard to find, and the way
+  Forge finds it is by looking at a smaller copy in which each pixel is the most common colour of
+  the block it came from, which removes the soft edges that would otherwise eat the search. And a
+  white that is five shades from the paper cannot be told apart from the paper by any amount of
+  cleverness, so if your picture has one, name your colours instead of asking Forge to find them.
+  A picture too big to trace is now made smaller and traced, instead of refused, and the amount it
+  was shrunk by is said out loud
+
+- **A stencil can now be a set of plates and a jig, up to eight colours** (DP-17) - the Stencil
+  Maker used to make three plates and decide what went on them by how deeply the shapes nested.
+  It now makes as many plates as the design has colours, up to eight, and it makes the thing that
+  holds them still: a printed base with four posts, and a matching hole in the corner of every
+  plate. The posts are round at one end and rectangular at the other, so a plate cannot go on
+  backwards, which is the mistake that ruins a six-colour picture on the last coat. Each plate
+  carries its own number cut through the bottom margin, so a stack of them on a bench still says
+  which is which. There is a new **Export all plates** button that renders the whole set in turn
+  and hands back one zip: a file per plate named for its colour, the jig base, and a text file
+  with the order to paint in. All of it is measured against a real stencil: one user made a
+  six-plate set of their cat by hand, and five of Forge's six plates now come out at 99.7% to
+  99.9% the same shape as the ones they cut. The sixth is lower for a reason worth knowing: on
+  that plate they opened the pupil of each eye together with the black ring around it, and Forge
+  opens the pupil
+
+- **Forge now understands that a stencil layer is a paint colour** (DP-16) - not a nesting depth,
+  which is what it used to work out for itself. Nothing on screen changes yet; this is the part
+  underneath. It knows what a region of a drawing is, and for a line drawing that is the areas
+  BETWEEN the lines rather than the lines themselves, which is the thing the old version had
+  backwards: given a drawing of a cat traced as outlines, it finds the twenty-one faces of the
+  line network and the whole head as a silhouette, and every one of the sixteen regions the owner
+  of that drawing painted by hand is among them. It knows a palette, an order to paint in, which
+  plate cuts what under either of the two methods, and which openings will drop a loose piece out
+  of the plate, with the three ways round that named rather than chosen for you. The shapes are
+  worked out with a different geometry library than before, which on one real drawing of 831
+  pieces takes 0.55 seconds where the old path took 2 minutes 8
+
+- **The reference image can sit on any surface, be cropped, and be used as the design** (DP-5,
+  DP-6) - three additions to the Reference Image panel. **Sits against** chooses the height by
+  naming a surface (under the plate, the plate itself, the top of the model, or a height you
+  type) instead of asking for a number; "top of the model" follows the model as it changes, which
+  is what you want when tracing onto the top of a charm. **Crop** keeps the part of a photograph
+  you want, by typing the edges with the picture beside them showing the same rectangle; it never
+  changes your picture, it saves a copy named after the original. **Use as design** hands the
+  image to one of the model's design parameters, the same way a file you chose by hand would go
+  in, so a photograph is traced and its proportions measured in the same step
+
+- **Forge remembers where you put the reference image, per project** (DP-5) - position, rotation,
+  size and chosen surface are saved with the project, so reopening it puts the reference back
+  where you left it. Opacity and colour stay the same across every project, because those are
+  settings for how you like to work rather than facts about one design. A project saved before
+  this release opens exactly as it did
+
+- **Groundwork for opening a file straight into Forge from your desktop** (IR-10, not switched on) -
+  an installed app can be registered with the operating system so double-clicking a `.scad`, `.zip`,
+  `.svg` or `.dxf` opens it in Forge. The routing is built and tested: a file handed over by the
+  system takes exactly the path an uploaded one takes, waits for the engine to be ready first, and
+  sends drawings to the drawing editor. The registration itself is deliberately NOT shipped. It is a
+  claim on your operating system's file associations, and nobody has yet installed Forge on a real
+  machine and watched an Open with actually work. That test is a person's to run
+
+- **The provenance record inside a downloaded project is now a promise, not a proposal** (IR-6) -
+  `forge-provenance.json` shipped in an earlier release marked "PROPOSED, not yet a guarantee".
+  Its shape is countersigned and it now carries the same additive-only promise and six-month notice
+  period as every URL parameter, so a tool at the other end can depend on it
+
+- **One page a pipeline tool can build against without talking to anybody** (IR-6) -
+  `docs/specs/FORGE_HANDOFF_CONTRACT.md` writes down how another program hands work to Forge and
+  gets it back: the link parameters, the settings fragment, the zero-hosting `data:` lane with its
+  measured budget, which hosts a file may live on, what comes back and what it is called, the error
+  codes, the sizes, and the four things the browser's security policy will not allow (no iframe, no
+  opener messaging, no arbitrary hosts, no server-side state). Every claim on it is backed by a
+  shipped release or a file in this repository; where something does not work, it says so. A short
+  machine-readable summary is served at `/forge-capabilities.txt`, and a test in the
+  production-parity lane composes a link from the page alone and loads it, so the page cannot drift
+  away from what the app does
+
+- **A shared link can decide which settings you meet first** (IR-9) - some designs have well over a
+  hundred parameters, and every one of them is there for a reason, but that is not a first screen
+  anybody can use. Whoever writes a project's manifest can now list the handful that matter
+  (`defaults.starterParameters`), and Forge shows those and puts the rest behind one Show all
+  parameters button. Nothing is removed: the button is a toggle, everything comes back in the order
+  the design wrote it, and searching for a parameter drops the wall on its own and says so. A
+  control you cannot see is not reachable by keyboard or screen reader either, so there is nothing
+  lurking invisibly in the Tab order. A manifest that does not use the field opens exactly as it
+  always did
+
+- **Adding a design of your own is now a documented job, not a favour** (IR-8) - there is a
+  template to copy in `public/examples/_template/`, a walkthrough in
+  `docs/guides/TILE_AUTHOR_GUIDE.md` that assumes no knowledge of this app's code, and a checker,
+  `node scripts/validate-example.mjs`, that reads a contribution and says in plain sentences what is
+  missing: no license, a control with nothing to explain it, a picture the design reads but the
+  manifest never declares. It also checks that anything meant to be read by touch has a written-down
+  range and an `assert()` enforcing it - it cannot tell whether the numbers are right, and says so;
+  those come from the standard governing the design and are signed off by a person. CI runs the
+  checker on the example folders a pull request actually touches
+
+- **Your edits can land in the folder the other program is watching** (IR-5, off by default) - Forge
+  could already watch a linked folder and re-render when a desktop editor changed a file in it, but
+  the loop only ran one way: nothing of Forge's could get back into the folder except a preset
+  sidecar. Two explicit actions now close it - Save to folder puts a generated file beside your
+  design, and Save companions to folder writes the companion files you edited. Every write is one
+  you asked for, every write is announced, and your main design is never overwritten: Forge is not
+  the editor of record for it in this loop. This ships switched OFF and stays off until the folder
+  write-back has been tried on a real Chrome or Edge with the watcher running, which is a test only
+  a person can do
+
+- **Stencil Maker** (`?example=stencil-maker`) - a new welcome-screen tool that turns a shape or
+  a drawing into printable stencil plates: thin bridges hold the islands so letter centres do not
+  fall out, registration marks in the corners line the plates up, and the plate, bridge and mark
+  dimensions are all parameters. This entry records the tool's arrival; the CHANGELOG missed it
+  at the time
+
+- **Open a DXF, tidy it up, and save a DXF back** (IR-12) - laser and cutting software speaks DXF,
+  and so does the tool chain some of this work arrives from. The drawing editor now takes a .dxf
+  the same way it takes an SVG or a photo: Forge's own engine converts it, the editor opens on the
+  drawing with every shape listed, and Save as DXF sits beside Save edited SVG. Measured on a
+  40 by 25 mm drawing, converting takes about a third of a second each way. Forge states the size
+  of what it saved out loud, because rebuilding a drawing from its shapes is not perfectly exact
+  and a millimetre matters when you are cutting to a fit. A DXF holding only text or dimensions
+  arrives empty - OpenSCAD reads drawing entities, not annotations - and Forge says exactly that
+  rather than handing back a blank page
+
+- **A symbol keeps its picture instead of turning into a coloured blob** (IR-11) - communication
+  symbols are black line work over a strong colour, and the colour means something. Forge decided
+  what to trace by brightness alone, which puts a blue background and the black drawing on top of
+  it in the same bucket: a person symbol inside a blue square came out as a plain blue square, the
+  person gone, with nothing said about it. Photos now come in through a choice - Line art, which
+  keeps the drawn lines and drops the colour behind them, Solid shape for very small pieces, or
+  Light and dark, which is what Forge did before and is one press away. Line art is the starting
+  point for photos. Two sliders, each with a number box, tune it, and after every change Forge
+  says how many shapes it found, how much of the picture became ink, and whether the result looks
+  almost empty or almost solid. If one colour sat behind the lines, it tells you which, so you can
+  choose a filament that keeps the symbol recognisable. Everything happens in your browser and
+  nothing is uploaded
+
+- **Open a drawing, clean it up, and save it back - no design needed** (IR-4) - Forge already had an
+  editor that lists every shape in an SVG and lets you choose, by keyboard, which ones become the
+  printed shape, which become holes, and which are dropped. You could only reach it through a
+  design's file parameter, and there was no way to get the cleaned drawing back out. Now there are
+  two doors - a line inside Explore Features & Accessibility on the welcome screen, and Edit
+  Drawing in the Actions drawer - and a Save edited SVG button that hands you the result as a file
+  named after the one you opened. Photos are traced first, the same as before. A photographed bird
+  drawing goes in with its eye and feather strokes, and comes back as one clean outline the way a
+  tactile printer can actually show it. Nothing is uploaded anywhere: the tracing, the editing and
+  the saving all happen in your browser, and your original file is never changed
+
+- **Send a link that opens with your settings, and get one back** (IR-3) - a plain link opened a
+  design at its own defaults, so "make me this one, but 72 mm wide" meant writing the numbers out
+  and hoping. Forge now puts the values you changed at the end of the link. Three ways to make
+  one: copy the address bar, press Copy Link in the Actions drawer, or tick "Include my current
+  settings in the link" in the Publish dialog before you fill in your hosting address. Only the
+  values that differ travel, so the link stays short, and the person who opens it gets your
+  numbers checked against what the design allows rather than applied blindly. A design you opened
+  from your own computer still gets a link - it carries your settings and says plainly that
+  whoever opens it needs to load the design first, because nothing on the web can fetch a file
+  from your machine
+
+- **Hand over the whole project as one file** (IR-3) - the Publish dialog can now download an
+  archive holding your project's files, the manifest that describes them, and a small record of
+  where the design came from, which preset was chosen, and the values that differed. Unzip it into
+  your repository and everything is already in the right place
+
+- **The smallest character size now knows your machine** (CW-42) - the game used to open at 50%
+  characters on every machine and let you go down to 10% everywhere, even where 10% turned walking
+  into a slideshow. Now, in the first moments after you enter a city, the game quietly measures how
+  fast your machine actually draws and picks the smallest size in the 10-30% range that can hold
+  30 frames per second: that size becomes both where a fresh session opens and how far down the
+  Smaller control will go, with a spoken reason at the stop. A size you chose yourself is never
+  touched - choose once and the game keeps your choice, today and every day after. On a machine
+  where even 30% cannot keep up, the game says so plainly in one line and keeps the 50% default
+  rather than pretending. Every city entry measures again, so one slow afternoon never brands a
+  fast machine - and the measurement rides the frames the entry was already drawing, so there is
+  nothing extra to see or wait for
+
+- **Cars are cars now** (CW-46) - the streets used to park one identical car shape everywhere.
+  Six vehicle classes now share the curbs and lanes: full-size pickups with open beds, SUVs,
+  crossovers, minivans, sedans and compact hatches, sized from published segment dimensions and
+  mixed the way American streets actually look (pickups and SUVs common). Each one is solid at its
+  own true size - a pickup blocks more sidewalk than a hatch. And the buildings joined in: window
+  sizes now differ between facade families, ground floors vary in height instead of all being one
+  size, and shop lights lean warm where food is served, cool at banks and theatres, neutral at
+  shops - no more identical white glow on every street
+
+- **People are people now** (CW-45) - the city's pedestrians used to be one identical 1.72 m
+  figure stamped everywhere. Every figure is now its own person: height drawn from the documented
+  adult range (1.50-1.95 m, the span of published anthropometric reference tables), broader or
+  slighter builds, and jointed poses - walkers caught mid-step, joggers leaning with bent elbows,
+  people standing about, and figures sitting on real benches (only where OpenStreetMap actually
+  records a bench - a city with two benches seats at most two people). Their colors come from the
+  game's own color schemes. The same spot always holds the same person on every visit
+
+- **Seattle reaches the Space Needle** (CW-44) - the Seattle map grew from a downtown patch to a
+  1.3 km circle centered toward the waterfront: Pike Place, the Great Wheel piers, Pioneer Square
+  and the Seattle Center are all in one walkable city now. The Space Needle stands at its true spot
+  - and because OpenStreetMap itself records its legs, shaft and saucer as building parts, the
+  ordinary building renderer draws a recognizable Needle with no special treatment; walk up and
+  look straight up. The map legend fills with real places: Space Needle, Smith Tower Observatory,
+  Underground Tour, the Great Wheel and more, each with a compass direction. The bigger download
+  (about 4.9 MB) shows and speaks its progress while it loads - on a slow connection the picker
+  says "Loading Seattle, Washington… 40%" instead of sitting silent for most of a minute
+
+- **The street furniture is real** (CW-43) - bus stops, benches, waste baskets, bicycle racks and
+  fire hydrants now stand in every city, each at the exact spot OpenStreetMap records it - never
+  scattered for looks, because for a blind traveler the placement is the information. A bus stop is
+  a pole with its flag, and a shelter where the data says there is one; a bench has a back where
+  the mapper said so. Everything is solid: walk into a shelter and you press against it and slide,
+  the same as a wall. The extracts also now carry the accessibility layer around crossings - kerb
+  heights, tactile paving, whether a signal speaks or vibrates - as data for wayfinding features to
+  come. Albuquerque, with almost no furniture mapped, stays exactly as sparse as it really is
+
+- **Real attractions join the map legend** (CW-44 groundwork) - named attraction points from
+  OpenStreetMap now count as landmarks, so Seattle's legend stops being a list of hotels: the
+  Seattle Great Wheel, Pike Place's Public Market Clock, Wings over Washington and more appear by
+  name with compass directions. The Wheel is a point in the map data, so it is findable by name
+  rather than drawn as a wheel - the honest shape of what open data holds
+
+- **Drop yourself onto any street** (CW-36) - the map was somewhere to look at the city; it is now
+  somewhere to travel from. Click a street on the overhead map and the game tells you which street
+  you picked, marks it with a ring, and waits. Press J and you are standing there, looking along the
+  street rather than at a wall. Nothing is picked and you press J: you land on the middle of the
+  map, which matters because the arrow keys already steer that middle - so the whole thing works
+  from the keyboard alone, without needing to click anything. There is a **Teleport here** button on
+  the map toolbar for the same job. You can never land inside a building: the landing uses the same
+  test the walker itself uses to decide whether a step is possible, and if there is genuinely
+  nowhere to stand near where you picked, it says so instead of putting you somewhere wrong
+
+### Changed
+
+- **Someone to find in every city** (CW-65) - a traveler is standing somewhere in each city, with a
+  white cane and a high-visibility jacket, and walking up to them is worth doing: they say hello,
+  the map legend records that you found them, and from then on they are waiting near where you start
+  whenever you come back. Where they stand is fixed per city and remembered between sessions, so the
+  search is the same one each time until you finish it. **The X key is how you actually find them**,
+  and that is not a fallback for anyone - it is the search itself. Pressing X adds a line saying
+  roughly how far away they are, from "a long way from here" down to "you can hear a cane tapping
+  close by", and it goes quiet once you have found them. The reason is measured rather than assumed:
+  a whole person is about two and a half characters wide and four tall at thirty metres, and the
+  jacket stops standing out from the crowd at about twenty, in a city two and a half kilometres
+  across. Nobody finds one figure in that by looking, so nobody is asked to. **The cane you see is
+  drawn thicker than a real one** - a real cane is two-thirds of a screen pixel at that distance and
+  could not mark a single character - and the record says so plainly rather than pretending
+  otherwise
+
+- **Links that unlock the City Walk no longer throw away what they were carrying** (CW-66) - opening
+  a link with `?hfm=unlock` on it removes that part of the address afterwards, so the link is not
+  passed on by accident. It was also removing everything after the `#`, which is where a shared set
+  of parameters lives - so a link that both unlocked the game and carried a shared model destroyed
+  the model on arrival. The part after the `#` is kept now, and the unlock is still stripped
+
+- **Fireworks when you finish a city** (CW-64) - find all twelve landmarks and the sky over the
+  city lights up for about twenty seconds: bursts on a ring around you, well above the rooftops,
+  drawn as characters like everything else here. Afterwards a Fireworks button appears and the Y key
+  replays it whenever you like, and the city remembers that you earned it. The overhead map shows
+  the bursts where they really are, so you can watch it from up there instead. **If you use reduced
+  motion you still get a celebration**: the same bursts, composed and held still for a few seconds
+  in front of you, with a spoken line saying what it is and why it is not moving - because a reward
+  that answers "no" is worse than one that answers quietly. The show was measured against WCAG
+  2.3.1, the standard that protects people who can have seizures from flashing: it produces no
+  flashes at all, and the whole picture's brightness moves about a ninth of what a single flash
+  would need. The instrument that says so was first proven able to catch seventeen flashes in a
+  deliberately strobing version
+
+- **Two Seattle landmarks now look like themselves** (CW-63) - every building in the City Walk is
+  drawn by one pipeline from its own OpenStreetMap data, on purpose, because a city where the code
+  knows about particular buildings stops working when the data moves. Two named landmarks are now a
+  deliberate exception, and only two. The Space Needle has its arched tripod: the map data holds
+  thirteen straight volumes and no curve at all, so the hourglass - the one thing that makes the
+  silhouette the Space Needle rather than a mast - is drawn from the published dimensions. The
+  Seattle Central Library has its five offset platforms with the flowing planes between them and the
+  diamond steel grid over the whole envelope, where before it was a plain box: its map data is a
+  60 metre outline and four roof planes, with no massing in it at all. Both are authored from
+  published heights, storey counts and section drawings, cited in the code beside the numbers they
+  produced; there is no imagery involved and nothing traced from anybody's photographs. Every other
+  building in every city takes exactly the path it always did, and each landmark is one line to
+  reverse
+
+- **The map asks before it moves you** (CW-61) - clicking the City Walk's map used to do nothing
+  unless you had first pressed Teleport to arm it, and then any click sent you there instantly with
+  no way back to where you were. Now a click anywhere on the map asks, in a small dialog that names
+  the spot you would land on: "On 4th Avenue and Union Street", or one street where there is no
+  corner, or open ground. Nothing moves until you press Travel here, and Cancel or Escape leaves you
+  exactly where you were and says so. J asks the same question about the middle of the map, so the
+  keyboard reaches it too. The naming is careful about what it claims: it will only call a spot a
+  corner when a second street really is within twelve metres, and it will never offer a street its
+  own cycle track as the cross street. A circle marks the spot being asked about while you decide.
+  The old Teleport button stays, doing the asking rather than the arming
+
+- **Four maps in one** (CW-60) - the City Walk's overhead map can be drawn four ways now, and each
+  one is a simplification rather than a repaint. Standard is the map as it has always been.
+  Roads only hides the buildings and parks so the street network stands alone. Buildings only takes
+  the streets down to a hairline so the shapes of the buildings carry the place. Wayfinding is the
+  reason the other three exist: it marks every crossing, every stretch of tactile paving and every
+  kerb the map records, over everything else dimmed to be the ground they sit on. That information
+  has been read out of OpenStreetMap and carried around in the game for eight releases without
+  anything ever drawing it. The idea comes from how tactile maps are made, where one map carries one
+  kind of thing because a finger cannot read a page as an eye can. Over the map the second control
+  pad in the Camera panel changes the style, K and Shift+K step through it, there is a Map style
+  button in the map toolbar, and the choice is remembered. Street view is untouched by all of it
+
+- **Birds where birds rest** (CW-58) - gulls and crows on parapets and lamp heads, pigeons and
+  sparrows on bench backs, picnic tables and planter rims, Canada geese gathered on park grass, and
+  in Albuquerque the greater roadrunner along the roadside its name comes from. Each city has its
+  own roster and each bird sits only on a perch that bird actually uses. Everything is built at its
+  real field-guide size, and nothing was made bigger in order to be seen: the goose reads
+  unmistakably, neck and all, while a house sparrow at true scale is a small mark on a bench back
+  rather than a recognisable bird. That is the honest trade, and it is written down rather than
+  papered over
+
+- **Planters, flowerbeds and picnic tables** (CW-57) - where a city's map records them, and only
+  there. Seattle and Burnaby have real ones and use them; Denver and Albuquerque have none recorded,
+  so they get hash-placed planters inside their own real parks, counted separately so design can
+  always be told from data. Denver's map has no picnic tables at all and none were invented. Each
+  city's flowers come from a cited list of what its parks actually plant, which is why Albuquerque's
+  come out yellow where Seattle's come out pink
+
+- **Trees with names** (CW-56) - a street tree used to be one shape repeated. Each city now plants
+  the species its own street-tree inventory records, in the crown form that species has, and where
+  the map says a tree is needle-leaved it is drawn as a conifer even when the city's common list
+  names none. Heights are compressed against the cited ranges, because at full size this city's
+  infill spacing closes the sky into a ceiling
+
+- **The cars have wheels, and the ones that are driving have their lights on** (CW-54) - a parked
+  row used to read as a low dotted mass, because every car body sat flat on the road with nothing
+  under it. Each car now rides on four wheels at a height typical of its own kind, so there is a gap
+  under it, and at this size that shadow line is what says vehicle long before a wheel is big enough
+  to see. Tyres are a little darker than the body they carry, but not so dark that they vanish
+  against black tarmac. The cars standing in the traffic lanes have white head lamps at the front
+  and red brake lights at the back; the parked ones are dark, because a parked car is parked and
+  because a string of bright points down every kerb is not what a street looks like at night
+
+- **Twenty kinds of shop front instead of five** (CW-53) - the ground floor of a building used to
+  come from one of five window patterns picked at random. There are now twenty, and which one a
+  building gets is decided by what the map actually records there: a restaurant gets warm glass with
+  dark tables along the bottom, a bakery a lit counter under a canopy, a bank one lit alcove in a
+  dark front, a theatre a bright bulb band, an empty unit papered windows with no light in them at
+  all. Buildings with nothing recorded near them still fall back to a pattern chosen from the
+  building itself, so a street is never uniform. All twenty appear in all four cities
+
+- **The city stops flickering while you move** (CW-52) - lit surfaces used to fizz and flash as you
+  walked or turned, in a way a screenshot could never show. The cause was not the lighting. A
+  second, hidden pass tells the drawing which surface each character is looking at, so a shopfront
+  and the wall behind it can be drawn with different characters, and that pass could not reliably
+  tell the two apart where they touch: it changed its mind again and again as you moved, and better
+  than a quarter of the screen kept swapping character sets frame after frame. It now keeps them
+  apart the same way the picture itself does. Measured over twenty consecutive frames of a very
+  slow turn, the flicker drops by more than nine tenths at every character size, in both screen
+  colors, while the brightness of the picture is unchanged to the last digit - the glow stays, the
+  fracture goes. Two ground textures that were never actually being filtered for the character grid
+  are now filtered, and the ground far ahead of you, which you see almost edge on, is filtered for
+  that angle as well
+
+- **Lines on the road, and a pavement with the finish its own city specifies** (CW-51) - the
+  arterial streets now carry a dashed centre line, so a main road reads as a main road rather than
+  as a wider gap. The lines are derived from what kind of street it is, because the map data does
+  not record road markings anywhere in the four cities. Pavements had no surface at all and now
+  carry control joints about every metre and a half, plus the finish the city itself specifies:
+  pebbly river stone in Seattle, flat with cracks and grip scoring in Albuquerque, and a broom
+  finish in Denver and Burnaby, which is what both of those cities' construction standards call
+  for
+
+- **The streets are the width real streets are, and they have curbs** (CW-50) - the road widths
+  described the driving lanes only, so a street read as narrower than the one you would stand on,
+  and the roadway itself was an indistinct dark gap between two thin lines. Widths are now measured
+  curb to curb, the way a pavement meets a road: a two-lane residential street with parking on both
+  sides is about eight metres across, not six, and each step up from there adds a lane. Every
+  street now has a raised pavement beside it and a real curb you can step down off and back up
+  onto, instead of only the few streets whose pavements the map happens to record separately. Your
+  eye follows the ground: it drops as you step into the road and climbs as you step back up, over a
+  short distance rather than in a jump, and it never changes with how fast you are walking. The
+  curb is never a wall - you can always walk across it. Pedestrianised streets have no curb at all,
+  because they are pavement from one side to the other
+
+- **Every part of a figure takes a color from the scheme** (CW-49) - a person's torso and legs
+  already wore colors from the city's own color scheme, but their head and shoulders kept a single
+  fixed tone, so a street of people repeated one note at the top of every figure. All three zones
+  now take their own hue, picked from the figure's own position so the same spot always holds the
+  same person. The monochrome screens are unchanged by design: there is no color scheme to show
+  there, so a head is simply a bright head
+
+- **The city walks at city speed** (CW-48) - walking used to start at a stroll, and the way to a
+  brisk pace was to turn the speed up every time you arrived. What the slider called 300 percent is
+  now what it calls 100, and it is where the game starts. The top of the range is faster than the
+  old top was, and Shift now always outruns whatever pace you have set - it used to be a fixed
+  speed that a turned-up walk could overtake. The numbers the slider announces are the same 50 to
+  300 they always were, so nothing you learned about it has changed except how far it gets you. A
+  walking speed you saved before is carried over, with the old top of the range becoming the new
+  normal one. If you had it near the bottom you will come back a little faster than you left,
+  because the slowest setting on the new scale is quicker than the slowest on the old one
+
+- **Walking into things works the same however fast you are going** (CW-48) - collision was checked
+  once per drawn frame, so how precisely it worked depended on how far you travelled in that frame,
+  which meant it depended on your walking speed and on how busy your machine was. Tripling the
+  default speed would have made the loose case the usual one, and at the very top of the new range
+  a sprint on a slow frame could cross a tree trunk entirely. Each frame's movement is now checked
+  in fixed short steps instead, so how close you can get to a bench, a car or a wall no longer
+  depends on your pace or your hardware
+
+- **The sharing guide stops recommending hosting that does not work** (IR-2) - it told authors to
+  put a GitHub release URL, or a Cloudflare R2 / S3 bucket URL, into their manifest. Forge's
+  security policy names the hosts it may fetch from, and none of those are on it: the browser
+  blocks the request before it is sent, so those projects simply never loaded. The guide now says
+  so plainly, shows what was measured, and points at the hosts that do work - the repository
+  itself, GitHub Pages, GitLab Pages, Cloudflare Pages. It also stops claiming no tool writes the
+  manifest for you, because the Publish dialog has been doing exactly that
+
+- **The shimmering facades hold still** (CW-41) - at small character sizes, building fronts used to
+  carry sliding interference bands - "a fractured polygon" look - because the window pattern sat at
+  the same scale as the characters themselves, and every tiny movement of the view re-rolled which
+  characters lit up. Measured first, then fixed: the facade textures are now filtered for the
+  character grid rather than the pixel grid, so window patterns dissolve smoothly exactly where
+  they become too small to draw honestly, and stay sharp everywhere they fit. Up close nothing
+  changes; the interference is gone at the small sizes, and drawing got no slower - on the densest
+  city it measured slightly faster
+
+- **Teleporting is drop-a-pin now** (CW-40) - press **Teleport** on the map toolbar and the cursor
+  becomes a ring; click anywhere on the map and you are there, in one step - the "I'm here" marker
+  moves to the spot, the game says which street you landed on, and you stay on the map so you can
+  keep hopping without re-arming. Enter the street whenever you choose; it opens exactly where you
+  landed. Pressing the button again turns the mode off, and leaving the map turns it off by itself.
+  From the keyboard nothing got harder: the arrows still steer the map and **J** still drops you at
+  the middle of the screen, with no mode to arm. The old two-step flow - click to pick, then press J
+  to go - is gone, along with its "Press J to go" prompt. The marker itself was redrawn as a bright
+  square frame around a dark centre that stays the same size at every zoom level: the old solid
+  block shrank to a dot zoomed out, and in color mode it vanished entirely among white buildings
+
+- **The phosphor trail is retired** (CW-39) - moving through the city used to leave a fading
+  double-exposure behind every tree, pole and sign, the way a slow CRT smeared when it scrolled. The
+  owner found it distracting, and it was expensive: measured side by side in one session, drawing
+  without it is 19 to 32 percent faster per frame on a throttled machine, which on this hardware is
+  the difference between about 26 and about 40 frames a second standing in heavy rain at the
+  smallest character size. The night city itself is untouched - the lit windows, the bright
+  storefronts and the dark ground all read exactly as before; only the smear is gone. The main
+  app's Alt View keeps its own afterglow slider exactly as it was
+
+- **The Camera panel speaks the game's language** (CW-38) - its two direction pads were titled
+  "Rotate View" and "Pan View", the 3D preview's camera words. In the street they now say
+  **Look Around** and **Walk Around**, and over the map both say **Pan Map**, because over the map
+  both pads pan. In high contrast the panel also fits the screen again: every control grows in that
+  mode and the panel had quietly become taller than a 1600x900 display, leaving Reset View stranded
+  below the edge of the screen behind a scrollbar
+
+- **One key, one meaning** (CW-38) - Minus and Equals used to change character size in the street
+  but zoom the map overhead, so the same key did different things depending on where you were
+  standing. They now change character size everywhere, and the map zooms with **Page Up** and
+  **Page Down** instead - held down, exactly the way the old keys worked. The help panel, the spoken
+  map-view announcement and the toolbar tooltips all teach the new keys
+
+- **The Colour button now says Color** (CW-38) - the game speaks US English everywhere a player can
+  see, and this was the one hold-out. Only the words changed: your saved choice is kept, and
+  everything under the hood keeps its old name so nothing you stored is lost
+
+- **A phone toolbar that earns its rows** (UF-42) - with a project open on a phone, the app used to
+  spend four stacked rows before you saw anything you came for: the header, a row holding four
+  icons, the menu row, and the Customizer row. That is 147 pixels in the Simplified view and 187 in
+  Standard, on a screen about 810 pixels tall. High contrast, theme, Full Screen and Help now sit in
+  the Customizer row, which had the width going spare, and the row they came from is gone.
+  Simplified spends **93** pixels of chrome instead of 147; Standard spends **135** instead of 187.
+  On a real phone that is about a tenth more preview. Nothing was hidden or shrunk to do it: all
+  four controls are the same size, in the same order, with the same names, still reachable by
+  keyboard, and every tour that points at one of them still finds it. On a desktop-shaped window
+  they move straight back where they were, live, with no reload. The Main Page keeps its own row
+  exactly as it was, because high contrast and theme have to be reachable before you open anything
+
+- **The Classic button no longer sits greyed out on a phone** (UF-42) - Classic is a desktop layout
+  and is not being offered on phones for now, so on a phone-shaped screen the button is simply not
+  there, rather than sitting there dimmed and unusable. It comes straight back when the window
+  becomes desktop-shaped, without a reload, and if you are already in Classic on a window you have
+  narrowed, the button stays put - the way out is never taken away. The explanation you used to get
+  from the greyed-out button is still there, on the first-visit screen, in the same place it was
+
+- **Where the City Walk's speed actually landed** (CW-37) - this round set out to hold 30 frames a
+  second at the smallest character size, with heavy rain, on a machine running four times slow.
+  Measured on all four cities, walking, on a real graphics card: **on a normal machine the target is
+  met with room to spare** - 18.6 to 22.2 ms a frame against an allowance of 33, and 60 frames a
+  second. At the character size most people play at, the frame-rate target is met even on the
+  four-times-slow machine. At the smallest size on that slow machine it is **not** met: 25 to 28
+  frames a second instead of 30. The round took that case from 3 frames a second to 26, and the
+  reason it stops there is now measured rather than guessed - between 39 and 49 ms of every frame
+  does not depend on the number of characters at all, so no further work on the characters can
+  reach the target. What is left is the painting and the phosphor trail, which are outside this
+  round's plan - a question I am leaving open rather than answering in passing
+
+- **The camera controls are the ones you already know** (CW-35) - the game had its own vocabulary
+  along the bottom of the screen - Turn left, Look up, Forward, Step left - which is a second thing
+  to learn for the same job the Forge's 3D preview already does with a Camera panel down its
+  right-hand side. That panel is in the game now, same sections in the same order: Rotate View, Pan
+  View, Zoom, Standard Views, Reset View. The buttons do not reinvent anything; each one drives an
+  action the game already had. Two words changed to fit a city: the Forge's `Bottom` view is
+  `Street` here, and its Front/Back/Left/Right are `North`/`East`/`South`/`West`, because the game
+  has a real compass and the status line already speaks in bearings. `Towers` tilts your gaze up at
+  the skyline. The panel collapses if you want the city back, and remembers that you collapsed it
+- **The same panel works over the map** (CW-35) - it does not disappear when you switch to the
+  overhead view, it re-labels: the D-pads pan the map, Zoom becomes the map's own zoom, and Reset
+  centers it back on you. The four compass buttons and Towers stand down there, because there is no
+  walker on screen to turn. What still swaps on the toolbar is only what genuinely means nothing
+  overhead - Fast and Rain leave, and the map's own three arrive
+- **The buildings stop repeating** (CW-34) - two things you photographed. The first: at your
+  character size the near towers read as literal giant letters, because each family of buildings
+  had a letter cut out of its window panes to tell it from the next. The letters are gone. What
+  identifies a building now is the shape of its glazing - nine kinds, from a plain pane to a
+  vertical slot to a continuous horizontal band - and, more than that, **which of its windows are
+  lit**. The old pattern lit each window independently, which produces an even scatter that repeats
+  every four windows across; the city read as wallpaper because it was. Windows are now lit in
+  runs, with the run length and how many are lit re-rolled every few floors, so a tower reads as
+  offices working late. Each building also slides its own pattern along the tile, so two neighbours
+  of the same family are not the same wall twice
+- **Ground floors that are not all the same** (CW-34) - the second: every building's first level was
+  literally one repeating strip. There are five now - a glass front, an awning, a closed roller
+  shutter, an arcade, and a blank service wall, because a street where every ground floor is a shop
+  reads as a film set. Which one a building gets comes from the nearest shop or cafe in the map
+  data where there is one, and from the building itself where there is not
+
+### Fixed
+
+- **The Logo Plate example works out of the box** (IR-7) - opening it always failed underneath:
+  the engine could not find the sample logo it imports, so the engraving was missing, while the
+  status line cheerfully said "Preview ready". The file had been sitting in the repository the
+  whole time and the example's own description listed it; the part of the app that fetches files
+  read a different list that did not. Both now come from one place
+
+- **A shipped sample drawing a browser could not read** (IR-7) - `sample-logo.svg` contained a
+  stray control character in a comment, left over from an em dash. OpenSCAD ignored it, but a
+  browser refuses such a file outright, so the moment the file finally reached the project the
+  reference-image overlay failed to load it. Fixed, and every SVG the app ships is now checked for
+  characters XML does not allow
+
+- **When a link's numbers get changed, the message now waits for you** (IR-13) - opening a shared
+  link whose value is outside what the design allows adjusts it, and Forge said so in the status
+  line for about two thirds of a second before the render replaced it. Anyone who looked up a
+  moment later never found out their number had moved. It is now a notice that sits above the
+  controls until you dismiss it, and it names each one: which parameter, what the link asked for,
+  and what it is now
+
+- **Changing how a photo is read no longer throws you out of the control you are using** (IR-11) -
+  re-reading a picture rebuilds the editor underneath, and that was moving the settings panel in a
+  way that dropped your keyboard focus and shrank the editor back behind the page. Both were found
+  by a test that runs the same walk four times. The editor now stays as you left it: expanded if it
+  was expanded, with the keyboard still on the control you were adjusting
+
+- **The drawing editor reads correctly to a screen reader** (IR-4) - two long-standing faults, both
+  found the first time the editor was checked with an accessibility scanner. The list of shapes had
+  a hidden announcement area parked among the list items, which made the whole list invalid - a
+  screen reader could not rely on "shape 3 of 7" meaning anything. And both preview panes claimed
+  to be pictures while holding zoom buttons inside them, which is a combination assistive
+  technology refuses. The announcement area moved out of the list, and the panes are now named
+  groups holding a picture. The scanner reports nothing on the editor at all now
+
+- **The Publish dialog is readable in the light theme again** (IR-3) - it painted a dark box under
+  dark text, so the manifest it generated and the address you typed were both invisible unless you
+  used the dark theme. The dialog's colors came from names the app does not define, each with a
+  dark value written in beside it as a fallback, so the dialog never followed your theme at all.
+  Measured before: about 1.03 to 1 against a 4.5 to 1 minimum. Measured after: about 14 to 1
+
+- **Publish no longer hands you a manifest Forge would refuse** (IR-2) - for a project you loaded
+  from a ZIP, the Publish dialog put the archive's own filename where the main design file belongs.
+  Forge rejects that on the way back in, so the link built from it could not open the project, and
+  nothing said so until someone tried it. A ZIP project is now described as what it is: the archive
+  as the bundle, the real main .scad inside it named beside it, and the files it contains not
+  listed twice. The dialog also checks its own output against the same rules the loader uses, and
+  refuses to open with a plain explanation rather than handing over something broken
+
+- **A link with your settings in it now actually opens with your settings** (IR-1) - the app has
+  always written the values you changed into the end of the address bar, so a link you copied
+  carried them with it. Opening that link never applied them: the person you sent it to saw the
+  model's plain defaults while the address still promised your numbers. Now the values arrive in
+  the controls, out-of-range numbers are pulled to the nearest allowed value with a spoken note
+  saying so, and a value the model does not have is dropped with the same note rather than
+  silently ignored. Anything else already in the address after the # sign - a marker some other
+  tool put there - is now left alone instead of being wiped when a project loads
+
+- **You spawn facing down the street, not into a wall** (CW-44) - every city entry used to face
+  due north no matter what stood there, and the bigger Seattle put a storefront two and a half
+  meters that way: the first thing a new player did was walk into a wall. The spawn now faces the
+  direction with the longest clear, walkable run - in Seattle that is an open street with a proper
+  vanishing point. CI caught this before a person did
+
+- **Collapsing the game's Camera panel no longer traps you** (CW-38) - the collapse arrow hid the
+  panel and then hid itself, so there was no way to bring the panel back - and worse, the vanishing
+  button silently dropped your keyboard: after collapsing, M, the arrows, every game key went dead
+  until you happened to press Tab. The reopen arrow now stays put when the panel is collapsed, keeps
+  your focus, and the keyboard keeps working the whole time
+
+- **The preview status line can actually be read on a phone** (UF-42) - the line that tells you the
+  preview is ready, how big the file is and how many triangles it has was written into a corner
+  that, on a phone, always had something on top of it: the Actions and Camera bar when the camera
+  pad was shut, and the camera pad itself when it was open, where it came out washed-out with the
+  pad's own headings printed through it. It now reads at the top of the preview, clear of both.
+  One thing this quietly repairs: pressing the theme button writes "Theme: Light" to that same line,
+  so on a phone the first press looked like it did nothing at all. It has been saying so all along
+- **The Main Page button is whole again** (UF-42) - at phone width the GitHub button was painted
+  over the last 19 pixels of "Main Page", and a tap that landed on the tail of the label opened
+  GitHub instead of going back
+- **High contrast no longer pushes the toolbar off the side of the screen** (UF-42) - high contrast
+  makes every control a little wider, and the header row had no way to give: it slid its contents
+  off the left edge, where there is no scrollbar to bring them back. "Main Page", "File" and
+  "Customizer" were all cut. The row now wraps onto a second line when it genuinely cannot fit,
+  which costs a little height in high contrast and keeps every control on screen and tappable
+- **A tour card no longer sits on top of buttons it is not talking about** (UF-42) - on a phone, a
+  step pointing at something near the bottom of the screen put its card over the whole top of the
+  app: ten controls were underneath it and could not be tapped. The card now starts below the app's
+  own toolbar
+- **High contrast advertises its keyboard shortcut** (UF-42) - the high-contrast button never told
+  screen readers about Ctrl+Shift+H, though the theme button beside it always had
+
+### Added
+
+- **Real ground under your feet** (CW-33) - the city had one floor: a roadway, a kerb line and a
+  dotted plane. It has three now. Pavements that are mapped separately from the road - and there
+  are 1,539 of them in Seattle alone - are drawn as their own narrow ribbons, lighter than the
+  carriageway and written with their own set of characters, so you can see where the kerb is
+  instead of inferring it. Parks, gardens, pitches and playgrounds appear as greenspace, with their
+  own characters again: clumps and tufts rather than the lines the road uses. And where the map
+  says what a road is paved with - asphalt, concrete, paving stones - the texture shifts to suit;
+  where it does not, a roadway is assumed asphalt and a pavement concrete, which is what
+  OpenStreetMap itself assumes. All four cities were rebaked to collect this
+- **Denver has its shape at last** (CW-33, CW-Q31) - it has been the one city drawn as plain boxes
+  since the stepped towers arrived, because it is mapped in unusual detail: 3,013 separate volumes,
+  more than the file budget allowed. **2,118 of those are smaller than ten square metres** - ledges
+  and setbacks a few centimetres across that no character on screen could ever show. Dropping them
+  leaves 895 real volumes and brings the city inside the budget, so Denver now has its stepped
+  towers and its roofs
+
+### Changed
+
+- **The graphics card now chooses the characters** (CW-32) - deciding which character to draw in
+  each cell was the single most expensive thing the City Walk did: sixteen brightness samples, two
+  contrast curves and a nearest-shape search, on the processor, about 140,000 times per frame at the
+  smallest character size. All of it is now one drawing pass on the graphics card, which is the kind
+  of work graphics cards exist for. Same session, same standing view, heavy rain, 10% characters,
+  with the processor slowed to a quarter speed: a conversion fell from 220 ms to 65 ms in
+  monochrome, and from 268 ms to 34 ms in colour. The picture refreshes about three times as often
+  and the frame rate roughly tripled. The city looks the same - the two paths were photographed side
+  by side at 10% and 50%, in monochrome, colour and high contrast, and the differences are subtle
+  changes in how densely a few cells are inked, about half of them cases where the graphics card
+  picks the *nearer* character than the processor's cache did. Nothing depends on it: a machine
+  without WebGL2, a shader that will not compile, or a readback that fails all fall back to the
+  processor permanently and silently, and that path is unchanged and still runs everywhere. **The
+  goal of thirty frames a second on a low-end machine is still not met** - drawing the finished
+  picture is now the expensive step, and it was not part of this work
+
+- **The city runs colder at the smallest characters** (CW-30) - at the 10% character size a cell is
+  about two device pixels wide, and the converter was reading sixteen samples for it. Measured,
+  those sixteen land on six distinct pixels: the ring of samples meant to see a cell's surroundings
+  was reading the very pixels the cell itself had already read. Each pixel is now read once and
+  handed to every sample that asked for it, which is not an approximation - the picture comes out
+  the same character for character. The two contrast curves, which raise a number to a fixed power
+  up to twelve times per cell, are now read from a table built once per frame rather than computed
+  per cell. Same session, same standing view, heavy rain, 10% characters, under a 4x CPU throttle:
+  a conversion took 287-346 ms before and 179-190 ms after, and the picture refreshed about three
+  times a second before and about five after. Nothing about how it looks has changed - at 50%
+  characters the frame is pixel-for-pixel identical to the old path, and at 10% it differs in 17
+  pixels out of 1,129,600, against a 31,000-pixel floor from capturing the same code twice. This
+  is the first of three staged pieces of performance work; the goal of thirty frames a second on a
+  low-end machine is not met yet
+
+### Added
+
+- **The tour ends by telling you the way out** (UF-39, U-45) - the Getting Started tour used to
+  finish with "You're ready!" and leave you standing in a project with no word about how to get back
+  to your own files. The way people reached for was the browser's Back button, which closed the app.
+  Both project tours, Forge and Classic, now end on one more step that points at the Main Page button
+  in the top left corner and says to use that instead. Pressing the button it is pointing at is a
+  first-class way to finish: the tour closes with the project, announces that it did, and keeps your
+  progress. The Main Page tour gained the same sentence in its closing step, so the button is named
+  from both directions. Both project tours are 18 steps rather than 17
+- **The city file format is written down, and so is where this is going** (CW-28) - two new
+  documents. The first describes the city extract format field by field, so that someone who has
+  never seen this project could write a valid city file, or write a second program that reads one.
+  The second records two things the City Walk is deliberately built to grow into: letting people
+  search for an address and walk there, and feeding tactile maps for readers who cannot see the
+  screen. The roadmap is a record of intent and of the seams already in the code, not a schedule -
+  and it states plainly that when tactile work does begin, every dimension a hand reads is a
+  safety value that needs a signed-off number, with no exceptions
+- **The status line knows which street you are on** (CW-27) - walk down a street and the line at
+  the top now reads "on 4th Avenue", changing as you turn onto another one. If you are not
+  actually on a street it says "near" the closest one, and if there is nothing close it says
+  nothing at all rather than naming a street you cannot see. Press **X**, or the new **Where am
+  I?** button in the toolbar, and the game says the whole thing out loud through the same
+  announcer everything else uses: which street, which landmark is nearby, and which way you are
+  facing. The names were in the map data all along - the game had been throwing them away while
+  reading the file
+- **The cities get the shapes they were actually mapped with** (CW-26) - a tall building is rarely
+  one plain box, and until now every one of them was. Mappers describe a stepped tower by drawing
+  its separate volumes, and describe a house roof by naming its shape; the bake threw both away
+  before the game ever saw them. Seattle, Burnaby and Albuquerque have been rebaked to keep them.
+  One Seattle tower that used to be a single 259 m block is now twenty-six stacked volumes
+  stepping 255, 147, 126, 110 m and down - and the skyline as a whole gained about a sixth more
+  steps in it. Pitched roofs - pyramidal, gabled and hipped - are built as real shapes that finish
+  at the height the building is tagged with, rather than being stacked on top of it. Roof shapes
+  nobody can draw honestly from the tags, and buildings too irregular to say which way they run,
+  keep their flat tops rather than being guessed at. **Denver is unchanged for now**: its 3,013
+  mapped parts are mostly tiny architectural details and carrying them all would nearly double the
+  download, so that trade is written up for a decision rather than made quietly
+- **Weather, photographs, and a reason to wander** (CW-20) - three things the City Walk did not
+  have. **Rain**, on the G key or the Rain button, in two strengths: heavy is not simply more
+  drops but faster and more slanted ones, because rain that only gets denser reads as fog. The
+  drops are real objects in the world rather than something painted over the top, so the same
+  machinery that turns the city into characters turns them into streaks - look up while it is
+  raining and they converge overhead the way falling rain actually does. While it rains the fog
+  slowly breathes between a clear night and a murky one, taking about three minutes to cross,
+  and distant thunder lifts the light by a fifth for a third of a second every half minute or so.
+  All of that is movement, so all of it stops for anyone who has asked for reduced motion - and
+  the G key says so out loud rather than ignoring the press, while the button removes itself
+  instead of sitting there doing nothing. **Photo mode**, on P, saves a PNG of exactly what is on
+  screen, named for the city and the date. **A landmark tracker**: the status line counts the
+  landmarks you have walked past, the map legend ticks them off, and when you have found them all
+  the game says so once. Nothing is stored - a fresh visit is a fresh walk
+- **The streets have people, parked traffic and working signals** (CW-19) - the city was
+  furnished but empty: nothing stood on the pavements and nothing sat in the road. It now has
+  standing figures built from a real outline - head, shoulders, body, arms and legs, most of them
+  frozen mid-step, and about one in six walking a dog - along with cars stopped in the travel lanes
+  facing the way they would be going, and traffic lights at the junctions where three or more
+  streets actually meet. Nothing moves except the signals, which is deliberate: this city is
+  deliberately held still, and a traffic light that never changes is not a traffic light. The
+  signals run in two groups so that when one street goes green the cross street is red, every
+  colour holds for at least two seconds, and they stop entirely - holding a real colour rather than
+  going dark - for anyone who has asked for reduced motion. They also only ask the screen to
+  redraw when a light actually changes, roughly once every two seconds, rather than every frame.
+  You can walk around the people, the signal posts and the parked cars; the cars stopped in the
+  traffic lanes are scenery you pass through, because fencing off the lanes would turn the street
+  into a maze. How many cars a street gets comes from what kind of street it is, which is the
+  honest limit of what open map data can say - live traffic information is not freely available -
+  and the code is arranged so a better source can be dropped in one place. Per city: 101 signals
+  and 1,419 stopped cars in Seattle, 87 and 908 in Denver, 46 and 887 in Albuquerque, 52 and 539
+  in Burnaby
+
+- **Every surface speaks in its own characters** (CW-23) - the City Walk picked each character by
+  how BRIGHT a patch of the screen was and nothing else, so a stretch of pavement and the side of a
+  tower that happened to be equally bright came out looking like the same material. The game now
+  draws a second, tiny picture behind the scenes - one pixel per character cell - whose only job is
+  to say what each cell is looking at, and a small table decides which characters each surface may
+  use. Roads get characters that lie down, so the roadway stacks into receding bands instead of a
+  field of noise; walls get characters that stand up; foliage gets characters that clump;
+  shopfronts and signs get the round, heavy ones. The table is plain data, one line per surface,
+  meant to be adjusted by eye. Two of its rules are not taste, and the suite enforces both: every
+  surface must be allowed the space character, or the darkest cells can no longer stay empty and
+  the black the whole picture is built on fills in with texture; and every surface needs light,
+  middle and heavy characters, or that surface flattens to one tone. Measured cost: about 1.1 ms a
+  frame at the default character size and 1.7 ms at the smallest, against a budget of 3
+
+- **A skyline past the fog** (CW-24) - the fog faded everything to black beyond about 260 metres,
+  and a cell that is exactly black is an empty cell, so every tower past the fog was not being
+  pushed into the distance - it was being deleted. The middle of the frame was a void even though
+  the city data reaches 700 metres. Buildings now keep about a seventh of their brightness however
+  far away they are, so a distant tower reads as a dim silhouette. Only buildings: the ground,
+  roads and kerbs still fade to true black, because a dim carpet across the lower half of the
+  screen is a failure this project has already made once. In colour the far towers keep their own
+  hue, so the skyline reads as a coloured city rather than a grey smudge
+
+- **Buildings no longer all wear the same windows** (CW-25) - every building used one identical
+  window pattern, so once the picture had become characters, one tower's wall was
+  indistinguishable from the next: colour told them apart, texture did not. There are now eight
+  facade patterns, each cutting a different letter shape out of its lit window panes - not writing,
+  just glazing bars, the way a leaded window has a pattern. Which one a building gets is fixed by
+  the same identity that fixes its colour, so a building keeps its face for as long as the city
+  data does. The patterns are painted when the city loads, so eight of them add nothing to the
+  download
+
+- **Monochrome is a choice now, not a loss** (CW-21) - with colour switched off the City Walk was a
+  single flat tone: pavement, walls and lit shop signs all painted at exactly the same brightness, so
+  turning colour off cost depth as well as hue. Real single-colour terminals never had that problem,
+  because they separated things with an intensity attribute rather than with more characters - which
+  matters here, since this project only ever draws the 95 printable ASCII characters and the densest
+  one of those fills less than half its cell. Three things change. Darker parts of the picture are
+  now driven at 65% of the phosphor rather than 100%, so pavement and distant walls sit back and lit
+  surfaces come forward; nothing is brighter than it used to be, and the dim level is still
+  6.45:1 against black in green and 5.03:1 in amber, both above the 4.5:1 this project holds itself
+  to. The brightest cells - lit shop signs, billboards, lamp heads - flip to reverse video, a solid
+  block of phosphor with the character knocked out of it, which is the only way to make a cell read
+  as genuinely LIT when no available character can fill more than half of one; it claims about 1.9%
+  of a street, chosen by counting: at a lower threshold every lit window turns solid too and the
+  signs stop being the brightest thing you can see. And the picture now keeps a soft phosphor trail
+  while you move, the way a slow tube smeared when it scrolled, gone within about three frames and
+  gone entirely when you stop. The trail is motion, so it turns itself off for anyone who asks for
+  reduced motion, including if that preference changes while you are walking. All of this is
+  monochrome only - with colour on, each cell is already picked out by its own hue - and none of it
+  reaches the main app's Alt View. Measured cost at the size the game starts at: the intensity and
+  reverse-video work is lost in the noise, the trail adds about 5 ms and the game stays at 60 frames
+  a second; at the smallest characters the trail takes it from 30.0 to 28.3
+
+- **Street life, standing still** (CW-18) - the City Walk's streets had trees and parked cars but
+  nothing above head height and nothing on the walls. Now streetlights march down every ordinary
+  street and arterial, one every 30 m, alternating sides: a slim post with a bright head reaching out
+  over the roadway, which at glyph scale is the row of bright dashes overhead that the reference
+  screenshots show. Shop signs hang over the storefront glass, and the rarer big billboard high on a
+  tower's flank. A sign is two pieces on purpose - a bright near-white plate with a deeply coloured
+  face laid on it - because one piece cannot do both jobs: a tone bright enough to be the brightest
+  thing on the street is too close to white for the colour quantizer to read as anything but white.
+  So monochrome sees a bright bordered panel and colour sees a vivid one. Signs pick the wall people
+  actually walk past rather than simply the longest, which moves the typical sign from about 20 m off
+  the nearest street to about 13. A long parade of shops is a single footprint in OpenStreetMap, so a
+  long frontage carries a row of up to four signs rather than one lonely one. Towers grow rooftop
+  masts, and the pavement gets its scuffs back: the ground texture went from 150 single pixels to
+  about 2400 short streaks laid in patches, so the near field reads as worn tarmac with lighter and
+  darker stretches instead of near-black. Per city that is 659 to 1071 lamps, 226 to 343 signs and
+  54 to 130 masts. The cost, measured on this machine's real GPU: about one frame per second at the
+  default character size and a third of one at the smallest
+
+- **Colour is now a switch of its own** (CW-Q16) - colour used to arrive only with high contrast, so
+  anybody who wanted the city in colour had to take high contrast with it, and anybody who wanted the
+  authentic single-colour retro screen had to give up high contrast to keep it. The game's header
+  carries a third button, Colour, with O as its key, and the two are independent. Nothing changes for
+  anyone who does not press it: with no choice stored, colour still follows high contrast exactly as
+  it did. Once you press it, your choice is remembered and outranks high contrast in both directions.
+  Turning colour off is not a step down in legibility - the single phosphor measures 15.3:1 (green)
+  and 11.5:1 (amber) against the black screen, and a test now reads those from the same token the
+  renderer reads so that stays true
+
+### Changed
+
+- **One name per thing** (UF-40, U-44) - the app used four names for two things. The page you land
+  on was the "welcome page", the "welcome screen" and the "Main Page" depending on which tour, button
+  or message you happened to read; the panel where you change a model was "Params" on a phone,
+  "Parameters" in the tours, and "Customizer" on its own heading. It is now the **Main Page** and the
+  **Customizer**, everywhere a user can read it, in both interfaces and every theme. The Main Page
+  also says its own name now, in its heading, with a line explaining what it is for: your projects,
+  organized like folders on a desktop computer. Five controls that named the panel indirectly came
+  with it, so **Export Params** is **Export Customizer Settings**, **View Params JSON** is **View
+  Customizer JSON**, **Color Parameters** is **Color Settings**, **Reset All Parameters?** is **Reset
+  the Customizer?**, and the search box says **Search the Customizer**. The individual values inside
+  the panel are still parameters, which is what desktop OpenSCAD calls them, and nothing in a .scad
+  file was touched. Two controls also had accessible names that did not contain the words printed on
+  them, so someone using speech input could read "Main Page" or "Customizer" on screen and have
+  nothing happen when they said it; both now match (WCAG 2.5.3). The tour that walks you around the
+  Main Page is the **Main Page Tour**, and the step that used to say "Click Generate" now names both
+  labels that button can wear, because once a file exists it says Download
+- **The two halves of the browser test suite now take the same amount of time** (CW-29, D-72) - the
+  Chromium and Edge test lanes each run in two halves side by side, and each half was being given
+  the same NUMBER of tests: 476 against 475. The work was nowhere near equal, because the slow
+  files happen to sort first alphabetically - one of them, the City Walk's own suite, is a quarter
+  of the whole lane on its own. One half ran for 32 to 35 minutes against a 35-minute limit and
+  failed three times on the clock rather than on anything being wrong; its sibling finished in 12.
+  The halves are now packed by measured cost, from real timings read out of a green run, and come
+  out at about 20 minutes each. The list of files is read off disk every time, so a test file added
+  later cannot fall between the two halves and quietly stop being run
+- **The City Walk runs at full frame rate from its default size upwards** (CW-22) - the game draws
+  its picture by stamping one character at a time onto a canvas, and asking the canvas to draw
+  something costs about the same whether the thing is big or small. At the size the game starts at,
+  that stamping was over half of all the work in a frame. There was already a faster way in the code
+  - build the whole frame in memory and hand the canvas one finished picture - but it was only used
+  for characters 4 pixels wide and under, and the game starts at 5. Measured with timers inside the
+  converter, the faster way wins at every size, so the size limit is gone. At the default size a
+  conversion drops from 40.7 to 17.5 ms and the game goes from about 42 to 60 frames a second; at 60%
+  character size, which was the slowest setting in the whole game despite drawing fewer characters
+  than the default, from 48.7 to 15.6 ms and 38 to 60 frames a second; at the largest characters from
+  25.0 to 12.9 ms. Everything from 40% down was already using the faster way and is unchanged.
+  Nothing looks different, and that is checked rather than asserted: 40 full-frame comparisons across
+  two cities, monochrome and colour, at every character size from 2 to 12 pixels wide, found 0
+  differing pixels out of about 1.6 million on every colour channel, and the suite now carries that
+  comparison against a hand-written reference so it stays true. The main app's Alt View gets the same
+  speed-up and the same unchanged picture. The phosphor afterglow still draws character by character,
+  because layering the previous frame on top is the one thing a single buffer cannot do
+
+- **The retro colour palettes read as colour more of the time** (CW-Q11) - measured by counting the
+  pixels the game actually paints, nearly half of a high-contrast street had no colour in it at all.
+  Three changes cut that to about a quarter: the quantizer's chroma boost rises from 3.5 to 5.0,
+  which is the point where every tinted surface in the scene lands on a colour rather than washing
+  out to white (genuinely grey things - pavement, curbs, lamp posts, sign plates - still come out
+  white, as they should); the amber neon set gains a seventh entry, a foliage green, because tree
+  crowns and yellow-green buildings had both been landing on the same lime; and the green set's soft
+  red becomes a saturated one, which was carrying the most work of any entry and now hands the
+  warm-yellow hues back to yellow. Every entry is still guarded at 4.5:1 or better against black
+
+- **Twice the city** (CW-17) - each of the four City Walk cities now covers twice the ground it did.
+  The bake radius moves from 500 m to 707 m, which is the number that doubles the AREA; doubling the
+  radius would have quadrupled it. All four extracts were rebaked from OpenStreetMap at the same
+  centers. Seattle grows from 272 to 475 buildings and 569 KB to 1016 KB, Denver from 190 to 330 and
+  343 KB to 893 KB, Albuquerque from 248 to 638 and 310 KB to 610 KB, Burnaby from 183 to 436 and
+  351 KB to 628 KB; the playable area of each goes from about 1.1 square kilometers to about 2.1.
+  Only Seattle had real map trees before, because the tree query arrived with CW-16 and only Seattle
+  was rebaked then. Now all four do - Denver alone carries 2291 of them, and its downtown streets read
+  as the leafy ones they are. Two things the extra ground does not cost you: the far city still fades
+  into the fog at the same distance, because that is a look and not a boundary, and the frame rate at
+  the default character size is unchanged, because the whole city has always been a handful of merged
+  meshes rather than one mesh per building. The extra ground is emptier than the middle, so the city
+  is in fact more walkable than it was: the share of it blocked by buildings falls in three cities of
+  four. What it does cost is the download - the largest city goes from 76 KB to 137 KB compressed -
+  and about a fifth of a second more to open a city on this machine
+
+- **Trees and parked cars along the streets** (CW-16) - the City Walk's streets were empty tarmac
+  between the buildings: correct, and nothing like a city anybody has stood in. Trees and parked cars
+  now furnish them. The trees are the real ones first - the bake script asks OpenStreetMap for its
+  `natural=tree` nodes, and Seattle's extract carries 119 of them, planted where the map says they
+  stand - and then a deterministic infill fills the gaps along residential, tertiary, pedestrian and
+  living-street curbs about every 18 m, on the sidewalk side of the curb line. A trunk is 2.5 m of
+  dark stem and the crown starts at 2.2 m, above eye height, so you walk under the leaves and around
+  the trunk. Cars park in hashed runs with gaps, 40 to 60 percent of the slots filled, parallel to the
+  curb and just inside it, on ordinary streets only - nobody leaves a car on a motorway. Each is two
+  boxes, a body and a slightly brighter cabin, in varied tones so a parked row reads as separate cars
+  rather than one long block, and a tone below the buildings so the lit shopfronts stay the brightest
+  thing at street level. Under the monochrome modes the props are what the reference calls the life
+  band: a seam of glyphs where the buildings meet the road. Under high contrast the crowns
+  quantize to the palette's green in dark mode and its lime in amber, so a tree is a tree at a glance.
+  The map view stays a clean street network - props hide there exactly as the curb lines do. Cars and
+  trunks are solid: walk into one and you stop. Crowns are not, because they are over your head. The
+  same rule that keeps a prop out of a building keeps the player out of a prop - the collision grid is
+  built from the buildings first, so nothing is ever placed inside one, and the props' own footprints
+  are stamped in before the spawn point is chosen, so nobody starts a game inside a parked car.
+  Measured across the four cities: 594 to 809 trees and 952 to 1213 cars each, all merged into three
+  draw calls
+
+- **Every City Walk key gets a button** (CW-15) - the game was a keyboard game. Someone playing with a
+  mouse alone could launch it and pick a city, and then reach nothing: walking, turning, looking, the
+  map, the landmarks and both size controls were keys and only keys. A toolbar now runs along the
+  bottom of the layer, one button per key, in six named groups - Camera, Move, Speed, Characters, Map
+  and Landmarks - with the group names shown, so the two smaller/larger pairs are never a guess. Hold
+  a movement button and the player keeps moving for as long as the mouse is down; click it and you get
+  one 250 ms step, which is also what Enter or Space does when the button has focus, because a key
+  press has no duration of its own. Every button drives the action its key already drove, so the map
+  view reinterprets them exactly as it does the keys: Forward walks a street and pans a map. Buttons
+  that would do nothing in the view you are in are not left lying there - Look up, Look down and Fast
+  step aside in map view, and Center on you, Zoom out and Zoom in take their place, announced. Fast is
+  a sticky toggle rather than a held key, because a mouse cannot hold Shift; it carries its pressed
+  state and Shift still works alongside it. The strip is one row on a wide window and wraps by group
+  on a narrower one, every button keeps the 44 px hit-target floor, and the help panel and landmark
+  legend now measure the toolbar and stop above it instead of covering the buttons. Contrast was
+  measured on the real buttons at rest and hovered in all four in-game states, the pressed toggle
+  among them; the worst of the twenty readings is 7.22:1
+
+- **C and T in the City Walk** (CW-Q15) - the two accessibility toggles CW-14 put in the game's header
+  now have keys as well: C turns high contrast on and off, T cycles the theme. Both run through the
+  same handlers the buttons call, so there is one announcement and one place the labels are kept
+  honest, and Ctrl+T still belongs to the browser
+
+- **Accessibility toggles inside the City Walk** (CW-14) - the game layer is a modal that traps focus,
+  so the app header's high contrast and theme buttons were out of reach for as long as you were
+  walking. The game's own header now carries both, in the same order the app header uses: High
+  contrast, Theme, then Help and Exit game. They call the app's existing theme manager, so a flip made
+  inside the game is the same flip as one made outside it, and it is still in force when you leave.
+  High contrast is a toggle button that carries its pressed state, and switching it on mid-walk raises
+  the multicolour high-contrast palette over the city without a reload; switching it off returns the
+  single phosphor. The theme button cycles the app's three settings and names the one it is on - Auto,
+  Light or Dark - and because the phosphor colour is the theme's accent, dark walks the city in green
+  and light walks it in amber, swapping live as you press. Both buttons announce what happened through
+  the game's own in-layer announcer rather than the app's status line, which a modal hides, and both
+  keep their labels honest when the flip arrives from somewhere else. The pressed pair was measured on
+  the real button at rest and hovered in all four states the game can be in; the worst of the eight
+  readings is 9.46:1
+
+- **Look up at the towers in the City Walk** (CW-13) - the game's camera is no longer fixed to the
+  horizon. R and F tilt the gaze up and down at 45 degrees a second, stopping at 60 degrees either
+  way, and V returns it to level and says so. Dragging the viewport with a mouse looks around too,
+  at a quarter of a degree per pixel, with no pointer lock and no cursor capture - a press that
+  travels less than four pixels is still an ordinary click. The bearing survives every tilt, so
+  looking up at a tower and then walking still walks the way you were facing, and the HUD adds
+  "looking up" or "looking down" while the gaze is tilted. Every look action has a key; the mouse
+  drag is an addition, never the only way to reach anything. The map view keeps both hands off:
+  walking is suspended there and so is looking around
+
+- **City Walk characters small enough to disappear into** (CW-12) - the game's character size now
+  runs from 10% to 100% in ten-point steps, replacing the old 50-250%, and persists across
+  sessions on its own preference key. The floor was MEASURED rather than guessed: at a fullscreen
+  game viewport the converter's automatic base font is 21 px, so 10% lands on the renderer's own
+  3 px floor - the smallest size that still changes anything on screen. Getting there needed two
+  renderer fixes. Painting a frame of 238,000 character cells was calling drawImage once per cell,
+  which cost more than everything else in the conversion put together; below a 4 px cell the
+  glyphs are now composed into one buffer and handed to the canvas in a single putImageData,
+  measured 4-5x faster (30% went from 143 ms a frame to 34 ms) and proven pixel-identical to the
+  old path. And a glyph rasterized into a 2x4 pixel cell is almost all antialiasing, which was
+  quietly dimming the whole city as the characters shrank - in amber the brightest pixel of a
+  frame measured 4.08:1 on black - so tiny glyph atlases are now normalized back to full opacity
+  (amber's floor measures 8.99:1 after, high contrast dark 19.43:1). The brightness
+  treatment is opt-in per caller, so the main app's Alt View keeps exactly the rendering it had;
+  it does share the faster paint path, which changes speed and not one pixel
+
+- **City Walk is desktop-only, like Classic** (CW-11) - the hidden game card's "Enter the City"
+  button now gates on the same viewport shape as the Classic interface (at least 1024 px wide and
+  not portrait, U-10/Q-24a). On a phone-shaped window it reads as unavailable, shows a
+  plain-language reason on the card that is also its accessible description, and a press announces
+  the refusal instead of starting a game whose controls were never designed for that shape. The
+  gate is ENTRY only: a session already running survives any resize, Escape always leaves, and the
+  button re-enables live when a desktop-shaped window returns, with no reload
+
+- **ASCII City Walk Round 2 — a city that looks alive** (CW-8, CW-6, CW-9, CW-10) — the game's
+  comprehensive visual pass and feature round. Buildings are now distinct: window-grid wall
+  textures (world-meter UVs, no custom mapping), deterministic per-building lightness tiers and
+  palette-family hues carried as vertex colors, lit storefront strips on the ground floor, and
+  streets drawn at eye level as curb lines that fade under the fog (surfaces stay black — any
+  visible surface tone carpets the horizon). The signed high-contrast color model ships: the ANSI
+  bright terminal set in green+HC, the cyberpunk neon set in amber+HC, single phosphor everywhere
+  else, via a new per-instance palette mode in the Alt View converter (per-color glyph atlases,
+  chroma-normalized per-cell picks that survive fog, guarded ≥4.5:1 on black). Character size is
+  adjustable in-game (-/=; see CW-12 below for the range that superseded this one). The map view is
+  navigable: arrows pan at constant screen speed, -/= and the mouse wheel zoom 0.4×–8×, Home
+  recenters on the player (follow mode), solid emissive-free block masses over dark street
+  corridors. Walking speed is a persistent 0.5×–3× multiplier on [ and ]. And every city carries
+  up to twelve landmarks (rebaked extracts keep tourism/historic/amenity tags): map beacons,
+  L/Shift+L cycling with announcements, a real-text legend with compass directions, and
+  "near NAME" street-view proximity announcements with hysteresis
+
+### Fixed
+
+- **The welcome dialog fits the phone, and the Download button never leaves the screen** (UF-41,
+  U-39) - the first thing a new person saw on a phone was a dialog with two enormous screenshots in
+  it, nothing to say it scrolled, and the button that starts the app hidden somewhere below the
+  bottom of the screen. The whole Classic card was down there too. Measured across six screen sizes,
+  **Download & Continue was below an unmarked fold on every one of them**, laptops included - a
+  1366x768 screen missed it by about 90 pixels, so this was never only a phone problem. The dialog
+  is now built as three parts instead of one: the title at the top and the button at the bottom stay
+  put, and only the middle scrolls. Download & Continue is on screen and pressable at every size
+  tested, down to 360x640, where fitting everything without scrolling is simply not possible. On a
+  phone the two interface screenshots are gone - Classic cannot be chosen on a phone anyway, so they
+  were pictures of a choice you are not being offered - and the four "note for first time users"
+  facts become four tappable rows you can open one at a time: **Browser based process**, **Initial
+  download, about 15 to 30 MB**, **Local project storage**, **Completely removable**. On a computer
+  nothing is hidden: the four facts stay written out in full, and the two screenshots are still
+  there, just small enough to sit side by side. Where the dialog does still scroll, a fade and a
+  small chevron above the button now say so, and they go away when you reach the end. In high
+  contrast the fade becomes a hard line instead, because a soft gradient is the wrong instrument
+  there and does not render at all in Windows' forced-colours mode. Screen-reader users lose
+  nothing when the pictures go: the description of each interface's layout moved to text that is
+  always present, so it is read out exactly as before
+- **The welcome dialog's title no longer hides under the browser's toolbar** (UF-41, U-39) - on a
+  phone the title was cut off at the top by the browser's own chrome. The dialog was being sized
+  against the height a phone has with its toolbar hidden, so whenever the toolbar was showing the
+  box was taller than the space it was being centred in, and it overflowed off the top and the
+  bottom at once. It is now sized against the space that actually exists, with the phone's safe
+  areas already taken out of it
+- **The Back button asks before it closes the app** (UF-39, U-41) - on a phone, halfway through the
+  Getting Started tour, pressing the browser's Back button closed the whole app. Not the panel, not
+  the tour, the app: the next thing on screen was the browser's home page. Nothing the app did had
+  ever put an entry in the browser's history, so the first Back press was always a step out of the
+  document, with no chance to say anything about it. Opening a project now adds one history entry of
+  its own, and that is the entry Back lands on, so instead of leaving you get a dialog: "Leave the
+  app? The browser's Back button closes this app. It does not go back to the Main Page or the
+  previous menu. Your saved projects stay in this browser." Stay in the app puts you back exactly
+  where you were, including the address bar, and it works every time rather than once. Leave really
+  leaves. Escape and a press outside the box both choose Stay, and Stay is the button that already
+  has focus when the dialog opens. A tour that is running stays running, on the step it was on. The
+  Main Page keeps the browser's own behaviour: the guard is for a project you are inside of, and it
+  takes its entry back out of the history when you return to the Main Page, so nothing stale is left
+  behind. If you press Back twice, the second press leaves, the same as it always did
+- **Walls you look straight at are drawn as walls again** (CW-29, D-73) - the City Walk decides what
+  each character is looking at before it picks the character, so that a road can be drawn with
+  characters that lie down and a wall with characters that stand up. It worked out which way a
+  building face pointed relative to the CAMERA rather than relative to the world, so any facade you
+  stood square to was filed as a rooftop and drawn with the flat horizontal characters rooftops
+  get - the venetian-blind banding the wall vocabulary exists to avoid, on whichever building you
+  happened to be looking at. Standing at one Seattle corner with the view level, 28.6% of the
+  screen was being called rooftop; from street level with a level view the true answer is
+  essentially none, and now is. Every other surface classified identically before and after, and
+  the map view - where the camera really does look down and roofs really are roofs - is unchanged
+- **The fog no longer outstays the rain that brought it** (CW-29, D-74) - while it rains the fog
+  slowly breathes between a clear night and a murky one, over about three minutes. That drift was
+  read off a clock that kept running whether or not it was raining, and was only ever applied while
+  it was. Stop the rain on the murky half and the fog stayed at its thickest for the rest of the
+  session, on a clear night, with nothing on screen to explain why you could not see across the
+  street. Start it again and the fog jumped in a single frame to wherever the clock had got to.
+  Now a shower picks the drift up from the fog that is actually on screen and carries on
+  thickening from there, and ending a shower hands back the clear night it borrowed
+- **Thunder lets go of the city** (CW-29, D-75) - a thunder swell lifts the ambient light by up to
+  22% over a third of a second and then puts it back. Putting it back needs a frame, and both ways
+  out of the rain skip those frames: stopping the rain, and turning on reduced motion. Either one,
+  caught mid-swell, left the whole city sitting under a raised light with no rain and no thunder
+  in it, until something unrelated happened to reset it. Both exits now put the light down
+- **Asking for less movement ends the shower** (CW-29, D-76) - the rain key has always refused to
+  START rain while reduced motion is on. Rain already falling was left exactly where it stood,
+  because turning the preference on stops the frames that move the drops rather than stopping the
+  rain: the shower froze in mid-air as a field of static diagonal streaks, and the Rain button
+  stayed in a toolbar where pressing it now only produced the refusal message. Turning reduced
+  motion on now ends the shower the same way the key does - the drops go, the fog goes back to
+  clear, the button leaves the toolbar, and it says so
+- **The status line stopped spilling onto a second row in Denver** (D-71) - standing near the
+  Embassy Suites by Hilton Denver Downtown Convention Center made the line long enough to wrap,
+  which pushed the game view down by a row. Very long street and landmark names are now shortened
+  with an ellipsis in the status line only; anything the game says out loud still uses the full
+  name
+
+- **Tour cards that admit when there is more to read** (UF-38, D-65) - on a phone the instruction
+  card was cut off mid-sentence with nothing to say so. One step ended on "You can resize this drawer
+  using the handle. With", and that was simply where the text stopped; there was no scrollbar, no
+  fade, no arrow, nothing. The card is capped at 45% of the screen height, and a phone screen is not
+  as tall as the emulator's - once the browser's address bar and the gesture bar are taken off a
+  1080x2520 phone there are about 810 usable points, not 915. At 810 three steps of the Getting
+  Started tour overflow that cap, by 47, 19 and 40 points. Nothing about that was visible. Now the
+  card's text area fades out at the bottom and shows a small chevron whenever there is more below,
+  and both disappear the moment you reach the end. The cue costs the text no room at all, is
+  invisible to screen readers and cannot be tabbed to, and at high contrast it is drawn as a hard
+  rule rather than a fade, because a soft gradient is exactly the wrong instrument there. The text
+  area also keeps a floor now - enough for the step's heading and a line of its text - so it can
+  never be squeezed away to a clipped headline the way the reported screenshots showed. And a step
+  you scrolled through no longer hands its scroll position to the next step, which was arriving with
+  its own title already scrolled off the top
+
+- **"Close to continue" no longer prints across the Features Guide's title** (UF-38, D-66) - the
+  hint was pinned to the left of the modal's X, which on a wide window puts it in empty space and on
+  a phone puts it straight on top of the words "Features Guide". At phone widths it now takes its own
+  line under the title, where it has room, and the close button keeps its pulse
+
+- **The Clear Cache dialog is centred again, and its backdrop covers the screen** (UF-38, D-69) - a
+  `max-width` meant for the dialog had been applied to the full-screen layer behind it, so on any
+  window wider than 500 points the dialog sat against the left edge and the dark backdrop was a
+  narrow strip beside it instead of dimming the page. Phones were never affected, which is why this
+  went unseen. Measured at 800 and 1280 points wide, the backdrop now spans the window and the dialog
+  sits in the middle
+
+- **The tour card can be reached and heard while the Customizer is open** (UF-38, D-70) - on a phone
+  the Customizer is a drawer that covers the screen, so it correctly tells a screen reader to ignore
+  everything behind it. Since the tour card started staying on screen next to that drawer, "behind
+  it" included the instructions. A blind user got no instructions at all on the drawer steps, which
+  is most of the tour, and a keyboard user could not reach Next, Back, minimise or Close - measured
+  at eighty consecutive Tab presses without once leaving the panel. While a tour is running, the
+  drawer and the card stop competing to be the only thing on screen, and the drawer's keyboard trap
+  now spans the card as well: one Shift+Tab from the top of the drawer reaches it. Everything is put
+  back the moment the drawer closes, and the drawer is unchanged for anyone not on a tour
+
+- **The Getting Started tour stopped arguing with you on a phone** (UF-37, D-62 and D-63) - three
+  quarters of that tour lives in the Customizer panel, and on a phone that panel is a drawer covering
+  the screen. Because a drawer that covers the screen has to say so for a screen reader, the tour read
+  it as a dialog somebody had opened over the top of it and politely got out of the way - collapsing
+  to a small yellow pill on every single one of those steps. So step 3 arrived with the drawer already
+  open, a ring around a Close button nobody had been told about, and not one word of instruction on
+  screen. Pressing the pill to get the instructions back closed the drawer, and pressing Next opened
+  it again, and the instructions vanished again. On step 4 it was worse: the pill did nothing at all
+  that you could see, because the drawer was still open and the tour minimised itself again in the
+  same instant. Closing the drawer by hand did not work either, since the tour reopened it within half
+  a second. Four things change. The tour now knows the Customizer is part of the app rather than a
+  dialog you opened, so the instruction card stays on screen next to the open drawer instead of
+  hiding - and it docks below the drawer's title so it never sits on the drawer's only Close button.
+  Step 3 arrives with the drawer shut and the ring on the Params button, which is what its words tell
+  you to press; open the drawer and the ring walks over to the Close button, so the one step teaches
+  both halves. If you close the drawer while a step still needs it, it stays closed: the tour rings
+  the button that opens it again and says "Open Params to continue." rather than dragging it back
+  open. And Escape now takes one surface at a time - the first press closes the drawer, the second
+  ends the tour - where before, once the drawer stopped counting as a dialog, a single press would
+  have taken both. Minimising and restoring the card by hand works and stays worked. The same rules
+  apply to the collapsing panel on a desktop, where the line reads "Expand Parameters to continue."
+
+- **A dialog you open during a tour is now a dialog you can answer** (UF-36, D-61) - following the
+  Main Page tour on a phone to the Clear Cache step and pressing the button it points at left people
+  stuck. The tour did shrink to its pill, but shrinking is not standing aside: the dimming veil kept
+  painting over the dialog, the highlighted button kept the ring and the raised position the
+  spotlight gives it, and the pill kept the dialog's bottom corner. On a phone-sized screen that
+  button lands squarely across the dialog's own Cancel and its red confirm, so aiming at either one
+  pressed the page button underneath instead - and each press opened another copy of the same dialog,
+  every one of them with its Cancel buried the same way. Now, whenever a dialog you opened is on
+  screen, the tour stands down completely: no veil, no ring, and the pill moves to a gap the dialog
+  leaves or steps off screen when it leaves none. Close the dialog and the tour comes back exactly
+  where it was, ring and all. This covers every dialog a highlighted control can open, not only Clear
+  Cache. The one case that keeps its spotlight is a step whose subject IS the open dialog, like the
+  Features Guide step, which is unchanged. The Clear Cache step also now says what Cancel does, and
+  still tells you about the checkbox that keeps your saved projects
+
+- **The tour overlay stopped climbing above its own head** (UF-36, D-67) - the code that lifts the
+  tour above awkward parts of the page measured the highlighted element itself, which the tour had
+  just raised a moment earlier. So on every single step it read its own work back and lifted itself
+  higher again, which is how the dimming veil ended up above dialogs it should never have covered.
+  The layering is now written down once, in the design tokens, instead of being rediscovered on each
+  step, and the last hardcoded stacking numbers in the tutorial code moved onto those tokens. Nothing
+  about the finished picture changes: the ring still shows through the veil, the tour card still sits
+  above both, and the tour's own dialogs still sit above the card
+
+- **The contrast modes finally get the thicker focus ring they ask for** - both the app's own high
+  contrast mode and the operating system's "increase contrast" preference are supposed to draw a
+  heavier ring around whatever has keyboard focus, and neither ever did on a button or a link. The
+  rule that paints those rings carried a hardcoded width that overrode the setting, so people who had
+  asked for a stronger focus indicator were quietly getting the ordinary one. Nothing changes for
+  anyone who has not asked for more contrast. The test that was supposed to cover this could not:
+  it measured whatever the first Tab press happened to reach, and accepted the ordinary ring as a
+  pass, so it now focuses a known control and checks the ring both with the preference and without it
+
+- **The header toggles no longer lie about the state they are in** (D-60) - the high contrast and
+  theme buttons each wrote their spoken label only inside their own click handler, so any other route
+  left the label saying the opposite of the truth, to the one group of people who cannot see the
+  button change. Three routes reached it: the keyboard shortcut, the City Walk's in-game toggles
+  (which act on the same setting from inside a modal that hides the header), and - under the Auto
+  theme setting - the system simply changing colour scheme, with nobody touching anything at all.
+  Both labels now follow the theme manager itself, which every route already notifies
+
+- **The Classic button reads clearly while it is unavailable** (CW-Q13c) - on a window too narrow for
+  Classic the header button stays focusable and explains why, dimmed so it also reads as unavailable
+  without relying on colour. That dimming was quietly costing the label its legibility: measured
+  across all eight theme states, five sat below the 4.5:1 minimum, the worst of them in high contrast
+  and the mono Alt View - the modes people choose because they need contrast. The dimming is gentler
+  now, so the worst reading is 5.35:1 and the button still reads as unavailable. Nothing had caught
+  this because nothing could: a dimmed control blends with whatever is behind it, and automated
+  contrast checks skip disabled controls entirely, so the guard added here does the blending itself
+
+- **City Walk: help panel rendered under the ASCII glyphs** — the overlay canvas carries
+  z-index 5 and the help panel (and the new landmark legend) defaulted below it, so both panels
+  were occluded by the rendered city; visibility assertions cannot detect occlusion, which is why
+  no test caught it. Both panels now sit at `--z-index-dropdown`, verified by screenshot
+
+- **ASCII City Walk — a playable game inside the hidden Alt View mode** (CW-1…CW-5) — unlocking
+  Alt View now also reveals a game card on the welcome screen. Pick one of four bundled cities
+  (Seattle, Denver, Albuquerque, Burnaby — built from real OpenStreetMap building footprints,
+  heights, and streets; Map data © OpenStreetMap contributors, ODbL) and walk it in first person,
+  rendered entirely through the existing ASCII pipeline in the active phosphor (green dark /
+  amber light). Keyboard-only controls (arrows/WASD walk, Q/E turn, Shift faster, M toggles a
+  top-down map view with a player beacon, H help, Escape exits), fullscreen modal layer with a
+  capture-phase focus trap, in-layer screen-reader announcements, and persistent map-data
+  attribution. The Alt View renderer was refactored from a module singleton to per-instance
+  state (public API unchanged) so the game and the model preview can each hold their own ASCII
+  view; city extracts are baked by `scripts/bake-city-extract.mjs` (Overpass API, tags trimmed,
+  ODbL attribution stamped) into `public/examples/ascii-city/`, load lazily, and are excluded
+  from the bundle budget under the same lazy-payload rationale as liblouis. New unit suites
+  (parser/heights/ring-stitching, collision/movement/compass, scene build, alt-view instance
+  isolation) and an e2e spec (gating, keyboard flow, map toggle, focus restore, axe scans of the
+  open layer)
+
+### Fixed
+
+- **A click on the City Walk killed the keyboard** (D-59) - the game's viewport is not a focusable
+  element, so a plain click anywhere on the city moved focus to the page body, outside the layer
+  the game's key handler is bound to. Every key stopped working for the rest of the session, in
+  both the street and map views, with only Escape and Tab as a way back and nothing on screen to
+  say so. Present since the game first shipped; found while checking that the new mouse drag left
+  the focus trap alone, and measured on the release base before and after the fix
+
+- **Mono variant: primary buttons keep a legible label while hovered** (D-55 pattern) — the mono
+  theme's generic button hover repaints the surface with `--color-hover-bg` and nothing else,
+  which under a primary button's black label measured **1.11:1** (label erased on mouse-over) on
+  every primary button in the hidden theme. Found by the City Walk axe scan, which deliberately
+  hovers a real button — a hover state is invisible to a scan unless something happens to be
+  hovering. variant.css now completes the pair by flipping the hovered label (and its
+  `currentColor` icons) to the accent: measured 7.2:1 (green) / 10.2:1 (amber), guarded by new
+  token-pair tests beside the existing mono contrast guards
 
 - **Braille editor (Unicode) extended to the Braille Sign** (Braille Sign 1.2.0) — the
   card tool's hand-editing panel now appears in the sign tool too, wired to the sign's

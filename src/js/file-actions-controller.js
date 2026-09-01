@@ -19,34 +19,82 @@ const RECENT_FILES_KEY = getAppPrefKey('recent-files');
 const MAX_RECENT = 10;
 
 /**
- * Export the current render result in the given format from a toolbar menu action.
- * @param {string} format - Format key from OUTPUT_FORMATS (e.g. 'stl', 'obj')
+ * Render pipeline hooks, injected from main.js, which owns it.
+ * @type {{hasCurrentRender: Function|null, renderForExport: Function|null}}
  */
-export function exportFormatFromMenu(format) {
+let exportDeps = { hasCurrentRender: null, renderForExport: null };
+
+/**
+ * @param {Object} deps
+ * @param {(format: string, opts: Object) => boolean} deps.hasCurrentRender
+ *        Whether the render already in hand is this format, for these
+ *        parameters. Must be the app's single render-state source.
+ * @param {(format: string, opts: Object) => Promise<'ready'|'downloaded'|false>}
+ *        deps.renderForExport Runs a full render in the requested format.
+ */
+export function setExportDependencies(deps) {
+  exportDeps = {
+    hasCurrentRender: deps.hasCurrentRender || null,
+    renderForExport: deps.renderForExport || null,
+  };
+}
+
+/**
+ * Export the model in the given format.
+ *
+ * Upstream's File > Export renders whatever you ask for. This used to refuse
+ * with a "Format Mismatch" toast whenever the render in hand was a different
+ * format — a dead end the user could only escape by finding the output-format
+ * select and pressing Generate. It now renders on demand instead.
+ *
+ * @param {string} format - Format key from OUTPUT_FORMATS (e.g. 'stl', 'obj')
+ * @param {Object} [options]
+ * @param {boolean} [options.stlBinary=true] - STL encoding (upstream ships both)
+ * @param {boolean} [options.renderIfNeeded=true] - Set false to export only
+ *        what already exists. The memory banner needs this: it appears when
+ *        memory is critical, and rendering is the operation it is warning
+ *        about, so it must never start one.
+ */
+export async function exportFormatFromMenu(
+  format,
+  { stlBinary = true, renderIfNeeded = true } = {}
+) {
   const state = stateManager.getState();
-  const outputData = state.generatedOutput?.data || state.stl;
-  if (!outputData) {
+  if (!state.uploadedFile?.content) {
     showErrorToast({
-      title: 'No Rendered Model',
-      message: 'No rendered model to export. Run Render first.',
+      title: 'No File Open',
+      message: 'Open a .scad file first.',
     });
     return;
   }
-  const stateFormat = (
-    state.generatedOutput?.format ||
-    state.outputFormat ||
-    'stl'
-  ).toLowerCase();
-  if (stateFormat !== format) {
-    showErrorToast({
-      title: 'Format Mismatch',
-      message: `The current render is ${stateFormat.toUpperCase()}. To export as ${format.toUpperCase()}, change the output format and click Generate first.`,
-    });
-    return;
+
+  if (exportDeps.hasCurrentRender?.(format, { stlBinary }) !== true) {
+    if (!renderIfNeeded) {
+      showErrorToast({
+        title: 'No Rendered Model',
+        message: 'No rendered model to export. Run Render first.',
+      });
+      return;
+    }
+    if (!exportDeps.renderForExport) {
+      showErrorToast({
+        title: 'Engine Not Ready',
+        message:
+          'The OpenSCAD engine has not initialized yet. Please wait or refresh the page.',
+      });
+      return;
+    }
+    const outcome = await exportDeps.renderForExport(format, { stlBinary });
+    // 'downloaded' — the 2D path saves the file itself, so stop here.
+    if (outcome !== 'ready') return;
   }
+
+  const current = stateManager.getState();
+  const outputData = current.generatedOutput?.data || current.stl;
+  if (!outputData) return;
   const filename = resolveDownloadFilename(
-    state.uploadedFile?.name || 'model',
-    state.parameters || {},
+    current.uploadedFile?.name || 'model',
+    current.parameters || {},
     format,
     getBrailleDownloadName()
   );
@@ -110,6 +158,15 @@ export class FileActionsController {
     if (this.recentFiles.length > MAX_RECENT) {
       this.recentFiles = this.recentFiles.slice(0, MAX_RECENT);
     }
+    this._saveRecent();
+    this._renderRecentList();
+  }
+
+  /**
+   * Forget every recent file (File > Recent Files > Clear Recent).
+   */
+  clearRecent() {
+    this.recentFiles = [];
     this._saveRecent();
     this._renderRecentList();
   }

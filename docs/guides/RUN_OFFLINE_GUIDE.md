@@ -76,7 +76,7 @@ You only need to do this once after installing.
 1. Open the installed app at least once while online and let it finish loading (the page should be fully interactive and the example model should render).
 2. Disable wifi / unplug the network cable / put the device in airplane mode.
 3. Re-launch the app from the Start menu (Windows), Applications folder (macOS), or app launcher (Linux).
-4. The app should load and still let you open an example, change parameters, and render. Exporting STL/OBJ/3MF works too.
+4. The app should load and still let you open an example, change parameters, and render. Exporting STL/OBJ works too.
 
 If it does not load offline, see [Troubleshooting](#troubleshooting) below.
 
@@ -162,7 +162,7 @@ Reference: [Microsoft Learn -- ConfigureList of force-installed web apps](https:
 
 Intune can deploy the same Edge / Chrome policy via the **Settings catalog** (search for `WebAppInstallForceList`) or as an **Administrative template**. Push the JSON above as the policy value.
 
-For a longer security walk-through aimed at IT directors and approvers, see [IT Approval Guide](IT_APPROVAL_GUIDE.md).
+For the site's verifiable safety and privacy facts -- the CSP verbatim, data handling, what it connects to -- see [Site Facts](../SITE_FACTS.md).
 
 ---
 
@@ -195,6 +195,6 @@ For a longer security walk-through aimed at IT directors and approvers, see [IT 
 
 ## Related documentation
 
-- [IT Approval Guide](IT_APPROVAL_GUIDE.md) -- for IT and security teams reviewing the app for allowlisting or enterprise deployment.
+- [Site Facts](../SITE_FACTS.md) -- how the site approaches safety and privacy, verifiable against the files it cites.
 - [Getting Started](GETTING_STARTED.md) -- your first five minutes with the app once it is installed.
 - [Accessibility Guide](ACCESSIBILITY_GUIDE.md) -- keyboard, screen reader, and high contrast notes.

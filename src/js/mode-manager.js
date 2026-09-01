@@ -199,9 +199,25 @@ export class ModeManager {
       this._announceSwitch(targetMode);
     }
 
-    // Move focus to the appropriate target after switch (WCAG 2.4.3 Focus Order)
+    // Move focus to the appropriate target after switch (WCAG 2.4.3 Focus
+    // Order), unless a menu or dialog has taken focus in the meantime.
+    //
+    // D-15: this runs a frame later, and a user who presses the editor toggle
+    // and then opens a menu in the same task lands here with the menu already
+    // holding focus. Taking it back leaves the menu open with focus outside
+    // it, breaking the APG contract that focus moves INTO an open menu.
+    //
+    // Deliberately narrow. Declining whenever focus had changed AT ALL would
+    // also skip the move in the ordinary case where the switch itself moved
+    // focus, and the 2.4.3 behaviour every other path relies on would become
+    // conditional on timing. Only a menu or a dialog owns focus in a way this
+    // must not steal back.
     if (!options.skipFocus) {
-      requestAnimationFrame(() => this._manageFocusAfterSwitch(targetMode));
+      requestAnimationFrame(() => {
+        if (!this._focusHeldByOverlay()) {
+          this._manageFocusAfterSwitch(targetMode);
+        }
+      });
     }
 
     // Save mode to preferences
@@ -288,6 +304,29 @@ export class ModeManager {
   }
 
   /**
+   * The element that currently has focus, or null outside a browser.
+   * @returns {Element|null}
+   * @private
+   */
+  _activeElement() {
+    return typeof document === 'undefined' ? null : document.activeElement;
+  }
+
+  /**
+   * Whether a menu or dialog currently holds focus. Those own it until the
+   * user dismisses them, so a deferred focus move must not take it back.
+   * @returns {boolean}
+   * @private
+   */
+  _focusHeldByOverlay() {
+    const active = this._activeElement();
+    if (!active || typeof active.closest !== 'function') return false;
+    return Boolean(
+      active.closest('[role="menu"], [role="dialog"], [aria-modal="true"]')
+    );
+  }
+
+  /**
    * Move focus to appropriate element after mode switch (WCAG 2.4.3)
    * Standard mode: focus first parameter input
    * Expert mode: focus the code editor (textarea or Monaco)
@@ -339,9 +378,8 @@ export class ModeManager {
   _announceSwitch(mode) {
     const messages = {
       standard:
-        'Switched to Standard Mode. Parameter controls are now active. Tab through parameters to customize.',
-      expert:
-        'Switched to Expert Mode. Code editor is now active. Press Escape then Tab to access other controls.',
+        'Editor closed. Parameter controls are now active. Tab through parameters to customize.',
+      expert: 'Editor opened. Press Escape then Tab to access other controls.',
     };
 
     this.announceToScreenReader(messages[mode] || `Switched to ${mode} mode`);

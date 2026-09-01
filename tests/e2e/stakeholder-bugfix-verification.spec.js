@@ -23,6 +23,18 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.clear()
     localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+    localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
+    // UF-27: three cases in this file were RED before this line, and the
+    // failure screenshot said why in one glance - the app was in Simplified
+    // mode, where #consolePanel is defaultHiddenInBasic, so the Bug 1 cases
+    // clicked at a summary the mode controller had hidden and timed out after
+    // 10s. The warnings they were looking for were plainly on screen the whole
+    // time. Same finding and same fix as UF-25 made in render-stability: a
+    // suite that drives panels has to ask for Standard.
+    localStorage.setItem(
+      'openscad-forge-ui-mode',
+      JSON.stringify({ mode: 'standard', lastCustomMode: 'standard' })
+    )
   })
 })
 
@@ -221,7 +233,8 @@ test.describe('Bug 1: Console warnings for missing companion files', () => {
     // Use evaluate to toggle the filter checkbox via DOM (it may be covered by
     // a custom CSS checkbox overlay that prevents Playwright clicks from toggling).
     const warnFilter = page.locator('#console-filter-warn')
-    if (await warnFilter.count() > 0) {
+    await expect(warnFilter).toHaveCount(1)
+    {
       const isChecked = await warnFilter.isChecked({ timeout: 5000 })
       console.log('[Bug1-filter] Warning filter initially checked:', isChecked)
       expect(isChecked).toBe(true)
@@ -245,9 +258,6 @@ test.describe('Bug 1: Console warnings for missing companion files', () => {
       const rechecked = await warnFilter.isChecked()
       console.log('[Bug1-filter] After re-check:', rechecked)
       expect(rechecked).toBe(true)
-    } else {
-      console.log('[Bug1-filter] Warning filter checkbox not found, skipping')
-      test.skip()
     }
   })
 })
@@ -264,15 +274,19 @@ test.describe('Bug 3: include_screenshot overlay wiring', () => {
     await uploadZip(page, zipPath)
 
     await page.waitForSelector('.param-control', { state: 'attached', timeout: 20000 })
+
+    // F5: parameter groups load COLLAPSED, so every control is attached long
+    // before it is visible. UF-27: this case reached straight for the toggle
+    // and timed out on check() after 10s against a control inside a closed
+    // group - the same trap preset-workflow documents. Ask for them open.
+    const expandAll = page.locator('#expandAllGroupsBtn')
+    await expect(expandAll).toBeVisible()
+    await expandAll.click()
     await page.waitForTimeout(2000)
 
     // include_screenshot renders as a toggle switch (checkbox role="switch")
     const screenshotToggle = page.locator('#param-include_screenshot, [id*="include_screenshot"]').first()
-    if (await screenshotToggle.count() === 0) {
-      console.log('[Bug3] include_screenshot control not found, skipping')
-      test.skip()
-      return
-    }
+    await expect(screenshotToggle).toBeVisible()
 
     // Check initial state -- should be unchecked ("no")
     const initialChecked = await screenshotToggle.isChecked()
@@ -316,12 +330,7 @@ test.describe('Bug 4: Imported preset auto-selection', () => {
   test('imported preset is auto-selected in dropdown after import', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
-    try {
-      await loadSimpleBoxExample(page)
-    } catch {
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page)
 
     await expandPresetsPanel(page)
 
@@ -343,11 +352,7 @@ test.describe('Bug 4: Imported preset auto-selection', () => {
 
     // Use "Export All Designs" button (always visible in modal header)
     const exportAllBtn = page.locator('button:has-text("Export All")')
-    if (await exportAllBtn.count() === 0) {
-      console.log('[Bug4] No Export All button found, skipping')
-      test.skip()
-      return
-    }
+    await expect(exportAllBtn).toBeVisible()
 
     const downloadPromise = page.waitForEvent('download')
     await exportAllBtn.click()
@@ -396,36 +401,22 @@ test.describe('Bug 4: Imported preset auto-selection', () => {
 
     // Use "Import Designs" button
     const importBtn = page.locator('button:has-text("Import Designs")')
-    if (await importBtn.count() === 0) {
-      console.log('[Bug4] No Import Designs button found, skipping')
-      test.skip()
-      return
-    }
+    await expect(importBtn).toBeVisible()
 
     await importBtn.click()
     await page.waitForTimeout(500)
 
     // An import mode dialog appears (merge/replace). Click "Choose files..." to proceed.
     const importModeDialog = page.locator('dialog[open]')
-    if (await importModeDialog.count() > 0) {
-      // Set up filechooser BEFORE clicking submit (the submit triggers the filechooser)
-      const fileChooserPromise = page.waitForEvent('filechooser', { timeout: 10000 })
-      const chooseFilesBtn = importModeDialog.locator('button[value="ok"], button:has-text("Choose files")')
-      await chooseFilesBtn.click()
+    await expect(importModeDialog).toHaveCount(1)
 
-      try {
-        const fileChooser = await fileChooserPromise
-        await fileChooser.setFiles(downloadPath)
-      } catch {
-        console.log('[Bug4] File chooser not triggered, skipping')
-        test.skip()
-        return
-      }
-    } else {
-      console.log('[Bug4] Import mode dialog did not appear, skipping')
-      test.skip()
-      return
-    }
+    // Set up filechooser BEFORE clicking submit (the submit triggers the filechooser)
+    const fileChooserPromise = page.waitForEvent('filechooser', { timeout: 10000 })
+    const chooseFilesBtn = importModeDialog.locator('button[value="ok"], button:has-text("Choose files")')
+    await chooseFilesBtn.click()
+
+    const fileChooser = await fileChooserPromise
+    await fileChooser.setFiles(downloadPath)
 
     // Dismiss any alert dialogs that appear
     await page.waitForTimeout(3000)
@@ -463,12 +454,7 @@ test.describe('Bug 5: Preset compatibility warning', () => {
   test('compatible preset loads without false warning dialog', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
-    try {
-      await loadSimpleBoxExample(page)
-    } catch {
-      test.skip()
-      return
-    }
+    await loadSimpleBoxExample(page)
 
     await expandPresetsPanel(page)
 
@@ -528,6 +514,7 @@ test.describe('Bug 5: Preset compatibility warning', () => {
       }
       localStorage.setItem('openscad-forge-presets-v2', JSON.stringify(presetData))
       localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+      localStorage.setItem('openscad-forge-tour-nudge-suppressed', 'true')
     })
 
     await page.goto('/?example=simple-box')
@@ -540,11 +527,7 @@ test.describe('Bug 5: Preset compatibility warning', () => {
     const allOptions = await getPresetOptions(page)
     console.log('[Bug5] Available presets:', allOptions)
     const match = allOptions.find(opt => opt.includes('Tampered Schema Test'))
-    if (!match) {
-      console.log('[Bug5] Tampered preset not found in dropdown')
-      test.skip()
-      return
-    }
+    expect(match).toBeTruthy()
 
     await selectPreset(page, match)
     await page.waitForTimeout(2000)

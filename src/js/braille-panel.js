@@ -59,14 +59,34 @@ const MARGIN_PRESETS = [
  */
 const SIZE_PRESETS = [
   { id: 'auto', label: 'Auto-size to fit text', width: null, height: null },
-  { id: 'default', label: 'Default card (200 × 100 mm)', width: 200, height: 100 },
-  { id: 'business', label: 'Business card (89 × 51 mm)', width: 89, height: 51 },
+  {
+    id: 'default',
+    label: 'Default card (200 × 100 mm)',
+    width: 200,
+    height: 100,
+  },
+  {
+    id: 'business',
+    label: 'Business card (89 × 51 mm)',
+    width: 89,
+    height: 51,
+  },
   { id: 'postcard', label: 'Postcard (152 × 102 mm)', width: 152, height: 102 },
-  { id: 'greeting', label: 'Greeting card (178 × 127 mm / 5 × 7 in)', width: 178, height: 127 },
+  {
+    id: 'greeting',
+    label: 'Greeting card (178 × 127 mm / 5 × 7 in)',
+    width: 178,
+    height: 127,
+  },
   { id: 'a5', label: 'A5 (210 × 148 mm)', width: 210, height: 148 },
   { id: 'a4', label: 'A4 (297 × 210 mm)', width: 297, height: 210 },
   { id: 'letter', label: 'US Letter (279 × 216 mm)', width: 279, height: 216 },
-  { id: 'custom', label: 'Custom (use the width/height parameters)', width: null, height: null },
+  {
+    id: 'custom',
+    label: 'Custom (use the width/height parameters)',
+    width: null,
+    height: null,
+  },
 ];
 
 /**
@@ -228,7 +248,9 @@ class BraillePanel {
   mount() {
     const parametersContainer = document.getElementById('parametersContainer');
     if (!parametersContainer?.parentNode) {
-      console.warn('[BraillePanel] parametersContainer not found; not mounting');
+      console.warn(
+        '[BraillePanel] parametersContainer not found; not mounting'
+      );
       return;
     }
 
@@ -286,9 +308,7 @@ class BraillePanel {
     textLabel.setAttribute('for', 'brailleTextInput');
     textLabel.className = 'braille-panel-label';
     textLabel.textContent =
-      this.mode === 'charm'
-        ? 'Characters to translate'
-        : 'Text to translate';
+      this.mode === 'charm' ? 'Characters to translate' : 'Text to translate';
     section.appendChild(textLabel);
 
     const textHelp = document.createElement('p');
@@ -565,7 +585,9 @@ class BraillePanel {
     const lines = field.value.replace(/\r\n?/g, '\n').split('\n');
     const texts = [];
     for (const line of lines) {
-      texts.push(line.trim() === '' ? '' : await backTranslateText(line, table));
+      texts.push(
+        line.trim() === '' ? '' : await backTranslateText(line, table)
+      );
     }
     while (texts.length > 0 && texts[texts.length - 1] === '') texts.pop();
 
@@ -1025,8 +1047,7 @@ class BraillePanel {
     };
     const readGridRows = () =>
       String(
-        stateManager.getState().parameters?.[this.capacityParams.gridRows] ??
-          ''
+        stateManager.getState().parameters?.[this.capacityParams.gridRows] ?? ''
       );
     this.lastWatchedValues = readWatched();
     this.lastGridRowsParam = readGridRows();
@@ -1249,7 +1270,11 @@ class BraillePanel {
 
     const warnings = [...layout.warnings];
     this.collectRowClampWarning(warnings, geometry, rowsPerCard);
-    this.collectCommonWarnings(warnings, { untranslatable, preserveCaps, text });
+    this.collectCommonWarnings(warnings, {
+      untranslatable,
+      preserveCaps,
+      text,
+    });
 
     // Explicit capacity-overflow error: the laid-out text exceeds the
     // current card's space. Rows-overflow (splitting off) and
@@ -1442,7 +1467,11 @@ class BraillePanel {
     if (seq !== this.layoutSeq) return;
 
     const warnings = [];
-    this.collectCommonWarnings(warnings, { untranslatable, preserveCaps, text });
+    this.collectCommonWarnings(warnings, {
+      untranslatable,
+      preserveCaps,
+      text,
+    });
 
     // Per-charm cell budget check (each character carries its own charm)
     const overflowing = charms.filter(
@@ -1463,7 +1492,10 @@ class BraillePanel {
             : '.'),
       });
     }
-    if (charms.length > this.charmParams.length && this.charmParams.length > 0) {
+    if (
+      charms.length > this.charmParams.length &&
+      this.charmParams.length > 0
+    ) {
       warnings.push({
         type: 'charm-limit',
         message:
@@ -1602,7 +1634,11 @@ class BraillePanel {
         `${tooManyLines.needed ?? 'more'}. The extra lines were dropped — ` +
         `shorten the text or split it across multiple signs.`;
     }
-    this.collectCommonWarnings(warnings, { untranslatable, preserveCaps, text });
+    this.collectCommonWarnings(warnings, {
+      untranslatable,
+      preserveCaps,
+      text,
+    });
 
     this.cards = [layout.brailleRows];
     this.allLines = layout.brailleRows;
@@ -1935,8 +1971,7 @@ class BraillePanel {
         `Charm ${this.currentCharm + 1} of ${this.charms.length}` +
         (charm?.source ? ` — ${charm.source}` : '');
       this.refs.prevBtn.disabled = this.currentCharm === 0;
-      this.refs.nextBtn.disabled =
-        this.currentCharm === this.charms.length - 1;
+      this.refs.nextBtn.disabled = this.currentCharm === this.charms.length - 1;
       this.refs.pagerHint.textContent =
         `Each charm exports separately. Suggested file name: ` +
         `${this.getCharmDownloadName() ?? 'Braille Charm'}.stl`;
@@ -2019,7 +2054,8 @@ class BraillePanel {
     // merely to sync grid capacity values.
     const currentParams = stateManager.getState().parameters || {};
     const linesDiffer = this.lineParams.some(
-      (name, i) => String(currentParams[name] ?? '') !== (card[i]?.braille ?? '')
+      (name, i) =>
+        String(currentParams[name] ?? '') !== (card[i]?.braille ?? '')
     );
     this.writeParams(updates, {
       skipIfFirstLayout: this.firstLayout && !linesDiffer,

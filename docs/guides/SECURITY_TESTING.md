@@ -2,7 +2,7 @@
 
 How to test the security fixes in the codebase and verify ongoing security.
 
-## Recent fixes (2026-01-27)
+## Fixes from 2026-01-27
 
 ### XSS in ZIP file tree
 
