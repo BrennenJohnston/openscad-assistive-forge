@@ -371,3 +371,170 @@ export const LANDMARK_DRESSINGS = new Map([
 export function dressingFor(id) {
   return LANDMARK_DRESSINGS.get(id) ?? null;
 }
+
+// ---------------------------------------------------------------------------
+// CW-78: node-keyed dressings, and the Needle's missing top
+// ---------------------------------------------------------------------------
+
+/**
+ * ★★ THE GREAT WHEEL IS A NODE, AND UNTIL NOW A NODE COULD NOT HAVE A BODY.
+ * CW-63's table is keyed by way id and reaches only buildings; the legend's
+ * number-two Seattle row (`n1809238334`, attraction=big_wheel) was never
+ * drawn at all - bushes, pier sheds, water. This second table is keyed by
+ * NODE id and gives it one. One row to delete, like every other dressing.
+ *
+ * Published dimensions used: 175 ft / 53.3 m tall, 42 gondolas, Pier 57
+ * (Wikipedia "Seattle Great Wheel"; the OSM node carries height=53 and
+ * wikidata Q7442108). ★ THE RIM DIAMETER HAS NO PRIMARY SOURCE - a 158 ft
+ * figure circulates unsourced (plan §3g) - so the rim is drawn from the
+ * HEIGHT and a stated ratio, and the ratio is a design choice this comment
+ * owns rather than a measurement.
+ */
+export const WHEEL_NODE_ID = 1809238334;
+
+export const GREAT_WHEEL = {
+  /** Cited: 175 ft over the pier deck. */
+  totalHeightM: 53.3,
+  /**
+   * DESIGN, not measurement: 0.458 of the height, chosen so the rim's low
+   * point clears the deck by about 4.5 m the way a boarding platform needs.
+   * (It happens to land within a metre of the unsourced 158 ft figure,
+   * which is reassuring and is not the justification.)
+   */
+  rimRadiusM: 24.4,
+  /**
+   * Drawn member widths. The real rim truss is thinner; a mark thinner than
+   * a character cell photographs as nothing (CW-63's diagrid members, the
+   * traveler's cane), so these are diagram widths at the medium's own
+   * resolution.
+   */
+  rimThickM: 1.4,
+  rimSegments: 24,
+  spokes: 8,
+  spokeThickM: 1.0,
+  hubRadiusM: 2.4,
+  /** The hub drum's length along the axle. */
+  hubWidthM: 3.4,
+  /** A-frame legs: ground half-spread in the wheel's own plane. */
+  legSpreadM: 13,
+  legThickM: 1.7,
+  /** The two leg pairs stand either side of the wheel plane by this. */
+  legOutM: 3.2,
+  /** The pier boarding platform under it. */
+  platformHalfAlongM: 16,
+  platformHalfAcrossM: 6,
+  platformThickM: 1.1,
+  /**
+   * Drawn gondolas: eight at the spoke ends, a diagram of the cited 42
+   * (42 boxes at this size would fuse into a second rim on the character
+   * grid). The CW-78 blocker rule stands: they ship only if they survive
+   * the 40 m photograph, and deleting them is one flag.
+   */
+  gondolas: 8,
+  gondolaM: 2.6,
+  /**
+   * MEASURED from the extract, not assumed: the wheel plane runs along the
+   * pier, and Pier 57's own shed (way 166910699, "Pier 57 - Miner's
+   * Landing") has its longest edge at bearing 90.6 degrees - the pier runs
+   * east-west, which is why the full circle photographs from the Alaskan
+   * Way pavement north or south of it.
+   */
+  planeBearingDeg: 90.6,
+};
+
+/** Hub (axle) height: the rim hangs from it and tops out at the cited total. */
+export function wheelHubHeightM() {
+  return GREAT_WHEEL.totalHeightM - GREAT_WHEEL.rimRadiusM;
+}
+
+/**
+ * One rim point in the wheel's own plane, as [along, z]: `along` runs along
+ * the plane bearing, z up from the deck. t=0 is the top of the rim.
+ */
+export function wheelRimPoint(t) {
+  const a = t * 2 * Math.PI;
+  return [
+    Math.sin(a) * GREAT_WHEEL.rimRadiusM,
+    wheelHubHeightM() + Math.cos(a) * GREAT_WHEEL.rimRadiusM,
+  ];
+}
+
+/**
+ * The node-keyed dressing table. Same law as the way-keyed one: authored
+ * from published dimensions, cited per entry, one row reversible.
+ */
+export const NODE_LANDMARK_DRESSINGS = new Map([
+  [
+    WHEEL_NODE_ID,
+    {
+      name: 'Seattle Great Wheel',
+      body: 'great-wheel',
+      source:
+        'published dimensions only (height 175 ft / 53.3 m, 42 gondolas, Pier 57; rim ratio a stated design choice - no primary source publishes the diameter)',
+    },
+  ],
+]);
+
+/** @param {number|undefined} id an OSM node id */
+export function nodeDressingFor(id) {
+  return NODE_LANDMARK_DRESSINGS.get(id) ?? null;
+}
+
+/**
+ * ★★ THE NEEDLE'S TOP, WHICH IS WHY IT READ AS A RADIO MAST. The thirteen
+ * `building:part` prisms carry the saucer stack at the width of the SHAFT -
+ * nothing in the data has the 138 ft / 42 m overhang, and the eyes-on session
+ * measured two foreground tree crowns each bigger on screen than the top
+ * house. CW-63's dressing drew the legs to the waist and stopped; the owner's
+ * silhouette sheet (plan §11.7) asks for the whole profile: legs to a narrow
+ * waist, a flare back out, then the STACKED saucer - disc, halo ring, top
+ * house - with the spire above.
+ *
+ * Published dimensions used (§3g): observation level 518-520 ft / 158-160 m;
+ * top house 138 ft / 42 m across; total 605 ft / 184.4 m to the tip. The halo
+ * ring's and top house's radii, and the flare's curve, are design choices
+ * from the published elevation, stated here.
+ */
+export const NEEDLE_TOP = {
+  /** The saucer disc: cited 42 m across at the cited observation level. */
+  discRadiusM: 21,
+  discBottomM: 158,
+  discTopM: 160.5,
+  /** The halo ring stacked above the disc (the icon's second, smaller disc). */
+  haloRadiusM: 12,
+  haloBottomM: 161.3,
+  haloTopM: 163.2,
+  /** The top house drum. */
+  houseRadiusM: 5.2,
+  houseBottomM: 163.2,
+  houseTopM: 166.5,
+  /** The spire, to the cited 605 ft total. Drawn width, cell-floor law:
+   * 1.3 m photographed as one marginal cell at the sheet's own 160-260 m
+   * distances and read as nothing; 2.0 m is the width that survives them. */
+  spireTopM: 184.4,
+  spireThickM: 2.0,
+  /** Where the upper flare meets the saucer's underside structure. */
+  supportTopRadiusM: 8.5,
+  supportTopM: 156,
+  /** The flare hugs the shaft and swings out late, like the published
+   * elevation; same box-segment construction as the legs. */
+  flareSegments: 6,
+  flareCurve: 1.7,
+};
+
+/**
+ * The centreline of one upper-flare arc from the waist to the saucer
+ * support, [x, y, z] relative to the tower centre. t=0 at the waist, 1 at
+ * the support.
+ */
+export function needleFlarePoint(bearingRad, t) {
+  const { waistRadiusM, waistHeightM } = NEEDLE_LEG;
+  const { supportTopRadiusM, supportTopM, flareCurve } = NEEDLE_TOP;
+  const radius =
+    waistRadiusM + (supportTopRadiusM - waistRadiusM) * Math.pow(t, flareCurve);
+  return [
+    Math.sin(bearingRad) * radius,
+    Math.cos(bearingRad) * radius,
+    waistHeightM + (supportTopM - waistHeightM) * t,
+  ];
+}

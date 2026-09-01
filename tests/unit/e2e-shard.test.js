@@ -33,7 +33,7 @@ describe('e2e shard planner (D-72)', () => {
     expect(files.every((f) => f.endsWith('.spec.js'))).toBe(true)
   })
 
-  for (const total of [2, 3]) {
+  for (const total of [2, 3, 4, 6]) {
     it(`runs every spec file exactly once across ${total} shards`, () => {
       const plan = planShards(files, MEASURED_SECONDS, total)
       const placed = plan.flat()
@@ -69,10 +69,17 @@ describe('e2e shard planner (D-72)', () => {
     // five times low on exactly the files this round grew. A model can be
     // right and still lie, if nobody re-measures what it is multiplying.
     //
-    // Chromium runs THREE shards since CW-62 (test.yml), which is why this
-    // plans for three. Twenty-five minutes leaves ten of margin on a
-    // thirty-five minute ceiling, which is what a starved runner eats.
-    for (const shard of planShards(files, MEASURED_SECONDS, 3)) {
+    // Chromium runs FOUR shards since CW-80 (test.yml): Round 8 grew the
+    // city suites ~35 heavy cases past the 08-27 model, both PR-R8C CI
+    // passes died on the 2100 s clock, and the re-measured model put three
+    // shards at 30.2 projected minutes against this guard's own bar - so
+    // the fourth shard the Chromium note has always promised is what
+    // happened. Twenty-five minutes leaves ten of margin on a thirty-five
+    // minute ceiling, which is what a starved runner eats.
+    // CW-83 aftercare: SIX shards - the close-head run proved the model's
+    // CI factor optimistic (four shards still hit the clock; the two-core
+    // runner does not parallelize software 3D). The bar stays at 25.
+    for (const shard of planShards(files, MEASURED_SECONDS, 6)) {
       const wallMin = projectMin(shard)
       expect(
         wallMin,
@@ -81,23 +88,33 @@ describe('e2e shard planner (D-72)', () => {
     }
   })
 
-  it('★ says out loud how little room the two-shard lanes have left', () => {
+  it('★ says out loud how little room the ceiling-bound lanes have left', () => {
     // Edge and Firefox still run two shards. Edge CANNOT be re-split without
     // the owner editing ruleset 12059827, because each Edge shard is its own
     // required context - so this does not demand the room Chromium has. What
     // it does is refuse to let the lane quietly cross the real ceiling, and
     // name the margin when it is asked.
+    // CW-83 (G3): the owner signed the ruleset edit and Edge runs THREE
+    // shards now, so the CW-80 stopgap (50) came back down as promised.
+    // Firefox still runs two shards but its lane has never approached the
+    // ceiling; the projection below covers the worst two-shard split so a
+    // regression in EITHER lane's shape still trips here.
     const CEILING_MIN = 35
-    // Each lane is booked for what IT runs (DP-19): Firefox leaves out
-    // wasm-smoke, and both leave out the drawing editor's own walk, because
-    // with nothing added they projected to 34.8 of these 35 minutes.
-    for (const project of ['msedge', 'firefox']) {
+    // Each lane is booked for what IT runs (DP-19) at the shard count it
+    // actually has: Edge three since the ruleset edit, Firefox two. Firefox
+    // leaves out wasm-smoke, and both leave out the drawing editor's own
+    // walk - that ignore was priced when both lanes ran two shards, and it
+    // is re-visited only from a green CI board, never from a projection.
+    for (const [project, laneShards] of [
+      ['msedge', 3],
+      ['firefox', 2],
+    ]) {
       const lane = filesForProject(files, project)
-      for (const shard of planShards(lane, MEASURED_SECONDS, 2)) {
+      for (const shard of planShards(lane, MEASURED_SECONDS, laneShards)) {
         const wallMin = projectMin(shard)
         expect(
           wallMin,
-          `a two-shard ${project} lane projects to ${wallMin.toFixed(1)} minutes, ` +
+          `a ${laneShards}-shard ${project} lane projects to ${wallMin.toFixed(1)} minutes, ` +
             `${(CEILING_MIN - wallMin).toFixed(1)} short of the ceiling`
         ).toBeLessThan(CEILING_MIN)
       }

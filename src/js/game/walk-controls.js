@@ -59,6 +59,9 @@ const MAX_STEP_DT_S = 0.1;
 // frame at 0.10-0.14 us, and each extra hop adds about 0.03 us, against a
 // 33 ms frame budget.
 const MAX_SUBSTEP_M = PLAYER_RADIUS_M / 2;
+// Below this a hop component is float dust, not movement (CW-81): a micron
+// per hop even at 30 fps is 30 um/s, four orders under anything visible.
+const MIN_HOP_M = 1e-6;
 
 /**
  * @param {{x: number, y: number, headingRad?: number, pitchRad?: number}} spawn
@@ -182,9 +185,17 @@ export function stepWalk(state, input, dtS, collision) {
   if (forward === 0 && strafe === 0) return { moved: false, turned, pitched };
 
   const walkSpeed = speedForLabel(input.speedLabel);
-  const speed = input.fast
-    ? Math.min(SPRINT_MAX_MPS, walkSpeed * SPRINT_MULTIPLIER)
-    : walkSpeed;
+  // CW-81: the acceleration ramp. `speedScale` (0..1) lets a caller ease the
+  // walker up to speed and back down instead of starting every step at the
+  // full 4.8 m/s from rest; absent, everything behaves exactly as before.
+  const speedScale = Number.isFinite(input.speedScale)
+    ? Math.min(1, Math.max(0, input.speedScale))
+    : 1;
+  const speed =
+    (input.fast
+      ? Math.min(SPRINT_MAX_MPS, walkSpeed * SPRINT_MULTIPLIER)
+      : walkSpeed) * speedScale;
+  if (speed <= 0) return { moved: false, turned, pitched };
   const sin = Math.sin(state.headingRad);
   const cos = Math.cos(state.headingRad);
   // Forward along the bearing; strafe 90° clockwise from it.
@@ -199,8 +210,16 @@ export function stepWalk(state, input, dtS, collision) {
   const hops = collision
     ? Math.max(1, Math.ceil(Math.hypot(dx, dy) / MAX_SUBSTEP_M))
     : 1;
-  const hopX = dx / hops;
-  const hopY = dy / hops;
+  let hopX = dx / hops;
+  let hopY = dy / hops;
+  // A near-cardinal bearing carries float dust in its cross component
+  // (Math.sin(Math.PI) is 1.2e-16, not 0), and dust is enough to arm the
+  // slide branches below: nose to a wall, the walker "slides" 1e-16 m per
+  // frame with moved: true, forever - standing still while claiming to
+  // walk, so auto-walk's blocked stop never fires. A micron per hop is
+  // nothing a player can perceive; a real glide moves millimetres.
+  if (Math.abs(hopX) < MIN_HOP_M) hopX = 0;
+  if (Math.abs(hopY) < MIN_HOP_M) hopY = 0;
 
   let moved = false;
   for (let i = 0; i < hops; i++) {
@@ -246,6 +265,112 @@ export const CURB_HEIGHT_M = 0.15;
  * speed - the same reasoning that fixed the collision hop in CW-48.
  */
 export const CURB_EASE_M = 0.5;
+
+/**
+ * CW-79: the ground's real height, from the extract's terrain block.
+ *
+ * Bilinear over the bake's 30 m DEM grid, expressed RELATIVE to the city's
+ * lowest sampled ground (the datum), so z = 0 stays "the lowest street" and
+ * every number in a log reads as metres of climb. Holes - points the DEM
+ * service had no answer for, kept as NaN by parseElevation on purpose - are
+ * filled once here by flooding outward from the answered cells, because a
+ * height query must never return NaN into camera math; the fill count is
+ * reported so a census can say how much ground is interpolation.
+ *
+ * Returns null when the extract carries no terrain (a v1 extract, every
+ * unit fixture): the city stays flat, which is the additive promise.
+ *
+ * @param {ReturnType<import('./city-data.js').parseElevation>} elevation
+ * @returns {{heightAt:(x:number,y:number)=>number, datumM:number,
+ *            spanM:number, filledHoles:number}|null}
+ */
+export function buildTerrain(elevation) {
+  if (!elevation) return null;
+  const { originX, originY, stepM, cols, rows, samples, minM, maxM } =
+    elevation;
+
+  const filled = Float32Array.from(samples);
+  let filledHoles = 0;
+  // Flood the holes from their answered neighbours, nearest first: a BFS
+  // ring by ring, so an unanswered corner takes the value of the closest
+  // real ground rather than an average across the map.
+  const queue = [];
+  for (let i = 0; i < filled.length; i++) {
+    if (!Number.isNaN(filled[i])) queue.push(i);
+  }
+  for (let head = 0; head < queue.length; head++) {
+    const i = queue[head];
+    const c = i % cols;
+    const r = (i - c) / cols;
+    for (const [dc, dr] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ]) {
+      const nc = c + dc;
+      const nr = r + dr;
+      if (nc < 0 || nr < 0 || nc >= cols || nr >= rows) continue;
+      const n = nr * cols + nc;
+      if (Number.isNaN(filled[n])) {
+        filled[n] = filled[i];
+        filledHoles++;
+        queue.push(n);
+      }
+    }
+  }
+
+  const at = (c, r) =>
+    filled[
+      Math.min(rows - 1, Math.max(0, r)) * cols +
+        Math.min(cols - 1, Math.max(0, c))
+    ];
+
+  return {
+    datumM: minM,
+    spanM: maxM - minM,
+    filledHoles,
+    heightAt(x, y) {
+      const u = (x - originX) / stepM;
+      const v = (y - originY) / stepM;
+      const c0 = Math.floor(u);
+      const r0 = Math.floor(v);
+      const fu = u - c0;
+      const fv = v - r0;
+      const h00 = at(c0, r0);
+      const h10 = at(c0 + 1, r0);
+      const h01 = at(c0, r0 + 1);
+      const h11 = at(c0 + 1, r0 + 1);
+      const h =
+        h00 * (1 - fu) * (1 - fv) +
+        h10 * fu * (1 - fv) +
+        h01 * (1 - fu) * fv +
+        h11 * fu * fv;
+      return h - minM;
+    },
+  };
+}
+
+/**
+ * CW-80: the grade under the walker's next stride, as a signed percent -
+ * positive uphill, negative downhill, null where the city has no terrain.
+ * Measured over probeM along the heading on the TERRAIN, never on the
+ * surface grid: the kerb cut is a step, not a slope, and a sentence that
+ * said "downhill 3 percent" at every kerb would be noise wearing words.
+ *
+ * @param {ReturnType<typeof buildTerrain>|null} terrain
+ * @param {number} x @param {number} y @param {number} headingRad
+ * @param {number} [probeM]
+ * @returns {number|null}
+ */
+export function gradePercent(terrain, x, y, headingRad, probeM = 6) {
+  if (!terrain) return null;
+  const ahead = terrain.heightAt(
+    x + Math.sin(headingRad) * probeM,
+    y + Math.cos(headingRad) * probeM
+  );
+  return ((ahead - terrain.heightAt(x, y)) / probeM) * 100;
+}
 
 /**
  * Rasterize the PAVEMENT into a grid, so the walker's eye knows what is
@@ -334,15 +459,41 @@ export function buildSurfaceGrid(model, options = {}) {
     stampAlong(road.points ?? [], road.widthM / 2, 0);
   }
 
+  // CW-79: the kerb cut rides ON the terrain. With no terrain block (a v1
+  // extract, every hand-built fixture) the city stays flat and this returns
+  // exactly what it always has.
+  const terrain =
+    options.terrain !== undefined
+      ? options.terrain
+      : buildTerrain(model.elevation);
+
   return {
     cols,
     rows,
     cellM,
+    terrain,
+    /**
+     * CW-79: whether (x, y) is PAVEMENT - the question heightAt used to
+     * answer with a bare zero before the ground had height. Every reader
+     * that asked 'heightAt === 0' meant THIS, and the terrain term would
+     * have silently broken each one.
+     */
+    isPavement(x, y) {
+      const cx = Math.floor((x - originX) / cellM);
+      const cy = Math.floor((y - originY) / cellM);
+      if (cx < 0 || cy < 0 || cx >= cols || cy >= rows) return false;
+      return cells[cy * cols + cx] === 1;
+    },
     heightAt(x, y) {
       const cx = Math.floor((x - originX) / cellM);
       const cy = Math.floor((y - originY) / cellM);
-      if (cx < 0 || cy < 0 || cx >= cols || cy >= rows) return 0;
-      return cells[cy * cols + cx] === 1 ? 0 : -CURB_HEIGHT_M;
+      const kerb =
+        cx < 0 || cy < 0 || cx >= cols || cy >= rows
+          ? 0
+          : cells[cy * cols + cx] === 1
+            ? 0
+            : -CURB_HEIGHT_M;
+      return (terrain ? terrain.heightAt(x, y) : 0) + kerb;
     },
   };
 }
@@ -364,10 +515,21 @@ const UNPAVED_FOR_SURFACE = new Set([
 ]);
 
 /**
+ * CW-95 (CW-Q82): ways that are WALKED, never driven - a transit platform,
+ * an indoor corridor, a road closed for rebuilding. Each used to fall
+ * through the width table into a five-metre ROADWAY ribbon, which put a
+ * carriageway on a light-rail platform and parked the bench-sitter law's
+ * "will not invent a person sitting on the tarmac" refusal on top of the
+ * platform benches. They are pavement-family now: walkable open ground.
+ */
+const WALKED_NOT_DRIVEN = new Set(['platform', 'corridor', 'construction']);
+
+/**
  * Whether a way IS pavement rather than a roadway with pavement beside it
  * (CW-50, CW-Q64). A separately-mapped pavement obviously is one; so is a
  * pedestrianised street, which is pavement end to end - cutting a roadway
- * down the middle of one would invent a road that is not there.
+ * down the middle of one would invent a road that is not there. CW-95 adds
+ * the walked-never-driven kinds above.
  *
  * The scene and this grid both read it, so the two cannot drift apart about
  * where the ground is: cross-file disagreement about a shared value is this
@@ -377,7 +539,230 @@ const UNPAVED_FOR_SURFACE = new Set([
  * @returns {boolean}
  */
 export function isPavementWay(road) {
-  return Boolean(road?.sidewalk) || road?.kind === 'pedestrian';
+  return (
+    Boolean(road?.sidewalk) ||
+    road?.kind === 'pedestrian' ||
+    WALKED_NOT_DRIVEN.has(road?.kind)
+  );
+}
+
+/**
+ * Whether a way is drawn as a ROADWAY - the ribbon a car drives on and a
+ * lamp post must not stand in (CW-75).
+ *
+ * It is the same test the surface grid above makes and the same one
+ * `city-scene.js` makes when it lays the road ribbons down, said once so the
+ * placement audit cannot disagree with the thing it audits.
+ *
+ * @param {{sidewalk?: boolean, kind?: string}} road
+ * @returns {boolean}
+ */
+export function isDrawnRoadway(road) {
+  return !isPavementWay(road) && !UNPAVED_FOR_SURFACE.has(road?.kind);
+}
+
+/** The four corners of one of these rectangles, in order. */
+function rectCorners(rect) {
+  const c = Math.cos(rect.rotationRad ?? 0);
+  const s = Math.sin(rect.rotationRad ?? 0);
+  const hl = rect.halfLengthM ?? 0;
+  const hw = rect.halfWidthM ?? 0;
+  const out = [];
+  for (const [u, v] of [
+    [hl, hw],
+    [hl, -hw],
+    [-hl, -hw],
+    [-hl, hw],
+  ]) {
+    out.push(rect.x + u * c - v * s, rect.y + u * s + v * c);
+  }
+  return out;
+}
+
+/**
+ * Whether two rotated rectangles overlap - separating axis, exact (CW-75).
+ *
+ * Touching is NOT overlapping: two cars parked nose to tail with their
+ * bumpers on the same line are legal, and the test says so, because the
+ * alternative is a floating-point coin toss on every kerb in the city.
+ *
+ * The one implementation. The placement streams use it to refuse a spot, and
+ * `scripts/census-city-walk.mjs` uses it to audit them - two copies of a
+ * geometry test is how a census comes to disagree with the build for a reason
+ * that is not a bug.
+ *
+ * @param {{x:number, y:number, halfLengthM:number, halfWidthM:number, rotationRad?:number}} a
+ * @param {{x:number, y:number, halfLengthM:number, halfWidthM:number, rotationRad?:number}} b
+ * @returns {boolean}
+ */
+export function rectsOverlap(a, b) {
+  const pa = rectCorners(a);
+  const pb = rectCorners(b);
+  for (const quad of [pa, pb]) {
+    for (let i = 0; i < 8; i += 2) {
+      const j = (i + 2) % 8;
+      const axX = -(quad[j + 1] - quad[i + 1]);
+      const axY = quad[j] - quad[i];
+      let aMin = Infinity;
+      let aMax = -Infinity;
+      let bMin = Infinity;
+      let bMax = -Infinity;
+      for (let k = 0; k < 8; k += 2) {
+        const p = pa[k] * axX + pa[k + 1] * axY;
+        if (p < aMin) aMin = p;
+        if (p > aMax) aMax = p;
+        const q = pb[k] * axX + pb[k + 1] * axY;
+        if (q < bMin) bMin = q;
+        if (q > bMax) bMax = q;
+      }
+      if (aMax <= bMin || bMax <= aMin) return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * How far outside a ribbon the index can still answer questions. A segment
+ * registers in every bucket its half-width PLUS this reaches, so a query is
+ * one bucket lookup and still exact.
+ */
+const ROADWAY_SLACK_M = 2;
+
+/**
+ * ★ THE ROAD-RIBBON INDEX (CW-75).
+ *
+ * Every placement stream in `buildStreetProps` used to know about exactly one
+ * road: its own. Infill trees are planted 1.2 m outside THEIR kerb and never
+ * asked whether that spot is in the middle of the street they are crossing,
+ * which is how 735 tree trunks came to stand inside Seattle roadways - a side
+ * street planting into the ribbon of the street it meets. Lamps ride the same
+ * law. A prop cannot be tested against every road by scanning every road, so
+ * the roads are bucketed once and every stream asks the same index.
+ *
+ * The index is pure geometry: no meshes, no model, no random stream. That is
+ * what lets `scripts/census-city-walk.mjs` audit placement with the code's own
+ * answer rather than a second implementation of it.
+ *
+ * @param {Array<{points: number[][], widthM: number, kind?: string, name?: string, sidewalk?: boolean}>} roads
+ * @param {{cellM?: number}} [options]
+ */
+export function buildRoadwayIndex(roads, options = {}) {
+  const cellM = options.cellM ?? 16;
+  /** @type {Map<string, number[]>} */
+  const buckets = new Map();
+  // Flat segment store: six numbers per segment, then the road it came from.
+  /** @type {number[]} */
+  const seg = [];
+  /** @type {Array<{kind?: string, name?: string, widthM: number}>} */
+  const owners = [];
+  let count = 0;
+
+  for (const road of roads ?? []) {
+    if (!isDrawnRoadway(road)) continue;
+    const pts = road?.points ?? [];
+    if (pts.length < 2) continue;
+    count++;
+    const halfW = (road.widthM ?? 0) / 2;
+    if (!(halfW > 0)) continue;
+    const owner = { kind: road.kind, name: road.name, widthM: road.widthM };
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const [x1, y1] = pts[i];
+      const [x2, y2] = pts[i + 1];
+      if (Math.hypot(x2 - x1, y2 - y1) < 1e-6) continue;
+      const index = owners.length;
+      owners.push(owner);
+      seg.push(x1, y1, x2, y2, halfW, 0);
+      const reach = halfW + ROADWAY_SLACK_M;
+      const cx0 = Math.floor((Math.min(x1, x2) - reach) / cellM);
+      const cx1 = Math.floor((Math.max(x1, x2) + reach) / cellM);
+      const cy0 = Math.floor((Math.min(y1, y2) - reach) / cellM);
+      const cy1 = Math.floor((Math.max(y1, y2) + reach) / cellM);
+      for (let gy = cy0; gy <= cy1; gy++) {
+        for (let gx = cx0; gx <= cx1; gx++) {
+          const k = gx + ',' + gy;
+          const list = buckets.get(k);
+          if (list) list.push(index);
+          else buckets.set(k, [index]);
+        }
+      }
+    }
+  }
+
+  return {
+    /** How many drawn roadway ways went in. */
+    count,
+    /** How many segments went in - the size the buckets index. */
+    segments: owners.length,
+    /**
+     * The roadway a point stands deepest inside, or null.
+     *
+     * `inside` is metres of ribbon between the point and the nearest kerb:
+     * positive means in the road. A NEGATIVE `marginM` asks the wider
+     * question "is this within |marginM| of a roadway", which is how a prop
+     * with a footprint asks whether its box - not just its centre - reaches
+     * the tarmac.
+     *
+     * @param {number} x
+     * @param {number} y
+     * @param {number} [marginM] report only hits deeper than this
+     * @returns {{kind?: string, name?: string, widthM: number, inside: number,
+     *            cx: number, cy: number, nx: number, ny: number}|null}
+     */
+    insideRoadway(x, y, marginM = 0) {
+      if (marginM < -ROADWAY_SLACK_M) {
+        throw new RangeError(
+          `insideRoadway margin ${marginM} reaches past the index's ` +
+            `${ROADWAY_SLACK_M} m slack`
+        );
+      }
+      const list = buckets.get(
+        Math.floor(x / cellM) + ',' + Math.floor(y / cellM)
+      );
+      if (!list) return null;
+      let best = null;
+      for (let k = 0; k < list.length; k++) {
+        const s = list[k] * 6;
+        const ax = seg[s];
+        const ay = seg[s + 1];
+        const dx = seg[s + 2] - ax;
+        const dy = seg[s + 3] - ay;
+        const halfW = seg[s + 4];
+        const l2 = dx * dx + dy * dy;
+        let t = l2 > 0 ? ((x - ax) * dx + (y - ay) * dy) / l2 : 0;
+        if (t < 0) t = 0;
+        else if (t > 1) t = 1;
+        const px = ax + dx * t;
+        const py = ay + dy * t;
+        const d = Math.hypot(x - px, y - py);
+        const inside = halfW - d;
+        if (best && inside <= best.inside) continue;
+        // Which way is out: from the centreline toward the point, or the
+        // segment's own normal when the point sits exactly on the line.
+        let nx = x - px;
+        let ny = y - py;
+        if (d > 1e-6) {
+          nx /= d;
+          ny /= d;
+        } else {
+          const len = Math.hypot(dx, dy) || 1;
+          nx = -dy / len;
+          ny = dx / len;
+        }
+        const owner = owners[list[k]];
+        best = {
+          kind: owner.kind,
+          name: owner.name,
+          widthM: owner.widthM,
+          inside,
+          cx: px,
+          cy: py,
+          nx,
+          ny,
+        };
+      }
+      return best && best.inside > marginM ? best : null;
+    },
+  };
 }
 
 /**
@@ -572,6 +957,10 @@ export function buildCollisionGrid(model, options = {}) {
     cols,
     rows,
     cellM,
+    // CW-87: the tour's A* needs cell centres in world metres, which needs
+    // the grid's origin - isBlocked alone cannot be inverted.
+    originX,
+    originY,
     isBlocked(x, y) {
       const cx = Math.floor((x - originX) / cellM);
       const cy = Math.floor((y - originY) / cellM);
@@ -706,11 +1095,52 @@ export function pointInRing(x, y, ring) {
  * Choose a spawn point: the road vertex nearest the extract center that is
  * not inside a building, falling back to a spiral probe around the center.
  *
+ * CW-78: an optional anchor moves the search - the spawn becomes the clear
+ * road vertex nearest the anchor among those within `withinM` of it (the
+ * registry's first row, so a city starts in sight of its icon). `minM`
+ * keeps a viewing distance: Seattle's nearest clear vertex to the Great
+ * Wheel is 18 m away ON the pier, where a 53 m wheel is legs filling the
+ * frame rather than a wheel - vertices nearer than minM are passed over
+ * while anything in the ring remains. If nothing within the ring is clear,
+ * the centre rule stands and the caller's record says so; a silent bad
+ * spawn is worse than an honest central one.
+ *
  * @param {ReturnType<import('./city-data.js').parseCityExtract>} model
  * @param {{isBlocked: (x:number, y:number) => boolean}} collision
+ * @param {{nearX?: number, nearY?: number, withinM?: number, minM?: number}} [anchor]
  * @returns {{x: number, y: number}}
  */
-export function findSpawn(model, collision) {
+export function findSpawn(model, collision, anchor) {
+  if (
+    anchor &&
+    Number.isFinite(anchor.nearX) &&
+    Number.isFinite(anchor.nearY)
+  ) {
+    const withinM = anchor.withinM ?? 200;
+    const minM = anchor.minM ?? 0;
+    let best = null;
+    let bestDist = Infinity;
+    let nearFallback = null;
+    let nearFallbackDist = Infinity;
+    for (const road of model.roads) {
+      for (const [x, y] of road.points) {
+        const dist = Math.hypot(x - anchor.nearX, y - anchor.nearY);
+        if (dist > withinM || isCircleBlocked(collision, x, y)) continue;
+        if (dist >= minM) {
+          if (dist < bestDist) {
+            best = { x, y };
+            bestDist = dist;
+          }
+        } else if (dist < nearFallbackDist) {
+          nearFallback = { x, y };
+          nearFallbackDist = dist;
+        }
+      }
+    }
+    if (best) return best;
+    if (nearFallback) return nearFallback;
+  }
+
   let best = null;
   let bestDist = Infinity;
   for (const road of model.roads) {
@@ -772,6 +1202,236 @@ export function findClearHeading(collision, x, y, options = {}) {
     }
   }
   return bestHeading;
+}
+
+/**
+ * CW-87 street-following: where auto-walk should steer when the way ahead
+ * closes. Probes a fan of bearings within 90 degrees either side of the
+ * current one for clear run (body circle, sampled every stepM out to
+ * lookM); the longest run wins, with a small straightness bias so the walk
+ * hugs its own direction instead of ping-ponging between near-equal
+ * corridors. Returns null when nothing in the fan clears minM - a true
+ * dead end, the one case left for auto-walk's blocked stop.
+ *
+ * @param {{isBlocked: (x:number, y:number) => boolean}} collision
+ * @param {number} x @param {number} y @param {number} headingRad
+ * @returns {number|null} the bearing to steer toward, or null
+ */
+export function steerHeading(collision, x, y, headingRad, options = {}) {
+  const lookM = options.lookM ?? 8;
+  const minM = options.minM ?? 2.2;
+  const stepM = options.stepM ?? 0.4;
+  let best = null;
+  let bestScore = -Infinity;
+  for (let deg = -90; deg <= 90; deg += 15) {
+    const h = headingRad + (deg * Math.PI) / 180;
+    const sin = Math.sin(h);
+    const cos = Math.cos(h);
+    let run = 0;
+    while (run < lookM) {
+      const next = run + stepM;
+      if (isCircleBlocked(collision, x + sin * next, y + cos * next)) break;
+      run = next;
+    }
+    if (run < minM) continue;
+    const score = run - Math.abs(deg) * 0.02;
+    if (score > bestScore) {
+      bestScore = score;
+      best = h;
+    }
+  }
+  return best;
+}
+
+/**
+ * Clear run along one bearing, body circle, sampled every stepM out to
+ * maxM - the "is the way ahead closing" probe street-following gates on,
+ * so it only steers when there is something to steer around and the
+ * player's own turning is never fought over open ground.
+ */
+export function clearRunAhead(collision, x, y, headingRad, maxM, stepM = 0.4) {
+  const sin = Math.sin(headingRad);
+  const cos = Math.cos(headingRad);
+  let run = 0;
+  while (run < maxM) {
+    const next = run + stepM;
+    if (isCircleBlocked(collision, x + sin * next, y + cos * next)) break;
+    run = next;
+  }
+  return run;
+}
+
+/**
+ * True when a walker's body can travel the straight segment without
+ * touching anything - the same circle stepWalk protects, sampled finely
+ * enough that no cell the body would cross is skipped.
+ */
+export function segmentClear(collision, x0, y0, x1, y1) {
+  const dist = Math.hypot(x1 - x0, y1 - y0);
+  const steps = Math.max(1, Math.ceil(dist / (PLAYER_RADIUS_M / 2)));
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    if (isCircleBlocked(collision, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * CW-87: a walkable route from one point to another over the collision
+ * grid - A* on cell centres with the walker's own body probe deciding
+ * walkability, diagonals allowed only when both flanking orthogonal cells
+ * are walkable (a disc cannot cut a corner stepWalk would refuse), then
+ * greedily straightened: each kept waypoint is the farthest path point the
+ * body can reach in a straight line, so the walker walks streets, not
+ * staircases.
+ *
+ * Returns world-space waypoints ending within goalRadiusM of `to`, or
+ * null when no route exists inside the expansion budget - the budget is
+ * what bounds a cross-city search in time, and a null is a sentence to the
+ * player, never a hang.
+ *
+ * @param {{cols:number, rows:number, cellM:number, originX:number,
+ *          originY:number, isBlocked:(x:number,y:number)=>boolean}} collision
+ * @param {{x:number, y:number}} from
+ * @param {{x:number, y:number}} to
+ * @returns {{x:number, y:number}[]|null}
+ */
+export function findRoute(collision, from, to, options = {}) {
+  if (!collision || !Number.isFinite(collision.originX)) return null;
+  const goalM = options.goalRadiusM ?? 1.4;
+  const budget = options.maxExpandedCells ?? 400000;
+  const { cols, rows, cellM, originX, originY } = collision;
+  const wxOf = (c) => originX + (c % cols) * cellM + cellM / 2;
+  const wyOf = (c) => originY + Math.floor(c / cols) * cellM + cellM / 2;
+  const cellOf = (x, y) => {
+    const cx = Math.floor((x - originX) / cellM);
+    const cy = Math.floor((y - originY) / cellM);
+    if (cx < 0 || cy < 0 || cx >= cols || cy >= rows) return -1;
+    return cy * cols + cx;
+  };
+  const walkable = (c) =>
+    c >= 0 && !isCircleBlocked(collision, wxOf(c), wyOf(c));
+
+  // The walker may stand pressed against something (its own cell centre
+  // blocked for the body probe): start from the nearest walkable centre.
+  let start = -1;
+  outer: for (let ring = 0; ring <= 3; ring++) {
+    for (let dy = -ring; dy <= ring; dy++) {
+      for (let dx = -ring; dx <= ring; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== ring) continue;
+        const c = cellOf(from.x + dx * cellM, from.y + dy * cellM);
+        if (walkable(c)) {
+          start = c;
+          break outer;
+        }
+      }
+    }
+  }
+  if (start < 0) return null;
+
+  const g = new Map();
+  const cameFrom = new Map();
+  const heur = (c) => Math.hypot(wxOf(c) - to.x, wyOf(c) - to.y);
+  // Binary heap of [f, cell].
+  const heap = [[heur(start), start]];
+  const push = (entry) => {
+    heap.push(entry);
+    let i = heap.length - 1;
+    while (i > 0) {
+      const p = (i - 1) >> 1;
+      if (heap[p][0] <= heap[i][0]) break;
+      [heap[p], heap[i]] = [heap[i], heap[p]];
+      i = p;
+    }
+  };
+  const pop = () => {
+    const top = heap[0];
+    const last = heap.pop();
+    if (heap.length) {
+      heap[0] = last;
+      let i = 0;
+      for (;;) {
+        const l = i * 2 + 1;
+        const r = l + 1;
+        let m = i;
+        if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
+        if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
+        if (m === i) break;
+        [heap[m], heap[i]] = [heap[i], heap[m]];
+        i = m;
+      }
+    }
+    return top;
+  };
+  g.set(start, 0);
+  const closed = new Set();
+  let goal = -1;
+  let expanded = 0;
+  while (heap.length) {
+    const [, current] = pop();
+    if (closed.has(current)) continue;
+    closed.add(current);
+    if (++expanded > budget) return null;
+    if (Math.hypot(wxOf(current) - to.x, wyOf(current) - to.y) <= goalM) {
+      goal = current;
+      break;
+    }
+    const cx = current % cols;
+    const cy = Math.floor(current / cols);
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        const nx = cx + dx;
+        const ny = cy + dy;
+        if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+        const n = ny * cols + nx;
+        if (closed.has(n) || !walkable(n)) continue;
+        if (dx !== 0 && dy !== 0) {
+          if (!walkable(cy * cols + nx) || !walkable(ny * cols + cx)) continue;
+        }
+        const step = dx !== 0 && dy !== 0 ? cellM * Math.SQRT2 : cellM;
+        const tentative = g.get(current) + step;
+        if (tentative < (g.get(n) ?? Infinity)) {
+          g.set(n, tentative);
+          cameFrom.set(n, current);
+          push([tentative + heur(n), n]);
+        }
+      }
+    }
+  }
+  if (goal < 0) return null;
+
+  const cells = [goal];
+  while (cells[cells.length - 1] !== start) {
+    cells.push(cameFrom.get(cells[cells.length - 1]));
+  }
+  cells.reverse();
+  const points = cells.map((c) => ({ x: wxOf(c), y: wyOf(c) }));
+
+  const route = [points[0]];
+  let at = 0;
+  while (at < points.length - 1) {
+    let far = at + 1;
+    for (let j = points.length - 1; j > at + 1; j--) {
+      if (
+        segmentClear(
+          collision,
+          points[at].x,
+          points[at].y,
+          points[j].x,
+          points[j].y
+        )
+      ) {
+        far = j;
+        break;
+      }
+    }
+    route.push(points[far]);
+    at = far;
+  }
+  return route;
 }
 
 /**
@@ -1039,6 +1699,28 @@ export const CHAR_SCALE_STEP = 0.1;
 export const CHAR_SCALE_DEFAULT = 0.5;
 
 /**
+ * CW-72 (CW-Q75, signed by the owner at G1): THE ONE DEFAULT CHARACTER SIZE.
+ *
+ * CW-42 landed every machine on its own calibrated size, so two players saw
+ * two different games and no picture either of them described was the picture
+ * the other had. This is the size everyone starts at, chosen from the bench
+ * rather than from a preference: 45-second scripted walks in heavy rain on an
+ * Intel Iris Xe, the owner's signed hardware target.
+ *
+ *   size   full speed   four times slow (Seattle / Denver)
+ *   10%      59.3 fps       29.8  -           fails the bar
+ *   30%      52.9-59.8      41.6 / 43.6       the smallest that holds
+ *   40%      -              -    / 43.5       holds
+ *   50%      59.9           41.6 / -          holds
+ *
+ * 10% and 20% are the SAME 2x4 pixel cell (the three-pixel font floor), so the
+ * ladder is really 10 / 30 / 40 / 50, and 30 is the smallest rung that clears
+ * thirty frames a second on a slow machine in BOTH the light city and the
+ * heavy one.
+ */
+export const CITY_DEFAULT_CHAR_SCALE = 0.3;
+
+/**
  * Clamp a character scale into the game's range and snap it onto the
  * 10-point step grid, so every announced value is a whole ten percent.
  *
@@ -1068,31 +1750,43 @@ export function clampCharScale(scale, floorScale = null) {
 }
 
 /**
- * Decide the character scale a session opens at (CW-Q10, amended CW-Q39).
+ * Decide the character scale a session opens at (CW-Q10, amended CW-Q39,
+ * rewritten CW-72 for CW-Q75).
  *
- * Order: the game's own saved value (the manual choice — it sticks, even
- * below today's floor), then the machine's stored calibrated default, then
- * the shared Alt View preference clamped into the game's range, then the
- * default. The calibrated default outranks the Alt View courtesy seed
- * because fresh calibration would re-apply over it moments after entry
- * anyway — landing there spares the player a visible jump.
+ * ONE DEFAULT FOR EVERYONE. CW-42 seeded from the machine's own calibrated
+ * landing and, failing that, from the main app's Alt View slider - so two
+ * players, and even one player on two machines, opened two different games.
+ * There are now two inputs and one of them is a floor:
+ *
+ *   1. The player's own saved size. Their choice, and it sticks.
+ *   2. The floor this machine measured for itself, which SEEDS a player who
+ *      has never chosen. It does not clamp one who has.
+ *
+ * The shared Alt View preference no longer seeds the game at all: a slider in
+ * the main app deciding how coarse the city looks is exactly the second size
+ * this release exists to remove.
+ *
+ * CW-88 (CW-Q87): the floor used to raise a saved size up to itself, and the
+ * owner reversed that half of CW-Q68 - keep 30 per cent as the default, and
+ * let a player who wants to adjust go as small as 10 again. Three comments in
+ * this codebase already described the behaviour restored here, including
+ * `clampCharScale`'s own docblock above ("a stored manual choice below
+ * today's floor is grandfathered on seed, never clamped up") and two in the
+ * controller; CW-72's `Math.max` is what diverged from them. The DEFAULT half
+ * of CW-Q68 stands: 30 per cent for anybody with no saved choice, raised by
+ * the calibration.
  *
  * @param {string|null|undefined} savedGame - the game's own persisted value
- * @param {string|null|undefined} savedAltView - the shared Alt View preference
- * @param {number|null} [calibratedDefault] - decoded stored calibration
+ * @param {number|null} [floorScale] - the decoded stored floor, if any
  * @returns {number}
  */
-export function seedCharScale(
-  savedGame,
-  savedAltView,
-  calibratedDefault = null
-) {
+export function seedCharScale(savedGame, floorScale = null) {
   const game = parseFloat(savedGame ?? '');
+  // A choice they made reaches CHAR_SCALE_MIN, and passing no floor is what
+  // says so: clampCharScale bounds below at CHAR_SCALE_MIN when it has none.
   if (Number.isFinite(game)) return clampCharScale(game);
-  if (Number.isFinite(calibratedDefault)) {
-    return clampCharScale(calibratedDefault);
-  }
-  const altView = parseFloat(savedAltView ?? '');
-  if (Number.isFinite(altView)) return clampCharScale(altView);
-  return CHAR_SCALE_DEFAULT;
+  const floor = Number.isFinite(floorScale)
+    ? Math.max(floorScale, CITY_DEFAULT_CHAR_SCALE)
+    : CITY_DEFAULT_CHAR_SCALE;
+  return clampCharScale(floor);
 }

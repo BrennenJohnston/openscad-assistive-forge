@@ -475,19 +475,20 @@ test.describe('ASCII City Walk — map navigation and walking speed (CW-9)', () 
     await page.keyboard.press('KeyM')
     await expect(page.locator('#cityWalkHudStatus')).toContainText('map view')
 
-    // Minus over the map changes SIZE now, and leaves the zoom alone.
+    // Minus over the map changes SIZE now, and leaves the zoom alone. One
+    // step down from the CW-72 default of 30%.
     const zoomBefore = await zoomOf()
     await page.keyboard.press('Minus')
     await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
-      /Character size 40 percent/
+      /Character size 20 percent/
     )
-    expect(await scaleOf()).toBeCloseTo(0.4, 5)
+    expect(await scaleOf()).toBeCloseTo(0.2, 5)
     expect(await zoomOf()).toBeCloseTo(zoomBefore, 5)
 
     // Equals brings it back, still without touching the zoom.
     await page.keyboard.press('Equal')
     await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
-      /Character size 50 percent/
+      /Character size 30 percent/
     )
     expect(await zoomOf()).toBeCloseTo(zoomBefore, 5)
 
@@ -531,9 +532,9 @@ test.describe('ASCII City Walk — map navigation and walking speed (CW-9)', () 
     )
     await page.keyboard.press('Minus')
     await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
-      /Character size 40 percent/
+      /Character size 20 percent/
     )
-    expect(await scaleOf()).toBeCloseTo(0.4, 5)
+    expect(await scaleOf()).toBeCloseTo(0.2, 5)
   })
 
   test('walking speed adjusts, announces, and persists across sessions', async ({
@@ -606,11 +607,21 @@ test.describe('ASCII City Walk — the view cuts, it does not cross-fade (D-81)'
   test('switching between map and street leaves no ghost of the other', async ({
     page,
   }) => {
-    test.setTimeout(120_000)
+    // CW-97 batch 3: entry plus several screenshot comparisons at CI
+    // software's seconds-per-frame pace outgrew 120 s (the last capture
+    // died with 4.3 s of test left). The comparisons decide; the budget
+    // follows the pace.
+    test.setTimeout(300_000)
     await launchGame(page)
     await enterCity(page)
     await page.waitForTimeout(1500)
     await page.locator('#cityWalkViewport').click({ position: { x: 5, y: 5 } })
+    // CW-81: that focus click parks the pointer at the viewport's top-left
+    // corner, which hover-look reads as a full-rate turn - the street then
+    // pans forever and immediate-vs-settled measures scenery, not ghosting
+    // (25.73 levels, deterministic). Park the pointer off the viewport so
+    // the camera holds still; the ghost this test guards is unaffected.
+    await page.mouse.move(0, 0)
 
     /** Mean absolute difference in level between two PNG buffers, 0-255. */
     const ghost = (a, b) =>
@@ -694,16 +705,18 @@ test.describe('ASCII City Walk — character size (CW-12)', () => {
     await launchGame(page)
     await enterCity(page)
 
-    // Opens at the game's own 50% default with nothing saved.
-    expect(await scaleOf(page)).toBeCloseTo(0.5, 5)
+    // Opens at the ONE default of 30% with nothing saved (CW-72). The
+    // default is where everybody STARTS; the range a player may choose from
+    // is unchanged, and still reaches the 10% end.
+    expect(await scaleOf(page)).toBeCloseTo(0.3, 5)
 
     await page.keyboard.press('Equal')
     await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
-      /Character size 60 percent/
+      /Character size 40 percent/
     )
 
-    // Down to the floor: 60 → 10 is five steps.
-    for (let i = 0; i < 5; i++) await page.keyboard.press('Minus')
+    // Down to the floor: 40 → 10 is three steps.
+    for (let i = 0; i < 3; i++) await page.keyboard.press('Minus')
     await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
       /Character size 10 percent/
     )
@@ -745,17 +758,19 @@ test.describe('ASCII City Walk — character size (CW-12)', () => {
     expect(await scaleOf(page)).toBeCloseTo(1, 5)
   })
 
-  test('a saved Alt View preference seeds the game, snapped into range', async ({
+  test('★★ the main app Alt View preference no longer seeds the game (CW-72)', async ({
     page,
   }) => {
-    // 2.5 is a legal preview-slider value and far outside the game's range;
-    // it must arrive as the game's 100% ceiling, not as 250%.
+    // It used to: a preview-slider value arrived as the game's opening size,
+    // snapped into range. That is a second size decided somewhere else, which
+    // is exactly what CW-72's ONE default exists to remove. 2.5 is a legal
+    // slider value; the game must ignore it entirely and open at 30%.
     await page.addInitScript(() => {
       localStorage.setItem('openscad-forge-hfm-font-scale', '2.5')
     })
     await launchGame(page)
     await enterCity(page)
-    expect(await scaleOf(page)).toBeCloseTo(1, 5)
+    expect(await scaleOf(page)).toBeCloseTo(0.3, 5)
   })
 
   test('the help panel states the range it actually offers', async ({
@@ -861,7 +876,9 @@ test.describe('ASCII City Walk — looking around (CW-13)', () => {
     try {
       await expect
         .poll(async () => Math.round((await gaze(page)).pitch / DEG), {
-          timeout: 30000,
+          // CI software pitches at ~1.6 deg/s (measured: 48 of the 60
+          // landed inside the old 30 s) - the clamp still decides.
+          timeout: 120000,
           intervals: [200],
         })
         .toBe(60)
@@ -900,8 +917,18 @@ test.describe('ASCII City Walk — looking around (CW-13)', () => {
   test('a mouse drag turns and tilts; a plain click does neither', async ({
     page,
   }) => {
+    // CW-81: dragging is the second of three look modes now (hover-look is
+    // the default), so this case opts into DRAG explicitly and keeps
+    // guarding the 0.25 deg/px contract. Shortened from 20 mouse steps to 8
+    // (§6a: the 20-step version hung against the 60 s CI limit).
+    await page.addInitScript(() =>
+      localStorage.setItem('openscad-forge-city-walk-look', 'drag')
+    )
     await launchGame(page)
     await enterCity(page)
+    expect(
+      await page.evaluate(() => window.__cityWalkGame.lookMode)
+    ).toBe('drag')
 
     const before = await gaze(page)
 
@@ -918,7 +945,7 @@ test.describe('ASCII City Walk — looking around (CW-13)', () => {
     // clearest street rather than a fixed north.
     const TAU_DEG = 360
     const startDeg = Math.round(before.heading / DEG)
-    await dragViewport(page, 200, -100)
+    await dragViewport(page, 200, -100, 8)
     await expect
       .poll(async () =>
         (Math.round((await gaze(page)).heading / DEG) - startDeg + TAU_DEG) %
@@ -936,12 +963,18 @@ test.describe('ASCII City Walk — looking around (CW-13)', () => {
     // Positive control first: without proof the same press WORKS in street
     // view, "the map ignores it" would pass on a build that has no pitch at
     // all - which is exactly what the release base is.
+    //
+    // CW-97: hold until the GAME's own pitch answers, not for a wall-clock
+    // 700 ms. Look rates integrate per FRAME with dt clamped, so on a
+    // frame-starved fresh entry (the first seconds after the city builds -
+    // heavier since the crown clusters) a fixed wall-time hold delivers a
+    // fraction of the turn. The claim is that R pitches; the clock was
+    // only ever the measure.
     await page.keyboard.down('KeyR')
-    await page.waitForTimeout(700)
-    await page.keyboard.up('KeyR')
     await expect
-      .poll(async () => (await gaze(page)).pitch > 5 * DEG)
+      .poll(async () => (await gaze(page)).pitch > 5 * DEG, { timeout: 15000 })
       .toBe(true)
+    await page.keyboard.up('KeyR')
     await page.keyboard.press('KeyV')
     expect((await gaze(page)).pitch).toBe(0)
 
@@ -1005,10 +1038,21 @@ test.describe('ASCII City Walk — looking around (CW-13)', () => {
     await expect(page.locator('#cityWalkHelpPanel')).toContainText(
       'V: level the view'
     )
-    // CW-59: the mouse drags the MAP now as well, so the line that taught
-    // it as street-only was describing half the feature.
+    // CW-96: the default is DRAG again (the owner's post-round call), so
+    // the help teaches the drag first - the full original line - and the
+    // Mouse look button's options ride their own line.
     await expect(page.locator('#cityWalkHelpPanel')).toContainText(
       'Drag with the mouse: look around in street view, move the map in map view'
+    )
+    await expect(page.locator('#cityWalkHelpPanel')).toContainText(
+      'The Mouse look button can make the view follow the cursor'
+    )
+    await expect(page.locator('#cityWalkHelpPanel')).toContainText(
+      'N: auto-walk forward, following the street, until something stops you'
+    )
+    // CW-87: and the tour's line beside it.
+    await expect(page.locator('#cityWalkHelpPanel')).toContainText(
+      'I: walk to the selected landmark, turn by turn'
     )
     // ★ AND THE MAP LINE TEACHES W A S D, which it always should have. Those
     // keys have panned the map since the map existed - the same actions the
@@ -1074,6 +1118,147 @@ test.describe('ASCII City Walk — landmarks (CW-10)', () => {
   })
 })
 
+test.describe('ASCII City Walk — the curated legend and the waypoints (CW-78)', () => {
+  test('★★ the legend is the curated seven, and Seattle spawns facing the Wheel', async ({
+    page,
+  }) => {
+    await launchGame(page)
+    await enterCity(page)
+
+    const state = await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const wheel = g.landmarks[0]
+      const dx = wheel.x - g.walkState.x
+      const dy = wheel.y - g.walkState.y
+      const facing = Math.atan2(dx, dy)
+      let turn = facing - g.walkState.headingRad
+      while (turn > Math.PI) turn -= 2 * Math.PI
+      while (turn < -Math.PI) turn += 2 * Math.PI
+      return {
+        names: g.landmarks.map((l) => l.name),
+        wheelDistM: Math.hypot(dx, dy),
+        turnDeg: (Math.abs(turn) * 180) / Math.PI,
+        waypoints: g.waypointSpots.map((s) => s.placement),
+      }
+    })
+
+    // The seven, in TABLE order - the scorer put a Hyatt third and the
+    // Needle eleventh; the registry leads with the two icons.
+    expect(state.names).toEqual([
+      'Seattle Great Wheel',
+      'Space Needle',
+      'Seattle Central Library',
+      'Smith Tower',
+      'Public Market Clock',
+      'Paramount Theatre',
+      'Arctic Building',
+    ])
+    // The spawn rule: within 200 m of the Wheel, facing it.
+    expect(state.wheelDistM).toBeLessThan(200)
+    expect(state.turnDeg).toBeLessThan(10)
+    // And every landmark got its street-face mark, on pavement.
+    expect(state.waypoints).toEqual(Array(7).fill('pavement'))
+
+    await page.keyboard.press('KeyM')
+    const items = page.locator('#cityWalkLegend li')
+    await expect(items).toHaveCount(7)
+    await expect(items.first()).toContainText('Seattle Great Wheel')
+  })
+
+  test('★★ walking into a waypoint announces it and ticks the legend (T7)', async ({
+    page,
+  }) => {
+    // CI renders in software and rides the dt clamp: below ~10 fps the walk
+    // covers a FRACTION of real time, so the 8-14 m approach that takes two
+    // seconds on a real GPU can take twenty-plus there. The first CI run
+    // timed out at 15 s with the touch announcement arriving just after -
+    // the retry's failure snapshot caught "Waypoint reached" already on the
+    // live region. The window is sized for the slowest walker, not the
+    // local one.
+    test.setTimeout(120000)
+    await launchGame(page)
+    await enterCity(page)
+
+    // Stand a few metres street-side of the Wheel's waypoint, facing it,
+    // then WALK the rest - the touch must come from the real collision
+    // walk pressing against the plinth, not from a poked flag.
+    const posed = await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const spot = g.waypointSpots[0]
+      for (const d of [8, 10, 12, 14]) {
+        const x = spot.x + Math.sin(spot.facingRad) * d
+        const y = spot.y + Math.cos(spot.facingRad) * d
+        if (!g.collision.isBlocked(x, y)) {
+          const st = g.walkState
+          st.x = x
+          st.y = y
+          st.headingRad = Math.atan2(spot.x - x, spot.y - y)
+          return { name: spot.name, d }
+        }
+      }
+      return null
+    })
+    expect(posed?.name).toBe('Seattle Great Wheel')
+
+    // The whole approach happens with the live region under watch (T7):
+    // the walk is real keys, and the sentence must arrive by itself.
+    //
+    // CW-97: watched by a MutationObserver ACCUMULATOR (the teleport
+    // suite's pattern), not by polling the current text. The arrival
+    // sentence is TRANSIENT now - CW-80's slope sentences replace it
+    // within seconds when the walker presses on past the plinth up a
+    // grade - so a DOM poll can race it and lose while a screen reader,
+    // which hears every change, does not. The observer is armed BEFORE
+    // the walk so nothing can slip between.
+    await page.evaluate(() => {
+      window.__t7Heard = []
+      const node = document.querySelector('#cityWalkAnnouncer')
+      new MutationObserver(() => {
+        const t = node.textContent ?? ''
+        if (t) window.__t7Heard.push(t)
+      }).observe(node, {
+        childList: true,
+        characterData: true,
+        subtree: true,
+      })
+    })
+    await page.keyboard.down('KeyW')
+    try {
+      await expect
+        .poll(
+          () =>
+            page.evaluate(() =>
+              (window.__t7Heard ?? []).some((t) =>
+                t.includes('Waypoint reached: Seattle Great Wheel.')
+              )
+            ),
+          // The 8-14 m approach at CI software's ~0.23 m/s sat exactly at
+          // the old 60 s; the observer still decides.
+          { timeout: 180000 }
+        )
+        .toBe(true)
+    } finally {
+      await page.keyboard.up('KeyW')
+    }
+
+    const touched = await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      return {
+        visited: [...g.visited],
+        touching: g.touchedWaypoint,
+      }
+    })
+    expect(touched.visited).toContain('Seattle Great Wheel')
+    expect(touched.touching).toBe('Seattle Great Wheel')
+
+    // The legend agrees - the tick and its screen-reader word.
+    await page.keyboard.press('KeyM')
+    const row = page.locator('#cityWalkLegend li').first()
+    await expect(row).toContainText('✓')
+    await expect(row).toContainText('Seattle Great Wheel')
+  })
+})
+
 test.describe('ASCII City Walk — high contrast (CW-6)', () => {
   test('launches and plays under high contrast with the palette active', async ({
     page,
@@ -1098,11 +1283,11 @@ test.describe('ASCII City Walk — high contrast (CW-6)', () => {
     )
     expect(paletteOn).toBeGreaterThanOrEqual(4)
 
-    // …character size keys still work. The game opens at its own 50%
-    // default now (CW-12), so one step up is 60, not 110.
+    // …character size keys still work. The game opens at the ONE default of
+    // 30% (CW-72), so one step up is 40.
     await page.keyboard.press('Equal')
     await expect(page.locator('#cityWalkAnnouncer')).toHaveText(
-      /Character size 60 percent/
+      /Character size 40 percent/
     )
 
     // …and walking still walks. Exact label, not substring (see
@@ -2308,5 +2493,332 @@ test.describe('ASCII City Walk — find the traveler (CW-65, CW-Q60)', () => {
       .include('#cityWalkLayer')
       .analyze()
     expectOnlyAllowedViolations(results)
+  })
+})
+
+test.describe('ASCII City Walk — the whole-map draw distance (CW-82)', () => {
+  test('★★ the far skyline puts real ink where the near mesh ends', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await launchGame(page)
+    await enterCity(page)
+
+    // The waterfront vantage from the release record: open foreground,
+    // First Hill and downtown standing well past the 260 m boundary.
+    await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const st = g.walkState
+      st.x = -157
+      st.y = -629
+      st.headingRad = Math.atan2(900 - st.x, -100 - st.y)
+      st.pitchRad = (6 * Math.PI) / 180
+      st.groundZ = g.surface ? g.surface.heightAt(st.x, st.y) : 0
+      const eyeZ = 1.7 + (st.groundZ ?? 0)
+      g.fpCamera.position.set(st.x, st.y, eyeZ)
+      g.fpCamera.lookAt(
+        st.x + Math.sin(st.headingRad),
+        st.y + Math.cos(st.headingRad),
+        eyeZ + Math.tan(st.pitchRad)
+      )
+      g.altView.invalidate()
+    })
+    await page.waitForTimeout(1500)
+
+    // Same-code control (the round's own law for pixel comparisons): the
+    // ONLY difference between the two frames is the far mesh.
+    await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      g.scene.traverse((o) => {
+        if (o.name === 'buildings-far') o.visible = false
+      })
+      g.altView.invalidate()
+    })
+    await page.waitForTimeout(1200)
+    const off = await page.locator('#cityWalkViewport').screenshot()
+    await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      g.scene.traverse((o) => {
+        if (o.name === 'buildings-far') o.visible = true
+      })
+      g.altView.invalidate()
+    })
+    await page.waitForTimeout(1200)
+    const on = await page.locator('#cityWalkViewport').screenshot()
+
+    const gained = await page.evaluate(
+      async ([a, b]) => {
+        const load = async (u) => {
+          const i = new Image()
+          i.src = u
+          await i.decode()
+          const c = document.createElement('canvas')
+          c.width = i.width
+          c.height = i.height
+          c.getContext('2d').drawImage(i, 0, 0)
+          return c.getContext('2d').getImageData(0, 0, c.width, c.height).data
+        }
+        const [p, q] = [await load(a), await load(b)]
+        // Count pixels that were black without the far mesh and lit with it
+        // - ink the skyline ADDED, not ink that moved.
+        let lit = 0
+        for (let i = 0; i < p.length; i += 4) {
+          const offMax = Math.max(p[i], p[i + 1], p[i + 2])
+          const onMax = Math.max(q[i], q[i + 1], q[i + 2])
+          if (offMax < 8 && onMax > 24) lit++
+        }
+        return lit
+      },
+      [
+        'data:image/png;base64,' + off.toString('base64'),
+        'data:image/png;base64,' + on.toString('base64'),
+      ]
+    )
+    // Measured at this pose: the far towers light tens of thousands of
+    // pixels. The bar is a SHARE-shaped floor well under that but far
+    // above noise (a whole character cell is ~18 px at the default size).
+    expect(gained).toBeGreaterThan(2000)
+  })
+})
+
+test.describe('ASCII City Walk — the ground has height (CW-79)', () => {
+  test('★★ walking inland from the waterfront CLIMBS, and the eye rides the ground', async ({
+    page,
+  }) => {
+    test.setTimeout(180000)
+    await launchGame(page)
+    await enterCity(page)
+
+    // The Seattle spawn is on the waterfront (CW-78); everything east goes
+    // up. Face up the grade and hold W - the walker's groundZ and the
+    // camera must rise TOGETHER, smoothly, by metres.
+    const start = await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const st = g.walkState
+      st.x = -120
+      st.y = -580
+      st.headingRad = (78 * Math.PI) / 180
+      g.lookTarget.headingRad = st.headingRad
+      st.groundZ = g.surface.heightAt(st.x, st.y)
+      return { groundZ: st.groundZ }
+    })
+    await page.keyboard.down('KeyW')
+    // Sample as it walks: the climb must be continuous - no single frame
+    // may step the eye more than the kerb-ease law allows.
+    //
+    // CW-97: the profile ends at EITHER 600 frames OR four metres of
+    // proven climb. A software renderer's frames are seconds apart - 600
+    // of them outlive the whole test - while its dt-clamped strides
+    // climb whole decimetres per frame, so the gain arrives in far fewer
+    // samples there. Every sampled pair still answers the smoothness
+    // law; a walker that never climbs still runs the full 600 and fails
+    // the gain honestly.
+    const profile = await page.evaluate(
+      (z0) =>
+        new Promise((resolve) => {
+          const g = window.__cityWalkGame
+          const zs = []
+          const tick = () => {
+            zs.push(g.walkState.groundZ)
+            if (zs.length >= 600 || zs[zs.length - 1] - z0 > 4)
+              return resolve(zs)
+            requestAnimationFrame(tick)
+          }
+          requestAnimationFrame(tick)
+        }),
+      start.groundZ
+    )
+    await page.keyboard.up('KeyW')
+
+    const gained = profile[profile.length - 1] - start.groundZ
+    expect(gained).toBeGreaterThan(3)
+    let worstStep = 0
+    for (let i = 1; i < profile.length; i++) {
+      worstStep = Math.max(worstStep, Math.abs(profile[i] - profile[i - 1]))
+    }
+    // The ease law: ground covered per frame at sprintless walk is ~0.16 m,
+    // and easeGroundZ closes at most CURB_HEIGHT_M per CURB_EASE_M of
+    // travel... a hill's own grade is gentler than a kerb, so half a kerb
+    // per frame is generous headroom against a teleporting eye.
+    expect(worstStep).toBeLessThan(0.15)
+
+    const eye = await page.evaluate(() => ({
+      camZ: window.__cityWalkGame.fpCamera.position.z,
+      groundZ: window.__cityWalkGame.walkState.groundZ,
+    }))
+    expect(eye.camZ).toBeCloseTo(eye.groundZ + 1.7, 1)
+  })
+
+  test('★★ the hills census: a span of real metres, skirts where slopes are, holes only outside the circle', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await launchGame(page)
+    await enterCity(page)
+
+    const census = await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      return {
+        spanM: g.surface.terrain.spanM,
+        holes: g.surface.terrain.filledHoles,
+        skirts: g.city3d.stats.skirtsAdded,
+        waterfront: g.surface.heightAt(-157, -629),
+        firstHillWay: g.surface.heightAt(260, -480),
+        center: g.surface.heightAt(-698, 880),
+      }
+    })
+    // Seattle's bake spans ~105 m of relief; the shoreline sits within a
+    // couple of metres of the datum; 380 m inland the ground stands past
+    // 25 m; Seattle Center past 35. Wide floors, not knife-edges: a rebake
+    // may move each by metres, but a FLAT city or a broken datum cannot
+    // pass any of them.
+    expect(census.spanM).toBeGreaterThan(60)
+    expect(census.waterfront).toBeLessThan(8)
+    expect(census.firstHillWay).toBeGreaterThan(25)
+    expect(census.center).toBeGreaterThan(35)
+    // The DEM answered everywhere inside the circle: the filled holes are
+    // exactly the grid corners the circle never asked for.
+    expect(census.holes).toBe(2012)
+    // Downtown is a hillside: hundreds of buildings need their skirt.
+    expect(census.skirts).toBeGreaterThan(500)
+  })
+})
+
+test.describe('ASCII City Walk — the spoken slope (CW-80)', () => {
+  const announcer = (page) => page.locator('#cityWalkAnnouncer')
+  const pose = (page, x, y, headingDeg) =>
+    page.evaluate(
+      (q) => {
+        const g = window.__cityWalkGame
+        const st = g.walkState
+        st.x = q.x
+        st.y = q.y
+        st.headingRad = (q.headingDeg * Math.PI) / 180
+        g.lookTarget.headingRad = st.headingRad
+        st.groundZ = g.surface.heightAt(st.x, st.y)
+        // A fresh tracker per pose: the first reading arms silently, which
+        // is the spawn law this suite relies on below.
+        g.slope = { cat: null, pct: null, sinceM: Infinity }
+      },
+      { x, y, headingDeg }
+    )
+
+  test('★★ walking onto a grade says Uphill, about-face says Downhill, and standing says nothing', async ({
+    page,
+  }) => {
+    test.setTimeout(180000)
+    await launchGame(page)
+    await enterCity(page)
+
+    // Start at the toe of the First Hill grade, facing up it. CW-97: the
+    // pose moved up the walk from the flat strip - the sentence is the
+    // same and so is the silent first arming, but a software-GL renderer
+    // walks at a tenth speed or worse under the dt clamp, and the old
+    // 40 m approach outran the 60 s window there while proving nothing
+    // extra. First moved to ~15 m out (-135,-586); Edge's software lane
+    // still starved it, so the pose sits ~9 m from the measured turnover
+    // (Uphill announced by about -122,-578 on this heading).
+    await pose(page, -130, -583, 60)
+    await page.keyboard.down('KeyW')
+    // Climb until the grade is at least 4 percent, not merely announced: a
+    // slow walker's FIRST sentence is the 2 percent toe, and 2 percent
+    // reversed sits under the level threshold - probed at 20x throttle,
+    // the about-face then said "Level." and wandered ninety metres before
+    // any true downhill. Four percent reversed is a Downhill sentence
+    // wherever the about-face happens.
+    await expect(announcer(page)).toContainText(
+      /Uphill ([4-9]|[1-9]\d) percent\./,
+      // ~9 m to the grade turnover at CI software's ~0.23 m/s, plus the
+      // strides the tracker needs past it - the bound follows the pace.
+      { timeout: 180000 }
+    )
+    // Keep walking PAST the announced ground before turning: the grade is
+    // a six-metre LOOKAHEAD, so the sentence speaks for ground the walker
+    // has not stood on yet - probed at 20x throttle, an about-face taken
+    // at the sentence still stands on the flat toe and honestly reads
+    // "Level." going back. Eight metres clears the probe length wherever
+    // the sentence fired.
+    const atSentence = await page.evaluate(() => ({
+      x: window.__cityWalkGame.walkState.x,
+      y: window.__cityWalkGame.walkState.y,
+    }))
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            (p) => {
+              const w = window.__cityWalkGame.walkState
+              return Math.hypot(w.x - p.x, w.y - p.y)
+            },
+            atSentence
+          ),
+        { timeout: 120000 }
+      )
+      .toBeGreaterThan(8)
+    await page.keyboard.up('KeyW')
+
+    // Standing still on the grade: the sentence does not repeat.
+    const said = await announcer(page).textContent()
+    await page.waitForTimeout(1500)
+    expect(await announcer(page).textContent()).toBe(said)
+
+    // About-face, walk back down: the same street is downhill now.
+    await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      g.walkState.headingRad =
+        (g.walkState.headingRad + Math.PI) % (2 * Math.PI)
+      g.lookTarget.headingRad = g.walkState.headingRad
+    })
+    await page.keyboard.down('KeyW')
+    await expect(announcer(page)).toContainText(/Downhill \d+ percent\./, {
+      timeout: 180000,
+    })
+    await page.keyboard.up('KeyW')
+  })
+
+  test('★★ X names the slope underfoot, and level ground adds no clause', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await launchGame(page)
+    await enterCity(page)
+
+    // On the grade, facing up: the X sentence carries the slope clause.
+    await pose(page, -60, -565, 60)
+    await page.keyboard.press('KeyX')
+    await expect(announcer(page)).toContainText(/Uphill \d+ percent\./)
+
+    // On level ground: the clause is absent - an empty clause is never
+    // spoken (the whereAmI family's standing rule). 'Level' is a bearing
+    // as much as a place (the shore tilts toward the water), so the test
+    // asks the game's own terrain for a bearing under the threshold
+    // rather than trusting a guessed compass point.
+    await page.evaluate(() => {
+      const g = window.__cityWalkGame
+      const st = g.walkState
+      st.x = -160
+      st.y = -629
+      for (let deg = 0; deg < 360; deg += 10) {
+        const rad = (deg * Math.PI) / 180
+        const ahead = g.surface.terrain.heightAt(
+          st.x + Math.sin(rad) * 6,
+          st.y + Math.cos(rad) * 6
+        )
+        const here = g.surface.terrain.heightAt(st.x, st.y)
+        if (Math.abs(((ahead - here) / 6) * 100) < 1.4) {
+          st.headingRad = rad
+          g.lookTarget.headingRad = rad
+          break
+        }
+      }
+      st.groundZ = g.surface.heightAt(st.x, st.y)
+      g.slope = { cat: null, pct: null, sinceM: Infinity }
+    })
+    await page.keyboard.press('KeyX')
+    // The live region clears before it speaks; wait for the sentence.
+    await expect(announcer(page)).toContainText('facing', { timeout: 5000 })
+    const text = await announcer(page).textContent()
+    expect(text).not.toContain('percent')
+    expect(text).not.toContain('Level')
   })
 })

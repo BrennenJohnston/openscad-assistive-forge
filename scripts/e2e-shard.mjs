@@ -75,7 +75,7 @@ export const MEASURED_SECONDS = {
   // their parent, but it is exactly what a cost packer needs: it can put the
   // pieces on DIFFERENT shards. These three weights are the old file's own
   // describe blocks, re-summed from the same run.
-  'ascii-city-walk-controls.spec.js': 891.1,
+  'ascii-city-walk-controls.spec.js': 2068,
   // CW-64 added four cases here (the trigger, the re-entry, the reduced-motion
   // picture, and the WCAG 2.3.1 measurement), taking the file from 40 to 44.
   // 775 is 704.3 scaled by test count and LABELLED an estimate, the same way
@@ -94,24 +94,41 @@ export const MEASURED_SECONDS = {
   // a fixed time (the find, and axe over the open bubble), which is correct -
   // a wall-clock hold is a bet on the frame rate - but it does mean their cost
   // scales with how slow the runner is. They are the ones to watch.
-  'ascii-city-walk.spec.js': 863,
-  // 289.0 measured, plus ~40 for the two weather describes CW-29 added, which
-  // no CI run has timed yet. The next board replaces this with a measurement.
-  'ascii-city-walk-street.spec.js': 901.7,
+  // CW-79 RE-WEIGHTED THE SEVEN CITY FILES (2026-08-31). Rounds 8's own
+  // releases (CW-81/87/82/95/79) grew five of them AFTER the 08-27
+  // re-measure, and both CI passes of PR-R8C's run died on 'Timed out
+  // waiting 2100s' - the scatter was interruption, not flakiness, and the
+  // rule above says never re-weight from those. Source instead: the GREEN
+  // local chromium board of 2026-08-31 (headed, Iris Xe, 190 tests,
+  // per-test durations summed per file), scaled by ONE constant (x1.8,
+  // set so the street file lands in its known CI range) - the packer uses
+  // RATIOS, and a same-day same-machine green board is the best ratio
+  // data that exists. The next green CI board replaces these.
+  'ascii-city-walk.spec.js': 2078,
+  // CW-97 CI-fix batch 6 RE-PRICED THIS ONE FILE from whole-lane CI
+  // evidence: across three diagnostic runs the three heavy Chromium lanes
+  // ran nearly EQUAL wall time (34:52 / 35:50 / 37:04 on the last), each
+  // anchored by one of walk/controls/street - so street's true CI cost
+  // stands level with the other two, not at half. The old 985 (a local
+  // hardware ratio) under-priced it ~2x, and the packer answered by
+  // stacking extra co-files onto street's lanes - which is precisely the
+  // lane that kept overflowing its clock on Edge. Priced level with its
+  // peers; the next green CI board replaces all three with measurements.
+  'ascii-city-walk-street.spec.js': 2050,
   // NOT measured on CI - CW-36 is newer than the last board. Estimated from
   // this machine, where the file runs 37.5 s against the controls file's
   // 84 s, and the controls file is 417.4 here: 37.5 / 84 * 417.4 ~= 186,
   // rounded up because every one of its eight cases builds a city. Left
   // unlisted it would be booked at DEFAULT_WEIGHT_S, 60, and lopside a shard
   // by two minutes. The next board replaces this with a measurement.
-  'ascii-city-walk-teleport.spec.js': 274.1,
+  'ascii-city-walk-teleport.spec.js': 211,
   // Same estimate, same caveat: 29.4 s here against the controls file's 84 s,
   // so 29.4 / 84 * 417.4 ~= 146. Two cases, both of which load a city.
-  'ascii-city-walk-perf-smoke.spec.js': 142.4,
+  'ascii-city-walk-perf-smoke.spec.js': 66,
   // CW-62: these two were NEVER IN THE TABLE and were therefore booked at
   // DEFAULT_WEIGHT_S, 60, against a real 147 and 131. An unmeasured city
   // spec is not a cheap newcomer - every one of its cases builds a 3D city.
-  'ascii-city-walk-calibration.spec.js': 146.9,
+  'ascii-city-walk-calibration.spec.js': 228,
   // CW-63 added two cases to this file (the diagrid present in Seattle, absent
   // in Denver), taking it from 9 to 11. This 160 is the 130.8 measured on run
   // 33063099176's green shards SCALED BY TEST COUNT, not a fresh measurement -
@@ -123,7 +140,7 @@ export const MEASURED_SECONDS = {
   // CW-62 fixed: a weight that is 22% low on the one file a release grew is
   // how a lane projects 25 minutes and takes 32. Edge has about two minutes of
   // margin, and 29 unbooked seconds is a sixth of it.
-  'ascii-city-walk-furniture.spec.js': 160,
+  'ascii-city-walk-furniture.spec.js': 164,
   'classic-panels.spec.js': 442.5,
   'classic-mode.spec.js': 400.8,
   'menu-parity.spec.js': 224.8,
