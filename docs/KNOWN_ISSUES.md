@@ -166,7 +166,7 @@ against either editor.
 **Description**: Phase 9 of the parity remediation fixed a Layer 2 bug where image companion files were mounted to the Emscripten virtual FS as data-URL strings instead of binary `Uint8Array` data. Whether the current WASM build includes `libpng` for `surface()` image rendering is unknown.
 
 **How to verify (manual, requires a browser)**:
-1. Start the dev server: `pixi run dev`
+1. Start the dev server: `npm run dev`
 2. Open http://localhost:5173 and upload `tests/fixtures/surface-image-test.scad` together with a PNG companion file (use the folder-import or ZIP path so both files mount)
 3. Open the browser console (F12) and trigger a render
 4. If the console shows `Can't open` errors for the PNG, the WASM build lacks `libpng`; if the surface renders with height variation, image support works
