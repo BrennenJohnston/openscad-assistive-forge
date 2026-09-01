@@ -3052,7 +3052,13 @@ async function initApp() {
     updateStoragePrefs({ allowLargeDownloads: true, seenDisclosure: true });
     // Unchecked "remember" = proceed this session only; the modal returns
     // next visit because the first-visit marker is never written.
-    if (document.getElementById('firstVisitRemember')?.checked !== false) {
+    //
+    // Q-21 (2026-08-10) signed "remember checked by default". The owner's
+    // directive of 2026-08-27 (line 2) supersedes it: the box now ships
+    // UNCHECKED, so the test has to be null-safe toward NOT remembering.
+    // `?.checked !== false` would remember whenever the element goes missing,
+    // which is remember-by-default surviving as DOM drift.
+    if (document.getElementById('firstVisitRemember')?.checked === true) {
       markFirstVisitComplete();
     }
     closeModal(firstVisitModal);
@@ -5334,8 +5340,145 @@ async function initApp() {
     shortcutsBtn.addEventListener('click', _openShortcutsModal);
   }
 
+  // ── The drawing editor takes the preview area (DP-19) ─────────────────
+  // The editor says it is opening; what that means for the 3D canvas is the
+  // preview's business, and this is the one place that knows both.
+  // Looked up at the moment, not at boot: the preview's init() rebuilds its
+  // container, and the element that was there before it is not the one that
+  // is there after.
+  const drawingEditorSurface = () =>
+    document.getElementById('drawingEditorSurface');
+  window.addEventListener('drawing-editor:open', () => {
+    previewManager?.showEditorSurface?.(drawingEditorSurface());
+  });
+  window.addEventListener('drawing-editor:close', () => {
+    previewManager?.hideEditorSurface?.(drawingEditorSurface());
+  });
+
   // Declare format selector elements
   const outputFormatSelect = document.getElementById('outputFormat');
+
+  // ── Export the whole stencil set (DP-17) ──────────────────────────────
+  // A six-colour stencil is seven printed parts, and the one thing that must
+  // not go wrong is which plate is which. The button renders them in order and
+  // hands back a zip whose names say what each file is.
+  const stencilSetExport = document.getElementById('stencilSetExport');
+  const exportStencilSetBtn = document.getElementById('exportStencilSetBtn');
+  const stencilSetExportInfo = document.getElementById('stencilSetExportInfo');
+
+  /** How many plates the app has actually written for the current design. */
+  function stencilPlateCount(parameters) {
+    let n = 0;
+    for (let i = 1; i <= 8; i++) {
+      const v = parameters?.[`stencil_plate_${i}`];
+      const has = v && (typeof v === 'string' ? v !== '' : !!v.data);
+      if (!has) break;
+      n += 1;
+    }
+    return n;
+  }
+
+  function updateStencilSetExport() {
+    if (!stencilSetExport) return;
+    const state = stateManager.getState();
+    const params = state.parameters || {};
+    const isStencil = 'stencil_plate_1' in params && 'plate_number' in params;
+    const count = isStencil ? stencilPlateCount(params) : 0;
+    const show = isStencil && params.stencil_mode === 'layered' && count > 0;
+    stencilSetExport.hidden = !show;
+    if (!show) return;
+    const pegs =
+      params.registration === 'pegs' || params.registration === 'both';
+    const parts = count + (pegs ? 1 : 0);
+    // STRINGS: owner review pending (DP-R2 text pack).
+    stencilSetExportInfo.textContent = pegs
+      ? `${count} plates and the jig base, plus the paint order.`
+      : `${count} plates, plus the paint order.`;
+    exportStencilSetBtn.setAttribute(
+      'aria-label',
+      `Export all plates: ${parts} files as a zip`
+    );
+  }
+
+  // Which plates exist changes when the design changes and when the plate
+  // params are rewritten, both of which land as a parameters update.
+  stateManager.subscribe((state, prevState) => {
+    if (state.parameters !== prevState.parameters) updateStencilSetExport();
+  });
+  updateStencilSetExport();
+
+  exportStencilSetBtn?.addEventListener('click', async () => {
+    const state = stateManager.getState();
+    const params = state.parameters || {};
+    const count = stencilPlateCount(params);
+    const pegs =
+      params.registration === 'pegs' || params.registration === 'both';
+    const format = outputFormatSelect ? outputFormatSelect.value : 'stl';
+    const designName = String(params.design_file?.name || 'stencil').replace(
+      /\.[^.]+$/,
+      ''
+    );
+    const { stencilSetJobs, exportStencilSet, EXPORT_STRINGS } =
+      await import('./js/stencil-export.js');
+    const colourNames = Array.isArray(state.stencilColourNames)
+      ? state.stencilColourNames
+      : [];
+    const jobs = stencilSetJobs({
+      parameters: params,
+      plateCount: count,
+      colourNames,
+      includeJig: pegs,
+      format,
+    });
+
+    exportStencilSetBtn.disabled = true;
+    const restore = exportStencilSetBtn.textContent;
+    exportStencilSetBtn.textContent = EXPORT_STRINGS.busy;
+    announceImmediate(EXPORT_STRINGS.start(jobs.length + 1));
+    try {
+      const libsForRender = getEnabledLibrariesForRender();
+      const { blob, filename, files } = await exportStencilSet({
+        jobs,
+        designName,
+        colourNames,
+        onProgress: (done, total, label) => {
+          if (!label) return;
+          const line = EXPORT_STRINGS.step(done, total, label);
+          updateStatus(line);
+          announceImmediate(line);
+        },
+        render: (parameters) =>
+          renderController.renderFull(state.uploadedFile.content, parameters, {
+            outputFormat: format,
+            paramTypes: state.paramTypes || {},
+            files: state.projectFiles,
+            mainFile: state.mainFilePath,
+            libraries: libsForRender,
+          }),
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      const done = EXPORT_STRINGS.done(files.length, filename);
+      updateStatus(done);
+      announceImmediate(done);
+    } catch (error) {
+      console.error('Stencil set export failed:', error);
+      const said = EXPORT_STRINGS.failed(error.message);
+      updateStatus(said);
+      announceImmediate(said);
+      showErrorToast({ title: 'Export stopped', message: error.message });
+    } finally {
+      exportStencilSetBtn.disabled = false;
+      exportStencilSetBtn.textContent = restore;
+    }
+  });
+
   const formatInfo = document.getElementById('formatInfo');
   const format2dGuidance = document.getElementById('format2dGuidance');
 
@@ -16435,6 +16578,42 @@ if (typeof window !== 'undefined') {
      */
     previewColorScheme() {
       return previewManager?.currentTheme ?? null;
+    },
+
+    /**
+     * Where the active camera is (DP-19). A spec has to be able to prove
+     * that a key pressed inside the drawing editor did NOT move the model
+     * behind it, and a screenshot of a hidden canvas cannot say so.
+     * @returns {{x: number, y: number, z: number}|null}
+     */
+    cameraPosition() {
+      const camera = previewManager?.getActiveCamera?.();
+      if (!camera?.position) return null;
+      const { x, y, z } = camera.position;
+      return { x, y, z };
+    },
+
+    /**
+     * The reference overlay's live placement (DP-5). Where the image SITS is
+     * saved per project, and a spec has to be able to prove the numbers came
+     * back rather than infer it from a picture.
+     * @returns {Object|null}
+     */
+    overlayPlacement() {
+      const c = previewManager?.overlayConfig;
+      if (!c) return null;
+      return {
+        enabled: c.enabled,
+        offsetX: c.offsetX,
+        offsetY: c.offsetY,
+        rotationDeg: c.rotationDeg,
+        width: c.width,
+        height: c.height,
+        lockAspect: c.lockAspect,
+        zPreset: c.zPreset,
+        zCustomMm: c.zCustomMm,
+        zPosition: c.zPosition,
+      };
     },
 
     /**

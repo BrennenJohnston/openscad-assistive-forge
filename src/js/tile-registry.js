@@ -63,14 +63,35 @@ const EXAMPLES = {
     // the file has always been on disk, but the loader reads THIS list - so
     // the first preview errored with "Can't open file '/tmp/sample-logo.svg'"
     // while the status said "Preview ready".
-    additionalFiles: ['/examples/logo-plate/sample-logo.svg'],
+    additionalFiles: [
+      '/examples/logo-plate/sample-logo.svg',
+      // DP-9. The shared gallery set, copied into this tile rather than
+      // borrowed from another: a tile that reaches into a sibling's folder
+      // breaks the moment that sibling is renamed or dropped.
+      '/examples/logo-plate/smiley.svg',
+      '/examples/logo-plate/heart.svg',
+      '/examples/logo-plate/star.svg',
+      '/examples/logo-plate/lightning.svg',
+      '/examples/logo-plate/crown.svg',
+      '/examples/logo-plate/sun.svg',
+      '/examples/logo-plate/presets/large-plate.json',
+      '/examples/logo-plate/presets/small-plate.json',
+    ],
   },
   'nasif-charm-maker': {
     path: '/examples/nasif-charm-maker/nasif_charm_maker.scad',
     name: 'nasif_charm_maker.scad',
-    description: 'Charm Customizer',
+    description: 'Charm Designer',
     manifest: '/examples/nasif-charm-maker/manifest.json',
     additionalFiles: [
+      // DP-9. The default design, BESIDE the .scad, so desktop OpenSCAD can
+      // open it: import("heart.svg") looked in the model's own folder and the
+      // only copy lived in svg-library/. Desktop printed
+      // "ERROR: Can't open file ... heart.svg" and then rendered a blank
+      // charm anyway, reporting Status: NoError and writing an STL.
+      '/examples/nasif-charm-maker/heart.svg',
+      '/examples/nasif-charm-maker/presets/large-pendant.json',
+      '/examples/nasif-charm-maker/presets/small-pendant.json',
       '/examples/nasif-charm-maker/svg-library/heart.svg',
       '/examples/nasif-charm-maker/svg-library/star.svg',
       '/examples/nasif-charm-maker/svg-library/paw.svg',
@@ -88,7 +109,7 @@ const EXAMPLES = {
   'braille-wedge-card': {
     path: '/examples/braille-wedge-card/braille_wedge_card.scad',
     name: 'braille_wedge_card.scad',
-    description: 'Braille Card Customizer',
+    description: 'Braille Card Designer',
     manifest: '/examples/braille-wedge-card/manifest.json',
   },
   'braille-charm': {
@@ -114,12 +135,11 @@ const EXAMPLES = {
     manifest: '/examples/stencil-maker/manifest.json',
     additionalFiles: [
       '/examples/stencil-maker/sample-design.svg',
-      '/examples/stencil-maker/smiley.svg',
-      '/examples/stencil-maker/heart.svg',
-      '/examples/stencil-maker/star.svg',
-      '/examples/stencil-maker/lightning.svg',
-      '/examples/stencil-maker/crown.svg',
-      '/examples/stencil-maker/sun.svg',
+      // DP-14. The gallery is this project's own work now: the ring, which
+      // demonstrates a support bar holding an enclosed centre, and the Forge
+      // logo. The six charm icons that used to sit here were copies of another
+      // tile's library and had nothing to do with stencils.
+      '/examples/stencil-maker/forge-logo.svg',
     ],
   },
   'q-charm': {
@@ -131,18 +151,27 @@ const EXAMPLES = {
       '/examples/q-charm/q_Charm_L.dxf',
       '/examples/q-charm/presets/large-charm.json',
       '/examples/q-charm/presets/small-charm.json',
-      '/examples/nasif-charm-maker/svg-library/smiley.svg',
-      '/examples/nasif-charm-maker/svg-library/heart.svg',
-      '/examples/nasif-charm-maker/svg-library/star.svg',
-      '/examples/nasif-charm-maker/svg-library/paw.svg',
-      '/examples/nasif-charm-maker/svg-library/lightning.svg',
-      '/examples/nasif-charm-maker/svg-library/music-note.svg',
-      '/examples/nasif-charm-maker/svg-library/moon.svg',
-      '/examples/nasif-charm-maker/svg-library/flower.svg',
-      '/examples/nasif-charm-maker/svg-library/diamond.svg',
-      '/examples/nasif-charm-maker/svg-library/crown.svg',
-      '/examples/nasif-charm-maker/svg-library/leaf.svg',
-      '/examples/nasif-charm-maker/svg-library/sun.svg',
+      // DP-8. Example passes for the layered mode, so desktop OpenSCAD has
+      // something to point the layer parameters at. The parameters themselves
+      // default to empty: the tiered mode is off until someone fills one in.
+      '/examples/q-charm/design_layer_1.svg',
+      '/examples/q-charm/design_layer_2.svg',
+      '/examples/q-charm/design_layer_3.svg',
+      // D-106, closed in DP-14. This list used to reach into
+      // nasif-charm-maker/svg-library/ for twelve files while q-charm's own
+      // manifest declared six by bare name. Both lists produced `smiley.svg`
+      // in the WASM filesystem, so the gallery worked and the disagreement
+      // stayed invisible - until you rename or drop the sibling. The six
+      // copies have been in this tile's folder since D-109; these are they,
+      // and manifest and registry now name the same files. The other six the
+      // borrowed list carried (paw, music-note, moon, flower, diamond, leaf)
+      // were never in q-charm's gallery and are gone with it.
+      '/examples/q-charm/smiley.svg',
+      '/examples/q-charm/heart.svg',
+      '/examples/q-charm/star.svg',
+      '/examples/q-charm/lightning.svg',
+      '/examples/q-charm/crown.svg',
+      '/examples/q-charm/sun.svg',
     ],
   },
 };
@@ -153,11 +182,11 @@ const EXAMPLES = {
 
 const PROGRAMS = {
   'charm-customizer': {
-    label: 'Charm Customizer',
+    label: 'Charm Designer',
     examples: ['nasif-charm-maker', 'q-charm', 'logo-plate'],
   },
   'braille-card-customizer': {
-    label: 'Braille Card Customizer',
+    label: 'Braille Card Designer',
     examples: ['braille-wedge-card', 'braille-charm', 'braille-sign'],
   },
   'stencil-maker': {

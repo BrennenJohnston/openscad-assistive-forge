@@ -174,6 +174,88 @@ errored while the status line said "Preview ready". Nobody noticed for months.
 The validator now checks this for you. It reads your `.scad`, finds everything
 it reads from disk, and tells you if `files` does not name it.
 
+### Layered designs (prototype)
+
+STRINGS/PROSE: owner review pending (DP-R1 text pack).
+
+Most designs are one shape cut or raised once. A **layered** design is built
+in passes: the app looks at which shapes sit inside which, writes one file per
+pass, and your model builds them one on top of the other. Three nested squares
+come out as a stepped pyramid rather than a single flat square.
+
+Your `.scad` opts in simply by declaring the parameters. If a file parameter
+is called `design_file`, the app looks for `design_layer_1`, `design_layer_2`
+and `design_layer_3` beside it, each with an `_aspect` companion:
+
+```openscad
+design_layer_1 = "";        // [file:svg]
+design_layer_1_aspect = 1;  // [0.05:0.01:20]
+design_layer_1_depth = 0.8; // [0.4:0.1:3.0]
+design_layer_1_style = "raised"; // [raised, engraved]
+```
+
+There is no flag anywhere else. Your parameters ARE the opt-in, so nothing can
+drift out of step with them. Declare them all empty: a layered design should be
+something a person turns on, not something they discover.
+
+Four things about the files the app writes, each of which will bite you:
+
+- **Every pass is written on the same canvas**, `100mm` wide, sized from the
+  first pass. Scale by ONE factor and never call `resize()` on a pass. OpenSCAD's
+  `resize()` fits the shape's own bounding box, so fitting each pass separately
+  scales the smallest one up to the size of the largest and your stack prints
+  as identical slabs.
+- **Import with `center = false`.** The passes already share one coordinate
+  system; `center = true` re-centres each on its own bounding box and pulls
+  the stack apart.
+- **Anchor each pass where the last one finished**, and overlap by `0.01`.
+  Raised passes travel up, engraved passes travel down. Nothing may exactly
+  touch.
+- **Join `total_top_z`.** If your model measures anything down from the top,
+  a stack that raised the model without telling it will cut in the wrong place.
+
+Cost, measured on this machine with OpenSCAD 2026.01.03: three passes of simple
+artwork render in 0.34 s against 0.31 s for one. Three passes of an 831-subpath
+drawing take 10.2 s against 3.5 s - close to linear in the number of passes, so
+a detailed drawing built in three passes is a ten-second render, not a
+one-second one.
+
+Add each example pass file to `files`, the same as any other file your design
+reads.
+
+## 5b. The feature contract (charm-program models)
+
+STRINGS/PROSE: owner review pending (DP-R1 text pack).
+
+Three models share the charm program, and features kept being added to one and
+forgotten on the others. This table is the contract. It is not documentation
+ABOUT the models - `tests/unit/parity-charm-models.test.js` PARSES this table
+and checks each model's `.scad` against it, so a row that stops being true
+fails the build rather than quietly ageing.
+
+`N-A` needs a reason. "Not done yet" is not one; write `yes` and do it, or say
+why the feature does not belong to that model.
+
+<!-- parity-contract:start -->
+
+| Feature | key | q-charm | nasif-charm-maker | logo-plate |
+|---|---|---|---|---|
+| Design file | design_file | yes | yes | yes |
+| Aspect companion | aspect | yes | yes | yes |
+| Design size control | scale | yes | yes | yes |
+| Design position and rotation | placement | yes | yes | yes |
+| Line thickening for FDM | thickening | yes | yes | yes |
+| Two text layers | text2 | yes | yes | yes |
+| Icon gallery | gallery | yes | yes | yes |
+| Large and small presets | presets | yes | yes | yes |
+| Choice of attachment | attachment | yes | yes | N-A the plate has one keychain hole and controls to place it, not a choice of fitting |
+| Second design layer | design2 | yes | N-A superseded by the layered engine, which does the same job for any number of passes | N-A superseded by the layered engine |
+| Layered design passes | layers | yes | N-A prototype scope: one model builds the stack this round | N-A prototype scope: one model builds the stack this round |
+| Shape taken from the design | shapefromdesign | N-A the clip's shape is what grips the band, so it is not the design's to choose | yes | N-A a plate is a plate; its whole point is the rectangle |
+| Clip fit for a silicone band | clipfit | yes | N-A a flat pendant is not a clip | N-A a plate is not a clip |
+
+<!-- parity-contract:end -->
+
 ## 6. Tactile designs
 
 **Owner sign-off required. This section is a draft.**

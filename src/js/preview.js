@@ -79,6 +79,13 @@ ColorManagement.enabled = false;
 /** Default grid config — 220×220mm matches popular mid-range FDM printers (Creality K1C, FlashForge Adventurer 5M Pro) */
 const DEFAULT_GRID_CONFIG = { widthMm: 220, heightMm: 220 };
 
+/**
+ * How far above a face the reference overlay sits when it is placed ON that
+ * face (DP-5). Exactly coincident planes z-fight, and the overlay is meant to
+ * be traced against the surface, so it has to win.
+ */
+const OVERLAY_SURFACE_EPSILON_MM = 0.25;
+
 /** Scratch target for renderer.getSize() in the triad pass (r162 requires one). */
 const _triadSizeScratch = new Vector2();
 
@@ -523,7 +530,16 @@ export class PreviewManager {
       rotationDeg: 0,
       width: 200, // mm (default; replaced by SVG physical size or explicit sizing)
       height: 150, // mm
+      // DP-5: the effective Z, in mm. Derived from zPreset except when the
+      // preset is 'custom', where the person typed it.
       zPosition: -0.25, // Slightly below Z=0 build plate (avoid z-fighting with grid)
+      // Which surface the overlay is meant to sit against. A raw number is a
+      // poor control here: -0.25 means nothing to someone deciding "I want to
+      // trace onto the top of the charm". 'model-top' is recomputed whenever
+      // the model changes, so it follows the object rather than freezing at
+      // whatever the height happened to be when it was chosen.
+      zPreset: 'under-plate',
+      zCustomMm: 0,
       lockAspect: true,
       intrinsicAspect: null, // Width/height ratio from source image
       sourceFileName: null, // Name of the file used as overlay source
@@ -567,6 +583,19 @@ export class PreviewManager {
       preview2d.setAttribute('role', 'img');
       preview2d.setAttribute('aria-label', 'Rendered 2D SVG preview');
       this.container.appendChild(preview2d);
+    }
+
+    // And the drawing editor's surface (DP-19), for the same reason: the
+    // markup in index.html is the honest picture of the container, and the
+    // wipe above takes it with everything else.
+    if (!document.getElementById('drawingEditorSurface')) {
+      const surface = document.createElement('div');
+      surface.id = 'drawingEditorSurface';
+      surface.className = 'drawing-editor-surface hidden';
+      surface.setAttribute('role', 'region');
+      surface.setAttribute('aria-label', 'Drawing editor');
+      surface.hidden = true;
+      this.container.appendChild(surface);
     }
 
     // Detect initial theme
@@ -1429,6 +1458,12 @@ export class PreviewManager {
     const zoomSpeed = 10;
 
     this.keyboardHandler = (event) => {
+      // ★ The drawing editor lives in this container, and every key it uses -
+      // arrows between regions, Escape to leave - is a key this handler would
+      // otherwise spend on the camera. A button or a table row is not an INPUT,
+      // so the guard below does not cover it.
+      if (this._isEditorSurfaceActive) return;
+
       // Ignore if focus is in an input field
       if (
         event.target.tagName === 'INPUT' ||
@@ -1663,6 +1698,10 @@ export class PreviewManager {
           this._postLoadHook();
         }
         this._firePostLoadListeners();
+        // DP-5: "Top of the model" is a promise about THIS model, so it is
+        // re-resolved whenever one arrives. Any other preset is a constant and
+        // this returns immediately.
+        this.refreshOverlayZ();
 
         if (this.measurementsEnabled) {
           this.showMeasurements();
@@ -1986,6 +2025,10 @@ export class PreviewManager {
           this._postLoadHook();
         }
         this._firePostLoadListeners();
+        // DP-5: "Top of the model" is a promise about THIS model, so it is
+        // re-resolved whenever one arrives. Any other preset is a constant and
+        // this returns immediately.
+        this.refreshOverlayZ();
         if (this.measurementsEnabled) {
           this.showMeasurements();
         }
@@ -4419,6 +4462,67 @@ export class PreviewManager {
   }
 
   /**
+   * The Z a preset resolves to, in mm, for the model currently loaded.
+   *
+   * 'model-top' asks the mesh, so it is only meaningful while there is one;
+   * with no model it falls back to the build plate rather than to a stale
+   * height from a previous object.
+   *
+   * @param {string} preset
+   * @param {number} customMm - Used only by the 'custom' preset
+   * @returns {number} Z in mm
+   */
+  resolveOverlayZ(preset, customMm) {
+    switch (preset) {
+      case 'build-plate':
+        return 0;
+      case 'model-top': {
+        if (!this.mesh) return 0;
+        const box = new Box3().setFromObject(this.mesh);
+        if (!Number.isFinite(box.max.z)) return 0;
+        // A hair above the face, or it z-fights the surface it is tracing.
+        return box.max.z + OVERLAY_SURFACE_EPSILON_MM;
+      }
+      case 'custom':
+        return Number.isFinite(customMm) ? customMm : 0;
+      case 'under-plate':
+      default:
+        return -0.25;
+    }
+  }
+
+  /**
+   * Choose which surface the overlay sits against (DP-5).
+   *
+   * @param {Object} options
+   * @param {string} [options.preset] - under-plate | build-plate | model-top | custom
+   * @param {number} [options.customMm] - Z in mm, used by the custom preset
+   */
+  setOverlayZ({ preset, customMm } = {}) {
+    if (typeof preset === 'string') this.overlayConfig.zPreset = preset;
+    if (Number.isFinite(customMm)) this.overlayConfig.zCustomMm = customMm;
+    this.overlayConfig.zPosition = this.resolveOverlayZ(
+      this.overlayConfig.zPreset,
+      this.overlayConfig.zCustomMm
+    );
+    if (this.overlayConfig.enabled) {
+      this.createOrUpdateReferenceOverlay();
+      if (this.overlayMeasurementsEnabled) {
+        this.showOverlayMeasurements();
+      }
+    }
+  }
+
+  /**
+   * Re-resolve the overlay Z against whatever model is loaded now.
+   * Called after a render, so 'Top of model' follows the object.
+   */
+  refreshOverlayZ() {
+    if (this.overlayConfig.zPreset !== 'model-top') return;
+    this.setOverlayZ({});
+  }
+
+  /**
    * Set the overlay size
    * @param {Object} size - Size configuration
    * @param {number} [size.width] - Width in mm
@@ -5158,6 +5262,11 @@ export class PreviewManager {
   _set2DPreviewActive(is2D) {
     this._is2DPreviewActive = is2D;
 
+    // While the drawing editor owns the area, a render behind it must not
+    // put the canvas or the label back: what it asked for is remembered
+    // above and honoured when the editor gives the area back.
+    if (this._isEditorSurfaceActive) return;
+
     // Hide 3D canvas when 2D is active, show when 3D
     if (this.renderer?.domElement) {
       this.renderer.domElement.style.display = is2D ? 'none' : '';
@@ -5176,6 +5285,78 @@ export class PreviewManager {
         is2D ? 'Rendered 2D SVG preview' : '3D model preview and controls'
       );
     }
+  }
+
+  /**
+   * Give the preview area over to the drawing editor (DP-19).
+   *
+   * The editor goes WHERE THE 3D VIEW IS, not in a panel beside it and not in
+   * a block inside the customizer, because it is the biggest surface on the
+   * page and on a phone it is the whole of it. Same shape as the 2D preview's
+   * takeover: hide the canvas, hide the placeholder, say what the region is
+   * now.
+   *
+   * ★ AND STAND THE CAMERA KEYS DOWN. `keyboardHandler` fires for any keydown
+   * while focus is inside #previewContainer unless the target is an INPUT,
+   * TEXTAREA, SELECT or contentEditable - so a focused table row or a button
+   * inside the editor would rotate the model behind it while a person thought
+   * they were moving between regions.
+   *
+   * @param {HTMLElement} el - The editor's own root, already in the container
+   */
+  showEditorSurface(el) {
+    if (!el) return;
+    this._isEditorSurfaceActive = true;
+    el.hidden = false;
+    el.classList.remove('hidden');
+    // The render-state pills (the ready badge, the generating pill, the
+    // status bar) float over this area and, MEASURED at 412 px wide, over
+    // the editor's own title. They fade while the editor has the area; they
+    // stay in the accessibility tree, so what they announce is still heard.
+    this.container
+      ?.closest('.preview-canvas-section')
+      ?.classList.add('has-drawing-editor');
+    if (this.renderer?.domElement) {
+      this.renderer.domElement.style.display = 'none';
+    }
+    const placeholder = this.container?.querySelector('.preview-placeholder');
+    if (placeholder) placeholder.style.display = 'none';
+    const twoD = document.getElementById('rendered2dPreview');
+    if (twoD) twoD.classList.add('hidden');
+    if (this.container) {
+      this.container.setAttribute('aria-label', 'Drawing editor');
+      // The container's own tabindex would put an extra stop in front of the
+      // editor's toolbar for no reason: inside the editor, the editor's
+      // controls are the tab stops.
+      this.container.removeAttribute('tabindex');
+    }
+  }
+
+  /**
+   * Give the preview area back, and put the camera keys back with it.
+   *
+   * @param {HTMLElement} el - The editor's own root
+   */
+  hideEditorSurface(el) {
+    this._isEditorSurfaceActive = false;
+    if (el) {
+      el.hidden = true;
+      el.classList.add('hidden');
+    }
+    this.container
+      ?.closest('.preview-canvas-section')
+      ?.classList.remove('has-drawing-editor');
+    // Whatever was asked for while the editor had the area - a 2D preview,
+    // a mesh, nothing yet - is what comes back.
+    const twoD = document.getElementById('rendered2dPreview');
+    if (twoD) twoD.classList.toggle('hidden', !this._is2DPreviewActive);
+    if (this.container) this.container.setAttribute('tabindex', '0');
+    this._set2DPreviewActive(this._is2DPreviewActive === true);
+  }
+
+  /** Whether the drawing editor currently owns the preview area. */
+  isEditorSurfaceActive() {
+    return this._isEditorSurfaceActive === true;
   }
 
   /**

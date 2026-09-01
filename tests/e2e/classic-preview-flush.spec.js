@@ -76,6 +76,10 @@ test('camera-bar Preview renders an unblurred edit typed moments before', async 
   await page.locator('#classicPreviewBtn').click();
 
   // The render that follows carries the edit only if the button flushed
-  // the write-back before previewing.
-  await expect(consoleLog).toContainText(MARKER, { timeout: 60_000 });
+  // the write-back before previewing. CI's software renderer needs more
+  // wall clock than local hardware for the same render (MEASURED: the
+  // marker missed a 60 s window on a starved shard while the same walk
+  // passes locally in seconds); the contract stays binary - a stale
+  // render never contains the marker at any timeout.
+  await expect(consoleLog).toContainText(MARKER, { timeout: 120_000 });
 });

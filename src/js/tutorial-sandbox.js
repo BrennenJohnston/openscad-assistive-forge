@@ -1605,7 +1605,7 @@ const TUTORIALS = {
         skipReason: 'not available in this browser',
       },
       {
-        title: 'Charm Customizer',
+        title: 'Charm Designer',
         content: `
           <p>This card holds a ready-made creative project: wearable charms, pendants, and logo plates with raised or engraved icons. Pick a shape from the <strong>Shape</strong> menu, and the button opens it as a full project. This tour stays on the Main Page, so we will not open it now.</p>
         `,
@@ -1613,9 +1613,9 @@ const TUTORIALS = {
         position: 'top',
       },
       {
-        title: 'Braille Card Customizer',
+        title: 'Braille Card Designer',
         content: `
-          <p>This card makes 3D-printable braille. Type text and get cards, charms, or two-part tactile signs. Braille translation runs on your device, so nothing you type leaves it. When you are ready, the <strong>Open Braille Card Customizer</strong> button starts it.</p>
+          <p>This card makes 3D-printable braille. Type text and get cards, charms, or two-part tactile signs. Braille translation runs on your device, so nothing you type leaves it. When you are ready, the <strong>Open Braille Card Designer</strong> button starts it.</p>
         `,
         highlightSelector: '@braille-card',
         position: 'top',
@@ -1711,7 +1711,7 @@ const TUTORIALS = {
         skipReason: 'not available in this browser',
       },
       {
-        title: 'Charm Customizer',
+        title: 'Charm Designer',
         content: `
           <p>This card holds a ready-made creative project: wearable charms, pendants, and logo plates with raised or engraved icons. Pick a shape from the <strong>Shape</strong> menu, and the button opens it as a full project. This tour stays on the Main Page, so we will not open it now.</p>
         `,
@@ -1719,9 +1719,9 @@ const TUTORIALS = {
         position: 'top',
       },
       {
-        title: 'Braille Card Customizer',
+        title: 'Braille Card Designer',
         content: `
-          <p>This card makes 3D-printable braille. Type text and get cards, charms, or two-part tactile signs. Braille translation runs on your device, so nothing you type leaves it. When you are ready, the <strong>Open Braille Card Customizer</strong> button starts it.</p>
+          <p>This card makes 3D-printable braille. Type text and get cards, charms, or two-part tactile signs. Braille translation runs on your device, so nothing you type leaves it. When you are ready, the <strong>Open Braille Card Designer</strong> button starts it.</p>
         `,
         highlightSelector: '@braille-card',
         position: 'top',

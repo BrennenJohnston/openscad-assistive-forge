@@ -22,6 +22,14 @@ import path from 'node:path'
 const FIXTURES = path.join(process.cwd(), 'tests', 'fixtures', 'dxf')
 const KNOWN = path.join(FIXTURES, 'known-extents.dxf')
 const TEXT_ONLY = path.join(FIXTURES, 'text-only.dxf')
+// The owner's own Fusion sketch: 31 SPLINE, 2 ELLIPSE, 1 LINE (D-123).
+const OWNER_SKETCH = path.join(
+  process.cwd(),
+  'tests',
+  'fixtures',
+  'harley',
+  'sketch4.dxf'
+)
 
 /** The fixture's own declared size, read from the file the test ships with. */
 function fixtureSize() {
@@ -108,6 +116,24 @@ test.describe('DXF in, DXF out', () => {
     // Both ways out are offered.
     await expect(page.locator('button[data-action="save"]')).toBeVisible()
     await expect(page.locator('button[data-action="save-dxf"]')).toBeVisible()
+  })
+
+  // D-123 (DP-26 P2): OpenSCAD's importer reads none of this file's curved
+  // entities, and before the fix 31 of its 34 vanished SILENTLY - the
+  // editor showed three shapes and said nothing was missing. The curves
+  // are evaluated to polylines before the engine sees the file.
+  test('★ D-123: the owner sketch arrives whole - its curves, not just its line', async ({
+    page,
+  }) => {
+    test.setTimeout(300000)
+    await openDrawing(page, OWNER_SKETCH)
+    await page
+      .locator('.svg-prep-object')
+      .first()
+      .waitFor({ state: 'visible', timeout: 180000 })
+    const shapes = await page.locator('.svg-prep-object').count()
+    console.log('[dxf] owner sketch shapes in the editor:', shapes)
+    expect(shapes).toBeGreaterThanOrEqual(30)
   })
 
   test('the drawing comes back as DXF, at a size the app states out loud', async ({

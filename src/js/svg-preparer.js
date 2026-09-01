@@ -33,6 +33,11 @@ import {
 } from 'transformation-matrix';
 import { offsetPath } from './svg-offset.js';
 import {
+  polygonFromPathData,
+  boundsOf,
+  buildNestingTree,
+} from './svg-nesting.js';
+import {
   pathFromPathData,
   pathToPathData,
   pathBoolean,
@@ -60,11 +65,60 @@ const NON_RENDERING_CONTAINERS = new Set([
 ]);
 
 /**
- * Maximum rendering elements before an SVG is rejected as too complex.
- * Beyond this threshold path-bool operations become prohibitively slow
- * and produce unreliable output.
+ * Element-count tiers, signed by the owner at DP-Q9 (2026-08-28) against the
+ * DP-0 bench rather than assumed.
+ *
+ * The old single cap of 50 was documented as guarding path-bool, and DP-0's
+ * measurement says that was exactly right - and that it was ALSO doing a job
+ * it had no business doing. The two bills are wildly different:
+ *
+ *   count | table (parse+classify+analyze) | flattenToCompoundPath
+ *         | desktop      4x throttle       | desktop
+ *   ------+-------------------------------+-----------------------
+ *      50 | 1.8-3.2 ms   10.8-20.8 ms     |   1.02 s
+ *     100 | 2.7-7.7 ms   12.6-27.9 ms     |   7.53 s
+ *     200 | 4.2-4.8 ms   19.6-23.6 ms     |  56.70 s
+ *     400 | 8.5-10.0 ms  32.1-50.2 ms     | 447.90 s
+ *     800 | 16.5-17.9 ms 71.5-86.4 ms     | ~59 min (extrapolated)
+ *
+ * and on the real file this round exists for, WATAP Logo HD.svg at 831
+ * elements, the whole table builds in 24-27 ms desktop / 117-143 ms at 4x.
+ * So the table is free and the boolean is everything: the cap was a BOOLEAN
+ * cap wearing a TABLE cap's clothes, and refusing to show the table was
+ * refusing the one thing that costs nothing.
+ *
+ * AUTO_RENDER_MAX (A): the whole chain runs on its own. 1.02 s desktop,
+ *   4.9-5.3 s at 4x - right on the 5 s bar the plan set for the low end.
+ * DEFER_FLATTEN_MAX (B): table and live preview stay; the boolean waits for
+ *   a deliberate Apply, which costs 56.7 s desktop / 4 min 32 s at 4x and is
+ *   said so in words.
+ * TABLE_MAX (C): table only, preview on request. Admits the owner's 831.
+ * Above C, a plain refusal that names the count and the cap.
  */
-const MAX_ELEMENT_COUNT = 50;
+export const ELEMENT_TIERS = Object.freeze({
+  autoRenderMax: 50,
+  deferFlattenMax: 200,
+  tableMax: 1000,
+});
+
+/**
+ * Which tier a rendering-element count falls in.
+ *
+ * @param {number} count - Number of rendering elements
+ * @returns {'auto'|'defer_flatten'|'manual_render'|'too_complex'}
+ */
+/**
+ * The prototype builds three passes, so no more than three files are ever
+ * written. The owner's number; the tiered charm model is built to it.
+ */
+export const LAYER_EMIT_CAP = 3;
+
+export function tierForCount(count) {
+  if (count <= ELEMENT_TIERS.autoRenderMax) return 'auto';
+  if (count <= ELEMENT_TIERS.deferFlattenMax) return 'defer_flatten';
+  if (count <= ELEMENT_TIERS.tableMax) return 'manual_render';
+  return 'too_complex';
+}
 
 // CSS Level 2 named colors → hex.
 // parseLuminance() (image-import.js:130) handles rgb() and #hex only;
@@ -343,6 +397,131 @@ export function bakeElementTransforms(element, pathData) {
  * @returns {string|null} Effective paint value, or null when unset anywhere
  *   (callers apply the SVG defaults: black fill, no stroke)
  */
+/**
+ * Declarations a document's <style> blocks give to each class and element
+ * name, parsed once per document and cached.
+ *
+ * D-118 (DP-0, 2026-08-28): getEffectivePaint used to read the presentation
+ * attribute, the `style` ATTRIBUTE and ancestors, and nothing else. Every CAD
+ * and Illustrator export declares paint by CLASS instead:
+ *
+ *   <defs><style>.cls-1 { fill: none; stroke: #000 }</style></defs>
+ *   <path class="cls-1" d="..."/>
+ *
+ * so `fill` resolved to null, the SVG default BLACK was assumed, and a
+ * stroke-only line drawing became a page of solid black shapes. MEASURED on
+ * the owner's own files: 70/70 and 831/831 elements classified `foreground`
+ * with ZERO stroke conversions, which is why their art came out of the
+ * stencil as one hole the shape of its outer boundary.
+ *
+ * Deliberately small: this resolves simple class, type and id selectors,
+ * which is the shape every exporter emits. Anything with a combinator, a
+ * pseudo-class or an attribute test is skipped rather than half-understood -
+ * a wrong answer here silently changes geometry.
+ */
+const STYLESHEET_CACHE = new WeakMap();
+
+/**
+ * Parse a declaration block ("fill:none;stroke:#000") into a plain object.
+ * @param {string} body
+ * @returns {Object<string, string>}
+ */
+function parseDeclarations(body) {
+  const out = {};
+  for (const part of body.split(';')) {
+    const colon = part.indexOf(':');
+    if (colon === -1) continue;
+    const name = part.slice(0, colon).trim().toLowerCase();
+    const value = part.slice(colon + 1).trim();
+    if (name && value) out[name] = value;
+  }
+  return out;
+}
+
+/**
+ * Build {classes, types, ids} declaration maps from a document's <style>
+ * blocks. Later rules win, matching CSS's own last-one-wins for equal
+ * specificity.
+ *
+ * @param {Document} doc
+ * @returns {{classes: Object, types: Object, ids: Object}}
+ */
+function buildStylesheetIndex(doc) {
+  const index = { classes: {}, types: {}, ids: {} };
+  const styles = doc.querySelectorAll ? doc.querySelectorAll('style') : [];
+  for (const styleEl of styles) {
+    // Comments first, so a commented-out rule cannot be read as live.
+    const css = (styleEl.textContent || '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const ruleRe = /([^{}]+)\{([^{}]*)\}/g;
+    let match;
+    while ((match = ruleRe.exec(css)) !== null) {
+      const declarations = parseDeclarations(match[2]);
+      if (Object.keys(declarations).length === 0) continue;
+      for (const rawSelector of match[1].split(',')) {
+        const selector = rawSelector.trim();
+        if (!selector) continue;
+        let bucket = null;
+        let key = null;
+        if (/^\.[A-Za-z_][\w-]*$/.test(selector)) {
+          bucket = index.classes;
+          key = selector.slice(1);
+        } else if (/^#[A-Za-z_][\w-]*$/.test(selector)) {
+          bucket = index.ids;
+          key = selector.slice(1);
+        } else if (/^[A-Za-z][\w-]*$/.test(selector)) {
+          bucket = index.types;
+          key = selector.toLowerCase();
+        }
+        // Anything else (combinators, pseudo-classes, attribute tests) is
+        // left alone rather than guessed at.
+        if (!bucket) continue;
+        bucket[key] = { ...(bucket[key] || {}), ...declarations };
+      }
+    }
+  }
+  return index;
+}
+
+/**
+ * The value a document's <style> rules give this element for one property,
+ * in ascending specificity: type < class < id.
+ *
+ * @param {Element} element
+ * @param {string} prop
+ * @returns {string|null}
+ */
+function stylesheetValueFor(element, prop) {
+  const doc = element.ownerDocument;
+  if (!doc) return null;
+  let index = STYLESHEET_CACHE.get(doc);
+  if (!index) {
+    index = buildStylesheetIndex(doc);
+    STYLESHEET_CACHE.set(doc, index);
+  }
+  let value = null;
+  const type = element.tagName ? element.tagName.toLowerCase() : null;
+  if (type && index.types[type] && index.types[type][prop] !== undefined) {
+    value = index.types[type][prop];
+  }
+  const classAttr = element.getAttribute && element.getAttribute('class');
+  if (classAttr) {
+    for (const name of classAttr.split(/\s+/)) {
+      if (
+        name &&
+        index.classes[name] &&
+        index.classes[name][prop] !== undefined
+      ) {
+        value = index.classes[name][prop];
+      }
+    }
+  }
+  const id = element.getAttribute && element.getAttribute('id');
+  if (id && index.ids[id] && index.ids[id][prop] !== undefined) {
+    value = index.ids[id][prop];
+  }
+  return value;
+}
+
 export function getEffectivePaint(element, prop) {
   const styleRe = new RegExp(`(?:^|;)\\s*${prop}\\s*:\\s*([^;]+)`, 'i');
   let node = element;
@@ -353,6 +532,10 @@ export function getEffectivePaint(element, prop) {
       const m = styleAttr.match(styleRe);
       if (m) return m[1].trim();
     }
+    // D-118: a <style> rule outranks a presentation attribute, and loses to
+    // the style attribute above. Same order the browser uses.
+    const fromSheet = stylesheetValueFor(node, prop);
+    if (fromSheet !== null && fromSheet !== '') return fromSheet;
     const attr = node.getAttribute && node.getAttribute(prop);
     if (attr !== null && attr !== undefined && attr !== '') return attr;
     node = node.parentElement;
@@ -676,6 +859,257 @@ export function flattenToCompoundPath(
 }
 
 /**
+ * Flatten a design into one compound-path SVG PER LAYER (DP-7).
+ *
+ * The stacked-mask law, which is the containment law seen from the printer's
+ * side: layer L carries the FULL regions of every element assigned to L AND
+ * to every layer below it. The directive says layer 2's elements "were
+ * embossed in layer 1 and layer 2", and that is exactly this - each pass
+ * lays down a smaller mask on top of the last, so nested regions accumulate
+ * height and nothing is ever left standing on air.
+ *
+ * Not rings, and not per-layer differences: full regions, stacked. The DP-0
+ * probe built a stepped pyramid this way and it came out watertight.
+ *
+ * Layer 1 therefore costs what today's single flatten costs, and each deeper
+ * layer holds strictly fewer elements than the one before it.
+ *
+ * @param {Array} classifiedElements - Output of classifyElements()
+ * @param {Array<number>} layers - Layer per element, positionally aligned
+ * @param {number} limit - How many layers to emit
+ * @param {object} [svgMeta] - viewBox/width/height for the written SVG
+ * @param {string[]} [warningsOut] - Receives flatten fallback warnings
+ * @returns {Array<string|null>} One SVG per layer; null where a layer has
+ *   nothing to build
+ */
+/**
+ * The design's OUTER SILHOUETTE: its outline with every hole filled (DP-11).
+ *
+ * A traced bird becomes a bird-shaped pendant. Two measurements shape this,
+ * and without either one the pendant comes out wrong in a way that renders
+ * perfectly and prints as rubbish.
+ *
+ * ★ IT WORKS ON THE RAW GEOMETRY, NOT THE CONVERTED GEOMETRY. The bird's own
+ * outline is a stroke - `fill="none" stroke="#1a1a1a" stroke-width="14"` -
+ * and strokeToFill turns a stroke into a thin BAND. Built from the converted
+ * paths the pendant came out as a HOLLOW RING with the eye and the feathers
+ * floating in the hole. The raw subpath, implicitly closed, is the shape the
+ * eye sees, and filling it is the whole point of a silhouette.
+ *
+ * ★ AND THE OUTERMOST SHAPE OF A TRACED PHOTOGRAPH IS ALMOST NEVER THE
+ * DRAWING. This repo's bird fixture has one root: a full-bleed
+ * `<rect fill="#efe9dc">`, the paper it was drawn on. Taking roots naively
+ * gave a 600x450 RECTANGLE, so every traced photograph would have made a
+ * rectangular pendant. A root classified as a hole is a background, and this
+ * descends past it to the shapes drawn on it.
+ *
+ * Below the top level, roles stop mattering: a hole is a hole in the RELIEF,
+ * not a hole in the pendant. Something marked "cut out" should not saw the
+ * body in half.
+ *
+ * @param {Array} rawElements - Output of parseSvgElements(), NOT classified
+ * @param {Array<string>} roles - Role per element, positionally aligned
+ * @param {object} [svgMeta] - viewBox/width/height of the source
+ * @param {string[]} [warningsOut] - Receives flatten fallback warnings
+ * @returns {string|null} One compound-path SVG, or null when there is no shape
+ */
+export function flattenSilhouette(
+  rawElements,
+  roles,
+  svgMeta = {},
+  warningsOut = null
+) {
+  if (!Array.isArray(rawElements) || rawElements.length === 0) return null;
+  const roleAt = (i) => (Array.isArray(roles) ? roles[i] : 'foreground');
+
+  // The tree is built on the RAW outlines, which is also the only tree that
+  // matches what a person sees: converting strokes first would put the bird
+  // INSIDE its own outline band rather than being it.
+  const tree = buildNestingTree(rawElements);
+
+  const outline = [];
+  const visit = (index, depth) => {
+    const el = rawElements[index];
+    const node = tree.nodes[index];
+    if (!el || !node || depth > 4) return;
+    const role = roleAt(index);
+    if (role !== 'hole' && role !== 'ignore' && el.pathData) {
+      outline.push({ ...el, role: 'foreground' });
+      return;
+    }
+    for (const child of node.children) visit(child, depth + 1);
+  };
+  for (const root of tree.roots) visit(root, 0);
+
+  if (outline.length === 0) return null;
+  const svg = flattenToCompoundPath(outline, svgMeta, warningsOut);
+  if (!svg) return null;
+  // Normalized against its own outline, so the body and the relief files land
+  // on one canvas and a model needs one scale factor for both.
+  return normalizeLayerStack([svg])[0];
+}
+
+export function flattenLayers(
+  classifiedElements,
+  layers,
+  limit,
+  svgMeta = {},
+  warningsOut = null,
+  options = {}
+) {
+  const out = [];
+  if (!Array.isArray(classifiedElements) || !Array.isArray(layers)) return out;
+  const count = Math.max(0, Math.min(limit || 0, LAYER_EMIT_CAP));
+  const raw = [];
+
+  for (let layer = 1; layer <= count; layer++) {
+    const forThisLayer = classifiedElements
+      .filter((el, i) => (layers[i] || 1) >= layer)
+      // ★ SOLID MODE, for the bridge-less stencil (DP-12). There, DEPTH alone
+      // decides and every cut must be one solid region: layer 1's cut is the
+      // letter A INCLUDING where its counter will be, because the counter is
+      // cut at layer 1 too and only becomes its own shape at layer 2. That is
+      // the whole reason the method needs no bridges - no cut is ever an
+      // annulus, so nothing is ever left connected to nothing.
+      //
+      // MEASURED without it: the letter A came out as TWO subpaths, its
+      // counter a hole, and layer 2 came out NULL, because the counter was
+      // classified 'hole' and a compound path with no foreground is nothing.
+      //
+      // The charm keeps roles on purpose - there a hole IS a hole in the
+      // relief, and the walls of a counter must not close over as the stack
+      // rises. One law, two different jobs.
+      .map((el) => (options.solid ? { ...el, role: 'foreground' } : el));
+    raw.push(
+      forThisLayer.length === 0
+        ? null
+        : flattenToCompoundPath(forThisLayer, svgMeta, warningsOut)
+    );
+  }
+  return normalizeLayerStack(raw);
+}
+
+/**
+ * Put every layer on one shared, normalized canvas sized from LAYER 1 (DP-7).
+ *
+ * Four things were MEASURED against OpenSCAD 2026.01.03 to arrive at this,
+ * every one of which would otherwise have shipped as geometry that looks
+ * correct from directly above:
+ *
+ *   1. resize() fits the CONTENT bounding box, not the document. Fitting each
+ *      layer to the charm face independently scaled the probe's 8 mm inner
+ *      square up to 20 mm, the same size as the 36 mm outer one. Three
+ *      identical slabs.
+ *   2. import(center = false) preserves ABSOLUTE user coordinates (the probe
+ *      came back at 2..38 and 16..24 exactly), so layers already share one
+ *      coordinate system and need ONE transform between them.
+ *   3. OpenSCAD honours a <g transform> on import: a translate+scale wrapper
+ *      moved a square from 16..24 to 12..28 as written.
+ *   4. A width with NO unit is pixels, converted at 72 dpi: a 100-wide
+ *      document came in at 35.28 mm. The unit is therefore always written.
+ *
+ * And one quirk worth naming: OpenSCAD maps the viewBox as x_out = x - minX
+ * but y_out = (height - minY) - y, so a NEGATIVE minY shifts the result by
+ * twice itself. The canvas is always written with minX and minY at zero, and
+ * then the mapping is simply a y flip inside [0,W] x [0,H] - the same flip the
+ * single-design path already lives with, so the two agree.
+ *
+ * The result: layer 1 spans the full canvas width, deeper layers sit inside it
+ * at their true relative size and position, and the model needs one scale
+ * factor plus the aspect it already carries.
+ *
+ * @param {Array<string|null>} svgs - Per-layer SVGs, layer 1 first
+ * @returns {Array<string|null>} The same list on the normalized canvas
+ */
+function normalizeLayerStack(svgs) {
+  const first = svgs.find((v) => v);
+  if (!first) return svgs;
+  const d = /\sd="([^"]*)"/.exec(first);
+  if (!d) return svgs;
+
+  const { points } = polygonFromPathData(d[1]);
+  const box = boundsOf(points);
+  if (!box) return svgs;
+  const width = box.maxX - box.minX;
+  const height = box.maxY - box.minY;
+  if (!(width > 0) || !(height > 0)) return svgs;
+
+  const scale = LAYER_CANVAS_SPAN / width;
+  const canvasH = round6(height * scale);
+  // translate(a,b) scale(s) scales first, so this lands the design's own
+  // bounding box exactly on [0, SPAN] x [0, canvasH].
+  const t =
+    `translate(${round6(-scale * box.minX)},${round6(-scale * box.minY)}) ` +
+    `scale(${round6(scale)})`;
+  const open =
+    `<svg xmlns="http://www.w3.org/2000/svg" ` +
+    `width="${LAYER_CANVAS_SPAN}mm" height="${canvasH}mm" ` +
+    `viewBox="0 0 ${LAYER_CANVAS_SPAN} ${canvasH}">` +
+    `<g transform="${t}">`;
+
+  return svgs.map((svg) =>
+    svg
+      ? svg.replace(/^<svg[^>]*>/, open).replace(/<\/svg>$/, '</g></svg>')
+      : null
+  );
+}
+
+function round6(n) {
+  return Math.round(n * 1e6) / 1e6;
+}
+
+/**
+ * Read back a layer file written by normalizeLayerStack: the path data, the
+ * canvas it is normalized to, and the transform BETWEEN the two.
+ *
+ * ★ D-122. The path data inside a layer file is still in the design's own
+ * user units; the `<g transform>` is what puts it on the normalized canvas.
+ * A reader that takes the `d` and the viewBox and nothing else is holding two
+ * coordinate systems and has no way to know it: the plate builder did exactly
+ * that and fitted 119.81 units of cat as if they were 100. That is a 1.198x
+ * error on this SVG and 5x on a 503-pixel raster trace - the owner's 285 mm
+ * cat on a 100 mm plate. So this is the ONE reader of a layer file, it always
+ * hands back the transform beside the data, and the caller applies it exactly
+ * once.
+ *
+ * @param {string|null} layerSvg - One entry of a flattenLayers result
+ * @returns {{pathData: string, canvasSpan: number, canvasHeight: number,
+ *   transform: {scale: number, dx: number, dy: number}|null}|null}
+ */
+export function readLayerFile(layerSvg) {
+  if (!layerSvg || typeof layerSvg !== 'string') return null;
+  const pathData = / d="([^"]*)"/.exec(layerSvg)?.[1];
+  if (!pathData) return null;
+  const vb = /viewBox="0 0 ([\d.eE+-]+) ([\d.eE+-]+)"/.exec(layerSvg);
+  const t =
+    /<g transform="translate\(([^,)]+),([^)]+)\) scale\(([^)]+)\)"/.exec(
+      layerSvg
+    );
+  const num = (s) => {
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : null;
+  };
+  const scale = t ? num(t[3]) : null;
+  const dx = t ? num(t[1]) : null;
+  const dy = t ? num(t[2]) : null;
+  return {
+    pathData,
+    canvasSpan: vb ? (num(vb[1]) ?? LAYER_CANVAS_SPAN) : LAYER_CANVAS_SPAN,
+    canvasHeight: vb ? (num(vb[2]) ?? LAYER_CANVAS_SPAN) : LAYER_CANVAS_SPAN,
+    transform:
+      scale !== null && dx !== null && dy !== null ? { scale, dx, dy } : null,
+  };
+}
+
+/**
+ * The width every layer file is normalized to, in millimetres of SVG canvas.
+ * A CONTRACT between this emitter and any tile that reads layer files: the
+ * model multiplies by one scale factor to reach the size it wants, and may
+ * not be changed without changing them together.
+ */
+export const LAYER_CANVAS_SPAN = 100;
+
+/**
  * Full SVG preparation pipeline.
  *
  * Parses, classifies, and flattens a multi-element SVG into a single
@@ -824,14 +1258,17 @@ export function analyzeSvg(svgString) {
     }
   }
 
-  if (renderElements.length > MAX_ELEMENT_COUNT) {
+  const tier = tierForCount(renderElements.length);
+
+  if (tier === 'too_complex') {
     return {
       status: 'too_complex',
+      tier,
       confidence: 0,
       elements: [],
       warnings: [
-        `This SVG has ${renderElements.length} elements — the maximum is ${MAX_ELEMENT_COUNT}. ` +
-          'Simplify the SVG in a vector editor (e.g., merge paths, remove hidden layers) before importing.',
+        `This drawing has ${renderElements.length} shapes, and Forge can work with ${ELEMENT_TIERS.tableMax} at a time. ` +
+          'Simplify it in a vector editor (merge paths, remove hidden layers) and try again.',
       ],
       unsupportedFeatures: [],
       recommendation: 'reject',
@@ -994,8 +1431,23 @@ export function analyzeSvg(svgString) {
     recommendation = 'open_editor';
   }
 
+  // DP-3: above tier A, nothing may start a boolean flatten by itself.
+  // `auto_prepare` is the only recommendation that does, so it becomes
+  // `open_editor` and the person decides when to spend the time.
+  // `pass_through` is left alone at every tier ON PURPOSE: it means the
+  // shapes need no flattening at all (OpenSCAD unions overlapping fills
+  // natively), so it costs nothing however many there are, and downgrading
+  // it would send people to the editor for a file that is already fine.
+  // The advisory copy for each tier lives in the UI, not here: this function
+  // stays an analyzer, and `warnings` keeps meaning "something about this
+  // drawing is off" for the code that already filters it.
+  if (tier !== 'auto' && recommendation === 'auto_prepare') {
+    recommendation = 'open_editor';
+  }
+
   return {
     status,
+    tier,
     confidence,
     elements,
     warnings,
@@ -1003,6 +1455,7 @@ export function analyzeSvg(svgString) {
     recommendation,
     singleElement,
     isCompoundPathOnly,
+    elementCount: renderElements.length,
   };
 }
 

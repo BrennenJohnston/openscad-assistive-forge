@@ -30,6 +30,14 @@ const LIT = '.tour-nudge-lit';
 const TARGET = '.tour-nudge-target';
 const CARD_TIP = '.welcome-spotlight-tag';
 const START_BTN = '#startWelcomeTourBtn';
+// DP-2: the landing target after "no". #welcomeScreen is its own scroll
+// container, not the document, so scrollTop is read from it and never window.
+const MAIN_HEADING = '#features-heading';
+
+const welcomeScrollTop = (page) =>
+  page.evaluate(
+    () => document.getElementById('welcomeScreen')?.scrollTop ?? null
+  );
 
 const CLASSIC_STAMP = JSON.stringify({
   mode: 'classic',
@@ -126,16 +134,37 @@ test.describe('Welcome tour nudge (U-27, UF-22)', () => {
     await expect(page.locator(MODAL)).toHaveCount(0);
   });
 
-  test('Not now hands over to the card tip, keeps focus, and asks again next load', async ({
+  test('Not now returns to the top of the Main Page, hands over to the card tip, and asks again next load', async ({
     page,
   }) => {
     await bootWelcome(page);
     await expect(page.locator(MODAL)).toBeVisible({ timeout: 30_000 });
+    // The nudge scrolled the tour card up to ask its question.
+    expect(await welcomeScrollTop(page)).toBeGreaterThan(0);
+
     await page.locator('.tour-nudge-dismiss').click();
 
     await expect(page.locator(MODAL)).toHaveCount(0);
     await expect(page.locator(CARD_TIP)).toHaveCount(1);
-    await expect(page.locator(START_BTN)).toBeFocused();
+
+    // DP-2 (directive line 3) supersedes Q-52c's LANDING: the visitor is put
+    // back at the top of the Main Page rather than welded to the tour button.
+    // Q-52's other parts are unchanged and still asserted below.
+    expect(await welcomeScrollTop(page)).toBe(0);
+    await expect(page.locator(MAIN_HEADING)).toBeFocused();
+    await expect(page.locator(START_BTN)).not.toBeFocused();
+
+    // The owner's named most-important menus are on screen, not just in the DOM.
+    for (const sel of ['#saved-projects-heading', MAIN_HEADING]) {
+      // boundingBox() is {x, y, width, height} in viewport coordinates.
+      const box = await page.locator(sel).boundingBox();
+      expect(box, `${sel} must have a box`).not.toBeNull();
+      expect(box.y, `${sel} must be below the viewport top`).toBeGreaterThan(0);
+      expect(
+        box.y + box.height,
+        `${sel} must be above the fold`
+      ).toBeLessThan(page.viewportSize().height);
+    }
 
     const suppressed = await page.evaluate(
       (key) => localStorage.getItem(key),
@@ -151,18 +180,51 @@ test.describe('Welcome tour nudge (U-27, UF-22)', () => {
     await expect(page.locator(MODAL)).toBeVisible({ timeout: 30_000 });
   });
 
-  test('Escape dismisses for now without suppressing', async ({ page }) => {
+  test('Escape and a backdrop click are the same no, and take the same landing', async ({
+    page,
+  }) => {
+    // One gesture, one meaning: all three ways of saying no route through
+    // close(false), so splitting their landings would split the gesture.
+    for (const how of ['escape', 'backdrop']) {
+      await bootWelcome(page);
+      await expect(page.locator(MODAL)).toBeVisible({ timeout: 30_000 });
+      expect(await welcomeScrollTop(page)).toBeGreaterThan(0);
+
+      if (how === 'escape') await page.keyboard.press('Escape');
+      // The dialog sits over the middle of the backdrop, so aim at a corner.
+      else
+        await page
+          .locator(BACKDROP)
+          .click({ position: { x: 5, y: 5 } });
+
+      await expect(page.locator(MODAL), how).toHaveCount(0);
+      await expect(page.locator(CARD_TIP), how).toHaveCount(1);
+      expect(await welcomeScrollTop(page), how).toBe(0);
+      await expect(page.locator(MAIN_HEADING), how).toBeFocused();
+
+      const suppressed = await page.evaluate(
+        (key) => localStorage.getItem(key),
+        SUPPRESS_KEY
+      );
+      expect(suppressed, how).toBeNull();
+    }
+  });
+
+  test('Start the tour is unchanged: no scroll move, focus back on the button', async ({
+    page,
+  }) => {
+    // The supersession is the NO half only. close(true) must behave exactly as
+    // Q-52c signed it, or starting the tour would fight its own first step.
     await bootWelcome(page);
     await expect(page.locator(MODAL)).toBeVisible({ timeout: 30_000 });
-    await page.keyboard.press('Escape');
+    const before = await welcomeScrollTop(page);
+    expect(before).toBeGreaterThan(0);
 
+    await page.locator('.tour-nudge-start').click();
     await expect(page.locator(MODAL)).toHaveCount(0);
-    await expect(page.locator(CARD_TIP)).toHaveCount(1);
-    const suppressed = await page.evaluate(
-      (key) => localStorage.getItem(key),
-      SUPPRESS_KEY
-    );
-    expect(suppressed).toBeNull();
+
+    expect(await welcomeScrollTop(page)).toBe(before);
+    await expect(page.locator(MAIN_HEADING)).not.toBeFocused();
   });
 
   test('the checkbox is permanent, and the card tip still appears', async ({

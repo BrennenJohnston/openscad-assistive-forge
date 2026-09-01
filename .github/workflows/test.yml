@@ -554,7 +554,7 @@ jobs:
         # the board, but the packing works off the RATIOS between files, and
         # those are a property of what the tests do rather than of the browser.
         run: |
-          FILES=$(node scripts/e2e-shard.mjs ${{ matrix.shard }} 3)
+          FILES=$(node scripts/e2e-shard.mjs ${{ matrix.shard }} 3 msedge)
           echo "shard ${{ matrix.shard }}/3 runs: $FILES"
           npx playwright test --project=msedge $FILES
         env:
@@ -636,16 +636,22 @@ jobs:
   # Edge lanes do it: Playwright's own --shard divides by test count in path
   # order, which balances the counts and not the work.
   e2e-tests-firefox-shard:
-    name: E2E Tests (Firefox ${{ matrix.shard }}/2)
+    # D-130: three shards since 2026-09-01. At two, the lane projected to
+    # 49.4 minutes against the 35-minute ceiling on the post-R8 weights - a
+    # truth the old command hid by running a 3-way plan on a 2-job matrix,
+    # which silently dropped shard 3's files. The per-shard job names are
+    # not required contexts (the aggregator below is), so this re-split
+    # needs no ruleset edit.
+    name: E2E Tests (Firefox ${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
     strategy:
-      # A red shard must not cancel its sibling: knowing whether the failure is
-      # in one half or both is most of the diagnosis.
+      # A red shard must not cancel its siblings: knowing which shard holds
+      # the failure is most of the diagnosis.
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3]
     
     steps:
       - name: Checkout code
@@ -691,9 +697,12 @@ jobs:
             npx playwright install --with-deps firefox
           fi
       
-      - name: Run E2E tests (Firefox shard ${{ matrix.shard }} of 2)
+      - name: Run E2E tests (Firefox shard ${{ matrix.shard }} of 3)
         run: |
-          FILES=$(node scripts/e2e-shard.mjs ${{ matrix.shard }} 3)
+          # The shard count is said once, in the matrix above, and repeated
+          # here; the project name makes the planner book only what this
+          # lane will actually run (PROJECT_IGNORES).
+          FILES=$(node scripts/e2e-shard.mjs ${{ matrix.shard }} 3 firefox)
           echo "shard ${{ matrix.shard }}/3 runs: $FILES"
           npx playwright test --project=firefox $FILES
         env:
@@ -746,12 +755,12 @@ jobs:
     if: always()
 
     steps:
-      - name: Both Firefox shards must have passed
+      - name: All Firefox shards must have passed
         run: |
           result='${{ needs.e2e-tests-firefox-shard.result }}'
           echo "Firefox shards reported: $result"
           if [ "$result" != "success" ]; then
-            echo "::error::Firefox did not pass ($result). The half that failed is in E2E Tests (Firefox 1/2) or (2/2)."
+            echo "::error::Firefox did not pass ($result). The shard that failed is in E2E Tests (Firefox 1/3), (2/3) or (3/3)."
             exit 1
           fi
 

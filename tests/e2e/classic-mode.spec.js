@@ -1554,12 +1554,16 @@ test.describe('Classic dock resizers (B4)', () => {
 
     await tab.click();
     await expect(foldBtn).toHaveAttribute('aria-expanded', 'true');
-    // Back to the height the user chose, not the default
+    // Back to the height the user chose, not the default. The contract is
+    // WHICH height came back - the chosen one differs from the default by
+    // three arrow steps - so the bar only has to separate those two, and
+    // CI's renderer restores with more rounding than local (MEASURED:
+    // 3.45 px there, sub-pixel here).
     await expect
       .poll(async () =>
         Math.abs((await strip.boundingBox()).height - resizedHeight)
       )
-      .toBeLessThan(3);
+      .toBeLessThan(6);
     await expect(stripResizer).toBeVisible();
   });
 
@@ -2269,6 +2273,23 @@ test.describe('Classic dock relocation (B6-B8)', () => {
     test.setTimeout(240_000);
     await enterClassicDesktop(page);
 
+    // The move announcement is transient and preview chatter overwrites it
+    // (MEASURED on CI: the poll saw empty, then Preview ready, then empty).
+    // Record everything the live region says and assert from the record -
+    // the file's announce-once idiom.
+    await page.evaluate(() => {
+      window.__said = [];
+      const region = document.getElementById('srAnnouncer');
+      new MutationObserver(() => {
+        const text = region.textContent.trim();
+        if (text) window.__said.push(text);
+      }).observe(region, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+      });
+    });
+
     // Reach the menu button by keyboard alone
     const menuBtn = page.getByRole('button', {
       name: 'Move Error-Log',
@@ -2302,9 +2323,11 @@ test.describe('Classic dock relocation (B6-B8)', () => {
     ).toBeFocused();
 
     // ...and it was announced
-    await expect(page.locator('#srAnnouncer')).toContainText(
-      'Error-Log moved to the upper right'
-    );
+    await expect
+      .poll(async () => page.evaluate(() => (window.__said || []).join(' | ')), {
+        timeout: 15000,
+      })
+      .toContain('Error-Log moved to the upper right');
   });
 
   test('classic-move-escape: Escape closes the menu and hands focus back', async ({
@@ -2339,6 +2362,24 @@ test.describe('Classic dock relocation (B6-B8)', () => {
     test.setTimeout(240_000);
     await enterClassicDesktop(page);
 
+    // The merge announcement is transient (announcer auto-clear plus any
+    // later polite chatter overwrites it), so it is RECORDED before the
+    // click and asserted from the record - the file's own
+    // classic-window-announce-once idiom. Polling the live region raced
+    // it on CI's slow lanes.
+    await page.evaluate(() => {
+      window.__said = [];
+      const region = document.getElementById('srAnnouncer');
+      new MutationObserver(() => {
+        const text = region.textContent.trim();
+        if (text) window.__said.push(text);
+      }).observe(region, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+      });
+    });
+
     await page
       .getByRole('button', { name: 'Move Error-Log', exact: true })
       .click();
@@ -2356,9 +2397,11 @@ test.describe('Classic dock relocation (B6-B8)', () => {
     // After a merge focus lands on the newly selected tab (B7)
     await expect(errorTab).toBeFocused();
     await expect(errorTab).toHaveAttribute('aria-selected', 'true');
-    await expect(page.locator('#srAnnouncer')).toContainText(
-      'Error-Log merged with Console, tab 2 of 2'
-    );
+    await expect
+      .poll(async () => page.evaluate(() => (window.__said || []).join(' | ')), {
+        timeout: 15000,
+      })
+      .toContain('Error-Log merged with Console, tab 2 of 2');
 
     // Arrows select, and the group is a single tab stop
     await page.keyboard.press('ArrowLeft');

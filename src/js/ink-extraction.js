@@ -36,7 +36,7 @@
  *   purpose - for very small pieces where detail could not be felt anyway.
  * - `standard`: no extraction at all. What Forge did before this existed.
  */
-export const INK_MODES = ['lineart', 'silhouette', 'standard'];
+export const INK_MODES = ['lineart', 'silhouette', 'standard', 'colours'];
 
 /** The starting point for the two thresholds, and the limits a slider allows. */
 export const INK_DEFAULTS = {
@@ -46,6 +46,13 @@ export const INK_DEFAULTS = {
   /** C* at or below this may be ink. 0 is a perfect grey. */
   chromaMax: 25,
   chromaRange: [2, 80],
+  // How many flat colours the Colours mode looks for. Six is what the
+  // owner's own cat needs for its painted colours; the picture also has a
+  // second black along its outlines, so seven finds every one of them. A
+  // colour that was never found cannot be taken out later, so the help
+  // text says to ask for more rather than fewer.
+  colourCount: 6,
+  colourCountRange: [2, 8],
 };
 
 /**

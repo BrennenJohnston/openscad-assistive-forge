@@ -144,6 +144,39 @@ function scrollMenuIntoView(card) {
 }
 
 /**
+ * Put the page back where the user was before the nudge scrolled it, and
+ * land them on the Main Page heading.
+ *
+ * Q-52c (owner, 2026-08-15) signed "Not now hands over to the card tip,
+ * keeps focus [on the tour Start button]". The owner's directive of
+ * 2026-08-27 (line 3) SUPERSEDES the landing half of that: scrollMenuIntoView
+ * runs before the dialog opens, so answering "no" used to leave the visitor
+ * looking at the tour cards with "Open or start a project" and Saved Projects
+ * scrolled off the top - MEASURED at 1400x1024 before this change:
+ * #welcomeScreen.scrollTop 683, #features-heading at -486px, Saved Projects
+ * at -359px. Q-52's other parts (ask until finished, once per load,
+ * dialog-first, Dismiss-tip counts as a no, the D-35 pack-A copy) stand.
+ *
+ * There is deliberately NO live-region announcement here. The heading is
+ * focusable and its accessible name is "Main Page", so moving focus to it IS
+ * the announcement, in semantic HTML rather than ARIA. Adding a second voice
+ * would land inside the welcome spotlight's own polite announcement and one
+ * would cancel the other (the IR-9 debounce lesson) - measured on the live
+ * region across the whole dismissal, the spotlight's tip is the message that
+ * needs the air.
+ */
+function returnToTopOfMainPage() {
+  const scroller = document.getElementById('welcomeScreen');
+  if (scroller) scroller.scrollTop = 0;
+  const heading = document.getElementById('features-heading');
+  if (heading) {
+    heading.focus();
+    return true;
+  }
+  return false;
+}
+
+/**
  * Build the dialog. Kept as real elements rather than an innerHTML blob so the
  * copy above cannot be broken by an unescaped character.
  *
@@ -243,9 +276,13 @@ function showNudge(startTutorial) {
       backdrop.remove();
       modal.remove();
 
-      // Focus lands on the button the outline was pointing at, whichever way
-      // the dialog was answered — never on <body>.
-      tourBtn.focus();
+      // "Yes" lands on the button the outline was pointing at; "no" - the
+      // Not now button, Escape and a backdrop click, which are one gesture
+      // with one meaning - goes back to the top of the Main Page instead
+      // (directive line 3; see returnToTopOfMainPage). Never <body> either way.
+      if (startRequested || !returnToTopOfMainPage()) {
+        tourBtn.focus();
+      }
 
       if (startRequested) {
         startTutorial('welcome', { triggerEl: tourBtn });
