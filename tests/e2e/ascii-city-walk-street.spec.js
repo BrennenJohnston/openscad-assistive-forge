@@ -1032,6 +1032,9 @@ test.describe('ASCII City Walk — the thunder lets go (D-75)', () => {
     await expect
       .poll(() => ambient(page), {
         message: 'asking for less movement left the thunder lift on screen',
+        // The media-change handler lands on a FRAME (the D-76 rain case's
+        // own lesson), and CI software's frames are seconds apart.
+        timeout: 60000,
       })
       .toBeCloseTo(base, 6)
   })
@@ -1896,10 +1899,12 @@ test.describe('ASCII City Walk — the kerb (CW-50)', () => {
         )
         .toBeGreaterThan(setup.needM)
       // Then a few more observed frames, so the climb finishes on screen.
+      // (CW-97 batch 4: twelve frames at CI software's ~2 s/frame is only
+      // 24 samples inside the old 30 s - measured exactly there.)
       const from = await page.evaluate(() => window.__cwKerb.camZ.length)
       await expect
         .poll(() => page.evaluate(() => window.__cwKerb.camZ.length), {
-          timeout: 30_000,
+          timeout: 120_000,
         })
         .toBeGreaterThan(from + 12)
     } finally {
@@ -3229,7 +3234,16 @@ test.describe('ASCII City Walk — colour belongs to its surface (CW-92, D-127)'
     // (CW-Q96), and the lit screen decides only whether the cell is inked.
     await launchGame(page)
     await enterCity(page)
-    await page.locator('#cityWalkColourBtn').click()
+    // noWaitAfter: the colour flip rebuilds the glyph atlas synchronously,
+    // and right after entry - the far bake still running - that handler
+    // outlived even the 30 s action budget on CI software (batch 4,
+    // measured). The aria-pressed wait below is the real post-condition.
+    await page.locator('#cityWalkColourBtn').click({ noWaitAfter: true })
+    await expect(page.locator('#cityWalkColourBtn')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+      { timeout: 120000 }
+    )
     await page.evaluate(() => {
       window.__cityWalkGame.motionReduced = true
       window.__cityWalkGame.altView.setCellProbe(true)
@@ -3313,7 +3327,16 @@ test.describe('ASCII City Walk — colour belongs to its surface (CW-92, D-127)'
     // against the table alone.
     await launchGame(page)
     await enterCity(page)
-    await page.locator('#cityWalkColourBtn').click()
+    // noWaitAfter: the colour flip rebuilds the glyph atlas synchronously,
+    // and right after entry - the far bake still running - that handler
+    // outlived even the 30 s action budget on CI software (batch 4,
+    // measured). The aria-pressed wait below is the real post-condition.
+    await page.locator('#cityWalkColourBtn').click({ noWaitAfter: true })
+    await expect(page.locator('#cityWalkColourBtn')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+      { timeout: 120000 }
+    )
     await page.evaluate(() => {
       window.__cityWalkGame.motionReduced = true
       window.__cityWalkGame.altView.setCellProbe(true)
