@@ -3262,11 +3262,13 @@
                       </label>
                     </div>
                     <span
-                      id="overlaySourceHelp"
                       class="overlay-source-help-text"
-                      >Upload a PNG, JPEG, or SVG image as a reference overlay
-                      behind your 3D model. This does not affect the SCAD file
-                      &mdash; it is a visual guide only.</span
+                      ><span id="overlaySourceHelp"
+                        >Upload a PNG, JPEG, or SVG image as a reference
+                        overlay behind your 3D model.</span
+                      >
+                      This does not affect the SCAD file &mdash; it is a visual
+                      guide only.</span
                     >
                   </div>
                   <label class="overlay-enable-toggle">
@@ -8301,10 +8303,13 @@
                 >Tab key inserts an indent</label
               >
             </div>
-            <p id="prefs-reason-tabkey" class="preferences-panel-reason">
-              Not offered. Tab moves to the next control so keyboard and switch
-              users are never trapped inside the editor. Use the Indent and
-              Unindent buttons on the editor toolbar, or Edit ▸ Indent.
+            <p class="preferences-panel-reason">
+              <span id="prefs-reason-tabkey"
+                >Not offered. Tab moves to the next control so keyboard and
+                switch users are never trapped inside the editor.</span
+              >
+              Use the Indent and Unindent buttons on the editor toolbar, or
+              Edit ▸ Indent.
             </p>
 
             <div class="preferences-check-row">
@@ -8386,10 +8391,12 @@
             tabindex="0"
             hidden
           >
-            <p id="prefs-reason-3dprint" class="preferences-panel-reason">
-              Sending a model straight to a printer (the desktop's OctoPrint and
-              slicer hookups) is not built here. Export the model and open it in
-              your slicer.
+            <p class="preferences-panel-reason">
+              <span id="prefs-reason-3dprint"
+                >Sending a model straight to a printer (the desktop's OctoPrint
+                and slicer hookups) is not built here.</span
+              >
+              Export the model and open it in your slicer.
             </p>
           </div>
           <div
@@ -8453,12 +8460,19 @@
             tabindex="0"
             hidden
           >
-            <p id="prefs-reason-axes" class="preferences-panel-reason">
-              A game controller already moves the view: the right stick rotates,
-              and the left stick zooms and pans. What is not built is changing
-              those assignments, or the dead-zone and trim controls the desktop
-              offers — the dead zone is fixed. Space mice and other specialist
-              3D input devices are not supported.
+            <!-- DP-32: the disabled tab's description is the first sentence
+                 only; the rest stays visible here. Keep the id on the span -
+                 collapsing it back onto the paragraph silently restores the
+                 full text to every arrow-key pass along the tab strip. -->
+            <p class="preferences-panel-reason">
+              <span id="prefs-reason-axes"
+                >A game controller already moves the view: the right stick
+                rotates, and the left stick zooms and pans.</span
+              >
+              What is not built is changing those assignments, or the dead-zone
+              and trim controls the desktop offers — the dead zone is fixed.
+              Space mice and other specialist 3D input devices are not
+              supported.
             </p>
             <!-- Read-only, deliberately NOT a live region: plugging a pad in
                  already announces through the status line (main.js wires
@@ -8474,11 +8488,14 @@
             tabindex="0"
             hidden
           >
-            <p id="prefs-reason-buttons" class="preferences-panel-reason">
-              A game controller's buttons already run commands: A renders, X
-              downloads, Y switches the preview on and off, B cancels, and the
-              D-pad steps through the parameters and changes their values. What
-              is not built is choosing which button does what.
+            <p class="preferences-panel-reason">
+              <span id="prefs-reason-buttons"
+                >A game controller's buttons already run commands: A renders, X
+                downloads, Y switches the preview on and off, B cancels, and
+                the D-pad steps through the parameters and changes their
+                values.</span
+              >
+              What is not built is choosing which button does what.
             </p>
           </div>
           <div
@@ -9099,10 +9116,12 @@ No console output yet. Generate a model to see output.</pre
           >
             Download Project ZIP
           </button>
-          <p id="downloadProjectZipHelp" class="publish-help-text">
-            One archive holding this project's files, the manifest above, and a
-            record of where the design came from. Unzip it into your repository
-            and everything is in place.
+          <p class="publish-help-text">
+            <span id="downloadProjectZipHelp"
+              >One archive holding this project's files, the manifest above,
+              and a record of where the design came from.</span
+            >
+            Unzip it into your repository and everything is in place.
           </p>
           <h3>3. Get Your Shareable Link</h3>
           <div class="publish-setting-row">
