@@ -1756,6 +1756,8 @@ export function createDrawingEditor({
     },
     setCount,
     say,
+    /** D-120: resolves once the workspace's ring engine is in. */
+    whenReady: () => workspace.whenReady(),
     getResult: () => workspace.getResult(),
     getRoleOverrides: () => workspace.getRoleOverrides(),
     getOffsetOverrides: () => workspace.getOffsetOverrides(),

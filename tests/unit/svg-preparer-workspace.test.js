@@ -456,9 +456,10 @@ describe('createSvgPrepWorkspace', () => {
       ws.destroy();
     });
 
-    it('updates the ARIA live region on role change with preview info', () => {
+    it('updates the ARIA live region on role change with preview info', async () => {
       const ws = createSvgPrepWorkspace(container);
       ws.open(SIMPLE_SVG, makeAnalysis(1));
+      await ws.whenReady();
 
       const radios = ws._root.querySelectorAll('input[type="radio"]');
       const ignoreRadio = Array.from(radios).find((r) => r.value === 'ignore');
@@ -767,9 +768,10 @@ describe('createSvgPrepWorkspace', () => {
   });
 
   describe('footer buttons', () => {
-    it('Apply closes the editor', () => {
+    it('Apply closes the editor', async () => {
       const ws = createSvgPrepWorkspace(container);
       ws.open(SIMPLE_SVG, makeAnalysis(1));
+      await ws.whenReady();
 
       const applyBtn = ws._root.querySelector('[data-action="apply"]');
       applyBtn.click();
@@ -921,10 +923,14 @@ describe('Phase 3: source pane rendering', () => {
   });
 });
 
+// D-120: the flatten runs through the lazily loaded ring engine, so a test
+// that reads the result awaits whenReady() once after open. After that the
+// engine is in and every later re-render is synchronous.
 describe('Phase 3: result pane rendering', () => {
-  it('renders prepared result in the result pane on open', () => {
+  it('renders prepared result in the result pane on open', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(1));
+    await ws.whenReady();
 
     const resultSvg = ws._root.querySelector('.svg-prep-result-pane svg');
     expect(resultSvg).toBeTruthy();
@@ -932,9 +938,10 @@ describe('Phase 3: result pane rendering', () => {
     ws.destroy();
   });
 
-  it('result pane contains a single <path> after preparation', () => {
+  it('result pane contains a single <path> after preparation', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(1));
+    await ws.whenReady();
 
     const paths = ws._root.querySelectorAll('.svg-prep-result-pane path');
     expect(paths.length).toBe(1);
@@ -942,19 +949,21 @@ describe('Phase 3: result pane rendering', () => {
     ws.destroy();
   });
 
-  it('result path includes fill-rule="evenodd"', () => {
+  it('result path carries the ring flatten fill rule (nonzero since D-120)', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(1));
+    await ws.whenReady();
 
     const path = ws._root.querySelector('.svg-prep-result-pane path');
-    expect(path.getAttribute('fill-rule')).toBe('evenodd');
+    expect(path.getAttribute('fill-rule')).toBe('nonzero');
 
     ws.destroy();
   });
 
-  it('getResult returns prepared SVG string after open', () => {
+  it('getResult returns prepared SVG string after open', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(1));
+    await ws.whenReady();
 
     const result = ws.getResult();
     expect(result).not.toBeNull();
@@ -993,10 +1002,11 @@ describe('Phase 3: role change updates result preview', () => {
     ws.destroy();
   });
 
-  it('changing role from hole to foreground updates result path data', () => {
+  it('changing role from hole to foreground updates result path data', async () => {
     const ws = createSvgPrepWorkspace(container);
     const analysis = makeAnalysis(2);
     ws.open(SIMPLE_SVG, analysis);
+    await ws.whenReady();
 
     const initialPath = ws._root.querySelector('.svg-prep-result-pane path');
     const initialD = initialPath ? initialPath.getAttribute('d') : '';
@@ -1016,9 +1026,10 @@ describe('Phase 3: role change updates result preview', () => {
     ws.destroy();
   });
 
-  it('announces preview state after role change', () => {
+  it('announces preview state after role change', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(2));
+    await ws.whenReady();
 
     const secondItem = ws._root.querySelector(
       '.svg-prep-object[data-index="1"]'
@@ -1376,9 +1387,10 @@ describe('Phase 3: reset behavior', () => {
     ws.destroy();
   });
 
-  it('Reset updates the result preview', () => {
+  it('Reset updates the result preview', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(1));
+    await ws.whenReady();
 
     const radios = ws._root.querySelectorAll('input[type="radio"]');
     const ignoreRadio = Array.from(radios).find((r) => r.value === 'ignore');
@@ -1416,10 +1428,11 @@ describe('Phase 4a: open() callbacks parameter', () => {
 });
 
 describe('Phase 4a: Apply button fires onApply callback', () => {
-  it('calls onApply with the prepared result on Apply', () => {
+  it('calls onApply with the prepared result on Apply', async () => {
     const onApply = vi.fn();
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(1), { onApply });
+    await ws.whenReady();
 
     const applyBtn = ws._root.querySelector('[data-action="apply"]');
     applyBtn.click();
@@ -1430,10 +1443,11 @@ describe('Phase 4a: Apply button fires onApply callback', () => {
     expect(result).toContain('<path');
   });
 
-  it('closes the editor after calling onApply', () => {
+  it('closes the editor after calling onApply', async () => {
     const onApply = vi.fn();
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(1), { onApply });
+    await ws.whenReady();
 
     ws._root.querySelector('[data-action="apply"]').click();
     expect(ws._root.hidden).toBe(true);
@@ -1547,9 +1561,10 @@ describe('Phase 4a: Escape / close button keep the original', () => {
 });
 
 describe('Apply button disabled state', () => {
-  it('disables Apply and shows the hint when nothing is included', () => {
+  it('disables Apply and shows the hint when nothing is included', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(1));
+    await ws.whenReady();
 
     const applyBtn = ws._root.querySelector('[data-action="apply"]');
     expect(applyBtn.disabled).toBe(false);
@@ -1716,9 +1731,10 @@ describe('viewBox fallback and zoom preservation', () => {
     ws.destroy();
   });
 
-  it('preserves result pane zoom across preview re-renders', () => {
+  it('preserves result pane zoom across preview re-renders', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(2));
+    await ws.whenReady();
 
     const zoomInBtn = ws._root.querySelector(
       '.svg-prep-result-pane .svg-prep-zoom-in'
@@ -1745,9 +1761,10 @@ describe('viewBox fallback and zoom preservation', () => {
 });
 
 describe('preview error handling', () => {
-  it('shows an inline error instead of dying when preview generation throws', () => {
+  it('shows an inline error instead of dying when preview generation throws', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(2));
+    await ws.whenReady();
 
     // Force the next preview render to explode mid-pipeline
     const RealDOMParser = globalThis.DOMParser;
@@ -1855,7 +1872,7 @@ describe('Phase 5: getRoleOverrides()', () => {
     ws.destroy();
   });
 
-  it('is callable from the onApply callback before close()', () => {
+  it('is callable from the onApply callback before close()', async () => {
     let capturedOverrides = null;
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(2), {
@@ -1863,6 +1880,7 @@ describe('Phase 5: getRoleOverrides()', () => {
         capturedOverrides = ws.getRoleOverrides();
       },
     });
+    await ws.whenReady();
 
     ws._root.querySelector('[data-action="apply"]').click();
     expect(capturedOverrides).toBeTruthy();
@@ -2541,7 +2559,7 @@ describe('Phase 9: getOffsetOverrides()', () => {
     ws.destroy();
   });
 
-  it('is callable from the onApply callback before close', () => {
+  it('is callable from the onApply callback before close', async () => {
     let capturedOffsets = null;
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(2), {
@@ -2549,6 +2567,7 @@ describe('Phase 9: getOffsetOverrides()', () => {
         capturedOffsets = ws.getOffsetOverrides();
       },
     });
+    await ws.whenReady();
 
     const inputs = ws._root.querySelectorAll('.svg-prep-offset-input');
     inputs[0].value = '1.0';
