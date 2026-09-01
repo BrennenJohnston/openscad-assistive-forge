@@ -102,17 +102,24 @@ export async function enterCity(page, cityName = 'Seattle, Washington') {
     !(await webglAvailable(page)),
     'This browser has no WebGL, so the 3D city cannot start.'
   )
+  // Entering a 3D city IS the slow path, and the budget should say so
+  // where the cost lives: slow() triples the calling test's timeout, so a
+  // case that never set its own does not die at the 60 s default while
+  // CI's two-core software renderer is still building the city (measured
+  // at CW-97: the calibration cases died exactly this way).
+  test.slow()
   // noWaitAfter: the click handler BUILDS THE CITY, and on CI's two-core
   // software renderer that synchronous build can outlast the 10 s action
   // timeout - the click then "fails" while the city is busy being born
   // (measured at CW-97: Denver's entry, and at its worst even Seattle's).
   // The viewport wait below is the real post-condition and carries the
-  // budget.
+  // budget - 90 s because the same build that outlives the click can
+  // outlive 30 s wholesale on the slowest software shard.
   await page
     .getByRole('button', { name: cityName })
     .click({ noWaitAfter: true })
   await expect(page.locator('#cityWalkViewport')).toBeVisible({
-    timeout: 30000,
+    timeout: 90000,
   })
   await expect(page.locator('#cityWalkHudStatus')).toContainText(
     'street view',

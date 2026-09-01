@@ -174,6 +174,20 @@ test('a relocated toggle stays keyboard-operable in its menu home', async ({
     if (onIt) break;
     await page.keyboard.press('ArrowDown');
   }
+  // The announcement is TRANSIENT: the polite live region debounces, sets,
+  // and then auto-clears itself (announcer.js clearDelayMs), so a poll of
+  // its current text on a slow shard can begin after the wipe and only
+  // ever read "" — measured on CI with the toggle itself working. Watch
+  // with an observer armed BEFORE the toggle: what a screen reader hears,
+  // accumulated.
+  await page.evaluate(() => {
+    window.__uf11Heard = [];
+    const node = document.getElementById('srAnnouncer');
+    new MutationObserver(() => {
+      const t = node.textContent.trim();
+      if (t) window.__uf11Heard.push(t);
+    }).observe(node, { childList: true, characterData: true, subtree: true });
+  });
   await page.keyboard.press('Enter');
 
   // The grid preference flipped from its default (on) and the change was
@@ -186,9 +200,7 @@ test('a relocated toggle stays keyboard-operable in its menu home', async ({
     .toBe('false');
   await expect
     .poll(() =>
-      page.evaluate(() =>
-        document.getElementById('srAnnouncer').textContent.trim()
-      )
+      page.evaluate(() => (window.__uf11Heard ?? []).join(' | '))
     )
     .toContain('Grid hidden');
 });

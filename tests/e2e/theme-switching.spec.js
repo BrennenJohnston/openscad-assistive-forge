@@ -709,9 +709,13 @@ test.describe('The header toggles describe the state they are in (D-60)', () => 
     await page.locator('#themeToggle').waitFor()
 
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
-    expect(await themeLabel(page)).toBe(
-      'Current theme: light. Click to cycle themes.'
-    )
+    // Polled, not one-shot: the button exists with its static "Toggle
+    // theme" label before init wires the descriptive one, and a loaded
+    // shard can read that gap (measured on CI; the sibling case above is
+    // gated behind data-wasm-ready and never saw it).
+    await expect
+      .poll(() => themeLabel(page))
+      .toBe('Current theme: light. Click to cycle themes.')
 
     await page.emulateMedia({ colorScheme: 'dark' })
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
