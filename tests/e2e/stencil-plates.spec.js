@@ -233,4 +233,92 @@ test.describe('The Stencil Maker makes plates', () => {
     await page.waitForTimeout(2000)
     expect(errors, errors.join(' | ')).toEqual([])
   })
+
+  // DP-26 P3, the crop-to-Colours join the owner picked at G0: colour from
+  // the photo ITSELF. The crop exists (DP-5), the posterize lane exists
+  // (DP-18); this walks the join between them - crop a reference photo,
+  // press Use as design, and the cropped COPY (not the original) enters the
+  // Colours flow.
+  test('★ the crop feeds the Colours lane: a cropped photo becomes the design', async ({
+    page,
+  }) => {
+    test.setTimeout(400000)
+    await openStencil(page)
+    const notNow = page.locator('#saveProjectNotNow')
+    try {
+      await notNow.waitFor({ state: 'visible', timeout: 5000 })
+      await notNow.click()
+    } catch {
+      // no save prompt this time
+    }
+
+    // The Reference Image controls live inside collapsed disclosures; open
+    // the chain rather than testing whether it happens to be open.
+    await page.evaluate(() => {
+      const input = document.getElementById('overlayFileInput')
+      for (
+        let d = input?.closest('details');
+        d;
+        d = d.parentElement?.closest('details')
+      ) {
+        d.open = true
+      }
+    })
+    await page.setInputFiles('#overlayFileInput', CAT_PNG)
+
+    const cropBtn = page.locator('#overlayCropBtn')
+    await expect(cropBtn).toBeEnabled({ timeout: 30000 })
+    // On the element, per this file's convention: the panel sits inside the
+    // preview-settings drawer, and whether that drawer happens to be open
+    // is not what this test is about.
+    await cropBtn.evaluate((el) => el.click())
+
+    // Keep the middle: half the width, half the height.
+    await expect(page.locator('#cropImageModal')).toBeVisible()
+    const half = async (id) => {
+      const el = page.locator(`#${id}`)
+      const max = Number(await el.getAttribute('max')) || 100
+      await el.evaluate((input, v) => {
+        input.value = String(v)
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+        input.dispatchEvent(new Event('change', { bubbles: true }))
+      }, Math.round(max / 2))
+    }
+    await half('cropWidth')
+    await half('cropHeight')
+    await page.locator('#cropApplyBtn').click()
+
+    // The copy became the overlay; the hand-over row follows it.
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(
+            () => document.getElementById('overlaySourceSelect')?.value || ''
+          ),
+        { timeout: 30000 }
+      )
+      .toContain('-crop')
+    const useBtn = page.locator('#overlayUseAsDesignBtn')
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(
+            () => !document.getElementById('overlayUseRow')?.hidden
+          ),
+        { timeout: 30000 }
+      )
+      .toBe(true)
+    await useBtn.evaluate((el) => el.click())
+
+    // The join lands: the CROPPED copy is the design, and the photo route
+    // opens the editor on it.
+    await expect
+      .poll(async () => (await plateState(page)).design || '', {
+        timeout: 180000,
+      })
+      .toContain('-crop')
+    await expect(page.locator('#drawingEditorSurface')).toBeVisible({
+      timeout: 180000,
+    })
+  })
 })
