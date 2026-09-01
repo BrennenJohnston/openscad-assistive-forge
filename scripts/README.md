@@ -73,7 +73,7 @@ Exit codes: 0 = passed, 1 = failed, 124 = timeout.
 When adding new scripts:
 
 1. Use ES modules (`.js` with shebang `#!/usr/bin/env node`)
-2. Add an npm script in `package.json`, and a matching task in `pixi.toml`
+2. Add an npm script in `package.json`
 3. Add a row to the table at the top of this file
 4. Test on Windows and Unix
 

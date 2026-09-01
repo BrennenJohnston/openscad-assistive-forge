@@ -48,6 +48,10 @@ localhost_*.report.html
 .lighthouseci/
 lighthouse-*.json
 
+# CI generates a fresh SBOM every run and uploads it as an artifact; a
+# tracked copy goes stale by construction, so none is kept.
+sbom.json
+
 # Local debug screenshots
 screenshot-*.png
 
@@ -56,9 +60,6 @@ screenshot-*.png
 
 # Editor workspace files
 *.code-workspace
-
-# Pixi (optional environment manager)
-.pixi/
 
 # Editor workspace
 .cursor/
