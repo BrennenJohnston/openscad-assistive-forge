@@ -419,6 +419,9 @@ test.describe('The drawing editor door', () => {
 
     // Record everything the live region says across the whole render, so a
     // start message that is swallowed by the finish message cannot pass.
+    // The busy window is recorded the same way: the ring flatten made a
+    // 210-rect render near-instant, so POLLING for disabled raced a window
+    // narrower than one expect poll (CI Firefox caught it already enabled).
     await page.evaluate(() => {
       window.__live = []
       const el = document.querySelector('.svg-prep-workspace > .sr-only[aria-live]')
@@ -426,6 +429,11 @@ test.describe('The drawing editor door', () => {
         const t = (el.textContent || '').trim()
         if (t) window.__live.push(t)
       }).observe(el, { childList: true, characterData: true, subtree: true })
+      window.__busy = []
+      const renderBtn = document.querySelector('.svg-prep-render-btn')
+      new MutationObserver(() => {
+        window.__busy.push(renderBtn.disabled)
+      }).observe(renderBtn, { attributes: true, attributeFilter: ['disabled'] })
     })
 
     // The editor opens fullscreen and its focus trap takes focus as it
@@ -443,12 +451,16 @@ test.describe('The drawing editor door', () => {
       .toBe(true)
     await page.keyboard.press('Enter')
 
-    // Busy first, then done - waiting only for "not disabled" would pass on
-    // the click's own frame and measure nothing.
-    await expect(btn).toBeDisabled()
+    // Busy first, then done - asserted from the RECORD, because the live
+    // state can close the window faster than one poll.
     await expect(btn).toBeEnabled({ timeout: 300000 })
 
     await expect(page.locator('.svg-prep-result-pane svg')).toHaveCount(1)
+    const busy = await page.evaluate(() => window.__busy)
+    expect(
+      busy[0] === true && busy[busy.length - 1] === false,
+      `disabled transitions recorded: ${busy.join(' -> ')}`
+    ).toBe(true)
     const said = await page.evaluate(() => window.__live)
     expect(said.some((t) => /Combining 210 shapes/.test(t)), said.join(' | ')).toBe(true)
     expect(said.some((t) => /Preview ready/.test(t)), said.join(' | ')).toBe(true)
