@@ -46,6 +46,14 @@ export function expectOnlyAllowedViolations(results) {
  * so a plain assignment wins).
  */
 export function useCityWalkFixtures() {
+  // CW-97 batch 3: a running city on CI's software renderer measured about
+  // two SECONDS per converted frame, and Playwright's actionability cycle
+  // (stable-position checks, then the dispatch) could not land an ordinary
+  // toolbar click inside the global 10 s action budget - ten distinct reds
+  // on one run, axe cases among them, were this single mechanism. The
+  // budget follows the measured cost for the city suites alone; every
+  // other spec keeps the sharp 10 s.
+  test.use({ actionTimeout: 30000 })
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('openscad-forge-first-visit-seen', 'true')

@@ -607,7 +607,11 @@ test.describe('ASCII City Walk — the view cuts, it does not cross-fade (D-81)'
   test('switching between map and street leaves no ghost of the other', async ({
     page,
   }) => {
-    test.setTimeout(120_000)
+    // CW-97 batch 3: entry plus several screenshot comparisons at CI
+    // software's seconds-per-frame pace outgrew 120 s (the last capture
+    // died with 4.3 s of test left). The comparisons decide; the budget
+    // follows the pace.
+    test.setTimeout(300_000)
     await launchGame(page)
     await enterCity(page)
     await page.waitForTimeout(1500)
@@ -872,7 +876,9 @@ test.describe('ASCII City Walk — looking around (CW-13)', () => {
     try {
       await expect
         .poll(async () => Math.round((await gaze(page)).pitch / DEG), {
-          timeout: 30000,
+          // CI software pitches at ~1.6 deg/s (measured: 48 of the 60
+          // landed inside the old 30 s) - the clamp still decides.
+          timeout: 120000,
           intervals: [200],
         })
         .toBe(60)
@@ -1226,7 +1232,9 @@ test.describe('ASCII City Walk — the curated legend and the waypoints (CW-78)'
                 t.includes('Waypoint reached: Seattle Great Wheel.')
               )
             ),
-          { timeout: 60000 }
+          // The 8-14 m approach at CI software's ~0.23 m/s sat exactly at
+          // the old 60 s; the observer still decides.
+          { timeout: 180000 }
         )
         .toBe(true)
     } finally {
@@ -2713,7 +2721,9 @@ test.describe('ASCII City Walk — the spoken slope (CW-80)', () => {
     await pose(page, -130, -583, 60)
     await page.keyboard.down('KeyW')
     await expect(announcer(page)).toContainText(/Uphill \d+ percent\./, {
-      timeout: 60000,
+      // ~9 m to the grade turnover at CI software's ~0.23 m/s, plus the
+      // strides the tracker needs past it - the bound follows the pace.
+      timeout: 180000,
     })
     await page.keyboard.up('KeyW')
 
@@ -2731,7 +2741,7 @@ test.describe('ASCII City Walk — the spoken slope (CW-80)', () => {
     })
     await page.keyboard.down('KeyW')
     await expect(announcer(page)).toContainText(/Downhill \d+ percent\./, {
-      timeout: 60000,
+      timeout: 180000,
     })
     await page.keyboard.up('KeyW')
   })
