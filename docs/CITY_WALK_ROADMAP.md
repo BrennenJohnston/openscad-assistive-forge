@@ -61,9 +61,9 @@ cannot reach any host that is not on it. Adding search would mean adding
 `https://nominatim.openstreetmap.org` and `https://overpass-api.de` to that
 list.
 
-That change must be additive, signed off by the owner, and made everywhere in
-one go. It must never become a wildcard, and it must never weaken any other
-directive.
+That change must be additive, a decision I make deliberately, and made
+everywhere in one go. It must never become a wildcard, and it must never
+weaken any other directive.
 
 The policy string is copied into several documents, and a future change has to
 update all of them together or the docs start lying about the deployed headers.
@@ -121,8 +121,8 @@ idea.
   KeySoft.
 
 There is also an existing open-source tactile map project, **touch-mapper**,
-which is licensed AGPL-3.0. It is **reference only** unless licence
-compatibility is checked properly and the owner signs it off. Do not copy from
+which is licensed AGPL-3.0. It is **reference only** unless I check the
+licence compatibility properly and sign it off. Do not copy from
 it on the assumption that open means usable here.
 
 ### What "ready for tactile" means concretely
@@ -537,10 +537,10 @@ whether the machine can hold 30. Cost rises as the cells get smaller. Such a
 pass is treated as inconclusive - nothing stored, nothing announced - rather
 than being read as a verdict on a size it never measured.
 
-### What the owner chose when the pictures were on the table
+### What I chose when the pictures were on the table
 
 The three treatments of the bright layer, the four settings of the colour ink
-budget and the size were all put to the owner with the measurements and the
+budget and the size were all decided with the measurements and the
 pictures beside each option. The answers:
 
 - **No solid cells at all.** A lit shopfront is drawn as characters. It costs
@@ -668,8 +668,8 @@ glyph change is 7.54 per cent against 7.55 before in monochrome and 9.80
 against 9.79 in colour; the storefront class carries the same 2,193 cells with
 the same 2,156 lit. Standing, the storefront class actually settles better
 (glyph change 0.57 to 0.17, persistence 37.8 to 44.5 frames of 48). The band's
-brightness is untouched - that is the luminance treatment the owner chose at
-G1, and this release does not go near it.
+brightness is untouched - that is the luminance treatment I chose with the
+G1 pictures on the table, and this release does not go near it.
 
 ### Lamps where the city has them, and the ground under it
 
@@ -687,7 +687,7 @@ one it has already described, so a mapped lamp suppresses the invented ones
 within a share of that street's own interval.
 
 **Seattle carries a surveyed register.** Seattle City Light publishes every
-pole it owns with a "has streetlight" flag, and the owner authorised its use
+pole it owns with a "has streetlight" flag, and I authorised its use
 (CW-Q76) knowing the publisher states no licence. What it holds inside the
 baked circle:
 
@@ -790,7 +790,7 @@ with the void showing between them, and a wall was a hatch you could see
 through. The reference this project works from does the opposite on nearby
 surfaces: it fills those gaps with a dark tint of the material the ray hit,
 road slate, pavement tan, a trunk brown, and leaves the sky and the far skyline
-bare. The owner asked for that as a toggle. It is key **B**, it is called Day,
+bare. I wanted that as a toggle. It is key **B**, it is called Day,
 and Night is what you get unless you ask for it.
 
 The layer is deliberately not a decision. Everything else the converter does to
@@ -961,4 +961,4 @@ than reporting a tidy set of zeroes, which is exactly what it is for.
 
 It is not a commitment, an estimate, or a design review. Anyone starting either
 piece of work should expect to make real decisions that this file does not
-make for them — and to bring the owner-facing ones to the owner first.
+make for them — and to raise the judgment calls with me first.

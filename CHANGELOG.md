@@ -229,8 +229,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   range does not contain. Smaller cells cost more, not less, so such a pass now decides nothing:
   nothing is stored and nothing is announced
 
-- **The city is not dark any more** (CW-84) - after playing the deployed build the owner reported the
-  picture was too dark and that frames looked like they were blending together. Three things changed.
+- **The city is not dark any more** (CW-84) - playing the deployed build, the picture read too dark
+  and frames looked like they were blending together. Three things changed.
   In colour, the ink floor is gone: it had left 28 per cent of the screen carrying ink where 89 per
   cent used to, so the sky, the road and the pavement were simply black. The gate that removed the
   flat white fields stays, so nothing goes back to white. In monochrome the solid bright layer is
@@ -326,8 +326,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the old calibration that was FINER than the new default is quietly raised to it, because leaving it
   would have kept that one machine on its own private game
 
-- **The bright layer is gone from the game, and the parks are visible** (CW-72) - the two treatments
-  built and measured in the previous release went to the owner with pictures, and the answer was to
+- **The bright layer is gone from the game, and the parks are visible** (CW-72) - I compared the two
+  treatments built and measured in the previous release, pictures side by side, and chose to
   remove the solid layer: no cell is painted as a solid block any more, and a lit shopfront is drawn
   as characters you can see into. Colour mode's ink floor was set to the value that keeps a street
   readable rather than the one that empties it, and a park's surface was raised out of the near-black
@@ -856,8 +856,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   frames a second instead of 30. The round took that case from 3 frames a second to 26, and the
   reason it stops there is now measured rather than guessed - between 39 and 49 ms of every frame
   does not depend on the number of characters at all, so no further work on the characters can
-  reach the target. What is left is the painting and the phosphor trail, which are not part of this
-  round's plan and are a question for the owner rather than a decision for it
+  reach the target. What is left is the painting and the phosphor trail, which are outside this
+  round's plan - a question I am leaving open rather than answering in passing
 
 - **The camera controls are the ones you already know** (CW-35) - the game had its own vocabulary
   along the bottom of the screen - Turn left, Look up, Forward, Step left - which is a second thing
