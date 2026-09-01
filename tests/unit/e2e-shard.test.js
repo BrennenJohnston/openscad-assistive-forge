@@ -3,7 +3,9 @@ import path from 'node:path'
 import {
   MEASURED_SECONDS,
   DEFAULT_WEIGHT_S,
+  PROJECT_IGNORES,
   planShards,
+  filesForProject,
   listSpecFiles,
 } from '../../scripts/e2e-shard.mjs'
 
@@ -86,7 +88,7 @@ describe('e2e shard planner (D-72)', () => {
     }
   })
 
-  it('★ says out loud how little room the two-shard lanes have left', () => {
+  it('★ says out loud how little room the ceiling-bound lanes have left', () => {
     // Edge and Firefox still run two shards. Edge CANNOT be re-split without
     // the owner editing ruleset 12059827, because each Edge shard is its own
     // required context - so this does not demand the room Chromium has. What
@@ -98,14 +100,43 @@ describe('e2e shard planner (D-72)', () => {
     // ceiling; the projection below covers the worst two-shard split so a
     // regression in EITHER lane's shape still trips here.
     const CEILING_MIN = 35
-    for (const shard of planShards(files, MEASURED_SECONDS, 3)) {
-      const wallMin = projectMin(shard)
-      expect(
-        wallMin,
-        `an Edge shard projects to ${wallMin.toFixed(1)} minutes, ` +
-          `${(CEILING_MIN - wallMin).toFixed(1)} short of the ceiling`
-      ).toBeLessThan(CEILING_MIN)
+    // Each lane is booked for what IT runs (DP-19) at the shard count it
+    // actually has: Edge three since the ruleset edit, Firefox three since
+    // D-130 (at two it projected to 49.4 of these 35 minutes on the post-R8
+    // weights - hidden until then by a 3-way plan running on a 2-job
+    // matrix). Firefox leaves out wasm-smoke, and both leave out the
+    // drawing editor's own walk - that ignore was priced when the lanes ran
+    // two shards, and it is re-visited only from a green CI board, never
+    // from a projection.
+    for (const [project, laneShards] of [
+      ['msedge', 3],
+      ['firefox', 3],
+    ]) {
+      const lane = filesForProject(files, project)
+      for (const shard of planShards(lane, MEASURED_SECONDS, laneShards)) {
+        const wallMin = projectMin(shard)
+        expect(
+          wallMin,
+          `a ${laneShards}-shard ${project} lane projects to ${wallMin.toFixed(1)} minutes, ` +
+            `${(CEILING_MIN - wallMin).toFixed(1)} short of the ceiling`
+        ).toBeLessThan(CEILING_MIN)
+      }
     }
+  })
+
+  it('a file a lane leaves out is left out of its shards, and only its (DP-19)', () => {
+    for (const [project, skipped] of Object.entries(PROJECT_IGNORES)) {
+      const lane = filesForProject(files, project)
+      for (const file of skipped) {
+        expect(files, `${file} must exist to be left out`).toContain(file)
+        expect(lane).not.toContain(file)
+        expect(planShards(lane, MEASURED_SECONDS, 2).flat()).not.toContain(file)
+      }
+      expect(lane.length).toBe(files.length - skipped.length)
+    }
+    // Chromium runs everything, on three shards.
+    expect(filesForProject(files, 'chromium')).toEqual(files)
+    expect(filesForProject(files, 'no-such-project')).toEqual(files)
   })
 
   it('places a file nobody has measured yet, and charges it for the room', () => {

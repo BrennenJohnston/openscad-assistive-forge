@@ -7,13 +7,58 @@
   "main": "logo_plate.scad",
   "files": [
     "logo_plate.scad",
-    "sample-logo.svg"
+    "sample-logo.svg",
+    "smiley.svg",
+    "heart.svg",
+    "star.svg",
+    "lightning.svg",
+    "crown.svg",
+    "sun.svg",
+    "presets/large-plate.json",
+    "presets/small-plate.json"
   ],
   "program": "charm-customizer",
-  "tags": ["svg", "import", "engraving", "plate", "logo"],
+  "tags": [
+    "svg",
+    "import",
+    "engraving",
+    "plate",
+    "logo"
+  ],
   "inspired_by": {
     "name": "Nasif Zaman",
     "github": "Znasif",
     "reference": "https://github.com/Znasif/openscad-assistive-forge"
-  }
+  },
+  "svgLibrary": [
+    {
+      "paramName": "logo_file",
+      "options": [
+        {
+          "file": "smiley.svg",
+          "label": "Smiley face"
+        },
+        {
+          "file": "heart.svg",
+          "label": "Heart"
+        },
+        {
+          "file": "star.svg",
+          "label": "Star"
+        },
+        {
+          "file": "lightning.svg",
+          "label": "Lightning bolt"
+        },
+        {
+          "file": "crown.svg",
+          "label": "Crown"
+        },
+        {
+          "file": "sun.svg",
+          "label": "Sun"
+        }
+      ]
+    }
+  ]
 }

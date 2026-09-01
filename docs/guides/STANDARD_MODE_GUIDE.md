@@ -315,18 +315,52 @@ The editor shows a side-by-side view of your source SVG and the prepared result.
 - **Hole**: Subtracted from the foreground (creates cutouts)
 - **Ignore**: Dropped from the output entirely
 
-Every role change updates the prepared result preview in real time, so you can see exactly what your changes do before applying.
+For a drawing of fifty shapes or fewer, every role change updates the prepared
+result preview straight away, so you can see exactly what your changes do before
+applying.
+
+**Bigger drawings: the preview waits to be asked**
+
+Combining shapes into one outline is the expensive step, and it grows steeply:
+about a second for fifty shapes, a minute for two hundred. So above fifty shapes
+the list and the original are shown immediately, and the "Will print as" pane
+stays empty with a **Render preview** button under it. Press it when you want to
+see the result; Forge tells you it is working and how long it took. Apply and
+Save wait until you have rendered, so you are never applying something you have
+not seen.
+
+Above a thousand shapes Forge says so and asks you to simplify the drawing
+first, naming both numbers.
+
+**Removing shapes you do not want**
+
+"Ignore" leaves a shape in the list but out of the result. To take shapes out of
+the *list* as well, which is what you want when there are hundreds of them:
+
+| Action | How |
+|--------|-----|
+| Remove one shape | The **Delete** button at the end of its row |
+| Remove every shape below a size | Type a size in **Smaller than … mm²** and press **Delete those** |
+| Keep only the biggest ones | Type a number in **Keep largest …** and press **Delete the rest** |
+| Put the last removal back | **Undo delete** (one step, and only for this session) |
+
+Sizes are measured against the design width in the editor's header, so they are
+the size the shape will really print. If removing shapes brings the drawing under
+fifty, the preview starts updating on its own again.
+
+Removals are remembered with the project, so reopening it later shows the list
+you left behind rather than starting over.
 
 **Editor controls:**
 
 | Action | How |
 |--------|-----|
 | Change a role | Click a radio button or use arrow keys in the radio group |
-| See the effect | The prepared result updates instantly |
+| See the effect | The prepared result updates instantly, or after **Render preview** on a big drawing |
 | Apply changes | Click "Apply prepared SVG" |
 | Save it as a file | Click "Save edited SVG" |
 | Keep the original | Click "Keep original" (bypasses preparation) |
-| Reset roles | Click "Reset" to return to auto-classification |
+| Reset roles | Click "Reset" to return to auto-classification (this does not bring deleted shapes back) |
 | Expand to fullscreen | Click the fullscreen button (top-right) |
 | Exit fullscreen | Press `Escape` or click the fullscreen button again |
 
@@ -474,6 +508,47 @@ Want to see how your model lines up against a reference image? The Reference Ima
 - **Fit to model** -- auto-sizes the image to match the model's footprint
 - **Center** -- snaps the image back to the origin
 - **Offset / Rotation** -- nudge or rotate for a better fit
+
+### Which surface it sits against
+
+**Sits against** chooses the height the image is drawn at, by naming a surface
+rather than asking for a number:
+
+| Choice | Where the image goes |
+|--------|----------------------|
+| **Under the plate** | Just below the build plate. The default, and where it has always been |
+| **Build plate** | Level with the plate itself |
+| **Top of the model** | Just above the model's highest face, which is what you want when tracing something onto the top of a charm. It follows the model, so it moves when the model changes |
+| **A height I choose** | Type the height in mm |
+
+### Cropping
+
+A photograph of a page is mostly page. **Crop** lets you keep the part you
+want by typing the edges, with the picture beside the numbers showing the same
+rectangle. If you type something that will not fit, the number is pulled back
+to what actually fits, so the boxes always say what will really happen.
+
+Cropping never changes your picture. It saves a copy named after the original
+(`bird.png` becomes `bird-crop.png`), leaves the original in the list, and
+points the overlay at the copy.
+
+### Using it as a design
+
+**Use as design** hands the image you have been tracing against to one of the
+model's design parameters. It goes in the same way a file you chose by hand
+would: a photograph is traced, the preparation editor opens if the drawing
+needs it, and the design's proportions are measured at the same moment. If the
+model has more than one design slot, you choose which one.
+
+### Forge remembers where you put it
+
+The image's position, rotation, size and chosen surface are saved **with the
+project**, so reopening it later puts the reference back where you left it.
+Opacity and colour are settings for how you like to work, so they stay the
+same across every project rather than travelling with one.
+
+Your images never leave your device. Cropping, tracing and measuring all
+happen in your browser.
 
 ### A note on accessibility
 

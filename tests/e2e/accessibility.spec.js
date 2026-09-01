@@ -1532,16 +1532,17 @@ test.describe('Color System and Theme Accessibility', () => {
       // Allow one animation frame for style recalculation + MutationObserver
       await page.evaluate(() => new Promise((r) => requestAnimationFrame(r)))
 
-      const result = await page.evaluate(() => {
-        const input = document.querySelector('#_test-toggle-wrapper input')
-        const trackStyle = getComputedStyle(input)
-        const thumbStyle = getComputedStyle(input, '::before')
+      const readColors = () =>
+        page.evaluate(() => {
+          const input = document.querySelector('#_test-toggle-wrapper input')
+          const trackStyle = getComputedStyle(input)
+          const thumbStyle = getComputedStyle(input, '::before')
 
-        return {
-          trackBg: trackStyle.backgroundColor,
-          thumbBg: thumbStyle.backgroundColor,
-        }
-      })
+          return {
+            trackBg: trackStyle.backgroundColor,
+            thumbBg: thumbStyle.backgroundColor,
+          }
+        })
 
       const parseRgb = (str) => {
         const m = str.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/)
@@ -1551,22 +1552,32 @@ test.describe('Color System and Theme Accessibility', () => {
         return [Number(m[1]), Number(m[2]), Number(m[3])]
       }
 
-      const trackRgb = parseRgb(result.trackBg)
-      const thumbRgb = parseRgb(result.thumbBg)
-
-      expect(trackRgb, `${state.name}: track bg parseable`).not.toBeNull()
-      expect(thumbRgb, `${state.name}: thumb bg parseable`).not.toBeNull()
-
-      if (trackRgb && thumbRgb) {
-        const diff =
-          Math.abs(trackRgb[0] - thumbRgb[0]) +
-          Math.abs(trackRgb[1] - thumbRgb[1]) +
-          Math.abs(trackRgb[2] - thumbRgb[2])
-        expect(
-          diff,
-          `${state.name}: track (${result.trackBg}) vs thumb (${result.thumbBg}) channel diff=${diff} must be ≥30`,
-        ).toBeGreaterThanOrEqual(30)
+      const channelDiff = (r) => {
+        const track = parseRgb(r.trackBg)
+        const thumb = parseRgb(r.thumbBg)
+        if (!track || !thumb) return -1
+        return (
+          Math.abs(track[0] - thumb[0]) +
+          Math.abs(track[1] - thumb[1]) +
+          Math.abs(track[2] - thumb[2])
+        )
       }
+
+      // One read raced the Radix color-scale sync on CI Firefox: the HC
+      // Dark state came back as near-black-on-black (diff 12) while the
+      // same build on the same browser locally read the real tokens. The
+      // variables land a beat after the attribute flip, so the read polls
+      // until they have.
+      let result = await readColors()
+      await expect
+        .poll(
+          async () => {
+            result = await readColors()
+            return channelDiff(result)
+          },
+          { timeout: 10000 },
+        )
+        .toBeGreaterThanOrEqual(30)
 
       console.log(
         `${state.name}: track=${result.trackBg}, thumb=${result.thumbBg}`,

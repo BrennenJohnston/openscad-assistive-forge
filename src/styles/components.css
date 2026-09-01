@@ -2883,6 +2883,128 @@ dialog:modal {
   align-items: stretch;
 }
 
+/* DP-6: handing the reference image to a design parameter. */
+.overlay-use-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+  margin-top: var(--space-xs);
+}
+
+.overlay-use-row[hidden] {
+  display: none;
+}
+
+#overlayUseTargetSelect[hidden] {
+  display: none;
+}
+
+/* DP-5: the crop dialog. The picture is a read-only illustration of what the
+   numeric fields say, so it carries no controls of its own. */
+.crop-modal-help {
+  margin: 0 0 var(--space-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.crop-modal-layout {
+  display: flex;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.crop-preview {
+  position: relative;
+  flex: 1 1 18rem;
+  min-width: 12rem;
+  max-width: 100%;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+}
+
+.crop-preview img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.crop-preview-rect {
+  position: absolute;
+  border: 2px solid var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 18%, transparent);
+  pointer-events: none;
+}
+
+.crop-fields {
+  flex: 1 1 12rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.crop-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.crop-field input {
+  width: 7rem;
+  min-height: 44px;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-input-bg);
+  color: var(--color-text-primary);
+}
+
+.crop-field-note {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+#cropSelectAllBtn,
+#cropApplyBtn,
+#cropCancelBtn {
+  min-height: 44px;
+}
+
+/* DP-5: which surface the reference image sits against. The millimetre field
+   belongs to the "A height I choose" preset and is hidden otherwise, so the
+   panel never shows a number the preset is about to overwrite. */
+.overlay-z-control {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.overlay-z-custom {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.overlay-z-custom[hidden] {
+  display: none;
+}
+
+.overlay-number-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-input-bg);
+  color: var(--color-text-primary);
+}
+
 .overlay-source-help-text {
   font-size: var(--font-size-xs);
   color: var(--color-text-tertiary, var(--color-text-secondary));
@@ -4789,6 +4911,25 @@ select:focus-visible {
 }
 
 /* Output Format Section (Left Panel) */
+/* The whole stencil set in one download (DP-17). Sits above the output format
+   because it is a different question: which parts, not which file type. */
+.stencil-set-export {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  margin-bottom: var(--space-md);
+}
+
+.stencil-set-export-info {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
 .output-format-section {
   padding: var(--space-md);
   background: var(--color-bg-secondary);
@@ -5750,6 +5891,18 @@ body.first-visit-blocking #app {
 .first-visit-option-cell:has(input:checked) {
   border-color: var(--color-accent);
   background: var(--color-accent-subtle);
+}
+
+/* DP-1 put a card in the checked state on first paint, which is the first
+   time this modal's accent-coloured text has ever sat on the subtle accent
+   fill. MEASURED: --color-accent-fg (#a35e00) is 4.44:1 on yellow-4, just
+   under AA - it was only ever validated against white and slate-2. The
+   selected-card tint stays (a yellow-9 border alone is ~1.3:1 on white, so
+   dropping it would weaken the selected affordance); the foreground moves to
+   the token for this surface instead. */
+.first-visit-option-cell:has(input:checked) .first-visit-badge,
+.first-visit-option-cell:has(input:checked) .first-visit-option-more a {
+  color: var(--color-on-accent-subtle);
 }
 
 .first-visit-option-cell:has(input:focus-visible) {
@@ -15429,6 +15582,73 @@ body.tutorial-body-locked {
   cursor: not-allowed;
 }
 
+/* ── Hole placement warning (DP-11) ─────────────────────────────────────── */
+.hole-placement-warning {
+  margin: 0 0 var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  border-inline-start: var(--border-width-thick, 3px) solid var(--color-warning);
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  font-size: var(--font-size-sm);
+}
+
+.hole-placement-warning[hidden] {
+  display: none;
+}
+
+@media (forced-colors: active) {
+  .hole-placement-warning {
+    border-inline-start: 3px solid Highlight;
+    background: Canvas;
+    color: CanvasText;
+  }
+}
+
+/* ── Layer column (DP-7, shown only for a tile that opts in) ────────────── */
+.svg-prep-object .svg-prep-layer-select {
+  flex-shrink: 0;
+  padding: var(--space-2xs) var(--space-xs);
+  font-size: var(--font-size-sm);
+  min-height: var(--size-touch-target);
+}
+
+.svg-prep-layer-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* The row keeps its shape and the note wraps under it, so a warning never
+   squeezes the controls a person is reaching for. */
+.svg-prep-layer-note {
+  flex-basis: 100%;
+  font-size: var(--font-size-sm);
+  color: var(--color-warning-text);
+}
+
+.svg-prep-layer-note[hidden] {
+  display: none;
+}
+
+/* Colour is not the only signal: the border carries it too, for anyone who
+   cannot separate these two hues. */
+.svg-prep-object.svg-prep-layer-problem {
+  border-inline-start: var(--border-width-thick, 3px) solid var(--color-warning);
+}
+
+.svg-prep-layer-summary {
+  margin: var(--space-xs) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.svg-prep-layer-summary[hidden] {
+  display: none;
+}
+
+.svg-prep-layer-summary-problem {
+  color: var(--color-warning-text);
+}
+
 /* ── Design width input (header) ────────────────────────────────────────── */
 .svg-prep-design-width {
   display: flex;
@@ -15489,6 +15709,97 @@ body.tutorial-body-locked {
 
 .svg-prep-apply-hint[hidden] {
   display: none;
+}
+
+/* DP-4: removing shapes from the list, not just from the output. The bar sits
+   outside the role="list" container because that list takes listitem children
+   only (D-101). */
+.svg-prep-bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  padding: var(--space-xs) 0;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.svg-prep-bulk-count {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.svg-prep-bulk-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  /* Keep "Smaller than" and "Keep largest" on one line. The bar itself wraps,
+     so a long label moves to its own row rather than being clipped - the
+     nowrap-plus-flex-end trap from UF-40 needs a NON-wrapping container. */
+  white-space: nowrap;
+}
+
+.svg-prep-bulk-input {
+  width: 5rem;
+  min-height: 44px;
+}
+
+.svg-prep-bulk-btn {
+  min-height: 44px;
+}
+
+.svg-prep-bulk-help {
+  margin: 0;
+  flex: 1 1 100%;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.svg-prep-object-delete {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.svg-prep-object-delete:hover {
+  border-color: var(--color-border-hover);
+}
+
+/* DP-3: the on-demand render control under the result pane. Only present
+   above tier A, where the boolean is too slow to run on its own. */
+.svg-prep-render-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  margin-top: var(--space-xs);
+}
+
+.svg-prep-render-row[hidden] {
+  display: none;
+}
+
+.svg-prep-render-note {
+  margin: 0;
+  flex: 1 1 12rem;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.svg-prep-render-btn {
+  /* 44px target floor, same as every other control in this editor. */
+  min-height: 44px;
+  min-width: 44px;
+  flex: 0 0 auto;
 }
 
 .svg-prep-footer button[data-action='apply']:disabled {
@@ -15575,6 +15886,15 @@ body.tutorial-body-locked {
   max-height: 45vh;
   min-height: 120px;
   overflow: hidden;
+}
+
+/* One picture by default (G0, DP-24): with the original waiting behind
+   Compare, the edited drawing is the subject and takes the height the pair
+   used to split. */
+.svg-prep-workspace.svg-prep-fullscreen .svg-prep-previews--single {
+  flex: 0 0 50vh;
+  flex: 0 0 50dvh;
+  max-height: 60vh;
 }
 
 .svg-prep-workspace.svg-prep-fullscreen .svg-prep-source-pane,
@@ -15808,6 +16128,23 @@ body.tutorial-body-locked {
 
   .svg-prep-swatch {
     border: 2px solid ButtonText;
+  }
+
+  /* The row carries a written note as well, so nothing here is the only way
+     to learn a shape breaks the law - this just keeps the marker visible. */
+  .svg-prep-object.svg-prep-layer-problem {
+    border-inline-start: 3px solid Highlight;
+  }
+
+  .svg-prep-layer-note,
+  .svg-prep-layer-summary-problem {
+    color: CanvasText;
+  }
+
+  .svg-prep-layer-select {
+    border: 1px solid ButtonText;
+    background: ButtonFace;
+    color: ButtonText;
   }
 
   .svg-prep-source-pane,
@@ -16403,4 +16740,841 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
 .preferences-unit {
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
+}
+
+/* ── The drawing editor surface (DP-19) ─────────────────────────────────────
+   It takes the preview area, so it is sized to fill whatever that is rather
+   than to a height of its own. Tokens only: every colour, space and radius
+   here is the same one the rest of the app uses, so a theme change reaches it
+   without anybody remembering to come back. */
+.drawing-editor-surface {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  background: var(--color-bg-primary);
+  overflow: hidden;
+  z-index: 1;
+  /* The layout below asks how wide the SURFACE is, not the window: at 768
+     the window is wide and the preview area beside the customizer is not
+     (MEASURED: a 135 px drawing next to a 245 px panel). */
+  container-type: inline-size;
+}
+
+.drawing-editor-surface.hidden,
+.drawing-editor-surface[hidden] {
+  display: none;
+}
+
+.drawing-editor {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+}
+
+/* The skip links are visible on focus and out of the way otherwise: a
+   sighted keyboard user needs to SEE where the jump goes. */
+.drawing-editor-skip {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  z-index: 2;
+}
+
+.drawing-editor-skip:focus,
+.drawing-editor-skip:focus-visible {
+  left: var(--space-sm);
+}
+
+/* Two rows at desktop width (G0 named the four-row wrap at 1280): the
+   actions row and the working-tools row. Each row may still wrap on a
+   phone, where rows are expected. */
+.drawing-editor-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  padding-bottom: var(--space-xs);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.drawing-editor-toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+/* A row whose groups are all hidden (the other purpose's row) leaves no
+   gap behind. */
+.drawing-editor-toolbar-row:not(:has(> :not([hidden]))) {
+  display: none;
+}
+
+.drawing-editor-title {
+  margin: 0;
+  margin-right: auto;
+  font-size: var(--font-size-md);
+  color: var(--color-text-primary);
+}
+
+.drawing-editor-title:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.drawing-editor-body {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: var(--space-sm);
+}
+
+.drawing-editor-stage {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* G0 (DP-24): the picture is the editor. The panel is a DRAWER laid over
+   the drawing's right edge, not a column that squeezes it - the drawing
+   keeps the full width whether the drawer is open or shut. */
+.drawing-editor-panel {
+  position: absolute;
+  inset-block: 0;
+  right: 0;
+  width: clamp(280px, 44%, 460px);
+  overflow: auto;
+  background: var(--color-bg-elevated, var(--color-bg-secondary));
+  border-left: 1px solid var(--color-border);
+  padding-left: var(--space-sm);
+  padding-right: var(--space-2xs);
+  z-index: var(--z-index-drawer);
+  /* The table below asks how wide the PANEL is. */
+  container-type: inline-size;
+  container-name: panel;
+}
+
+/* In a narrow side panel the Share column steps aside so the Remove button
+   is not the thing that scrolls out of sight: MEASURED at 1280, five
+   columns clipped it in a 310 px panel. Stacked below the drawing the panel
+   is the full width and every column shows. */
+@container panel (max-width: 360px) {
+  .drawing-editor-regions-table th:nth-child(4),
+  .drawing-editor-regions-table td:nth-child(4) {
+    display: none;
+  }
+}
+
+/* Narrow surface: the drawer takes the whole body instead of a 44% strip
+   nobody can read at 412 wide. The drawing underneath keeps its full size;
+   closing the drawer is one press. (The old stacked-columns answer here is
+   retired with the drawer - MEASURED before it: at 412 wide the panel grew
+   to 1,674 px and the stage was squeezed to 0.) */
+@container (max-width: 640px) {
+  .drawing-editor-panel {
+    width: 100%;
+    border-left: none;
+    padding-left: var(--space-2xs);
+  }
+}
+
+.drawing-editor-section + .drawing-editor-section {
+  margin-top: var(--space-xs);
+}
+
+.drawing-editor-section-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xs);
+  /* 44 px, the touch-target floor, without a fixed height that would clip a
+     wrapped name at a large text size. */
+  min-height: var(--size-touch-target);
+  padding: var(--space-xs) var(--space-sm);
+  cursor: pointer;
+  color: var(--color-text-primary);
+  background: var(--color-bg-secondary);
+  border-radius: var(--border-radius-sm);
+  font-weight: 600;
+}
+
+.drawing-editor-section-summary:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.drawing-editor-section-count {
+  color: var(--color-text-secondary);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.drawing-editor-section-body {
+  padding: var(--space-xs) var(--space-sm);
+}
+
+.drawing-editor-status {
+  margin: 0;
+  min-height: 1.4em;
+  /* The status is a flex child of the surface column and the body's flex:1
+     was shrinking it mid-line at narrow widths (MEASURED at 768 and 412:
+     the sentence's last line half-clipped). It says its piece in full. */
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* The workspace's own pieces, re-homed. Its footer is the action row and
+   sits in the toolbar; its shape list and warnings sit in the panel; what
+   stays in the stage loses the box it used to draw around itself, because
+   the surface is the box now. */
+.drawing-editor-toolbar .svg-prep-footer {
+  border-top: 0;
+  padding-top: 0;
+  margin-left: auto;
+}
+
+.drawing-editor-view-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.drawing-editor-view-controls:empty {
+  display: none;
+}
+
+.drawing-editor-stage .svg-prep-workspace {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.drawing-editor-stage .svg-prep-header {
+  display: none;
+}
+
+.drawing-editor-shapes[hidden],
+.drawing-editor-regions[hidden] {
+  display: none;
+}
+
+/* Five columns are wider than the side panel at 1280 (MEASURED: the Remove
+   button was clipped), so the table scrolls inside its own box rather than
+   the page or the panel ever scrolling sideways. */
+.drawing-editor-regions {
+  overflow-x: auto;
+}
+
+/* ── The stencil purpose: regions, colours, plates ─────────────────────── */
+.drawing-editor-regions-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.drawing-editor-regions-table caption {
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  padding-bottom: var(--space-xs);
+}
+
+.drawing-editor-regions-table th,
+.drawing-editor-regions-table td {
+  text-align: left;
+  vertical-align: middle;
+  padding: var(--space-xs) var(--space-xs);
+  border-bottom: 1px solid var(--color-border-light);
+  color: var(--color-text-primary);
+}
+
+.drawing-editor-regions-table thead th {
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+
+.drawing-editor-regions-table tbody th {
+  font-weight: 400;
+}
+
+.drawing-editor-regions-table td[data-plate] {
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+/* 44 px, the touch-target floor, on the one control the column has. */
+.drawing-editor-colour-select {
+  min-height: var(--size-touch-target);
+  max-width: 100%;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.drawing-editor-colour-select:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.drawing-editor-swatches {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.drawing-editor-swatch-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: var(--size-touch-target-sm);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
+/* The colour itself, beside its name: the name carries the meaning, the
+   chip is the picture of it. */
+.drawing-editor-swatch {
+  flex: 0 0 auto;
+  width: 1.25em;
+  height: 1.25em;
+  border-radius: var(--border-radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--swatch, transparent);
+}
+
+.drawing-editor-add-colour fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-sm);
+  margin: var(--space-sm) 0 0;
+  padding: var(--space-sm);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--border-radius-sm);
+}
+
+.drawing-editor-add-colour legend {
+  padding: 0 var(--space-xs);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.drawing-editor-add-colour label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.drawing-editor-add-colour input[type='text'] {
+  min-height: var(--size-touch-target);
+  min-width: 8em;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+
+.drawing-editor-add-colour input[type='color'] {
+  min-height: var(--size-touch-target);
+  min-width: var(--size-touch-target);
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-primary);
+}
+
+.drawing-editor-add-colour input:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.drawing-editor-plates,
+.drawing-editor-islands {
+  margin: 0;
+  padding-left: var(--space-md);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.drawing-editor-plates li + li,
+.drawing-editor-islands li + li {
+  margin-top: var(--space-xs);
+}
+
+.drawing-editor-islands ul {
+  margin: var(--space-xs) 0 0;
+  padding-left: var(--space-md);
+  color: var(--color-text-secondary);
+}
+
+/* ── DP-20: the tools, the canvas, the table's checkboxes and actions ──── */
+.drawing-editor-stencil-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  /* xs, not sm: the hands row's fit at the editor's 692 px is a matter of
+     sixteen pixels. */
+  gap: var(--space-xs);
+}
+
+.drawing-editor-stencil-tools[hidden] {
+  display: none;
+}
+
+/* Each group wraps on its own: MEASURED at 412 px wide, five tool buttons
+   in one unwrapping row ran off the edge. */
+.drawing-editor-tools,
+.drawing-editor-paint,
+.drawing-editor-history,
+.drawing-editor-zoom {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+/* The paint pair (the colour and its one button) moves as a unit instead of
+   wrapping inside itself: a nested wrap container reports a broken
+   intrinsic width (MEASURED: the group told its row 224 px while its
+   content needed 281), which wrapped the button under the select at every
+   width. The pair fits even a 412 screen. */
+.drawing-editor-paint {
+  flex-wrap: nowrap;
+}
+
+.drawing-editor-paint .btn {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.drawing-editor-tool[aria-pressed='true'] {
+  background: var(--color-hover-bg);
+  border-color: var(--color-accent);
+  box-shadow: inset 0 0 0 1px var(--color-accent);
+}
+
+.drawing-editor-paint-select,
+.drawing-editor-merge-select {
+  min-height: var(--size-touch-target);
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  /* Capped so the hands row (tools + paint) fits the editor's real 692 px
+     at a 1280 window; a long colour name ellipsizes here and reads in full
+     in the open list. */
+  max-width: 8rem;
+}
+
+.drawing-editor-paint-select:focus-visible,
+.drawing-editor-merge-select:focus-visible,
+.drawing-editor-rename-input:focus-visible,
+.drawing-editor-region-check:focus-visible,
+.drawing-editor-canvas-svg:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* The canvas fills the stage; the drawing keeps its aspect inside it. */
+.drawing-editor-canvas {
+  width: 100%;
+  height: 100%;
+  min-height: 240px;
+  display: flex;
+}
+
+.drawing-editor-canvas[hidden] {
+  display: none;
+}
+
+.drawing-editor-canvas-svg {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-height: 240px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  touch-action: none;
+}
+
+.drawing-editor-canvas-svg[data-tool='hand'] {
+  cursor: grab;
+}
+
+.drawing-editor-canvas-svg[data-tool='marquee'] {
+  cursor: crosshair;
+}
+
+/* The original art underneath, dimmed so the regions read over it. */
+.drawing-editor-canvas-svg [data-layer='art'] {
+  opacity: var(--drawing-editor-art-opacity, 0.35);
+  pointer-events: none;
+}
+
+/* One path per region: its colour at FULL contrast (DP-21), a selection as
+   a thick outline, hover as a steady outline. Colour is never the only
+   signal: the table says the same thing in words, and the legend names the
+   four looks. */
+.drawing-editor-region {
+  fill: var(--region-fill, transparent);
+  fill-opacity: 1;
+  stroke: var(--color-border);
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+  cursor: pointer;
+}
+
+/* Removed: hatched at low contrast, the fill attribute pointing at the
+   pattern in defs; the pattern's line takes the token below. */
+.drawing-editor-region.is-removed {
+  fill-opacity: 1;
+  stroke-dasharray: 4 3;
+}
+
+.drawing-editor-hatch-line {
+  stroke: var(--color-text-secondary);
+  stroke-width: 1px;
+  stroke-opacity: 0.45;
+}
+
+.drawing-editor-region.is-selected {
+  stroke: var(--color-focus);
+  stroke-width: 3px;
+}
+
+.drawing-editor-region.is-hover {
+  stroke: var(--color-text-primary);
+  stroke-width: 2px;
+}
+
+/* ★ The keyboard highlight: two strokes drawn over the regions, the outer in
+   the page's TEXT colour and the inner in its BACKGROUND colour. That pair is
+   black and white in the light theme and white and black in the dark one,
+   and for any region colour at least one of black and white contrasts with
+   it at 4.58:1 or better (the geometric mean of 21:1), which is the
+   guarantee "reads on any region colour" needs. The plan's page-background
+   halo under a --color-focus stroke was MEASURED first: the focus blue on a
+   white region is 2.2:1. */
+.drawing-editor-highlight-halo,
+.drawing-editor-highlight-stroke {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.drawing-editor-highlight-halo {
+  stroke: var(--color-text-primary);
+  stroke-width: 7px;
+}
+
+.drawing-editor-highlight-stroke {
+  stroke: var(--color-bg-primary);
+  stroke-width: 3px;
+}
+
+/* Three beats, then it settles. The pulse is on the inner stroke's width and
+   opacity only, so the outline never leaves and never moves. */
+@keyframes drawing-editor-pulse {
+  0%,
+  100% {
+    stroke-width: 3px;
+    stroke-opacity: 1;
+  }
+  50% {
+    stroke-width: 6px;
+    stroke-opacity: 0.45;
+  }
+}
+
+[data-layer='highlight'].is-pulsing .drawing-editor-highlight-stroke {
+  animation: drawing-editor-pulse calc(var(--motion-slow) * 4) ease-in-out 3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-layer='highlight'].is-pulsing .drawing-editor-highlight-stroke {
+    animation: none;
+  }
+}
+
+/* One plate at a time (the stepper): the plan dims, the plate's cut is drawn
+   in the accent over it. */
+.drawing-editor-canvas-svg[data-plate='true'] [data-layer='regions'] {
+  opacity: 0.25;
+}
+
+.drawing-editor-plate-cut {
+  fill: var(--color-accent);
+  fill-opacity: 0.55;
+  stroke: var(--color-text-primary);
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+/* "Show original": the art at full strength and nothing drawn over it. */
+.drawing-editor-canvas-svg[data-view='original'] [data-layer='art'] {
+  opacity: 1;
+}
+
+.drawing-editor-canvas-svg[data-view='original'] [data-layer='regions'],
+.drawing-editor-canvas-svg[data-view='original'] [data-layer='plate'],
+.drawing-editor-canvas-svg[data-view='original'] [data-layer='highlight'],
+.drawing-editor-canvas-svg[data-view='original'] [data-layer='marquee'] {
+  display: none;
+}
+
+.drawing-editor-show-original[aria-pressed='true'] {
+  background: var(--color-hover-bg);
+  border-color: var(--color-accent);
+  box-shadow: inset 0 0 0 1px var(--color-accent);
+}
+
+.drawing-editor-view {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.drawing-editor-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.drawing-editor-stepper-text {
+  min-width: 8em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The legend under the drawing: a chip in each look, and its words. */
+.drawing-editor-legend {
+  list-style: none;
+  margin: var(--space-xs) 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-md);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.drawing-editor-legend[hidden] {
+  display: none;
+}
+
+.drawing-editor-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.drawing-editor-legend-chip {
+  width: 1.1em;
+  height: 1.1em;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-secondary);
+}
+
+.drawing-editor-legend [data-kind='painted'] .drawing-editor-legend-chip {
+  background: linear-gradient(135deg, #997048 50%, #8b9770 50%);
+}
+
+.drawing-editor-legend [data-kind='base'] .drawing-editor-legend-chip {
+  background: var(--drawing-editor-base-tint);
+}
+
+.drawing-editor-legend [data-kind='removed'] .drawing-editor-legend-chip {
+  background: repeating-linear-gradient(
+    45deg,
+    transparent 0 3px,
+    var(--color-text-secondary) 3px 4px
+  );
+}
+
+.drawing-editor-legend [data-kind='plate'] .drawing-editor-legend-chip {
+  background: var(--color-accent);
+}
+
+.drawing-editor-marquee {
+  fill: var(--color-focus);
+  fill-opacity: 0.12;
+  stroke: var(--color-focus);
+  stroke-width: 1.5px;
+  stroke-dasharray: 5 4;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+/* A neutral tint for the base coat, so "base" reads as painted and differs
+   from "unpainted" (nothing) at a glance. */
+:root {
+  --drawing-editor-base-tint: var(--color-text-secondary);
+}
+
+.drawing-editor-region-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  cursor: pointer;
+}
+
+.drawing-editor-region-check {
+  width: 1.25em;
+  height: 1.25em;
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.drawing-editor-regions-table tr.is-removed th,
+.drawing-editor-regions-table tr.is-removed td {
+  color: var(--color-text-secondary);
+  text-decoration: line-through;
+}
+
+.drawing-editor-regions-table tr.is-removed td:last-child {
+  text-decoration: none;
+}
+
+.drawing-editor-region-remove {
+  min-height: var(--size-touch-target);
+}
+
+.drawing-editor-table-actions {
+  margin-top: var(--space-sm);
+}
+
+.drawing-editor-swatch-row {
+  flex-wrap: wrap;
+}
+
+.drawing-editor-swatch-text {
+  flex: 1 1 8em;
+}
+
+.drawing-editor-swatch-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+
+.drawing-editor-rename-input {
+  flex: 1 1 8em;
+  min-height: var(--size-touch-target);
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+
+.drawing-editor-plates li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.drawing-editor-plate-actions {
+  display: inline-flex;
+  gap: var(--space-xs);
+  margin-left: auto;
+}
+
+.drawing-editor-rule {
+  margin-top: var(--space-sm);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.drawing-editor-rule label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: var(--size-touch-target);
+  cursor: pointer;
+}
+
+.drawing-editor-rule-help {
+  margin: var(--space-xs) 0 0;
+  color: var(--color-text-secondary);
+}
+
+/* While the editor owns the area, the preview's floating pills fade: they
+   are about the model behind the editor, and at 412 px wide one of them sat
+   on the editor's title. Opacity, not display, so their live regions still
+   speak. Reverse: delete this block. */
+.preview-canvas-section.has-drawing-editor .preview-state-indicator,
+.preview-canvas-section.has-drawing-editor .preview-rendering-overlay,
+.preview-canvas-section.has-drawing-editor .preview-status-bar {
+  opacity: 0;
+  pointer-events: none;
+  /* The ready badge pulses its opacity while a render runs, and an
+     animation outranks the cascade: MEASURED, it stayed on screen. */
+  animation: none;
+}
+
+/* ── The no-model door: the surface is the screen ─────────────────────── */
+.drawing-editor-host {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-index-modal, 1000);
+  display: flex;
+  background: var(--color-bg-primary);
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.drawing-editor-host.hidden,
+.drawing-editor-host[hidden] {
+  display: none;
+}
+
+/* The status line sits under the toolbar rather than at the foot: the
+   preview's own "Rendering preview" pill overlays the foot of this area, and
+   a live region nobody can read is not a live region. */
+.drawing-editor-status {
+  order: 1;
+}
+
+.drawing-editor-body {
+  order: 2;
+}
+
+/* The one control in the colour column gets the room the column has. */
+.drawing-editor-regions-table .drawing-editor-colour-cell {
+  width: 40%;
+}
+
+.drawing-editor-colour-select {
+  width: 100%;
+  min-width: 6em;
 }

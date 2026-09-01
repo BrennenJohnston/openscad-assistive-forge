@@ -34,6 +34,12 @@ export const INK_MODE_CHOICES = [
     description:
       'Keep whatever is darker than the background. What Forge did before. Best for a plain pencil drawing on white paper.',
   },
+  {
+    value: 'colours',
+    label: 'Colours',
+    description:
+      'Separate the picture into flat colours, one region per colour, ready to paint a plate for each. Best for a photo or a coloured drawing you want as a spray stencil.',
+  },
 ];
 
 /** Not bundled, not endorsed - signposts to sets that are free to use. */
@@ -42,6 +48,36 @@ export const OPEN_SYMBOL_SETS = [
   { name: 'Mulberry Symbols', url: 'https://mulberrysymbols.org/' },
   { name: 'Blissymbolics', url: 'https://blissymbolics.org/' },
 ];
+
+/**
+ * What the colour separation found, said in one sentence.
+ *
+ * STRINGS: owner review pending (DP-R2 text pack). Every colour is named with
+ * its share, because a person who wanted a colour that is not in the list has
+ * to be able to SEE that it is not there - and the answer is to ask for more.
+ *
+ * @param {Array<{name: string, hex: string, share: number,
+ *   isBackground: boolean}>} colours
+ * @param {{downscaledFrom?: number, factor?: number}} [notes]
+ * @returns {string}
+ */
+export function colourSentence(colours, notes = {}) {
+  const list = colours || [];
+  if (list.length === 0) return 'No colours were found in this picture.';
+  const parts = list.map(
+    (c) =>
+      `${c.name} ${Math.round(c.share * 100)}%${c.isBackground ? ' (the wall)' : ''}`
+  );
+  const painted = list.filter((c) => !c.isBackground).length;
+  const head =
+    painted === 1
+      ? '1 colour to paint, and the wall:'
+      : `${painted} colours to paint, and the wall:`;
+  const downscale = notes.factor
+    ? ` The picture was ${notes.factor} times too big to trace, so it was made ${notes.factor} times smaller first.`
+    : '';
+  return `${head} ${parts.join(', ')}.${downscale}`;
+}
 
 /**
  * A sentence describing what the extraction did, for the live region.
@@ -121,6 +157,8 @@ export function createInkControls({ idPrefix, onChange, announce }) {
     mode: 'lineart',
     lightnessMax: INK_DEFAULTS.lightnessMax,
     chromaMax: INK_DEFAULTS.chromaMax,
+    colourCount: INK_DEFAULTS.colourCount,
+    wallColour: 'auto',
   };
 
   const root = document.createElement('div');
@@ -214,7 +252,40 @@ export function createInkControls({ idPrefix, onChange, announce }) {
     INK_DEFAULTS.chromaMax,
     'Lower rejects coloured fills more firmly. Raise it if a coloured line is being dropped.'
   );
-  sliders.append(lightness.wrap, chroma.wrap);
+  const colourCount = makeSlider(
+    'colours',
+    'How many colours',
+    INK_DEFAULTS.colourCountRange,
+    INK_DEFAULTS.colourCount,
+    'One plate per colour. Ask for more than you think you need: taking a colour out later is easy, and a colour that was never found is not there to take.'
+  );
+  sliders.append(lightness.wrap, chroma.wrap, colourCount.wrap);
+
+  // Which colour is the wall behind the stencil, rather than paint on it.
+  // "Work it out" votes along the border of the picture, which is where a
+  // wall shows; colour alone cannot answer it, because a dark background is
+  // still a background.
+  const wallWrap = document.createElement('div');
+  wallWrap.className = 'ink-slider-row ink-wall-row';
+  const wallLabel = document.createElement('label');
+  wallLabel.setAttribute('for', id('wall'));
+  wallLabel.className = 'ink-slider-label';
+  wallLabel.textContent = 'Wall colour';
+  const wallSelect = document.createElement('select');
+  wallSelect.id = id('wall');
+  wallSelect.className = 'ink-wall-select';
+  wallSelect.setAttribute('aria-describedby', id('wall-help'));
+  const autoOption = document.createElement('option');
+  autoOption.value = 'auto';
+  autoOption.textContent = 'Work it out';
+  wallSelect.appendChild(autoOption);
+  const wallHelp = document.createElement('span');
+  wallHelp.className = 'ink-slider-help';
+  wallHelp.id = id('wall-help');
+  wallHelp.textContent =
+    'The colour that is the surface behind the stencil, not paint on it. It gets no plate.';
+  wallWrap.append(wallLabel, wallSelect, wallHelp);
+  sliders.appendChild(wallWrap);
 
   const summaryEl = document.createElement('p');
   summaryEl.className = 'ink-controls-summary';
@@ -263,13 +334,39 @@ export function createInkControls({ idPrefix, onChange, announce }) {
   const emit = () => {
     // Only line art uses the colourfulness gate; leaving it live in the other
     // modes would offer a control that changes nothing.
+    const isColours = settings.mode === 'colours';
     const usesChroma = settings.mode === 'lineart';
     chroma.range.disabled = !usesChroma;
     chroma.number.disabled = !usesChroma;
-    const usesThresholds = settings.mode !== 'standard';
+    const usesThresholds = settings.mode !== 'standard' && !isColours;
     lightness.range.disabled = !usesThresholds;
     lightness.number.disabled = !usesThresholds;
+    // The two colour controls are the other way round: they are the only ones
+    // this mode uses, and they mean nothing to the other three.
+    colourCount.range.disabled = !isColours;
+    colourCount.number.disabled = !isColours;
+    wallSelect.disabled = !isColours;
     onChange({ ...settings });
+  };
+
+  /**
+   * Offer the colours that were actually found as the wall, so the choice is
+   * between things a person can see rather than between abstractions.
+   *
+   * @param {Array<{hex: string, name: string, isBackground: boolean}>} colours
+   */
+  const setColours = (colours) => {
+    const chosen = wallSelect.value;
+    while (wallSelect.options.length > 1) wallSelect.remove(1);
+    for (const c of colours || []) {
+      const option = document.createElement('option');
+      option.value = c.hex;
+      option.textContent = `${c.name} (${c.hex})`;
+      wallSelect.appendChild(option);
+    }
+    wallSelect.value = [...wallSelect.options].some((o) => o.value === chosen)
+      ? chosen
+      : 'auto';
   };
 
   fieldset.addEventListener('change', (event) => {
@@ -297,16 +394,55 @@ export function createInkControls({ idPrefix, onChange, announce }) {
   };
   bindPair(lightness, 'lightnessMax');
   bindPair(chroma, 'chromaMax');
+  bindPair(colourCount, 'colourCount');
+
+  wallSelect.addEventListener('change', () => {
+    settings.wallColour = wallSelect.value;
+    const label =
+      wallSelect.options[wallSelect.selectedIndex]?.textContent ||
+      'Work it out';
+    say(`Wall colour: ${label}`);
+    emit();
+  });
 
   return {
     element: root,
     getSettings: () => ({ ...settings }),
+    /**
+     * Offer the colours a separation actually found as the wall choice, and
+     * say what came out. Called only in the Colours mode.
+     *
+     * @param {Array<{hex: string, name: string, share: number,
+     *   isBackground: boolean, shapes: number}>} colours
+     * @param {{downscaledFrom?: number, factor?: number}} [notes]
+     */
+    setColourResult(colours, notes = {}) {
+      setColours(colours);
+      summaryEl.textContent = colourSentence(colours, notes);
+      warningsEl.replaceChildren();
+      warningsEl.hidden = true;
+    },
     setBusy(busy) {
       // Only ever WRITES the waiting line. Clearing on the way out would erase
       // the summary that setSummary has already put there: the re-trace
       // finishes inside the same turn, so the two would race and the summary
       // would lose.
       if (busy) summaryEl.textContent = 'Re-reading the picture…';
+    },
+    /**
+     * Replace the waiting line when a trace did not finish.
+     *
+     * D-119: setBusy writes "Re-reading the picture…" and only setSummary
+     * clears it, so a failed trace used to leave that sentence standing as if
+     * work were still going on. Takes the caller's own already-shown failure
+     * text rather than inventing a second wording for the same event.
+     *
+     * @param {string} text - The failure message already shown to the user
+     */
+    setFailed(text) {
+      summaryEl.textContent = text;
+      warningsEl.replaceChildren();
+      warningsEl.hidden = true;
     },
     /**
      * Report what the extraction did.

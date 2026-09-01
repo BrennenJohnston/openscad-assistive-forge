@@ -1091,7 +1091,9 @@
               role="region"
               aria-labelledby="features-heading"
             >
-              <h2 id="features-heading">Main Page</h2>
+              <!-- DP-2: tabindex="-1" so "Not now" on the tour nudge can land
+                   focus here. Not in the tab order; script-focusable only. -->
+              <h2 id="features-heading" tabindex="-1">Main Page</h2>
               <!-- UF-40 (U-44): the landing surface carries the name the
                    tours, the header button and the docs all use, so the
                    vocabulary is visible where it is introduced. The id and
@@ -1424,7 +1426,7 @@
                     <summary>What you’ll learn</summary>
                     <ul class="role-path-tips" aria-label="What you'll learn">
                       <li>Where projects open and how saving works</li>
-                      <li>The ready-made Charm and Braille customizers</li>
+                      <li>The ready-made Charm and Braille designers</li>
                       <li>What Clear Cache does before you press it</li>
                       <li>The controls in the header</li>
                     </ul>
@@ -1480,7 +1482,7 @@
                   </div>
                 </div>
                 <div class="role-path-card" data-tutorial-target="charm-card">
-                  <h3 class="role-path-title">Charm Customizer</h3>
+                  <h3 class="role-path-title">Charm Designer</h3>
                   <p class="role-path-meta">
                     Creative project &bull; customize &amp; 3D print &bull; by
                     <a
@@ -1521,7 +1523,7 @@
                         (opens in new tab)</span
                       ></a
                     >
-                    to learn how to use the Charm Customizer.
+                    to learn how to use the Charm Designer.
                   </p>
                   <details class="role-path-details">
                     <summary>What you can make</summary>
@@ -1559,14 +1561,14 @@
                       id="openCharmMakerBtn"
                       data-example="q-charm"
                       data-role="creators"
-                      aria-label="Open Charm Customizer"
+                      aria-label="Open Charm Designer"
                     >
-                      Open Charm Customizer
+                      Open Charm Designer
                     </button>
                   </div>
                 </div>
                 <div class="role-path-card" data-tutorial-target="braille-card">
-                  <h3 class="role-path-title">Braille Card Customizer</h3>
+                  <h3 class="role-path-title">Braille Card Designer</h3>
                   <p class="role-path-meta">
                     Accessibility project &bull; customize &amp; 3D print &bull;
                     based on the
@@ -1638,25 +1640,20 @@
                       id="openBrailleCardBtn"
                       data-example="braille-sign"
                       data-role="creators"
-                      aria-label="Open Braille Card Customizer"
+                      aria-label="Open Braille Card Designer"
                     >
-                      Open Braille Card Customizer
+                      Open Braille Card Designer
                     </button>
                   </div>
                 </div>
                 <div class="role-path-card">
                   <h3 class="role-path-title">Stencil Maker</h3>
+                  <!-- DP-14: the attribution keeps the name and drops the
+                       link. The Stencil Forge repository is private, so the
+                       link was a 404 for everybody who followed it. -->
                   <p class="role-path-meta">
                     Creative project &bull; spray-paint stencils &bull; 3D print
-                    or laser cut &bull; based on the
-                    <a
-                      href="https://github.com/BrennenJohnston/stencil-forge"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      >Stencil Forge project<span class="sr-only">
-                        (opens in new tab)</span
-                      ></a
-                    >
+                    or laser cut &bull; based on the Stencil Forge project
                   </p>
                   <p class="role-path-description">
                     Turn a picture into a spray-paint stencil. Upload a PNG,
@@ -3260,6 +3257,43 @@
                           aria-label="Upload overlay image file"
                         />
                       </label>
+                      <!-- DP-5: cropping saves a COPY; the original stays in
+                           the image list. Disabled until there is a raster
+                           image chosen, because an SVG has nothing to crop. -->
+                      <button
+                        type="button"
+                        id="overlayCropBtn"
+                        class="btn btn-sm btn-outline overlay-crop-btn"
+                        disabled
+                      >
+                        Crop
+                      </button>
+                    </div>
+                    <!-- DP-6: the picture you have been tracing against is
+                         usually the picture you want ON the model. This hands
+                         it to a design parameter through the ordinary upload
+                         path, so it traces, opens the editor and lands in the
+                         gallery exactly as a file chosen by hand would. -->
+                    <div class="overlay-use-row" id="overlayUseRow" hidden>
+                      <label
+                        class="overlay-control-label"
+                        for="overlayUseTargetSelect"
+                        id="overlayUseTargetLabel"
+                      >
+                        Use it as
+                      </label>
+                      <select
+                        id="overlayUseTargetSelect"
+                        class="overlay-select"
+                        aria-labelledby="overlayUseTargetLabel"
+                      ></select>
+                      <button
+                        type="button"
+                        id="overlayUseAsDesignBtn"
+                        class="btn btn-sm btn-outline"
+                      >
+                        Use as design
+                      </button>
                     </div>
                     <span class="overlay-source-help-text"
                       ><span id="overlaySourceHelp"
@@ -3391,6 +3425,55 @@
                       More options
                     </summary>
                     <div class="overlay-advanced-controls">
+                      <!-- DP-5: which surface the overlay sits against. A
+                           raw millimetre box alone is a poor control here -
+                           "-0.25" says nothing to someone who wants to trace
+                           onto the top of a charm - so the presets name the
+                           surfaces and the number field stays for the rest. -->
+                      <div class="overlay-control overlay-z-control">
+                        <label
+                          class="overlay-control-label"
+                          for="overlayZPresetSelect"
+                          id="overlayZPresetLabel"
+                        >
+                          Sits against
+                        </label>
+                        <select
+                          id="overlayZPresetSelect"
+                          class="overlay-select"
+                          aria-describedby="overlayZHelp"
+                        >
+                          <option value="under-plate">Under the plate</option>
+                          <option value="build-plate">Build plate</option>
+                          <option value="model-top">Top of the model</option>
+                          <option value="custom">A height I choose</option>
+                        </select>
+                        <span id="overlayZHelp" class="sr-only"
+                          >Chooses the height the reference image sits at. Top
+                          of the model follows the model as it changes.</span
+                        >
+                        <div
+                          class="overlay-z-custom"
+                          id="overlayZCustomRow"
+                          hidden
+                        >
+                          <label
+                            class="overlay-control-label"
+                            for="overlayZCustomInput"
+                            id="overlayZCustomLabel"
+                          >
+                            Height (mm)
+                          </label>
+                          <input
+                            type="number"
+                            id="overlayZCustomInput"
+                            class="overlay-number-input"
+                            step="0.25"
+                            value="0"
+                            aria-labelledby="overlayZCustomLabel"
+                          />
+                        </div>
+                      </div>
                       <!-- Manual override master toggle -->
                       <label
                         class="overlay-enable-toggle overlay-override-toggle"
@@ -4254,6 +4337,24 @@
               >
                 <!-- Parameters will be dynamically generated here -->
               </div>
+              <!-- The whole stencil set in one download (DP-17). Shown only
+                   when the loaded tile makes plates; main.js reveals it. -->
+              <div id="stencilSetExport" class="stencil-set-export" hidden>
+                <button
+                  type="button"
+                  id="exportStencilSetBtn"
+                  class="btn btn-secondary"
+                >
+                  Export all plates
+                </button>
+                <span
+                  class="stencil-set-export-info"
+                  id="stencilSetExportInfo"
+                  aria-live="polite"
+                >
+                  One file per plate, plus the jig and the paint order.
+                </span>
+              </div>
               <!-- Output Format Selector -->
               <div class="output-format-section">
                 <label for="outputFormat" class="output-format-label"
@@ -5108,6 +5209,17 @@
                     class="rendered-2d-preview hidden"
                     role="img"
                     aria-label="Rendered 2D SVG preview"
+                  ></div>
+                  <!-- The drawing editor takes this space when it is open,
+                       the same way the 2D preview does (DP-19). It is where
+                       the 3D view was because that is the biggest surface on
+                       the page, and on a phone it IS the page. -->
+                  <div
+                    id="drawingEditorSurface"
+                    class="drawing-editor-surface hidden"
+                    role="region"
+                    aria-label="Drawing editor"
+                    hidden
                   ></div>
                   <!-- Screen reader accessible model summary (WCAG 2.2 non-visual content) -->
                   <div
@@ -6540,6 +6652,111 @@
       aria-live="assertive"
       aria-atomic="true"
     ></div>
+    <!-- Crop the reference image (DP-5). Numeric fields are the primary
+         control, not a fallback: a drag handle cannot be operated by keyboard
+         or described to a screen reader, and the numbers are what the person
+         is actually deciding. The picture beside them shows the rectangle. -->
+    <div
+      class="modal hidden"
+      id="cropImageModal"
+      role="dialog"
+      aria-labelledby="cropModalTitle"
+      aria-describedby="cropModalHelp"
+      aria-modal="true"
+      aria-hidden="true"
+    >
+      <div class="modal-overlay" id="cropModalOverlay"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="cropModalTitle">Crop the reference image</h2>
+          <button
+            type="button"
+            class="modal-close"
+            id="cropModalClose"
+            aria-label="Close without cropping"
+          >
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p id="cropModalHelp" class="crop-modal-help">
+            Choose the part of the picture to keep. Your original image is not
+            changed: cropping saves a copy and the overlay uses that.
+          </p>
+          <div class="crop-modal-layout">
+            <div class="crop-preview" id="cropPreview">
+              <!-- The picture is set when the dialog opens. A 1x1 transparent
+                   placeholder keeps this a valid img until then; alt is empty
+                   because the numbers beside it are the accessible content. -->
+              <img
+                id="cropPreviewImage"
+                alt=""
+                src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+              />
+              <div class="crop-preview-rect" id="cropPreviewRect"></div>
+            </div>
+            <div class="crop-fields">
+              <label class="crop-field">
+                <span>Left</span>
+                <input type="number" id="cropX" min="0" step="1" value="0" />
+              </label>
+              <label class="crop-field">
+                <span>Top</span>
+                <input type="number" id="cropY" min="0" step="1" value="0" />
+              </label>
+              <label class="crop-field">
+                <span>Width</span>
+                <input
+                  type="number"
+                  id="cropWidth"
+                  min="1"
+                  step="1"
+                  value="0"
+                />
+              </label>
+              <label class="crop-field">
+                <span>Height</span>
+                <input
+                  type="number"
+                  id="cropHeight"
+                  min="1"
+                  step="1"
+                  value="0"
+                />
+              </label>
+              <p class="crop-field-note" id="cropSizeNote"></p>
+              <button
+                type="button"
+                class="btn btn-secondary"
+                id="cropSelectAllBtn"
+              >
+                Select the whole picture
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-primary" id="cropApplyBtn">
+            Crop and use the copy
+          </button>
+          <button type="button" class="btn btn-secondary" id="cropCancelBtn">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Render Queue Modal -->
     <div
       class="modal hidden"
@@ -8806,6 +9023,7 @@ No console output yet. Generate a model to see output.</pre
                       name="first-visit-ui"
                       id="firstVisitChoiceForge"
                       value="forge"
+                      checked
                       aria-labelledby="firstVisitForgeName firstVisitForgeBadge"
                       aria-describedby="firstVisitForgeShotDesc firstVisitForgeGuide"
                     />
@@ -8928,7 +9146,7 @@ No console output yet. Generate a model to see output.</pre
             role="alert"
           ></p>
           <label class="first-visit-remember">
-            <input type="checkbox" id="firstVisitRemember" checked />
+            <input type="checkbox" id="firstVisitRemember" />
             <span>Remember my choice on this device</span>
           </label>
           <p class="features-note first-visit-learn-more">

@@ -289,6 +289,7 @@
   --color-accent-text: #ffffff;
   --color-accent-subtle: #e6f0ff;
   --color-accent-fg: #003d99; /* Same as accent: solid dark blue already passes AAA */
+  --color-on-accent-subtle: var(--color-accent-fg); /* 8.59:1 on #e6f0ff */
 
   /* Text on Solid Semantic Surfaces */
   --color-on-accent: #ffffff;
@@ -367,6 +368,7 @@
   --color-accent-text: #000000;
   --color-accent-subtle: #003d66;
   --color-accent-fg: #66b3ff; /* Same as accent: light blue already passes on black */
+  --color-on-accent-subtle: var(--color-accent-fg); /* 5.09:1 on #003d66 */
 
   /* Text on Solid Semantic Surfaces */
   --color-on-accent: #000000;
@@ -532,6 +534,7 @@
     --color-accent-hover: LinkText;
     --color-accent-text: Canvas;
     --color-accent-subtle: Canvas;
+    --color-on-accent-subtle: CanvasText;
 
     /* Text on Solid Semantic Surfaces */
     --color-on-accent: Canvas;

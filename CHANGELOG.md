@@ -61,6 +61,68 @@ illustrated version.
 
 ### Changed
 
+- **The drawing editor is one picture now** (DP-24) - the editor used to spend its width on a
+  before-and-after pair, and the drawing you were actually editing got what was left. The edited
+  drawing is the editor now: it takes the full width, and toggling a shape on or off shows in
+  that one picture. **Compare with original** is a button beside Show roles that brings the pair
+  back while it is pressed; every fresh open returns to the one picture
+- **The editor's side panel is a drawer over the drawing** (DP-24) - the regions, colours,
+  plates and warnings used to be a column that squeezed the drawing to less than half its space
+  (and at phone width grew to four screens tall while the drawing shrank to nothing). The panel
+  lays OVER the drawing's right edge now, from a Regions toggle in the toolbar: closed by
+  default on the stencil tile, where pointing at the picture carries the task, open on the
+  drawing-cleanup door, where the shape list is the hands. The skip link still lands on the
+  regions table - it opens the drawer on its way there
+- **The editor toolbar is three named rows** (DP-24) - it used to be one long line that wrapped
+  wherever it ran out, four rows deep. Now it is the actions row, the view row and the hands
+  row, and none of them wraps at a desktop window. Getting the hands row to hold took a shorter
+  word: **Paint selection**, the Paint tool's own verb, where "Colour the selection" wrapped the
+  row at every width
+- **The two ready-made cards are Designers now** - the parameter panel is called the Customizer,
+  and two welcome cards were called Customizers too, which put one word on two different things
+  on the same screen. The cards are the **Charm Designer** and the **Braille Card Designer**
+  now: a design you customize, in the panel that kept the name
+
+### Added
+
+- **Muted colour names** (DP-25) - the automatic colour namer knew eighteen saturated anchors,
+  so every muted colour in a traced photograph landed on a gray: sage-green eyes, a dusty-pink
+  nose and a gray muzzle were all called "Gray", three swatches sharing one name in a list whose
+  whole job is telling them apart. Olive, Sage, Dusty pink and Cream join the table, each placed
+  so it does not steal a saturated name
+- **A cropped photo can be the design** (DP-26) - colour from the photo itself: crop a reference
+  photo down to its subject and press Use as design, and the cropped copy enters the colours
+  flow with the editor open on it. The hand-over row used to hide itself after a crop - a plain
+  upload offered it and a cropped copy did not, which was backwards, because cropping is what
+  you do on the way to the colours
+
+### Fixed
+
+- **The relief flatten survives real drawings** (DP-26, D-120) - the editor's combined preview
+  was built by merging shapes two at a time under even-odd rules, which is order-dependent once
+  shapes overlap: converted strokes could corrupt, and on this app's own logo (139 stroke bands)
+  the chain exhausted the browser's memory outright. Shapes are now read on their own terms and
+  folded together with true unions, one region at a time - order cannot change the picture, the
+  logo flattens in seconds, and a cut-out that would erase the whole drawing is treated as the
+  paper it is, with a warning that says so
+- **A DXF's curves arrive** (DP-26, D-123) - OpenSCAD's importer reads line geometry, not
+  splines or ellipses, and this door said nothing about the difference: a Fusion sketch of 34
+  entities opened as two shapes with the rest silently gone. Every spline is now evaluated with
+  the curve's own arithmetic and every ellipse parametrically before the engine sees the file -
+  the same sketch opens whole - and the engine's warning lines ride into the editor's warnings
+  list instead of being swallowed at the door
+- **The traced colour masks tile** (DP-24) - each colour of a separated picture is traced on its
+  own, and the tracer pulls every boundary inward, so neighbouring colours never quite touched:
+  the hairline gaps between them became hundreds of loose pieces on the plates. Grown under a
+  pixel before tracing (after the too-small specks are dropped, counted, so growth cannot
+  resurrect them), neighbours meet: the owner's cat went from 997 loose pieces to 64, and the
+  survivors are true paint-order islands the report should name
+- **A file control never says [object Object]** (DP-25) - a rebuilt file control whose saved
+  value is a file object printed its type instead of its name, to the person and to the screen
+  reader. It shows the file's name now, or says no file is selected
+
+### Changed
+
 - **Trees are their species now** (CW-94, CW-97) - a tree used to be a lollipop: one thin stem
   and one faceted blob, at half its real height. Every tree is built the way trees grow now: a
   full-height trunk at the species' cited size with a base flare on the big ones, branches
@@ -486,6 +548,261 @@ illustrated version.
   makes, not something the graphics card does. The frame-time bench also gained a character-size
   sweep inside one browser session, and lost its "reverse" column, which counted solid cells in the
   last frame of a run and swung between 0 and 95,425 between two runs of the same configuration
+
+### Changed
+
+- **The Stencil Maker's designs are this project's own now** (DP-14) - the gallery used to offer
+  six icons copied out of the charm tool's library: a smiley, a heart, a star, a bolt, a crown
+  and a sun, none of which had anything to do with stencils. They are gone. In their place is the
+  Forge logo, beside the ring that was already there. Getting the logo in took some doing, and it
+  is the same thing that happens to any drawing exported from a CAD program: the logo is drawn in
+  lines with nothing filled in, and OpenSCAD fills in every shape it is given, so the file as it
+  stood came out as one solid blob. The app's own preparer turns the lines into thin filled
+  ribbons, which is what a stencil of a line drawing should be, and that is what ships. The ring
+  is still the design you start with, because the logo's ellipses and figure close into pieces
+  the default single support bar does not reach, and the ring is there to show a bar doing its
+  job. The Stencil Maker card still credits the Stencil Forge project by name, but no longer
+  links to it: that repository is private, so the link was a dead end for everybody who followed
+  it. The same credit is now in CREDITS.md, saying which parts were carried over and under what
+  licence. Behind the scenes, the Bracelet Clip Charm stopped borrowing its six gallery icons
+  from a neighbouring tool's folder and uses its own copies, which have been sitting there unused
+  since they were added
+
+- **A pendant can take the shape of your own drawing** (DP-11) - the Flat Pendant gains a shape
+  called "design": instead of a circle or a square, the outline of your drawing becomes the
+  pendant itself, and everything inside it stands up on the surface as raised detail. A traced
+  bird becomes a bird-shaped pendant. Two things this needed getting right, neither of which
+  would have looked wrong on screen. An outline that was DRAWN as a line, rather than filled in,
+  used to come out as a hollow ring with the details floating in the middle; it is now filled.
+  And a traced photograph's outermost shape is almost always the paper it was drawn on, which
+  would have made every traced photo a rectangle; the background is now stepped over. The
+  keychain hole gains position controls, and because the pendant is now whatever shape you drew,
+  the app checks that the hole is actually inside it with at least 1.2 mm of material around it.
+  If it is not, it says so in plain words with both measurements, and leaves the hole exactly
+  where you put it
+
+- **The Flat Pendant and the Logo Plate caught up with the Bracelet Clip Charm** (DP-9, DP-10) -
+  three models share the charm program and features kept being added to one and forgotten on the
+  others. All three now offer the same things: move, rotate and resize your design, thicken its
+  lines for printing, two lines of text, an icon gallery, and large and small presets. Three
+  older faults are fixed with them. The Flat Pendant's design ratio was being written into a
+  setting the model never read, so a tall design was squeezed as though it were square. Its
+  default heart could not be found by desktop OpenSCAD at all, which said so and then quietly
+  built a blank pendant anyway. And text could run off the edge of a charm and print standing on
+  nothing; text is now cut off at the edge of the face on every model. The guide gains a table
+  saying which model has which feature, and the tests read that table, so a promise it makes
+  that stops being true now fails the build instead of quietly ageing
+
+- **A drawing can be built as a stack of layers, not just one flat shape** (DP-7, DP-8) - if the
+  shapes in your drawing sit inside one another, the app can now work that out and build them as
+  separate passes, each standing on the one before it. Three nested squares come out as a stepped
+  pyramid instead of a single flat square. In the drawing editor each shape gets a Layer control,
+  suggested from how deeply it is nested and yours to change. If you put a shape on a layer with
+  nothing under it, the row says so in plain words and explains what to do, and nothing is moved
+  for you: the choice stays yours. The Bracelet Clip Charm is the first model that can build
+  them, with its own depth and raised-or-engraved choice per pass, and it is entirely optional -
+  leave the layer files empty and the charm is exactly what it was. Measured: a simple drawing in
+  three passes renders in 0.34 seconds against 0.31 for one; a very detailed one takes about ten
+  seconds against three and a half, so a complicated drawing built in three passes is a
+  ten-second render
+
+- **Shapes can be deleted from the editor's list, not just left out of the result** (DP-4) -
+  marking a shape "Ignore" kept it out of what gets printed but left it in the list, which is no
+  help when a drawing has hundreds of them. Every row now has a Delete button, and above the list
+  there are two ways to clear out a lot at once: remove everything smaller than a size you give,
+  or keep only the largest few and remove the rest. Sizes are in square millimetres measured
+  against the design width, so they are the size the shape will really print. One step of undo is
+  available while you are working, and what you removed is remembered with the project, so
+  reopening it shows the list you left behind. Removing enough shapes to get under fifty brings
+  the automatic preview back
+
+- **Drawings with more than fifty shapes can be opened and edited now** (DP-3) - the editor used
+  to refuse any drawing with more than fifty shapes outright, showing no list at all, which was
+  precisely backwards: the list is what you would use to delete the shapes you do not want. The
+  limit turned out to be guarding one particular step, combining the shapes into a single
+  outline, and not the list. So the list is now shown for drawings up to a thousand shapes, and
+  the combining step waits until you press Render preview, telling you it is working and how
+  long it took. Measured on a real 831-shape drawing: it used to be refused outright, then took
+  64 seconds to open once the refusal was lifted, and now opens in about 2 seconds. Drawings of
+  fifty shapes or fewer behave exactly as before
+
+- **Saying "Not now" to the tour puts you back at the top of the Main Page** (DP-2) - the tour
+  question scrolls the tour cards up so it can point at the button it is asking about, and until
+  now answering "no" left you there, with "Open or start a project" and Saved Projects scrolled
+  off the top. Answering no now takes you back to the top of the page and lands you on the Main
+  Page heading, so a keyboard or screen-reader user carries on from the beginning of the page
+  rather than from the middle. The Not now button, the Escape key and clicking outside the
+  question all do the same thing, and the tip on the tour card still appears exactly as before.
+  Choosing to start the tour is unchanged
+
+- **The first screen makes the recommendation instead of asking you to** (DP-1) - the welcome
+  modal now opens with Assistive Forge already chosen, and "Remember my choice on this device"
+  now starts UNCHECKED. A first-time visitor can press Download & Continue once and be in the
+  recommended interface, without that one press deciding anything permanent for the device: the
+  choice is remembered only if you tick the box. Everything else about the modal is unchanged,
+  including the wording, the mobile layout, and the notice that Classic is desktop-only
+
+### Fixed
+
+- **A stencil plate no longer comes out several times the size of the plate it is cut from**
+  (DP-15) - a drawing is put on a shared canvas before the plates are cut from it, so that every
+  plate lines up with every other one, and that canvas is reached by a transform stored beside
+  the drawing. The plate builder read the canvas but not the transform, so it sized the drawing
+  as if it were already on the canvas. A drawing 119.81 units wide came out a fifth too big and
+  ran off the bottom of the plate; a drawing traced from a photograph, whose units are pixels,
+  came out five times over - a 100 mm plate with a 285 mm cat hanging off the corner of it, which
+  is exactly what one owner's export looked like. The transform is now applied, once, and a cut
+  lands inside the plate's margin on both axes. The design's own proportions did not change: the
+  cat that used to overflow a 70 mm design box now fills it exactly. The laser sheet was reading
+  the same drawing the same wrong way, and is fixed with it
+
+- **Drawings that declare their colours in a style block are no longer read as solid black**
+  (DP-3) - drawings exported from CAD and illustration programs usually set "no fill, black
+  outline" once at the top of the file and refer to it by name from every shape. Forge was not
+  reading that, so it assumed every shape was filled in, and a line drawing became a page of
+  solid blocks. On a stencil that meant the whole picture came out as one hole the shape of its
+  outer edge, with none of the artwork in it. Forge now reads those rules, and such a drawing
+  opens as the line art it is
+
+- **The editor said the wrong thing about drawings it could not open** (DP-3) - a drawing with
+  too many shapes was turned away with "has no shapes Forge can work with. A photo needs dark
+  lines on a light background to trace." That is advice about photographs, given about a
+  drawing, and it named a cause that was not the cause. It now says how many shapes the drawing
+  has and how many Forge can work with
+
+- **A picture that was too large to convert no longer reports that it worked** (DP-3) - when a
+  photograph was too big to trace, the message saying so was immediately overwritten by one
+  saying the file had been converted. The model got nothing, the preview said it was ready, and
+  the only place the truth appeared was a message that scrolled past. The failure now stands
+
+- **Two pieces of text on the chosen card were just under the contrast minimum** (DP-1) - putting
+  a card in the chosen state on first paint was the first time the modal's amber text had ever sat
+  on the pale yellow chosen fill, and there it measured 4.44 to 1 where the standard asks for 4.5.
+  The badge and the Accessibility highlights link now use a foreground colour picked for that
+  fill, measured at 5.78 to 1. The colour was missing from the design system rather than wrong in
+  the modal, so it is added there and every theme states its own value; nothing that was already
+  correct changed. Anyone who clicked a card before this release met the same problem
+
+### Added
+
+- **You can see what you did** (DP-21) - the drawing editor's canvas is one picture now. The
+  original drawing sits underneath, dimmed; every region is painted in its colour at full
+  strength, the base coat in a neutral grey so it reads differently from "unpainted"; a removed
+  region is hatched; a selected one has a thick outline. "Show original" is a button you press
+  to see the untouched drawing alone and press again to see your edits, and it says which. When
+  you move through the regions table, the drawing draws a two-stroke outline around the region
+  you are on - dark outside, light inside, so it reads on any colour - that pulses three times
+  and then settles; if your system asks for less motion, it settles at once. The plate stepper
+  in the toolbar walks the plates one at a time, drawing that plate's cut over the dimmed plan
+  and saying the same paint sentence the export writes, so you can see what plate 2 will cut
+  before anything is printed. A legend under the drawing names the five looks
+
+- **You can point at a region and say brown** (DP-20) - the drawing editor on the Stencil Maker
+  gains its tools. The drawing is one canvas you work on directly: Select a region by clicking it
+  (Shift adds another), drag a Marquee around several, Paint one with the current colour, Remove
+  one, or drag with the Hand to move around; the wheel zooms. Every one of those has a keyboard
+  equivalent: the regions table has a checkbox on each row, Up and Down walk the rows in the same
+  column while the drawing highlights the region you are on, Space ticks, Ctrl+A ticks them all,
+  the number keys 1 to 8 give the ticked regions the matching colour and 0 the base coat, Delete
+  removes them and "Put back" restores them. Everything you do is an Undo away - Ctrl+Z, Ctrl+Y,
+  the Undo button in the toolbar or the one under the table - and every undo says what came back,
+  in words. Colours can be renamed, merged into another, or removed (their regions go back to the
+  base coat), and the paint order has "Paint earlier" and "Paint later" buttons on each plate. One
+  checkbox decides the plate rule: on, later colours also cut through each plate so nothing can
+  fall out; off, each plate cuts its own colour only, the way a hand-cut set does. The plan you
+  apply is saved with the drawing and comes back when the drawing does, so a project reopened
+  cuts what it cut when it was saved. Walked through with one user's own cat: their six plates,
+  applied by hand through the interface, come out as six plates
+
+- **The drawing editor now lives where the 3D preview is** (DP-19) - it used to be a block nested
+  inside the customizer's file control, a long flat list with a before-and-after pair above it.
+  Now it takes the preview area, the biggest surface on the page and on a phone the whole of it:
+  a toolbar across the top, the drawing in the middle, and a side panel of collapsible sections
+  beside it (Colours, Regions, Plates and paint order, Warnings), each a native disclosure that
+  opens from the keyboard. The customizer stays one Tab away, the arrow keys you use inside the
+  editor no longer turn the model behind it, and Escape gives the area back. On the Stencil
+  Maker the editor reads a drawing into REGIONS, the faces between the lines, one row each with
+  a colour to choose, the plate that paints it and its share of the drawing; you can add a
+  colour, give it to a region, and when you apply, that colour comes out as a plate. A drawing
+  with no colours of its own, like a line drawing from a CAD program, used to be waved through
+  with "OpenSCAD merges these automatically", which is how one user's cat came out as a single
+  silhouette hole; on a stencil tile it now opens the editor by itself and says what it found:
+  "21 regions found, no colours yet: every one starts as the base coat." The editor's own door
+  on the welcome screen hosts the same surface over the whole page. The editing itself - roles,
+  layers, deleting shapes and undoing it, the render tiers - is the same tested code as before,
+  mounted inside the new surface rather than rewritten. Behind the scenes the editor is loaded
+  the first time it opens, so a project that never opens it never downloads it, and the tests
+  for the editor's own walk run on Chromium only, because the Edge and Firefox lanes were
+  within a third of a minute of their time ceiling before this release existed
+
+- **A set of real stencil plates to check Forge's own against** (DP-15) - one of this project's
+  users made a six-plate spray stencil of their cat by hand, drawing it in Illustrator, cutting
+  the plates in Fusion 360 and painting the result, and has contributed the drawing and the seven
+  printed pieces to the project as test fixtures. They live in `tests/fixtures/harley/`, with the
+  colour plan measured out of the plates themselves rather than typed from a description, and a
+  new tool, `scripts/stencil-golden.mjs`, sets a plate Forge makes beside the plate the owner made
+  and reports how much of the two cuts is the same shape. That number is what the stencil work in
+  this round is judged by. The photograph the drawing was traced from is deliberately not included
+
+- **A photo or a coloured drawing can become the colours of a stencil, by itself** (DP-18) - the
+  picture panel gains a fourth choice, **Colours**. Instead of deciding what counts as a line, it
+  separates the picture into flat colours, one region per colour, and hands them straight to the
+  plate maker: choose a photo, choose how many colours, and a set of plates comes out with nobody
+  having to point at anything. It also names the wall, which is the colour that is the surface
+  behind the stencil rather than paint on it, and gets no plate; Forge guesses by looking at the
+  edges of the picture, where a wall shows, and you can override it. The summary line names every
+  colour and how much of the picture it covers, so a colour you wanted and did not get is visible
+  rather than merely absent, and the answer is to ask for one more. Two things are worth knowing.
+  A colour that covers about one per cent of a picture is genuinely hard to find, and the way
+  Forge finds it is by looking at a smaller copy in which each pixel is the most common colour of
+  the block it came from, which removes the soft edges that would otherwise eat the search. And a
+  white that is five shades from the paper cannot be told apart from the paper by any amount of
+  cleverness, so if your picture has one, name your colours instead of asking Forge to find them.
+  A picture too big to trace is now made smaller and traced, instead of refused, and the amount it
+  was shrunk by is said out loud
+
+- **A stencil can now be a set of plates and a jig, up to eight colours** (DP-17) - the Stencil
+  Maker used to make three plates and decide what went on them by how deeply the shapes nested.
+  It now makes as many plates as the design has colours, up to eight, and it makes the thing that
+  holds them still: a printed base with four posts, and a matching hole in the corner of every
+  plate. The posts are round at one end and rectangular at the other, so a plate cannot go on
+  backwards, which is the mistake that ruins a six-colour picture on the last coat. Each plate
+  carries its own number cut through the bottom margin, so a stack of them on a bench still says
+  which is which. There is a new **Export all plates** button that renders the whole set in turn
+  and hands back one zip: a file per plate named for its colour, the jig base, and a text file
+  with the order to paint in. All of it is measured against a real stencil: one user made a
+  six-plate set of their cat by hand, and five of Forge's six plates now come out at 99.7% to
+  99.9% the same shape as the ones they cut. The sixth is lower for a reason worth knowing: on
+  that plate they opened the pupil of each eye together with the black ring around it, and Forge
+  opens the pupil
+
+- **Forge now understands that a stencil layer is a paint colour** (DP-16) - not a nesting depth,
+  which is what it used to work out for itself. Nothing on screen changes yet; this is the part
+  underneath. It knows what a region of a drawing is, and for a line drawing that is the areas
+  BETWEEN the lines rather than the lines themselves, which is the thing the old version had
+  backwards: given a drawing of a cat traced as outlines, it finds the twenty-one faces of the
+  line network and the whole head as a silhouette, and every one of the sixteen regions the owner
+  of that drawing painted by hand is among them. It knows a palette, an order to paint in, which
+  plate cuts what under either of the two methods, and which openings will drop a loose piece out
+  of the plate, with the three ways round that named rather than chosen for you. The shapes are
+  worked out with a different geometry library than before, which on one real drawing of 831
+  pieces takes 0.55 seconds where the old path took 2 minutes 8
+
+- **The reference image can sit on any surface, be cropped, and be used as the design** (DP-5,
+  DP-6) - three additions to the Reference Image panel. **Sits against** chooses the height by
+  naming a surface (under the plate, the plate itself, the top of the model, or a height you
+  type) instead of asking for a number; "top of the model" follows the model as it changes, which
+  is what you want when tracing onto the top of a charm. **Crop** keeps the part of a photograph
+  you want, by typing the edges with the picture beside them showing the same rectangle; it never
+  changes your picture, it saves a copy named after the original. **Use as design** hands the
+  image to one of the model's design parameters, the same way a file you chose by hand would go
+  in, so a photograph is traced and its proportions measured in the same step
+
+- **Forge remembers where you put the reference image, per project** (DP-5) - position, rotation,
+  size and chosen surface are saved with the project, so reopening it puts the reference back
+  where you left it. Opacity and colour stay the same across every project, because those are
+  settings for how you like to work rather than facts about one design. A project saved before
+  this release opens exactly as it did
 
 - **Groundwork for opening a file straight into Forge from your desktop** (IR-10, not switched on) -
   an installed app can be registered with the operating system so double-clicking a `.scad`, `.zip`,

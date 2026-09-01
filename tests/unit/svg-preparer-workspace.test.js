@@ -10,7 +10,15 @@
  * @license GPL-3.0-or-later
  */
 
-import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  beforeEach,
+  afterEach,
+  vi,
+} from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -229,7 +237,9 @@ describe('createSvgPrepWorkspace', () => {
       const backdrop = ws._refs.backdrop;
 
       expect(backdrop).toBeTruthy();
-      expect(backdrop.classList.contains('svg-prep-fullscreen-backdrop')).toBe(true);
+      expect(backdrop.classList.contains('svg-prep-fullscreen-backdrop')).toBe(
+        true
+      );
       expect(backdrop.classList.contains('hidden')).toBe(true);
       expect(backdrop.getAttribute('aria-hidden')).toBe('true');
 
@@ -446,9 +456,10 @@ describe('createSvgPrepWorkspace', () => {
       ws.destroy();
     });
 
-    it('updates the ARIA live region on role change with preview info', () => {
+    it('updates the ARIA live region on role change with preview info', async () => {
       const ws = createSvgPrepWorkspace(container);
       ws.open(SIMPLE_SVG, makeAnalysis(1));
+      await ws.whenReady();
 
       const radios = ws._root.querySelectorAll('input[type="radio"]');
       const ignoreRadio = Array.from(radios).find((r) => r.value === 'ignore');
@@ -757,9 +768,10 @@ describe('createSvgPrepWorkspace', () => {
   });
 
   describe('footer buttons', () => {
-    it('Apply closes the editor', () => {
+    it('Apply closes the editor', async () => {
       const ws = createSvgPrepWorkspace(container);
       ws.open(SIMPLE_SVG, makeAnalysis(1));
+      await ws.whenReady();
 
       const applyBtn = ws._root.querySelector('[data-action="apply"]');
       applyBtn.click();
@@ -804,7 +816,9 @@ describe('createSvgPrepWorkspace', () => {
       ws.destroy();
 
       expect(container.querySelector('.svg-prep-workspace')).toBe(null);
-      expect(container.querySelector('.svg-prep-fullscreen-backdrop')).toBe(null);
+      expect(container.querySelector('.svg-prep-fullscreen-backdrop')).toBe(
+        null
+      );
     });
 
     it('closes the workspace before destroying', () => {
@@ -909,10 +923,14 @@ describe('Phase 3: source pane rendering', () => {
   });
 });
 
+// D-120: the flatten runs through the lazily loaded ring engine, so a test
+// that reads the result awaits whenReady() once after open. After that the
+// engine is in and every later re-render is synchronous.
 describe('Phase 3: result pane rendering', () => {
-  it('renders prepared result in the result pane on open', () => {
+  it('renders prepared result in the result pane on open', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(1));
+    await ws.whenReady();
 
     const resultSvg = ws._root.querySelector('.svg-prep-result-pane svg');
     expect(resultSvg).toBeTruthy();
@@ -920,9 +938,10 @@ describe('Phase 3: result pane rendering', () => {
     ws.destroy();
   });
 
-  it('result pane contains a single <path> after preparation', () => {
+  it('result pane contains a single <path> after preparation', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(1));
+    await ws.whenReady();
 
     const paths = ws._root.querySelectorAll('.svg-prep-result-pane path');
     expect(paths.length).toBe(1);
@@ -930,19 +949,21 @@ describe('Phase 3: result pane rendering', () => {
     ws.destroy();
   });
 
-  it('result path includes fill-rule="evenodd"', () => {
+  it('result path carries the ring flatten fill rule (nonzero since D-120)', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(1));
+    await ws.whenReady();
 
     const path = ws._root.querySelector('.svg-prep-result-pane path');
-    expect(path.getAttribute('fill-rule')).toBe('evenodd');
+    expect(path.getAttribute('fill-rule')).toBe('nonzero');
 
     ws.destroy();
   });
 
-  it('getResult returns prepared SVG string after open', () => {
+  it('getResult returns prepared SVG string after open', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(1));
+    await ws.whenReady();
 
     const result = ws.getResult();
     expect(result).not.toBeNull();
@@ -981,10 +1002,11 @@ describe('Phase 3: role change updates result preview', () => {
     ws.destroy();
   });
 
-  it('changing role from hole to foreground updates result path data', () => {
+  it('changing role from hole to foreground updates result path data', async () => {
     const ws = createSvgPrepWorkspace(container);
     const analysis = makeAnalysis(2);
     ws.open(SIMPLE_SVG, analysis);
+    await ws.whenReady();
 
     const initialPath = ws._root.querySelector('.svg-prep-result-pane path');
     const initialD = initialPath ? initialPath.getAttribute('d') : '';
@@ -1004,9 +1026,10 @@ describe('Phase 3: role change updates result preview', () => {
     ws.destroy();
   });
 
-  it('announces preview state after role change', () => {
+  it('announces preview state after role change', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(2));
+    await ws.whenReady();
 
     const secondItem = ws._root.querySelector(
       '.svg-prep-object[data-index="1"]'
@@ -1157,9 +1180,7 @@ describe('role color-coding layer and legend', () => {
     const layer = ws._root.querySelector('.svg-prep-role-layer');
     const paths = layer.querySelectorAll('.svg-prep-role-path');
     expect(paths.length).toBe(2);
-    expect(paths[0].classList.contains('svg-prep-role--foreground')).toBe(
-      true
-    );
+    expect(paths[0].classList.contains('svg-prep-role--foreground')).toBe(true);
     expect(paths[1].classList.contains('svg-prep-role--hole')).toBe(true);
 
     ws.destroy();
@@ -1366,9 +1387,10 @@ describe('Phase 3: reset behavior', () => {
     ws.destroy();
   });
 
-  it('Reset updates the result preview', () => {
+  it('Reset updates the result preview', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(1));
+    await ws.whenReady();
 
     const radios = ws._root.querySelectorAll('input[type="radio"]');
     const ignoreRadio = Array.from(radios).find((r) => r.value === 'ignore');
@@ -1406,10 +1428,11 @@ describe('Phase 4a: open() callbacks parameter', () => {
 });
 
 describe('Phase 4a: Apply button fires onApply callback', () => {
-  it('calls onApply with the prepared result on Apply', () => {
+  it('calls onApply with the prepared result on Apply', async () => {
     const onApply = vi.fn();
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(1), { onApply });
+    await ws.whenReady();
 
     const applyBtn = ws._root.querySelector('[data-action="apply"]');
     applyBtn.click();
@@ -1420,10 +1443,11 @@ describe('Phase 4a: Apply button fires onApply callback', () => {
     expect(result).toContain('<path');
   });
 
-  it('closes the editor after calling onApply', () => {
+  it('closes the editor after calling onApply', async () => {
     const onApply = vi.fn();
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(1), { onApply });
+    await ws.whenReady();
 
     ws._root.querySelector('[data-action="apply"]').click();
     expect(ws._root.hidden).toBe(true);
@@ -1537,9 +1561,10 @@ describe('Phase 4a: Escape / close button keep the original', () => {
 });
 
 describe('Apply button disabled state', () => {
-  it('disables Apply and shows the hint when nothing is included', () => {
+  it('disables Apply and shows the hint when nothing is included', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(1));
+    await ws.whenReady();
 
     const applyBtn = ws._root.querySelector('[data-action="apply"]');
     expect(applyBtn.disabled).toBe(false);
@@ -1608,19 +1633,18 @@ describe('compound-path mode (Include/Exclude)', () => {
       analysis: {
         status: 'ready',
         confidence: 1,
-        elements: [
-          'M10,10 L20,10 L20,20 Z',
-          'M40,40 L50,40 L50,50 Z',
-        ].map((d, i) => ({
-          element: pathEl,
-          pathData: d,
-          fill: 'black',
-          stroke: '',
-          luminance: 0,
-          autoRole: 'foreground',
-          subpathIndex: i,
-          warnings: [],
-        })),
+        elements: ['M10,10 L20,10 L20,20 Z', 'M40,40 L50,40 L50,50 Z'].map(
+          (d, i) => ({
+            element: pathEl,
+            pathData: d,
+            fill: 'black',
+            stroke: '',
+            luminance: 0,
+            autoRole: 'foreground',
+            subpathIndex: i,
+            warnings: [],
+          })
+        ),
         warnings: [],
         unsupportedFeatures: [],
         recommendation: 'pass_through',
@@ -1707,9 +1731,10 @@ describe('viewBox fallback and zoom preservation', () => {
     ws.destroy();
   });
 
-  it('preserves result pane zoom across preview re-renders', () => {
+  it('preserves result pane zoom across preview re-renders', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(2));
+    await ws.whenReady();
 
     const zoomInBtn = ws._root.querySelector(
       '.svg-prep-result-pane .svg-prep-zoom-in'
@@ -1736,9 +1761,10 @@ describe('viewBox fallback and zoom preservation', () => {
 });
 
 describe('preview error handling', () => {
-  it('shows an inline error instead of dying when preview generation throws', () => {
+  it('shows an inline error instead of dying when preview generation throws', async () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(2));
+    await ws.whenReady();
 
     // Force the next preview render to explode mid-pipeline
     const RealDOMParser = globalThis.DOMParser;
@@ -1846,7 +1872,7 @@ describe('Phase 5: getRoleOverrides()', () => {
     ws.destroy();
   });
 
-  it('is callable from the onApply callback before close()', () => {
+  it('is callable from the onApply callback before close()', async () => {
     let capturedOverrides = null;
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(2), {
@@ -1854,6 +1880,7 @@ describe('Phase 5: getRoleOverrides()', () => {
         capturedOverrides = ws.getRoleOverrides();
       },
     });
+    await ws.whenReady();
 
     ws._root.querySelector('[data-action="apply"]').click();
     expect(capturedOverrides).toBeTruthy();
@@ -1873,15 +1900,11 @@ describe('Phase 5: open() with initialOverrides', () => {
     const overrides = ws.getRoleOverrides();
     expect(overrides).toEqual(['ignore', 'foreground', 'hole']);
 
-    const radios0 = ws._root.querySelectorAll(
-      'input[name="svg-prep-role-0"]'
-    );
+    const radios0 = ws._root.querySelectorAll('input[name="svg-prep-role-0"]');
     const checked0 = Array.from(radios0).find((r) => r.checked);
     expect(checked0.value).toBe('ignore');
 
-    const radios1 = ws._root.querySelectorAll(
-      'input[name="svg-prep-role-1"]'
-    );
+    const radios1 = ws._root.querySelectorAll('input[name="svg-prep-role-1"]');
     const checked1 = Array.from(radios1).find((r) => r.checked);
     expect(checked1.value).toBe('foreground');
 
@@ -1896,9 +1919,7 @@ describe('Phase 5: open() with initialOverrides', () => {
 
     const items = ws._root.querySelectorAll('.svg-prep-object');
     expect(items[0].getAttribute('aria-label')).toContain('role: ignore');
-    expect(items[1].getAttribute('aria-label')).toContain(
-      'role: foreground'
-    );
+    expect(items[1].getAttribute('aria-label')).toContain('role: foreground');
 
     ws.destroy();
   });
@@ -2059,7 +2080,9 @@ describe('Phase 6b: accessibility — all interactive elements have names', () =
 
   it('all zoom buttons have accessible names', () => {
     const ws = createSvgPrepWorkspace(container);
-    const zoomBtns = ws._root.querySelectorAll('.svg-prep-zoom-controls button');
+    const zoomBtns = ws._root.querySelectorAll(
+      '.svg-prep-zoom-controls button'
+    );
     expect(zoomBtns.length).toBeGreaterThanOrEqual(6);
 
     zoomBtns.forEach((btn) => {
@@ -2214,13 +2237,19 @@ describe('Phase 6b: accessibility — keyboard walkthrough', () => {
 
     const sourcePane = ws._root.querySelector('.svg-prep-source-pane');
     const svg = sourcePane.querySelector('svg');
-    const [, , w1] = svg.getAttribute('viewBox').split(/[\s,]+/).map(Number);
+    const [, , w1] = svg
+      .getAttribute('viewBox')
+      .split(/[\s,]+/)
+      .map(Number);
 
     sourcePane.dispatchEvent(
       new KeyboardEvent('keydown', { key: '=', bubbles: true })
     );
 
-    const [, , w2] = svg.getAttribute('viewBox').split(/[\s,]+/).map(Number);
+    const [, , w2] = svg
+      .getAttribute('viewBox')
+      .split(/[\s,]+/)
+      .map(Number);
     expect(w2).toBeLessThan(w1);
 
     ws.destroy();
@@ -2342,9 +2371,7 @@ describe('Fullscreen sticky layout CSS contract', () => {
   });
 
   it('non-fullscreen workspace preserves default overflow', () => {
-    const baseMatch = css.match(
-      /\.svg-prep-workspace\s*\{([^}]*)\}/
-    );
+    const baseMatch = css.match(/\.svg-prep-workspace\s*\{([^}]*)\}/);
     expect(baseMatch).not.toBeNull();
     expect(baseMatch[1]).not.toMatch(/overflow\s*:\s*hidden/);
   });
@@ -2532,7 +2559,7 @@ describe('Phase 9: getOffsetOverrides()', () => {
     ws.destroy();
   });
 
-  it('is callable from the onApply callback before close', () => {
+  it('is callable from the onApply callback before close', async () => {
     let capturedOffsets = null;
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(2), {
@@ -2540,6 +2567,7 @@ describe('Phase 9: getOffsetOverrides()', () => {
         capturedOffsets = ws.getOffsetOverrides();
       },
     });
+    await ws.whenReady();
 
     const inputs = ws._root.querySelectorAll('.svg-prep-offset-input');
     inputs[0].value = '1.0';
@@ -2696,6 +2724,576 @@ describe('Phase 9: Reset restores offsets', () => {
     ws._root.querySelector('[data-action="reset"]').click();
 
     expect(item.querySelector('.svg-prep-offset-input').disabled).toBe(false);
+
+    ws.destroy();
+  });
+});
+
+/**
+ * DP-4: removing shapes from the LIST, not just from the output.
+ *
+ * The sharp edge here is not the deleting, it is what deleting does to
+ * everything that is keyed by position: the rows' data-index, the radio group
+ * names, the roles and offsets arrays, and above all the SAVED
+ * prepOverrides / prepOffsets. The editor reopens on the raw SVG and
+ * re-analyses it, so a saved role array that is positional against the
+ * post-delete list would be applied to the wrong shapes on the next visit.
+ */
+describe('deleting shapes from the list (DP-4)', () => {
+  const openWith = (ws, count, callbacks = {}) => {
+    const analysis = makeAnalysis(count);
+    ws.open(SIMPLE_SVG, analysis, callbacks);
+    return analysis;
+  };
+  const rows = (ws) => ws._root.querySelectorAll('.svg-prep-object');
+  const deleteRow = (ws, i) =>
+    ws._root
+      .querySelector(`.svg-prep-object-delete[data-delete-index="${i}"]`)
+      .click();
+
+  it('a row delete removes exactly that row and renumbers the rest', () => {
+    const ws = createSvgPrepWorkspace(container);
+    openWith(ws, 5);
+    expect(rows(ws).length).toBe(5);
+
+    deleteRow(ws, 1);
+
+    const after = rows(ws);
+    expect(after.length).toBe(4);
+    // Renumbered with no gaps: a stale data-index is how a radio in one row
+    // ends up driving another.
+    expect(Array.from(after).map((r) => r.dataset.index)).toEqual([
+      '0',
+      '1',
+      '2',
+      '3',
+    ]);
+    ws.destroy();
+  });
+
+  it('keeps the surviving roles with their own shapes, not their old slots', () => {
+    const ws = createSvgPrepWorkspace(container);
+    openWith(ws, 4, {
+      initialOverrides: ['foreground', 'hole', 'ignore', 'hole'],
+    });
+
+    deleteRow(ws, 1); // the 'hole' at index 1 goes
+
+    const checked = Array.from(rows(ws)).map(
+      (r) => r.querySelector('input[type="radio"]:checked').value
+    );
+    expect(checked).toEqual(['foreground', 'ignore', 'hole']);
+    ws.destroy();
+  });
+
+  it('saves roles against the ORIGINAL indices, so a reopen lands them right', () => {
+    const ws = createSvgPrepWorkspace(container);
+    openWith(ws, 4, {
+      initialOverrides: ['foreground', 'hole', 'ignore', 'hole'],
+    });
+
+    deleteRow(ws, 1);
+
+    // Position 1 in the saved array is still the shape that WAS at position 1,
+    // and it is absent because it was deleted.
+    const saved = ws.getRoleOverrides();
+    expect(saved[0]).toBe('foreground');
+    expect(saved[1]).toBeUndefined();
+    expect(saved[2]).toBe('ignore');
+    expect(saved[3]).toBe('hole');
+    expect(ws.getDeletedIndices()).toEqual([1]);
+    ws.destroy();
+  });
+
+  it('round-trips a delete through save and reopen', () => {
+    const ws = createSvgPrepWorkspace(container);
+    openWith(ws, 4, {
+      initialOverrides: ['foreground', 'hole', 'ignore', 'hole'],
+    });
+    deleteRow(ws, 1);
+    const savedRoles = ws.getRoleOverrides();
+    const savedDeleted = ws.getDeletedIndices();
+
+    // Reopen on a FRESH analysis of the untouched source, the way the Edit
+    // button does - four elements again, with the saved arrays applied.
+    ws.open(SIMPLE_SVG, makeAnalysis(4), {
+      initialOverrides: savedRoles,
+      initialDeleted: savedDeleted,
+    });
+
+    expect(rows(ws).length).toBe(3);
+    const checked = Array.from(rows(ws)).map(
+      (r) => r.querySelector('input[type="radio"]:checked').value
+    );
+    expect(checked).toEqual(['foreground', 'ignore', 'hole']);
+    ws.destroy();
+  });
+
+  it('reads a saved project from before deletions existed unchanged', () => {
+    // prepDeleted is absent in older saves, which is exactly right: nothing
+    // was deleted then, and the dense positional array still means what it did.
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(3), {
+      initialOverrides: ['hole', 'foreground', 'ignore'],
+    });
+    expect(rows(ws).length).toBe(3);
+    expect(
+      Array.from(rows(ws)).map(
+        (r) => r.querySelector('input[type="radio"]:checked').value
+      )
+    ).toEqual(['hole', 'foreground', 'ignore']);
+    ws.destroy();
+  });
+
+  it('undo is one level and puts the shape back where it was', () => {
+    const ws = createSvgPrepWorkspace(container);
+    openWith(ws, 4, {
+      initialOverrides: ['foreground', 'hole', 'ignore', 'hole'],
+    });
+
+    const undoBtn = ws._root.querySelector('[data-action="undo-delete"]');
+    expect(undoBtn.disabled).toBe(true);
+
+    deleteRow(ws, 1);
+    expect(rows(ws).length).toBe(3);
+    expect(undoBtn.disabled).toBe(false);
+
+    undoBtn.click();
+    expect(rows(ws).length).toBe(4);
+    expect(
+      Array.from(rows(ws)).map(
+        (r) => r.querySelector('input[type="radio"]:checked').value
+      )
+    ).toEqual(['foreground', 'hole', 'ignore', 'hole']);
+    expect(ws.getDeletedIndices()).toEqual([]);
+    // One level only: a second undo has nothing to do.
+    expect(undoBtn.disabled).toBe(true);
+    ws.destroy();
+  });
+
+  it('the bulk bar lives outside the list, which takes listitems only', () => {
+    // D-101: a toolbar inside role="list" is dropped from the accessibility
+    // tree, so this is a placement the markup has to keep.
+    const ws = createSvgPrepWorkspace(container);
+    openWith(ws, 3);
+    const list = ws._root.querySelector('.svg-prep-objects');
+    const bar = ws._root.querySelector('.svg-prep-bulk-bar');
+    expect(bar).not.toBeNull();
+    expect(list.contains(bar)).toBe(false);
+    expect(bar.getAttribute('role')).toBe('group');
+    ws.destroy();
+  });
+
+  it('says how many shapes are left, and updates as they go', () => {
+    const ws = createSvgPrepWorkspace(container);
+    openWith(ws, 5);
+    const count = ws._root.querySelector('.svg-prep-bulk-count');
+    expect(count.textContent).toBe('5 shapes');
+    deleteRow(ws, 0);
+    expect(count.textContent).toBe('4 shapes');
+    ws.destroy();
+  });
+
+  it('announces the delete and the undo, with the count left', () => {
+    const ws = createSvgPrepWorkspace(container);
+    openWith(ws, 3);
+    deleteRow(ws, 0);
+    const said = announce.mock.calls.map((c) => c[0]).join(' | ');
+    expect(said).toMatch(/Deleted/);
+    expect(said).toMatch(/2 shapes left/);
+    expect(said).toMatch(/Undo available/);
+    ws._root.querySelector('[data-action="undo-delete"]').click();
+    expect(announce.mock.calls.map((c) => c[0]).join(' | ')).toMatch(
+      /Undone\. 3 shapes\./
+    );
+    ws.destroy();
+  });
+
+  it('every delete control clears the 44 px target floor in its own styles', () => {
+    // jsdom has no layout, so the rule is asserted where it is WRITTEN rather
+    // than measured - the e2e walk measures it for real. The block is cut at
+    // its own closing brace: reading a fixed number of characters would let a
+    // neighbouring rule's min-height satisfy this, which is a guard that
+    // cannot fail.
+    const css = readFileSync(
+      resolve(process.cwd(), 'src/styles/components.css'),
+      'utf8'
+    );
+    const ruleBlock = (selector) => {
+      const at = css.indexOf(`${selector} {`);
+      if (at === -1) return null;
+      const open = css.indexOf('{', at);
+      const close = css.indexOf('}', open);
+      return css.slice(open, close);
+    };
+    for (const sel of [
+      '.svg-prep-object-delete',
+      '.svg-prep-bulk-btn',
+      '.svg-prep-bulk-input',
+    ]) {
+      const block = ruleBlock(sel);
+      expect(block, `${sel} must have a rule of its own`).not.toBeNull();
+      expect(block, sel).toMatch(/min-height:\s*44px/);
+    }
+  });
+});
+
+// ── DP-7: the Layer column ───────────────────────────────────────────────────
+
+/** Nested squares as an analysis, outermost first. */
+function makeNestedAnalysis(count = 3, outer = 100) {
+  const parser = new DOMParser();
+  const parts = [];
+  const paths = [];
+  for (let i = 0; i < count; i++) {
+    const size = outer - i * (outer / (count + 1));
+    const at = (outer - size) / 2;
+    paths.push(
+      `M ${at} ${at} L ${at + size} ${at} L ${at + size} ${at + size} ` +
+        `L ${at} ${at + size} Z`
+    );
+    parts.push(`<path d="${paths[i]}" fill="black"/>`);
+  }
+  const svgString =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${outer} ${outer}">` +
+    `${parts.join('')}</svg>`;
+  const doc = parser.parseFromString(svgString, 'image/svg+xml');
+  const els = Array.from(doc.querySelectorAll('path'));
+  return {
+    svgString,
+    analysis: {
+      status: 'needs_review',
+      confidence: 0.8,
+      elements: els.map((el, i) => ({
+        element: el,
+        pathData: paths[i],
+        fill: 'black',
+        stroke: '',
+        luminance: 0,
+        autoRole: 'foreground',
+        warnings: [],
+      })),
+      warnings: [],
+      unsupportedFeatures: [],
+      recommendation: 'open_editor',
+      singleElement: false,
+    },
+  };
+}
+
+const layerSelects = (ws) =>
+  Array.from(ws._refs.objects.querySelectorAll('.svg-prep-layer-select'));
+
+function setLayer(ws, i, value) {
+  const s = layerSelects(ws)[i];
+  s.value = String(value);
+  s.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+describe('the Layer column (DP-7)', () => {
+  describe('opt-in', () => {
+    it('is ABSENT for a tile that did not ask for it', () => {
+      // The control case: a non-layered editor must be exactly what it was.
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(3);
+      ws.open(svgString, analysis);
+      expect(layerSelects(ws)).toHaveLength(0);
+      expect(ws._refs.layerSummary.hidden).toBe(true);
+      expect(ws.getLayerAssignments()).toEqual({
+        layers: [],
+        limit: 0,
+        problems: [],
+      });
+    });
+
+    it('appears when the tile opts in', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(3);
+      ws.open(svgString, analysis, { layersEnabled: true });
+      expect(layerSelects(ws)).toHaveLength(3);
+      expect(ws._refs.layerSummary.hidden).toBe(false);
+    });
+
+    it('offers a single layer when nothing encloses anything', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const parser = new DOMParser();
+      const a = 'M 0 0 L 10 0 L 10 10 L 0 10 Z';
+      const b = 'M 50 0 L 60 0 L 60 10 L 50 10 Z';
+      const svgString =
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+        `<path d="${a}"/><path d="${b}"/></svg>`;
+      const doc = parser.parseFromString(svgString, 'image/svg+xml');
+      const els = Array.from(doc.querySelectorAll('path'));
+      const analysis = {
+        status: 'needs_review',
+        elements: els.map((el, i) => ({
+          element: el,
+          pathData: i === 0 ? a : b,
+          fill: 'black',
+          stroke: '',
+          luminance: 0,
+          autoRole: 'foreground',
+          warnings: [],
+        })),
+        warnings: [],
+        unsupportedFeatures: [],
+        recommendation: 'open_editor',
+      };
+      ws.open(svgString, analysis, { layersEnabled: true });
+      expect(ws.getLayerAssignments().limit).toBe(1);
+      expect(ws._refs.layerSummary.textContent).toContain('1 layer');
+    });
+  });
+
+  describe('suggestions', () => {
+    it('auto-categorizes each shape to its nesting depth', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(3);
+      ws.open(svgString, analysis, { layersEnabled: true });
+      expect(layerSelects(ws).map((s) => s.value)).toEqual(['1', '2', '3']);
+    });
+
+    it('offers exactly as many layers as the artwork supports', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(2);
+      ws.open(svgString, analysis, { layersEnabled: true });
+      for (const s of layerSelects(ws)) {
+        expect(Array.from(s.options).map((o) => o.value)).toEqual(['1', '2']);
+      }
+      expect(ws._refs.layerSummary.textContent).toContain('2 layers');
+    });
+
+    it('never offers a fourth layer, whatever the artwork nests to', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(5);
+      ws.open(svgString, analysis, { layersEnabled: true });
+      expect(ws.getLayerAssignments().limit).toBe(3);
+      for (const s of layerSelects(ws)) expect(s.options).toHaveLength(3);
+    });
+
+    it('every select carries an accessible name', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(3);
+      ws.open(svgString, analysis, { layersEnabled: true });
+      for (const s of layerSelects(ws)) {
+        expect(s.getAttribute('aria-label')).toMatch(/^Layer for .+/);
+      }
+    });
+  });
+
+  describe('the containment law', () => {
+    function openNested(count = 3) {
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(count);
+      ws.open(svgString, analysis, { layersEnabled: true });
+      return ws;
+    }
+
+    it('accepts the suggestion it made', () => {
+      const ws = openNested();
+      expect(ws.getLayerAssignments().problems).toEqual([]);
+      expect(
+        ws._refs.objects.querySelectorAll('.svg-prep-layer-problem')
+      ).toHaveLength(0);
+    });
+
+    it('marks a shape whose support was cut away, and says why', () => {
+      const ws = openNested();
+      // Put the middle square on layer 1: the inner one now has nothing on
+      // layer 2 around it, so layer 3 would print it standing on air.
+      setLayer(ws, 1, 1);
+
+      const rows = ws._refs.objects.querySelectorAll('.svg-prep-layer-problem');
+      expect(rows).toHaveLength(1);
+      expect(rows[0].dataset.index).toBe('2');
+
+      const note = rows[0].querySelector('.svg-prep-layer-note');
+      expect(note.hidden).toBe(false);
+      expect(note.textContent).toContain('nothing under it');
+      expect(note.textContent).not.toContain('—');
+    });
+
+    it('points the select at its own explanation', () => {
+      const ws = openNested();
+      setLayer(ws, 1, 1);
+      const select = layerSelects(ws)[2];
+      expect(select.getAttribute('aria-invalid')).toBe('true');
+      const noteId = select.getAttribute('aria-describedby');
+      expect(noteId).toBeTruthy();
+      expect(ws._root.querySelector(`#${noteId}`).textContent).toContain(
+        'layer'
+      );
+    });
+
+    it('NEVER reassigns the layer the person chose', () => {
+      const ws = openNested();
+      setLayer(ws, 1, 1);
+      // The row is marked, and the value it was given is still the value.
+      expect(layerSelects(ws)[2].value).toBe('3');
+      expect(ws.getLayerAssignments().layers[2]).toBe(3);
+    });
+
+    it('clears the mark when the problem is fixed', () => {
+      const ws = openNested();
+      setLayer(ws, 1, 1);
+      expect(
+        ws._refs.objects.querySelectorAll('.svg-prep-layer-problem')
+      ).toHaveLength(1);
+      setLayer(ws, 1, 2);
+      expect(
+        ws._refs.objects.querySelectorAll('.svg-prep-layer-problem')
+      ).toHaveLength(0);
+      expect(layerSelects(ws)[2].getAttribute('aria-invalid')).toBeNull();
+    });
+
+    it('announces the problem, not merely the new value', () => {
+      const ws = openNested();
+      announce.mockClear();
+      setLayer(ws, 1, 1);
+      const said = announce.mock.calls.map((c) => c[0]).join(' ');
+      // The row that CHANGED is legal; the one it stranded is not, and that
+      // is the fact worth hearing.
+      expect(said).toMatch(/1 other shape now needs a different layer/);
+    });
+
+    it('counts the problems in the summary', () => {
+      const ws = openNested();
+      setLayer(ws, 1, 1);
+      expect(ws._refs.layerSummary.textContent).toContain(
+        '1 shape needs a different layer'
+      );
+      expect(
+        ws._refs.layerSummary.classList.contains(
+          'svg-prep-layer-summary-problem'
+        )
+      ).toBe(true);
+    });
+
+    it('reports problems in ORIGINAL indices, like every other override', () => {
+      const ws = openNested();
+      setLayer(ws, 1, 1);
+      const { problems } = ws.getLayerAssignments();
+      expect(problems).toHaveLength(1);
+      expect(problems[0].index).toBe(2);
+      expect(problems[0].layer).toBe(3);
+    });
+  });
+
+  describe('working with the rest of the editor', () => {
+    it('an ignored shape cannot carry a layer', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(3);
+      ws.open(svgString, analysis, { layersEnabled: true });
+      const row = ws._refs.objects.querySelector(
+        '.svg-prep-object[data-index="2"]'
+      );
+      const ignore = row.querySelector('input[value="ignore"]');
+      ignore.checked = true;
+      ignore.dispatchEvent(new Event('change', { bubbles: true }));
+      expect(row.querySelector('.svg-prep-layer-select').disabled).toBe(true);
+    });
+
+    it('restores layers saved from a previous visit', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(3);
+      ws.open(svgString, analysis, {
+        layersEnabled: true,
+        initialLayers: [1, 1, 2],
+      });
+      expect(layerSelects(ws).map((s) => s.value)).toEqual(['1', '1', '2']);
+      expect(ws.getLayerAssignments().problems).toEqual([]);
+    });
+
+    it('never restores a layer past the limit', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(2);
+      ws.open(svgString, analysis, {
+        layersEnabled: true,
+        initialLayers: [1, 3],
+      });
+      expect(layerSelects(ws)[1].value).toBe('2');
+    });
+
+    it('keys assignments by ORIGINAL index, so a delete cannot shift them', () => {
+      const ws = createSvgPrepWorkspace(container);
+      const { svgString, analysis } = makeNestedAnalysis(3);
+      ws.open(svgString, analysis, { layersEnabled: true });
+      expect(ws.getLayerAssignments().layers).toEqual([1, 2, 3]);
+    });
+  });
+});
+
+// G0 2026-09-01 (DP-24): the owner's words - "It should be one picture svg
+// that you are seeing the elements turning on or off. A side by side of
+// original to edited is offed in a button toggle if the user wishes but is
+// not default." The edited drawing IS the editor; the original arrives
+// beside it only when Compare is pressed.
+describe('one picture by default (DP-24)', () => {
+  it('opens with the original pane hidden and the edited drawing alone', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const previews = ws._root.querySelector('.svg-prep-previews');
+    expect(previews.classList.contains('svg-prep-previews--single')).toBe(true);
+    const sourceWrap = ws._root.querySelector('.svg-prep-pane-wrap--source');
+    expect(sourceWrap).toBeTruthy();
+    expect(sourceWrap.hidden).toBe(true);
+    const resultWrap = ws._root.querySelector('.svg-prep-pane-wrap--result');
+    expect(resultWrap).toBeTruthy();
+    expect(resultWrap.hidden).toBe(false);
+
+    ws.destroy();
+  });
+
+  it('offers Compare as an unpressed toggle in the header', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const compareBtn = ws._root.querySelector('.svg-prep-compare-btn');
+    expect(compareBtn).toBeTruthy();
+    expect(compareBtn.getAttribute('aria-pressed')).toBe('false');
+
+    ws.destroy();
+  });
+
+  it('Compare shows the pair, says so, and un-pressing hides it again', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const compareBtn = ws._root.querySelector('.svg-prep-compare-btn');
+    const sourceWrap = ws._root.querySelector('.svg-prep-pane-wrap--source');
+    const previews = ws._root.querySelector('.svg-prep-previews');
+
+    compareBtn.click();
+    expect(compareBtn.getAttribute('aria-pressed')).toBe('true');
+    expect(sourceWrap.hidden).toBe(false);
+    expect(previews.classList.contains('svg-prep-previews--single')).toBe(
+      false
+    );
+    expect(announce).toHaveBeenCalledWith(
+      'Comparing with the original drawing.'
+    );
+
+    compareBtn.click();
+    expect(compareBtn.getAttribute('aria-pressed')).toBe('false');
+    expect(sourceWrap.hidden).toBe(true);
+    expect(previews.classList.contains('svg-prep-previews--single')).toBe(true);
+    expect(announce).toHaveBeenCalledWith('Showing your edited drawing.');
+
+    ws.destroy();
+  });
+
+  it('a fresh open returns to the one-picture default', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+    ws._root.querySelector('.svg-prep-compare-btn').click();
+    ws.close();
+
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+    const compareBtn = ws._root.querySelector('.svg-prep-compare-btn');
+    const sourceWrap = ws._root.querySelector('.svg-prep-pane-wrap--source');
+    expect(compareBtn.getAttribute('aria-pressed')).toBe('false');
+    expect(sourceWrap.hidden).toBe(true);
 
     ws.destroy();
   });

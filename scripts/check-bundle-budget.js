@@ -34,11 +34,27 @@ const EXCLUDED_DIRS = ['liblouis', 'examples/ascii-city'];
 
 // Budget definitions (in bytes)
 const BUDGETS = {
-  // Core app bundle - must be under 500KB gzipped for initial load
-  // Vite generates hashes with alphanumeric chars and underscores
+  // Core app bundle - the one chunk every visitor downloads before anything
+  // works, so it is the number that decides how long a first visit takes.
+  // Vite generates hashes with alphanumeric chars and underscores.
+  //
+  // ★ RAISED FROM 500 KB TO 586 KB BY THE OWNER at gate G1 (DP-Q22,
+  // 2026-08-28), with the numbers in front of them. Wiring the stencil colour
+  // engine into the customizer put this at 516,052 B against the old 512,000;
+  // moving the whole stencil engine into a chunk that only loads when a
+  // stencil is opened brought it back to 511,760, which passed with 240 bytes
+  // to spare. The drawing editor is the biggest thing still to be written, and
+  // 240 bytes is not room to write it in. The owner's decision was to raise
+  // the number rather than spend the round shaving bytes off working code:
+  // "I would rather spend the round building the editor". The check still
+  // fails loudly if something doubles.
+  //
+  // Remember D-121 when reading any of these: this script weighs .js, .css,
+  // .html and .json only. Images, fonts, SVGs, .scad and .wasm are invisible
+  // to it, including to the "Total Assets" line below.
   coreApp: {
     name: 'Core App (no Monaco)',
-    budget: 500 * 1024, // 500 KB
+    budget: 600 * 1000, // 600 kB, decimal - see the note above
     pattern: /^index-[a-zA-Z0-9_-]+\.js$/,
     critical: true,
   },
@@ -52,7 +68,13 @@ const BUDGETS = {
   // Total assets (excluding WASM and external Monaco)
   totalAssets: {
     name: 'Total Assets',
-    budget: 1024 * 1024, // 1 MB (not including lazy-loaded Monaco)
+    // 1,200,000 B, signed by the owner at the design round's close gate.
+    // MEASURED then: 1,051,173 B gzipped at 13b04ce (full npm run build) -
+    // the drawing editor's lazy chunks put the old 1 MiB line underwater,
+    // and the line is raised to the owner's number rather than trimmed
+    // quietly. D-121's lesson stands beside it: this weighs CODE the
+    // browser may fetch, not the vendored WASM engine.
+    budget: 1200000,
     pattern: null, // Sum all
     critical: true,
   },

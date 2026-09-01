@@ -233,13 +233,74 @@ export const MEASURED_SECONDS = {
   'param-links.spec.js': 73.1,
   'publish-dialog.spec.js': 23.4,
   'share-settings.spec.js': 53.5,
-  'svg-edit-door.spec.js': 34.1,
   'ink-modes.spec.js': 45.5,
   'dxf-roundtrip.spec.js': 19.7,
+
+  // Design Pipeline Round 1, summed from the Chromium shards of run
+  // 33186286382 (2026-08-28), the same method. svg-edit-door grew from 6 cases
+  // to 12 across DP-3 and DP-4 and was still booked at its Interop-era 34.1,
+  // a 3.8x under-count; overlay-placement is new and was riding the 60s
+  // default against a real 107.9. Between them that is 143 seconds of work
+  // the planner could not see, and the Edge lanes of that very run ended at
+  // 35 minutes with "25 did not run".
+  'svg-edit-door.spec.js': 129.8,
+  'overlay-placement.spec.js': 107.9,
+
+  // Design Pipeline Round 2. Booked from a LOCAL run rather than from CI,
+  // which is a weaker measurement and is said so here: four cases in 14.5 s
+  // on this machine, against an engine that was already warm. The 60 s
+  // default would have been closer to the truth than a local number pretending
+  // to be a CI one, so this is booked at three times what was measured and
+  // re-weighted from a green CI run at the round's close.
+  'stencil-plates.spec.js': 60.0,
+  // DP-19..21. ONE case, one load of the stencil tile, every walk the editor
+  // has on it: MEASURED locally at 42 s after DP-21 (8.5 s at DP-19), booked
+  // at the same four-times ratio stencil-plates carries (14.5 measured, 60
+  // booked). Chromium only (PROJECT_IGNORES): the two-shard lanes were a
+  // third of a minute from their 35-minute ceiling before this file existed.
+  // Re-weighted from a green CI run at the round's close.
+  'drawing-editor.spec.js': 170.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */
 export const DEFAULT_WEIGHT_S = 60;
+
+/**
+ * Spec files a browser lane does NOT run, by Playwright project name.
+ *
+ * ONE source of truth: playwright.config.js builds each project's
+ * `testIgnore` from this table, and the planner leaves these files out of
+ * that project's shards and out of its projection, so a lane is booked for
+ * what it will actually run. Before this, wasm-smoke was ignored on Firefox
+ * by the config and still charged to Firefox's shards by the planner.
+ *
+ * ★ drawing-editor.spec.js (DP-19) runs on Chromium only. MEASURED before it
+ * was written: the two-shard lanes (Edge, Firefox) projected to 34.8 of their
+ * 35 minutes with nothing added, so no honest weight for a new file fits -
+ * 35 s, its measured cost scaled the way stencil-plates is, put the lane at
+ * 35.1. Edge cannot be re-split without the owner editing ruleset 12059827
+ * (on the owner ledger). The editor's walk is DOM and keyboard behaviour the
+ * Chromium lane covers on three shards; the door's twelve cases still run
+ * everywhere. Reverse: delete the two entries once the lanes are re-split.
+ */
+export const PROJECT_IGNORES = Object.freeze({
+  chromium: [],
+  msedge: ['drawing-editor.spec.js'],
+  firefox: ['wasm-smoke.spec.js', 'drawing-editor.spec.js'],
+});
+
+/**
+ * The spec files a project runs: everything under tests/e2e, less what the
+ * table above says it leaves out. An unknown project name runs everything.
+ *
+ * @param {string[]} files - every spec file name
+ * @param {string} [project] - Playwright project name
+ * @returns {string[]}
+ */
+export function filesForProject(files, project) {
+  const skip = new Set(PROJECT_IGNORES[project] || []);
+  return files.filter((f) => !skip.has(f));
+}
 
 /**
  * Deal the files into `total` shards, heaviest first, each one going to the
@@ -293,12 +354,17 @@ const invokedDirectly =
 if (invokedDirectly) {
   const index = Number(process.argv[2]);
   const total = Number(process.argv[3]);
+  // Optional: the Playwright project the shard is for, so files that
+  // project does not run are not dealt into it.
+  const project = process.argv[4] || 'chromium';
   if (!Number.isInteger(index) || index < 1 || index > total) {
-    console.error('usage: node scripts/e2e-shard.mjs <shard> <total>');
+    console.error(
+      'usage: node scripts/e2e-shard.mjs <shard> <total> [project]'
+    );
     process.exit(2);
   }
   const dir = path.resolve('tests/e2e');
-  const files = listSpecFiles(dir);
+  const files = filesForProject(listSpecFiles(dir), project);
   if (files.length === 0) {
     console.error(
       `no spec files under ${dir} - refusing to run an empty shard`

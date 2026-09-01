@@ -15,7 +15,6 @@
  * @license GPL-3.0-or-later
  */
 
-import { createSvgPrepWorkspace } from './svg-preparer-workspace.js';
 import { analyzeSvg } from './svg-preparer.js';
 import {
   convertImageDataToSvg,
@@ -123,7 +122,7 @@ export async function svgTextForFile(
     }
     const { dxfToSvg, dxfSize } = await import('./dxf-convert.js');
     const dxfText = await readAsText(file);
-    const { svg, ms } = await dxfToSvg({
+    const { svg, ms, warnings } = await dxfToSvg({
       dxfText,
       fileName: file.name,
       render,
@@ -133,6 +132,9 @@ export async function svgTextForFile(
       traced: false,
       converted: true,
       ms,
+      // D-123: the engine's WARNING lines, carried to the editor's own
+      // warnings list instead of being swallowed at this door.
+      warnings: warnings || [],
       // Kept so a saved file can be measured against what was opened.
       sourceSize: dxfSize(dxfText),
       imageData: null,
@@ -190,13 +192,25 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
     say(message);
   };
 
-  function ensureWorkspace() {
+  /**
+   * The editor surface, hosted over the whole page. With no model behind it
+   * there is nothing for a person to Tab out to, so this is the one host that
+   * traps focus, and Escape is the way out (DP-19).
+   */
+  async function ensureWorkspace() {
+    if (workspace) return workspace;
+    const { createDrawingEditor } = await import('./drawing-editor/surface.js');
     if (workspace) return workspace;
     container = document.createElement('div');
-    container.className = 'svg-edit-standalone-host';
+    container.className = 'svg-edit-standalone-host drawing-editor-host';
     container.id = 'svgEditStandaloneHost';
+    container.hidden = true;
     document.body.appendChild(container);
-    workspace = createSvgPrepWorkspace(container);
+    workspace = createDrawingEditor({
+      surfaceEl: container,
+      fullscreen: true,
+      announce: say,
+    });
     return workspace;
   }
 
@@ -205,10 +219,19 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
    * after an ink setting changes.
    * @returns {boolean} false when the SVG has nothing the editor can work on
    */
-  function showSvg(svg, { announceOpen, summary } = {}) {
+  async function showSvg(svg, { announceOpen, summary, extraWarnings } = {}) {
     let analysis;
     try {
       analysis = analyzeSvg(svg);
+      // D-123: the DXF converter's engine warnings join the analysis's own,
+      // so the editor's warnings list shows what the engine said instead of
+      // this door swallowing it.
+      if (Array.isArray(extraWarnings) && extraWarnings.length > 0) {
+        analysis = {
+          ...analysis,
+          warnings: [...(analysis.warnings || []), ...extraWarnings],
+        };
+      }
     } catch (error) {
       fail(
         `Forge could not read the shapes in ${currentFileName}: ${error.message}`
@@ -218,18 +241,31 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
 
     const shapeCount = analysis.elements ? analysis.elements.length : 0;
     if (shapeCount === 0) {
-      fail(
-        `${currentFileName} has no shapes Forge can work with. ` +
-          `A photo needs dark lines on a light background to trace.`
-      );
+      // D-117: analyzeSvg returns an empty table for two different reasons,
+      // and this used to tell the user the wrong one. When a drawing is over
+      // the cap, the analyzer has already written the honest sentence - the
+      // real count and the real cap - and throwing it away to say "no shapes
+      // ... a photo needs dark lines" gave photo advice for a vector file and
+      // named a cause that was not the cause. MEASURED before the fix on both
+      // of the owner's SVGs and on Forge's own logo.
+      const reason =
+        analysis.warnings && analysis.warnings.length > 0
+          ? analysis.warnings[0]
+          : `${currentFileName} has no shapes Forge can work with. ` +
+            `A photo needs dark lines on a light background to trace.`;
+      fail(reason);
       return false;
     }
 
-    const ws = ensureWorkspace();
+    const ws = await ensureWorkspace();
     ws.open(svg, analysis, {
+      purpose: 'relief',
       mode: 'file',
       sourceName: currentFileName,
       tools: inkControls ? inkControls.element : null,
+      // The surface announces its own opening; the door's sentence, which
+      // names the file and counts its shapes, is the one worth hearing.
+      openedSentence: announceOpen || undefined,
       onSave: (savedName) => {
         say(`${savedName} saved. Your original file is untouched.`);
       },
@@ -238,15 +274,9 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
       },
       onSaveDxf: typeof render === 'function' ? saveAsDxf : undefined,
     });
-    if (!open) {
-      // With no model behind it this is the whole screen's task, so it opens
-      // expanded: that is also where the editor's own focus trap lives.
-      ws.openFullscreen();
-    }
     open = true;
 
     if (inkControls) inkControls.setSummary(summary, shapeCount);
-    if (announceOpen) say(announceOpen);
     return true;
   }
 
@@ -305,7 +335,7 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
       const { svg, summary } = await convertImageDataToSvg(currentImageData, {
         ink: settings,
       });
-      showSvg(svg, { summary });
+      await showSvg(svg, { summary });
     } catch (error) {
       fail(`Forge could not re-read ${currentFileName}: ${error.message}`);
     } finally {
@@ -364,6 +394,7 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
 
     return showSvg(prepared.svg, {
       summary: prepared.summary,
+      extraWarnings: prepared.warnings,
       announceOpen: prepared.traced
         ? `${file.name} traced into ${shapes()} shapes. Editor opened.`
         : prepared.converted
