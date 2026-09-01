@@ -107,11 +107,14 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
       window.__cwLegTick = requestAnimationFrame(tick)
     }, sampleFrames)
 
-  /** Settle function: hold until the leg has the sample it asked for. */
+  /** Settle function: hold until the leg has the sample it asked for.
+   * CW-97 batch 3: the bound follows CI software's measured ~2 s frames -
+   * ten sampled frames plus the quarter-second ramp sat exactly at the
+   * old 20 s. The leg is frame-gated either way; hardware ends early. */
   const untilLegFull = (page) => async () => {
     await expect
       .poll(() => page.evaluate(() => window.__cwLeg?.done === true), {
-        timeout: 20000,
+        timeout: 120000,
       })
       .toBe(true)
   }
@@ -216,10 +219,14 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     await waitForFrames(page, 3)
 
     const start = await walkPos(page)
+    // CW-97 batch 3: the poll bounds follow CI software's measured pace
+    // (the city walks at ~0.23 m/s and turns at ~3 deg/s there - a full
+    // sector change can need the better part of a minute). Polls end
+    // early when satisfied, so hardware pays nothing.
     await holdButton(page, 'cityWalkCamPanUp', () =>
       expect
         .poll(async () => distance(start, await walkPos(page)), {
-          timeout: 15000,
+          timeout: 60000,
         })
         .toBeGreaterThan(0.5)
     )
@@ -231,7 +238,7 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
     const restHeading = await hudHeading(page)
     await holdButton(page, 'cityWalkCamRotateRight', () =>
       expect
-        .poll(() => hudHeading(page), { timeout: 15000 })
+        .poll(() => hudHeading(page), { timeout: 60000 })
         .not.toBe(restHeading)
     )
 
@@ -857,7 +864,10 @@ test.describe('ASCII City Walk — the mouse-only toolbar (CW-15)', () => {
           const d = Math.abs(h - h0) % (2 * Math.PI)
           return Math.min(d, 2 * Math.PI - d)
         },
-        { timeout: 15000 }
+        // CI software turns at ~3 deg/s (measured: 0.56-0.75 rad landed
+        // inside the old 15 s bound) - the radian still decides, the
+        // bound just fits the slowest turner.
+        { timeout: 120000 }
       )
       .toBeGreaterThan(1.0)
     await page.keyboard.up('ArrowRight')
@@ -1994,7 +2004,10 @@ test.describe('ASCII City Walk — look without dragging, walk without holding (
           odoPrev = { x: g.x, y: g.y }
           return odo
         },
-        { timeout: 90000 }
+        // CI software walks at ~0.23 m/s (measured: 20.4 m landed inside
+        // the old 90 s bound) - 27 m of path needs the outer bound to say
+        // four minutes; the odometer still decides.
+        { timeout: 240000 }
       )
       .toBeGreaterThan(Math.min(posed.d, 25) + 2)
     const g = await gaze(page)
@@ -2051,7 +2064,9 @@ test.describe('ASCII City Walk — look without dragging, walk without holding (
     await expect(announcer(page)).toContainText('Auto-walk on')
     await expect(announcer(page)).toContainText(
       'Auto-walk stopped. Something is in the way.',
-      { timeout: 60000 }
+      // The walker crosses the 1.6 m to the U's wall at CI software's
+      // ~0.23 m/s and the fan needs frames to fail - the bound follows.
+      { timeout: 180000 }
     )
     expect((await gaze(page)).autoWalk).toBe(false)
   })
@@ -2207,7 +2222,10 @@ test.describe('ASCII City Walk — the tour: take me there (CW-87)', () => {
     )
     await expect(announcer(page)).toContainText(
       'Waypoint reached: Seattle Great Wheel.',
-      { timeout: 120000 }
+      // The tour route runs tens of metres at CI software's ~0.23 m/s;
+      // the walker stops on arrival so the sentence stands - only the
+      // bound follows the pace.
+      { timeout: 300000 }
     )
     const s = await tourState(page)
     expect(s.tour).toBeNull()

@@ -1066,6 +1066,9 @@ test.describe('ASCII City Walk — reduced motion ends the shower (D-76)', () =>
     await expect
       .poll(() => page.evaluate(() => window.__cityWalkGame.rainLevel), {
         message: 'the rain kept falling after reduced motion came on',
+        // The media-change handler lands on a FRAME, and CI software's
+        // frames are seconds apart - the 5 s default poll expired first.
+        timeout: 60000,
       })
       .toBe(null)
     expect(
@@ -1106,6 +1109,7 @@ test.describe('ASCII City Walk — reduced motion ends the shower (D-76)', () =>
     await expect
       .poll(() => page.evaluate(() => window.__cityWalkGame.lighting.getFogFar()), {
         message: 'the murk outlived the rain that brought it',
+        timeout: 60000,
       })
       .toBeCloseTo(clear, 6)
   })
@@ -1728,16 +1732,18 @@ test.describe('ASCII City Walk — cars are cars (CW-46)', () => {
       // the arrival itself does not.
       await expect
         .poll(() => page.evaluate(() => window.__cwPickup.closest), {
-          timeout: 60_000,
+          timeout: 180_000,
         })
         .toBeLessThan(setup.halfLengthM + 1.0)
       // Then keep pushing on the tail for 40 more OBSERVED frames - the
       // old 4.4 m footprint lets the walker into the bed within a handful,
       // which the watcher records as closest dipping under the tail plane.
+      // (CW-97 batch 3: 40 frames at CI software's measured ~2 s/frame is
+      // 80 s - the old 60 s bound starved a frame-gated wait.)
       const arrived = await page.evaluate(() => window.__cwPickup.frames)
       await expect
         .poll(() => page.evaluate(() => window.__cwPickup.frames), {
-          timeout: 60_000,
+          timeout: 180_000,
         })
         .toBeGreaterThan(arrived + 40)
     } finally {
@@ -1764,6 +1770,10 @@ test.describe('ASCII City Walk — the kerb (CW-50)', () => {
   test('the eye follows the ground across a kerb, and the kerb never blocks', async ({
     page,
   }) => {
+    // CW-97 batch 3: the crossing runs ~5-8 m at CI software's ~0.23 m/s
+    // and the entry itself costs tens of seconds there - the budget and
+    // the poll bound below both follow that measured pace.
+    test.setTimeout(300000)
     await launchGame(page)
     await enterCity(page)
 
@@ -1882,7 +1892,7 @@ test.describe('ASCII City Walk — the kerb (CW-50)', () => {
               },
               { x: setup.x, y: setup.y }
             ),
-          { timeout: 60_000 }
+          { timeout: 180_000 }
         )
         .toBeGreaterThan(setup.needM)
       // Then a few more observed frames, so the climb finishes on screen.
