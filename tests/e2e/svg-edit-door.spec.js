@@ -291,6 +291,37 @@ test.describe('The drawing editor door', () => {
     expect(download.suggestedFilename()).toBe('bird-drawing-edited.svg')
   })
 
+  // G0 2026-09-01 (DP-24): "one picture svg that you are seeing the elements
+  // turning on or off. A side by side of original to edited is offed in a
+  // button toggle if the user wishes but is not default."
+  test('one picture by default; Compare brings the original beside it', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await openApp(page)
+    await openEditorByKeyboard(page, BIRD_SVG)
+
+    const sourceWrap = page.locator('.svg-prep-pane-wrap--source')
+    const resultWrap = page.locator('.svg-prep-pane-wrap--result')
+    const compareBtn = page.locator('.svg-prep-compare-btn')
+
+    await expect(resultWrap).toBeVisible()
+    await expect(sourceWrap).toBeHidden()
+    await expect(compareBtn).toBeVisible()
+    await expect(compareBtn).toHaveAttribute('aria-pressed', 'false')
+
+    // By keyboard, per the file's thesis.
+    await compareBtn.focus()
+    await page.keyboard.press('Enter')
+    await expect(compareBtn).toHaveAttribute('aria-pressed', 'true')
+    await expect(sourceWrap).toBeVisible()
+    await expect(resultWrap).toBeVisible()
+
+    await page.keyboard.press('Enter')
+    await expect(compareBtn).toHaveAttribute('aria-pressed', 'false')
+    await expect(sourceWrap).toBeHidden()
+  })
+
   test('the Actions drawer opens the same door', async ({ page }) => {
     test.setTimeout(120000)
     await page.goto('/?example=simple-box')

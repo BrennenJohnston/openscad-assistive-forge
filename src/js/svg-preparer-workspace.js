@@ -164,6 +164,14 @@ function buildWorkspaceDom() {
   rolesToggleBtn.textContent = 'Show roles';
   rolesToggleBtn.setAttribute('aria-pressed', 'true');
 
+  // G0 (DP-24): the edited drawing is the editor's one picture; the original
+  // sits beside it only while this is pressed.
+  const compareBtn = document.createElement('button');
+  compareBtn.className = 'svg-prep-compare-btn btn btn-secondary';
+  compareBtn.type = 'button';
+  compareBtn.textContent = 'Compare with original';
+  compareBtn.setAttribute('aria-pressed', 'false');
+
   const fullscreenBtn = document.createElement('button');
   fullscreenBtn.className = 'svg-prep-fullscreen-btn';
   fullscreenBtn.setAttribute('aria-label', 'Open fullscreen');
@@ -199,6 +207,7 @@ function buildWorkspaceDom() {
   header.append(
     title,
     designWidthGroup,
+    compareBtn,
     rolesToggleBtn,
     fullscreenBtn,
     closeBtn
@@ -209,7 +218,9 @@ function buildWorkspaceDom() {
   previews.className = 'svg-prep-previews';
 
   const sourcePaneWrap = document.createElement('div');
-  sourcePaneWrap.className = 'svg-prep-pane-wrap';
+  sourcePaneWrap.className = 'svg-prep-pane-wrap svg-prep-pane-wrap--source';
+  // One picture by default (DP-24): the original waits behind Compare.
+  sourcePaneWrap.hidden = true;
 
   const sourceCaption = document.createElement('span');
   sourceCaption.className = 'svg-prep-pane-caption';
@@ -228,7 +239,7 @@ function buildWorkspaceDom() {
   sourcePaneWrap.append(sourceCaption, sourcePane);
 
   const resultPaneWrap = document.createElement('div');
-  resultPaneWrap.className = 'svg-prep-pane-wrap';
+  resultPaneWrap.className = 'svg-prep-pane-wrap svg-prep-pane-wrap--result';
 
   const resultCaption = document.createElement('span');
   resultCaption.className = 'svg-prep-pane-caption';
@@ -332,6 +343,7 @@ function buildWorkspaceDom() {
   resultPaneWrap.append(resultCaption, resultPane, renderRow);
 
   previews.append(sourcePaneWrap, resultPaneWrap);
+  previews.classList.add('svg-prep-previews--single');
 
   // Role color legend (shown under the source pane)
   const legendRow = document.createElement('div');
@@ -445,12 +457,15 @@ function buildWorkspaceDom() {
       title,
       designWidthGroup,
       designWidthInput,
+      compareBtn,
       rolesToggleBtn,
       fullscreenBtn,
       closeBtn,
       previews,
       sourcePane,
+      sourcePaneWrap,
       resultPane,
+      resultPaneWrap,
       sourceCaption,
       resultCaption,
       legendRow,
@@ -772,6 +787,8 @@ export function createSvgPrepWorkspace(containerEl) {
   // replaced by an auto-prepared version.
   let resolved = false;
   let rolesVisible = true;
+  // One picture by default (G0, DP-24); Compare turns the pair on.
+  let compareOpen = false;
   // DP-3: whether the boolean flatten may run by itself. True only in tier A
   // (50 shapes or fewer), where DP-0 measured it at about a second.
   let autoPreview = true;
@@ -1347,6 +1364,27 @@ export function createSvgPrepWorkspace(containerEl) {
       : 'Role colors hidden';
   }
 
+  /**
+   * G0 (DP-24): one picture by default. The edited drawing is the editor;
+   * pressing Compare puts the original beside it, un-pressing takes it away.
+   */
+  function setCompare(on, { silent = false } = {}) {
+    compareOpen = on === true;
+    refs.compareBtn.setAttribute('aria-pressed', String(compareOpen));
+    refs.sourcePaneWrap.hidden = !compareOpen;
+    refs.previews.classList.toggle('svg-prep-previews--single', !compareOpen);
+    if (silent) return;
+    announce(
+      compareOpen
+        ? 'Comparing with the original drawing.'
+        : 'Showing your edited drawing.'
+    );
+  }
+
+  function handleCompareToggle() {
+    setCompare(!compareOpen);
+  }
+
   function handleOffsetChange(e) {
     const match =
       e.target.name && e.target.name.match(/^svg-prep-offset-(\d+)$/);
@@ -1795,6 +1833,7 @@ export function createSvgPrepWorkspace(containerEl) {
     rolesVisible = true;
     refs.rolesToggleBtn.setAttribute('aria-pressed', 'true');
     refs.legendRow.hidden = false;
+    setCompare(false, { silent: true });
     root.hidden = false;
 
     currentCallbacks = callbacks;
@@ -1926,6 +1965,7 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.objects.addEventListener('click', handleDeleteClick);
     refs.bulkBar.addEventListener('click', handleDeleteClick);
     refs.rolesToggleBtn.addEventListener('click', handleRolesToggle);
+    refs.compareBtn.addEventListener('click', handleCompareToggle);
     refs.closeBtn.addEventListener('click', close);
     refs.fullscreenBtn.addEventListener('click', handleFullscreenButton);
     refs.backdrop.addEventListener('click', closeFullscreen);
@@ -1999,6 +2039,7 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.objects.removeEventListener('click', handleDeleteClick);
     refs.bulkBar.removeEventListener('click', handleDeleteClick);
     refs.rolesToggleBtn.removeEventListener('click', handleRolesToggle);
+    refs.compareBtn.removeEventListener('click', handleCompareToggle);
     refs.closeBtn.removeEventListener('click', close);
     refs.fullscreenBtn.removeEventListener('click', handleFullscreenButton);
     refs.backdrop.removeEventListener('click', closeFullscreen);

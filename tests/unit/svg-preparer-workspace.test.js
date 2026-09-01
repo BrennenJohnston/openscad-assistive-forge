@@ -3203,3 +3203,79 @@ describe('the Layer column (DP-7)', () => {
     });
   });
 });
+
+// G0 2026-09-01 (DP-24): the owner's words - "It should be one picture svg
+// that you are seeing the elements turning on or off. A side by side of
+// original to edited is offed in a button toggle if the user wishes but is
+// not default." The edited drawing IS the editor; the original arrives
+// beside it only when Compare is pressed.
+describe('one picture by default (DP-24)', () => {
+  it('opens with the original pane hidden and the edited drawing alone', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const previews = ws._root.querySelector('.svg-prep-previews');
+    expect(previews.classList.contains('svg-prep-previews--single')).toBe(true);
+    const sourceWrap = ws._root.querySelector('.svg-prep-pane-wrap--source');
+    expect(sourceWrap).toBeTruthy();
+    expect(sourceWrap.hidden).toBe(true);
+    const resultWrap = ws._root.querySelector('.svg-prep-pane-wrap--result');
+    expect(resultWrap).toBeTruthy();
+    expect(resultWrap.hidden).toBe(false);
+
+    ws.destroy();
+  });
+
+  it('offers Compare as an unpressed toggle in the header', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const compareBtn = ws._root.querySelector('.svg-prep-compare-btn');
+    expect(compareBtn).toBeTruthy();
+    expect(compareBtn.getAttribute('aria-pressed')).toBe('false');
+
+    ws.destroy();
+  });
+
+  it('Compare shows the pair, says so, and un-pressing hides it again', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const compareBtn = ws._root.querySelector('.svg-prep-compare-btn');
+    const sourceWrap = ws._root.querySelector('.svg-prep-pane-wrap--source');
+    const previews = ws._root.querySelector('.svg-prep-previews');
+
+    compareBtn.click();
+    expect(compareBtn.getAttribute('aria-pressed')).toBe('true');
+    expect(sourceWrap.hidden).toBe(false);
+    expect(previews.classList.contains('svg-prep-previews--single')).toBe(
+      false
+    );
+    expect(announce).toHaveBeenCalledWith(
+      'Comparing with the original drawing.'
+    );
+
+    compareBtn.click();
+    expect(compareBtn.getAttribute('aria-pressed')).toBe('false');
+    expect(sourceWrap.hidden).toBe(true);
+    expect(previews.classList.contains('svg-prep-previews--single')).toBe(true);
+    expect(announce).toHaveBeenCalledWith('Showing your edited drawing.');
+
+    ws.destroy();
+  });
+
+  it('a fresh open returns to the one-picture default', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+    ws._root.querySelector('.svg-prep-compare-btn').click();
+    ws.close();
+
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+    const compareBtn = ws._root.querySelector('.svg-prep-compare-btn');
+    const sourceWrap = ws._root.querySelector('.svg-prep-pane-wrap--source');
+    expect(compareBtn.getAttribute('aria-pressed')).toBe('false');
+    expect(sourceWrap.hidden).toBe(true);
+
+    ws.destroy();
+  });
+});

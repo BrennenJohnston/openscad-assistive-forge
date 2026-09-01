@@ -15888,6 +15888,15 @@ body.tutorial-body-locked {
   overflow: hidden;
 }
 
+/* One picture by default (G0, DP-24): with the original waiting behind
+   Compare, the edited drawing is the subject and takes the height the pair
+   used to split. */
+.svg-prep-workspace.svg-prep-fullscreen .svg-prep-previews--single {
+  flex: 0 0 50vh;
+  flex: 0 0 50dvh;
+  max-height: 60vh;
+}
+
 .svg-prep-workspace.svg-prep-fullscreen .svg-prep-source-pane,
 .svg-prep-workspace.svg-prep-fullscreen .svg-prep-result-pane {
   min-height: 0;

@@ -379,7 +379,11 @@ export function createDrawingEditor({
   refs.title.hidden = true;
   refs.fullscreenBtn.hidden = true;
   refs.closeBtn.hidden = true;
-  viewControls.append(refs.designWidthGroup, refs.rolesToggleBtn);
+  viewControls.append(
+    refs.designWidthGroup,
+    refs.compareBtn,
+    refs.rolesToggleBtn
+  );
   // Apply / Save / Keep original / Reset: the workspace's footer IS the
   // action row, listeners and all, so it moves whole.
   toolbar.insertBefore(refs.footer, applyBtn);
