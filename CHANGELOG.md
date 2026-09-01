@@ -9,6 +9,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The drawing editor is one picture now** (DP-24) - the editor used to spend its width on a
+  before-and-after pair, and the drawing you were actually editing got what was left. The edited
+  drawing is the editor now: it takes the full width, and toggling a shape on or off shows in
+  that one picture. **Compare with original** is a button beside Show roles that brings the pair
+  back while it is pressed; every fresh open returns to the one picture
+- **The editor's side panel is a drawer over the drawing** (DP-24) - the regions, colours,
+  plates and warnings used to be a column that squeezed the drawing to less than half its space
+  (and at phone width grew to four screens tall while the drawing shrank to nothing). The panel
+  lays OVER the drawing's right edge now, from a Regions toggle in the toolbar: closed by
+  default on the stencil tile, where pointing at the picture carries the task, open on the
+  drawing-cleanup door, where the shape list is the hands. The skip link still lands on the
+  regions table - it opens the drawer on its way there
+- **The editor toolbar is three named rows** (DP-24) - it used to be one long line that wrapped
+  wherever it ran out, four rows deep. Now it is the actions row, the view row and the hands
+  row, and none of them wraps at a desktop window. Getting the hands row to hold took a shorter
+  word: **Paint selection**, the Paint tool's own verb, where "Colour the selection" wrapped the
+  row at every width
+- **The two ready-made cards are Designers now** - the parameter panel is called the Customizer,
+  and two welcome cards were called Customizers too, which put one word on two different things
+  on the same screen. The cards are the **Charm Designer** and the **Braille Card Designer**
+  now: a design you customize, in the panel that kept the name
+
+### Added
+
+- **Muted colour names** (DP-25) - the automatic colour namer knew eighteen saturated anchors,
+  so every muted colour in a traced photograph landed on a gray: sage-green eyes, a dusty-pink
+  nose and a gray muzzle were all called "Gray", three swatches sharing one name in a list whose
+  whole job is telling them apart. Olive, Sage, Dusty pink and Cream join the table, each placed
+  so it does not steal a saturated name
+- **A cropped photo can be the design** (DP-26) - colour from the photo itself: crop a reference
+  photo down to its subject and press Use as design, and the cropped copy enters the colours
+  flow with the editor open on it. The hand-over row used to hide itself after a crop - a plain
+  upload offered it and a cropped copy did not, which was backwards, because cropping is what
+  you do on the way to the colours
+
+### Fixed
+
+- **The relief flatten survives real drawings** (DP-26, D-120) - the editor's combined preview
+  was built by merging shapes two at a time under even-odd rules, which is order-dependent once
+  shapes overlap: converted strokes could corrupt, and on this app's own logo (139 stroke bands)
+  the chain exhausted the browser's memory outright. Shapes are now read on their own terms and
+  folded together with true unions, one region at a time - order cannot change the picture, the
+  logo flattens in seconds, and a cut-out that would erase the whole drawing is treated as the
+  paper it is, with a warning that says so
+- **A DXF's curves arrive** (DP-26, D-123) - OpenSCAD's importer reads line geometry, not
+  splines or ellipses, and this door said nothing about the difference: a Fusion sketch of 34
+  entities opened as two shapes with the rest silently gone. Every spline is now evaluated with
+  the curve's own arithmetic and every ellipse parametrically before the engine sees the file -
+  the same sketch opens whole - and the engine's warning lines ride into the editor's warnings
+  list instead of being swallowed at the door
+- **The traced colour masks tile** (DP-24) - each colour of a separated picture is traced on its
+  own, and the tracer pulls every boundary inward, so neighbouring colours never quite touched:
+  the hairline gaps between them became hundreds of loose pieces on the plates. Grown under a
+  pixel before tracing (after the too-small specks are dropped, counted, so growth cannot
+  resurrect them), neighbours meet: the owner's cat went from 997 loose pieces to 64, and the
+  survivors are true paint-order islands the report should name
+- **A file control never says [object Object]** (DP-25) - a rebuilt file control whose saved
+  value is a file object printed its type instead of its name, to the person and to the screen
+  reader. It shows the file's name now, or says no file is selected
+
+### Changed
+
 - **Trees are their species now** (CW-94, CW-97) - a tree used to be a lollipop: one thin stem
   and one faceted blob, at half its real height. Every tree is built the way trees grow now: a
   full-height trunk at the species' cited size with a base flare on the big ones, branches
