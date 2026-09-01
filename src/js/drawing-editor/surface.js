@@ -232,14 +232,16 @@ export function createDrawingEditor({
 
   const stencilTools = document.createElement('div');
   stencilTools.className = 'drawing-editor-stencil-tools';
-  stencilTools.append(
-    toolsGroup,
-    paintGroup,
-    historyGroup,
-    viewGroup,
-    zoomGroup
-  );
+  // The working hands only; the view, zoom and history groups get the view
+  // row. MEASURED at a 1280 window: the toolbar's real width is 692 px (the
+  // editor shares the window with the customizer) and the groups sum to
+  // 1,705 px, so two rows cannot hold them - the honest structure is three
+  // NAMED rows, none of which wraps.
+  stencilTools.append(toolsGroup, paintGroup);
   stencilTools.hidden = true;
+  viewGroup.hidden = true;
+  zoomGroup.hidden = true;
+  historyGroup.hidden = true;
 
   const viewControls = document.createElement('div');
   viewControls.className = 'drawing-editor-view-controls';
@@ -256,6 +258,16 @@ export function createDrawingEditor({
     'btn btn-secondary drawing-editor-close',
     'editor-close'
   );
+
+  // G0 (DP-24): the picture is the editor; the side panel is a drawer over
+  // it, owned by this toggle. State lives in aria-expanded.
+  const panelToggleBtn = button(
+    S.panelToggle,
+    'btn btn-secondary drawing-editor-panel-toggle',
+    'panel-toggle'
+  );
+  panelToggleBtn.setAttribute('aria-expanded', 'false');
+  panelToggleBtn.setAttribute('aria-controls', panelId);
 
   const body = document.createElement('div');
   body.className = 'drawing-editor-body';
@@ -307,6 +319,13 @@ export function createDrawingEditor({
   backToToolbar.href = `#${titleId}`;
   backToToolbar.textContent = S.backToToolbar;
   panel.appendChild(backToToolbar);
+
+  /** The drawer's one switch: the panel's own hidden is the state. */
+  function setPanel(open) {
+    panel.hidden = open !== true;
+    panelToggleBtn.setAttribute('aria-expanded', String(open === true));
+    root.classList.toggle('drawing-editor--panel-open', open === true);
+  }
 
   const status = document.createElement('p');
   status.className = 'drawing-editor-status';
@@ -368,7 +387,22 @@ export function createDrawingEditor({
   legend.hidden = true;
 
   body.append(stage, panel);
-  toolbar.append(title, stencilTools, viewControls, applyBtn, closeBtn);
+  // Two rows at desktop width instead of one long wrap (G0 named the
+  // four-row toolbar at 1280): the actions row a person finishes with, and
+  // the working-tools row they live in.
+  const toolbarHeaderRow = document.createElement('div');
+  toolbarHeaderRow.className =
+    'drawing-editor-toolbar-row drawing-editor-toolbar-row--header';
+  const toolbarViewRow = document.createElement('div');
+  toolbarViewRow.className =
+    'drawing-editor-toolbar-row drawing-editor-toolbar-row--view';
+  const toolbarToolsRow = document.createElement('div');
+  toolbarToolsRow.className =
+    'drawing-editor-toolbar-row drawing-editor-toolbar-row--tools';
+  toolbarHeaderRow.append(title, panelToggleBtn, applyBtn, closeBtn);
+  toolbarViewRow.append(viewGroup, zoomGroup, historyGroup, viewControls);
+  toolbarToolsRow.append(stencilTools);
+  toolbar.append(toolbarHeaderRow, toolbarViewRow, toolbarToolsRow);
   root.append(skipToTable, toolbar, status, body);
   surfaceEl.appendChild(root);
 
@@ -386,7 +420,7 @@ export function createDrawingEditor({
   );
   // Apply / Save / Keep original / Reset: the workspace's footer IS the
   // action row, listeners and all, so it moves whole.
-  toolbar.insertBefore(refs.footer, applyBtn);
+  toolbarHeaderRow.insertBefore(refs.footer, applyBtn);
   const shapesBlock = document.createElement('div');
   shapesBlock.className = 'drawing-editor-shapes';
   shapesBlock.append(refs.layerSummary, refs.bulkBar, refs.objects);
@@ -586,11 +620,18 @@ export function createDrawingEditor({
   /** Show what this purpose needs and nothing it does not. */
   function applyPurpose() {
     const stencil = purpose === 'stencil';
+    // G0 (DP-24): the picture is the editor. The stencil purpose starts with
+    // the drawer closed - the canvas and the paint tools carry the task; the
+    // relief purpose starts with it open - the shape list IS the hands.
+    setPanel(!stencil);
     sections.colours.details.hidden = !stencil;
     sections.plates.details.hidden = !stencil;
     regionsBlock.hidden = !stencil;
     shapesBlock.hidden = stencil;
     stencilTools.hidden = !stencil;
+    viewGroup.hidden = !stencil;
+    zoomGroup.hidden = !stencil;
+    historyGroup.hidden = !stencil;
     canvas.root.hidden = !stencil;
     legend.hidden = !stencil;
     applyBtn.hidden = !stencil;
@@ -598,6 +639,7 @@ export function createDrawingEditor({
     // relief purpose's vocabulary: a stencil region has a colour, not a
     // role, and the plate's size is a parameter beside the editor.
     refs.rolesToggleBtn.hidden = stencil;
+    refs.compareBtn.hidden = stencil;
     refs.designWidthGroup.hidden = stencil || refs.designWidthGroup.hidden;
     refs.legendRow.hidden = stencil || refs.legendRow.hidden;
     refs.previews.hidden = stencil;
@@ -1539,6 +1581,12 @@ export function createDrawingEditor({
   fitBtn.addEventListener('click', () => canvas.fit());
   zoomInBtn.addEventListener('click', () => canvas.zoomIn());
   zoomOutBtn.addEventListener('click', () => canvas.zoomOut());
+  panelToggleBtn.addEventListener('click', () => setPanel(panel.hidden));
+  // The skip link's promise ("skip to the regions table") holds with the
+  // drawer closed: it opens the drawer on its way there.
+  skipToTable.addEventListener('click', () => {
+    if (panel.hidden) setPanel(true);
+  });
 
   /**
    * Up and Down walk the table a row at a time, staying in the same column,
@@ -1684,6 +1732,9 @@ export function createDrawingEditor({
       if (event.target.classList?.contains('drawing-editor-rename-input')) {
         return;
       }
+      // The drawer does NOT intercept Escape: "Escape from anywhere inside
+      // takes one path" is pinned behaviour the owner already has, and the
+      // drawer's own way shut is its toggle.
       event.preventDefault();
       event.stopPropagation();
       finish('onKeepOriginal');

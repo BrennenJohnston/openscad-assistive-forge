@@ -315,3 +315,138 @@ describe('the surface: Show original and the plate stepper', () => {
     expect(surface.querySelector('.drawing-editor-show-original').getAttribute('aria-pressed')).toBe('false')
   })
 })
+
+// G0 2026-09-01 (DP-24): the picture is the editor. The side panel becomes a
+// drawer over it - closed by default on the stencil purpose, where the canvas
+// and the paint tools carry the task; open on the relief purpose, where the
+// shape list IS the hands - and the toolbar holds two rows at desktop width
+// instead of wrapping to four.
+describe('the panel drawer and the two-row toolbar (DP-24)', () => {
+  let surface
+  let announce
+  let editor
+
+  const table = () => surface.querySelector('.drawing-editor-regions-table')
+  async function openCat() {
+    editor.open(CAT_SVG, analyzeSvg(CAT_SVG), {
+      purpose: 'stencil',
+      onApply: vi.fn(),
+      onKeepOriginal: vi.fn(),
+    })
+    await vi.waitFor(() => expect(table()).not.toBeNull(), { timeout: 15000 })
+  }
+
+  beforeEach(() => {
+    setReducedMotion(false)
+    surface = document.createElement('div')
+    surface.id = 'drawingEditorSurface'
+    document.body.appendChild(surface)
+    announce = vi.fn()
+    editor = createDrawingEditor({ surfaceEl: surface, announce })
+    vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  it('the stencil purpose starts with the panel closed behind an unexpanded toggle', async () => {
+    await openCat()
+    const panel = surface.querySelector('.drawing-editor-panel')
+    const toggle = surface.querySelector('.drawing-editor-panel-toggle')
+    expect(panel.hidden).toBe(true)
+    expect(toggle).not.toBeNull()
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(toggle.getAttribute('aria-controls')).toBe(panel.id)
+  })
+
+  it('the relief purpose starts with the panel open: the shape list is the hands', () => {
+    editor.open(CAT_SVG, analyzeSvg(CAT_SVG), {
+      onApply: vi.fn(),
+      onKeepOriginal: vi.fn(),
+    })
+    const panel = surface.querySelector('.drawing-editor-panel')
+    const toggle = surface.querySelector('.drawing-editor-panel-toggle')
+    expect(panel.hidden).toBe(false)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('the toggle opens and closes the panel', async () => {
+    await openCat()
+    const panel = surface.querySelector('.drawing-editor-panel')
+    const toggle = surface.querySelector('.drawing-editor-panel-toggle')
+    toggle.click()
+    expect(panel.hidden).toBe(false)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    toggle.click()
+    expect(panel.hidden).toBe(true)
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('the skip link opens the panel on its way to the table', async () => {
+    await openCat()
+    const panel = surface.querySelector('.drawing-editor-panel')
+    const skip = surface.querySelector('.drawing-editor-skip')
+    expect(panel.hidden).toBe(true)
+    skip.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    expect(panel.hidden).toBe(false)
+  })
+
+  it('Escape inside the open drawer keeps the one path: the editor closes', async () => {
+    // "Escape from anywhere inside takes one path" is pinned behaviour the
+    // owner already has; the drawer never intercepts it. Its way shut is
+    // the toggle.
+    const onKeepOriginal = vi.fn()
+    editor.open(CAT_SVG, analyzeSvg(CAT_SVG), {
+      purpose: 'stencil',
+      onApply: vi.fn(),
+      onKeepOriginal,
+    })
+    await vi.waitFor(() => expect(table()).not.toBeNull(), { timeout: 15000 })
+    const panel = surface.querySelector('.drawing-editor-panel')
+    surface.querySelector('.drawing-editor-panel-toggle').click()
+    expect(panel.hidden).toBe(false)
+    const summary = panel.querySelector('summary')
+    summary.focus()
+    summary.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    )
+    expect(onKeepOriginal).toHaveBeenCalledTimes(1)
+  })
+
+  it('a fresh stencil open returns the panel to closed', async () => {
+    await openCat()
+    surface.querySelector('.drawing-editor-panel-toggle').click()
+    editor.dismiss()
+    await openCat()
+    expect(surface.querySelector('.drawing-editor-panel').hidden).toBe(true)
+  })
+
+  it('the toolbar is three named rows: actions, view, hands', async () => {
+    // Two was the aim; MEASURED at a 1280 window the toolbar's real width
+    // is 692 px (the editor shares the window with the customizer) and the
+    // groups sum to 1,705 px, so three named rows that never wrap is the
+    // honest answer to G0's four-row complaint.
+    await openCat()
+    const rows = surface.querySelectorAll('.drawing-editor-toolbar-row')
+    expect(rows.length).toBe(3)
+    expect(rows[0].querySelector('.drawing-editor-title')).not.toBeNull()
+    expect(rows[0].querySelector('.drawing-editor-close')).not.toBeNull()
+    expect(rows[0].querySelector('.drawing-editor-panel-toggle')).not.toBeNull()
+    expect(rows[1].querySelector('.drawing-editor-view')).not.toBeNull()
+    expect(rows[1].querySelector('.drawing-editor-zoom')).not.toBeNull()
+    expect(rows[2].querySelector('.drawing-editor-tools')).not.toBeNull()
+    expect(rows[2].querySelector('.drawing-editor-paint')).not.toBeNull()
+  })
+
+  it('Compare belongs to the relief purpose and stays out of the stencil toolbar', async () => {
+    await openCat()
+    const compare = surface.querySelector('.svg-prep-compare-btn')
+    expect(compare.hidden).toBe(true)
+    editor.open(CAT_SVG, analyzeSvg(CAT_SVG), {
+      onApply: vi.fn(),
+      onKeepOriginal: vi.fn(),
+    })
+    expect(compare.hidden).toBe(false)
+  })
+})

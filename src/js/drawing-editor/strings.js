@@ -44,6 +44,13 @@ export const EDITOR_STRINGS = Object.freeze({
   skipToRegions: 'Skip to the regions table',
   backToToolbar: 'Back to the toolbar',
 
+  /**
+   * The side panel is a drawer over the drawing now (G0: the picture is the
+   * editor). The toggle carries the state in aria-expanded; no announcement,
+   * because the pressed control already says which way it went.
+   */
+  panelToggle: 'Regions',
+
   sectionColours: 'Colours',
   sectionRegions: 'Regions',
   sectionPlates: 'Plates and paint order',
@@ -87,7 +94,12 @@ export const EDITOR_STRINGS = Object.freeze({
   toolChosen: (name) => `${name} tool.`,
   /** The current colour for the Paint tool. A11Y. */
   paintColourLabel: 'Paint with',
-  paintSelection: 'Colour the selection',
+  /**
+   * REVISED at DP-24 from "Colour the selection": same act, the Paint
+   * tool's own verb, and the hands row fits the editor's real 692 px at a
+   * 1280 window with room instead of teetering at one pixel.
+   */
+  paintSelection: 'Paint selection',
   undo: 'Undo',
   redo: 'Redo',
   fit: 'Fit',

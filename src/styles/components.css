@@ -16794,13 +16794,28 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   left: var(--space-sm);
 }
 
+/* Two rows at desktop width (G0 named the four-row wrap at 1280): the
+   actions row and the working-tools row. Each row may still wrap on a
+   phone, where rows are expected. */
 .drawing-editor-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  padding-bottom: var(--space-xs);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.drawing-editor-toolbar-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-sm);
-  padding-bottom: var(--space-xs);
-  border-bottom: 1px solid var(--color-border);
+}
+
+/* A row whose groups are all hidden (the other purpose's row) leaves no
+   gap behind. */
+.drawing-editor-toolbar-row:not(:has(> :not([hidden]))) {
+  display: none;
 }
 
 .drawing-editor-title {
@@ -16816,6 +16831,7 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
 }
 
 .drawing-editor-body {
+  position: relative;
   display: flex;
   flex: 1 1 auto;
   min-height: 0;
@@ -16829,12 +16845,20 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   overflow: auto;
 }
 
+/* G0 (DP-24): the picture is the editor. The panel is a DRAWER laid over
+   the drawing's right edge, not a column that squeezes it - the drawing
+   keeps the full width whether the drawer is open or shut. */
 .drawing-editor-panel {
-  flex: 0 0 clamp(280px, 44%, 460px);
-  min-height: 0;
+  position: absolute;
+  inset-block: 0;
+  right: 0;
+  width: clamp(280px, 44%, 460px);
   overflow: auto;
+  background: var(--color-bg-elevated, var(--color-bg-secondary));
   border-left: 1px solid var(--color-border);
   padding-left: var(--space-sm);
+  padding-right: var(--space-2xs);
+  z-index: var(--z-index-drawer);
   /* The table below asks how wide the PANEL is. */
   container-type: inline-size;
   container-name: panel;
@@ -16851,30 +16875,16 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   }
 }
 
-/* Narrow surface: the two stack and the BODY scrolls as one, so the drawing
-   keeps a height of its own, the toolbar stays put, and nothing paints past
-   the box it is in. MEASURED before this: at 412 wide the panel grew to
-   1,674 px, the stage was squeezed to 0, and the status line was painted
-   under the table. */
+/* Narrow surface: the drawer takes the whole body instead of a 44% strip
+   nobody can read at 412 wide. The drawing underneath keeps its full size;
+   closing the drawer is one press. (The old stacked-columns answer here is
+   retired with the drawer - MEASURED before it: at 412 wide the panel grew
+   to 1,674 px and the stage was squeezed to 0.) */
 @container (max-width: 640px) {
-  .drawing-editor-body {
-    flex-direction: column;
-    overflow: auto;
-  }
-
-  .drawing-editor-stage {
-    flex: 0 0 auto;
-    min-height: 240px;
-    overflow: visible;
-  }
-
   .drawing-editor-panel {
-    flex: 0 0 auto;
-    overflow: visible;
+    width: 100%;
     border-left: none;
-    border-top: 1px solid var(--color-border);
-    padding-left: 0;
-    padding-top: var(--space-sm);
+    padding-left: var(--space-2xs);
   }
 }
 
@@ -16916,6 +16926,10 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
 .drawing-editor-status {
   margin: 0;
   min-height: 1.4em;
+  /* The status is a flex child of the surface column and the body's flex:1
+     was shrinking it mid-line at narrow widths (MEASURED at 768 and 412:
+     the sentence's last line half-clipped). It says its piece in full. */
+  flex-shrink: 0;
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
 }
@@ -17120,7 +17134,9 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-sm);
+  /* xs, not sm: the hands row's fit at the editor's 692 px is a matter of
+     sixteen pixels. */
+  gap: var(--space-xs);
 }
 
 .drawing-editor-stencil-tools[hidden] {
@@ -17139,6 +17155,20 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   gap: var(--space-xs);
 }
 
+/* The paint pair (the colour and its one button) moves as a unit instead of
+   wrapping inside itself: a nested wrap container reports a broken
+   intrinsic width (MEASURED: the group told its row 224 px while its
+   content needed 281), which wrapped the button under the select at every
+   width. The pair fits even a 412 screen. */
+.drawing-editor-paint {
+  flex-wrap: nowrap;
+}
+
+.drawing-editor-paint .btn {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .drawing-editor-tool[aria-pressed='true'] {
   background: var(--color-hover-bg);
   border-color: var(--color-accent);
@@ -17154,6 +17184,10 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   background: var(--color-bg-primary);
   color: var(--color-text-primary);
   font-size: var(--font-size-sm);
+  /* Capped so the hands row (tools + paint) fits the editor's real 692 px
+     at a 1280 window; a long colour name ellipsizes here and reads in full
+     in the open list. */
+  max-width: 8rem;
 }
 
 .drawing-editor-paint-select:focus-visible,

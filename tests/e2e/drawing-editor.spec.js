@@ -117,9 +117,22 @@ test.describe('The drawing editor takes the preview area', () => {
       )
       .toContain('drawing-editor-title')
 
+    // ── The side panel is a drawer, closed by default (G0, DP-24) ────────
+    // The picture is the editor; the panel opens over it from the toggle,
+    // and the skip link opens it on the way to the table.
+    const panel = page.locator('.drawing-editor-panel')
+    const panelToggle = page.locator('.drawing-editor-panel-toggle')
+    await expect(panel).toBeHidden()
+    await expect(panelToggle).toHaveAttribute('aria-expanded', 'false')
+    await panelToggle.focus()
+    await page.keyboard.press('Enter')
+    await expect(panel).toBeVisible()
+    await expect(panelToggle).toHaveAttribute('aria-expanded', 'true')
+
     // ── The customizer stays one Tab away: no trap over the preview ──────
     // From the editor's first Tab stop, one step backwards is the page around
-    // it; from its last, one step forwards is too. Nothing holds focus in.
+    // it; from its last (the drawer's own back-link, so the drawer is open
+    // for this probe), one step forwards is too. Nothing holds focus in.
     await page.locator('.drawing-editor-skip').first().focus()
     expect(await focusedIsInside(page, '#drawingEditorSurface')).toBe(true)
     await page.keyboard.press('Shift+Tab')
@@ -223,6 +236,10 @@ test.describe('The drawing editor takes the preview area', () => {
     // Opened directly: the accordion's own keyboard operability is proven
     // above, and a summary that Playwright has to scroll a long panel to
     // reach is a moving target for its stability check, not for a person.
+    // The reopened editor starts with the drawer closed again - open it so
+    // the scan sees the panel too.
+    await page.locator('.drawing-editor-panel-toggle').click()
+    await expect(page.locator('.drawing-editor-panel')).toBeVisible()
     await page.evaluate(() => {
       for (const d of document.querySelectorAll('details.drawing-editor-section')) d.open = true
     })
@@ -298,6 +315,11 @@ test.describe('The drawing editor takes the preview area', () => {
     await expect(speck.locator('[data-plate]')).toHaveText('2')
 
     // ── DP-20, with the mouse: a marquee, then the selection painted ──────
+    // The drawer overlays the drawing's right edge; close it so the marquee
+    // sweeps the whole canvas unobstructed - which is also how a person
+    // would work the picture (G0: the picture is the editor).
+    await page.locator('.drawing-editor-panel-toggle').click()
+    await expect(page.locator('.drawing-editor-panel')).toBeHidden()
     await page.keyboard.press('m')
     await expect(page.locator('.drawing-editor-tool[data-tool="marquee"]')).toHaveAttribute('aria-pressed', 'true')
     await expect(status).toHaveText('Marquee tool.')
@@ -332,6 +354,10 @@ test.describe('The drawing editor takes the preview area', () => {
     await expect(page.locator('.svg-prep-status-plan')).toHaveText('2 colours, 2 plates.')
     await editBtn.click()
     await expect(surface(page)).toBeVisible()
+    // A fresh open starts with the drawer closed; the colour work below
+    // lives in it.
+    await page.locator('.drawing-editor-panel-toggle').click()
+    await expect(page.locator('.drawing-editor-panel')).toBeVisible()
     await expect(rows).toHaveCount(21)
     await expect(page.locator('[data-count="colours"]')).toHaveText('2')
     for (const i of [17, 18, 19, 20]) {
