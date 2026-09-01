@@ -135,6 +135,17 @@ async function openEditorByKeyboard(page, fixture) {
     .first()
     .waitFor({ state: 'visible', timeout: 60000 })
 
+  // The surface takes focus as it opens (its own name). Wait for that here,
+  // once, so no case below can focus a control only to have the opening
+  // take it back a moment later - which is what made the single-row delete
+  // case delete nothing on two CI lanes.
+  await expect
+    .poll(
+      async () => (await focused(page))?.className ?? '',
+      { timeout: 15000 }
+    )
+    .toContain('drawing-editor-title')
+
   return { summaryPresses: summary.presses, doorPresses: door.presses }
 }
 
@@ -278,6 +289,37 @@ test.describe('The drawing editor door', () => {
       page.locator('button[data-action="save"]').click(),
     ])
     expect(download.suggestedFilename()).toBe('bird-drawing-edited.svg')
+  })
+
+  // G0 2026-09-01 (DP-24): "one picture svg that you are seeing the elements
+  // turning on or off. A side by side of original to edited is offed in a
+  // button toggle if the user wishes but is not default."
+  test('one picture by default; Compare brings the original beside it', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await openApp(page)
+    await openEditorByKeyboard(page, BIRD_SVG)
+
+    const sourceWrap = page.locator('.svg-prep-pane-wrap--source')
+    const resultWrap = page.locator('.svg-prep-pane-wrap--result')
+    const compareBtn = page.locator('.svg-prep-compare-btn')
+
+    await expect(resultWrap).toBeVisible()
+    await expect(sourceWrap).toBeHidden()
+    await expect(compareBtn).toBeVisible()
+    await expect(compareBtn).toHaveAttribute('aria-pressed', 'false')
+
+    // By keyboard, per the file's thesis.
+    await compareBtn.focus()
+    await page.keyboard.press('Enter')
+    await expect(compareBtn).toHaveAttribute('aria-pressed', 'true')
+    await expect(sourceWrap).toBeVisible()
+    await expect(resultWrap).toBeVisible()
+
+    await page.keyboard.press('Enter')
+    await expect(compareBtn).toHaveAttribute('aria-pressed', 'false')
+    await expect(sourceWrap).toBeHidden()
   })
 
   test('the Actions drawer opens the same door', async ({ page }) => {

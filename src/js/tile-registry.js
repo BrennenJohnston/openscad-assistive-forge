@@ -81,7 +81,7 @@ const EXAMPLES = {
   'nasif-charm-maker': {
     path: '/examples/nasif-charm-maker/nasif_charm_maker.scad',
     name: 'nasif_charm_maker.scad',
-    description: 'Charm Customizer',
+    description: 'Charm Designer',
     manifest: '/examples/nasif-charm-maker/manifest.json',
     additionalFiles: [
       // DP-9. The default design, BESIDE the .scad, so desktop OpenSCAD can
@@ -109,7 +109,7 @@ const EXAMPLES = {
   'braille-wedge-card': {
     path: '/examples/braille-wedge-card/braille_wedge_card.scad',
     name: 'braille_wedge_card.scad',
-    description: 'Braille Card Customizer',
+    description: 'Braille Card Designer',
     manifest: '/examples/braille-wedge-card/manifest.json',
   },
   'braille-charm': {
@@ -182,11 +182,11 @@ const EXAMPLES = {
 
 const PROGRAMS = {
   'charm-customizer': {
-    label: 'Charm Customizer',
+    label: 'Charm Designer',
     examples: ['nasif-charm-maker', 'q-charm', 'logo-plate'],
   },
   'braille-card-customizer': {
-    label: 'Braille Card Customizer',
+    label: 'Braille Card Designer',
     examples: ['braille-wedge-card', 'braille-charm', 'braille-sign'],
   },
   'stencil-maker': {

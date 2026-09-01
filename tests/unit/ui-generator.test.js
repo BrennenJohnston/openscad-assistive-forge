@@ -541,6 +541,44 @@ describe('UI Generator', () => {
       expect(fileInput).toBeTruthy();
       expect(fileInput.accept).toBe('.png,.jpg');
     });
+
+    // DP-25 P2: a rebuilt file control whose default is a FILE OBJECT
+    // (the shape a saved plate value travels in) printed "[object Object]"
+    // as its status line. The name is the honest text; anything else says
+    // no file.
+    it('a file control with an object default shows the file NAME, never [object Object]', () => {
+      const schema = buildParams({
+        params: [
+          {
+            name: 'plate_file',
+            type: 'file',
+            default: { name: 'sketch4_plate_1.svg' },
+            uiType: 'file',
+            acceptedExtensions: ['svg'],
+          },
+        ],
+      });
+      renderParameterUI(schema, container, vi.fn(), {});
+      const info = container.querySelector('.file-info');
+      expect(info.textContent).toBe('sketch4_plate_1.svg');
+    });
+
+    it('a file control with a nameless object default says no file selected', () => {
+      const schema = buildParams({
+        params: [
+          {
+            name: 'plate_file',
+            type: 'file',
+            default: { size: 12 },
+            uiType: 'file',
+            acceptedExtensions: ['svg'],
+          },
+        ],
+      });
+      renderParameterUI(schema, container, vi.fn(), {});
+      const info = container.querySelector('.file-info');
+      expect(info.textContent).toBe('No file selected');
+    });
   });
 
   describe('Groups and Labels', () => {

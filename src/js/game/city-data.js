@@ -44,6 +44,34 @@ const MAX_BUILDING_HEIGHT_M = 700;
 // stand proud of it.
 export const PART_COVERAGE_MIN = 0.6;
 
+// CW-76. A part standing this close to the ground is standing ON it. Above
+// it, the parts float and the outline under them is what holds the building
+// up - see resolveMassing.
+export const PART_GROUND_MAX_M = 0.5;
+
+// CW-76. Two volumes this far apart vertically are still one building: real
+// extracts round a podium to 8 m and start the slab above it at 9, and a
+// walker at street level cannot see a metre of daylight thirty metres up.
+// Wider than this and the gap is the defect this release is named after.
+export const SUPPORT_GAP_TOLERANCE_M = 1.5;
+
+// CW-76 canopies. `building=roof` and `building=bridge` are not masses: they
+// are a surface held over something. Extruded from zero they become a wall
+// across the street, which is what the round's directive photographed on 3rd
+// Avenue. A canopy is a SLAB this thick, and its underside never drops below
+// the clearance a walker needs - below that a canopy would be a wall again,
+// and the collision grid (walk-controls, EYE_HEIGHT_M + 0.3) would start
+// blocking a way that is meant to be walked under.
+export const CANOPY_THICKNESS_M = 0.3;
+export const CANOPY_MIN_CLEAR_M = 2.2;
+
+// Where a canopy sits when the data says nothing at all: no min_height, no
+// height, and nothing under it. Two thirds of the roof ways in the four
+// extracts are exactly this (Seattle 27 of 46, Albuquerque 14 of 14), so this
+// number is the one most canopies actually wear. It is a shelter height, not
+// a guess at a building.
+export const CANOPY_DEFAULT_BASE_M = 4;
+
 // CW-26 roofs. A roof shallower than this is not worth the triangles at the
 // distance a walker sees it, and one deeper than a fifth of the building
 // starts to look like a circus tent, so an untagged pitch takes a quarter of
@@ -220,6 +248,17 @@ export const FURNITURE_AMENITY_VALUES = [
   'bicycle_parking',
 ];
 export const FURNITURE_HIGHWAY_VALUES = ['bus_stop', 'crossing'];
+
+/**
+ * CW-77: mapped street lamps.
+ *
+ * Kept OUT of `furniture` on purpose. `furniture` is CW-43's stream, with its
+ * own geometry, its own spacing grid and exact e2e counts; a lamp is drawn by
+ * the lamp stream instead, and folding one into the other would move every
+ * furniture count in the game for no reason a reader could follow. They ride
+ * their own list.
+ */
+export const LAMP_HIGHWAY_VALUE = 'street_lamp';
 export const FURNITURE_EMERGENCY_VALUES = ['fire_hydrant'];
 
 /**
@@ -333,6 +372,406 @@ export function resolveBuildingHeight(tags = {}) {
   if (heightM <= minHeightM) heightM = minHeightM + 0.5;
 
   return { heightM, minHeightM };
+}
+
+/**
+ * The height these tags actually STATE, or null when the 8 m default is doing
+ * the talking. resolveBuildingHeight cannot answer this: it has already
+ * substituted the default by the time it returns, and a canopy tagged nothing
+ * is a different structure from one tagged height=8.
+ *
+ * @param {Object} tags
+ * @returns {number|null}
+ */
+export function taggedHeightM(tags = {}) {
+  const direct =
+    parseLengthMeters(tags.height) ??
+    parseLengthMeters(tags['building:height']);
+  if (direct !== null && direct > 0)
+    return Math.min(direct, MAX_BUILDING_HEIGHT_M);
+  const levels = parseFloat(tags['building:levels']);
+  if (Number.isFinite(levels) && levels > 0) {
+    return Math.min(levels * LEVEL_HEIGHT_M, MAX_BUILDING_HEIGHT_M);
+  }
+  return null;
+}
+
+/**
+ * CW-76: is this way a canopy rather than a mass? `building=roof` is a roof
+ * over something with no walls under it; `building=bridge` is the same idea
+ * spanning a gap. Both are drawn as slabs.
+ *
+ * @param {Object} tags
+ * @returns {boolean}
+ */
+export function isCanopyBuilding(tags = {}) {
+  return tags?.building === 'roof' || tags?.building === 'bridge';
+}
+
+/**
+ * Where a canopy's slab starts and stops.
+ *
+ * The cascade for the UNDERSIDE, in the order the data deserves to be
+ * believed: the mapper's own min_height; the height of the building the
+ * canopy sits over; the canopy's own tagged height less the slab (a roof
+ * tagged 3 m tall has its SURFACE at 3 m, not its underside); and finally the
+ * shelter default. The TOP is the tagged height where there is one, so the
+ * Convention Center Arch keeps the 10-to-18 m volume its mapper described,
+ * and a slab's thickness otherwise.
+ *
+ * @param {Object} tags
+ * @param {number|null} coveredHeightM - the building this canopy stands over
+ * @returns {{baseM: number, topM: number, source: string}}
+ */
+export function resolveCanopy(tags = {}, coveredHeightM = null) {
+  const tagged = taggedHeightM(tags);
+  const min = parseLengthMeters(tags.min_height);
+  const minLevel = parseFloat(tags['building:min_level']);
+  const minTagged =
+    min !== null && min > 0
+      ? min
+      : Number.isFinite(minLevel) && minLevel > 0
+        ? minLevel * LEVEL_HEIGHT_M
+        : null;
+
+  let baseM;
+  let source;
+  if (minTagged !== null) {
+    baseM = minTagged;
+    source = 'min_height';
+  } else if (Number.isFinite(coveredHeightM) && coveredHeightM > 0) {
+    baseM = coveredHeightM;
+    source = 'covered';
+  } else if (tagged !== null) {
+    baseM = tagged - CANOPY_THICKNESS_M;
+    source = 'height';
+  } else {
+    baseM = CANOPY_DEFAULT_BASE_M;
+    source = 'default';
+  }
+  baseM = Math.max(baseM, CANOPY_MIN_CLEAR_M);
+
+  const topM = Math.max(tagged ?? 0, baseM + CANOPY_THICKNESS_M);
+  return { baseM, topM, source };
+}
+
+/**
+ * CW-76: decide what each building's MASS actually is, once every outline and
+ * every part is in hand.
+ *
+ * Three questions, in this order, because each one changes the answer to the
+ * next:
+ *
+ *  1. Is this way a canopy? Then it is a slab held over something, not a
+ *     solid from the pavement. `building=roof` extruded from zero is how a
+ *     canopy over 3rd Avenue became a building across the street.
+ *
+ *  2. Do this building's parts really replace its outline? Simple 3D
+ *     Buildings says they do when they cover it (CW-26, PART_COVERAGE_MIN),
+ *     and that is right - but only if one of them reaches the ground.
+ *     Metropolitan Park West Tower's three parts all start at 45 m, so the
+ *     outline stood down and the tower began in mid-air. The parts still
+ *     replace the outline ABOVE their base; below it the outline is the
+ *     podium that holds them up.
+ *
+ *  3. Is there anything under the lowest volume at all? Ask the whole city,
+ *     not the way: an orphaned `building:part` at 121.9 m is the top slice of
+ *     a stack whose lower slices are separate ways standing on the street,
+ *     and a per-way test calls all four of them floating. Where the column
+ *     really is empty the volume is drawn down to whatever IS under it - the
+ *     gap is closed, never doubled, so a slab a metre above an 8 m podium
+ *     grows by a metre rather than sprouting a second copy of the podium.
+ *
+ * Canopies are exempt from (3) on purpose. A canopy hangs; that is what it is
+ * for. What it must not do is hang over nothing with no support, and that is
+ * a question about COLUMNS - which need the roads, so the scene asks it
+ * (city-scene.js, buildCityGroup) and this pass does not.
+ *
+ * Mutates `buildings` and returns what it did, for the census.
+ *
+ * @param {Array<Object>} buildings
+ * @returns {{canopies:number, canopiesCovered:number, canopyBySource:Object, podiums:number, grounded:number, groundedToZero:number, floatingMass:number}}
+ */
+export function resolveMassing(buildings) {
+  const out = {
+    canopies: 0,
+    canopiesCovered: 0,
+    canopyBySource: { min_height: 0, covered: 0, height: 0, default: 0 },
+    podiums: 0,
+    grounded: 0,
+    groundedToZero: 0,
+    floatingMass: 0,
+  };
+  if (!Array.isArray(buildings) || buildings.length === 0) return out;
+
+  const boxes = buildings.map((b) => ringBounds(b.outer));
+  const centroids = buildings.map((b) => ringCentroid(b.outer));
+  const canopy = buildings.map((b) => isCanopyBuilding(b.tags));
+
+  // (1) Canopies. The covered building is the one whose outline contains this
+  // canopy's centroid; where more than one does, the TALLEST wins, because a
+  // canopy sits on the roof it is nearest to being part of.
+  for (let i = 0; i < buildings.length; i++) {
+    if (!canopy[i]) continue;
+    const b = buildings[i];
+    const [cx, cy] = centroids[i];
+    let coveredHeightM = null;
+    for (let j = 0; j < buildings.length; j++) {
+      if (j === i || canopy[j]) continue;
+      const bb = boxes[j];
+      if (cx < bb.minX || cx > bb.maxX || cy < bb.minY || cy > bb.maxY) {
+        continue;
+      }
+      if (!pointInRing(cx, cy, buildings[j].outer)) continue;
+      const h = buildings[j].heightM ?? 0;
+      if (coveredHeightM === null || h > coveredHeightM) coveredHeightM = h;
+    }
+    const { baseM, topM, source } = resolveCanopy(b.tags, coveredHeightM);
+    b.minHeightM = baseM;
+    b.heightM = topM;
+    // A slab has no pitch. resolveRoof was answered against the old extent
+    // and would now cap a 0.3 m body with a 1.5 m roof.
+    b.roof = null;
+    // A canopy's own parts must not stand in for it: the slab IS the way.
+    b.partsAreMass = false;
+    b.canopy = { baseM, topM, source, coveredHeightM };
+    out.canopies++;
+    if (source === 'covered') out.canopiesCovered++;
+    out.canopyBySource[source]++;
+  }
+
+  // (2) The podium under parts that all float.
+  for (const b of buildings) {
+    b.podiumToM = 0;
+    if (!b.partsAreMass || !Array.isArray(b.parts) || b.parts.length === 0) {
+      continue;
+    }
+    let lowest = Infinity;
+    for (const p of b.parts) {
+      const base = Number.isFinite(p.minHeightM) ? p.minHeightM : 0;
+      if (base < lowest) lowest = base;
+    }
+    if (!Number.isFinite(lowest) || !(lowest > PART_GROUND_MAX_M)) continue;
+    const outlineBase = Number.isFinite(b.minHeightM) ? b.minHeightM : 0;
+    if (outlineBase >= lowest) continue;
+    b.podiumToM = lowest;
+    out.podiums++;
+  }
+
+  // (3) Close the empty columns, lowest first. Bottom-up matters: fixing the
+  // 19 m slab of a four-slab stack puts the 19.5 m slab back on solid ground,
+  // and a pass that ran top-down would have drawn four nested boxes where the
+  // city has one building.
+  const drawnVolumes = (b) => {
+    const list = [];
+    if (b.partsAreMass) {
+      if (b.podiumToM > 0) {
+        list.push({ ring: b.outer, base: 0, top: b.podiumToM, owner: b });
+      }
+    } else {
+      list.push({
+        ring: b.outer,
+        base: b.minHeightM ?? 0,
+        top: b.heightM ?? 0,
+        owner: b,
+        volume: b,
+      });
+    }
+    for (const p of b.parts ?? []) {
+      list.push({
+        ring: p.outer,
+        base: p.minHeightM ?? 0,
+        top: p.heightM ?? 0,
+        owner: b,
+        volume: p,
+      });
+    }
+    return list;
+  };
+
+  const all = [];
+  for (const b of buildings) all.push(...drawnVolumes(b));
+
+  // ★ Read LIVE, never off the snapshot. This loop lowers volumes as it goes,
+  // and a stack of four slabs is only resolved by one fix if the second slab
+  // can see that the first one now reaches the ground.
+  const baseOf = (v) => (v.volume ? (v.volume.minHeightM ?? 0) : v.base);
+  const topOf = (v) => (v.volume ? (v.volume.heightM ?? 0) : v.top);
+
+  /**
+   * How high anything drawn over (x, y) reaches, other than `self`.
+   *
+   * ★★★ CW-90 (D-126): A BUILDING'S OWN VOLUMES COUNT AS SUPPORT NOW. CW-76
+   * excluded them, which was right for the question it was asking - it only
+   * ever looked at a building's LOWEST volume, and a sibling could not be
+   * holding that up. It is wrong for the question the owner asked, which is
+   * about a part hovering above a LOWER PART of the same building: there, the
+   * lower part is exactly what support means.
+   *
+   * The walk still starts at the ground and only accepts a span whose base is
+   * within a tolerance of what it has reached so far, so a floating sibling
+   * cannot prop anything up - it has to be connected to the ground itself.
+   */
+  const supportUnder = (x, y, self) => {
+    const spans = [];
+    for (const v of all) {
+      if (v === self) continue;
+      if (!(topOf(v) > baseOf(v))) continue;
+      if (!pointInRing(x, y, v.ring)) continue;
+      spans.push(v);
+    }
+    spans.sort((a, z) => baseOf(a) - baseOf(z));
+    let reach = PART_GROUND_MAX_M;
+    for (const v of spans) {
+      if (baseOf(v) > reach + SUPPORT_GAP_TOLERANCE_M) break;
+      if (topOf(v) > reach) reach = topOf(v);
+    }
+    return reach;
+  };
+
+  // ★★★ EVERY VOLUME, NOT EACH BUILDING'S LOWEST ONE (CW-90, D-126, CW-Q89
+  // "close every gap"). CW-76 built `lowestOf` and asked about that alone, so
+  // a part hanging above a lower part was never even a candidate - it is not
+  // the lowest thing its building draws, so the pass walked straight past it.
+  // That is the defect the owner photographed: a floating half over the half
+  // below it.
+  //
+  // MEASURED before this pass looked at all of them, over the four shipped
+  // extracts: 71 drawn volumes still hung with a gap beneath them - Seattle
+  // 35, Denver 31, Albuquerque 1, Burnaby 4. The worst were not obscure:
+  // Seattle Municipal Tower began at 18 m under a 220 m tower, Qualtrics
+  // Tower at 25 m, Museum House 88.5 m up with 77.8 m of nothing under it.
+  //
+  // It is also asked at each VOLUME'S own centre rather than at its
+  // building's: a wing off to one side of a big outline is not described by
+  // the middle of that outline.
+  const floaters = [];
+  for (let i = 0; i < buildings.length; i++) {
+    if (canopy[i]) continue;
+    for (const v of drawnVolumes(buildings[i])) {
+      if (!v.volume) continue;
+      if (!(v.base > PART_GROUND_MAX_M)) continue;
+      floaters.push({
+        index: i,
+        building: buildings[i],
+        volume: v.volume,
+        ring: v.ring,
+      });
+    }
+  }
+  // Lowest first, and the reach is read LIVE, so grounding the 19 m slab of a
+  // stack lets the 19.5 m slab above it see solid ground on the same pass.
+  floaters.sort(
+    (a, z) => (a.volume.minHeightM ?? 0) - (z.volume.minHeightM ?? 0)
+  );
+
+  for (const f of floaters) {
+    const base = f.volume.minHeightM ?? 0;
+    if (!(base > PART_GROUND_MAX_M)) continue;
+    const [cx, cy] = ringCentroid(f.ring);
+    const reach = supportUnder(cx, cy, null);
+    if (reach + SUPPORT_GAP_TOLERANCE_M >= base) continue;
+    const newBase = reach <= PART_GROUND_MAX_M ? 0 : reach;
+    f.volume.minHeightM = newBase;
+    // The volume just grew downward, and a pitched roof is a share of the
+    // BODY, so it would grow with it. Re-answer it against the new extent.
+    f.volume.roof = resolveRoof(f.volume.tags ?? {}, f.volume.heightM, newBase);
+    out.grounded++;
+    if (newBase === 0) out.groundedToZero++;
+  }
+
+  // The post-condition, MEASURED rather than assumed: after the pass, how
+  // many DRAWN VOLUMES still stand on nothing? CW-90 widened this from
+  // "masses" to every volume, for the same reason it widened the pass: a part
+  // hanging over a lower part is the defect, and counting only each
+  // building's lowest volume could never see one. The e2e guard asserts this
+  // is zero in all four cities.
+  for (let i = 0; i < buildings.length; i++) {
+    if (canopy[i]) continue;
+    for (const v of drawnVolumes(buildings[i])) {
+      if (!v.volume) continue;
+      const base = v.volume.minHeightM ?? 0;
+      if (!(base > PART_GROUND_MAX_M)) continue;
+      const [cx, cy] = ringCentroid(v.ring);
+      if (supportUnder(cx, cy, null) + SUPPORT_GAP_TOLERANCE_M < base) {
+        out.floatingMass++;
+      }
+    }
+  }
+
+  return out;
+}
+
+/**
+ * CW-77: the terrain block an `ascii-city-extract@2` carries, validated.
+ *
+ * The bake samples a national 1 m DEM on a regular grid clipped to the
+ * circle and writes it as a flat row-major array with its own origin, step
+ * and dimensions, plus the licence and attribution the source requires. This
+ * turns it into something a heightfield can be built from and REFUSES a block
+ * it cannot trust rather than handing on a half-filled grid: a wrong terrain
+ * is a walker sunk to the knee or floating, which is worse than flat ground.
+ *
+ * Returns null for a v1 extract, which is the whole additive promise.
+ *
+ * @param {Object|undefined} raw
+ * @returns {{originX:number, originY:number, stepM:number, cols:number, rows:number, samples:Float32Array, coverage:number, minM:number, maxM:number, source:string, license:string, attribution:string}|null}
+ */
+export function parseElevation(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const { originX, originY, stepM, cols, rows } = raw;
+  const finite = (v) => typeof v === 'number' && Number.isFinite(v);
+  if (![originX, originY, stepM, cols, rows].every(finite)) return null;
+  if (!(stepM > 0) || !(cols > 1) || !(rows > 1)) return null;
+  if (!Array.isArray(raw.samples) || raw.samples.length !== cols * rows) {
+    return null;
+  }
+
+  // A null in the grid is a point the service had no data for, and it stays a
+  // hole rather than a zero: sea level is a real height and "no answer" is
+  // not. `coverage` is what fraction of the grid answered, so a consumer can
+  // refuse a city that is mostly holes.
+  const samples = new Float32Array(cols * rows);
+  let filled = 0;
+  let minM = Infinity;
+  let maxM = -Infinity;
+  for (let i = 0; i < samples.length; i++) {
+    const v = raw.samples[i];
+    if (typeof v === 'number' && Number.isFinite(v)) {
+      samples[i] = v;
+      filled++;
+      if (v < minM) minM = v;
+      if (v > maxM) maxM = v;
+    } else {
+      samples[i] = Number.NaN;
+    }
+  }
+  if (filled === 0) return null;
+
+  // Coverage is measured against the points the bake ASKED FOR, not against
+  // the whole rectangle: a circle fills about 61 % of its bounding square at
+  // this step, and reporting that as 61 % covered would read as "a third of
+  // the terrain is missing" when nothing is.
+  const asked =
+    typeof raw.inCircle === 'number' && raw.inCircle > 0
+      ? raw.inCircle
+      : samples.length;
+
+  return {
+    originX,
+    originY,
+    stepM,
+    cols,
+    rows,
+    samples,
+    inCircle: asked,
+    coverage: Math.min(1, filled / asked),
+    minM,
+    maxM,
+    source: typeof raw.source === 'string' ? raw.source : '',
+    license: typeof raw.license === 'string' ? raw.license : '',
+    attribution: typeof raw.attribution === 'string' ? raw.attribution : '',
+  };
 }
 
 /** Exact-coordinate key for ring stitching (Overpass repeats node coords). */
@@ -558,6 +997,8 @@ export function parseCityExtract(extract, options = {}) {
   const plantings = [];
   const picnicTables = [];
   const partWays = [];
+  // CW-77: mapped street lamps, their own stream (see LAMP_HIGHWAY_VALUE).
+  const lamps = [];
   let droppedRings = 0;
   let droppedElements = 0;
   let orphanParts = 0;
@@ -617,6 +1058,24 @@ export function parseCityExtract(extract, options = {}) {
         picnicTables.push({ x, y });
         continue;
       }
+      // CW-77: a mapped street lamp, at its own position. Routed before the
+      // furniture branch for the same reason the furniture branch sits before
+      // the poi one: a lamp is a highway node and must not fall through into
+      // something that dresses a ground floor.
+      if (tags.highway === LAMP_HIGHWAY_VALUE) {
+        const [x, y] = projectLatLon(el.lat, el.lon, center);
+        const lamp = { x, y };
+        if (typeof tags.lamp_mount === 'string') lamp.mount = tags.lamp_mount;
+        const lampH = parseLengthMeters(tags.height);
+        if (lampH !== null && lampH > 0) lamp.heightM = lampH;
+        // Whose asset it is. The Seattle extract carries City Light's own
+        // pole register beside OpenStreetMap's lamps (CW-Q76), and a reader
+        // has to be able to tell them apart.
+        if (typeof tags.operator === 'string') lamp.operator = tags.operator;
+        if (typeof tags.ref === 'string') lamp.ref = tags.ref;
+        lamps.push(lamp);
+        continue;
+      }
       // CW-43 (CW-Q43): rendered street furniture, typed, at the node's true
       // position. Routed BEFORE the poi branch on purpose: a bench is an
       // amenity node, and letting it fall through would hand the storefront
@@ -670,6 +1129,10 @@ export function parseCityExtract(extract, options = {}) {
       ) {
         const [x, y] = projectLatLon(el.lat, el.lon, center);
         attractions.push({
+          // CW-78: the OSM node id, carried for the same reason buildings
+          // carry theirs (CW-63) - a landmark registry row and a node-keyed
+          // dressing are keyed on it, and a name is not an identity.
+          id: el.id,
           name: tags.name,
           x,
           y,
@@ -678,6 +1141,7 @@ export function parseCityExtract(extract, options = {}) {
               ? tags.attraction
               : 'attraction',
           heightM: parseLengthMeters(tags.height) ?? 0,
+          wikidata: typeof tags.wikidata === 'string' ? tags.wikidata : null,
         });
         continue;
       }
@@ -848,7 +1312,16 @@ export function parseCityExtract(extract, options = {}) {
     if (el.type === 'way' && isGreenTags(tags) && Array.isArray(el.geometry)) {
       const ring = projectRing(el.geometry, center, true);
       if (ring) {
-        greens.push({ outer: ring, kind: tags.leisure ?? tags.landuse });
+        // CW-78: id and name ride along so a landmark registry row can key a
+        // park the way it keys a building (Burnaby's Central Park is the
+        // city's most cited landmark and is a leisure=park way). Additive -
+        // nothing that draws a green reads either field.
+        greens.push({
+          id: el.id,
+          name: typeof tags.name === 'string' ? tags.name : undefined,
+          outer: ring,
+          kind: tags.leisure ?? tags.landuse,
+        });
       } else {
         droppedRings++;
       }
@@ -932,6 +1405,11 @@ export function parseCityExtract(extract, options = {}) {
     }
   }
 
+  // CW-76: canopies, podiums and empty columns, decided over the whole set
+  // rather than one way at a time. Runs unconditionally - a city can have
+  // roof ways and no building:part at all (Albuquerque has 14 and none).
+  const massing = resolveMassing(buildings);
+
   // Bounds define the playable core (map view, ground plane, collision).
   // Overpass `around` returns WHOLE ways, so a highway passing through the
   // radius can trail kilometers beyond it — bounds therefore come from the
@@ -969,6 +1447,11 @@ export function parseCityExtract(extract, options = {}) {
     picnicTables,
     wayfinding,
     attractions,
+    // CW-77: mapped lamps, and the terrain the bake sampled. Both are
+    // ADDITIVE - a v1 extract simply has neither, and every reader of them
+    // has to cope with that.
+    lamps,
+    elevation: parseElevation(extract?.elevation),
     boundsM,
     stats: {
       buildingCount: buildings.length,
@@ -980,6 +1463,15 @@ export function parseCityExtract(extract, options = {}) {
       treeCount: trees.length,
       partCount: partWays.length,
       orphanParts,
+      // CW-76: what resolveMassing did, so the census reads the builder's own
+      // counters instead of re-deriving them beside it.
+      canopyCount: massing.canopies,
+      canopyCovered: massing.canopiesCovered,
+      canopyBySource: massing.canopyBySource,
+      podiumCount: massing.podiums,
+      groundedVolumes: massing.grounded,
+      groundedToZero: massing.groundedToZero,
+      floatingMass: massing.floatingMass,
       droppedRings,
       droppedElements,
       // CW-43/CW-44: per-class counts — the record's table and the e2e
@@ -998,6 +1490,13 @@ export function parseCityExtract(extract, options = {}) {
         return acc;
       }, {}),
       picnicTableCount: picnicTables.length,
+      // CW-77: how many lamps the map actually gave us, and whose they are.
+      lampNodeCount: lamps.length,
+      lampNodesByOperator: lamps.reduce((acc, l) => {
+        const k = l.operator ?? 'OpenStreetMap';
+        acc[k] = (acc[k] ?? 0) + 1;
+        return acc;
+      }, {}),
       leafTypedTreeCount: trees.filter((t) => t.leafType).length,
     },
   };
@@ -1020,6 +1519,25 @@ export function trimOverpassElement(el) {
     'building:min_level',
     'name',
     'highway',
+    // CW-77: what ascii-city-extract@2 adds.
+    //
+    // `wikidata` is the stable identity a landmark registry can be keyed on
+    // where a name cannot (CW-62: names are edited, translated and
+    // disambiguated upstream). `layer` and `location` are how the map says a
+    // building is below the street, which the bake now drops. `incline` is
+    // OSM's own slope, kept for the 28 Seattle sidewalks that carry one even
+    // though a DEM has to do the real work. `ele` is a spot height. Every one
+    // of them is ADDITIVE: a v1 reader ignores what it does not know.
+    'wikidata',
+    'layer',
+    'location',
+    'incline',
+    'ele',
+    // CW-77 street lamps: how the luminaire is carried, where the map says.
+    'lamp_mount',
+    'support',
+    'operator',
+    'ref',
     // Landmark families (CW-10)
     'tourism',
     'historic',
@@ -1243,6 +1761,7 @@ export function extractLandmarks(model, options = {}) {
       y: cy / building.outer.length,
       heightM: building.heightM,
       score,
+      wikidata: typeof tags.wikidata === 'string' ? tags.wikidata : null,
     });
   }
 
@@ -1268,10 +1787,20 @@ export function extractLandmarks(model, options = {}) {
       y: node.y,
       heightM: node.heightM || 0,
       score,
+      wikidata: node.wikidata ?? null,
     });
   }
 
-  scored.sort((a, b) => b.score - a.score || b.heightM - a.heightM);
+  // CW-78 (CW-Q70): `wikidata` presence is the generic tiebreaker for a city
+  // with no curated table - a mapped identity is the closest thing the data
+  // has to "people write about this" - and the old height arithmetic only
+  // where both sides of a tie are silent.
+  scored.sort(
+    (a, b) =>
+      b.score - a.score ||
+      (b.wikidata ? 1 : 0) - (a.wikidata ? 1 : 0) ||
+      b.heightM - a.heightM
+  );
   return scored.slice(0, max);
 }
 

@@ -1228,6 +1228,12 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
           overlaySourceSelect.value = `screenshot:${record.name}`;
         }
         updateCropButton();
+        // DP-26 P3: the Use-as-design row read the select while it was
+        // momentarily blank (the config sync above writes a name with no
+        // "screenshot:" prefix) and hid itself - so a plain upload offered
+        // the hand-over and a CROPPED copy did not, which is backwards:
+        // cropping is what you do on the way to the Colours lane.
+        updateUseAsDesignRow();
         noteOverlayChanged();
       } catch (error) {
         console.error('[Overlay] Could not use the cropped copy:', error);

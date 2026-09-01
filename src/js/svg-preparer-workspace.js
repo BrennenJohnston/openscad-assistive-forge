@@ -15,7 +15,6 @@ import { createDocumentFocusTrap } from './focus-trap.js';
 import { announce } from './announcer.js';
 import {
   classifyElements,
-  flattenToCompoundPath,
   applyPerPathOffsets,
   tierForCount,
 } from './svg-preparer.js';
@@ -50,6 +49,130 @@ const COMPOUND_ROLE_OPTIONS = [
 const AUTO_FULLSCREEN_MAX_WIDTH = 768;
 
 // ── Utility functions ────────────────────────────────────────────────────────
+
+/**
+ * D-120 (DP-26 P1): flatten classified elements through the ring engine.
+ *
+ * The old road, `flattenToCompoundPath`, unions the elements PAIRWISE with
+ * path-bool under even-odd, which is order-dependent once shapes overlap -
+ * and on this app's own logo (139 converted strokes) the pairwise chain
+ * does not merely corrupt: MEASURED, it exhausts an 8 GB node heap and
+ * dies. The ring road reads each element on its own terms (even-odd, so a
+ * counter stays a counter), then combines every region in one NonZero
+ * union - order-independent, and the same fixture finishes in seconds
+ * (1,280 rings, area 1,265 svg units squared).
+ *
+ * The cost, stated: rings are polylines, so curves leave at the ring
+ * engine's resolution - the same trade the stencil lane shipped with
+ * (plates reproduced at IoU 0.952). An element whose rings cannot be read
+ * is appended verbatim on its own even-odd path, counted into the warning,
+ * and never dropped.
+ *
+ * The engine arrives as an argument so the workspace stays out of the lazy
+ * chunk's way: this file is core, clipper is not.
+ *
+ * @param {object} engine - The ring-geometry module
+ * @param {Array} classifiedElements - Output of classifyElements()
+ * @param {object} [svgMeta]
+ * @param {string[]} [warningsOut]
+ * @returns {string|null}
+ */
+export function flattenWithRings(
+  engine,
+  classifiedElements,
+  svgMeta = {},
+  warningsOut = null
+) {
+  const foreground = classifiedElements.filter(
+    (el) => el.role === 'foreground' && el.pathData
+  );
+  const holes = classifiedElements.filter(
+    (el) => el.role === 'hole' && el.pathData
+  );
+  if (foreground.length === 0) return null;
+
+  const fallbacks = [];
+  const readRegion = (el) => {
+    try {
+      const rings = engine.evenOddUnion(engine.ringsFromPathData(el.pathData));
+      if (rings.length === 0) {
+        fallbacks.push(el.pathData);
+        return null;
+      }
+      return rings;
+    } catch {
+      fallbacks.push(el.pathData);
+      return null;
+    }
+  };
+
+  // ★ Regions are combined ONE AT A TIME, subject against clip - never by
+  // pouring every region's rings into a single NonZero subject. In one
+  // list the windings sum ACROSS regions: element B's solid ring inside
+  // element A's counter counts +1 - 1 = 0 and the area vanishes. MEASURED
+  // on the bird fixture: six healthy foreground regions one-shot-unioned
+  // to an EMPTY result, while the logo survived only because its bands'
+  // windings happened not to cancel. A fold of true unions is
+  // order-independent in the only sense that matters: the union of sets
+  // does not care what order it was taken in.
+  const combine = (elements) => {
+    let region = null;
+    for (const el of elements) {
+      const rings = readRegion(el);
+      if (!rings) continue;
+      region = region === null ? rings : engine.union(region, rings);
+    }
+    return region || [];
+  };
+
+  let region = combine(foreground);
+  // Holes cut ONE AT A TIME, and a hole that would erase the whole drawing
+  // is the PAPER, not a cut. The bird fixture is the measured case: its
+  // full-bleed background rect is auto-classified as a hole, and
+  // subtracting it legally empties everything - the old flatten hid this
+  // by silently discarding an empty difference. The same law the
+  // silhouette already states ("a root classified as a hole is a
+  // background") is applied here explicitly, per hole, and said out loud.
+  let paperHoles = 0;
+  for (const el of holes) {
+    if (region.length === 0) break;
+    const rings = readRegion(el);
+    if (!rings) continue;
+    const cut = engine.difference(region, rings);
+    if (cut.length === 0) {
+      paperHoles += 1;
+      continue;
+    }
+    region = cut;
+  }
+  if (paperHoles > 0 && Array.isArray(warningsOut)) {
+    warningsOut.push(
+      `${paperHoles} cut-out(s) would have erased the whole drawing and were treated as the background`
+    );
+  }
+  if (region.length === 0 && fallbacks.length === 0) return null;
+
+  if (fallbacks.length > 0 && Array.isArray(warningsOut)) {
+    warningsOut.push(
+      `${fallbacks.length} shape(s) could not be merged and were appended as-is`
+    );
+  }
+
+  const { viewBox, width, height } = svgMeta;
+  let attrs = 'xmlns="http://www.w3.org/2000/svg"';
+  if (viewBox) attrs += ` viewBox="${viewBox}"`;
+  if (width) attrs += ` width="${width}"`;
+  if (height) attrs += ` height="${height}"`;
+
+  let body = '';
+  if (region.length > 0) {
+    body += `<path d="${engine.ringsToPathData(region)}" fill="black" fill-rule="nonzero"/>`;
+  }
+  if (fallbacks.length > 0) {
+    body += `<path d="${fallbacks.join(' ')}" fill="black" fill-rule="evenodd"/>`;
+  }
+  return `<svg ${attrs}>${body}</svg>`;
+}
 
 /**
  * Build a human-readable description for an SVG shape element.
@@ -164,6 +287,14 @@ function buildWorkspaceDom() {
   rolesToggleBtn.textContent = 'Show roles';
   rolesToggleBtn.setAttribute('aria-pressed', 'true');
 
+  // G0 (DP-24): the edited drawing is the editor's one picture; the original
+  // sits beside it only while this is pressed.
+  const compareBtn = document.createElement('button');
+  compareBtn.className = 'svg-prep-compare-btn btn btn-secondary';
+  compareBtn.type = 'button';
+  compareBtn.textContent = 'Compare with original';
+  compareBtn.setAttribute('aria-pressed', 'false');
+
   const fullscreenBtn = document.createElement('button');
   fullscreenBtn.className = 'svg-prep-fullscreen-btn';
   fullscreenBtn.setAttribute('aria-label', 'Open fullscreen');
@@ -199,6 +330,7 @@ function buildWorkspaceDom() {
   header.append(
     title,
     designWidthGroup,
+    compareBtn,
     rolesToggleBtn,
     fullscreenBtn,
     closeBtn
@@ -209,7 +341,9 @@ function buildWorkspaceDom() {
   previews.className = 'svg-prep-previews';
 
   const sourcePaneWrap = document.createElement('div');
-  sourcePaneWrap.className = 'svg-prep-pane-wrap';
+  sourcePaneWrap.className = 'svg-prep-pane-wrap svg-prep-pane-wrap--source';
+  // One picture by default (DP-24): the original waits behind Compare.
+  sourcePaneWrap.hidden = true;
 
   const sourceCaption = document.createElement('span');
   sourceCaption.className = 'svg-prep-pane-caption';
@@ -228,7 +362,7 @@ function buildWorkspaceDom() {
   sourcePaneWrap.append(sourceCaption, sourcePane);
 
   const resultPaneWrap = document.createElement('div');
-  resultPaneWrap.className = 'svg-prep-pane-wrap';
+  resultPaneWrap.className = 'svg-prep-pane-wrap svg-prep-pane-wrap--result';
 
   const resultCaption = document.createElement('span');
   resultCaption.className = 'svg-prep-pane-caption';
@@ -332,6 +466,7 @@ function buildWorkspaceDom() {
   resultPaneWrap.append(resultCaption, resultPane, renderRow);
 
   previews.append(sourcePaneWrap, resultPaneWrap);
+  previews.classList.add('svg-prep-previews--single');
 
   // Role color legend (shown under the source pane)
   const legendRow = document.createElement('div');
@@ -445,12 +580,15 @@ function buildWorkspaceDom() {
       title,
       designWidthGroup,
       designWidthInput,
+      compareBtn,
       rolesToggleBtn,
       fullscreenBtn,
       closeBtn,
       previews,
       sourcePane,
+      sourcePaneWrap,
       resultPane,
+      resultPaneWrap,
       sourceCaption,
       resultCaption,
       legendRow,
@@ -772,9 +910,36 @@ export function createSvgPrepWorkspace(containerEl) {
   // replaced by an auto-prepared version.
   let resolved = false;
   let rolesVisible = true;
+  // One picture by default (G0, DP-24); Compare turns the pair on.
+  let compareOpen = false;
   // DP-3: whether the boolean flatten may run by itself. True only in tier A
   // (50 shapes or fewer), where DP-0 measured it at about a second.
   let autoPreview = true;
+  // D-120: the flatten goes through the ring engine, which lives in the
+  // lazy chunk. Loaded once at the first open; a preview asked for before
+  // it lands is re-run the moment it does.
+  let ringEngine = null;
+  let ringEnginePromise = null;
+  let previewWaitingForEngine = false;
+  function loadRingEngine() {
+    if (!ringEnginePromise) {
+      ringEnginePromise = import('./ring-geometry.js')
+        .then((m) => {
+          ringEngine = m;
+          if (isOpen && previewWaitingForEngine) {
+            previewWaitingForEngine = false;
+            updateResultPreview();
+          }
+          return m;
+        })
+        .catch((err) => {
+          ringEnginePromise = null;
+          console.error('[SVG Prep] ring engine failed to load:', err);
+          throw err;
+        });
+    }
+    return ringEnginePromise;
+  }
   // DP-4. Deleting a row shifts every index after it, and roles, offsets, the
   // rows' data-index, the radio names and the SAVED prepOverrides/prepOffsets
   // are ALL positional. So each surviving row remembers the index it had in
@@ -1011,9 +1176,23 @@ export function createSvgPrepWorkspace(containerEl) {
       const withOffsets = applyPerPathOffsets(classified, svgOffsets);
 
       const isCompound = currentAnalysis.isCompoundPathOnly;
-      const resultSvgString = isCompound
-        ? concatenateSubpaths(withOffsets, currentSvgMeta)
-        : flattenToCompoundPath(withOffsets, currentSvgMeta);
+      let resultSvgString;
+      if (isCompound) {
+        resultSvgString = concatenateSubpaths(withOffsets, currentSvgMeta);
+      } else if (ringEngine) {
+        // D-120: order-independent ring flatten; never the pairwise chain.
+        resultSvgString = flattenWithRings(
+          ringEngine,
+          withOffsets,
+          currentSvgMeta
+        );
+      } else {
+        // The engine is still on its way (first open). No fallback to the
+        // order-dependent path - the preview re-runs when the chunk lands.
+        previewWaitingForEngine = true;
+        loadRingEngine().catch(() => {});
+        return;
+      }
 
       if (!resultSvgString) {
         currentResult = null;
@@ -1345,6 +1524,27 @@ export function createSvgPrepWorkspace(containerEl) {
     liveRegion.textContent = rolesVisible
       ? 'Role colors shown'
       : 'Role colors hidden';
+  }
+
+  /**
+   * G0 (DP-24): one picture by default. The edited drawing is the editor;
+   * pressing Compare puts the original beside it, un-pressing takes it away.
+   */
+  function setCompare(on, { silent = false } = {}) {
+    compareOpen = on === true;
+    refs.compareBtn.setAttribute('aria-pressed', String(compareOpen));
+    refs.sourcePaneWrap.hidden = !compareOpen;
+    refs.previews.classList.toggle('svg-prep-previews--single', !compareOpen);
+    if (silent) return;
+    announce(
+      compareOpen
+        ? 'Comparing with the original drawing.'
+        : 'Showing your edited drawing.'
+    );
+  }
+
+  function handleCompareToggle() {
+    setCompare(!compareOpen);
   }
 
   function handleOffsetChange(e) {
@@ -1795,6 +1995,10 @@ export function createSvgPrepWorkspace(containerEl) {
     rolesVisible = true;
     refs.rolesToggleBtn.setAttribute('aria-pressed', 'true');
     refs.legendRow.hidden = false;
+    setCompare(false, { silent: true });
+    // D-120: the flatten needs the ring engine; start it on its way now so
+    // the first preview rarely has to wait for it.
+    loadRingEngine().catch(() => {});
     root.hidden = false;
 
     currentCallbacks = callbacks;
@@ -1926,6 +2130,7 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.objects.addEventListener('click', handleDeleteClick);
     refs.bulkBar.addEventListener('click', handleDeleteClick);
     refs.rolesToggleBtn.addEventListener('click', handleRolesToggle);
+    refs.compareBtn.addEventListener('click', handleCompareToggle);
     refs.closeBtn.addEventListener('click', close);
     refs.fullscreenBtn.addEventListener('click', handleFullscreenButton);
     refs.backdrop.addEventListener('click', closeFullscreen);
@@ -1999,6 +2204,7 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.objects.removeEventListener('click', handleDeleteClick);
     refs.bulkBar.removeEventListener('click', handleDeleteClick);
     refs.rolesToggleBtn.removeEventListener('click', handleRolesToggle);
+    refs.compareBtn.removeEventListener('click', handleCompareToggle);
     refs.closeBtn.removeEventListener('click', close);
     refs.fullscreenBtn.removeEventListener('click', handleFullscreenButton);
     refs.backdrop.removeEventListener('click', closeFullscreen);
@@ -2108,6 +2314,12 @@ export function createSvgPrepWorkspace(containerEl) {
     openFullscreen,
     closeFullscreen,
     toggleFullscreen,
+    /**
+     * Resolves once the ring engine is in and any preview that waited on
+     * it has re-run (the internal re-run is chained on the same promise,
+     * registered first, so awaiting this is deterministic).
+     */
+    whenReady: () => (ringEnginePromise || Promise.resolve()).catch(() => {}),
     _root: root,
     _refs: refs,
   };

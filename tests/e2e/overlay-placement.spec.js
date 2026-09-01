@@ -249,6 +249,22 @@ test.describe('Reference image placement (DP-5)', () => {
 
     await cropBtn.click()
     await expect(page.locator('#cropImageModal')).not.toHaveClass(/hidden/)
+    // The trap moves focus into the dialog on the next animation frame; an
+    // Escape typed before that lands on the button OUTSIDE the dialog and
+    // the dialog's own listener never hears it. A person cannot type
+    // between two frames - this test could (measured: one failure in four
+    // runs) - so it waits for the focus a person would see.
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(() =>
+            document
+              .getElementById('cropImageModal')
+              ?.contains(document.activeElement)
+          ),
+        { timeout: 10000 }
+      )
+      .toBe(true)
     await page.keyboard.press('Escape')
     await expect(page.locator('#cropImageModal')).toHaveClass(/hidden/)
 

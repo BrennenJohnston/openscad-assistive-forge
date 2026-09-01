@@ -9,6 +9,16 @@ const isWindows = process.platform === 'win32'
 const isCI = !!process.env.CI
 const baseURL = process.env.PW_BASE_URL || 'http://localhost:5173'
 
+// Local Windows headless Chromium can silently fall back to SwiftShader
+// (software GL) - measured after a reboot: the city ran at about a tenth
+// speed and every frame-bound walking guard starved, while the same tests
+// passed on hardware GL. ANGLE-on-D3D11 pins the real GPU for local runs;
+// CI keeps its own (software) rendering, which the tests must survive on
+// their own terms. Read the GL string before trusting any local timing
+// verdict - this is that lesson, enforced where the boards launch.
+const hardwareGl =
+  isWindows && !isCI ? { args: ['--use-angle=d3d11'] } : {}
+
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
@@ -55,12 +65,16 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: { ...devices['Desktop Chrome'], launchOptions: hardwareGl },
     },
     // Edge - Tier 1 browser (blocking in CI)
     {
       name: 'msedge',
-      use: { ...devices['Desktop Edge'], channel: 'msedge' },
+      use: {
+        ...devices['Desktop Edge'],
+        channel: 'msedge',
+        launchOptions: hardwareGl,
+      },
       testIgnore: ignores('msedge'),
     },
     // Firefox - Tier 1 browser (extended timeouts for WASM init overhead)

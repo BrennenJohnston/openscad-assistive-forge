@@ -122,7 +122,7 @@ export async function svgTextForFile(
     }
     const { dxfToSvg, dxfSize } = await import('./dxf-convert.js');
     const dxfText = await readAsText(file);
-    const { svg, ms } = await dxfToSvg({
+    const { svg, ms, warnings } = await dxfToSvg({
       dxfText,
       fileName: file.name,
       render,
@@ -132,6 +132,9 @@ export async function svgTextForFile(
       traced: false,
       converted: true,
       ms,
+      // D-123: the engine's WARNING lines, carried to the editor's own
+      // warnings list instead of being swallowed at this door.
+      warnings: warnings || [],
       // Kept so a saved file can be measured against what was opened.
       sourceSize: dxfSize(dxfText),
       imageData: null,
@@ -216,10 +219,19 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
    * after an ink setting changes.
    * @returns {boolean} false when the SVG has nothing the editor can work on
    */
-  async function showSvg(svg, { announceOpen, summary } = {}) {
+  async function showSvg(svg, { announceOpen, summary, extraWarnings } = {}) {
     let analysis;
     try {
       analysis = analyzeSvg(svg);
+      // D-123: the DXF converter's engine warnings join the analysis's own,
+      // so the editor's warnings list shows what the engine said instead of
+      // this door swallowing it.
+      if (Array.isArray(extraWarnings) && extraWarnings.length > 0) {
+        analysis = {
+          ...analysis,
+          warnings: [...(analysis.warnings || []), ...extraWarnings],
+        };
+      }
     } catch (error) {
       fail(
         `Forge could not read the shapes in ${currentFileName}: ${error.message}`
@@ -382,6 +394,7 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
 
     return showSvg(prepared.svg, {
       summary: prepared.summary,
+      extraWarnings: prepared.warnings,
       announceOpen: prepared.traced
         ? `${file.name} traced into ${shapes()} shapes. Editor opened.`
         : prepared.converted

@@ -231,7 +231,7 @@ describe('opening and giving the area back', () => {
     expect(editor.getLayerAssignments().limit).toBeGreaterThan(0)
   })
 
-  it('Apply hands the host the result while the workspace still knows its state', () => {
+  it('Apply hands the host the result while the workspace still knows its state', async () => {
     const onClose = vi.fn()
     const editor = make({ onClose })
     let deletedSeenInside = null
@@ -239,6 +239,8 @@ describe('opening and giving the area back', () => {
       deletedSeenInside = editor.getDeletedIndices()
     })
     openOn(editor, THREE, { initialDeleted: [2], onApply })
+    // D-120: Apply is enabled once the ring engine's first preview lands.
+    await editor.whenReady()
     editor._workspace._refs.applyBtn.click()
     expect(onApply).toHaveBeenCalledTimes(1)
     expect(typeof onApply.mock.calls[0][0]).toBe('string')
@@ -437,7 +439,8 @@ describe('the stencil purpose, on the owner drawing', () => {
     expect(announce).toHaveBeenLastCalledWith(S.regionSet(name, 'Brown', 2))
     const swatches = [...surface.querySelectorAll('.drawing-editor-swatch-row')]
     expect(swatches[1].textContent).toContain(S.usedBy(1))
-    const plates = [...surface.querySelectorAll('.drawing-editor-plates li')]
+    // Each plate line carries its order buttons after the sentence (DP-20).
+    const plates = [...surface.querySelectorAll('.drawing-editor-plates li > span:first-child')]
     expect(plates[1].textContent).toBe(S.plateLine(2, 'Brown', 1, 0))
     expect(plates[0].textContent).toBe(S.plateGround(1, 'Base coat'))
     expect(editor.getPlan().assignment[row.dataset.region]).toBe(brownId)

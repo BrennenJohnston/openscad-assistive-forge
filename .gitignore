@@ -28,6 +28,12 @@ playwright-results.json
 # PR descriptions now. Files committed before this rule stay tracked.
 build/
 
+# The frame-sequence instrument's own output (CW-67): filmstrips, contact
+# sheets, class maps and WebMs. Kept out for the same reason build/ is - it
+# is measurement, not source. The ones a release RECORD cites are copied into
+# the research folder's R8-filmstrips\ instead.
+seq-out/
+
 # Parity harness output (generated; goldens live in scripts/parity/golden/)
 artifacts/
 

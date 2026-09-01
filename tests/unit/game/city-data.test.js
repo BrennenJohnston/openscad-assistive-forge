@@ -801,15 +801,39 @@ describe('the bake keeps what the silhouettes need (CW-26)', () => {
         building: 'yes',
         'addr:housenumber': '12',
         'source:date': '2019',
-        wikidata: 'Q1',
-        operator: 'Someone',
+        'fixme': 'check this',
+        note: 'a note to mappers',
       },
     })
     expect(el.tags.building).toBe('yes')
     expect(el.tags['addr:housenumber']).toBeUndefined()
     expect(el.tags['source:date']).toBeUndefined()
-    expect(el.tags.wikidata).toBeUndefined()
-    expect(el.tags.operator).toBeUndefined()
+    expect(el.tags.fixme).toBeUndefined()
+    expect(el.tags.note).toBeUndefined()
+  })
+
+  it('CW-77 keeps wikidata and operator, which it used to throw away', () => {
+    // Both were dropped until CW-77, and both are now load-bearing: wikidata
+    // is the stable identity a landmark registry needs where a NAME is not
+    // one (CW-62), and operator is how a reader tells Seattle City Light's
+    // surveyed poles from OpenStreetMap's own lamps in the same file.
+    const el = trimOverpassElement({
+      type: 'node',
+      id: 3,
+      lat: 0,
+      lon: 0,
+      tags: {
+        highway: 'street_lamp',
+        wikidata: 'Q1',
+        operator: 'Seattle City Light',
+        ref: '1353729',
+        lamp_mount: 'bent_mast',
+      },
+    })
+    expect(el.tags.wikidata).toBe('Q1')
+    expect(el.tags.operator).toBe('Seattle City Light')
+    expect(el.tags.ref).toBe('1353729')
+    expect(el.tags.lamp_mount).toBe('bent_mast')
   })
 })
 
@@ -862,10 +886,22 @@ describe('building parts become the silhouette (CW-26)', () => {
     expect(host.parts.map((p) => p.heightM).sort((a, b) => a - b)).toEqual([
       12, 90,
     ])
-    // The tower part starts where the wing stops - that stepped profile IS
-    // the silhouette this release exists to recover.
+    // ★★ THE TOWER NOW STARTS AT 8, NOT AT 12, AND THAT IS CW-90 (D-126).
+    //
+    // This expectation used to be 12 and its comment said the tower "starts
+    // where the wing stops". Read the fixture: the wing spans 0.1-0.4 D of
+    // latitude and the tower 0.5-0.8 D. They do not overlap ANYWHERE. Nothing
+    // was under that tower at all - it hung 12 m up over the outline's own
+    // 8 m mass, with a 4 m gap, which is exactly the defect the owner
+    // photographed and CW-Q89 answered with "close every gap".
+    //
+    // 8 is the top of the mass beneath it, NOT the ground: the part is
+    // lowered to meet what holds it up and no further, which is the
+    // difference between the option the owner chose and the one they did not.
+    // The stepped silhouette CW-26 exists to recover is unaffected - it is
+    // the tower being 90 m tall over an 8 m wing, and it still is.
     const tower = host.parts.find((p) => p.heightM === 90)
-    expect(tower.minHeightM).toBe(12)
+    expect(tower.minHeightM).toBe(8)
   })
 
   it('keeps the OUTLINE for collision, whatever the parts do', async () => {

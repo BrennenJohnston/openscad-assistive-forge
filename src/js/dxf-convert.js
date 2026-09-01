@@ -100,6 +100,223 @@ export function withMetricUnits(dxfText) {
   return lines.join(eol);
 }
 
+/** How many polyline samples each spline knot span gets. */
+const SPLINE_SAMPLES_PER_SPAN = 8;
+
+/** How many segments a full ellipse becomes. */
+const ELLIPSE_SEGMENTS = 72;
+
+/**
+ * D-123 (DP-26 P2): evaluate the curve entities OpenSCAD's importer does
+ * not read, BEFORE the engine sees the file.
+ *
+ * MEASURED on the owner's own Fusion sketch (31 SPLINE, 2 ELLIPSE, 1 LINE):
+ * the importer reads none of the curved 33, so 31 of the 34 entities
+ * vanished SILENTLY - the editor showed two shapes and said nothing was
+ * missing. Every SPLINE is evaluated with the NURBS arithmetic (Cox-de
+ * Boor basis, rational when weights arrive) and every ELLIPSE
+ * parametrically, and each becomes a chain of LINE entities - the one
+ * entity this repo's own known-extents fixture PROVES the engine joins
+ * back into closed shapes at coincident endpoints.
+ *
+ * @param {string} dxfText
+ * @returns {{text: string, splines: number, ellipses: number}}
+ */
+export function evaluateDxfCurves(dxfText) {
+  if (typeof dxfText !== 'string' || !dxfText.includes('ENTITIES')) {
+    return { text: dxfText, splines: 0, ellipses: 0 };
+  }
+  const crlf = dxfText.includes('\r\n');
+  const eol = crlf ? '\r\n' : '\n';
+  const lines = dxfText.split(/\r?\n/);
+
+  const out = [];
+  let splines = 0;
+  let ellipses = 0;
+  let inEntities = false;
+  let i = 0;
+  while (i < lines.length) {
+    const code = lines[i].trim();
+    const value = (lines[i + 1] || '').trim();
+    if (code === '2' && value === 'ENTITIES') inEntities = true;
+    if (code === '0' && value === 'ENDSEC') inEntities = false;
+
+    if (
+      inEntities &&
+      code === '0' &&
+      (value === 'SPLINE' || value === 'ELLIPSE')
+    ) {
+      // Collect this entity's group codes up to the next entity marker.
+      let j = i + 2;
+      const groups = [];
+      while (j < lines.length && lines[j].trim() !== '0') {
+        groups.push([lines[j].trim(), (lines[j + 1] || '').trim()]);
+        j += 2;
+      }
+      const points =
+        value === 'SPLINE' ? evaluateSpline(groups) : evaluateEllipse(groups);
+      if (points && points.length >= 2) {
+        if (value === 'SPLINE') splines += 1;
+        else ellipses += 1;
+        const layer = groups.find(([g]) => g === '8')?.[1] || '0';
+        for (let p = 0; p + 1 < points.length; p++) {
+          out.push(
+            '0',
+            'LINE',
+            '8',
+            layer,
+            '10',
+            points[p].x.toFixed(6),
+            '20',
+            points[p].y.toFixed(6),
+            '11',
+            points[p + 1].x.toFixed(6),
+            '21',
+            points[p + 1].y.toFixed(6)
+          );
+        }
+        i = j;
+        continue;
+      }
+      // Unreadable curve: left exactly as it was, for the engine to warn on.
+    }
+    out.push(lines[i]);
+    i += 1;
+  }
+  return { text: out.join(eol), splines, ellipses };
+}
+
+/** Numbers for a repeated group code, in file order. */
+function numbersFor(groups, code) {
+  return groups
+    .filter(([g]) => g === code)
+    .map(([, v]) => Number(v))
+    .filter((n) => Number.isFinite(n));
+}
+
+/**
+ * A SPLINE entity's points, by the NURBS arithmetic.
+ * @param {Array<[string, string]>} groups
+ * @returns {Array<{x: number, y: number}>|null}
+ */
+function evaluateSpline(groups) {
+  const degree = Number(groups.find(([g]) => g === '71')?.[1]) || 3;
+  const knots = numbersFor(groups, '40');
+  const xs = numbersFor(groups, '10');
+  const ys = numbersFor(groups, '20');
+  const weights = numbersFor(groups, '41');
+  const flags = Number(groups.find(([g]) => g === '70')?.[1]) || 0;
+  const closed = (flags & 1) === 1;
+
+  if (xs.length < 2 || xs.length !== ys.length) {
+    // Fit points only: a polyline through them keeps the drawing honest.
+    const fx = numbersFor(groups, '11');
+    const fy = numbersFor(groups, '21');
+    if (fx.length >= 2 && fx.length === fy.length) {
+      const pts = fx.map((x, k) => ({ x, y: fy[k] }));
+      if (closed) pts.push({ ...pts[0] });
+      return pts;
+    }
+    return null;
+  }
+  const ctrl = xs.map((x, k) => ({ x, y: ys[k] }));
+  const n = ctrl.length - 1;
+  if (knots.length !== n + degree + 2) return null;
+  const w = weights.length === ctrl.length ? weights : ctrl.map(() => 1);
+
+  const uMin = knots[degree];
+  const uMax = knots[knots.length - 1 - degree];
+  const spans = new Set(knots.filter((k) => k >= uMin && k <= uMax));
+  const samples = Math.max(16, (spans.size - 1) * SPLINE_SAMPLES_PER_SPAN);
+
+  const points = [];
+  for (let s = 0; s <= samples; s++) {
+    const u = uMin + ((uMax - uMin) * s) / samples;
+    points.push(nurbsPoint(u, degree, knots, ctrl, w, n));
+  }
+  if (closed) points.push({ ...points[0] });
+  return points;
+}
+
+/** One point on a NURBS curve: the Cox-de Boor basis, rational. */
+function nurbsPoint(u, degree, knots, ctrl, weights, n) {
+  // The span that holds u; the last span is closed at its right edge.
+  let span = degree;
+  while (span < n && u >= knots[span + 1]) span += 1;
+
+  const basis = new Array(degree + 1).fill(0);
+  basis[0] = 1;
+  const left = new Array(degree + 1).fill(0);
+  const right = new Array(degree + 1).fill(0);
+  for (let j = 1; j <= degree; j++) {
+    left[j] = u - knots[span + 1 - j];
+    right[j] = knots[span + j] - u;
+    let saved = 0;
+    for (let r = 0; r < j; r++) {
+      const denom = right[r + 1] + left[j - r];
+      const temp = denom === 0 ? 0 : basis[r] / denom;
+      basis[r] = saved + right[r + 1] * temp;
+      saved = left[j - r] * temp;
+    }
+    basis[j] = saved;
+  }
+
+  let x = 0;
+  let y = 0;
+  let wSum = 0;
+  for (let k = 0; k <= degree; k++) {
+    const idx = span - degree + k;
+    if (idx < 0 || idx >= ctrl.length) continue;
+    const wk = basis[k] * weights[idx];
+    x += wk * ctrl[idx].x;
+    y += wk * ctrl[idx].y;
+    wSum += wk;
+  }
+  if (wSum === 0) return { x: 0, y: 0 };
+  return { x: x / wSum, y: y / wSum };
+}
+
+/**
+ * An ELLIPSE entity's points, parametrically.
+ * @param {Array<[string, string]>} groups
+ * @returns {Array<{x: number, y: number}>|null}
+ */
+function evaluateEllipse(groups) {
+  const one = (code, fallback) => {
+    const v = Number(groups.find(([g]) => g === code)?.[1]);
+    return Number.isFinite(v) ? v : fallback;
+  };
+  const cx = one('10', null);
+  const cy = one('20', null);
+  const mx = one('11', null);
+  const my = one('21', null);
+  const ratio = one('40', null);
+  if (cx === null || cy === null || mx === null || my === null || !ratio) {
+    return null;
+  }
+  const start = one('41', 0);
+  let end = one('42', Math.PI * 2);
+  if (end <= start) end += Math.PI * 2;
+  const full = Math.abs(end - start - Math.PI * 2) < 1e-9;
+  const segments = Math.max(
+    8,
+    Math.round((ELLIPSE_SEGMENTS * (end - start)) / (Math.PI * 2))
+  );
+  // The minor axis is the major rotated a quarter turn, scaled by the ratio.
+  const points = [];
+  for (let s = 0; s <= segments; s++) {
+    const t = start + ((end - start) * s) / segments;
+    const c = Math.cos(t);
+    const si = Math.sin(t);
+    points.push({
+      x: cx + c * mx - si * ratio * my,
+      y: cy + c * my + si * ratio * mx,
+    });
+  }
+  if (full) points[points.length - 1] = { ...points[0] };
+  return points;
+}
+
 /**
  * The one-line project that imports a drawing so the engine can re-emit it.
  * @param {string} fileName - Name the drawing is mounted under
@@ -258,6 +475,9 @@ export async function dxfToSvg({ dxfText, fileName, render }) {
   const wrapper = importWrapper(mounted);
   const started = Date.now();
 
+  // D-123: splines and ellipses become line chains the importer reads.
+  const curves = evaluateDxfCurves(dxfText);
+
   let result;
   try {
     result = await render(
@@ -271,7 +491,7 @@ export async function dxfToSvg({ dxfText, fileName, render }) {
         // directory, so a wrapper living anywhere else cannot find it.
         files: new Map([
           [WRAPPER_MAIN, wrapper],
-          [mounted, dxfText],
+          [mounted, curves.text],
         ]),
         mainFile: WRAPPER_MAIN,
       }
@@ -284,7 +504,19 @@ export async function dxfToSvg({ dxfText, fileName, render }) {
   if (!svg || !svg.includes('<svg')) {
     throw emptyImportError(fileName);
   }
-  return { svg, ms: Date.now() - started };
+  // D-123, the other half: the engine's own WARNING lines used to be
+  // swallowed here (core rule 13's exact shape). They ride out for the
+  // editor's warnings list, deduplicated - the importer repeats itself
+  // per entity.
+  const warnings = [
+    ...new Set(
+      (asText(result?.consoleOutput) || '')
+        .split(/\r?\n/)
+        .filter((line) => /^WARNING:/i.test(line.trim()))
+        .map((line) => line.trim())
+    ),
+  ];
+  return { svg, ms: Date.now() - started, warnings };
 }
 
 /**

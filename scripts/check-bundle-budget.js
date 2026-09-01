@@ -68,7 +68,13 @@ const BUDGETS = {
   // Total assets (excluding WASM and external Monaco)
   totalAssets: {
     name: 'Total Assets',
-    budget: 1024 * 1024, // 1 MB (not including lazy-loaded Monaco)
+    // 1,200,000 B, signed by the owner at the design round's close gate.
+    // MEASURED then: 1,051,173 B gzipped at 13b04ce (full npm run build) -
+    // the drawing editor's lazy chunks put the old 1 MiB line underwater,
+    // and the line is raised to the owner's number rather than trimmed
+    // quietly. D-121's lesson stands beside it: this weighs CODE the
+    // browser may fetch, not the vendored WASM engine.
+    budget: 1200000,
     pattern: null, // Sum all
     critical: true,
   },

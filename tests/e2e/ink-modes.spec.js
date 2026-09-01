@@ -42,12 +42,14 @@ async function openPicture(page, fixture) {
   await expect(page.locator('.ink-controls')).toBeVisible()
   // The editor's focus trap takes focus on a short delay. Driving the keyboard
   // before it lands means the trap steals the first keypress back.
+  // RE-PINNED at DP-19: the surface that hosts the editor puts focus on its
+  // own name (the "Drawing editor" heading), not on a close button.
   await expect
     .poll(
       async () =>
         page.evaluate(() =>
           (document.activeElement?.className || '').includes(
-            'svg-prep-close-btn'
+            'drawing-editor-title'
           )
         ),
       { timeout: 15000 }
@@ -222,7 +224,11 @@ test.describe('What to keep from a picture', () => {
     // in the DOM and blur whatever was focused - on every slider step.
     await expect(page.locator('#svg-edit-ink-mode-silhouette')).toBeFocused()
     // It also stayed expanded rather than dropping back behind the page.
-    await expect(page.locator('.svg-prep-fullscreen')).toHaveCount(1)
+    // RE-PINNED at DP-19: the door hosts the editor surface over the whole
+    // page (#svgEditStandaloneHost); the workspace's own fullscreen class is
+    // no longer how that happens, so the host staying visible is the pin.
+    await expect(page.locator('#svgEditStandaloneHost')).toBeVisible()
+    await expect(page.locator('.svg-prep-fullscreen')).toHaveCount(0)
 
     // Every control in the panel is a tab stop inside the editor's trap.
     const reachable = await page.evaluate(() => {
