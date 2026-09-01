@@ -10,7 +10,7 @@ This is a single-maintainer project. This file is here so I don’t have to answ
 
 - The web app works: upload a Customizer-enabled `.scad`, tweak params, preview, export.
 - It’s intentionally **client-side only** (no accounts, no uploads, no backend).
-- The welcome screen ships ready-to-use tools: the **Charm Customizer** (with its SVG drawing editor), the **Braille Card Customizer** (card / charm / sign, with on-device liblouis braille translation), and the **Stencil Maker**.
+- The welcome screen ships ready-to-use tools: the **Charm Designer** (with its SVG drawing editor), the **Braille Card Designer** (card / charm / sign, with on-device liblouis braille translation), and the **Stencil Maker**.
 - There are **two interfaces**: the guided **Assistive Forge** one, and **Classic**, which reproduces the OpenSCAD desktop window. The app asks which you want on your first visit and you can switch at any time.
 - The stencil work grew bigger than I expected, so I’ve shelved the deeper stencil project for now — the Stencil Maker tile stays usable as it stands, and I’ll pick the rest up another time.
 
