@@ -54,6 +54,16 @@ async function boot(page, { classic = false } = {}) {
   );
   await page.goto('/');
   await expect(page.locator('#welcomeScreen')).toBeVisible({ timeout: 30_000 });
+  // A visible welcome screen is not a wired one: on CI Firefox (cold, slow
+  // module evaluation) the Try/tour clicks fired before main.js attached
+  // their handlers, and the app sat on the welcome surface through 180
+  // seconds of polling. The tours load the sample through the engine
+  // anyway, so the engine-ready stamp is the honest gate - the same one
+  // every sibling suite boots on.
+  await page.waitForSelector('body[data-wasm-ready="true"]', {
+    state: 'attached',
+    timeout: 180_000,
+  });
 }
 
 const said = (page) => page.evaluate(() => window.__said.slice());
