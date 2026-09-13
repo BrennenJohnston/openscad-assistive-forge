@@ -2322,6 +2322,13 @@ export function createSvgPrepWorkspace(containerEl) {
     getOffsetOverrides,
     getDeletedIndices,
     getLayerAssignments,
+    /**
+     * The ring engine, once the lazy chunk is in; null while it is not.
+     * D-132: the file control's layer companions flatten with the same engine
+     * the preview uses, and the control cannot import the chunk itself without
+     * pulling clipper into the core bundle.
+     */
+    getRingEngine: () => ringEngine,
     destroy,
     openFullscreen,
     closeFullscreen,

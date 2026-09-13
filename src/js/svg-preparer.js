@@ -980,10 +980,20 @@ export function flattenLayers(
       // relief, and the walls of a counter must not close over as the stack
       // rises. One law, two different jobs.
       .map((el) => (options.solid ? { ...el, role: 'foreground' } : el));
+    // D-132: `options.flattenRegion` is the ring engine's flatten, handed in by
+    // the caller. It cannot be imported here - the ring engine lives in a lazy
+    // chunk and its wrapper lives in the workspace, which imports THIS file -
+    // so the caller supplies it and this stays the dependency-free end.
+    // Without it the pairwise compound-path flatten still runs, which is what
+    // every caller did before and what the stencil's own tests exercise.
+    const flattenRegion =
+      typeof options.flattenRegion === 'function'
+        ? options.flattenRegion
+        : flattenToCompoundPath;
     raw.push(
       forThisLayer.length === 0
         ? null
-        : flattenToCompoundPath(forThisLayer, svgMeta, warningsOut)
+        : flattenRegion(forThisLayer, svgMeta, warningsOut)
     );
   }
   return normalizeLayerStack(raw);

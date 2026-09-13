@@ -14819,6 +14819,114 @@ body.tutorial-body-locked {
 }
 
 /* ============================================================
+   Start, a bar that moves, and Cancel (DP-34)
+   ============================================================ */
+
+.trace-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+}
+
+.trace-progress-running {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.trace-progress-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.trace-progress-bar {
+  width: 100%;
+  height: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-secondary);
+  appearance: none;
+}
+
+.trace-progress-bar::-webkit-progress-bar {
+  background: var(--color-bg-secondary);
+  border-radius: var(--border-radius-sm);
+}
+
+.trace-progress-bar::-webkit-progress-value {
+  background: var(--color-accent);
+  border-radius: var(--border-radius-sm);
+  transition: width 200ms linear;
+}
+
+.trace-progress-bar::-moz-progress-bar {
+  background: var(--color-accent);
+  border-radius: var(--border-radius-sm);
+}
+
+/* An indeterminate bar has no value to draw, so the movement is its own. It
+   sweeps rather than fills, which is what "we are working, and we cannot say
+   how far" honestly looks like. */
+.trace-progress-bar:indeterminate {
+  background-image: linear-gradient(
+    90deg,
+    var(--color-bg-secondary) 0%,
+    var(--color-accent) 50%,
+    var(--color-bg-secondary) 100%
+  );
+  background-size: 200% 100%;
+  animation: trace-progress-sweep 1.4s linear infinite;
+}
+
+@keyframes trace-progress-sweep {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.trace-progress-note {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.trace-progress-stage {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.trace-progress-cancel {
+  align-self: flex-start;
+}
+
+/* Reduced, not removed. MDN's own guidance keeps a subtle indeterminate motion
+   under this preference, and a person who asked for less movement did not ask
+   to be left wondering whether anything is happening. The sweep slows right
+   down and loses its contrast; the stage sentence still changes, and that is
+   the part that actually carries the information. */
+@media (prefers-reduced-motion: reduce) {
+  .trace-progress-bar:indeterminate {
+    animation-duration: 6s;
+    background-image: linear-gradient(
+      90deg,
+      var(--color-bg-secondary) 0%,
+      var(--color-border) 50%,
+      var(--color-bg-secondary) 100%
+    );
+  }
+
+  .trace-progress-bar::-webkit-progress-value {
+    transition: none;
+  }
+}
+
+/* ============================================================
    Ink controls (what to keep from a picture)
    ============================================================ */
 

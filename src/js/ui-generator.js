@@ -7,11 +7,7 @@ import { formatFileSize } from './download.js';
 import { announceChange, announceImmediate } from './announcer.js';
 import { reapplyDetailLevel } from './param-detail-controller.js';
 import { isRasterImageFile } from './file-param-resolver.js';
-import {
-  convertImageDataToSvg,
-  loadImageData,
-  validateImageDimensions,
-} from './image-import.js';
+import { loadImageData, validateImageDimensions } from './image-import.js';
 import { isEnabled } from './feature-flags.js';
 import {
   prepareSvg,
@@ -34,7 +30,11 @@ import {
 import {
   createSvgPrepWorkspace,
   extractSvgMeta,
+  flattenWithRings,
 } from './svg-preparer-workspace.js';
+import { createTraceRunner, TraceCancelled } from './trace-runner.js';
+import { createTraceProgress } from './trace-progress.js';
+import { quickLook, quickLookSentence } from './quick-look.js';
 import { checkHolePlacement } from './hole-placement.js';
 import { STENCIL_PLATE_CAP, JIG_DEFAULTS } from './stencil-limits.js';
 import { buildBridges, bridgesToPathData } from './stencil-bridges.js';
@@ -2285,6 +2285,33 @@ function createFileControl(
    * never be seen apart by the renderer or by undo.
    * @param {Object|null} value - File object {name, data, ...} or null
    */
+  // ── The ring engine, for the companions (D-132) ────────────────────────
+  // The editor keeps its own copy for its preview; the file control needs one
+  // too, because the layer companions are built on every emit whether or not
+  // anyone has opened the editor. Lazy, so clipper stays out of the core
+  // chunk, and started the moment a design arrives rather than at boot, so a
+  // model nobody gives a design to never pays for it.
+  let ringEngineModule = null;
+  let ringEnginePromise = null;
+  function ensureRingEngine() {
+    if (ringEngineModule) return Promise.resolve(ringEngineModule);
+    if (!ringEnginePromise) {
+      ringEnginePromise = import('./ring-geometry.js')
+        .then((m) => {
+          ringEngineModule = m;
+          return m;
+        })
+        .catch((err) => {
+          // Not fatal: the companions fall back to the older flatten, which is
+          // slow but correct. Never silent, though.
+          ringEnginePromise = null;
+          console.warn('[Design] ring engine failed to load:', err);
+          return null;
+        });
+    }
+    return ringEnginePromise;
+  }
+
   /**
    * The per-layer companion values for one design (DP-7).
    *
@@ -2300,9 +2327,11 @@ function createFileControl(
    * @param {Object|null} value - The file value being emitted
    * @param {Array<number>|null} assignments - The editor's Layer column, by
    *   original index; null means use the depth suggestion
+   * @param {Object|null} ringEngine - The ring-geometry module when it is in
+   *   hand; see the flatten note below
    * @returns {Object} Parameter names to values, for the SAME state update
    */
-  function buildLayerCompanions(value, assignments) {
+  function buildLayerCompanions(value, assignments, ringEngine = null) {
     const out = {};
     for (const { file, aspect } of layerParams) {
       out[file.name] = null;
@@ -2319,7 +2348,28 @@ function createFileControl(
         ? elements.map((_, i) => assignments[i] || 1)
         : suggestLayers(tree).map((v) => v || 1);
       const meta = extractSvgMeta(currentRawSvg);
-      svgs = flattenLayers(elements, layers, limit, meta);
+      // ★ D-132: THIS is where the page froze. The stack was flattened with
+      // `flattenToCompoundPath`, the pairwise path-bool chain that D-120
+      // retired from the editor, over the whole drawing, on the main thread,
+      // on every emit. CPU-profiled on the activities icon at 1x: 18,905 ms of
+      // an 18,960 ms emit, while the trace that produced the drawing took
+      // 186 ms. The ring engine does the same work and is order-independent
+      // besides. MEASURED on the traced drawings, same stack, same layers:
+      //
+      //   Bathroom icon   52 elements   3,693 ms -> 262 ms    (14.1x)
+      //   activities icon 74 elements  22,131 ms -> 584 ms    (37.9x)
+      //   WATAP Paint     168 elements 37,936 ms -> 1,330 ms  (28.5x)
+      //
+      // The engine arrives as an argument because it lives in the lazy chunk
+      // and this file is core. When it has not landed yet the old path still
+      // runs, so a stack is never silently dropped; `ensureRingEngine()` is
+      // awaited on every path that can, which is every path a person uses.
+      svgs = flattenLayers(elements, layers, limit, meta, null, {
+        flattenRegion: ringEngine
+          ? (els, svgMeta, warnings) =>
+              flattenWithRings(ringEngine, els, svgMeta, warnings)
+          : null,
+      });
     } catch (err) {
       // A design the layer analysis cannot read still uploads: the ordinary
       // single-file path is unaffected, and the layer params stay null rather
@@ -2563,7 +2613,7 @@ function createFileControl(
     return out;
   }
 
-  function emitFileValue(value, assignments = null) {
+  function emitFileValue(value, assignments = null, ringEngine = null) {
     let extra = null;
     if (aspectParam) {
       let aspect = null;
@@ -2584,7 +2634,15 @@ function createFileControl(
     // in the SAME state update as the design itself, so the renderer and undo
     // can never see a stack half-changed.
     if (layerParams.length > 0) {
-      extra = { ...(extra || {}), ...buildLayerCompanions(value, assignments) };
+      extra = {
+        ...(extra || {}),
+        // Whatever the caller hands over, else whatever has already landed.
+        ...buildLayerCompanions(
+          value,
+          assignments,
+          ringEngine || ringEngineModule
+        ),
+      };
     }
     if (silhouetteParams) {
       extra = { ...(extra || {}), ...buildSilhouetteCompanion(value) };
@@ -2614,7 +2672,36 @@ function createFileControl(
   let inkControls = null;
   let inkSourceImageData = null;
   let inkSourceFileName = null;
+  // The name of the PICTURE the drawing came from, for the "converted from"
+  // line. Kept beside the pixels so every conversion path can say it.
+  let sourceFileLabel = null;
   let inkRetraceTimer = null;
+
+  // ── Start, the bar, and Cancel (DP-34) ─────────────────────────────────
+  // The conversion no longer begins by itself for anything but a picture small
+  // enough that it is over before a person could have pressed the button
+  // (AUTO_START_MAX_PIXELS). Everything else waits to be started, reports the
+  // stage it has reached, and can be cancelled at any moment.
+  //
+  // AUTO_START_MAX_PIXELS is the owner's number, signed at DP-Q32: at most
+  // 0.5 MP may start by itself, through the same bar and the same Cancel. Above
+  // it, Start is the rule. Start stays on screen either way, because re-running
+  // after a settings change is the common case.
+  const AUTO_START_MAX_PIXELS = 500_000;
+  // What the quick look said about the picture now in hand, kept so the
+  // auto-start rule and the sentence agree with each other.
+  let currentQuickLook = null;
+  const traceProgress = createTraceProgress({
+    onStart: () => startConversion({ announceResult: true }),
+    onCancel: () => cancelConversion(),
+  });
+  traceProgress.hide();
+  let traceRunner = null;
+
+  function ensureTraceRunner() {
+    if (!traceRunner) traceRunner = createTraceRunner();
+    return traceRunner;
+  }
 
   // ── The drawing editor (DP-19) ─────────────────────────────────────────
   // It lives in the PREVIEW AREA now, not in a block inside this control. The
@@ -2860,7 +2947,14 @@ function createFileControl(
       type: 'image/svg+xml',
       data: svgDataUrl,
     };
-    emitFileValue(fileObj, prepLayers);
+    // D-132: the same ring engine the editor's own preview used, so the layer
+    // files agree with what the person just looked at and cost what the
+    // preview cost rather than seconds of the retired pairwise flatten.
+    const ringEngine =
+      workspace && typeof workspace.getRingEngine === 'function'
+        ? workspace.getRingEngine()
+        : null;
+    emitFileValue(fileObj, prepLayers, ringEngine);
     if (fileUploadListener) fileUploadListener(param.name, fileObj);
     announceChange('SVG prepared for OpenSCAD');
   }
@@ -2936,13 +3030,43 @@ function createFileControl(
    * @param {Object} [options]
    * @param {boolean} [options.announceResult]
    */
+  /**
+   * Stop whatever conversion is running, and say so once.
+   *
+   * DP-34. The page can do this at any moment because the work is in a worker:
+   * terminate() returns in a fraction of a millisecond and the next main-thread
+   * tick follows immediately. Before, there was no thread to run this on.
+   */
+  function cancelConversion() {
+    if (!traceRunner || !traceRunner.isRunning()) return;
+    traceRunner.cancel();
+    traceProgress.finish();
+    traceProgress.offer('Start conversion');
+    fileInfo.textContent = 'Conversion cancelled';
+    fileInfo.removeAttribute('aria-busy');
+    fileButton.disabled = false;
+    if (inkControls) inkControls.setFailed('Conversion cancelled');
+    // One action, one announcement (DP-32).
+    announceChange('Conversion cancelled');
+  }
+
+  /** Begin a conversion of the picture already read, with the current settings. */
+  function startConversion(opts = {}) {
+    if (!inkSourceImageData || !inkControls) return Promise.resolve();
+    return applyTracedImage(inkControls.getSettings(), opts).catch(() => {});
+  }
+
   async function applyTracedImage(settings, { announceResult = false } = {}) {
     if (!inkSourceImageData) return;
     if (inkControls) inkControls.setBusy(true);
+    traceProgress.show();
+    traceProgress.begin();
     try {
-      const { svg, summary } = await convertImageDataToSvg(inkSourceImageData, {
-        ink: settings,
-      });
+      const { svg, summary } = await ensureTraceRunner().start(
+        inkSourceImageData,
+        settings,
+        { onStage: (s) => traceProgress.stage(s) }
+      );
       currentFileName = inkSourceFileName;
       const processedSvg = processSvgForOpenScad(svg);
       const svgDataUrl = svgToDataUrl(processedSvg);
@@ -2968,16 +3092,46 @@ function createFileControl(
         type: 'image/svg+xml',
         data: svgDataUrl,
       };
+      // D-132: wait for the ring engine before emitting, so the layer
+      // companions are flattened by it rather than by the retired pairwise
+      // chain. The chunk is already on its way (started when the file was
+      // chosen), so this costs nothing on the second picture and a chunk
+      // fetch on the first.
+      if (layerParams.length > 0) await ensureRingEngine();
       emitFileValue(convertedFile);
       if (fileUploadListener) {
         fileUploadListener(param.name, convertedFile);
       }
+      // The converted name belongs here, not in one caller, so that every way
+      // of starting a conversion - the button, a re-run after a settings
+      // change, or the small picture that starts itself - ends with the file
+      // control saying the same true thing.
+      if (sourceFileLabel) {
+        fileInfo.textContent = `${inkSourceFileName} (converted from ${sourceFileLabel})`;
+        fileInfo.title = inkSourceFileName;
+        fileInfo.className = 'file-info';
+      }
+      fileInfo.removeAttribute('aria-busy');
       if (announceResult) {
+        // One action, one announcement (DP-32): the completion speaks, the
+        // stages do not. The count is what a person actually wants to hear,
+        // because it decides whether the drawing is workable at all.
         announceChange(
-          `Image converted to vector format: ${inkSourceFileName}`
+          `Converted: ${pathCount} ${pathCount === 1 ? 'shape' : 'shapes'}`
         );
       }
+      traceProgress.finish();
+      traceProgress.offer('Convert again');
     } catch (err) {
+      traceProgress.finish();
+      traceProgress.offer('Start conversion');
+      // A cancel is not a failure and must not be reported as one. Its one
+      // announcement was already made by cancelConversion, which is the action
+      // the person took.
+      if (err instanceof TraceCancelled) {
+        if (err.reason === 'cancelled') return;
+        throw err;
+      }
       const shown = `Conversion failed: ${err.message}`;
       fileInfo.textContent = shown;
       fileInfo.className = 'file-info file-info--error';
@@ -3112,6 +3266,11 @@ function createFileControl(
     const file = e.target.files[0];
     if (!file) return;
 
+    // D-132: start the ring engine's chunk now, while the file is still being
+    // read and (for a picture) traced. By the time the companions are built it
+    // has almost always landed, so the wait before the emit is nothing.
+    if (layerParams.length > 0) ensureRingEngine();
+
     const reader = new FileReader();
     reader.onload = async (evt) => {
       const dataUrl = evt.target.result;
@@ -3126,41 +3285,70 @@ function createFileControl(
         preview.alt = '';
       }
 
-      // Auto-convert raster images to SVG when the param accepts SVG
+      // A picture the param can take as SVG: read it, then OFFER to convert it.
+      // DP-34: choosing a file no longer starts the work. Reading the pixels is
+      // cheap and has to happen before anything can be said about the picture;
+      // the conversion itself waits for Start, except for a picture small
+      // enough to be over before a person could press it (DP-Q32).
       if (isRasterImageFile(file.name) && acceptsSvg) {
         try {
-          fileInfo.textContent = 'Converting to SVG\u2026';
+          fileInfo.textContent = 'Reading the picture\u2026';
           fileInfo.setAttribute('aria-busy', 'true');
           fileButton.disabled = true;
 
-          // Validate before starting conversion
+          // Refuse a file that is not a readable picture before offering to
+          // convert it. The SIZE advisory that used to live here is now the
+          // quick look's job: it says the same thing in the same sentence as
+          // what the picture is and what it will cost, rather than as a
+          // separate warning about a number.
           const img = new Image();
-          const dimCheck = await new Promise((resolve, reject) => {
+          await new Promise((resolve, reject) => {
             img.onload = () =>
               resolve(validateImageDimensions(img.width, img.height));
             img.onerror = () => reject(new Error('Failed to load image'));
             img.src = dataUrl;
           });
 
-          if (dimCheck.warning) {
-            fileInfo.textContent = `Converting\u2026 ${dimCheck.warning}`;
-            announceChange(dimCheck.warning);
-          }
-
           const svgName = file.name.replace(/\.[^.]+$/, '.svg');
           inkSourceImageData = await loadImageData(dataUrl);
           inkSourceFileName = svgName;
+          sourceFileLabel = file.name;
           await ensureInkControls();
 
-          await applyTracedImage(inkControls.getSettings(), {
-            announceResult: true,
-          });
-
-          fileInfo.textContent = `${svgName} (converted from ${file.name})`;
-          fileInfo.title = svgName;
           fileInfo.removeAttribute('aria-busy');
           fileButton.disabled = false;
           clearButton.style.display = 'inline-block';
+          traceProgress.show();
+          traceProgress.offer('Start conversion');
+
+          // DP-35: one sentence about what this is and what it will cost HERE.
+          // Never blocking, never a refusal. It costs a thumbnail pass and a
+          // fixed calibration, measured in single-digit milliseconds.
+          currentQuickLook = quickLook(inkSourceImageData);
+          traceProgress.setNote(quickLookSentence(currentQuickLook));
+
+          const pixelCount =
+            inkSourceImageData.width * inkSourceImageData.height;
+          // DP-Q32, the owner's rule: at most 0.5 MP AND the quick look calls
+          // it quick. Both, because a small picture on a very slow phone is not
+          // quick, and the whole point is not to start work nobody asked for on
+          // a device that cannot afford it.
+          if (
+            pixelCount <= AUTO_START_MAX_PIXELS &&
+            currentQuickLook.costBand === 'quick'
+          ) {
+            // Small enough to start itself, and it still goes through the same
+            // bar and the same Cancel - there is no second, invisible path.
+            fileInfo.textContent = `${file.name} (${formatFileSize(file.size)})`;
+            await applyTracedImage(inkControls.getSettings(), {
+              announceResult: true,
+            });
+          } else {
+            // The quick look's sentence already says the picture is large and
+            // will be scaled down, so the old size warning would repeat it.
+            fileInfo.textContent = `${file.name} (${formatFileSize(file.size)}). Ready to convert.`;
+            fileInfo.title = file.name;
+          }
         } catch (err) {
           fileInfo.textContent = `Conversion failed: ${err.message}`;
           fileInfo.className = 'file-info file-info--error';
@@ -3201,6 +3389,9 @@ function createFileControl(
         currentSvgAnalysis = null;
         statusCard.style.display = 'none';
       }
+      // D-132, as in applyTracedImage: the companions flatten with the ring
+      // engine, so wait for it rather than fall back to the pairwise chain.
+      if (isSvgFile && layerParams.length > 0) await ensureRingEngine();
       emitFileValue(uploadedFileObj);
       if (fileUploadListener && isSvgFile) {
         fileUploadListener(param.name, uploadedFileObj);
@@ -3216,6 +3407,16 @@ function createFileControl(
   // Clear file
   clearButton.addEventListener('click', () => {
     if (currentFileName) setSvgPrepMetadata(currentFileName, null);
+    // Clearing the file stops any conversion of it. Silently, because clearing
+    // is the person's own action and already speaks for itself; announcing a
+    // cancel on top of it would be the second utterance DP-32 forbids.
+    if (traceRunner && traceRunner.isRunning()) traceRunner.cancel();
+    traceProgress.finish();
+    traceProgress.hide();
+    inkSourceImageData = null;
+    inkSourceFileName = null;
+    sourceFileLabel = null;
+    currentQuickLook = null;
     fileInput.value = '';
     fileInfo.textContent = 'No file selected';
     fileInfo.className = 'file-info';
@@ -3269,6 +3470,12 @@ function createFileControl(
 
   container.appendChild(fileContainer);
   if (acceptsSvg) {
+    // Start, the bar and Cancel sit above the ink panel, because they are what
+    // the person acts on and the ink settings are what they adjust before doing
+    // so. The file control is the region whose content is unsettled while a
+    // conversion runs, so it is the one marked busy.
+    container.appendChild(traceProgress.root);
+    traceProgress.describeRegion(fileContainer);
     container.appendChild(inkControlsContainer);
     container.appendChild(workspaceContainer);
   }
