@@ -111,6 +111,7 @@
   },
   "overrides": {
     "minimatch": "^10.2.1",
+    "fast-uri": "^3.1.7",
     "@angular/common": "20.3.27",
     "@angular/core": "20.3.27",
     "basic-ftp": "^5.3.0"
