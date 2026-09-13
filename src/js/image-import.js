@@ -170,7 +170,14 @@ export async function convertImageDataToSvg(imageData, options = {}) {
   if (ink && ink.mode && ink.mode !== 'standard') {
     // Lazy: nobody pays for the extractor until a picture actually needs it.
     const { extractInk } = await import('./ink-extraction.js');
-    const extracted = extractInk(imageData, ink);
+    // ★ D-131: this read `imageData`, the ORIGINAL, so the downscale computed
+    // twenty lines above was thrown away for every ink mode - which is every
+    // mode an icon or a photo goes through. An 8 MP picture was ink-extracted
+    // and traced at 8 MP and a 12 MP phone photo at 12 MP, while the summary
+    // cheerfully reported that it had been scaled down by N. The cap was dead
+    // code on the one path that needed it most, and the shipped conversion ran
+    // three to ten times slower than its own stages because of this one word.
+    const extracted = extractInk(pixels, ink);
     pixels = extracted.imageData;
     summary = extracted.summary;
   }
