@@ -34,6 +34,7 @@ import {
 import {
   createSvgPrepWorkspace,
   extractSvgMeta,
+  flattenWithRings,
 } from './svg-preparer-workspace.js';
 import { checkHolePlacement } from './hole-placement.js';
 import { STENCIL_PLATE_CAP, JIG_DEFAULTS } from './stencil-limits.js';
@@ -2285,6 +2286,33 @@ function createFileControl(
    * never be seen apart by the renderer or by undo.
    * @param {Object|null} value - File object {name, data, ...} or null
    */
+  // ── The ring engine, for the companions (D-132) ────────────────────────
+  // The editor keeps its own copy for its preview; the file control needs one
+  // too, because the layer companions are built on every emit whether or not
+  // anyone has opened the editor. Lazy, so clipper stays out of the core
+  // chunk, and started the moment a design arrives rather than at boot, so a
+  // model nobody gives a design to never pays for it.
+  let ringEngineModule = null;
+  let ringEnginePromise = null;
+  function ensureRingEngine() {
+    if (ringEngineModule) return Promise.resolve(ringEngineModule);
+    if (!ringEnginePromise) {
+      ringEnginePromise = import('./ring-geometry.js')
+        .then((m) => {
+          ringEngineModule = m;
+          return m;
+        })
+        .catch((err) => {
+          // Not fatal: the companions fall back to the older flatten, which is
+          // slow but correct. Never silent, though.
+          ringEnginePromise = null;
+          console.warn('[Design] ring engine failed to load:', err);
+          return null;
+        });
+    }
+    return ringEnginePromise;
+  }
+
   /**
    * The per-layer companion values for one design (DP-7).
    *
@@ -2300,9 +2328,11 @@ function createFileControl(
    * @param {Object|null} value - The file value being emitted
    * @param {Array<number>|null} assignments - The editor's Layer column, by
    *   original index; null means use the depth suggestion
+   * @param {Object|null} ringEngine - The ring-geometry module when it is in
+   *   hand; see the flatten note below
    * @returns {Object} Parameter names to values, for the SAME state update
    */
-  function buildLayerCompanions(value, assignments) {
+  function buildLayerCompanions(value, assignments, ringEngine = null) {
     const out = {};
     for (const { file, aspect } of layerParams) {
       out[file.name] = null;
@@ -2319,7 +2349,28 @@ function createFileControl(
         ? elements.map((_, i) => assignments[i] || 1)
         : suggestLayers(tree).map((v) => v || 1);
       const meta = extractSvgMeta(currentRawSvg);
-      svgs = flattenLayers(elements, layers, limit, meta);
+      // ★ D-132: THIS is where the page froze. The stack was flattened with
+      // `flattenToCompoundPath`, the pairwise path-bool chain that D-120
+      // retired from the editor, over the whole drawing, on the main thread,
+      // on every emit. CPU-profiled on the activities icon at 1x: 18,905 ms of
+      // an 18,960 ms emit, while the trace that produced the drawing took
+      // 186 ms. The ring engine does the same work and is order-independent
+      // besides. MEASURED on the traced drawings, same stack, same layers:
+      //
+      //   Bathroom icon   52 elements   3,693 ms -> 262 ms    (14.1x)
+      //   activities icon 74 elements  22,131 ms -> 584 ms    (37.9x)
+      //   WATAP Paint     168 elements 37,936 ms -> 1,330 ms  (28.5x)
+      //
+      // The engine arrives as an argument because it lives in the lazy chunk
+      // and this file is core. When it has not landed yet the old path still
+      // runs, so a stack is never silently dropped; `ensureRingEngine()` is
+      // awaited on every path that can, which is every path a person uses.
+      svgs = flattenLayers(elements, layers, limit, meta, null, {
+        flattenRegion: ringEngine
+          ? (els, svgMeta, warnings) =>
+              flattenWithRings(ringEngine, els, svgMeta, warnings)
+          : null,
+      });
     } catch (err) {
       // A design the layer analysis cannot read still uploads: the ordinary
       // single-file path is unaffected, and the layer params stay null rather
@@ -2563,7 +2614,7 @@ function createFileControl(
     return out;
   }
 
-  function emitFileValue(value, assignments = null) {
+  function emitFileValue(value, assignments = null, ringEngine = null) {
     let extra = null;
     if (aspectParam) {
       let aspect = null;
@@ -2584,7 +2635,15 @@ function createFileControl(
     // in the SAME state update as the design itself, so the renderer and undo
     // can never see a stack half-changed.
     if (layerParams.length > 0) {
-      extra = { ...(extra || {}), ...buildLayerCompanions(value, assignments) };
+      extra = {
+        ...(extra || {}),
+        // Whatever the caller hands over, else whatever has already landed.
+        ...buildLayerCompanions(
+          value,
+          assignments,
+          ringEngine || ringEngineModule
+        ),
+      };
     }
     if (silhouetteParams) {
       extra = { ...(extra || {}), ...buildSilhouetteCompanion(value) };
@@ -2860,7 +2919,14 @@ function createFileControl(
       type: 'image/svg+xml',
       data: svgDataUrl,
     };
-    emitFileValue(fileObj, prepLayers);
+    // D-132: the same ring engine the editor's own preview used, so the layer
+    // files agree with what the person just looked at and cost what the
+    // preview cost rather than seconds of the retired pairwise flatten.
+    const ringEngine =
+      workspace && typeof workspace.getRingEngine === 'function'
+        ? workspace.getRingEngine()
+        : null;
+    emitFileValue(fileObj, prepLayers, ringEngine);
     if (fileUploadListener) fileUploadListener(param.name, fileObj);
     announceChange('SVG prepared for OpenSCAD');
   }
@@ -2968,6 +3034,12 @@ function createFileControl(
         type: 'image/svg+xml',
         data: svgDataUrl,
       };
+      // D-132: wait for the ring engine before emitting, so the layer
+      // companions are flattened by it rather than by the retired pairwise
+      // chain. The chunk is already on its way (started when the file was
+      // chosen), so this costs nothing on the second picture and a chunk
+      // fetch on the first.
+      if (layerParams.length > 0) await ensureRingEngine();
       emitFileValue(convertedFile);
       if (fileUploadListener) {
         fileUploadListener(param.name, convertedFile);
@@ -3112,6 +3184,11 @@ function createFileControl(
     const file = e.target.files[0];
     if (!file) return;
 
+    // D-132: start the ring engine's chunk now, while the file is still being
+    // read and (for a picture) traced. By the time the companions are built it
+    // has almost always landed, so the wait before the emit is nothing.
+    if (layerParams.length > 0) ensureRingEngine();
+
     const reader = new FileReader();
     reader.onload = async (evt) => {
       const dataUrl = evt.target.result;
@@ -3201,6 +3278,9 @@ function createFileControl(
         currentSvgAnalysis = null;
         statusCard.style.display = 'none';
       }
+      // D-132, as in applyTracedImage: the companions flatten with the ring
+      // engine, so wait for it rather than fall back to the pairwise chain.
+      if (isSvgFile && layerParams.length > 0) await ensureRingEngine();
       emitFileValue(uploadedFileObj);
       if (fileUploadListener && isSvgFile) {
         fileUploadListener(param.name, uploadedFileObj);
