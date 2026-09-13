@@ -21,12 +21,7 @@ import {
   flattenToCompoundPath,
   LAYER_EMIT_CAP,
 } from './svg-preparer.js';
-import {
-  buildNestingTree,
-  suggestLayers,
-  layerLimit,
-  boundsOf,
-} from './svg-nesting.js';
+import { buildNestingTree, layerLimit, boundsOf } from './svg-nesting.js';
 import {
   createSvgPrepWorkspace,
   extractSvgMeta,
@@ -2324,9 +2319,29 @@ function createFileControl(
    * file behind would print the previous design's second pass on top of this
    * one.
    *
+   * ★ A STACK IS SOMETHING A PERSON BUILDS (D-135, the owner's answer at
+   * DP-Q44, 2026-09-13: "only when asked").
+   *
+   * This used to fall back to `suggestLayers(tree)` whenever nobody had
+   * assigned anything, so EVERY upload filled `design_layer_1` and
+   * `design_layer_2` from nesting depth alone - and the model's layers are
+   * ADDITIVE over the ordinary design, so the charm silently gained a pass
+   * nobody asked for. MEASURED with the pinned desktop OpenSCAD on a traced
+   * icon, reading each STL's own Z extent: the design alone tops out at
+   * 9.450 mm with 65,288 facets; with the companions this emitted by itself,
+   * 10.250 mm and 83,030 facets. 83,030 is exactly the triangle count the app's
+   * own preview reported, so that stack was what everyone was getting.
+   *
+   * The model says it plainly: "Leave every file empty to keep the charm
+   * exactly as it was; fill layer 1 in to turn the stack on." Nobody was
+   * filling them in. This was.
+   *
+   * The depth SUGGESTION is not gone - it is what the editor's Layer column
+   * offers when someone opens it. What is gone is applying it on their behalf.
+   *
    * @param {Object|null} value - The file value being emitted
    * @param {Array<number>|null} assignments - The editor's Layer column, by
-   *   original index; null means use the depth suggestion
+   *   original index; null means nobody has built a stack
    * @param {Object|null} ringEngine - The ring-geometry module when it is in
    *   hand; see the flatten note below
    * @returns {Object} Parameter names to values, for the SAME state update
@@ -2338,15 +2353,18 @@ function createFileControl(
       if (aspect) out[aspect.name] = aspect.default ?? 1;
     }
     if (!value || !currentRawSvg) return out;
+    // A Layer column of all 1s is not a stack either: every element would sit
+    // on layer 1, which is the design a second time at the same height.
+    if (!Array.isArray(assignments) || !assignments.some((v) => v >= 2)) {
+      return out;
+    }
 
     let svgs = [];
     try {
       const elements = classifyElements(parseSvgElements(currentRawSvg));
       const tree = buildNestingTree(elements);
       const limit = layerLimit(tree);
-      const layers = Array.isArray(assignments)
-        ? elements.map((_, i) => assignments[i] || 1)
-        : suggestLayers(tree).map((v) => v || 1);
+      const layers = elements.map((_, i) => assignments[i] || 1);
       const meta = extractSvgMeta(currentRawSvg);
       // ★ D-132: THIS is where the page froze. The stack was flattened with
       // `flattenToCompoundPath`, the pairwise path-bool chain that D-120
