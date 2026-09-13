@@ -161,8 +161,22 @@ export function devWorkerModuleGraph(entry = 'src/worker/openscad-worker.js') {
   return urls;
 }
 
+/**
+ * Every module worker the app builds from src/, so none of them can be the one
+ * that was forgotten. The render worker is D-31's; the trace worker is DP-34's
+ * and would have hit the identical refusal on WebKit, since it imports
+ * image-import.js and ink-extraction.js, which the main thread loads first.
+ */
+const DEV_WORKER_ENTRIES = [
+  'src/worker/openscad-worker.js',
+  'src/js/trace-worker.js',
+];
+
 function devWorkerNoStore() {
-  const workerModules = devWorkerModuleGraph();
+  const workerModules = new Set();
+  for (const entry of DEV_WORKER_ENTRIES) {
+    for (const url of devWorkerModuleGraph(entry)) workerModules.add(url);
+  }
 
   return {
     name: 'd31-dev-worker-no-store',

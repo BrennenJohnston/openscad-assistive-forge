@@ -29,8 +29,13 @@ export const IMAGE_IMPORT_LIMITS = {
 /**
  * imagetracerjs options tuned for monochrome logo tracing.
  * posterized1 preset (2 colors) with stroke disabled.
+ *
+ * Exported because the trace worker runs the same trace off the main thread
+ * and has to use the same numbers. A second copy over there would be exactly
+ * the cross-file default drift that has caused more defects in this project
+ * than anything else.
  */
-const TRACER_OPTIONS = {
+export const TRACER_OPTIONS = {
   colorsampling: 0,
   numberofcolors: 2,
   pathomit: 8,
