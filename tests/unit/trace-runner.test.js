@@ -197,7 +197,7 @@ describe('the trace runner (DP-34)', () => {
     await expect(second).resolves.toMatchObject({ svg: 'filtered:<real/>' })
   })
 
-  it('passes the pixel buffer by transfer, never by copy', () => {
+  it('transfers the pixel buffer rather than structured-cloning it', () => {
     const r = runner()
     const pic = picture(8, 8)
     r.start(pic, { mode: 'lineart' })
@@ -207,6 +207,27 @@ describe('the trace runner (DP-34)', () => {
     expect(w.posted[0].image.width).toBe(8)
     expect(w.posted[0].image.height).toBe(8)
   })
+
+  it("★ leaves the caller's own pixels intact, so a re-trace is possible", () => {
+    // Transferring the caller's buffer detaches it. The file control keeps its
+    // decoded pixels so that changing an ink setting re-traces the SAME
+    // picture; detaching them made every re-run fail with
+    // "DataCloneError: ArrayBuffer at index 0 is already detached".
+    const r = runner()
+    const pic = picture(8, 8)
+    r.start(pic, { mode: 'lineart' })
+
+    expect(pic.data.buffer.detached).not.toBe(true)
+    expect(pic.data.length).toBe(8 * 8 * 4)
+    expect(w_transferred_is_a_copy(pic)).toBe(true)
+
+    // And a second start still works, which is the behaviour that broke.
+    expect(() => r.start(pic, { mode: 'silhouette' })).not.toThrow()
+  })
+
+  function w_transferred_is_a_copy(pic) {
+    return latest().posted[0].image.buffer !== pic.data.buffer
+  }
 
   it('a worker error rejects with the message and drops the worker', async () => {
     const r = runner()

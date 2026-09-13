@@ -141,12 +141,20 @@ export function createTraceRunner(options = {}) {
       current = { id, resolve, reject, onStage: opts.onStage || null };
     });
 
-    // The pixels change owner rather than being copied. A 12 MP photograph is
-    // 48 MB; copying it twice per trace is a stall of its own.
-    const buffer =
-      imageData.data.buffer.byteLength === imageData.data.byteLength
-        ? imageData.data.buffer
-        : imageData.data.slice().buffer;
+    // ★ A COPY is transferred, never the caller's own buffer.
+    //
+    // Transferring the caller's buffer DETACHES it, and the file control keeps
+    // its decoded pixels on purpose, so that changing an ink setting re-traces
+    // the same picture instead of re-reading the file. MEASURED the other way
+    // round first: the trace worked once, and then every re-run died with
+    // "DataCloneError: ArrayBuffer at index 0 is already detached" - so Convert
+    // again, and every slider, was a dead end.
+    //
+    // One copy of the source is the price, and it is the right one: about 8 MB
+    // for a 2 MP picture against a trace measured in seconds, and what the
+    // worker then owns outright for the whole job, so nothing is copied again
+    // inside it.
+    const buffer = imageData.data.slice().buffer;
 
     worker.postMessage(
       {

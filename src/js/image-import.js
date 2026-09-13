@@ -14,7 +14,6 @@
  * @license GPL-3.0-or-later
  */
 
-import ImageTracer from 'imagetracerjs';
 import { hexToRgb } from './color-utils.js';
 
 /**
@@ -187,6 +186,13 @@ export async function convertImageDataToSvg(imageData, options = {}) {
     summary = extracted.summary;
   }
 
+  // DP-34: imagetracerjs is loaded here on demand rather than at the top of the
+  // file. Every conversion a person actually starts now runs in the trace
+  // worker, which carries its own copy of the tracer in its own chunk; a static
+  // import here put a SECOND copy in the core bundle, which every visitor
+  // downloads whether or not they ever choose a picture. MEASURED: the core
+  // chunk carried the tracer with no production caller left for this function.
+  const { default: ImageTracer } = await import('imagetracerjs');
   const tracerOptions = { ...TRACER_OPTIONS, ...tracerOverrides };
   const svgString = ImageTracer.imagedataToSVG(pixels, tracerOptions);
 

@@ -260,6 +260,12 @@ export const MEASURED_SECONDS = {
   // third of a minute from their 35-minute ceiling before this file existed.
   // Re-weighted from a green CI run at the round's close.
   'drawing-editor.spec.js': 170.0,
+  // DP-34. Three cases: a 2000x2000 noise picture built in the page and traced
+  // at 4x CPU throttling, then two small ones for the announcements. MEASURED
+  // locally at 17.7 s for the file; booked at the same four-times ratio the two
+  // files above carry. Chromium only (PROJECT_IGNORES): CPU throttling is a CDP
+  // feature, and the other lanes have no headroom (see the note below).
+  'trace-start-cancel.spec.js': 70.0,
 };
 
 /** What an unmeasured file is assumed to cost: above the median, on purpose. */
@@ -285,8 +291,12 @@ export const DEFAULT_WEIGHT_S = 60;
  */
 export const PROJECT_IGNORES = Object.freeze({
   chromium: [],
-  msedge: ['drawing-editor.spec.js'],
-  firefox: ['wasm-smoke.spec.js', 'drawing-editor.spec.js'],
+  msedge: ['drawing-editor.spec.js', 'trace-start-cancel.spec.js'],
+  firefox: [
+    'wasm-smoke.spec.js',
+    'drawing-editor.spec.js',
+    'trace-start-cancel.spec.js',
+  ],
 });
 
 /**

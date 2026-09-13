@@ -7,11 +7,7 @@ import { formatFileSize } from './download.js';
 import { announceChange, announceImmediate } from './announcer.js';
 import { reapplyDetailLevel } from './param-detail-controller.js';
 import { isRasterImageFile } from './file-param-resolver.js';
-import {
-  convertImageDataToSvg,
-  loadImageData,
-  validateImageDimensions,
-} from './image-import.js';
+import { loadImageData, validateImageDimensions } from './image-import.js';
 import { isEnabled } from './feature-flags.js';
 import {
   prepareSvg,
@@ -36,6 +32,8 @@ import {
   extractSvgMeta,
   flattenWithRings,
 } from './svg-preparer-workspace.js';
+import { createTraceRunner, TraceCancelled } from './trace-runner.js';
+import { createTraceProgress } from './trace-progress.js';
 import { checkHolePlacement } from './hole-placement.js';
 import { STENCIL_PLATE_CAP, JIG_DEFAULTS } from './stencil-limits.js';
 import { buildBridges, bridgesToPathData } from './stencil-bridges.js';
@@ -2673,7 +2671,33 @@ function createFileControl(
   let inkControls = null;
   let inkSourceImageData = null;
   let inkSourceFileName = null;
+  // The name of the PICTURE the drawing came from, for the "converted from"
+  // line. Kept beside the pixels so every conversion path can say it.
+  let sourceFileLabel = null;
   let inkRetraceTimer = null;
+
+  // ── Start, the bar, and Cancel (DP-34) ─────────────────────────────────
+  // The conversion no longer begins by itself for anything but a picture small
+  // enough that it is over before a person could have pressed the button
+  // (AUTO_START_MAX_PIXELS). Everything else waits to be started, reports the
+  // stage it has reached, and can be cancelled at any moment.
+  //
+  // AUTO_START_MAX_PIXELS is the owner's number, signed at DP-Q32: at most
+  // 0.5 MP may start by itself, through the same bar and the same Cancel. Above
+  // it, Start is the rule. Start stays on screen either way, because re-running
+  // after a settings change is the common case.
+  const AUTO_START_MAX_PIXELS = 500_000;
+  const traceProgress = createTraceProgress({
+    onStart: () => startConversion({ announceResult: true }),
+    onCancel: () => cancelConversion(),
+  });
+  traceProgress.hide();
+  let traceRunner = null;
+
+  function ensureTraceRunner() {
+    if (!traceRunner) traceRunner = createTraceRunner();
+    return traceRunner;
+  }
 
   // ── The drawing editor (DP-19) ─────────────────────────────────────────
   // It lives in the PREVIEW AREA now, not in a block inside this control. The
@@ -3002,13 +3026,43 @@ function createFileControl(
    * @param {Object} [options]
    * @param {boolean} [options.announceResult]
    */
+  /**
+   * Stop whatever conversion is running, and say so once.
+   *
+   * DP-34. The page can do this at any moment because the work is in a worker:
+   * terminate() returns in a fraction of a millisecond and the next main-thread
+   * tick follows immediately. Before, there was no thread to run this on.
+   */
+  function cancelConversion() {
+    if (!traceRunner || !traceRunner.isRunning()) return;
+    traceRunner.cancel();
+    traceProgress.finish();
+    traceProgress.offer('Start conversion');
+    fileInfo.textContent = 'Conversion cancelled';
+    fileInfo.removeAttribute('aria-busy');
+    fileButton.disabled = false;
+    if (inkControls) inkControls.setFailed('Conversion cancelled');
+    // One action, one announcement (DP-32).
+    announceChange('Conversion cancelled');
+  }
+
+  /** Begin a conversion of the picture already read, with the current settings. */
+  function startConversion(opts = {}) {
+    if (!inkSourceImageData || !inkControls) return Promise.resolve();
+    return applyTracedImage(inkControls.getSettings(), opts).catch(() => {});
+  }
+
   async function applyTracedImage(settings, { announceResult = false } = {}) {
     if (!inkSourceImageData) return;
     if (inkControls) inkControls.setBusy(true);
+    traceProgress.show();
+    traceProgress.begin();
     try {
-      const { svg, summary } = await convertImageDataToSvg(inkSourceImageData, {
-        ink: settings,
-      });
+      const { svg, summary } = await ensureTraceRunner().start(
+        inkSourceImageData,
+        settings,
+        { onStage: (s) => traceProgress.stage(s) }
+      );
       currentFileName = inkSourceFileName;
       const processedSvg = processSvgForOpenScad(svg);
       const svgDataUrl = svgToDataUrl(processedSvg);
@@ -3044,12 +3098,36 @@ function createFileControl(
       if (fileUploadListener) {
         fileUploadListener(param.name, convertedFile);
       }
+      // The converted name belongs here, not in one caller, so that every way
+      // of starting a conversion - the button, a re-run after a settings
+      // change, or the small picture that starts itself - ends with the file
+      // control saying the same true thing.
+      if (sourceFileLabel) {
+        fileInfo.textContent = `${inkSourceFileName} (converted from ${sourceFileLabel})`;
+        fileInfo.title = inkSourceFileName;
+        fileInfo.className = 'file-info';
+      }
+      fileInfo.removeAttribute('aria-busy');
       if (announceResult) {
+        // One action, one announcement (DP-32): the completion speaks, the
+        // stages do not. The count is what a person actually wants to hear,
+        // because it decides whether the drawing is workable at all.
         announceChange(
-          `Image converted to vector format: ${inkSourceFileName}`
+          `Converted: ${pathCount} ${pathCount === 1 ? 'shape' : 'shapes'}`
         );
       }
+      traceProgress.finish();
+      traceProgress.offer('Convert again');
     } catch (err) {
+      traceProgress.finish();
+      traceProgress.offer('Start conversion');
+      // A cancel is not a failure and must not be reported as one. Its one
+      // announcement was already made by cancelConversion, which is the action
+      // the person took.
+      if (err instanceof TraceCancelled) {
+        if (err.reason === 'cancelled') return;
+        throw err;
+      }
       const shown = `Conversion failed: ${err.message}`;
       fileInfo.textContent = shown;
       fileInfo.className = 'file-info file-info--error';
@@ -3203,14 +3281,18 @@ function createFileControl(
         preview.alt = '';
       }
 
-      // Auto-convert raster images to SVG when the param accepts SVG
+      // A picture the param can take as SVG: read it, then OFFER to convert it.
+      // DP-34: choosing a file no longer starts the work. Reading the pixels is
+      // cheap and has to happen before anything can be said about the picture;
+      // the conversion itself waits for Start, except for a picture small
+      // enough to be over before a person could press it (DP-Q32).
       if (isRasterImageFile(file.name) && acceptsSvg) {
         try {
-          fileInfo.textContent = 'Converting to SVG\u2026';
+          fileInfo.textContent = 'Reading the picture\u2026';
           fileInfo.setAttribute('aria-busy', 'true');
           fileButton.disabled = true;
 
-          // Validate before starting conversion
+          // Validate before offering the conversion
           const img = new Image();
           const dimCheck = await new Promise((resolve, reject) => {
             img.onload = () =>
@@ -3220,24 +3302,36 @@ function createFileControl(
           });
 
           if (dimCheck.warning) {
-            fileInfo.textContent = `Converting\u2026 ${dimCheck.warning}`;
             announceChange(dimCheck.warning);
           }
 
           const svgName = file.name.replace(/\.[^.]+$/, '.svg');
           inkSourceImageData = await loadImageData(dataUrl);
           inkSourceFileName = svgName;
+          sourceFileLabel = file.name;
           await ensureInkControls();
 
-          await applyTracedImage(inkControls.getSettings(), {
-            announceResult: true,
-          });
-
-          fileInfo.textContent = `${svgName} (converted from ${file.name})`;
-          fileInfo.title = svgName;
           fileInfo.removeAttribute('aria-busy');
           fileButton.disabled = false;
           clearButton.style.display = 'inline-block';
+          traceProgress.show();
+          traceProgress.offer('Start conversion');
+
+          const pixelCount =
+            inkSourceImageData.width * inkSourceImageData.height;
+          if (pixelCount <= AUTO_START_MAX_PIXELS) {
+            // Small enough to start itself, and it still goes through the same
+            // bar and the same Cancel - there is no second, invisible path.
+            fileInfo.textContent = `${file.name} (${formatFileSize(file.size)})`;
+            await applyTracedImage(inkControls.getSettings(), {
+              announceResult: true,
+            });
+          } else {
+            fileInfo.textContent = dimCheck.warning
+              ? `${file.name}. ${dimCheck.warning}`
+              : `${file.name} (${formatFileSize(file.size)}). Ready to convert.`;
+            fileInfo.title = file.name;
+          }
         } catch (err) {
           fileInfo.textContent = `Conversion failed: ${err.message}`;
           fileInfo.className = 'file-info file-info--error';
@@ -3296,6 +3390,15 @@ function createFileControl(
   // Clear file
   clearButton.addEventListener('click', () => {
     if (currentFileName) setSvgPrepMetadata(currentFileName, null);
+    // Clearing the file stops any conversion of it. Silently, because clearing
+    // is the person's own action and already speaks for itself; announcing a
+    // cancel on top of it would be the second utterance DP-32 forbids.
+    if (traceRunner && traceRunner.isRunning()) traceRunner.cancel();
+    traceProgress.finish();
+    traceProgress.hide();
+    inkSourceImageData = null;
+    inkSourceFileName = null;
+    sourceFileLabel = null;
     fileInput.value = '';
     fileInfo.textContent = 'No file selected';
     fileInfo.className = 'file-info';
@@ -3349,6 +3452,12 @@ function createFileControl(
 
   container.appendChild(fileContainer);
   if (acceptsSvg) {
+    // Start, the bar and Cancel sit above the ink panel, because they are what
+    // the person acts on and the ink settings are what they adjust before doing
+    // so. The file control is the region whose content is unsettled while a
+    // conversion runs, so it is the one marked busy.
+    container.appendChild(traceProgress.root);
+    traceProgress.describeRegion(fileContainer);
     container.appendChild(inkControlsContainer);
     container.appendChild(workspaceContainer);
   }
