@@ -112,6 +112,7 @@ async function openCharm(page) {
 
 /** The design control's own panel; q-charm declares two design files. */
 const panel = (page) => ({
+  note: page.locator('.trace-progress-note').first(),
   start: page.locator('.trace-progress-start').first(),
   cancel: page.locator('.trace-progress-cancel').first(),
   bar: page.locator('.trace-progress-bar').first(),
@@ -231,6 +232,42 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
       ),
       `heard: ${heard.join(' | ')}`
     ).toEqual([]);
+  });
+
+  test('★ the quick look says what the picture is before anything is started, and never blocks it', async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(browserName !== 'chromium', 'CPU throttling is a CDP feature');
+    test.setTimeout(300_000);
+
+    // DP-35. A person may choose a photograph without realising the work, or
+    // that a simpler picture would give a better charm. The sentence says so
+    // BEFORE Start, and it is a paragraph rather than anything that has to be
+    // dismissed.
+    await openCharm(page);
+    await choosePicture(page, 2000, 'noise');
+    const p = panel(page);
+
+    await expect(p.note).toBeVisible({ timeout: 120_000 });
+    await expect(p.note).toContainText('Looks like');
+    await expect(p.note).toContainText('Converting');
+
+    // Never a modal, never a refusal: Start is right there and usable.
+    await expect(p.start).toBeVisible();
+    await expect(p.start).toBeEnabled();
+    await expect(
+      page.locator('dialog[open], [role="alertdialog"]')
+    ).toHaveCount(0);
+
+    // A 4 MP noise picture is over the cap, and the sentence says so rather
+    // than leaving a separate warning to say it somewhere else.
+    await expect(p.note).toContainText('scaled down first');
+
+    // And it is a paragraph, not a live region shouting on every file choice.
+    await expect(p.note).toHaveJSProperty('tagName', 'P');
+    expect(await p.note.getAttribute('aria-live')).toBeNull();
+    expect(await p.note.getAttribute('role')).toBeNull();
   });
 
   test('a picture small enough to be over in a moment starts itself, through the same bar', async ({

@@ -54,6 +54,14 @@ export function createTraceProgress({ onStart, onCancel }) {
   const root = document.createElement('div');
   root.className = 'trace-progress';
 
+  // The quick look's sentence, above Start. It is a plain paragraph: never a
+  // modal, never a warning the person cannot act on, and never something that
+  // has to be dismissed before they can get on.
+  const note = document.createElement('p');
+  note.className = 'trace-progress-note';
+  note.id = `${id}-note`;
+  note.hidden = true;
+
   const startButton = document.createElement('button');
   startButton.type = 'button';
   startButton.className = 'btn btn-primary trace-progress-start';
@@ -93,7 +101,7 @@ export function createTraceProgress({ onStart, onCancel }) {
   cancelButton.addEventListener('click', () => onCancel && onCancel());
 
   running.append(label, bar, stageText, cancelButton);
-  root.append(startButton, running);
+  root.append(note, startButton, running);
 
   /** The element whose content is not settled while a trace runs. */
   let describedRegion = null;
@@ -132,6 +140,15 @@ export function createTraceProgress({ onStart, onCancel }) {
     /** The region to mark busy while a trace runs. */
     describeRegion(element) {
       describedRegion = element;
+    },
+
+    /**
+     * Say what the picture looks like and roughly what it will cost. Empty
+     * text takes the sentence away rather than leaving a blank line.
+     */
+    setNote(text) {
+      note.textContent = text || '';
+      note.hidden = !text;
     },
 
     /**
@@ -180,6 +197,8 @@ export function createTraceProgress({ onStart, onCancel }) {
     /** Take the whole panel away (the file was cleared, or is not a picture). */
     hide() {
       root.hidden = true;
+      note.textContent = '';
+      note.hidden = true;
       markBusy(false);
     },
 

@@ -34,6 +34,7 @@ import {
 } from './svg-preparer-workspace.js';
 import { createTraceRunner, TraceCancelled } from './trace-runner.js';
 import { createTraceProgress } from './trace-progress.js';
+import { quickLook, quickLookSentence } from './quick-look.js';
 import { checkHolePlacement } from './hole-placement.js';
 import { STENCIL_PLATE_CAP, JIG_DEFAULTS } from './stencil-limits.js';
 import { buildBridges, bridgesToPathData } from './stencil-bridges.js';
@@ -2687,6 +2688,9 @@ function createFileControl(
   // it, Start is the rule. Start stays on screen either way, because re-running
   // after a settings change is the common case.
   const AUTO_START_MAX_PIXELS = 500_000;
+  // What the quick look said about the picture now in hand, kept so the
+  // auto-start rule and the sentence agree with each other.
+  let currentQuickLook = null;
   const traceProgress = createTraceProgress({
     onStart: () => startConversion({ announceResult: true }),
     onCancel: () => cancelConversion(),
@@ -3292,18 +3296,18 @@ function createFileControl(
           fileInfo.setAttribute('aria-busy', 'true');
           fileButton.disabled = true;
 
-          // Validate before offering the conversion
+          // Refuse a file that is not a readable picture before offering to
+          // convert it. The SIZE advisory that used to live here is now the
+          // quick look's job: it says the same thing in the same sentence as
+          // what the picture is and what it will cost, rather than as a
+          // separate warning about a number.
           const img = new Image();
-          const dimCheck = await new Promise((resolve, reject) => {
+          await new Promise((resolve, reject) => {
             img.onload = () =>
               resolve(validateImageDimensions(img.width, img.height));
             img.onerror = () => reject(new Error('Failed to load image'));
             img.src = dataUrl;
           });
-
-          if (dimCheck.warning) {
-            announceChange(dimCheck.warning);
-          }
 
           const svgName = file.name.replace(/\.[^.]+$/, '.svg');
           inkSourceImageData = await loadImageData(dataUrl);
@@ -3317,9 +3321,22 @@ function createFileControl(
           traceProgress.show();
           traceProgress.offer('Start conversion');
 
+          // DP-35: one sentence about what this is and what it will cost HERE.
+          // Never blocking, never a refusal. It costs a thumbnail pass and a
+          // fixed calibration, measured in single-digit milliseconds.
+          currentQuickLook = quickLook(inkSourceImageData);
+          traceProgress.setNote(quickLookSentence(currentQuickLook));
+
           const pixelCount =
             inkSourceImageData.width * inkSourceImageData.height;
-          if (pixelCount <= AUTO_START_MAX_PIXELS) {
+          // DP-Q32, the owner's rule: at most 0.5 MP AND the quick look calls
+          // it quick. Both, because a small picture on a very slow phone is not
+          // quick, and the whole point is not to start work nobody asked for on
+          // a device that cannot afford it.
+          if (
+            pixelCount <= AUTO_START_MAX_PIXELS &&
+            currentQuickLook.costBand === 'quick'
+          ) {
             // Small enough to start itself, and it still goes through the same
             // bar and the same Cancel - there is no second, invisible path.
             fileInfo.textContent = `${file.name} (${formatFileSize(file.size)})`;
@@ -3327,9 +3344,9 @@ function createFileControl(
               announceResult: true,
             });
           } else {
-            fileInfo.textContent = dimCheck.warning
-              ? `${file.name}. ${dimCheck.warning}`
-              : `${file.name} (${formatFileSize(file.size)}). Ready to convert.`;
+            // The quick look's sentence already says the picture is large and
+            // will be scaled down, so the old size warning would repeat it.
+            fileInfo.textContent = `${file.name} (${formatFileSize(file.size)}). Ready to convert.`;
             fileInfo.title = file.name;
           }
         } catch (err) {
@@ -3399,6 +3416,7 @@ function createFileControl(
     inkSourceImageData = null;
     inkSourceFileName = null;
     sourceFileLabel = null;
+    currentQuickLook = null;
     fileInput.value = '';
     fileInfo.textContent = 'No file selected';
     fileInfo.className = 'file-info';
