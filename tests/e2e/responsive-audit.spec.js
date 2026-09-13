@@ -324,10 +324,42 @@ for (const vp of VIEWPORTS) {
       // Open the keyboard shortcuts modal (no WASM needed)
       const shortcutsBtn = page.locator('#shortcutsToggle')
       await expect(shortcutsBtn).toBeVisible()
-      await shortcutsBtn.click()
 
       const modalContent = page.locator('#shortcutsModal .modal-content')
-      await expect(modalContent).toBeVisible({ timeout: 3000 })
+
+      // #shortcutsToggle sits in the static HTML, so it is visible the instant
+      // the document loads - but initApp() is async and called at module scope,
+      // and this button's click handler is attached thousands of lines into it.
+      // So there is a window where the button is on screen and DEAD, and a
+      // click that lands in it is swallowed: waiting longer on the modal cannot
+      // recover that click, because nothing is ever coming.
+      //
+      // MEASURED (build/dp-r4 harness, clicking every 100ms from
+      // domcontentloaded and timing the first click that works): the dead
+      // window after `load` is 766ms on Firefox, 450ms on Chromium, and 1,287ms
+      // on Chromium at 6x CPU throttling - it scales with how slow the machine
+      // is. This test used to click exactly once, at `load`, then allow the
+      // modal 3s. On a contended CI box that window passes 3s and the test
+      // fails with nothing wrong with the app, which is what happened on CI
+      // Firefox: three attempts red in a row, then green on the re-run.
+      // Locally it is not flaky at all (0 failures in 6 Firefox runs, ~4.7s
+      // each), so patience alone would have proved nothing here.
+      //
+      // Clicking until the modal answers fixes the cause and leaves every
+      // assertion below untouched. _openShortcutsModal always opens (it never
+      // toggles) and wires its body once, so a repeat click is safe, and
+      // checking visibility first means the button is never clicked through the
+      // open modal's own overlay.
+      await expect
+        .poll(
+          async () => {
+            if (await modalContent.isVisible()) return true
+            await shortcutsBtn.click({ timeout: 2000 }).catch(() => {})
+            return modalContent.isVisible()
+          },
+          { timeout: 15_000, intervals: [200, 400, 800, 1600] }
+        )
+        .toBe(true)
 
       const modalBox = await modalContent.boundingBox()
       expect(modalBox.width).toBeLessThanOrEqual(vp.width)
