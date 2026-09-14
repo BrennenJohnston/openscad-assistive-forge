@@ -98,6 +98,26 @@ async function waitForRetrace(page, before) {
     .toBe(true);
 }
 
+/**
+ * Press Start if the design control is offering it.
+ *
+ * A picture chosen on a file PARAMETER waits to be started unless it is both
+ * small and quick on this device (DP-Q32). The drawing editor's own door has no
+ * Start - opening the door is the deliberate act there - so only the file
+ * parameter path needs this.
+ *
+ * It has to be conditional rather than an unconditional click: on a fast
+ * machine a small picture converts by itself and the button is already reading
+ * "Convert again", which a second press would re-run for nothing.
+ */
+async function startIfOffered(page) {
+  const start = page.locator('.trace-progress-start').first();
+  if (!(await start.isVisible().catch(() => false))) return false;
+  if ((await start.textContent())?.trim() !== 'Start conversion') return false;
+  await start.click();
+  return true;
+}
+
 async function chooseMode(page, value) {
   const before = await summaryText(page);
   await page.locator(`#svg-edit-ink-mode-${value}`).check();
@@ -351,9 +371,16 @@ test.describe('A model that takes an image', () => {
     await expect(
       page.locator('.ink-controls input[type="radio"][value="lineart"]')
     ).toBeChecked();
+
+    // On this path the picture waits to be started unless it is small AND the
+    // quick look calls it quick here - and a slower machine does not, which is
+    // why this passed locally and failed on CI. Pressing Start when it is
+    // offered is what a person does, and it is the same on either machine.
+    await startIfOffered(page);
+
     await expect
       .poll(async () => page.locator('.ink-controls-summary').textContent(), {
-        timeout: 30000,
+        timeout: 120000,
       })
       .toMatch(/shapes traced/);
 

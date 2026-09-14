@@ -1,12 +1,16 @@
 import { describe, it, expect } from 'vitest'
 import path from 'node:path'
+import { readFileSync } from 'node:fs'
 import {
   MEASURED_SECONDS,
   DEFAULT_WEIGHT_S,
   PROJECT_IGNORES,
+  CI_SKIPPED,
+  CI_SKIPPED_WEIGHT_S,
   planShards,
   filesForProject,
   listSpecFiles,
+  weightsFor,
 } from '../../scripts/e2e-shard.mjs'
 
 /**
@@ -170,5 +174,70 @@ describe('e2e shard planner (D-72)', () => {
       measuredButGone,
       'the weight table names spec files that are no longer here'
     ).toEqual([])
+  })
+})
+
+/**
+ * A lane should be booked for what it will actually RUN.
+ *
+ * The City Walk suites are paused on CI and skip themselves in seconds there,
+ * but the planner was still booking their full measured minutes. MEASURED on
+ * the Chromium lane: the three heaviest were given a shard EACH, which left
+ * three of six idle on CI and pushed everything else into the remainder -
+ * shard 6 alone carried 44 files, and two tests began failing there for
+ * crowding rather than for behaviour.
+ */
+describe('planning for what CI actually runs', () => {
+  const files = filesForProject(
+    listSpecFiles(path.resolve('tests/e2e')),
+    'chromium'
+  )
+
+  it('every CI-skipped file is a spec that exists', () => {
+    const gone = CI_SKIPPED.filter((f) => !files.includes(f))
+    expect(gone, 'CI_SKIPPED names spec files that are no longer here').toEqual(
+      []
+    )
+  })
+
+  it('every CI-skipped file really does skip itself on CI', () => {
+    // The skip lives in one helper; a file claiming to be skipped without
+    // using it would be booked at nothing and then run for minutes.
+    for (const file of CI_SKIPPED) {
+      const source = readFileSync(path.resolve('tests/e2e', file), 'utf-8')
+      expect(
+        source.includes('useCityWalkFixtures'),
+        `${file} is listed as skipped on CI but does not use the helper that skips it`
+      ).toBe(true)
+    }
+  })
+
+  it('local planning is untouched: a local board runs these suites in full', () => {
+    expect(weightsFor(false)).toBe(MEASURED_SECONDS)
+  })
+
+  it('CI planning books a skipped suite at what skipping costs', () => {
+    const onCI = weightsFor(true)
+    for (const file of CI_SKIPPED) expect(onCI[file]).toBe(CI_SKIPPED_WEIGHT_S)
+    // And leaves everything else exactly as measured.
+    for (const [file, seconds] of Object.entries(MEASURED_SECONDS)) {
+      if (!CI_SKIPPED.includes(file)) expect(onCI[file]).toBe(seconds)
+    }
+  })
+
+  it('★ no CI shard is left idle while another carries everything', () => {
+    const plan = planShards(files, weightsFor(true), 6)
+    const counts = plan.map((shard) => shard.length)
+    // Before this, three shards held ONE file each - a file that skips.
+    expect(Math.min(...counts), `files per shard: ${counts}`).toBeGreaterThan(5)
+
+    const loads = plan.map((shard) =>
+      shard.reduce(
+        (sum, f) => sum + (weightsFor(true)[f] ?? DEFAULT_WEIGHT_S),
+        0
+      )
+    )
+    const spread = Math.max(...loads) - Math.min(...loads)
+    expect(spread, `booked seconds per shard: ${loads}`).toBeLessThan(60)
   })
 })
