@@ -1021,6 +1021,123 @@ test.describe("the flatten budget's loose ends (owner answers, 2026-09-14)", () 
   })
 })
 
+test.describe('choosing rows (DP-39 P2, signed at DP-Q36)', () => {
+  // "Click selects, Shift and Ctrl extend" was signed as part of row model A.
+  // The ROW is the target and nothing is added to it - which is not only tidy,
+  // it is the only thing that fits: MEASURED, the signed row has no spare
+  // width at the drawer's 280 px floor, so a checkbox per row would have cost
+  // the one line this release just bought.
+
+  async function openBird(page) {
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await openApp(page)
+    await openEditorByKeyboard(page, BIRD_SVG)
+    await expect(page.locator('.svg-prep-object').first()).toBeVisible({
+      timeout: 30000,
+    })
+  }
+
+  const chosen = (page) => page.locator('.svg-prep-object--selected')
+  const row = (page, n) => page.locator('.svg-prep-object').nth(n)
+
+  test('★ click chooses one, Shift extends, Ctrl adds', async ({ page }) => {
+    test.setTimeout(180000)
+    await openBird(page)
+    await expect(chosen(page)).toHaveCount(0)
+
+    await row(page, 1).click()
+    await expect(chosen(page)).toHaveCount(1)
+
+    await row(page, 4).click({ modifiers: ['Shift'] })
+    await expect(chosen(page), 'Shift did not take the range').toHaveCount(4)
+
+    await row(page, 0).click({ modifiers: ['Control'] })
+    await expect(chosen(page)).toHaveCount(5)
+
+    // And a plain click starts again, which is what every list people already
+    // use does.
+    await row(page, 2).click()
+    await expect(chosen(page)).toHaveCount(1)
+  })
+
+  test('★ a keyboard chooses the same way, and says what it chose', async ({
+    page,
+  }) => {
+    test.setTimeout(180000)
+    await openBird(page)
+    await row(page, 3).focus()
+    await page.keyboard.press('Space')
+    await expect(chosen(page)).toHaveCount(1)
+
+    // The state is SAID, because these rows are list items: aria-selected
+    // belongs to options and grid rows, and an option may not hold the radios
+    // and the button this row holds. Rather than change what the whole list
+    // reads as, the change is announced and counted where the actions are.
+    const said = await page.evaluate(
+      () =>
+        document.querySelector('.svg-prep-workspace .sr-only[aria-live]')
+          ?.textContent
+    )
+    expect(said).toMatch(/1 of 7 shapes selected/)
+  })
+
+  test('★ a press on a control in the row is not a press on the row', async ({
+    page,
+  }) => {
+    // The radios, More and everything in it are controls with their own jobs.
+    test.setTimeout(180000)
+    await openBird(page)
+    await row(page, 1).click()
+    await expect(chosen(page)).toHaveCount(1)
+
+    await row(page, 3).getByRole('radio', { name: 'Hole' }).check()
+    await expect(chosen(page), 'a role click moved the selection').toHaveCount(1)
+
+    await row(page, 3).locator('.svg-prep-more-btn').click()
+    await expect(chosen(page), 'opening a menu moved the selection').toHaveCount(1)
+  })
+
+  test('★ Delete selected takes exactly those rows, and the choice goes with them', async ({
+    page,
+  }) => {
+    test.setTimeout(180000)
+    await openBird(page)
+    const all = await page.locator('.svg-prep-object').count()
+
+    const button = page.locator('[data-action="delete-selected"]')
+    // Nothing chosen, nothing offered: a button that does nothing is worse
+    // than no button.
+    await expect(button).toBeHidden()
+
+    await row(page, 1).click()
+    await row(page, 2).click({ modifiers: ['Control'] })
+    await expect(button).toBeVisible()
+    // It says how many, because that count is the whole reason somebody chose
+    // rather than deleting one at a time.
+    await expect(button).toHaveText('Delete selected (2)')
+
+    await button.click()
+    await expect(page.locator('.svg-prep-object')).toHaveCount(all - 2)
+    // Every index after a deleted row has moved, so a selection kept across
+    // the rebuild would point at shapes nobody chose.
+    await expect(chosen(page)).toHaveCount(0)
+    await expect(button).toBeHidden()
+  })
+
+  test('the chosen row is not marked by colour alone', async ({ page }) => {
+    test.setTimeout(180000)
+    await openBird(page)
+    await row(page, 1).click()
+    const shadow = await chosen(page).evaluate(
+      (el) => getComputedStyle(el).boxShadow
+    )
+    // A bar down the leading edge, so the state survives a greyscale
+    // screenshot and outlasts the pointer that hover depends on.
+    expect(shadow).not.toBe('none')
+    expect(shadow).toContain('inset')
+  })
+})
+
 test.describe('the list can point at the picture (DP-39 P3)', () => {
   // ★ It could, and then it could not, and nothing said so. Hovering or
   // focusing a row draws that shape's outline into an overlay - and the

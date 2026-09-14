@@ -350,6 +350,16 @@ function buildWorkspaceDom() {
   keepLargestBtn.dataset.action = 'keep-largest';
   keepLargestBtn.textContent = 'Delete the rest';
 
+  // DP-39 P2. A selection nobody can act on is not a feature, and Delete is
+  // the thing people said they wanted it for. It says how many, because "3"
+  // is the whole reason somebody selected rather than deleted one at a time.
+  const deleteSelectedBtn = document.createElement('button');
+  deleteSelectedBtn.type = 'button';
+  deleteSelectedBtn.className = 'btn btn-secondary svg-prep-bulk-btn';
+  deleteSelectedBtn.dataset.action = 'delete-selected';
+  deleteSelectedBtn.textContent = 'Delete selected';
+  deleteSelectedBtn.hidden = true;
+
   const undoDeleteBtn = document.createElement('button');
   undoDeleteBtn.type = 'button';
   undoDeleteBtn.className = 'btn btn-secondary svg-prep-bulk-btn';
@@ -363,6 +373,7 @@ function buildWorkspaceDom() {
     deleteSmallBtn,
     keepLabel,
     keepLargestBtn,
+    deleteSelectedBtn,
     undoDeleteBtn,
     bulkHelp
   );
@@ -555,6 +566,7 @@ function buildWorkspaceDom() {
       sourceZoom,
       resultZoom,
       bulkBar,
+      deleteSelectedBtn,
       bulkCount,
       smallInput,
       keepInput,
@@ -1772,6 +1784,123 @@ export function createSvgPrepWorkspace(containerEl) {
     }
   }
 
+  // ── DP-39 P2: the selection ────────────────────────────────────────────
+  //
+  // Signed at DP-Q36 as part of row model A: "click selects, Shift and Ctrl
+  // extend". The ROW is the target and nothing is added to it - which is not
+  // only tidy, it is the only thing that fits. MEASURED at the drawer's 280 px
+  // floor the signed row has no spare width at all, so a checkbox per row
+  // (about 30 px once it clears the 44 px floor) would have cost the one line
+  // this release just bought.
+  //
+  // What it does NOT do is claim `aria-selected`. That attribute belongs to
+  // options and grid rows; these are list items, and they hold radios and a
+  // button, which an option may not. Rather than change what the whole list
+  // reads as - the thing the gate pinned - the state is said out loud when it
+  // changes and counted where the actions are.
+
+  /** Indices currently selected. */
+  let selected = new Set();
+  /** Where a Shift range starts: the last row chosen on its own. */
+  let selectionAnchor = null;
+
+  function selectionSentence() {
+    if (selected.size === 0) return 'Nothing selected.';
+    return `${selected.size} of ${liveElements.length} shapes selected.`;
+  }
+
+  /** Paint the rows, the count and the button from `selected`. */
+  function renderSelection() {
+    refs.objects.querySelectorAll('.svg-prep-object').forEach((row) => {
+      const on = selected.has(parseInt(row.dataset.index, 10));
+      row.classList.toggle('svg-prep-object--selected', on);
+    });
+    refs.deleteSelectedBtn.hidden = selected.size === 0;
+    refs.deleteSelectedBtn.textContent =
+      selected.size > 0
+        ? `Delete selected (${selected.size})`
+        : 'Delete selected';
+  }
+
+  /** Change the selection and say what it is now. */
+  function setSelection(next, { announce: say = true } = {}) {
+    selected = next;
+    renderSelection();
+    if (say) {
+      const sentence = selectionSentence();
+      liveRegion.textContent = sentence;
+      announce(sentence);
+    }
+  }
+
+  function clearSelection() {
+    if (selected.size === 0) return;
+    selectionAnchor = null;
+    setSelection(new Set(), { announce: false });
+  }
+
+  /**
+   * One press on a row.
+   *
+   * Plain: this row alone. Ctrl or Cmd: add or remove this row. Shift: every
+   * row from the last single choice to this one, which is what every list
+   * people already use does.
+   */
+  function chooseRow(index, { toggle = false, range = false } = {}) {
+    if (!Number.isInteger(index) || index < 0) return;
+    const next = new Set(selected);
+    if (range && selectionAnchor !== null) {
+      const from = Math.min(selectionAnchor, index);
+      const to = Math.max(selectionAnchor, index);
+      for (let i = from; i <= to; i++) next.add(i);
+    } else if (toggle) {
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      selectionAnchor = index;
+    } else {
+      next.clear();
+      next.add(index);
+      selectionAnchor = index;
+    }
+    setSelection(next);
+  }
+
+  /**
+   * A press on the row, but not on anything the row holds.
+   *
+   * The radios, the menu and everything inside it are controls with their own
+   * jobs; a click on one of those is not a click on the row.
+   */
+  function handleRowClick(e) {
+    const row = e.target.closest('.svg-prep-object');
+    if (!row || !refs.objects.contains(row)) return;
+    if (
+      e.target.closest(
+        'input, button, select, label, .svg-prep-more-panel, .svg-prep-role-group'
+      )
+    ) {
+      return;
+    }
+    chooseRow(parseInt(row.dataset.index, 10), {
+      toggle: e.ctrlKey || e.metaKey,
+      range: e.shiftKey,
+    });
+  }
+
+  /** The same three choices from the keyboard, on the focused row. */
+  function handleRowKeydown(e) {
+    if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+    const row = e.target.closest('.svg-prep-object');
+    // Only when the ROW itself has focus: inside a control, Space and Enter
+    // belong to the control.
+    if (!row || e.target !== row) return;
+    e.preventDefault();
+    chooseRow(parseInt(row.dataset.index, 10), {
+      toggle: e.ctrlKey || e.metaKey,
+      range: e.shiftKey,
+    });
+  }
+
   /** Which role table this drawing is using. */
   function currentRoleOptions() {
     return currentAnalysis?.isCompoundPathOnly
@@ -2111,6 +2240,10 @@ export function createSvgPrepWorkspace(containerEl) {
     // this point `roles` is still the array from before the rebuild and is a
     // different length from `liveElements`.
     setPreviewBand();
+    // Every index after a deleted row has moved, so a selection kept across
+    // the rebuild would point at different shapes than the ones a person
+    // chose. It goes rather than lies.
+    clearSelection();
     requestResultPreview();
   }
 
@@ -2277,6 +2410,11 @@ export function createSvgPrepWorkspace(containerEl) {
         return;
       }
       deleteRows(doomed, `${doomed.length} small shapes`);
+    } else if (btn.dataset.action === 'delete-selected') {
+      const doomed = [...selected].filter((i) => i < liveElements.length);
+      if (doomed.length === 0) return;
+      clearSelection();
+      deleteRows(doomed, `${doomed.length} selected shapes`);
     } else if (btn.dataset.action === 'keep-largest') {
       const keep = parseInt(refs.keepInput.value, 10);
       if (!Number.isInteger(keep) || keep < 1) return;
@@ -2588,6 +2726,7 @@ export function createSvgPrepWorkspace(containerEl) {
     // Anything the analyzer did not label is treated as tier A, so an older
     // caller keeps exactly the behaviour it had.
     setPreviewBand();
+    clearSelection();
     if (autoPreview) {
       updateResultPreview();
     } else {
@@ -2616,6 +2755,8 @@ export function createSvgPrepWorkspace(containerEl) {
     // the footer's delegated handler cannot see it.
     refs.renderBtn.addEventListener('click', renderPreviewOnDemand);
     refs.renderCancelBtn.addEventListener('click', cancelRender);
+    refs.objects.addEventListener('click', handleRowClick);
+    refs.objects.addEventListener('keydown', handleRowKeydown);
     refs.objects.addEventListener('click', handleMoreClick);
     refs.objects.addEventListener('click', handleDeleteClick);
     refs.bulkBar.addEventListener('click', handleDeleteClick);
@@ -2702,6 +2843,8 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.designWidthInput.removeEventListener('input', handleDesignWidthChange);
     refs.footer.removeEventListener('click', handleFooterClick);
     refs.renderBtn.removeEventListener('click', renderPreviewOnDemand);
+    refs.objects.removeEventListener('click', handleRowClick);
+    refs.objects.removeEventListener('keydown', handleRowKeydown);
     refs.objects.removeEventListener('click', handleMoreClick);
     refs.objects.removeEventListener('click', handleDeleteClick);
     refs.bulkBar.removeEventListener('click', handleDeleteClick);

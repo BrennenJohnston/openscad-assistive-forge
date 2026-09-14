@@ -15646,6 +15646,29 @@ body.tutorial-body-locked {
   background: var(--color-hover-bg);
 }
 
+/* DP-39 P2: chosen.
+   A tinted ground AND a bar down the leading edge, so the state survives a
+   greyscale screenshot and never rests on colour alone.
+
+   The bar is the text colour, not the accent. MEASURED: the accent is #ffe629
+   on a #fcfcfd row, about 1.3:1, and a mark that carries meaning owes 3:1 to
+   what is beside it - the yellow was drawing perfectly and saying nothing.
+   It is the right colour for the role switch, where it is a GROUND with dark
+   text on it and the text carries the contrast.
+
+   And a real token for the ground, not an invented name with a fallback: a
+   var() fallback only applies to a property that was never declared, which is
+   a quiet way to end up with no tint at all.
+
+   The ground is the same step hover uses, on purpose. Hover is a thing that
+   happens while a pointer is somewhere; selection is a thing that stays, and
+   the BAR is what says so - it is there when the pointer has gone. */
+.svg-prep-object--selected,
+.svg-prep-object--selected:hover {
+  background: var(--color-bg-tertiary);
+  box-shadow: inset 4px 0 0 var(--color-text-primary);
+}
+
 .svg-prep-object:focus-visible {
   outline: 3px solid var(--color-focus);
   outline-offset: 2px;
