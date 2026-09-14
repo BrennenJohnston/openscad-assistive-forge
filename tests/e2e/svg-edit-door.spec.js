@@ -772,3 +772,62 @@ test.describe('the side panel does not sit on the drawing (DP-37 P1)', () => {
     expect(box.width).toBeGreaterThan(300)
   })
 })
+
+test.describe('the picture is the first thing (DP-37 P1, audit 21)', () => {
+  // ★ The ink panel used to come before the picture, and it is tall.
+  // MEASURED with a traced icon: the panel ran 694 px at 1280, 853 at 900 and
+  // 1,242 at 412, which put "Will print as" at y 862, y 1,024 and y 1,590. On
+  // a 900-tall window the person's own picture was below the fold at every
+  // width - so the first thing they met after choosing a picture was a column
+  // of settings for a drawing they could not see.
+
+  const RING = path.join(process.cwd(), 'tests', 'fixtures', 'icons', 'outline-ring.png')
+
+  for (const width of [1280, 900]) {
+    test(`★ the picture comes before the settings at ${width}`, async ({ page }) => {
+      test.setTimeout(120000)
+      await page.setViewportSize({ width, height: 900 })
+      await openApp(page)
+      await openEditorByKeyboard(page, RING)
+      await expect(page.locator('.svg-prep-object').first()).toBeVisible()
+
+      const tops = await page.evaluate(() => {
+        const caption = [...document.querySelectorAll('.svg-prep-pane-caption')]
+          .find((e) => /Will print as/.test(e.textContent))
+        const ink = document.querySelector('.ink-controls')
+        return {
+          picture: caption ? Math.round(caption.getBoundingClientRect().y) : null,
+          settings: ink ? Math.round(ink.getBoundingClientRect().y) : null,
+        }
+      })
+      expect(tops.picture).not.toBeNull()
+      expect(tops.settings).not.toBeNull()
+      // Above the settings, and inside the first screen.
+      expect(tops.picture).toBeLessThan(tops.settings)
+      expect(tops.picture).toBeLessThan(600)
+    })
+  }
+
+  test('in the document, the picture comes first whatever the width', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await page.setViewportSize({ width: 412, height: 900 })
+    await openApp(page)
+    await openEditorByKeyboard(page, RING)
+    await expect(page.locator('.svg-prep-object').first()).toBeVisible()
+
+    // Reading order is the one thing that holds at every width, drawer open or
+    // shut: a screen reader meets the picture before the settings for it.
+    const pictureFirst = await page.evaluate(() => {
+      const caption = [...document.querySelectorAll('.svg-prep-pane-caption')]
+        .find((e) => /Will print as/.test(e.textContent))
+      const ink = document.querySelector('.ink-controls')
+      if (!caption || !ink) return null
+      return Boolean(
+        caption.compareDocumentPosition(ink) & Node.DOCUMENT_POSITION_FOLLOWING
+      )
+    })
+    expect(pictureFirst).toBe(true)
+  })
+})
