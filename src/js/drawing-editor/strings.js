@@ -81,6 +81,18 @@ export const EDITOR_STRINGS = Object.freeze({
 
   sectionColours: 'Colours',
   sectionRegions: 'Regions',
+  /**
+   * DP-Q40 (signed): "Shapes" is the word on the CHARM's panel.
+   *
+   * A region is a thing the stencil lane cuts and paints, and that lane keeps
+   * the word. What somebody is looking at on a charm is a shape, and it is
+   * already the word the rows and the counts use ("7 shapes", "Shape 1"), so
+   * the heading was the odd one out.
+   *
+   * STRINGS: owner review pending.
+   */
+  sectionShapes: 'Shapes',
+  panelToggleShapes: 'Shapes',
   sectionPlates: 'Plates and paint order',
   sectionWarnings: 'Warnings',
 

@@ -821,6 +821,16 @@ export function createDrawingEditor({
     canvas.root.hidden = !stencil;
     legend.hidden = !stencil;
     applyBtn.hidden = !stencil;
+    // DP-Q40: and the WORD is the relief purpose's vocabulary too. A region is
+    // a thing the stencil lane cuts and paints; what somebody is looking at on
+    // a charm is a shape, which is already the word the rows and counts use.
+    panelToggleBtn.textContent = stencil ? S.panelToggle : S.panelToggleShapes;
+    const regionsName = sections.regions?.details?.querySelector(
+      '.drawing-editor-section-name'
+    );
+    if (regionsName) {
+      regionsName.textContent = stencil ? S.sectionRegions : S.sectionShapes;
+    }
     // Roles, offsets, the design width and the before/after panes are the
     // relief purpose's vocabulary: a stencil region has a colour, not a
     // role, and the plate's size is a parameter beside the editor.

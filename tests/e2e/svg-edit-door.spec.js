@@ -821,7 +821,10 @@ test.describe('the side panel does not sit on the drawing (DP-37 P1)', () => {
     // starts shut (DP-Q46a), so this opens it first and then checks the two
     // things that matter: it takes the WHOLE width rather than lying across
     // the drawing as a strip, and closing it gives the drawing back.
-    const regions = page.locator('button:has-text("Regions")').first()
+    // By its class, not its text. The word changed at DP-Q40 (Regions ->
+    // Shapes) and "Shapes" also matches the door button on the page behind,
+    // so the text is ambiguous here. What the word IS has its own guard.
+    const regions = page.locator('.drawing-editor-panel-toggle').first()
     await regions.click()
     await expect(page.locator('.drawing-editor-panel')).toBeVisible()
     const panelWidth = await page.evaluate(
@@ -920,7 +923,10 @@ test.describe('the drawer starts shut on a phone (DP-Q46a)', () => {
     expect(box.width).toBeGreaterThan(300)
 
     // And the list is one press away, on a button that was already there.
-    const regions = page.locator('button:has-text("Regions")').first()
+    // By its class, not its text. The word changed at DP-Q40 (Regions ->
+    // Shapes) and "Shapes" also matches the door button on the page behind,
+    // so the text is ambiguous here. What the word IS has its own guard.
+    const regions = page.locator('.drawing-editor-panel-toggle').first()
     await expect(regions).toBeVisible()
     await expect(regions).toHaveAttribute('aria-expanded', 'false')
     await regions.click()
@@ -1018,6 +1024,27 @@ test.describe("the flatten budget's loose ends (owner answers, 2026-09-14)", () 
     await expect(note).toContainText('300 shapes')
     await expect(note).toContainText(/may take about \d+ seconds, so Forge waits until you ask\./)
     await expect(note).not.toContainText('here')
+  })
+})
+
+test.describe('the word on the panel (DP-Q40)', () => {
+  test('★ the charm says Shapes, because that is what is on it', async ({
+    page,
+  }) => {
+    // A region is a thing the stencil lane cuts and paints. What somebody is
+    // looking at on a charm is a shape, and it is already the word the rows
+    // and the counts use - "7 shapes", "Shape 1" - so the heading was the odd
+    // one out.
+    test.setTimeout(180000)
+    await openApp(page)
+    await openEditorByKeyboard(page, BIRD_SVG)
+
+    await expect(page.locator('.drawing-editor-panel-toggle')).toHaveText(
+      'Shapes'
+    )
+    await expect(
+      page.locator('[data-section="regions"] .drawing-editor-section-name')
+    ).toHaveText('Shapes')
   })
 })
 
