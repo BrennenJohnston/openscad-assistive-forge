@@ -320,6 +320,18 @@ function buildWorkspaceDom() {
   designWidthInput.step = '1';
   designWidthInput.value = '14';
 
+  // Under the tools, above the picture. It started in the header beside the
+  // width control - the two numbers do belong together - but the header is a
+  // flex row of buttons and the sentence collapsed to nothing between them.
+  // An e2e caught it reading the right words at zero width. A sentence that
+  // has to wrap does not live in a button row.
+  //
+  // Not inside designWidthGroup either: that is hidden unless the offset
+  // control is on, and a line that will not print is worth saying regardless.
+  const thinLines = document.createElement('p');
+  thinLines.className = 'svg-prep-thin-lines';
+  thinLines.hidden = true;
+
   const designWidthUnit = document.createElement('span');
   designWidthUnit.className = 'svg-prep-design-width-unit';
   designWidthUnit.textContent = 'mm';
@@ -563,6 +575,7 @@ function buildWorkspaceDom() {
   root.append(
     header,
     toolsSlot,
+    thinLines,
     previews,
     legendRow,
     layerSummary,
@@ -580,6 +593,7 @@ function buildWorkspaceDom() {
       title,
       designWidthGroup,
       designWidthInput,
+      thinLines,
       compareBtn,
       rolesToggleBtn,
       fullscreenBtn,
@@ -854,6 +868,52 @@ function renderWarnings(warningsEl, warnings) {
  * @param {string|null} sourceName - The file the editor was opened on
  * @returns {string}
  */
+/** Under this, a 0.4 mm nozzle cannot be relied on to lay a line down. */
+export const THIN_LINE_MM = 0.5;
+
+/**
+ * What to say about how thin the lines are, at the size this will be printed.
+ *
+ * The measurement arrives in picture pixels, which mean nothing to anybody: a
+ * three-pixel line on a 700-pixel icon is 0.06 mm on a charm and 0.6 mm on a
+ * coaster. It only becomes a fact a person can act on once it is converted at
+ * the width the design will actually be, so this needs that width and says
+ * which one it used.
+ *
+ * A PROPOSAL, never an action. MEASURED on nine stock icons at charm size,
+ * their outlines land between 0.31 and 0.65 mm: some print and some do not,
+ * and a blanket offset applied to all of them would fatten the ones that were
+ * already fine. So it names the lever and leaves the hand on it.
+ *
+ * @param {{p10: number}|null} lineWidthPx from the trace summary
+ * @param {number} pictureWidthPx the traced picture's width
+ * @param {number} designWidthMm how wide this will be printed
+ * @param {boolean} [widthKnown] false when designWidthMm is the editor's own
+ *   default rather than a width read from the model
+ * @returns {string} empty when there is nothing measured to say
+ */
+export function thinLineSentence(
+  lineWidthPx,
+  pictureWidthPx,
+  designWidthMm,
+  widthKnown = true
+) {
+  const p10 = lineWidthPx && lineWidthPx.p10;
+  if (!p10 || !(pictureWidthPx > 0) || !(designWidthMm > 0)) return '';
+
+  const mm = (p10 * designWidthMm) / pictureWidthPx;
+  if (mm >= THIN_LINE_MM) return 'Lines look thick enough to print.';
+
+  const at = widthKnown
+    ? `${+designWidthMm.toFixed(1)} mm wide`
+    : `${+designWidthMm.toFixed(1)} mm wide, the editor's default width`;
+  return (
+    `Thin lines: about ${mm.toFixed(2)} mm at ${at}. ` +
+    `Lines under ${THIN_LINE_MM} mm may not print. ` +
+    'Raise Design offset (0.6 suits a 0.4 mm nozzle) or make the design bigger.'
+  );
+}
+
 export function editedSvgFileName(sourceName) {
   const base = String(sourceName || 'drawing')
     .split(/[\\/]/)
@@ -2027,6 +2087,19 @@ export function createSvgPrepWorkspace(containerEl) {
     currentSvgString = svgString;
     currentAnalysis = analysis;
     currentSvgMeta = extractSvgMeta(svgString);
+
+    // How thin the thinnest lines are, at the width this will be printed. The
+    // measurement comes from the trace; the width comes from the control right
+    // beside this sentence, so the two numbers are read together.
+    const designWidthMm = parseFloat(refs.designWidthInput.value) || 14;
+    const thin = thinLineSentence(
+      callbacks.lineWidthPx,
+      parseFloat(currentSvgMeta.width) || 0,
+      designWidthMm,
+      callbacks.designWidthKnown !== false
+    );
+    refs.thinLines.textContent = thin;
+    refs.thinLines.hidden = thin === '';
 
     // With no model behind the editor there is nothing for Apply to apply to,
     // and "Keep original" would keep it where? Saving is the whole task.

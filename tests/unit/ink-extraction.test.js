@@ -11,6 +11,8 @@ import {
   maskToImageData,
   dominantRejectedColor,
   extractInk,
+  compositeOntoWhite,
+  lineWidthPercentiles,
   INK_DEFAULTS,
   MEANINGFUL_ALPHA_SHARE,
 } from '../../src/js/ink-extraction.js'
@@ -408,5 +410,121 @@ describe('extractInk', () => {
     })
     expect(summary.lightnessMax).toBeGreaterThan(0)
     expect(summary.lightnessMax).toBeLessThan(100)
+  })
+})
+
+describe('compositeOntoWhite (DP-36, audit 15)', () => {
+  const PALETTE = {
+    '#': [0, 0, 0, 255],
+    '.': [255, 255, 255, 255],
+    ' ': [0, 0, 0, 0],
+    'h': [0, 0, 0, 128],
+    'r': [255, 0, 0, 0],
+  }
+
+  it('★ a fully see-through pixel becomes white, not black', () => {
+    // The defect this fixes: Standard mode handed the tracer a picture with
+    // alpha and the tracer decided what a see-through pixel was. A logo saved
+    // on a transparent background came back with a field around it that nobody
+    // drew.
+    const out = compositeOntoWhite(
+      imageFrom(['#. ', ' .#'], PALETTE),
+      makeImageData
+    )
+    expect(out.composited).toBe(true)
+    const px = (x, y) => {
+      const i = (y * 3 + x) * 4
+      return [...out.imageData.data.slice(i, i + 4)]
+    }
+    expect(px(0, 0)).toEqual([0, 0, 0, 255])
+    expect(px(2, 0)).toEqual([255, 255, 255, 255])
+    expect(px(0, 1)).toEqual([255, 255, 255, 255])
+  })
+
+  it('★ a see-through RED pixel becomes white, not red', () => {
+    // Alpha zero means the colour underneath it was never shown to anybody.
+    // Keeping the colour and dropping the alpha would invent a pixel.
+    const out = compositeOntoWhite(imageFrom(['r'], PALETTE), makeImageData)
+    expect([...out.imageData.data]).toEqual([255, 255, 255, 255])
+  })
+
+  it('blends a half-transparent pixel rather than rounding it off', () => {
+    const out = compositeOntoWhite(imageFrom(['h'], PALETTE), makeImageData)
+    const [r, g, b, a] = out.imageData.data
+    expect(a).toBe(255)
+    // Black at alpha 128 of 255 over white is 255 x (127/255) = 127, not 128.
+    // Alpha 128 is not half: half of 255 is 127.5, and the byte below it is
+    // the one that arrives.
+    expect([r, g, b]).toEqual([127, 127, 127])
+  })
+
+  it('★ a picture with no transparency is handed back untouched', () => {
+    // Not a copy: the same object. Copying eight megabytes to change nothing
+    // is the kind of cost this round spent a release removing.
+    const opaque = imageFrom(['#.', '.#'], PALETTE)
+    const out = compositeOntoWhite(opaque, makeImageData)
+    expect(out.composited).toBe(false)
+    expect(out.imageData).toBe(opaque)
+  })
+})
+
+describe('lineWidthPercentiles (DP-36 P3)', () => {
+  /** A mask of horizontal bands, each `thickness` rows of ink then paper. */
+  function bands(width, height, thickness, period) {
+    const mask = new Uint8Array(width * height)
+    for (let y = 0; y < height; y++) {
+      if (y % period < thickness) {
+        for (let x = 0; x < width; x++) mask[y * width + x] = 1
+      }
+    }
+    return mask
+  }
+
+  it('★ measures a stroke of known width', () => {
+    // Three pixels across, read as three.
+    expect(lineWidthPercentiles(bands(60, 60, 3, 20), 60, 60).p10).toBe(3)
+    expect(lineWidthPercentiles(bands(60, 60, 9, 30), 60, 60).p10).toBe(9)
+  })
+
+  it('★ never reads a line as THICKER than it is', () => {
+    // The direction matters: this number decides whether somebody is warned
+    // that a line may not print. Reading thick would let a line that cannot
+    // print go unmentioned, so the measure is exact on odd widths and one
+    // pixel low on even ones.
+    for (const w of [2, 3, 4, 5, 8, 9, 12]) {
+      const got = lineWidthPercentiles(bands(80, 80, w, 24), 80, 80).p10
+      expect(got).toBeLessThanOrEqual(w)
+      expect(got).toBeGreaterThanOrEqual(w - 1)
+    }
+  })
+
+  it('the tenth percentile finds the thinnest stroke, not the commonest', () => {
+    // A drawing of thick strokes with one thin one in it. The thin one is the
+    // one that will not print, and it is the one worth saying.
+    // Bands of 12 with paper between them, and one lone row in a gap. The
+    // lone row has to sit clear of the bands or it merges with one and there
+    // is no thin stroke to find - which is what the first draft of this test
+    // did, and it is why the assertion is on the VALUE now and not just on the
+    // two percentiles differing.
+    const mask = bands(120, 120, 12, 24)
+    for (let y = 18; y < 120; y += 24) {
+      for (let x = 0; x < 120; x++) mask[y * 120 + x] = 1
+    }
+    const out = lineWidthPercentiles(mask, 120, 120)
+    expect(out.p10).toBe(1)
+    expect(out.p50).toBeGreaterThanOrEqual(11)
+  })
+
+  it('a picture with no ink has no lines to measure', () => {
+    expect(lineWidthPercentiles(new Uint8Array(400), 20, 20)).toEqual({
+      p10: 0,
+      p50: 0,
+      ridgePx: 0,
+    })
+  })
+
+  it('nothing at all is nothing, not a crash', () => {
+    expect(lineWidthPercentiles(null, 10, 10).p10).toBe(0)
+    expect(lineWidthPercentiles(new Uint8Array(4), 0, 0).p10).toBe(0)
   })
 })

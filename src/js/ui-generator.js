@@ -23,6 +23,7 @@ import {
   LAYER_EMIT_CAP,
 } from './svg-preparer.js';
 import { buildNestingTree, layerLimit, boundsOf } from './svg-nesting.js';
+import { removeCreditLine } from './credit-line.js';
 import {
   createSvgPrepWorkspace,
   extractSvgMeta,
@@ -3075,17 +3076,54 @@ function createFileControl(
     return applyTracedImage(inkControls.getSettings(), opts).catch(() => {});
   }
 
+  /**
+   * Hand a traced drawing to the model as the design file.
+   *
+   * Used by Undo, which puts back the drawing as the tracer produced it -
+   * credit line and all - without tracing the picture again. The trace is the
+   * expensive part and it has not changed; only the decision about the caption
+   * has.
+   *
+   * @param {string} svgText the drawing to emit
+   * @param {object|null} summary the ink summary that produced it
+   */
+  async function emitTracedSvg(svgText, summary) {
+    const processedSvg = processSvgForOpenScad(svgText);
+    const convertedFile = {
+      name: inkSourceFileName,
+      size: processedSvg.length,
+      type: 'image/svg+xml',
+      data: svgToDataUrl(processedSvg),
+    };
+    const pathCount = countTracedShapes(svgText);
+    if (inkControls) inkControls.setSummary(summary, pathCount);
+    if (layerParams.length > 0) await ensureRingEngine();
+    emitFileValue(convertedFile);
+    if (fileUploadListener) fileUploadListener(param.name, convertedFile);
+    // One action, one announcement: pressing Undo is the action, and what it
+    // produced is the sentence.
+    announceChange(
+      `Credit line put back: ${pathCount} ${pathCount === 1 ? 'shape' : 'shapes'}`
+    );
+  }
+
   async function applyTracedImage(settings, { announceResult = false } = {}) {
     if (!inkSourceImageData) return;
     if (inkControls) inkControls.setBusy(true);
     traceProgress.show();
     traceProgress.begin();
     try {
-      const { svg, summary } = await ensureTraceRunner().start(
+      const { svg: traced, summary } = await ensureTraceRunner().start(
         inkSourceImageData,
         settings,
         { onStage: (s) => traceProgress.stage(s) }
       );
+      // A stock icon arrives with its attribution printed along the bottom, and
+      // traced that is forty-odd shapes of unreadable specks rather than a
+      // caption. Taking it off is the default the owner signed (DP-Q31), and
+      // Undo below puts the whole drawing back exactly as it was traced.
+      const credit = removeCreditLine(traced);
+      const svg = credit.svg;
       currentFileName = inkSourceFileName;
       const processedSvg = processSvgForOpenScad(svg);
       const svgDataUrl = svgToDataUrl(processedSvg);
@@ -3101,7 +3139,15 @@ function createFileControl(
             factor: summary.downscale ? summary.downscale.factor : null,
           });
         } else {
-          inkControls.setSummary(summary, pathCount);
+          inkControls.setSummary(summary, pathCount, {
+            creditLine:
+              credit.removed > 0
+                ? {
+                    removed: credit.removed,
+                    onUndo: () => emitTracedSvg(credit.original, summary),
+                  }
+                : null,
+          });
         }
       }
 

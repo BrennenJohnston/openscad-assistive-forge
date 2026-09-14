@@ -48,6 +48,24 @@ function picture(width, height) {
   return { width, height, buffer: data.buffer }
 }
 
+/** A picture with a see-through corner, for the Standard-mode composite. */
+function seeThrough(width, height) {
+  const data = new Uint8ClampedArray(width * height * 4)
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4
+      const clear = x < width / 2
+      // Red underneath, so a composite that keeps the colour and drops the
+      // alpha is visible as red rather than passing for white.
+      data[i] = 255
+      data[i + 1] = 0
+      data[i + 2] = 0
+      data[i + 3] = clear ? 0 : 255
+    }
+  }
+  return { width, height, buffer: data.buffer }
+}
+
 async function run(message) {
   posted.length = 0
   await fakeSelf.onmessage({ data: message })
@@ -284,5 +302,45 @@ describe('choosing an engine (DP-43)', () => {
     })
     expect(failed(out).message).toBe('wasm did not load')
     expect(done(out)).toBeUndefined()
+  })
+})
+
+describe('Standard mode and see-through pictures (DP-36, audit 15)', () => {
+  beforeEach(() => {
+    posted.length = 0
+  })
+
+  it('★ says so when it put a see-through picture on white', async () => {
+    const out = await run({
+      id: 1,
+      image: seeThrough(40, 40),
+      ink: { mode: 'standard' },
+    })
+    const reply = done(out)
+    expect(reply.summary).toMatchObject({
+      mode: 'standard',
+      applied: false,
+      composited: true,
+      warnings: ['composited-onto-white'],
+    })
+  })
+
+  it('a picture with no transparency gets no note about one', async () => {
+    const out = await run({
+      id: 2,
+      image: picture(40, 40),
+      ink: { mode: 'standard' },
+    })
+    expect(done(out).summary).toBeNull()
+  })
+
+  it('the ink modes are untouched by it: they build a mask instead', async () => {
+    const out = await run({
+      id: 3,
+      image: seeThrough(40, 40),
+      ink: { mode: 'lineart' },
+    })
+    expect(done(out).summary.mode).toBe('lineart')
+    expect(done(out).summary.warnings).not.toContain('composited-onto-white')
   })
 })

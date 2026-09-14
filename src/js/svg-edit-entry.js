@@ -16,6 +16,7 @@
  */
 
 import { analyzeSvg } from './svg-preparer.js';
+import { removeCreditLine } from './credit-line.js';
 import { loadImageData, IMAGE_IMPORT_LIMITS } from './image-import.js';
 import { createTraceRunner, TraceCancelled } from './trace-runner.js';
 
@@ -235,10 +236,30 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
    * after an ink setting changes.
    * @returns {boolean} false when the SVG has nothing the editor can work on
    */
-  async function showSvg(svg, { announceOpen, summary, extraWarnings } = {}) {
+  async function showSvg(
+    svg,
+    { announceOpen, summary, extraWarnings, removeCredit = false } = {}
+  ) {
+    // Only a TRACED picture has its credit line taken off. A vector file the
+    // person chose is a file they made or picked deliberately, and quietly
+    // deleting part of it is a different act from cleaning up after a tracer.
+    // The caller says which this is rather than this guessing.
+    let shown = svg;
+    let creditLine = null;
+    if (removeCredit) {
+      const credit = removeCreditLine(svg);
+      if (credit.removed > 0) {
+        shown = credit.svg;
+        creditLine = {
+          removed: credit.removed,
+          onUndo: () => showSvg(credit.original, { summary, extraWarnings }),
+        };
+      }
+    }
+
     let analysis;
     try {
-      analysis = analyzeSvg(svg);
+      analysis = analyzeSvg(shown);
       // D-123: the DXF converter's engine warnings join the analysis's own,
       // so the editor's warnings list shows what the engine said instead of
       // this door swallowing it.
@@ -274,14 +295,28 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
     }
 
     const ws = await ensureWorkspace();
-    ws.open(svg, analysis, {
+    ws.open(shown, analysis, {
       purpose: 'relief',
       mode: 'file',
       sourceName: currentFileName,
+      // The editor says how thin the thinnest lines are at the width it will
+      // be printed. The measurement rides in with the trace; the width is the
+      // editor's own control. Nothing is changed by it - it names the lever.
+      //
+      // When a credit line was taken off, the figure that leaves the bottom
+      // band out is the one that describes what is left. Letter strokes are
+      // the thinnest thing in most icons, so using the other number would warn
+      // about lettering that is no longer on the drawing.
+      lineWidthPx:
+        summary && (creditLine ? summary.lineWidthPxBody : summary.lineWidthPx),
+      designWidthKnown: false,
       tools: inkControls ? inkControls.element : null,
       // The surface announces its own opening; the door's sentence, which
       // names the file and counts its shapes, is the one worth hearing.
-      openedSentence: announceOpen || undefined,
+      openedSentence:
+        typeof announceOpen === 'function'
+          ? announceOpen(shapeCount)
+          : announceOpen || undefined,
       onSave: (savedName) => {
         say(`${savedName} saved. Your original file is untouched.`);
       },
@@ -292,7 +327,8 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
     });
     open = true;
 
-    if (inkControls) inkControls.setSummary(summary, shapeCount);
+    if (inkControls)
+      inkControls.setSummary(summary, shapeCount, { creditLine });
     return true;
   }
 
@@ -349,7 +385,7 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
     if (inkControls) inkControls.setBusy(true);
     try {
       const { svg, summary } = await runTrace(currentImageData, settings);
-      await showSvg(svg, { summary });
+      await showSvg(svg, { summary, removeCredit: true });
     } catch (error) {
       // A trace the person superseded by moving another slider is not a
       // failure and must not be reported as one.
@@ -401,22 +437,20 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
       inkControls = null;
     }
 
-    const shapes = () => {
-      try {
-        return (analyzeSvg(prepared.svg).elements || []).length;
-      } catch {
-        return 0;
-      }
-    };
-
+    // The count is taken from what the editor actually shows, not from the
+    // drawing on the way in: with a credit line removed those are different
+    // numbers, and announcing the one nobody can see would be a lie the person
+    // could check.
     return showSvg(prepared.svg, {
       summary: prepared.summary,
       extraWarnings: prepared.warnings,
-      announceOpen: prepared.traced
-        ? `${file.name} traced into ${shapes()} shapes. Editor opened.`
-        : prepared.converted
-          ? `${file.name} converted in ${(prepared.ms / 1000).toFixed(1)} seconds, ${shapes()} shapes. Editor opened.`
-          : `${file.name} opened for editing, ${shapes()} shapes.`,
+      removeCredit: prepared.traced,
+      announceOpen: (shapes) =>
+        prepared.traced
+          ? `${file.name} traced into ${shapes} shapes. Editor opened.`
+          : prepared.converted
+            ? `${file.name} converted in ${(prepared.ms / 1000).toFixed(1)} seconds, ${shapes} shapes. Editor opened.`
+            : `${file.name} opened for editing, ${shapes} shapes.`,
     });
   }
 
