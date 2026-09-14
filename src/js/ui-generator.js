@@ -2766,6 +2766,10 @@ function createFileControl(
           window.dispatchEvent(new CustomEvent('drawing-editor:open')),
         onClose: () =>
           window.dispatchEvent(new CustomEvent('drawing-editor:close')),
+        onViewChange: (view, host) =>
+          window.dispatchEvent(
+            new CustomEvent('drawing-editor:view', { detail: { view, host } })
+          ),
       });
     } else {
       workspace = createSvgPrepWorkspace(workspaceContainer);

@@ -725,6 +725,13 @@ export class PreviewManager {
 
     // Handle window resize with view preservation
     this.handleResize = () => {
+      // While the charm view has the canvas fitted to the editor's own window
+      // (DP-38), that window is what a resize has to re-measure. Sizing to the
+      // container here would hand the canvas back mid-session.
+      if (this._charmHost) {
+        this._sizeCanvasToCharmHost();
+        return;
+      }
       const width = this.container.clientWidth;
       const height = this.container.clientHeight;
 
@@ -5352,6 +5359,90 @@ export class PreviewManager {
     if (twoD) twoD.classList.toggle('hidden', !this._is2DPreviewActive);
     if (this.container) this.container.setAttribute('tabindex', '0');
     this._set2DPreviewActive(this._is2DPreviewActive === true);
+  }
+
+  /**
+   * Show or hide what the model looks like WHILE the editor still owns the
+   * area (DP-38's Charm view).
+   *
+   * The editor's Charm view is not a picture the editor draws. It is this
+   * preview, which `showEditorSurface` put out of sight, and showing it again
+   * is the whole of it. Deliberately narrow: it does nothing unless the
+   * editor is active, and it never decides between the 3D canvas and the 2D
+   * preview - it honours whichever one was already asked for, so a design
+   * being previewed as SVG shows its SVG.
+   *
+   * @param {boolean} visible
+   * @param {HTMLElement} [host] - The box the charm has to fit INSIDE
+   */
+  setEditorCharmVisible(visible, host = null) {
+    if (!this._isEditorSurfaceActive) return;
+    const show3D = visible && !this._is2DPreviewActive;
+    if (this.renderer?.domElement) {
+      this.renderer.domElement.style.display = show3D ? '' : 'none';
+    }
+    const twoD = document.getElementById('rendered2dPreview');
+    if (twoD) {
+      twoD.classList.toggle(
+        'hidden',
+        !(visible && this._is2DPreviewActive === true)
+      );
+    }
+    this._charmHost = show3D ? host : null;
+    if (show3D) this._sizeCanvasToCharmHost();
+    else this._restoreCanvasBox();
+  }
+
+  /**
+   * Fit the canvas to the part of the area a person can actually SEE.
+   *
+   * The editor is laid over this canvas, and its toolbar and drawer cover a
+   * great deal of it. MEASURED with the charm view open, visible area against
+   * canvas area: 66 per cent at 1280, 57 at 900, **39 at 412** - and the
+   * shapes differ as much as the sizes do, because at 900 the canvas is 476 by
+   * 761 while the window left over is 460 by 445. Framed for the canvas, the
+   * charm is drawn to fill a tall box and the near-square window shows a band
+   * across its middle: a slab, not a charm.
+   *
+   * So the canvas is given the window's box while the charm view is on, and
+   * its own back when it is over.
+   */
+  _sizeCanvasToCharmHost() {
+    const el = this.renderer?.domElement;
+    const host = this._charmHost;
+    if (!el || !host || !this.container) return;
+    const area = this.container.getBoundingClientRect();
+    const box = host.getBoundingClientRect();
+    const width = Math.max(1, Math.round(box.width));
+    const height = Math.max(1, Math.round(box.height));
+    el.style.position = 'absolute';
+    el.style.left = `${Math.round(box.left - area.left)}px`;
+    el.style.top = `${Math.round(box.top - area.top)}px`;
+    el.style.width = `${width}px`;
+    el.style.height = `${height}px`;
+    // updateStyle false: the CSS box is set above and three.js must not take
+    // it back, or the canvas would be stretched to the container again.
+    this.renderer.setSize(width, height, false);
+    this.camera.aspect = width / height;
+    this.camera.updateProjectionMatrix();
+  }
+
+  /** Give the canvas the whole area back. */
+  _restoreCanvasBox() {
+    const el = this.renderer?.domElement;
+    if (!el) return;
+    el.style.position = '';
+    el.style.left = '';
+    el.style.top = '';
+    el.style.width = '';
+    el.style.height = '';
+    // handleResize does nothing when the dimensions it reads are unchanged,
+    // and from its point of view they never changed - it was the canvas that
+    // moved, not the container. Forgetting what it last saw is what makes it
+    // do the work.
+    this._lastContainerWidth = null;
+    this._lastContainerHeight = null;
+    this.handleResize?.();
   }
 
   /** Whether the drawing editor currently owns the preview area. */

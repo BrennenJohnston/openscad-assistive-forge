@@ -253,12 +253,15 @@ export const MEASURED_SECONDS = {
   // to be a CI one, so this is booked at three times what was measured and
   // re-weighted from a green CI run at the round's close.
   'stencil-plates.spec.js': 60.0,
-  // DP-19..21. ONE case, one load of the stencil tile, every walk the editor
-  // has on it: MEASURED locally at 42 s after DP-21 (8.5 s at DP-19), booked
-  // at the same four-times ratio stencil-plates carries (14.5 measured, 60
-  // booked). Chromium only (PROJECT_IGNORES): the two-shard lanes were a
+  // DP-19..21, RE-MEASURED at DP-38. It was ONE case - one load of the stencil
+  // tile, every walk the editor has on it - measured locally at 42 s after
+  // DP-21 (8.5 s at DP-19) and booked at the same four-times ratio
+  // stencil-plates carries (14.5 measured, 60 booked). DP-38 added eight more
+  // for the Drawing / Charm switch, one of which renders the charm twice to
+  // prove the session is cheaper. MEASURED locally: nine cases in 37 s, well
+  // inside the 170 already booked, so the number is left alone and the shard
+  // deal with it. Chromium only (PROJECT_IGNORES): the two-shard lanes were a
   // third of a minute from their 35-minute ceiling before this file existed.
-  // Re-weighted from a green CI run at the round's close.
   'drawing-editor.spec.js': 170.0,
   // DP-34, RE-MEASURED at DP-43. Now five cases: the 2000x2000 noise picture is
   // built and traced TWICE, because the conversion got fast enough that one run

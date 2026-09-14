@@ -16928,6 +16928,114 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   container-type: inline-size;
 }
 
+/* ── DP-38: the Drawing / Charm switch ─────────────────────────────────── */
+
+/* A fieldset drawn as a segmented control. The radios themselves are the
+   thing that is checked and focused; the labels are what a finger and an eye
+   get, at the 44 px floor every other control in this editor keeps. */
+.drawing-editor-view-switch {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  overflow: hidden;
+}
+
+.drawing-editor-view-switch[hidden] {
+  display: none;
+}
+
+.drawing-editor-view-option {
+  position: relative;
+  display: flex;
+}
+
+/* Invisible, not absent, and the same size as the thing it looks like. A
+   radio clipped to a pixel would leave the label as the only thing a pointer
+   could hit; this way the control itself IS the 44 px target. */
+.drawing-editor-view-switch input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.drawing-editor-view-switch label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 var(--space-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  background: var(--color-bg-primary);
+  cursor: pointer;
+}
+
+.drawing-editor-view-option + .drawing-editor-view-option label {
+  border-left: 1px solid var(--color-border);
+}
+
+.drawing-editor-view-switch input:checked + label {
+  /* The same pair .btn-primary uses, so the contrast is one the app has
+     already answered for rather than a new one invented here. */
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+/* The ring belongs on the label, because the input it names is the size of a
+   pixel and nobody would see a ring there. */
+.drawing-editor-view-switch input:focus-visible + label {
+  outline: 3px solid var(--color-focus);
+  outline-offset: -3px;
+}
+
+/* The sentence belongs to the charm view: it describes the picture beneath,
+   and there is no picture beneath in the drawing view. */
+.drawing-editor-draft-note {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.drawing-editor:not([data-view='charm']) .drawing-editor-draft-note {
+  display: none;
+}
+
+/* ── Showing the charm ──────────────────────────────────────────────────── */
+
+/* The charm is not drawn by this editor. It is the 3D preview the surface is
+   sitting on top of, so showing it means getting out of its way: the surface
+   stops painting its own background, the drawing stops being drawn, and both
+   stop swallowing the pointer so the camera still answers a drag.
+   The toolbar and the panel keep their own background and their own pointer,
+   because they are still the editor and still have to be usable. */
+.drawing-editor-surface:has(.drawing-editor[data-view='charm']) {
+  background: transparent;
+  pointer-events: none;
+}
+
+.drawing-editor[data-view='charm'] .drawing-editor-stage {
+  /* visibility, not display: the body keeps its box, so the panel drawer laid
+     over it keeps the place it is laid over. And visibility:hidden takes the
+     drawing out of the accessibility tree too, which display:none would also
+     do and opacity:0 would NOT - a drawing nobody can see must not still be
+     read out. */
+  visibility: hidden;
+}
+
+.drawing-editor[data-view='charm'] .drawing-editor-toolbar,
+.drawing-editor[data-view='charm'] .drawing-editor-panel,
+.drawing-editor[data-view='charm'] .drawing-editor-status {
+  background: var(--color-bg-primary);
+  pointer-events: auto;
+}
+
 /* The skip links are visible on focus and out of the way otherwise: a
    sighted keyboard user needs to SEE where the jump goes. */
 .drawing-editor-skip {

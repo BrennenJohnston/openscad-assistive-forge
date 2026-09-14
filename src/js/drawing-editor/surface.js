@@ -116,6 +116,7 @@ const isTextField = (el) =>
  *   (the no-model door): focus is trapped and Escape closes it outright
  * @param {Function} [args.onOpen] - Called when the surface takes the area
  * @param {Function} [args.onClose] - Called when it gives the area back
+ * @param {Function} [args.onViewChange] - Called with ('drawing'|'charm', stage)
  * @param {Function} [args.announce] - Polite live-region announcer
  * @returns {object} The workspace's own contract, plus the surface's
  */
@@ -124,6 +125,7 @@ export function createDrawingEditor({
   fullscreen = false,
   onOpen = null,
   onClose = null,
+  onViewChange = null,
   announce = null,
 }) {
   const uid = ++instances;
@@ -255,6 +257,70 @@ export function createDrawingEditor({
 
   const viewControls = document.createElement('div');
   viewControls.className = 'drawing-editor-view-controls';
+
+  // DP-38: the drawing, or the thing the drawing makes.
+  //
+  // A real fieldset with two real radios. Two named choices where only one can
+  // be true is what a radio group IS, so the markup says it and nothing has to
+  // be repaired with ARIA: arrows move between them, the legend names the
+  // question, and a screen reader reads "View, Drawing, radio button, 1 of 2"
+  // without being told to.
+  //
+  // The `name` carries the instance id because more than one surface can exist
+  // in a document (the preview area's and the standalone door's), and two
+  // groups sharing a name would be ONE group - checking Charm on one surface
+  // would silently uncheck Drawing on the other.
+  const viewSwitch = document.createElement('fieldset');
+  viewSwitch.className = 'drawing-editor-view-switch';
+  const viewLegend = document.createElement('legend');
+  viewLegend.className = 'sr-only';
+  viewLegend.textContent = S.viewLegend;
+  viewSwitch.appendChild(viewLegend);
+
+  const viewGroupName = `drawingEditorView-${uid}`;
+  const viewRadios = {};
+  for (const [value, label] of [
+    ['drawing', S.viewDrawing],
+    ['charm', S.viewCharm],
+  ]) {
+    const id = `${viewGroupName}-${value}`;
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = viewGroupName;
+    input.id = id;
+    input.value = value;
+    input.checked = value === 'drawing';
+    const labelEl = document.createElement('label');
+    labelEl.setAttribute('for', id);
+    labelEl.textContent = label;
+    // The input is laid OVER its own label at full size rather than clipped
+    // to a pixel in the corner. A clipped radio leaves the label as the only
+    // thing a pointer can hit, and then the 44 px target belongs to the label
+    // while the control belongs to the input - which is fine for a mouse and
+    // wrong for anything that aims at the control itself.
+    const option = document.createElement('span');
+    option.className = 'drawing-editor-view-option';
+    option.append(input, labelEl);
+    viewSwitch.append(option);
+    viewRadios[value] = input;
+  }
+  // Shown only when there is a model behind the editor. Through the standalone
+  // door there is no charm, and a control offering a view that cannot exist is
+  // worse than no control.
+  viewSwitch.hidden = true;
+  viewSwitch.addEventListener('change', (e) => {
+    if (e.target && e.target.name === viewGroupName) setView(e.target.value);
+  });
+
+  // DP-38 P2 says this out loud, because a person will SEE the difference and
+  // should not be left wondering whether their model changed. It is shown in
+  // the charm view only: it describes the picture beneath, and in the drawing
+  // view there is no picture beneath to describe. Not in the live region -
+  // the switch already announced what happened, and DP-32 allows one sentence
+  // per action, not two.
+  const draftNote = document.createElement('p');
+  draftNote.className = 'drawing-editor-draft-note';
+  draftNote.textContent = S.draftNote;
 
   const applyBtn = button(
     S.applyColours,
@@ -426,7 +492,14 @@ export function createDrawingEditor({
   toolbarToolsRow.className =
     'drawing-editor-toolbar-row drawing-editor-toolbar-row--tools';
   toolbarHeaderRow.append(title, panelToggleBtn, applyBtn, closeBtn);
-  toolbarViewRow.append(viewGroup, zoomGroup, historyGroup, viewControls);
+  toolbarViewRow.append(
+    viewSwitch,
+    draftNote,
+    viewGroup,
+    zoomGroup,
+    historyGroup,
+    viewControls
+  );
   toolbarToolsRow.append(stencilTools);
   toolbar.append(toolbarHeaderRow, toolbarViewRow, toolbarToolsRow);
   root.append(skipToTable, toolbar, status, body);
@@ -502,6 +575,10 @@ export function createDrawingEditor({
 
   let isOpen = false;
   let purpose = 'relief';
+  /** 'drawing' or 'charm' (DP-38). Back to the drawing on every open. */
+  let view = 'drawing';
+  /** Whether the drawer was open when the charm view closed it. */
+  let panelOpenBeforeCharm = null;
   let callbacks = {};
   let trap = null;
   let previousFocus = null;
@@ -556,6 +633,7 @@ export function createDrawingEditor({
     }
     workspace.close();
     hide();
+    resetView();
     status.textContent = '';
     if (typeof onClose === 'function') onClose(surfaceEl);
     if (fullscreen && previousFocus?.focus) previousFocus.focus();
@@ -600,6 +678,16 @@ export function createDrawingEditor({
     callbacks = rest;
     purpose = askedPurpose === 'stencil' ? 'stencil' : 'relief';
     root.dataset.purpose = purpose;
+    // DP-38: every open starts on the drawing. A re-trace calls open() on an
+    // editor that is already up, and coming back to a charm view of a drawing
+    // that has just changed underneath it would be showing the OLD charm.
+    resetView();
+    // No charm to switch to without a model behind the editor (`mode` is the
+    // same flag the workspace reads to decide whether Apply means anything),
+    // and none on the stencil purpose either: what sits behind THAT editor is
+    // a tile of plates, and a control labelled Charm would be naming something
+    // that is not there. DP-38 is the charm's release.
+    viewSwitch.hidden = rest.mode === 'file' || purpose !== 'relief';
     isOpen = true;
     currentSvg = svgString;
     initialPlan = savedPlan || null;
@@ -641,6 +729,64 @@ export function createDrawingEditor({
       trap.activate({ initialFocus: title, initialFocusDelay: 0 });
     }
     title.focus();
+  }
+
+  /**
+   * Show the drawing, or the charm the drawing makes.
+   *
+   * Nothing is torn down and nothing is rebuilt: the editor keeps every role,
+   * deletion and layer it had, because all that changes is which of two things
+   * is on screen. The charm is not drawn here either - it is the 3D preview
+   * this surface is sitting on top of, and showing it is a matter of getting
+   * out of its way.
+   */
+  function setView(next) {
+    const wanted = next === 'charm' ? 'charm' : 'drawing';
+    if (wanted === view) return;
+    view = wanted;
+    root.dataset.view = view;
+    if (viewRadios[view] && !viewRadios[view].checked) {
+      viewRadios[view].checked = true;
+    }
+    // The drawer is about the DRAWING's shapes, and in the charm view there is
+    // no drawing on screen for it to be about. It also costs more of the charm
+    // than anything else does: MEASURED at 1280, the editor's chrome covers
+    // the canvas's top 215 px and the drawer its right 310 px, and the charm
+    // itself is 515 px wide - so the toolbar clips 30 px off its top while the
+    // drawer hides 206 px of its side. It closes here and comes back exactly
+    // as it was, because closing it was this control's doing and not the
+    // person's.
+    if (view === 'charm') {
+      panelOpenBeforeCharm =
+        panelToggleBtn.getAttribute('aria-expanded') === 'true';
+      setPanel(false);
+    } else if (panelOpenBeforeCharm !== null) {
+      setPanel(panelOpenBeforeCharm);
+      panelOpenBeforeCharm = null;
+    }
+    // Same division as open and close: the surface says what it wants shown,
+    // and whoever owns the preview decides what that means for the canvas.
+    // The stage is the box the charm has to fit inside: everything else in
+    // this editor is laid over the canvas, not beside it.
+    if (typeof onViewChange === 'function') onViewChange(view, stage);
+    // DP-32, one action one announcement: one control pressed, one sentence
+    // saying what is now on screen.
+    say(view === 'charm' ? S.viewShowingCharm : S.viewShowingDrawing);
+  }
+
+  /** Put the view back to the drawing, without announcing it. */
+  function resetView() {
+    const wasCharm = view === 'charm';
+    view = 'drawing';
+    root.dataset.view = 'drawing';
+    if (viewRadios.drawing) viewRadios.drawing.checked = true;
+    if (viewRadios.charm) viewRadios.charm.checked = false;
+    panelOpenBeforeCharm = null;
+    // Closing or re-opening on the charm view would otherwise leave the
+    // preview showing underneath the next drawing.
+    if (wasCharm && typeof onViewChange === 'function') {
+      onViewChange('drawing', stage);
+    }
   }
 
   /** Show what this purpose needs and nothing it does not. */
