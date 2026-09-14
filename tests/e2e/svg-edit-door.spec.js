@@ -710,3 +710,65 @@ test.describe('the preview is never blank (DP-37 P1)', () => {
     await expect(picture).not.toHaveClass(/svg-prep-standin/)
   })
 })
+
+test.describe('the side panel does not sit on the drawing (DP-37 P1)', () => {
+  // ★ The panel is position:absolute over the editor body, and nothing
+  // reserved room for it. MEASURED before this: at 1280 the stage ran
+  // x 6..1274 and the panel x 814..1274, so 453 px of the drawing was painted
+  // underneath the shapes list; at 900, 384 px; at 412, 271 px of a 400 px
+  // picture, with the sentence beneath it cut mid-word.
+
+  async function openAt(page, width) {
+    await page.setViewportSize({ width, height: 900 })
+    await openApp(page)
+    await openEditorByKeyboard(page, MANY_210)
+    await expect(page.locator('.svg-prep-object').first()).toBeVisible()
+  }
+
+  /** How much of the drawing the panel covers. */
+  async function hiddenPx(page) {
+    return page.evaluate(() => {
+      const svg = document.querySelector('.svg-prep-result-pane svg')
+      const panel = document.querySelector('.drawing-editor-panel')
+      if (!svg || !panel || panel.hidden) return 0
+      const s = svg.getBoundingClientRect()
+      const p = panel.getBoundingClientRect()
+      if (p.width === 0) return 0
+      return Math.max(0, Math.round(s.x + s.width - p.x))
+    })
+  }
+
+  for (const width of [1280, 900]) {
+    test(`★ none of the drawing is under the panel at ${width}`, async ({
+      page,
+    }) => {
+      test.setTimeout(120000)
+      await openAt(page, width)
+      expect(await hiddenPx(page)).toBe(0)
+    })
+  }
+
+  test('★ at phone width the panel is a drawer, and one press gives the drawing back', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await openAt(page, 412)
+
+    // The drawer rule is written for this width and never fired here, because
+    // no ancestor of the stage was a container. It fires now: the panel takes
+    // the whole width rather than lying across the drawing as a strip.
+    const panelWidth = await page.evaluate(
+      () => document.querySelector('.drawing-editor-panel').getBoundingClientRect().width
+    )
+    expect(panelWidth).toBeGreaterThan(380)
+
+    // And the design's own premise holds: closing it is one press, and the
+    // drawing is really there underneath.
+    await page.locator('button:has-text("Regions")').first().click()
+    await expect(page.locator('.drawing-editor-panel')).toBeHidden()
+    const drawing = page.locator('.svg-prep-result-pane svg').first()
+    await expect(drawing).toBeVisible()
+    const box = await drawing.boundingBox()
+    expect(box.width).toBeGreaterThan(300)
+  })
+})
