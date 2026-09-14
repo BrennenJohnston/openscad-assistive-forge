@@ -3458,3 +3458,16 @@ describe('the result pane is never empty (DP-37 P1)', () => {
     ws.destroy();
   });
 });
+
+describe('the drawer breakpoint lives in two files (DP-Q46a)', () => {
+  it('★ the number in surface.js and the number in the stylesheet are the same', async () => {
+    // surface.js has to choose the drawer's starting state before anything is
+    // laid out, so it cannot ask the stylesheet - it repeats the number. Two
+    // copies of a number drift; this is what stops them.
+    const { PANEL_DRAWER_MAX_WIDTH } = await import(
+      '../../src/js/drawing-editor/surface.js'
+    );
+    const css = readFileSync(resolve('src/styles/components.css'), 'utf-8');
+    expect(css).toContain(`@container (max-width: ${PANEL_DRAWER_MAX_WIDTH}px)`);
+  });
+});
