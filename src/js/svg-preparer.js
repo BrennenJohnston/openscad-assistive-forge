@@ -36,6 +36,7 @@ import {
   polygonFromPathData,
   boundsOf,
   buildNestingTree,
+  estimateRingPoints,
 } from './svg-nesting.js';
 import {
   pathFromPathData,
@@ -65,59 +66,126 @@ const NON_RENDERING_CONTAINERS = new Set([
 ]);
 
 /**
- * Element-count tiers, signed by the owner at DP-Q9 (2026-08-28) against the
- * DP-0 bench rather than assumed.
- *
- * The old single cap of 50 was documented as guarding path-bool, and DP-0's
- * measurement says that was exactly right - and that it was ALSO doing a job
- * it had no business doing. The two bills are wildly different:
- *
- *   count | table (parse+classify+analyze) | flattenToCompoundPath
- *         | desktop      4x throttle       | desktop
- *   ------+-------------------------------+-----------------------
- *      50 | 1.8-3.2 ms   10.8-20.8 ms     |   1.02 s
- *     100 | 2.7-7.7 ms   12.6-27.9 ms     |   7.53 s
- *     200 | 4.2-4.8 ms   19.6-23.6 ms     |  56.70 s
- *     400 | 8.5-10.0 ms  32.1-50.2 ms     | 447.90 s
- *     800 | 16.5-17.9 ms 71.5-86.4 ms     | ~59 min (extrapolated)
- *
- * and on the real file this round exists for, WATAP Logo HD.svg at 831
- * elements, the whole table builds in 24-27 ms desktop / 117-143 ms at 4x.
- * So the table is free and the boolean is everything: the cap was a BOOLEAN
- * cap wearing a TABLE cap's clothes, and refusing to show the table was
- * refusing the one thing that costs nothing.
- *
- * AUTO_RENDER_MAX (A): the whole chain runs on its own. 1.02 s desktop,
- *   4.9-5.3 s at 4x - right on the 5 s bar the plan set for the low end.
- * DEFER_FLATTEN_MAX (B): table and live preview stay; the boolean waits for
- *   a deliberate Apply, which costs 56.7 s desktop / 4 min 32 s at 4x and is
- *   said so in words.
- * TABLE_MAX (C): table only, preview on request. Admits the owner's 831.
- * Above C, a plain refusal that names the count and the cap.
- */
-export const ELEMENT_TIERS = Object.freeze({
-  autoRenderMax: 50,
-  deferFlattenMax: 200,
-  tableMax: 1000,
-});
-
-/**
- * Which tier a rendering-element count falls in.
- *
- * @param {number} count - Number of rendering elements
- * @returns {'auto'|'defer_flatten'|'manual_render'|'too_complex'}
- */
-/**
  * The prototype builds three passes, so no more than three files are ever
  * written. The owner's number; the tiered charm model is built to it.
  */
 export const LAYER_EMIT_CAP = 3;
 
-export function tierForCount(count) {
-  if (count <= ELEMENT_TIERS.autoRenderMax) return 'auto';
-  if (count <= ELEMENT_TIERS.deferFlattenMax) return 'defer_flatten';
-  if (count <= ELEMENT_TIERS.tableMax) return 'manual_render';
-  return 'too_complex';
+/**
+ * How many shapes the editor will list at once.
+ *
+ * All that survives of DP-Q9's 50 / 200 / 1000 counts. The 1,000 is a LIST
+ * cap - a table nobody can read and a DOM nobody wants - and it was always a
+ * different question from how long the boolean takes. The other two counts
+ * were answering that second question with the wrong unit and retired at
+ * DP-Q33; FLATTEN_BUDGET_MS below answers it in milliseconds.
+ */
+export const SHAPE_LIST_CAP = 1000;
+
+/** @param {number} count @returns {boolean} */
+export function isOverListCap(count) {
+  return count > SHAPE_LIST_CAP;
+}
+
+/**
+ * How long a combine may be predicted to take before Forge stops doing it
+ * unasked. Signed by the owner at DP-Q33 (2026-09-13).
+ *
+ * DP-Q9 signed 50 / 200 as counts, against the pairwise flatten that D-120
+ * has since replaced. A count cannot carry this decision: MEASURED with the
+ * ring engine, the same 200 shapes cost 77 ms as rectangles and 593 ms as
+ * curves, and 400 curvy shapes cost 2.5 SECONDS. The cost is in ring points
+ * and in how many shapes have to be folded together, not in either alone.
+ */
+export const FLATTEN_BUDGET_MS = 300;
+
+/**
+ * Milliseconds per (shape x ring point), the shape of the cost DP-Q33 signed.
+ *
+ * MEASURED 2026-09-14 in desktop Node against the ring engine that ships,
+ * median of three, synthetic shapes of a fixed complexity so the two axes
+ * move independently:
+ *
+ *   shapes   ring points   points/shape   flatten      ms / (shapes x points)
+ *      100           400              4     23.8 ms                  5.9e-4
+ *      800         3,200              4    961.9 ms                  3.8e-4
+ *       50         3,200             64     44.9 ms                  2.8e-4
+ *      400        25,600             64  2,551.1 ms                  2.5e-4
+ *      100        19,200            192    708.9 ms                  3.7e-4
+ *      400        76,800            192 13,030.9 ms                  4.2e-4
+ *      100        64,000            640  6,960.4 ms                  1.1e-3
+ *      400       256,000            640     132 s                    1.3e-3
+ *
+ * and the owner's two Illustrator-prepped icons, read in place and never
+ * copied: activities (9 shapes, 2,800 points) 36.7 ms = 1.5e-3; Bathroom
+ * (7 shapes, 863 points) 7.4 ms = 1.2e-3.
+ *
+ * Read the last column down: WITHIN one class of drawing it moves by less
+ * than a quarter across an eight-fold change in shape count, and BETWEEN
+ * classes it spans five-fold. That is exactly why DP-Q33 signed a
+ * calibration as well as a predictor - the constant belongs to the artwork
+ * and the machine, not to the formula.
+ *
+ * The default is the HIGH end on purpose. Real artwork sits there (both
+ * icons do), and being wrong high sends a drawing to a button it did not
+ * need; being wrong low starts a combine somebody did not ask for. After
+ * the first real flatten the measured value replaces this one.
+ */
+export const FLATTEN_COST_DEFAULT = 1.5e-3;
+
+/**
+ * What a flatten of this size is expected to cost.
+ *
+ * @param {number} shapes - Shapes that will be folded together
+ * @param {number} ringPoints - Their estimated ring points in total
+ * @param {number} [costPerUnit] - The calibrated constant, if there is one
+ * @returns {number} Milliseconds
+ */
+export function predictFlattenMs(
+  shapes,
+  ringPoints,
+  costPerUnit = FLATTEN_COST_DEFAULT
+) {
+  if (!(shapes > 0) || !(ringPoints > 0)) return 0;
+  return costPerUnit * shapes * ringPoints;
+}
+
+/**
+ * The constant a real flatten just proved, for the next prediction.
+ *
+ * Returns null rather than a number when the flatten was too small to have
+ * measured anything: a 0.2 ms combine of three squares is mostly the clock,
+ * and calibrating on it would teach the app that everything is free.
+ *
+ * @param {number} shapes
+ * @param {number} ringPoints
+ * @param {number} elapsedMs
+ * @returns {number|null}
+ */
+export function flattenCostFrom(shapes, ringPoints, elapsedMs) {
+  if (!(shapes > 0) || !(ringPoints > 0)) return null;
+  if (!(elapsedMs >= FLATTEN_CALIBRATION_FLOOR_MS)) return null;
+  return elapsedMs / (shapes * ringPoints);
+}
+
+/**
+ * Below this a flatten says more about the clock than about the drawing.
+ * The smallest row in the table above is 23.8 ms; 5 ms is well under
+ * anything measured and well over timer noise.
+ */
+export const FLATTEN_CALIBRATION_FLOOR_MS = 5;
+
+/**
+ * Total ring points for a set of elements, from their path data alone.
+ *
+ * @param {Array<{pathData?: string}>} elements
+ * @returns {number}
+ */
+export function ringPointsOf(elements) {
+  if (!Array.isArray(elements)) return 0;
+  let total = 0;
+  for (const el of elements) total += estimateRingPoints(el && el.pathData);
+  return total;
 }
 
 // CSS Level 2 named colors → hex.
@@ -1269,6 +1337,8 @@ export function measureSvgAspect(svgString) {
  *   recommendation: 'auto_prepare'|'open_editor'|'pass_through'|'reject',
  *   singleElement: boolean,
  *   elementCount?: number,
+ *   ringPoints?: number,
+ *   predictedFlattenMs?: number,
  * }}
  */
 export function analyzeSvg(svgString) {
@@ -1300,16 +1370,13 @@ export function analyzeSvg(svgString) {
     }
   }
 
-  const tier = tierForCount(renderElements.length);
-
-  if (tier === 'too_complex') {
+  if (isOverListCap(renderElements.length)) {
     return {
       status: 'too_complex',
-      tier,
       confidence: 0,
       elements: [],
       warnings: [
-        `This drawing has ${renderElements.length} shapes, and Forge can work with ${ELEMENT_TIERS.tableMax} at a time. ` +
+        `This drawing has ${renderElements.length} shapes, and Forge can work with ${SHAPE_LIST_CAP} at a time. ` +
           'Simplify it in a vector editor (merge paths, remove hidden layers) and try again.',
       ],
       unsupportedFeatures: [],
@@ -1473,23 +1540,34 @@ export function analyzeSvg(svgString) {
     recommendation = 'open_editor';
   }
 
-  // DP-3: above tier A, nothing may start a boolean flatten by itself.
-  // `auto_prepare` is the only recommendation that does, so it becomes
-  // `open_editor` and the person decides when to spend the time.
-  // `pass_through` is left alone at every tier ON PURPOSE: it means the
-  // shapes need no flattening at all (OpenSCAD unions overlapping fills
-  // natively), so it costs nothing however many there are, and downgrading
-  // it would send people to the editor for a file that is already fine.
-  // The advisory copy for each tier lives in the UI, not here: this function
-  // stays an analyzer, and `warnings` keeps meaning "something about this
-  // drawing is off" for the code that already filters it.
-  if (tier !== 'auto' && recommendation === 'auto_prepare') {
+  // DP-3, re-signed at DP-Q33: nothing may start a boolean flatten by itself
+  // if that flatten is predicted to outrun the budget. `auto_prepare` is the
+  // only recommendation that does, so it becomes `open_editor` and the
+  // person decides when to spend the time.
+  // `pass_through` is left alone WHATEVER the prediction, ON PURPOSE: it
+  // means the shapes need no flattening at all (OpenSCAD unions overlapping
+  // fills natively), so it costs nothing however many there are, and
+  // downgrading it would send people to the editor for a file that is
+  // already fine.
+  // The advisory copy lives in the UI, not here: this function stays an
+  // analyzer, and `warnings` keeps meaning "something about this drawing is
+  // off" for the code that already filters it.
+  const ringPoints = ringPointsOf(elements);
+  const predictedFlattenMs = predictFlattenMs(
+    renderElements.length,
+    ringPoints
+  );
+  if (
+    predictedFlattenMs > FLATTEN_BUDGET_MS &&
+    recommendation === 'auto_prepare'
+  ) {
     recommendation = 'open_editor';
   }
 
   return {
     status,
-    tier,
+    ringPoints,
+    predictedFlattenMs,
     confidence,
     elements,
     warnings,

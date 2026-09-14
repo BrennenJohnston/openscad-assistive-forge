@@ -21,10 +21,20 @@ import path from 'node:path'
 const FIXTURES = path.join(process.cwd(), 'tests', 'fixtures', 'svg-edit')
 const BIRD_PNG = path.join(FIXTURES, 'bird-drawing.png')
 const BIRD_SVG = path.join(FIXTURES, 'bird-drawing.svg')
-// DP-3 tiers. 210 shapes sits in the manual-render band (B=200 < 210 <= C=1000);
-// 1200 is over the cap. Both are built from plain rects so the fixtures say
-// what they test without a drawing program in the loop.
+// 1200 is over the LIST cap of 1,000 and is refused outright.
+//
+// 210 plain rects USED to sit in the manual-render band, back when the band
+// was a count. DP-Q33 retired the counts: those 210 rects are 840 ring points
+// between them and MEASURED they flatten in 80-110 ms, so they combine by
+// themselves now and pressing a button for them was never right.
+//
+// over-budget-300 is what the manual band needs instead: 300 curved shapes,
+// 19,200 ring points, predicted at 8.8 seconds and MEASURED at 923 ms - over
+// the 300 ms budget with room, and long enough that a person can really press
+// Cancel in the middle of it. All three are built from plain geometry so the
+// fixtures say what they test without a drawing program in the loop.
 const MANY_210 = path.join(FIXTURES, 'many-shapes-210.svg')
+const OVER_BUDGET_300 = path.join(FIXTURES, 'over-budget-300.svg')
 const OVER_CAP_1200 = path.join(FIXTURES, 'over-cap-1200.svg')
 // D-118: paint declared by CSS class, the way every CAD export writes it.
 const CLASS_STYLED = path.join(FIXTURES, 'class-styled-strokes.svg')
@@ -427,10 +437,10 @@ test.describe('The drawing editor door', () => {
   }) => {
     test.setTimeout(180000)
     await openApp(page)
-    await openEditorByKeyboard(page, MANY_210)
+    await openEditorByKeyboard(page, OVER_BUDGET_300)
 
     // The whole table is there. It used to be nothing.
-    await expect(page.locator('.svg-prep-object')).toHaveCount(210)
+    await expect(page.locator('.svg-prep-object')).toHaveCount(300)
 
     // And the boolean has NOT run.
     //
@@ -445,7 +455,7 @@ test.describe('The drawing editor door', () => {
     await expect(page.locator('button[data-action="save"]')).toBeDisabled()
     const row = page.locator('.svg-prep-render-row')
     await expect(row).toBeVisible()
-    await expect(page.locator('.svg-prep-render-note')).toContainText('210 shapes')
+    await expect(page.locator('.svg-prep-render-note')).toContainText('300 shapes')
 
     // Applying a result nobody has seen is refused, and the reason says so
     // rather than claiming there is nothing to apply.
@@ -459,7 +469,7 @@ test.describe('The drawing editor door', () => {
   }) => {
     test.setTimeout(300000)
     await openApp(page)
-    await openEditorByKeyboard(page, MANY_210)
+    await openEditorByKeyboard(page, OVER_BUDGET_300)
 
     const btn = page.locator('.svg-prep-render-btn')
     const box = await btn.boundingBox()
@@ -519,7 +529,7 @@ test.describe('The drawing editor door', () => {
     await expect(page.locator('.svg-prep-render-progress')).toBeHidden()
     await expect(page.locator('.svg-prep-render-cancel')).toBeHidden()
     const said = await page.evaluate(() => window.__live)
-    expect(said.some((t) => /Combining 210 shapes/.test(t)), said.join(' | ')).toBe(true)
+    expect(said.some((t) => /Combining 300 shapes/.test(t)), said.join(' | ')).toBe(true)
     expect(said.some((t) => /Preview ready/.test(t)), said.join(' | ')).toBe(true)
   })
 
@@ -581,9 +591,9 @@ test.describe('The drawing editor door', () => {
   }) => {
     test.setTimeout(300000)
     await openApp(page)
-    await openEditorByKeyboard(page, MANY_210)
-    await expect(page.locator('.svg-prep-object')).toHaveCount(210)
-    await expect(page.locator('.svg-prep-bulk-count')).toHaveText('210 shapes')
+    await openEditorByKeyboard(page, OVER_BUDGET_300)
+    await expect(page.locator('.svg-prep-object')).toHaveCount(300)
+    await expect(page.locator('.svg-prep-bulk-count')).toHaveText('300 shapes')
 
     // Keep the 40 largest, by keyboard: into the field, type, then the button.
     const keepField = page.locator('.svg-prep-bulk-field', { hasText: 'Keep largest' })
@@ -603,8 +613,10 @@ test.describe('The drawing editor door', () => {
     await expect(page.locator('.svg-prep-object')).toHaveCount(40)
     await expect(page.locator('.svg-prep-bulk-count')).toHaveText('40 shapes')
 
-    // Under tier A now, so the preview comes back on its own - the drawing
-    // has been made simple enough to behave like a simple one.
+    // Under the budget now, so the preview comes back on its own: the drawing
+    // has been made simple enough to behave like a simple one. 40 of these
+    // shapes are 2,600 ring points, predicted at 156 ms against a 300 ms
+    // budget.
     await expect(page.locator('.svg-prep-result-pane svg')).toHaveCount(1, {
       timeout: 120000,
     })
@@ -613,7 +625,7 @@ test.describe('The drawing editor door', () => {
     const undo = page.locator('[data-action="undo-delete"]')
     await undo.focus()
     await page.keyboard.press('Enter')
-    await expect(page.locator('.svg-prep-object')).toHaveCount(210)
+    await expect(page.locator('.svg-prep-object')).toHaveCount(300)
     await expect(undo).toBeDisabled()
   })
 
@@ -685,7 +697,7 @@ test.describe('the preview is never blank (DP-37 P1)', () => {
   }) => {
     test.setTimeout(120000)
     await openApp(page)
-    await openEditorByKeyboard(page, MANY_210)
+    await openEditorByKeyboard(page, OVER_BUDGET_300)
     await expect(page.locator('.svg-prep-object').first()).toBeVisible()
 
     // MEASURED before this release: the pane was 1268 x 160 with no svg in it
@@ -708,7 +720,7 @@ test.describe('the preview is never blank (DP-37 P1)', () => {
 
     // And it is the drawing, not an empty frame: the tints are on it.
     const tinted = await picture.locator('.svg-prep-role-path').count()
-    expect(tinted).toBe(210)
+    expect(tinted).toBe(300)
   })
 
   test('a drawing under the budget still shows its combined result', async ({
@@ -721,6 +733,28 @@ test.describe('the preview is never blank (DP-37 P1)', () => {
     await expect(picture).toBeVisible()
     // Not a stand-in: this one was actually combined.
     await expect(picture).not.toHaveClass(/svg-prep-standin/)
+  })
+
+  test('★ 210 shapes combine by themselves now, because a count was the wrong question (DP-Q33)', async ({
+    page,
+  }) => {
+    // This is the drawing the re-sign is FOR. Under DP-Q9 it was refused the
+    // automatic combine for being 210 shapes, and a person had to press a
+    // button and wait. Those 210 rects are 840 ring points between them and
+    // MEASURED they flatten in 80 to 110 ms: the button was asking somebody to
+    // decide about a tenth of a second.
+    test.setTimeout(120000)
+    await openApp(page)
+    await openEditorByKeyboard(page, MANY_210)
+    await expect(page.locator('.svg-prep-object')).toHaveCount(210)
+
+    const picture = page.locator('.svg-prep-result-pane svg').first()
+    await expect(picture).toBeVisible({ timeout: 60000 })
+    await expect(picture).not.toHaveClass(/svg-prep-standin/)
+    // Nothing is asked of anybody: no button, no sentence about waiting.
+    await expect(page.locator('.svg-prep-render-row')).toBeHidden()
+    // And there IS a result, so it can be applied and saved.
+    await expect(page.locator('button[data-action="save"]')).toBeEnabled()
   })
 })
 
@@ -905,7 +939,7 @@ test.describe('the combine runs off the main thread (DP-37 P2)', () => {
   }) => {
     test.setTimeout(300000)
     await openApp(page)
-    await openEditorByKeyboard(page, MANY_210)
+    await openEditorByKeyboard(page, OVER_BUDGET_300)
 
     const render = page.locator('.svg-prep-render-btn')
     await expect(render).toBeVisible()
@@ -947,7 +981,7 @@ test.describe('the combine runs off the main thread (DP-37 P2)', () => {
   }) => {
     test.setTimeout(300000)
     await openApp(page)
-    await openEditorByKeyboard(page, MANY_210)
+    await openEditorByKeyboard(page, OVER_BUDGET_300)
 
     await page.locator('.svg-prep-render-btn').click({ noWaitAfter: true })
     const cancel = page.locator('.svg-prep-render-cancel')
@@ -982,7 +1016,7 @@ test.describe('the combine runs off the main thread (DP-37 P2)', () => {
   }) => {
     test.setTimeout(300000)
     await openApp(page)
-    await openEditorByKeyboard(page, MANY_210)
+    await openEditorByKeyboard(page, OVER_BUDGET_300)
 
     // Closing mid-combine is another thing that was impossible while the
     // thread was taken. Only `destroy` stopped the work, and the surface's
@@ -1008,7 +1042,7 @@ test.describe('the combine runs off the main thread (DP-37 P2)', () => {
   }) => {
     test.setTimeout(300000)
     await openApp(page)
-    await openEditorByKeyboard(page, MANY_210)
+    await openEditorByKeyboard(page, OVER_BUDGET_300)
 
     await page.locator('.svg-prep-render-btn').click({ noWaitAfter: true })
     const cancel = page.locator('.svg-prep-render-cancel')

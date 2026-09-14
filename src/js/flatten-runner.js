@@ -90,6 +90,8 @@ export function createFlattenRunner(options = {}) {
       job.resolve({
         svg: message.svg ?? null,
         warnings: Array.isArray(message.warnings) ? message.warnings : [],
+        // What the union itself took, for the caller's budget to learn from.
+        ms: typeof message.ms === 'number' ? message.ms : null,
       });
       return;
     }
@@ -115,7 +117,7 @@ export function createFlattenRunner(options = {}) {
    * @param {object} svgMeta - {viewBox, width, height}
    * @param {object} [opts]
    * @param {Function} [opts.onStage] - Called with {stage}
-   * @returns {Promise<{svg: string|null, warnings: string[]}>}
+   * @returns {Promise<{svg: string|null, warnings: string[], ms: number|null}>}
    */
   function start(elements, svgMeta, opts = {}) {
     if (current) settleCancelled('superseded');

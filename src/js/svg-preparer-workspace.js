@@ -16,13 +16,17 @@ import { announce } from './announcer.js';
 import {
   classifyElements,
   applyPerPathOffsets,
-  tierForCount,
+  FLATTEN_BUDGET_MS,
+  FLATTEN_COST_DEFAULT,
+  predictFlattenMs,
+  flattenCostFrom,
 } from './svg-preparer.js';
 import {
   buildNestingTree,
   suggestLayers,
   layerLimit,
   validateLayers,
+  estimateRingPoints,
 } from './svg-nesting.js';
 import { getPathBBox } from 'svg-path-commander';
 import { mmToSvgUnits } from './svg-offset.js';
@@ -921,6 +925,21 @@ export function createSvgPrepWorkspace(containerEl) {
    */
   const canUseWorker = () => typeof Worker !== 'undefined';
   let previewWaitingForEngine = false;
+  /**
+   * Milliseconds per (shape x ring point), as this session has measured it.
+   *
+   * DP-Q33 signed the calibration as well as the predictor because the
+   * constant belongs to the artwork and the machine, not to the formula:
+   * MEASURED, it moves less than a quarter within one class of drawing and
+   * five-fold between classes. It starts at the default and is replaced by
+   * the first real flatten big enough to have measured anything.
+   *
+   * It lives for as long as the editor does, and no longer. Keeping it across
+   * sessions would predict better on the second visit; it would also be a new
+   * thing stored about a person's drawings, which is the owner's call and not
+   * mine.
+   */
+  let flattenCost = FLATTEN_COST_DEFAULT;
   function loadRingEngine() {
     if (!ringEnginePromise) {
       ringEnginePromise = import('./ring-geometry.js')
@@ -1145,15 +1164,45 @@ export function createSvgPrepWorkspace(containerEl) {
   }
 
   /**
-   * Read the tier from the number of shapes ON SCREEN and set whether the
-   * boolean may run by itself.
+   * How big the combine on screen actually is: the shapes that will be folded
+   * together, and the ring points they will make.
    *
-   * Anything the analyzer did not label is treated as tier A, so an older
-   * caller keeps exactly the behaviour it had.
+   * Ignored shapes are left out of BOTH numbers because the flatten leaves
+   * them out too, and the prediction and the calibration have to be measured
+   * on the same thing or the constant learned from one would be read back
+   * against the other.
+   */
+  function flattenSizeOf() {
+    let shapes = 0;
+    let points = 0;
+    for (let i = 0; i < liveElements.length; i++) {
+      if (roles[i] === 'ignore') continue;
+      const pathData = liveElements[i] && liveElements[i].pathData;
+      if (!pathData) continue;
+      shapes++;
+      points += estimateRingPoints(pathData);
+    }
+    return { shapes, points };
+  }
+
+  /**
+   * Decide whether the combine may run by itself, from what it is PREDICTED to
+   * cost rather than from how many shapes there are.
+   *
+   * DP-Q33 (2026-09-13) retired DP-Q9's 50 / 200 counts: the same 200 shapes
+   * cost 77 ms as rectangles and 593 ms as curves, so a count was answering
+   * the question in the wrong unit. The budget is in milliseconds and the
+   * predictor is calibrated by this session's own flattens.
    */
   function setPreviewBand() {
-    const count = liveElements.length;
-    autoPreview = count > 0 && tierForCount(count) === 'auto';
+    const { shapes, points } = flattenSizeOf();
+    const predictedFlattenMs = predictFlattenMs(shapes, points, flattenCost);
+    // No guard on the count. A drawing with nothing left to combine predicts
+    // nothing, which is under any budget, so it runs and the result pane says
+    // in its own words that there is no foreground. Deferring it instead would
+    // offer a button to spend time on no work, under a sentence that reads
+    // "This drawing has 0 shapes. Combining them may take about a second."
+    autoPreview = predictedFlattenMs <= FLATTEN_BUDGET_MS;
     refs.renderRow.hidden = autoPreview;
   }
 
@@ -1205,12 +1254,32 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.renderBtn.disabled = false;
   }
 
+  /**
+   * The predicted wait in words somebody can act on.
+   *
+   * A number of milliseconds is not a decision. "About four seconds" is: a
+   * person can decide to wait for that, and cannot decide anything about
+   * 3,847. The bands are coarse on purpose - the prediction is good to a
+   * factor, not to a digit, and a sentence precise beyond its own accuracy
+   * is a lie with a decimal point in it.
+   */
+  function waitInWords(ms) {
+    if (ms < 1500) return 'about a second';
+    if (ms < 90000) return `about ${Math.round(ms / 1000)} seconds`;
+    return `about ${Math.round(ms / 60000)} minutes`;
+  }
+
   /** The sentence under the Render preview button. */
   function staleNoteText() {
-    const count = liveElements.length;
+    // Both numbers read fresh. Holding the prediction from when the band was
+    // last set would let the count move while the duration stood still, so
+    // deleting 260 of 300 shapes would say "40 shapes" and still quote the
+    // wait for 300.
+    const { shapes, points } = flattenSizeOf();
+    const ms = predictFlattenMs(shapes, points, flattenCost);
     return (
-      `This drawing has ${count} shapes. Combining them takes a while, ` +
-      `so Forge waits until you ask.`
+      `This drawing has ${shapes} shapes. Combining them may take ` +
+      `${waitInWords(ms)} here, so Forge waits until you ask.`
     );
   }
 
@@ -1226,8 +1295,8 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.renderBtn.hidden = busy;
     refs.resultPane.setAttribute('aria-busy', String(busy));
     if (busy) {
-      const count = liveElements.length;
-      refs.renderNote.textContent = `Combining ${count} shapes.`;
+      const { shapes } = flattenSizeOf();
+      refs.renderNote.textContent = `Combining ${shapes} shapes.`;
     }
   }
 
@@ -1287,11 +1356,16 @@ export function createSvgPrepWorkspace(containerEl) {
           'Still combining the shapes. Apply is ready when the result appears.'
         );
         try {
+          const size = flattenSizeOf();
           const out = await getFlattenRunner().start(
             withOffsets,
             currentSvgMeta
           );
           resultSvgString = out.svg;
+          // DP-Q33's calibration: what this drawing really cost, on this
+          // machine, replaces the default for every prediction after it.
+          const measured = flattenCostFrom(size.shapes, size.points, out.ms);
+          if (measured !== null) flattenCost = measured;
         } catch (error) {
           // None of the three is a failure and none may be reported as one:
           // the person stopped this combine, a newer one replaced it, or the
@@ -1759,7 +1833,7 @@ export function createSvgPrepWorkspace(containerEl) {
 
   async function renderPreviewOnDemand() {
     if (!currentAnalysis) return;
-    const count = liveElements.length;
+    const { shapes: count } = flattenSizeOf();
     const started = performance.now();
 
     // No frame dance before the work any more. There used to be two, so the
@@ -1821,11 +1895,6 @@ export function createSvgPrepWorkspace(containerEl) {
    * them is a defect nobody sees until a radio in row 40 drives row 41.
    */
   function rebuildRows() {
-    // DP-4: the band is a property of HOW MANY shapes there are, so it has to
-    // be re-read after every delete and undo. Cutting a 210-shape drawing down
-    // to 40 puts it in tier A, and the preview should start behaving like the
-    // simple drawing it has just been made into.
-    setPreviewBand();
     const keptRoles = [...roles];
     const keptOffsets = [...offsets];
     const keptLayers = [...layers];
@@ -1861,6 +1930,15 @@ export function createSvgPrepWorkspace(containerEl) {
     applyInitialOffsets(offsets);
     applyLayerSelections();
     renderRoleLayer();
+    // DP-4: the band is a property of what is left to combine, so it has to be
+    // re-read after every delete and undo. Cutting a 210-shape drawing down to
+    // 40 brings it under the budget, and the preview should start behaving
+    // like the simple drawing it has just been made into.
+    //
+    // AFTER the roles are back, not before: the band reads them, and until
+    // this point `roles` is still the array from before the rebuild and is a
+    // different length from `liveElements`.
+    setPreviewBand();
     requestResultPreview();
   }
 

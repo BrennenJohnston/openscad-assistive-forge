@@ -77,11 +77,29 @@ describe('the flatten runner (DP-37 P2)', () => {
       type: 'done',
       svg: '<svg/>',
       warnings: ['1 cut-out(s) would have erased the whole drawing'],
+      ms: 412.5,
     })
     await expect(promise).resolves.toEqual({
       svg: '<svg/>',
       warnings: ['1 cut-out(s) would have erased the whole drawing'],
+      ms: 412.5,
     })
+  })
+
+  it('★ carries what the union COST, which is what the budget learns from', async () => {
+    // DP-37 P3: the caller predicts the next combine from the last one it
+    // measured, so a reply with no timing in it has to come back as null
+    // rather than as a zero somebody could divide by and believe.
+    const r = runner()
+    const timed = r.start(shapes(), META)
+    let w = latest()
+    w.reply({ id: w.jobId, type: 'done', svg: '<svg/>', ms: 87.25 })
+    await expect(timed).resolves.toMatchObject({ ms: 87.25 })
+
+    const untimed = r.start(shapes(), META)
+    w = latest()
+    w.reply({ id: w.jobId, type: 'done', svg: '<svg/>' })
+    await expect(untimed).resolves.toMatchObject({ ms: null })
   })
 
   it('★ sends only what the flatten reads, because the rest cannot be cloned', () => {
@@ -212,8 +230,8 @@ describe('the flatten runner (DP-37 P2)', () => {
     const r = runner()
     const promise = r.start(shapes(), META)
     const w = latest()
-    w.reply({ id: w.jobId, type: 'done', svg: null, warnings: [] })
-    await expect(promise).resolves.toEqual({ svg: null, warnings: [] })
+    w.reply({ id: w.jobId, type: 'done', svg: null, warnings: [], ms: 1.5 })
+    await expect(promise).resolves.toEqual({ svg: null, warnings: [], ms: 1.5 })
   })
 
   it('a worker error rejects with the message and drops the worker', async () => {

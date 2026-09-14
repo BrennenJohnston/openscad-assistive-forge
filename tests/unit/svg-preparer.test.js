@@ -26,6 +26,7 @@ import {
   layerLimit,
   polygonFromPathData,
   boundsOf,
+  estimateRingPoints,
 } from '../../src/js/svg-nesting.js';
 import {
   parseSvgElements,
@@ -39,8 +40,12 @@ import {
   applyPerPathOffsets,
   getEffectivePaint,
   measureSvgAspect,
-  ELEMENT_TIERS,
-  tierForCount,
+  FLATTEN_BUDGET_MS,
+  FLATTEN_CALIBRATION_FLOOR_MS,
+  SHAPE_LIST_CAP,
+  isOverListCap,
+  predictFlattenMs,
+  flattenCostFrom,
   flattenLayers,
   LAYER_EMIT_CAP,
 } from '../../src/js/svg-preparer.js';
@@ -2226,13 +2231,16 @@ describe('measureSvgAspect', () => {
 });
 
 /**
- * DP-3: the element-count tiers signed at DP-Q9 (2026-08-28).
+ * DP-37 P3: the flatten budget signed at DP-Q33 (2026-09-13), which retires
+ * DP-Q9's 50 and 200 counts and keeps its 1,000 as a LIST cap.
  *
- * The boundaries are pinned as VALUES, not as "whatever the constant says",
+ * The values are pinned as VALUES, not as "whatever the constant says",
  * because they are an owner signature against a measured bench and drifting
- * them silently is the whole risk.
+ * them silently is the whole risk. What changed is the unit: a count could
+ * not carry this decision, because MEASURED with the ring engine the same
+ * 200 shapes cost 77 ms as rectangles and 593 ms as curves.
  */
-describe('element-count tiers (DP-Q9)', () => {
+describe('the flatten budget (DP-Q33)', () => {
   /** N filled rects, every 5th one a smaller white one nested in the last. */
   const syntheticSvg = (n) => {
     const parts = [];
@@ -2249,35 +2257,107 @@ describe('element-count tiers (DP-Q9)', () => {
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 484 ${h}">${parts.join('')}</svg>`;
   };
 
-  it('carries the signed boundary values', () => {
-    expect(ELEMENT_TIERS.autoRenderMax).toBe(50);
-    expect(ELEMENT_TIERS.deferFlattenMax).toBe(200);
-    expect(ELEMENT_TIERS.tableMax).toBe(1000);
+  it('carries the signed values', () => {
+    expect(FLATTEN_BUDGET_MS).toBe(300);
+    expect(SHAPE_LIST_CAP).toBe(1000);
   });
 
   it.each([
-    [1, 'auto'],
-    [50, 'auto'],
-    [51, 'defer_flatten'],
-    [200, 'defer_flatten'],
-    [201, 'manual_render'],
-    [1000, 'manual_render'],
-    [1001, 'too_complex'],
-    [831, 'manual_render'],
-  ])('tierForCount(%i) is %s', (count, expected) => {
-    expect(tierForCount(count)).toBe(expected);
+    [1, false],
+    [1000, false],
+    [1001, true],
+    [831, false],
+  ])('isOverListCap(%i) is %s', (count, expected) => {
+    expect(isOverListCap(count)).toBe(expected);
   });
 
+  /**
+   * The predictor against the bench that produced it.
+   *
+   * MEASURED 2026-09-14, desktop Node, median of three, against the ring
+   * engine that ships. Each row is (shapes, ring points, real flatten), and
+   * what is checked is that the prediction lands within the spread the
+   * constant was chosen from, not that it hits a number, which it cannot:
+   * the cost per (shape x point) spans five-fold between classes of drawing,
+   * which is exactly why DP-Q33 signed a calibration as well.
+   */
   it.each([
-    [10, 'auto'],
-    [50, 'auto'],
-    [51, 'defer_flatten'],
-    [200, 'defer_flatten'],
-    [201, 'manual_render'],
-  ])('analyzeSvg reports tier %s for %i elements', (count, expected) => {
-    const result = analyzeSvg(syntheticSvg(count));
-    expect(result.elementCount).toBe(count);
-    expect(result.tier).toBe(expected);
+    ['100 rects', 100, 400, 23.8],
+    ['800 rects', 800, 3200, 961.9],
+    ['50 curvy', 50, 3200, 44.9],
+    ['400 curvy', 400, 25600, 2551.1],
+    ['100 lobed', 100, 19200, 708.9],
+    ['400 lobed', 400, 76800, 13030.9],
+    ['100 complex', 100, 64000, 6960.4],
+  ])(
+    'predicts %s within the measured spread',
+    (_label, shapes, points, realMs) => {
+      const predicted = predictFlattenMs(shapes, points);
+      // Never UNDER: the default constant is the high end on purpose, so a
+      // drawing is never let through the gate having been called cheaper
+      // than it turns out to be.
+      expect(predicted).toBeGreaterThanOrEqual(realMs);
+      // And never wild: six and a half times is the whole spread of the bench.
+      expect(predicted).toBeLessThan(realMs * 6.5);
+    }
+  );
+
+  it('the prepped icons predict close to what they really cost', () => {
+    // Read in place from the owner's own folder when the bench ran; only the
+    // three numbers came back. activities: 9 shapes, 2,800 ring points,
+    // 36.7 ms. Bathroom: 7 shapes, 863 points, 7.4 ms. Real artwork sits at
+    // the high end of the constant, which is why the default is set there.
+    expect(predictFlattenMs(9, 2800)).toBeCloseTo(37.8, 0);
+    expect(predictFlattenMs(7, 863)).toBeCloseTo(9.1, 0);
+  });
+
+  it('a drawing with nothing in it predicts nothing, and never NaN', () => {
+    expect(predictFlattenMs(0, 0)).toBe(0);
+    expect(predictFlattenMs(10, 0)).toBe(0);
+    expect(predictFlattenMs(0, 500)).toBe(0);
+    expect(predictFlattenMs(NaN, NaN)).toBe(0);
+  });
+
+  it('calibration replaces the default with what a real flatten proved', () => {
+    // 400 curvy shapes, 25,600 points, 2,551.1 ms measured -> 2.49e-4, which
+    // is a sixth of the default. The next drawing of the same kind is then
+    // predicted on the machine it is actually running on.
+    const cost = flattenCostFrom(400, 25600, 2551.1);
+    expect(cost).toBeCloseTo(2.49e-4, 6);
+    expect(predictFlattenMs(400, 25600, cost)).toBeCloseTo(2551.1, 0);
+  });
+
+  it('refuses to calibrate on a flatten too small to have measured anything', () => {
+    // Three squares combine in a fifth of a millisecond. That number is the
+    // clock, not the drawing, and learning from it would teach the app that
+    // everything is free.
+    expect(flattenCostFrom(3, 12, 0.2)).toBeNull();
+    expect(
+      flattenCostFrom(3, 12, FLATTEN_CALIBRATION_FLOOR_MS - 0.01)
+    ).toBeNull();
+    expect(flattenCostFrom(3, 12, FLATTEN_CALIBRATION_FLOOR_MS)).not.toBeNull();
+    expect(flattenCostFrom(0, 0, 500)).toBeNull();
+  });
+
+  it('ring points are estimated from the d string, and match the real rings', () => {
+    // The cost bench's own row: 50 synthetic rects are 200 ring points, 4 each.
+    expect(estimateRingPoints('M2 2 H38 V38 H2 Z')).toBe(4);
+    // One command letter can carry many coordinate groups. Counting letters
+    // undercounted the prepped icons by 40 to 46 per cent; counting groups
+    // brought the same two to 0.1 and 0.8 per cent.
+    expect(estimateRingPoints('M0 0c1 2 3 4 5 6 7 8 9 10 11 12')).toBe(33);
+    expect(estimateRingPoints('')).toBe(0);
+    expect(estimateRingPoints(null)).toBe(0);
+  });
+
+  it('analyzeSvg reports what it will cost to combine', () => {
+    const result = analyzeSvg(syntheticSvg(100));
+    expect(result.elementCount).toBe(100);
+    expect(result.ringPoints).toBe(400);
+    expect(result.predictedFlattenMs).toBeCloseTo(
+      predictFlattenMs(100, 400),
+      6
+    );
   });
 
   it('RETURNS THE TABLE right up to the cap, instead of an empty refusal', () => {
@@ -2292,7 +2372,6 @@ describe('element-count tiers (DP-Q9)', () => {
 
   it('refuses above the cap, naming the real count and the cap', () => {
     const result = analyzeSvg(syntheticSvg(1001));
-    expect(result.tier).toBe('too_complex');
     expect(result.status).toBe('too_complex');
     expect(result.recommendation).toBe('reject');
     expect(result.elements).toEqual([]);
@@ -2301,10 +2380,18 @@ describe('element-count tiers (DP-Q9)', () => {
     expect(result.warnings[0]).toContain('1000');
   });
 
-  it('never auto-prepares above tier A, because that would start the boolean', () => {
-    // flattenToCompoundPath measured 56.7 s at 200 elements on desktop. No
-    // count above A may set it running without a deliberate act.
-    for (const count of [51, 201]) {
+  it('never auto-prepares over the budget, because that would start the boolean', () => {
+    // No drawing whose combine is predicted to outrun the budget may set it
+    // running without a deliberate act. These rects are 4 ring points each,
+    // so the prediction is 6e-3 x count squared and the budget falls between
+    // 223 and 224 of them.
+    for (const count of [400, 600]) {
+      const result = analyzeSvg(syntheticSvg(count));
+      expect(result.predictedFlattenMs, count + ' elements').toBeGreaterThan(
+        FLATTEN_BUDGET_MS
+      );
+    }
+    for (const count of [400, 600]) {
       const result = analyzeSvg(syntheticSvg(count));
       expect(result.recommendation, `${count} elements`).not.toBe(
         'auto_prepare'
@@ -2312,7 +2399,19 @@ describe('element-count tiers (DP-Q9)', () => {
     }
   });
 
-  it('leaves pass_through alone at every tier: it costs no boolean at all', () => {
+  it('the counts DP-Q9 refused are cheap, which is why they retired', () => {
+    // 51 of these rects were refused the automatic combine for being 51. They
+    // are 204 ring points between them and the combine is predicted at under
+    // 16 ms - MEASURED, 100 rects of this kind flatten in 23.8 ms. A count
+    // was answering the question in the wrong unit, and this is the drawing
+    // that shows it.
+    const small = analyzeSvg(syntheticSvg(51));
+    expect(small.predictedFlattenMs).toBeLessThan(FLATTEN_BUDGET_MS);
+    const was200 = analyzeSvg(syntheticSvg(200));
+    expect(was200.predictedFlattenMs).toBeLessThan(FLATTEN_BUDGET_MS);
+  });
+
+  it('leaves pass_through alone whatever the prediction: it costs no boolean at all', () => {
     // All-foreground shapes need no flattening - OpenSCAD unions them - so
     // sending them to the editor for their size would be a made-up cost.
     const manyDark = Array.from(
@@ -2324,7 +2423,7 @@ describe('element-count tiers (DP-Q9)', () => {
       `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 484 400">${manyDark}</svg>`
     );
     expect(result.elementCount).toBe(300);
-    expect(result.tier).toBe('manual_render');
+    expect(result.predictedFlattenMs).toBeGreaterThan(FLATTEN_BUDGET_MS);
     expect(result.recommendation).toBe('pass_through');
   });
 });
