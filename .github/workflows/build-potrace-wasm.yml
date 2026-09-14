@@ -70,7 +70,7 @@ jobs:
             echo '```'
             sha256sum public/wasm/potrace/potrace.wasm public/wasm/potrace/potrace.mjs
             echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the build
         uses: actions/upload-artifact@v4

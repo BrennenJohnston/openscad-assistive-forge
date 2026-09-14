@@ -127,6 +127,9 @@ WASM_GZ="$(gzip_size_of "${OUT}/potrace.wasm")"
 JS_RAW="$(size_of "${OUT}/potrace.mjs")"
 JS_GZ="$(gzip_size_of "${OUT}/potrace.mjs")"
 EMCC_VERSION="$(emcc --version | head -1)"
+# Recorded relative to the repository, so the recipe reads the same whether it
+# was built on a runner or on someone's laptop.
+EMCC_FLAGS_RECORDED="${EMCC_FLAGS[*]//${ROOT}\//}"
 
 cat > "${OUT}/README.txt" <<README
 Potrace, compiled to WebAssembly for OpenSCAD Assistive Forge.
@@ -154,7 +157,7 @@ Compiled from
 
 Built with
   ${EMCC_VERSION}
-  ${EMCC_FLAGS[*]}
+  ${EMCC_FLAGS_RECORDED}
 
 Size, as built
   potrace.wasm  ${WASM_RAW} bytes raw, ${WASM_GZ} bytes gzipped
