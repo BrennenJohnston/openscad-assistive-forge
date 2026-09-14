@@ -5215,8 +5215,24 @@ export function closeTutorial(completed = false, options = {}) {
   //    hidden, so on the welcome screen the loop chose #primaryActionBtn
   //    inside #mainInterface.hidden and .focus() was a no-op. isRendered()
   //    uses checkVisibility(), which accounts for hidden ancestors.
-  const restoreTo = previousFocus;
-  const restoreFallback = triggerElement;
+  // D-134. The TRIGGER is tried first, and previousFocus second.
+  //
+  // It was the other way round, and that made the restore depend on where a
+  // browser leaves focus after a click - which is not the same everywhere.
+  // MEASURED on WebKit: clicking "Take the tour" left `previousFocus` reading
+  // #main-content rather than the button, so the first branch restored to
+  // #main-content, reported success, and the button was never tried. A
+  // keyboard or screen-reader user pressed a button and was returned to the
+  // top of the document. Chromium happened to leave the button focused, so the
+  // same code passed there and the defect was invisible - and the test that
+  // catches it is skipped on CI, so no board ever showed it either.
+  //
+  // Preferring the trigger is also simply more correct: somebody pressed that
+  // control to open the tour, so that control is where leaving the tour should
+  // put them. previousFocus is the right answer only when nothing triggered
+  // this explicitly, which is what it is still there for.
+  const restoreTo = triggerElement;
+  const restoreFallback = previousFocus;
 
   const canTakeFocus = (el) =>
     el &&
@@ -5224,18 +5240,18 @@ export function closeTutorial(completed = false, options = {}) {
     document.contains(el) &&
     isRendered(el);
 
-  // Restore focus to the element that had focus before tutorial started
+  // Restore focus to the control that opened the tutorial.
   // Use requestAnimationFrame to ensure DOM has settled after overlay removal
   requestAnimationFrame(() => {
     let focusRestored = false;
 
-    // First try: the element that had focus when the tutorial started
+    // First try: the control that opened the tutorial
     if (canTakeFocus(restoreTo)) {
       restoreTo.focus();
       focusRestored = document.activeElement === restoreTo;
     }
 
-    // Second try: the element that triggered the tutorial
+    // Second try: whatever had focus before it opened
     if (!focusRestored && canTakeFocus(restoreFallback)) {
       restoreFallback.focus();
       focusRestored = document.activeElement === restoreFallback;
