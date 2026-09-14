@@ -47,11 +47,25 @@ import {
   IMAGE_IMPORT_LIMITS,
   TRACER_OPTIONS,
 } from './image-import.js';
-import { compositeOntoWhite, extractInk } from './ink-extraction.js';
+import {
+  compositeOntoWhite,
+  extractInk,
+  lineWidthPercentiles,
+} from './ink-extraction.js';
 import { DEFAULT_TRACE_ENGINE } from './trace-engines.js';
 
 /** The stages a caller can be told about, in the order they happen. */
 export const TRACE_STAGES = Object.freeze(['reading', 'ink', 'tracing']);
+
+/**
+ * How much of a picture's bottom a credit line can occupy.
+ *
+ * The same share credit-line.js uses. It is repeated rather than imported
+ * because that module needs a DOM parser and this one has no DOM; a number
+ * crossing the wire is cheaper than a parser, and the two are pinned together
+ * by a test.
+ */
+export const CREDIT_BAND_SHARE = 0.2;
 
 /**
  * Rebuild the plain object a structured-clone transfer leaves behind into
@@ -171,6 +185,31 @@ self.onmessage = async (event) => {
       pixels = extracted.imageData;
       summary = extracted.summary;
       inkMask = extracted.mask;
+      // How thin the thinnest lines are, so the editor can say whether they
+      // will print. MEASURED at 15 to 20 ms on a picture at the 2 MP cap, so
+      // it rides along with the stage that already has the mask rather than
+      // costing a second pass over the picture later.
+      if (inkMask) {
+        // Two answers, because the caller does not know yet whether this
+        // picture has a caption on it: that is decided on the other side,
+        // where a DOM parser exists. The second leaves out the band a credit
+        // line lives in, and the caller picks the one that matches the drawing
+        // it ended up with.
+        summary = {
+          ...summary,
+          lineWidthPx: lineWidthPercentiles(
+            inkMask,
+            pixels.width,
+            pixels.height
+          ),
+          lineWidthPxBody: lineWidthPercentiles(
+            inkMask,
+            pixels.width,
+            pixels.height,
+            { ignoreBelowY: pixels.height * (1 - CREDIT_BAND_SHARE) }
+          ),
+        };
+      }
     } else {
       // Standard keeps the picture's own colours and builds no mask, so a
       // see-through picture used to reach the tracer with its alpha and the

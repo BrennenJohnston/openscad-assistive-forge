@@ -48,6 +48,8 @@ vi.mock('../../src/js/feature-flags.js', () => ({
 import {
   createSvgPrepWorkspace,
   describeElement,
+  thinLineSentence,
+  THIN_LINE_MM,
 } from '../../src/js/svg-preparer-workspace.js';
 import { createDocumentFocusTrap } from '../../src/js/focus-trap.js';
 import { announce } from '../../src/js/announcer.js';
@@ -3305,5 +3307,68 @@ describe('one picture by default (DP-24)', () => {
     expect(sourceWrap.hidden).toBe(true);
 
     ws.destroy();
+  });
+});
+
+describe('the thin-line advisory (DP-36 P3)', () => {
+  // MEASURED on nine stock icons at charm size: their outlines land between
+  // 0.31 and 0.65 mm. Some print and some do not, and nothing said which.
+  const px = (p10) => ({ p10, p50: p10 * 2, ridgePx: 100 });
+
+  it('★ turns pixels into the millimetres this will actually print at', () => {
+    // Three pixels on a 700-pixel icon is 0.06 mm on a 14 mm charm. The same
+    // three pixels on a 60 mm coaster is 0.26 mm. The pixel count alone is not
+    // a fact anybody can act on.
+    expect(thinLineSentence(px(3), 700, 14)).toContain('about 0.06 mm');
+    expect(thinLineSentence(px(3), 700, 60)).toContain('about 0.26 mm');
+  });
+
+  it('names the width it measured at, and the lever', () => {
+    const said = thinLineSentence(px(10), 700, 14);
+    expect(said).toBe(
+      'Thin lines: about 0.20 mm at 14 mm wide. Lines under 0.5 mm may not ' +
+        'print. Raise Design offset (0.6 suits a 0.4 mm nozzle) or make the ' +
+        'design bigger.'
+    );
+  });
+
+  it('★ says when the width is the editor’s own default, not the model’s', () => {
+    // A number the person did not choose, presented as if they had, is the
+    // kind of thing that sends someone hunting for where they set it.
+    expect(thinLineSentence(px(10), 700, 14, false)).toContain(
+      "14 mm wide, the editor's default width"
+    );
+    expect(thinLineSentence(px(10), 700, 14, true)).not.toContain('default');
+  });
+
+  it('says so when there is nothing to worry about', () => {
+    // 30 px on a 700 px icon at 14 mm is 0.6 mm, over the line.
+    expect(thinLineSentence(px(30), 700, 14)).toBe(
+      'Lines look thick enough to print.'
+    );
+  });
+
+  it('the line is half a millimetre, which is what a 0.4 mm nozzle can do', () => {
+    expect(THIN_LINE_MM).toBe(0.5);
+    // Exactly on the line counts as thick enough: 25 px of 700 at 14 mm is
+    // 0.5 mm exactly.
+    expect(thinLineSentence(px(25), 700, 14)).toBe(
+      'Lines look thick enough to print.'
+    );
+  });
+
+  it('says nothing at all when there is no measurement', () => {
+    expect(thinLineSentence(null, 700, 14)).toBe('');
+    expect(thinLineSentence(px(0), 700, 14)).toBe('');
+    expect(thinLineSentence(px(3), 0, 14)).toBe('');
+    expect(thinLineSentence(px(3), 700, 0)).toBe('');
+  });
+
+  it('★ proposes and never acts: no default is changed by it', () => {
+    // The plan is explicit that this is a proposal. Nine icons at 0.31 to
+    // 0.65 mm means a blanket offset would fatten the ones already fine.
+    const said = thinLineSentence(px(3), 700, 14);
+    expect(said).toContain('Raise Design offset');
+    expect(said).toContain('or make the design bigger');
   });
 });

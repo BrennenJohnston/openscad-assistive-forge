@@ -21,6 +21,7 @@ import {
   CREDIT_LINE_RULE,
 } from '../../src/js/credit-line.js'
 import { creditLineSentence } from '../../src/js/ink-controls.js'
+import { CREDIT_BAND_SHARE } from '../../src/js/trace-worker.js'
 
 const SIZE = 700
 
@@ -225,6 +226,14 @@ describe('the credit line (DP-36)', () => {
         bandFromBottom: 0.2,
         maxClusterHeightShare: 0.12,
       })
+    })
+
+    it('★ the worker knows the same band, and a test keeps them level', () => {
+      // trace-worker.js repeats the band share rather than importing it: this
+      // module needs a DOM parser and the worker has no DOM. A number crossing
+      // the wire is cheaper than a parser, but two copies of a number drift,
+      // so this is what stops them.
+      expect(CREDIT_BAND_SHARE).toBe(CREDIT_LINE_RULE.bandFromBottom)
     })
 
     it('can be tightened or loosened by a caller', () => {

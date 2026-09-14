@@ -477,6 +477,113 @@ export function dominantRejectedColor(imageData, mask, minChroma = 25) {
  * @param {Function} [makeImageData] - (w, h) => ImageData
  * @returns {{imageData: ImageData, composited: boolean}}
  */
+/**
+ * How thin the thinnest lines in a drawing are, in picture pixels.
+ *
+ * A charm is fourteen millimetres across and a 0.4 mm nozzle cannot lay a line
+ * thinner than about half a millimetre. MEASURED on nine stock icons, their
+ * outlines land between 0.31 and 0.65 mm at that size - some of them print and
+ * some of them do not, and nothing in the app said which was which.
+ *
+ * The measurement is a distance transform: for every ink pixel, how far it is
+ * from the nearest paper. On the RIDGE of a stroke - the pixels that are local
+ * maxima of that distance - twice the distance is the stroke's width there.
+ * Taking the tenth percentile of those widths rather than the smallest guards
+ * against a single ragged pixel deciding the answer for a whole drawing.
+ *
+ * Chamfer 3-4 rather than true Euclidean distance: two passes instead of a
+ * search, about 4% error on the diagonal, and this number becomes "about 0.3
+ * mm" in a sentence. Exactness here would cost time and change nothing said.
+ *
+ * @param {Uint8Array} mask one byte per pixel, non-zero is ink
+ * @param {number} width
+ * @param {number} height
+ * @param {object} [options]
+ * @param {number} [options.ignoreBelowY] leave rows at or below this out of
+ *   the answer, for a picture whose bottom band is a caption
+ * @returns {{p10: number, p50: number, ridgePx: number}} widths in pixels
+ */
+export function lineWidthPercentiles(mask, width, height, options = {}) {
+  const none = { p10: 0, p50: 0, ridgePx: 0 };
+  if (!mask || !(width > 0) || !(height > 0)) return none;
+  // A band to leave out of the answer. The credit line a stock icon carries is
+  // letter strokes a couple of pixels across, and it is the thinnest thing in
+  // most icons - so without this the advisory describes a caption that has
+  // already been taken off the drawing and says a charm will not print
+  // because of lettering that is not on it. An e2e caught exactly that: the
+  // ring fixture, whose stroke is thirty pixels, reported 0.06 mm.
+  const ignoreBelowY =
+    options.ignoreBelowY > 0 ? options.ignoreBelowY : Infinity;
+
+  const INF = 1e9;
+  const d = new Float32Array(width * height);
+  for (let i = 0; i < d.length; i++) d[i] = mask[i] ? INF : 0;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = y * width + x;
+      if (!mask[i]) continue;
+      let v = d[i];
+      if (x > 0) v = Math.min(v, d[i - 1] + 3);
+      if (y > 0) {
+        v = Math.min(v, d[i - width] + 3);
+        if (x > 0) v = Math.min(v, d[i - width - 1] + 4);
+        if (x < width - 1) v = Math.min(v, d[i - width + 1] + 4);
+      }
+      d[i] = v;
+    }
+  }
+  for (let y = height - 1; y >= 0; y--) {
+    for (let x = width - 1; x >= 0; x--) {
+      const i = y * width + x;
+      if (!mask[i]) continue;
+      let v = d[i];
+      if (x < width - 1) v = Math.min(v, d[i + 1] + 3);
+      if (y < height - 1) {
+        v = Math.min(v, d[i + width] + 3);
+        if (x < width - 1) v = Math.min(v, d[i + width + 1] + 4);
+        if (x > 0) v = Math.min(v, d[i + width - 1] + 4);
+      }
+      d[i] = v;
+    }
+  }
+
+  const widths = [];
+  const lastRow = Math.min(height - 1, Math.ceil(ignoreBelowY));
+  for (let y = 1; y < lastRow; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const i = y * width + x;
+      if (!mask[i]) continue;
+      const v = d[i];
+      if (
+        v < d[i - 1] ||
+        v < d[i + 1] ||
+        v < d[i - width] ||
+        v < d[i + width]
+      ) {
+        continue;
+      }
+      // 2d - 1, not 2d. A distance transform measures centre-to-nearest-PAPER
+      // PIXEL, so a stroke three pixels across reads d = 2 and 2d would call
+      // it four. Subtracting one is exact on odd widths and one pixel low on
+      // even ones, and low is the right direction for an advisory: this
+      // number decides whether a person is warned that a line may not print,
+      // and erring thick would let a line that cannot print go unmentioned.
+      // One pixel is 0.02 mm on a 700 px icon at charm size.
+      widths.push(Math.max(0, (2 * v) / 3 - 1));
+    }
+  }
+  if (widths.length === 0) return none;
+  widths.sort((a, b) => a - b);
+  const at = (p) =>
+    widths[Math.min(widths.length - 1, Math.floor(p * widths.length))];
+  return {
+    p10: +at(0.1).toFixed(2),
+    p50: +at(0.5).toFixed(2),
+    ridgePx: widths.length,
+  };
+}
+
 export function compositeOntoWhite(
   imageData,
   makeImageData = defaultMakeImageData

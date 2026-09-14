@@ -15780,6 +15780,20 @@ body.tutorial-body-locked {
   display: none;
 }
 
+/* Beside the width it is measured at, because the two numbers only mean
+   anything together. It wraps rather than truncates: a warning nobody can
+   finish reading is not a warning. */
+.svg-prep-thin-lines {
+  margin: 0 0 var(--space-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1.4;
+}
+
+.svg-prep-thin-lines[hidden] {
+  display: none;
+}
+
 .svg-prep-design-width label {
   display: inline-flex;
   align-items: center;

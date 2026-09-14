@@ -475,3 +475,43 @@ test.describe('the credit line a stock icon carries (DP-36)', () => {
     );
   });
 });
+
+test.describe('how thin the lines are (DP-36 P3)', () => {
+  test('★ says the width in millimetres at the size it will be printed', async ({
+    page,
+  }) => {
+    test.setTimeout(120000);
+    // The bird is drawn with a thin stroke: about 9 px on a 600 px picture,
+    // which is a fifth of a millimetre on a 14 mm charm and will not print.
+    await openPicture(page, BIRD);
+    const advisory = page.locator('.svg-prep-thin-lines');
+    await expect(advisory).toBeVisible();
+    await expect(advisory).toContainText(/Thin lines: about 0\.\d+ mm at 14 mm wide/);
+    // It names the width it used, because the person did not choose it.
+    await expect(advisory).toContainText("the editor's default width");
+    // And it names the lever without pulling it.
+    await expect(advisory).toContainText('Raise Design offset');
+  });
+
+  test('a thick-lined drawing is told it is fine', async ({ page }) => {
+    test.setTimeout(120000);
+    // The ring fixture is a 30 px stroke on 700 px: 0.6 mm at charm size.
+    await openPicture(page, RING_WITH_CAPTION);
+    await expect(page.locator('.svg-prep-thin-lines')).toHaveText(
+      'Lines look thick enough to print.'
+    );
+  });
+
+  test('★ nothing is changed by it: the advisory is a sentence, not an action', async ({
+    page,
+  }) => {
+    test.setTimeout(120000);
+    await openPicture(page, BIRD);
+    await expect(page.locator('.svg-prep-thin-lines')).toBeVisible();
+    // The offset control it names is still where it was, at zero.
+    const offsets = await page
+      .locator('.svg-prep-offset-input')
+      .evaluateAll((els) => els.map((el) => el.value));
+    for (const value of offsets) expect(Number(value)).toBe(0);
+  });
+});

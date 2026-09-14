@@ -299,6 +299,17 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
       purpose: 'relief',
       mode: 'file',
       sourceName: currentFileName,
+      // The editor says how thin the thinnest lines are at the width it will
+      // be printed. The measurement rides in with the trace; the width is the
+      // editor's own control. Nothing is changed by it - it names the lever.
+      //
+      // When a credit line was taken off, the figure that leaves the bottom
+      // band out is the one that describes what is left. Letter strokes are
+      // the thinnest thing in most icons, so using the other number would warn
+      // about lettering that is no longer on the drawing.
+      lineWidthPx:
+        summary && (creditLine ? summary.lineWidthPxBody : summary.lineWidthPx),
+      designWidthKnown: false,
       tools: inkControls ? inkControls.element : null,
       // The surface announces its own opening; the door's sentence, which
       // names the file and counts its shapes, is the one worth hearing.
