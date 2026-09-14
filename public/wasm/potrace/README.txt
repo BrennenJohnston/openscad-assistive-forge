@@ -1,8 +1,12 @@
 Potrace, compiled to WebAssembly for OpenSCAD Assistive Forge.
 
-Everything in this folder is build output. Do not edit it by hand: rerun
-scripts/build-potrace-wasm.sh, or the "Build Potrace wasm" GitHub Actions
-workflow, and commit what comes out.
+Everything in this folder is build output, and so is vendor/potrace/potrace.mjs
+beside it. Do not edit any of it by hand: rerun scripts/build-potrace-wasm.sh,
+or the "Build Potrace wasm" GitHub Actions workflow, and commit what comes out.
+
+The loader lives apart from the binary because it is JavaScript and a bundler
+has to treat it as code, while the binary keeps a stable address so the
+checksum below can be checked against the file actually served.
 
 Source
   https://potrace.sourceforge.net/download/1.16/potrace-1.16.tar.gz
@@ -26,8 +30,8 @@ Built with
   -O3 -DHAVE_CONFIG_H -I build/potrace/potrace-1.16/src --no-entry -s MODULARIZE=1 -s EXPORT_ES6=1 -s EXPORT_NAME=createPotrace -s ENVIRONMENT=web,worker,node -s FILESYSTEM=0 -s DYNAMIC_EXECUTION=0 -s ALLOW_MEMORY_GROWTH=1 -s INVOKE_RUN=0 -s ASSERTIONS=0 -s EXPORTED_FUNCTIONS=_potrace_trace_to_path,_potrace_free_result,_potrace_build_version,_malloc,_free -s EXPORTED_RUNTIME_METHODS=HEAPU8,UTF8ToString
 
 Size, as built
-  potrace.wasm  41705 bytes raw, 18357 bytes gzipped
-  potrace.mjs   8186 bytes raw, 2890 bytes gzipped
+  public/wasm/potrace/potrace.wasm  41705 bytes raw, 18357 gzipped
+  vendor/potrace/potrace.mjs        8186 bytes raw, 2890 gzipped
 
 Getting the source
   The tarball above is the complete corresponding source for the potrace part
