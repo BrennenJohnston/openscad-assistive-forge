@@ -1086,9 +1086,15 @@ test.describe('Screen Reader Support', () => {
     })
     
     test('should close tutorial with Escape key and restore focus', async ({ page }) => {
-      // Skip in CI - requires WASM for example loading
-      test.skip(isCI, 'WASM example loading is slow/unreliable in CI')
-      
+      // D-134: this used to be skipped on CI, and that is how a real Safari
+      // accessibility defect lived unseen. The skip's stated reason was example
+      // loading, and this test loads no example - it waits for the engine and
+      // opens the welcome tour, which every other case in this file does too.
+      // It runs everywhere now. If it ever fails on CI for time rather than for
+      // behaviour, that is the pure-timeout class and takes a skip with the
+      // measurement written next to it; this is not that.
+      test.setTimeout(180_000)
+
       await page.goto('/')
       await dismissFirstVisitModal(page)
       await waitForWasmReady(page)
