@@ -925,8 +925,6 @@ export function createSvgPrepWorkspace(containerEl) {
    */
   const canUseWorker = () => typeof Worker !== 'undefined';
   let previewWaitingForEngine = false;
-  /** What the combine on screen is predicted to cost, in ms. */
-  let predictedFlattenMs = 0;
   /**
    * Milliseconds per (shape x ring point), as this session has measured it.
    *
@@ -1198,7 +1196,7 @@ export function createSvgPrepWorkspace(containerEl) {
    */
   function setPreviewBand() {
     const { shapes, points } = flattenSizeOf();
-    predictedFlattenMs = predictFlattenMs(shapes, points, flattenCost);
+    const predictedFlattenMs = predictFlattenMs(shapes, points, flattenCost);
     // No guard on the count. A drawing with nothing left to combine predicts
     // nothing, which is under any budget, so it runs and the result pane says
     // in its own words that there is no foreground. Deferring it instead would
@@ -1273,10 +1271,15 @@ export function createSvgPrepWorkspace(containerEl) {
 
   /** The sentence under the Render preview button. */
   function staleNoteText() {
-    const { shapes } = flattenSizeOf();
+    // Both numbers read fresh. Holding the prediction from when the band was
+    // last set would let the count move while the duration stood still, so
+    // deleting 260 of 300 shapes would say "40 shapes" and still quote the
+    // wait for 300.
+    const { shapes, points } = flattenSizeOf();
+    const ms = predictFlattenMs(shapes, points, flattenCost);
     return (
       `This drawing has ${shapes} shapes. Combining them may take ` +
-      `${waitInWords(predictedFlattenMs)} here, so Forge waits until you ask.`
+      `${waitInWords(ms)} here, so Forge waits until you ask.`
     );
   }
 
