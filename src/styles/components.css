@@ -15621,8 +15621,19 @@ body.tutorial-body-locked {
 
 .svg-prep-object {
   display: flex;
+  /* DP-39 P1. The row could not fit on one line and had no way to say so, so
+     it took the space out of the NAME and then out of Delete. MEASURED in the
+     standalone door on the bird, at 768: the name rendered at ZERO pixels wide
+     and Delete ran 38 px past the list, 40 px of the row clipped away. Seven
+     rows of a dot, three radios and a box, with nothing to tell one shape from
+     another - which is the complaint this release exists for.
+
+     Wrapping is what lets the row say it has run out of room. Nothing moves
+     while there is room for it: MEASURED at 1280 the row still lays out on one
+     line exactly as before. */
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-sm);
+  gap: var(--space-2xs) var(--space-sm);
   padding: var(--space-sm);
   border: 1px solid var(--color-border-light);
   border-radius: var(--border-radius-sm);
@@ -15660,7 +15671,12 @@ body.tutorial-body-locked {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  min-width: 0;
+  /* `min-width: 0` let the name be squeezed to nothing, which is what a flex
+     item does when something has to give and it is the only thing that can.
+     Six characters and an ellipsis is the floor: enough to tell one shape from
+     another, and the width the row is signed to keep for it. */
+  flex: 1 1 6ch;
+  min-width: 6ch;
 }
 
 .svg-prep-role-group {

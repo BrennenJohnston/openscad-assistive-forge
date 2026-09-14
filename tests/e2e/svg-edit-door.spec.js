@@ -927,6 +927,75 @@ test.describe('the drawer starts shut on a phone (DP-Q46a)', () => {
   })
 })
 
+test.describe('the shapes row keeps its name and its Delete (DP-39 P1)', () => {
+  // ★ The row could not fit on one line and had no way to say so, so it took
+  // the space out of the NAME and then out of Delete. MEASURED in this door on
+  // the bird, at 768: the name rendered at ZERO pixels wide and Delete ran
+  // 38 px past the list, 40 px of the row clipped away. Seven rows of a dot,
+  // three radios and a number box, with nothing to tell one shape from
+  // another - which is the complaint DP-39 exists for.
+  //
+  // 768 is the width that showed it, and it is not an unusual one: it is a
+  // tablet, and it is also what a 1280 window gives this panel once the
+  // customizer has taken its half.
+
+  /** Every row's name width, and how far any row overflows its list. */
+  const rowFacts = (page) =>
+    page.evaluate(() => {
+      const list = document.querySelector('.svg-prep-objects')
+      const rows = [...document.querySelectorAll('.svg-prep-object')]
+      return rows.map((row) => {
+        const name = row.querySelector('.svg-prep-object-name')
+        const del = row.querySelector('.svg-prep-object-delete')
+        return {
+          nameWidth: name ? Math.round(name.getBoundingClientRect().width) : 0,
+          nameText: name ? name.textContent : '',
+          deleteRight: del ? Math.round(del.getBoundingClientRect().right) : 0,
+          listRight: Math.round(list.getBoundingClientRect().right),
+          overflow: Math.max(0, Math.round(row.scrollWidth - list.clientWidth)),
+        }
+      })
+    })
+
+  for (const width of [1280, 768, 412]) {
+    test(`★ at ${width} every row shows a name and a whole Delete`, async ({
+      page,
+    }) => {
+      test.setTimeout(180000)
+      await page.setViewportSize({ width, height: 900 })
+      await openApp(page)
+      await openEditorByKeyboard(page, BIRD_SVG)
+      // Below 640 the drawer starts shut (DP-Q46a).
+      const toggle = page.locator('.drawing-editor-panel-toggle')
+      if (await toggle.isVisible().catch(() => false)) {
+        if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+          await toggle.click()
+        }
+      }
+      await expect(page.locator('.svg-prep-object').first()).toBeVisible({
+        timeout: 30000,
+      })
+
+      const rows = await rowFacts(page)
+      expect(rows.length).toBeGreaterThan(0)
+      for (const [i, row] of rows.entries()) {
+        // Six characters and an ellipsis is the floor the row is signed to
+        // keep. 30 px is that floor with room for the font to differ.
+        expect(
+          row.nameWidth,
+          `row ${i} name "${row.nameText}" is ${row.nameWidth} px wide`
+        ).toBeGreaterThan(30)
+        // Delete is a whole button, inside the list it belongs to.
+        expect(
+          row.deleteRight,
+          `row ${i} Delete ends at ${row.deleteRight}, list at ${row.listRight}`
+        ).toBeLessThanOrEqual(row.listRight)
+        expect(row.overflow, `row ${i} overflows by ${row.overflow} px`).toBe(0)
+      }
+    })
+  }
+})
+
 test.describe('the combine runs off the main thread (DP-37 P2)', () => {
   // ★ MEASURED before this, in Chromium, on the same drawing: the flatten took
   // 3,818 ms on the main thread and the page rendered TWO frames in all of it.
