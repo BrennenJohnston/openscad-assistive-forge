@@ -28,6 +28,7 @@ listed below.
 | `stability-city-walk.mjs` | Still-image stability instrument for the city converter | by hand |
 | `build-potrace-wasm.sh` | Compiles Potrace to WebAssembly from one pinned, checksummed tarball into `public/wasm/potrace/` | the "Build Potrace wasm" workflow, or by hand with emsdk active |
 | `potrace-glue.c` | The code between Potrace and the browser: an ink mask in, SVG path data out. Compiled by the script above | not run directly |
+| `make-icon-fixtures.mjs` | Draws the two stock-icon-shaped fixtures the credit-line tests trace, so none has to be downloaded | by hand, when the fixtures change |
 | `verify-potrace-wasm.mjs` | Traces shapes whose answers are known and fails a build that came out mirrored, hole-less or with its settings unwired | the same workflow, right after the build |
 
 The three required CI gates run inside the Unit Tests job. If you add a script,
