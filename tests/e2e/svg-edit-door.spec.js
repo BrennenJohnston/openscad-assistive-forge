@@ -1027,6 +1027,110 @@ test.describe("the flatten budget's loose ends (owner answers, 2026-09-14)", () 
   })
 })
 
+test.describe('on a phone the list is a sheet, not a cover (DP-39 P4)', () => {
+  // ★ The panel is laid ABSOLUTELY over the editor's body, which is right
+  // beside a wide picture and wrong on a phone, where it is the full width.
+  // MEASURED at 412 x 915 with the drawer open, before this: the panel covered
+  // 107,163 of the picture's 107,352 square pixels. 99.8 per cent. Opening the
+  // list to see which shape is which hid the very thing you were trying to
+  // name.
+
+  /**
+   * What is actually on screen, and what sits on top of it.
+   *
+   * The picture's own rect is not the answer: it is inside a box that scrolls,
+   * so part of it can be laid out somewhere nobody can see. What counts is the
+   * part inside that box.
+   */
+  const coverage = (page) =>
+    page.evaluate(() => {
+      const pic = document.querySelector('.svg-prep-result-pane svg')
+      const stage = document.querySelector('.drawing-editor-stage')
+      const panel = document.querySelector('.drawing-editor-panel')
+      if (!pic || !stage) return null
+      const p = pic.getBoundingClientRect()
+      const st = stage.getBoundingClientRect()
+      const clip = {
+        left: Math.max(p.left, st.left),
+        right: Math.min(p.right, st.right),
+        top: Math.max(p.top, st.top),
+        bottom: Math.min(p.bottom, st.bottom),
+      }
+      const seen =
+        Math.max(0, clip.right - clip.left) * Math.max(0, clip.bottom - clip.top)
+      let covered = 0
+      if (panel && !panel.hidden) {
+        const b = panel.getBoundingClientRect()
+        covered =
+          Math.max(0, Math.min(clip.right, b.right) - Math.max(clip.left, b.left)) *
+          Math.max(0, Math.min(clip.bottom, b.bottom) - Math.max(clip.top, b.top))
+      }
+      return {
+        seen: Math.round(seen),
+        covered: Math.round(covered),
+        whole: Math.round(p.width * p.height),
+        panelTop: panel && !panel.hidden ? Math.round(panel.getBoundingClientRect().top) : null,
+        stageBottom: Math.round(st.bottom),
+      }
+    })
+
+  test('★ at 412 the drawing stays on screen with the list open', async ({
+    page,
+  }) => {
+    test.setTimeout(180000)
+    await page.setViewportSize({ width: 412, height: 915 })
+    await openApp(page)
+    await openEditorByKeyboard(page, BIRD_SVG)
+    await expect(page.locator('.svg-prep-result-pane svg').first()).toBeVisible({
+      timeout: 60000,
+    })
+
+    // The drawer starts shut at this width (DP-Q46a), so this is the press
+    // that used to hide the drawing.
+    await page.locator('.drawing-editor-panel-toggle').click()
+    await expect(page.locator('.drawing-editor-panel')).toBeVisible()
+
+    const c = await coverage(page)
+    expect(c.covered, `the list covers ${c.covered} px of the drawing`).toBe(0)
+    expect(c.seen, 'nothing of the drawing is on screen').toBeGreaterThan(10000)
+    // Below, not on top.
+    expect(c.panelTop).toBeGreaterThanOrEqual(c.stageBottom - 2)
+  })
+
+  test('★ and the whole drawing, not the top of it', async ({ page }) => {
+    // Shrinking the stage on its own left the picture at its old size and
+    // simply scrolled the rest away: MEASURED, a 284 px drawing in a 197 px
+    // stage, so what a person saw with the list open was half a bird.
+    test.setTimeout(180000)
+    await page.setViewportSize({ width: 412, height: 915 })
+    await openApp(page)
+    await openEditorByKeyboard(page, BIRD_SVG)
+    await page.locator('.drawing-editor-panel-toggle').click()
+    await expect(page.locator('.drawing-editor-panel')).toBeVisible()
+
+    const c = await coverage(page)
+    // Every square pixel the picture lays out is a square pixel on screen.
+    expect(
+      c.seen / c.whole,
+      `only ${Math.round((c.seen / c.whole) * 100)}% of the drawing is in view`
+    ).toBeGreaterThan(0.9)
+  })
+
+  test('a wide editor is untouched: the list stays beside the drawing', async ({
+    page,
+  }) => {
+    test.setTimeout(180000)
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await openApp(page)
+    await openEditorByKeyboard(page, BIRD_SVG)
+    await expect(page.locator('.drawing-editor-panel')).toBeVisible()
+    const c = await coverage(page)
+    expect(c.covered).toBe(0)
+    // Beside, which means it does NOT start below the picture's box.
+    expect(c.panelTop).toBeLessThan(c.stageBottom)
+  })
+})
+
 test.describe('the word on the panel (DP-Q40)', () => {
   test('★ the charm says Shapes, because that is what is on it', async ({
     page,

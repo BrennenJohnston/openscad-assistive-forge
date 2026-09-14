@@ -17301,11 +17301,58 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
    closing the drawer is one press. (The old stacked-columns answer here is
    retired with the drawer - MEASURED before it: at 412 wide the panel grew
    to 1,674 px and the stage was squeezed to 0.) */
+/* ── DP-39 P4: below 640 the list is a SHEET, not a cover ────────────────
+   The panel is laid absolutely over the body, which is right beside a wide
+   picture and wrong on a phone, where it is the full width. MEASURED at
+   412 x 915 with the drawer open: the panel covered 107,163 of the picture's
+   107,352 square pixels. 99.8 per cent. Opening the list to see which shape
+   is which hid the very thing you were trying to name.
+
+   So at this width the body becomes a column and the panel joins the flow
+   underneath the picture: the drawing stays on screen, shorter, and the list
+   sits below it where a thumb can reach it. Its heading is the "Shapes"
+   summary it already carries; a second one would say the same word twice. */
 @container (max-width: 640px) {
+  .drawing-editor-body {
+    flex-direction: column;
+  }
+
   .drawing-editor-panel {
+    position: static;
     width: 100%;
+    /* Whatever the picture does not need, and never so little that the first
+       row is a sliver. */
+    flex: 1 1 auto;
+    min-height: 120px;
     border-left: none;
+    border-top: 1px solid var(--color-border);
     padding-left: var(--space-2xs);
+  }
+
+  /* The picture keeps the top of the editor and gives up the rest. Without a
+     ceiling it takes its natural height and pushes the sheet off the bottom,
+     which is the covering problem again with extra steps. */
+  .drawing-editor--panel-open .drawing-editor-stage {
+    /* A share of the room, with a floor that holds the whole picture: the
+       cap below is 160 px and the pane puts a caption and its padding around
+       it. MEASURED without the floor, the stage settled at 152 px and clipped
+       40 px off the bottom of a 160 px drawing - three quarters of a bird
+       instead of half, which is not the fix, only a smaller version of the
+       same bug. */
+    flex: 0 0 auto;
+    min-height: 200px;
+    max-height: 45%;
+  }
+
+  /* And the drawing SHRINKS to the room it has rather than being cut off in
+     it. The picture is capped at 300 px and the shortened stage simply
+     scrolled the rest away: MEASURED at 412 x 915, a 284 px drawing in a
+     197 px stage, so what a person saw with the list open was the top half of
+     a bird. 160 px is the pane's own minimum height, so the picture is never
+     asked to fit somewhere the pane will not go. */
+  .drawing-editor--panel-open .svg-prep-source-pane svg,
+  .drawing-editor--panel-open .svg-prep-result-pane svg {
+    max-height: 160px;
   }
 }
 
