@@ -1206,6 +1206,11 @@ export function createSvgPrepWorkspace(containerEl) {
 
   /** Show the combine as work in progress, with a way to stop it. */
   function setRenderBusy(busy) {
+    // The bar and the Cancel button live INSIDE the render row, and on an
+    // auto-preview drawing that row is hidden - so unhiding the two of them
+    // showed a person NOTHING while the combine ran. The row is what reports
+    // the work, at every tier; it goes back to the tier's own state after.
+    refs.renderRow.hidden = busy ? false : autoPreview;
     refs.renderProgress.hidden = !busy;
     refs.renderCancelBtn.hidden = !busy;
     refs.renderBtn.hidden = busy;
@@ -1261,6 +1266,16 @@ export function createSvgPrepWorkspace(containerEl) {
         // thing this app does to a drawing and it used to freeze the page for
         // as long as it took.
         setRenderBusy(true);
+        // There is no result to apply until the combine lands. Pressing Apply
+        // used to be impossible too early because the combine finished inside
+        // this same turn; now it is seconds of worker start-up and work, and
+        // Apply's handler refuses on a null result by RETURNING - so the
+        // button sat enabled and did nothing at all when pressed. Firefox on
+        // CI pressed it in that window and the stack was never built.
+        setApplyEnabled(
+          false,
+          'Still combining the shapes. Apply is ready when the result appears.'
+        );
         try {
           const out = await getFlattenRunner().start(
             withOffsets,
@@ -1274,14 +1289,24 @@ export function createSvgPrepWorkspace(containerEl) {
           if (error instanceof FlattenCancelled) {
             if (error.reason === 'cancelled') {
               currentResult = null;
-              setApplyEnabled(false);
+              setApplyEnabled(
+                false,
+                'Combining was stopped, so there is no result to apply.'
+              );
+              // The way back is the Render button, and on an auto-preview
+              // drawing the row holding it is hidden the rest of the time.
+              refs.renderRow.hidden = false;
+              refs.renderBtn.disabled = false;
               refs.renderNote.textContent = 'Combining cancelled.';
               liveRegion.textContent = 'Combining cancelled.';
             }
             return;
           }
           currentResult = null;
-          setApplyEnabled(false);
+          setApplyEnabled(
+            false,
+            'The shapes could not be combined, so there is nothing to apply.'
+          );
           showResultError(
             `The drawing could not be combined: ${error.message}`
           );
