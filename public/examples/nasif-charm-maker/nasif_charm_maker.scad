@@ -20,7 +20,7 @@ charm_thickness = 3; // [1.5:0.5:8]
 corner_radius = 4; // [0:0.5:15]
 
 /* [Design] */
-// Image file for the design (SVG, PNG, or JPG — raster images auto-convert to SVG)
+// Image file for the design (SVG, PNG, or JPG. A picture is converted to SVG when you press Start conversion)
 design_file = "heart.svg"; // [file:svg,png,jpg]
 
 // Engraving depth (or raise height)

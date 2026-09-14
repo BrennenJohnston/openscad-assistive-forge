@@ -81,3 +81,26 @@ describe('the dev render worker\'s no-store scope (D-31, D-133)', () => {
     expect(graph.has('/src/main.js')).toBe(false)
   })
 })
+
+/**
+ * DP-34's trace worker is the second module worker built from src/, and it
+ * imports image-import.js and ink-extraction.js, both of which the main thread
+ * loads first. That is precisely the D-133 shape, so it needs the same scope.
+ */
+describe("the trace worker's no-store scope (DP-34)", () => {
+  const graph = devWorkerModuleGraph('src/js/trace-worker.js')
+
+  it('covers the worker entry', () => {
+    expect(graph.has('/src/js/trace-worker.js')).toBe(true)
+  })
+
+  it('covers the modules it shares with the main thread', () => {
+    for (const url of [
+      '/src/js/image-import.js',
+      '/src/js/ink-extraction.js',
+      '/src/js/color-utils.js',
+    ]) {
+      expect(graph.has(url), `${url} must be served no-store in dev`).toBe(true)
+    }
+  })
+})

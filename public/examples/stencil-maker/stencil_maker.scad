@@ -61,7 +61,7 @@ stencil_plate_7 = ""; // [file:svg]
 stencil_plate_8 = ""; // [file:svg]
 
 /* [Design] */
-// Image file for the stencil (SVG, PNG, or JPG — raster images auto-convert to SVG)
+// Image file for the stencil (SVG, PNG, or JPG. A picture is converted to SVG when you press Start conversion)
 design_file = "sample-design.svg"; // [file:svg,png,jpg]
 
 // Design width divided by height. The Assistive Forge app measures and sets this when you choose a file; in desktop OpenSCAD set it to your file's width/height so 100 truly fills the design area (1 assumes a square design)

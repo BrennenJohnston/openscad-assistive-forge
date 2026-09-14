@@ -6,7 +6,7 @@
 // License: CC0 (Public Domain)
 
 /* [Design] */
-// Image file for the design (SVG, PNG, or JPG — raster images auto-convert to SVG; use simple single-path SVGs for best results)
+// Image file for the design (SVG, PNG, or JPG. A picture is converted to SVG when you press Start conversion; simple single-path SVGs work best)
 design_file = ""; // [file:svg,png,jpg]
 
 // Depth of engraving (or height of raised design)

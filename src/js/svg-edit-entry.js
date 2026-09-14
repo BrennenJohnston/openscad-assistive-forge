@@ -16,11 +16,15 @@
  */
 
 import { analyzeSvg } from './svg-preparer.js';
-import {
-  convertImageDataToSvg,
-  loadImageData,
-  IMAGE_IMPORT_LIMITS,
-} from './image-import.js';
+import { loadImageData, IMAGE_IMPORT_LIMITS } from './image-import.js';
+import { createTraceRunner, TraceCancelled } from './trace-runner.js';
+
+// DP-34: the door's FIRST trace, the one that happens while the editor is
+// still being opened. It runs in the worker like every other trace, so a big
+// picture at this door no longer blocks the page while it converts. One runner
+// for the module, because svgTextForFile is a free function and there is only
+// ever one door open.
+let doorRunner = null;
 
 /** Extensions the standalone door accepts. */
 export const SVG_EDIT_ACCEPTED_EXTENSIONS = [
@@ -145,9 +149,10 @@ export async function svgTextForFile(
   if (RASTER_EXTENSIONS.includes(fileExtension(file.name))) {
     const dataUrl = await readAsDataUrl(file);
     const imageData = await loadImageData(dataUrl);
-    // convertImageDataToSvg refuses anything past IMAGE_IMPORT_LIMITS.maxPixels
-    // with its own message, which names the actual pixel count.
-    const { svg, summary } = await convertImageDataToSvg(imageData, { ink });
+    // A picture past IMAGE_IMPORT_LIMITS.maxPixels is SCALED DOWN rather than
+    // refused, and the worker says by how much in its summary.
+    if (!doorRunner) doorRunner = createTraceRunner();
+    const { svg, summary } = await doorRunner.start(imageData, ink || null);
     return { svg, traced: true, imageData, summary };
   }
 
@@ -166,6 +171,17 @@ export async function svgTextForFile(
  * @returns {{ openFile: Function, isOpen: Function, destroy: Function }}
  */
 export function createSvgEditEntry({ announce, onError, render } = {}) {
+  // DP-34: the door's traces run in the worker too, so opening a big picture
+  // here does not freeze the page either. The door has no Start button yet -
+  // the person already chose Edit Drawing, which IS the deliberate action -
+  // and no Cancel surface, because there is nothing on screen to put one on
+  // until the editor exists. DP-37 gives this door a picture first, and the
+  // bar and Cancel belong with it.
+  let traceRunner = null;
+  const runTrace = (imageData, ink) => {
+    if (!traceRunner) traceRunner = createTraceRunner();
+    return traceRunner.start(imageData, ink);
+  };
   let container = null;
   let workspace = null;
   let open = false;
@@ -332,11 +348,12 @@ export function createSvgEditEntry({ announce, onError, render } = {}) {
     if (!currentImageData) return;
     if (inkControls) inkControls.setBusy(true);
     try {
-      const { svg, summary } = await convertImageDataToSvg(currentImageData, {
-        ink: settings,
-      });
+      const { svg, summary } = await runTrace(currentImageData, settings);
       await showSvg(svg, { summary });
     } catch (error) {
+      // A trace the person superseded by moving another slider is not a
+      // failure and must not be reported as one.
+      if (error instanceof TraceCancelled) return;
       fail(`Forge could not re-read ${currentFileName}: ${error.message}`);
     } finally {
       if (inkControls) inkControls.setBusy(false);

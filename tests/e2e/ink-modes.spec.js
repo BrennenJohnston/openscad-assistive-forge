@@ -61,13 +61,34 @@ const shapeCount = (page) => page.locator('.svg-prep-object').count()
 const summaryText = (page) =>
   page.locator('.ink-controls-summary').textContent()
 
-/** Switch mode and wait for the re-trace to report. */
+/**
+ * Switch mode and wait for the re-trace to REPORT, not merely to start.
+ *
+ * This used to wait for the summary to differ from what it said before, and
+ * that was only ever reliable by accident: setBusy writes "Re-reading the
+ * picture..." into the same element, and the trace used to finish inside the
+ * same turn because it ran on the main thread, so the waiting line was
+ * overwritten before Playwright could read it.
+ *
+ * Since the trace moved into a worker (DP-34) the gap is real, and this
+ * returned on the waiting line with the PREVIOUS mode's shapes still on
+ * screen - passing locally, failing on a slower CI runner. The waiting line is
+ * not an answer; wait past it.
+ */
+const BUSY_LINE = /Re-reading the picture/
+
 async function chooseMode(page, value) {
   const before = await summaryText(page)
   await page.locator(`#svg-edit-ink-mode-${value}`).check()
   await expect
-    .poll(async () => summaryText(page), { timeout: 20000 })
-    .not.toBe(before)
+    .poll(
+      async () => {
+        const now = await summaryText(page)
+        return now !== before && !BUSY_LINE.test(now || '')
+      },
+      { timeout: 60000 }
+    )
+    .toBe(true)
 }
 
 test.describe('What to keep from a picture', () => {

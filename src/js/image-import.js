@@ -14,7 +14,6 @@
  * @license GPL-3.0-or-later
  */
 
-import ImageTracer from 'imagetracerjs';
 import { hexToRgb } from './color-utils.js';
 
 /**
@@ -29,8 +28,13 @@ export const IMAGE_IMPORT_LIMITS = {
 /**
  * imagetracerjs options tuned for monochrome logo tracing.
  * posterized1 preset (2 colors) with stroke disabled.
+ *
+ * Exported because the trace worker runs the same trace off the main thread
+ * and has to use the same numbers. A second copy over there would be exactly
+ * the cross-file default drift that has caused more defects in this project
+ * than anything else.
  */
-const TRACER_OPTIONS = {
+export const TRACER_OPTIONS = {
   colorsampling: 0,
   numberofcolors: 2,
   pathomit: 8,
@@ -170,11 +174,25 @@ export async function convertImageDataToSvg(imageData, options = {}) {
   if (ink && ink.mode && ink.mode !== 'standard') {
     // Lazy: nobody pays for the extractor until a picture actually needs it.
     const { extractInk } = await import('./ink-extraction.js');
-    const extracted = extractInk(imageData, ink);
+    // ★ D-131: this read `imageData`, the ORIGINAL, so the downscale computed
+    // twenty lines above was thrown away for every ink mode - which is every
+    // mode an icon or a photo goes through. An 8 MP picture was ink-extracted
+    // and traced at 8 MP and a 12 MP phone photo at 12 MP, while the summary
+    // cheerfully reported that it had been scaled down by N. The cap was dead
+    // code on the one path that needed it most, and the shipped conversion ran
+    // three to ten times slower than its own stages because of this one word.
+    const extracted = extractInk(pixels, ink);
     pixels = extracted.imageData;
     summary = extracted.summary;
   }
 
+  // DP-34: imagetracerjs is loaded here on demand rather than at the top of the
+  // file. Every conversion a person actually starts now runs in the trace
+  // worker, which carries its own copy of the tracer in its own chunk; a static
+  // import here put a SECOND copy in the core bundle, which every visitor
+  // downloads whether or not they ever choose a picture. MEASURED: the core
+  // chunk carried the tracer with no production caller left for this function.
+  const { default: ImageTracer } = await import('imagetracerjs');
   const tracerOptions = { ...TRACER_OPTIONS, ...tracerOverrides };
   const svgString = ImageTracer.imagedataToSVG(pixels, tracerOptions);
 
