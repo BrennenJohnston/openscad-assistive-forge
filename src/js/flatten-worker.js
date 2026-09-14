@@ -47,8 +47,14 @@ self.onmessage = async (event) => {
     const engine = await import('./ring-geometry.js');
 
     const warnings = [];
+    // Timed HERE, around the union alone: the import above happens once per
+    // worker and the postMessage either side is not the drawing's fault. What
+    // goes back is what DP-37 P3 calibrates its budget on, so it has to be the
+    // cost of the work and nothing else.
+    const started = performance.now();
     const svg = flattenWithRings(engine, elements, svgMeta || {}, warnings);
-    post({ id, type: 'done', svg, warnings });
+    const ms = performance.now() - started;
+    post({ id, type: 'done', svg, warnings, ms });
   } catch (err) {
     post({
       id,

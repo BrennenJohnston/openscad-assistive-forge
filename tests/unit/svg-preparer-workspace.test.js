@@ -3391,10 +3391,16 @@ describe('the result pane is never empty (DP-37 P1)', () => {
   // It was walked on the bird - tier A, the one class of drawing that could
   // not show it.
 
-  // 60 elements is above ELEMENT_TIERS.autoRenderMax, which is the band the
-  // blank lived in. Below it the editor combines on its own and the pane holds
-  // a real result.
-  const ABOVE_BUDGET = 60;
+  // Above FLATTEN_BUDGET_MS, which is the band the blank lived in. Below it
+  // the editor combines on its own and the pane holds a real result.
+  //
+  // Each of these elements is an M and two arcs, which the estimator prices at
+  // 33 ring points, so the prediction is 1.5e-3 x n x 33n and the 300 ms
+  // budget falls between 77 and 78 of them. 100 is over it with room. It used
+  // to be 60, which was over DP-Q9's retired count of 50 and is under the
+  // budget that replaced it (178 ms) - the re-sign at DP-Q33 moved this line
+  // and the drawing that sits on it had to move too.
+  const ABOVE_BUDGET = 100;
 
   it('★ shows the drawing where the combined result will go', () => {
     const ws = createSvgPrepWorkspace(container);
