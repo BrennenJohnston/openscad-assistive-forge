@@ -130,8 +130,13 @@ async function openEditorByKeyboard(page, fixture) {
   await expectPickerOpened(page)
   await page.locator('#svgEditFileInput').setInputFiles(fixture)
 
+  // Waits on the PICTURE, not the shape list. The list is inside the side
+  // panel, and below 640 that panel is a drawer which now starts shut
+  // (DP-Q46a) - so a wait on a row never returns at phone width. The picture
+  // is in the editor at every width, which is DP-37 P1's whole subject, and a
+  // case that needs the list asserts it for itself.
   await page
-    .locator('.svg-prep-object')
+    .locator('.svg-prep-result-pane svg')
     .first()
     .waitFor({ state: 'visible', timeout: 60000 })
 
@@ -722,7 +727,9 @@ test.describe('the side panel does not sit on the drawing (DP-37 P1)', () => {
     await page.setViewportSize({ width, height: 900 })
     await openApp(page)
     await openEditorByKeyboard(page, MANY_210)
-    await expect(page.locator('.svg-prep-object').first()).toBeVisible()
+    // The picture, not the list: below 640 the list is inside a drawer that
+    // starts shut (DP-Q46a).
+    await expect(page.locator('.svg-prep-result-pane svg').first()).toBeVisible()
   }
 
   /** How much of the drawing the panel covers. */
@@ -755,20 +762,125 @@ test.describe('the side panel does not sit on the drawing (DP-37 P1)', () => {
     await openAt(page, 412)
 
     // The drawer rule is written for this width and never fired here, because
-    // no ancestor of the stage was a container. It fires now: the panel takes
-    // the whole width rather than lying across the drawing as a strip.
+    // no ancestor of the stage was a container. It fires now - but the drawer
+    // starts shut (DP-Q46a), so this opens it first and then checks the two
+    // things that matter: it takes the WHOLE width rather than lying across
+    // the drawing as a strip, and closing it gives the drawing back.
+    const regions = page.locator('button:has-text("Regions")').first()
+    await regions.click()
+    await expect(page.locator('.drawing-editor-panel')).toBeVisible()
     const panelWidth = await page.evaluate(
       () => document.querySelector('.drawing-editor-panel').getBoundingClientRect().width
     )
     expect(panelWidth).toBeGreaterThan(380)
 
-    // And the design's own premise holds: closing it is one press, and the
-    // drawing is really there underneath.
-    await page.locator('button:has-text("Regions")').first().click()
+    await regions.click()
     await expect(page.locator('.drawing-editor-panel')).toBeHidden()
     const drawing = page.locator('.svg-prep-result-pane svg').first()
     await expect(drawing).toBeVisible()
     const box = await drawing.boundingBox()
     expect(box.width).toBeGreaterThan(300)
+  })
+})
+
+test.describe('the picture is the first thing (DP-37 P1, audit 21)', () => {
+  // ★ The ink panel used to come before the picture, and it is tall.
+  // MEASURED with a traced icon: the panel ran 694 px at 1280, 853 at 900 and
+  // 1,242 at 412, which put "Will print as" at y 862, y 1,024 and y 1,590. On
+  // a 900-tall window the person's own picture was below the fold at every
+  // width - so the first thing they met after choosing a picture was a column
+  // of settings for a drawing they could not see.
+
+  const RING = path.join(process.cwd(), 'tests', 'fixtures', 'icons', 'outline-ring.png')
+
+  for (const width of [1280, 900]) {
+    test(`★ the picture comes before the settings at ${width}`, async ({ page }) => {
+      test.setTimeout(120000)
+      await page.setViewportSize({ width, height: 900 })
+      await openApp(page)
+      await openEditorByKeyboard(page, RING)
+      await expect(page.locator('.svg-prep-object').first()).toBeVisible()
+
+      const tops = await page.evaluate(() => {
+        const caption = [...document.querySelectorAll('.svg-prep-pane-caption')]
+          .find((e) => /Will print as/.test(e.textContent))
+        const ink = document.querySelector('.ink-controls')
+        return {
+          picture: caption ? Math.round(caption.getBoundingClientRect().y) : null,
+          settings: ink ? Math.round(ink.getBoundingClientRect().y) : null,
+        }
+      })
+      expect(tops.picture).not.toBeNull()
+      expect(tops.settings).not.toBeNull()
+      // Above the settings, and inside the first screen.
+      expect(tops.picture).toBeLessThan(tops.settings)
+      expect(tops.picture).toBeLessThan(600)
+    })
+  }
+
+  test('in the document, the picture comes first whatever the width', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await page.setViewportSize({ width: 412, height: 900 })
+    await openApp(page)
+    await openEditorByKeyboard(page, RING)
+    // Waits on the PICTURE, not the shape list: at this width the list is
+    // inside a drawer that now starts shut (DP-Q46a), which is the point.
+    await expect(page.locator('.svg-prep-result-pane svg').first()).toBeVisible()
+
+    // Reading order is the one thing that holds at every width, drawer open or
+    // shut: a screen reader meets the picture before the settings for it.
+    const pictureFirst = await page.evaluate(() => {
+      const caption = [...document.querySelectorAll('.svg-prep-pane-caption')]
+        .find((e) => /Will print as/.test(e.textContent))
+      const ink = document.querySelector('.ink-controls')
+      if (!caption || !ink) return null
+      return Boolean(
+        caption.compareDocumentPosition(ink) & Node.DOCUMENT_POSITION_FOLLOWING
+      )
+    })
+    expect(pictureFirst).toBe(true)
+  })
+})
+
+test.describe('the drawer starts shut on a phone (DP-Q46a)', () => {
+  const RING_PNG = path.join(process.cwd(), 'tests', 'fixtures', 'icons', 'outline-ring.png')
+
+  test('★ the picture is the first thing SEEN, not only the first thing read', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await page.setViewportSize({ width: 412, height: 900 })
+    await openApp(page)
+    await openEditorByKeyboard(page, RING_PNG)
+
+    // MEASURED before this: the drawer opened by default and took 396 px of a
+    // 412 px screen, so the first thing after choosing a picture was a list of
+    // shapes drawn on top of the picture.
+    await expect(page.locator('.drawing-editor-panel')).toBeHidden()
+    const picture = page.locator('.svg-prep-result-pane svg').first()
+    await expect(picture).toBeVisible()
+    const box = await picture.boundingBox()
+    expect(box.width).toBeGreaterThan(300)
+
+    // And the list is one press away, on a button that was already there.
+    const regions = page.locator('button:has-text("Regions")').first()
+    await expect(regions).toBeVisible()
+    await expect(regions).toHaveAttribute('aria-expanded', 'false')
+    await regions.click()
+    await expect(page.locator('.drawing-editor-panel')).toBeVisible()
+    await expect(page.locator('.svg-prep-object').first()).toBeVisible()
+  })
+
+  test('a wide screen is untouched: the panel is beside the drawing, open', async ({
+    page,
+  }) => {
+    test.setTimeout(120000)
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await openApp(page)
+    await openEditorByKeyboard(page, RING_PNG)
+    await expect(page.locator('.drawing-editor-panel')).toBeVisible()
+    await expect(page.locator('.svg-prep-object').first()).toBeVisible()
   })
 })

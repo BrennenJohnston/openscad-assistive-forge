@@ -84,6 +84,16 @@ let instances = 0;
 
 const SECTION_ORDER = ['colours', 'regions', 'plates', 'warnings'];
 
+/**
+ * The width at or below which the side panel is a full-width drawer.
+ *
+ * The stylesheet carries this number too, as an `@container` query on
+ * `.drawing-editor`. It is repeated here because the drawer's STARTING state
+ * has to be chosen before the editor is laid out, and a unit test pins the two
+ * copies together so they cannot drift.
+ */
+export const PANEL_DRAWER_MAX_WIDTH = 640;
+
 /** A value made safe inside an attribute selector; jsdom has no CSS.escape. */
 const escapeAttr = (value) => String(value).replace(/["\\]/g, '\\$&');
 
@@ -319,6 +329,22 @@ export function createDrawingEditor({
   backToToolbar.href = `#${titleId}`;
   backToToolbar.textContent = S.backToToolbar;
   panel.appendChild(backToToolbar);
+
+  /**
+   * Is the panel a full-width drawer at this size, rather than a side strip?
+   *
+   * The stylesheet decides where that band is, with a container query on the
+   * editor. This needs the answer BEFORE anything is laid out - the starting
+   * state is chosen as the editor opens - so the number is repeated in
+   * PANEL_DRAWER_MAX_WIDTH and a test pins the two together.
+   *
+   * Falls back to the window when the editor has no width yet, which happens
+   * when the purpose is applied before the host is shown.
+   */
+  function panelIsDrawer() {
+    const width = root.getBoundingClientRect().width || window.innerWidth || 0;
+    return width > 0 && width <= PANEL_DRAWER_MAX_WIDTH;
+  }
 
   /** The drawer's one switch: the panel's own hidden is the state. */
   function setPanel(open) {
@@ -623,7 +649,15 @@ export function createDrawingEditor({
     // G0 (DP-24): the picture is the editor. The stencil purpose starts with
     // the drawer closed - the canvas and the paint tools carry the task; the
     // relief purpose starts with it open - the shape list IS the hands.
-    setPanel(!stencil);
+    //
+    // ★ Except on a narrow screen, signed at DP-Q46a. There the panel is not a
+    // strip beside the drawing, it is a drawer laid over it: MEASURED at 412,
+    // 396 px of a 412 px screen. Open, the first thing a person sees after
+    // choosing a picture is a list of shapes on top of the picture they
+    // chose. Shut, the picture is the first thing SEEN as well as the first
+    // thing read, and the list is one press away on a button already in the
+    // header. Nothing changes above the band, where the panel covers nothing.
+    setPanel(!stencil && !panelIsDrawer());
     sections.colours.details.hidden = !stencil;
     sections.plates.details.hidden = !stencil;
     regionsBlock.hidden = !stencil;

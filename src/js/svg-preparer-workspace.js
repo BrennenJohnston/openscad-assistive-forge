@@ -572,12 +572,24 @@ function buildWorkspaceDom() {
   toolsSlot.className = 'svg-prep-tools-slot';
   toolsSlot.hidden = true;
 
+  // ★ The picture first, at every width (audit 21).
+  //
+  // The ink panel used to come before it, and the panel is tall: MEASURED with
+  // a traced icon through the Edit Drawing door, the panel ran 694 px at 1280,
+  // 853 at 900 and 1,242 at 412, which put "Will print as" at y 862, y 1,024
+  // and y 1,590. On a 900-tall window the person's own picture was below the
+  // fold at every width, and nearly two screens down on a phone - so the first
+  // thing they met after choosing a picture was a column of settings for a
+  // drawing they could not see.
+  //
+  // What sits with the picture stays with it: the thin-line advisory and the
+  // tint legend both describe what is in the frame above them.
   root.append(
     header,
-    toolsSlot,
-    thinLines,
     previews,
+    thinLines,
     legendRow,
+    toolsSlot,
     layerSummary,
     bulkBar,
     objects,
