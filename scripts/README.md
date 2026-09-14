@@ -26,6 +26,9 @@ listed below.
 | `census-city-walk.mjs` | Placement census over the shipped extracts and builders | by hand |
 | `seq-city-walk.mjs` | Frame-sequence stability instrument for the city converter | by hand |
 | `stability-city-walk.mjs` | Still-image stability instrument for the city converter | by hand |
+| `build-potrace-wasm.sh` | Compiles Potrace to WebAssembly from one pinned, checksummed tarball into `public/wasm/potrace/` | the "Build Potrace wasm" workflow, or by hand with emsdk active |
+| `potrace-glue.c` | The code between Potrace and the browser: an ink mask in, SVG path data out. Compiled by the script above | not run directly |
+| `verify-potrace-wasm.mjs` | Traces shapes whose answers are known and fails a build that came out mirrored, hole-less or with its settings unwired | the same workflow, right after the build |
 
 The three required CI gates run inside the Unit Tests job. If you add a script,
 add it to this table.

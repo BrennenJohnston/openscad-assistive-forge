@@ -134,6 +134,40 @@ SVG path offset calculations use clipper2-js for polygon offsetting (Minkowski s
 
 ---
 
+## Potrace (GPL-2.0-or-later)
+
+The picture tracer can use Potrace to turn an ink mask into curves. I compile it
+from source rather than shipping a published binary, so the exact bytes in the
+app can be traced back to one tarball and one checksum.
+
+**License**: GNU General Public License v2.0 or later
+**Project**: https://potrace.sourceforge.net/
+**Copyright**: (C) 2001-2019 Peter Selinger
+**Source Tarball**: https://potrace.sourceforge.net/download/1.16/potrace-1.16.tar.gz
+**sha256**: `be8248a17dedd6ccbaab2fcc45835bb0502d062e40fbded3bc56028ce5eb7acc`
+**Vendored Location**: `public/wasm/potrace/` (build output, with the upstream `COPYING` beside it)
+**Build Recipe**: `scripts/build-potrace-wasm.sh`, run by the "Build Potrace wasm" workflow
+**Usage**: `src/js/potrace-trace.js`, called from the picture tracing worker
+
+Compiled unmodified from `src/potracelib.c`, `src/curve.c`, `src/trace.c` and
+`src/decompose.c`. Two files are added to the upstream tree during the build: a
+two-line `config.h` holding the `VERSION` and `HAVE_INTTYPES_H` that
+`./configure` would otherwise supply, and `scripts/potrace-glue.c`, which is
+this project's own code and carries this project's GPL-3.0-or-later licence.
+
+Potrace's README grants it under "either version 2 of the License, or (at your
+option) any later version", and that "or later" is what makes it compatible
+with this project's GPL-3.0-or-later. The npm package `esm-potrace-wasm` is
+deliberately not used: as published it declares GPL-2.0-only, which is not.
+
+### Obtaining Potrace Source
+
+The tarball named above is the complete corresponding source for the Potrace
+part of this build. It is also mirrored at https://potrace.sourceforge.net/,
+and I will supply a copy on request.
+
+---
+
 ## OpenStreetMap Data (ODbL 1.0)
 
 The hidden ASCII City Walk game renders walkable city scenes from bundled
