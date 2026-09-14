@@ -15508,6 +15508,12 @@ body.tutorial-body-locked {
   vector-effect: non-scaling-stroke;
 }
 
+/* The picture standing in for a combined result. Held back a little so the two
+   are never confused at a glance: this is what you have, not what you get. */
+.svg-prep-standin {
+  opacity: 0.75;
+}
+
 .svg-prep-role--foreground {
   fill: var(--color-success-text);
   fill-opacity: 0.25;

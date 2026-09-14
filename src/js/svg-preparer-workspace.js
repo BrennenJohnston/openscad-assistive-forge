@@ -1043,8 +1043,18 @@ export function createSvgPrepWorkspace(containerEl) {
 
   // ── Internal rendering ────────────────────────────────────────────────
 
-  function renderSourcePane() {
-    const existingSvg = refs.sourcePane.querySelector('svg');
+  /**
+   * Draw the drawing into a pane, with its role tints over it.
+   *
+   * @param {HTMLElement} pane
+   * @param {HTMLElement} before - the zoom controls to insert ahead of
+   * @param {string} label - what a screen reader calls this picture
+   * @param {boolean} [withOverlay] - add the hover-highlight layer, which only
+   *   the pane the list points at has any use for
+   * @returns {SVGElement|null}
+   */
+  function renderPictureInto(pane, before, label, withOverlay = false) {
+    const existingSvg = pane.querySelector('svg');
     if (existingSvg) existingSvg.remove();
     if (!currentSvgString) return null;
 
@@ -1067,14 +1077,56 @@ export function createSvgPrepWorkspace(containerEl) {
     roleLayer.setAttribute('aria-hidden', 'true');
     imported.appendChild(roleLayer);
 
-    const overlay = document.createElementNS(SVG_NS, 'g');
-    overlay.setAttribute('class', 'svg-prep-overlay');
-    overlay.setAttribute('aria-hidden', 'true');
-    imported.appendChild(overlay);
+    if (withOverlay) {
+      const overlay = document.createElementNS(SVG_NS, 'g');
+      overlay.setAttribute('class', 'svg-prep-overlay');
+      overlay.setAttribute('aria-hidden', 'true');
+      imported.appendChild(overlay);
+    }
 
-    markAsPicture(imported, 'Source SVG');
-    refs.sourcePane.insertBefore(imported, refs.sourceZoom);
+    markAsPicture(imported, label);
+    pane.insertBefore(imported, before);
     return imported;
+  }
+
+  function renderSourcePane() {
+    return renderPictureInto(
+      refs.sourcePane,
+      refs.sourceZoom,
+      'Source SVG',
+      true
+    );
+  }
+
+  /**
+   * ★ The picture that stands in until a combined result exists.
+   *
+   * Above the auto budget the result pane used to be EMPTY: `markPreviewStale`
+   * removed the drawing and left a captioned box with nothing in it, and DP-24
+   * had already hidden the source pane behind Compare. So a person who opened
+   * a drawing of 210 shapes was shown "Will print as", an empty rectangle, two
+   * zoom buttons floating in it, and a sentence telling them to press a button.
+   * MEASURED at 1268 x 160 with no svg in it at all.
+   *
+   * "One picture" was built by hiding rather than by showing, and it was walked
+   * on the one class of drawing - the bird, at tier A - that could not show it.
+   *
+   * So this fills it: the same drawing, with the same role tints, marked as not
+   * yet combined. It is a picture of what the person HAS, standing where the
+   * picture of what they will GET goes, and the button below says which is
+   * which. Signed at DP-Q34.
+   */
+  function renderStandInResult() {
+    const picture = renderPictureInto(
+      refs.resultPane,
+      refs.resultZoom,
+      'The drawing as it is now, not yet combined'
+    );
+    if (picture) {
+      picture.classList.add('svg-prep-standin');
+      renderRoleLayer();
+    }
+    return picture;
   }
 
   function clearSvgGroup(group) {
@@ -1086,8 +1138,14 @@ export function createSvgPrepWorkspace(containerEl) {
    * current role, into the role layer of the source pane.
    */
   function renderRoleLayer() {
-    const layer = refs.sourcePane.querySelector('.svg-prep-role-layer');
-    if (!layer) return;
+    // Every layer, not just the source pane's: the stand-in picture in the
+    // result pane carries one too, and the two must never disagree about what
+    // colour a shape is.
+    const layers = root.querySelectorAll('.svg-prep-role-layer');
+    layers.forEach((layer) => paintRoleLayer(layer));
+  }
+
+  function paintRoleLayer(layer) {
     clearSvgGroup(layer);
     if (!rolesVisible || !currentAnalysis) return;
 
@@ -1192,9 +1250,9 @@ export function createSvgPrepWorkspace(containerEl) {
     // currentResult === null IS "stale": Apply and Save already refuse on it,
     // so a second flag saying the same thing could only drift from it.
     currentResult = null;
-    const existingSvg = refs.resultPane.querySelector('svg');
-    if (existingSvg) existingSvg.remove();
     clearResultError();
+    // The pane is REPLACED, never emptied. See renderStandInResult.
+    renderStandInResult();
     setApplyEnabled(
       false,
       'Render the preview before applying it, so you can see what you get.'
