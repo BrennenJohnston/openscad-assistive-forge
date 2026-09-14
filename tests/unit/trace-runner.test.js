@@ -208,21 +208,35 @@ describe('the trace runner (DP-34)', () => {
     expect(w.posted[0].image.height).toBe(8)
   })
 
-  it("★ leaves the caller's own pixels intact, so a re-trace is possible", () => {
+  it("★ leaves the caller's own pixels intact, so a re-trace is possible", async () => {
     // Transferring the caller's buffer detaches it. The file control keeps its
     // decoded pixels so that changing an ink setting re-traces the SAME
     // picture; detaching them made every re-run fail with
     // "DataCloneError: ArrayBuffer at index 0 is already detached".
     const r = runner()
     const pic = picture(8, 8)
-    r.start(pic, { mode: 'lineart' })
+    // Every promise this test creates is claimed. A superseded job rejects, and
+    // a rejection nobody is holding is an unhandled rejection - which passed
+    // here and failed the whole file on CI, where the timing differs.
+    const first = r.start(pic, { mode: 'lineart' })
+    const firstSettled = expect(first).rejects.toMatchObject({
+      reason: 'superseded',
+    })
 
     expect(pic.data.buffer.detached).not.toBe(true)
     expect(pic.data.length).toBe(8 * 8 * 4)
     expect(w_transferred_is_a_copy(pic)).toBe(true)
 
     // And a second start still works, which is the behaviour that broke.
-    expect(() => r.start(pic, { mode: 'silhouette' })).not.toThrow()
+    let second
+    expect(() => {
+      second = r.start(pic, { mode: 'silhouette' })
+    }).not.toThrow()
+    await firstSettled
+
+    const w = latest()
+    w.reply({ id: w.jobId, type: 'done', svg: '<svg/>', filterForeground: true })
+    await expect(second).resolves.toMatchObject({ svg: 'filtered:<svg/>' })
   })
 
   function w_transferred_is_a_copy(pic) {

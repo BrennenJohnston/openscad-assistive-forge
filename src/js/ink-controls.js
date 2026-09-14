@@ -423,10 +423,17 @@ export function createInkControls({ idPrefix, onChange, announce }) {
       warningsEl.hidden = true;
     },
     setBusy(busy) {
-      // Only ever WRITES the waiting line. Clearing on the way out would erase
-      // the summary that setSummary has already put there: the re-trace
-      // finishes inside the same turn, so the two would race and the summary
-      // would lose.
+      // Only ever WRITES the waiting line; setSummary is what clears it.
+      // Clearing on the way out would erase a summary that had already landed.
+      //
+      // This note used to add that the re-trace "finishes inside the same
+      // turn". That was true when the trace ran on the main thread, and is not
+      // any more: DP-34 moved it into a worker, so the waiting line is now
+      // genuinely visible for as long as the trace takes, which is the point of
+      // having it. Anything waiting on this element has to wait PAST the
+      // waiting line rather than treat a change as an answer - a test that did
+      // exactly that passed for years and only failed once the work stopped
+      // blocking the page.
       if (busy) summaryEl.textContent = 'Re-reading the picture…';
     },
     /**
