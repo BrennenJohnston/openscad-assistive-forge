@@ -17,14 +17,17 @@
  */
 
 /**
- * The three ways a job ends without an answer, which the caller has to tell
- * apart: the person stopped it, a newer job replaced it, or the choices it was
- * built from changed under it. They leave the pane in three different states.
+ * The ways a job ends without an answer, which the caller has to tell apart:
+ * only the person's own Cancel has anything left to say. A job replaced by a
+ * newer one, abandoned because the choices changed under it, or dropped
+ * because the editor closed all have somebody else already saying what
+ * happens next, and a second voice would only contradict them.
  */
 const CANCEL_MESSAGES = Object.freeze({
   cancelled: 'Flatten cancelled',
   superseded: 'Flatten superseded',
   stale: 'Flatten abandoned: the choices changed under it',
+  closed: 'Flatten dropped: the editor closed',
 });
 
 /** Thrown (as a rejection reason) when a job ends without an answer. */

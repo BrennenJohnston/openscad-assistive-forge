@@ -157,6 +157,11 @@ describe('the flatten runner (DP-37 P2)', () => {
     await expect(abandoned).rejects.toMatchObject({ reason: 'stale' })
     await expect(abandoned).rejects.toThrow(/changed under it/)
 
+    const dropped = r.start(shapes(), META)
+    r.cancel('closed')
+    await expect(dropped).rejects.toMatchObject({ reason: 'closed' })
+    await expect(dropped).rejects.toThrow(/the editor closed/)
+
     // And the default is still the person's own Cancel.
     const stopped = r.start(shapes(), META)
     r.cancel()

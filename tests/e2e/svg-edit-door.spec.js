@@ -977,6 +977,32 @@ test.describe('the combine runs off the main thread (DP-37 P2)', () => {
     )
   })
 
+  test('★ closing the editor mid-combine stops the work it was doing', async ({
+    page,
+  }) => {
+    test.setTimeout(300000)
+    await openApp(page)
+    await openEditorByKeyboard(page, MANY_210)
+
+    // Closing mid-combine is another thing that was impossible while the
+    // thread was taken. Only `destroy` stopped the work, and the surface's
+    // Close calls `close`, so the worker carried on with a drawing nobody was
+    // looking at any more - MEASURED at 419 ms on this fixture, and minutes on
+    // the biggest drawings this app accepts - and then drew its result into
+    // the closed editor and announced it.
+    await page.locator('.svg-prep-render-btn').click({ noWaitAfter: true })
+    await page.locator('.drawing-editor-close').click()
+
+    // A closed editor draws nothing and says nothing. 419 ms is the whole
+    // window, so two seconds is well past when the old result would land.
+    await page.waitForTimeout(2000)
+    await expect(page.locator('.svg-prep-result-pane svg')).toHaveCount(0)
+    await expect(page.locator('.svg-prep-result-pane')).toHaveAttribute(
+      'aria-busy',
+      'false'
+    )
+  })
+
   test('★ Cancel stops a combine and leaves the drawing where it was', async ({
     page,
   }) => {
