@@ -72,7 +72,7 @@ const layerState = (page) =>
  * anyone's behalf. The depth SUGGESTION is still there - it is what the Layer
  * column is pre-filled with - but somebody has to look at it and press Apply.
  */
-async function buildStackInTheEditor(page) {
+async function openTheEditor(page) {
   // The editor's door lives in the design control's status card, inside the
   // Design group, which ships collapsed like every other parameter group.
   await page.evaluate(() => {
@@ -89,6 +89,10 @@ async function buildStackInTheEditor(page) {
   await door.waitFor({ state: 'visible', timeout: 60000 });
   await door.scrollIntoViewIfNeeded();
   await door.click({ timeout: 30000 });
+}
+
+async function buildStackInTheEditor(page) {
+  await openTheEditor(page);
   const layerSelects = page.locator('.svg-prep-layer-select');
   await expect
     .poll(() => layerSelects.count(), { timeout: 60000 })
@@ -168,6 +172,70 @@ test.describe('A design built as a stack of passes (DP-7, DP-8)', () => {
     expect(layers.filter(Boolean), `layers: ${JSON.stringify(layers)}`).toEqual(
       []
     );
+  });
+
+  test('★ Apply is not offered while the shapes are still being combined', async ({
+    page,
+  }) => {
+    // Firefox on CI found this one by pressing Apply faster than the combine
+    // could finish. The combine left the main thread at DP-37 P2, so between
+    // the editor opening and the result landing there are now seconds of
+    // worker start-up - and Apply's handler refuses a null result by
+    // RETURNING. The button was enabled the whole time and did nothing at all
+    // when pressed: no stack, no message, no closed editor.
+    //
+    // The window is milliseconds on a fast machine, so this watches the
+    // MUTATION rather than polling for a state that would be over before the
+    // first sample. The observer is armed before the editor exists.
+    test.slow();
+    await openCharm(page);
+    await page.setInputFiles('#param-design_file', SQUARES);
+    await expect
+      .poll(async () => (await layerState(page)).design, { timeout: 90000 })
+      .toBe('nested-squares.svg');
+
+    await page.evaluate(() => {
+      window.__combine = { sawBusy: false, applyLive: [], rowShown: false };
+      new MutationObserver(() => {
+        const pane = document.querySelector('.svg-prep-result-pane');
+        if (!pane || pane.getAttribute('aria-busy') !== 'true') return;
+        window.__combine.sawBusy = true;
+        const apply = document.querySelector('button[data-action="apply"]');
+        if (apply) window.__combine.applyLive.push(!apply.disabled);
+        const row = document.querySelector('.svg-prep-render-row');
+        if (row && !row.hidden) window.__combine.rowShown = true;
+      }).observe(document.body, {
+        subtree: true,
+        childList: true,
+        attributes: true,
+        attributeFilter: ['aria-busy', 'disabled', 'hidden'],
+      });
+    });
+
+    await openTheEditor(page);
+    await expect
+      .poll(() => page.locator('.svg-prep-layer-select').count(), {
+        timeout: 60000,
+      })
+      .toBeGreaterThan(0);
+
+    const seen = await page.evaluate(() => window.__combine);
+    expect(seen.sawBusy, 'the combine never reported itself as busy').toBe(
+      true
+    );
+    // Never enabled with nothing behind it.
+    expect(
+      seen.applyLive.filter(Boolean).length,
+      `Apply was pressable ${seen.applyLive.filter(Boolean).length} times while combining`
+    ).toBe(0);
+    // And a person can SEE the work: the bar and its Cancel live inside the
+    // render row, which on a small drawing is hidden the rest of the time, so
+    // unhiding the two of them alone showed nothing.
+    expect(seen.rowShown, 'nothing on screen said it was combining').toBe(true);
+
+    // Then it lands, and Apply means something again.
+    await expect(page.getByRole('button', { name: /^Apply/ }).first())
+      .toBeEnabled({ timeout: 90000 });
   });
 
   test('★ three nested squares become three passes when asked, and the charm renders', async ({

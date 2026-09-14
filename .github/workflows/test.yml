@@ -1064,8 +1064,14 @@ jobs:
   # evidence) are point-in-time documents, and OPENSCAD_LANGUAGE_REFERENCE.md
   # mirrors upstream, whose link rot is not ours to chase. 403 is accepted
   # because every one the first sweep found was a bot-wall on a LIVE site
-  # (w3.org's WCAG page included); two shop hosts that reject CI outright are
-  # excluded by name.
+  # (w3.org's WCAG page included); three hosts that reject CI outright are
+  # excluded by name. The third is the OSM Foundation's operations site, which
+  # started refusing the runners in September 2026: two runs in a row, first as
+  # a 20-second timeout and then as a connection reset, on the single link to
+  # its Nominatim usage policy. That page answers 200 from an ordinary
+  # connection - measured at 12.7 seconds - so the link is good and the host is
+  # the problem. Excluding it costs exactly one link; nothing else in the
+  # checked docs points at that host.
   link-check:
     name: Docs Link Check
     runs-on: ubuntu-latest
@@ -1086,6 +1092,7 @@ jobs:
             --exclude '^https?://(localhost|127\.0\.0\.1)'
             --exclude '^https://www\.bestbuy\.com'
             --exclude '^https://www\.sovol\.tech'
+            --exclude '^https://operations\.osmfoundation\.org'
             --exclude-path docs/OPENSCAD_LANGUAGE_REFERENCE.md
             'README.md'
             'docs/*.md'

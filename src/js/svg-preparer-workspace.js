@@ -27,6 +27,12 @@ import {
 import { getPathBBox } from 'svg-path-commander';
 import { mmToSvgUnits } from './svg-offset.js';
 import { isEnabled } from './feature-flags.js';
+// Re-exported below so every caller keeps the import it already had. The
+// flatten itself moved to a module a worker can load: see flatten-rings.js.
+import { flattenWithRings } from './flatten-rings.js';
+import { createFlattenRunner, FlattenCancelled } from './flatten-runner.js';
+
+export { flattenWithRings };
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -49,130 +55,6 @@ const COMPOUND_ROLE_OPTIONS = [
 const AUTO_FULLSCREEN_MAX_WIDTH = 768;
 
 // ── Utility functions ────────────────────────────────────────────────────────
-
-/**
- * D-120 (DP-26 P1): flatten classified elements through the ring engine.
- *
- * The old road, `flattenToCompoundPath`, unions the elements PAIRWISE with
- * path-bool under even-odd, which is order-dependent once shapes overlap -
- * and on this app's own logo (139 converted strokes) the pairwise chain
- * does not merely corrupt: MEASURED, it exhausts an 8 GB node heap and
- * dies. The ring road reads each element on its own terms (even-odd, so a
- * counter stays a counter), then combines every region in one NonZero
- * union - order-independent, and the same fixture finishes in seconds
- * (1,280 rings, area 1,265 svg units squared).
- *
- * The cost, stated: rings are polylines, so curves leave at the ring
- * engine's resolution - the same trade the stencil lane shipped with
- * (plates reproduced at IoU 0.952). An element whose rings cannot be read
- * is appended verbatim on its own even-odd path, counted into the warning,
- * and never dropped.
- *
- * The engine arrives as an argument so the workspace stays out of the lazy
- * chunk's way: this file is core, clipper is not.
- *
- * @param {object} engine - The ring-geometry module
- * @param {Array} classifiedElements - Output of classifyElements()
- * @param {object} [svgMeta]
- * @param {string[]} [warningsOut]
- * @returns {string|null}
- */
-export function flattenWithRings(
-  engine,
-  classifiedElements,
-  svgMeta = {},
-  warningsOut = null
-) {
-  const foreground = classifiedElements.filter(
-    (el) => el.role === 'foreground' && el.pathData
-  );
-  const holes = classifiedElements.filter(
-    (el) => el.role === 'hole' && el.pathData
-  );
-  if (foreground.length === 0) return null;
-
-  const fallbacks = [];
-  const readRegion = (el) => {
-    try {
-      const rings = engine.evenOddUnion(engine.ringsFromPathData(el.pathData));
-      if (rings.length === 0) {
-        fallbacks.push(el.pathData);
-        return null;
-      }
-      return rings;
-    } catch {
-      fallbacks.push(el.pathData);
-      return null;
-    }
-  };
-
-  // ★ Regions are combined ONE AT A TIME, subject against clip - never by
-  // pouring every region's rings into a single NonZero subject. In one
-  // list the windings sum ACROSS regions: element B's solid ring inside
-  // element A's counter counts +1 - 1 = 0 and the area vanishes. MEASURED
-  // on the bird fixture: six healthy foreground regions one-shot-unioned
-  // to an EMPTY result, while the logo survived only because its bands'
-  // windings happened not to cancel. A fold of true unions is
-  // order-independent in the only sense that matters: the union of sets
-  // does not care what order it was taken in.
-  const combine = (elements) => {
-    let region = null;
-    for (const el of elements) {
-      const rings = readRegion(el);
-      if (!rings) continue;
-      region = region === null ? rings : engine.union(region, rings);
-    }
-    return region || [];
-  };
-
-  let region = combine(foreground);
-  // Holes cut ONE AT A TIME, and a hole that would erase the whole drawing
-  // is the PAPER, not a cut. The bird fixture is the measured case: its
-  // full-bleed background rect is auto-classified as a hole, and
-  // subtracting it legally empties everything - the old flatten hid this
-  // by silently discarding an empty difference. The same law the
-  // silhouette already states ("a root classified as a hole is a
-  // background") is applied here explicitly, per hole, and said out loud.
-  let paperHoles = 0;
-  for (const el of holes) {
-    if (region.length === 0) break;
-    const rings = readRegion(el);
-    if (!rings) continue;
-    const cut = engine.difference(region, rings);
-    if (cut.length === 0) {
-      paperHoles += 1;
-      continue;
-    }
-    region = cut;
-  }
-  if (paperHoles > 0 && Array.isArray(warningsOut)) {
-    warningsOut.push(
-      `${paperHoles} cut-out(s) would have erased the whole drawing and were treated as the background`
-    );
-  }
-  if (region.length === 0 && fallbacks.length === 0) return null;
-
-  if (fallbacks.length > 0 && Array.isArray(warningsOut)) {
-    warningsOut.push(
-      `${fallbacks.length} shape(s) could not be merged and were appended as-is`
-    );
-  }
-
-  const { viewBox, width, height } = svgMeta;
-  let attrs = 'xmlns="http://www.w3.org/2000/svg"';
-  if (viewBox) attrs += ` viewBox="${viewBox}"`;
-  if (width) attrs += ` width="${width}"`;
-  if (height) attrs += ` height="${height}"`;
-
-  let body = '';
-  if (region.length > 0) {
-    body += `<path d="${engine.ringsToPathData(region)}" fill="black" fill-rule="nonzero"/>`;
-  }
-  if (fallbacks.length > 0) {
-    body += `<path d="${fallbacks.join(' ')}" fill="black" fill-rule="evenodd"/>`;
-  }
-  return `<svg ${attrs}>${body}</svg>`;
-}
 
 /**
  * Build a human-readable description for an SVG shape element.
@@ -474,7 +356,27 @@ function buildWorkspaceDom() {
   renderBtn.textContent = 'Render preview';
   renderBtn.setAttribute('aria-describedby', renderNote.id);
 
-  renderRow.append(renderNote, renderBtn);
+  // DP-37 P2: while the combine runs it runs in a worker, so there is a bar to
+  // watch and a way to stop it. A native <progress> with no value: the ring
+  // union is one call into the engine and cannot say where it has got to, and
+  // an honest bar with no number beats a number that is made up.
+  const renderProgress = document.createElement('progress');
+  renderProgress.className = 'svg-prep-render-progress';
+  renderProgress.id = 'svgPrepRenderProgress';
+  renderProgress.hidden = true;
+  // A <label for> does NOT name a <progress> in Chromium - measured at DP-34,
+  // where the same mistake left the trace's bar unnamed. aria-labelledby does.
+  renderProgress.setAttribute('aria-labelledby', renderNote.id);
+
+  const renderCancelBtn = document.createElement('button');
+  renderCancelBtn.type = 'button';
+  renderCancelBtn.className = 'btn btn-secondary svg-prep-render-cancel';
+  renderCancelBtn.dataset.action = 'cancel-render';
+  renderCancelBtn.textContent = 'Cancel';
+  renderCancelBtn.hidden = true;
+  renderCancelBtn.setAttribute('aria-describedby', renderNote.id);
+
+  renderRow.append(renderNote, renderProgress, renderBtn, renderCancelBtn);
   resultPaneWrap.append(resultCaption, resultPane, renderRow);
 
   previews.append(sourcePaneWrap, resultPaneWrap);
@@ -631,6 +533,8 @@ function buildWorkspaceDom() {
       renderRow,
       renderNote,
       renderBtn,
+      renderProgress,
+      renderCancelBtn,
       objects,
       warnings,
       footer,
@@ -999,6 +903,23 @@ export function createSvgPrepWorkspace(containerEl) {
   // it lands is re-run the moment it does.
   let ringEngine = null;
   let ringEnginePromise = null;
+
+  // DP-37 P2: the flatten runs off the main thread. MEASURED on it before this,
+  // in Chromium over traced curves: 50 shapes 485 ms, 200 shapes 14.7 s, 800
+  // shapes eight and a half minutes - every one of them with the page frozen.
+  let flattenRunner = null;
+  function getFlattenRunner() {
+    if (!flattenRunner) flattenRunner = createFlattenRunner();
+    return flattenRunner;
+  }
+  /**
+   * Can the work actually leave this thread?
+   *
+   * Everywhere a person uses this, yes. Under jsdom there is no Worker at all,
+   * and the alternative to running it inline there is not running the tests.
+   * Narrow on purpose, and said out loud rather than discovered.
+   */
+  const canUseWorker = () => typeof Worker !== 'undefined';
   let previewWaitingForEngine = false;
   function loadRingEngine() {
     if (!ringEnginePromise) {
@@ -1262,6 +1183,16 @@ export function createSvgPrepWorkspace(containerEl) {
     // currentResult === null IS "stale": Apply and Save already refuse on it,
     // so a second flag saying the same thing could only drift from it.
     currentResult = null;
+    // A combine already in flight is answering a question nobody is asking any
+    // more: it was built from the choices as they stood BEFORE this change, so
+    // letting it land would put the very picture of older choices into the
+    // pane that this function exists to prevent. MEASURED on the 210-shape
+    // drawing: a role changed 200 ms into the combine armed Apply fifteen
+    // seconds later with the replaced choice's result. It could not happen
+    // before DP-37 P2 - nothing could be clicked while the thread was taken.
+    if (flattenRunner && flattenRunner.isRunning()) {
+      flattenRunner.cancel('stale');
+    }
     clearResultError();
     // The pane is REPLACED, never emptied. See renderStandInResult.
     renderStandInResult();
@@ -1283,15 +1214,38 @@ export function createSvgPrepWorkspace(containerEl) {
     );
   }
 
-  function updateResultPreview() {
+  /** Show the combine as work in progress, with a way to stop it. */
+  function setRenderBusy(busy) {
+    // The bar and the Cancel button live INSIDE the render row, and on an
+    // auto-preview drawing that row is hidden - so unhiding the two of them
+    // showed a person NOTHING while the combine ran. The row is what reports
+    // the work, at every tier; it goes back to the tier's own state after.
+    refs.renderRow.hidden = busy ? false : autoPreview;
+    refs.renderProgress.hidden = !busy;
+    refs.renderCancelBtn.hidden = !busy;
+    refs.renderBtn.hidden = busy;
+    refs.resultPane.setAttribute('aria-busy', String(busy));
+    if (busy) {
+      const count = liveElements.length;
+      refs.renderNote.textContent = `Combining ${count} shapes.`;
+    }
+  }
+
+  async function updateResultPreview() {
     if (!currentAnalysis || !currentSvgMeta) return;
 
-    // Preserve the user's zoom level across preview re-renders
+    // Preserve the user's zoom level across preview re-renders.
+    //
+    // ★ The old picture is NOT removed here. It used to be, and that was fine
+    // while the combine finished inside this same turn - but the combine went
+    // into a worker (DP-37 P2) and now the await below can last seconds, which
+    // would leave the pane empty for all of them. That is the blank P1 just
+    // repaired, reintroduced by making the work asynchronous. Whatever is in
+    // the pane stays there until there is something better to put in it.
     const existingSvg = refs.resultPane.querySelector('svg');
     const previousViewBox = existingSvg
       ? existingSvg.getAttribute('viewBox')
       : null;
-    if (existingSvg) existingSvg.remove();
     clearResultError();
 
     try {
@@ -1316,8 +1270,75 @@ export function createSvgPrepWorkspace(containerEl) {
       let resultSvgString;
       if (isCompound) {
         resultSvgString = concatenateSubpaths(withOffsets, currentSvgMeta);
-      } else if (ringEngine) {
+      } else if (canUseWorker()) {
         // D-120: order-independent ring flatten; never the pairwise chain.
+        // DP-37 P2: and off this thread, because it is the most expensive
+        // thing this app does to a drawing and it used to freeze the page for
+        // as long as it took.
+        setRenderBusy(true);
+        // There is no result to apply until the combine lands. Pressing Apply
+        // used to be impossible too early because the combine finished inside
+        // this same turn; now it is seconds of worker start-up and work, and
+        // Apply's handler refuses on a null result by RETURNING - so the
+        // button sat enabled and did nothing at all when pressed. Firefox on
+        // CI pressed it in that window and the stack was never built.
+        setApplyEnabled(
+          false,
+          'Still combining the shapes. Apply is ready when the result appears.'
+        );
+        try {
+          const out = await getFlattenRunner().start(
+            withOffsets,
+            currentSvgMeta
+          );
+          resultSvgString = out.svg;
+        } catch (error) {
+          // None of the three is a failure and none may be reported as one:
+          // the person stopped this combine, a newer one replaced it, or the
+          // choices it was built from changed under it.
+          if (error instanceof FlattenCancelled) {
+            if (error.reason === 'superseded') {
+              // The job that replaced this one owns the pane now. Clearing the
+              // busy state here would take the bar and the Cancel button away
+              // from work that is still running, and tell a screen reader the
+              // pane had settled while it had not.
+              return;
+            }
+            setRenderBusy(false);
+            // Only the person's own Cancel has anything to say here. A job
+            // abandoned because the choices changed has already been spoken
+            // for by markPreviewStale, and one dropped because the editor
+            // closed has nowhere to say it.
+            if (error.reason !== 'cancelled') return;
+            currentResult = null;
+            setApplyEnabled(
+              false,
+              'Combining was stopped, so there is no result to apply.'
+            );
+            // The way back is the Render button, and on an auto-preview
+            // drawing the row holding it is hidden the rest of the time.
+            refs.renderRow.hidden = false;
+            refs.renderBtn.disabled = false;
+            refs.renderNote.textContent = 'Combining cancelled.';
+            liveRegion.textContent = 'Combining cancelled.';
+            return;
+          }
+          setRenderBusy(false);
+          currentResult = null;
+          setApplyEnabled(
+            false,
+            'The shapes could not be combined, so there is nothing to apply.'
+          );
+          showResultError(
+            `The drawing could not be combined: ${error.message}`
+          );
+          liveRegion.textContent = `The drawing could not be combined: ${error.message}`;
+          return;
+        }
+        setRenderBusy(false);
+      } else if (ringEngine) {
+        // No Worker here, which in practice means a test environment. Running
+        // it inline is the only way to run at all; see canUseWorker.
         resultSvgString = flattenWithRings(
           ringEngine,
           withOffsets,
@@ -1334,12 +1355,20 @@ export function createSvgPrepWorkspace(containerEl) {
       if (!resultSvgString) {
         currentResult = null;
         setApplyEnabled(false);
+        // The pane keeps the drawing rather than emptying: there is no result
+        // to show, and showing nothing at all is the defect P1 repaired.
+        renderStandInResult();
         liveRegion.textContent = 'No foreground elements \u2014 preview empty';
         return;
       }
 
       currentResult = resultSvgString;
       setApplyEnabled(true);
+
+      // Now, and not before: the old picture held the pane while the combine
+      // ran.
+      const stale = refs.resultPane.querySelector('svg');
+      if (stale) stale.remove();
 
       const parser = new DOMParser();
       const doc = parser.parseFromString(resultSvgString, 'image/svg+xml');
@@ -1718,48 +1747,66 @@ export function createSvgPrepWorkspace(containerEl) {
    * is yielded, so the button really does look and read as busy instead of the
    * page freezing with the old label still on it.
    */
-  function renderPreviewOnDemand() {
+  /** Stop a combine in flight. The person gets the page and the button back. */
+  function cancelRender() {
+    if (!flattenRunner || !flattenRunner.isRunning()) return;
+    // The announcement is made HERE, by the action the person took, and
+    // updateResultPreview says nothing more about it (DP-32: one action, one
+    // announcement).
+    flattenRunner.cancel();
+    announce('Combining cancelled');
+  }
+
+  async function renderPreviewOnDemand() {
     if (!currentAnalysis) return;
     const count = liveElements.length;
-    refs.renderBtn.disabled = true;
-    refs.renderNote.textContent = `Combining ${count} shapes. This can take a while.`;
-    const message = `Combining ${count} shapes. This can take a while.`;
+    const started = performance.now();
+
+    // No frame dance before the work any more. There used to be two, so the
+    // busy state was painted before the main thread was taken for the boolean;
+    // the boolean is in a worker now (DP-37 P2) and the thread is never taken,
+    // so the ceremony documented behaviour this code no longer has.
+    const message = `Combining ${count} shapes.`;
     liveRegion.textContent = message;
     announce(message);
 
-    // Two frames: one to paint the busy state, one to be sure it was painted
-    // before the main thread is taken for the boolean.
-    requestAnimationFrame(() => {
-      requestAnimationFrame(async () => {
-        const started = performance.now();
-        // D-120 aftercare: an on-demand render WAITS for the ring engine
-        // rather than deferring. Deferred, this body became instant and
-        // wrong - the busy window collapsed to two frames and "could not
-        // be built" was announced about a preview that then appeared by
-        // itself moments later.
-        if (!ringEngine && !currentAnalysis?.isCompoundPathOnly) {
-          try {
-            await loadRingEngine();
-          } catch {
-            // updateResultPreview reports the empty result honestly below.
-          }
-        }
-        updateResultPreview();
-        const seconds = Math.max(
-          1,
-          Math.round((performance.now() - started) / 1000)
-        );
-        refs.renderBtn.disabled = false;
-        refs.renderNote.textContent = currentResult
-          ? `Preview is up to date. Change anything and you can render it again.`
-          : staleNoteText();
-        const done = currentResult
-          ? `Preview ready. It took ${seconds} seconds.`
-          : 'Preview could not be built from these choices.';
-        liveRegion.textContent = done;
-        announce(done);
-      });
-    });
+    // D-120 aftercare: an on-demand render WAITS for the ring engine rather
+    // than deferring. Deferred, this body became instant and wrong.
+    if (
+      !ringEngine &&
+      !currentAnalysis?.isCompoundPathOnly &&
+      !canUseWorker()
+    ) {
+      try {
+        await loadRingEngine();
+      } catch {
+        // updateResultPreview reports the empty result honestly below.
+      }
+    }
+
+    // ★ AWAITED. It used to be called and left, which was harmless while the
+    // combine finished inside the same turn. Once it moved to a worker the
+    // lines below ran IMMEDIATELY, so pressing the button announced "Preview
+    // could not be built from these choices" while the work was still running
+    // - measured, three seconds before it finished. An announcement that is
+    // wrong is worse than no announcement.
+    await updateResultPreview();
+
+    // Cancelled: the action the person took has already spoken for itself.
+    if (!currentResult && flattenRunner && flattenRunner.isRunning()) return;
+
+    const seconds = Math.max(
+      1,
+      Math.round((performance.now() - started) / 1000)
+    );
+    refs.renderBtn.disabled = false;
+    if (currentResult) {
+      refs.renderNote.textContent =
+        'Preview is up to date. Change anything and you can render it again.';
+      const done = `Preview ready. It took ${seconds} seconds.`;
+      liveRegion.textContent = done;
+      announce(done);
+    }
   }
 
   // ── DP-4: deleting rows, and keeping the saved metadata honest ──────────
@@ -2289,6 +2336,7 @@ export function createSvgPrepWorkspace(containerEl) {
     // The render control lives under the result pane, not in the footer, so
     // the footer's delegated handler cannot see it.
     refs.renderBtn.addEventListener('click', renderPreviewOnDemand);
+    refs.renderCancelBtn.addEventListener('click', cancelRender);
     refs.objects.addEventListener('click', handleDeleteClick);
     refs.bulkBar.addEventListener('click', handleDeleteClick);
     refs.rolesToggleBtn.addEventListener('click', handleRolesToggle);
@@ -2323,6 +2371,17 @@ export function createSvgPrepWorkspace(containerEl) {
 
   function close() {
     if (!isOpen) return;
+
+    // A combine outlives the editor otherwise. `destroy` stopped one, but the
+    // surface's Close calls THIS, so the worker carried on with a drawing
+    // nobody is looking at any more and then drew its result into the closed
+    // editor and announced it - MEASURED at 419 ms on the 210-shape drawing,
+    // and minutes on the biggest this app accepts. It could not happen before
+    // DP-37 P2, when the thread was taken for the whole combine and there was
+    // nothing to press.
+    if (flattenRunner && flattenRunner.isRunning()) {
+      flattenRunner.cancel('closed');
+    }
 
     // Closing without Apply/Keep counts as keeping the original
     if (!resolved) {
@@ -2458,6 +2517,12 @@ export function createSvgPrepWorkspace(containerEl) {
 
   function destroy() {
     if (isOpen) dismiss();
+    // A combine outlives the editor otherwise: the worker keeps grinding on a
+    // drawing nobody is looking at any more.
+    if (flattenRunner) {
+      flattenRunner.destroy();
+      flattenRunner = null;
+    }
     if (refs.backdrop.parentNode)
       refs.backdrop.parentNode.removeChild(refs.backdrop);
     if (root.parentNode) root.parentNode.removeChild(root);

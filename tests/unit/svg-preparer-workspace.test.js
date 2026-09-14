@@ -1399,7 +1399,14 @@ describe('Phase 3: reset behavior', () => {
     ignoreRadio.checked = true;
     ignoreRadio.dispatchEvent(new Event('change', { bubbles: true }));
 
-    expect(ws._root.querySelector('.svg-prep-result-pane svg')).toBeFalsy();
+    // RE-PINNED at DP-37: this used to assert the pane held NO svg at all.
+    // The pane is never empty now (P1) - with every shape ignored there is no
+    // combined result, and what stands in its place is the drawing itself,
+    // marked as not yet combined. Emptiness was the evidence, not the point.
+    expect(
+      ws._root.querySelector('.svg-prep-result-pane svg.svg-prep-standin')
+    ).toBeTruthy();
+    expect(ws._refs.applyBtn.disabled).toBe(true);
 
     const resetBtn = ws._root.querySelector('[data-action="reset"]');
     resetBtn.click();
