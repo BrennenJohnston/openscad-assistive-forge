@@ -942,6 +942,41 @@ test.describe('the combine runs off the main thread (DP-37 P2)', () => {
     expect(answered).toBeLessThan(1000)
   })
 
+  test('★ a choice changed mid-combine is not answered with the one it replaced', async ({
+    page,
+  }) => {
+    test.setTimeout(300000)
+    await openApp(page)
+    await openEditorByKeyboard(page, MANY_210)
+
+    await page.locator('.svg-prep-render-btn').click({ noWaitAfter: true })
+    const cancel = page.locator('.svg-prep-render-cancel')
+    await expect(cancel).toBeVisible()
+
+    // The page answers while it combines now - that is what the worker bought
+    // - so a person can change their mind in the middle of one, which was
+    // impossible while the thread was taken. The moment they do, the work in
+    // flight is answering a question nobody is asking any more.
+    await page
+      .locator(
+        '.svg-prep-object[data-index="0"] .svg-prep-role-group input[value="ignore"]'
+      )
+      .check()
+
+    // It has to be dropped, not left to land: a result built from the choice
+    // that was just replaced is the "picture of older choices" the stale pane
+    // exists to prevent, and it must never arm Apply.
+    await expect(cancel).toBeHidden({ timeout: 60000 })
+    await expect(page.locator('button[data-action="save"]')).toBeDisabled()
+    const render = page.locator('.svg-prep-render-btn')
+    await expect(render).toBeVisible()
+    await expect(render).toBeEnabled()
+    await expect(page.locator('.svg-prep-result-pane')).toHaveAttribute(
+      'aria-busy',
+      'false'
+    )
+  })
+
   test('★ Cancel stops a combine and leaves the drawing where it was', async ({
     page,
   }) => {

@@ -16,10 +16,21 @@
  * @license GPL-3.0-or-later
  */
 
-/** Thrown (as a rejection reason) when a job is cancelled or superseded. */
+/**
+ * The three ways a job ends without an answer, which the caller has to tell
+ * apart: the person stopped it, a newer job replaced it, or the choices it was
+ * built from changed under it. They leave the pane in three different states.
+ */
+const CANCEL_MESSAGES = Object.freeze({
+  cancelled: 'Flatten cancelled',
+  superseded: 'Flatten superseded',
+  stale: 'Flatten abandoned: the choices changed under it',
+});
+
+/** Thrown (as a rejection reason) when a job ends without an answer. */
 export class FlattenCancelled extends Error {
   constructor(reason = 'cancelled') {
-    super(reason === 'superseded' ? 'Flatten superseded' : 'Flatten cancelled');
+    super(CANCEL_MESSAGES[reason] || CANCEL_MESSAGES.cancelled);
     this.name = 'FlattenCancelled';
     this.reason = reason;
   }
@@ -131,8 +142,8 @@ export function createFlattenRunner(options = {}) {
 
   return {
     start,
-    cancel: () => {
-      if (current) settleCancelled('cancelled');
+    cancel: (reason = 'cancelled') => {
+      if (current) settleCancelled(reason);
     },
     isRunning: () => current !== null,
     destroy: () => {

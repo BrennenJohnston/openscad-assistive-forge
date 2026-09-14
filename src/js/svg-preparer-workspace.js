@@ -1183,6 +1183,16 @@ export function createSvgPrepWorkspace(containerEl) {
     // currentResult === null IS "stale": Apply and Save already refuse on it,
     // so a second flag saying the same thing could only drift from it.
     currentResult = null;
+    // A combine already in flight is answering a question nobody is asking any
+    // more: it was built from the choices as they stood BEFORE this change, so
+    // letting it land would put the very picture of older choices into the
+    // pane that this function exists to prevent. MEASURED on the 210-shape
+    // drawing: a role changed 200 ms into the combine armed Apply fifteen
+    // seconds later with the replaced choice's result. It could not happen
+    // before DP-37 P2 - nothing could be clicked while the thread was taken.
+    if (flattenRunner && flattenRunner.isRunning()) {
+      flattenRunner.cancel('stale');
+    }
     clearResultError();
     // The pane is REPLACED, never emptied. See renderStandInResult.
     renderStandInResult();
@@ -1283,25 +1293,35 @@ export function createSvgPrepWorkspace(containerEl) {
           );
           resultSvgString = out.svg;
         } catch (error) {
-          setRenderBusy(false);
-          // A combine the person stopped, or one superseded by their next
-          // change, is not a failure and must not be reported as one.
+          // None of the three is a failure and none may be reported as one:
+          // the person stopped this combine, a newer one replaced it, or the
+          // choices it was built from changed under it.
           if (error instanceof FlattenCancelled) {
-            if (error.reason === 'cancelled') {
-              currentResult = null;
-              setApplyEnabled(
-                false,
-                'Combining was stopped, so there is no result to apply.'
-              );
-              // The way back is the Render button, and on an auto-preview
-              // drawing the row holding it is hidden the rest of the time.
-              refs.renderRow.hidden = false;
-              refs.renderBtn.disabled = false;
-              refs.renderNote.textContent = 'Combining cancelled.';
-              liveRegion.textContent = 'Combining cancelled.';
+            if (error.reason === 'superseded') {
+              // The job that replaced this one owns the pane now. Clearing the
+              // busy state here would take the bar and the Cancel button away
+              // from work that is still running, and tell a screen reader the
+              // pane had settled while it had not.
+              return;
             }
+            setRenderBusy(false);
+            // markPreviewStale has already said what the pane is now, and the
+            // person's own action has already spoken for itself.
+            if (error.reason === 'stale') return;
+            currentResult = null;
+            setApplyEnabled(
+              false,
+              'Combining was stopped, so there is no result to apply.'
+            );
+            // The way back is the Render button, and on an auto-preview
+            // drawing the row holding it is hidden the rest of the time.
+            refs.renderRow.hidden = false;
+            refs.renderBtn.disabled = false;
+            refs.renderNote.textContent = 'Combining cancelled.';
+            liveRegion.textContent = 'Combining cancelled.';
             return;
           }
+          setRenderBusy(false);
           currentResult = null;
           setApplyEnabled(
             false,

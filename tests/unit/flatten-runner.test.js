@@ -144,6 +144,25 @@ describe('the flatten runner (DP-37 P2)', () => {
     await expect(promise).rejects.toMatchObject({ reason: 'cancelled' })
   })
 
+  it('★ names WHY a job ended, because the pane answers the three differently', async () => {
+    // A person's Cancel says so and offers the render again; a job replaced by
+    // a newer one must not touch the pane at all, because the newer one owns
+    // it; a job abandoned because the choices changed under it has already
+    // been spoken for by whoever changed them. One reason, three states.
+    const r = runner()
+    const abandoned = r.start(shapes(), META)
+    const w = latest()
+    r.cancel('stale')
+    expect(w.terminated).toBe(true)
+    await expect(abandoned).rejects.toMatchObject({ reason: 'stale' })
+    await expect(abandoned).rejects.toThrow(/changed under it/)
+
+    // And the default is still the person's own Cancel.
+    const stopped = r.start(shapes(), META)
+    r.cancel()
+    await expect(stopped).rejects.toMatchObject({ reason: 'cancelled' })
+  })
+
   it('cancel on an idle runner does nothing and does not throw', () => {
     const r = runner()
     expect(() => r.cancel()).not.toThrow()
