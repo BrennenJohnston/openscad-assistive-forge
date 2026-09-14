@@ -122,7 +122,31 @@ const panel = (page) => ({
 });
 
 test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
-  test('★ a big picture waits to be started, answers a click while it works, and cancels', async ({
+  // ★ RE-WRITTEN at DP-43, and the reason is a measurement worth keeping.
+  //
+  // This used to do both of its mid-conversion checks in one run: probe that
+  // the page answers a click, read the stage sentence, then press Cancel. That
+  // worked while a 2000 x 2000 noise picture took about thirteen seconds. With
+  // Potrace it takes under two, so all three had to land inside a window a
+  // slower runner could miss - and CI did miss it, reading an empty stage and
+  // then finding Cancel already gone.
+  //
+  // MEASURED in the browser, the same picture, 4x CPU throttling:
+  //
+  //   imagetracerjs   13,401 ms       Potrace   1,872 ms
+  //
+  // And a second thing fell out of it: CPU throttling barely moves that number
+  // any more (1,872 ms at 4x, 1,677 at 10x, 1,591 at 20x), because
+  // Emulation.setCPUThrottlingRate throttles the MAIN THREAD and the trace no
+  // longer runs there. Throttling is still the right way to ask "does the page
+  // answer", which is what it is used for below; it is no longer a way to make
+  // the conversion last longer.
+  //
+  // So the window is used for one thing at a time: one run to prove the page
+  // answers while it works, one to prove Cancel stops it. The stage sentence
+  // is collected by an observer from before the start, because it is transient
+  // and sampling it is a race by construction.
+  test('★ a big picture waits to be started, and answers a click while it works', async ({
     page,
     browserName,
   }) => {
@@ -145,6 +169,23 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
     await expect(p.info).not.toContainText('converted from');
     await expect(p.running).toBeHidden();
 
+    // Every sentence the stage line ever shows, collected from before the
+    // start. A transient announcement cannot be sampled after the fact.
+    await page.evaluate(() => {
+      window.__stages = [];
+      const el = document.querySelector('.trace-progress-stage');
+      const note = () => {
+        const t = (el.textContent || '').trim();
+        if (t && !window.__stages.includes(t)) window.__stages.push(t);
+      };
+      new MutationObserver(note).observe(el, {
+        childList: true,
+        characterData: true,
+        subtree: true,
+      });
+      note();
+    });
+
     await p.start.click();
     await expect(p.running).toBeVisible({ timeout: 30_000 });
 
@@ -161,21 +202,51 @@ test.describe('Start, a bar that moves, and Cancel (DP-34)', () => {
       `the page took ${Math.round(answered)} ms to answer a click mid-conversion`
     ).toBeLessThan(1000);
 
-    // The bar carries a name and the stage sentence says something real.
+    // The bar carries a name.
     await expect(p.bar).toHaveAttribute('aria-labelledby', /trace-progress/);
-    const stageText = await p.stage.textContent();
-    expect(
-      ['Reading the picture', 'Finding the ink', 'Tracing the shapes'],
-      `stage read "${stageText}"`
-    ).toContain((stageText || '').trim());
 
-    await p.cancel.click();
+    // Let it finish, then read what the stage line said along the way.
+    await expect(p.info).toContainText('converted from', { timeout: 120_000 });
+    const stages = await page.evaluate(() => window.__stages);
+    expect(stages.length, `stage line showed ${JSON.stringify(stages)}`)
+      .toBeGreaterThan(0);
+    for (const said of stages) {
+      expect(
+        ['Reading the picture', 'Finding the ink', 'Tracing the shapes'],
+        `stage read "${said}"`
+      ).toContain(said);
+    }
+  });
+
+  test('★ Cancel stops a conversion and says so, once', async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(browserName !== 'chromium', 'CPU throttling is a CDP feature');
+    test.setTimeout(300_000);
+
+    await openCharm(page);
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+
+    await choosePicture(page, 2000, 'noise');
+    const p = panel(page);
+    await expect(p.start).toBeVisible({ timeout: 120_000 });
+
+    // Cancel is the first thing that happens after the bar appears: the whole
+    // conversion is under two seconds now, and anything else in front of the
+    // click spends that window.
+    await p.start.click();
+    await expect(p.cancel).toBeVisible({ timeout: 30_000 });
+    await p.cancel.click({ timeout: 10_000 });
 
     await expect(p.running).toBeHidden({ timeout: 15_000 });
     await expect(p.start).toBeVisible();
     await expect(p.info).toHaveText('Conversion cancelled');
     // Nothing is left claiming to be busy.
     await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+    // And nothing was converted: a cancelled job leaves no file behind.
+    await expect(p.info).not.toContainText('converted from');
   });
 
   test('a finished conversion speaks once, and only about its completion', async ({

@@ -260,12 +260,14 @@ export const MEASURED_SECONDS = {
   // third of a minute from their 35-minute ceiling before this file existed.
   // Re-weighted from a green CI run at the round's close.
   'drawing-editor.spec.js': 170.0,
-  // DP-34. Three cases: a 2000x2000 noise picture built in the page and traced
-  // at 4x CPU throttling, then two small ones for the announcements. MEASURED
-  // locally at 17.7 s for the file; booked at the same four-times ratio the two
+  // DP-34, RE-MEASURED at DP-43. Now five cases: the 2000x2000 noise picture is
+  // built and traced TWICE, because the conversion got fast enough that one run
+  // can no longer carry both mid-conversion checks (13,401 ms with
+  // imagetracerjs, 1,872 with Potrace, same picture and throttle). MEASURED
+  // locally at 33.8 s for the file; booked at the same four-times ratio the
   // files above carry. Chromium only (PROJECT_IGNORES): CPU throttling is a CDP
   // feature, and the other lanes have no headroom (see the note below).
-  'trace-start-cancel.spec.js': 70.0,
+  'trace-start-cancel.spec.js': 135.0,
   // DP-43. One case: a ring traced through the real worker on both engines,
   // which is also the only place the wasm is proved to load under COOP/COEP.
   // MEASURED locally: 2.9 s on Chromium, 3.6 s on WebKit, 7.8 s on Firefox.
