@@ -16913,6 +16913,19 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   min-height: 0;
   gap: var(--space-sm);
   padding: var(--space-sm);
+  /* ★ The editor is the container its own layout rules ask about.
+     It was not one, and only .drawing-editor-surface was - so in the standalone
+     Edit Drawing door, where the surface is hidden at 0 px wide and the editor
+     is hosted in .svg-edit-standalone-host instead, NO ancestor of the stage
+     was a container and every @container rule below silently did nothing.
+     MEASURED at 412: the panel stayed a 280 px strip laid over the drawing
+     instead of becoming the full-width drawer written for exactly that width,
+     hiding 271 px of a 400 px picture and cutting the sentence under it
+     mid-word.
+     Safe to make one: this element takes its width from its parent
+     (width: 100%), never from its contents, which is the only thing
+     inline-size containment forbids. */
+  container-type: inline-size;
 }
 
 /* The skip links are visible on focus and out of the way otherwise: a
@@ -16983,6 +16996,25 @@ body:not([data-ui-mode='classic']) #prefsColorSchemeGroup {
   min-width: 0;
   min-height: 0;
   overflow: auto;
+}
+
+/* ★ Room for the side panel, which is positioned ABSOLUTELY over this body and
+   so takes no width from it. Nothing reserved any. MEASURED at 1280: stage
+   x 6..1274, panel x 814..1274, so 453 px of the drawing was painted
+   underneath the shapes list; at 900 it was 384 px. A person could not see a
+   third of their own picture and had no way to know it was there.
+
+   The reservation repeats the panel's own clamp rather than sharing a custom
+   property. Both percentages resolve against the same box - the body - so the
+   two give the same number, but they are two separate facts about two separate
+   boxes and writing them as one would make a coincidence look like a promise.
+
+   Not in the drawer band below 640: there the panel covering the drawing IS
+   the design, and closing it is one press. */
+@container (min-width: 641px) {
+  .drawing-editor-stage {
+    padding-right: clamp(280px, 44%, 460px);
+  }
 }
 
 /* G0 (DP-24): the picture is the editor. The panel is a DRAWER laid over
