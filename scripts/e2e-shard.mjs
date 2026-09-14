@@ -300,6 +300,51 @@ export const PROJECT_IGNORES = Object.freeze({
 });
 
 /**
+ * Suites that RUN on CI but skip themselves the moment they start.
+ *
+ * The owner paused the City Walk e2e on CI (PR #201): CI software-renders the
+ * 3D city at about two seconds a frame, so every one of these files reports
+ * skipped in seconds there while still costing its full measured minutes on a
+ * local hardware board. `useCityWalkFixtures()` carries the one skip.
+ *
+ * The planner has to know, because it books time per file. MEASURED on the
+ * Chromium lane before this existed: the three heaviest City Walk files were
+ * given a shard EACH (2,078 s, 2,068 s and 2,050 s booked, seconds actually
+ * spent), which left three of six shards idle on CI and pushed everything else
+ * into the remainder - shard 6 alone carried 44 files. Two tests began failing
+ * there for crowding rather than for behaviour.
+ *
+ * Reverse this the moment the suites come back: delete the `test.skip` in
+ * `useCityWalkFixtures()` and this list together, or the lanes will be booked
+ * for work they are once again doing.
+ */
+export const CI_SKIPPED = Object.freeze([
+  'ascii-city-walk.spec.js',
+  'ascii-city-walk-calibration.spec.js',
+  'ascii-city-walk-controls.spec.js',
+  'ascii-city-walk-furniture.spec.js',
+  'ascii-city-walk-perf-smoke.spec.js',
+  'ascii-city-walk-street.spec.js',
+  'ascii-city-walk-teleport.spec.js',
+]);
+
+/** What a file that skips itself on arrival actually costs there. */
+export const CI_SKIPPED_WEIGHT_S = 10;
+
+/**
+ * The weights to plan with, for the environment doing the planning.
+ *
+ * @param {boolean} [onCI] - default: whether this process is running on CI
+ * @returns {Record<string, number>}
+ */
+export function weightsFor(onCI = !!process.env.CI) {
+  if (!onCI) return MEASURED_SECONDS;
+  const out = { ...MEASURED_SECONDS };
+  for (const file of CI_SKIPPED) out[file] = CI_SKIPPED_WEIGHT_S;
+  return out;
+}
+
+/**
  * The spec files a project runs: everything under tests/e2e, less what the
  * table above says it leaves out. An unknown project name runs everything.
  *
@@ -381,6 +426,6 @@ if (invokedDirectly) {
     );
     process.exit(1);
   }
-  const shard = planShards(files, MEASURED_SECONDS, total)[index - 1];
+  const shard = planShards(files, weightsFor(), total)[index - 1];
   process.stdout.write(shard.map((f) => `tests/e2e/${f}`).join(' '));
 }
